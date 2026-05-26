@@ -1,0 +1,9 @@
+.DS_Store
+_build/
+.mooncakes/
+.moonagent/
+
+.agents
+
+/external/examples/web-demo
+/external/examples/web-spike
