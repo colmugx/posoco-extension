@@ -1,7 +1,7 @@
 ///|
 /// posoco_ext_mcp.mbt — Posoco MCP Extension
 ///
-/// Bridges colmugx/mcp client with posoco's ToolProvider + ToolRuntime traits.
+/// Bridges colmugx/mcp client with posoco's unified ToolProvider trait.
 /// Enables posoco agents to discover and call tools from MCP servers.
 
 ///|
@@ -37,6 +37,7 @@ fn convert_tool_def(
     description: mcp_tool.description,
     input_schema: mcp_tool.input_schema,
     metadata: None,
+    source: Some("posoco_ext_mcp:\{server_name}"),
   }
 }
 
@@ -84,7 +85,7 @@ struct MCPServerConn {
 ///|
 /// ——— MCPToolBridge ———
 
-///| Bridge struct that implements both ToolProvider and ToolRuntime.
+///| Bridge struct that implements the unified ToolProvider trait (list + execute).
 
 ///|
 /// Manages multiple MCP server connections with namespaced tool routing.
@@ -198,27 +199,23 @@ pub fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
 /// ——— Trait Implementations ———
 
 ///|
-/// ToolProvider: return all tools from all connected servers.
-pub impl @posoco.ToolProvider for MCPToolBridge with fn list_tools(
-  self,
-) -> Array[@posoco.ToolDef] {
+/// ToolProvider: return cached tools from all connected servers.
+/// Tools are fetched during connect() and refresh_tools().
+pub impl @posoco.ToolProvider for MCPToolBridge with fn list_tools(self) -> Array[
+  @posoco.ToolDef,
+] {
   let all : Array[@posoco.ToolDef] = []
   for conn in self.connections {
-    match conn.client.list_tools() {
-      Ok(result) => {
-        for t in result.tools {
-          all.push(convert_tool_def(t, conn.name))
-        }
-      }
-      Err(_) => ()
+    for t in conn.cached_tools {
+      all.push(t)
     }
   }
   all
 }
 
 ///|
-/// ToolRuntime: route tool calls to the correct MCP server.
-pub impl @posoco.ToolRuntime for MCPToolBridge with fn execute(
+/// ToolProvider (execute): route tool calls to the correct MCP server.
+pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   self,
   _name : String,
   call : @posoco.ToolCall,
@@ -227,9 +224,7 @@ pub impl @posoco.ToolRuntime for MCPToolBridge with fn execute(
   let conn_idx = match self.tool_to_conn.get(call.name) {
     Some(idx) => idx
     None =>
-      raise @posoco.RuntimeError::UnknownTool(
-        "Unknown MCP tool: " + call.name,
-      )
+      raise @posoco.RuntimeError::UnknownTool("Unknown MCP tool: " + call.name)
   }
   let conn = self.connections[conn_idx]
   // Strip namespace to get original MCP tool name

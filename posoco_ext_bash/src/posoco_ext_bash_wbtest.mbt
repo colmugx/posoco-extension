@@ -1,34 +1,46 @@
 ///|
-/// shell_wbtest.mbt — Whitebox tests for ShellToolProvider and ShellToolRuntime
+/// shell_wbtest.mbt — Whitebox tests for ShellTools (unified ToolProvider)
 ///
 /// Note: Runtime execution tests are skipped since they need a real shell.
 
 ///|
-/// ——— Test: ShellToolProvider.list_tools ———
+/// ——— Test: ShellTools.list_tools ———
 async test "list_tools_contains_bash_and_shell" {
-  let provider = ShellToolProvider::{  }
-  let tools = provider.list_tools()
-  let names = tools.map(fn(t) { t.name })
+  let tools = ShellTools::{  }
+  let tool_defs = tools.list_tools()
+  let names = tool_defs.map(fn(t) { t.name })
   assert_true(names.contains("bash"))
   assert_true(names.contains("shell"))
-  assert_eq(tools.length(), 2)
+  assert_eq(tool_defs.length(), 2)
 }
 
 ///|
 async test "list_tools_tool_defs_have_descriptions" {
-  let provider = ShellToolProvider::{  }
-  let tools = provider.list_tools()
-  for tool in tools {
+  let tools = ShellTools::{  }
+  let tool_defs = tools.list_tools()
+  for tool in tool_defs {
     assert_true(tool.description.length() > 0)
   }
 }
 
 ///|
 async test "list_tools_tool_defs_have_input_schema" {
-  let provider = ShellToolProvider::{  }
-  let tools = provider.list_tools()
-  for tool in tools {
+  let tools = ShellTools::{  }
+  let tool_defs = tools.list_tools()
+  for tool in tool_defs {
     assert_true(tool.input_schema is Json::Object(_))
+  }
+}
+
+///|
+async test "list_tools_have_source" {
+  let tools = ShellTools::{  }
+  let tool_defs = tools.list_tools()
+  for tool in tool_defs {
+    match tool.source {
+      Some(s) => assert_eq(s, "posoco_ext_bash")
+      None => fail("expected source to be set")
+    }
   }
 }
 

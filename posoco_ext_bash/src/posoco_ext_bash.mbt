@@ -1,11 +1,17 @@
 ///|
-/// ShellToolProvider — provides shell/command execution tools
-pub(all) struct ShellToolProvider {}
+/// ShellTools — unified shell tool provider (list + execute).
+/// Provides bash and shell command execution tools on native target.
+pub(all) struct ShellTools {}
 
 ///|
-pub impl @posoco.ToolProvider for ShellToolProvider with fn list_tools(
-  _self,
-) -> Array[@posoco.ToolDef] {
+pub fn ShellTools::new() -> ShellTools {
+  ShellTools::{  }
+}
+
+///|
+pub impl @posoco.ToolProvider for ShellTools with fn list_tools(_self) -> Array[
+  @posoco.ToolDef,
+] {
   [
     @posoco.ToolDef::{
       name: "bash",
@@ -14,6 +20,7 @@ pub impl @posoco.ToolProvider for ShellToolProvider with fn list_tools(
         Map::from_array([("cmd", Json::string("the command to execute"))]),
       ),
       metadata: None,
+      source: Some("posoco_ext_bash"),
     },
     @posoco.ToolDef::{
       name: "shell",
@@ -22,21 +29,13 @@ pub impl @posoco.ToolProvider for ShellToolProvider with fn list_tools(
         Map::from_array([("cmd", Json::string("the command to execute"))]),
       ),
       metadata: None,
+      source: Some("posoco_ext_bash"),
     },
   ]
 }
 
 ///|
-/// ShellToolRuntime — executes shell commands via system subprocess
-pub(all) struct ShellToolRuntime {}
-
-///|
-pub fn ShellToolRuntime::new() -> ShellToolRuntime {
-  ShellToolRuntime::{  }
-}
-
-///|
-pub impl @posoco.ToolRuntime for ShellToolRuntime with fn execute(
+pub impl @posoco.ToolProvider for ShellTools with fn execute(
   _self,
   _name : String,
   call : @posoco.ToolCall,

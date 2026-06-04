@@ -9,16 +9,13 @@
 pub(all) struct OpenAIConfig {
   api_key : String
   model : String
-  base_url : String         // default: "https://api.openai.com/v1"
+  base_url : String // default: "https://api.openai.com/v1"
   organization : String?
 }
 
 ///|
 /// Create an OpenAIConfig with defaults.
-pub fn OpenAIConfig::new(
-  api_key : String,
-  model : String,
-) -> OpenAIConfig {
+pub fn OpenAIConfig::new(api_key : String, model : String) -> OpenAIConfig {
   {
     api_key,
     model,
@@ -59,11 +56,9 @@ fn build_request_body(
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   model : String,
-  stream~ : Bool = false,
+  stream? : Bool = false,
 ) -> Json {
-  let input_items = messages.map(fn(m) {
-    posoco_message_to_openai(m)
-  })
+  let input_items = messages.map(fn(m) { posoco_message_to_openai(m) })
   let fields : Array[(String, Json)] = [
     ("model", Json::string(model)),
     ("input", Json::array(input_items)),
@@ -112,32 +107,20 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn chat(
 ) -> @posoco.ModelResponse raise @posoco.ModelError {
   let body = build_request_body(messages, tools, options, self.config.model)
   let headers = build_headers(self.config)
-  let client = @http.Client::Client(
-    self.config.base_url,
-    headers=headers,
-  ) catch {
+  let client = @http.Client::Client(self.config.base_url, headers~) catch {
     e =>
-      raise @posoco.ModelError::Transport(
-        "Failed to create HTTP client: \{e}",
-      )
+      raise @posoco.ModelError::Transport("Failed to create HTTP client: \{e}")
   }
-  let response = client.post(
-    "/responses",
-    body.stringify(),
-  ) catch {
-    e =>
-      raise @posoco.ModelError::Transport("HTTP request failed: \{e}")
+  let response = client.post("/responses", body.stringify()) catch {
+    e => raise @posoco.ModelError::Transport("HTTP request failed: \{e}")
   }
   let body_data = client.read_all() catch {
-    e =>
-      raise @posoco.ModelError::Transport("Failed to read response: \{e}")
+    e => raise @posoco.ModelError::Transport("Failed to read response: \{e}")
   }
   client.close()
   let body_text = body_data.text() catch {
     e =>
-      raise @posoco.ModelError::ResponseParse(
-        "Failed to decode response: \{e}",
-      )
+      raise @posoco.ModelError::ResponseParse("Failed to decode response: \{e}")
   }
   if response.code != 200 {
     raise @posoco.ModelError::Transport(
@@ -145,8 +128,7 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn chat(
     )
   }
   let resp_json : Json = @json.parse(body_text) catch {
-    e =>
-      raise @posoco.ModelError::ResponseParse("JSON parse error: \{e}")
+    e => raise @posoco.ModelError::ResponseParse("JSON parse error: \{e}")
   }
   parse_openai_response(resp_json)
 }
@@ -160,9 +142,7 @@ fn process_sse_event(
   acc : @posoco.StreamAccumulator,
   on_chunk : (@posoco.StreamChunk) -> Unit,
 ) -> Bool {
-  let event_json : Json = @json.parse(data) catch {
-    _ => return false
-  }
+  let event_json : Json = @json.parse(data) catch { _ => return false }
   let event_type = match event_json {
     Json::Object(map) =>
       match map.get("type") {
@@ -190,7 +170,7 @@ fn process_sse_event(
       let index = extract_sse_int_field(event_json, "output_index")
       let delta = extract_sse_string_field(event_json, "delta")
       let chunk = @posoco.StreamChunk::ToolCallDelta(
-        index=index,
+        index~,
         id=None,
         name=None,
         arguments_delta=Some(delta),
@@ -225,7 +205,7 @@ fn process_sse_event(
         None => ()
       }
       let reason = extract_finish_from_completed(event_json)
-      let finish_chunk = @posoco.StreamChunk::Finish(reason=reason)
+      let finish_chunk = @posoco.StreamChunk::Finish(reason~)
       on_chunk(finish_chunk)
       acc.push(finish_chunk)
       true
@@ -296,7 +276,7 @@ fn extract_sse_int_field(json : Json, field : String) -> Int {
 
 ///|
 /// Extract output item info (index, id, name) from output_item.added event.
-fn extract_sse_output_item(json : Json) -> Option[(Int, String, String)] {
+fn extract_sse_output_item(json : Json) -> (Int, String, String)? {
   match json {
     Json::Object(map) =>
       match map.get("item") {
@@ -349,20 +329,12 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn chat_streaming(
   )
   let headers = build_headers(self.config)
   // Create streaming HTTP connection
-  let client = @http.Client::Client(
-    self.config.base_url,
-    headers=headers,
-  ) catch {
+  let client = @http.Client::Client(self.config.base_url, headers~) catch {
     e =>
-      raise @posoco.ModelError::Transport(
-        "Failed to create HTTP client: \{e}",
-      )
+      raise @posoco.ModelError::Transport("Failed to create HTTP client: \{e}")
   }
   // Send POST request (streaming mode)
-  client.request(
-    @http.RequestMethod::Post,
-    "/responses",
-  ) catch {
+  client.request(@http.RequestMethod::Post, "/responses") catch {
     _ => {
       client.close()
       raise @posoco.ModelError::Transport("Request send failed")
@@ -390,17 +362,13 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn chat_streaming(
   }
   if response.code != 200 {
     client.close()
-    raise @posoco.ModelError::Transport(
-      "OpenAI API error \{response.code}",
-    )
+    raise @posoco.ModelError::Transport("OpenAI API error \{response.code}")
   }
   // Read SSE stream line by line
   let acc = @posoco.StreamAccumulator::new()
   let mut done = false
   while !done {
-    let line = client.read_until("\n") catch {
-      _ => None
-    }
+    let line = client.read_until("\n") catch { _ => None }
     match line {
       Some(data) => {
         let trimmed = data.trim()

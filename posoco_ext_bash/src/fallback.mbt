@@ -5,27 +5,23 @@
 /// On wasm-gc/js, tools are not listed and execute raises an error.
 
 ///|
-/// ShellToolProvider — returns empty tool list on non-native targets.
-pub(all) struct ShellToolProvider {}
+/// ShellTools — returns empty tool list on non-native targets.
+pub(all) struct ShellTools {}
 
 ///|
-pub impl @posoco.ToolProvider for ShellToolProvider with fn list_tools(
-  _self,
-) -> Array[@posoco.ToolDef] {
+pub fn ShellTools::new() -> ShellTools {
+  ShellTools::{  }
+}
+
+///|
+pub impl @posoco.ToolProvider for ShellTools with fn list_tools(_self) -> Array[
+  @posoco.ToolDef,
+] {
   []
 }
 
 ///|
-/// ShellToolRuntime — raises error on non-native targets.
-pub(all) struct ShellToolRuntime {}
-
-///|
-pub fn ShellToolRuntime::new() -> ShellToolRuntime {
-  ShellToolRuntime::{  }
-}
-
-///|
-pub impl @posoco.ToolRuntime for ShellToolRuntime with fn execute(
+pub impl @posoco.ToolProvider for ShellTools with fn execute(
   _self,
   _name : String,
   _call : @posoco.ToolCall,

@@ -7,20 +7,19 @@
 /// Convert a posoco Message to an OpenAI Responses API input item (Json).
 pub fn posoco_message_to_openai(msg : @posoco.Message) -> Json {
   match msg.role {
-    @posoco.Role::User => Json::object(
-      Map::from_array([
-        ("role", Json::string("user")),
-        (
-          "content",
-          Json::array(msg.content.map(fn(c) { content_to_openai(c) })),
-        ),
-      ]),
-    )
+    @posoco.Role::User =>
+      Json::object(
+        Map::from_array([
+          ("role", Json::string("user")),
+          (
+            "content",
+            Json::array(msg.content.map(fn(c) { content_to_openai(c) })),
+          ),
+        ]),
+      )
     @posoco.Role::Assistant => {
       let content_arr = msg.content.map(fn(c) { content_to_openai(c) })
-      let fields : Array[(String, Json)] = [
-        ("role", Json::string("assistant")),
-      ]
+      let fields : Array[(String, Json)] = [("role", Json::string("assistant"))]
       if !content_arr.is_empty() {
         fields.push(("content", Json::array(content_arr)))
       }
@@ -43,15 +42,16 @@ pub fn posoco_message_to_openai(msg : @posoco.Message) -> Json {
         ]),
       )
     }
-    @posoco.Role::System => Json::object(
-      Map::from_array([
-        ("role", Json::string("system")),
-        (
-          "content",
-          Json::array(msg.content.map(fn(c) { content_to_openai(c) })),
-        ),
-      ]),
-    )
+    @posoco.Role::System =>
+      Json::object(
+        Map::from_array([
+          ("role", Json::string("system")),
+          (
+            "content",
+            Json::array(msg.content.map(fn(c) { content_to_openai(c) })),
+          ),
+        ]),
+      )
   }
 }
 
@@ -59,21 +59,20 @@ pub fn posoco_message_to_openai(msg : @posoco.Message) -> Json {
 /// Convert a posoco Content item to OpenAI input content format.
 fn content_to_openai(c : @posoco.Content) -> Json {
   match c {
-    @posoco.Content::Text(t) => Json::object(
-      Map::from_array([
-        ("type", Json::string("input_text")),
-        ("text", Json::string(t)),
-      ]),
-    )
-    @posoco.Content::Image(mime_type, data) => Json::object(
-      Map::from_array([
-        ("type", Json::string("input_image")),
-        (
-          "image_url",
-          Json::string("data:\{mime_type};base64,\{data}"),
-        ),
-      ]),
-    )
+    @posoco.Content::Text(t) =>
+      Json::object(
+        Map::from_array([
+          ("type", Json::string("input_text")),
+          ("text", Json::string(t)),
+        ]),
+      )
+    @posoco.Content::Image(mime_type, data) =>
+      Json::object(
+        Map::from_array([
+          ("type", Json::string("input_image")),
+          ("image_url", Json::string("data:\{mime_type};base64,\{data}")),
+        ]),
+      )
   }
 }
 
@@ -124,9 +123,7 @@ fn extract_tool_calls(output : Json) -> (Array[@posoco.ToolCall], Bool) {
               let args : Json = @json.parse(args_str) catch {
                 _ => Json::object(Map::from_array([]))
               }
-              tool_calls.push(
-                @posoco.ToolCall::{ id, name, arguments: args },
-              )
+              tool_calls.push(@posoco.ToolCall::{ id, name, arguments: args })
             }
           _ => ()
         }
@@ -197,13 +194,11 @@ fn extract_usage(resp : Json) -> @posoco.Usage? {
             (Some(i), Some(o)) => Some(i + o)
             _ => None
           }
-          Some(
-            @posoco.Usage::{
-              input_tokens,
-              output_tokens,
-              total_tokens: total,
-            },
-          )
+          Some(@posoco.Usage::{
+            input_tokens,
+            output_tokens,
+            total_tokens: total,
+          })
         }
         _ => None
       }
@@ -247,8 +242,8 @@ pub fn parse_openai_response(resp_json : Json) -> @posoco.ModelResponse {
   let content = extract_assistant_content(output)
   let final_message : @posoco.Message = {
     role: @posoco.Role::Assistant,
-    content: content,
-    tool_calls: tool_calls,
+    content,
+    tool_calls,
     tool_call_id: None,
     name: None,
   }
@@ -256,9 +251,9 @@ pub fn parse_openai_response(resp_json : Json) -> @posoco.ModelResponse {
   let finish_reason = extract_finish_reason(resp_json, has_fc)
   @posoco.ModelResponse::{
     message: final_message,
-    tool_calls: tool_calls,
-    finish_reason: finish_reason,
-    usage: usage,
+    tool_calls,
+    finish_reason,
+    usage,
     reasoning_summary: None,
   }
 }
