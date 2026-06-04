@@ -1,0 +1,12 @@
+options(
+  targets: {
+    "posoco_ext_bash.mbt": ["native"],
+    "fallback.mbt": ["wasm-gc", "js"],
+  },
+)
+
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+}

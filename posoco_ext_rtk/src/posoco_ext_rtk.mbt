@@ -120,7 +120,7 @@ pub fn rewrite_tool_call(
 }
 
 ///|
-pub impl @posoco.PipelineHook for RTKHook with on_stage(
+pub impl @posoco.PipelineHook for RTKHook with fn on_stage(
   self,
   stage : @posoco.Stage,
 ) -> Result[@posoco.Stage, @posoco.HookError] {

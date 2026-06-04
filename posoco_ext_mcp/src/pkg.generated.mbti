@@ -1,0 +1,36 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-mcp/src"
+
+import {
+  "colmugx/mcp/transport",
+  "colmugx/posoco",
+  "moonbitlang/async",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct MCPServerConfig {
+  name : String
+  transport : @transport.AnyTransport
+}
+
+type MCPServerConn
+
+pub(all) struct MCPToolBridge {
+  mut connections : Array[MCPServerConn]
+  mut tool_to_conn : Map[String, Int]
+}
+pub fn MCPToolBridge::close(Self) -> Unit
+pub async fn MCPToolBridge::connect(Self, MCPServerConfig, @async.TaskGroup[Unit]) -> Result[Unit, String]
+pub fn MCPToolBridge::new() -> Self
+pub async fn MCPToolBridge::refresh_tools(Self) -> Result[Unit, String]
+pub impl @posoco.ToolProvider for MCPToolBridge
+pub impl @posoco.ToolRuntime for MCPToolBridge
+
+// Type aliases
+
+// Traits
+

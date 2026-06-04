@@ -100,7 +100,7 @@ test "rewrite_tool_call_preserves_id_and_name" {
 
 ///|
 /// ——— Test: RTKHook PipelineHook implementation ———
-test "hook_passes_through_non_shell_tool" {
+async test "hook_passes_through_non_shell_tool" {
   // Setup: a rewrite that would change anything
   let hook = RTKHook::new("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
   let stage = @posoco.Stage::BeforeTool({
@@ -115,7 +115,7 @@ test "hook_passes_through_non_shell_tool" {
 }
 
 ///|
-test "hook_rewrites_shell_tool_call" {
+async test "hook_rewrites_shell_tool_call" {
   // Mock rewrite that prepends "rtk "
   let hook = RTKHook::new("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
   let stage = @posoco.Stage::BeforeTool({
@@ -140,7 +140,7 @@ test "hook_rewrites_shell_tool_call" {
 }
 
 ///|
-test "hook_passes_through_when_rewrite_returns_none" {
+async test "hook_passes_through_when_rewrite_returns_none" {
   // Mock rewrite that always returns None (pass-through)
   let hook = RTKHook::new("/usr/local/bin/rtk", fn(_cmd) { None })
   let stage = @posoco.Stage::BeforeTool({
@@ -157,7 +157,7 @@ test "hook_passes_through_when_rewrite_returns_none" {
 }
 
 ///|
-test "hook_passes_through_after_tool_stage" {
+async test "hook_passes_through_after_tool_stage" {
   let hook = RTKHook::new("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
   let stage = @posoco.Stage::AfterTurn(@posoco.TurnResult::{
     message: @posoco.Message::{
@@ -177,7 +177,7 @@ test "hook_passes_through_after_tool_stage" {
 }
 
 ///|
-test "hook_passes_through_before_turn_stage" {
+async test "hook_passes_through_before_turn_stage" {
   let hook = RTKHook::new("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
   match hook.on_stage(@posoco.Stage::BeforeTurn) {
     Ok(@posoco.Stage::BeforeTurn) => ()
@@ -186,7 +186,7 @@ test "hook_passes_through_before_turn_stage" {
 }
 
 ///|
-test "hook_identical_rewrite_passes_through" {
+async test "hook_identical_rewrite_passes_through" {
   // Rewrite function returns the same string (no actual rewrite)
   let hook = RTKHook::new(
     "/usr/local/bin/rtk",

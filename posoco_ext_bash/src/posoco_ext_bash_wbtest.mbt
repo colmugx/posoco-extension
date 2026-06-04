@@ -5,8 +5,8 @@
 
 ///|
 /// ——— Test: ShellToolProvider.list_tools ———
-test "list_tools_contains_bash_and_shell" {
-  let provider = ShellToolProvider::{}
+async test "list_tools_contains_bash_and_shell" {
+  let provider = ShellToolProvider::{  }
   let tools = provider.list_tools()
   let names = tools.map(fn(t) { t.name })
   assert_true(names.contains("bash"))
@@ -14,16 +14,18 @@ test "list_tools_contains_bash_and_shell" {
   assert_eq(tools.length(), 2)
 }
 
-test "list_tools_tool_defs_have_descriptions" {
-  let provider = ShellToolProvider::{}
+///|
+async test "list_tools_tool_defs_have_descriptions" {
+  let provider = ShellToolProvider::{  }
   let tools = provider.list_tools()
   for tool in tools {
     assert_true(tool.description.length() > 0)
   }
 }
 
-test "list_tools_tool_defs_have_input_schema" {
-  let provider = ShellToolProvider::{}
+///|
+async test "list_tools_tool_defs_have_input_schema" {
+  let provider = ShellToolProvider::{  }
   let tools = provider.list_tools()
   for tool in tools {
     assert_true(tool.input_schema is Json::Object(_))
@@ -43,6 +45,7 @@ test "extract_command_from_cmd_key" {
   assert_eq(cmd, "ls -la")
 }
 
+///|
 test "extract_command_from_command_key" {
   let args = Json::object(
     Map::from_array([("command", Json::string("git status"))]),
@@ -51,6 +54,7 @@ test "extract_command_from_command_key" {
   assert_eq(cmd, "git status")
 }
 
+///|
 test "extract_command_empty_object_returns_to_string" {
   let args = Json::object(Map::from_array([]))
   let cmd = extract_command(args)
