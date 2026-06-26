@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-llm/src"
+
+import {
+  "colmugx/posoco",
+}
+
+// Values
+pub fn parse_openai_response(Json) -> @posoco.ModelResponse
+
+pub fn posoco_message_to_openai(@posoco.Message) -> Json
+
+pub fn posoco_tool_to_openai(@posoco.ToolDef) -> Json
+
+// Errors
+
+// Types and methods
+pub(all) struct OpenAIConfig {
+  api_key : String
+  model : String
+  base_url : String
+  organization : String?
+}
+pub fn OpenAIConfig::new(String, String) -> Self
+
+pub(all) struct OpenAIModelPort {
+  config : OpenAIConfig
+}
+pub fn OpenAIModelPort::new(OpenAIConfig) -> Self
+pub impl @posoco.ModelPort for OpenAIModelPort
+
+// Type aliases
+
+// Traits
+

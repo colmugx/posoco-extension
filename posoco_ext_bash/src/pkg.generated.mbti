@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco_ext_bash/src"
+
+import {
+  "colmugx/posoco",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct ShellTools {
+}
+pub fn ShellTools::new() -> Self
+pub impl @posoco.ToolProvider for ShellTools
+
+// Type aliases
+
+// Traits
+

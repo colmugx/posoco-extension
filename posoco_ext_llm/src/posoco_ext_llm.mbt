@@ -373,12 +373,12 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn chat_streaming(
       Some(data) => {
         let trimmed = data.trim()
         if trimmed.has_prefix("data: ") {
-          let payload = trimmed["data: ".length():].to_string()
+          let payload = trimmed["data: ".length():].to_owned()
           let pl = payload.trim()
           if pl == "[DONE]" {
             done = true
           } else if pl.length() > 0 {
-            done = process_sse_event(pl.to_string(), acc, on_chunk)
+            done = process_sse_event(pl.to_owned(), acc, on_chunk)
           }
         }
       }

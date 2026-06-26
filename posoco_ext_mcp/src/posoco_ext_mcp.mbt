@@ -8,6 +8,18 @@
 /// ——— Namespace helpers ———
 
 ///|
+/// Extract (cmd, args) from a StdioClientTransport for connect_stdio dispatch.
+fn stdio_cmd(t : @transport.StdioClientTransport) -> (String, Array[String]) {
+  (t.cmd, t.args)
+}
+
+///|
+/// Extract base_url from an HttpClientTransport for connect_http dispatch.
+fn http_url(t : @transport.HttpClientTransport) -> String {
+  t.base_url
+}
+
+///|
 /// Double-underscore separator between server name and tool name.
 fn namespaced_tool_name(server_name : String, tool_name : String) -> String {
   "\{server_name}__\{tool_name}"
@@ -102,38 +114,46 @@ pub fn MCPToolBridge::new() -> MCPToolBridge {
 ///|
 /// Connect to an MCP server. Fetches and caches tools during init.
 ///
-/// Must be called before the agent loop starts. Uses legacy (single-request)
-/// mode — no event loop required.
+/// Must be called before the agent loop starts. Dispatches to connect_http
+/// or connect_stdio based on the transport variant (mcp 0.14 API).
 pub async fn MCPToolBridge::connect(
   self : MCPToolBridge,
   config : MCPServerConfig,
   group : @async.TaskGroup[Unit],
 ) -> Result[Unit, String] {
-  // Start STDIO subprocess if needed
-  match config.transport {
-    @transport.AnyTransport::StdioClient(t) =>
-      t.start(group) catch {
-        e => return Err("Transport start failed for '\{config.name}': \{e}")
-      }
-    _ => ()
+  // Create MCP client via connect_* factory (mcp 0.14: connect replaces new+initialize)
+  let client_result : Result[@client.MCPClient, @types.MCPError] = match config.transport {
+    @transport.AnyTransport::StdioClient(t) => {
+      let (cmd, args) = stdio_cmd(t)
+      @client.MCPClient::connect_stdio(
+        cmd~,
+        args~,
+        name=config.name,
+        version="0.1.0",
+        group~,
+      )
+    }
+    @transport.AnyTransport::HttpClient(t) => {
+      let url = http_url(t)
+      @client.MCPClient::connect_http(
+        url~,
+        name=config.name,
+        version="0.1.0",
+      )
+    }
+    _ =>
+      return Err("Unsupported transport for '\{config.name}'")
   }
-  // Create MCP client
-  let client = @client.MCPClient::new(
-    name=config.name,
-    version="0.1.0",
-    transport=config.transport,
-  )
-  // Initialize (MCP handshake)
-  let server_info = match client.initialize() {
-    Ok(info) => info
+  let client = match client_result {
+    Ok(c) => c
     Err(e) =>
-      return Err("MCP init failed for '\{config.name}': \{e.to_string()}")
+      return Err("MCP connect failed for '\{config.name}': \{e.message()}")
   }
-  // Fetch tools
+  // Fetch tools (connect_* already did initialize/handshake)
   let tools_result = match client.list_tools() {
     Ok(r) => r
     Err(e) =>
-      return Err("MCP list_tools failed for '\{config.name}': \{e.to_string()}")
+      return Err("MCP list_tools failed for '\{config.name}': \{e.message()}")
   }
   // Convert and namespace tools
   let posoco_tools = tools_result.tools.map(fn(t) {
@@ -145,7 +165,7 @@ pub async fn MCPToolBridge::connect(
     name: config.name,
     client,
     cached_tools: posoco_tools,
-    _server_info: Some(server_info),
+    _server_info: None, // connect_* already did handshake; server_info not returned by 0.14 API
   }
   self.connections.push(conn)
   // Build reverse map
@@ -178,7 +198,7 @@ pub async fn MCPToolBridge::refresh_tools(
         }
       }
       Err(e) =>
-        return Err("Refresh failed for '\{conn.name}': \{e.to_string()}")
+        return Err("Refresh failed for '\{conn.name}': \{e.message()}")
     }
     i = i + 1
   }
@@ -242,7 +262,7 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
     Ok(r) => r
     Err(e) =>
       raise @posoco.RuntimeError::InvocationFailed(
-        "MCP call failed for '\{original_name}': \{e.to_string()}",
+        "MCP call failed for '\{original_name}': \{e.message()}",
       )
   }
   let content = convert_content_to_string(result.content)

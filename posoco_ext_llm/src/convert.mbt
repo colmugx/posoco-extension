@@ -254,6 +254,6 @@ pub fn parse_openai_response(resp_json : Json) -> @posoco.ModelResponse {
     tool_calls,
     finish_reason,
     usage,
-    reasoning_summary: None,
+    reasoning_content: None,
   }
 }

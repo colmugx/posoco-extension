@@ -27,8 +27,8 @@ pub fn MCPToolBridge::close(Self) -> Unit
 pub async fn MCPToolBridge::connect(Self, MCPServerConfig, @async.TaskGroup[Unit]) -> Result[Unit, String]
 pub fn MCPToolBridge::new() -> Self
 pub async fn MCPToolBridge::refresh_tools(Self) -> Result[Unit, String]
+pub impl @posoco.Lifecycle for MCPToolBridge
 pub impl @posoco.ToolProvider for MCPToolBridge
-pub impl @posoco.ToolRuntime for MCPToolBridge
 
 // Type aliases
 

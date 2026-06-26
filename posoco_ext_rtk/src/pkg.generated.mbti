@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco_ext_rtk"
+
+import {
+  "colmugx/posoco",
+}
+
+// Values
+pub fn default_rtk_rewrite(String, String) -> String?
+
+pub fn default_shell_tools() -> ShellTools
+
+pub fn extract_command(Json) -> String
+
+pub fn is_shell_tool(String, ShellTools) -> Bool
+
+pub fn rewrite_tool_call(@posoco.ToolCall, String) -> @posoco.ToolCall
+
+// Errors
+
+// Types and methods
+pub(all) struct RTKHook {
+  rtk_path : String
+  shell_tools : ShellTools
+  rewrite : (String) -> String?
+}
+pub fn RTKHook::new(String, (String) -> String?) -> Self
+pub fn RTKHook::with_shell_tools(String, ShellTools, (String) -> String?) -> Self
+pub impl @posoco.PipelineHook for RTKHook
+
+pub(all) struct ShellTools {
+  names : Array[String]
+}
+
+// Type aliases
+
+// Traits
+
