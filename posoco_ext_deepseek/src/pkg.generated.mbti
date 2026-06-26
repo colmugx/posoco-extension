@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-deepseek/src"
+
+import {
+  "colmugx/posoco",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct DeepSeekConfig {
+  api_key : String
+  base_url : String
+  chat_model : String
+  reasoner_model : String
+  coder_model : String
+  thinking : ThinkingMode
+  retry_attempts : Int
+  retry_backoff_ms : Int
+} derive(Eq, @debug.Debug)
+pub fn DeepSeekConfig::new(String, base_url? : String, chat_model? : String, reasoner_model? : String, coder_model? : String, thinking? : ThinkingMode, retry_attempts? : Int, retry_backoff_ms? : Int) -> Self
+
+pub(all) struct DeepSeekModelPort {
+  config : DeepSeekConfig
+}
+pub async fn DeepSeekModelPort::chat_prefix_completion(Self, Array[@posoco.Message], String, Array[String]?) -> String raise @posoco.ModelError
+pub async fn DeepSeekModelPort::fim_completion(Self, String, String?, max_tokens? : Int) -> String raise @posoco.ModelError
+pub fn DeepSeekModelPort::new(DeepSeekConfig) -> Self
+pub impl @posoco.ModelPort for DeepSeekModelPort
+
+pub(all) enum ThinkingMode {
+  No
+  High
+  Max
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+
