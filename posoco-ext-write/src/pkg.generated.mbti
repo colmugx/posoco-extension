@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-write/src"
+
+import {
+  "colmugx/posoco",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct WriteTools {
+}
+pub fn WriteTools::new() -> Self
+pub impl @posoco.ToolProvider for WriteTools
+
+// Type aliases
+
+// Traits
+

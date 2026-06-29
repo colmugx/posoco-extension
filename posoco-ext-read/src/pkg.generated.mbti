@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-read/src"
+
+import {
+  "colmugx/posoco",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct ReadTools {
+}
+pub fn ReadTools::new() -> Self
+pub impl @posoco.ToolProvider for ReadTools
+
+// Type aliases
+
+// Traits
+

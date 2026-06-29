@@ -1,0 +1,7 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native"

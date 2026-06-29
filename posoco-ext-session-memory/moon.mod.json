@@ -1,5 +1,5 @@
 {
-  "name": "colmugx/posoco-ext-session-memory",
+  "name": "colmugx/posoco-ext-session_memory",
   "version": "0.1.0",
   "deps": {
     "colmugx/posoco": { "path": "../../.." }

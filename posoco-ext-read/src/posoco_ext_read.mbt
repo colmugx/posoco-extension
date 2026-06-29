@@ -1,0 +1,80 @@
+///|
+/// ReadTools — file reading tool provider.
+/// Reads a file's contents and returns them as text.
+
+///|
+pub(all) struct ReadTools {}
+
+///|
+pub fn ReadTools::new() -> ReadTools {
+  ReadTools::{  }
+}
+
+///|
+pub impl @posoco.ToolProvider for ReadTools with fn list_tools(_self) -> Array[
+  @posoco.ToolDef,
+] {
+  [
+    @posoco.ToolDef::{
+      name: "read",
+      description: "Read a file's contents. Returns the text content of the file at the given path.",
+      input_schema: Json::object({
+        "type": Json::string("object"),
+        "properties": Json::object({
+          "path": Json::object({
+            "type": Json::string("string"),
+            "description": Json::string("Path to the file to read"),
+          }),
+        }),
+        "required": Json::array([Json::string("path")]),
+      }),
+      metadata: None,
+      source: Some("posoco_ext_read"),
+    },
+  ]
+}
+
+///|
+pub impl @posoco.ToolProvider for ReadTools with fn execute(
+  _self,
+  _name : String,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolResult raise @posoco.RuntimeError {
+  // Extract path from arguments
+  let path = match call.arguments {
+    Object(obj) =>
+      match obj.get("path") {
+        Some(String(p)) => p
+        _ =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "read: missing 'path' argument",
+          )
+      }
+    _ => raise @posoco.RuntimeError::UnknownTool("read: invalid arguments")
+  }
+  // Check existence
+  let exists = @fs.exists(path) catch {
+    e => raise @posoco.RuntimeError::InvocationFailed("read: stat failed: \{e}")
+  }
+  if !exists {
+    return @posoco.ToolResult::{
+      content: "File not found: " + path,
+      structured: None,
+      is_error: true,
+    }
+  }
+  // Read file
+  let data = @fs.read_file(path) catch {
+    e =>
+      raise @posoco.RuntimeError::InvocationFailed(
+        "read: failed to read \{path}: \{e}",
+      )
+  }
+  let content = data.text() catch {
+    e =>
+      raise @posoco.RuntimeError::InvocationFailed(
+        "read: decode failed for \{path}: \{e}",
+      )
+  }
+  @posoco.ToolResult::{ content, structured: None, is_error: false }
+}

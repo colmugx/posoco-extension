@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-grep/src"
+
+import {
+  "colmugx/posoco",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct GrepTools {
+}
+pub fn GrepTools::new() -> Self
+pub impl @posoco.ToolProvider for GrepTools
+
+// Type aliases
+
+// Traits
+
