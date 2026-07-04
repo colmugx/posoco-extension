@@ -166,6 +166,7 @@ async test "hook_passes_through_after_tool_stage" {
       tool_calls: [],
       tool_call_id: None,
       name: None,
+      reasoning_content: None,
     },
     tool_results: [],
     final_session_id: "session_1",

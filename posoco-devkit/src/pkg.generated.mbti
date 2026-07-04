@@ -1,0 +1,51 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-devkit"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct ExtContext {
+  logger : &Logger
+}
+pub fn ExtContext::debug(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+pub fn ExtContext::default() -> Self
+pub fn ExtContext::error(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+pub fn ExtContext::info(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+pub fn ExtContext::log(Self, LogEvent) -> Unit
+pub fn ExtContext::new(logger? : &Logger) -> Self
+pub fn ExtContext::warn(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+
+pub(all) struct LogEvent {
+  level : LogLevel
+  source : String
+  code : String
+  message : String
+  data : Json?
+}
+
+pub(all) enum LogLevel {
+  Debug
+  Info
+  Warn
+  Error
+} derive(Eq)
+
+pub(all) struct MemoryLogger {
+  events : Array[LogEvent]
+}
+pub fn MemoryLogger::new() -> Self
+pub impl Logger for MemoryLogger
+
+pub(all) struct NoopLogger {
+}
+pub impl Logger for NoopLogger
+
+// Type aliases
+
+// Traits
+pub(open) trait Logger {
+  fn log(Self, LogEvent) -> Unit
+}
+

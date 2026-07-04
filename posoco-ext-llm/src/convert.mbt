@@ -246,6 +246,7 @@ pub fn parse_openai_response(resp_json : Json) -> @posoco.ModelResponse {
     tool_calls,
     tool_call_id: None,
     name: None,
+    reasoning_content: None,
   }
   let usage = extract_usage(resp_json)
   let finish_reason = extract_finish_reason(resp_json, has_fc)

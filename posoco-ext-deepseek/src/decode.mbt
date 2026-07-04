@@ -135,6 +135,7 @@ fn decode_chat_response(
     tool_calls,
     tool_call_id: None,
     name: None,
+    reasoning_content: reasoning,
   }
   {
     message,

@@ -10,6 +10,7 @@ fn user_msg(text : String) -> @posoco.Message {
     tool_calls: [],
     tool_call_id: None,
     name: None,
+    reasoning_content: None,
   }
 }
 
@@ -21,6 +22,29 @@ fn assistant_msg(text : String) -> @posoco.Message {
     tool_calls: [],
     tool_call_id: None,
     name: None,
+    reasoning_content: None,
+  }
+}
+
+///|
+fn chat_options(effort : @posoco.ReasoningEffort?) -> @posoco.ChatOptions {
+  {
+    temperature: None,
+    max_output_tokens: None,
+    tool_choice: None,
+    reasoning_effort: effort,
+  }
+}
+
+///|
+fn assert_json_field_string(
+  obj : Map[String, Json],
+  key : String,
+  expected : String,
+) -> Unit raise {
+  match obj.get(key) {
+    Some(String(s)) => assert_eq(s, expected)
+    _ => fail("expected string field: " + key)
   }
 }
 
@@ -76,6 +100,7 @@ test "encode_message_with_tool_calls" {
     ],
     tool_call_id: None,
     name: None,
+    reasoning_content: None,
   }
   let json = encode_message(msg)
   guard json is Object(obj) else { fail("expected object") }
@@ -297,5 +322,272 @@ test "sse_tool_call_delta" {
   match args.get("path") {
     Some(String(p)) => assert_eq(p, "/x")
     _ => fail("expected path argument")
+  }
+}
+
+///|
+/// DeepSeek rule: assistant with tool_calls MUST resend reasoning_content.
+/// Verify the encoder emits it when tool_calls present + reasoning_content present.
+test "encode_message_reasoning_resent_with_tool_calls" {
+  let msg : @posoco.Message = {
+    role: @posoco.Role::Assistant,
+    content: [],
+    tool_calls: [{ id: "c1", name: "read", arguments: Json::object({}) }],
+    tool_call_id: None,
+    name: None,
+    reasoning_content: Some("thinking about this..."),
+  }
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("reasoning_content") {
+    Some(String(r)) => assert_eq(r, "thinking about this...")
+    _ => fail("reasoning_content MUST be present when tool_calls exist")
+  }
+}
+
+///|
+/// DeepSeek rule: assistant WITHOUT tool_calls — reasoning_content is omitted
+/// even if present (saves tokens, preserves prefix cache).
+test "encode_message_reasoning_omitted_without_tool_calls" {
+  let msg : @posoco.Message = {
+    role: @posoco.Role::Assistant,
+    content: [@posoco.Content::Text("answer")],
+    tool_calls: [],
+    tool_call_id: None,
+    name: None,
+    reasoning_content: Some("thinking..."),
+  }
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("reasoning_content") {
+    None => () // correct: omitted
+    _ => fail("reasoning_content should be omitted for non-tool-call turns")
+  }
+}
+
+///|
+/// DeepSeek rule: tool_calls present but reasoning_content is None — encoder
+/// should not add an empty reasoning_content field.
+test "encode_message_tool_calls_no_reasoning" {
+  let msg : @posoco.Message = {
+    role: @posoco.Role::Assistant,
+    content: [],
+    tool_calls: [{ id: "c1", name: "read", arguments: Json::object({}) }],
+    tool_call_id: None,
+    name: None,
+    reasoning_content: None,
+  }
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("reasoning_content") {
+    None => () // correct: None means don't emit
+    _ => fail("should not emit reasoning_content when it's None")
+  }
+}
+
+///|
+test "deepseek_config_defaults_to_single_model" {
+  let config = DeepSeekConfig::new("key")
+  assert_eq(config.api_key, "key")
+  assert_eq(config.base_url, "https://api.deepseek.com")
+  assert_eq(config.model, "deepseek-v4-flash")
+}
+
+///|
+test "deepseek_config_custom_model_passes_through" {
+  let config = DeepSeekConfig::new("key", model="custom-model")
+  assert_eq(config.model, "custom-model")
+}
+
+///|
+test "endpoint_helpers_build_api_and_beta_base" {
+  let config = DeepSeekConfig::new("key", base_url="https://api.deepseek.com")
+  assert_eq(api_base(config), "https://api.deepseek.com")
+  assert_eq(beta_base(config), "https://api.deepseek.com/beta")
+}
+
+///|
+test "beta_base_does_not_duplicate_suffix" {
+  let config = DeepSeekConfig::new(
+    "key",
+    base_url="https://api.deepseek.com/beta",
+  )
+  assert_eq(beta_base(config), "https://api.deepseek.com/beta")
+}
+
+///|
+test "build_chat_request_high_thinking_no_warn" {
+  let logger = @devkit.MemoryLogger::new()
+  let ctx = @devkit.ExtContext::new(logger~)
+  let body = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(Some(High)),
+    "deepseek-v4-flash",
+    false,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  assert_json_field_string(root, "model", "deepseek-v4-flash")
+  guard root.get("thinking") is Some(Object(thinking)) else {
+    fail("expected thinking object")
+  }
+  assert_json_field_string(thinking, "type", "enabled")
+  assert_json_field_string(root, "reasoning_effort", "high")
+  assert_eq(logger.events.length(), 0)
+}
+
+///|
+test "build_chat_request_maximum_thinking_no_warn" {
+  let logger = @devkit.MemoryLogger::new()
+  let ctx = @devkit.ExtContext::new(logger~)
+  let body = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(Some(Maximum)),
+    "deepseek-v4-flash",
+    false,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  guard root.get("thinking") is Some(Object(thinking)) else {
+    fail("expected thinking object")
+  }
+  assert_json_field_string(thinking, "type", "enabled")
+  assert_json_field_string(root, "reasoning_effort", "max")
+  assert_eq(logger.events.length(), 0)
+}
+
+///|
+test "build_chat_request_medium_falls_back_with_warn" {
+  let logger = @devkit.MemoryLogger::new()
+  let ctx = @devkit.ExtContext::new(logger~)
+  let body = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(Some(Medium)),
+    "deepseek-v4-flash",
+    false,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  guard root.get("thinking") is Some(Object(thinking)) else {
+    fail("expected thinking object")
+  }
+  assert_json_field_string(thinking, "type", "enabled")
+  assert_json_field_string(root, "reasoning_effort", "high")
+  assert_eq(logger.events.length(), 1)
+  assert_eq(logger.events[0].code, "deepseek.effort_fallback")
+  assert_eq(logger.events[0].message, "值不存在已自动路由到high")
+}
+
+///|
+test "build_chat_request_low_and_minimal_fallback" {
+  let logger = @devkit.MemoryLogger::new()
+  let ctx = @devkit.ExtContext::new(logger~)
+  let _ = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(Some(Low)),
+    "deepseek-v4-flash",
+    false,
+  )
+  let _ = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(Some(Minimal)),
+    "deepseek-v4-flash",
+    false,
+  )
+  assert_eq(logger.events.length(), 2)
+  assert_eq(logger.events[0].code, "deepseek.effort_fallback")
+  assert_eq(logger.events[1].code, "deepseek.effort_fallback")
+}
+
+///|
+test "build_chat_request_off_disables_thinking_no_warn" {
+  let logger = @devkit.MemoryLogger::new()
+  let ctx = @devkit.ExtContext::new(logger~)
+  let body = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(Some(Off)),
+    "deepseek-v4-flash",
+    false,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  guard root.get("thinking") is Some(Object(thinking)) else {
+    fail("expected thinking object")
+  }
+  assert_json_field_string(thinking, "type", "disabled")
+  match root.get("reasoning_effort") {
+    None => ()
+    _ => fail("disabled thinking should omit reasoning_effort")
+  }
+  assert_eq(logger.events.length(), 0)
+}
+
+///|
+test "build_chat_request_named_tool_choice" {
+  let ctx = @devkit.ExtContext::default()
+  let options : @posoco.ChatOptions = {
+    temperature: None,
+    max_output_tokens: None,
+    tool_choice: Some(@posoco.ToolChoice::NamedTool("read")),
+    reasoning_effort: Some(@posoco.ReasoningEffort::Off),
+  }
+  let body = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    options,
+    "deepseek-v4-flash",
+    false,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  guard root.get("tool_choice") is Some(Object(choice)) else {
+    fail("expected named tool choice")
+  }
+  assert_json_field_string(choice, "type", "function")
+  guard choice.get("function") is Some(Object(function)) else {
+    fail("expected function choice")
+  }
+  assert_json_field_string(function, "name", "read")
+}
+
+///|
+test "fim_request_body_uses_config_model" {
+  let config = DeepSeekConfig::new("key", model="same-model")
+  let body = build_fim_request_body(config, "prefix", Some("suffix"), 64)
+  guard body is Object(root) else { fail("expected object") }
+  assert_json_field_string(root, "model", "same-model")
+  assert_json_field_string(root, "prompt", "prefix")
+  assert_json_field_string(root, "suffix", "suffix")
+}
+
+///|
+test "prefix_request_body_uses_config_model_and_appends_prefix" {
+  let config = DeepSeekConfig::new("key", model="same-model")
+  let body = build_prefix_request_body(
+    config,
+    [user_msg("hi")],
+    "```json\n",
+    Some(["```"]),
+  )
+  guard body is Object(root) else { fail("expected object") }
+  assert_json_field_string(root, "model", "same-model")
+  guard root.get("messages") is Some(Array(messages)) else {
+    fail("expected messages")
+  }
+  assert_eq(messages.length(), 2)
+  guard messages[1] is Object(prefix_msg) else { fail("expected prefix msg") }
+  assert_json_field_string(prefix_msg, "role", "assistant")
+  assert_json_field_string(prefix_msg, "content", "```json\n")
+  match prefix_msg.get("prefix") {
+    Some(True) => ()
+    _ => fail("expected prefix=true")
   }
 }

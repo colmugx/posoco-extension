@@ -1,11 +1,12 @@
 ///|
 /// Wire encoder: convert posoco types to DeepSeek API JSON.
 ///
-/// DeepSeek-specific correctness:
-/// - Historical assistant messages NEVER carry `reasoning_content` (it is a
-///   one-shot field from deepseek-reasoner; resending it wastes ~11% tokens
-///   and pollutes the prefix cache). posoco's Message type has no reasoning
-///   field, so this is structurally guaranteed.
+/// DeepSeek-specific reasoning_content rules (per official thinking_mode guide):
+/// - Assistant message WITH tool_calls: reasoning_content MUST be resent in
+///   all subsequent turns (otherwise DeepSeek returns 400).
+/// - Assistant message WITHOUT tool_calls: reasoning_content is optional;
+///   omitting it saves tokens and preserves prefix cache.
+/// - Non-assistant messages: never carry reasoning_content.
 /// - Tool call arguments are JSON strings (DeepSeek convention).
 /// - Message order is append-only (prefix-cache friendly).
 
@@ -56,7 +57,18 @@ fn encode_message(msg : @posoco.Message) -> Json {
     Some(n) => obj["name"] = Json::string(n)
     None => ()
   }
-  // NOTE: deliberately no `reasoning_content` — see module doc.
+  // reasoning_content: DeepSeek requires it to be resent when the assistant
+  // message has tool_calls (otherwise 400 error). When there are no tool_calls,
+  // resending is optional and wasteful (pollutes prefix cache), so we skip it.
+  // This is the official recommendation from DeepSeek thinking_mode docs.
+  if msg.role is Assistant && msg.tool_calls.length() > 0 {
+    match msg.reasoning_content {
+      Some(r) => obj["reasoning_content"] = Json::string(r)
+      None => ()
+    }
+  }
+  // NOTE: for non-tool-call turns, reasoning_content is deliberately omitted
+  // even if present — see DeepSeek thinking_mode guide.
   Json::object(obj)
 }
 
@@ -81,11 +93,11 @@ fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
 /// Build the full chat completions request body.
 /// `base_url` is prepended by the caller; this returns just the JSON payload.
 fn build_chat_request(
+  ctx : @devkit.ExtContext,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   model : String,
-  thinking : ThinkingMode,
   stream : Bool,
 ) -> Json {
   let body : Map[String, Json] = {
@@ -107,14 +119,21 @@ fn build_chat_request(
     Some(Auto) => body["tool_choice"] = Json::string("auto")
     Some(NoTool) => body["tool_choice"] = Json::string("none")
     Some(Required) => body["tool_choice"] = Json::string("required")
-    Some(NamedTool(_)) => () // DeepSeek may not support named tool choice
+    Some(NamedTool(name)) =>
+      body["tool_choice"] = Json::object({
+        "type": Json::string("function"),
+        "function": Json::object({ "name": Json::string(name) }),
+      })
     None => ()
   }
-  // DeepSeek thinking effort (reasoner model only)
-  match thinking {
-    No => ()
-    High => body["thinking"] = Json::object({ "effort": Json::string("high") })
-    Max => body["thinking"] = Json::object({ "effort": Json::string("max") })
+  let (thinking, effort) = resolve_deepseek_thinking(
+    ctx,
+    options.reasoning_effort,
+  )
+  body["thinking"] = thinking
+  match effort {
+    Some(e) => body["reasoning_effort"] = Json::string(e)
+    None => ()
   }
   if stream {
     body["stream"] = Json::boolean(true)
@@ -123,4 +142,52 @@ fn build_chat_request(
     })
   }
   Json::object(body)
+}
+
+///|
+fn reasoning_effort_name(effort : @posoco.ReasoningEffort) -> String {
+  match effort {
+    Off => "off"
+    Minimal => "minimal"
+    Low => "low"
+    Medium => "medium"
+    High => "high"
+    Maximum => "maximum"
+  }
+}
+
+///|
+fn enabled_thinking_json() -> Json {
+  Json::object({ "type": Json::string("enabled") })
+}
+
+///|
+fn disabled_thinking_json() -> Json {
+  Json::object({ "type": Json::string("disabled") })
+}
+
+///|
+fn resolve_deepseek_thinking(
+  ctx : @devkit.ExtContext,
+  effort : @posoco.ReasoningEffort?,
+) -> (Json, String?) {
+  match effort {
+    None | Some(Off) => (disabled_thinking_json(), None)
+    Some(High) => (enabled_thinking_json(), Some("high"))
+    Some(Maximum) => (enabled_thinking_json(), Some("max"))
+    Some(other) => {
+      ctx.warn(
+        source="posoco-ext-deepseek",
+        code="deepseek.effort_fallback",
+        message="值不存在已自动路由到high",
+        data=Some(
+          Json::object({
+            "requested": Json::string(reasoning_effort_name(other)),
+            "routed_to": Json::string("high"),
+          }),
+        ),
+      )
+      (enabled_thinking_json(), Some("high"))
+    }
+  }
 }

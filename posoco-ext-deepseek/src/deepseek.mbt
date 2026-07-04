@@ -18,6 +18,34 @@ fn build_headers(config : DeepSeekConfig) -> Map[String, String] {
 }
 
 ///|
+fn api_base(config : DeepSeekConfig) -> String {
+  config.base_url
+}
+
+///|
+fn beta_base(config : DeepSeekConfig) -> String {
+  let base = config.base_url
+  if base.has_suffix("/beta") {
+    base
+  } else {
+    base + "/beta"
+  }
+}
+
+///|
+fn raise_http_status(
+  label : String,
+  code : Int,
+  body_text : String,
+) -> Unit raise @posoco.ModelError {
+  if code != 200 {
+    raise @posoco.ModelError::Transport(
+      "DeepSeek " + label + " error \{code}: " + body_text,
+    )
+  }
+}
+
+///|
 /// ModelPort implementation — non-streaming chat via /chat/completions.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   self : DeepSeekModelPort,
@@ -25,26 +53,37 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
 ) -> @posoco.ModelResponse raise @posoco.ModelError {
-  let (model, thinking) = resolve_model(self.config, options)
   let body = build_chat_request(
-    messages, tools, options, model, thinking, false,
+    self.ctx,
+    messages,
+    tools,
+    options,
+    self.config.model,
+    false,
   )
   let headers = build_headers(self.config)
-  let client = @http.Client::Client(self.config.base_url, headers~) catch {
+  let client = @http.Client::Client(api_base(self.config), headers~) catch {
     e =>
       raise @posoco.ModelError::Transport("Failed to create HTTP client: \{e}")
   }
-  let _ = client.post("/chat/completions", body.stringify()) catch {
-    e => raise @posoco.ModelError::Transport("HTTP request failed: \{e}")
+  let response = client.post("/chat/completions", body.stringify()) catch {
+    e => {
+      client.close()
+      raise @posoco.ModelError::Transport("HTTP request failed: \{e}")
+    }
   }
   let body_data = client.read_all() catch {
-    e => raise @posoco.ModelError::Transport("Failed to read response: \{e}")
+    e => {
+      client.close()
+      raise @posoco.ModelError::Transport("Failed to read response: \{e}")
+    }
   }
   client.close()
   let body_text = body_data.text() catch {
     e =>
       raise @posoco.ModelError::ResponseParse("Failed to decode response: \{e}")
   }
+  raise_http_status("chat", response.code, body_text)
   let resp_json : Json = @json.parse(body_text) catch {
     e => raise @posoco.ModelError::ResponseParse("JSON parse error: \{e}")
   }
@@ -61,10 +100,16 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat_streaming(
   options : @posoco.ChatOptions,
   on_chunk : (@posoco.StreamChunk) -> Unit,
 ) -> @posoco.ModelResponse raise @posoco.ModelError {
-  let (model, thinking) = resolve_model(self.config, options)
-  let body = build_chat_request(messages, tools, options, model, thinking, true)
+  let body = build_chat_request(
+    self.ctx,
+    messages,
+    tools,
+    options,
+    self.config.model,
+    true,
+  )
   let headers = build_headers(self.config)
-  let client = @http.Client::Client(self.config.base_url, headers~) catch {
+  let client = @http.Client::Client(api_base(self.config), headers~) catch {
     e =>
       raise @posoco.ModelError::Transport("Failed to create HTTP client: \{e}")
   }
