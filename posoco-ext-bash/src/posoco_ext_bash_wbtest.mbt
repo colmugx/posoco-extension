@@ -1,7 +1,8 @@
 ///|
 /// shell_wbtest.mbt — Whitebox tests for ShellTools (unified ToolProvider)
 ///
-/// Note: Runtime execution tests are skipped since they need a real shell.
+/// Runtime fixtures use only the local `sh` required by the implementation;
+/// they are offline and do not depend on external services.
 
 ///|
 /// ——— Test: ShellTools.list_tools ———
@@ -67,8 +68,86 @@ test "extract_command_from_command_key" {
 }
 
 ///|
-test "extract_command_empty_object_returns_to_string" {
+/// T07-B: a missing cmd/command now raises a typed error instead of silently
+/// falling back to running the JSON blob as a shell command.
+async test "extract_command_empty_object_raises_typed_error" {
   let args = Json::object(Map::from_array([]))
-  let cmd = extract_command(args)
-  assert_true(cmd.length() > 0)
+  let result = Ok(extract_command(args)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.RuntimeError::UnknownTool(msg)) =>
+      assert_true(msg.contains("missing"))
+    _ => fail("expected UnknownTool error for missing cmd")
+  }
+}
+
+///|
+async test "extract_command_wrong_type_raises_precise_error" {
+  for
+    pair in [
+      ("cmd", Json::object(Map::from_array([("cmd", Json::number(1.0))]))),
+      (
+        "command",
+        Json::object(Map::from_array([("command", Json::boolean(true))])),
+      ),
+    ] {
+    let (field, args) = pair
+    let result = Ok(extract_command(args)) catch { error => Err(error) }
+    match result {
+      Err(@posoco.RuntimeError::UnknownTool(message)) => {
+        assert_true(message.contains("'" + field + "'"))
+        assert_true(message.contains("must be a string"))
+        assert_false(message.contains("missing"))
+      }
+      _ => fail("expected wrong-type shell command to be rejected")
+    }
+  }
+}
+
+///|
+async test "empty_command_has_arguments_stage" {
+  let call : @posoco.ToolCall = {
+    id: "tc_empty",
+    name: "bash",
+    arguments: Json::object(Map::from_array([("cmd", Json::string(""))])),
+  }
+  let result = Ok(ShellTools::new().execute("bash", call)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@posoco.RuntimeError::InvocationFailed(message)) => {
+      assert_true(message.contains("bash"))
+      assert_true(message.contains("stage=arguments"))
+      assert_true(message.contains("empty_command"))
+    }
+    _ => fail("expected empty command to fail before process execution")
+  }
+}
+
+///|
+test "collect_output_failure_mapping_is_stage_only" {
+  match bash_collect_output_failure() {
+    @posoco.RuntimeError::InvocationFailed(message) =>
+      assert_eq(message, "bash: process failed (stage=collect_output)")
+    _ => fail("expected collect_output mapping to be InvocationFailed")
+  }
+}
+
+///|
+/// T07-B: invalid UTF-8 from an exit-0 process is an explicit business error,
+/// not a successful result with silently replaced output.
+async test "non_utf8_output_is_explicit_tool_error" {
+  let tools = ShellTools::new()
+  let call : @posoco.ToolCall = {
+    id: "tc_binary",
+    name: "bash",
+    arguments: Json::object(
+      Map::from_array([("cmd", Json::string("printf '\\377'"))]),
+    ),
+  }
+  let result = tools.execute("bash", call)
+  assert_true(result.is_error)
+  assert_true(result.content.contains("bash"))
+  assert_true(result.content.contains("stage=decode_output"))
+  assert_true(result.content.contains("invalid_utf8"))
+  assert_true(result.content.contains("exit_code=0"))
 }

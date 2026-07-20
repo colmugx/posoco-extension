@@ -10,7 +10,7 @@ pub fn default_rtk_rewrite(String, String) -> String?
 
 pub fn default_shell_tools() -> ShellTools
 
-pub fn extract_command(Json) -> String
+pub fn extract_command(Json) -> Result[String, @posoco.HookError]
 
 pub fn is_shell_tool(String, ShellTools) -> Bool
 

@@ -50,14 +50,72 @@ fn build_prefix_request_body(
 }
 
 ///|
+/// Pure decoder for the DeepSeek FIM wire response. Keeping the decoder free
+/// of HTTP concerns makes every malformed response shape testable offline.
+fn decode_fim_response(json : Json) -> String raise @posoco.ModelError {
+  guard json is Object(root) else {
+    raise @posoco.ModelError::ResponseParse(
+      "DeepSeek response parse failure (stage=fim.response, category=not_object)",
+    )
+  }
+  match root.get("error") {
+    Some(Object(_)) =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek API error (stage=fim.response.error, category=structured)",
+      )
+    Some(_) =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek API error (stage=fim.response.error, category=wrong_type)",
+      )
+    None => ()
+  }
+  let choices = match root.get("choices") {
+    Some(Array(choices)) => choices
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=fim.choices, category=wrong_type)",
+      )
+    None =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=fim.choices, category=missing)",
+      )
+  }
+  if choices.length() == 0 {
+    raise @posoco.ModelError::ResponseParse(
+      "DeepSeek response parse failure (stage=fim.choices, category=empty)",
+    )
+  }
+  guard choices[0] is Object(choice) else {
+    raise @posoco.ModelError::ResponseParse(
+      "DeepSeek response parse failure (stage=fim.choice, category=not_object)",
+    )
+  }
+  match choice.get("text") {
+    Some(String(text)) => text
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=fim.choice.text, category=wrong_type)",
+      )
+    None =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=fim.choice.text, category=missing)",
+      )
+  }
+}
+
+///|
 /// FIM completion: given code before and after the cursor, fill the middle.
 ///
 /// Example:
 /// ```moonbit nocheck
-/// let filled = port.fim_completion(
-///   prefix="def fib(a):\n  if a <= 1: return a\n  ",
-///   suffix="return fib(a-1) + fib(a-2)",
-/// )
+/// async fn fim_example(
+///   port : DeepSeekModelPort,
+/// ) -> String raise @posoco.ModelError {
+///   port.fim_completion(
+///     "def fib(a):\n  if a <= 1: return a\n  ",
+///     Some("return fib(a-1) + fib(a-2)"),
+///   )
+/// }
 /// ```
 pub async fn DeepSeekModelPort::fim_completion(
   self : DeepSeekModelPort,
@@ -69,55 +127,56 @@ pub async fn DeepSeekModelPort::fim_completion(
   let body = build_fim_request_body(self.config, prefix, suffix, max_tokens)
   let headers = build_headers(self.config)
   let client = @http.Client::Client(base, headers~) catch {
-    e => raise @posoco.ModelError::Transport("FIM client failed: \{e}")
+    _ =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=fim.create_client)",
+      )
   }
   let response = client.post("/completions", body.stringify()) catch {
-    e => {
+    _ => {
       client.close()
-      raise @posoco.ModelError::Transport("FIM request failed: \{e}")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=fim.send_request)",
+      )
+    }
+  }
+  if !is_deepseek_http_success(response.code) {
+    let body_summary = read_error_body_summary(client) catch {
+      _ => BodyUnavailable
+    }
+    client.close()
+    match
+      classify_deepseek_http_status(
+        "fim.http_status",
+        response.code,
+        body_summary,
+      ) {
+      Some(err) => raise err
+      None => ()
     }
   }
   let resp_data = client.read_all() catch {
-    e => {
+    _ => {
       client.close()
-      raise @posoco.ModelError::Transport("FIM read failed: \{e}")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=fim.read_response)",
+      )
     }
   }
   client.close()
   let resp_text = resp_data.text() catch {
-    e => raise @posoco.ModelError::ResponseParse("FIM decode failed: \{e}")
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=fim.decode_utf8, category=invalid_utf8, body_bytes=\{resp_data.binary().length()})",
+      )
   }
-  raise_http_status("FIM", response.code, resp_text)
   let resp_json : Json = @json.parse(resp_text) catch {
-    e => raise @posoco.ModelError::ResponseParse("FIM JSON error: \{e}")
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=fim.json, category=malformed, body_chars=\{resp_text.length()})",
+      )
   }
-  // FIM response: { "choices": [{ "text": "..." }] }
-  guard resp_json is Object(root) else {
-    raise @posoco.ModelError::ResponseParse("FIM response not object")
-  }
-  match root.get("error") {
-    Some(Object(e)) =>
-      match e.get("message") {
-        Some(String(m)) =>
-          raise @posoco.ModelError::Transport("DeepSeek FIM error: " + m)
-        _ => raise @posoco.ModelError::Transport("unknown FIM error")
-      }
-    _ => ()
-  }
-  guard root.get("choices") is Some(Array(choices)) else {
-    raise @posoco.ModelError::ResponseParse("FIM missing choices")
-  }
-  if choices.length() == 0 {
-    raise @posoco.ModelError::ResponseParse("FIM empty choices")
-  }
-  match choices[0] {
-    Object(choice) =>
-      match choice.get("text") {
-        Some(String(text)) => text
-        _ => raise @posoco.ModelError::ResponseParse("FIM missing text field")
-      }
-    _ => raise @posoco.ModelError::ResponseParse("FIM invalid choice")
-  }
+  decode_fim_response(resp_json)
 }
 
 ///|
@@ -129,11 +188,12 @@ pub async fn DeepSeekModelPort::fim_completion(
 ///
 /// Example:
 /// ```moonbit nocheck
-/// let json_str = port.chat_prefix_completion(
-///   messages=[user_msg("output JSON")],
-///   prefix="```json\n",
-///   stop=["```"],
-/// )
+/// async fn prefix_example(
+///   port : DeepSeekModelPort,
+///   messages : Array[@posoco.Message],
+/// ) -> String raise @posoco.ModelError {
+///   port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
+/// }
 /// ```
 pub async fn DeepSeekModelPort::chat_prefix_completion(
   self : DeepSeekModelPort,
@@ -145,33 +205,67 @@ pub async fn DeepSeekModelPort::chat_prefix_completion(
   let body = build_prefix_request_body(self.config, messages, prefix, stop)
   let headers = build_headers(self.config)
   let client = @http.Client::Client(base, headers~) catch {
-    e => raise @posoco.ModelError::Transport("Prefix client failed: \{e}")
+    _ =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=prefix.create_client)",
+      )
   }
   let response = client.post("/chat/completions", body.stringify()) catch {
-    e => {
+    _ => {
       client.close()
-      raise @posoco.ModelError::Transport("Prefix request failed: \{e}")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=prefix.send_request)",
+      )
+    }
+  }
+  if !is_deepseek_http_success(response.code) {
+    let body_summary = read_error_body_summary(client) catch {
+      _ => BodyUnavailable
+    }
+    client.close()
+    match
+      classify_deepseek_http_status(
+        "prefix.http_status",
+        response.code,
+        body_summary,
+      ) {
+      Some(err) => raise err
+      None => ()
     }
   }
   let resp_data = client.read_all() catch {
-    e => {
+    _ => {
       client.close()
-      raise @posoco.ModelError::Transport("Prefix read failed: \{e}")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=prefix.read_response)",
+      )
     }
   }
   client.close()
   let resp_text = resp_data.text() catch {
-    e => raise @posoco.ModelError::ResponseParse("Prefix decode failed: \{e}")
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=prefix.decode_utf8, category=invalid_utf8, body_bytes=\{resp_data.binary().length()})",
+      )
   }
-  raise_http_status("prefix", response.code, resp_text)
   let resp_json : Json = @json.parse(resp_text) catch {
-    e => raise @posoco.ModelError::ResponseParse("Prefix JSON error: \{e}")
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=prefix.json, category=malformed, body_chars=\{resp_text.length()})",
+      )
   }
   // Reuse decode_chat_response for the response (same format as /chat/completions)
   let response = decode_chat_response(resp_json)
   // Extract text content from the response message
-  match response.message.content[0] {
-    @posoco.Content::Text(t) => t
-    _ => ""
+  match response.message.content {
+    [@posoco.Content::Text(t), ..] => t
+    [] =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=prefix.content, category=missing)",
+      )
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=prefix.content, category=wrong_type)",
+      )
   }
 }

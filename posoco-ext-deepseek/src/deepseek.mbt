@@ -33,15 +33,124 @@ fn beta_base(config : DeepSeekConfig) -> String {
 }
 
 ///|
-fn raise_http_status(
-  label : String,
-  code : Int,
-  body_text : String,
-) -> Unit raise @posoco.ModelError {
-  if code != 200 {
-    raise @posoco.ModelError::Transport(
-      "DeepSeek " + label + " error \{code}: " + body_text,
+/// Redacted non-2xx body metadata. Keeping this as an ADT prevents the raw
+/// provider body from crossing the HTTP-error formatting boundary.
+priv enum DeepSeekErrorBodySummary {
+  BodyBytesUtf8(Int)
+  BodyBytesInvalidUtf8(Int)
+  BodyReadFailed
+  BodyUnavailable
+}
+
+///|
+/// Format an HTTP failure from redacted metadata.
+fn format_deepseek_http_error(
+  stage : String,
+  status : Int,
+  body_summary : DeepSeekErrorBodySummary,
+) -> String {
+  let summary = match body_summary {
+    BodyBytesUtf8(length) => "body_bytes=\{length}, body_category=utf8"
+    BodyBytesInvalidUtf8(length) =>
+      "body_bytes=\{length}, body_category=invalid_utf8"
+    BodyReadFailed => "body_category=read_failed"
+    BodyUnavailable => "body_category=unavailable"
+  }
+  "DeepSeek HTTP error (stage=\{stage}, status=\{status}, \{summary})"
+}
+
+///|
+fn is_deepseek_http_success(status : Int) -> Bool {
+  status >= 200 && status < 300
+}
+
+///|
+/// Pure HTTP-status classifier. It accepts only redacted body metadata, so a
+/// provider payload can never cross into the observable error message.
+fn classify_deepseek_http_status(
+  stage : String,
+  status : Int,
+  body_summary : DeepSeekErrorBodySummary,
+) -> @posoco.ModelError? {
+  if is_deepseek_http_success(status) {
+    None
+  } else {
+    Some(
+      @posoco.ModelError::Transport(
+        format_deepseek_http_error(stage, status, body_summary),
+      ),
     )
+  }
+}
+
+///|
+/// T07-B: drain a non-2xx response without exposing provider payloads.
+async fn read_error_body_summary(
+  client : @http.Client,
+) -> DeepSeekErrorBodySummary {
+  let data = client.read_all() catch { _ => return BodyReadFailed }
+  let byte_length = data.binary().length()
+  let _ = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
+  BodyBytesUtf8(byte_length)
+}
+
+///|
+/// Pure classification for stream termination; used by the HTTP loop and
+/// offline tests so EOF is never inferred from accumulated content.
+priv enum DeepSeekStreamTermination {
+  ExplicitTerminal
+  CleanEof
+  TransportFailure
+}
+
+///|
+fn classify_deepseek_stream_termination(
+  termination : DeepSeekStreamTermination,
+) -> @posoco.ModelError? {
+  match termination {
+    ExplicitTerminal => None
+    CleanEof =>
+      Some(
+        @posoco.ModelError::ResponseParse(
+          "DeepSeek SSE truncated (stage=eof, terminal_marker=missing)",
+        ),
+      )
+    TransportFailure =>
+      Some(
+        @posoco.ModelError::Transport(
+          "DeepSeek transport failure (stage=read_stream)",
+        ),
+      )
+  }
+}
+
+///|
+/// Reject incomplete tool-call builders before delegating JSON assembly.
+fn validate_deepseek_stream_tool_calls(
+  acc : @posoco.StreamAccumulator,
+) -> Unit raise @posoco.ModelError {
+  for tc in acc.tool_calls {
+    if tc.id == "" {
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek SSE parse failure (stage=tool.id, category=missing)",
+      )
+    }
+    if tc.name == "" {
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek SSE parse failure (stage=tool.name, category=missing)",
+      )
+    }
+    if tc.arguments_json == "" {
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek SSE parse failure (stage=tool.arguments, category=missing)",
+      )
+    }
+    let _ : Json = @json.parse(tc.arguments_json) catch {
+      _ =>
+        raise @posoco.ModelError::ResponseParse(
+          "DeepSeek SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json.length()})",
+        )
+    }
   }
 }
 
@@ -63,29 +172,54 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   )
   let headers = build_headers(self.config)
   let client = @http.Client::Client(api_base(self.config), headers~) catch {
-    e =>
-      raise @posoco.ModelError::Transport("Failed to create HTTP client: \{e}")
+    _ =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=create_client)",
+      )
   }
   let response = client.post("/chat/completions", body.stringify()) catch {
-    e => {
+    _ => {
       client.close()
-      raise @posoco.ModelError::Transport("HTTP request failed: \{e}")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=send_request)",
+      )
+    }
+  }
+  if !is_deepseek_http_success(response.code) {
+    let body_summary = read_error_body_summary(client) catch {
+      _ => BodyUnavailable
+    }
+    client.close()
+    match
+      classify_deepseek_http_status(
+        "chat.http_status",
+        response.code,
+        body_summary,
+      ) {
+      Some(err) => raise err
+      None => ()
     }
   }
   let body_data = client.read_all() catch {
-    e => {
+    _ => {
       client.close()
-      raise @posoco.ModelError::Transport("Failed to read response: \{e}")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=read_response)",
+      )
     }
   }
   client.close()
   let body_text = body_data.text() catch {
-    e =>
-      raise @posoco.ModelError::ResponseParse("Failed to decode response: \{e}")
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
+      )
   }
-  raise_http_status("chat", response.code, body_text)
   let resp_json : Json = @json.parse(body_text) catch {
-    e => raise @posoco.ModelError::ResponseParse("JSON parse error: \{e}")
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=json, category=malformed, body_chars=\{body_text.length()})",
+      )
   }
   decode_chat_response(resp_json)
 }
@@ -110,48 +244,77 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat_streaming(
   )
   let headers = build_headers(self.config)
   let client = @http.Client::Client(api_base(self.config), headers~) catch {
-    e =>
-      raise @posoco.ModelError::Transport("Failed to create HTTP client: \{e}")
+    _ =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=create_client)",
+      )
   }
   client.request(@http.RequestMethod::Post, "/chat/completions") catch {
     _ => {
       client.close()
-      raise @posoco.ModelError::Transport("Request send failed")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=send_request)",
+      )
     }
   }
   client.write(body.stringify()) catch {
     _ => {
       client.close()
-      raise @posoco.ModelError::Transport("Write body failed")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=write_body)",
+      )
     }
   }
   client.flush() catch {
     _ => {
       client.close()
-      raise @posoco.ModelError::Transport("Flush failed")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=flush)",
+      )
     }
   }
   let response = client.end_request() catch {
     _ => {
       client.close()
-      raise @posoco.ModelError::Transport("End request failed")
+      raise @posoco.ModelError::Transport(
+        "DeepSeek transport failure (stage=end_request)",
+      )
     }
   }
-  if response.code != 200 {
+  if !is_deepseek_http_success(response.code) {
+    let err_summary = read_error_body_summary(client) catch {
+      _ => BodyUnavailable
+    }
     client.close()
-    raise @posoco.ModelError::Transport("DeepSeek API error \{response.code}")
+    match
+      classify_deepseek_http_status(
+        "chat_stream.http_status",
+        response.code,
+        err_summary,
+      ) {
+      Some(err) => raise err
+      None => ()
+    }
   }
   // Read SSE stream line by line
   let acc = @posoco.StreamAccumulator::new()
   let mut done = false
   let mut data_buffer = ""
   while !done {
-    let line = client.read_until("\n") catch { _ => None }
+    let line = client.read_until("\n") catch {
+      _ => {
+        client.close()
+        match classify_deepseek_stream_termination(TransportFailure) {
+          Some(err) => raise err
+          None => None
+        }
+      }
+    }
     match line {
       Some(data) => {
         let trimmed = data.trim()
-        if trimmed.has_prefix("data: ") {
-          let payload = trimmed[6:].to_owned()
+        if trimmed.has_prefix("data:") {
+          let payload = trimmed[5:].trim().to_owned()
           if payload.length() > 0 {
             data_buffer = payload
             done = process_deepseek_sse(payload, acc, on_chunk)
@@ -162,19 +325,19 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat_streaming(
         }
       }
       None => {
-        // Stream closed
-        if !(acc.tool_calls.length() > 0 ||
-          acc.text != "" ||
-          acc.reasoning != "") {
-          client.close()
-          raise @posoco.ModelError::ResponseParse(
-            "Stream ended with no content",
-          )
+        client.close()
+        match classify_deepseek_stream_termination(CleanEof) {
+          Some(err) => raise err
+          None => done = true
         }
-        done = true
       }
     }
   }
   client.close()
+  match classify_deepseek_stream_termination(ExplicitTerminal) {
+    Some(err) => raise err
+    None => ()
+  }
+  validate_deepseek_stream_tool_calls(acc)
   acc.to_response()
 }

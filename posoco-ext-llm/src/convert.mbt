@@ -90,10 +90,17 @@ pub fn posoco_tool_to_openai(tool : @posoco.ToolDef) -> Json {
 
 ///|
 /// Extract tool calls from OpenAI Responses API output array.
-fn extract_tool_calls(output : Json) -> (Array[@posoco.ToolCall], Bool) {
+/// T07-B: malformed tool-call arguments JSON raises ResponseParse instead
+/// of silently becoming {}.
+fn extract_tool_calls(
+  output : Json,
+) -> (Array[@posoco.ToolCall], Bool) raise @posoco.ModelError {
   let items = match output {
     Json::Array(arr) => arr
-    _ => return ([], false)
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=output, category=wrong_type)",
+      )
   }
   let tool_calls : Array[@posoco.ToolCall] = []
   let mut has_fc = false
@@ -105,29 +112,79 @@ fn extract_tool_calls(output : Json) -> (Array[@posoco.ToolCall], Bool) {
             if t == "function_call" {
               has_fc = true
               let id = match map.get("call_id") {
-                Some(Json::String(s)) => s
-                _ =>
+                Some(Json::String(s)) if s != "" => s
+                Some(Json::String(_)) =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.call_id, category=empty)",
+                  )
+                Some(_) =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.call_id, category=wrong_type)",
+                  )
+                None =>
                   match map.get("id") {
-                    Some(Json::String(s)) => s
-                    _ => ""
+                    Some(Json::String(s)) if s != "" => s
+                    Some(Json::String(_)) =>
+                      raise @posoco.ModelError::ResponseParse(
+                        "OpenAI response parse failure (stage=tool.id, category=empty)",
+                      )
+                    Some(_) =>
+                      raise @posoco.ModelError::ResponseParse(
+                        "OpenAI response parse failure (stage=tool.id, category=wrong_type)",
+                      )
+                    None =>
+                      raise @posoco.ModelError::ResponseParse(
+                        "OpenAI response parse failure (stage=tool.id, category=missing)",
+                      )
                   }
               }
               let name = match map.get("name") {
-                Some(Json::String(s)) => s
-                _ => ""
+                Some(Json::String(s)) if s != "" => s
+                Some(Json::String(_)) =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.name, category=empty)",
+                  )
+                Some(_) =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.name, category=wrong_type)",
+                  )
+                None =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.name, category=missing)",
+                  )
               }
               let args_str = match map.get("arguments") {
                 Some(Json::String(s)) => s
-                _ => "{}"
+                Some(_) =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.arguments, category=wrong_type)",
+                  )
+                None =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.arguments, category=missing)",
+                  )
               }
               let args : Json = @json.parse(args_str) catch {
-                _ => Json::object(Map::from_array([]))
+                _ =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
+                  )
               }
               tool_calls.push(@posoco.ToolCall::{ id, name, arguments: args })
             }
-          _ => ()
+          Some(_) =>
+            raise @posoco.ModelError::ResponseParse(
+              "OpenAI response parse failure (stage=output_item.type, category=wrong_type)",
+            )
+          None =>
+            raise @posoco.ModelError::ResponseParse(
+              "OpenAI response parse failure (stage=output_item.type, category=missing)",
+            )
         }
-      _ => ()
+      _ =>
+        raise @posoco.ModelError::ResponseParse(
+          "OpenAI response parse failure (stage=output_item, category=not_object)",
+        )
     }
   }
   (tool_calls, has_fc)
@@ -135,10 +192,15 @@ fn extract_tool_calls(output : Json) -> (Array[@posoco.ToolCall], Bool) {
 
 ///|
 /// Extract assistant message content from OpenAI Responses API output array.
-fn extract_assistant_content(output : Json) -> Array[@posoco.Content] {
+fn extract_assistant_content(
+  output : Json,
+) -> Array[@posoco.Content] raise @posoco.ModelError {
   let items = match output {
     Json::Array(arr) => arr
-    _ => return []
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=output, category=wrong_type)",
+      )
   }
   let content : Array[@posoco.Content] = []
   for item in items {
@@ -157,19 +219,54 @@ fn extract_assistant_content(output : Json) -> Array[@posoco.Content] {
                             match ci_map.get("text") {
                               Some(Json::String(s)) =>
                                 content.push(@posoco.Content::Text(s))
-                              _ => ()
+                              Some(_) =>
+                                raise @posoco.ModelError::ResponseParse(
+                                  "OpenAI response parse failure (stage=message.output_text.text, category=wrong_type)",
+                                )
+                              None =>
+                                raise @posoco.ModelError::ResponseParse(
+                                  "OpenAI response parse failure (stage=message.output_text.text, category=missing)",
+                                )
                             }
-                          _ => ()
+                          Some(Json::String(_)) => ()
+                          Some(_) =>
+                            raise @posoco.ModelError::ResponseParse(
+                              "OpenAI response parse failure (stage=message.content_item.type, category=wrong_type)",
+                            )
+                          None =>
+                            raise @posoco.ModelError::ResponseParse(
+                              "OpenAI response parse failure (stage=message.content_item.type, category=missing)",
+                            )
                         }
-                      _ => ()
+                      _ =>
+                        raise @posoco.ModelError::ResponseParse(
+                          "OpenAI response parse failure (stage=message.content_item, category=not_object)",
+                        )
                     }
                   }
-                _ => ()
+                Some(_) =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=message.content, category=wrong_type)",
+                  )
+                None =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=message.content, category=missing)",
+                  )
               }
             }
-          _ => ()
+          Some(_) =>
+            raise @posoco.ModelError::ResponseParse(
+              "OpenAI response parse failure (stage=output_item.type, category=wrong_type)",
+            )
+          None =>
+            raise @posoco.ModelError::ResponseParse(
+              "OpenAI response parse failure (stage=output_item.type, category=missing)",
+            )
         }
-      _ => ()
+      _ =>
+        raise @posoco.ModelError::ResponseParse(
+          "OpenAI response parse failure (stage=output_item, category=not_object)",
+        )
     }
   }
   content
@@ -177,66 +274,124 @@ fn extract_assistant_content(output : Json) -> Array[@posoco.Content] {
 
 ///|
 /// Extract usage from OpenAI Responses API response.
-fn extract_usage(resp : Json) -> @posoco.Usage? {
+fn extract_usage(resp : Json) -> @posoco.Usage? raise @posoco.ModelError {
   match resp {
     Json::Object(map) =>
       match map.get("usage") {
         Some(Json::Object(usage_map)) => {
           let input_tokens = match usage_map.get("input_tokens") {
             Some(Json::Number(n, ..)) => Some(n.to_int())
-            _ => None
+            Some(_) =>
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI response parse failure (stage=usage.input_tokens, category=wrong_type)",
+              )
+            None =>
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI response parse failure (stage=usage.input_tokens, category=missing)",
+              )
           }
           let output_tokens = match usage_map.get("output_tokens") {
             Some(Json::Number(n, ..)) => Some(n.to_int())
-            _ => None
+            Some(_) =>
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI response parse failure (stage=usage.output_tokens, category=wrong_type)",
+              )
+            None =>
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI response parse failure (stage=usage.output_tokens, category=missing)",
+              )
           }
-          let total = match (input_tokens, output_tokens) {
-            (Some(i), Some(o)) => Some(i + o)
-            _ => None
+          let total_tokens = match usage_map.get("total_tokens") {
+            Some(Json::Number(n, ..)) => Some(n.to_int())
+            Some(_) =>
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI response parse failure (stage=usage.total_tokens, category=wrong_type)",
+              )
+            None =>
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI response parse failure (stage=usage.total_tokens, category=missing)",
+              )
           }
-          Some(@posoco.Usage::{
-            input_tokens,
-            output_tokens,
-            total_tokens: total,
-          })
+          Some(@posoco.Usage::{ input_tokens, output_tokens, total_tokens })
         }
-        _ => None
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "OpenAI response parse failure (stage=usage, category=wrong_type)",
+          )
+        None => None
       }
-    _ => None
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=response, category=not_object)",
+      )
   }
 }
 
 ///|
-/// Determine FinishReason from OpenAI response status and tool calls.
-fn extract_finish_reason(
+/// Validate a terminal Responses API object without serializing provider error
+/// bodies or status payloads. Only `completed` is a successful response.
+fn validate_openai_terminal_response(
   resp : Json,
-  has_tool_calls : Bool,
-) -> @posoco.FinishReason {
-  if has_tool_calls {
-    return @posoco.FinishReason::ToolCalls
+  stage_prefix : String,
+) -> Unit raise @posoco.ModelError {
+  let map = match resp {
+    Json::Object(map) => map
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=response, category=not_object)",
+      )
   }
-  match resp {
-    Json::Object(map) =>
-      match map.get("status") {
-        Some(Json::String("completed")) => @posoco.FinishReason::Stop
-        Some(Json::String("incomplete")) => @posoco.FinishReason::Length
-        Some(Json::String(s)) => @posoco.FinishReason::Other(s)
-        _ => @posoco.FinishReason::Stop
-      }
-    _ => @posoco.FinishReason::Stop
+  match map.get("error") {
+    Some(Json::Null) | None => ()
+    Some(Json::Object(_)) =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response terminal failure (stage=\{stage_prefix}error, category=provider_error)",
+      )
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=\{stage_prefix}error, category=wrong_type)",
+      )
+  }
+  match map.get("status") {
+    Some(Json::String("completed")) => ()
+    Some(Json::String(_)) =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response terminal failure (stage=\{stage_prefix}status, category=not_completed)",
+      )
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=\{stage_prefix}status, category=wrong_type)",
+      )
+    None =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=\{stage_prefix}status, category=missing)",
+      )
   }
 }
 
 ///|
 /// Parse a complete OpenAI Responses API response into a posoco ModelResponse.
-pub fn parse_openai_response(resp_json : Json) -> @posoco.ModelResponse {
+pub fn parse_openai_response(
+  resp_json : Json,
+) -> @posoco.ModelResponse raise @posoco.ModelError {
+  validate_openai_terminal_response(resp_json, "")
   let output = match resp_json {
     Json::Object(map) =>
       match map.get("output") {
-        Some(o) => o
-        None => Json::array([])
+        Some(Json::Array(_) as output) => output
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "OpenAI response parse failure (stage=output, category=wrong_type)",
+          )
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "OpenAI response parse failure (stage=output, category=missing)",
+          )
       }
-    _ => Json::array([])
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI response parse failure (stage=response, category=not_object)",
+      )
   }
   let (tool_calls, has_fc) = extract_tool_calls(output)
   let content = extract_assistant_content(output)
@@ -249,7 +404,11 @@ pub fn parse_openai_response(resp_json : Json) -> @posoco.ModelResponse {
     reasoning_content: None,
   }
   let usage = extract_usage(resp_json)
-  let finish_reason = extract_finish_reason(resp_json, has_fc)
+  let finish_reason = if has_fc {
+    @posoco.FinishReason::ToolCalls
+  } else {
+    @posoco.FinishReason::Stop
+  }
   @posoco.ModelResponse::{
     message: final_message,
     tool_calls,

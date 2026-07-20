@@ -11,43 +11,71 @@ fn decode_chat_response(
   json : Json,
 ) -> @posoco.ModelResponse raise @posoco.ModelError {
   guard json is Object(root) else {
-    raise @posoco.ModelError::Transport("invalid response: not an object")
+    raise @posoco.ModelError::ResponseParse(
+      "DeepSeek response parse failure (stage=response, category=not_object)",
+    )
   }
   // Check for API error
   match root.get("error") {
-    Some(err) =>
-      match err {
-        Object(e) =>
-          match e.get("message") {
-            Some(String(m)) =>
-              raise @posoco.ModelError::Transport("DeepSeek API error: " + m)
-            _ => raise @posoco.ModelError::Transport("unknown API error")
-          }
-        _ => raise @posoco.ModelError::Transport("unknown API error")
-      }
+    Some(Object(_)) =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek API error (stage=response.error, category=structured)",
+      )
+    Some(_) =>
+      raise @posoco.ModelError::Transport(
+        "DeepSeek API error (stage=response.error, category=wrong_type)",
+      )
     None => ()
   }
-  guard root.get("choices") is Some(Array(choices)) else {
-    raise @posoco.ModelError::ResponseParse("missing choices in response")
+  let choices = match root.get("choices") {
+    Some(Array(choices)) => choices
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=choices, category=wrong_type)",
+      )
+    None =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=choices, category=missing)",
+      )
   }
   if choices.length() == 0 {
-    raise @posoco.ModelError::ResponseParse("empty choices array")
+    raise @posoco.ModelError::ResponseParse(
+      "DeepSeek response parse failure (stage=choices, category=empty)",
+    )
   }
   guard choices[0] is Object(choice) else {
-    raise @posoco.ModelError::ResponseParse("invalid choice entry")
+    raise @posoco.ModelError::ResponseParse(
+      "DeepSeek response parse failure (stage=choice, category=not_object)",
+    )
   }
-  guard choice.get("message") is Some(Object(msg)) else {
-    raise @posoco.ModelError::ResponseParse("missing message in choice")
+  let msg = match choice.get("message") {
+    Some(Object(msg)) => msg
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=message, category=wrong_type)",
+      )
+    None =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=message, category=missing)",
+      )
   }
   // Extract content
   let text = match msg.get("content") {
     Some(String(s)) => s
-    _ => ""
+    Some(Null) | None => ""
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=message.content, category=wrong_type)",
+      )
   }
   // Extract reasoning_content (DeepSeek reasoner; independent field)
   let reasoning : String? = match msg.get("reasoning_content") {
     Some(String(s)) => if s == "" { None } else { Some(s) }
-    _ => None
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=message.reasoning_content, category=wrong_type)",
+      )
+    None => None
   }
   // Extract tool calls
   let tool_calls : Array[@posoco.ToolCall] = match msg.get("tool_calls") {
@@ -57,40 +85,87 @@ fn decode_chat_response(
         match tc {
           Object(o) => {
             let id = match o.get("id") {
-              Some(String(s)) => s
-              _ => ""
+              Some(String(s)) if s != "" => s
+              Some(String(_)) =>
+                raise @posoco.ModelError::ResponseParse(
+                  "DeepSeek response parse failure (stage=tool.id, category=empty)",
+                )
+              Some(_) =>
+                raise @posoco.ModelError::ResponseParse(
+                  "DeepSeek response parse failure (stage=tool.id, category=wrong_type)",
+                )
+              None =>
+                raise @posoco.ModelError::ResponseParse(
+                  "DeepSeek response parse failure (stage=tool.id, category=missing)",
+                )
             }
             let (name, args_str) = match o.get("function") {
               Some(Object(f)) => {
                 let n = match f.get("name") {
-                  Some(String(s)) => s
-                  _ => ""
+                  Some(String(s)) if s != "" => s
+                  Some(String(_)) =>
+                    raise @posoco.ModelError::ResponseParse(
+                      "DeepSeek response parse failure (stage=tool.name, category=empty)",
+                    )
+                  Some(_) =>
+                    raise @posoco.ModelError::ResponseParse(
+                      "DeepSeek response parse failure (stage=tool.name, category=wrong_type)",
+                    )
+                  None =>
+                    raise @posoco.ModelError::ResponseParse(
+                      "DeepSeek response parse failure (stage=tool.name, category=missing)",
+                    )
                 }
                 let a = match f.get("arguments") {
                   Some(String(s)) => s
-                  _ => "{}"
+                  Some(_) =>
+                    raise @posoco.ModelError::ResponseParse(
+                      "DeepSeek response parse failure (stage=tool.arguments, category=wrong_type)",
+                    )
+                  None =>
+                    raise @posoco.ModelError::ResponseParse(
+                      "DeepSeek response parse failure (stage=tool.arguments, category=missing)",
+                    )
                 }
                 (n, a)
               }
-              _ => ("", "{}")
+              Some(_) =>
+                raise @posoco.ModelError::ResponseParse(
+                  "DeepSeek response parse failure (stage=tool.function, category=wrong_type)",
+                )
+              None =>
+                raise @posoco.ModelError::ResponseParse(
+                  "DeepSeek response parse failure (stage=tool.function, category=missing)",
+                )
             }
             let args : Json = @json.parse(args_str) catch {
-              _ => Json::object({})
+              _ =>
+                raise @posoco.ModelError::ResponseParse(
+                  "DeepSeek response parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
+                )
             }
             result.push({ id, name, arguments: args })
           }
-          _ => {
-            let args : Json = Json::object({})
-            result.push({ id: "", name: "", arguments: args })
-          }
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "DeepSeek response parse failure (stage=tool, category=not_object)",
+            )
         }
       }
       result
     }
-    _ => []
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=message.tool_calls, category=wrong_type)",
+      )
+    None => []
   }
   // Extract finish reason
   let finish : @posoco.FinishReason = match choice.get("finish_reason") {
+    Some(String("")) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=finish_reason, category=empty)",
+      )
     Some(String(s)) =>
       match s {
         "stop" => @posoco.FinishReason::Stop
@@ -98,22 +173,50 @@ fn decode_chat_response(
         "tool_calls" => @posoco.FinishReason::ToolCalls
         _ => @posoco.FinishReason::Other(s)
       }
-    _ => @posoco.FinishReason::Stop
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=finish_reason, category=wrong_type)",
+      )
+    None =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=finish_reason, category=missing)",
+      )
   }
   // Extract usage
   let usage : @posoco.Usage? = match root.get("usage") {
     Some(Object(u)) => {
       let prompt = match u.get("prompt_tokens") {
         Some(Number(n, ..)) => Some(n.to_int())
-        _ => None
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=usage.prompt_tokens, category=wrong_type)",
+          )
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=usage.prompt_tokens, category=missing)",
+          )
       }
       let completion = match u.get("completion_tokens") {
         Some(Number(n, ..)) => Some(n.to_int())
-        _ => None
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=usage.completion_tokens, category=wrong_type)",
+          )
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=usage.completion_tokens, category=missing)",
+          )
       }
       let total = match u.get("total_tokens") {
         Some(Number(n, ..)) => Some(n.to_int())
-        _ => None
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=usage.total_tokens, category=wrong_type)",
+          )
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=usage.total_tokens, category=missing)",
+          )
       }
       Some({
         input_tokens: prompt,
@@ -121,7 +224,11 @@ fn decode_chat_response(
         total_tokens: total,
       })
     }
-    _ => None
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek response parse failure (stage=usage, category=wrong_type)",
+      )
+    None => None
   }
   // Build posoco Message + ModelResponse
   let content : Array[@posoco.Content] = if text == "" {

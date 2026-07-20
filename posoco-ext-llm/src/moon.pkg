@@ -5,3 +5,9 @@ import {
   "moonbitlang/async/io",
   "moonbitlang/core/json",
 }
+
+warnings = "-unused_package"
+
+options(
+  supported_targets: "+native",
+)

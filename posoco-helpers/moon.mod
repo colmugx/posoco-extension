@@ -3,7 +3,7 @@ name = "colmugx/posoco_helpers"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.4.0",
+  "colmugx/posoco@0.4.4",
 }
 
 readme = "README.mbt.md"

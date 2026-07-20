@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
   "moonbitlang/async",
-  "moonbitlang/core/debug",
 }
+
+warnings = "-unused_package"

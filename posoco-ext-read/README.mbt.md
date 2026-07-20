@@ -3,3 +3,5 @@
 > **Target: native only** — 依赖 `moonbitlang/async/fs`（native-only）。
 
 read tool for posoco agents. Implements `@posoco.ToolProvider`.
+
+Current support truth: [`docs/support-matrix.md`](../../../docs/support-matrix.md).

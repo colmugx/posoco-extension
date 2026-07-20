@@ -84,6 +84,170 @@ test "convert_content_to_string_resource_link" {
 }
 
 ///|
+fn catalog_test_tool(name : String) -> @posoco.ToolDef {
+  @posoco.ToolDef::{
+    name,
+    description: "test tool",
+    input_schema: Json::object(Map::from_array([])),
+    metadata: None,
+    source: Some("mcp-test"),
+  }
+}
+
+///|
+fn catalog_test_mcp_tool(name : String) -> @types.ToolDefinition {
+  @types.ToolDefinition::{
+    name,
+    description: "test tool",
+    input_schema: Json::object(Map::from_array([])),
+    cached_schema_json: "",
+    icon: None,
+  }
+}
+
+///|
+test "catalog_plan_builds_complete_reverse_map" {
+  let entries = [
+    CatalogEntry::{
+      connection_index: 0,
+      tools: [catalog_test_tool("files__read")],
+    },
+    CatalogEntry::{
+      connection_index: 1,
+      tools: [catalog_test_tool("github__issue")],
+    },
+  ]
+  match plan_catalog(entries, 2) {
+    Ok(plan) => {
+      assert_eq(plan.entries.length(), 2)
+      assert_true(plan.tool_to_conn.get("files__read") is Some(0))
+      assert_true(plan.tool_to_conn.get("github__issue") is Some(1))
+    }
+    Err(message) => fail("unexpected catalog error: " + message)
+  }
+}
+
+///|
+test "catalog_collision_does_not_mutate_previous_snapshot" {
+  let previous_tools = [catalog_test_tool("legacy__read")]
+  let previous_route : Map[String, Int] = Map::from_array([("legacy__read", 0)])
+  let ambiguous_name = "alpha__beta__gamma"
+  let left = convert_tool_def(catalog_test_mcp_tool("beta__gamma"), "alpha")
+  let right = convert_tool_def(catalog_test_mcp_tool("gamma"), "alpha__beta")
+  assert_eq(left.name, ambiguous_name)
+  assert_eq(right.name, ambiguous_name)
+  let candidate = [
+    CatalogEntry::{ connection_index: 0, tools: [left] },
+    CatalogEntry::{ connection_index: 1, tools: [right] },
+  ]
+  let commits : Array[Unit] = []
+  match replace_catalog(candidate, 2, _plan => commits.push(())) {
+    Err(message) => assert_true(message.contains("collision"))
+    Ok(_) => fail("expected namespaced collision")
+  }
+  // The production transaction helper never invokes commit for a failed plan,
+  // leaving the known-good snapshot available unchanged.
+  assert_eq(commits.length(), 0)
+  assert_eq(previous_tools.length(), 1)
+  assert_eq(previous_tools[0].name, "legacy__read")
+  assert_true(previous_route.get("legacy__read") is Some(0))
+  assert_true(previous_route.get(ambiguous_name) is None)
+}
+
+///|
+test "catalog_plan_rejects_incomplete_refresh" {
+  let candidate = [
+    CatalogEntry::{
+      connection_index: 0,
+      tools: [catalog_test_tool("files__read")],
+    },
+  ]
+  match plan_catalog(candidate, 2) {
+    Err(message) => assert_true(message.contains("incomplete"))
+    Ok(_) => fail("expected incomplete catalog failure")
+  }
+}
+
+///|
+test "refresh_fetch_failure_preserves_previous_catalog" {
+  let previous_tools = [catalog_test_tool("legacy__read")]
+  let previous_route : Map[String, Int] = Map::from_array([("legacy__read", 0)])
+  let fetches : Array[Result[CatalogEntry, String]] = [
+    Ok(CatalogEntry::{
+      connection_index: 0,
+      tools: [catalog_test_tool("fresh__read")],
+    }),
+    Err("MCP refresh list_tools failed for 'private-server'"),
+  ]
+  let commits : Array[Unit] = []
+  match replace_catalog_from_fetches(fetches, 2, _plan => commits.push(())) {
+    Err(message) => assert_true(message.contains("refresh list_tools failed"))
+    Ok(_) => fail("expected injected refresh fetch failure")
+  }
+  assert_eq(commits.length(), 0)
+  assert_eq(previous_tools.length(), 1)
+  assert_eq(previous_tools[0].name, "legacy__read")
+  assert_true(previous_route.get("legacy__read") is Some(0))
+  assert_true(previous_route.get("fresh__read") is None)
+}
+
+///|
+test "mcp_call_failures_are_typed_and_redacted" {
+  let raw_tool = "tool\nsecret\t" + "x".repeat(200) + "TAIL_SECRET"
+  for failure in [TransportFailure, RemoteFailure] {
+    match mcp_call_failure(failure, raw_tool) {
+      @posoco.RuntimeError::InvocationFailed(message) => {
+        assert_true(message.contains("MCP call failed"))
+        assert_true(message.contains("stage="))
+        assert_false(message.contains("\n"))
+        assert_false(message.contains("\t"))
+        assert_false(message.contains("TAIL_SECRET"))
+      }
+      _ => fail("expected typed MCP call failure")
+    }
+  }
+}
+
+///|
+test "diagnostic_label_is_single_line_and_bounded" {
+  let label = diagnostic_label("server\nsecret\t" + "x".repeat(200))
+  assert_false(label.contains("\n"))
+  assert_false(label.contains("\t"))
+  assert_true(label.length() < 140)
+}
+
+///|
+test "failed_initialization_result_runs_cleanup_once" {
+  let cleanups : Array[Unit] = []
+  let result : Result[Int, String] = result_or_cleanup(
+    Err("transport body must not escape"),
+    () => cleanups.push(()),
+    "safe list_tools failure",
+  )
+  assert_eq(cleanups.length(), 1)
+  match result {
+    Err(message) => assert_eq(message, "safe list_tools failure")
+    Ok(_) => fail("expected initialization failure")
+  }
+}
+
+///|
+test "successful_initialization_result_keeps_resource_open" {
+  let cleanups : Array[Unit] = []
+  let input : Result[Int, String] = Ok(7)
+  let result : Result[Int, String] = result_or_cleanup(
+    input,
+    () => cleanups.push(()),
+    "unused",
+  )
+  assert_eq(cleanups.length(), 0)
+  match result {
+    Ok(value) => assert_eq(value, 7)
+    Err(_) => fail("expected initialization success")
+  }
+}
+
+///|
 async test "list_tools_returns_empty_before_connect" {
   let bridge = MCPToolBridge::new()
   let tools = bridge.list_tools()

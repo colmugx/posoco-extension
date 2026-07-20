@@ -45,20 +45,38 @@ pub fn default_rtk_rewrite(_rtk_path : String, _cmd : String) -> String? {
 }
 
 ///|
-pub fn extract_command(args : Json) -> String {
+pub fn extract_command(args : Json) -> Result[String, @posoco.HookError] {
   match args {
     Object(map) =>
       match map.get("cmd") {
-        Some(String(s)) => s
-        Some(_) => @debug.to_string(args)
+        Some(String(s)) => Ok(s)
+        Some(_) =>
+          Err(
+            @posoco.HookError::Aborted(
+              "rtk: shell argument 'cmd' must be a string",
+            ),
+          )
         None =>
           match map.get("command") {
-            Some(String(s)) => s
-            Some(_) => @debug.to_string(args)
-            None => @debug.to_string(args)
+            Some(String(s)) => Ok(s)
+            Some(_) =>
+              Err(
+                @posoco.HookError::Aborted(
+                  "rtk: shell argument 'command' must be a string",
+                ),
+              )
+            None =>
+              Err(
+                @posoco.HookError::Aborted(
+                  "rtk: shell arguments require 'cmd' or 'command'",
+                ),
+              )
           }
       }
-    _ => @debug.to_string(args)
+    _ =>
+      Err(
+        @posoco.HookError::Aborted("rtk: shell arguments must be a JSON object"),
+      )
   }
 }
 
@@ -70,7 +88,10 @@ pub fn rewrite_tool_call(
   let new_args = match original.arguments {
     Object(map) =>
       if map.contains("cmd") {
-        let new_map = map
+        let new_map : Map[String, Json] = Map::from_array([])
+        for key in map.keys() {
+          new_map[key] = map[key]
+        }
         new_map["cmd"] = Json::string(rewritten_cmd)
         Json::object(new_map)
       } else {
@@ -87,17 +108,19 @@ pub impl @posoco.PipelineHook for RTKHook with fn on_stage(
   stage : @posoco.Stage,
 ) -> Result[@posoco.Stage, @posoco.HookError] {
   match stage {
-    BeforeTool(call) if is_shell_tool(call.name, self.shell_tools) => {
-      let cmd = extract_command(call.arguments)
-      match (self.rewrite)(cmd) {
-        Some(rewritten) if rewritten != cmd => {
-          let new_call = rewrite_tool_call(call, rewritten)
-          Ok(BeforeTool(new_call))
-        }
-        // Pass through: no rewrite, or rewrite identical to original
-        _ => Ok(stage)
+    BeforeTool(call) if is_shell_tool(call.name, self.shell_tools) =>
+      match extract_command(call.arguments) {
+        Err(error) => Err(error)
+        Ok(cmd) =>
+          match (self.rewrite)(cmd) {
+            Some(rewritten) if rewritten != cmd => {
+              let new_call = rewrite_tool_call(call, rewritten)
+              Ok(BeforeTool(new_call))
+            }
+            // Pass through: no rewrite, or rewrite identical to original
+            _ => Ok(stage)
+          }
       }
-    }
     // All other stages pass through unchanged
     _ => Ok(stage)
   }

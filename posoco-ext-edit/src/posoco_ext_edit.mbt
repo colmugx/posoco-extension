@@ -11,6 +11,32 @@ pub fn EditTools::new() -> EditTools {
 }
 
 ///|
+/// Keep user-controlled paths bounded and single-line in diagnostics.
+fn diagnostic_path(path : String) -> String {
+  let builder = StringBuilder::new()
+  let mut count = 0
+  for ch in path {
+    if count >= 160 {
+      builder.write_string("...")
+      break
+    }
+    match ch {
+      '\n' | '\r' | '\t' => builder.write_char(' ')
+      _ => builder.write_char(ch)
+    }
+    count += 1
+  }
+  builder.to_string()
+}
+
+///|
+fn edit_failure(stage : String, path : String) -> @posoco.RuntimeError {
+  @posoco.RuntimeError::InvocationFailed(
+    "edit: " + stage + " failed for '" + diagnostic_path(path) + "'",
+  )
+}
+
+///|
 pub impl @posoco.ToolProvider for EditTools with fn list_tools(_self) -> Array[
   @posoco.ToolDef,
 ] {
@@ -62,46 +88,60 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
     Object(obj) => {
       let p = match obj.get("path") {
         Some(String(s)) => s
-        _ => raise @posoco.RuntimeError::UnknownTool("edit: missing 'path'")
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "edit: 'path' argument must be a string",
+          )
+        None => raise @posoco.RuntimeError::UnknownTool("edit: missing 'path'")
       }
       let o = match obj.get("old_text") {
         Some(String(s)) => s
-        _ => raise @posoco.RuntimeError::UnknownTool("edit: missing 'old_text'")
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "edit: 'old_text' argument must be a string",
+          )
+        None =>
+          raise @posoco.RuntimeError::UnknownTool("edit: missing 'old_text'")
       }
       let n = match obj.get("new_text") {
         Some(String(s)) => s
-        _ => raise @posoco.RuntimeError::UnknownTool("edit: missing 'new_text'")
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "edit: 'new_text' argument must be a string",
+          )
+        None =>
+          raise @posoco.RuntimeError::UnknownTool("edit: missing 'new_text'")
       }
       let ra = match obj.get("replace_all") {
         Some(True) => true
-        _ => false
+        Some(False) | None => false
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "edit: optional 'replace_all' must be a boolean",
+          )
       }
       (p, o, n, ra)
     }
-    _ => raise @posoco.RuntimeError::UnknownTool("edit: invalid arguments")
+    _ =>
+      raise @posoco.RuntimeError::UnknownTool(
+        "edit: arguments must be a JSON object",
+      )
   }
   // Read current content
-  let exists = @fs.exists(path) catch {
-    e => raise @posoco.RuntimeError::InvocationFailed("edit: stat failed: \{e}")
-  }
+  let exists = @fs.exists(path) catch { _ => raise edit_failure("stat", path) }
   if !exists {
     return @posoco.ToolResult::{
-      content: "File not found: " + path,
+      content: "File not found: " + diagnostic_path(path),
       structured: None,
       is_error: true,
     }
   }
-  let data = @fs.read_file(path) catch {
-    e => raise @posoco.RuntimeError::InvocationFailed("edit: read failed: \{e}")
-  }
-  let content = data.text() catch {
-    e =>
-      raise @posoco.RuntimeError::InvocationFailed("edit: decode failed: \{e}")
-  }
+  let data = @fs.read_file(path) catch { _ => raise edit_failure("read", path) }
+  let content = data.text() catch { _ => raise edit_failure("decode", path) }
   // Check if old_text exists
   if !content.contains(old_text) {
     return @posoco.ToolResult::{
-      content: "old_text not found in " + path,
+      content: "old_text not found in " + diagnostic_path(path),
       structured: None,
       is_error: true,
     }
@@ -115,8 +155,7 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   // Write back
   let write_data = new_content
   @fs.write_file(path, write_data) catch {
-    e =>
-      raise @posoco.RuntimeError::InvocationFailed("edit: write failed: \{e}")
+    _ => raise edit_failure("write", path)
   }
   @posoco.ToolResult::{
     content: "Edited " + path,

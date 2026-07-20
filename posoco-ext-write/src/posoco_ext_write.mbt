@@ -11,6 +11,32 @@ pub fn WriteTools::new() -> WriteTools {
 }
 
 ///|
+/// Keep user-controlled paths bounded and single-line in diagnostics.
+fn diagnostic_path(path : String) -> String {
+  let builder = StringBuilder::new()
+  let mut count = 0
+  for ch in path {
+    if count >= 160 {
+      builder.write_string("...")
+      break
+    }
+    match ch {
+      '\n' | '\r' | '\t' => builder.write_char(' ')
+      _ => builder.write_char(ch)
+    }
+    count += 1
+  }
+  builder.to_string()
+}
+
+///|
+fn write_failure(path : String) -> @posoco.RuntimeError {
+  @posoco.RuntimeError::InvocationFailed(
+    "write: write failed for '" + diagnostic_path(path) + "'",
+  )
+}
+
+///|
 pub impl @posoco.ToolProvider for WriteTools with fn list_tools(_self) -> Array[
   @posoco.ToolDef,
 ] {
@@ -48,22 +74,31 @@ pub impl @posoco.ToolProvider for WriteTools with fn execute(
     Object(obj) => {
       let p = match obj.get("path") {
         Some(String(s)) => s
-        _ => raise @posoco.RuntimeError::UnknownTool("write: missing 'path'")
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "write: 'path' argument must be a string",
+          )
+        None => raise @posoco.RuntimeError::UnknownTool("write: missing 'path'")
       }
       let c = match obj.get("content") {
         Some(String(s)) => s
-        _ => raise @posoco.RuntimeError::UnknownTool("write: missing 'content'")
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "write: 'content' argument must be a string",
+          )
+        None =>
+          raise @posoco.RuntimeError::UnknownTool("write: missing 'content'")
       }
       (p, c)
     }
-    _ => raise @posoco.RuntimeError::UnknownTool("write: invalid arguments")
+    _ =>
+      raise @posoco.RuntimeError::UnknownTool(
+        "write: arguments must be a JSON object",
+      )
   }
   let data = content
   @fs.write_file(path, data) catch {
-    e =>
-      raise @posoco.RuntimeError::InvocationFailed(
-        "write: failed to write \{path}: \{e}",
-      )
+    _ => raise write_failure(path)
   }
   let written = content.length().to_string()
   @posoco.ToolResult::{

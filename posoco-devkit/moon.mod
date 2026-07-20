@@ -3,7 +3,7 @@ name = "colmugx/posoco-devkit"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.4.1",
+  "colmugx/posoco@0.4.4",
   "colmugx/reader@0.3.0",
   "tonyfettes/xlog@0.4.0",
 }
@@ -16,6 +16,4 @@ keywords = [ "posoco", "devkit", "extension", "logger" ]
 
 description = "Small helper layer for Posoco extension authors"
 
-options(
-  source: "src",
-)
+source = "src"

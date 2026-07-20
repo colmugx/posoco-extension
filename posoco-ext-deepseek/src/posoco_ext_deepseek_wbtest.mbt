@@ -232,8 +232,10 @@ test "decode_chat_response_api_error" {
   }
   // Should raise ModelError::Transport
   match (Ok(decode_chat_response(resp_json)) catch { e => Err(e) }) {
-    Err(@posoco.ModelError::Transport(msg)) =>
-      assert_true(msg.contains("Invalid API key"))
+    Err(@posoco.ModelError::Transport(msg)) => {
+      assert_true(msg.contains("stage=response.error"))
+      assert_false(msg.contains("Invalid API key"))
+    }
     Err(_) => fail("expected Transport error")
     Ok(_) => fail("expected error")
   }
@@ -332,7 +334,7 @@ test "encode_message_reasoning_resent_with_tool_calls" {
   let msg : @posoco.Message = {
     role: @posoco.Role::Assistant,
     content: [],
-    tool_calls: [{ id: "c1", name: "read", arguments: Json::object({}) }],
+    tool_calls: [{ id: "c1", name: "read", arguments: Json::empty_object() }],
     tool_call_id: None,
     name: None,
     reasoning_content: Some("thinking about this..."),
@@ -372,7 +374,7 @@ test "encode_message_tool_calls_no_reasoning" {
   let msg : @posoco.Message = {
     role: @posoco.Role::Assistant,
     content: [],
-    tool_calls: [{ id: "c1", name: "read", arguments: Json::object({}) }],
+    tool_calls: [{ id: "c1", name: "read", arguments: Json::empty_object() }],
     tool_call_id: None,
     name: None,
     reasoning_content: None,
@@ -589,5 +591,614 @@ test "prefix_request_body_uses_config_model_and_appends_prefix" {
   match prefix_msg.get("prefix") {
     Some(True) => ()
     _ => fail("expected prefix=true")
+  }
+}
+
+// ---------------------------------------------------------------------------
+// M0-T07-B: error-transparency fixtures (offline, no network).
+// These use non-async test blocks with try/catch since decode_chat_response
+// is synchronous but raises ModelError.
+// ---------------------------------------------------------------------------
+
+///|
+/// Build a tool-call entry JSON object with the given arguments string.
+fn build_tool_call_json(id : String, name : String, args_str : String) -> Json {
+  Json::object(
+    Map::from_array([
+      ("id", Json::string(id)),
+      ("type", Json::string("function")),
+      (
+        "function",
+        Json::object(
+          Map::from_array([
+            ("name", Json::string(name)),
+            ("arguments", Json::string(args_str)),
+          ]),
+        ),
+      ),
+    ]),
+  )
+}
+
+///|
+/// T07-B: malformed tool-call arguments JSON must raise ResponseParse,
+/// not silently become {}.
+test "t07b_deepseek_malformed_tool_args_raises" {
+  let bad_call = build_tool_call_json("tc_1", "bad", "not-valid-json")
+  let resp_json = Json::object(
+    Map::from_array([
+      (
+        "choices",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              (
+                "message",
+                Json::object(
+                  Map::from_array([
+                    ("role", Json::string("assistant")),
+                    ("content", Json::string("")),
+                    ("tool_calls", Json::array([bad_call])),
+                  ]),
+                ),
+              ),
+              ("finish_reason", Json::string("tool_calls")),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  let result = Ok(decode_chat_response(resp_json)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(_)) => ()
+    _ => fail("expected ResponseParse for malformed tool arguments")
+  }
+}
+
+///|
+/// T07-B: valid tool-call arguments still decode correctly (no false positive).
+test "t07b_deepseek_valid_tool_args_still_decode" {
+  let ok_call = build_tool_call_json("tc_1", "ok", "{}")
+  let resp_json = Json::object(
+    Map::from_array([
+      (
+        "choices",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              (
+                "message",
+                Json::object(
+                  Map::from_array([
+                    ("role", Json::string("assistant")),
+                    ("content", Json::string("")),
+                    ("tool_calls", Json::array([ok_call])),
+                  ]),
+                ),
+              ),
+              ("finish_reason", Json::string("tool_calls")),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  let resp = decode_chat_response(resp_json)
+  assert_eq(resp.tool_calls.length(), 1)
+  assert_eq(resp.tool_calls[0].name, "ok")
+}
+
+///|
+test "t07b_deepseek_malformed_sse_is_loud_and_redacted" {
+  let acc = @posoco.StreamAccumulator::new()
+  let secret = "secret-sse-payload"
+  let result = Ok(process_deepseek_sse(secret, acc, fn(_) { () })) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) => {
+      assert_true(msg.contains("stage=json"))
+      assert_false(msg.contains(secret))
+    }
+    _ => fail("expected ResponseParse for malformed SSE JSON")
+  }
+}
+
+///|
+test "t07b_deepseek_missing_sse_structure_is_loud" {
+  let acc = @posoco.StreamAccumulator::new()
+  let missing_choices =
+    #|{"id":"response_without_choices"}
+  let result = Ok(process_deepseek_sse(missing_choices, acc, fn(_) { () })) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) =>
+      assert_true(msg.contains("stage=choices"))
+    _ => fail("expected ResponseParse for missing choices")
+  }
+}
+
+///|
+test "t07b_deepseek_wrong_type_tool_field_is_loud" {
+  let acc = @posoco.StreamAccumulator::new()
+  let bad_name =
+    #|{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":7,"arguments":"{}"}}]}}]}
+  let result = Ok(process_deepseek_sse(bad_name, acc, fn(_) { () })) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) =>
+      assert_true(msg.contains("stage=tool.name"))
+    _ => fail("expected ResponseParse for wrong-type tool name")
+  }
+}
+
+///|
+test "t07b_deepseek_stream_termination_is_protocol_driven" {
+  assert_true(classify_deepseek_stream_termination(ExplicitTerminal) is None)
+  match classify_deepseek_stream_termination(CleanEof) {
+    Some(@posoco.ModelError::ResponseParse(msg)) =>
+      assert_true(msg.contains("terminal_marker=missing"))
+    _ => fail("clean EOF before terminal marker must be ResponseParse")
+  }
+  match classify_deepseek_stream_termination(TransportFailure) {
+    Some(@posoco.ModelError::Transport(msg)) =>
+      assert_true(msg.contains("stage=read_stream"))
+    _ => fail("read failure must be Transport")
+  }
+}
+
+///|
+test "t07b_deepseek_tool_argument_error_does_not_echo_payload" {
+  let secret = "secret-tool-arguments"
+  let bad_call = build_tool_call_json("tc_1", "bad", secret)
+  let resp_json = Json::object(
+    Map::from_array([
+      (
+        "choices",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              (
+                "message",
+                Json::object(
+                  Map::from_array([
+                    ("role", Json::string("assistant")),
+                    ("content", Json::string("")),
+                    ("tool_calls", Json::array([bad_call])),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  let result = Ok(decode_chat_response(resp_json)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) => {
+      assert_true(msg.contains("payload_chars="))
+      assert_false(msg.contains(secret))
+    }
+    _ => fail("expected redacted ResponseParse")
+  }
+}
+
+///|
+test "t07b_deepseek_missing_nonstream_tool_arguments_is_loud" {
+  let bad_call : Json = {
+    "id": "tc_1",
+    "type": "function",
+    "function": { "name": "missing_args" },
+  }
+  let resp_json : Json = {
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [bad_call],
+        },
+      },
+    ],
+  }
+  let result = Ok(decode_chat_response(resp_json)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) =>
+      assert_true(msg.contains("stage=tool.arguments"))
+    _ => fail("expected ResponseParse for missing tool arguments")
+  }
+}
+
+///|
+test "t07b_deepseek_stream_tool_argument_error_is_redacted" {
+  let acc = @posoco.StreamAccumulator::new()
+  let secret = "secret-stream-tool-arguments"
+  acc.push(
+    @posoco.StreamChunk::ToolCallDelta(
+      index=0,
+      id=Some("call_1"),
+      name=Some("bad"),
+      arguments_delta=Some(secret),
+    ),
+  )
+  let result = Ok(validate_deepseek_stream_tool_calls(acc)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) => {
+      assert_true(msg.contains("payload_chars="))
+      assert_false(msg.contains(secret))
+    }
+    _ => fail("expected redacted stream argument error")
+  }
+}
+
+///|
+fn assert_deepseek_response_parse(resp : Json, stage : String) -> Unit raise {
+  let result = Ok(decode_chat_response(resp)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("stage=" + stage))
+    _ => fail("expected DeepSeek ResponseParse at " + stage)
+  }
+}
+
+///|
+test "t07b_deepseek_nonobject_response_is_response_parse" {
+  assert_deepseek_response_parse(Json::array([]), "response")
+}
+
+///|
+fn assert_deepseek_response_parse_category(
+  response : Json,
+  stage : String,
+  category : String,
+) -> Unit raise {
+  let result = Ok(decode_chat_response(response)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) => {
+      assert_true(message.contains("stage=" + stage))
+      assert_true(message.contains("category=" + category))
+      assert_false(message.contains("secret-provider-body"))
+    }
+    _ => fail("expected DeepSeek ResponseParse at " + stage)
+  }
+}
+
+///|
+test "t07b_deepseek_chat_response_shapes_are_structured_and_redacted" {
+  assert_deepseek_response_parse_category(
+    Json::empty_object(),
+    "choices",
+    "missing",
+  )
+  assert_deepseek_response_parse_category(
+    Json::object({ "choices": Json::string("secret-provider-body") }),
+    "choices",
+    "wrong_type",
+  )
+  assert_deepseek_response_parse_category(
+    Json::object({ "choices": Json::array([]) }),
+    "choices",
+    "empty",
+  )
+  assert_deepseek_response_parse_category(
+    Json::object({ "choices": Json::array([Json::string("invalid")]) }),
+    "choice",
+    "not_object",
+  )
+  assert_deepseek_response_parse_category(
+    Json::object({ "choices": Json::array([Json::empty_object()]) }),
+    "message",
+    "missing",
+  )
+}
+
+///|
+test "t07b_deepseek_reasoning_content_is_strict" {
+  let response : Json = {
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "ok",
+          "reasoning_content": 7,
+        },
+        "finish_reason": "stop",
+      },
+    ],
+  }
+  assert_deepseek_response_parse(response, "message.reasoning_content")
+}
+
+///|
+test "t07b_deepseek_finish_reason_is_required_and_typed" {
+  let missing : Json = {
+    "choices": [{ "message": { "role": "assistant", "content": "ok" } }],
+  }
+  assert_deepseek_response_parse(missing, "finish_reason")
+  let wrong_type : Json = {
+    "choices": [
+      {
+        "message": { "role": "assistant", "content": "ok" },
+        "finish_reason": 7,
+      },
+    ],
+  }
+  assert_deepseek_response_parse(wrong_type, "finish_reason")
+}
+
+///|
+test "t07b_deepseek_nonstream_usage_is_strict" {
+  let wrong_type : Json = {
+    "choices": [
+      {
+        "message": { "role": "assistant", "content": "ok" },
+        "finish_reason": "stop",
+      },
+    ],
+    "usage": {
+      "prompt_tokens": "secret",
+      "completion_tokens": 1,
+      "total_tokens": 2,
+    },
+  }
+  assert_deepseek_response_parse(wrong_type, "usage.prompt_tokens")
+  let missing_field : Json = {
+    "choices": [
+      {
+        "message": { "role": "assistant", "content": "ok" },
+        "finish_reason": "stop",
+      },
+    ],
+    "usage": { "prompt_tokens": 1, "completion_tokens": 1 },
+  }
+  assert_deepseek_response_parse(missing_field, "usage.total_tokens")
+}
+
+///|
+test "t07b_deepseek_valid_nonstream_response_still_decodes" {
+  let response : Json = {
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "ok",
+          "reasoning_content": "checked",
+        },
+        "finish_reason": "stop",
+      },
+    ],
+    "usage": { "prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3 },
+  }
+  let decoded = decode_chat_response(response)
+  assert_true(decoded.finish_reason is @posoco.FinishReason::Stop)
+  assert_true(decoded.reasoning_content == Some("checked"))
+  match decoded.usage {
+    Some(usage) => {
+      assert_true(usage.input_tokens == Some(2))
+      assert_true(usage.output_tokens == Some(1))
+      assert_true(usage.total_tokens == Some(3))
+    }
+    None => fail("expected decoded usage")
+  }
+}
+
+///|
+test "t07b_deepseek_http_error_formatter_is_payload_free" {
+  let message = format_deepseek_http_error(
+    "fim.http_status",
+    429,
+    BodyBytesUtf8(19),
+  )
+  assert_eq(
+    message, "DeepSeek HTTP error (stage=fim.http_status, status=429, body_bytes=19, body_category=utf8)",
+  )
+  assert_false(message.contains("secret-response-body"))
+}
+
+///|
+fn assert_deepseek_sse_response_parse(
+  data : String,
+  stage : String,
+  category : String,
+) -> Unit raise {
+  let acc = @posoco.StreamAccumulator::new()
+  let result = Ok(process_deepseek_sse(data, acc, fn(_) { () })) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) => {
+      assert_true(message.contains("stage=" + stage))
+      assert_true(message.contains("category=" + category))
+    }
+    _ => fail("expected DeepSeek SSE ResponseParse at " + stage)
+  }
+}
+
+///|
+test "t07b_deepseek_stream_usage_fields_are_required" {
+  assert_deepseek_sse_response_parse(
+    "{\"usage\":{\"completion_tokens\":2,\"total_tokens\":3}}", "usage.prompt_tokens",
+    "missing",
+  )
+  assert_deepseek_sse_response_parse(
+    "{\"usage\":{\"prompt_tokens\":1,\"total_tokens\":3}}", "usage.completion_tokens",
+    "missing",
+  )
+  assert_deepseek_sse_response_parse(
+    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2}}", "usage.total_tokens",
+    "missing",
+  )
+}
+
+///|
+test "t07b_deepseek_stream_usage_fields_are_typed" {
+  assert_deepseek_sse_response_parse(
+    "{\"usage\":{\"prompt_tokens\":\"secret\",\"completion_tokens\":2,\"total_tokens\":3}}",
+    "usage.prompt_tokens", "wrong_type",
+  )
+  assert_deepseek_sse_response_parse(
+    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":false,\"total_tokens\":3}}",
+    "usage.completion_tokens", "wrong_type",
+  )
+  assert_deepseek_sse_response_parse(
+    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":null}}",
+    "usage.total_tokens", "wrong_type",
+  )
+}
+
+///|
+test "t07b_deepseek_valid_stream_usage_still_decodes" {
+  let acc = @posoco.StreamAccumulator::new()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let done = process_deepseek_sse(
+    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",
+    acc,
+    fn(chunk) { chunks.push(chunk) },
+  )
+  assert_false(done)
+  assert_eq(chunks.length(), 1)
+  assert_true(
+    chunks[0]
+    is @posoco.StreamChunk::Usage(
+      { input_tokens: Some(1), output_tokens: Some(2), total_tokens: Some(3) }
+    ),
+  )
+}
+
+///|
+fn assert_deepseek_http_error_summary(
+  summary : DeepSeekErrorBodySummary,
+  expected : String,
+) -> Unit raise {
+  match classify_deepseek_http_status("prefix.http_status", 503, summary) {
+    Some(@posoco.ModelError::Transport(message)) => {
+      assert_true(message.contains("status=503"))
+      assert_true(message.contains(expected))
+      assert_false(message.contains("secret-provider-body"))
+    }
+    _ => fail("non-2xx response must be Transport")
+  }
+}
+
+///|
+test "t07b_deepseek_http_status_classifier_preserves_status_and_redacts_body" {
+  assert_true(
+    classify_deepseek_http_status(
+      "chat.http_status",
+      200,
+      BodyBytesInvalidUtf8(11),
+    )
+    is None,
+  )
+  assert_true(
+    classify_deepseek_http_status("chat.http_status", 204, BodyBytesUtf8(0))
+    is None,
+  )
+  assert_deepseek_http_error_summary(
+    BodyBytesUtf8(13),
+    "body_bytes=13, body_category=utf8",
+  )
+  assert_deepseek_http_error_summary(
+    BodyBytesInvalidUtf8(11),
+    "body_bytes=11, body_category=invalid_utf8",
+  )
+  assert_deepseek_http_error_summary(
+    BodyReadFailed,
+    "body_category=read_failed",
+  )
+}
+
+///|
+fn assert_fim_response_parse(
+  response : Json,
+  stage : String,
+  category : String,
+) -> Unit raise {
+  let result = Ok(decode_fim_response(response)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) => {
+      assert_true(message.contains("stage=" + stage))
+      assert_true(message.contains("category=" + category))
+      assert_false(message.contains("secret-provider-body"))
+    }
+    _ => fail("expected FIM ResponseParse at " + stage)
+  }
+}
+
+///|
+test "t07b_deepseek_fim_response_shapes_are_strict_and_redacted" {
+  assert_fim_response_parse(Json::array([]), "fim.response", "not_object")
+  assert_fim_response_parse(Json::empty_object(), "fim.choices", "missing")
+  assert_fim_response_parse(
+    Json::object({ "choices": Json::string("secret-provider-body") }),
+    "fim.choices",
+    "wrong_type",
+  )
+  assert_fim_response_parse(
+    Json::object({ "choices": Json::array([]) }),
+    "fim.choices",
+    "empty",
+  )
+  assert_fim_response_parse(
+    Json::object({ "choices": Json::array([Json::string("invalid")]) }),
+    "fim.choice",
+    "not_object",
+  )
+  assert_fim_response_parse(
+    Json::object({ "choices": Json::array([Json::empty_object()]) }),
+    "fim.choice.text",
+    "missing",
+  )
+  assert_fim_response_parse(
+    Json::object({
+      "choices": Json::array([Json::object({ "text": Json::number(7.0) })]),
+    }),
+    "fim.choice.text",
+    "wrong_type",
+  )
+}
+
+///|
+test "t07b_deepseek_valid_fim_response_still_decodes" {
+  assert_eq(
+    decode_fim_response(
+      Json::object({
+        "choices": Json::array([
+          Json::object({ "text": Json::string("middle") }),
+        ]),
+      }),
+    ),
+    "middle",
+  )
+}
+
+///|
+/// `moon fmt` marks async documentation snippets as `nocheck`. Keep their
+/// exact public call shapes type-checked here without performing HTTP I/O.
+async test "t08_deepseek_public_fim_examples_compile" {
+  @async.protect_from_cancel(() => ())
+  let port = DeepSeekModelPort::new(DeepSeekConfig::new("fixture-key"))
+  let messages : Array[@posoco.Message] = [
+    {
+      role: @posoco.Role::User,
+      content: [@posoco.Content::Text("output JSON")],
+      tool_calls: [],
+      tool_call_id: None,
+      name: None,
+      reasoning_content: None,
+    },
+  ]
+  if false {
+    let _ = port.fim_completion(
+      "def fib(a):\n  if a <= 1: return a\n  ",
+      Some("return fib(a-1) + fib(a-2)"),
+    )
+    let _ = port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
   }
 }

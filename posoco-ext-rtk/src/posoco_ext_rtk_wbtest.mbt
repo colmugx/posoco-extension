@@ -35,8 +35,10 @@ test "extract_command_from_cmd_key" {
       ("dir", Json::string("/tmp")),
     ]),
   )
-  let cmd = extract_command(args)
-  assert_eq(cmd, "ls -la")
+  match extract_command(args) {
+    Ok(cmd) => assert_eq(cmd, "ls -la")
+    Err(_) => fail("expected valid cmd")
+  }
 }
 
 ///|
@@ -44,25 +46,50 @@ test "extract_command_from_command_key" {
   let args = Json::object(
     Map::from_array([("command", Json::string("git status"))]),
   )
-  let cmd = extract_command(args)
-  assert_eq(cmd, "git status")
+  match extract_command(args) {
+    Ok(cmd) => assert_eq(cmd, "git status")
+    Err(_) => fail("expected valid command")
+  }
 }
 
 ///|
-test "extract_command_unknown_key_returns_raw_json" {
+test "extract_command_unknown_key_is_loud_without_raw_json" {
   let args = Json::object(
     Map::from_array([("script", Json::string("echo hi"))]),
   )
-  let cmd = extract_command(args)
-  assert_true(cmd.length() > 0)
+  match extract_command(args) {
+    Err(@posoco.HookError::Aborted(message)) => {
+      assert_true(message.contains("require"))
+      assert_true(!message.contains("echo hi"))
+    }
+    _ => fail("expected strict missing-command error")
+  }
 }
 
 ///|
-test "extract_command_non_object_returns_to_string" {
+test "extract_command_non_object_is_loud_without_raw_json" {
   let args = Json::string("ls -la")
-  let cmd = extract_command(args)
-  // Returns the raw JSON string representation
-  assert_eq(cmd, @debug.to_string(Json::string("ls -la")))
+  match extract_command(args) {
+    Err(@posoco.HookError::Aborted(message)) => {
+      assert_true(message.contains("JSON object"))
+      assert_true(!message.contains("ls -la"))
+    }
+    _ => fail("expected strict non-object error")
+  }
+}
+
+///|
+test "extract_command_wrong_type_is_loud_without_raw_json" {
+  let args = Json::object(
+    Map::from_array([("cmd", Json::array([Json::string("secret")]))]),
+  )
+  match extract_command(args) {
+    Err(@posoco.HookError::Aborted(message)) => {
+      assert_true(message.contains("must be a string"))
+      assert_true(!message.contains("secret"))
+    }
+    _ => fail("expected strict command type error")
+  }
 }
 
 ///|
@@ -82,6 +109,20 @@ test "rewrite_tool_call_updates_cmd_arg" {
       }
     _ => fail("expected Object")
   }
+}
+
+///|
+test "rewrite_tool_call_does_not_mutate_original_arguments" {
+  let original_map : Map[String, Json] = Map::from_array([
+    ("cmd", Json::string("ls -la")),
+  ])
+  let original = @posoco.ToolCall::{
+    id: "call_snapshot",
+    name: "bash",
+    arguments: Json::object(original_map),
+  }
+  let _ = rewrite_tool_call(original, "rtk ls -la")
+  assert_true(original_map["cmd"] == Json::string("ls -la"))
 }
 
 ///|

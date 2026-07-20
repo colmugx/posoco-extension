@@ -12,6 +12,25 @@ pub fn GlobTools::new() -> GlobTools {
 }
 
 ///|
+/// Keep user-controlled paths bounded and single-line in diagnostics.
+fn diagnostic_path(path : String) -> String {
+  let builder = StringBuilder::new()
+  let mut count = 0
+  for ch in path {
+    if count >= 160 {
+      builder.write_string("...")
+      break
+    }
+    match ch {
+      '\n' | '\r' | '\t' => builder.write_char(' ')
+      _ => builder.write_char(ch)
+    }
+    count += 1
+  }
+  builder.to_string()
+}
+
+///|
 pub impl @posoco.ToolProvider for GlobTools with fn list_tools(_self) -> Array[
   @posoco.ToolDef,
 ] {
@@ -53,15 +72,27 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
     Object(obj) => {
       let p = match obj.get("pattern") {
         Some(String(s)) => s
-        _ => raise @posoco.RuntimeError::UnknownTool("glob: missing 'pattern'")
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "glob: 'pattern' argument must be a string",
+          )
+        None =>
+          raise @posoco.RuntimeError::UnknownTool("glob: missing 'pattern'")
       }
       let b = match obj.get("path") {
         Some(String(s)) => s
-        _ => "."
+        None => "."
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "glob: optional 'path' must be a string",
+          )
       }
       (p, b)
     }
-    _ => raise @posoco.RuntimeError::UnknownTool("glob: invalid arguments")
+    _ =>
+      raise @posoco.RuntimeError::UnknownTool(
+        "glob: arguments must be a JSON object",
+      )
   }
   // Walk the directory tree and collect matches
   let matches : Array[String] = []
@@ -73,7 +104,10 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
       }
     }
   }) catch {
-    e => raise @posoco.RuntimeError::InvocationFailed("glob: walk failed: \{e}")
+    _ =>
+      raise @posoco.RuntimeError::InvocationFailed(
+        "glob: walk failed for '" + diagnostic_path(base) + "'",
+      )
   }
   // Build result text
   let builder = StringBuilder::new()

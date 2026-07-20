@@ -4,9 +4,14 @@ import {
   "moonbitlang/async/process",
 }
 
+warnings = "-unused_package"
+
 options(
   targets: {
     "posoco_ext_bash.mbt": [ "native" ],
     "fallback.mbt": [ "wasm-gc", "js" ],
+    // wbtest references native-only internals (extract_command,
+    // bash_collect_output_failure) — skip on non-native targets.
+    "posoco_ext_bash_wbtest.mbt": [ "native" ],
   },
 )

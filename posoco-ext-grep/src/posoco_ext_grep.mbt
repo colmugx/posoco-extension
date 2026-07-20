@@ -11,6 +11,42 @@ pub fn GrepTools::new() -> GrepTools {
 }
 
 ///|
+/// Keep diagnostic paths single-line and bounded. Paths are useful for
+/// identifying the failed file, but must not turn an error into an unbounded
+/// copy of tool input.
+fn diagnostic_path(path : String) -> String {
+  let builder = StringBuilder::new()
+  let mut count = 0
+  for ch in path {
+    if count >= 160 {
+      builder.write_string("...")
+      break
+    }
+    match ch {
+      '\n' | '\r' | '\t' => builder.write_char(' ')
+      _ => builder.write_char(ch)
+    }
+    count += 1
+  }
+  builder.to_string()
+}
+
+///|
+/// Record the precise stage before aborting `@fs.walk`. The walk API wraps
+/// callback failures, so the caller reads this side channel instead of
+/// serializing the underlying OS error (which may contain sensitive data).
+fn[T] abort_file(
+  failures : Array[String],
+  stage : String,
+  path : String,
+) -> T raise Failure {
+  failures.push(
+    "grep: " + stage + " failed for '" + diagnostic_path(path) + "'",
+  )
+  raise Failure::Failure("grep aborted")
+}
+
+///|
 pub impl @posoco.ToolProvider for GrepTools with fn list_tools(_self) -> Array[
   @posoco.ToolDef,
 ] {
@@ -52,49 +88,82 @@ pub impl @posoco.ToolProvider for GrepTools with fn execute(
     Object(obj) => {
       let p = match obj.get("pattern") {
         Some(String(s)) => s
-        _ => raise @posoco.RuntimeError::UnknownTool("grep: missing 'pattern'")
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "grep: 'pattern' argument must be a string",
+          )
+        None =>
+          raise @posoco.RuntimeError::UnknownTool("grep: missing 'pattern'")
       }
       let b = match obj.get("path") {
         Some(String(s)) => s
-        _ => "."
+        None => "."
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "grep: optional 'path' must be a string",
+          )
       }
       let g = match obj.get("glob") {
         Some(String(s)) => s
-        _ => ""
+        None => ""
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "grep: optional 'glob' must be a string",
+          )
       }
       (p, b, g)
     }
     _ => raise @posoco.RuntimeError::UnknownTool("grep: invalid arguments")
   }
-  // Collect matching lines
+  // Collect matching lines. Walk sequentially so the first failure and its
+  // diagnostic are deterministic and no callback can race after cancellation.
   let results : Array[String] = []
-  @fs.walk(base, (dir : String, entries : Array[String]) => {
-    for entry in entries {
-      let full = if dir == "." { entry } else { dir + "/" + entry }
-      // Skip if glob filter doesn't match
-      if file_glob != "" && !file_matches(full, file_glob) {
-        continue
-      }
-      // Try to read as text
-      let exists = @fs.exists(full) catch { _ => false }
-      if !exists {
-        continue
-      }
-      let data = @fs.read_file(full) catch { _ => return }
-      let content = data.text() catch { _ => return }
-      // Search line by line
-      let mut line_num = 0
-      for line in content.split("\n") {
-        line_num += 1
-        if line.contains(pattern) {
-          results.push(
-            full + ":" + line_num.to_string() + ": " + line.to_owned(),
-          )
+  let failures : Array[String] = []
+  @fs.walk(
+    base,
+    (dir : String, entries : Array[String]) => {
+      for entry in entries {
+        let full = if dir == "." { entry } else { dir + "/" + entry }
+        // Skip if glob filter doesn't match
+        if file_glob != "" && !file_matches(full, file_glob) {
+          continue
+        }
+        // `walk` includes directory names in `entries`; inspect the kind so
+        // directories are deliberately skipped while stat errors stay loud.
+        let kind = @fs.kind(full) catch {
+          _ => abort_file(failures, "stat", full)
+        }
+        if kind == @fs.FileKind::Directory {
+          continue
+        }
+        let data = @fs.read_file(full) catch {
+          _ => abort_file(failures, "read", full)
+        }
+        let content = data.text() catch {
+          _ => abort_file(failures, "decode", full)
+        }
+        // Search line by line
+        let mut line_num = 0
+        for line in content.split("\n") {
+          line_num += 1
+          if line.contains(pattern) {
+            results.push(
+              full + ":" + line_num.to_string() + ": " + line.to_owned(),
+            )
+          }
         }
       }
-    }
-  }) catch {
-    e => raise @posoco.RuntimeError::InvocationFailed("grep: walk failed: \{e}")
+    },
+    max_concurrency=1,
+  ) catch {
+    _ =>
+      match failures {
+        [message, ..] => raise @posoco.RuntimeError::InvocationFailed(message)
+        [] =>
+          raise @posoco.RuntimeError::InvocationFailed(
+            "grep: walk failed for '" + diagnostic_path(base) + "'",
+          )
+      }
   }
   // Build result
   if results.length() == 0 {
