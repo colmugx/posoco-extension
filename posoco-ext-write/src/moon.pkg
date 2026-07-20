@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",
 }

@@ -24,9 +24,7 @@ fn bash_empty_command_failure() -> @posoco.RuntimeError {
 
 ///|
 fn bash_decode_failure(exit_code : Int) -> String {
-  "bash: decode failed (stage=decode_output, category=invalid_utf8, exit_code=" +
-  exit_code.to_string() +
-  ")"
+  "bash: decode failed (stage=decode_output, category=invalid_utf8, exit_code=\{exit_code})"
 }
 
 ///|
@@ -75,9 +73,8 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   // error (is_error=true) with a message that includes the exit code, so the
   // model can react instead of receiving a silent "(decoding error)" body
   // on an exit-0 success.
-  let mut content = ""
   let mut decode_failed = false
-  content = output_data.text() catch {
+  let content = output_data.text() catch {
     _ => {
       decode_failed = true
       bash_decode_failure(exit_code)

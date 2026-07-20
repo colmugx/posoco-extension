@@ -12,25 +12,6 @@ pub fn GlobTools::new() -> GlobTools {
 }
 
 ///|
-/// Keep user-controlled paths bounded and single-line in diagnostics.
-fn diagnostic_path(path : String) -> String {
-  let builder = StringBuilder::new()
-  let mut count = 0
-  for ch in path {
-    if count >= 160 {
-      builder.write_string("...")
-      break
-    }
-    match ch {
-      '\n' | '\r' | '\t' => builder.write_char(' ')
-      _ => builder.write_char(ch)
-    }
-    count += 1
-  }
-  builder.to_string()
-}
-
-///|
 pub impl @posoco.ToolProvider for GlobTools with fn list_tools(_self) -> Array[
   @posoco.ToolDef,
 ] {
@@ -98,7 +79,7 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
   let matches : Array[String] = []
   @fs.walk(base, fn(dir : String, entries : Array[String]) {
     for entry in entries {
-      let full = if dir == "." { entry } else { dir + "/" + entry }
+      let full = if dir == "." { entry } else { "\{dir}/\{entry}" }
       if glob_match(pattern, full) {
         matches.push(full)
       }
@@ -106,7 +87,7 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
   }) catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
-        "glob: walk failed for '" + diagnostic_path(base) + "'",
+        "glob: walk failed for '\{@devkit.sanitize_path(base)}'",
       )
   }
   // Build result text
@@ -115,9 +96,8 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
     builder.write_string(m)
     builder.write_char('\n')
   }
-  let count = matches.length().to_string()
   @posoco.ToolResult::{
-    content: "Found " + count + " files:\n" + builder.to_string(),
+    content: "Found \{matches.length()} files:\n\{builder.to_string()}",
     structured: None,
     is_error: false,
   }
@@ -127,16 +107,16 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
 /// Match a path against a glob pattern. Supports * and **.
 /// `*` matches any characters except `/`; `**` matches any path segments.
 fn glob_match(pattern : String, path : String) -> Bool {
-  let pat_segs = pattern.split("/").map(fn(s) { s.to_owned() }).collect()
-  let path_segs = path.split("/").map(fn(s) { s.to_owned() }).collect()
+  let pat_segs = pattern.split("/").to_array()
+  let path_segs = path.split("/").to_array()
   match_segments(pat_segs, 0, path_segs, 0)
 }
 
 ///|
 fn match_segments(
-  pat : Array[String],
+  pat : Array[StringView],
   pi : Int,
-  path : Array[String],
+  path : Array[StringView],
   si : Int,
 ) -> Bool {
   if pi >= pat.length() {
@@ -168,7 +148,7 @@ fn match_segments(
 
 ///|
 /// Match a single path segment against a pattern segment (with * wildcards).
-fn seg_match(pat_seg : String, path_seg : String) -> Bool {
+fn seg_match(pat_seg : StringView, path_seg : StringView) -> Bool {
   if !pat_seg.contains("*") {
     return pat_seg == path_seg
   }

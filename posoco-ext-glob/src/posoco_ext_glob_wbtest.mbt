@@ -63,7 +63,10 @@ async test "glob_missing_base_is_loud_without_os_error" {
   }
   match outcome {
     Err(@posoco.RuntimeError::InvocationFailed(message)) =>
-      assert_eq(message, "glob: walk failed for '" + diagnostic_path(dir) + "'")
+      assert_eq(
+        message,
+        "glob: walk failed for '" + @devkit.sanitize_path(dir) + "'",
+      )
     _ => fail("expected a missing base directory to fail traversal")
   }
 }
@@ -71,7 +74,7 @@ async test "glob_missing_base_is_loud_without_os_error" {
 ///|
 test "glob_diagnostic_path_is_bounded_and_single_line" {
   let raw = "line-one\n" + "x".repeat(200) + "TAIL_SECRET"
-  let safe = diagnostic_path(raw)
+  let safe = @devkit.sanitize_path(raw)
   assert_false(safe.contains("\n"))
   assert_true(safe.contains("..."))
   assert_false(safe.contains("TAIL_SECRET"))

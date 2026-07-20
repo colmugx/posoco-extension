@@ -1,4 +1,10 @@
 import {
-  "colmugx/posoco@0.4.4",
-  "moonbitlang/async@0.20.2",
+  "colmugx/posoco",
+  "moonbitlang/core/json",
 }
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+supported_targets = "+native"

@@ -11,28 +11,9 @@ pub fn EditTools::new() -> EditTools {
 }
 
 ///|
-/// Keep user-controlled paths bounded and single-line in diagnostics.
-fn diagnostic_path(path : String) -> String {
-  let builder = StringBuilder::new()
-  let mut count = 0
-  for ch in path {
-    if count >= 160 {
-      builder.write_string("...")
-      break
-    }
-    match ch {
-      '\n' | '\r' | '\t' => builder.write_char(' ')
-      _ => builder.write_char(ch)
-    }
-    count += 1
-  }
-  builder.to_string()
-}
-
-///|
 fn edit_failure(stage : String, path : String) -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "edit: " + stage + " failed for '" + diagnostic_path(path) + "'",
+    "edit: \{stage} failed for '\{@devkit.sanitize_path(path)}'",
   )
 }
 
@@ -131,7 +112,7 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   let exists = @fs.exists(path) catch { _ => raise edit_failure("stat", path) }
   if !exists {
     return @posoco.ToolResult::{
-      content: "File not found: " + diagnostic_path(path),
+      content: "File not found: \{@devkit.sanitize_path(path)}",
       structured: None,
       is_error: true,
     }
@@ -141,7 +122,7 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   // Check if old_text exists
   if !content.contains(old_text) {
     return @posoco.ToolResult::{
-      content: "old_text not found in " + diagnostic_path(path),
+      content: "old_text not found in \{@devkit.sanitize_path(path)}",
       structured: None,
       is_error: true,
     }
@@ -158,7 +139,7 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
     _ => raise edit_failure("write", path)
   }
   @posoco.ToolResult::{
-    content: "Edited " + path,
+    content: "Edited \{path}",
     structured: None,
     is_error: false,
   }

@@ -11,28 +11,9 @@ pub fn ReadTools::new() -> ReadTools {
 }
 
 ///|
-/// Keep user-controlled paths bounded and single-line in diagnostics.
-fn diagnostic_path(path : String) -> String {
-  let builder = StringBuilder::new()
-  let mut count = 0
-  for ch in path {
-    if count >= 160 {
-      builder.write_string("...")
-      break
-    }
-    match ch {
-      '\n' | '\r' | '\t' => builder.write_char(' ')
-      _ => builder.write_char(ch)
-    }
-    count += 1
-  }
-  builder.to_string()
-}
-
-///|
 fn read_failure(stage : String, path : String) -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "read: " + stage + " failed for '" + diagnostic_path(path) + "'",
+    "read: \{stage} failed for '\{@devkit.sanitize_path(path)}'",
   )
 }
 
@@ -89,7 +70,7 @@ pub impl @posoco.ToolProvider for ReadTools with fn execute(
   let exists = @fs.exists(path) catch { _ => raise read_failure("stat", path) }
   if !exists {
     return @posoco.ToolResult::{
-      content: "File not found: " + diagnostic_path(path),
+      content: "File not found: \{@devkit.sanitize_path(path)}",
       structured: None,
       is_error: true,
     }

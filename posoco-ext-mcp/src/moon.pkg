@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "colmugx/mcp/client",
   "colmugx/mcp/transport",
   "colmugx/mcp/protocol/types",

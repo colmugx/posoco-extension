@@ -85,21 +85,19 @@ pub fn rewrite_tool_call(
   original : @posoco.ToolCall,
   rewritten_cmd : String,
 ) -> @posoco.ToolCall {
-  let new_args = match original.arguments {
-    Object(map) =>
-      if map.contains("cmd") {
-        let new_map : Map[String, Json] = Map::from_array([])
-        for key in map.keys() {
-          new_map[key] = map[key]
+  let new_map = match original.arguments {
+    Object(map) => {
+      let m = Map::from_array([("cmd", Json::string(rewritten_cmd))])
+      for key in map.keys() {
+        if key != "cmd" {
+          m[key] = map[key]
         }
-        new_map["cmd"] = Json::string(rewritten_cmd)
-        Json::object(new_map)
-      } else {
-        Json::object(Map::from_array([("cmd", Json::string(rewritten_cmd))]))
       }
-    _ => Json::object(Map::from_array([("cmd", Json::string(rewritten_cmd))]))
+      m
+    }
+    _ => Map::from_array([("cmd", Json::string(rewritten_cmd))])
   }
-  { id: original.id, name: original.name, arguments: new_args }
+  { id: original.id, name: original.name, arguments: Json::object(new_map) }
 }
 
 ///|

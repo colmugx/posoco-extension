@@ -120,7 +120,7 @@ async test "edit_directory_is_loud_without_os_error" {
       Err(@posoco.RuntimeError::InvocationFailed(message)) =>
         assert_eq(
           message,
-          "edit: read failed for '" + diagnostic_path(dir) + "'",
+          "edit: read failed for '" + @devkit.sanitize_path(dir) + "'",
         )
       _ => fail("expected editing a directory to fail reading")
     }
@@ -130,7 +130,7 @@ async test "edit_directory_is_loud_without_os_error" {
 ///|
 test "edit_diagnostic_path_is_bounded_and_single_line" {
   let raw = "line-one\t" + "x".repeat(200) + "TAIL_SECRET"
-  let safe = diagnostic_path(raw)
+  let safe = @devkit.sanitize_path(raw)
   assert_false(safe.contains("\t"))
   assert_true(safe.contains("..."))
   assert_false(safe.contains("TAIL_SECRET"))

@@ -15,6 +15,4 @@ keywords = [ "posoco", "goal", "autonomous", "loop", "ai-agent" ]
 
 description = "Goal-driven autonomous looping extension for Posoco"
 
-options(
-  source: "src",
-)
+source = "src"

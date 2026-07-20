@@ -75,7 +75,7 @@ async test "write_missing_parent_is_loud_without_os_error" {
       Err(@posoco.RuntimeError::InvocationFailed(message)) =>
         assert_eq(
           message,
-          "write: write failed for '" + diagnostic_path(path) + "'",
+          "write: write failed for '\{@devkit.sanitize_path(path)}'",
         )
       _ => fail("expected a missing parent directory to fail writing")
     }
@@ -85,7 +85,7 @@ async test "write_missing_parent_is_loud_without_os_error" {
 ///|
 test "write_diagnostic_path_is_bounded_and_single_line" {
   let raw = "line-one\r\n" + "x".repeat(200) + "TAIL_SECRET"
-  let safe = diagnostic_path(raw)
+  let safe = @devkit.sanitize_path(raw)
   assert_false(safe.contains("\n"))
   assert_false(safe.contains("\r"))
   assert_true(safe.contains("..."))

@@ -54,7 +54,7 @@ async test "read_directory_is_loud_without_os_error" {
       Err(@posoco.RuntimeError::InvocationFailed(message)) =>
         assert_eq(
           message,
-          "read: read failed for '" + diagnostic_path(dir) + "'",
+          "read: read failed for '" + @devkit.sanitize_path(dir) + "'",
         )
       _ => fail("expected reading a directory to fail")
     }
@@ -77,7 +77,7 @@ async test "read_invalid_utf8_is_explicit_decode_failure" {
       Err(@posoco.RuntimeError::InvocationFailed(message)) =>
         assert_eq(
           message,
-          "read: decode failed for '" + diagnostic_path(path) + "'",
+          "read: decode failed for '" + @devkit.sanitize_path(path) + "'",
         )
       _ => fail("expected invalid UTF-8 to fail decoding")
     }
@@ -85,9 +85,9 @@ async test "read_invalid_utf8_is_explicit_decode_failure" {
 }
 
 ///|
-test "read_diagnostic_path_is_bounded_and_single_line" {
+test "read_sanitize_path_is_bounded_and_single_line" {
   let raw = "line-one\n" + "x".repeat(200) + "TAIL_SECRET"
-  let safe = diagnostic_path(raw)
+  let safe = @devkit.sanitize_path(raw)
   assert_false(safe.contains("\n"))
   assert_true(safe.contains("..."))
   assert_false(safe.contains("TAIL_SECRET"))

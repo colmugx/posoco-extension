@@ -11,28 +11,9 @@ pub fn WriteTools::new() -> WriteTools {
 }
 
 ///|
-/// Keep user-controlled paths bounded and single-line in diagnostics.
-fn diagnostic_path(path : String) -> String {
-  let builder = StringBuilder::new()
-  let mut count = 0
-  for ch in path {
-    if count >= 160 {
-      builder.write_string("...")
-      break
-    }
-    match ch {
-      '\n' | '\r' | '\t' => builder.write_char(' ')
-      _ => builder.write_char(ch)
-    }
-    count += 1
-  }
-  builder.to_string()
-}
-
-///|
 fn write_failure(path : String) -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "write: write failed for '" + diagnostic_path(path) + "'",
+    "write: write failed for '\{@devkit.sanitize_path(path)}'",
   )
 }
 
@@ -100,9 +81,8 @@ pub impl @posoco.ToolProvider for WriteTools with fn execute(
   @fs.write_file(path, data) catch {
     _ => raise write_failure(path)
   }
-  let written = content.length().to_string()
   @posoco.ToolResult::{
-    content: "Wrote " + written + " bytes to " + path,
+    content: "Wrote \{content.length()} bytes to \{path}",
     structured: None,
     is_error: false,
   }

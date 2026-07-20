@@ -2,6 +2,9 @@
 package "colmugx/posoco-devkit"
 
 // Values
+pub fn sanitize_label(String, limit? : Int) -> String
+
+pub fn sanitize_path(String, limit? : Int) -> String
 
 // Errors
 

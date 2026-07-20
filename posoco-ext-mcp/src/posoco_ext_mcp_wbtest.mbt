@@ -209,8 +209,8 @@ test "mcp_call_failures_are_typed_and_redacted" {
 }
 
 ///|
-test "diagnostic_label_is_single_line_and_bounded" {
-  let label = diagnostic_label("server\nsecret\t" + "x".repeat(200))
+test "sanitize_label_is_single_line_and_bounded" {
+  let label = @devkit.sanitize_label("server\nsecret\t" + "x".repeat(200))
   assert_false(label.contains("\n"))
   assert_false(label.contains("\t"))
   assert_true(label.length() < 140)

@@ -26,26 +26,6 @@ fn namespaced_tool_name(server_name : String, tool_name : String) -> String {
 }
 
 ///|
-/// Keep server and tool identifiers useful but bounded in diagnostics. MCP
-/// transport errors and response bodies are intentionally not serialized.
-fn diagnostic_label(value : String) -> String {
-  let builder = StringBuilder::new()
-  let mut count = 0
-  for ch in value {
-    if count >= 120 {
-      builder.write_string("...")
-      break
-    }
-    match ch {
-      '\n' | '\r' | '\t' => builder.write_char(' ')
-      _ => builder.write_char(ch)
-    }
-    count += 1
-  }
-  builder.to_string()
-}
-
-///|
 fn strip_namespace(namespaced : String, server_name : String) -> String {
   let prefix = "\{server_name}__"
   if namespaced.has_prefix(prefix) {
@@ -76,23 +56,23 @@ fn convert_tool_def(
 ///|
 /// Convert MCP ContentItem array to a plain text string.
 fn convert_content_to_string(items : Array[@types.ContentItem]) -> String {
-  let parts : Array[String] = []
-  for item in items {
+  items
+  .map(fn(item) {
     match item {
-      @types.ContentItem::Text(t) => parts.push(t)
+      @types.ContentItem::Text(t) => t
       @types.ContentItem::Image(data, mime_type~) =>
-        parts.push("[Image: \{mime_type}, \{data.length()} chars]")
-      @types.ContentItem::ResourceLink(uri) => parts.push("[Resource: \{uri}]")
+        "[Image: \{mime_type}, \{data.length()} chars]"
+      @types.ContentItem::ResourceLink(uri) => "[Resource: \{uri}]"
       @types.ContentItem::EmbeddedResource(content) =>
         match content {
           @types.EmbeddedResourceContent::Text(t, uri~, ..) =>
-            parts.push("[Resource \{uri}]: \{t}")
+            "[Resource \{uri}]: \{t}"
           @types.EmbeddedResourceContent::Blob(b, uri~, ..) =>
-            parts.push("[Resource \{uri}]: [blob \{b.length()} chars]")
+            "[Resource \{uri}]: [blob \{b.length()} chars]"
         }
     }
-  }
-  parts.join("\n")
+  })
+  .join("\n")
 }
 
 ///|
@@ -168,7 +148,7 @@ fn plan_catalog(
     for tool in entry.tools {
       if route.contains(tool.name) {
         return Err(
-          "MCP namespaced tool collision: '" + diagnostic_label(tool.name) + "'",
+          "MCP namespaced tool collision: '\{@devkit.sanitize_label(tool.name)}'",
         )
       }
       route[tool.name] = entry.connection_index
@@ -232,11 +212,7 @@ fn mcp_call_failure(
     RemoteFailure => "remote_result"
   }
   @posoco.RuntimeError::InvocationFailed(
-    "MCP call failed (stage=" +
-    stage +
-    ", tool='" +
-    diagnostic_label(tool_name) +
-    "')",
+    "MCP call failed (stage=\{stage}, tool='\{@devkit.sanitize_label(tool_name)}')",
   )
 }
 
@@ -283,9 +259,7 @@ pub async fn MCPToolBridge::connect(
   for conn in self.connections {
     if conn.name == config.name {
       return Err(
-        "MCP connection name already exists: '" +
-        diagnostic_label(config.name) +
-        "'",
+        "MCP connection name already exists: '\{@devkit.sanitize_label(config.name)}'",
       )
     }
   }
@@ -308,14 +282,14 @@ pub async fn MCPToolBridge::connect(
     }
     _ =>
       return Err(
-        "Unsupported transport for '" + diagnostic_label(config.name) + "'",
+        "Unsupported transport for '\{@devkit.sanitize_label(config.name)}'",
       )
   }
   let client = match client_result {
     Ok(c) => c
     Err(_) =>
       return Err(
-        "MCP connect failed for '" + diagnostic_label(config.name) + "'",
+        "MCP connect failed for '\{@devkit.sanitize_label(config.name)}'",
       )
   }
   // Fetch tools (connect_* already did initialize/handshake)
@@ -323,7 +297,7 @@ pub async fn MCPToolBridge::connect(
     result_or_cleanup(
       client.list_tools(),
       () => client.close(),
-      "MCP list_tools failed for '" + diagnostic_label(config.name) + "'",
+      "MCP list_tools failed for '\{@devkit.sanitize_label(config.name)}'",
     ) {
     Ok(r) => r
     Err(message) => return Err(message)
@@ -383,9 +357,7 @@ pub async fn MCPToolBridge::refresh_tools(
       Err(_) => {
         fetches.push(
           Err(
-            "MCP refresh list_tools failed for '" +
-            diagnostic_label(conn.name) +
-            "'",
+            "MCP refresh list_tools failed for '\{@devkit.sanitize_label(conn.name)}'",
           ),
         )
         break
@@ -443,7 +415,7 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
     Some(idx) => idx
     None =>
       raise @posoco.RuntimeError::UnknownTool(
-        "Unknown MCP tool: " + diagnostic_label(call.name),
+        "Unknown MCP tool: \{@devkit.sanitize_label(call.name)}",
       )
   }
   let conn = self.connections[conn_idx]

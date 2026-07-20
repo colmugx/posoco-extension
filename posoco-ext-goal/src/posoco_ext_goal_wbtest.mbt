@@ -29,13 +29,14 @@ pub impl @posoco.ModelPort for MockModelPort with fn chat(
       tool_calls: [],
       tool_call_id: None,
       name: None,
+      reasoning_content: None,
     }
     @posoco.ModelResponse::{
       message: msg,
       tool_calls: [],
       finish_reason: @posoco.FinishReason::Stop,
       usage: None,
-      reasoning_summary: None,
+      reasoning_content: None,
     }
   }
 }
@@ -76,13 +77,14 @@ fn make_stop_response(text : String) -> @posoco.ModelResponse {
     tool_calls: [],
     tool_call_id: None,
     name: None,
+    reasoning_content: None,
   }
   {
     message: msg,
     tool_calls: [],
     finish_reason: @posoco.FinishReason::Stop,
     usage: None,
-    reasoning_summary: None,
+    reasoning_content: None,
   }
 }
 
@@ -97,6 +99,7 @@ fn make_stop_response_with_usage(
     tool_calls: [],
     tool_call_id: None,
     name: None,
+    reasoning_content: None,
   }
   {
     message: msg,
@@ -107,7 +110,7 @@ fn make_stop_response_with_usage(
       output_tokens: Some(total_tokens / 2),
       total_tokens: Some(total_tokens),
     }),
-    reasoning_summary: None,
+    reasoning_content: None,
   }
 }
 
@@ -118,7 +121,7 @@ fn make_config() -> @posoco.AgentConfig {
     temperature: None,
     max_output_tokens: None,
     tool_choice: None,
-    thinking: None,
+    reasoning_effort: None,
     model_context_window: None,
   }
 }
@@ -138,7 +141,9 @@ fn build_agent_with_goal(
     sessions=[MockSessionStore::{ store: Map::from_array([]) }],
     lifecycle=None,
     config=make_config(),
-  )
+  ) catch {
+    e => abort("Agent::new failed: \{e}")
+  }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -160,6 +165,7 @@ async test "goal_injects_system_prompt" {
     tool_calls: [],
     tool_call_id: None,
     name: None,
+    reasoning_content: None,
   }
   ignore(agent.run_turn(input, "s1"))
 
@@ -224,13 +230,14 @@ test "observer_accumulates_usage" {
         tool_calls: [],
         tool_call_id: None,
         name: None,
+        reasoning_content: None,
       },
       usage=Some({
         input_tokens: Some(100),
         output_tokens: Some(50),
         total_tokens: Some(150),
       }),
-      reasoning_summary=None,
+      reasoning_content=None,
     ),
   )
   assert_eq(runner.usage.total_tokens, 150)
@@ -371,6 +378,7 @@ async test "goal_ignores_non_running_status" {
       tool_calls: [],
       tool_call_id: None,
       name: None,
+      reasoning_content: None,
     },
   ]
   match runner.on_stage(@posoco.Stage::BeforeModel(msgs)) {

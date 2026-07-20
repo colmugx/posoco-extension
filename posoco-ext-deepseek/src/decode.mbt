@@ -184,46 +184,7 @@ fn decode_chat_response(
   }
   // Extract usage
   let usage : @posoco.Usage? = match root.get("usage") {
-    Some(Object(u)) => {
-      let prompt = match u.get("prompt_tokens") {
-        Some(Number(n, ..)) => Some(n.to_int())
-        Some(_) =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=usage.prompt_tokens, category=wrong_type)",
-          )
-        None =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=usage.prompt_tokens, category=missing)",
-          )
-      }
-      let completion = match u.get("completion_tokens") {
-        Some(Number(n, ..)) => Some(n.to_int())
-        Some(_) =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=usage.completion_tokens, category=wrong_type)",
-          )
-        None =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=usage.completion_tokens, category=missing)",
-          )
-      }
-      let total = match u.get("total_tokens") {
-        Some(Number(n, ..)) => Some(n.to_int())
-        Some(_) =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=usage.total_tokens, category=wrong_type)",
-          )
-        None =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=usage.total_tokens, category=missing)",
-          )
-      }
-      Some({
-        input_tokens: prompt,
-        output_tokens: completion,
-        total_tokens: total,
-      })
-    }
+    Some(Object(_)) => Some(extract_usage(root))
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
         "DeepSeek response parse failure (stage=usage, category=wrong_type)",
@@ -250,5 +211,58 @@ fn decode_chat_response(
     finish_reason: finish,
     usage,
     reasoning_content: reasoning,
+  }
+}
+
+///|
+/// Extract Usage from a JSON object containing usage fields.
+fn extract_usage(
+  root : Map[String, Json],
+) -> @posoco.Usage raise @posoco.ModelError {
+  match root.get("usage") {
+    Some(Object(u)) => {
+      let prompt = match u.get("prompt_tokens") {
+        Some(Number(n, ..)) => Some(n.to_int())
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek SSE parse failure (stage=usage.prompt_tokens, category=wrong_type)",
+          )
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek SSE parse failure (stage=usage.prompt_tokens, category=missing)",
+          )
+      }
+      let completion = match u.get("completion_tokens") {
+        Some(Number(n, ..)) => Some(n.to_int())
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek SSE parse failure (stage=usage.completion_tokens, category=wrong_type)",
+          )
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek SSE parse failure (stage=usage.completion_tokens, category=missing)",
+          )
+      }
+      let total = match u.get("total_tokens") {
+        Some(Number(n, ..)) => Some(n.to_int())
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek SSE parse failure (stage=usage.total_tokens, category=wrong_type)",
+          )
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek SSE parse failure (stage=usage.total_tokens, category=missing)",
+          )
+      }
+      { input_tokens: prompt, output_tokens: completion, total_tokens: total }
+    }
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek SSE parse failure (stage=usage, category=wrong_type)",
+      )
+    None =>
+      raise @posoco.ModelError::ResponseParse(
+        "DeepSeek SSE parse failure (stage=usage, category=missing)",
+      )
   }
 }

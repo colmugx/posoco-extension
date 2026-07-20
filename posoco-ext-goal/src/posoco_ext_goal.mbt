@@ -30,25 +30,28 @@ fn extract_text(content : Array[@posoco.Content]) -> String {
 /// Extract the reason preceding a [goal:blocked] marker.
 /// Looks for the marker and returns the last non-empty line before it.
 fn extract_block_reason(text : String, marker : String) -> String {
-  let idx = text.find(marker)
-  match idx {
+  match text.find(marker) {
     Some(pos) => {
       let before = text[0:pos].trim()
-      let lines = before.split("\n").to_array()
-      // Walk backwards to find last non-empty line
-      let mut last_line = ""
-      let mut i = lines.length() - 1
-      while i >= 0 && last_line == "" {
-        let trimmed = lines[i].trim()
-        if trimmed != "" {
-          last_line = trimmed.to_owned()
-        }
-        i = i - 1
-      }
-      if last_line.length() > 200 {
-        last_line[0:200].to_owned() + "…"
-      } else {
-        last_line
+      let non_empty = before
+        .split("\n")
+        .to_array()
+        .filter_map(fn(line) {
+          let t = line.trim()
+          if t != "" {
+            Some(t.to_owned())
+          } else {
+            None
+          }
+        })
+      match non_empty {
+        [] => ""
+        [.., last] =>
+          if last.length() > 200 {
+            last[0:200].to_owned() + "…"
+          } else {
+            last
+          }
       }
     }
     None => ""
@@ -220,6 +223,7 @@ pub impl @posoco.PipelineHook for GoalRunner with fn on_stage(
         tool_calls: [],
         tool_call_id: None,
         name: None,
+        reasoning_content: None,
       }
       let new_msgs = [sys_msg]
       for m in msgs {
@@ -396,6 +400,7 @@ pub async fn GoalRunner::execute(
       tool_calls: [],
       tool_call_id: None,
       name: None,
+      reasoning_content: None,
     }
 
     // 4. Execute one turn
