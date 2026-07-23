@@ -1,7 +1,9 @@
 import {
   "colmugx/posoco",
   "moonbitlang/async",
+  "moonbitlang/async/js_async",
   "moonbitlang/async/process",
+  "moonbitlang/core/json",
 }
 
 warnings = "-unused_package"
@@ -9,9 +11,9 @@ warnings = "-unused_package"
 options(
   targets: {
     "posoco_ext_bash.mbt": [ "native" ],
-    "fallback.mbt": [ "wasm-gc", "js" ],
-    // wbtest references native-only internals (extract_command,
-    // bash_collect_output_failure) — skip on non-native targets.
+    "posoco_ext_bash_js.mbt": [ "js" ],
+    "posoco_ext_bash_shared.mbt": [ "native", "js" ],
+    "fallback.mbt": [ "wasm-gc" ],
     "posoco_ext_bash_wbtest.mbt": [ "native" ],
   },
 )

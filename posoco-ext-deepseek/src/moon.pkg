@@ -11,4 +11,15 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
-supported_targets = "+native"
+options(
+  targets: {
+    "config.mbt": [ "native", "js" ],
+    "decode.mbt": [ "native", "js" ],
+    "deepseek.mbt": [ "native", "js" ],
+    "encode.mbt": [ "native", "js" ],
+    "fim.mbt": [ "native", "js" ],
+    "http_util.mbt": [ "native", "js" ],
+    "sse.mbt": [ "native", "js" ],
+    "posoco_ext_deepseek_wbtest.mbt": [ "native" ],
+  },
+)

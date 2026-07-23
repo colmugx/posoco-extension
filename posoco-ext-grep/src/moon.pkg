@@ -2,6 +2,7 @@ import {
   "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco",
   "moonbitlang/async/fs",
+  "moonbitlang/async/js_async",
   "moonbitlang/core/json",
 }
 
@@ -9,4 +10,11 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
-supported_targets = "+native"
+options(
+  targets: {
+    "posoco_ext_grep_shared.mbt": [ "native", "js" ],
+    "posoco_ext_grep.mbt": [ "native" ],
+    "posoco_ext_grep.js.mbt": [ "js" ],
+    "posoco_ext_grep_wbtest.mbt": [ "native" ],
+  },
+)

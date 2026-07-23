@@ -1,14 +1,13 @@
 ///|
-/// GrepTools — content search tool provider.
-/// Searches for a pattern in files under a directory and returns matching lines.
+/// posoco_ext_grep.mbt — native target implementation.
+///
+/// Provides the GrepSearcher adaptor (backed by `@fs.walk` + per-line
+/// `contains`) and the GrepTools struct + ToolProvider impl that delegates
+/// business logic to `execute_grep_impl`.
 
-///|
-pub(all) struct GrepTools {}
-
-///|
-pub fn GrepTools::new() -> GrepTools {
-  GrepTools::{  }
-}
+// ---------------------------------------------------------------------------
+// Native searcher — @fs.walk + in-process line search.
+// ---------------------------------------------------------------------------
 
 ///|
 /// Record the precise stage before aborting `@fs.walk`. The walk API wraps
@@ -24,76 +23,27 @@ fn[T] abort_file(
 }
 
 ///|
-pub impl @posoco.ToolProvider for GrepTools with fn list_tools(_self) -> Array[
-  @posoco.ToolDef,
-] {
-  [
-    @posoco.ToolDef::{
-      name: "grep",
-      description: "Search for a text pattern in files. Returns matching lines with file paths and line numbers. Searches recursively under the given path.",
-      input_schema: Json::object({
-        "type": Json::string("object"),
-        "properties": Json::object({
-          "pattern": Json::object({
-            "type": Json::string("string"),
-            "description": Json::string("Text pattern to search for"),
-          }),
-          "path": Json::object({
-            "type": Json::string("string"),
-            "description": Json::string("Directory to search in (default: '.')"),
-          }),
-          "glob": Json::object({
-            "type": Json::string("string"),
-            "description": Json::string("File pattern filter (e.g. '*.mbt')"),
-          }),
-        }),
-        "required": Json::array([Json::string("pattern")]),
-      }),
-      metadata: None,
-      source: Some("posoco_ext_grep"),
-    },
-  ]
+/// Check if a file path matches a simple glob (e.g. "*.mbt").
+fn file_matches(path : String, glob : String) -> Bool {
+  if glob.has_prefix("*.") {
+    let ext = glob[2:].to_owned()
+    return path.has_suffix("." + ext)
+  }
+  path == glob
 }
 
 ///|
-pub impl @posoco.ToolProvider for GrepTools with fn execute(
+priv struct NativeGrepSearcher {}
+
+///|
+/// Walk the tree sequentially (max_concurrency=1) so the first failure and
+/// its diagnostic are deterministic. Returns `path:line:content` entries.
+impl GrepSearcher for NativeGrepSearcher with fn search(
   _self,
-  _name : String,
-  call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
-  let (pattern, base, file_glob) = match call.arguments {
-    Object(obj) => {
-      let p = match obj.get("pattern") {
-        Some(String(s)) => s
-        Some(_) =>
-          raise @posoco.RuntimeError::UnknownTool(
-            "grep: 'pattern' argument must be a string",
-          )
-        None =>
-          raise @posoco.RuntimeError::UnknownTool("grep: missing 'pattern'")
-      }
-      let b = match obj.get("path") {
-        Some(String(s)) => s
-        None => "."
-        Some(_) =>
-          raise @posoco.RuntimeError::UnknownTool(
-            "grep: optional 'path' must be a string",
-          )
-      }
-      let g = match obj.get("glob") {
-        Some(String(s)) => s
-        None => ""
-        Some(_) =>
-          raise @posoco.RuntimeError::UnknownTool(
-            "grep: optional 'glob' must be a string",
-          )
-      }
-      (p, b, g)
-    }
-    _ => raise @posoco.RuntimeError::UnknownTool("grep: invalid arguments")
-  }
-  // Collect matching lines. Walk sequentially so the first failure and its
-  // diagnostic are deterministic and no callback can race after cancellation.
+  pattern : String,
+  base : String,
+  file_glob : String,
+) -> Array[String] {
   let results : Array[String] = []
   let failures : Array[String] = []
   @fs.walk(
@@ -140,32 +90,37 @@ pub impl @posoco.ToolProvider for GrepTools with fn execute(
           )
       }
   }
-  // Build result
-  if results.length() == 0 {
-    return @posoco.ToolResult::{
-      content: "No matches found for: \{pattern}",
-      structured: None,
-      is_error: false,
-    }
-  }
-  let builder = StringBuilder::new()
-  for r in results {
-    builder.write_string(r)
-    builder.write_char('\n')
-  }
-  @posoco.ToolResult::{
-    content: "Found \{results.length()} matches:\n\{builder.to_string()}",
-    structured: None,
-    is_error: false,
-  }
+  results
+}
+
+// ---------------------------------------------------------------------------
+// GrepTools — native struct + ToolProvider impl.
+// ---------------------------------------------------------------------------
+
+///|
+/// GrepTools — content search tool provider.
+/// Searches for a pattern in files under a directory and returns matching lines.
+pub(all) struct GrepTools {}
+
+///|
+pub fn GrepTools::new() -> GrepTools {
+  GrepTools::{  }
 }
 
 ///|
-/// Check if a file path matches a simple glob (e.g. "*.mbt").
-fn file_matches(path : String, glob : String) -> Bool {
-  if glob.has_prefix("*.") {
-    let ext = glob[2:].to_owned()
-    return path.has_suffix("." + ext)
-  }
-  path == glob
+pub impl @posoco.ToolProvider for GrepTools with fn list_tools(_self) -> Array[
+  @posoco.ToolDef,
+] {
+  shared_list_tools()
+}
+
+///|
+/// Execute the `grep` tool on native. Business logic lives in the shared
+/// `execute_grep_impl`; this method only supplies the walk-based searcher.
+pub impl @posoco.ToolProvider for GrepTools with fn execute(
+  _self,
+  _name : String,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolResult raise @posoco.RuntimeError {
+  execute_grep_impl(NativeGrepSearcher::{  }, call)
 }

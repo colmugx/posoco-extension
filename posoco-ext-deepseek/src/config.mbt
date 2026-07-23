@@ -9,6 +9,8 @@ pub(all) struct DeepSeekConfig {
   base_url : String
   /// Model id used for chat, FIM, and prefix completion.
   model : String
+  /// Endpoint path prefix, e.g. "/v1" when base_url is "http://host:port".
+  endpoint_prefix : String
 } derive(Eq, Debug)
 
 ///|
@@ -17,8 +19,9 @@ pub fn DeepSeekConfig::new(
   api_key : String,
   model? : String = "deepseek-v4-flash",
   base_url? : String = "https://api.deepseek.com",
+  endpoint_prefix? : String = "",
 ) -> DeepSeekConfig {
-  { api_key, base_url, model }
+  { api_key, base_url, model, endpoint_prefix }
 }
 
 ///|

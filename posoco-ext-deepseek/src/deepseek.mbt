@@ -2,11 +2,8 @@
 /// posoco_ext_deepseek — ModelPort implementation.
 ///
 /// Implements @posoco.ModelPort for DeepSeek's /chat/completions endpoint.
-/// DeepSeek-specific optimizations:
-/// - Historical reasoning_content is never resent (structurally guaranteed
-///   by posoco Message having no reasoning field — see encode.mbt).
-/// - Append-only message ordering for context cache friendliness.
-/// - SSE streaming via StreamAccumulator.
+/// Uses @http.post / @http.post_stream with the full endpoint URL, same
+/// pattern as elyra's HttpStreamingPort.
 
 ///|
 /// Build HTTP headers for DeepSeek API requests.
@@ -18,22 +15,35 @@ fn build_headers(config : DeepSeekConfig) -> Map[String, String] {
 }
 
 ///|
-fn api_base(config : DeepSeekConfig) -> String {
-  config.base_url
+/// The full chat completions URL: base_url + endpoint_prefix + /chat/completions.
+fn chat_url(config : DeepSeekConfig) -> String {
+  config.base_url + config.endpoint_prefix + "/chat/completions"
 }
 
 ///|
-fn beta_base(config : DeepSeekConfig) -> String {
-  let base = config.base_url
-  if base.has_suffix("/beta") {
-    base
+/// The full FIM completions URL (beta variant): base_url + /beta + endpoint_prefix + /completions.
+fn fim_url(config : DeepSeekConfig) -> String {
+  let base = if config.base_url.has_suffix("/beta") {
+    config.base_url
   } else {
-    base + "/beta"
+    config.base_url + "/beta"
   }
+  base + config.endpoint_prefix + "/completions"
 }
 
 ///|
-/// ModelPort implementation — non-streaming chat via /chat/completions.
+/// The full prefix-completion URL (beta variant): base_url + /beta + endpoint_prefix + /chat/completions.
+fn prefix_url(config : DeepSeekConfig) -> String {
+  let base = if config.base_url.has_suffix("/beta") {
+    config.base_url
+  } else {
+    config.base_url + "/beta"
+  }
+  base + config.endpoint_prefix + "/chat/completions"
+}
+
+///|
+/// ModelPort implementation — non-streaming chat via @http.post.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   self : DeepSeekModelPort,
   messages : Array[@posoco.Message],
@@ -49,44 +59,24 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
     false,
   )
   let headers = build_headers(self.config)
-  let client = @http.Client::Client(api_base(self.config), headers~) catch {
+  let url = chat_url(self.config)
+  let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
     _ =>
       raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=create_client)",
+        "DeepSeek transport failure (stage=post)",
       )
-  }
-  let response = client.post("/chat/completions", body.stringify()) catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=send_request)",
-      )
-    }
   }
   if !is_deepseek_http_success(response.code) {
-    let body_summary = read_error_body_summary(client) catch {
-      _ => BodyUnavailable
-    }
-    client.close()
     match
       classify_deepseek_http_status(
         "chat.http_status",
         response.code,
-        body_summary,
+        BodyBytesUtf8(body_data.binary().length()),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let body_data = client.read_all() catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=read_response)",
-      )
-    }
-  }
-  client.close()
   let body_text = body_data.text() catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
@@ -103,7 +93,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
 }
 
 ///|
-/// ModelPort implementation — streaming chat via /chat/completions with SSE.
+/// ModelPort implementation — streaming chat via @http.post_stream + SSE.
 /// Reads SSE events line by line, feeds StreamChunk to on_chunk + accumulator.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat_streaming(
   self : DeepSeekModelPort,
@@ -121,33 +111,18 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat_streaming(
     true,
   )
   let headers = build_headers(self.config)
-  let client = @http.Client::Client(api_base(self.config), headers~) catch {
+  let url = chat_url(self.config)
+  let client = @http.post_stream(url, headers~) catch {
     _ =>
       raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=create_client)",
+        "DeepSeek transport failure (stage=post_stream)",
       )
-  }
-  client.request(@http.RequestMethod::Post, "/chat/completions") catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=send_request)",
-      )
-    }
   }
   client.write(body.stringify()) catch {
     _ => {
       client.close()
       raise @posoco.ModelError::Transport(
         "DeepSeek transport failure (stage=write_body)",
-      )
-    }
-  }
-  client.flush() catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=flush)",
       )
     }
   }

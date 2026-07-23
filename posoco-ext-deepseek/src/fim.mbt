@@ -123,47 +123,27 @@ pub async fn DeepSeekModelPort::fim_completion(
   suffix : String?,
   max_tokens? : Int = 128,
 ) -> String raise @posoco.ModelError {
-  let base = beta_base(self.config)
   let body = build_fim_request_body(self.config, prefix, suffix, max_tokens)
   let headers = build_headers(self.config)
-  let client = @http.Client::Client(base, headers~) catch {
+  let url = fim_url(self.config)
+  let (response, resp_data) = @http.post(url, body.stringify(), headers~) catch {
     _ =>
       raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=fim.create_client)",
+        "DeepSeek transport failure (stage=fim.post)",
       )
-  }
-  let response = client.post("/completions", body.stringify()) catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=fim.send_request)",
-      )
-    }
   }
   if !is_deepseek_http_success(response.code) {
-    let body_summary = read_error_body_summary(client) catch {
-      _ => BodyUnavailable
-    }
-    client.close()
+    let byte_length = resp_data.binary().length()
     match
       classify_deepseek_http_status(
         "fim.http_status",
         response.code,
-        body_summary,
+        BodyBytesUtf8(byte_length),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let resp_data = client.read_all() catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=fim.read_response)",
-      )
-    }
-  }
-  client.close()
   let resp_text = resp_data.text() catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
@@ -201,47 +181,27 @@ pub async fn DeepSeekModelPort::chat_prefix_completion(
   prefix : String,
   stop : Array[String]?,
 ) -> String raise @posoco.ModelError {
-  let base = beta_base(self.config)
   let body = build_prefix_request_body(self.config, messages, prefix, stop)
   let headers = build_headers(self.config)
-  let client = @http.Client::Client(base, headers~) catch {
+  let url = prefix_url(self.config)
+  let (response, resp_data) = @http.post(url, body.stringify(), headers~) catch {
     _ =>
       raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=prefix.create_client)",
+        "DeepSeek transport failure (stage=prefix.post)",
       )
-  }
-  let response = client.post("/chat/completions", body.stringify()) catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=prefix.send_request)",
-      )
-    }
   }
   if !is_deepseek_http_success(response.code) {
-    let body_summary = read_error_body_summary(client) catch {
-      _ => BodyUnavailable
-    }
-    client.close()
+    let byte_length = resp_data.binary().length()
     match
       classify_deepseek_http_status(
         "prefix.http_status",
         response.code,
-        body_summary,
+        BodyBytesUtf8(byte_length),
       ) {
       Some(err) => raise err
       None => ()
     }
   }
-  let resp_data = client.read_all() catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=prefix.read_response)",
-      )
-    }
-  }
-  client.close()
   let resp_text = resp_data.text() catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
@@ -255,9 +215,9 @@ pub async fn DeepSeekModelPort::chat_prefix_completion(
       )
   }
   // Reuse decode_chat_response for the response (same format as /chat/completions)
-  let response = decode_chat_response(resp_json)
+  let model_response = decode_chat_response(resp_json)
   // Extract text content from the response message
-  match response.message.content {
+  match model_response.message.content {
     [@posoco.Content::Text(t), ..] => t
     [] =>
       raise @posoco.ModelError::ResponseParse(

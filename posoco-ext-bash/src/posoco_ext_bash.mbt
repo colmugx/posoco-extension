@@ -16,13 +16,6 @@ fn bash_collect_output_failure() -> @posoco.RuntimeError {
 }
 
 ///|
-fn bash_empty_command_failure() -> @posoco.RuntimeError {
-  @posoco.RuntimeError::InvocationFailed(
-    "bash: invocation failed (stage=arguments, category=empty_command)",
-  )
-}
-
-///|
 fn bash_decode_failure(exit_code : Int) -> String {
   "bash: decode failed (stage=decode_output, category=invalid_utf8, exit_code=\{exit_code})"
 }
@@ -31,26 +24,7 @@ fn bash_decode_failure(exit_code : Int) -> String {
 pub impl @posoco.ToolProvider for ShellTools with fn list_tools(_self) -> Array[
   @posoco.ToolDef,
 ] {
-  [
-    @posoco.ToolDef::{
-      name: "bash",
-      description: "Execute a shell command and return its output",
-      input_schema: Json::object(
-        Map::from_array([("cmd", Json::string("the command to execute"))]),
-      ),
-      metadata: None,
-      source: Some("posoco_ext_bash"),
-    },
-    @posoco.ToolDef::{
-      name: "shell",
-      description: "Execute a shell command (alias for bash)",
-      input_schema: Json::object(
-        Map::from_array([("cmd", Json::string("the command to execute"))]),
-      ),
-      metadata: None,
-      source: Some("posoco_ext_bash"),
-    },
-  ]
+  shared_list_tools()
 }
 
 ///|
@@ -84,40 +58,5 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     content,
     structured: None,
     is_error: exit_code != 0 || decode_failed,
-  }
-}
-
-///|
-/// Extract command string from ToolCall arguments JSON.
-/// T07-B: a missing or non-String cmd/command is now a typed error, not a
-/// silent fallback that runs the entire JSON blob as a shell command.
-fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
-  match args {
-    Json::Object(map) =>
-      if map.contains("cmd") {
-        match map["cmd"] {
-          Json::String(s) => s
-          _ =>
-            raise @posoco.RuntimeError::UnknownTool(
-              "bash: 'cmd' argument must be a string",
-            )
-        }
-      } else if map.contains("command") {
-        match map["command"] {
-          Json::String(s) => s
-          _ =>
-            raise @posoco.RuntimeError::UnknownTool(
-              "bash: 'command' argument must be a string",
-            )
-        }
-      } else {
-        raise @posoco.RuntimeError::UnknownTool(
-          "bash: missing 'cmd' or 'command' argument",
-        )
-      }
-    _ =>
-      raise @posoco.RuntimeError::UnknownTool(
-        "bash: arguments must be a JSON object with a 'cmd' field",
-      )
   }
 }

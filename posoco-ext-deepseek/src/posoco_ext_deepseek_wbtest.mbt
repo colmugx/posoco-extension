@@ -402,19 +402,19 @@ test "deepseek_config_custom_model_passes_through" {
 }
 
 ///|
-test "endpoint_helpers_build_api_and_beta_base" {
+test "endpoint_helpers_build_chat_and_fim_url" {
   let config = DeepSeekConfig::new("key", base_url="https://api.deepseek.com")
-  assert_eq(api_base(config), "https://api.deepseek.com")
-  assert_eq(beta_base(config), "https://api.deepseek.com/beta")
+  assert_eq(chat_url(config), "https://api.deepseek.com/chat/completions")
+  assert_eq(fim_url(config), "https://api.deepseek.com/beta/completions")
 }
 
 ///|
-test "beta_base_does_not_duplicate_suffix" {
+test "fim_url_does_not_duplicate_suffix" {
   let config = DeepSeekConfig::new(
     "key",
     base_url="https://api.deepseek.com/beta",
   )
-  assert_eq(beta_base(config), "https://api.deepseek.com/beta")
+  assert_eq(fim_url(config), "https://api.deepseek.com/beta/completions")
 }
 
 ///|
