@@ -35,7 +35,7 @@ async test "grep_required_pattern_distinguishes_wrong_type_from_missing" {
   ]
   for case in cases {
     let (call, expected, is_missing) = case
-    let result = Ok(GrepTools::new().execute("grep", call)) catch {
+    let result = Ok(GrepTools::GrepTools().execute("grep", call)) catch {
       error => Err(error)
     }
     match result {
@@ -52,7 +52,7 @@ async test "grep_required_pattern_distinguishes_wrong_type_from_missing" {
 ///|
 async test "grep_wrong_type_optional_path_is_loud" {
   let result = Ok(
-    GrepTools::new().execute(
+    GrepTools::GrepTools().execute(
       "grep",
       grep_call_with_arguments(
         Json::object(
@@ -76,7 +76,7 @@ async test "grep_wrong_type_optional_path_is_loud" {
 ///|
 async test "grep_wrong_type_optional_glob_is_loud" {
   let result = Ok(
-    GrepTools::new().execute(
+    GrepTools::GrepTools().execute(
       "grep",
       grep_call_with_arguments(
         Json::object(
@@ -109,7 +109,10 @@ async test "grep_zero_matches_is_success" {
       "alpha\nbeta\n",
       create_mode=CreateNew,
     )
-    let result = GrepTools::new().execute("grep", grep_call("missing", dir))
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call("missing", dir),
+    )
     assert_false(result.is_error)
     assert_true(result.content.contains("No matches found"))
   }
@@ -119,7 +122,9 @@ async test "grep_zero_matches_is_success" {
 async test "grep_missing_base_is_loud" {
   let dir = @fs.tmpdir(prefix="posoco-grep-missing")
   @fs.rmdir(dir, recursive=true)
-  let result = Ok(GrepTools::new().execute("grep", grep_call("anything", dir))) catch {
+  let result = Ok(
+    GrepTools::GrepTools().execute("grep", grep_call("anything", dir)),
+  ) catch {
     e => Err(e)
   }
   match result {
@@ -140,7 +145,7 @@ async test "grep_decode_failure_is_loud" {
     }
     @fs.write_file("\{dir}/invalid.bin", b"\xff", create_mode=CreateNew)
     let result = Ok(
-      GrepTools::new().execute("grep", grep_call("anything", dir)),
+      GrepTools::GrepTools().execute("grep", grep_call("anything", dir)),
     ) catch {
       e => Err(e)
     }
@@ -168,7 +173,7 @@ async test "grep_unreadable_file_is_loud" {
       permission=0o000,
     )
     let result = Ok(
-      GrepTools::new().execute("grep", grep_call("anything", dir)),
+      GrepTools::GrepTools().execute("grep", grep_call("anything", dir)),
     ) catch {
       e => Err(e)
     }

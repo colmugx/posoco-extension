@@ -1,13 +1,15 @@
 ///|
-/// posoco_ext_grep.js.mbt — js target (bun) implementation.
-///
-/// Provides the GrepSearcher adaptor (backed by `Bun.spawn` invoking `rg`)
-/// and the GrepTools struct + ToolProvider impl that delegates business logic
-/// to `execute_grep_impl`.
-///
-/// Why rg: writing an in-process recursive walker + regex engine in MoonBit
-/// for the js target is substantial; delegating to rg matches native-side
-/// semantics and performance. A pure-MoonBit fallback is a future task.
+// ============================================================================
+// posoco_ext_grep.js.mbt — js target (bun) adaptor + ToolProvider impl.
+//
+// Active on: target="js" (via moon.pkg targets)
+// Provides:  Bun FFI bindings, JsGrepSearcher adaptor (via rg), complete
+//            ToolProvider impl
+//
+// Why rg: writing an in-process recursive walker + regex engine in MoonBit
+// for the js target is substantial; delegating to rg matches native-side
+// semantics and performance. A pure-MoonBit fallback is a future task.
+// ============================================================================
 
 // ---------------------------------------------------------------------------
 // Bun FFI bindings.
@@ -71,7 +73,7 @@ priv struct JsGrepSearcher {}
 ///|
 /// Delegate search to ripgrep and parse `path:line:content` output.
 impl GrepSearcher for JsGrepSearcher with fn search(
-  _self,
+  _self : JsGrepSearcher,
   pattern : String,
   base : String,
   file_glob : String,
@@ -107,22 +109,13 @@ impl GrepSearcher for JsGrepSearcher with fn search(
 }
 
 // ---------------------------------------------------------------------------
-// GrepTools — js struct + ToolProvider impl.
+// ToolProvider — complete impl (list_tools + execute) for js.
 // ---------------------------------------------------------------------------
 
 ///|
-/// GrepTools — content search tool provider (js target).
-pub(all) struct GrepTools {}
-
-///|
-pub fn GrepTools::new() -> GrepTools {
-  GrepTools::{  }
-}
-
-///|
-pub impl @posoco.ToolProvider for GrepTools with fn list_tools(_self) -> Array[
-  @posoco.ToolDef,
-] {
+pub impl @posoco.ToolProvider for GrepTools with fn list_tools(
+  _self : GrepTools,
+) -> Array[@posoco.ToolDef] {
   shared_list_tools()
 }
 
@@ -130,7 +123,7 @@ pub impl @posoco.ToolProvider for GrepTools with fn list_tools(_self) -> Array[
 /// Execute the `grep` tool on js. Business logic lives in the shared
 /// `execute_grep_impl`; this method only supplies the rg-based searcher.
 pub impl @posoco.ToolProvider for GrepTools with fn execute(
-  _self,
+  _self : GrepTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolResult raise @posoco.RuntimeError {

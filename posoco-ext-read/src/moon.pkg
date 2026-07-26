@@ -12,9 +12,7 @@ import {
 
 options(
   targets: {
-    "posoco_ext_read_shared.mbt": [ "native", "js" ],
-    "posoco_ext_read.mbt": [ "native" ],
     "posoco_ext_read.js.mbt": [ "js" ],
-    "posoco_ext_read_wbtest.mbt": [ "native" ],
+    "posoco_ext_read.native.mbt": [ "native" ],
   },
 )

@@ -1,160 +1,156 @@
 ///|
-/// posoco_ext_glob.mbt — native target implementation.
-///
-/// Provides the GlobScanner adaptor (backed by `@fs.walk` + a MoonBit
-/// glob-matching engine) and the GlobTools struct + ToolProvider impl that
-/// delegates business logic to `execute_glob_impl`.
-
-// ---------------------------------------------------------------------------
-// Native scanner — @fs.walk + MoonBit glob-matching engine.
-// ---------------------------------------------------------------------------
-
-///|
-priv struct NativeGlobScanner {}
-
-///|
-/// Walk the directory tree and collect paths matching the glob pattern.
-impl GlobScanner for NativeGlobScanner with fn scan(
-  _self,
-  pattern : String,
-  base : String,
-) -> Array[String] {
-  let matches : Array[String] = []
-  @fs.walk(base, fn(dir : String, entries : Array[String]) {
-    for entry in entries {
-      let full = if dir == "." { entry } else { "\{dir}/\{entry}" }
-      if glob_match(pattern, full) {
-        matches.push(full)
-      }
-    }
-  }) catch {
-    _ =>
-      raise @posoco.RuntimeError::InvocationFailed(
-        "glob: walk failed for '\{@devkit.sanitize_path(base)}'",
-      )
-  }
-  matches
-}
-
-// ---------------------------------------------------------------------------
-// Glob-matching engine (native-only; js delegates to Bun.Glob).
-// ---------------------------------------------------------------------------
-
-///|
-/// Match a path against a glob pattern. Supports * and **.
-/// `*` matches any characters except `/`; `**` matches any path segments.
-fn glob_match(pattern : String, path : String) -> Bool {
-  let pat_segs = pattern.split("/").to_array()
-  let path_segs = path.split("/").to_array()
-  match_segments(pat_segs, 0, path_segs, 0)
-}
-
-///|
-fn match_segments(
-  pat : Array[StringView],
-  pi : Int,
-  path : Array[StringView],
-  si : Int,
-) -> Bool {
-  if pi >= pat.length() {
-    return si >= path.length()
-  }
-  if pat[pi] == "**" {
-    // ** matches zero or more path segments
-    // Try matching the rest of the pattern at every position
-    let mut next = si
-    while true {
-      if match_segments(pat, pi + 1, path, next) {
-        return true
-      }
-      if next >= path.length() {
-        return false
-      }
-      next += 1
-    }
-    return false // unreachable
-  }
-  if si >= path.length() {
-    return false
-  }
-  if seg_match(pat[pi], path[si]) {
-    return match_segments(pat, pi + 1, path, si + 1)
-  }
-  false
-}
-
-///|
-/// Match a single path segment against a pattern segment (with * wildcards).
-fn seg_match(pat_seg : StringView, path_seg : StringView) -> Bool {
-  if !pat_seg.contains("*") {
-    return pat_seg == path_seg
-  }
-  // Simple wildcard matching for single segment
-  wildcard_match(pat_seg.iter().collect(), 0, path_seg.iter().collect(), 0)
-}
-
-///|
-fn wildcard_match(
-  pat : Array[Char],
-  pi : Int,
-  text : Array[Char],
-  ti : Int,
-) -> Bool {
-  if pi >= pat.length() {
-    return ti >= text.length()
-  }
-  if pat[pi] == '*' {
-    // * matches zero or more chars
-    let mut next = ti
-    while true {
-      if wildcard_match(pat, pi + 1, text, next) {
-        return true
-      }
-      if next >= text.length() {
-        return false
-      }
-      next += 1
-    }
-    return false // unreachable
-  }
-  if ti >= text.length() {
-    return false
-  }
-  if pat[pi] == text[ti] {
-    return wildcard_match(pat, pi + 1, text, ti + 1)
-  }
-  false
-}
-
-// ---------------------------------------------------------------------------
-// GlobTools — native struct + ToolProvider impl.
-// ---------------------------------------------------------------------------
+// ============================================================================
+// posoco-ext-glob — file pattern matching tool.
+//
+// File organization:
+//   posoco_ext_glob.mbt          — all targets: struct, ctor, shared helpers,
+//                                  SystemPromptContributor, GlobScanner trait,
+//                                  shared_list_tools, extract_glob_args,
+//                                  execute_glob_impl
+//   posoco_ext_glob_native.mbt   — #cfg(target="native"): @fs.walk scanner +
+//                                  glob-matching engine + ToolProvider impl
+//   posoco_ext_glob_js.mbt       — #cfg(target="js"):      Bun.Glob scanner +
+//                                  ToolProvider impl
+//   fallback.mbt                 — #cfg(not(any(native,js))): empty list + error
+//
+// The struct + trait + shared execute logic live HERE so every target sees the
+// same type. Only the scanner adaptor differs per platform; each platform's
+// adaptor file provides its own scanner struct + a complete ToolProvider impl.
+// ============================================================================
 
 ///|
 /// GlobTools — file pattern matching tool provider.
+///
 /// Walks a directory tree and returns paths matching a glob-like pattern.
 /// Supports `*` (any chars in one segment) and `**` (recursive).
-pub(all) struct GlobTools {}
+/// On native, scanning uses `@fs.walk` + a MoonBit glob-matching engine;
+/// on js (bun), scanning delegates to `Bun.Glob`. On wasm/wasm-gc, the tool
+/// is not listed and execute raises `RuntimeError::InvocationFailed`.
+pub(all) struct GlobTools {
+  // Stateless — all configuration comes from ToolCall arguments at execute time.
+}
 
 ///|
-pub fn GlobTools::new() -> GlobTools {
+/// Canonical constructor. Use this everywhere — the old `GlobTools::GlobTools()`
+/// positional form is removed to avoid cross-target naming drift.
+pub fn GlobTools::GlobTools() -> GlobTools {
   GlobTools::{  }
 }
 
+// ---------------------------------------------------------------------------
+// SystemPromptContributor — identical on every target.
+// ---------------------------------------------------------------------------
+
 ///|
-pub impl @posoco.ToolProvider for GlobTools with fn list_tools(_self) -> Array[
-  @posoco.ToolDef,
-] {
-  shared_list_tools()
+pub impl @posoco.SystemPromptContributor for GlobTools with fn system_prompt(
+  _self : GlobTools,
+) -> String {
+  "Use glob to discover relevant paths before assuming the workspace layout."
+}
+
+// ---------------------------------------------------------------------------
+// GlobScanner trait — the search adaptor seam. Native and js each provide one.
+// ---------------------------------------------------------------------------
+
+///|
+/// High-level glob search boundary.
+///
+/// Native implements this with `@fs.walk` + a MoonBit glob-matching engine;
+/// js delegates to `Bun.Glob.scan`. The shared `execute_glob_impl` formats
+/// the result the same way regardless of engine.
+priv trait GlobScanner {
+  /// Scan `base` for paths matching `pattern`. Raise on IO failure.
+  async fn scan(self : Self, pattern : String, base : String) -> Array[String] raise @posoco.RuntimeError
+}
+
+// ---------------------------------------------------------------------------
+// Shared tool definition + argument extraction.
+// ---------------------------------------------------------------------------
+
+///|
+/// Shared tool definition for the `glob` tool.
+fn shared_list_tools() -> Array[@posoco.ToolDef] {
+  [
+    @posoco.ToolDef::{
+      name: "glob",
+      description: "Find files matching a glob pattern. Supports * (single segment wildcard) and ** (recursive). Example: '**/*.mbt' finds all .mbt files recursively.",
+      input_schema: Json::object({
+        "type": Json::string("object"),
+        "properties": Json::object({
+          "pattern": Json::object({
+            "type": Json::string("string"),
+            "description": Json::string(
+              "Glob pattern (e.g. '**/*.mbt', 'src/*.mbt')",
+            ),
+          }),
+          "path": Json::object({
+            "type": Json::string("string"),
+            "description": Json::string(
+              "Base directory to search (default: '.')",
+            ),
+          }),
+        }),
+        "required": Json::array([Json::string("pattern")]),
+      }),
+      metadata: None,
+      source: Some("posoco_ext_glob"),
+    },
+  ]
 }
 
 ///|
-/// Execute the `glob` tool on native. Business logic lives in the shared
-/// `execute_glob_impl`; this method only supplies the walk-based scanner.
-pub impl @posoco.ToolProvider for GlobTools with fn execute(
-  _self,
-  _name : String,
+/// Extract `(pattern, base)` from ToolCall arguments. `base` defaults to ".".
+fn extract_glob_args(
+  args : Json,
+) -> (String, String) raise @posoco.RuntimeError {
+  match args {
+    Object(obj) => {
+      let p = match obj.get("pattern") {
+        Some(String(s)) => s
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "glob: 'pattern' argument must be a string",
+          )
+        None =>
+          raise @posoco.RuntimeError::UnknownTool("glob: missing 'pattern'")
+      }
+      let b = match obj.get("path") {
+        Some(String(s)) => s
+        None => "."
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "glob: optional 'path' must be a string",
+          )
+      }
+      (p, b)
+    }
+    _ =>
+      raise @posoco.RuntimeError::UnknownTool(
+        "glob: arguments must be a JSON object",
+      )
+  }
+}
+
+// ---------------------------------------------------------------------------
+// execute_glob_impl — single source of truth for the glob tool's logic.
+// ---------------------------------------------------------------------------
+
+///|
+/// Shared `glob` execute logic. Target-agnostic; only the scanner differs.
+async fn execute_glob_impl(
+  scanner : &GlobScanner,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolResult raise @posoco.RuntimeError {
-  execute_glob_impl(NativeGlobScanner::{  }, call)
+  let (pattern, base) = extract_glob_args(call.arguments)
+  let matches = scanner.scan(pattern, base)
+  let builder = StringBuilder::new()
+  for m in matches {
+    builder.write_string(m)
+    builder.write_char('\n')
+  }
+  @posoco.ToolResult::{
+    content: "Found \{matches.length()} files:\n\{builder.to_string()}",
+    structured: None,
+    is_error: false,
+  }
 }

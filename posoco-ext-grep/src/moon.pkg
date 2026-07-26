@@ -8,13 +8,13 @@ import {
 
 import {
   "moonbitlang/async",
+  "moonbitlang/async/fs",
 } for "wbtest"
 
 options(
   targets: {
-    "posoco_ext_grep_shared.mbt": [ "native", "js" ],
-    "posoco_ext_grep.mbt": [ "native" ],
     "posoco_ext_grep.js.mbt": [ "js" ],
+    "posoco_ext_grep.native.mbt": [ "native" ],
     "posoco_ext_grep_wbtest.mbt": [ "native" ],
   },
 )

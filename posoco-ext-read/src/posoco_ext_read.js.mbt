@@ -1,12 +1,15 @@
 ///|
-/// posoco_ext_read.js.mbt — js target (bun runtime) implementation.
-///
-/// Provides the FsIo adaptor (backed by Bun globals) and the ReadTools struct
-/// + ToolProvider impl that delegates business logic to `execute_read_impl`.
-///
-/// Uses Bun's global `Bun.file` to stat + read. Bun is a global object
-/// under bun, so `extern "js" fn ... = #| () => Bun.xxx()` works without
-/// require/import. We deliberately do NOT use `node:fs`.
+// ============================================================================
+// posoco_ext_read_js.mbt — js target (bun runtime) adaptor + ToolProvider impl.
+//
+// Active on: target="js"
+// Provides:  Bun FFI bindings, JsFsIo adaptor (via Bun.file), and complete
+//            ToolProvider impl
+//
+// Uses Bun's global `Bun.file` to stat + read. Bun is a global object under
+// bun, so `extern "js" fn ... = #| () => Bun.xxx()` works without require/
+// import. We deliberately do NOT use `node:fs`.
+// ============================================================================
 
 // ---------------------------------------------------------------------------
 // Bun FFI bindings.
@@ -59,22 +62,13 @@ impl FsIo for JsFsIo with fn read_text(_self, path : String) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// ReadTools — js struct + ToolProvider impl.
+// ToolProvider — complete impl (list_tools + execute) for js.
 // ---------------------------------------------------------------------------
 
 ///|
-/// ReadTools — file reading tool provider (js target).
-pub(all) struct ReadTools {}
-
-///|
-pub fn ReadTools::new() -> ReadTools {
-  ReadTools::{  }
-}
-
-///|
-pub impl @posoco.ToolProvider for ReadTools with fn list_tools(_self) -> Array[
-  @posoco.ToolDef,
-] {
+pub impl @posoco.ToolProvider for ReadTools with fn list_tools(
+  _self : ReadTools,
+) -> Array[@posoco.ToolDef] {
   shared_list_tools()
 }
 
@@ -82,7 +76,7 @@ pub impl @posoco.ToolProvider for ReadTools with fn list_tools(_self) -> Array[
 /// Execute the `read` tool on js. Business logic lives in the shared
 /// `execute_read_impl`; this method only supplies the Bun-backed adaptor.
 pub impl @posoco.ToolProvider for ReadTools with fn execute(
-  _self,
+  _self : ReadTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolResult raise @posoco.RuntimeError {

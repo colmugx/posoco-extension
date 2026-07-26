@@ -110,7 +110,7 @@ async test "empty_command_has_arguments_stage" {
     name: "bash",
     arguments: Json::object(Map::from_array([("cmd", Json::string(""))])),
   }
-  let result = Ok(ShellTools::new().execute("bash", call)) catch {
+  let result = Ok(ShellTools().execute("bash", call)) catch {
     error => Err(error)
   }
   match result {
@@ -136,7 +136,7 @@ test "collect_output_failure_mapping_is_stage_only" {
 /// T07-B: invalid UTF-8 from an exit-0 process is an explicit business error,
 /// not a successful result with silently replaced output.
 async test "non_utf8_output_is_explicit_tool_error" {
-  let tools = ShellTools::new()
+  let tools = ShellTools()
   let call : @posoco.ToolCall = {
     id: "tc_binary",
     name: "bash",

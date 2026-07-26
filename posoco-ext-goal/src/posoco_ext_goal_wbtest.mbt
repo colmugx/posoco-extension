@@ -50,10 +50,10 @@ struct MockSessionStore {
 pub impl @posoco.SessionStore for MockSessionStore with fn load(
   self : MockSessionStore,
   id : String,
-) -> Result[@posoco.Session, @posoco.SessionError] {
+) -> @posoco.Session raise @posoco.SessionError {
   match self.store.get(id) {
-    Some(s) => Ok(s)
-    None => Ok({ messages: [], metadata: Map::from_array([]) })
+    Some(s) => s
+    None => { messages: [], metadata: Map::from_array([]) }
   }
 }
 
@@ -62,9 +62,8 @@ pub impl @posoco.SessionStore for MockSessionStore with fn save(
   self : MockSessionStore,
   id : String,
   session : @posoco.Session,
-) -> Result[Unit, @posoco.SessionError] {
+) -> Unit raise @posoco.SessionError {
   self.store[id] = session
-  Ok(())
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

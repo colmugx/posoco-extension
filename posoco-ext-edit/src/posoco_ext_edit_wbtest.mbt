@@ -1,4 +1,7 @@
 ///|
+/// ——— Test helpers ———
+
+///|
 fn edit_call(path : String, replace_all : Json?) -> @posoco.ToolCall {
   edit_call_fields(
     Json::string(path),
@@ -64,7 +67,7 @@ async test "edit_required_fields_distinguish_wrong_type_from_missing" {
   ]
   for pair in cases {
     let (call, field) = pair
-    let outcome = Ok(EditTools::new().execute("edit", call)) catch {
+    let outcome = Ok(EditTools::EditTools().execute("edit", call)) catch {
       error => Err(error)
     }
     match outcome {
@@ -92,7 +95,7 @@ test "edit_failure_mappers_cover_stat_decode_and_write" {
 ///|
 async test "edit_rejects_malformed_optional_replace_all" {
   let outcome = Ok(
-    EditTools::new().execute(
+    EditTools::EditTools().execute(
       "edit",
       edit_call("unused", Some(Json::string("yes"))),
     ),
@@ -107,13 +110,16 @@ async test "edit_rejects_malformed_optional_replace_all" {
 }
 
 ///|
+#cfg(target="native")
 async test "edit_directory_is_loud_without_os_error" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-edit-directory")
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    let outcome = Ok(EditTools::new().execute("edit", edit_call(dir, None))) catch {
+    let outcome = Ok(
+      EditTools::EditTools().execute("edit", edit_call(dir, None)),
+    ) catch {
       error => Err(error)
     }
     match outcome {

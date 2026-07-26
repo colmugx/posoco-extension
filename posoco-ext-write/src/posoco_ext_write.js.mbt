@@ -1,11 +1,15 @@
 ///|
-/// posoco_ext_write.js.mbt — js target (bun runtime) implementation.
-///
-/// Provides the FsIo adaptor (backed by Bun globals) and the WriteTools struct
-/// + ToolProvider impl that delegates business logic to `execute_write_impl`.
-///
-/// Uses Bun's global `Bun.write` (returns Promise<number>) + `Bun.mkdir` to
-/// ensure the parent directory exists. Bun is a global object under bun.
+// ============================================================================
+// posoco_ext_write_js.mbt — js target (bun runtime) adaptor + ToolProvider impl.
+//
+// Active on: target="js"
+// Provides:  Bun FFI bindings, JsFsIo adaptor (via Bun.write), and complete
+//            ToolProvider impl
+//
+// Uses Bun's global `Bun.write` (returns Promise<number>) + `Bun.mkdir` to
+// ensure the parent directory exists. Bun is a global object under bun, so
+// `extern "js" fn ... = #| () => Bun.xxx()` works without require/import.
+// ============================================================================
 
 // ---------------------------------------------------------------------------
 // Bun FFI bindings.
@@ -63,22 +67,13 @@ impl FsIo for JsFsIo with fn write_text(_self, path : String, content : String) 
 }
 
 // ---------------------------------------------------------------------------
-// WriteTools — js struct + ToolProvider impl.
+// ToolProvider — complete impl (list_tools + execute) for js.
 // ---------------------------------------------------------------------------
 
 ///|
-/// WriteTools — file writing tool provider (js target).
-pub(all) struct WriteTools {}
-
-///|
-pub fn WriteTools::new() -> WriteTools {
-  WriteTools::{  }
-}
-
-///|
-pub impl @posoco.ToolProvider for WriteTools with fn list_tools(_self) -> Array[
-  @posoco.ToolDef,
-] {
+pub impl @posoco.ToolProvider for WriteTools with fn list_tools(
+  _self : WriteTools,
+) -> Array[@posoco.ToolDef] {
   shared_list_tools()
 }
 
@@ -86,7 +81,7 @@ pub impl @posoco.ToolProvider for WriteTools with fn list_tools(_self) -> Array[
 /// Execute the `write` tool on js. Business logic lives in the shared
 /// `execute_write_impl`; this method only supplies the Bun-backed adaptor.
 pub impl @posoco.ToolProvider for WriteTools with fn execute(
-  _self,
+  _self : WriteTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolResult raise @posoco.RuntimeError {

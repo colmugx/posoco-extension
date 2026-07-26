@@ -19,7 +19,7 @@ async test "glob_wrong_type_pattern_is_not_reported_as_missing" {
     name: "glob",
     arguments: Json::object(Map::from_array([("pattern", Json::boolean(true))])),
   }
-  let outcome = Ok(GlobTools::new().execute("glob", call)) catch {
+  let outcome = Ok(GlobTools::GlobTools().execute("glob", call)) catch {
     error => Err(error)
   }
   match outcome {
@@ -35,7 +35,7 @@ async test "glob_wrong_type_pattern_is_not_reported_as_missing" {
 ///|
 async test "glob_rejects_malformed_optional_path" {
   let outcome = Ok(
-    GlobTools::new().execute(
+    GlobTools::GlobTools().execute(
       "glob",
       glob_call("*.mbt", Some(Json::number(1.0))),
     ),
@@ -50,11 +50,15 @@ async test "glob_rejects_malformed_optional_path" {
 }
 
 ///|
+/// Native-only: drives `@fs.tmpdir`/`@fs.rmdir` and asserts the native
+/// `@fs.walk`-specific failure message. Bun.Glob has different failure modes
+/// on js, so this test is skipped there.
+#cfg(target="native")
 async test "glob_missing_base_is_loud_without_os_error" {
   let dir = @fs.tmpdir(prefix="posoco-glob-missing")
   @fs.rmdir(dir, recursive=true)
   let outcome = Ok(
-    GlobTools::new().execute(
+    GlobTools::GlobTools().execute(
       "glob",
       glob_call("*.mbt", Some(Json::string(dir))),
     ),

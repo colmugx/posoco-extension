@@ -1,11 +1,11 @@
 name = "colmugx/posoco-ext-write"
 
-version = "0.1.0"
+version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.4.4",
+  "colmugx/posoco@0.5.5",
   "colmugx/posoco-devkit@0.1.0",
-  "moonbitlang/async@0.20.5",
+  "moonbitlang/async@0.20.3",
 }
 
 readme = "README.mbt.md"

@@ -1,4 +1,8 @@
 ///|
+/// ——— Test helpers ———
+
+///|
+#cfg(target="native")
 fn write_call(path : String, content : String) -> @posoco.ToolCall {
   {
     id: "write-test",
@@ -44,7 +48,7 @@ async test "write_required_fields_distinguish_wrong_type_from_missing" {
   ]
   for pair in cases {
     let (call, field) = pair
-    let outcome = Ok(WriteTools::new().execute("write", call)) catch {
+    let outcome = Ok(WriteTools::WriteTools().execute("write", call)) catch {
       error => Err(error)
     }
     match outcome {
@@ -59,6 +63,7 @@ async test "write_required_fields_distinguish_wrong_type_from_missing" {
 }
 
 ///|
+#cfg(target="native")
 async test "write_missing_parent_is_loud_without_os_error" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-missing")
@@ -67,7 +72,7 @@ async test "write_missing_parent_is_loud_without_os_error" {
     }
     let path = dir + "/missing-parent/output.txt"
     let outcome = Ok(
-      WriteTools::new().execute("write", write_call(path, "content")),
+      WriteTools::WriteTools().execute("write", write_call(path, "content")),
     ) catch {
       error => Err(error)
     }

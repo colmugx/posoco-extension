@@ -3,7 +3,7 @@ name = "colmugx/posoco-devkit"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.4.4",
+  "colmugx/posoco@0.5.5",
   "colmugx/reader@0.3.0",
   "tonyfettes/xlog@0.4.0",
 }

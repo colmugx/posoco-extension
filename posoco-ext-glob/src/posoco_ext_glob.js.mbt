@@ -1,9 +1,11 @@
 ///|
-/// posoco_ext_glob.js.mbt — js target (bun >= 1.2) implementation.
-///
-/// Provides the GlobScanner adaptor (backed by `Bun.Glob`) and the GlobTools
-/// struct + ToolProvider impl that delegates business logic to
-/// `execute_glob_impl`.
+// ============================================================================
+// posoco_ext_glob_js.mbt — ToolProvider for js target (bun >= 1.2).
+//
+// Active on: target="js"
+// Provides:  JsGlobScanner (Bun.Glob-backed adaptor) and the complete
+//            ToolProvider impl (list_tools + execute).
+// ============================================================================
 
 // ---------------------------------------------------------------------------
 // Bun.Glob FFI bindings.
@@ -57,22 +59,13 @@ impl GlobScanner for JsGlobScanner with fn scan(
 }
 
 // ---------------------------------------------------------------------------
-// GlobTools — js struct + ToolProvider impl.
+// ToolProvider — complete impl (list_tools + execute) for js.
 // ---------------------------------------------------------------------------
 
 ///|
-/// GlobTools — file pattern matching tool provider (js target).
-pub(all) struct GlobTools {}
-
-///|
-pub fn GlobTools::new() -> GlobTools {
-  GlobTools::{  }
-}
-
-///|
-pub impl @posoco.ToolProvider for GlobTools with fn list_tools(_self) -> Array[
-  @posoco.ToolDef,
-] {
+pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
+  _self : GlobTools,
+) -> Array[@posoco.ToolDef] {
   shared_list_tools()
 }
 
@@ -80,7 +73,7 @@ pub impl @posoco.ToolProvider for GlobTools with fn list_tools(_self) -> Array[
 /// Execute the `glob` tool on js. Business logic lives in the shared
 /// `execute_glob_impl`; this method only supplies the Bun.Glob scanner.
 pub impl @posoco.ToolProvider for GlobTools with fn execute(
-  _self,
+  _self : GlobTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolResult raise @posoco.RuntimeError {

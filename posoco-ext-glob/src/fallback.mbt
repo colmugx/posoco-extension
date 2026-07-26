@@ -4,29 +4,29 @@
 //
 // Active on: #cfg(not(any(target="native", target="js")))
 //
-// Shell execution requires a subprocess API (@process on native, Bun.spawn on
-// js). Neither exists on wasm/wasm-gc. Rather than omit the tool entirely
-// (which would make ShellTools::new() fail to compile due to missing trait
+// Glob scanning requires a filesystem walk API (@fs.walk on native, Bun.Glob
+// on js). Neither exists on wasm/wasm-gc. Rather than omit the tool entirely
+// (which would make GlobTools::new() fail to compile due to missing trait
 // impl), we provide a complete but inert impl: list_tools returns [] (no tools
 // advertised to the model), execute raises immediately.
 // ============================================================================
 
 ///|
 #cfg(not(any(target="native", target="js")))
-pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
-  _self : ShellTools,
+pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
+  _self : GlobTools,
 ) -> Array[@posoco.ToolDef] {
   []
 }
 
 ///|
 #cfg(not(any(target="native", target="js")))
-pub impl @posoco.ToolProvider for ShellTools with fn execute(
-  _self : ShellTools,
+pub impl @posoco.ToolProvider for GlobTools with fn execute(
+  _self : GlobTools,
   _name : String,
   _call : @posoco.ToolCall,
 ) -> @posoco.ToolResult raise @posoco.RuntimeError {
   raise @posoco.RuntimeError::InvocationFailed(
-    "shell execution requires native or js target (got wasm/wasm-gc)",
+    "glob scanning requires native or js target (got wasm/wasm-gc)",
   )
 }
