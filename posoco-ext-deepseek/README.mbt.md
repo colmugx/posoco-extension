@@ -45,7 +45,7 @@ let config = @deepseek.DeepSeekConfig::new(
 let port = @deepseek.DeepSeekModelPort::new(config)
 
 // 作为 posoco ModelPort 使用
-let agent = @posoco.Agent::new(port, tools, ...)
+let agent = @posoco.Agent(port, tools, ...)
 ```
 
 ## Migration

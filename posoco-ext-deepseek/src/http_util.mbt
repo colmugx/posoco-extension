@@ -7,7 +7,7 @@
 ///|
 /// Redacted non-2xx body metadata. Keeping this as an ADT prevents the raw
 /// provider body from crossing the HTTP-error formatting boundary.
-enum DeepSeekErrorBodySummary {
+priv enum DeepSeekErrorBodySummary {
   BodyBytesUtf8(Int)
   BodyBytesInvalidUtf8(Int)
   BodyReadFailed
@@ -69,7 +69,7 @@ async fn read_error_body_summary(
 ///|
 /// Pure classification for stream termination; used by the HTTP loop and
 /// offline tests so EOF is never inferred from accumulated content.
-enum DeepSeekStreamTermination {
+priv enum DeepSeekStreamTermination {
   ExplicitTerminal
   CleanEof
   TransportFailure

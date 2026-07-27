@@ -246,7 +246,7 @@ test "decode_chat_response_api_error" {
 
 ///|
 test "sse_text_delta" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let chunks : Array[@posoco.StreamChunk] = []
   let data = "{\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}"
   let done = process_deepseek_sse(data, acc, fn(c) { chunks.push(c) })
@@ -258,7 +258,7 @@ test "sse_text_delta" {
 
 ///|
 test "sse_reasoning_delta" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let chunks : Array[@posoco.StreamChunk] = []
   let data = "{\"choices\":[{\"delta\":{\"reasoning_content\":\"thinking\"}}]}"
   let _ = process_deepseek_sse(data, acc, fn(c) { chunks.push(c) })
@@ -271,7 +271,7 @@ test "sse_reasoning_delta" {
 
 ///|
 test "sse_done_marker" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let chunks : Array[@posoco.StreamChunk] = []
   let done = process_deepseek_sse("[DONE]", acc, fn(c) { chunks.push(c) })
   assert_true(done)
@@ -280,7 +280,7 @@ test "sse_done_marker" {
 
 ///|
 test "sse_finish_with_usage" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let chunks : Array[@posoco.StreamChunk] = []
   let data =
     #|{"choices":[{"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
@@ -303,7 +303,7 @@ test "sse_finish_with_usage" {
 
 ///|
 test "sse_tool_call_delta" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let chunks : Array[@posoco.StreamChunk] = []
   // First chunk: tool call id + name
   let data1 =
@@ -691,7 +691,7 @@ test "t07b_deepseek_valid_tool_args_still_decode" {
 
 ///|
 test "t07b_deepseek_malformed_sse_is_loud_and_redacted" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let secret = "secret-sse-payload"
   let result = Ok(process_deepseek_sse(secret, acc, fn(_) { () })) catch {
     e => Err(e)
@@ -707,7 +707,7 @@ test "t07b_deepseek_malformed_sse_is_loud_and_redacted" {
 
 ///|
 test "t07b_deepseek_missing_sse_structure_is_loud" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let missing_choices =
     #|{"id":"response_without_choices"}
   let result = Ok(process_deepseek_sse(missing_choices, acc, fn(_) { () })) catch {
@@ -722,7 +722,7 @@ test "t07b_deepseek_missing_sse_structure_is_loud" {
 
 ///|
 test "t07b_deepseek_wrong_type_tool_field_is_loud" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let bad_name =
     #|{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":7,"arguments":"{}"}}]}}]}
   let result = Ok(process_deepseek_sse(bad_name, acc, fn(_) { () })) catch {
@@ -815,7 +815,7 @@ test "t07b_deepseek_missing_nonstream_tool_arguments_is_loud" {
 
 ///|
 test "t07b_deepseek_stream_tool_argument_error_is_redacted" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let secret = "secret-stream-tool-arguments"
   acc.push(
     @posoco.StreamChunk::ToolCallDelta(
@@ -1007,7 +1007,7 @@ fn assert_deepseek_sse_response_parse(
   stage : String,
   category : String,
 ) -> Unit raise {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let result = Ok(process_deepseek_sse(data, acc, fn(_) { () })) catch {
     e => Err(e)
   }
@@ -1054,7 +1054,7 @@ test "t07b_deepseek_stream_usage_fields_are_typed" {
 
 ///|
 test "t07b_deepseek_valid_stream_usage_still_decodes" {
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let chunks : Array[@posoco.StreamChunk] = []
   let done = process_deepseek_sse(
     "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",

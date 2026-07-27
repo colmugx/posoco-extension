@@ -150,7 +150,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat_streaming(
     }
   }
   // Read SSE stream line by line
-  let acc = @posoco.StreamAccumulator::new()
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let mut done = false
   let mut data_buffer = ""
   while !done {
