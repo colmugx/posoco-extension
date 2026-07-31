@@ -2,8 +2,7 @@
 /// posoco_ext_deepseek — ModelPort implementation.
 ///
 /// Implements @posoco.ModelPort for DeepSeek's /chat/completions endpoint.
-/// Uses @http.post / @http.post_stream with the full endpoint URL, same
-/// pattern as elyra's HttpStreamingPort.
+/// Uses @http.post / @http.post_stream with the full endpoint URL.
 
 ///|
 /// Build HTTP headers for DeepSeek API requests.
@@ -43,154 +42,253 @@ fn prefix_url(config : DeepSeekConfig) -> String {
 }
 
 ///|
-/// ModelPort implementation — non-streaming chat via @http.post.
+/// DeepSeek's default thinking config: enabled with "high" effort.
+fn default_thinking_config() -> (Json, String?) {
+  (enabled_thinking_json(), Some("high"))
+}
+
+///|
+/// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   self : DeepSeekModelPort,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
-) -> @posoco.ModelResponse raise @posoco.ModelError {
-  let body = build_chat_request(
-    self.ctx,
-    messages,
-    tools,
-    options,
-    self.config.model,
-    false,
-  )
-  let headers = build_headers(self.config)
-  let url = chat_url(self.config)
-  let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-    _ =>
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=post)",
+  stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  // Resolve thinking config from the modelport's own policy (was
+  // ChatOptions.reasoning_effort before M3.7 slimmed ChatOptions).
+  let (thinking_json, effort_str) = default_thinking_config()
+  match stream {
+    NoStream => {
+      let body = build_chat_request(
+        self.ctx,
+        messages,
+        tools,
+        options,
+        self.config.model,
+        false,
+        thinking_json,
+        effort_str,
       )
-  }
-  if !is_deepseek_http_success(response.code) {
-    match
-      classify_deepseek_http_status(
-        "chat.http_status",
-        response.code,
-        BodyBytesUtf8(body_data.binary().length()),
-      ) {
-      Some(err) => raise err
-      None => ()
+      let headers = build_headers(self.config)
+      let url = chat_url(self.config)
+      let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
+        _ =>
+          raise @posoco.ModelError::Transport(
+            "DeepSeek transport failure (stage=post)",
+          )
+      }
+      if !is_deepseek_http_success(response.code) {
+        match
+          classify_deepseek_http_status(
+            "chat.http_status",
+            response.code,
+            BodyBytesUtf8(body_data.binary().length()),
+          ) {
+          Some(err) => raise err
+          None => ()
+        }
+      }
+      let body_text = body_data.text() catch {
+        _ =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
+          )
+      }
+      let resp_json : Json = @json.parse(body_text) catch {
+        _ =>
+          raise @posoco.ModelError::ResponseParse(
+            "DeepSeek response parse failure (stage=json, category=malformed, body_chars=\{body_text.length()})",
+          )
+      }
+      let completion = decode_chat_response(resp_json)
+      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+    }
+    Stream(on_chunk) => {
+      let body = build_chat_request(
+        self.ctx,
+        messages,
+        tools,
+        options,
+        self.config.model,
+        true,
+        thinking_json,
+        effort_str,
+      )
+      let headers = build_headers(self.config)
+      let url = chat_url(self.config)
+      let client = @http.post_stream(url, headers~) catch {
+        _ =>
+          raise @posoco.ModelError::Transport(
+            "DeepSeek transport failure (stage=post_stream)",
+          )
+      }
+      client.write(body.stringify()) catch {
+        _ => {
+          client.close()
+          raise @posoco.ModelError::Transport(
+            "DeepSeek transport failure (stage=write_body)",
+          )
+        }
+      }
+      let response = client.end_request() catch {
+        _ => {
+          client.close()
+          raise @posoco.ModelError::Transport(
+            "DeepSeek transport failure (stage=end_request)",
+          )
+        }
+      }
+      if !is_deepseek_http_success(response.code) {
+        let err_summary = read_error_body_summary(client) catch {
+          _ => BodyUnavailable
+        }
+        client.close()
+        match
+          classify_deepseek_http_status(
+            "chat_stream.http_status",
+            response.code,
+            err_summary,
+          ) {
+          Some(err) => raise err
+          None => ()
+        }
+      }
+      let acc = @posoco.StreamAccumulator::StreamAccumulator()
+      // Bridge: forward each StreamChunk to the host as a Json chunk matching
+      // the {kind, token} convention PortHostAdapter decodes. The accumulator
+      // is owned by process_deepseek_sse, which pushes every chunk exactly
+      // once; pushing here too would double every text/reasoning delta.
+      let on_typed = fn(chunk : @posoco.StreamChunk) {
+        on_chunk(streamchunk_to_json(chunk))
+      }
+      let mut done = false
+      let mut data_buffer = ""
+      while not(done) {
+        let line = client.read_until("\n") catch {
+          _ => {
+            client.close()
+            match classify_deepseek_stream_termination(TransportFailure) {
+              Some(err) => raise err
+              None => None
+            }
+          }
+        }
+        match line {
+          Some(data) => {
+            let trimmed = data.trim()
+            if trimmed.has_prefix("data:") {
+              let payload = trimmed[5:].trim().to_owned()
+              if payload.length() > 0 {
+                data_buffer = payload
+                done = process_deepseek_sse(payload, acc, on_typed)
+              }
+            } else if trimmed == "" && data_buffer.length() > 0 {
+              data_buffer = ""
+            }
+          }
+          None => {
+            client.close()
+            match classify_deepseek_stream_termination(CleanEof) {
+              Some(err) => raise err
+              None => done = true
+            }
+          }
+        }
+      }
+      client.close()
+      match classify_deepseek_stream_termination(ExplicitTerminal) {
+        Some(err) => raise err
+        None => ()
+      }
+      validate_deepseek_stream_tool_calls(acc)
+      let completion = acc.to_completion()
+      @posoco.ModelCallResult::{ completion, processed_messages: messages }
     }
   }
-  let body_text = body_data.text() catch {
-    _ =>
-      raise @posoco.ModelError::ResponseParse(
-        "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
-      )
-  }
-  let resp_json : Json = @json.parse(body_text) catch {
-    _ =>
-      raise @posoco.ModelError::ResponseParse(
-        "DeepSeek response parse failure (stage=json, category=malformed, body_chars=\{body_text.length()})",
-      )
-  }
-  decode_chat_response(resp_json)
 }
 
 ///|
-/// ModelPort implementation — streaming chat via @http.post_stream + SSE.
-/// Reads SSE events line by line, feeds StreamChunk to on_chunk + accumulator.
-pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat_streaming(
-  self : DeepSeekModelPort,
-  messages : Array[@posoco.Message],
-  tools : Array[@posoco.ToolDef],
-  options : @posoco.ChatOptions,
-  on_chunk : (@posoco.StreamChunk) -> Unit,
-) -> @posoco.ModelResponse raise @posoco.ModelError {
-  let body = build_chat_request(
-    self.ctx,
-    messages,
-    tools,
-    options,
-    self.config.model,
-    true,
+/// Serialize a StreamChunk to the Json chunk convention PortHostAdapter
+/// decodes: `{kind: "text"|"reasoning", token: "..."}` for deltas. Other
+/// chunk kinds (ToolCallDelta/Usage/Finish) are forwarded as a structured
+/// object so a host can inspect them, but the primary text/reasoning path
+/// matches what agent_puppet's stream callback expects.
+fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
+  match chunk {
+    TextDelta(token~) =>
+      Json::object(
+        Map::from_array([
+          ("kind", Json::string("text")),
+          ("token", Json::string(token)),
+        ]),
+      )
+    ReasoningDelta(token~) =>
+      Json::object(
+        Map::from_array([
+          ("kind", Json::string("reasoning")),
+          ("token", Json::string(token)),
+        ]),
+      )
+    ToolCallDelta(index~, id~, name~, arguments_delta~) => {
+      let m : Map[String, Json] = {
+        "kind": Json::string("tool_call_delta"),
+        "index": Json::number(index.to_double()),
+      }
+      match id {
+        Some(s) => m["id"] = Json::string(s)
+        None => ()
+      }
+      match name {
+        Some(s) => m["name"] = Json::string(s)
+        None => ()
+      }
+      match arguments_delta {
+        Some(s) => m["arguments_delta"] = Json::string(s)
+        None => ()
+      }
+      Json::object(m)
+    }
+    Usage(input_tokens~, output_tokens~, total_tokens~) =>
+      Json::object(
+        Map::from_array([
+          ("kind", Json::string("usage")),
+          ("input_tokens", Json::number(input_tokens.to_double())),
+          ("output_tokens", Json::number(output_tokens.to_double())),
+          ("total_tokens", Json::number(total_tokens.to_double())),
+        ]),
+      )
+    Finish(reason~) =>
+      Json::object(
+        Map::from_array([
+          ("kind", Json::string("finish")),
+          ("reason", Json::string(reason)),
+        ]),
+      )
+  }
+}
+
+///|
+/// ModelPort implementation — compact. DeepSeek has no dedicated compact
+/// endpoint; the modelport declines by raising ResponseParse so the pump's
+/// compact safe-point reports a typed failure rather than silently no-op'ing.
+pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
+  _self : DeepSeekModelPort,
+  _messages : Array[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  raise @posoco.ModelError::ResponseParse(
+    "DeepSeek does not implement compact (no provider-side endpoint)",
   )
-  let headers = build_headers(self.config)
-  let url = chat_url(self.config)
-  let client = @http.post_stream(url, headers~) catch {
-    _ =>
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=post_stream)",
-      )
-  }
-  client.write(body.stringify()) catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=write_body)",
-      )
-    }
-  }
-  let response = client.end_request() catch {
-    _ => {
-      client.close()
-      raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=end_request)",
-      )
-    }
-  }
-  if !is_deepseek_http_success(response.code) {
-    let err_summary = read_error_body_summary(client) catch {
-      _ => BodyUnavailable
-    }
-    client.close()
-    match
-      classify_deepseek_http_status(
-        "chat_stream.http_status",
-        response.code,
-        err_summary,
-      ) {
-      Some(err) => raise err
-      None => ()
-    }
-  }
-  // Read SSE stream line by line
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let mut done = false
-  let mut data_buffer = ""
-  while !done {
-    let line = client.read_until("\n") catch {
-      _ => {
-        client.close()
-        match classify_deepseek_stream_termination(TransportFailure) {
-          Some(err) => raise err
-          None => None
-        }
-      }
-    }
-    match line {
-      Some(data) => {
-        let trimmed = data.trim()
-        if trimmed.has_prefix("data:") {
-          let payload = trimmed[5:].trim().to_owned()
-          if payload.length() > 0 {
-            data_buffer = payload
-            done = process_deepseek_sse(payload, acc, on_chunk)
-          }
-        } else if trimmed == "" && data_buffer.length() > 0 {
-          // Empty line = event boundary; data already processed
-          data_buffer = ""
-        }
-      }
-      None => {
-        client.close()
-        match classify_deepseek_stream_termination(CleanEof) {
-          Some(err) => raise err
-          None => done = true
-        }
-      }
-    }
-  }
-  client.close()
-  match classify_deepseek_stream_termination(ExplicitTerminal) {
-    Some(err) => raise err
-    None => ()
-  }
-  validate_deepseek_stream_tool_calls(acc)
-  acc.to_response()
+}
+
+///|
+/// ModelPort implementation — provider_config. Declares which reasoning_effort
+/// values this modelport accepts (M3.7 pull-based config learning).
+pub impl @posoco.ModelPort for DeepSeekModelPort with fn provider_config(
+  _self : DeepSeekModelPort,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
 }

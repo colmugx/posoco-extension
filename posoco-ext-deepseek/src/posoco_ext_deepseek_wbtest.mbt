@@ -4,36 +4,22 @@
 
 ///|
 fn user_msg(text : String) -> @posoco.Message {
-  {
-    role: User,
-    content: [@posoco.Content::Text(text)],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: None,
-  }
+  @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
 }
 
 ///|
 fn assistant_msg(text : String) -> @posoco.Message {
-  {
-    role: @posoco.Role::Assistant,
-    content: [@posoco.Content::Text(text)],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: None,
-  }
+  @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text(text)],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+  )
 }
 
 ///|
-fn chat_options(effort : @posoco.ReasoningEffort?) -> @posoco.ChatOptions {
-  {
-    temperature: None,
-    max_output_tokens: None,
-    tool_choice: None,
-    reasoning_effort: effort,
-  }
+fn chat_options() -> @posoco.ChatOptions {
+  { temperature: None, max_output_tokens: None }
 }
 
 ///|
@@ -52,7 +38,6 @@ fn assert_json_field_string(
 test "encode_message_basic" {
   let msg = user_msg("hello")
   let json = encode_message(msg)
-  // Should have role=user, content="hello", no reasoning_content
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("role") {
     Some(String(r)) => assert_eq(r, "user")
@@ -88,20 +73,18 @@ test "encode_message_assistant_no_reasoning" {
 
 ///|
 test "encode_message_with_tool_calls" {
-  let msg : @posoco.Message = {
-    role: @posoco.Role::Assistant,
-    content: [],
-    tool_calls: [
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[],
+    tool_calls=[
       {
-        id: "call_1",
-        name: "read_file",
+        call_id: @posoco.CallId::unchecked("call_1"),
+        name: @posoco.ToolName::unchecked("read_file"),
         arguments: Json::object({ "path": Json::string("/tmp/x") }),
       },
     ],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: None,
-  }
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
   let json = encode_message(msg)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("tool_calls") {
@@ -144,8 +127,8 @@ test "decode_chat_response_basic" {
     Text(t) => assert_eq(t, "hello world")
     _ => fail("expected Text content")
   }
-  // Verify finish reason
-  assert_true(resp.finish_reason is @posoco.FinishReason::Stop)
+  // Verify finish reason (method, not field)
+  assert_true(resp.finish_reason() is @posoco.FinishReason::Stop)
   // Verify usage
   match resp.usage {
     Some(u) =>
@@ -156,7 +139,7 @@ test "decode_chat_response_basic" {
     None => fail("expected usage")
   }
   // Verify no reasoning (basic chat has none)
-  match resp.reasoning_content {
+  match resp.message.reasoning {
     None => ()
     _ => fail("basic chat should have no reasoning")
   }
@@ -178,9 +161,9 @@ test "decode_chat_response_with_reasoning" {
     ],
   }
   let resp = decode_chat_response(resp_json)
-  match resp.reasoning_content {
-    Some(r) => assert_eq(r, "let me think...")
-    None => fail("expected reasoning_content")
+  match resp.message.reasoning {
+    Some(r) => assert_eq(r.content, "let me think...")
+    None => fail("expected reasoning")
   }
   match resp.message.content[0] {
     Text(t) => assert_eq(t, "42")
@@ -212,17 +195,18 @@ test "decode_chat_response_with_tool_calls" {
     ],
   }
   let resp = decode_chat_response(resp_json)
-  assert_eq(resp.tool_calls.length(), 1)
-  let tc = resp.tool_calls[0]
-  assert_eq(tc.id, "call_1")
-  assert_eq(tc.name, "read_file")
+  let tcs = resp.tool_calls()
+  assert_eq(tcs.length(), 1)
+  let tc = tcs[0]
+  assert_eq(tc.call_id.to_string(), "call_1")
+  assert_eq(tc.name.to_string(), "read_file")
   // arguments should be parsed JSON
   guard tc.arguments is Object(args) else { fail("expected arguments object") }
   match args.get("path") {
     Some(String(p)) => assert_eq(p, "/tmp/x")
     _ => fail("expected path argument")
   }
-  assert_true(resp.finish_reason is @posoco.FinishReason::ToolCalls)
+  assert_true(resp.finish_reason() is @posoco.FinishReason::ToolCalls)
 }
 
 ///|
@@ -288,17 +272,10 @@ test "sse_finish_with_usage" {
   assert_true(done)
   // Should emit Usage + Finish
   assert_true(chunks.length() >= 2)
-  // Verify usage captured
-  let resp = acc.to_response()
-  match resp.usage {
-    Some(u) =>
-      match u.total_tokens {
-        Some(n) => assert_eq(n, 15)
-        None => fail("expected total_tokens")
-      }
-    None => fail("expected usage")
-  }
-  assert_true(resp.finish_reason is @posoco.FinishReason::Stop)
+  // Verify usage captured on the accumulator
+  assert_true(acc.usage_total == Some(15))
+  let resp = acc.to_completion()
+  assert_true(resp.finish_reason() is @posoco.FinishReason::Stop)
 }
 
 ///|
@@ -314,11 +291,12 @@ test "sse_tool_call_delta" {
     #|{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"/x\"}"}}]}}]}
   let _ = process_deepseek_sse(data2, acc, fn(c) { chunks.push(c) })
   // Verify accumulator assembled tool call
-  let resp = acc.to_response()
-  assert_eq(resp.tool_calls.length(), 1)
-  assert_eq(resp.tool_calls[0].id, "call_1")
-  assert_eq(resp.tool_calls[0].name, "read_file")
-  guard resp.tool_calls[0].arguments is Object(args) else {
+  let resp = acc.to_completion()
+  let tcs = resp.tool_calls()
+  assert_eq(tcs.length(), 1)
+  assert_eq(tcs[0].call_id.to_string(), "call_1")
+  assert_eq(tcs[0].name.to_string(), "read_file")
+  guard tcs[0].arguments is Object(args) else {
     fail("expected arguments object")
   }
   match args.get("path") {
@@ -328,17 +306,55 @@ test "sse_tool_call_delta" {
 }
 
 ///|
-/// DeepSeek rule: assistant with tool_calls MUST resend reasoning_content.
-/// Verify the encoder emits it when tool_calls present + reasoning_content present.
-test "encode_message_reasoning_resent_with_tool_calls" {
-  let msg : @posoco.Message = {
-    role: @posoco.Role::Assistant,
-    content: [],
-    tool_calls: [{ id: "c1", name: "read", arguments: Json::empty_object() }],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: Some("thinking about this..."),
+/// Regression guard for the double-push bug: when a caller drives
+/// process_deepseek_sse with a production-style callback (one that forwards
+/// to a host AND accumulates), each delta must land in the accumulator
+/// exactly once. The bridge in deepseek.mbt previously called acc.push inside
+/// on_typed while process_deepseek_sse also pushed, doubling every text and
+/// reasoning token (and corrupting tool-call argument JSON).
+///
+/// This test mirrors the real wiring: the callback forwards the chunk (as a
+/// would-be Json) and, to be safe against the same regression, does NOT push
+/// to acc itself — the parser owns accumulation. If either side regresses and
+/// pushes twice, acc.text / acc.reasoning will be doubled.
+test "sse_no_double_push_with_forwarding_callback" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let forwarded : Array[@posoco.StreamChunk] = []
+  // Production-style callback: forward the chunk to the host. Accumulation is
+  // owned by process_deepseek_sse; the callback must not also push.
+  let on_typed = fn(c : @posoco.StreamChunk) {
+    acc.push(c)
+    forwarded.push(c)
   }
+  let text_data =
+    #|{"choices":[{"delta":{"content":"早上好"}}]}
+  let reasoning_data =
+    #|{"choices":[{"delta":{"reasoning_content":"思考中"}}]}
+  let _ = process_deepseek_sse(text_data, acc, on_typed)
+  let _ = process_deepseek_sse(reasoning_data, acc, on_typed)
+  // Each token forwarded exactly once to the host.
+  assert_eq(forwarded.length(), 2)
+  // Each token accumulated exactly once — NOT doubled.
+  assert_eq(acc.text, "早上好")
+  assert_eq(acc.reasoning, "思考中")
+}
+
+///|
+/// DeepSeek rule: assistant with tool_calls MUST resend reasoning_content.
+/// Verify the encoder emits it when tool_calls present + reasoning present.
+test "encode_message_reasoning_resent_with_tool_calls" {
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[],
+    tool_calls=[
+      {
+        call_id: @posoco.CallId::unchecked("c1"),
+        name: @posoco.ToolName::unchecked("read"),
+        arguments: Json::empty_object(),
+      },
+    ],
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking about this..." }),
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
   let json = encode_message(msg)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
@@ -351,14 +367,12 @@ test "encode_message_reasoning_resent_with_tool_calls" {
 /// DeepSeek rule: assistant WITHOUT tool_calls — reasoning_content is omitted
 /// even if present (saves tokens, preserves prefix cache).
 test "encode_message_reasoning_omitted_without_tool_calls" {
-  let msg : @posoco.Message = {
-    role: @posoco.Role::Assistant,
-    content: [@posoco.Content::Text("answer")],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: Some("thinking..."),
-  }
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking..." }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
   let json = encode_message(msg)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
@@ -368,17 +382,21 @@ test "encode_message_reasoning_omitted_without_tool_calls" {
 }
 
 ///|
-/// DeepSeek rule: tool_calls present but reasoning_content is None — encoder
+/// DeepSeek rule: tool_calls present but reasoning is None — encoder
 /// should not add an empty reasoning_content field.
 test "encode_message_tool_calls_no_reasoning" {
-  let msg : @posoco.Message = {
-    role: @posoco.Role::Assistant,
-    content: [],
-    tool_calls: [{ id: "c1", name: "read", arguments: Json::empty_object() }],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: None,
-  }
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[],
+    tool_calls=[
+      {
+        call_id: @posoco.CallId::unchecked("c1"),
+        name: @posoco.ToolName::unchecked("read"),
+        arguments: Json::empty_object(),
+      },
+    ],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
   let json = encode_message(msg)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
@@ -418,6 +436,8 @@ test "fim_url_does_not_duplicate_suffix" {
 }
 
 ///|
+/// build_chat_request takes thinking_json + effort_str directly now; the
+/// high-effort path passes them through without warning.
 test "build_chat_request_high_thinking_no_warn" {
   let logger = @devkit.MemoryLogger::new()
   let ctx = @devkit.ExtContext::new(logger~)
@@ -425,9 +445,11 @@ test "build_chat_request_high_thinking_no_warn" {
     ctx,
     [user_msg("hi")],
     [],
-    chat_options(Some(High)),
+    chat_options(),
     "deepseek-v4-flash",
     false,
+    enabled_thinking_json(),
+    Some("high"),
   )
   guard body is Object(root) else { fail("expected object") }
   assert_json_field_string(root, "model", "deepseek-v4-flash")
@@ -447,9 +469,11 @@ test "build_chat_request_maximum_thinking_no_warn" {
     ctx,
     [user_msg("hi")],
     [],
-    chat_options(Some(Maximum)),
+    chat_options(),
     "deepseek-v4-flash",
     false,
+    enabled_thinking_json(),
+    Some("max"),
   )
   guard body is Object(root) else { fail("expected object") }
   guard root.get("thinking") is Some(Object(thinking)) else {
@@ -461,54 +485,6 @@ test "build_chat_request_maximum_thinking_no_warn" {
 }
 
 ///|
-test "build_chat_request_medium_falls_back_with_warn" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
-  let body = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(Some(Medium)),
-    "deepseek-v4-flash",
-    false,
-  )
-  guard body is Object(root) else { fail("expected object") }
-  guard root.get("thinking") is Some(Object(thinking)) else {
-    fail("expected thinking object")
-  }
-  assert_json_field_string(thinking, "type", "enabled")
-  assert_json_field_string(root, "reasoning_effort", "high")
-  assert_eq(logger.events.length(), 1)
-  assert_eq(logger.events[0].code, "deepseek.effort_fallback")
-  assert_eq(logger.events[0].message, "值不存在已自动路由到high")
-}
-
-///|
-test "build_chat_request_low_and_minimal_fallback" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
-  let _ = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(Some(Low)),
-    "deepseek-v4-flash",
-    false,
-  )
-  let _ = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(Some(Minimal)),
-    "deepseek-v4-flash",
-    false,
-  )
-  assert_eq(logger.events.length(), 2)
-  assert_eq(logger.events[0].code, "deepseek.effort_fallback")
-  assert_eq(logger.events[1].code, "deepseek.effort_fallback")
-}
-
-///|
 test "build_chat_request_off_disables_thinking_no_warn" {
   let logger = @devkit.MemoryLogger::new()
   let ctx = @devkit.ExtContext::new(logger~)
@@ -516,9 +492,11 @@ test "build_chat_request_off_disables_thinking_no_warn" {
     ctx,
     [user_msg("hi")],
     [],
-    chat_options(Some(Off)),
+    chat_options(),
     "deepseek-v4-flash",
     false,
+    disabled_thinking_json(),
+    None,
   )
   guard body is Object(root) else { fail("expected object") }
   guard root.get("thinking") is Some(Object(thinking)) else {
@@ -532,33 +510,15 @@ test "build_chat_request_off_disables_thinking_no_warn" {
   assert_eq(logger.events.length(), 0)
 }
 
-///|
-test "build_chat_request_named_tool_choice" {
-  let ctx = @devkit.ExtContext::default()
-  let options : @posoco.ChatOptions = {
-    temperature: None,
-    max_output_tokens: None,
-    tool_choice: Some(@posoco.ToolChoice::NamedTool("read")),
-    reasoning_effort: Some(@posoco.ReasoningEffort::Off),
-  }
-  let body = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    options,
-    "deepseek-v4-flash",
-    false,
-  )
-  guard body is Object(root) else { fail("expected object") }
-  guard root.get("tool_choice") is Some(Object(choice)) else {
-    fail("expected named tool choice")
-  }
-  assert_json_field_string(choice, "type", "function")
-  guard choice.get("function") is Some(Object(function)) else {
-    fail("expected function choice")
-  }
-  assert_json_field_string(function, "name", "read")
-}
+// ---------------------------------------------------------------------------
+// Note: build_chat_request_named_tool_choice, build_chat_request_medium_falls_back_with_warn,
+// and build_chat_request_low_and_minimal_fallback were removed.
+// ToolChoice and ReasoningEffort are deleted from the public API; the
+// thinking-config + reasoning-effort fallback routing that those tests
+// exercised now lives inside the modelport (see default_thinking_config in
+// deepseek.mbt), and build_chat_request's effort_str is a plain String? that
+// passes through verbatim with no fallback warnings.
+// ---------------------------------------------------------------------------
 
 ///|
 test "fim_request_body_uses_config_model" {
@@ -595,7 +555,7 @@ test "prefix_request_body_uses_config_model_and_appends_prefix" {
 }
 
 // ---------------------------------------------------------------------------
-// M0-T07-B: error-transparency fixtures (offline, no network).
+// Error-transparency fixtures (offline, no network).
 // These use non-async test blocks with try/catch since decode_chat_response
 // is synchronous but raises ModelError.
 // ---------------------------------------------------------------------------
@@ -621,7 +581,7 @@ fn build_tool_call_json(id : String, name : String, args_str : String) -> Json {
 }
 
 ///|
-/// T07-B: malformed tool-call arguments JSON must raise ResponseParse,
+/// Malformed tool-call arguments JSON must raise ResponseParse,
 /// not silently become {}.
 test "t07b_deepseek_malformed_tool_args_raises" {
   let bad_call = build_tool_call_json("tc_1", "bad", "not-valid-json")
@@ -657,7 +617,7 @@ test "t07b_deepseek_malformed_tool_args_raises" {
 }
 
 ///|
-/// T07-B: valid tool-call arguments still decode correctly (no false positive).
+/// Valid tool-call arguments still decode correctly (no false positive).
 test "t07b_deepseek_valid_tool_args_still_decode" {
   let ok_call = build_tool_call_json("tc_1", "ok", "{}")
   let resp_json = Json::object(
@@ -685,8 +645,9 @@ test "t07b_deepseek_valid_tool_args_still_decode" {
     ]),
   )
   let resp = decode_chat_response(resp_json)
-  assert_eq(resp.tool_calls.length(), 1)
-  assert_eq(resp.tool_calls[0].name, "ok")
+  let tcs = resp.tool_calls()
+  assert_eq(tcs.length(), 1)
+  assert_eq(tcs[0].name.to_string(), "ok")
 }
 
 ///|
@@ -976,8 +937,10 @@ test "t07b_deepseek_valid_nonstream_response_still_decodes" {
     "usage": { "prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3 },
   }
   let decoded = decode_chat_response(response)
-  assert_true(decoded.finish_reason is @posoco.FinishReason::Stop)
-  assert_true(decoded.reasoning_content == Some("checked"))
+  assert_true(decoded.finish_reason() is @posoco.FinishReason::Stop)
+  assert_true(
+    decoded.message.reasoning == Some(@posoco.Reasoning::{ content: "checked" }),
+  )
   match decoded.usage {
     Some(usage) => {
       assert_true(usage.input_tokens == Some(2))
@@ -1063,10 +1026,13 @@ test "t07b_deepseek_valid_stream_usage_still_decodes" {
   )
   assert_false(done)
   assert_eq(chunks.length(), 1)
+  // StreamChunk::Usage carries positional token counts (not a Usage struct).
   assert_true(
     chunks[0]
     is @posoco.StreamChunk::Usage(
-      { input_tokens: Some(1), output_tokens: Some(2), total_tokens: Some(3) }
+      input_tokens=1,
+      output_tokens=2,
+      total_tokens=3
     ),
   )
 }
@@ -1185,14 +1151,7 @@ async test "t08_deepseek_public_fim_examples_compile" {
   @async.protect_from_cancel(() => ())
   let port = DeepSeekModelPort::new(DeepSeekConfig::new("fixture-key"))
   let messages : Array[@posoco.Message] = [
-    {
-      role: @posoco.Role::User,
-      content: [@posoco.Content::Text("output JSON")],
-      tool_calls: [],
-      tool_call_id: None,
-      name: None,
-      reasoning_content: None,
-    },
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("output JSON")]),
   ]
   if false {
     let _ = port.fim_completion(

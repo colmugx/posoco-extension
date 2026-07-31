@@ -1,15 +1,11 @@
 ///|
-/// Wire decoder: convert DeepSeek API JSON response into posoco types.
-///
-/// All posoco enum variants are fully qualified (e.g. @posoco.FinishReason::Stop)
-/// because MoonBit disambiguates constructors by fully-qualified path in ext
-/// packages — bare `Stop` would be unbound.
+/// Wire decoder: convert DeepSeek API JSON response into kernel Completion.
 
 ///|
-/// Decode a non-streaming chat completion response.
+/// Decode a non-streaming chat completion response into a Completion.
 fn decode_chat_response(
   json : Json,
-) -> @posoco.ModelResponse raise @posoco.ModelError {
+) -> @posoco.Completion raise @posoco.ModelError {
   guard json is Object(root) else {
     raise @posoco.ModelError::ResponseParse(
       "DeepSeek response parse failure (stage=response, category=not_object)",
@@ -144,7 +140,11 @@ fn decode_chat_response(
                   "DeepSeek response parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
                 )
             }
-            result.push({ id, name, arguments: args })
+            result.push({
+              call_id: @posoco.CallId::unchecked(id),
+              name: @posoco.ToolName::unchecked(name),
+              arguments: args,
+            })
           }
           _ =>
             raise @posoco.ModelError::ResponseParse(
@@ -191,27 +191,23 @@ fn decode_chat_response(
       )
     None => None
   }
-  // Build posoco Message + ModelResponse
+
   let content : Array[@posoco.Content] = if text == "" {
     []
   } else {
     [@posoco.Content::Text(text)]
   }
-  let message : @posoco.Message = {
-    role: @posoco.Role::Assistant,
-    content,
-    tool_calls,
-    tool_call_id: None,
-    name: None,
-    reasoning_content: reasoning,
+  let reasoning_val : @posoco.Reasoning? = match reasoning {
+    Some(r) => Some(@posoco.Reasoning::{ content: r })
+    None => None
   }
-  {
-    message,
-    tool_calls,
-    finish_reason: finish,
-    usage,
-    reasoning_content: reasoning,
-  }
+  @posoco.Completion::Completion(
+    content~,
+    tool_calls~,
+    reasoning=reasoning_val,
+    finish_reason=finish,
+    usage~,
+  )
 }
 
 ///|

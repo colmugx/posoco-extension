@@ -1,5 +1,5 @@
 ///|
-/// Wire encoder: convert posoco types to DeepSeek API JSON.
+/// Wire encoder: convert kernel canonical types to DeepSeek API JSON.
 ///
 /// DeepSeek-specific reasoning_content rules (per official thinking_mode guide):
 /// - Assistant message WITH tool_calls: reasoning_content MUST be resent in
@@ -11,21 +11,37 @@
 /// - Message order is append-only (prefix-cache friendly).
 
 ///|
-/// Encode a posoco Message into a DeepSeek chat message JSON object.
+/// Encode a kernel Message into a DeepSeek chat message JSON object.
 fn encode_message(msg : @posoco.Message) -> Json {
-  let role = match msg.role {
-    System => "system"
-    User => "user"
-    Assistant => "assistant"
-    Tool => "tool"
+  let (role, content_blocks, tool_calls, reasoning_text) = match msg {
+    SystemMessage(content~) => ("system", content, [], None)
+    UserMessage(content~) => ("user", content, [], None)
+    AssistantMessage(content~, tool_calls~, reasoning~, finish_reason~) => {
+      let _ = finish_reason
+      let reasoning_str = match reasoning {
+        Some(r) => Some(r.to_string())
+        None => None
+      }
+      ("assistant", content, tool_calls, reasoning_str)
+    }
+    ToolMessage(call_id~, tool_name~, outcome~) => {
+      // Tool messages carry the outcome content as the wire "content".
+      let outcome_text = outcome_to_wire_text(outcome)
+      let tool_blocks : Array[@posoco.Content] = [
+        @posoco.Content::Text(outcome_text),
+      ]
+      let _ = call_id
+      let _ = tool_name
+      ("tool", tool_blocks, [], None)
+    }
   }
   // Concatenate Text content blocks into a single string (DeepSeek does not
   // support content arrays, only a string field).
   let text_builder = StringBuilder::new()
-  for block in msg.content {
+  for block in content_blocks {
     match block {
       Text(s) => text_builder.write_string(s)
-      Image(_, _) => () // DeepSeek chat does not support images
+      Image(media_type~, data~) => () // DeepSeek chat does not support images
     }
   }
   let content_str = text_builder.to_string()
@@ -34,13 +50,13 @@ fn encode_message(msg : @posoco.Message) -> Json {
     "content": Json::string(content_str),
   }
   // Tool calls (assistant messages requesting tool execution)
-  if msg.tool_calls.length() > 0 {
-    let tc_arr = msg.tool_calls.map(fn(tc) {
+  if tool_calls.length() > 0 {
+    let tc_arr = tool_calls.map(fn(tc) {
       let tc_obj : Map[String, Json] = {
-        "id": Json::string(tc.id),
+        "id": Json::string(tc.call_id.to_string()),
         "type": Json::string("function"),
         "function": Json::object({
-          "name": Json::string(tc.name),
+          "name": Json::string(tc.name.to_string()),
           "arguments": Json::string(tc.arguments.stringify()),
         }),
       }
@@ -48,21 +64,12 @@ fn encode_message(msg : @posoco.Message) -> Json {
     })
     obj["tool_calls"] = Json::array(tc_arr)
   }
-  // Tool result id (for tool-role messages)
-  match msg.tool_call_id {
-    Some(id) => obj["tool_call_id"] = Json::string(id)
-    None => ()
-  }
-  match msg.name {
-    Some(n) => obj["name"] = Json::string(n)
-    None => ()
-  }
   // reasoning_content: DeepSeek requires it to be resent when the assistant
   // message has tool_calls (otherwise 400 error). When there are no tool_calls,
   // resending is optional and wasteful (pollutes prefix cache), so we skip it.
   // This is the official recommendation from DeepSeek thinking_mode docs.
-  if msg.role is Assistant && msg.tool_calls.length() > 0 {
-    match msg.reasoning_content {
+  if role == "assistant" && tool_calls.length() > 0 {
+    match reasoning_text {
       Some(r) => obj["reasoning_content"] = Json::string(r)
       None => ()
     }
@@ -73,14 +80,27 @@ fn encode_message(msg : @posoco.Message) -> Json {
 }
 
 ///|
-/// Encode posoco ToolDef array into DeepSeek tool definitions.
+/// Flatten a ToolOutcome to the wire text DeepSeek expects in a tool-role
+/// message's `content` field. Business errors surface their message;
+/// runtime failures surface their category+message.
+fn outcome_to_wire_text(outcome : @posoco.ToolOutcome) -> String {
+  match outcome {
+    Success(content~, ..) => content
+    ToolReportedError(content~, ..) => content
+    RuntimeFailure(message~, ..) => message
+    NotExecuted(reason~, ..) => reason.to_string()
+  }
+}
+
+///|
+/// Encode kernel ToolDef array into DeepSeek tool definitions.
 fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
   Json::array(
     tools.map(fn(t) {
       Json::object({
         "type": Json::string("function"),
         "function": Json::object({
-          "name": Json::string(t.name),
+          "name": Json::string(t.name.to_string()),
           "description": Json::string(t.description),
           "parameters": t.input_schema,
         }),
@@ -99,6 +119,8 @@ fn build_chat_request(
   options : @posoco.ChatOptions,
   model : String,
   stream : Bool,
+  thinking_json : Json,
+  reasoning_effort_str : String?,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(model),
@@ -115,23 +137,8 @@ fn build_chat_request(
     Some(n) => body["max_tokens"] = Json::number(n.to_double())
     None => ()
   }
-  match options.tool_choice {
-    Some(Auto) => body["tool_choice"] = Json::string("auto")
-    Some(NoTool) => body["tool_choice"] = Json::string("none")
-    Some(Required) => body["tool_choice"] = Json::string("required")
-    Some(NamedTool(name)) =>
-      body["tool_choice"] = Json::object({
-        "type": Json::string("function"),
-        "function": Json::object({ "name": Json::string(name) }),
-      })
-    None => ()
-  }
-  let (thinking, effort) = resolve_deepseek_thinking(
-    ctx,
-    options.reasoning_effort,
-  )
-  body["thinking"] = thinking
-  match effort {
+  body["thinking"] = thinking_json
+  match reasoning_effort_str {
     Some(e) => body["reasoning_effort"] = Json::string(e)
     None => ()
   }
@@ -141,19 +148,8 @@ fn build_chat_request(
       "include_usage": Json::boolean(true),
     })
   }
+  let _ = ctx
   Json::object(body)
-}
-
-///|
-fn reasoning_effort_name(effort : @posoco.ReasoningEffort) -> String {
-  match effort {
-    Off => "off"
-    Minimal => "minimal"
-    Low => "low"
-    Medium => "medium"
-    High => "high"
-    Maximum => "maximum"
-  }
 }
 
 ///|
@@ -164,30 +160,4 @@ fn enabled_thinking_json() -> Json {
 ///|
 fn disabled_thinking_json() -> Json {
   Json::object({ "type": Json::string("disabled") })
-}
-
-///|
-fn resolve_deepseek_thinking(
-  ctx : @devkit.ExtContext,
-  effort : @posoco.ReasoningEffort?,
-) -> (Json, String?) {
-  match effort {
-    None | Some(Off) => (disabled_thinking_json(), None)
-    Some(High) => (enabled_thinking_json(), Some("high"))
-    Some(Maximum) => (enabled_thinking_json(), Some("max"))
-    Some(other) => {
-      ctx.warn(
-        source="posoco-ext-deepseek",
-        code="deepseek.effort_fallback",
-        message="值不存在已自动路由到high",
-        data=Some(
-          Json::object({
-            "requested": Json::string(reasoning_effort_name(other)),
-            "routed_to": Json::string("high"),
-          }),
-        ),
-      )
-      (enabled_thinking_json(), Some("high"))
-    }
-  }
 }

@@ -18,7 +18,7 @@ fn process_deepseek_sse(
 ) -> Bool raise @posoco.ModelError {
   // [DONE] marker — end of stream
   if data == "[DONE]" {
-    let chunk = @posoco.StreamChunk::Finish(reason=@posoco.FinishReason::Stop)
+    let chunk = @posoco.StreamChunk::Finish(reason="stop")
     on_chunk(chunk)
     acc.push(chunk)
     return true
@@ -45,7 +45,11 @@ fn process_deepseek_sse(
       match root.get("usage") {
         Some(Object(_)) => {
           let usage = extract_usage(root)
-          let chunk = @posoco.StreamChunk::Usage(usage)
+          let chunk = @posoco.StreamChunk::Usage(
+            input_tokens=usage.input_tokens.or(0),
+            output_tokens=usage.output_tokens.or(0),
+            total_tokens=usage.total_tokens.or(0),
+          )
           on_chunk(chunk)
           acc.push(chunk)
         }
@@ -75,23 +79,21 @@ fn process_deepseek_sse(
   match choice.get("finish_reason") {
     Some(String(reason)) =>
       if reason != "" {
-        let fr = match reason {
-          "stop" => @posoco.FinishReason::Stop
-          "length" => @posoco.FinishReason::Length
-          "tool_calls" => @posoco.FinishReason::ToolCalls
-          _ => @posoco.FinishReason::Other(reason)
-        }
         // Extract usage if present on the finish chunk
         match root.get("usage") {
           Some(_) => {
             let usage = extract_usage(root)
-            let usage_chunk = @posoco.StreamChunk::Usage(usage)
+            let usage_chunk = @posoco.StreamChunk::Usage(
+              input_tokens=usage.input_tokens.or(0),
+              output_tokens=usage.output_tokens.or(0),
+              total_tokens=usage.total_tokens.or(0),
+            )
             on_chunk(usage_chunk)
             acc.push(usage_chunk)
           }
           None => ()
         }
-        let chunk = @posoco.StreamChunk::Finish(reason=fr)
+        let chunk = @posoco.StreamChunk::Finish(reason~)
         on_chunk(chunk)
         acc.push(chunk)
         return true
