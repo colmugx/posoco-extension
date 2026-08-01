@@ -85,18 +85,20 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   )
   [
     @posoco.ToolDef::{
-      name: "bash",
+      name: @posoco.ToolName::unchecked("bash"),
       description: "Execute a shell command and return its output",
       input_schema: cmd_schema,
-      metadata: None,
-      source: Some("posoco_ext_bash"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_bash"),
     },
     @posoco.ToolDef::{
-      name: "shell",
+      name: @posoco.ToolName::unchecked("shell"),
       description: "Execute a shell command (alias for bash)",
       input_schema: cmd_schema,
-      metadata: None,
-      source: Some("posoco_ext_bash"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_bash"),
     },
   ]
 }

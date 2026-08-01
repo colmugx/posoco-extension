@@ -84,6 +84,6 @@ pub impl @posoco.ToolProvider for WriteTools with fn execute(
   _self : WriteTools,
   _name : String,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   execute_write_impl(JsFsIo::{  }, call)
 }

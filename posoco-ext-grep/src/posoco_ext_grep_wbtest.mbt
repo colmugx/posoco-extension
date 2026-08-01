@@ -1,8 +1,8 @@
 ///|
 fn grep_call(pattern : String, path : String) -> @posoco.ToolCall {
   @posoco.ToolCall::{
-    id: "grep-test",
-    name: "grep",
+    call_id: @posoco.CallId::unchecked("grep-test"),
+    name: @posoco.ToolName::unchecked("grep"),
     arguments: Json::object(
       Map::from_array([
         ("pattern", Json::string(pattern)),
@@ -14,7 +14,11 @@ fn grep_call(pattern : String, path : String) -> @posoco.ToolCall {
 
 ///|
 fn grep_call_with_arguments(arguments : Json) -> @posoco.ToolCall {
-  { id: "grep-args", name: "grep", arguments }
+  {
+    call_id: @posoco.CallId::unchecked("grep-args"),
+    name: @posoco.ToolName::unchecked("grep"),
+    arguments,
+  }
 }
 
 ///|
@@ -113,8 +117,13 @@ async test "grep_zero_matches_is_success" {
       "grep",
       grep_call("missing", dir),
     )
-    assert_false(result.is_error)
-    assert_true(result.content.contains("No matches found"))
+    // ToolOutcome is now a variant: Success carries content; business
+    // errors are ToolReportedError. Zero matches is still Success.
+    match result {
+      Success(content~, ..) => assert_true(content.contains("No matches found"))
+      other =>
+        fail("expected Success for zero matches, got " + other.to_string())
+    }
   }
 }
 

@@ -25,7 +25,7 @@ pub impl @posoco.ToolProvider for GrepTools with fn execute(
   _self : GrepTools,
   _name : String,
   _call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   raise @posoco.RuntimeError::InvocationFailed(
     "content search requires native or js target (got wasm/wasm-gc)",
   )

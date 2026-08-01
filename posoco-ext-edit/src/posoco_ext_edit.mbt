@@ -77,7 +77,7 @@ priv trait FsIo {
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
-      name: "edit",
+      name: @posoco.ToolName::unchecked("edit"),
       description: "Edit a file by replacing text. Finds `old_text` and replaces with `new_text`. By default replaces the first occurrence; set `replace_all` to true for all occurrences.",
       input_schema: Json::object({
         "type": Json::string("object"),
@@ -107,8 +107,9 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           Json::string("new_text"),
         ]),
       }),
-      metadata: None,
-      source: Some("posoco_ext_edit"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_edit"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_edit"),
     },
   ]
 }
@@ -209,28 +210,22 @@ fn apply_edit(
 async fn execute_edit_impl(
   io : &FsIo,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let (path, old_text, new_text, all) = extract_edit_args(call.arguments)
   if !io.exists(path) {
-    return @posoco.ToolResult::{
-      content: "File not found: \{@devkit.sanitize_path(path)}",
-      structured: None,
-      is_error: true,
-    }
+    return @posoco.ToolOutcome::ToolReportedError(
+      content="File not found: \{@devkit.sanitize_path(path)}",
+      structured=None,
+    )
   }
   let content = io.read_text(path)
   if !content.contains(old_text) {
-    return @posoco.ToolResult::{
-      content: "old_text not found in \{@devkit.sanitize_path(path)}",
-      structured: None,
-      is_error: true,
-    }
+    return @posoco.ToolOutcome::ToolReportedError(
+      content="old_text not found in \{@devkit.sanitize_path(path)}",
+      structured=None,
+    )
   }
   let new_content = apply_edit(content, old_text, new_text, all)
   io.write_text(path, new_content)
-  @posoco.ToolResult::{
-    content: "Edited \{path}",
-    structured: None,
-    is_error: false,
-  }
+  @posoco.ToolOutcome::Success(content="Edited \{path}", structured=None)
 }

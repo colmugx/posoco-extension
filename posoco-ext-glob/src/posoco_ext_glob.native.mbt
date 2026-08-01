@@ -146,6 +146,6 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
   _self : GlobTools,
   _name : String,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   execute_glob_impl(NativeGlobScanner::{  }, call)
 }

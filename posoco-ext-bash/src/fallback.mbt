@@ -25,7 +25,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   _self : ShellTools,
   _name : String,
   _call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   raise @posoco.RuntimeError::InvocationFailed(
     "shell execution requires native or js target (got wasm/wasm-gc)",
   )

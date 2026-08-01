@@ -73,7 +73,7 @@ priv trait FsIo {
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
-      name: "read",
+      name: @posoco.ToolName::unchecked("read"),
       description: "Read a file's contents. Returns the text content of the file at the given path.",
       input_schema: Json::object({
         "type": Json::string("object"),
@@ -85,8 +85,9 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("path")]),
       }),
-      metadata: None,
-      source: Some("posoco_ext_read"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_read"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_read"),
     },
   ]
 }
@@ -133,17 +134,16 @@ fn read_failure(stage : String, path : String) -> @posoco.RuntimeError {
 async fn execute_read_impl(
   io : &FsIo,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let path = extract_path(call.arguments)
   // exists() returns false for a missing file (recoverable → message);
   // it raises RuntimeError only on a genuine IO error (permission, etc).
   if !io.exists(path) {
-    return @posoco.ToolResult::{
-      content: "File not found: \{@devkit.sanitize_path(path)}",
-      structured: None,
-      is_error: true,
-    }
+    return @posoco.ToolOutcome::ToolReportedError(
+      content="File not found: \{@devkit.sanitize_path(path)}",
+      structured=None,
+    )
   }
   let content = io.read_text(path)
-  @posoco.ToolResult::{ content, structured: None, is_error: false }
+  @posoco.ToolOutcome::Success(content~, structured=None)
 }

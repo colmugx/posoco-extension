@@ -25,7 +25,7 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   _self : EditTools,
   _name : String,
   _call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   raise @posoco.RuntimeError::InvocationFailed(
     "file editing requires native or js target (got wasm/wasm-gc)",
   )

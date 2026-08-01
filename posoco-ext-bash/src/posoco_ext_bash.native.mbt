@@ -18,7 +18,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   _self : ShellTools,
   _name : String,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let cmd = extract_command(call.arguments)
   if cmd == "" {
     raise bash_empty_command_failure()
@@ -30,9 +30,9 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   }
   // T07-B: decode failure must not masquerade as success. If the process
   // produced non-UTF-8 / undecodable output, surface it as a business-level
-  // error (is_error=true) with a message that includes the exit code, so the
-  // model can react instead of receiving a silent "(decoding error)" body
-  // on an exit-0 success.
+  // error (ToolReportedError) with a message that includes the exit code,
+  // so the model can react instead of receiving a silent "(decoding error)"
+  // body on an exit-0 success.
   let mut decode_failed = false
   let content = output_data.text() catch {
     _ => {
@@ -40,9 +40,10 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       bash_decode_failure(exit_code)
     }
   }
-  @posoco.ToolResult::{
-    content,
-    structured: None,
-    is_error: exit_code != 0 || decode_failed,
+  let is_error = exit_code != 0 || decode_failed
+  if is_error {
+    @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
+  } else {
+    @posoco.ToolOutcome::Success(content~, structured=None)
   }
 }

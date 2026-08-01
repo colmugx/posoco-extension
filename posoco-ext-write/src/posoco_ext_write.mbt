@@ -69,7 +69,7 @@ priv trait FsIo {
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
-      name: "write",
+      name: @posoco.ToolName::unchecked("write"),
       description: "Write text content to a file. Creates the file if it does not exist; truncates if it does.",
       input_schema: Json::object({
         "type": Json::string("object"),
@@ -85,8 +85,9 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("path"), Json::string("content")]),
       }),
-      metadata: None,
-      source: Some("posoco_ext_write"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_write"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_write"),
     },
   ]
 }
@@ -141,12 +142,11 @@ fn write_failure(path : String) -> @posoco.RuntimeError {
 async fn execute_write_impl(
   io : &FsIo,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let (path, content) = extract_path_content(call.arguments)
   io.write_text(path, content)
-  @posoco.ToolResult::{
-    content: "Wrote \{content.length()} bytes to \{path}",
-    structured: None,
-    is_error: false,
-  }
+  @posoco.ToolOutcome::Success(
+    content="Wrote \{content.length()} bytes to \{path}",
+    structured=None,
+  )
 }

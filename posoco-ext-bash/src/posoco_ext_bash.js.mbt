@@ -56,7 +56,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   _self : ShellTools,
   _name : String,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let cmd = extract_command(call.arguments)
   if cmd == "" {
     raise bash_empty_command_failure()
@@ -79,5 +79,9 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   } else {
     stdout
   }
-  @posoco.ToolResult::{ content, structured: None, is_error: exit_code != 0 }
+  if exit_code != 0 {
+    @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
+  } else {
+    @posoco.ToolOutcome::Success(content~, structured=None)
+  }
 }

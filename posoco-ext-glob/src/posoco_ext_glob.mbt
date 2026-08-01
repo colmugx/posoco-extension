@@ -72,7 +72,7 @@ priv trait GlobScanner {
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
-      name: "glob",
+      name: @posoco.ToolName::unchecked("glob"),
       description: "Find files matching a glob pattern. Supports * (single segment wildcard) and ** (recursive). Example: '**/*.mbt' finds all .mbt files recursively.",
       input_schema: Json::object({
         "type": Json::string("object"),
@@ -92,8 +92,9 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("pattern")]),
       }),
-      metadata: None,
-      source: Some("posoco_ext_glob"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_glob"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_glob"),
     },
   ]
 }
@@ -140,7 +141,7 @@ fn extract_glob_args(
 async fn execute_glob_impl(
   scanner : &GlobScanner,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let (pattern, base) = extract_glob_args(call.arguments)
   let matches = scanner.scan(pattern, base)
   let builder = StringBuilder::new()
@@ -148,9 +149,8 @@ async fn execute_glob_impl(
     builder.write_string(m)
     builder.write_char('\n')
   }
-  @posoco.ToolResult::{
-    content: "Found \{matches.length()} files:\n\{builder.to_string()}",
-    structured: None,
-    is_error: false,
-  }
+  @posoco.ToolOutcome::Success(
+    content="Found \{matches.length()} files:\n\{builder.to_string()}",
+    structured=None,
+  )
 }

@@ -5,8 +5,8 @@
 #cfg(target="native")
 fn write_call(path : String, content : String) -> @posoco.ToolCall {
   {
-    id: "write-test",
-    name: "write",
+    call_id: @posoco.CallId::unchecked("write-test"),
+    name: @posoco.ToolName::unchecked("write"),
     arguments: Json::object(
       Map::from_array([
         ("path", Json::string(path)),
@@ -21,8 +21,8 @@ async test "write_required_fields_distinguish_wrong_type_from_missing" {
   let cases : Array[(@posoco.ToolCall, String)] = [
     (
       {
-        id: "write-path-type",
-        name: "write",
+        call_id: @posoco.CallId::unchecked("write-path-type"),
+        name: @posoco.ToolName::unchecked("write"),
         arguments: Json::object(
           Map::from_array([
             ("path", Json::boolean(true)),
@@ -34,8 +34,8 @@ async test "write_required_fields_distinguish_wrong_type_from_missing" {
     ),
     (
       {
-        id: "write-content-type",
-        name: "write",
+        call_id: @posoco.CallId::unchecked("write-content-type"),
+        name: @posoco.ToolName::unchecked("write"),
         arguments: Json::object(
           Map::from_array([
             ("path", Json::string("unused")),

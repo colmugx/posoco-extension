@@ -112,6 +112,6 @@ pub impl @posoco.ToolProvider for GrepTools with fn execute(
   _self : GrepTools,
   _name : String,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   execute_grep_impl(NativeGrepSearcher::{  }, call)
 }

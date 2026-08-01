@@ -6,8 +6,8 @@ fn glob_call(pattern : String, path : Json?) -> @posoco.ToolCall {
     None => ()
   }
   {
-    id: "glob-test",
-    name: "glob",
+    call_id: @posoco.CallId::unchecked("glob-test"),
+    name: @posoco.ToolName::unchecked("glob"),
     arguments: Json::object(Map::from_array(fields)),
   }
 }
@@ -15,8 +15,8 @@ fn glob_call(pattern : String, path : Json?) -> @posoco.ToolCall {
 ///|
 async test "glob_wrong_type_pattern_is_not_reported_as_missing" {
   let call : @posoco.ToolCall = {
-    id: "glob-pattern-type",
-    name: "glob",
+    call_id: @posoco.CallId::unchecked("glob-pattern-type"),
+    name: @posoco.ToolName::unchecked("glob"),
     arguments: Json::object(Map::from_array([("pattern", Json::boolean(true))])),
   }
   let outcome = Ok(GlobTools::GlobTools().execute("glob", call)) catch {

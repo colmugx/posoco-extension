@@ -9,7 +9,7 @@
 async test "list_tools_contains_bash_and_shell" {
   let tools = ShellTools::{  }
   let tool_defs = tools.list_tools()
-  let names = tool_defs.map(fn(t) { t.name })
+  let names = tool_defs.map(fn(t) { t.name.to_string() })
   assert_true(names.contains("bash"))
   assert_true(names.contains("shell"))
   assert_eq(tool_defs.length(), 2)
@@ -34,13 +34,13 @@ async test "list_tools_tool_defs_have_input_schema" {
 }
 
 ///|
-async test "list_tools_have_source" {
+async test "list_tools_have_provenance" {
   let tools = ShellTools::{  }
   let tool_defs = tools.list_tools()
   for tool in tool_defs {
-    match tool.source {
+    match tool.provenance {
       Some(s) => assert_eq(s, "posoco_ext_bash")
-      None => fail("expected source to be set")
+      None => fail("expected provenance to be set")
     }
   }
 }
@@ -106,8 +106,8 @@ async test "extract_command_wrong_type_raises_precise_error" {
 ///|
 async test "empty_command_has_arguments_stage" {
   let call : @posoco.ToolCall = {
-    id: "tc_empty",
-    name: "bash",
+    call_id: @posoco.CallId::unchecked("tc_empty"),
+    name: @posoco.ToolName::unchecked("bash"),
     arguments: Json::object(Map::from_array([("cmd", Json::string(""))])),
   }
   let result = Ok(ShellTools().execute("bash", call)) catch {
@@ -138,16 +138,25 @@ test "collect_output_failure_mapping_is_stage_only" {
 async test "non_utf8_output_is_explicit_tool_error" {
   let tools = ShellTools()
   let call : @posoco.ToolCall = {
-    id: "tc_binary",
-    name: "bash",
+    call_id: @posoco.CallId::unchecked("tc_binary"),
+    name: @posoco.ToolName::unchecked("bash"),
     arguments: Json::object(
       Map::from_array([("cmd", Json::string("printf '\\377'"))]),
     ),
   }
   let result = tools.execute("bash", call)
-  assert_true(result.is_error)
-  assert_true(result.content.contains("bash"))
-  assert_true(result.content.contains("stage=decode_output"))
-  assert_true(result.content.contains("invalid_utf8"))
-  assert_true(result.content.contains("exit_code=0"))
+  // ToolOutcome is now a variant. T07-B: invalid UTF-8 from an exit-0 process
+  // is a business-level error, surfaced as ToolReportedError (not Success).
+  match result {
+    ToolReportedError(content~, ..) => {
+      assert_true(content.contains("bash"))
+      assert_true(content.contains("stage=decode_output"))
+      assert_true(content.contains("invalid_utf8"))
+      assert_true(content.contains("exit_code=0"))
+    }
+    other =>
+      fail(
+        "expected ToolReportedError for invalid UTF-8, got " + other.to_string(),
+      )
+  }
 }

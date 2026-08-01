@@ -5,8 +5,8 @@
 #cfg(target="native")
 fn read_call(path : String) -> @posoco.ToolCall {
   {
-    id: "read-test",
-    name: "read",
+    call_id: @posoco.CallId::unchecked("read-test"),
+    name: @posoco.ToolName::unchecked("read"),
     arguments: Json::object(Map::from_array([("path", Json::string(path))])),
   }
 }
@@ -15,8 +15,8 @@ fn read_call(path : String) -> @posoco.ToolCall {
 #cfg(target="native")
 async test "read_wrong_type_path_is_not_reported_as_missing" {
   let call : @posoco.ToolCall = {
-    id: "read-wrong-type",
-    name: "read",
+    call_id: @posoco.CallId::unchecked("read-wrong-type"),
+    name: @posoco.ToolName::unchecked("read"),
     arguments: Json::object(Map::from_array([("path", Json::number(1.0))])),
   }
   let outcome = Ok(ReadTools::ReadTools().execute("read", call)) catch {

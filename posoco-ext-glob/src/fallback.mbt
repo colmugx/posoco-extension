@@ -25,7 +25,7 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
   _self : GlobTools,
   _name : String,
   _call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   raise @posoco.RuntimeError::InvocationFailed(
     "glob scanning requires native or js target (got wasm/wasm-gc)",
   )

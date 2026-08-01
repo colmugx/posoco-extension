@@ -28,8 +28,8 @@ fn edit_call_fields(
     None => ()
   }
   {
-    id: "edit-test",
-    name: "edit",
+    call_id: @posoco.CallId::unchecked("edit-test"),
+    name: @posoco.ToolName::unchecked("edit"),
     arguments: Json::object(Map::from_array(fields)),
   }
 }

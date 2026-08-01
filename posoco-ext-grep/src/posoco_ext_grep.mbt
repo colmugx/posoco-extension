@@ -74,7 +74,7 @@ priv trait GrepSearcher {
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
-      name: "grep",
+      name: @posoco.ToolName::unchecked("grep"),
       description: "Search for a text pattern in files. Returns matching lines with file paths and line numbers. Searches recursively under the given path.",
       input_schema: Json::object({
         "type": Json::string("object"),
@@ -94,8 +94,9 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("pattern")]),
       }),
-      metadata: None,
-      source: Some("posoco_ext_grep"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_grep"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_grep"),
     },
   ]
 }
@@ -165,12 +166,11 @@ fn grep_result_text(results : Array[String], pattern : String) -> String {
 async fn execute_grep_impl(
   searcher : &GrepSearcher,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let (pattern, base, file_glob) = extract_grep_args(call.arguments)
   let results = searcher.search(pattern, base, file_glob)
-  @posoco.ToolResult::{
-    content: grep_result_text(results, pattern),
-    structured: None,
-    is_error: false,
-  }
+  @posoco.ToolOutcome::Success(
+    content=grep_result_text(results, pattern),
+    structured=None,
+  )
 }
