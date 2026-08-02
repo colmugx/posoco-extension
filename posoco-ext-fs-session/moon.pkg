@@ -1,0 +1,20 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/js_async",
+  "moonbitlang/core/json",
+  "moonbitlang/x/fs" @xfs,
+}
+
+warnings = "-unused_package"
+
+options(
+  targets: {
+    "jsonl_session.mbt": [ "native" ],
+    "jsonl_session.js.mbt": [ "js" ],
+    "jsonl_session_serde.mbt": [ "native", "js" ],
+    // Tests use @fs (native-only) and @fs.tmpdir; restrict to native.
+    "jsonl_session_test.mbt": [ "native" ],
+  },
+)

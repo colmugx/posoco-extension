@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-fs-session"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+pub fn jsonl_session_path(String, String) -> String
+
+pub fn session_from_jsonl(String) -> Result[@types.Session, @error.SessionError]
+
+pub fn session_to_jsonl(@types.Session) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct JsonlSessionStore {
+  root_dir : String
+}
+pub fn JsonlSessionStore::new(String) -> Self
+pub impl @port.SessionStore for JsonlSessionStore
+
+// Type aliases
+
+// Traits
+
