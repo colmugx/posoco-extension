@@ -1,6 +1,9 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-ext-llm" @llm,
+  "colmugx/posoco-ext-oauth" @oauth,
+  "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/json",
   "moonbitlang/core/strconv",
@@ -19,7 +22,9 @@ options(
     "encode.mbt": [ "native", "js" ],
     "fim.mbt": [ "native", "js" ],
     "http_util.mbt": [ "native", "js" ],
+    "list_models.mbt": [ "native", "js" ],
     "sse.mbt": [ "native", "js" ],
     "posoco_ext_deepseek_wbtest.mbt": [ "native" ],
+    "list_models_wbtest.mbt": [ "native" ],
   },
 )

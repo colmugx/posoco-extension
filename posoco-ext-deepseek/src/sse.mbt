@@ -46,9 +46,9 @@ fn process_deepseek_sse(
         Some(Object(_)) => {
           let usage = extract_usage(root)
           let chunk = @posoco.StreamChunk::Usage(
-            input_tokens=usage.input_tokens.or(0),
-            output_tokens=usage.output_tokens.or(0),
-            total_tokens=usage.total_tokens.or(0),
+            input_tokens=usage.input_tokens.unwrap_or(0),
+            output_tokens=usage.output_tokens.unwrap_or(0),
+            total_tokens=usage.total_tokens.unwrap_or(0),
           )
           on_chunk(chunk)
           acc.push(chunk)
@@ -84,9 +84,9 @@ fn process_deepseek_sse(
           Some(_) => {
             let usage = extract_usage(root)
             let usage_chunk = @posoco.StreamChunk::Usage(
-              input_tokens=usage.input_tokens.or(0),
-              output_tokens=usage.output_tokens.or(0),
-              total_tokens=usage.total_tokens.or(0),
+              input_tokens=usage.input_tokens.unwrap_or(0),
+              output_tokens=usage.output_tokens.unwrap_or(0),
+              total_tokens=usage.total_tokens.unwrap_or(0),
             )
             on_chunk(usage_chunk)
             acc.push(usage_chunk)

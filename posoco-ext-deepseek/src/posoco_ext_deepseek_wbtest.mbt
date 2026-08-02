@@ -3,6 +3,11 @@
 /// These test the pure encode/decode logic without any network calls.
 
 ///|
+fn disabled_thinking_json() -> Json {
+  Json::object({ "type": Json::string("disabled") })
+}
+
+///|
 fn user_msg(text : String) -> @posoco.Message {
   @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
 }
@@ -20,6 +25,44 @@ fn assistant_msg(text : String) -> @posoco.Message {
 ///|
 fn chat_options() -> @posoco.ChatOptions {
   { temperature: None, max_output_tokens: None }
+}
+
+///|
+/// Provider-neutral prompt fake used to exercise DeepSeek's API-key seam.
+struct DeepSeekApiKeyPrompt {
+  value : String
+}
+
+///|
+pub impl @oauth.AuthPromptInteraction for DeepSeekApiKeyPrompt with fn prompt(
+  self : DeepSeekApiKeyPrompt,
+  _request : @oauth.AuthPromptRequest,
+) -> String raise @oauth.OAuthError {
+  self.value
+}
+
+///|
+async test "DeepSeek API-key factory validates and returns an opaque credential" {
+  let provider = DeepSeekProvider::new()
+  let api : &@llm.ApiKeyFactory = provider
+  let prompt_impl = DeepSeekApiKeyPrompt::{ value: "deepseek-secret" }
+  let prompt : &@oauth.AuthPromptInteraction = prompt_impl
+  let credential = api.login(prompt)
+  assert_eq(credential.secret, "deepseek-secret")
+}
+
+///|
+async test "DeepSeek API-key factory rejects an empty secret" {
+  let provider = DeepSeekProvider::new()
+  let api : &@llm.ApiKeyFactory = provider
+  let prompt_impl = DeepSeekApiKeyPrompt::{ value: "" }
+  let prompt : &@oauth.AuthPromptInteraction = prompt_impl
+  let result = Ok(api.login(prompt)) catch { error => Err(error) }
+  match result {
+    Err(@oauth.OAuthError::ParseError(message)) =>
+      assert_true(message.contains("must not be empty"))
+    _ => fail("expected empty DeepSeek API key to fail")
+  }
 }
 
 ///|

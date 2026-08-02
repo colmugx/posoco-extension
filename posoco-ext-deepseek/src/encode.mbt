@@ -41,7 +41,7 @@ fn encode_message(msg : @posoco.Message) -> Json {
   for block in content_blocks {
     match block {
       Text(s) => text_builder.write_string(s)
-      Image(media_type~, data~) => () // DeepSeek chat does not support images
+      Image(..) => () // DeepSeek chat does not support images
     }
   }
   let content_str = text_builder.to_string()
@@ -155,9 +155,4 @@ fn build_chat_request(
 ///|
 fn enabled_thinking_json() -> Json {
   Json::object({ "type": Json::string("enabled") })
-}
-
-///|
-fn disabled_thinking_json() -> Json {
-  Json::object({ "type": Json::string("disabled") })
 }

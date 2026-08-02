@@ -42,9 +42,15 @@ fn prefix_url(config : DeepSeekConfig) -> String {
 }
 
 ///|
-/// DeepSeek's default thinking config: enabled with "high" effort.
-fn default_thinking_config() -> (Json, String?) {
-  (enabled_thinking_json(), Some("high"))
+/// DeepSeek's provider-owned thinking config.
+fn DeepSeekModelPort::default_thinking_config(
+  self : DeepSeekModelPort,
+) -> (Json, String?) {
+  if self.config.thinking_efforts.is_empty() {
+    (Json::object({ "type": Json::string("disabled") }), None)
+  } else {
+    (enabled_thinking_json(), Some(self.config.reasoning_effort))
+  }
 }
 
 ///|
@@ -58,7 +64,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   // Resolve thinking config from the modelport's own policy (was
   // ChatOptions.reasoning_effort before M3.7 slimmed ChatOptions).
-  let (thinking_json, effort_str) = default_thinking_config()
+  let (thinking_json, effort_str) = self.default_thinking_config()
   match stream {
     NoStream => {
       let body = build_chat_request(
@@ -165,7 +171,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
       }
       let mut done = false
       let mut data_buffer = ""
-      while not(done) {
+      while !done {
         let line = client.read_until("\n") catch {
           _ => {
             client.close()
