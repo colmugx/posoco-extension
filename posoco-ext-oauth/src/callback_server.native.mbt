@@ -1,0 +1,134 @@
+///|
+/// callback_server.native.mbt — CallbackServer via @http.Server (native target).
+
+///|
+pub(all) struct NativeCallbackServer {
+  mut code : String
+  mut server : @http.Server?
+}
+
+///|
+pub fn NativeCallbackServer::NativeCallbackServer() -> NativeCallbackServer {
+  { code: "", server: None }
+}
+
+///|
+impl CallbackServer for NativeCallbackServer with fn start(
+  self : NativeCallbackServer,
+  port : Int,
+) -> Unit raise OAuthError {
+  let addr = @socket.Addr::resolve("127.0.0.1", port~) catch {
+    err => raise OAuthError::HttpError("resolve: " + err.to_string())
+  }
+  let srv = @http.Server(addr) catch {
+    err => raise OAuthError::HttpError("server bind: " + err.to_string())
+  }
+  self.server = Some(srv)
+  // Accept loop in background — use @async.spawn_immediate or just
+  // accept once since we only need a single callback.
+  // For simplicity, we don't use run_forever; instead we poll accept
+  // in wait_code directly.
+}
+
+///|
+impl CallbackServer for NativeCallbackServer with fn wait_code(
+  self : NativeCallbackServer,
+) -> String raise OAuthError {
+  let deadline = (@async.now() / 1000L).to_int() + 300 // 5 min
+  match self.server {
+    Some(srv) => {
+      while true {
+        let now = (@async.now() / 1000L).to_int()
+        if now >= deadline {
+          raise OAuthError::ExpiredToken
+        }
+        // Try to accept a connection with a short timeout.
+        let (conn, _) = srv.accept() catch {
+          _ => {
+            @async.sleep(1) catch {
+              _ => ()
+            }
+            continue
+          }
+        }
+        // Read the request.
+        let request = conn.read_request() catch {
+          _ => {
+            conn.close()
+            continue
+          }
+        }
+        // Extract code from path.
+        let path = request.path
+        let code = extract_code_from_path(path)
+        // Send response.
+        match code {
+          Some(_) => {
+            conn.send_response(200, "Login successful. You can close this tab.") catch {
+              _ => ()
+            }
+            conn.end_response() catch {
+              _ => ()
+            }
+            conn.close()
+            return match code {
+              Some(c) => c
+              None => ""
+            }
+          }
+          None => {
+            conn.send_response(404, "Not Found") catch {
+              _ => ()
+            }
+            conn.end_response() catch {
+              _ => ()
+            }
+            conn.close()
+            continue
+          }
+        }
+      }
+      abort("unreachable")
+    }
+    None => raise OAuthError::HttpError("server not started")
+  }
+}
+
+///|
+impl CallbackServer for NativeCallbackServer with fn stop(
+  self : NativeCallbackServer,
+) -> Unit {
+  match self.server {
+    Some(s) => s.close()
+    None => ()
+  }
+}
+
+///|
+/// Extract `code` query param from path like `/auth/callback?code=XXX`.
+fn extract_code_from_path(path : String) -> String? {
+  match path.find("?") {
+    None => None
+    Some(qmark) => {
+      let query = path.sub(start=qmark + 1)
+      // Find code= in the query string.
+      match query.find("code=") {
+        None => None
+        Some(code_pos) => {
+          let after_code = query.sub(start=code_pos + 5)
+          // Code ends at & or end of string.
+          match after_code.find("&") {
+            Some(amp) => Some(after_code.sub(end=amp).to_string())
+            None => Some(after_code.to_string())
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Factory: create a native CallbackServer.
+pub fn create_callback_server() -> NativeCallbackServer {
+  NativeCallbackServer::NativeCallbackServer()
+}
