@@ -4,8 +4,11 @@
 // ── Mock implementations ──────────────────────────────────────────────────
 
 ///|
+/// ModelPort fake. M3.7: `chat` returns `ModelCallResult` (the canonical
+/// completion + processed_messages bundle), takes an extra `stream` argument,
+/// and the trait now also requires `compact` and `provider_config`.
 struct MockModelPort {
-  responses : Array[@posoco.ModelResponse]
+  responses : Array[@posoco.ModelCallResult]
   mut index : Int
   received_messages : Array[Array[@posoco.Message]]
 }
@@ -16,29 +19,43 @@ pub impl @posoco.ModelPort for MockModelPort with fn chat(
   messages : Array[@posoco.Message],
   _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
-) -> @posoco.ModelResponse {
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
   self.received_messages.push(messages)
   if self.index < self.responses.length() {
     let resp = self.responses[self.index]
     self.index = self.index + 1
     resp
   } else {
-    let msg : @posoco.Message = {
-      role: @posoco.Role::Assistant,
-      content: [@posoco.Content::Text("mock done")],
-      tool_calls: [],
-      tool_call_id: None,
-      name: None,
-      reasoning_content: None,
-    }
-    @posoco.ModelResponse::{
-      message: msg,
-      tool_calls: [],
-      finish_reason: @posoco.FinishReason::Stop,
-      usage: None,
-      reasoning_content: None,
-    }
+    // Synthesise a "mock done" stop response with no tool calls.
+    let completion : @posoco.Completion = @posoco.Completion(
+      content=[@posoco.Content::Text("mock done")],
+      tool_calls=[],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::Stop,
+      usage=None,
+    )
+    { completion, processed_messages: [] }
   }
+}
+
+///|
+pub impl @posoco.ModelPort for MockModelPort with fn compact(
+  _self : MockModelPort,
+  _messages : Array[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  raise @posoco.ModelError::ResponseParse(
+    "MockModelPort does not implement compact",
+  )
+}
+
+///|
+pub impl @posoco.ModelPort for MockModelPort with fn provider_config(
+  _self : MockModelPort,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
 }
 
 ///|
@@ -69,48 +86,37 @@ pub impl @posoco.SessionStore for MockSessionStore with fn save(
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 ///|
-fn make_stop_response(text : String) -> @posoco.ModelResponse {
-  let msg : @posoco.Message = {
-    role: @posoco.Role::Assistant,
-    content: [@posoco.Content::Text(text)],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: None,
-  }
-  {
-    message: msg,
-    tool_calls: [],
-    finish_reason: @posoco.FinishReason::Stop,
-    usage: None,
-    reasoning_content: None,
-  }
+/// Build a ModelCallResult whose completion is a stop-finish text response
+/// with no tool calls and no usage.
+fn make_stop_response(text : String) -> @posoco.ModelCallResult {
+  let completion : @posoco.Completion = @posoco.Completion(
+    content=[@posoco.Content::Text(text)],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+    usage=None,
+  )
+  { completion, processed_messages: [] }
 }
 
 ///|
+/// Build a ModelCallResult whose completion reports a token usage total.
 fn make_stop_response_with_usage(
   text : String,
   total_tokens : Int,
-) -> @posoco.ModelResponse {
-  let msg : @posoco.Message = {
-    role: @posoco.Role::Assistant,
-    content: [@posoco.Content::Text(text)],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: None,
-  }
-  {
-    message: msg,
-    tool_calls: [],
-    finish_reason: @posoco.FinishReason::Stop,
-    usage: Some(@posoco.Usage::{
+) -> @posoco.ModelCallResult {
+  let completion : @posoco.Completion = @posoco.Completion(
+    content=[@posoco.Content::Text(text)],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+    usage=Some({
       input_tokens: Some(total_tokens / 2),
       output_tokens: Some(total_tokens / 2),
       total_tokens: Some(total_tokens),
     }),
-    reasoning_content: None,
-  }
+  )
+  { completion, processed_messages: [] }
 }
 
 ///|
@@ -122,6 +128,7 @@ fn make_config() -> @posoco.AgentConfig {
     tool_choice: None,
     reasoning_effort: None,
     model_context_window: None,
+    model: None,
   }
 }
 
@@ -130,18 +137,42 @@ fn build_agent_with_goal(
   model : MockModelPort,
   goal_runner : GoalRunner,
 ) -> @posoco.Agent {
-  @posoco.Agent::new(
-    model,
-    tools=[],
-    hooks=[goal_runner],
-    memory=[],
-    compressors=[@posoco.NoopCompressor::{  }],
-    observers=[goal_runner],
-    sessions=[MockSessionStore::{ store: Map::from_array([]) }],
-    lifecycle=None,
+  @posoco.Agent(
+    exts=[
+      @posoco.ManifestOnly::ManifestOnly({
+        id: "model",
+        models: [model],
+        tools: [],
+        sessions: [],
+        observers: [],
+        pre_model_hooks: [],
+        pre_tool_hooks: [],
+        post_event_hooks: [],
+        memory: [],
+        lifecycle: [],
+        commands: [],
+        ui: [],
+        prompt_contributors: [],
+      }),
+      @posoco.ManifestOnly::ManifestOnly({
+        id: "goal",
+        models: [],
+        tools: [],
+        sessions: [MockSessionStore::{ store: Map::from_array([]) }],
+        observers: [goal_runner],
+        pre_model_hooks: [goal_runner],
+        pre_tool_hooks: [],
+        post_event_hooks: [goal_runner],
+        memory: [],
+        lifecycle: [],
+        commands: [],
+        ui: [],
+        prompt_contributors: [],
+      }),
+    ],
     config=make_config(),
   ) catch {
-    e => abort("Agent::new failed: \{e}")
+    e => abort("Agent failed: \{e}")
   }
 }
 
@@ -158,27 +189,22 @@ async test "goal_injects_system_prompt" {
   let agent = build_agent_with_goal(model, runner)
   runner.status = Running
 
-  let input : @posoco.Message = {
-    role: @posoco.Role::User,
-    content: [@posoco.Content::Text("start")],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-    reasoning_content: None,
-  }
+  let input : @posoco.Message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("start"),
+  ])
   ignore(agent.run_turn(input, "s1"))
 
-  // The mock model should have received messages starting with a system message
+  // The mock model should have received messages starting with a system message.
   assert_true(model.received_messages.length() > 0)
   let msgs = model.received_messages[0]
   assert_true(msgs.length() > 0)
-  match msgs[0].role {
-    @posoco.Role::System => ()
+  match msgs[0] {
+    @posoco.Message::SystemMessage(content~) =>
+      match content {
+        [@posoco.Content::Text(t), ..] => assert_true(t.contains("fix the bug"))
+        _ => fail("system message should have text content")
+      }
     _ => fail("first message should be system prompt")
-  }
-  match msgs[0].content {
-    [@posoco.Content::Text(t), ..] => assert_true(t.contains("fix the bug"))
-    _ => fail("system message should have text content")
   }
 }
 
@@ -188,11 +214,10 @@ async test "goal_detects_completion" {
   runner.status = Running
   let resp = make_stop_response("All done! [goal:complete]")
 
-  // Simulate AfterModel stage via on_stage
-  match runner.on_stage(@posoco.Stage::AfterModel(resp)) {
-    Ok(_) => ()
-    Err(e) => fail("hook should not error: \{e}")
-  }
+  // Simulate the model-completed stage via on_post_event.
+  runner.on_post_event(
+    @posoco.PostStage::ModelCompleted(completion=resp.completion),
+  )
   match runner.status() {
     Completed => ()
     other => fail("expected Completed, got \{other}")
@@ -205,10 +230,9 @@ async test "goal_detects_blocked" {
   runner.status = Running
   let resp = make_stop_response("Need API key from user\n[goal:blocked]")
 
-  match runner.on_stage(@posoco.Stage::AfterModel(resp)) {
-    Ok(_) => ()
-    Err(e) => fail("hook should not error: \{e}")
-  }
+  runner.on_post_event(
+    @posoco.PostStage::ModelCompleted(completion=resp.completion),
+  )
   match runner.status() {
     Blocked(reason) => assert_true(reason.contains("Need API key"))
     other => fail("expected Blocked, got \{other}")
@@ -223,20 +247,17 @@ test "observer_accumulates_usage" {
 
   runner.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
-      message={
-        role: @posoco.Role::Assistant,
-        content: [@posoco.Content::Text("hi")],
-        tool_calls: [],
-        tool_call_id: None,
-        name: None,
-        reasoning_content: None,
-      },
+      message=@posoco.Message::AssistantMessage(
+        content=[@posoco.Content::Text("hi")],
+        tool_calls=[],
+        reasoning=None,
+        finish_reason=@posoco.FinishReason::Stop,
+      ),
       usage=Some({
         input_tokens: Some(100),
         output_tokens: Some(50),
         total_tokens: Some(150),
       }),
-      reasoning_content=None,
     ),
   )
   assert_eq(runner.usage.total_tokens, 150)
@@ -304,7 +325,7 @@ async test "execute_sends_wrapup" {
   options.budget.max_total_tokens = 100
   options.wrapup_ratio = 0.5
   let runner = GoalRunner::new(options)
-  // First response uses 80 tokens (>= 50% of 100), triggering wrap-up
+  // First response uses 80 tokens (>= 50% of 100), triggering wrap-up.
   let model = MockModelPort::{
     responses: [
       make_stop_response_with_usage("step 1", 80),
@@ -369,23 +390,14 @@ async test "goal_ignores_non_running_status" {
   let runner = GoalRunner::new(default_options("test"))
   runner.status = Paused
 
-  // PipelineHook should pass through without injection
+  // PreModelHook should pass through without injection when not Running.
   let msgs : Array[@posoco.Message] = [
-    {
-      role: @posoco.Role::User,
-      content: [@posoco.Content::Text("hello")],
-      tool_calls: [],
-      tool_call_id: None,
-      name: None,
-      reasoning_content: None,
-    },
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
   ]
-  match runner.on_stage(@posoco.Stage::BeforeModel(msgs)) {
-    Ok(@posoco.Stage::BeforeModel(returned_msgs)) =>
-      assert_eq(returned_msgs.length(), 1)
-    Ok(_) => fail("should return BeforeModel")
-    Err(e) => fail("should not error: \{e}")
+  let returned = runner.before_model(msgs) catch {
+    e => fail("before_model should not abort: \{e}")
   }
+  assert_eq(returned.length(), 1)
 }
 
 ///|
@@ -394,7 +406,7 @@ async test "stall_detection_pauses" {
   options.stall_turn_threshold = 2
   options.stall_min_tokens = 50
   let runner = GoalRunner::new(options)
-  // Responses with no usage → 0 token delta → stall
+  // Responses with no usage → 0 token delta → stall.
   let model = MockModelPort::{
     responses: [
       make_stop_response("thinking..."),

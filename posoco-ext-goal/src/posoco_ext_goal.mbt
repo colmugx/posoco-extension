@@ -1,8 +1,9 @@
 ///|
 /// posoco_ext_goal — Goal-driven autonomous looping extension for Posoco.
 ///
-/// Implements PipelineHook (inject goal context, detect completion markers)
-/// and Observer (track token usage). The execute() method provides the
+/// Implements PreModelHook (inject goal context before the model call),
+/// PostEventHook (detect completion markers after the model call), and
+/// Observer (track token usage). The execute() method provides the
 /// external orchestration loop that calls agent.run_turn() until the goal
 /// is achieved, blocked, or the budget is exhausted.
 ///
@@ -24,6 +25,17 @@ fn extract_text(content : Array[@posoco.Content]) -> String {
     }
   }
   parts.join("")
+}
+
+///|
+/// Extract plain text from a Message, regardless of which variant it is.
+fn extract_text_from_message(message : @posoco.Message) -> String {
+  match message {
+    @posoco.Message::SystemMessage(content~) => extract_text(content)
+    @posoco.Message::UserMessage(content~) => extract_text(content)
+    @posoco.Message::AssistantMessage(content~, ..) => extract_text(content)
+    @posoco.Message::ToolMessage(..) => ""
+  }
 }
 
 ///|
@@ -184,10 +196,10 @@ pub fn GoalRunner::new(options : GoalOptions) -> GoalRunner {
   }
 }
 
-// ── PipelineHook impl ──────────────────────────────────────────────────────
+// ── PreModelHook impl ──────────────────────────────────────────────────────
 
 ///|
-/// Build the goal system prompt injected at BeforeModel.
+/// Build the goal system prompt injected before the model call.
 fn build_goal_system_prompt(runner : GoalRunner) -> String {
   let budget_line = if runner.options.budget.max_turns > 0 {
     "Turn budget: \{runner.current_turn}/\{runner.options.budget.max_turns}\n"
@@ -206,37 +218,41 @@ fn build_goal_system_prompt(runner : GoalRunner) -> String {
 }
 
 ///|
-pub impl @posoco.PipelineHook for GoalRunner with fn on_stage(
+pub impl @posoco.PreModelHook for GoalRunner with fn before_model(
   self,
-  stage : @posoco.Stage,
-) -> Result[@posoco.Stage, @posoco.HookError] {
+  messages : Array[@posoco.Message],
+) -> Array[@posoco.Message] raise @posoco.HookAbort {
+  // Inject goal context as a system message before the model call.
+  // Pass-through when no goal is running.
+  if self.status != Running {
+    return messages
+  }
+  let sys_text = build_goal_system_prompt(self)
+  let sys_msg : @posoco.Message = @posoco.Message::SystemMessage(content=[
+    @posoco.Content::Text(sys_text),
+  ])
+  let new_msgs : Array[@posoco.Message] = [sys_msg]
+  for m in messages {
+    new_msgs.push(m)
+  }
+  new_msgs
+}
+
+// ── PostEventHook impl ─────────────────────────────────────────────────────
+
+///|
+pub impl @posoco.PostEventHook for GoalRunner with fn on_post_event(
+  self,
+  stage : @posoco.PostStage,
+) -> Unit {
+  // Detect completion / blocked markers in the model response.
+  // Read-only hook: status mutation only, never aborts the run.
+  if self.status != Running {
+    return
+  }
   match stage {
-    // Inject goal context as a system message before the model call
-    @posoco.Stage::BeforeModel(msgs) => {
-      if self.status != Running {
-        return Ok(stage)
-      }
-      let sys_text = build_goal_system_prompt(self)
-      let sys_msg : @posoco.Message = {
-        role: @posoco.Role::System,
-        content: [@posoco.Content::Text(sys_text)],
-        tool_calls: [],
-        tool_call_id: None,
-        name: None,
-        reasoning_content: None,
-      }
-      let new_msgs = [sys_msg]
-      for m in msgs {
-        new_msgs.push(m)
-      }
-      Ok(@posoco.Stage::BeforeModel(new_msgs))
-    }
-    // Detect completion / blocked markers in model response
-    @posoco.Stage::AfterModel(resp) => {
-      if self.status != Running {
-        return Ok(stage)
-      }
-      let text = extract_text(resp.message.content)
+    @posoco.PostStage::ModelCompleted(completion~) => {
+      let text = extract_text(completion.message.content)
       if text.contains(self.options.completion_marker) {
         self.status = Completed
       } else if text.contains(self.options.blocked_marker) {
@@ -244,9 +260,8 @@ pub impl @posoco.PipelineHook for GoalRunner with fn on_stage(
           extract_block_reason(text, self.options.blocked_marker),
         )
       }
-      Ok(stage)
     }
-    _ => Ok(stage)
+    _ => ()
   }
 }
 
@@ -394,14 +409,9 @@ pub async fn GoalRunner::execute(
     self.current_turn = self.current_turn + 1
 
     // 3. Create user message
-    let input : @posoco.Message = {
-      role: @posoco.Role::User,
-      content: [@posoco.Content::Text(prompt)],
-      tool_calls: [],
-      tool_call_id: None,
-      name: None,
-      reasoning_content: None,
-    }
+    let input : @posoco.Message = @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text(prompt),
+    ])
 
     // 4. Execute one turn
     let turn_result = agent.run_turn(input, session_id) catch {
@@ -412,7 +422,10 @@ pub async fn GoalRunner::execute(
     }
 
     // 5. Record history
-    let summary = truncate_text(extract_text(turn_result.message.content), 200)
+    let summary = truncate_text(
+      extract_text_from_message(turn_result.message),
+      200,
+    )
     let usage_snapshot : GoalUsage = {
       turns: self.usage.turns,
       total_tokens: self.usage.total_tokens,
