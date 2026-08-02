@@ -1,13 +1,21 @@
 import {
   "colmugx/posoco",
-  "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/async/io",
+  "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/core/json",
 }
 
-warnings = "-unused_package"
+import {
+  "moonbitlang/async",
+} for "wbtest"
 
 options(
-  supported_targets: "+native",
+  targets: {
+    "router.mbt": [ "native", "js" ],
+    "slot.mbt": [ "native", "js" ],
+    "manifest.mbt": [ "native", "js" ],
+    "command_model.mbt": [ "native", "js" ],
+    "router_wbtest.mbt": [ "native" ],
+    "command_model_wbtest.mbt": [ "native" ],
+    "command_login_wbtest.mbt": [ "native" ],
+  },
 )

@@ -1,35 +1,68 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "colmugx/posoco-ext-llm/src"
+package "colmugx/posoco-ext-llm"
 
 import {
-  "colmugx/posoco",
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
 }
 
 // Values
-pub fn parse_openai_response(Json) -> @posoco.ModelResponse
-
-pub fn posoco_message_to_openai(@posoco.Message) -> Json
-
-pub fn posoco_tool_to_openai(@posoco.ToolDef) -> Json
 
 // Errors
 
 // Types and methods
-pub(all) struct OpenAIConfig {
-  api_key : String
-  model : String
-  base_url : String
-  organization : String?
+pub(all) struct ModelSlot {
+  id : String
+  label : String
+  provider_id : String
+  model_id : String
+  port : &@port.ModelPort
+  oauth : &@posoco-ext-oauth.OAuthProvider?
+  thinking_efforts : Array[String]
+  rebuild_on_credential : ((@posoco-ext-oauth.Credential) -> ModelSlot)?
+  rebuild_on_effort : ((String) -> ModelSlot)?
 }
-pub fn OpenAIConfig::new(String, String) -> Self
+pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@posoco-ext-oauth.OAuthProvider?, thinking_efforts? : Array[String], rebuild_on_credential? : ((@posoco-ext-oauth.Credential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
 
-pub(all) struct OpenAIModelPort {
-  config : OpenAIConfig
+pub(all) struct ProviderModelCatalog {
+  provider_id : String
+  slots : Array[ModelSlot]
+  capabilities : Array[String]
 }
-pub fn OpenAIModelPort::new(OpenAIConfig) -> Self
-pub impl @posoco.ModelPort for OpenAIModelPort
+pub fn ProviderModelCatalog::ProviderModelCatalog(provider_id~ : String, slots~ : Array[ModelSlot], capabilities? : Array[String]) -> Self raise @error.CompositionError
+pub fn ProviderModelCatalog::capabilities(Self) -> Array[String]
+pub fn ProviderModelCatalog::provider_id(Self) -> String
+pub fn ProviderModelCatalog::slots(Self) -> Array[ModelSlot]
+
+
+pub(all) struct RouterModelPort {
+  slots : Map[String, ModelSlot]
+  slot_order : Array[String]
+  mut active_id : String
+  mut active_effort : String?
+  cred_store : &@posoco-ext-oauth.CredentialStore?
+  auth_interaction : &@posoco-ext-oauth.AuthInteraction?
+  credentials : Map[String, @posoco-ext-oauth.Credential]
+}
+pub fn RouterModelPort::active_effort(Self) -> String?
+pub fn RouterModelPort::active_slot_id(Self) -> String
+pub fn RouterModelPort::current_model_id(Self) -> String
+pub fn RouterModelPort::current_provider_id(Self) -> String
+pub fn RouterModelPort::extension_id(Self) -> String
+pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
+pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
+pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
+pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn RouterModelPort::new(slots~ : Array[ModelSlot], default_slot_id? : String, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
+pub impl @port.CommandPort for RouterModelPort
+pub impl @port.Extension for RouterModelPort
+pub impl @port.ModelPort for RouterModelPort
 
 // Type aliases
 
 // Traits
-
