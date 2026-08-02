@@ -3,6 +3,11 @@
 /// These test the pure encode/decode logic without any network calls.
 
 ///|
+fn disabled_thinking_json() -> Json {
+  Json::object({ "type": Json::string("disabled") })
+}
+
+///|
 fn user_msg(text : String) -> @posoco.Message {
   @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
 }
@@ -20,6 +25,182 @@ fn assistant_msg(text : String) -> @posoco.Message {
 ///|
 fn chat_options() -> @posoco.ChatOptions {
   { temperature: None, max_output_tokens: None }
+}
+
+///|
+/// Provider-neutral prompt fake used to exercise Kimi's API-key seam.
+struct KimiApiKeyPrompt {
+  value : String
+}
+
+///|
+struct KimiOAuthTransport {
+  requests : Array[@oauth.OAuthHttpRequest]
+  response : @oauth.OAuthHttpResponse
+}
+
+///|
+pub impl @oauth.OAuthHttpTransport for KimiOAuthTransport with fn post(
+  self : KimiOAuthTransport,
+  request : @oauth.OAuthHttpRequest,
+) -> @oauth.OAuthHttpResponse {
+  self.requests.push(request)
+  self.response
+}
+
+///|
+pub impl @oauth.AuthPromptInteraction for KimiApiKeyPrompt with fn prompt(
+  self : KimiApiKeyPrompt,
+  _request : @oauth.AuthPromptRequest,
+) -> String raise @oauth.OAuthError {
+  self.value
+}
+
+///|
+async test "Kimi API-key factory validates and returns an opaque credential" {
+  let provider = KimiProvider::new()
+  let api : &@llm.ApiKeyFactory = provider
+  let prompt_impl = KimiApiKeyPrompt::{ value: "kimi-secret" }
+  let prompt : &@oauth.AuthPromptInteraction = prompt_impl
+  let credential = api.login(prompt)
+  assert_eq(credential.secret, "kimi-secret")
+}
+
+///|
+async test "Kimi API-key factory rejects an empty secret" {
+  let provider = KimiProvider::new()
+  let api : &@llm.ApiKeyFactory = provider
+  let prompt_impl = KimiApiKeyPrompt::{ value: "" }
+  let prompt : &@oauth.AuthPromptInteraction = prompt_impl
+  let result = Ok(api.login(prompt)) catch { error => Err(error) }
+  match result {
+    Err(@oauth.OAuthError::ParseError(message)) =>
+      assert_true(message.contains("must not be empty"))
+    _ => fail("expected empty Kimi API key to fail")
+  }
+}
+
+///|
+async test "Kimi OAuth refresh matches form wire and preserves token fields" {
+  let token_body =
+    #|{"access_token":"access","refresh_token":"refresh-next","expires_in":3600,"token_type":"Bearer"}
+  let transport_impl = KimiOAuthTransport::{
+    requests: [],
+    response: @oauth.OAuthHttpResponse::{ status: 200, body: token_body },
+  }
+  let transport : &@oauth.OAuthHttpTransport = transport_impl
+  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth : &@oauth.OAuthProvider = oauth_impl
+  let credential = @oauth.Credential::Credential(
+    access_token="old-access",
+    refresh_token="refresh/token",
+    expires_at=1,
+  )
+  let refreshed = oauth.refresh(credential)
+  assert_eq(refreshed.access_token, "access")
+  assert_eq(refreshed.refresh_token, "refresh-next")
+  assert_eq(transport_impl.requests.length(), 1)
+  let request = transport_impl.requests[0]
+  assert_eq(
+    request.body,
+    "client_id=17e5f671-d194-4dfb-9706-5516cb48c098&grant_type=refresh_token&refresh_token=refresh%2Ftoken",
+  )
+  match request.headers.get("Content-Type") {
+    Some(value) => assert_eq(value, "application/x-www-form-urlencoded")
+    None => fail("missing content type")
+  }
+  match request.headers.get("Accept") {
+    Some(value) => assert_eq(value, "application/json")
+    None => fail("missing accept header")
+  }
+}
+
+///|
+async test "Kimi OAuth refresh maps invalid_grant to typed error" {
+  let invalid_body =
+    #|{"error":"invalid_grant"}
+  let transport_impl = KimiOAuthTransport::{
+    requests: [],
+    response: @oauth.OAuthHttpResponse::{ status: 400, body: invalid_body },
+  }
+  let transport : &@oauth.OAuthHttpTransport = transport_impl
+  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth : &@oauth.OAuthProvider = oauth_impl
+  let credential = @oauth.Credential::Credential(
+    access_token="old-access",
+    refresh_token="old-refresh",
+    expires_at=1,
+  )
+  let result = Ok(oauth.refresh(credential)) catch { error => Err(error) }
+  match result {
+    Err(@oauth.OAuthError::InvalidGrant) => ()
+    _ => fail("expected typed invalid_grant error")
+  }
+}
+
+///|
+struct KimiRetryOAuthTransport {
+  requests : Array[@oauth.OAuthHttpRequest]
+  responses : Array[@oauth.OAuthHttpResponse]
+}
+
+///|
+pub impl @oauth.OAuthHttpTransport for KimiRetryOAuthTransport with fn post(
+  self : KimiRetryOAuthTransport,
+  request : @oauth.OAuthHttpRequest,
+) -> @oauth.OAuthHttpResponse {
+  self.requests.push(request)
+  self.responses[self.requests.length() - 1]
+}
+
+///|
+async test "Kimi OAuth refresh retries transient 5xx once then succeeds" {
+  let transport_impl = KimiRetryOAuthTransport::{
+    requests: [],
+    responses: [
+      @oauth.OAuthHttpResponse::{ status: 503, body: "proxy unavailable" },
+      @oauth.OAuthHttpResponse::{
+        status: 200,
+        body: "{\"access_token\":\"access\",\"refresh_token\":\"refresh-next\",\"expires_in\":3600}",
+      },
+    ],
+  }
+  let transport : &@oauth.OAuthHttpTransport = transport_impl
+  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth : &@oauth.OAuthProvider = oauth_impl
+  let credential = @oauth.Credential::Credential(
+    access_token="old-access",
+    refresh_token="old-refresh",
+    expires_at=1,
+  )
+  let refreshed = oauth.refresh(credential)
+  assert_eq(refreshed.access_token, "access")
+  assert_eq(transport_impl.requests.length(), 2)
+}
+
+///|
+async test "Kimi OAuth refresh rejects fractional expiry" {
+  let transport_impl = KimiOAuthTransport::{
+    requests: [],
+    response: @oauth.OAuthHttpResponse::{
+      status: 200,
+      body: "{\"access_token\":\"access\",\"refresh_token\":\"refresh\",\"expires_in\":3600.5}",
+    },
+  }
+  let transport : &@oauth.OAuthHttpTransport = transport_impl
+  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth : &@oauth.OAuthProvider = oauth_impl
+  let credential = @oauth.Credential::Credential(
+    access_token="old-access",
+    refresh_token="old-refresh",
+    expires_at=1,
+  )
+  let result = Ok(oauth.refresh(credential)) catch { error => Err(error) }
+  match result {
+    Err(@oauth.OAuthError::ParseError(detail)) =>
+      assert_true(detail.contains("invalid expires_in"))
+    _ => fail("fractional expiry must be rejected")
+  }
 }
 
 ///|
@@ -409,7 +590,7 @@ test "encode_message_tool_calls_no_reasoning" {
 test "kimi_config_defaults_to_single_model" {
   let config = KimiConfig::new("key")
   assert_eq(config.api_key, "key")
-  assert_eq(config.base_url, "https://api.kimi.com")
+  assert_eq(config.base_url, "https://api.moonshot.ai/v1")
   assert_eq(config.model, "kimi-v4-flash")
 }
 
@@ -420,16 +601,156 @@ test "kimi_config_custom_model_passes_through" {
 }
 
 ///|
-test "endpoint_helpers_build_chat_and_fim_url" {
-  let config = KimiConfig::new("key", base_url="https://api.kimi.com")
-  assert_eq(chat_url(config), "https://api.kimi.com/chat/completions")
-  assert_eq(fim_url(config), "https://api.kimi.com/beta/completions")
+test "kimi_models_parser_prefers_nested_effort_declaration" {
+  let payload : Json = {
+    "data": [
+      {
+        "id": "kimi-v4-flash",
+        "context_length": 32768,
+        "supports_thinking_type": "both",
+        "supports_reasoning": true,
+        // Legacy fields are intentionally contradictory; nested metadata is
+        // the provider-owned source of truth when both forms are present.
+        "support_efforts": ["bogus"],
+        "default_effort": "bogus",
+        "think_efforts": {
+          "support": true,
+          "valid_efforts": ["low", "high"],
+          "default_effort": "high",
+        },
+      },
+    ],
+  }
+  let models = parse_kimi_models(payload)
+  assert_eq(models.length(), 1)
+  assert_eq(models[0].thinking_efforts, ["low", "high"])
+  assert_eq(models[0].default_effort, Some("high"))
 }
 
 ///|
-test "fim_url_does_not_duplicate_suffix" {
-  let config = KimiConfig::new("key", base_url="https://api.kimi.com/beta")
-  assert_eq(fim_url(config), "https://api.kimi.com/beta/completions")
+test "kimi_models_parser_reads_legacy_flat_efforts_without_guessing" {
+  let payload : Json = {
+    "data": [
+      {
+        "id": "legacy-kimi",
+        "context_length": 16384,
+        "support_efforts": ["fast", "deep"],
+        "default_effort": "deep",
+        "supports_reasoning": true,
+      },
+    ],
+  }
+  let models = parse_kimi_models(payload)
+  assert_eq(models[0].thinking_efforts, ["fast", "deep"])
+  assert_eq(models[0].default_effort, Some("deep"))
+  assert_true(models[0].capabilities.contains("reasoning"))
+}
+
+///|
+test "kimi_models_parser_keeps_reasoning_capability_without_fabricated_efforts" {
+  let payload : Json = {
+    "data": [
+      {
+        "id": "boolean-only",
+        "context_length": 8192,
+        "supports_reasoning": true,
+      },
+    ],
+  }
+  let models = parse_kimi_models(payload)
+  assert_true(models[0].thinking_efforts.is_empty())
+  assert_eq(models[0].default_effort, None)
+  assert_true(models[0].capabilities.contains("reasoning"))
+}
+
+///|
+test "kimi_models_parser_rejects_flat_default_without_declared_efforts" {
+  let payload : Json = {
+    "data": [
+      { "id": "invalid-flat", "context_length": 8192, "default_effort": "high" },
+    ],
+  }
+  let result : Result[Array[KimiModelInfo], @posoco.ModelError] = Ok(
+    parse_kimi_models(payload),
+  ) catch {
+    err => Err(err)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("requires support_efforts"))
+    _ => fail("expected invalid flat effort declaration")
+  }
+}
+
+///|
+test "kimi_dynamic_slot_rebuild_preserves_catalog_metadata" {
+  let config = KimiConfig::new(
+    "key",
+    model="kimi-k2.6",
+    thinking_efforts=Some(["low", "high"]),
+  )
+  let port = KimiModelPort::new(config)
+  let info = KimiModelInfo::{
+    id: "kimi-k2.6",
+    display_name: "Kimi K2.6",
+    context_window: 131072,
+    thinking_efforts: ["low", "high"],
+    default_effort: Some("high"),
+    capabilities: ["chat", "streaming", "reasoning"],
+  }
+  let other = KimiModelInfo::{
+    id: "kimi-k2.5",
+    display_name: "Kimi K2.5",
+    context_window: 65536,
+    thinking_efforts: ["high"],
+    default_effort: Some("high"),
+    capabilities: ["chat", "streaming", "reasoning"],
+  }
+  let catalog = port.model_catalog_from_models([other, info])
+  let slot = catalog.slots()[0]
+  assert_eq(slot.model_id, "kimi-k2.6")
+  assert_eq(slot.context_window, Some(131072))
+  assert_eq(slot.capabilities, ["chat", "streaming", "reasoning"])
+  match slot.rebuild_on_effort {
+    Some(rebuild) => {
+      let changed = rebuild("low")
+      assert_eq(changed.context_window, Some(131072))
+      assert_eq(changed.capabilities, ["chat", "streaming", "reasoning"])
+      assert_eq(changed.default_effort, Some("high"))
+    }
+    None => fail("expected Kimi effort rebuild hook")
+  }
+}
+
+///|
+test "kimi capability-only slot does not expose effort rebuild" {
+  let config = KimiConfig::new(
+    "key",
+    model="boolean-only",
+    reasoning_effort="",
+    thinking_efforts=Some([]),
+  )
+  let port = KimiModelPort::new(config)
+  let info = KimiModelInfo::{
+    id: "boolean-only",
+    display_name: "Boolean-only Kimi",
+    context_window: 8192,
+    thinking_efforts: [],
+    default_effort: None,
+    capabilities: ["chat", "streaming", "reasoning"],
+  }
+  let slot = port.model_catalog_from_models([info]).slots()[0]
+  assert_true(slot.thinking_efforts.is_empty())
+  match slot.rebuild_on_effort {
+    None => ()
+    Some(_) => fail("capability-only Kimi slot must not expose effort rebuild")
+  }
+}
+
+///|
+test "endpoint_helper_builds_chat_url" {
+  let config = KimiConfig::new("key", base_url="https://api.kimi.com")
+  assert_eq(chat_url(config), "https://api.kimi.com/chat/completions")
 }
 
 ///|
@@ -516,40 +837,6 @@ test "build_chat_request_off_disables_thinking_no_warn" {
 // kimi.mbt), and build_chat_request's effort_str is a plain String? that
 // passes through verbatim with no fallback warnings.
 // ---------------------------------------------------------------------------
-
-///|
-test "fim_request_body_uses_config_model" {
-  let config = KimiConfig::new("key", model="same-model")
-  let body = build_fim_request_body(config, "prefix", Some("suffix"), 64)
-  guard body is Object(root) else { fail("expected object") }
-  assert_json_field_string(root, "model", "same-model")
-  assert_json_field_string(root, "prompt", "prefix")
-  assert_json_field_string(root, "suffix", "suffix")
-}
-
-///|
-test "prefix_request_body_uses_config_model_and_appends_prefix" {
-  let config = KimiConfig::new("key", model="same-model")
-  let body = build_prefix_request_body(
-    config,
-    [user_msg("hi")],
-    "```json\n",
-    Some(["```"]),
-  )
-  guard body is Object(root) else { fail("expected object") }
-  assert_json_field_string(root, "model", "same-model")
-  guard root.get("messages") is Some(Array(messages)) else {
-    fail("expected messages")
-  }
-  assert_eq(messages.length(), 2)
-  guard messages[1] is Object(prefix_msg) else { fail("expected prefix msg") }
-  assert_json_field_string(prefix_msg, "role", "assistant")
-  assert_json_field_string(prefix_msg, "content", "```json\n")
-  match prefix_msg.get("prefix") {
-    Some(True) => ()
-    _ => fail("expected prefix=true")
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Error-transparency fixtures (offline, no network).
@@ -949,12 +1236,12 @@ test "t07b_kimi_valid_nonstream_response_still_decodes" {
 ///|
 test "t07b_kimi_http_error_formatter_is_payload_free" {
   let message = format_kimi_http_error(
-    "fim.http_status",
+    "chat.http_status",
     429,
     BodyBytesUtf8(19),
   )
   assert_eq(
-    message, "kimi HTTP error (stage=fim.http_status, status=429, body_bytes=19, body_category=utf8)",
+    message, "kimi HTTP error (stage=chat.http_status, status=429, body_bytes=19, body_category=utf8)",
   )
   assert_false(message.contains("secret-response-body"))
 }
@@ -1037,7 +1324,7 @@ fn assert_kimi_http_error_summary(
   summary : KimiErrorBodySummary,
   expected : String,
 ) -> Unit raise {
-  match classify_kimi_http_status("prefix.http_status", 503, summary) {
+  match classify_kimi_http_status("chat.http_status", 503, summary) {
     Some(@posoco.ModelError::Transport(message)) => {
       assert_true(message.contains("status=503"))
       assert_true(message.contains(expected))
@@ -1065,86 +1352,4 @@ test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
     "body_bytes=11, body_category=invalid_utf8",
   )
   assert_kimi_http_error_summary(BodyReadFailed, "body_category=read_failed")
-}
-
-///|
-fn assert_fim_response_parse(
-  response : Json,
-  stage : String,
-  category : String,
-) -> Unit raise {
-  let result = Ok(decode_fim_response(response)) catch { e => Err(e) }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(message)) => {
-      assert_true(message.contains("stage=" + stage))
-      assert_true(message.contains("category=" + category))
-      assert_false(message.contains("secret-provider-body"))
-    }
-    _ => fail("expected FIM ResponseParse at " + stage)
-  }
-}
-
-///|
-test "t07b_kimi_fim_response_shapes_are_strict_and_redacted" {
-  assert_fim_response_parse(Json::array([]), "fim.response", "not_object")
-  assert_fim_response_parse(Json::empty_object(), "fim.choices", "missing")
-  assert_fim_response_parse(
-    Json::object({ "choices": Json::string("secret-provider-body") }),
-    "fim.choices",
-    "wrong_type",
-  )
-  assert_fim_response_parse(
-    Json::object({ "choices": Json::array([]) }),
-    "fim.choices",
-    "empty",
-  )
-  assert_fim_response_parse(
-    Json::object({ "choices": Json::array([Json::string("invalid")]) }),
-    "fim.choice",
-    "not_object",
-  )
-  assert_fim_response_parse(
-    Json::object({ "choices": Json::array([Json::empty_object()]) }),
-    "fim.choice.text",
-    "missing",
-  )
-  assert_fim_response_parse(
-    Json::object({
-      "choices": Json::array([Json::object({ "text": Json::number(7.0) })]),
-    }),
-    "fim.choice.text",
-    "wrong_type",
-  )
-}
-
-///|
-test "t07b_kimi_valid_fim_response_still_decodes" {
-  assert_eq(
-    decode_fim_response(
-      Json::object({
-        "choices": Json::array([
-          Json::object({ "text": Json::string("middle") }),
-        ]),
-      }),
-    ),
-    "middle",
-  )
-}
-
-///|
-/// `moon fmt` marks async documentation snippets as `nocheck`. Keep their
-/// exact public call shapes type-checked here without performing HTTP I/O.
-async test "t08_kimi_public_fim_examples_compile" {
-  @async.protect_from_cancel(() => ())
-  let port = KimiModelPort::new(KimiConfig::new("fixture-key"))
-  let messages : Array[@posoco.Message] = [
-    @posoco.Message::UserMessage(content=[@posoco.Content::Text("output JSON")]),
-  ]
-  if false {
-    let _ = port.fim_completion(
-      "def fib(a):\n  if a <= 1: return a\n  ",
-      Some("return fib(a-1) + fib(a-2)"),
-    )
-    let _ = port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
-  }
 }

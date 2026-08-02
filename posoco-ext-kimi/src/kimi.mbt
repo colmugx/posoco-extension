@@ -20,28 +20,6 @@ fn chat_url(config : KimiConfig) -> String {
 }
 
 ///|
-/// The full FIM completions URL (beta variant): base_url + /beta + endpoint_prefix + /completions.
-fn fim_url(config : KimiConfig) -> String {
-  let base = if config.base_url.has_suffix("/beta") {
-    config.base_url
-  } else {
-    config.base_url + "/beta"
-  }
-  base + config.endpoint_prefix + "/completions"
-}
-
-///|
-/// The full prefix-completion URL (beta variant): base_url + /beta + endpoint_prefix + /chat/completions.
-fn prefix_url(config : KimiConfig) -> String {
-  let base = if config.base_url.has_suffix("/beta") {
-    config.base_url
-  } else {
-    config.base_url + "/beta"
-  }
-  base + config.endpoint_prefix + "/chat/completions"
-}
-
-///|
 /// Resolve thinking config based on model name (K7).
 /// - kimi-k3: thinking permanently on, supports reasoning_effort (low/high/max).
 ///   Do NOT send thinking object; send top-level reasoning_effort only.
@@ -54,25 +32,30 @@ fn prefix_url(config : KimiConfig) -> String {
 ///
 /// Returns (thinking_json, cache_key_placeholder). The cache_key is handled
 /// separately in build_chat_request.
-fn resolve_thinking_config(model : String) -> Json {
-  if model == "kimi-k3" {
-    // k3: thinking permanently enabled, do not send thinking object.
-    // reasoning_effort goes top-level — but we handle that via thinking.effort
-    // being None (k3 doesn't accept thinking object at all per docs).
-    // For k3 we omit thinking entirely and let the API default to max effort.
-    Json::null()
+fn resolve_thinking_config(
+  model : String,
+  thinking_efforts : Array[String],
+  effort : String,
+) -> (Json, String?) {
+  // A live model catalog may explicitly advertise no thinking support.  Do
+  // not send a provider-family default in that case.
+  if thinking_efforts.is_empty() {
+    (Json::object({ "type": Json::string("disabled") }), None)
+  } else if model == "kimi-k3" {
+    // k3: thinking permanently enabled and effort is top-level.
+    (Json::null(), Some(effort))
   } else if model == "kimi-k2.7-code" {
     // k2.7-code: permanently on, keep must be "all", cannot disable.
-    enabled_thinking_json(None)
+    (enabled_thinking_json(Some(effort)), None)
   } else if model == "kimi-k2.6" {
     // k2.6: enabled with keep="all". Caller must NOT set temperature.
-    enabled_thinking_json(None)
+    (enabled_thinking_json(Some(effort)), None)
   } else if model == "kimi-k2.5" {
     // k2.5: enabled, keep not supported (omit keep).
-    Json::object({ "type": Json::string("enabled") })
+    (enabled_thinking_json(Some(effort)), None)
   } else {
-    // Fallback: enabled with keep="all" and high effort.
-    enabled_thinking_json(Some("high"))
+    // Fallback: enabled with keep="all" and provider-selected effort.
+    (enabled_thinking_json(Some(effort)), None)
   }
 }
 
@@ -85,7 +68,11 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  let thinking_json = resolve_thinking_config(self.config.model)
+  let (thinking_json, reasoning_effort_str) = resolve_thinking_config(
+    self.config.model,
+    self.config.thinking_efforts,
+    self.config.reasoning_effort,
+  )
   // k2.6 must not set temperature — strip it if present.
   let safe_options : @posoco.ChatOptions = if self.config.model == "kimi-k2.6" {
     @posoco.ChatOptions::{
@@ -106,6 +93,7 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
         false,
         thinking_json,
         None, // cache_key — host passes session_id via call_options
+        reasoning_effort_str~,
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
@@ -151,6 +139,7 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
         true,
         thinking_json,
         None,
+        reasoning_effort_str~,
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)

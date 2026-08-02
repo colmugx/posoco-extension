@@ -2,7 +2,7 @@
 /// Shared HTTP utilities for kimi API — error body summary, status
 /// classification, stream termination classification, and tool-call
 /// validation. All items are package-visible so they can be used across
-/// files in this package (kimi.mbt, fim.mbt, tests, etc.).
+/// files in this package (kimi.mbt and tests).
 
 ///|
 /// Redacted non-2xx body metadata. Keeping this as an ADT prevents the raw

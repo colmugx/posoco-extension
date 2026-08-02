@@ -72,7 +72,7 @@ fn encode_message(msg : @posoco.Message) -> Json {
   for block in content_blocks {
     match block {
       Text(s) => text_builder.write_string(s)
-      Image(media_type~, data~) => () // kimi chat does not support images
+      Image(..) => () // kimi chat does not support images
     }
   }
   let content_str = text_builder.to_string()
@@ -163,6 +163,7 @@ fn build_chat_request(
   stream : Bool,
   thinking_json : Json,
   cache_key : String?,
+  reasoning_effort_str? : String? = None,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(model),
@@ -180,6 +181,10 @@ fn build_chat_request(
     None => ()
   }
   body["thinking"] = thinking_json
+  match reasoning_effort_str {
+    Some(effort) => body["reasoning_effort"] = Json::string(effort)
+    None => ()
+  }
   match cache_key {
     Some(k) => body["prompt_cache_key"] = Json::string(k)
     None => ()
@@ -207,9 +212,4 @@ fn enabled_thinking_json(effort : String?) -> Json {
     None => ()
   }
   Json::object(obj)
-}
-
-///|
-fn disabled_thinking_json() -> Json {
-  Json::object({ "type": Json::string("disabled") })
 }
