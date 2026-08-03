@@ -1,7 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-bash — Extension manifest.
-// ============================================================================
 
 ///|
 pub impl @posoco.Extension for ShellTools with fn extension_id(_self) -> String {
@@ -23,7 +20,7 @@ pub impl @posoco.Extension for ShellTools with fn manifest(self) -> @posoco.Exte
     lifecycle: [],
     commands: [],
     ui: [],
-    prompt_contributors: [self],
+    prompt_contributors: [],
   }
 }
 

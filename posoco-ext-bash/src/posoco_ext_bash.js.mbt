@@ -1,19 +1,10 @@
 ///|
-// ============================================================================
-// posoco_ext_bash.js.mbt — js target (bun) adaptor + ToolProvider impl.
+// Bun is a global under bun: `extern "js" fn ... = #| () => Bun.xxx()` works
+// without require/import. Deliberately do NOT use `node:child_process` — the
+// target runtime is bun.
 //
-// Active on: target="js" (via moon.pkg targets)
-// Provides:  Bun FFI bindings + complete ToolProvider impl (via Bun.spawn)
-//
-// Uses Bun's global `Bun.spawn` to run `sh -c <cmd>` with stdout+stderr piped.
-// Bun is a global object under bun, so `extern "js" fn ... = #| () => Bun.xxx()`
-// works without require/import. We deliberately do NOT use `node:child_process`
-// because the target runtime is bun (per project decision).
-//
-// `@js_async.Promise::wait` is an async fn: returns the fulfilled value
-// directly, and raises on rejection. Catch rejections with `try { ... }
-// catch { _ => ... }`.
-// ============================================================================
+// `@js_async.Promise::wait` returns the fulfilled value directly and raises on
+// rejection; catch rejections with try/catch.
 
 ///|
 #external

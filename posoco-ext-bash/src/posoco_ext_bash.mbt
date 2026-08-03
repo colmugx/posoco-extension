@@ -1,20 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-bash — shell command execution tool.
-//
-// File organization:
-//   posoco_ext_bash.mbt          — all targets: struct, ctor, shared helpers,
-//                                  SystemPromptContributor, list_tools
-//   posoco_ext_bash_native.mbt   — #cfg(target="native"): execute via @process
-//   posoco_ext_bash_js.mbt       — #cfg(target="js"):      execute via Bun.spawn
-//   fallback.mbt                 — #cfg(not(any(native,js))): empty list + error
-//
-// The struct + list_tools + SystemPromptContributor live HERE so every target
-// sees the same type. Only `execute` differs per platform; each platform's
-// adaptor file provides just that one method via a separate trait impl block.
-// ============================================================================
-
-///|
 /// ShellTools — shell command execution tool provider.
 ///
 /// On native, executes via `@process.collect_output_merged("sh", ...)`.
@@ -25,42 +9,21 @@ pub(all) struct ShellTools {
 }
 
 ///|
-/// Canonical constructor. Use this everywhere — the old `ShellTools()` positional
-/// form is removed to avoid cross-target naming drift.
+/// Canonical constructor. Use this everywhere.
 pub fn ShellTools::ShellTools() -> ShellTools {
   ShellTools::{  }
 }
 
-// ---------------------------------------------------------------------------
-// SystemPromptContributor — identical on every target.
-// ---------------------------------------------------------------------------
-
-///|
-pub impl @posoco.SystemPromptContributor for ShellTools with fn system_prompt(
-  _self : ShellTools,
-) -> String {
-  "Use bash for focused inspection and verification commands. Report command failures; never claim an unchecked result."
-}
-
-// ---------------------------------------------------------------------------
-// ToolProvider — split into two #cfg partitions:
-//
-//   #cfg(any(target="native", target="js"))   → real list_tools + execute
-//   #cfg(not(any(target="native", target="js"))) → empty list_tools + error execute
-//
-// Each partition is a COMPLETE impl block (both methods). The shared_list_tools
-// helper below avoids duplicating the ToolDef construction across partitions.
-// ---------------------------------------------------------------------------
+// ToolProvider is split into two complete #cfg partitions (native/js real, others inert); shared_list_tools avoids duplicating the ToolDef construction.
 
 ///|
 /// Shared tool list (bash + shell alias). Both native and js ShellTools
 /// expose the same two tool definitions; only `execute` differs per target.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   // OpenAI/DeepSeek tool schema requires `parameters` to be a JSON Schema with
-  // `type: "object"`. Previously this sent `{"cmd": "..."}` (a string value,
-  // not a nested schema), which strict servers reject with HTTP 400
-  // (`invalid_union_discriminator`, expected `type: "object"`). See
-  // posoco-ext-read/write/edit for the canonical pattern.
+  // `type: "object"`; strict servers otherwise reject with HTTP 400
+  // (`invalid_union_discriminator`). See posoco-ext-read/write/edit for the
+  // canonical pattern.
   let cmd_schema : Json = Json::object(
     Map::from_array([
       ("type", Json::string("object")),
@@ -103,14 +66,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   ]
 }
 
-// ---------------------------------------------------------------------------
-// Shared helpers — pure functions used by all execute impls.
-// ---------------------------------------------------------------------------
-
 ///|
 /// Extract command string from ToolCall arguments JSON.
-/// T07-B: a missing or non-String cmd/command is now a typed error, not a
-/// silent fallback that runs the entire JSON blob as a shell command.
+/// A missing or non-String cmd/command is a typed error, not a silent fallback
+/// that runs the entire JSON blob as a shell command.
 fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
   match args {
     Json::Object(map) =>

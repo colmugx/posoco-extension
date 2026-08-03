@@ -1,10 +1,4 @@
 ///|
-// ============================================================================
-// posoco_ext_bash.native.mbt — native target adaptor + ToolProvider impl.
-//
-// Active on: target="native" (via moon.pkg targets)
-// Provides:  complete ToolProvider impl (list_tools + execute via @process)
-// ============================================================================
 
 ///|
 pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
@@ -28,11 +22,11 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   ]) catch {
     _ => raise bash_collect_output_failure()
   }
-  // T07-B: decode failure must not masquerade as success. If the process
-  // produced non-UTF-8 / undecodable output, surface it as a business-level
-  // error (ToolReportedError) with a message that includes the exit code,
-  // so the model can react instead of receiving a silent "(decoding error)"
-  // body on an exit-0 success.
+  // Decode failure must not masquerade as success. If the process produced
+  // non-UTF-8 / undecodable output, surface it as a business-level error
+  // (ToolReportedError) with a message that includes the exit code, so the
+  // model can react instead of receiving a silent "(decoding error)" body on
+  // an exit-0 success.
   let mut decode_failed = false
   let content = output_data.text() catch {
     _ => {

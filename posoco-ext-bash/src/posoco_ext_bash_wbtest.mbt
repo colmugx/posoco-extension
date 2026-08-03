@@ -5,7 +5,7 @@
 /// they are offline and do not depend on external services.
 
 ///|
-/// ——— Test: ShellTools.list_tools ———
+/// Test: ShellTools.list_tools
 async test "list_tools_contains_bash_and_shell" {
   let tools = ShellTools::{  }
   let tool_defs = tools.list_tools()
@@ -46,7 +46,7 @@ async test "list_tools_have_provenance" {
 }
 
 ///|
-/// ——— Test: extract_command ———
+/// Test: extract_command
 test "extract_command_from_cmd_key" {
   let args = Json::object(
     Map::from_array([
@@ -68,8 +68,8 @@ test "extract_command_from_command_key" {
 }
 
 ///|
-/// T07-B: a missing cmd/command now raises a typed error instead of silently
-/// falling back to running the JSON blob as a shell command.
+/// A missing cmd/command raises a typed error instead of silently falling
+/// back to running the JSON blob as a shell command.
 async test "extract_command_empty_object_raises_typed_error" {
   let args = Json::object(Map::from_array([]))
   let result = Ok(extract_command(args)) catch { e => Err(e) }
@@ -133,8 +133,8 @@ test "collect_output_failure_mapping_is_stage_only" {
 }
 
 ///|
-/// T07-B: invalid UTF-8 from an exit-0 process is an explicit business error,
-/// not a successful result with silently replaced output.
+/// Invalid UTF-8 from an exit-0 process is an explicit business error, not a
+/// successful result with silently replaced output.
 async test "non_utf8_output_is_explicit_tool_error" {
   let tools = ShellTools()
   let call : @posoco.ToolCall = {
@@ -145,8 +145,8 @@ async test "non_utf8_output_is_explicit_tool_error" {
     ),
   }
   let result = tools.execute("bash", call)
-  // ToolOutcome is now a variant. T07-B: invalid UTF-8 from an exit-0 process
-  // is a business-level error, surfaced as ToolReportedError (not Success).
+  // Invalid UTF-8 from an exit-0 process is a business-level error, surfaced
+  // as ToolReportedError (not Success).
   match result {
     ToolReportedError(content~, ..) => {
       assert_true(content.contains("bash"))
