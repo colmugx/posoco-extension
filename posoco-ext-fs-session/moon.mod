@@ -7,7 +7,7 @@ version = "0.1.0"
 
 readme = "README.mbt.md"
 
-repository = ""
+repository = "https://github.com/colmugx/posoco-extension"
 
 license = "Apache-2.0"
 
@@ -15,10 +15,10 @@ keywords = [ "posoco", "session", "fs", "jsonl", "store", "bun" ]
 
 preferred_target = "native"
 
-description = "Posoco JSONL File Session Store — persistent session storage via JSONL files, dual-target (native + bun-js)"
+description = "Posoco JSONL file session extension with native and Bun targets"
 
 import {
-  "colmugx/posoco@0.7.2",
+  "colmugx/posoco@0.7.3",
   "moonbitlang/async@0.20.3",
   "moonbitlang/x@0.4.46",
 }
