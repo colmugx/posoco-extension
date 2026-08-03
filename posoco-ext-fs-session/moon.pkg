@@ -16,6 +16,7 @@ options(
     "jsonl_session_serde.mbt": [ "native", "js" ],
     "session_id.mbt": [ "native", "js" ],
     "manifest.mbt": [ "native", "js" ],
+    "session_id_test.mbt": [ "native", "js" ],
     // Tests use @fs (native-only) and @fs.tmpdir; restrict to native.
     "jsonl_session_test.mbt": [ "native" ],
   },
