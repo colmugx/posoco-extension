@@ -20,6 +20,28 @@ fn xfs_error_detail(error : @xfs.IOError) -> String {
 }
 
 ///|
+fn load_session_path(
+  root_dir : String,
+  id : String,
+) -> String raise @posoco.SessionError {
+  match validate_session_id(id) {
+    Ok(_) => jsonl_session_path(root_dir, id)
+    Err(reason) => raise @posoco.SessionError::Load("jsonl: " + reason)
+  }
+}
+
+///|
+fn save_session_path(
+  root_dir : String,
+  id : String,
+) -> String raise @posoco.SessionError {
+  match validate_session_id(id) {
+    Ok(_) => jsonl_session_path(root_dir, id)
+    Err(reason) => raise @posoco.SessionError::Save("jsonl: " + reason)
+  }
+}
+
+///|
 fn JsonlSessionStore::ensure_root_dir(
   self : JsonlSessionStore,
 ) -> Unit raise @posoco.SessionError {
@@ -58,7 +80,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
   self,
   id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
-  let path = jsonl_session_path(self.root_dir, id)
+  let path = load_session_path(self.root_dir, id)
   let exists = @xfs.path_exists(path)
   if !exists {
     return @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
@@ -76,15 +98,15 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
 }
 
 ///|
-/// SessionStore::save — serialise session and write atomically (truncate + write).
+/// SessionStore::save — serialise session and replace the file contents.
 /// Directory is created lazily.
 pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
   self,
   id : String,
   session : @posoco.Session,
 ) -> Unit raise @posoco.SessionError {
+  let path = save_session_path(self.root_dir, id)
   self.ensure_root_dir()
-  let path = jsonl_session_path(self.root_dir, id)
   let jsonl = session_to_jsonl(session)
   @xfs.write_string_to_file(path, jsonl) catch {
     e =>
