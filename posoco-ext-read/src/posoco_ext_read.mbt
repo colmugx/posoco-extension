@@ -1,23 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-read — file reading tool.
-//
-// File organization:
-//   posoco_ext_read.mbt          — all targets: struct, ctor, shared helpers,
-//                                  FsIo trait, SystemPromptContributor,
-//                                  execute_read_impl, list_tools schema
-//   posoco_ext_read_native.mbt   — #cfg(target="native"): NativeFsIo adaptor
-//                                  + complete ToolProvider impl (via @fs)
-//   posoco_ext_read_js.mbt       — #cfg(target="js"):      JsFsIo adaptor
-//                                  + complete ToolProvider impl (via Bun.file)
-//   fallback.mbt                 — #cfg(not(any(native,js))): empty list + error
-//
-// The struct + FsIo trait + shared business logic live HERE so every target
-// sees the same type. Only the IO adaptor + ToolProvider impl differ per
-// platform; each platform's adaptor file provides those via #cfg partitions.
-// ============================================================================
-
-///|
 /// ReadTools — file reading tool provider.
 ///
 /// On native, reads via `@fs.read_file`. On js (bun), reads via `Bun.file`.
@@ -28,26 +9,10 @@ pub(all) struct ReadTools {
 }
 
 ///|
-/// Canonical constructor. Use this everywhere — the old `ReadTools()` positional
-/// form is removed to avoid cross-target naming drift.
+/// Canonical constructor. Use this everywhere to avoid cross-target naming drift.
 pub fn ReadTools::ReadTools() -> ReadTools {
   ReadTools::{  }
 }
-
-// ---------------------------------------------------------------------------
-// SystemPromptContributor — identical on every target.
-// ---------------------------------------------------------------------------
-
-///|
-pub impl @posoco.SystemPromptContributor for ReadTools with fn system_prompt(
-  _self : ReadTools,
-) -> String {
-  "Use read to inspect exact file contents before changing them."
-}
-
-// ---------------------------------------------------------------------------
-// FsIo trait — the IO adaptor seam. Native and js each provide an impl.
-// ---------------------------------------------------------------------------
 
 ///|
 /// File-system IO boundary for the `read` tool.
@@ -62,10 +27,6 @@ priv trait FsIo {
   /// Read the entire file as a UTF-8 string. Raise on IO or decode failure.
   async fn read_text(self : Self, path : String) -> String raise @posoco.RuntimeError
 }
-
-// ---------------------------------------------------------------------------
-// Shared tool definition + argument extraction + failure formatting.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Shared tool list for the `read` tool. Both native and js ReadTools expose
@@ -123,14 +84,10 @@ fn read_failure(stage : String, path : String) -> @posoco.RuntimeError {
   )
 }
 
-// ---------------------------------------------------------------------------
-// execute_read_impl — single source of truth for the read tool's logic.
-// Each target's ReadTools::execute constructs its own FsIo adaptor and
-// delegates here. This is the one place to test the business rules.
-// ---------------------------------------------------------------------------
-
 ///|
 /// Shared `read` execute logic. Target-agnostic; only the IO adaptor differs.
+/// Each target's execute constructs its own adaptor and delegates here — the
+/// one place to test the business rules.
 async fn execute_read_impl(
   io : &FsIo,
   call : @posoco.ToolCall,

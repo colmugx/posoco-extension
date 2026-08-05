@@ -1,16 +1,4 @@
 ///|
-// ============================================================================
-// posoco_ext_read_native.mbt — native target adaptor + ToolProvider impl.
-//
-// Active on: target="native"
-// Provides:  NativeFsIo (via @fs) + complete ToolProvider impl
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// NativeFsIo — @fs-backed FsIo adaptor.
-// ---------------------------------------------------------------------------
-
-///|
 priv struct NativeFsIo {}
 
 ///|
@@ -31,10 +19,6 @@ impl FsIo for NativeFsIo with fn read_text(_self, path : String) -> String {
     _ => raise read_failure("decode", path)
   }
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for native.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for ReadTools with fn list_tools(

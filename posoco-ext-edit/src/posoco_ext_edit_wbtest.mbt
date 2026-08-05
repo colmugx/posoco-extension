@@ -1,5 +1,5 @@
 ///|
-/// ——— Test helpers ———
+/// Test helpers.
 
 ///|
 fn edit_call(path : String, replace_all : Json?) -> @posoco.ToolCall {

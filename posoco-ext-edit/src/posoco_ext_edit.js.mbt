@@ -1,19 +1,7 @@
 ///|
-// ============================================================================
-// posoco_ext_edit_js.mbt — js target (bun runtime) adaptor + ToolProvider impl.
-//
-// Active on: target="js"
-// Provides:  Bun FFI bindings, JsFsIo adaptor (via Bun.file + Bun.write), and
-//            complete ToolProvider impl
-//
-// Uses Bun's global `Bun.file` to stat + read and `Bun.write` to write. Bun is
-// a global object under bun, so `extern "js" fn ... = #| () => Bun.xxx()` works
-// without require/import. We deliberately do NOT use `node:fs`.
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// Bun FFI bindings (same shape as ext-read + ext-write).
-// ---------------------------------------------------------------------------
+// Bun is a global object under bun, so `extern "js" fn ... = #| () => Bun.xxx()`
+// works without require/import. We deliberately do NOT use `node:fs`.
+// Same shape as ext-read + ext-write.
 
 ///|
 /// Bun's opaque BunFile handle.
@@ -43,10 +31,6 @@ extern "js" fn bun_write_string(
 ) -> @js_async.Promise[Int] =
   #| (path, data) => Bun.write(path, data)
 
-// ---------------------------------------------------------------------------
-// JsFsIo — Bun-backed FsIo adaptor.
-// ---------------------------------------------------------------------------
-
 ///|
 priv struct JsFsIo {}
 
@@ -72,10 +56,6 @@ impl FsIo for JsFsIo with fn write_text(_self, path : String, content : String) 
     _ => raise edit_failure("write", path)
   }
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for js.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for EditTools with fn list_tools(

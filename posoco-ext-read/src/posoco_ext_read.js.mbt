@@ -1,19 +1,5 @@
-///|
-// ============================================================================
-// posoco_ext_read_js.mbt — js target (bun runtime) adaptor + ToolProvider impl.
-//
-// Active on: target="js"
-// Provides:  Bun FFI bindings, JsFsIo adaptor (via Bun.file), and complete
-//            ToolProvider impl
-//
-// Uses Bun's global `Bun.file` to stat + read. Bun is a global object under
-// bun, so `extern "js" fn ... = #| () => Bun.xxx()` works without require/
-// import. We deliberately do NOT use `node:fs`.
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// Bun FFI bindings.
-// ---------------------------------------------------------------------------
+// Bun is a global object under bun, so `extern "js" fn ... = #| () => Bun.xxx()`
+// works without require/import; we deliberately do NOT use `node:fs`.
 
 ///|
 /// Bun's opaque BunFile handle.
@@ -34,10 +20,6 @@ extern "js" fn BunFile::exists(self : BunFile) -> @js_async.Promise[Bool] =
 /// `BunFile.prototype.text()` — Promise<string>.
 extern "js" fn BunFile::text(self : BunFile) -> @js_async.Promise[String] =
   #| (file) => file.text()
-
-// ---------------------------------------------------------------------------
-// JsFsIo — Bun-backed FsIo adaptor.
-// ---------------------------------------------------------------------------
 
 ///|
 priv struct JsFsIo {}
@@ -60,10 +42,6 @@ impl FsIo for JsFsIo with fn read_text(_self, path : String) -> String {
     _ => raise read_failure("decode", path)
   }
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for js.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for ReadTools with fn list_tools(

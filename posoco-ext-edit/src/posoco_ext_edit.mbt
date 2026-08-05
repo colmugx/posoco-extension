@@ -1,23 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-edit — file editing tool (find-and-replace).
-//
-// File organization:
-//   posoco_ext_edit.mbt          — all targets: struct, ctor, shared helpers,
-//                                  FsIo trait, SystemPromptContributor,
-//                                  execute_edit_impl, list_tools schema
-//   posoco_ext_edit_native.mbt   — #cfg(target="native"): NativeFsIo adaptor
-//                                  + complete ToolProvider impl (via @fs)
-//   posoco_ext_edit_js.mbt       — #cfg(target="js"):      JsFsIo adaptor
-//                                  + complete ToolProvider impl (via Bun.file)
-//   fallback.mbt                 — #cfg(not(any(native,js))): empty list + error
-//
-// The struct + FsIo trait + shared business logic live HERE so every target
-// sees the same type. Only the IO adaptor + ToolProvider impl differ per
-// platform; each platform's adaptor file provides those via #cfg partitions.
-// ============================================================================
-
-///|
 /// EditTools — file editing tool provider.
 /// Performs find-and-replace within a file (single occurrence or all).
 ///
@@ -29,26 +10,10 @@ pub(all) struct EditTools {
 }
 
 ///|
-/// Canonical constructor. Use this everywhere — the old `EditTools()` positional
-/// form is removed to avoid cross-target naming drift.
+/// Canonical constructor. Use this everywhere.
 pub fn EditTools::EditTools() -> EditTools {
   EditTools::{  }
 }
-
-// ---------------------------------------------------------------------------
-// SystemPromptContributor — identical on every target.
-// ---------------------------------------------------------------------------
-
-///|
-pub impl @posoco.SystemPromptContributor for EditTools with fn system_prompt(
-  _self : EditTools,
-) -> String {
-  "Use edit for precise changes. If the expected text does not match, re-read the file and fix the cause instead of guessing."
-}
-
-// ---------------------------------------------------------------------------
-// FsIo trait — the IO adaptor seam. Native and js each provide an impl.
-// ---------------------------------------------------------------------------
 
 ///|
 /// File-system IO boundary for the `edit` tool.
@@ -65,10 +30,6 @@ priv trait FsIo {
   /// Write text content to a file (create or truncate). Raise on IO failure.
   async fn write_text(self : Self, path : String, content : String) -> Unit raise @posoco.RuntimeError
 }
-
-// ---------------------------------------------------------------------------
-// Shared tool definition + argument extraction + failure formatting.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Shared tool list for the `edit` tool (old_text/new_text/replace_all).
@@ -200,10 +161,6 @@ fn apply_edit(
     replace_first(content, old_text, new_text)
   }
 }
-
-// ---------------------------------------------------------------------------
-// execute_edit_impl — single source of truth for the edit tool's logic.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Shared `edit` execute logic. Target-agnostic; only the IO adaptor differs.

@@ -1,17 +1,8 @@
 ///|
-// ============================================================================
-// fallback.mbt — ToolProvider for unsupported targets (wasm, wasm-gc).
-//
-// Active on: #cfg(not(any(target="native", target="js")))
-//
-// File editing requires an IO API (@fs on native, Bun.file/Bun.write on js).
-// Neither exists on wasm/wasm-gc. Rather than omit the tool entirely (which
-// would make EditTools::new() fail to compile due to missing trait impl), we
-// provide a complete but inert impl: list_tools returns [] (no tools
-// advertised to the model), execute raises immediately.
-// ============================================================================
-
-///|
+// File editing requires an IO API (@fs on native, Bun.file/Bun.write on js),
+// which wasm/wasm-gc lacks. A missing ToolProvider impl would fail to compile,
+// so this file supplies a complete but inert one: list_tools returns [] and
+// execute raises immediately.
 #cfg(not(any(target="native", target="js")))
 pub impl @posoco.ToolProvider for EditTools with fn list_tools(
   _self : EditTools,

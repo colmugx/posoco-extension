@@ -1,19 +1,25 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "colmugx/posoco-ext-edit/src"
+package "colmugx/posoco-ext-edit"
 
 import {
-  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
 }
 
 // Values
+pub fn edit_extension() -> EditTools
 
 // Errors
 
 // Types and methods
 pub(all) struct EditTools {
 }
-pub fn EditTools::new() -> Self
-pub impl @posoco.ToolProvider for EditTools
+pub fn EditTools::EditTools() -> Self
+pub fn EditTools::extension_id(Self) -> String
+pub fn EditTools::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.Extension for EditTools
+pub impl @port.ToolProvider for EditTools
 
 // Type aliases
 

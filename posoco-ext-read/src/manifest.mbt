@@ -1,19 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-read — Extension manifest.
-//
-// ReadTools implements both ToolProvider (declares + executes the `read` tool)
-// and SystemPromptContributor (emits the "use read first" guidance). This file
-// adds the third trait — `@posoco.Extension` — so the agent composer can
-// discover all of ReadTools' port contributions through one self-reporting
-// interface.
-//
-// The manifest is intentionally a method on the existing struct (not a free
-// factory function), so a host that already holds a `ReadTools` instance can
-// pass it directly to `Agent::new(exts=[read_tools_instance], config~)`.
-// ============================================================================
-
-///|
 /// Self-report ReadTools' port contributions to the agent composer.
 ///
 /// `id` is the manifest identifier used in composition diagnostics (tool
@@ -24,7 +9,7 @@ pub impl @posoco.Extension for ReadTools with fn extension_id(_self) -> String {
 }
 
 ///|
-/// Declare the ports ReadTools contributes: ToolProvider + SystemPromptContributor.
+/// Declare the ports ReadTools contributes: ToolProvider.
 /// The same `self` reference appears under both fields because ReadTools
 /// implements both port traits on the same struct.
 pub impl @posoco.Extension for ReadTools with fn manifest(self) -> @posoco.ExtensionManifest {
@@ -34,14 +19,12 @@ pub impl @posoco.Extension for ReadTools with fn manifest(self) -> @posoco.Exten
     tools: [self],
     sessions: [],
     observers: [],
-    pre_model_hooks: [],
-    pre_tool_hooks: [],
-    post_event_hooks: [],
+    hooks: [],
     memory: [],
     lifecycle: [],
     commands: [],
     ui: [],
-    prompt_contributors: [self],
+    prompt_contributors: [],
   }
 }
 

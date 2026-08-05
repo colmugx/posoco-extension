@@ -1,7 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-edit — Extension manifest.
-// ============================================================================
 
 ///|
 pub impl @posoco.Extension for EditTools with fn extension_id(_self) -> String {
@@ -16,14 +13,12 @@ pub impl @posoco.Extension for EditTools with fn manifest(self) -> @posoco.Exten
     tools: [self],
     sessions: [],
     observers: [],
-    pre_model_hooks: [],
-    pre_tool_hooks: [],
-    post_event_hooks: [],
+    hooks: [],
     memory: [],
     lifecycle: [],
     commands: [],
     ui: [],
-    prompt_contributors: [self],
+    prompt_contributors: [],
   }
 }
 
