@@ -24,10 +24,8 @@ impl CallbackServer for NativeCallbackServer with fn start(
     err => raise OAuthError::HttpError("server bind: " + err.to_string())
   }
   self.server = Some(srv)
-  // Accept loop in background — use @async.spawn_immediate or just
-  // accept once since we only need a single callback.
-  // For simplicity, we don't use run_forever; instead we poll accept
-  // in wait_code directly.
+  // No background accept loop — wait_code polls accept directly for the
+  // single callback.
 }
 
 ///|
@@ -42,7 +40,6 @@ impl CallbackServer for NativeCallbackServer with fn wait_code(
         if now >= deadline {
           raise OAuthError::ExpiredToken
         }
-        // Try to accept a connection with a short timeout.
         let (conn, _) = srv.accept() catch {
           _ => {
             @async.sleep(1) catch {
@@ -51,17 +48,14 @@ impl CallbackServer for NativeCallbackServer with fn wait_code(
             continue
           }
         }
-        // Read the request.
         let request = conn.read_request() catch {
           _ => {
             conn.close()
             continue
           }
         }
-        // Extract code from path.
         let path = request.path
         let code = extract_code_from_path(path)
-        // Send response.
         match code {
           Some(_) => {
             conn.send_response(200, "Login successful. You can close this tab.") catch {
@@ -111,7 +105,6 @@ fn extract_code_from_path(path : String) -> String? {
     None => None
     Some(qmark) => {
       let query = path.sub(start=qmark + 1)
-      // Find code= in the query string.
       match query.find("code=") {
         None => None
         Some(code_pos) => {

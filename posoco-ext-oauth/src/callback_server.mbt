@@ -8,10 +8,6 @@
 /// Native: @http.Server (moonbitlang/async)
 /// JS:     Bun.serve (extern "js")
 
-// ---------------------------------------------------------------------------
-// CallbackServer trait — the IO seam.
-// ---------------------------------------------------------------------------
-
 ///|
 /// Local HTTP callback server for PKCE browser flow.
 /// Each target provides an impl:
@@ -30,10 +26,6 @@ pub(open) trait CallbackServer {
   fn stop(self : Self) -> Unit
 }
 
-// ---------------------------------------------------------------------------
-// PkceFlowConfig — provider-specific endpoints for browser flow.
-// ---------------------------------------------------------------------------
-
 ///|
 /// Configuration for the PKCE authorization-code browser flow.
 pub(all) struct PkceFlowConfig {
@@ -44,10 +36,6 @@ pub(all) struct PkceFlowConfig {
   callback_port : Int // e.g. 1455
   scope : String // e.g. "openid profile email offline_access"
 }
-
-// ---------------------------------------------------------------------------
-// run_pkce_browser_flow — shared logic, target-agnostic.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Run the full PKCE browser flow:
@@ -67,25 +55,18 @@ pub async fn run_pkce_browser_flow(
   interaction : &AuthInteraction,
   server : &CallbackServer,
 ) -> Credential raise OAuthError {
-  // 1. Generate PKCE.
   let pkce = generate_pkce()
 
-  // 2. Construct authorize URL.
   let auth_url = build_authorize_url(config, pkce)
 
-  // 3. Start callback server.
   server.start(config.callback_port)
 
-  // 4. Notify host to open URL.
   interaction.notify(AuthMessage::AuthUrl(auth_url))
 
-  // 5. Wait for callback.
   let code = server.wait_code()
 
-  // 6. Exchange code for tokens.
   let cred = exchange_code_for_token(config, code, pkce.code_verifier)
 
-  // 7. Stop server.
   server.stop()
 
   cred

@@ -47,3 +47,57 @@ pub impl AuthInteraction for NoopAuthInteraction with fn is_cancelled(
 ) -> Bool {
   false
 }
+
+///|
+/// Provider-neutral prompt options used by non-OAuth authentication flows.
+/// The host renders these without knowing which provider requested them.
+pub(all) struct AuthPromptOption {
+  id : String
+  label : String
+  description : String?
+}
+
+///|
+pub fn AuthPromptOption::AuthPromptOption(
+  id~ : String,
+  label~ : String,
+  description? : String? = None,
+) -> AuthPromptOption {
+  { id, label, description }
+}
+
+///|
+/// A provider-neutral interactive authentication request. Secret values must
+/// never be echoed by hosts or included in diagnostics.
+pub(all) enum AuthPromptRequest {
+  Secret(message~ : String)
+  Select(message~ : String, options~ : Array[AuthPromptOption])
+}
+
+///|
+/// Optional prompt seam for provider-owned API-key login. It is deliberately
+/// separate from `AuthInteraction` so existing OAuth-only hosts remain source
+/// compatible; a host that advertises API-key login implements both traits.
+pub(open) trait AuthPromptInteraction {
+  /// Prompt for a secret or select option. Cancellation and UI failures are
+  /// typed OAuth errors so provider login cannot silently continue.
+  async fn prompt(Self, request : AuthPromptRequest) -> String raise OAuthError
+}
+
+///|
+/// Headless prompt implementation for tests. It fails loudly because an
+/// unattended host must not pretend it obtained an API key.
+pub(all) struct NoopAuthPromptInteraction {}
+
+///|
+pub fn NoopAuthPromptInteraction::NoopAuthPromptInteraction() -> NoopAuthPromptInteraction {
+  NoopAuthPromptInteraction::{  }
+}
+
+///|
+pub impl AuthPromptInteraction for NoopAuthPromptInteraction with fn prompt(
+  _self : NoopAuthPromptInteraction,
+  _request : AuthPromptRequest,
+) -> String raise OAuthError {
+  raise OAuthError::Cancelled
+}
