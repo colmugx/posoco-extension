@@ -1,17 +1,4 @@
 ///|
-// ============================================================================
-// posoco_ext_glob_js.mbt — ToolProvider for js target (bun >= 1.2).
-//
-// Active on: target="js"
-// Provides:  JsGlobScanner (Bun.Glob-backed adaptor) and the complete
-//            ToolProvider impl (list_tools + execute).
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// Bun.Glob FFI bindings.
-// ---------------------------------------------------------------------------
-
-///|
 #external
 priv type BunGlob
 
@@ -35,10 +22,6 @@ extern "js" fn BunGlob::scan_array(
   #|   return out;
   #| }
 
-// ---------------------------------------------------------------------------
-// JsGlobScanner — Bun.Glob-backed adaptor.
-// ---------------------------------------------------------------------------
-
 ///|
 priv struct JsGlobScanner {}
 
@@ -57,10 +40,6 @@ impl GlobScanner for JsGlobScanner with fn scan(
       )
   }
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for js.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for GlobTools with fn list_tools(

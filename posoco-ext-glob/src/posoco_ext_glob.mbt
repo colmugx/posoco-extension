@@ -1,24 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-glob — file pattern matching tool.
-//
-// File organization:
-//   posoco_ext_glob.mbt          — all targets: struct, ctor, shared helpers,
-//                                  SystemPromptContributor, GlobScanner trait,
-//                                  shared_list_tools, extract_glob_args,
-//                                  execute_glob_impl
-//   posoco_ext_glob_native.mbt   — #cfg(target="native"): @fs.walk scanner +
-//                                  glob-matching engine + ToolProvider impl
-//   posoco_ext_glob_js.mbt       — #cfg(target="js"):      Bun.Glob scanner +
-//                                  ToolProvider impl
-//   fallback.mbt                 — #cfg(not(any(native,js))): empty list + error
-//
-// The struct + trait + shared execute logic live HERE so every target sees the
-// same type. Only the scanner adaptor differs per platform; each platform's
-// adaptor file provides its own scanner struct + a complete ToolProvider impl.
-// ============================================================================
-
-///|
 /// GlobTools — file pattern matching tool provider.
 ///
 /// Walks a directory tree and returns paths matching a glob-like pattern.
@@ -31,26 +11,10 @@ pub(all) struct GlobTools {
 }
 
 ///|
-/// Canonical constructor. Use this everywhere — the old `GlobTools::GlobTools()`
-/// positional form is removed to avoid cross-target naming drift.
+/// Canonical constructor. Use this everywhere.
 pub fn GlobTools::GlobTools() -> GlobTools {
   GlobTools::{  }
 }
-
-// ---------------------------------------------------------------------------
-// SystemPromptContributor — identical on every target.
-// ---------------------------------------------------------------------------
-
-///|
-pub impl @posoco.SystemPromptContributor for GlobTools with fn system_prompt(
-  _self : GlobTools,
-) -> String {
-  "Use glob to discover relevant paths before assuming the workspace layout."
-}
-
-// ---------------------------------------------------------------------------
-// GlobScanner trait — the search adaptor seam. Native and js each provide one.
-// ---------------------------------------------------------------------------
 
 ///|
 /// High-level glob search boundary.
@@ -62,10 +26,6 @@ priv trait GlobScanner {
   /// Scan `base` for paths matching `pattern`. Raise on IO failure.
   async fn scan(self : Self, pattern : String, base : String) -> Array[String] raise @posoco.RuntimeError
 }
-
-// ---------------------------------------------------------------------------
-// Shared tool definition + argument extraction.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Shared tool definition for the `glob` tool.
@@ -131,10 +91,6 @@ fn extract_glob_args(
       )
   }
 }
-
-// ---------------------------------------------------------------------------
-// execute_glob_impl — single source of truth for the glob tool's logic.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Shared `glob` execute logic. Target-agnostic; only the scanner differs.

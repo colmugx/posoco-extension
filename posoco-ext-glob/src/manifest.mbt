@@ -1,9 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-glob — Extension manifest.
-// ============================================================================
-
-///|
 pub impl @posoco.Extension for GlobTools with fn extension_id(_self) -> String {
   "posoco_ext_glob"
 }
@@ -16,14 +11,12 @@ pub impl @posoco.Extension for GlobTools with fn manifest(self) -> @posoco.Exten
     tools: [self],
     sessions: [],
     observers: [],
-    pre_model_hooks: [],
-    pre_tool_hooks: [],
-    post_event_hooks: [],
+    hooks: [],
     memory: [],
     lifecycle: [],
     commands: [],
     ui: [],
-    prompt_contributors: [self],
+    prompt_contributors: [],
   }
 }
 

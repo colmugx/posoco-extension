@@ -1,17 +1,4 @@
 ///|
-// ============================================================================
-// posoco_ext_glob_native.mbt — ToolProvider for native target.
-//
-// Active on: target="native"
-// Provides:  NativeGlobScanner (@fs.walk + MoonBit glob-matching engine) and
-//            the complete ToolProvider impl (list_tools + execute).
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// Native scanner — @fs.walk + MoonBit glob-matching engine.
-// ---------------------------------------------------------------------------
-
-///|
 priv struct NativeGlobScanner {}
 
 ///|
@@ -37,10 +24,6 @@ impl GlobScanner for NativeGlobScanner with fn scan(
   }
   matches
 }
-
-// ---------------------------------------------------------------------------
-// Glob-matching engine (native-only; js delegates to Bun.Glob).
-// ---------------------------------------------------------------------------
 
 ///|
 /// Match a path against a glob pattern. Supports * and **.
@@ -127,10 +110,6 @@ fn wildcard_match(
   }
   false
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for native.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Execute the `glob` tool on native. Business logic lives in the shared

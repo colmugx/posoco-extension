@@ -1,19 +1,25 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "colmugx/posoco-ext-glob/src"
+package "colmugx/posoco-ext-glob"
 
 import {
-  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
 }
 
 // Values
+pub fn glob_extension() -> GlobTools
 
 // Errors
 
 // Types and methods
 pub(all) struct GlobTools {
 }
-pub fn GlobTools::new() -> Self
-pub impl @posoco.ToolProvider for GlobTools
+pub fn GlobTools::GlobTools() -> Self
+pub fn GlobTools::extension_id(Self) -> String
+pub fn GlobTools::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.Extension for GlobTools
+pub impl @port.ToolProvider for GlobTools
 
 // Type aliases
 
