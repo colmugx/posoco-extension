@@ -1,0 +1,15 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: {
+    "statusbar_wbtest.mbt": [ "native" ],
+    "command_statusbar_wbtest.mbt": [ "native" ],
+  },
+)

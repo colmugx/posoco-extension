@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-statusbar"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+pub fn available_segments() -> Array[String]
+
+pub fn default_items() -> Array[String]
+
+// Errors
+
+// Types and methods
+pub struct StatusBar {
+  ui : &@port.UiPort
+  state : StatusBarState
+  mut items : Array[String]
+}
+pub fn StatusBar::extension_id(Self) -> String
+pub fn StatusBar::items(Self) -> Array[String]
+pub fn StatusBar::manifest(Self) -> @port.ExtensionManifest
+pub fn StatusBar::new(&@port.UiPort, items? : Array[String]) -> Self
+pub fn StatusBar::set_latency(Self, Int) -> Unit
+pub fn StatusBar::set_model(Self, String, effort~ : String?) -> Unit
+pub fn StatusBar::set_session(Self, String) -> Unit
+pub impl @port.CommandPort for StatusBar
+pub impl @port.Extension for StatusBar
+pub impl @port.Observer for StatusBar
+
+pub struct StatusBarState {
+  mut model : String?
+  mut effort : String?
+  mut turn_count : Int
+  mut tools_this_turn : Int
+  mut tokens_in : Int
+  mut tokens_out : Int
+  mut session_id : String?
+  mut latency_ms : Int?
+}
+
+// Type aliases
+
+// Traits
+
