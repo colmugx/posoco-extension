@@ -15,18 +15,23 @@ pub fn JsonlSessionStore::new(root_dir : String) -> JsonlSessionStore {
   { root_dir, }
 }
 
+///|
 #external
 priv type BunFile
 
+///|
 extern "js" fn bun_file(path : String) -> BunFile =
   #| (path) => Bun.file(path)
 
+///|
 extern "js" fn BunFile::text(self : BunFile) -> @js_async.Promise[String] =
   #| (file) => file.text()
 
+///|
 extern "js" fn BunFile::exists(self : BunFile) -> @js_async.Promise[Bool] =
   #| (file) => file.exists()
 
+///|
 extern "js" fn bun_write_string(
   path : String,
   data : String,
@@ -63,20 +68,20 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
   let path = js_load_session_path(self.root_dir, id)
   let file = bun_file(path)
   let exists = file.exists().wait() catch {
-    error =>
-      raise @posoco.SessionError::Load(
-        "jsonl[js]: exists() rejected for " + path + ": " + error.to_string(),
-      )
-  }
+      error =>
+        raise @posoco.SessionError::Load(
+          "jsonl[js]: exists() rejected for " + path + ": " + error.to_string(),
+        )
+    }
   if !exists {
     return @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
   }
   let content = file.text().wait() catch {
-    error =>
-      raise @posoco.SessionError::Load(
-        "jsonl[js]: text() rejected for " + path + ": " + error.to_string(),
-      )
-  }
+      error =>
+        raise @posoco.SessionError::Load(
+          "jsonl[js]: text() rejected for " + path + ": " + error.to_string(),
+        )
+    }
   match session_from_jsonl(content) {
     Ok(s) => s
     Err(e) => raise e

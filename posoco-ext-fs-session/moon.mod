@@ -15,10 +15,10 @@ keywords = [ "posoco", "session", "fs", "jsonl", "store", "bun" ]
 
 preferred_target = "native"
 
-description = "Posoco JSONL file session extension with native and Bun targets"
+description = "Posoco JSONL File Session Store"
 
 import {
-  "colmugx/posoco@0.7.3",
+  "colmugx/posoco@0.8.0",
   "moonbitlang/async@0.20.3",
   "moonbitlang/x@0.4.46",
 }

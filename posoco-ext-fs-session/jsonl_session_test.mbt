@@ -10,9 +10,7 @@
 /// JS-side async adapter reuses the same codec, so target-specific filesystem
 /// behaviour is isolated from codec regressions.
 
-// ============================================================================
 // Pure codec tests (no async, no IO)
-// ============================================================================
 
 ///|
 test "serde: empty session round-trips" {
@@ -207,9 +205,7 @@ test "serde: malformed message line errors loudly" {
   }
 }
 
-// ============================================================================
 // Native IO tests (async, use @fs.tmpdir for unique scratch dirs)
-// ============================================================================
 
 ///|
 /// Create a unique scratch directory with the given prefix, returning its path.
