@@ -243,7 +243,14 @@ async test "login persists credential and rebuilds matching slots" {
 async test "login rejects OAuth provider without configured dependencies" {
   let oauth_impl = LoginTestOAuth::{ credential: login_test_credential() }
   let oauth : &@oauth.OAuthProvider = oauth_impl
-  let router = RouterModelPort::new(slots=[login_test_slot(oauth)])
+  // Provide the auth interaction (so the login flow advances past it) but omit
+  // the credential store; the store-missing branch is the documented rejection.
+  let interaction_impl = @oauth.NoopAuthInteraction::NoopAuthInteraction()
+  let interaction : &@oauth.AuthInteraction = interaction_impl
+  let router = RouterModelPort::new(
+    slots=[login_test_slot(oauth)],
+    auth_interaction=Some(interaction),
+  )
   let result = Ok(
     router.invoke(
       "login",

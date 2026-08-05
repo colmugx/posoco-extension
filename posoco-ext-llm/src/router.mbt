@@ -191,10 +191,6 @@ pub fn RouterModelPort::switch_slot(
   self.active_effort = None
 }
 
-// ============================================================================
-// ModelPort impl — delegate to the active injected port.
-// ============================================================================
-
 ///|
 pub impl @posoco.ModelPort for RouterModelPort with fn chat(
   self : RouterModelPort,

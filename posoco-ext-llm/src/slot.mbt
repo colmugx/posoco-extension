@@ -20,6 +20,11 @@ pub(all) struct ModelSlot {
   capabilities : Array[String]
   /// Provider-declared default effort, if the model exposes thinking levels.
   default_effort : String?
+  /// Provider-declared display group for picker tab presentation. Slots without
+  /// a group are tabbed by their `provider_id`; grouped slots (e.g. custom
+  /// OpenAI-compatible endpoints) share one tab while keeping their real
+  /// `provider_id` for credentials and routing.
+  display_group : String?
   rebuild_on_credential : ((@oauth.Credential) -> ModelSlot)?
   rebuild_on_api_key : ((@oauth.ApiKeyCredential) -> ModelSlot)?
   /// Provider-owned rebuild hook used when `/model` selects an effort.
@@ -41,6 +46,7 @@ pub fn ModelSlot::ModelSlot(
   context_window? : Int? = None,
   capabilities? : Array[String] = [],
   default_effort? : String? = None,
+  display_group? : String? = None,
   rebuild_on_credential? : ((@oauth.Credential) -> ModelSlot)? = None,
   rebuild_on_api_key? : ((@oauth.ApiKeyCredential) -> ModelSlot)? = None,
   rebuild_on_effort? : ((String) -> ModelSlot)? = None,
@@ -57,6 +63,7 @@ pub fn ModelSlot::ModelSlot(
     context_window,
     capabilities,
     default_effort,
+    display_group,
     rebuild_on_credential,
     rebuild_on_api_key,
     rebuild_on_effort,

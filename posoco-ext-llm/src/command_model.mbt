@@ -48,6 +48,13 @@ fn RouterModelPort::slot_catalog_json(self : RouterModelPort) -> Json {
               None => Json::null()
             },
           ),
+          (
+            "group",
+            match slot.display_group {
+              Some(value) => Json::string(value)
+              None => Json::null()
+            },
+          ),
         ]),
       ),
     )
@@ -63,6 +70,7 @@ priv struct ModelSelection {
 
 ///|
 fn parse_optional_string(
+  command : String,
   fields : Map[String, Json],
   key : String,
 ) -> String? raise @posoco.CommandError {
@@ -71,14 +79,14 @@ fn parse_optional_string(
     Some(Json::String(value)) =>
       if value.length() == 0 {
         raise @posoco.CommandError::InvalidArgs(
-          reason="/model " + key + " must be a non-empty string",
+          reason=command + " " + key + " must be a non-empty string",
         )
       } else {
         Some(value)
       }
     Some(_) =>
       raise @posoco.CommandError::InvalidArgs(
-        reason="/model " + key + " must be a string",
+        reason=command + " " + key + " must be a string",
       )
   }
 }
@@ -97,12 +105,32 @@ fn model_command_selection(
       }
     Json::Object(fields) =>
       {
-        slot_id: parse_optional_string(fields, "slot"),
-        effort: parse_optional_string(fields, "effort"),
+        slot_id: parse_optional_string("/model", fields, "slot"),
+        effort: parse_optional_string("/model", fields, "effort"),
       }
     _ =>
       raise @posoco.CommandError::InvalidArgs(
         reason="/model expects no arguments, a slot string, or {slot, effort}",
+      )
+  }
+}
+
+///|
+/// Parse `/effort` arguments. Accepts no arguments (query the active slot),
+/// a bare effort string, or an object carrying either `effort` or the
+/// `_positional` string a host slash parser produces.
+fn effort_command_selection(args : Json) -> String? raise @posoco.CommandError {
+  match args {
+    Json::Null => None
+    Json::String(value) => if value.length() == 0 { None } else { Some(value) }
+    Json::Object(fields) =>
+      match parse_optional_string("/effort", fields, "effort") {
+        Some(value) => Some(value)
+        None => parse_optional_string("/effort", fields, "_positional")
+      }
+    _ =>
+      raise @posoco.CommandError::InvalidArgs(
+        reason="/effort expects no arguments or an effort string",
       )
   }
 }
@@ -211,6 +239,33 @@ pub impl @posoco.CommandPort for RouterModelPort with fn commands(
       visible: true,
       metadata: None,
     },
+    @posoco.CommandDef::{
+      id: "effort",
+      label: "Switch Effort",
+      description: "Show or switch reasoning effort for the active model slot",
+      category: "model",
+      ctype: @posoco.CommandType::Select,
+      params: [
+        @posoco.CommandParam::{
+          name: "effort",
+          label: "Effort",
+          description: "Provider-advertised reasoning effort; omit to show the current effort",
+          ptype: @posoco.ParamType::Str,
+          required: false,
+          default: None,
+          choices: match self.slots.get(self.active_id) {
+            Some(slot) => Some(slot.thinking_efforts.copy())
+            None => Some([])
+          },
+          positional: true,
+        },
+      ],
+      aliases: [],
+      shortcut: None,
+      icon: None,
+      visible: true,
+      metadata: None,
+    },
   ]
 }
 
@@ -256,6 +311,45 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
           @posoco.CommandOutcome::Failure(
             reason="/model effort requires a slot",
           )
+      }
+    "effort" =>
+      match effort_command_selection(args) {
+        None => {
+          let slot = self.active_slot()
+          let current = match self.active_effort {
+            Some(value) => Some(value)
+            None => slot.default_effort
+          }
+          let feedback = match current {
+            Some(value) =>
+              "current effort: " + value + " (" + self.active_id + ")"
+            None => "model slot has no effort selection: " + self.active_id
+          }
+          @posoco.CommandOutcome::Success(
+            feedback~,
+            structured=Some(self.slot_catalog_json()),
+            ui_hint=Some(@posoco.UiHint::None),
+          )
+        }
+        Some(level) => {
+          let slot = self.active_slot()
+          if slot.thinking_efforts.is_empty() {
+            @posoco.CommandOutcome::Failure(
+              reason="model slot does not support effort selection: " +
+                self.active_id,
+            )
+          } else {
+            self.select_effort(self.active_id, level) catch {
+              err =>
+                return @posoco.CommandOutcome::Failure(reason=err.to_string())
+            }
+            @posoco.CommandOutcome::Success(
+              feedback="switched effort: " + level + " (" + self.active_id + ")",
+              structured=Some(self.slot_catalog_json()),
+              ui_hint=Some(@posoco.UiHint::RefreshModelList),
+            )
+          }
+        }
       }
     "login" => self.invoke_login(args)
     other => raise @posoco.CommandError::NotFound(other)

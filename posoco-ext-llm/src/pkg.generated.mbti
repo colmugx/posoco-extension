@@ -7,6 +7,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -14,6 +15,12 @@ import {
 // Errors
 
 // Types and methods
+pub(all) enum AuthMethod {
+  ApiKey
+  OAuth
+} derive(Eq, @debug.Debug)
+pub fn AuthMethod::to_id(Self) -> String
+
 pub(all) struct ModelSlot {
   id : String
   label : String
@@ -21,11 +28,32 @@ pub(all) struct ModelSlot {
   model_id : String
   port : &@port.ModelPort
   oauth : &@posoco-ext-oauth.OAuthProvider?
+  api_key : &ApiKeyFactory?
   thinking_efforts : Array[String]
+  context_window : Int?
+  capabilities : Array[String]
+  default_effort : String?
   rebuild_on_credential : ((@posoco-ext-oauth.Credential) -> ModelSlot)?
+  rebuild_on_api_key : ((@posoco-ext-oauth.ApiKeyCredential) -> ModelSlot)?
   rebuild_on_effort : ((String) -> ModelSlot)?
 }
-pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@posoco-ext-oauth.OAuthProvider?, thinking_efforts? : Array[String], rebuild_on_credential? : ((@posoco-ext-oauth.Credential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
+pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@posoco-ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int?, capabilities? : Array[String], default_effort? : String?, rebuild_on_credential? : ((@posoco-ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@posoco-ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
+
+pub(all) enum ProviderBuildResult {
+  Ready(ProviderModelCatalog)
+  Unconfigured
+}
+
+pub(all) struct ProviderConfigSource {
+  settings : Json?
+  provider_credential : @posoco-ext-oauth.ProviderCredential?
+  credential : @posoco-ext-oauth.Credential?
+  api_key_credential : @posoco-ext-oauth.ApiKeyCredential?
+}
+pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @posoco-ext-oauth.ProviderCredential?, credential? : @posoco-ext-oauth.Credential?, api_key_credential? : @posoco-ext-oauth.ApiKeyCredential?) -> Self
+pub fn ProviderConfigSource::effective_credential(Self, String) -> @posoco-ext-oauth.ProviderCredential? raise @error.CompositionError
+pub fn ProviderConfigSource::has_settings(Self) -> Bool
+pub fn ProviderConfigSource::setting(Self, String) -> Json? raise @error.CompositionError
 
 pub(all) struct ProviderModelCatalog {
   provider_id : String
@@ -33,31 +61,36 @@ pub(all) struct ProviderModelCatalog {
   capabilities : Array[String]
 }
 pub fn ProviderModelCatalog::ProviderModelCatalog(provider_id~ : String, slots~ : Array[ModelSlot], capabilities? : Array[String]) -> Self raise @error.CompositionError
+pub fn ProviderModelCatalog::auth_methods(Self) -> Array[AuthMethod]
 pub fn ProviderModelCatalog::capabilities(Self) -> Array[String]
 pub fn ProviderModelCatalog::provider_id(Self) -> String
 pub fn ProviderModelCatalog::slots(Self) -> Array[ModelSlot]
-
 
 pub(all) struct RouterModelPort {
   slots : Map[String, ModelSlot]
   slot_order : Array[String]
   mut active_id : String
   mut active_effort : String?
+  provider_credential_store : &@posoco-ext-oauth.ProviderCredentialStore?
   cred_store : &@posoco-ext-oauth.CredentialStore?
   auth_interaction : &@posoco-ext-oauth.AuthInteraction?
+  api_key_store : &@posoco-ext-oauth.ApiKeyStore?
+  auth_prompt : &@posoco-ext-oauth.AuthPromptInteraction?
   credentials : Map[String, @posoco-ext-oauth.Credential]
+  api_key_credentials : Map[String, @posoco-ext-oauth.ApiKeyCredential]
 }
 pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_slot_id(Self) -> String
 pub fn RouterModelPort::current_model_id(Self) -> String
 pub fn RouterModelPort::current_provider_id(Self) -> String
 pub fn RouterModelPort::extension_id(Self) -> String
-pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::list_auth_capabilities(Self) -> Json
 pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
-pub fn RouterModelPort::new(slots~ : Array[ModelSlot], default_slot_id? : String, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::new(slots~ : Array[ModelSlot], default_slot_id? : String, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?) -> Self raise @error.CompositionError
 pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
 pub impl @port.CommandPort for RouterModelPort
 pub impl @port.Extension for RouterModelPort
@@ -66,3 +99,26 @@ pub impl @port.ModelPort for RouterModelPort
 // Type aliases
 
 // Traits
+pub(open) trait ApiKeyFactory {
+  fn provider_id(Self) -> String
+  fn credential_id(Self) -> String
+  async fn login(Self, &@posoco-ext-oauth.AuthPromptInteraction) -> @posoco-ext-oauth.ApiKeyCredential raise @posoco-ext-oauth.OAuthError
+}
+
+pub(open) trait OAuthFactory {
+  fn provider_id(Self) -> String
+  fn credential_id(Self) -> String
+  async fn login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
+}
+
+pub(open) trait ProviderFactory {
+  fn provider_id(Self) -> String
+  fn credential_id(Self) -> String
+  fn build(Self, ProviderConfigSource) -> ProviderBuildResult raise @error.CompositionError
+}
+
+pub(open) trait RefreshableProviderFactory {
+  fn provider_id(Self) -> String
+  async fn refresh(Self, ProviderConfigSource) -> ProviderBuildResult raise @error.CompositionError
+}
+
