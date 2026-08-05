@@ -1,0 +1,27 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-ext-llm" @llm,
+  "colmugx/posoco-ext-oauth" @oauth,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+  "moonbitlang/core/strconv",
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: {
+    "config.mbt": [ "native", "js" ],
+    "decode.mbt": [ "native", "js" ],
+    "encode.mbt": [ "native", "js" ],
+    "http_util.mbt": [ "native", "js" ],
+    "openai_compatible.mbt": [ "native", "js" ],
+    "sse.mbt": [ "native", "js" ],
+    "posoco_ext_openai_compatible_wbtest.mbt": [ "native" ],
+  },
+)
