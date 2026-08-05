@@ -75,11 +75,9 @@ fn process_deepseek_sse(
       "DeepSeek SSE parse failure (stage=choice, category=not_object)",
     )
   }
-  // Check finish_reason first
   match choice.get("finish_reason") {
     Some(String(reason)) =>
       if reason != "" {
-        // Extract usage if present on the finish chunk
         match root.get("usage") {
           Some(_) => {
             let usage = extract_usage(root)
@@ -108,7 +106,6 @@ fn process_deepseek_sse(
         "DeepSeek SSE parse failure (stage=finish_reason, category=wrong_type)",
       )
   }
-  // Process delta
   match choice.get("delta") {
     Some(Object(delta)) => {
       // Text content delta

@@ -48,11 +48,16 @@ pub fn DeepSeekConfig::new(
 }
 
 ///|
-/// Rebuild a provider config with a validated effort value.
+/// Rebuild a provider config with a validated effort value. The picker-facing
+/// "off" entry maps to "" (thinking disabled on the wire); any other value
+/// must be one of the declared `thinking_efforts`.
 pub fn DeepSeekConfig::with_reasoning_effort(
   self : DeepSeekConfig,
   effort : String,
 ) -> DeepSeekConfig raise @posoco.CompositionError {
+  if effort == "off" {
+    return { ..self, reasoning_effort: "" }
+  }
   if !self.thinking_efforts.contains(effort) {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_deepseek",

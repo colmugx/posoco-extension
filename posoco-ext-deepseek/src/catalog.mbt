@@ -1,13 +1,41 @@
 ///|
+/// The picker-facing effort list: an implicit leading "off" (thinking
+/// disabled on the wire) plus every declared level. A model with no declared
+/// levels (non-reasoning) exposes no selector at all.
+fn deepseek_slot_efforts(config : DeepSeekConfig) -> Array[String] {
+  if config.thinking_efforts.is_empty() {
+    return []
+  }
+  let efforts : Array[String] = ["off"]
+  efforts.append(config.thinking_efforts.copy())
+  efforts
+}
+
+///|
+/// The picker-facing label of the config's current effort.
+fn deepseek_effort_label(config : DeepSeekConfig) -> String {
+  if config.reasoning_effort == "" {
+    "off"
+  } else {
+    config.reasoning_effort
+  }
+}
+
+///|
 fn deepseek_catalog_slot(
   config : DeepSeekConfig,
   ctx : @devkit.ExtContext,
   api_key : &@llm.ApiKeyFactory,
-  default_effort? : String? = None,
 ) -> @llm.ModelSlot {
   let port : &@posoco.ModelPort = DeepSeekModelPort::new(config, ctx~)
   let slot_id = "deepseek/" + config.model
-  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if config.thinking_efforts.is_empty() {
+  let slot_efforts = deepseek_slot_efforts(config)
+  let default_effort = if slot_efforts.is_empty() {
+    None
+  } else {
+    Some(deepseek_effort_label(config))
+  }
+  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if slot_efforts.is_empty() {
     None
   } else {
     Some(fn(effort) {
@@ -15,7 +43,7 @@ fn deepseek_catalog_slot(
         err =>
           abort("DeepSeek catalog effort rebuild failed: " + err.to_string())
       }
-      deepseek_catalog_slot(rebuilt_config, ctx, api_key, default_effort~)
+      deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     })
   }
   let slot = @llm.ModelSlot::ModelSlot(
@@ -25,7 +53,7 @@ fn deepseek_catalog_slot(
     model_id=config.model,
     port~,
     api_key=Some(api_key),
-    thinking_efforts=config.thinking_efforts,
+    thinking_efforts=slot_efforts,
     default_effort~,
     rebuild_on_api_key=Some(fn(credential) {
       let rebuilt_config = DeepSeekConfig::new(
@@ -36,7 +64,7 @@ fn deepseek_catalog_slot(
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=config.thinking_efforts,
       )
-      deepseek_catalog_slot(rebuilt_config, ctx, api_key, default_effort~)
+      deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     }),
     rebuild_on_effort~,
   )
@@ -47,7 +75,8 @@ fn deepseek_catalog_slot(
 /// Build one slot from a provider-discovered model record.  The selected
 /// effort is kept only when the server-derived descriptor still advertises it;
 /// otherwise the descriptor's default is used, or no thinking effort is sent
-/// for a non-reasoning model.
+/// for a non-reasoning model. An explicitly configured off (empty effort)
+/// always wins, so a reasoning model can be run with thinking disabled.
 fn deepseek_catalog_slot_from_info(
   base_config : DeepSeekConfig,
   info : DeepSeekModelInfo,
@@ -55,6 +84,8 @@ fn deepseek_catalog_slot_from_info(
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
   let selected_effort = if info.thinking_efforts.is_empty() {
+    ""
+  } else if base_config.reasoning_effort == "" {
     ""
   } else if info.thinking_efforts.contains(base_config.reasoning_effort) {
     base_config.reasoning_effort
@@ -72,12 +103,7 @@ fn deepseek_catalog_slot_from_info(
     reasoning_effort=selected_effort,
     thinking_efforts=info.thinking_efforts,
   )
-  deepseek_catalog_slot(
-    config,
-    ctx,
-    api_key,
-    default_effort=info.default_effort,
-  )
+  deepseek_catalog_slot(config, ctx, api_key)
 }
 
 ///|

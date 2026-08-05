@@ -11,7 +11,6 @@ fn decode_chat_response(
       "DeepSeek response parse failure (stage=response, category=not_object)",
     )
   }
-  // Check for API error
   match root.get("error") {
     Some(Object(_)) =>
       raise @posoco.ModelError::Transport(
@@ -55,7 +54,6 @@ fn decode_chat_response(
         "DeepSeek response parse failure (stage=message, category=missing)",
       )
   }
-  // Extract content
   let text = match msg.get("content") {
     Some(String(s)) => s
     Some(Null) | None => ""
@@ -64,7 +62,7 @@ fn decode_chat_response(
         "DeepSeek response parse failure (stage=message.content, category=wrong_type)",
       )
   }
-  // Extract reasoning_content (DeepSeek reasoner; independent field)
+  // reasoning_content: DeepSeek reasoner field, independent of content.
   let reasoning : String? = match msg.get("reasoning_content") {
     Some(String(s)) => if s == "" { None } else { Some(s) }
     Some(_) =>
@@ -73,7 +71,6 @@ fn decode_chat_response(
       )
     None => None
   }
-  // Extract tool calls
   let tool_calls : Array[@posoco.ToolCall] = match msg.get("tool_calls") {
     Some(Array(tcs)) => {
       let result : Array[@posoco.ToolCall] = []
@@ -160,7 +157,6 @@ fn decode_chat_response(
       )
     None => []
   }
-  // Extract finish reason
   let finish : @posoco.FinishReason = match choice.get("finish_reason") {
     Some(String("")) =>
       raise @posoco.ModelError::ResponseParse(
@@ -182,7 +178,6 @@ fn decode_chat_response(
         "DeepSeek response parse failure (stage=finish_reason, category=missing)",
       )
   }
-  // Extract usage
   let usage : @posoco.Usage? = match root.get("usage") {
     Some(Object(_)) => Some(extract_usage(root))
     Some(_) =>

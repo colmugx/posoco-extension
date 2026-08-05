@@ -214,9 +214,8 @@ pub async fn DeepSeekModelPort::chat_prefix_completion(
         "DeepSeek response parse failure (stage=prefix.json, category=malformed, body_chars=\{resp_text.length()})",
       )
   }
-  // Reuse decode_chat_response for the response (same format as /chat/completions)
+  // Reuse decode_chat_response: same response shape as /chat/completions.
   let model_response = decode_chat_response(resp_json)
-  // Extract text content from the response message
   match model_response.message.content {
     [@posoco.Content::Text(t), ..] => t
     [] =>

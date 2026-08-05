@@ -42,11 +42,14 @@ fn prefix_url(config : DeepSeekConfig) -> String {
 }
 
 ///|
-/// DeepSeek's provider-owned thinking config.
+/// DeepSeek's provider-owned thinking config. An empty `reasoning_effort`
+/// means thinking is switched off: the wire carries `{type: "disabled"}` and
+/// no `reasoning_effort` field, regardless of the advertised effort list.
 fn DeepSeekModelPort::default_thinking_config(
   self : DeepSeekModelPort,
 ) -> (Json, String?) {
-  if self.config.thinking_efforts.is_empty() {
+  if self.config.thinking_efforts.is_empty() ||
+    self.config.reasoning_effort == "" {
     (Json::object({ "type": Json::string("disabled") }), None)
   } else {
     (enabled_thinking_json(), Some(self.config.reasoning_effort))
@@ -62,8 +65,6 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  // Resolve thinking config from the modelport's own policy (was
-  // ChatOptions.reasoning_effort before M3.7 slimmed ChatOptions).
   let (thinking_json, effort_str) = self.default_thinking_config()
   match stream {
     NoStream => {

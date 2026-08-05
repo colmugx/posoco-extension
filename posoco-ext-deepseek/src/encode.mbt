@@ -19,7 +19,7 @@ fn encode_message(msg : @posoco.Message) -> Json {
     AssistantMessage(content~, tool_calls~, reasoning~, finish_reason~) => {
       let _ = finish_reason
       let reasoning_str = match reasoning {
-        Some(r) => Some(r.to_string())
+        Some(r) => Some(r.content)
         None => None
       }
       ("assistant", content, tool_calls, reasoning_str)

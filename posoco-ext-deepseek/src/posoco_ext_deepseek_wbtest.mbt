@@ -164,7 +164,6 @@ test "decode_chat_response_basic" {
     "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 },
   }
   let resp = decode_chat_response(resp_json)
-  // Verify content
   assert_eq(resp.message.content.length(), 1)
   match resp.message.content[0] {
     Text(t) => assert_eq(t, "hello world")
@@ -172,7 +171,6 @@ test "decode_chat_response_basic" {
   }
   // Verify finish reason (method, not field)
   assert_true(resp.finish_reason() is @posoco.FinishReason::Stop)
-  // Verify usage
   match resp.usage {
     Some(u) =>
       match u.total_tokens {
@@ -365,10 +363,7 @@ test "sse_no_double_push_with_forwarding_callback" {
   let forwarded : Array[@posoco.StreamChunk] = []
   // Production-style callback: forward the chunk to the host. Accumulation is
   // owned by process_deepseek_sse; the callback must not also push.
-  let on_typed = fn(c : @posoco.StreamChunk) {
-    acc.push(c)
-    forwarded.push(c)
-  }
+  let on_typed = fn(c : @posoco.StreamChunk) { forwarded.push(c) }
   let text_data =
     #|{"choices":[{"delta":{"content":"早上好"}}]}
   let reasoning_data =
@@ -553,16 +548,6 @@ test "build_chat_request_off_disables_thinking_no_warn" {
   assert_eq(logger.events.length(), 0)
 }
 
-// ---------------------------------------------------------------------------
-// Note: build_chat_request_named_tool_choice, build_chat_request_medium_falls_back_with_warn,
-// and build_chat_request_low_and_minimal_fallback were removed.
-// ToolChoice and ReasoningEffort are deleted from the public API; the
-// thinking-config + reasoning-effort fallback routing that those tests
-// exercised now lives inside the modelport (see default_thinking_config in
-// deepseek.mbt), and build_chat_request's effort_str is a plain String? that
-// passes through verbatim with no fallback warnings.
-// ---------------------------------------------------------------------------
-
 ///|
 test "fim_request_body_uses_config_model" {
   let config = DeepSeekConfig::new("key", model="same-model")
@@ -597,11 +582,8 @@ test "prefix_request_body_uses_config_model_and_appends_prefix" {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Error-transparency fixtures (offline, no network).
-// These use non-async test blocks with try/catch since decode_chat_response
-// is synchronous but raises ModelError.
-// ---------------------------------------------------------------------------
+// Error-transparency fixtures (offline, no network). decode_chat_response is
+// synchronous but raises ModelError, so these use try/catch.
 
 ///|
 /// Build a tool-call entry JSON object with the given arguments string.
@@ -1202,5 +1184,72 @@ async test "t08_deepseek_public_fim_examples_compile" {
       Some("return fib(a-1) + fib(a-2)"),
     )
     let _ = port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
+  }
+}
+
+///|
+test "DeepSeekConfig::with_reasoning_effort maps off to empty and validates membership" {
+  let config = DeepSeekConfig::new("sk-test", reasoning_effort="high")
+  assert_eq(config.with_reasoning_effort("off").reasoning_effort, "")
+  assert_eq(config.with_reasoning_effort("max").reasoning_effort, "max")
+  let invalid = Ok(config.with_reasoning_effort("low")) catch {
+    err => Err(err)
+  }
+  match invalid {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("unsupported reasoning effort"))
+    _ => fail("an undeclared effort must fail at the config boundary")
+  }
+}
+
+///|
+test "default_thinking_config disables thinking whenever the effort is empty" {
+  let config = DeepSeekConfig::new("sk-test", reasoning_effort="")
+  let port = DeepSeekModelPort::new(config)
+  let (thinking, effort) = port.default_thinking_config()
+  guard thinking is Json::Object({ "type": Json::String("disabled"), .. }) else {
+    fail("an empty effort must emit disabled thinking")
+  }
+  assert_eq(effort, None)
+}
+
+///|
+test "model_catalog slot advertises an implicit off and derives the default effort" {
+  let config = DeepSeekConfig::new("sk-test", reasoning_effort="high")
+  let port = DeepSeekModelPort::new(config)
+  let catalog = port.model_catalog()
+  let slot = catalog.slots()[0]
+  assert_eq(slot.thinking_efforts, ["off", "high", "max"])
+  assert_eq(slot.default_effort, Some("high"))
+  guard slot.rebuild_on_effort is Some(rebuild) else {
+    fail("a reasoning model must expose an effort rebuild hook")
+  }
+  let rebuilt = rebuild("off")
+  assert_eq(rebuilt.thinking_efforts, ["off", "high", "max"])
+  assert_eq(rebuilt.default_effort, Some("off"))
+}
+
+///|
+test "ProviderFactory::build accepts reasoning_effort off and produces a disabled slot" {
+  let provider = DeepSeekProvider::new()
+  let factory : &@llm.ProviderFactory = provider
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(
+        Map::from_array([
+          ("api_key", Json::string("sk-test")),
+          ("reasoning_effort", Json::string("off")),
+        ]),
+      ),
+    ),
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      assert_eq(slot.thinking_efforts, ["off", "high", "max"])
+      assert_eq(slot.default_effort, Some("off"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with reasoning_effort off")
   }
 }

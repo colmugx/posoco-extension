@@ -105,6 +105,7 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
   }
   let (base_url, endpoint_prefix) = deepseek_endpoint_parts(base_url_setting)
   let effort = match deepseek_setting_string(source, "reasoning_effort") {
+    Some("off") => ""
     Some(value) => value
     None => "high"
   }
@@ -165,6 +166,7 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
   let (base_url, endpoint_prefix) = deepseek_endpoint_parts(base_setting)
   let requested_effort = match
     deepseek_setting_string(source, "reasoning_effort") {
+    Some("off") => ""
     Some(value) => value
     None => "high"
   }

@@ -56,7 +56,7 @@ fn classify_deepseek_http_status(
 }
 
 ///|
-/// T07-B: drain a non-2xx response without exposing provider payloads.
+/// Drain a non-2xx response without exposing provider payloads.
 async fn read_error_body_summary(
   client : @http.Client,
 ) -> DeepSeekErrorBodySummary {

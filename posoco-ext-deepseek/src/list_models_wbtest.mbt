@@ -92,7 +92,9 @@ test "DeepSeek refreshed catalog keeps configured model first" {
   match slots[1].rebuild_on_effort {
     Some(rebuild) => {
       let changed = rebuild("max")
-      assert_eq(changed.default_effort, Some("high"))
+      // default_effort tracks the slot's current effort (derived from the
+      // rebuilt config), so the picker highlights the actual selection.
+      assert_eq(changed.default_effort, Some("max"))
     }
     None => fail("expected DeepSeek effort rebuild hook")
   }
