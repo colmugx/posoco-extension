@@ -1,0 +1,26 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-llm" @llm,
+  "colmugx/posoco-ext-oauth" @oauth,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/io",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/codec/base64",
+}
+
+warnings = "-unused_package"
+
+options(
+  targets: {
+    "posoco_ext_openai.mbt": [ "native", "js" ],
+    "convert.mbt": [ "native", "js" ],
+    "sse.mbt": [ "native", "js" ],
+    "codex_oauth.mbt": [ "native", "js" ],
+    "list_models.mbt": [ "native", "js" ],
+    "posoco_ext_openai_wbtest.mbt": [ "native" ],
+    "posoco_ext_openai_test.mbt": [ "native", "js" ],
+  },
+)

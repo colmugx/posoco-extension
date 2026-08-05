@@ -1,0 +1,51 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-openai"
+
+import {
+  "colmugx/posoco-ext-llm",
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+pub fn codex_oauth_api_base() -> String
+
+pub async fn fetch_models(String, String) -> Array[String]
+
+pub fn parse_openai_response(Json) -> @kernel.Completion raise @error.ModelError
+
+pub fn posoco_message_to_openai(@kernel.Message) -> Json
+
+pub fn posoco_tool_to_openai(@kernel.ToolDef) -> Json
+
+// Errors
+
+// Types and methods
+pub(all) struct CodexOAuth {
+}
+pub fn CodexOAuth::CodexOAuth() -> Self
+pub impl @posoco-ext-oauth.OAuthProvider for CodexOAuth
+
+pub(all) struct OpenAIConfig {
+  api_key : String
+  model : String
+  base_url : String
+  organization : String?
+}
+pub fn OpenAIConfig::from_codex_credential(@posoco-ext-oauth.Credential, String) -> Self
+pub fn OpenAIConfig::new(String, String) -> Self
+pub fn OpenAIConfig::with_base_url(String, String, String) -> Self
+
+pub(all) struct OpenAIModelPort {
+  config : OpenAIConfig
+}
+pub fn OpenAIModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::new(OpenAIConfig) -> Self
+pub impl @port.ModelPort for OpenAIModelPort
+
+// Type aliases
+
+// Traits
