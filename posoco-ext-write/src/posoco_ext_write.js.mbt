@@ -1,19 +1,6 @@
 ///|
-// ============================================================================
-// posoco_ext_write_js.mbt — js target (bun runtime) adaptor + ToolProvider impl.
-//
-// Active on: target="js"
-// Provides:  Bun FFI bindings, JsFsIo adaptor (via Bun.write), and complete
-//            ToolProvider impl
-//
-// Uses Bun's global `Bun.write` (returns Promise<number>) + `Bun.mkdir` to
-// ensure the parent directory exists. Bun is a global object under bun, so
-// `extern "js" fn ... = #| () => Bun.xxx()` works without require/import.
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// Bun FFI bindings.
-// ---------------------------------------------------------------------------
+// Bun is a global object under bun, so `extern "js" fn ... = #| () => Bun.xxx()`
+// works without require/import — no node:fs / node:child_process needed.
 
 ///|
 /// `Bun.write(path, data)` returns Promise<number> (bytes written).
@@ -41,10 +28,6 @@ fn parent_dir(path : String) -> String {
   }
 }
 
-// ---------------------------------------------------------------------------
-// JsFsIo — Bun-backed FsIo adaptor.
-// ---------------------------------------------------------------------------
-
 ///|
 priv struct JsFsIo {}
 
@@ -65,10 +48,6 @@ impl FsIo for JsFsIo with fn write_text(_self, path : String, content : String) 
     _ => raise write_failure(path)
   }
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for js.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for WriteTools with fn list_tools(

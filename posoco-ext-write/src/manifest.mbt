@@ -1,12 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-write — Extension manifest.
-//
-// WriteTools implements both ToolProvider (declares + executes the `write`
-// tool) and SystemPromptContributor (emits write-specific guidance). This
-// file adds `@posoco.Extension` so the agent composer can discover both
-// port contributions through one self-reporting interface.
-// ============================================================================
 
 ///|
 pub impl @posoco.Extension for WriteTools with fn extension_id(_self) -> String {
@@ -21,14 +13,12 @@ pub impl @posoco.Extension for WriteTools with fn manifest(self) -> @posoco.Exte
     tools: [self],
     sessions: [],
     observers: [],
-    pre_model_hooks: [],
-    pre_tool_hooks: [],
-    post_event_hooks: [],
+    hooks: [],
     memory: [],
     lifecycle: [],
     commands: [],
     ui: [],
-    prompt_contributors: [self],
+    prompt_contributors: [],
   }
 }
 

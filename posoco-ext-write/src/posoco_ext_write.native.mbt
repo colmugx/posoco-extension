@@ -1,14 +1,4 @@
 ///|
-// ============================================================================
-// posoco_ext_write_native.mbt — native target adaptor + ToolProvider impl.
-//
-// Active on: target="native"
-// Provides:  NativeFsIo (via @fs) + complete ToolProvider impl
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// NativeFsIo — @fs-backed FsIo adaptor.
-// ---------------------------------------------------------------------------
 
 ///|
 priv struct NativeFsIo {}
@@ -24,10 +14,6 @@ impl FsIo for NativeFsIo with fn write_text(
     _ => raise write_failure(path)
   }
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for native.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for WriteTools with fn list_tools(

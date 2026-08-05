@@ -1,5 +1,5 @@
 ///|
-/// ——— Test helpers ———
+/// Test helpers.
 
 ///|
 #cfg(target="native")
