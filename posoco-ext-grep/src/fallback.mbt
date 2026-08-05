@@ -1,15 +1,6 @@
-///|
-// ============================================================================
-// fallback.mbt — ToolProvider for unsupported targets (wasm, wasm-gc).
-//
-// Active on: #cfg(not(any(target="native", target="js")))
-//
-// Content search requires a file-walking API (@fs.walk on native, rg on js).
-// Neither exists on wasm/wasm-gc. Rather than omit the tool entirely
-// (which would make GrepTools::GrepTools() fail to compile due to missing
-// trait impl), we provide a complete but inert impl: list_tools returns [],
-// execute raises immediately.
-// ============================================================================
+// Inert ToolProvider for targets without a file-walking API (wasm/wasm-gc):
+// list_tools returns [], execute raises immediately. Omitting the impl would
+// make GrepTools::GrepTools() fail to compile for a missing trait impl.
 
 ///|
 #cfg(not(any(target="native", target="js")))

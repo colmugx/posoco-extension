@@ -1,14 +1,4 @@
 ///|
-// ============================================================================
-// posoco_ext_grep.native.mbt — native target adaptor + ToolProvider impl.
-//
-// Active on: target="native" (via moon.pkg targets)
-// Provides:  NativeGrepSearcher (via @fs.walk) + complete ToolProvider impl
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// Native searcher — @fs.walk + in-process line search.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Record the precise stage before aborting `@fs.walk`. The walk API wraps
@@ -52,7 +42,6 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
     (dir : String, entries : Array[String]) => {
       for entry in entries {
         let full = if dir == "." { entry } else { "\{dir}/\{entry}" }
-        // Skip if glob filter doesn't match
         if file_glob != "" && !file_matches(full, file_glob) {
           continue
         }
@@ -70,7 +59,6 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
         let content = data.text() catch {
           _ => abort_file(failures, "decode", full)
         }
-        // Search line by line
         let mut line_num = 0
         for line in content.split("\n") {
           line_num += 1
@@ -93,10 +81,6 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
   }
   results
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for native.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for GrepTools with fn list_tools(

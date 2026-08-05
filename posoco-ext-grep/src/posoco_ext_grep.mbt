@@ -1,22 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-grep — content search tool.
-//
-// File organization:
-//   posoco_ext_grep.mbt          — all targets: struct, ctor, shared helpers,
-//                                  SystemPromptContributor, GrepSearcher trait,
-//                                  shared_list_tools, extract_grep_args,
-//                                  execute_grep_impl
-//   posoco_ext_grep.native.mbt   — native: @fs.walk searcher + ToolProvider impl
-//   posoco_ext_grep.js.mbt       — js: rg-backed searcher + ToolProvider impl
-//   fallback.mbt                 — #cfg(not(any(native,js))): empty list + error
-//
-// The struct + trait + shared execute logic live HERE so every target sees the
-// same type. Only the searcher adaptor differs per platform; each platform's
-// adaptor file provides its own searcher struct + a complete ToolProvider impl.
-// ============================================================================
-
-///|
 /// GrepTools — content search tool provider.
 ///
 /// Searches for a pattern in files under a directory and returns matching lines.
@@ -32,21 +14,6 @@ pub(all) struct GrepTools {
 pub fn GrepTools::GrepTools() -> GrepTools {
   GrepTools::{  }
 }
-
-// ---------------------------------------------------------------------------
-// SystemPromptContributor — identical on every target.
-// ---------------------------------------------------------------------------
-
-///|
-pub impl @posoco.SystemPromptContributor for GrepTools with fn system_prompt(
-  _self : GrepTools,
-) -> String {
-  "Use grep to locate definitions and call sites before making cross-file changes."
-}
-
-// ---------------------------------------------------------------------------
-// GrepSearcher trait — the search adaptor seam. Native and js each provide one.
-// ---------------------------------------------------------------------------
 
 ///|
 /// High-level content-search boundary.
@@ -64,10 +31,6 @@ priv trait GrepSearcher {
     file_glob : String,
   ) -> Array[String] raise @posoco.RuntimeError
 }
-
-// ---------------------------------------------------------------------------
-// Shared tool definition + argument extraction + result formatting.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Shared tool definition for the `grep` tool.
@@ -156,10 +119,6 @@ fn grep_result_text(results : Array[String], pattern : String) -> String {
   }
   builder.to_string()
 }
-
-// ---------------------------------------------------------------------------
-// execute_grep_impl — single source of truth for the grep tool's logic.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Shared `grep` execute logic. Target-agnostic; only the searcher differs.

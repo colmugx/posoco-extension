@@ -1,19 +1,25 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "colmugx/posoco-ext-grep/src"
+package "colmugx/posoco-ext-grep"
 
 import {
-  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
 }
 
 // Values
+pub fn grep_extension() -> GrepTools
 
 // Errors
 
 // Types and methods
 pub(all) struct GrepTools {
 }
-pub fn GrepTools::new() -> Self
-pub impl @posoco.ToolProvider for GrepTools
+pub fn GrepTools::GrepTools() -> Self
+pub fn GrepTools::extension_id(Self) -> String
+pub fn GrepTools::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.Extension for GrepTools
+pub impl @port.ToolProvider for GrepTools
 
 // Type aliases
 

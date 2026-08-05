@@ -1,19 +1,6 @@
-///|
-// ============================================================================
-// posoco_ext_grep.js.mbt — js target (bun) adaptor + ToolProvider impl.
-//
-// Active on: target="js" (via moon.pkg targets)
-// Provides:  Bun FFI bindings, JsGrepSearcher adaptor (via rg), complete
-//            ToolProvider impl
-//
 // Why rg: writing an in-process recursive walker + regex engine in MoonBit
 // for the js target is substantial; delegating to rg matches native-side
-// semantics and performance. A pure-MoonBit fallback is a future task.
-// ============================================================================
-
-// ---------------------------------------------------------------------------
-// Bun FFI bindings.
-// ---------------------------------------------------------------------------
+// semantics and performance.
 
 ///|
 #external
@@ -63,10 +50,6 @@ fn build_rg_args(
   args
 }
 
-// ---------------------------------------------------------------------------
-// JsGrepSearcher — rg-backed adaptor.
-// ---------------------------------------------------------------------------
-
 ///|
 priv struct JsGrepSearcher {}
 
@@ -107,10 +90,6 @@ impl GrepSearcher for JsGrepSearcher with fn search(
   }
   results
 }
-
-// ---------------------------------------------------------------------------
-// ToolProvider — complete impl (list_tools + execute) for js.
-// ---------------------------------------------------------------------------
 
 ///|
 pub impl @posoco.ToolProvider for GrepTools with fn list_tools(
