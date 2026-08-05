@@ -1,0 +1,18 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async/fs",
+}
+
+// @fs is native-only (used by fs_port.native.mbt). On js it is unused but
+// must remain imported so native compiles; silence the target-specific noise.
+
+warnings = "-unused_package"
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+} for "wbtest"
+
+options(
+  targets: { "fs_port.native.mbt": [ "native" ], "fs_port.js.mbt": [ "js" ] },
+)
