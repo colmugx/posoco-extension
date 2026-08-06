@@ -1,15 +1,21 @@
 ///|
-/// Renders a loaded ContextBundle as <cetas-context> elements suitable for
-/// the SystemPromptContributor seam.
+/// Renders a loaded ContextBundle through a caller-selected XML envelope for
+/// the SystemPromptContributor seam. The envelope name belongs to the host or
+/// product composing this extension; the context package does not define one.
 pub struct ContextPromptContributor {
   bundle : ContextBundle
+  envelope : String
 }
 
 ///|
+/// Construct a context contributor using the caller-owned envelope element
+/// name. The value is trusted host configuration and must be a valid XML
+/// element name.
 pub fn ContextPromptContributor::new(
   bundle~ : ContextBundle,
+  envelope~ : String,
 ) -> ContextPromptContributor {
-  { bundle, }
+  { bundle, envelope }
 }
 
 ///|
@@ -26,17 +32,22 @@ fn escape_xml(s : String) -> String {
 }
 
 // All context docs are trust="false" (untrusted): they come from the
-// filesystem and may contain instructions from unknown authors. The base
-// prompt teaches the model to read trust as a binary true/false flag.
+// filesystem and may contain instructions from unknown authors. Consumers
+// should interpret this flag as data provenance, not as elevated authority.
 
 ///|
-/// Render one document as a complete <cetas-context> element.
-fn render_context(doc : ContextDocument) -> String {
+/// Render one document using the configured envelope element.
+fn ContextPromptContributor::render_context(
+  self : ContextPromptContributor,
+  doc : ContextDocument,
+) -> String {
   let type_ = "project_instructions"
   let trust = "false"
   let source = escape_xml(doc.path)
   let content = escape_xml(doc.content)
-  "<cetas-context type=\"" +
+  "<" +
+  self.envelope +
+  " type=\"" +
   type_ +
   "\" trust=\"" +
   trust +
@@ -44,23 +55,25 @@ fn render_context(doc : ContextDocument) -> String {
   source +
   "\">\n" +
   content +
-  "\n</cetas-context>"
+  "\n</" +
+  self.envelope +
+  ">"
 }
 
 ///|
 /// SystemPromptContributor: emit all loaded context documents as parallel
-/// <cetas-context> elements. Returns "" for an empty bundle (no global, no
-/// ancestors) so SystemPromptHook::assemble silently skips this section.
+/// elements using the configured envelope. Returns "" for an empty bundle
+/// (no global, no ancestors) so SystemPromptHook::assemble skips this section.
 pub impl @posoco.SystemPromptContributor for ContextPromptContributor with fn system_prompt(
   self : ContextPromptContributor,
 ) -> String {
   let parts : Array[String] = []
   match self.bundle.global {
-    Some(doc) => parts.push(render_context(doc))
+    Some(doc) => parts.push(self.render_context(doc))
     None => ()
   }
   for doc in self.bundle.ancestors {
-    parts.push(render_context(doc))
+    parts.push(self.render_context(doc))
   }
   parts.join("\n\n")
 }
