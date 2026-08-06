@@ -2,7 +2,9 @@
 package "colmugx/posoco-ext-askquestion/src"
 
 import {
-  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
 }
 
 // Values
@@ -11,16 +13,15 @@ import {
 
 // Types and methods
 pub(all) struct AskQuestionTools {
-  ui : &@posoco.UiPort
+  ui : &@port.UiPort
 }
 pub fn AskQuestionTools::extension_id(Self) -> String
-pub fn AskQuestionTools::manifest(Self) -> @posoco.ExtensionManifest
-pub fn AskQuestionTools::new(&@posoco.UiPort) -> Self
-pub impl @posoco.Extension for AskQuestionTools
-pub impl @posoco.SystemPromptContributor for AskQuestionTools
-pub impl @posoco.ToolProvider for AskQuestionTools
+pub fn AskQuestionTools::manifest(Self) -> @port.ExtensionManifest
+pub fn AskQuestionTools::new(&@port.UiPort) -> Self
+pub impl @port.Extension for AskQuestionTools
+pub impl @port.SystemPromptContributor for AskQuestionTools
+pub impl @port.ToolProvider for AskQuestionTools
 
 // Type aliases
 
 // Traits
-
