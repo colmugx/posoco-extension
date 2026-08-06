@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-askquestion/src"
+
+import {
+  "colmugx/posoco",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct AskQuestionTools {
+  ui : &@posoco.UiPort
+}
+pub fn AskQuestionTools::extension_id(Self) -> String
+pub fn AskQuestionTools::manifest(Self) -> @posoco.ExtensionManifest
+pub fn AskQuestionTools::new(&@posoco.UiPort) -> Self
+pub impl @posoco.Extension for AskQuestionTools
+pub impl @posoco.SystemPromptContributor for AskQuestionTools
+pub impl @posoco.ToolProvider for AskQuestionTools
+
+// Type aliases
+
+// Traits
+
