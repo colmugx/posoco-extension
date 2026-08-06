@@ -51,4 +51,3 @@ pub impl Logger for NoopLogger
 pub(open) trait Logger {
   fn log(Self, LogEvent) -> Unit
 }
-

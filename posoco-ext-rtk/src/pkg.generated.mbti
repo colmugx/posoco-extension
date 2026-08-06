@@ -2,7 +2,9 @@
 package "colmugx/posoco-ext-rtk"
 
 import {
-  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
 }
 
 // Values
@@ -10,11 +12,11 @@ pub fn default_rtk_rewrite(String, String) -> String?
 
 pub fn default_shell_tools() -> ShellTools
 
-pub fn extract_command(Json) -> Result[String, @posoco.HookError]
+pub fn extract_command(Json) -> String raise @error.RuntimeError
 
-pub fn is_shell_tool(String, ShellTools) -> Bool
+pub fn is_shell_tool(@kernel.ToolName, ShellTools) -> Bool
 
-pub fn rewrite_tool_call(@posoco.ToolCall, String) -> @posoco.ToolCall
+pub fn rewrite_tool_call(@kernel.ToolCall, String) -> @kernel.ToolCall
 
 // Errors
 
@@ -26,7 +28,7 @@ pub(all) struct RTKHook {
 }
 pub fn RTKHook::new(String, (String) -> String?) -> Self
 pub fn RTKHook::with_shell_tools(String, ShellTools, (String) -> String?) -> Self
-pub impl @posoco.PipelineHook for RTKHook
+pub impl @port.Hook for RTKHook
 
 pub(all) struct ShellTools {
   names : Array[String]
@@ -35,4 +37,3 @@ pub(all) struct ShellTools {
 // Type aliases
 
 // Traits
-

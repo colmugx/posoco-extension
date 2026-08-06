@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-permission/src"
+
+import {
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/set",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum ApprovalDecision {
+  AllowOnce
+  AllowSession
+  AllowAlways
+  Deny(reason~ : String)
+}
+
+pub(all) struct ApprovalRequest {
+  tool_name : String
+  call_id : String
+  category : String
+  arguments_preview : String
+}
+
+pub(all) enum PermissionMode {
+  ReadOnly
+  WorkspaceWrite
+  Interactive
+} derive(Eq, @debug.Debug)
+
+pub(all) struct PermissionPolicy {
+  mode : PermissionMode
+  approval : &ApprovalSource?
+  mut session_approved : @set.Set[String]
+  read_tools : Array[String]
+  write_tools : Array[String]
+  shell_tools : Array[String]
+}
+pub fn PermissionPolicy::extension_id(Self) -> String
+pub fn PermissionPolicy::manifest(Self) -> @port.ExtensionManifest
+pub fn PermissionPolicy::mode(Self) -> PermissionMode
+pub fn PermissionPolicy::new(PermissionMode, approval? : &ApprovalSource?) -> Self
+pub impl @port.Extension for PermissionPolicy
+pub impl @port.Hook for PermissionPolicy
+pub impl @port.SystemPromptContributor for PermissionPolicy
+
+// Type aliases
+
+// Traits
+pub(open) trait ApprovalSource {
+  fn ask(Self, ApprovalRequest) -> ApprovalDecision
+}

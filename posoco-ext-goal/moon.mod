@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-goal"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.7.2",
+  "colmugx/posoco@0.9.0",
   "moonbitlang/async@0.20.3",
 }
 

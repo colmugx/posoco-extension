@@ -45,4 +45,3 @@ pub struct StatusBarState {
 // Type aliases
 
 // Traits
-

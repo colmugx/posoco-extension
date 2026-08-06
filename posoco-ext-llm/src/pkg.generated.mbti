@@ -33,11 +33,12 @@ pub(all) struct ModelSlot {
   context_window : Int?
   capabilities : Array[String]
   default_effort : String?
+  display_group : String?
   rebuild_on_credential : ((@posoco-ext-oauth.Credential) -> ModelSlot)?
   rebuild_on_api_key : ((@posoco-ext-oauth.ApiKeyCredential) -> ModelSlot)?
   rebuild_on_effort : ((String) -> ModelSlot)?
 }
-pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@posoco-ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int?, capabilities? : Array[String], default_effort? : String?, rebuild_on_credential? : ((@posoco-ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@posoco-ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
+pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@posoco-ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int?, capabilities? : Array[String], default_effort? : String?, display_group? : String?, rebuild_on_credential? : ((@posoco-ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@posoco-ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
 
 pub(all) enum ProviderBuildResult {
   Ready(ProviderModelCatalog)
@@ -121,4 +122,3 @@ pub(open) trait RefreshableProviderFactory {
   fn provider_id(Self) -> String
   async fn refresh(Self, ProviderConfigSource) -> ProviderBuildResult raise @error.CompositionError
 }
-

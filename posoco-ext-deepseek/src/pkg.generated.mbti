@@ -2,13 +2,20 @@
 package "colmugx/posoco-ext-deepseek"
 
 import {
-  "colmugx/posoco",
   "colmugx/posoco-devkit",
   "colmugx/posoco-ext-llm",
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub async fn fetch_deepseek_models(String, String, endpoint_prefix? : String) -> Array[DeepSeekModelInfo] raise @error.ModelError
+
+pub fn parse_deepseek_models(Json) -> Array[DeepSeekModelInfo] raise @error.ModelError
 
 // Errors
 
@@ -19,20 +26,39 @@ pub(all) struct DeepSeekConfig {
   model : String
   endpoint_prefix : String
   reasoning_effort : String
+  thinking_efforts : Array[String]
 } derive(Eq, @debug.Debug)
-pub fn DeepSeekConfig::new(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String) -> Self
-pub fn DeepSeekConfig::with_reasoning_effort(Self, String) -> Self raise @posoco.CompositionError
+pub fn DeepSeekConfig::new(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
+pub fn DeepSeekConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+pub(all) struct DeepSeekModelInfo {
+  id : String
+  owned_by : String
+  thinking_efforts : Array[String]
+  default_effort : String?
+}
 
 pub(all) struct DeepSeekModelPort {
   config : DeepSeekConfig
   ctx : @posoco-devkit.ExtContext
 }
-pub async fn DeepSeekModelPort::chat_prefix_completion(Self, Array[@posoco.Message], String, Array[String]?) -> String raise @posoco.ModelError
-pub async fn DeepSeekModelPort::fim_completion(Self, String, String?, max_tokens? : Int) -> String raise @posoco.ModelError
-pub fn DeepSeekModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @posoco.CompositionError
+pub async fn DeepSeekModelPort::chat_prefix_completion(Self, Array[@kernel.Message], String, Array[String]?) -> String raise @error.ModelError
+pub fn DeepSeekModelPort::extension_id(Self) -> String
+pub async fn DeepSeekModelPort::fim_completion(Self, String, String?, max_tokens? : Int) -> String raise @error.ModelError
+pub fn DeepSeekModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn DeepSeekModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn DeepSeekModelPort::model_catalog_from_models(Self, Array[DeepSeekModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn DeepSeekModelPort::new(DeepSeekConfig, ctx? : @posoco-devkit.ExtContext) -> Self
-pub impl @posoco.ModelPort for DeepSeekModelPort
-pub impl @posoco.Extension for DeepSeekModelPort
+pub impl @port.Extension for DeepSeekModelPort
+pub impl @port.ModelPort for DeepSeekModelPort
+
+pub(all) struct DeepSeekProvider {
+  ctx : @posoco-devkit.ExtContext
+}
+pub fn DeepSeekProvider::new(ctx? : @posoco-devkit.ExtContext) -> Self
+pub impl @posoco-ext-llm.ApiKeyFactory for DeepSeekProvider
+pub impl @posoco-ext-llm.ProviderFactory for DeepSeekProvider
+pub impl @posoco-ext-llm.RefreshableProviderFactory for DeepSeekProvider
 
 // Type aliases
 

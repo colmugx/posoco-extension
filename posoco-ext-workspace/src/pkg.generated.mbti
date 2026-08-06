@@ -1,0 +1,98 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-workspace"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn glob_match(String, String) -> Bool
+
+pub fn is_lexically_inside(String, String) -> Bool
+
+pub fn matches_ignore(String, Array[String]) -> Bool
+
+pub fn normalize_lexical(String) -> String
+
+pub async fn read_file_result(&WorkspaceFs, String) -> FileReadResult noraise
+
+// Errors
+pub(all) suberror PathPolicyError {
+  LexicalEscape(rule~ : String, relative~ : String)
+  CwdEscape(rule~ : String, relative~ : String)
+  SymlinkEscape(rule~ : String, relative~ : String)
+  SymlinkLoop(rule~ : String, relative~ : String)
+  AbsolutePathRejected(rule~ : String, relative~ : String)
+  ReadDenied(rule~ : String, relative~ : String)
+  WriteDenied(rule~ : String, relative~ : String)
+  ParentCreationDenied(rule~ : String, relative~ : String)
+} derive(Eq, @debug.Debug)
+
+pub(all) suberror WorkspaceFsError {
+  WorkspaceFsError(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for WorkspaceFsError
+
+// Types and methods
+pub(all) struct Capability {
+  read : Bool
+  write : Bool
+} derive(@debug.Debug)
+pub fn Capability::read_only() -> Self
+pub fn Capability::read_write() -> Self
+
+pub(all) enum FileReadResult {
+  Missing
+  Content(String)
+  Failed(String)
+} derive(@debug.Debug)
+
+pub(all) enum SymlinkPolicy {
+  Reject
+  FollowIfInsideRoot
+} derive(Eq, @debug.Debug)
+
+pub(all) enum WorkspaceFileKind {
+  File
+  Dir
+  Symlink
+  Other
+} derive(@debug.Debug)
+
+pub(all) struct WorkspaceLimits {
+  max_read_bytes : Int
+  max_walk_depth : Int
+  max_walk_entries : Int
+  max_results : Int
+  max_matches_per_file : Int
+  max_line_width : Int
+} derive(@debug.Debug)
+pub fn WorkspaceLimits::defaults() -> Self
+
+pub(all) struct WorkspacePolicy {
+  root : String
+  default_cwd : String
+  capability : Capability
+  symlink : SymlinkPolicy
+  ignore_patterns : Array[String]
+  limits : WorkspaceLimits
+  allow_create_parent : Bool
+} derive(@debug.Debug)
+pub fn WorkspacePolicy::new(root~ : String, default_cwd? : String, capability? : Capability, symlink? : SymlinkPolicy, ignore_patterns? : Array[String], limits? : WorkspaceLimits, allow_create_parent? : Bool) -> Result[Self, String]
+
+// Type aliases
+
+// Traits
+pub(open) trait WorkspaceFs {
+  async fn exists(Self, String) -> Bool raise WorkspaceFsError
+  async fn kind(Self, String, follow_symlink~ : Bool) -> WorkspaceFileKind raise WorkspaceFsError
+  async fn read_file(Self, String) -> String raise WorkspaceFsError
+  async fn write_file(Self, String, String) -> Unit raise WorkspaceFsError
+  async fn write_file_atomic(Self, String, String) -> Unit raise WorkspaceFsError
+  async fn remove(Self, String) -> Unit raise WorkspaceFsError
+  async fn rename(Self, String, String, replace~ : Bool) -> Unit raise WorkspaceFsError
+  async fn realpath(Self, String) -> String raise WorkspaceFsError
+  async fn readdir(Self, String, include_hidden~ : Bool) -> Array[String] raise WorkspaceFsError
+  async fn walk(Self, String, async (String, Array[String]) -> Unit) -> Unit raise WorkspaceFsError
+  async fn mkdir(Self, String, recursive~ : Bool) -> Unit raise WorkspaceFsError
+}

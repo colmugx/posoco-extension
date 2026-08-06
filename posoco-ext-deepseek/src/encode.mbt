@@ -13,26 +13,28 @@
 ///|
 /// Encode a kernel Message into a DeepSeek chat message JSON object.
 fn encode_message(msg : @posoco.Message) -> Json {
-  let (role, content_blocks, tool_calls, reasoning_text) = match msg {
-    SystemMessage(content~) => ("system", content, [], None)
-    UserMessage(content~) => ("user", content, [], None)
+  let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
+    msg {
+    SystemMessage(content~) => ("system", content, [], None, None)
+    UserMessage(content~) => ("user", content, [], None, None)
     AssistantMessage(content~, tool_calls~, reasoning~, finish_reason~) => {
       let _ = finish_reason
       let reasoning_str = match reasoning {
         Some(r) => Some(r.content)
         None => None
       }
-      ("assistant", content, tool_calls, reasoning_str)
+      ("assistant", content, tool_calls, None, reasoning_str)
     }
     ToolMessage(call_id~, tool_name~, outcome~) => {
-      // Tool messages carry the outcome content as the wire "content".
+      // Tool messages carry the outcome content as the wire "content", plus
+      // the `tool_call_id` of the assistant tool_call they answer — the
+      // mandatory correlation key (OpenAI-compatible convention).
       let outcome_text = outcome_to_wire_text(outcome)
       let tool_blocks : Array[@posoco.Content] = [
         @posoco.Content::Text(outcome_text),
       ]
-      let _ = call_id
       let _ = tool_name
-      ("tool", tool_blocks, [], None)
+      ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
   // Concatenate Text content blocks into a single string (DeepSeek does not
@@ -48,6 +50,10 @@ fn encode_message(msg : @posoco.Message) -> Json {
   let obj : Map[String, Json] = {
     "role": Json::string(role),
     "content": Json::string(content_str),
+  }
+  match tool_call_id {
+    Some(id) => obj["tool_call_id"] = Json::string(id)
+    None => ()
   }
   // Tool calls (assistant messages requesting tool execution)
   if tool_calls.length() > 0 {

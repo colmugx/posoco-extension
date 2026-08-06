@@ -2,7 +2,7 @@
 package "colmugx/posoco-ext-context"
 
 import {
-  "colmugx/posoco-tools-workspace",
+  "colmugx/posoco-ext-workspace",
   "colmugx/posoco/port",
 }
 
@@ -24,11 +24,11 @@ pub(all) struct ContextDocument {
 }
 
 pub struct ContextLoader {
-  fs : &@posoco-tools-workspace.WorkspaceFs
+  fs : &@posoco-ext-workspace.WorkspaceFs
   home : String
 }
 pub async fn ContextLoader::load(Self, String) -> ContextBundle
-pub fn ContextLoader::new(&@posoco-tools-workspace.WorkspaceFs, home~ : String) -> Self
+pub fn ContextLoader::new(&@posoco-ext-workspace.WorkspaceFs, home~ : String) -> Self
 
 pub struct ContextPromptContributor {
   bundle : ContextBundle

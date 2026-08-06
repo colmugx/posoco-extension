@@ -378,6 +378,12 @@ async fn poll_token(
 
 ///|
 /// Run the complete device flow with the default async HTTP transport.
+///
+/// Native/js only: this convenience constructs a `DefaultOAuthHttpTransport`,
+/// whose `OAuthHttpTransport` impl is compiled only on those backends. On
+/// wasm/wasm-gc, use `run_device_flow_with_transport` with a host-supplied
+/// transport.
+#cfg(any(target="native", target="js"))
 pub async fn run_device_flow(
   config : DeviceFlowConfig,
   interaction : &AuthInteraction,
@@ -385,6 +391,15 @@ pub async fn run_device_flow(
   let default_transport = DefaultOAuthHttpTransport::DefaultOAuthHttpTransport()
   let transport : &OAuthHttpTransport = default_transport
   run_device_flow_with_transport(config, interaction, transport)
+}
+
+///|
+#cfg(not(any(target="native", target="js")))
+pub fn run_device_flow(
+  _config : DeviceFlowConfig,
+  _interaction : &AuthInteraction,
+) -> Credential raise OAuthError {
+  raise Cancelled
 }
 
 ///|

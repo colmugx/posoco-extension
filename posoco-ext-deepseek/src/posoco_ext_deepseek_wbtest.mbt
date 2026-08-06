@@ -444,6 +444,35 @@ test "encode_message_tool_calls_no_reasoning" {
 }
 
 ///|
+/// Tool-role messages MUST carry `tool_call_id` — the correlation key for the
+/// assistant tool_call they answer (OpenAI-compatible convention; verified
+/// against opencode-zen 2026-08).
+test "encode_message_tool_result_carries_tool_call_id" {
+  let msg : @posoco.Message = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_42"),
+    tool_name=@posoco.ToolName::unchecked("read_file"),
+    outcome=@posoco.ToolOutcome::Success(
+      content="file contents",
+      structured=None,
+    ),
+  )
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("role") {
+    Some(String(r)) => assert_eq(r, "tool")
+    _ => fail("expected tool role")
+  }
+  match obj.get("tool_call_id") {
+    Some(String(id)) => assert_eq(id, "call_42")
+    _ => fail("tool message MUST carry tool_call_id")
+  }
+  match obj.get("content") {
+    Some(String(c)) => assert_eq(c, "file contents")
+    _ => fail("expected outcome text as content")
+  }
+}
+
+///|
 test "deepseek_config_defaults_to_single_model" {
   let config = DeepSeekConfig::new("key")
   assert_eq(config.api_key, "key")
@@ -692,18 +721,15 @@ test "t07b_deepseek_malformed_sse_is_loud_and_redacted" {
 }
 
 ///|
-test "t07b_deepseek_missing_sse_structure_is_loud" {
+test "t07b_deepseek_content_free_chunk_is_skipped" {
+  // No choices/usage/error keys: a preamble or keepalive chunk carries no
+  // content; skipping it must not fail the stream (policy moved to the
+  // shared posoco-kit-chat-completions parser).
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let missing_choices =
+  let content_free =
     #|{"id":"response_without_choices"}
-  let result = Ok(process_deepseek_sse(missing_choices, acc, fn(_) { () })) catch {
-    e => Err(e)
-  }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(msg)) =>
-      assert_true(msg.contains("stage=choices"))
-    _ => fail("expected ResponseParse for missing choices")
-  }
+  let done = process_deepseek_sse(content_free, acc, fn(_) { () })
+  assert_false(done)
 }
 
 ///|

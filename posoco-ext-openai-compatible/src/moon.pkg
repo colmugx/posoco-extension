@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-kit-chat-completions" @chatkit,
   "colmugx/posoco-ext-llm" @llm,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",
@@ -16,12 +17,15 @@ import {
 
 options(
   targets: {
-    "config.mbt": [ "native", "js" ],
-    "decode.mbt": [ "native", "js" ],
-    "encode.mbt": [ "native", "js" ],
-    "http_util.mbt": [ "native", "js" ],
-    "openai_compatible.mbt": [ "native", "js" ],
-    "sse.mbt": [ "native", "js" ],
+    // HTTP-backed chat impl: native+js only (moonbitlang/async/http is
+    // unavailable on wasm). The struct definition, config, encode/decode, SSE
+    // parsing, error classification, compact, provider_config, and the factory
+    // all live in the unrestricted core files and compile on every backend —
+    // so the package exports a complete mbti. Only the live chat request and
+    // the tests are target-restricted. Mirrors posoco-ext-read / posoco-ext-oauth.
+    "chat_native_js.mbt": [ "native", "js" ],
+    "wire_log.js.mbt": [ "js" ],
+    "wire_log_native.mbt": [ "native" ],
     "posoco_ext_openai_compatible_wbtest.mbt": [ "native" ],
   },
 )

@@ -10,10 +10,12 @@ import {
 
 options(
   targets: {
-    "router.mbt": [ "native", "js" ],
-    "slot.mbt": [ "native", "js" ],
-    "manifest.mbt": [ "native", "js" ],
-    "command_model.mbt": [ "native", "js" ],
+    // All production files are pure: they reference only @posoco and @oauth
+    // types, both of which now compile on every backend. The previous
+    // native+js pinning was a workaround for posoco-ext-oauth's empty mbti
+    // (fixed); with oauth exporting its real interface on wasm too, llm needs
+    // no backend restrictions on its core. Only the white-box tests are
+    // native-only (they exercise async login/refresh paths).
     "router_wbtest.mbt": [ "native" ],
     "command_model_wbtest.mbt": [ "native" ],
     "command_login_wbtest.mbt": [ "native" ],

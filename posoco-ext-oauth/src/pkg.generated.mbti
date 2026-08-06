@@ -1,13 +1,210 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "colmugx/posoco-ext-oauth"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn generate_pkce() -> PkcePair
+
+pub fn oauth_form_url_encode(String) -> String
+
+pub fn run_device_flow(DeviceFlowConfig, &AuthInteraction) -> Credential raise OAuthError
+
+pub async fn run_device_flow_with_transport(DeviceFlowConfig, &AuthInteraction, &OAuthHttpTransport) -> Credential raise OAuthError
+
+pub async fn run_pkce_browser_flow(PkceFlowConfig, &AuthInteraction, &CallbackServer, &OAuthHttpTransport) -> Credential raise OAuthError
 
 // Errors
+pub(all) suberror OAuthError {
+  AuthPending
+  SlowDown
+  AccessDenied
+  ExpiredToken
+  InvalidGrant
+  HttpError(String)
+  ParseError(String)
+  Cancelled
+} derive(Eq, @debug.Debug)
 
 // Types and methods
+pub(all) struct ApiKeyCredential {
+  secret : String
+  metadata : Map[String, String]
+}
+pub fn ApiKeyCredential::ApiKeyCredential(secret~ : String, metadata? : Map[String, String]) -> Self
+pub fn ApiKeyCredential::from_json(Json) -> Self?
+pub fn ApiKeyCredential::to_json(Self) -> Json
+
+pub(all) enum AuthHeader {
+  Bearer(String)
+  Header(Map[String, String])
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AuthMessage {
+  AuthUrl(String)
+  DeviceCode(String, String)
+  Progress(String)
+}
+
+pub(all) struct AuthPromptOption {
+  id : String
+  label : String
+  description : String?
+}
+pub fn AuthPromptOption::AuthPromptOption(id~ : String, label~ : String, description? : String?) -> Self
+
+pub(all) enum AuthPromptRequest {
+  Secret(message~ : String)
+  Select(message~ : String, options~ : Array[AuthPromptOption])
+}
+
+pub(all) struct Credential {
+  access_token : String
+  refresh_token : String
+  expires_at : Int
+  token_type : String
+  metadata : Map[String, String]
+}
+pub fn Credential::Credential(access_token~ : String, refresh_token~ : String, expires_at~ : Int, token_type? : String, metadata? : Map[String, String]) -> Self
+pub fn Credential::from_json(Json) -> Self?
+pub fn Credential::is_expired(Self, Int) -> Bool
+pub fn Credential::metadata_value(Self, String) -> String?
+pub fn Credential::to_auth_header(Self) -> AuthHeader
+pub fn Credential::to_json(Self) -> Json
+
+pub(all) struct DefaultOAuthHttpTransport {
+}
+pub fn DefaultOAuthHttpTransport::DefaultOAuthHttpTransport() -> Self
+pub impl OAuthHttpTransport for DefaultOAuthHttpTransport
+
+pub(all) struct DeviceAuthResponse {
+  device_code : String
+  user_code : String
+  verification_uri : String
+  verification_uri_complete : String?
+  expires_in : Int
+  interval : Int
+}
+
+pub(all) struct DeviceFlowConfig {
+  client_id : String
+  device_auth_endpoint : String
+  token_endpoint : String
+  scope : String
+  default_headers : Map[String, String]
+}
+pub fn DeviceFlowConfig::new(client_id~ : String, device_auth_endpoint~ : String, token_endpoint~ : String, scope? : String) -> Self
+pub fn DeviceFlowConfig::with_default_headers(Self, Map[String, String]) -> Self
+
+pub(all) struct InMemoryApiKeyStore {
+  credentials : Map[String, ApiKeyCredential]
+}
+pub fn InMemoryApiKeyStore::new() -> Self
+pub impl ApiKeyStore for InMemoryApiKeyStore
+
+pub(all) struct InMemoryCredentialStore {
+  credentials : Map[String, Credential]
+}
+pub fn InMemoryCredentialStore::new() -> Self
+pub impl CredentialStore for InMemoryCredentialStore
+
+pub(all) struct InMemoryProviderCredentialStore {
+  credentials : Map[String, ProviderCredential]
+}
+pub fn InMemoryProviderCredentialStore::new() -> Self
+pub impl ProviderCredentialStore for InMemoryProviderCredentialStore
+
+pub(all) struct NoopAuthInteraction {
+}
+pub fn NoopAuthInteraction::NoopAuthInteraction() -> Self
+pub impl AuthInteraction for NoopAuthInteraction
+
+pub(all) struct NoopAuthPromptInteraction {
+}
+pub fn NoopAuthPromptInteraction::NoopAuthPromptInteraction() -> Self
+pub impl AuthPromptInteraction for NoopAuthPromptInteraction
+
+pub(all) struct OAuthHttpRequest {
+  url : String
+  body : String
+  headers : Map[String, String]
+}
+pub fn OAuthHttpRequest::OAuthHttpRequest(url~ : String, body~ : String, headers~ : Map[String, String]) -> Self
+
+pub(all) struct OAuthHttpResponse {
+  status : Int
+  body : String
+}
+pub fn OAuthHttpResponse::OAuthHttpResponse(status~ : Int, body~ : String) -> Self
+
+pub(all) struct PkceFlowConfig {
+  client_id : String
+  authorize_url : String
+  token_url : String
+  redirect_uri : String
+  callback_port : Int
+  scope : String
+}
+
+pub(all) struct PkcePair {
+  code_verifier : String
+  code_challenge : String
+  code_challenge_method : String
+}
+
+pub(all) enum ProviderCredential {
+  OAuth(Credential)
+  ApiKey(ApiKeyCredential)
+}
+pub fn ProviderCredential::from_json(Json) -> Self?
+pub fn ProviderCredential::method_id(Self) -> String
+pub fn ProviderCredential::to_json(Self) -> Json
 
 // Type aliases
 
 // Traits
+pub(open) trait ApiKeyStore {
+  async fn read(Self, String) -> ApiKeyCredential? raise OAuthError
+  async fn write(Self, String, ApiKeyCredential) -> Unit raise OAuthError
+  async fn delete(Self, String) -> Unit raise OAuthError
+}
 
+pub(open) trait AuthInteraction {
+  fn notify(Self, AuthMessage) -> Unit
+  fn is_cancelled(Self) -> Bool
+}
+
+pub(open) trait AuthPromptInteraction {
+  async fn prompt(Self, AuthPromptRequest) -> String raise OAuthError
+}
+
+pub(open) trait CallbackServer {
+  async fn start(Self, Int) -> Unit raise OAuthError
+  async fn wait_code(Self) -> String raise OAuthError
+  fn stop(Self) -> Unit
+}
+
+pub(open) trait CredentialStore {
+  async fn read(Self, String) -> Credential? raise OAuthError
+  async fn write(Self, String, Credential) -> Unit raise OAuthError
+  async fn delete(Self, String) -> Unit raise OAuthError
+}
+
+pub(open) trait OAuthHttpTransport {
+  async fn post(Self, OAuthHttpRequest) -> OAuthHttpResponse raise OAuthError
+}
+
+pub(open) trait OAuthProvider {
+  fn provider_id(Self) -> String
+  async fn login(Self, &AuthInteraction) -> Credential raise OAuthError
+  async fn refresh(Self, Credential) -> Credential raise OAuthError
+  fn to_auth(Self, Credential) -> AuthHeader
+}
+
+pub(open) trait ProviderCredentialStore {
+  async fn read(Self, String) -> ProviderCredential? raise OAuthError
+  async fn write(Self, String, ProviderCredential) -> Unit raise OAuthError
+  async fn delete(Self, String) -> Unit raise OAuthError
+}

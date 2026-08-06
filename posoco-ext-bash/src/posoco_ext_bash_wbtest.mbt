@@ -6,13 +6,12 @@
 
 ///|
 /// Test: ShellTools.list_tools
-async test "list_tools_contains_bash_and_shell" {
+async test "list_tools_contains_bash" {
   let tools = ShellTools::{  }
   let tool_defs = tools.list_tools()
   let names = tool_defs.map(fn(t) { t.name.to_string() })
   assert_true(names.contains("bash"))
-  assert_true(names.contains("shell"))
-  assert_eq(tool_defs.length(), 2)
+  assert_eq(tool_defs.length(), 1)
 }
 
 ///|

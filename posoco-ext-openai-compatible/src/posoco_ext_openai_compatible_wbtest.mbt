@@ -349,6 +349,77 @@ test "build_chat_request carries tools and stream options" {
 }
 
 ///|
+/// Tool-role messages MUST carry `tool_call_id` — the correlation key for the
+/// assistant tool_call they answer. OpenAI requires it; zen's upstream drops
+/// the request without it (curl-verified 2026-08).
+test "encode_message_tool_result_carries_tool_call_id" {
+  let msg : @posoco.Message = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_42"),
+    tool_name=@posoco.ToolName::unchecked("read_file"),
+    outcome=@posoco.ToolOutcome::Success(
+      content="file contents",
+      structured=None,
+    ),
+  )
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("role") {
+    Some(String(r)) => assert_eq(r, "tool")
+    _ => fail("expected tool role")
+  }
+  match obj.get("tool_call_id") {
+    Some(String(id)) => assert_eq(id, "call_42")
+    _ => fail("tool message MUST carry tool_call_id")
+  }
+  match obj.get("content") {
+    Some(String(c)) => assert_eq(c, "file contents")
+    _ => fail("expected outcome text as content")
+  }
+}
+
+///|
+/// Thinking-mode upstreams (DeepSeek behind opencode-zen) 400 unless the
+/// assistant message that carried tool_calls resends `reasoning_content`.
+test "encode_message_reasoning_resent_with_tool_calls" {
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[],
+    tool_calls=[
+      {
+        call_id: @posoco.CallId::unchecked("c1"),
+        name: @posoco.ToolName::unchecked("read"),
+        arguments: Json::empty_object(),
+      },
+    ],
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking about this..." }),
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("reasoning_content") {
+    Some(String(r)) => assert_eq(r, "thinking about this...")
+    _ => fail("reasoning_content MUST be present when tool_calls exist")
+  }
+}
+
+///|
+/// Without tool_calls, `reasoning_content` is optional and wasteful (pollutes
+/// prefix cache) — omit it even when present.
+test "encode_message_reasoning_omitted_without_tool_calls" {
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking..." }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("reasoning_content") {
+    None => ()
+    _ => fail("reasoning_content should be omitted for non-tool-call turns")
+  }
+}
+
+///|
 /// Decode a standard Chat Completions response. reasoning_content is optional;
 /// when absent the Completion carries no reasoning.
 test "decode_chat_response parses a plain text response" {
@@ -668,4 +739,26 @@ test "ProviderFactory::build rejects malformed reasoning_efforts" {
       assert_true(detail.contains("reasoning_efforts"))
     _ => fail("an empty effort entry must fail composition")
   }
+}
+
+///|
+test "process_oai_compat_sse tolerates explicit nulls in tool-call continuation chunks" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let on_chunk = fn(chunk : @posoco.StreamChunk) -> Unit { chunks.push(chunk) }
+  // First delta carries the id and name; arguments start as explicit null.
+  let first = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"echo\",\"arguments\":null}}]},\"finish_reason\":null}]}"
+  assert_false(process_oai_compat_sse(first, acc, on_chunk))
+  // Continuation delta: some compatible servers serialize absent fields as
+  // explicit null instead of omitting the keys.
+  let cont = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":null,\"function\":{\"name\":null,\"arguments\":\"{\\\"text\\\":\\\"hi\\\"}\"}}]},\"finish_reason\":null}]}"
+  assert_false(process_oai_compat_sse(cont, acc, on_chunk))
+  let last = "{\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}"
+  assert_true(process_oai_compat_sse(last, acc, on_chunk))
+  let completion = acc.to_completion()
+  assert_true(completion.message.tool_calls.length() == 1)
+  let tc = completion.message.tool_calls[0]
+  assert_eq(tc.call_id.to_string(), "call_1")
+  assert_eq(tc.name.to_string(), "echo")
+  assert_eq(tc.arguments.stringify(), "{\"text\":\"hi\"}")
 }

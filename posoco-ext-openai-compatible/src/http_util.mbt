@@ -56,15 +56,9 @@ fn classify_oai_compat_http_status(
 }
 
 ///|
-/// Drain a non-2xx response without exposing provider payloads.
-async fn read_error_body_summary(
-  client : @http.Client,
-) -> OaiCompatErrorBodySummary {
-  let data = client.read_all() catch { _ => return BodyReadFailed }
-  let byte_length = data.binary().length()
-  let _ = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
-  BodyBytesUtf8(byte_length)
-}
+/// `read_error_body_summary` (the one function that takes an `@http.Client`)
+/// lives in chat_native_js.mbt, co-located with the chat impl. The
+/// classification helpers below are pure and stay here for every backend.
 
 ///|
 /// Pure classification for stream termination; used by the HTTP loop and

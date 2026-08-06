@@ -10,9 +10,10 @@ pub fn default_shell_tools() -> ShellTools {
 }
 
 ///|
-/// Check whether a tool name is a known shell tool.
-pub fn is_shell_tool(name : String, tools : ShellTools) -> Bool {
-  tools.names.contains(name)
+/// Check whether a tool name is a known shell tool. Accepts the typed
+/// `ToolName` wrapper.
+pub fn is_shell_tool(name : @posoco.ToolName, tools : ShellTools) -> Bool {
+  tools.names.contains(name.to_string())
 }
 
 ///|
@@ -45,42 +46,43 @@ pub fn default_rtk_rewrite(_rtk_path : String, _cmd : String) -> String? {
 }
 
 ///|
-pub fn extract_command(args : Json) -> Result[String, @posoco.HookError] {
+/// Extract the shell command from a tool call's arguments JSON.
+///
+/// Recognises `cmd` (preferred) and `command` (fallback) keys. Raises
+/// `RuntimeError::UnknownTool` on malformed arguments so the pump surfaces
+/// the failure as a tool business error.
+pub fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
   match args {
     Object(map) =>
       match map.get("cmd") {
-        Some(String(s)) => Ok(s)
+        Some(String(s)) => s
         Some(_) =>
-          Err(
-            @posoco.HookError::Aborted(
-              "rtk: shell argument 'cmd' must be a string",
-            ),
+          raise @posoco.RuntimeError::UnknownTool(
+            "rtk: shell argument 'cmd' must be a string",
           )
         None =>
           match map.get("command") {
-            Some(String(s)) => Ok(s)
+            Some(String(s)) => s
             Some(_) =>
-              Err(
-                @posoco.HookError::Aborted(
-                  "rtk: shell argument 'command' must be a string",
-                ),
+              raise @posoco.RuntimeError::UnknownTool(
+                "rtk: shell argument 'command' must be a string",
               )
             None =>
-              Err(
-                @posoco.HookError::Aborted(
-                  "rtk: shell arguments require 'cmd' or 'command'",
-                ),
+              raise @posoco.RuntimeError::UnknownTool(
+                "rtk: shell arguments require 'cmd' or 'command'",
               )
           }
       }
     _ =>
-      Err(
-        @posoco.HookError::Aborted("rtk: shell arguments must be a JSON object"),
+      raise @posoco.RuntimeError::UnknownTool(
+        "rtk: shell arguments must be a JSON object",
       )
   }
 }
 
 ///|
+/// Build a rewritten `ToolCall` carrying `rewritten_cmd` in its `cmd` field.
+/// Preserves all other argument keys.
 pub fn rewrite_tool_call(
   original : @posoco.ToolCall,
   rewritten_cmd : String,
@@ -97,29 +99,41 @@ pub fn rewrite_tool_call(
     }
     _ => Map::from_array([("cmd", Json::string(rewritten_cmd))])
   }
-  { id: original.id, name: original.name, arguments: Json::object(new_map) }
+  {
+    call_id: original.call_id,
+    name: original.name,
+    arguments: Json::object(new_map),
+  }
 }
 
 ///|
-pub impl @posoco.PipelineHook for RTKHook with fn on_stage(
-  self,
-  stage : @posoco.Stage,
-) -> Result[@posoco.Stage, @posoco.HookError] {
-  match stage {
-    BeforeTool(call) if is_shell_tool(call.name, self.shell_tools) =>
-      match extract_command(call.arguments) {
-        Err(error) => Err(error)
-        Ok(cmd) =>
-          match (self.rewrite)(cmd) {
-            Some(rewritten) if rewritten != cmd => {
-              let new_call = rewrite_tool_call(call, rewritten)
-              Ok(BeforeTool(new_call))
-            }
-            // Pass through: no rewrite, or rewrite identical to original
-            _ => Ok(stage)
-          }
+/// Rewrites shell-tool calls; every other tool is approved unchanged.
+/// Malformed shell arguments surface as `Reject`; a successful rewrite
+/// returns `Approve(call~)` with the rewritten call.
+pub impl @posoco.Hook for RTKHook with fn before_tool(
+  self : RTKHook,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolHookDecision {
+  if !is_shell_tool(call.name, self.shell_tools) {
+    return Approve(call~)
+  }
+  let extracted : Result[String, @posoco.RuntimeError] = Ok(
+    extract_command(call.arguments),
+  ) catch {
+    error => Err(error)
+  }
+  match extracted {
+    Err(error) =>
+      // Malformed shell arguments: reject so the pump stops the run loudly.
+      Reject(reason=error.to_string())
+    Ok(cmd) =>
+      match (self.rewrite)(cmd) {
+        Some(rewritten) if rewritten != cmd => {
+          let new_call = rewrite_tool_call(call, rewritten)
+          Approve(call=new_call)
+        }
+        // Pass through: no rewrite, or rewrite identical to original.
+        _ => Approve(call~)
       }
-    // All other stages pass through unchanged
-    _ => Ok(stage)
   }
 }

@@ -14,16 +14,20 @@ pub fn session_from_jsonl(String) -> Result[@types.Session, @error.SessionError]
 
 pub fn session_to_jsonl(@types.Session) -> String
 
+pub fn validate_session_id(String) -> Result[Unit, String]
+
 // Errors
 
 // Types and methods
 pub(all) struct JsonlSessionStore {
   root_dir : String
 }
+pub fn JsonlSessionStore::extension_id(Self) -> String
+pub fn JsonlSessionStore::manifest(Self) -> @port.ExtensionManifest
 pub fn JsonlSessionStore::new(String) -> Self
+pub impl @port.Extension for JsonlSessionStore
 pub impl @port.SessionStore for JsonlSessionStore
 
 // Type aliases
 
 // Traits
-

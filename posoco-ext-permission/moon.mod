@@ -13,5 +13,5 @@ keywords = [ "posoco", "permission", "policy", "coding-agent" ]
 description = "Composable tool permission policy extension for Posoco coding agents"
 
 import {
-  "colmugx/posoco@0.7.3",
+  "colmugx/posoco@0.9.0",
 }

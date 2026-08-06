@@ -48,12 +48,14 @@ pub(all) struct PkceFlowConfig {
 /// 7. Stop server, return Credential
 ///
 /// The `server` parameter is a target-specific CallbackServer impl.
-/// Callers construct it (NativeCallbackServer on native, JsCallbackServer
-/// on js) and pass it in.
+/// The `transport` parameter is an OAuthHttpTransport impl
+/// (DefaultOAuthHttpTransport on native/js, host-supplied on wasm). Both are
+/// target seams so this shared flow stays free of platform HTTP APIs.
 pub async fn run_pkce_browser_flow(
   config : PkceFlowConfig,
   interaction : &AuthInteraction,
   server : &CallbackServer,
+  transport : &OAuthHttpTransport,
 ) -> Credential raise OAuthError {
   let pkce = generate_pkce()
 
@@ -65,7 +67,12 @@ pub async fn run_pkce_browser_flow(
 
   let code = server.wait_code()
 
-  let cred = exchange_code_for_token(config, code, pkce.code_verifier)
+  let cred = exchange_code_for_token(
+    config,
+    code,
+    pkce.code_verifier,
+    transport,
+  )
 
   server.stop()
 
@@ -89,11 +96,15 @@ fn build_authorize_url(config : PkceFlowConfig, pkce : PkcePair) -> String {
 }
 
 ///|
-/// Exchange authorization code for tokens.
+/// Exchange authorization code for tokens via the supplied transport. Core
+/// OAuth logic (body shape, error mapping, response parsing) stays here; the
+/// actual HTTP POST is delegated so this file never imports a platform HTTP
+/// package.
 async fn exchange_code_for_token(
   config : PkceFlowConfig,
   code : String,
   code_verifier : String,
+  transport : &OAuthHttpTransport,
 ) -> Credential raise OAuthError {
   let headers : Map[String, String] = Map([
     ("Content-Type", "application/x-www-form-urlencoded"),
@@ -107,13 +118,12 @@ async fn exchange_code_for_token(
     url_encode(code_verifier) +
     "&redirect_uri=" +
     url_encode(config.redirect_uri)
-  let (_, body_data) = @http.post(config.token_url, body, headers~) catch {
-    err => raise OAuthError::HttpError("token exchange: " + err.to_string())
-  }
-  let body_text = body_data.text() catch {
-    err => raise OAuthError::HttpError("token body: " + err.to_string())
-  }
-  let resp_json = @json.parse(body_text) catch {
+  let response = transport.post(OAuthHttpRequest::{
+    url: config.token_url,
+    body,
+    headers,
+  })
+  let resp_json = @json.parse(response.body) catch {
     err => raise OAuthError::ParseError("token response: " + err.to_string())
   }
   parse_token_response(resp_json)

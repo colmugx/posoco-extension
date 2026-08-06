@@ -1,9 +1,9 @@
 ///|
 /// posoco_ext_goal — Goal-driven autonomous looping extension for Posoco.
 ///
-/// Implements PreModelHook (inject goal context before the model call),
-/// PostEventHook (detect completion markers after the model call), and
-/// Observer (track token usage). The execute() method provides the
+/// Implements Hook (inject goal context before the model call, detect
+/// completion markers after the model call), and Observer (track token
+/// usage). The execute() method provides the
 /// external orchestration loop that calls agent.run_turn() until the goal
 /// is achieved, blocked, or the budget is exhausted.
 ///
@@ -11,8 +11,6 @@
 ///   let runner = GoalRunner::new(default_options("fix all tests"))
 ///   let agent = Agent::new(model, hooks=[runner], observers=[runner], ...)
 ///   let result = runner.execute(agent, "session_1")
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 ///|
 /// Extract plain text from a Content array.
@@ -79,8 +77,6 @@ fn truncate_text(text : String, max_len : Int) -> String {
     text
   }
 }
-
-// ── Types ──────────────────────────────────────────────────────────────────
 
 ///|
 pub(all) enum GoalStatus {
@@ -149,10 +145,8 @@ pub(all) struct GoalResult {
   history : Array[GoalHistoryEntry]
 } derive(Debug)
 
-// ── GoalRunner ─────────────────────────────────────────────────────────────
-
 ///|
-/// Central struct: implements PipelineHook + Observer + provides execute() loop.
+/// Central struct: implements Hook + Observer + provides execute() loop.
 ///
 /// Pass the same instance to both hooks=[] and observers=[] in Agent::new.
 /// Mutable state is shared between the two trait objects.
@@ -196,8 +190,6 @@ pub fn GoalRunner::new(options : GoalOptions) -> GoalRunner {
   }
 }
 
-// ── PreModelHook impl ──────────────────────────────────────────────────────
-
 ///|
 /// Build the goal system prompt injected before the model call.
 fn build_goal_system_prompt(runner : GoalRunner) -> String {
@@ -218,11 +210,10 @@ fn build_goal_system_prompt(runner : GoalRunner) -> String {
 }
 
 ///|
-pub impl @posoco.PreModelHook for GoalRunner with fn before_model(
+pub impl @posoco.Hook for GoalRunner with fn before_model(
   self,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] raise @posoco.HookAbort {
-  // Inject goal context as a system message before the model call.
   // Pass-through when no goal is running.
   if self.status != Running {
     return messages
@@ -238,20 +229,17 @@ pub impl @posoco.PreModelHook for GoalRunner with fn before_model(
   new_msgs
 }
 
-// ── PostEventHook impl ─────────────────────────────────────────────────────
-
 ///|
-pub impl @posoco.PostEventHook for GoalRunner with fn on_post_event(
+pub impl @posoco.Hook for GoalRunner with fn on_post_event(
   self,
-  stage : @posoco.PostStage,
+  stage : @posoco.HookStage,
 ) -> Unit {
-  // Detect completion / blocked markers in the model response.
   // Read-only hook: status mutation only, never aborts the run.
   if self.status != Running {
     return
   }
   match stage {
-    @posoco.PostStage::ModelCompleted(completion~) => {
+    @posoco.HookStage::ModelCompleted(completion~) => {
       let text = extract_text(completion.message.content)
       if text.contains(self.options.completion_marker) {
         self.status = Completed
@@ -264,8 +252,6 @@ pub impl @posoco.PostEventHook for GoalRunner with fn on_post_event(
     _ => ()
   }
 }
-
-// ── Observer impl ──────────────────────────────────────────────────────────
 
 ///|
 pub impl @posoco.Observer for GoalRunner with fn on_event(
@@ -286,8 +272,6 @@ pub impl @posoco.Observer for GoalRunner with fn on_event(
     _ => ()
   }
 }
-
-// ── Budget helpers ─────────────────────────────────────────────────────────
 
 ///|
 fn GoalRunner::is_budget_exhausted(self : GoalRunner) -> Bool {
@@ -314,8 +298,6 @@ fn GoalRunner::near_budget_limit(self : GoalRunner) -> Bool {
   false
 }
 
-// ── Prompt formatting ──────────────────────────────────────────────────────
-
 ///|
 fn GoalRunner::format_continue_prompt(self : GoalRunner) -> String {
   let goal = self.options.goal_condition
@@ -330,8 +312,6 @@ fn GoalRunner::format_wrapup_prompt(self : GoalRunner) -> String {
   let marker = self.options.completion_marker
   "You are approaching the token budget limit for goal: \{goal}\n\nFinish the current step if it is small and safe. Then write a concise handoff summary:\n- What is done\n- What remains\n- The next concrete action to take\n\nDo NOT output \{marker} unless the goal is actually finished."
 }
-
-// ── Public query/control methods ───────────────────────────────────────────
 
 ///|
 /// Get the current goal status.
@@ -367,14 +347,12 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.wrapup_sent = false
 }
 
-// ── execute() loop ─────────────────────────────────────────────────────────
-
 ///|
 /// Run the goal-driven autonomous loop.
 ///
 /// Loops agent.run_turn() until:
-/// - PipelineHook detects [goal:complete] → Completed
-/// - PipelineHook detects [goal:blocked] → Blocked(reason)
+/// - Hook detects [goal:complete] → Completed
+/// - Hook detects [goal:blocked] → Blocked(reason)
 /// - Budget exhausted (turns or tokens) → BudgetExhausted
 /// - agent.run_turn() raises an error → Failed(msg)
 /// - pause() called externally → Paused
@@ -392,13 +370,11 @@ pub async fn GoalRunner::execute(
   self.stall_count = 0
 
   while self.status == Running {
-    // 1. Check budget
     if self.is_budget_exhausted() {
       self.status = BudgetExhausted
       break
     }
 
-    // 2. Build prompt
     let prompt = if self.near_budget_limit() && !self.wrapup_sent {
       self.wrapup_sent = true
       self.format_wrapup_prompt()
@@ -408,12 +384,10 @@ pub async fn GoalRunner::execute(
 
     self.current_turn = self.current_turn + 1
 
-    // 3. Create user message
     let input : @posoco.Message = @posoco.Message::UserMessage(content=[
       @posoco.Content::Text(prompt),
     ])
 
-    // 4. Execute one turn
     let turn_result = agent.run_turn(input, session_id) catch {
       e => {
         self.status = Failed(e.to_string())
@@ -421,7 +395,6 @@ pub async fn GoalRunner::execute(
       }
     }
 
-    // 5. Record history
     let summary = truncate_text(
       extract_text_from_message(turn_result.message),
       200,
@@ -436,7 +409,7 @@ pub async fn GoalRunner::execute(
       summary,
     })
 
-    // 6. Stall detection: only if PipelineHook didn't set a terminal status
+    // Stall detection: only if the hook didn't set a terminal status
     if self.status == Running {
       let token_delta = self.usage.total_tokens - self.last_total_tokens
       if token_delta < self.options.stall_min_tokens {
@@ -451,9 +424,9 @@ pub async fn GoalRunner::execute(
     }
     self.last_total_tokens = self.usage.total_tokens
 
-    // Note: PipelineHook's AfterModel may have set status to
-    // Completed or Blocked during agent.run_turn(). The while
-    // condition will catch this on the next iteration.
+    // Note: the hook may have set status to Completed or Blocked
+    // during agent.run_turn(). The while condition will catch this
+    // on the next iteration.
   }
 
   GoalResult::{

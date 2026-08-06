@@ -1,8 +1,6 @@
 ///|
 /// Tests for posoco_ext_goal.
 
-// ── Mock implementations ──────────────────────────────────────────────────
-
 ///|
 /// ModelPort fake. M3.7: `chat` returns `ModelCallResult` (the canonical
 /// completion + processed_messages bundle), takes an extra `stream` argument,
@@ -83,8 +81,6 @@ pub impl @posoco.SessionStore for MockSessionStore with fn save(
   self.store[id] = session
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
 ///|
 /// Build a ModelCallResult whose completion is a stop-finish text response
 /// with no tool calls and no usage.
@@ -125,10 +121,7 @@ fn make_config() -> @posoco.AgentConfig {
     max_tool_rounds: 5,
     temperature: None,
     max_output_tokens: None,
-    tool_choice: None,
-    reasoning_effort: None,
     model_context_window: None,
-    model: None,
   }
 }
 
@@ -145,9 +138,7 @@ fn build_agent_with_goal(
         tools: [],
         sessions: [],
         observers: [],
-        pre_model_hooks: [],
-        pre_tool_hooks: [],
-        post_event_hooks: [],
+        hooks: [],
         memory: [],
         lifecycle: [],
         commands: [],
@@ -160,9 +151,7 @@ fn build_agent_with_goal(
         tools: [],
         sessions: [MockSessionStore::{ store: Map::from_array([]) }],
         observers: [goal_runner],
-        pre_model_hooks: [goal_runner],
-        pre_tool_hooks: [],
-        post_event_hooks: [goal_runner],
+        hooks: [goal_runner],
         memory: [],
         lifecycle: [],
         commands: [],
@@ -175,8 +164,6 @@ fn build_agent_with_goal(
     e => abort("Agent failed: \{e}")
   }
 }
-
-// ── Tests ──────────────────────────────────────────────────────────────────
 
 ///|
 async test "goal_injects_system_prompt" {
@@ -216,7 +203,7 @@ async test "goal_detects_completion" {
 
   // Simulate the model-completed stage via on_post_event.
   runner.on_post_event(
-    @posoco.PostStage::ModelCompleted(completion=resp.completion),
+    @posoco.HookStage::ModelCompleted(completion=resp.completion),
   )
   match runner.status() {
     Completed => ()
@@ -231,7 +218,7 @@ async test "goal_detects_blocked" {
   let resp = make_stop_response("Need API key from user\n[goal:blocked]")
 
   runner.on_post_event(
-    @posoco.PostStage::ModelCompleted(completion=resp.completion),
+    @posoco.HookStage::ModelCompleted(completion=resp.completion),
   )
   match runner.status() {
     Blocked(reason) => assert_true(reason.contains("Need API key"))
@@ -390,7 +377,7 @@ async test "goal_ignores_non_running_status" {
   let runner = GoalRunner::new(default_options("test"))
   runner.status = Paused
 
-  // PreModelHook should pass through without injection when not Running.
+  // Hook::before_model should pass through without injection when not Running.
   let msgs : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
   ]

@@ -1,21 +1,26 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "colmugx/posoco-ext-read/src"
+package "colmugx/posoco-ext-read"
 
 import {
-  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
 }
 
 // Values
+pub fn read_extension() -> ReadTools
 
 // Errors
 
 // Types and methods
 pub(all) struct ReadTools {
 }
-pub fn ReadTools::new() -> Self
-pub impl @posoco.ToolProvider for ReadTools
+pub fn ReadTools::ReadTools() -> Self
+pub fn ReadTools::extension_id(Self) -> String
+pub fn ReadTools::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.Extension for ReadTools
+pub impl @port.ToolProvider for ReadTools
 
 // Type aliases
 
 // Traits
-

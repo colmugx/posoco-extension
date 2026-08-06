@@ -2,36 +2,49 @@
 /// Wire encoder: convert kernel canonical types to standard OpenAI
 /// Chat Completions API JSON.
 ///
-/// This is the plain OpenAI Chat Completions shape — no DeepSeek-specific
-/// `reasoning_content` resending rule, no `thinking` wrapper. Servers that
-/// support reasoning expose it via the optional top-level `reasoning_effort`
-/// field (set on the request body, not per-message). Tool call arguments are
-/// JSON strings (OpenAI convention). Message order is append-only.
+/// This is the plain OpenAI Chat Completions shape — no `thinking` wrapper.
+/// Servers that support reasoning expose it via the optional top-level
+/// `reasoning_effort` field (set on the request body, not per-message).
+/// Tool call arguments are JSON strings (OpenAI convention). Message order
+/// is append-only.
+///
+/// Wire rules verified against opencode-zen (curl A/B/C, 2026-08):
+/// - Tool-role messages MUST carry `tool_call_id` — the correlation key for
+///   the assistant tool_call they answer. OpenAI requires it; zen's upstream
+///   drops the request silently without it. There is no "host adapter layer"
+///   that adds it later; it must be encoded here.
+/// - Assistant messages WITH tool_calls resend `reasoning_content` when the
+///   model produced reasoning: thinking-mode upstreams (DeepSeek behind zen)
+///   400 without it ("The reasoning_content in the thinking mode must be
+///   passed back to the API"). Assistant messages WITHOUT tool_calls omit it
+///   (saves tokens, preserves prefix cache). Plain OpenAI models never
+///   populate reasoning, so the field is only ever sent to endpoints that
+///   require it.
 
 ///|
 /// Encode a kernel Message into an OpenAI chat message JSON object.
 fn encode_message(msg : @posoco.Message) -> Json {
-  let (role, content_blocks, tool_calls) = match msg {
-    SystemMessage(content~) => ("system", content, [])
-    UserMessage(content~) => ("user", content, [])
+  let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
+    msg {
+    SystemMessage(content~) => ("system", content, [], None, None)
+    UserMessage(content~) => ("user", content, [], None, None)
     AssistantMessage(content~, tool_calls~, reasoning~, finish_reason~) => {
-      let _ = reasoning
       let _ = finish_reason
-      ("assistant", content, tool_calls)
+      let reasoning_str = match reasoning {
+        Some(r) => Some(r.content)
+        None => None
+      }
+      ("assistant", content, tool_calls, None, reasoning_str)
     }
     ToolMessage(call_id~, tool_name~, outcome~) => {
-      // Standard OpenAI tool role: the outcome content carries back to the
-      // model. `call_id` and `tool_name` are not encoded here because the
-      // plain `tool` role relies on server-side correlation via message order;
-      // servers that require explicit `tool_call_id` are handled by the host
-      // adapter layer.
-      let _ = call_id
-      let _ = tool_name
+      // The outcome content carries back to the model; `tool_call_id` is the
+      // mandatory correlation key for the assistant tool_call it answers.
       let outcome_text = outcome_to_wire_text(outcome)
       let tool_blocks : Array[@posoco.Content] = [
         @posoco.Content::Text(outcome_text),
       ]
-      ("tool", tool_blocks, [])
+      let _ = tool_name
+      ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
   // OpenAI Chat Completions accepts either a string or an array of content
@@ -49,6 +62,10 @@ fn encode_message(msg : @posoco.Message) -> Json {
     "role": Json::string(role),
     "content": Json::string(content_str),
   }
+  match tool_call_id {
+    Some(id) => obj["tool_call_id"] = Json::string(id)
+    None => ()
+  }
   // Tool calls (assistant messages requesting tool execution)
   if tool_calls.length() > 0 {
     let tc_arr = tool_calls.map(fn(tc) {
@@ -63,6 +80,15 @@ fn encode_message(msg : @posoco.Message) -> Json {
       Json::object(tc_obj)
     })
     obj["tool_calls"] = Json::array(tc_arr)
+  }
+  // reasoning_content: thinking-mode upstreams require it to be resent when
+  // the assistant message has tool_calls (otherwise 400). Without tool_calls
+  // it is optional and wasteful (pollutes prefix cache), so we skip it.
+  if role == "assistant" && tool_calls.length() > 0 {
+    match reasoning_text {
+      Some(r) => obj["reasoning_content"] = Json::string(r)
+      None => ()
+    }
   }
   Json::object(obj)
 }

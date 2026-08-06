@@ -17,8 +17,8 @@ pub fn ShellTools::ShellTools() -> ShellTools {
 // ToolProvider is split into two complete #cfg partitions (native/js real, others inert); shared_list_tools avoids duplicating the ToolDef construction.
 
 ///|
-/// Shared tool list (bash + shell alias). Both native and js ShellTools
-/// expose the same two tool definitions; only `execute` differs per target.
+/// Shared tool list (bash only). Both native and js ShellTools expose the
+/// same single tool definition; only `execute` differs per target.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   // OpenAI/DeepSeek tool schema requires `parameters` to be a JSON Schema with
   // `type: "object"`; strict servers otherwise reject with HTTP 400
@@ -50,14 +50,6 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash"),
       description: "Execute a shell command and return its output",
-      input_schema: cmd_schema,
-      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_bash"),
-    },
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("shell"),
-      description: "Execute a shell command (alias for bash)",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
