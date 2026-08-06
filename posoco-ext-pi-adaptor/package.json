@@ -1,0 +1,11 @@
+{
+  "name": "posoco-ext-pi-adaptor-dev",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "test:node": "node --experimental-strip-types --test test/host.test.mjs"
+  }
+}
