@@ -95,7 +95,7 @@ test "t07b_llm_incomplete_and_error_events_are_loud_and_redacted" {
     e => Err(e)
   }
   match incomplete_result {
-    Err(@posoco.ModelError::ResponseParse(message)) => {
+    Err(@posoco.ModelError::Transport(message)) => {
       assert_true(message.contains("stage=response.incomplete"))
       assert_false(message.contains("secret-incomplete"))
     }
@@ -107,7 +107,7 @@ test "t07b_llm_incomplete_and_error_events_are_loud_and_redacted" {
     e => Err(e)
   }
   match error_result {
-    Err(@posoco.ModelError::ResponseParse(message)) => {
+    Err(@posoco.ModelError::Transport(message)) => {
       assert_true(message.contains("stage=error"))
       assert_false(message.contains("secret-error-body"))
     }
@@ -116,28 +116,24 @@ test "t07b_llm_incomplete_and_error_events_are_loud_and_redacted" {
 }
 
 ///|
-test "t07b_llm_completed_event_structure_and_usage_are_strict" {
+/// Missing/null output on completed is tolerated as empty (Stop); missing
+/// usage token fields map to None (chat-completions tolerance alignment).
+test "t07b_llm_completed_event_tolerates_missing_output_and_usage_fields" {
   let acc = @posoco.StreamAccumulator()
+  let chunks : Array[@posoco.StreamChunk] = []
   let missing_output =
     #|{"type":"response.completed","response":{"status":"completed"}}
-  let output_result = Ok(process_sse_event(missing_output, acc, fn(_) { () })) catch {
-    e => Err(e)
-  }
-  match output_result {
-    Err(@posoco.ModelError::ResponseParse(message)) =>
-      assert_true(message.contains("stage=completed.output"))
-    _ => fail("completed response output is required")
+  assert_true(process_sse_event(missing_output, acc, fn(c) { chunks.push(c) }))
+  match chunks[chunks.length() - 1] {
+    @posoco.StreamChunk::Finish(reason~) => assert_eq(reason, "Stop")
+    _ => fail("expected a Finish chunk for completed without output")
   }
   let missing_total =
     #|{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1}}}
-  let usage_result = Ok(process_sse_event(missing_total, acc, fn(_) { () })) catch {
-    e => Err(e)
-  }
-  match usage_result {
-    Err(@posoco.ModelError::ResponseParse(message)) =>
-      assert_true(message.contains("stage=usage.total_tokens"))
-    _ => fail("completed response usage must preserve total_tokens")
-  }
+  assert_true(process_sse_event(missing_total, acc, fn(c) { chunks.push(c) }))
+  // Missing total_tokens maps to None in Usage, surfaced as 0 in the chunk.
+  assert_true(acc.usage_input == Some(1))
+  assert_true(acc.usage_total == Some(0))
 }
 
 ///|
@@ -168,6 +164,54 @@ test "t07b_llm_missing_tool_identity_is_loud" {
       assert_true(msg.contains("stage=tool.name"))
     _ => fail("expected ResponseParse for missing tool name")
   }
+}
+
+///|
+/// Explicit-null tolerances aligned with the chat-completions shared parser:
+/// null delta events are skipped, null call_id falls back to the item id, a
+/// bare {"error": ...} data line is a Transport failure, and null output /
+/// message content decode as empty.
+test "t07b_llm_explicit_null_fields_are_tolerated" {
+  let acc = @posoco.StreamAccumulator()
+  let null_delta =
+    #|{"type":"response.output_text.delta","delta":null}
+  assert_false(process_sse_event(null_delta, acc, fn(_) { () }))
+  assert_eq(acc.text, "")
+  let null_call_id =
+    #|{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":null,"id":"fc_1","name":"read"}}
+  let chunks : Array[@posoco.StreamChunk] = []
+  assert_false(process_sse_event(null_call_id, acc, fn(c) { chunks.push(c) }))
+  match chunks[0] {
+    @posoco.StreamChunk::ToolCallDelta(index~, id~, name~, arguments_delta~) => {
+      assert_eq(index, 0)
+      assert_eq(id, Some("fc_1"))
+      assert_eq(name, Some("read"))
+      assert_true(arguments_delta is None)
+    }
+    _ => fail("null call_id must fall back to the item id")
+  }
+  let bare_error =
+    #|{"error":{"message":"secret-stream-error","type":"server_error"}}
+  let error_result = Ok(process_sse_event(bare_error, acc, fn(_) { () })) catch {
+    e => Err(e)
+  }
+  match error_result {
+    Err(@posoco.ModelError::Transport(message)) => {
+      assert_true(message.contains("stage=error"))
+      assert_false(message.contains("secret-stream-error"))
+    }
+    _ => fail("a bare error data line must be a Transport failure")
+  }
+  let null_output : Json = { "output": null, "status": "completed" }
+  assert_true(
+    parse_openai_response(null_output).finish_reason()
+    is @posoco.FinishReason::Stop,
+  )
+  let null_content : Json = {
+    "output": [{ "type": "message", "content": null }],
+    "status": "completed",
+  }
+  assert_eq(parse_openai_response(null_content).message.content.length(), 0)
 }
 
 ///|
@@ -317,24 +361,30 @@ test "t07b_llm_nonstream_usage_is_strict" {
     "usage": { "input_tokens": "secret", "output_tokens": 1 },
   }
   assert_openai_response_parse(wrong_type, "usage.input_tokens")
-  let missing_field : Json = {
-    "output": [],
-    "status": "completed",
-    "usage": { "input_tokens": 1 },
-  }
-  assert_openai_response_parse(missing_field, "usage.output_tokens")
-  let missing_total : Json = {
-    "output": [],
-    "status": "completed",
-    "usage": { "input_tokens": 1, "output_tokens": 1 },
-  }
-  assert_openai_response_parse(missing_total, "usage.total_tokens")
   let wrong_total : Json = {
     "output": [],
     "status": "completed",
     "usage": { "input_tokens": 1, "output_tokens": 1, "total_tokens": "secret" },
   }
   assert_openai_response_parse(wrong_total, "usage.total_tokens")
+  // Missing usage token fields map to None instead of failing.
+  let missing_fields : Json = {
+    "output": [],
+    "status": "completed",
+    "usage": { "input_tokens": 1 },
+  }
+  let decoded = parse_openai_response(missing_fields)
+  match decoded.usage {
+    Some(usage) => {
+      assert_true(usage.input_tokens == Some(1))
+      assert_true(usage.output_tokens is None)
+      assert_true(usage.total_tokens is None)
+    }
+    None => fail("expected decoded usage")
+  }
+  // "usage": null is treated as absent.
+  let null_usage : Json = { "output": [], "status": "completed", "usage": null }
+  assert_true(parse_openai_response(null_usage).usage is None)
 }
 
 ///|
@@ -751,11 +801,341 @@ test "openai reasoning effort is carried in responses request body" {
     Some("high"),
   )
   match body {
-    Json::Object(fields) =>
+    Json::Object(fields) => {
+      // Codex parity: effort + summary:auto, and the encrypted reasoning
+      // payload requested via include.
       assert_eq(
         fields.get("reasoning"),
-        Some(@json.parse("{\"effort\":\"high\"}")),
+        Some(@json.parse("{\"effort\":\"high\",\"summary\":\"auto\"}")),
       )
+      assert_eq(
+        fields.get("include"),
+        Some(@json.parse("[\"reasoning.encrypted_content\"]")),
+      )
+    }
     _ => fail("Responses request body must be an object")
+  }
+}
+
+///|
+/// Manual state management (migrate-to-responses guide): an assistant message
+/// with tool calls expands into a message item PLUS one function_call item
+/// per call — dropping function_call items is a named common migration error.
+test "openai_input_assistant_tool_calls_emit_function_call_items" {
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("let me check")],
+    tool_calls=[
+      {
+        call_id: @posoco.CallId::unchecked("call_1"),
+        name: @posoco.ToolName::unchecked("read"),
+        arguments: Json::object({ "path": Json::string("/tmp/x") }),
+      },
+    ],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
+  let items = posoco_message_to_openai_items(msg)
+  assert_eq(items.length(), 2)
+  guard items[0] is Object(m0) else { fail("expected message item") }
+  match m0.get("role") {
+    Some(String("assistant")) => ()
+    _ => fail("expected assistant message item")
+  }
+  guard items[1] is Object(fc) else { fail("expected function_call item") }
+  match fc.get("type") {
+    Some(String("function_call")) => ()
+    _ => fail("expected function_call type")
+  }
+  match fc.get("call_id") {
+    Some(String(id)) => assert_eq(id, "call_1")
+    _ => fail("expected call_id")
+  }
+  match fc.get("name") {
+    Some(String(n)) => assert_eq(n, "read")
+    _ => fail("expected name")
+  }
+  match fc.get("arguments") {
+    Some(String(a)) => assert_true(a.contains("/tmp/x"))
+    _ => fail("expected arguments string")
+  }
+}
+
+///|
+/// Reasoning items replay verbatim ahead of the assistant message item
+/// (official reasoning guide: pass back all reasoning items untouched).
+test "openai_input_replays_reasoning_items_verbatim" {
+  let raw_item = Json::object(
+    Map::from_array([
+      ("id", Json::string("rs_123")),
+      ("type", Json::string("reasoning")),
+      ("summary", Json::array([])),
+      ("encrypted_content", Json::string("enc_payload")),
+    ]),
+  )
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{
+      content: "",
+      raw: Some(Json::array([raw_item])),
+    }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let items = posoco_message_to_openai_items(msg)
+  assert_eq(items.length(), 2)
+  assert_true(items[0] == raw_item)
+  guard items[1] is Object(m1) else { fail("expected message item") }
+  match m1.get("role") {
+    Some(String("assistant")) => ()
+    _ => fail("expected assistant message item after reasoning")
+  }
+}
+
+///|
+/// Responses with a reasoning item surface it on the Completion: summary text
+/// as user-visible content, the raw item preserved for replay.
+test "openai_parse_captures_reasoning_items" {
+  let reasoning_item = Json::object(
+    Map::from_array([
+      ("id", Json::string("rs_9")),
+      ("type", Json::string("reasoning")),
+      (
+        "summary",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              ("type", Json::string("summary_text")),
+              ("text", Json::string("thought hard")),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  let message_item = Json::object(
+    Map::from_array([
+      ("type", Json::string("message")),
+      ("role", Json::string("assistant")),
+      (
+        "content",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              ("type", Json::string("output_text")),
+              ("text", Json::string("hi")),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  let resp_json = Json::object(
+    Map::from_array([
+      ("output", Json::array([reasoning_item, message_item])),
+      ("status", Json::string("completed")),
+    ]),
+  )
+  let resp = parse_openai_response(resp_json)
+  match resp.message.reasoning {
+    Some(r) => {
+      assert_eq(r.content, "thought hard")
+      assert_true(r.raw == Some(Json::array([reasoning_item])))
+    }
+    None => fail("reasoning item must be captured")
+  }
+}
+
+///|
+/// Streaming: reasoning items on the terminal response.completed event are
+/// captured into the sink and attached to the accumulated completion.
+test "openai_stream_captures_reasoning_items_from_completed" {
+  let acc = @posoco.StreamAccumulator()
+  let sink = ReasoningSink::{ items: [], summary: "" }
+  let completed =
+    #|{"type":"response.completed","response":{"status":"completed","output":[{"id":"rs_1","type":"reasoning","summary":[{"type":"summary_text","text":"s"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}}
+  assert_true(
+    process_sse_event(completed, acc, fn(_) { () }, reasoning_sink=sink),
+  )
+  let completion = attach_reasoning_items(acc.to_completion(), sink)
+  match completion.message.reasoning {
+    Some(r) => {
+      assert_eq(r.content, "s")
+      match r.raw {
+        Some(Json::Array(items)) => assert_eq(items.length(), 1)
+        _ => fail("raw reasoning items must be attached")
+      }
+    }
+    None => fail("reasoning must be attached from the completed event")
+  }
+}
+
+///|
+/// /responses/compact output decodes into canonical messages: the opaque
+/// compaction item rides the next assistant's Reasoning.raw, reasoning items
+/// are preserved, function_call/output pairs become tool calls and tool
+/// messages, wire order intact.
+test "openai_compact_decodes_window" {
+  let window =
+    #|{"output":[
+    #|  {"type":"compaction","id":"cmp_1","encrypted_content":"zzz"},
+    #|  {"role":"user","content":[{"type":"input_text","text":"q1"}]},
+    #|  {"type":"reasoning","id":"rs_1","summary":[]},
+    #|  {"role":"assistant","content":[{"type":"output_text","text":"a1"}]},
+    #|  {"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{}"},
+    #|  {"type":"function_call_output","call_id":"call_1","output":"sunny"}
+    #|]}
+  let messages = parse_compact_response(@json.parse(window))
+  assert_eq(messages.length(), 5)
+  // The leading compaction item flushes as a synthetic empty assistant ahead
+  // of the user message, preserving wire order.
+  match messages[0] {
+    @posoco.Message::AssistantMessage(content~, reasoning~, ..) => {
+      assert_eq(content.length(), 0)
+      match reasoning {
+        Some(r) =>
+          match r.raw {
+            Some(Json::Array(items)) => {
+              assert_eq(items.length(), 1)
+              match items[0] {
+                Json::Object(m) =>
+                  match m.get("type") {
+                    Some(Json::String("compaction")) => ()
+                    _ => fail("expected compaction item in Reasoning.raw")
+                  }
+                _ => fail("expected compaction object")
+              }
+            }
+            _ => fail("compaction item must ride Reasoning.raw")
+          }
+        None => fail("synthetic assistant must carry compaction state")
+      }
+    }
+    _ => fail("expected synthetic assistant for leading compaction item")
+  }
+  match messages[1] {
+    @posoco.Message::UserMessage(content~) =>
+      match content[0] {
+        @posoco.Content::Text(t) => assert_eq(t, "q1")
+        _ => fail("expected user text")
+      }
+    _ => fail("expected user message")
+  }
+  match messages[2] {
+    @posoco.Message::AssistantMessage(content~, reasoning~, tool_calls~, ..) => {
+      assert_eq(tool_calls.length(), 0)
+      match content[0] {
+        @posoco.Content::Text(t) => assert_eq(t, "a1")
+        _ => fail("expected assistant text")
+      }
+      match reasoning {
+        Some(r) =>
+          match r.raw {
+            Some(Json::Array(items)) => assert_eq(items.length(), 1)
+            _ => fail("reasoning item must ride Reasoning.raw")
+          }
+        None => fail("assistant must carry reasoning state")
+      }
+    }
+    _ => fail("expected assistant message")
+  }
+  match messages[3] {
+    @posoco.Message::AssistantMessage(tool_calls~, finish_reason~, ..) => {
+      assert_eq(tool_calls.length(), 1)
+      assert_eq(tool_calls[0].call_id.to_string(), "call_1")
+      assert_eq(tool_calls[0].name.to_string(), "get_weather")
+      match finish_reason {
+        @posoco.FinishReason::ToolCalls => ()
+        _ => fail("expected ToolCalls finish reason")
+      }
+    }
+    _ => fail("expected synthetic assistant carrying the function_call")
+  }
+  match messages[4] {
+    @posoco.Message::ToolMessage(call_id~, outcome~, ..) => {
+      assert_eq(call_id.to_string(), "call_1")
+      match outcome {
+        @posoco.ToolOutcome::Success(content~, ..) =>
+          assert_eq(content, "sunny")
+        _ => fail("expected tool success outcome")
+      }
+    }
+    _ => fail("expected tool message")
+  }
+}
+
+///|
+/// Decode → re-encode replays the window as-is: opaque items (compaction,
+/// reasoning) come back verbatim and the remaining items keep their order and
+/// canonical shape (assistant text normalizes to input_text).
+test "openai_compact_roundtrip_replays_verbatim" {
+  let window =
+    #|{"output":[
+    #|  {"type":"compaction","id":"cmp_1","encrypted_content":"zzz"},
+    #|  {"role":"user","content":[{"type":"input_text","text":"q1"}]},
+    #|  {"type":"reasoning","id":"rs_1","summary":[]},
+    #|  {"role":"assistant","content":[{"type":"output_text","text":"a1"}]},
+    #|  {"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{}"},
+    #|  {"type":"function_call_output","call_id":"call_1","output":"sunny"}
+    #|]}
+  let messages = parse_compact_response(@json.parse(window))
+  let re_encoded : Array[Json] = []
+  for m in messages {
+    for item in posoco_message_to_openai_items(m) {
+      re_encoded.push(item)
+    }
+  }
+  let expected_window =
+    #|[{"type":"compaction","id":"cmp_1","encrypted_content":"zzz"},
+    #| {"role":"user","content":[{"type":"input_text","text":"q1"}]},
+    #| {"type":"reasoning","id":"rs_1","summary":[]},
+    #| {"role":"assistant","content":[{"type":"input_text","text":"a1"}]},
+    #| {"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{}"},
+    #| {"type":"function_call_output","call_id":"call_1","output":"sunny"}]
+  let expected = @json.parse(expected_window)
+  assert_true(Json::array(re_encoded) == expected)
+}
+
+///|
+/// The compact request body is exactly {model, input} — fully stateless.
+test "openai_compact_request_body_shape" {
+  let body = build_compact_request_body(
+    [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
+    "gpt-5",
+  )
+  guard body is Json::Object(m) else { fail("expected object body") }
+  assert_true(m.contains("model"))
+  assert_true(m.contains("input"))
+  assert_eq(m.length(), 2)
+  match m.get("model") {
+    Some(Json::String("gpt-5")) => ()
+    _ => fail("model field mismatch")
+  }
+  match m.get("input") {
+    Some(Json::Array(items)) => assert_eq(items.length(), 1)
+    _ => fail("input must be an item array")
+  }
+}
+
+///|
+/// Compact envelope failures are loud: a provider error object and a
+/// non-array output both raise ResponseParse.
+test "openai_compact_parse_rejects_bad_envelopes" {
+  let provider_error_json =
+    #|{"error":{"type":"server_error","message":"boom"}}
+  let provider_error = @json.parse(provider_error_json)
+  let result = Ok(parse_compact_response(provider_error)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) =>
+      assert_true(msg.contains("stage=error"))
+    _ => fail("expected ResponseParse for provider error envelope")
+  }
+  let bad_output_json =
+    #|{"output":{}}
+  let bad_output = @json.parse(bad_output_json)
+  let result2 = Ok(parse_compact_response(bad_output)) catch { e => Err(e) }
+  match result2 {
+    Err(@posoco.ModelError::ResponseParse(msg)) =>
+      assert_true(msg.contains("stage=output"))
+    _ => fail("expected ResponseParse for non-array output")
   }
 }

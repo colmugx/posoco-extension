@@ -14,13 +14,5 @@ import {
 warnings = "-unused_package"
 
 options(
-  targets: {
-    "posoco_ext_openai.mbt": [ "native", "js" ],
-    "convert.mbt": [ "native", "js" ],
-    "sse.mbt": [ "native", "js" ],
-    "codex_oauth.mbt": [ "native", "js" ],
-    "list_models.mbt": [ "native", "js" ],
-    "posoco_ext_openai_wbtest.mbt": [ "native" ],
-    "posoco_ext_openai_test.mbt": [ "native", "js" ],
-  },
+  targets: { "posoco_ext_openai_wbtest.mbt": [ "native" ] },
 )

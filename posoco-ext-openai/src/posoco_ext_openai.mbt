@@ -214,7 +214,12 @@ fn build_request_body(
   reasoning_effort : String?,
   stream? : Bool = false,
 ) -> Json {
-  let input_items = messages.map(fn(m) { posoco_message_to_openai(m) })
+  let input_items : Array[Json] = []
+  for m in messages {
+    for item in posoco_message_to_openai_items(m) {
+      input_items.push(item)
+    }
+  }
   let fields : Array[(String, Json)] = [
     ("model", Json::string(model)),
     ("input", Json::array(input_items)),
@@ -227,13 +232,26 @@ fn build_request_body(
     fields.push(("tools", Json::array(tool_defs)))
   }
   match reasoning_effort {
-    Some(effort) =>
+    Some(effort) => {
+      // Codex parity: ask for the summary text AND the encrypted reasoning
+      // payload. The encrypted_content is what makes replayed reasoning items
+      // carry real state across turns (official reasoning guide); without it
+      // the verbatim replay is a hollow shell.
       fields.push(
         (
           "reasoning",
-          Json::object(Map::from_array([("effort", Json::string(effort))])),
+          Json::object(
+            Map::from_array([
+              ("effort", Json::string(effort)),
+              ("summary", Json::string("auto")),
+            ]),
+          ),
         ),
       )
+      fields.push(
+        ("include", Json::array([Json::string("reasoning.encrypted_content")])),
+      )
+    }
     None => ()
   }
   let final_fields = append_options(fields, options)
@@ -343,6 +361,7 @@ async fn OpenAIModelPort::chat_stream(
     }
   }
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let reasoning_sink = ReasoningSink::{ items: [], summary: "" }
   let on_typed = fn(chunk : @posoco.StreamChunk) {
     acc.push(chunk)
     on_chunk(streamchunk_to_json(chunk))
@@ -367,7 +386,12 @@ async fn OpenAIModelPort::chat_stream(
           if pl == "[DONE]" {
             done = true
           } else if pl.length() > 0 {
-            done = process_sse_event(pl.to_owned(), acc, on_typed)
+            done = process_sse_event(
+              pl.to_owned(),
+              acc,
+              on_typed,
+              reasoning_sink~,
+            )
           }
         }
       }
@@ -386,8 +410,37 @@ async fn OpenAIModelPort::chat_stream(
     None => ()
   }
   validate_stream_tool_calls(acc)
-  let completion = acc.to_completion()
+  let completion = attach_reasoning_items(acc.to_completion(), reasoning_sink)
   @posoco.ModelCallResult::{ completion, processed_messages: messages }
+}
+
+///|
+/// Attach the reasoning items captured from the terminal `response.completed`
+/// event to the accumulated completion, so later requests replay them
+/// verbatim (official reasoning guide: pass back all reasoning items since
+/// the last user message when manually managing state).
+fn attach_reasoning_items(
+  completion : @posoco.Completion,
+  sink : ReasoningSink,
+) -> @posoco.Completion {
+  if sink.items.is_empty() {
+    return completion
+  }
+  let content = match completion.message.reasoning {
+    Some(r) => if r.content == "" { sink.summary } else { r.content }
+    None => sink.summary
+  }
+  let reasoning = @posoco.Reasoning::{
+    content,
+    raw: Some(Json::array(sink.items)),
+  }
+  @posoco.Completion::Completion(
+    content=completion.message.content,
+    tool_calls=completion.message.tool_calls,
+    reasoning=Some(reasoning),
+    finish_reason=completion.message.finish_reason,
+    usage=completion.usage,
+  )
 }
 
 ///|
@@ -446,28 +499,22 @@ fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
 }
 
 ///|
-async fn OpenAIModelPort::chat_nonstream(
-  self : OpenAIModelPort,
-  messages : Array[@posoco.Message],
-  tools : Array[@posoco.ToolDef],
-  options : @posoco.ChatOptions,
-) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  validate_openai_config(self.config)
-  let body = build_request_body(
-    messages,
-    tools,
-    options,
-    self.config.model,
-    self.config.reasoning_effort,
-  )
-  let headers = build_headers(self.config)
-  let client = @http.Client::Client(self.config.base_url, headers~) catch {
+/// Shared POST helper for the Responses API family: builds the client, sends
+/// the JSON body, classifies transport/HTTP failures, and parses the response
+/// JSON. Used by chat (non-stream) and compact.
+async fn openai_post_json(
+  config : OpenAIConfig,
+  path : String,
+  body : Json,
+) -> Json raise @posoco.ModelError {
+  let headers = build_headers(config)
+  let client = @http.Client::Client(config.base_url, headers~) catch {
     _ =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=create_client)",
       )
   }
-  let response = client.post("/responses", body.stringify()) catch {
+  let response = client.post(path, body.stringify()) catch {
     _ => {
       client.close()
       raise @posoco.ModelError::Transport(
@@ -513,26 +560,107 @@ async fn OpenAIModelPort::chat_nonstream(
         "OpenAI response parse failure (stage=decode_utf8, body_bytes=\{body_data.binary().length()})",
       )
   }
-  let resp_json : Json = @json.parse(body_text) catch {
+  @json.parse(body_text) catch {
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "OpenAI response parse failure (stage=json, body_chars=\{body_text.length()})",
       )
   }
+}
+
+///|
+async fn OpenAIModelPort::chat_nonstream(
+  self : OpenAIModelPort,
+  messages : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  validate_openai_config(self.config)
+  let body = build_request_body(
+    messages,
+    tools,
+    options,
+    self.config.model,
+    self.config.reasoning_effort,
+  )
+  let resp_json = openai_post_json(self.config, "/responses", body)
   let completion = parse_openai_response(resp_json)
   @posoco.ModelCallResult::{ completion, processed_messages: messages }
 }
 
 ///|
+/// Build the request body for the standalone compaction endpoint.
+fn build_compact_request_body(
+  messages : Array[@posoco.Message],
+  model : String,
+) -> Json {
+  let input_items : Array[Json] = []
+  for m in messages {
+    for item in posoco_message_to_openai_items(m) {
+      input_items.push(item)
+    }
+  }
+  Json::object(
+    Map::from_array([
+      ("model", Json::string(model)),
+      ("input", Json::array(input_items)),
+    ]),
+  )
+}
+
+///|
+/// Validate a /responses/compact response envelope and decode its output
+/// items into canonical messages.
+fn parse_compact_response(
+  resp_json : Json,
+) -> Array[@posoco.Message] raise @posoco.ModelError {
+  let output = match resp_json {
+    Json::Object(map) => {
+      match map.get("error") {
+        Some(Json::Object(_)) =>
+          raise @posoco.ModelError::ResponseParse(
+            "OpenAI compact terminal failure (stage=error, category=provider_error)",
+          )
+        _ => ()
+      }
+      match map.get("output") {
+        Some(Json::Array(_) as out) => out
+        Some(Json::Null) | None => Json::array([])
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "OpenAI compact parse failure (stage=output, category=wrong_type)",
+          )
+      }
+    }
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI compact parse failure (stage=response, category=not_object)",
+      )
+  }
+  openai_items_to_posoco_messages(output)
+}
+
+///|
+/// ModelPort implementation — compact via the official standalone endpoint
+/// (POST /responses/compact). Fully stateless and ZDR-friendly: we send the
+/// full current window and the endpoint returns the canonical next context
+/// window ("pass it into your next /responses call as-is — do not prune"),
+/// which maps to Replace semantics. The opaque compaction item rides
+/// Reasoning.raw and replays verbatim on subsequent chat calls.
 pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
-  _self : OpenAIModelPort,
-  _messages : Array[@posoco.Message],
+  self : OpenAIModelPort,
+  messages : Array[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
-  raise @posoco.ModelError::ResponseParse(
-    "OpenAI does not implement compact (no provider-side endpoint)",
-  )
+  validate_openai_config(self.config)
+  let body = build_compact_request_body(messages, self.config.model)
+  let resp_json = openai_post_json(self.config, "/responses/compact", body)
+  let compacted = parse_compact_response(resp_json)
+  @posoco.CompactResult::{
+    compacted_messages: compacted,
+    mode: @posoco.CompactMode::Replace,
+  }
 }
 
 ///|
