@@ -27,25 +27,39 @@ test "parent_dir: strips trailing slash" {
 ///|
 test "system_prompt: empty bundle renders nothing" {
   let bundle = ContextBundle::empty()
-  let c = ContextPromptContributor::new(bundle~)
+  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
   assert_eq(c.system_prompt(), "")
 }
 
 ///|
-test "system_prompt: renders <cetas-context> envelope with attributes" {
+test "system_prompt: renders caller-selected envelope with attributes" {
   let bundle : ContextBundle = {
     global: None,
     ancestors: [{ path: "/repo/AGENTS.md", content: "build: make test" }],
     warnings: [],
   }
-  let c = ContextPromptContributor::new(bundle~)
+  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
   let rendered = c.system_prompt()
-  assert_true(rendered.contains("<cetas-context "))
+  assert_true(rendered.contains("<posoco-context "))
   assert_true(rendered.contains("type=\"project_instructions\""))
   assert_true(rendered.contains("trust=\"false\""))
   assert_true(rendered.contains("source=\"/repo/AGENTS.md\""))
   assert_true(rendered.contains("build: make test"))
-  assert_true(rendered.contains("</cetas-context>"))
+  assert_true(rendered.contains("</posoco-context>"))
+}
+
+///|
+test "system_prompt: envelope is not hardcoded" {
+  let bundle : ContextBundle = {
+    global: None,
+    ancestors: [{ path: "/repo/AGENTS.md", content: "repo" }],
+    warnings: [],
+  }
+  let c = ContextPromptContributor::new(bundle~, envelope="example-context")
+  let rendered = c.system_prompt()
+  assert_true(rendered.contains("<example-context "))
+  assert_true(rendered.contains("</example-context>"))
+  assert_false(rendered.contains("<posoco-context"))
 }
 
 ///|
@@ -58,13 +72,11 @@ test "system_prompt: multiple documents render as parallel elements" {
     ],
     warnings: [],
   }
-  let c = ContextPromptContributor::new(bundle~)
+  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
   let rendered = c.system_prompt()
-  // Three independent <cetas-context> elements. Count via split length.
-  let parts = rendered.split("<cetas-context ")
+  let parts = rendered.split("<posoco-context ")
   assert_eq(parts.length() - 1, 3)
-  // Global appears before ancestors.
-  let global_pos = match rendered.find("<cetas-context ") {
+  let global_pos = match rendered.find("<posoco-context ") {
     Some(i) => i
     None => -1
   }
@@ -85,12 +97,11 @@ test "system_prompt: xml-escapes special characters in content" {
     ],
     warnings: [],
   }
-  let c = ContextPromptContributor::new(bundle~)
+  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
   let rendered = c.system_prompt()
   assert_true(rendered.contains("&lt;tag&gt;"))
   assert_true(rendered.contains("&amp;"))
   assert_true(rendered.contains("&quot;quotes&quot;"))
   assert_true(rendered.contains("&apos;attrs&apos;"))
-  // Raw special chars must not appear inside the content region.
   assert_false(rendered.contains("<tag>"))
 }

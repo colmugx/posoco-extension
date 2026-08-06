@@ -1,6 +1,6 @@
 name = "colmugx/posoco-ext-context"
 
-version = "0.1.0"
+version = "0.2.0"
 
 import {
   "colmugx/posoco@0.9.0",
@@ -15,6 +15,6 @@ license = "Apache-2.0"
 
 keywords = [ "posoco", "context", "agents-md", "system-prompt" ]
 
-description = "Posoco context loader — discovers and loads AGENTS.md / CLAUDE.md from global + workspace ancestor chain, exposes them as a SystemPromptContributor rendering <cetas-context> envelopes"
+description = "Posoco context loader — discovers and loads AGENTS.md / CLAUDE.md from a global + workspace ancestor chain and renders them through a caller-configured prompt envelope"
 
 source = "src"

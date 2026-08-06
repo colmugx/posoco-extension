@@ -32,8 +32,9 @@ pub fn ContextLoader::new(&@posoco-ext-workspace.WorkspaceFs, home~ : String) ->
 
 pub struct ContextPromptContributor {
   bundle : ContextBundle
+  envelope : String
 }
-pub fn ContextPromptContributor::new(bundle~ : ContextBundle) -> Self
+pub fn ContextPromptContributor::new(bundle~ : ContextBundle, envelope~ : String) -> Self
 pub impl @port.SystemPromptContributor for ContextPromptContributor
 
 // Type aliases
