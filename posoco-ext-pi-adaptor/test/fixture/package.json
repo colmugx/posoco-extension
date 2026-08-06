@@ -1,0 +1,11 @@
+{
+  "name": "pi-adaptor-test-fixture",
+  "version": "1.0.0",
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.mjs",
+      "./second.mjs"
+    ]
+  }
+}
