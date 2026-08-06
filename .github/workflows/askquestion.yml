@@ -15,9 +15,21 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      - name: checkout posoco 0.9.0 workspace member
+        run: git clone --depth 1 --branch main https://github.com/colmugx/posoco.git posoco
+
+      - name: create MoonBit workspace
+        run: |
+          cat > moon.work <<'EOF'
+          members = [
+            "posoco",
+            "posoco-ext-askquestion",
+          ]
+          EOF
 
       - name: install MoonBit
         run: |
@@ -28,9 +40,9 @@ jobs:
         run: |
           moon version --all
           node --version
+          grep 'version = "0.9.0"' posoco/moon.mod
 
       - name: update dependencies
-        working-directory: posoco-ext-askquestion
         run: moon update
 
       - name: check and test native
