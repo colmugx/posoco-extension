@@ -128,10 +128,8 @@ fn render_handoff_document(state : HandoffState) -> String {
 }
 
 ///|
-/// Commit machine state first because it is authoritative. The Markdown view
-/// is then replaced atomically from that committed state. If rendering the
-/// derivative view fails, the command reports that partial failure explicitly
-/// instead of pretending the protocol state was rolled back.
+/// Machine state is authoritative. The derived Markdown is written from the
+/// committed state and any derivative-write failure is reported explicitly.
 async fn Handoff::persist(self : Handoff, state : HandoffState) -> Result[Unit, String] {
   self.fs.mkdir(self.handoff_dir(), recursive=true) catch {
     err => return Err(fs_failure(err))
@@ -269,11 +267,19 @@ fn concat_unique(left : Array[String], right : Array[String]) -> Array[String] {
 }
 
 ///|
+fn prefer_optional(overlay : String?, base : String?) -> String? {
+  match overlay {
+    Some(_) => overlay
+    None => base
+  }
+}
+
+///|
 fn merge_work(base : WorkSnapshot, overlay : WorkSnapshot) -> WorkSnapshot {
   {
-    objective: match overlay.objective { Some(_) => overlay.objective, None => base.objective },
-    current_step: match overlay.current_step { Some(_) => overlay.current_step, None => base.current_step },
-    next_action: match overlay.next_action { Some(_) => overlay.next_action, None => base.next_action },
+    objective: prefer_optional(overlay.objective, base.objective),
+    current_step: prefer_optional(overlay.current_step, base.current_step),
+    next_action: prefer_optional(overlay.next_action, base.next_action),
     completed: concat_unique(base.completed, overlay.completed),
     pending: concat_unique(base.pending, overlay.pending),
     validation_passed: concat_unique(base.validation_passed, overlay.validation_passed),
@@ -328,7 +334,8 @@ async fn Handoff::create_handoff(
           )
         Active =>
           match state.target_session_id {
-            Some(owner) if owner == session_id => inherited = merge_work(state.work, inherited)
+            Some(owner) if owner == session_id =>
+              inherited = merge_work(state.work, inherited)
             _ =>
               return @posoco.CommandOutcome::Failure(
                 reason="current session does not own the active handoff",
@@ -364,7 +371,9 @@ async fn Handoff::create_handoff(
     Ok(_) =>
       @posoco.CommandOutcome::Success(
         feedback="handoff offered: " + state.id + " (" + self.document_path() + ")",
-        structured=Some(structured_outcome("handoff_created", state, self.document_path())),
+        structured=Some(
+          structured_outcome("handoff_created", state, self.document_path()),
+        ),
         ui_hint=Some(@posoco.UiHint::None),
       )
   }
@@ -415,7 +424,9 @@ async fn Handoff::accept_handoff(
     Ok(_) =>
       @posoco.CommandOutcome::Success(
         feedback="handoff accepted: " + next.id,
-        structured=Some(structured_outcome("handoff_accepted", next, self.document_path())),
+        structured=Some(
+          structured_outcome("handoff_accepted", next, self.document_path()),
+        ),
         ui_hint=Some(@posoco.UiHint::None),
       )
   }
@@ -436,10 +447,14 @@ async fn Handoff::reject_handoff(
     Err(message) => return @posoco.CommandOutcome::Failure(reason=message)
   }
   if state.status != Offered {
-    return @posoco.CommandOutcome::Failure(reason="only an offered handoff can be rejected")
+    return @posoco.CommandOutcome::Failure(
+      reason="only an offered handoff can be rejected",
+    )
   }
   if state.source_session_id == session_id {
-    return @posoco.CommandOutcome::Failure(reason="source session should cancel, not reject, its handoff")
+    return @posoco.CommandOutcome::Failure(
+      reason="source session should cancel, not reject, its handoff",
+    )
   }
   let next : HandoffState = {
     ..state,
@@ -452,7 +467,9 @@ async fn Handoff::reject_handoff(
     Ok(_) =>
       @posoco.CommandOutcome::Success(
         feedback="handoff rejected: " + next.id,
-        structured=Some(structured_outcome("handoff_rejected", next, self.document_path())),
+        structured=Some(
+          structured_outcome("handoff_rejected", next, self.document_path()),
+        ),
         ui_hint=Some(@posoco.UiHint::None),
       )
   }
@@ -472,10 +489,14 @@ async fn Handoff::cancel_handoff(
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
   }
   if state.status != Offered {
-    return @posoco.CommandOutcome::Failure(reason="only an offered handoff can be cancelled")
+    return @posoco.CommandOutcome::Failure(
+      reason="only an offered handoff can be cancelled",
+    )
   }
   if state.source_session_id != session_id {
-    return @posoco.CommandOutcome::Failure(reason="only the source session can cancel this handoff")
+    return @posoco.CommandOutcome::Failure(
+      reason="only the source session can cancel this handoff",
+    )
   }
   let next : HandoffState = { ..state, status: Cancelled }
   match self.persist(next) {
@@ -483,7 +504,9 @@ async fn Handoff::cancel_handoff(
     Ok(_) =>
       @posoco.CommandOutcome::Success(
         feedback="handoff cancelled: " + next.id,
-        structured=Some(structured_outcome("handoff_cancelled", next, self.document_path())),
+        structured=Some(
+          structured_outcome("handoff_cancelled", next, self.document_path()),
+        ),
         ui_hint=Some(@posoco.UiHint::None),
       )
   }
@@ -500,7 +523,9 @@ async fn Handoff::inspect_handoff(self : Handoff) -> @posoco.CommandOutcome {
   }
   @posoco.CommandOutcome::Success(
     feedback=document,
-    structured=Some(structured_outcome("handoff_inspected", state, self.document_path())),
+    structured=Some(
+      structured_outcome("handoff_inspected", state, self.document_path()),
+    ),
     ui_hint=Some(@posoco.UiHint::None),
   )
 }
@@ -512,13 +537,19 @@ async fn Handoff::status_handoff(self : Handoff) -> @posoco.CommandOutcome {
     Ok(None) =>
       @posoco.CommandOutcome::Success(
         feedback="no handoff in this project",
-        structured=Some(Json::object(Map::from_array([("status", Json::string("none"))]))),
+        structured=Some(
+          Json::object(
+            Map::from_array([("status", Json::string("none"))]),
+          ),
+        ),
         ui_hint=Some(@posoco.UiHint::None),
       )
     Ok(Some(state)) =>
       @posoco.CommandOutcome::Success(
         feedback="handoff " + state.id + ": " + state.status.to_wire(),
-        structured=Some(structured_outcome("handoff_status", state, self.document_path())),
+        structured=Some(
+          structured_outcome("handoff_status", state, self.document_path()),
+        ),
         ui_hint=Some(@posoco.UiHint::None),
       )
   }
@@ -543,7 +574,14 @@ pub impl @posoco.CommandPort for Handoff with fn commands(_self : Handoff) -> Ar
           ptype: @posoco.ParamType::Str,
           required: false,
           default: Some(Json::string("status")),
-          choices: Some(["create", "inspect", "accept", "reject", "cancel", "status"]),
+          choices: Some([
+            "create",
+            "inspect",
+            "accept",
+            "reject",
+            "cancel",
+            "status",
+          ]),
           positional: true,
         },
         @posoco.CommandParam::{
