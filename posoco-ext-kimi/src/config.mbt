@@ -15,6 +15,10 @@ pub(all) struct KimiConfig {
   reasoning_effort : String
   /// Effort values declared by the provider model catalog.
   thinking_efforts : Array[String]
+  /// Product identity headers (User-Agent + X-Msh-*). Populated by the
+  /// provider factory when impersonating kimi-code-cli; merged under the
+  /// Authorization/Content-Type chat headers so the chat wire contract wins.
+  identity_headers : Map[String, String]
 } derive(Eq, Debug)
 
 ///|
@@ -26,6 +30,7 @@ pub fn KimiConfig::new(
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
   thinking_efforts? : Array[String]? = None,
+  identity_headers? : Map[String, String] = Map::from_array([]),
 ) -> KimiConfig {
   let declared_efforts = match thinking_efforts {
     Some(values) => values
@@ -50,6 +55,7 @@ pub fn KimiConfig::new(
     endpoint_prefix,
     reasoning_effort,
     thinking_efforts: declared_efforts,
+    identity_headers,
   }
 }
 
@@ -88,13 +94,16 @@ pub fn KimiConfig::with_reasoning_effort(
 ///|
 /// Build the provider-owned OAuth transport configuration. Hosts should pass
 /// the opaque credential and model id here instead of selecting the `/coding`
-/// endpoint themselves.
+/// endpoint themselves. `identity_headers` carries the product identity set
+/// (User-Agent + X-Msh-*) the provider needs to impersonate kimi-code-cli for
+/// the managed endpoint.
 pub fn KimiConfig::from_oauth_credential(
   credential : @oauth.Credential,
   model : String,
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
   thinking_efforts? : Array[String]? = None,
+  identity_headers? : Map[String, String] = Map::from_array([]),
 ) -> KimiConfig {
   KimiConfig::new(
     credential.access_token,
@@ -103,6 +112,7 @@ pub fn KimiConfig::from_oauth_credential(
     endpoint_prefix~,
     reasoning_effort~,
     thinking_efforts~,
+    identity_headers~,
   )
 }
 

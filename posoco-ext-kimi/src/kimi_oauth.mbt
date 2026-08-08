@@ -13,20 +13,32 @@ let kimi_client_id : String = "17e5f671-d194-4dfb-9706-5516cb48c098"
 let kimi_oauth_host : String = "https://auth.kimi.com"
 
 ///|
-let kimi_api_base : String = "https://api.kimi.com/coding"
+let kimi_api_base : String = "https://api.kimi.com/coding/v1"
 
 ///|
 /// Kimi OAuth provider. Implements @oauth.OAuthProvider via device flow.
 pub(all) struct KimiOAuth {
   /// Optional injected HTTP transport used by deterministic tests/hosts.
   transport : &@oauth.OAuthHttpTransport?
+  /// Optional stable device id reported via `X-Msh-Device-Id`. Hosts that
+  /// persist a device id across runs pass it here; when absent a fresh
+  /// process-local UUID is minted per request set (see identity.mbt).
+  device_id : String?
 }
 
 ///|
 pub fn KimiOAuth::KimiOAuth(
   transport? : &@oauth.OAuthHttpTransport? = None,
+  device_id? : String = "",
 ) -> KimiOAuth {
-  { transport, }
+  {
+    transport,
+    device_id: if device_id.length() > 0 {
+      Some(device_id)
+    } else {
+      None
+    },
+  }
 }
 
 ///|
@@ -41,11 +53,16 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn login(
   self : KimiOAuth,
   interaction : &@oauth.AuthInteraction,
 ) -> @oauth.Credential raise @oauth.OAuthError {
+  let identity_headers = match self.device_id {
+    Some(id) => kimi_default_headers(device_id=id)
+    None => kimi_default_headers()
+  }
   let config : @oauth.DeviceFlowConfig = {
     client_id: kimi_client_id,
     device_auth_endpoint: kimi_oauth_host + "/api/oauth/device_authorization",
     token_endpoint: kimi_oauth_host + "/api/oauth/token",
     scope: "openid profile email offline_access",
+    default_headers: identity_headers,
   }
   match self.transport {
     Some(transport) =>
@@ -59,10 +76,18 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn refresh(
   self : KimiOAuth,
   credential : @oauth.Credential,
 ) -> @oauth.Credential raise @oauth.OAuthError {
-  let headers : Map[String, String] = Map([
-    ("Content-Type", "application/x-www-form-urlencoded"),
-    ("Accept", "application/json"),
-  ])
+  // Identity headers are the base layer; Content-Type/Accept override any
+  // same-named default so the RFC 8628 form/JSON wire contract is preserved.
+  let identity_headers = match self.device_id {
+    Some(id) => kimi_default_headers(device_id=id)
+    None => kimi_default_headers()
+  }
+  let headers : Map[String, String] = Map::from_array([])
+  for k, v in identity_headers {
+    headers[k] = v
+  }
+  headers["Content-Type"] = "application/x-www-form-urlencoded"
+  headers["Accept"] = "application/json"
   let body = "client_id=" +
     @oauth.oauth_form_url_encode(kimi_client_id) +
     "&grant_type=refresh_token&refresh_token=" +

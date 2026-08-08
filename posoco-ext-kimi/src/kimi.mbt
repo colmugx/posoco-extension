@@ -5,12 +5,18 @@
 /// Uses @http.post / @http.post_stream with the full endpoint URL.
 
 ///|
-/// Build HTTP headers for kimi API requests.
+/// Build HTTP headers for kimi API requests. Identity headers (User-Agent +
+/// X-Msh-*) form the base layer when the provider impersonates kimi-code-cli;
+/// Authorization and Content-Type always override any same-named default so
+/// the chat wire contract stays authoritative.
 fn build_headers(config : KimiConfig) -> Map[String, String] {
-  {
-    "Authorization": "Bearer \{config.api_key}",
-    "Content-Type": "application/json",
+  let headers : Map[String, String] = Map::from_array([])
+  for k, v in config.identity_headers {
+    headers[k] = v
   }
+  headers["Authorization"] = "Bearer \{config.api_key}"
+  headers["Content-Type"] = "application/json"
+  headers
 }
 
 ///|
@@ -63,6 +69,7 @@ fn resolve_thinking_config(
 /// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for KimiModelPort with fn chat(
   self : KimiModelPort,
+  _scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -300,6 +307,7 @@ fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
 /// compact safe-point reports a typed failure rather than silently no-op'ing.
 pub impl @posoco.ModelPort for KimiModelPort with fn compact(
   _self : KimiModelPort,
+  _scope : @posoco.InvocationScope,
   _messages : Array[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,

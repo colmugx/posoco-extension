@@ -376,16 +376,23 @@ fn kimi_models_url(base_url : String, endpoint_prefix : String) -> String {
 ///|
 /// Fetch and decode a live Kimi catalog. OAuth and API-key callers pass their
 /// provider-selected base URL and opaque token; the host never builds this URL.
+/// `identity_headers` carries the product identity set (User-Agent + X-Msh-*)
+/// when the provider needs to impersonate kimi-code-cli for the managed
+/// `/coding/v1/models` endpoint; it is merged under the Authorization/Accept
+/// headers so the catalog wire contract stays authoritative.
 pub async fn fetch_kimi_models(
   base_url : String,
   access_token : String,
   endpoint_prefix? : String = "",
+  identity_headers? : Map[String, String] = Map::from_array([]),
 ) -> Array[KimiModelInfo] raise @posoco.ModelError {
-  let headers : Map[String, String] = Map::from_array([
-    ("Authorization", "Bearer " + access_token),
-    ("Accept", "application/json"),
-  ])
-  let (response, body_data) = @async.with_timeout(30000, fn() {
+  let headers : Map[String, String] = Map::from_array([])
+  for k, v in identity_headers {
+    headers[k] = v
+  }
+  headers["Authorization"] = "Bearer " + access_token
+  headers["Accept"] = "application/json"
+  let (response, body_data) = @async.with_timeout(30000, () => {
     @http.get(kimi_models_url(base_url, endpoint_prefix), headers~)
   }) catch {
     @async.TimeoutError =>

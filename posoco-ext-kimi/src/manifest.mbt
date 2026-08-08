@@ -1,12 +1,4 @@
 ///|
-// ============================================================================
-// posoco-ext-kimi — Extension manifest.
-//
-// KimiModelPort implements `@posoco.ModelPort` (HTTP chat to kimi's
-// OpenAI-compatible API). It contributes a single model slot; multi-model
-// routing across providers (kimi + OpenAI + Kimi) is the host's concern,
-// typically solved by a meta-extension like posoco-ext-llm.
-// ============================================================================
 
 ///|
 pub impl @posoco.Extension for KimiModelPort with fn extension_id(_self) -> String {
@@ -21,9 +13,7 @@ pub impl @posoco.Extension for KimiModelPort with fn manifest(self) -> @posoco.E
     tools: [],
     sessions: [],
     observers: [],
-    pre_model_hooks: [],
-    pre_tool_hooks: [],
-    post_event_hooks: [],
+    hooks: [],
     memory: [],
     lifecycle: [],
     commands: [],

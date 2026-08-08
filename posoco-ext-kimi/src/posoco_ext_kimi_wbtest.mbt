@@ -113,6 +113,16 @@ async test "Kimi OAuth refresh matches form wire and preserves token fields" {
     Some(value) => assert_eq(value, "application/json")
     None => fail("missing accept header")
   }
+  // Identity headers must reach the OAuth host on every request, including
+  // refresh, so the host recognises the client as a coding agent.
+  match request.headers.get("User-Agent") {
+    Some(value) => assert_true(value.contains("kimi-code-cli/"))
+    None => fail("missing User-Agent identity header on refresh")
+  }
+  match request.headers.get("X-Msh-Platform") {
+    Some(value) => assert_eq(value, "kimi_code_cli")
+    None => fail("missing X-Msh-Platform identity header on refresh")
+  }
 }
 
 ///|
@@ -501,12 +511,10 @@ test "sse_tool_call_delta" {
 test "sse_no_double_push_with_forwarding_callback" {
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let forwarded : Array[@posoco.StreamChunk] = []
-  // Production-style callback: forward the chunk to the host. Accumulation is
-  // owned by process_kimi_sse; the callback must not also push.
-  let on_typed = fn(c : @posoco.StreamChunk) {
-    acc.push(c)
-    forwarded.push(c)
-  }
+  // Production-style callback: forward the chunk to the host ONLY.
+  // Accumulation is owned by process_kimi_sse (it calls acc.push); if the
+  // callback also pushed, every token would be doubled.
+  let on_typed = fn(c : @posoco.StreamChunk) { forwarded.push(c) }
   let text_data =
     #|{"choices":[{"delta":{"content":"早上好"}}]}
   let reasoning_data =
@@ -533,7 +541,10 @@ test "encode_message_reasoning_resent_with_tool_calls" {
         arguments: Json::empty_object(),
       },
     ],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking about this..." }),
+    reasoning=Some(@posoco.Reasoning::{
+      content: "thinking about this...",
+      raw: None,
+    }),
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
   let json = encode_message(msg)
@@ -545,20 +556,26 @@ test "encode_message_reasoning_resent_with_tool_calls" {
 }
 
 ///|
-/// kimi rule: assistant WITHOUT tool_calls — reasoning_content is omitted
-/// even if present (saves tokens, preserves prefix cache).
-test "encode_message_reasoning_omitted_without_tool_calls" {
+/// kimi rule (verified against kimi-code/kosong): reasoning_content is
+/// UNCONDITIONALLY preserved on every assistant message, regardless of
+/// tool_calls. Removing it breaks prefix cache (byte-for-byte longest-prefix
+/// matching) and disrupts reasoning signature continuity. This is the
+/// thinking.keep="all" default policy.
+test "encode_message_reasoning_preserved_without_tool_calls" {
   let msg : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("answer")],
     tool_calls=[],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking..." }),
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
     finish_reason=@posoco.FinishReason::Stop,
   )
   let json = encode_message(msg)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
-    None => () // correct: omitted
-    _ => fail("reasoning_content should be omitted for non-tool-call turns")
+    Some(String(r)) => assert_eq(r, "thinking...")
+    _ =>
+      fail(
+        "reasoning_content must be preserved even without tool_calls (prefix cache)",
+      )
   }
 }
 
@@ -583,6 +600,48 @@ test "encode_message_tool_calls_no_reasoning" {
   match obj.get("reasoning_content") {
     None => () // correct: None means don't emit
     _ => fail("should not emit reasoning_content when it's None")
+  }
+}
+
+///|
+/// Tool-role messages MUST carry the sanitized `tool_call_id` of the assistant
+/// tool_call they answer — same charset/length rules as assistant-side ids so
+/// correlation matches byte-for-byte.
+test "encode_message_tool_result_carries_tool_call_id" {
+  let msg : @posoco.Message = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_42"),
+    tool_name=@posoco.ToolName::unchecked("read_file"),
+    outcome=@posoco.ToolOutcome::Success(
+      content="file contents",
+      structured=None,
+    ),
+  )
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("role") {
+    Some(String(r)) => assert_eq(r, "tool")
+    _ => fail("expected tool role")
+  }
+  match obj.get("tool_call_id") {
+    Some(String(id)) => assert_eq(id, "call_42")
+    _ => fail("tool message MUST carry tool_call_id")
+  }
+}
+
+///|
+/// Kimi rejects ids outside [a-zA-Z0-9_-]; the tool-role message must sanitize
+/// exactly like the assistant-side tool_call id it answers.
+test "encode_message_tool_result_sanitizes_tool_call_id" {
+  let msg : @posoco.Message = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call:42|/x"),
+    tool_name=@posoco.ToolName::unchecked("read_file"),
+    outcome=@posoco.ToolOutcome::Success(content="ok", structured=None),
+  )
+  let json = encode_message(msg)
+  guard json is Object(obj) else { fail("expected object") }
+  match obj.get("tool_call_id") {
+    Some(String(id)) => assert_eq(id, "call_42__x")
+    _ => fail("tool message MUST carry tool_call_id")
   }
 }
 
@@ -828,21 +887,9 @@ test "build_chat_request_off_disables_thinking_no_warn" {
   assert_eq(logger.events.length(), 0)
 }
 
-// ---------------------------------------------------------------------------
-// Note: build_chat_request_named_tool_choice, build_chat_request_medium_falls_back_with_warn,
-// and build_chat_request_low_and_minimal_fallback were removed.
-// ToolChoice and ReasoningEffort are deleted from the public API; the
-// thinking-config + reasoning-effort fallback routing that those tests
-// exercised now lives inside the modelport (see default_thinking_config in
-// kimi.mbt), and build_chat_request's effort_str is a plain String? that
-// passes through verbatim with no fallback warnings.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Error-transparency fixtures (offline, no network).
 // These use non-async test blocks with try/catch since decode_chat_response
 // is synchronous but raises ModelError.
-// ---------------------------------------------------------------------------
 
 ///|
 /// Build a tool-call entry JSON object with the given arguments string.
@@ -951,18 +998,15 @@ test "t07b_kimi_malformed_sse_is_loud_and_redacted" {
 }
 
 ///|
-test "t07b_kimi_missing_sse_structure_is_loud" {
+test "t07b_kimi_content_free_chunk_is_skipped" {
+  // No choices/usage/error keys: a preamble or keepalive chunk carries no
+  // content; skipping it must not fail the stream (policy moved to the
+  // shared posoco-kit-chat-completions parser).
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let missing_choices =
+  let content_free =
     #|{"id":"response_without_choices"}
-  let result = Ok(process_kimi_sse(missing_choices, acc, fn(_) { () })) catch {
-    e => Err(e)
-  }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(msg)) =>
-      assert_true(msg.contains("stage=choices"))
-    _ => fail("expected ResponseParse for missing choices")
-  }
+  let done = process_kimi_sse(content_free, acc, fn(_) { () })
+  assert_false(done)
 }
 
 ///|
@@ -1221,7 +1265,8 @@ test "t07b_kimi_valid_nonstream_response_still_decodes" {
   let decoded = decode_chat_response(response)
   assert_true(decoded.finish_reason() is @posoco.FinishReason::Stop)
   assert_true(
-    decoded.message.reasoning == Some(@posoco.Reasoning::{ content: "checked" }),
+    decoded.message.reasoning ==
+    Some(@posoco.Reasoning::{ content: "checked", raw: None }),
   )
   match decoded.usage {
     Some(usage) => {
@@ -1352,4 +1397,44 @@ test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
     "body_bytes=11, body_category=invalid_utf8",
   )
   assert_kimi_http_error_summary(BodyReadFailed, "body_category=read_failed")
+}
+
+///|
+/// Identity headers must mirror MoonshotAI/kimi-code's
+/// `createKimiDefaultHeaders`: a product User-Agent plus the six `X-Msh-*`
+/// device headers, all non-empty, with the device id echoing back when
+/// supplied. Without these the OAuth host records the session as "未知设备".
+test "kimi_default_headers mirrors kimi-code-cli identity set" {
+  let headers = kimi_default_headers(
+    device_id="11111111-1111-4111-8111-111111111111",
+  )
+  let expected_keys = [
+    "User-Agent", "X-Msh-Platform", "X-Msh-Version", "X-Msh-Device-Name", "X-Msh-Device-Model",
+    "X-Msh-Os-Version", "X-Msh-Device-Id",
+  ]
+  for key in expected_keys {
+    assert_true(headers.contains(key))
+    match headers[key] {
+      value => assert_true(value.length() > 0)
+    }
+  }
+  // Product token shape mirrors kimi-code-cli: `kimi-code-cli/<version>`.
+  assert_eq(headers["User-Agent"], "kimi-code-cli/1.2.3")
+  assert_eq(headers["X-Msh-Platform"], "kimi_code_cli")
+  // The supplied device id is echoed back verbatim.
+  assert_eq(headers["X-Msh-Device-Id"], "11111111-1111-4111-8111-111111111111")
+}
+
+///|
+/// Without an injected device id the headers still carry a freshly minted
+/// process-local UUID (so the OAuth request is never blank); two calls in the
+/// same process produce different ids (no hidden cross-call stability).
+test "kimi_default_headers mints a fallback device id when none supplied" {
+  let headers_a = kimi_default_headers()
+  let headers_b = kimi_default_headers()
+  let a = headers_a["X-Msh-Device-Id"]
+  let b = headers_b["X-Msh-Device-Id"]
+  assert_true(a.length() > 0)
+  assert_true(b.length() > 0)
+  assert_true(a != b)
 }

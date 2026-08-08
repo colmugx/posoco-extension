@@ -42,9 +42,10 @@ fn sanitize_tool_call_id(id : String) -> String {
 ///|
 /// Encode a kernel Message into a kimi chat message JSON object.
 fn encode_message(msg : @posoco.Message) -> Json {
-  let (role, content_blocks, tool_calls, reasoning_text) = match msg {
-    SystemMessage(content~) => ("system", content, [], None)
-    UserMessage(content~) => ("user", content, [], None)
+  let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
+    msg {
+    SystemMessage(content~) => ("system", content, [], None, None)
+    UserMessage(content~) => ("user", content, [], None, None)
     AssistantMessage(content~, tool_calls~, reasoning~, finish_reason~) => {
       let _ = finish_reason
       // Read .content directly — Reasoning's Show impl only renders a
@@ -53,17 +54,19 @@ fn encode_message(msg : @posoco.Message) -> Json {
         Some(r) => Some(r.content)
         None => None
       }
-      ("assistant", content, tool_calls, reasoning_str)
+      ("assistant", content, tool_calls, None, reasoning_str)
     }
     ToolMessage(call_id~, tool_name~, outcome~) => {
-      // Tool messages carry the outcome content as the wire "content".
+      // Tool messages carry the outcome content as the wire "content", plus
+      // the sanitized `tool_call_id` of the assistant tool_call they answer
+      // (same charset/length rules as assistant-side ids, so correlation
+      // matches byte-for-byte).
       let outcome_text = outcome_to_wire_text(outcome)
       let tool_blocks : Array[@posoco.Content] = [
         @posoco.Content::Text(outcome_text),
       ]
-      let _ = call_id
       let _ = tool_name
-      ("tool", tool_blocks, [], None)
+      ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
   // Concatenate Text content blocks into a single string (kimi does not
@@ -77,6 +80,10 @@ fn encode_message(msg : @posoco.Message) -> Json {
   }
   let content_str = text_builder.to_string()
   let obj : Map[String, Json] = { "role": Json::string(role) }
+  match tool_call_id {
+    Some(id) => obj["tool_call_id"] = Json::string(sanitize_tool_call_id(id))
+    None => ()
+  }
   // K3: Kimi rejects empty content on assistant messages ("must not be empty").
   // When an assistant message only has tool_calls, omit content entirely.
   // Non-assistant messages always carry content (even if empty).

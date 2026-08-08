@@ -2,16 +2,28 @@
 package "colmugx/posoco-ext-kimi"
 
 import {
-  "colmugx/posoco",
   "colmugx/posoco-devkit",
   "colmugx/posoco-ext-llm",
   "colmugx/posoco-ext-oauth",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub async fn fetch_kimi_models(String, String, endpoint_prefix? : String, identity_headers? : Map[String, String]) -> Array[KimiModelInfo] raise @error.ModelError
+
+pub fn kimi_default_headers(device_id? : String) -> Map[String, String]
+
 pub fn kimi_effort_values(String) -> Array[String]
+
 pub fn kimi_oauth_api_base() -> String
+
+pub fn kimi_user_agent() -> String
+
+pub fn parse_kimi_models(Json) -> Array[KimiModelInfo] raise @error.ModelError
 
 // Errors
 
@@ -22,24 +34,50 @@ pub(all) struct KimiConfig {
   model : String
   endpoint_prefix : String
   reasoning_effort : String
+  thinking_efforts : Array[String]
+  identity_headers : Map[String, String]
 } derive(Eq, @debug.Debug)
-pub fn KimiConfig::from_oauth_credential(@posoco-ext-oauth.Credential, String, endpoint_prefix? : String, reasoning_effort? : String) -> Self
-pub fn KimiConfig::new(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String) -> Self
-pub fn KimiConfig::with_reasoning_effort(Self, String) -> Self raise @posoco.CompositionError
+pub fn KimiConfig::from_oauth_credential(@posoco-ext-oauth.Credential, String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self
+pub fn KimiConfig::new(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self
+pub fn KimiConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+pub(all) struct KimiModelInfo {
+  id : String
+  display_name : String
+  context_window : Int
+  thinking_efforts : Array[String]
+  default_effort : String?
+  capabilities : Array[String]
+}
 
 pub(all) struct KimiModelPort {
   config : KimiConfig
   ctx : @posoco-devkit.ExtContext
 }
-pub fn KimiModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @posoco.CompositionError
+pub fn KimiModelPort::extension_id(Self) -> String
+pub fn KimiModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn KimiModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn KimiModelPort::model_catalog_from_models(Self, Array[KimiModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn KimiModelPort::new(KimiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
-pub impl @posoco.ModelPort for KimiModelPort
-pub impl @posoco.Extension for KimiModelPort
+pub impl @port.Extension for KimiModelPort
+pub impl @port.ModelPort for KimiModelPort
 
 pub(all) struct KimiOAuth {
+  transport : &@posoco-ext-oauth.OAuthHttpTransport?
+  device_id : String?
 }
-pub fn KimiOAuth::KimiOAuth() -> Self
+pub fn KimiOAuth::KimiOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?, device_id? : String) -> Self
 pub impl @posoco-ext-oauth.OAuthProvider for KimiOAuth
+
+pub(all) struct KimiProvider {
+  ctx : @posoco-devkit.ExtContext
+  device_id : String
+}
+pub fn KimiProvider::new(ctx? : @posoco-devkit.ExtContext, device_id? : String) -> Self
+pub impl @posoco-ext-llm.ApiKeyFactory for KimiProvider
+pub impl @posoco-ext-llm.OAuthFactory for KimiProvider
+pub impl @posoco-ext-llm.ProviderFactory for KimiProvider
+pub impl @posoco-ext-llm.RefreshableProviderFactory for KimiProvider
 
 // Type aliases
 

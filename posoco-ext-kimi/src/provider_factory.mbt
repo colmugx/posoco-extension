@@ -1,16 +1,36 @@
-///| 
+///|
 /// Provider-owned configuration and OAuth contribution for Kimi.
 
 ///|
 pub(all) struct KimiProvider {
   ctx : @devkit.ExtContext
+  /// Stable device id reported to the Kimi OAuth host via X-Msh-Device-Id.
+  /// Hosts that persist a device id across runs pass it at construction; an
+  /// empty value (the default) makes KimiOAuth mint a fresh process-local
+  /// UUID per login. Only OAuth (managed `/coding`) requests carry identity
+  /// headers; API-key requests to the Moonshot Open Platform do not.
+  device_id : String
 }
 
 ///|
 pub fn KimiProvider::new(
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  device_id? : String = "",
 ) -> KimiProvider {
-  { ctx, }
+  { ctx, device_id }
+}
+
+///|
+/// Build the kimi-code-cli identity header set for this provider. Returns an
+/// empty map when `device_id` is unset AND the caller does not require it;
+/// callers that need identity headers always call this, since kimi_default_headers
+/// falls back to a process-local UUID internally when device_id is empty.
+fn KimiProvider::identity_headers(self : KimiProvider) -> Map[String, String] {
+  if self.device_id.length() > 0 {
+    kimi_default_headers(device_id=self.device_id)
+  } else {
+    kimi_default_headers()
+  }
 }
 
 ///|
@@ -113,6 +133,7 @@ pub impl @llm.ProviderFactory for KimiProvider with fn build(
         credential,
         model,
         reasoning_effort=effort,
+        identity_headers=self.identity_headers(),
       )
     Some(@oauth.ProviderCredential::ApiKey(credential)) => {
       let base_setting = match kimi_setting_string(source, "base_url") {
@@ -176,6 +197,7 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
         reasoning_effort=effort,
         // Defer effort validation until the authenticated catalog is parsed.
         thinking_efforts=Some(if effort == "" { [] } else { [effort] }),
+        identity_headers=self.identity_headers(),
       )
     Some(@oauth.ProviderCredential::ApiKey(credential)) => {
       let base_setting = match kimi_setting_string(source, "base_url") {
@@ -216,6 +238,10 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
     config.base_url,
     config.api_key,
     endpoint_prefix=config.endpoint_prefix,
+    // OAuth-managed /coding/v1/models needs the kimi-code-cli identity set
+    // to be recognised as a coding agent; API-key mode passes an empty map
+    // (config.identity_headers is empty in that branch).
+    identity_headers=config.identity_headers,
   ) catch {
     err =>
       raise @posoco.CompositionError::ManifestSchemaError(
@@ -243,10 +269,10 @@ pub impl @llm.OAuthFactory for KimiProvider with fn credential_id(
 
 ///|
 pub impl @llm.OAuthFactory for KimiProvider with fn login(
-  _self : KimiProvider,
+  self : KimiProvider,
   interaction : &@oauth.AuthInteraction,
 ) -> @oauth.Credential raise @oauth.OAuthError {
-  let oauth = KimiOAuth::KimiOAuth()
+  let oauth = KimiOAuth::KimiOAuth(device_id=self.device_id)
   oauth.login(interaction)
 }
 
