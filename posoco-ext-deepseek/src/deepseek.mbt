@@ -60,6 +60,7 @@ fn DeepSeekModelPort::default_thinking_config(
 /// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   self : DeepSeekModelPort,
+  _scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -282,6 +283,7 @@ fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
 /// compact safe-point reports a typed failure rather than silently no-op'ing.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
   _self : DeepSeekModelPort,
+  _scope : @posoco.InvocationScope,
   _messages : Array[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,

@@ -143,7 +143,7 @@ pub async fn fetch_deepseek_models(
     ("Authorization", "Bearer " + api_key),
     ("Accept", "application/json"),
   ])
-  let (response, body_data) = @async.with_timeout(30000, fn() {
+  let (response, body_data) = @async.with_timeout(30000, () => {
     @http.get(deepseek_models_url(base_url, endpoint_prefix), headers~)
   }) catch {
     @async.TimeoutError =>

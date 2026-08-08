@@ -390,7 +390,10 @@ test "encode_message_reasoning_resent_with_tool_calls" {
         arguments: Json::empty_object(),
       },
     ],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking about this..." }),
+    reasoning=Some(@posoco.Reasoning::{
+      content: "thinking about this...",
+      raw: None,
+    }),
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
   let json = encode_message(msg)
@@ -408,7 +411,7 @@ test "encode_message_reasoning_omitted_without_tool_calls" {
   let msg : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("answer")],
     tool_calls=[],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking..." }),
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
     finish_reason=@posoco.FinishReason::Stop,
   )
   let json = encode_message(msg)
@@ -990,7 +993,8 @@ test "t07b_deepseek_valid_nonstream_response_still_decodes" {
   let decoded = decode_chat_response(response)
   assert_true(decoded.finish_reason() is @posoco.FinishReason::Stop)
   assert_true(
-    decoded.message.reasoning == Some(@posoco.Reasoning::{ content: "checked" }),
+    decoded.message.reasoning ==
+    Some(@posoco.Reasoning::{ content: "checked", raw: None }),
   )
   match decoded.usage {
     Some(usage) => {
