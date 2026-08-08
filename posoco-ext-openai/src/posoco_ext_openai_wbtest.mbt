@@ -802,8 +802,9 @@ test "openai reasoning effort is carried in responses request body" {
   )
   match body {
     Json::Object(fields) => {
-      // Codex parity: effort + summary:auto, and the encrypted reasoning
-      // payload requested via include.
+      // Codex parity: stateless (store:false), effort + summary:auto, and
+      // the encrypted reasoning payload requested via include.
+      assert_eq(fields.get("store"), Some(Json::boolean(false)))
       assert_eq(
         fields.get("reasoning"),
         Some(@json.parse("{\"effort\":\"high\",\"summary\":\"auto\"}")),

@@ -66,7 +66,7 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
   url : String,
   headers : Map[String, String],
 ) -> OpenAIModelsHttpResponse raise @posoco.ModelError {
-  @async.with_timeout(openai_models_timeout_ms, fn() {
+  @async.with_timeout(openai_models_timeout_ms, () => {
     let (response, body_data) = @http.get(url, headers~) catch {
       err =>
         raise @posoco.ModelError::Transport(

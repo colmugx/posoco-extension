@@ -51,7 +51,7 @@ fn codex_hex_upper(value : Int) -> String {
   if value < 10 {
     value.to_string()
   } else {
-    Char::from_int(value + 55).to_string()
+    (value + 55).unsafe_to_char().to_string()
   }
 }
 

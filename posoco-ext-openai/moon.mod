@@ -3,10 +3,10 @@ name = "colmugx/posoco-ext-openai"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.9.0",
+  "colmugx/posoco@0.10.1",
   "colmugx/posoco-ext-llm@0.1.0",
   "colmugx/posoco-ext-oauth@0.1.0",
-  "moonbitlang/async@0.20.3",
+  "moonbitlang/async@0.20.4",
   "moonbitlang/x@0.4.46",
 }
 

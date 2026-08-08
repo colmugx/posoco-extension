@@ -223,6 +223,10 @@ fn build_request_body(
   let fields : Array[(String, Json)] = [
     ("model", Json::string(model)),
     ("input", Json::array(input_items)),
+    // Codex parity: run stateless (ZDR-friendly). The server keeps no
+    // response state; the full window is replayed as input on every call,
+    // with encrypted reasoning / compaction items carrying the model state.
+    ("store", Json::boolean(false)),
   ]
   if stream {
     fields.push(("stream", Json::boolean(true)))
@@ -282,6 +286,7 @@ fn append_options(
 ///|
 pub impl @posoco.ModelPort for OpenAIModelPort with fn chat(
   self : OpenAIModelPort,
+  _scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -649,6 +654,7 @@ fn parse_compact_response(
 /// Reasoning.raw and replays verbatim on subsequent chat calls.
 pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
   self : OpenAIModelPort,
+  _scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
