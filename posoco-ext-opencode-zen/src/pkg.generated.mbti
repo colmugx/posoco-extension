@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-opencode-zen"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco-ext-llm",
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco-ext-openai-compatible",
+  "colmugx/posoco/error",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn parse_zen_models(Json) -> Array[ZenModelInfo] raise @error.ModelError
+
+pub fn zen_model_catalog(@posoco-ext-openai-compatible.OpenAICompatibleConfig, Array[ZenModelInfo], String, &@posoco-ext-llm.ApiKeyFactory) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+
+pub fn zen_static_catalog(@posoco-ext-openai-compatible.OpenAICompatibleConfig, &@posoco-ext-llm.ApiKeyFactory) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+
+// Errors
+
+// Types and methods
+pub(all) struct OpenCodeZenProvider {
+  ctx : @posoco-devkit.ExtContext
+}
+pub fn OpenCodeZenProvider::new(ctx? : @posoco-devkit.ExtContext) -> Self
+pub impl @posoco-ext-llm.ApiKeyFactory for OpenCodeZenProvider
+pub impl @posoco-ext-llm.ProviderFactory for OpenCodeZenProvider
+pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
+
+pub(all) struct ZenModelInfo {
+  id : String
+  owned_by : String
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

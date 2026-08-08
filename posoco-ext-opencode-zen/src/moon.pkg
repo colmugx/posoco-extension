@@ -1,0 +1,32 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-ext-llm" @llm,
+  "colmugx/posoco-ext-oauth" @oauth,
+  "colmugx/posoco-ext-openai-compatible" @openai_compatible,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+  "moonbitlang/core/strconv",
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: {
+    // HTTP-backed adaptors: native+js only (moonbitlang/async/http is
+    // unavailable on wasm). The pure decoder (parse_zen_models), ZenModelInfo,
+    // the catalog builders, the factory (build/login/provider_id), and the
+    // static catalog path all live in unrestricted core files and compile on
+    // every backend. On wasm, #cfg-guarded fallbacks in
+    // refresh_wasm_fallback.mbt satisfy the RefreshableProviderFactory trait,
+    // so the package exports a complete mbti on every backend — unblocking
+    // downstream packages from resolving @llm types. Mirrors posoco-ext-read.
+    "models_native_js.mbt": [ "native", "js" ],
+    "refresh_native_js.mbt": [ "native", "js" ],
+    "opencode_zen_wbtest.mbt": [ "native" ],
+  },
+)
