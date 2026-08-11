@@ -11,40 +11,75 @@ The extension keeps the active transcript bounded while preserving older session
 
 A checkpoint is intentionally not described as lossless. Exact facts should be recovered from the archive.
 
+## Architecture
+
+`posoco-ext-continuity` is composed entirely from existing Posoco ports. It does not require Continuity-specific changes in Posoco.
+
+One `ContinuityExtension` instance is exposed through several port views so they share the same state:
+
+- **ModelPort decorator** — receives Posoco's existing `InvocationScope` and records the canonical current session/run before delegating to the configured model.
+- **Hook** — owns transcript planning and rewrite behavior. `before_model` is the place where prepared checkpoints replace older settled transcript ranges.
+- **Observer** — owns turn-level lifecycle bookkeeping (`TurnStarted`, `TurnCompleted`, `TurnFailed`, redirects, telemetry).
+- **SystemPromptContributor** — teaches the model the checkpoint/recall protocol.
+- **ToolProvider** — will expose checkpoint/search/read/status once the prepare/commit path is wired.
+
+The important separation is:
+
+- Hook changes execution state.
+- Observer watches committed turn-level outcomes.
+- ModelPort provides the invocation identity that Posoco already defines.
+- The model never chooses a session id.
+
 ## v0.1 status
 
-This branch currently contains the provider-neutral core:
+This branch currently contains:
 
+- Posoco 0.10.1 alignment;
 - context-budget classification;
-- token-size estimation;
+- provider-neutral token-size estimation;
 - conservative working-set planning;
 - structured checkpoint summaries;
 - checkpoint rendering;
 - in-memory per-session archive;
 - lexical history search and paginated read;
 - static `SystemPromptContributor` protocol;
-- extension manifest scaffold;
+- scope-aware `ContinuityExtension` model decorator;
+- Hook + Observer registration on the same extension instance;
 - core tests.
 
-The runtime adapter is intentionally not implemented against Posoco 0.9.0 because the current `ModelPort` and `ToolProvider` execution boundaries do not receive the canonical current `RunId` / `SessionId`. Implementing the history tools before that API exists would require model-supplied session IDs or global mutable session state, both of which are rejected by design.
+The remaining runtime work is:
 
-See [`POSOCO_INTEGRATION.md`](POSOCO_INTEGRATION.md) for the small backwards-compatible Posoco API addition required to complete the adapter.
+1. bind planner candidates to the `InvocationScope` observed by the model decorator;
+2. implement `session_checkpoint` prepare semantics;
+3. apply prepared checkpoints from `Hook::before_model` as canonical transcript rewrites;
+4. expose `session_history_search`, `session_history_read`, and `session_continuity_status`;
+5. add durable archive storage and end-to-end tests.
 
-## Intended tools after scoped runtime support lands
+## Composition
 
-- `session_checkpoint` — prepare a structured checkpoint for a host-selected historical candidate.
-- `session_history_search` — search only the current session archive.
-- `session_history_read` — paginated exact read from one archived entry.
-- `session_continuity_status` — report active/archive/checkpoint state.
+Continuity wraps the model that would otherwise be registered directly:
 
-The model never supplies a session identifier to these tools.
+```moonbit
+let continuity = continuity_extension(model as &@posoco.ModelPort)
+
+let agent = @posoco.Agent(
+  exts=[
+    continuity as &@posoco.Extension,
+    // session store and other tool extensions...
+  ],
+  config=...,
+)
+```
+
+Only the wrapped Continuity model should be contributed to the final Agent model slot.
 
 ## Safety invariants
 
 1. Current intent stays active.
 2. History is archived before it is folded out of the canonical transcript.
 3. Checkpoints are working hints; archives are historical evidence.
-4. Session identity comes from Posoco, never from the model.
+4. Session identity comes from Posoco's canonical invocation scope, never from model arguments.
+5. Hook and Observer responsibilities remain separate: interception in Hook, lifecycle/telemetry in Observer.
 
 ## License
 
