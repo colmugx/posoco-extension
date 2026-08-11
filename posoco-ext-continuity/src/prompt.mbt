@@ -1,7 +1,7 @@
 ///|
 /// Static session-continuity protocol. Dynamic checkpoint candidates are
-/// injected by the future scoped ModelPort adapter and are intentionally not
-/// persisted as part of this contributor.
+/// injected by the Continuity Hook when the planner decides older settled work
+/// can leave the active working set.
 pub struct ContinuityPrompt {}
 
 ///|
