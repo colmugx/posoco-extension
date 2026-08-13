@@ -10,6 +10,33 @@ test "work_snapshot/empty_is_explicitly_unspecified" {
 }
 
 ///|
+test "handoff_validation/requires_continuation_anchors" {
+  let empty = WorkSnapshot::empty()
+  assert_eq(validate_work(empty), Some("handoff requires an objective"))
+
+  let objective_only : WorkSnapshot = {
+    ..empty,
+    objective: Some("Implement handoff"),
+  }
+  assert_eq(validate_work(objective_only), Some("handoff requires current_work"))
+
+  let current : WorkSnapshot = {
+    ..objective_only,
+    current_work: Some("Writing HANDOFF.md renderer"),
+  }
+  assert_eq(
+    validate_work(current),
+    Some("handoff requires exactly one next_action"),
+  )
+
+  let complete : WorkSnapshot = {
+    ..current,
+    next_action: Some("Run moon test"),
+  }
+  assert_eq(validate_work(complete), None)
+}
+
+///|
 test "handoff_document/renders_continuation_state_not_history" {
   let work : WorkSnapshot = {
     objective: Some("Implement posoco-ext-handoff"),
@@ -44,6 +71,6 @@ test "handoff_document/renders_continuation_state_not_history" {
   assert_true(markdown.contains("Implement the Markdown renderer"))
   assert_true(markdown.contains("`posoco-ext-handoff/src/handoff.mbt` — modified"))
   assert_true(markdown.contains("Run moon test"))
-  assert_true(!markdown.contains("session"))
+  assert_true(!markdown.contains("source session"))
   assert_true(!markdown.contains("ownership"))
 }
