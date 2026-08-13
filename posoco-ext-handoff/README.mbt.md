@@ -8,8 +8,8 @@ an LLM.
 
 Posoco's message tree owns conversation history. `posoco-ext-handoff` records
 the complementary state needed to continue the work now: objective, completion
-criteria, current work, workspace facts, validation, and one immediate next
-action.
+criteria, constraints, completed work, current work, decisions, blockers,
+workspace facts, validation, and one immediate next action.
 
 It writes one project-local artifact:
 
@@ -29,8 +29,11 @@ Structured callers may additionally provide:
 
 - `objective`
 - `done_when[]`
+- `constraints[]`
 - `completed[]`
 - `current_work`
+- `decisions[]`
+- `blockers[]`
 - `next_action`
 - `queue[]`
 - `notes[]`
@@ -38,9 +41,32 @@ Structured callers may additionally provide:
 - `validation_failed[]`
 - `validation_not_run[]`
 
-The extension also accepts a deterministic `collect_work` callback. Explicit
-command fields overlay the collected work state; arrays are merged without
-duplicates.
+## Work sources
+
+Products may contribute deterministic work facts through one or more
+`HandoffWorkSource` implementations:
+
+```moonbit
+pub(open) trait HandoffWorkSource {
+  fn handoff_work(Self) -> WorkSnapshot
+}
+```
+
+This is intentionally an extension-local seam, not a Posoco port. A handoff
+must not reverse-query another port's private state. If a planner, task manager,
+or product workflow already knows useful work facts, the product adapts those
+facts explicitly into `HandoffWorkSource`.
+
+Sources are merged in declaration order:
+
+- later sources override singular fields (`objective`, `current_work`,
+  `next_action`)
+- list fields append unique facts while preserving order
+- explicit `/handoff create` fields are merged last and therefore win
+
+`HANDOFF.md` itself is never read as a work source. Re-running `create` takes a
+fresh snapshot from configured sources plus the current workspace, so stale
+handoff content cannot silently leak into the next handoff.
 
 ## HANDOFF.md contract
 
@@ -50,8 +76,11 @@ A generated document uses the stable section order below:
 # Handoff
 ## Objective
 ## Done When
+## Constraints
 ## Completed
 ## Current Work
+## Decisions
+## Blockers
 ## Workspace
 ### Changes
 ## Validation
@@ -70,7 +99,8 @@ anchors are known:
 - `Current Work`
 - exactly one `Next Action`
 
-`Done When`, `Completed`, `Queue`, `Notes`, and validation lists may be empty.
+The other sections may be empty. `Next Action` is intentionally singular;
+subsequent executable work belongs in `Queue`.
 
 ## Workspace seam
 
@@ -98,13 +128,27 @@ Implement `posoco-ext-handoff` as a standalone Posoco extension.
 - `/handoff create` writes `.handoff/HANDOFF.md`
 - No LLM is required
 
+## Constraints
+
+- Do not inspect session or other port-private state
+- Do not modify Posoco core for handoff-specific behavior
+
 ## Completed
 
 - Defined the stable handoff document shape
 
 ## Current Work
 
-Implementing deterministic Markdown rendering.
+Implementing deterministic work-source composition and Markdown rendering.
+
+## Decisions
+
+- Conversation history remains in Posoco's message tree
+- `HANDOFF.md` records continuation state, not conversation history
+
+## Blockers
+
+- `moon` is unavailable in the current development environment
 
 ## Workspace
 
@@ -136,15 +180,15 @@ Run `moon test`, then fix any MoonBit API mismatches.
 
 ## Queue
 
-- Add host workspace probe integration
+- Add a concrete host workspace probe adapter
 
 ## Notes
 
-- Conversation history remains in Posoco's message tree
+- The handoff file is regenerated from current sources on every create
 ```
 
 ## Deliberate v1 boundary
 
 The extension does not implement accept/reject/cancel state, session identity,
-workspace ownership, or conversation export. Those concerns are outside the
-`HANDOFF.md` work-continuation artifact.
+workspace ownership, conversation export, or automatic conversation summary.
+Those concerns are outside the `HANDOFF.md` work-continuation artifact.
