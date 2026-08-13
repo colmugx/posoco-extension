@@ -3,7 +3,7 @@
 /// It does not compact context, inspect session state, or transfer ownership.
 pub(all) struct Handoff {
   cwd : String
-  fs : &@workspace.WorkspaceFs
+  store : &HandoffStore
   probe : &HandoffWorkspaceProbe
   work_sources : Array[&HandoffWorkSource]
 }
@@ -11,11 +11,11 @@ pub(all) struct Handoff {
 ///|
 pub fn Handoff::new(
   cwd : String,
-  fs : &@workspace.WorkspaceFs,
+  store : &HandoffStore,
   probe : &HandoffWorkspaceProbe,
   work_sources : Array[&HandoffWorkSource],
 ) -> Handoff {
-  { cwd, fs, probe, work_sources }
+  { cwd, store, probe, work_sources }
 }
 
 ///|
@@ -30,11 +30,6 @@ fn Handoff::handoff_dir(self : Handoff) -> String {
 ///|
 fn Handoff::document_path(self : Handoff) -> String {
   self.handoff_dir() + "/HANDOFF.md"
-}
-
-///|
-fn fs_failure(error : @workspace.WorkspaceFsError) -> String {
-  error.to_string()
 }
 
 ///|
@@ -291,11 +286,13 @@ async fn Handoff::create_handoff(
       )
   }
   let document = render_handoff_document(work, workspace)
-  self.fs.mkdir(self.handoff_dir(), recursive=true) catch {
-    err => return @posoco.CommandOutcome::Failure(reason=fs_failure(err))
+  match self.store.ensure_dir(self.handoff_dir()) {
+    Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
+    Ok(_) => ()
   }
-  self.fs.write_file_atomic(self.document_path(), document) catch {
-    err => return @posoco.CommandOutcome::Failure(reason=fs_failure(err))
+  match self.store.write_atomic(self.document_path(), document) {
+    Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
+    Ok(_) => ()
   }
   @posoco.CommandOutcome::Success(
     feedback="handoff written: " + self.document_path(),
@@ -307,16 +304,18 @@ async fn Handoff::create_handoff(
 ///|
 async fn Handoff::inspect_handoff(self : Handoff) -> @posoco.CommandOutcome {
   let path = self.document_path()
-  let present = self.fs.exists(path) catch {
-    err => return @posoco.CommandOutcome::Failure(reason=fs_failure(err))
+  let present = match self.store.exists(path) {
+    Ok(value) => value
+    Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
   }
   if !present {
     return @posoco.CommandOutcome::Failure(
       reason="no .handoff/HANDOFF.md exists in this project",
     )
   }
-  let document = self.fs.read_file(path) catch {
-    err => return @posoco.CommandOutcome::Failure(reason=fs_failure(err))
+  let document = match self.store.read(path) {
+    Ok(value) => value
+    Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
   }
   @posoco.CommandOutcome::Success(
     feedback=document,
