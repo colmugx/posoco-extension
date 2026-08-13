@@ -87,14 +87,7 @@ fn push_unique(values : Array[String], value : String) -> Unit {
 
 ///|
 fn remove_value(values : Array[String], value : String) -> Unit {
-  let mut index = 0
-  while index < values.length() {
-    if values[index] == value {
-      values.remove(index)
-    } else {
-      index = index + 1
-    }
-  }
+  values.retain(item => item != value)
 }
 
 ///|
