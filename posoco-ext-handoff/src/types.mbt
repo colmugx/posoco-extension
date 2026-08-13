@@ -28,8 +28,11 @@ pub(all) struct WorkspaceSnapshot {
 pub(all) struct WorkSnapshot {
   objective : String?
   done_when : Array[String]
+  constraints : Array[String]
   completed : Array[String]
   current_work : String?
+  decisions : Array[String]
+  blockers : Array[String]
   next_action : String?
   queue : Array[String]
   notes : Array[String]
@@ -43,8 +46,11 @@ pub fn WorkSnapshot::empty() -> WorkSnapshot {
   {
     objective: None,
     done_when: [],
+    constraints: [],
     completed: [],
     current_work: None,
+    decisions: [],
+    blockers: [],
     next_action: None,
     queue: [],
     notes: [],
@@ -52,6 +58,17 @@ pub fn WorkSnapshot::empty() -> WorkSnapshot {
     validation_failed: [],
     validation_not_run: [],
   }
+}
+
+///|
+/// A deterministic producer of handoff work facts.
+///
+/// This is intentionally an extension-local seam rather than a Posoco port:
+/// handoff must not inspect or reverse-query the internal state of unrelated
+/// ports. Products may adapt their own planner/task/workflow state into this
+/// interface explicitly.
+pub(open) trait HandoffWorkSource {
+  fn handoff_work(Self) -> WorkSnapshot
 }
 
 ///|
