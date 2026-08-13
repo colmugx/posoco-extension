@@ -102,9 +102,17 @@ anchors are known:
 The other sections may be empty. `Next Action` is intentionally singular;
 subsequent executable work belongs in `Queue`.
 
-## Workspace seam
+## Host seams
 
-The host provides a `HandoffWorkspaceProbe` implementation returning:
+Workspace discovery is supplied through `HandoffWorkspaceProbe`:
+
+```moonbit
+pub(open) trait HandoffWorkspaceProbe {
+  fn snapshot(Self, cwd : String) -> Result[WorkspaceSnapshot, String]
+}
+```
+
+It returns:
 
 - project root
 - optional branch
@@ -113,6 +121,21 @@ The host provides a `HandoffWorkspaceProbe` implementation returning:
 
 The extension deliberately does not know how those values are obtained. Git is
 one possible implementation, not part of the handoff protocol.
+
+Persistence is supplied through the minimal `HandoffStore` seam:
+
+```moonbit
+pub(open) trait HandoffStore {
+  async fn exists(Self, path : String) -> Result[Bool, String]
+  async fn read(Self, path : String) -> Result[String, String]
+  async fn ensure_dir(Self, path : String) -> Result[Unit, String]
+  async fn write_atomic(Self, path : String, content : String) -> Result[Unit, String]
+}
+```
+
+This keeps the package independent of `posoco-ext-workspace` or any specific
+filesystem implementation. The host can adapt an existing filesystem service
+without making handoff aware of that service's internal architecture.
 
 ## Example
 
