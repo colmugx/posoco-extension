@@ -1,50 +1,49 @@
 ///|
-test "handoff_state/json_round_trip" {
-  let original : HandoffState = {
-    version: 1,
-    generation: 3,
-    id: "handoff-3-source",
-    status: Offered,
-    source_session_id: "source",
-    target_session_id: None,
-    rejected_by_session_id: None,
-    rejection_reason: None,
-    workspace: {
-      root: "/repo",
-      branch: Some("main"),
-      head: Some("abc123"),
-      signature: "sig",
-      changed_files: ["src/a.mbt", "README.md"],
-    },
-    work: {
-      objective: Some("Implement handoff"),
-      current_step: Some("Wire command context"),
-      next_action: Some("Run tests"),
-      completed: ["protocol types"],
-      pending: ["Cetas integration"],
-      validation_passed: ["codec test"],
-      validation_failed: [],
-      validation_not_run: ["moon test"],
-    },
-  }
-  let json = @json.parse(original.stringify()) catch {
-    _ => fail("generated handoff state must be valid JSON")
-  }
-  match handoff_state_from_json(json) {
-    Ok(decoded) => assert_eq(decoded, original)
-    Err(reason) => fail("round trip failed: " + reason)
-  }
+test "work_snapshot/empty_is_explicitly_unspecified" {
+  let work = WorkSnapshot::empty()
+  assert_eq(work.objective, None)
+  assert_eq(work.current_work, None)
+  assert_eq(work.next_action, None)
+  assert_eq(work.done_when.length(), 0)
+  assert_eq(work.completed.length(), 0)
+  assert_eq(work.queue.length(), 0)
 }
 
 ///|
-test "handoff_state/rejects_unknown_status" {
-  let json = @json.parse(
-    "{\"version\":1,\"generation\":1,\"id\":\"h\",\"status\":\"mystery\",\"source_session_id\":\"s\",\"workspace\":{\"root\":\"/r\",\"signature\":\"x\",\"changed_files\":[]},\"work\":{}}",
-  ) catch {
-    _ => fail("fixture must be valid JSON")
+test "handoff_document/renders_continuation_state_not_history" {
+  let work : WorkSnapshot = {
+    objective: Some("Implement posoco-ext-handoff"),
+    done_when: ["HANDOFF.md is deterministic", "No LLM is required"],
+    completed: ["Defined the handoff document shape"],
+    current_work: Some("Implement the Markdown renderer"),
+    next_action: Some("Run moon test"),
+    queue: ["Add workspace probe integration"],
+    notes: ["Conversation history stays in the Posoco message tree"],
+    validation_passed: ["pure renderer fixture"],
+    validation_failed: [],
+    validation_not_run: ["moon test"],
   }
-  match handoff_state_from_json(json) {
-    Err(reason) => assert_true(reason.contains("status"))
-    Ok(_) => fail("unknown status must not be accepted")
+  let workspace : WorkspaceSnapshot = {
+    root: "/repo",
+    branch: Some("feat/handoff"),
+    head: Some("abc123"),
+    changes: [
+      { path: "posoco-ext-handoff/src/handoff.mbt", status: "modified" },
+      { path: "posoco-ext-handoff/README.mbt.md", status: "modified" },
+    ],
   }
+  let markdown = render_handoff_document(work, workspace)
+  assert_true(markdown.contains("# Handoff"))
+  assert_true(markdown.contains("## Objective"))
+  assert_true(markdown.contains("## Done When"))
+  assert_true(markdown.contains("## Current Work"))
+  assert_true(markdown.contains("## Workspace"))
+  assert_true(markdown.contains("## Validation"))
+  assert_true(markdown.contains("## Next Action"))
+  assert_true(markdown.contains("## Queue"))
+  assert_true(markdown.contains("Implement the Markdown renderer"))
+  assert_true(markdown.contains("`posoco-ext-handoff/src/handoff.mbt` — modified"))
+  assert_true(markdown.contains("Run moon test"))
+  assert_true(!markdown.contains("session"))
+  assert_true(!markdown.contains("ownership"))
 }
