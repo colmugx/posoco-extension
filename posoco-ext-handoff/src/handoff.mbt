@@ -5,7 +5,7 @@ pub(all) struct Handoff {
   cwd : String
   fs : &@workspace.WorkspaceFs
   probe : &HandoffWorkspaceProbe
-  collect_work : () -> WorkSnapshot
+  work_sources : Array[&HandoffWorkSource]
 }
 
 ///|
@@ -13,9 +13,9 @@ pub fn Handoff::new(
   cwd : String,
   fs : &@workspace.WorkspaceFs,
   probe : &HandoffWorkspaceProbe,
-  collect_work : () -> WorkSnapshot,
+  work_sources : Array[&HandoffWorkSource],
 ) -> Handoff {
-  { cwd, fs, probe, collect_work }
+  { cwd, fs, probe, work_sources }
 }
 
 ///|
@@ -80,8 +80,11 @@ pub fn render_handoff_document(
   "# Handoff\n\n" +
   "## Objective\n\n" + markdown_optional(work.objective) + "\n\n" +
   "## Done When\n\n" + markdown_list(work.done_when) + "\n" +
+  "## Constraints\n\n" + markdown_list(work.constraints) + "\n" +
   "## Completed\n\n" + markdown_list(work.completed) + "\n" +
   "## Current Work\n\n" + markdown_optional(work.current_work) + "\n\n" +
+  "## Decisions\n\n" + markdown_list(work.decisions) + "\n" +
+  "## Blockers\n\n" + markdown_list(work.blockers) + "\n" +
   "## Workspace\n\n" +
   "- Root: `" + workspace.root + "`\n" +
   "- Branch: " + markdown_optional(workspace.branch) + "\n" +
@@ -165,8 +168,11 @@ fn work_from_args(args : Json, details : String?) -> WorkSnapshot {
       {
         objective,
         done_when: array_strings_from_args(fields, "done_when"),
+        constraints: array_strings_from_args(fields, "constraints"),
         completed: array_strings_from_args(fields, "completed"),
         current_work: optional_string_from_args(fields, "current_work"),
+        decisions: array_strings_from_args(fields, "decisions"),
+        blockers: array_strings_from_args(fields, "blockers"),
         next_action: optional_string_from_args(fields, "next_action"),
         queue: array_strings_from_args(fields, "queue"),
         notes: array_strings_from_args(fields, "notes"),
@@ -204,12 +210,18 @@ fn prefer_optional(overlay : String?, base : String?) -> String? {
 }
 
 ///|
-fn merge_work(base : WorkSnapshot, overlay : WorkSnapshot) -> WorkSnapshot {
+/// Merge is deterministic and intentionally asymmetric. Later sources override
+/// singular fields and append unique list facts. Command arguments are merged
+/// last, so an explicit `/handoff create` value wins over configured sources.
+pub fn merge_work(base : WorkSnapshot, overlay : WorkSnapshot) -> WorkSnapshot {
   {
     objective: prefer_optional(overlay.objective, base.objective),
     done_when: concat_unique(base.done_when, overlay.done_when),
+    constraints: concat_unique(base.constraints, overlay.constraints),
     completed: concat_unique(base.completed, overlay.completed),
     current_work: prefer_optional(overlay.current_work, base.current_work),
+    decisions: concat_unique(base.decisions, overlay.decisions),
+    blockers: concat_unique(base.blockers, overlay.blockers),
     next_action: prefer_optional(overlay.next_action, base.next_action),
     queue: concat_unique(base.queue, overlay.queue),
     notes: concat_unique(base.notes, overlay.notes),
@@ -217,6 +229,15 @@ fn merge_work(base : WorkSnapshot, overlay : WorkSnapshot) -> WorkSnapshot {
     validation_failed: concat_unique(base.validation_failed, overlay.validation_failed),
     validation_not_run: concat_unique(base.validation_not_run, overlay.validation_not_run),
   }
+}
+
+///|
+fn Handoff::collect_work(self : Handoff) -> WorkSnapshot {
+  let mut work = WorkSnapshot::empty()
+  for source in self.work_sources {
+    work = merge_work(work, source.handoff_work())
+  }
+  work
 }
 
 ///|
@@ -255,7 +276,9 @@ async fn Handoff::create_handoff(
   args : Json,
   details : String?,
 ) -> @posoco.CommandOutcome {
-  let work = merge_work((self.collect_work)(), work_from_args(args, details))
+  // Important: HANDOFF.md is an output, never a work-state source. Repeated
+  // create calls always re-snapshot the configured sources and workspace.
+  let work = merge_work(self.collect_work(), work_from_args(args, details))
   match validate_work(work) {
     Some(reason) => return @posoco.CommandOutcome::Failure(reason~)
     None => ()
