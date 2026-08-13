@@ -72,6 +72,17 @@ pub(open) trait HandoffWorkSource {
 }
 
 ///|
+/// Minimal persistence required by the handoff extension. Keeping this seam
+/// local avoids coupling HANDOFF.md generation to another extension package or
+/// a particular filesystem implementation.
+pub(open) trait HandoffStore {
+  async fn exists(Self, path : String) -> Result[Bool, String]
+  async fn read(Self, path : String) -> Result[String, String]
+  async fn ensure_dir(Self, path : String) -> Result[Unit, String]
+  async fn write_atomic(Self, path : String, content : String) -> Result[Unit, String]
+}
+
+///|
 /// Host-owned workspace adapter. Keeping workspace discovery behind this seam
 /// prevents the handoff extension from reaching through another Posoco port or
 /// depending on one VCS implementation.
