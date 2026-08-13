@@ -1,14 +1,21 @@
 # posoco-ext-handoff
 
-Deterministic current-work checkpoint and ownership transfer for Posoco.
+Deterministic current-work handoff document generation for Posoco.
 
-This extension is **not** a context compactor and does **not** call an LLM.
-It writes the current project handoff to:
+This extension is **not** a context compactor. It does not summarize the
+conversation, inspect another port's session state, transfer ownership, or call
+an LLM.
+
+Posoco's message tree owns conversation history. `posoco-ext-handoff` records
+the complementary state needed to continue the work now: objective, completion
+criteria, current work, workspace facts, validation, and one immediate next
+action.
+
+It writes one project-local artifact:
 
 ```text
 .handoff/
-├── state.json   # authoritative machine protocol state
-└── HANDOFF.md   # deterministic human/agent-readable view
+└── HANDOFF.md
 ```
 
 ## Commands
@@ -16,69 +23,128 @@ It writes the current project handoff to:
 ```text
 /handoff create [objective]
 /handoff inspect
-/handoff accept
-/handoff reject [reason]
-/handoff cancel
-/handoff status
 ```
 
-Structured callers may additionally supply `objective`, `current_step`,
-`next_action`, `completed`, `pending`, `validation_passed`,
-`validation_failed`, and `validation_not_run` fields in the command JSON.
-Missing semantic fields remain unspecified; the extension never invents them.
+Structured callers may additionally provide:
 
-## State machine
+- `objective`
+- `done_when[]`
+- `completed[]`
+- `current_work`
+- `next_action`
+- `queue[]`
+- `notes[]`
+- `validation_passed[]`
+- `validation_failed[]`
+- `validation_not_run[]`
+
+The extension also accepts a deterministic `collect_work` callback. Explicit
+command fields overlay the collected work state; arrays are merged without
+duplicates.
+
+## HANDOFF.md contract
+
+A generated document uses the stable section order below:
 
 ```text
-create                 accept
-  ───────► offered ─────────────► active
-               │                    │
-               ├── reject           └── create (next generation)
-               ▼
-            rejected
-               │
-               └── create (next generation)
-
-source cancel
-     offered ─────────► cancelled ──► create (next generation)
+# Handoff
+## Objective
+## Done When
+## Completed
+## Current Work
+## Workspace
+### Changes
+## Validation
+### Passed
+### Failed
+### Not Run
+## Next Action
+## Queue
+## Notes
 ```
 
-`accept` re-probes the workspace and refuses the transfer when the current
-workspace signature differs from the signature captured by `create`.
+`create` refuses to write an incomplete handoff unless all three continuation
+anchors are known:
 
-An `active` handoff may only be handed off again by its target/owner session.
-An `offered` handoff must be accepted, rejected, or cancelled before another
-handoff can be created.
+- `Objective`
+- `Current Work`
+- exactly one `Next Action`
 
-## Host integration
+`Done When`, `Completed`, `Queue`, `Notes`, and validation lists may be empty.
 
-The host provides two deterministic inputs:
+## Workspace seam
 
-- `HandoffWorkspaceProbe`: captures project root, Git HEAD/branch, changed
-  files, and a stable workspace signature. The signature **must exclude
-  `.handoff/` itself**.
-- `collect_work`: returns structured work facts already known by the host.
+The host provides a `HandoffWorkspaceProbe` implementation returning:
 
-Ownership-changing commands require Posoco's `CommandInvocationContext` so the
-extension receives the current `session_id` explicitly. Existing commands stay
-compatible through the default `CommandPort::invoke_with_context` fallback.
+- project root
+- optional branch
+- optional HEAD
+- changed paths with factual status labels
 
-## Cetas v1
+The extension deliberately does not know how those values are obtained. Git is
+one possible implementation, not part of the handoff protocol.
 
-The Cetas adapter uses fixed-argv Git commands through Bun (no user-provided
-shell command) and chooses the Git top-level directory as the handoff root.
-Plan-mode state is contributed deterministically when available.
+## Example
 
-## Deliberate v1 limits
+```markdown
+# Handoff
 
-- Cross-process `accept` is not yet protected by a compare-and-swap/file lock.
-  Cetas serializes commands within one application process, but two independent
-  processes could race.
-- The protocol says an offered source has relinquished work, but v1 does not
-  yet hard-block subsequent model/tool turns from that source session.
-- `.handoff/` is excluded from the Cetas workspace signature, but v1 does not
-  automatically edit `.git/info/exclude`.
-- The Cetas adapter currently requires a Git worktree for reliable stale-state
-  verification.
+## Objective
 
-These are protocol/runtime hardening tasks, not reasons to add an LLM.
+Implement `posoco-ext-handoff` as a standalone Posoco extension.
+
+## Done When
+
+- `/handoff create` writes `.handoff/HANDOFF.md`
+- No LLM is required
+
+## Completed
+
+- Defined the stable handoff document shape
+
+## Current Work
+
+Implementing deterministic Markdown rendering.
+
+## Workspace
+
+- Root: `/repo`
+- Branch: feat/handoff
+- HEAD: abc123
+
+### Changes
+
+- `posoco-ext-handoff/src/handoff.mbt` — modified
+
+## Validation
+
+### Passed
+
+- renderer fixture
+
+### Failed
+
+- _(none recorded)_
+
+### Not Run
+
+- `moon test`
+
+## Next Action
+
+Run `moon test`, then fix any MoonBit API mismatches.
+
+## Queue
+
+- Add host workspace probe integration
+
+## Notes
+
+- Conversation history remains in Posoco's message tree
+```
+
+## Deliberate v1 boundary
+
+The extension does not implement accept/reject/cancel state, session identity,
+workspace ownership, or conversation export. Those concerns are outside the
+`HANDOFF.md` work-continuation artifact.
