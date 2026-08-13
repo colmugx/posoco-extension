@@ -68,6 +68,41 @@ Sources are merged in declaration order:
 fresh snapshot from configured sources plus the current workspace, so stale
 handoff content cannot silently leak into the next handoff.
 
+### Default mutable source
+
+For products that do not already own structured planner/task state, the package
+provides `HandoffWorkState`. It is a small in-memory `HandoffWorkSource`, not a
+Posoco port and not an extension of its own.
+
+```moonbit
+let work = HandoffWorkState::new()
+work.set_objective("Implement posoco-ext-handoff")
+work.add_done_when("/handoff create writes HANDOFF.md")
+work.add_constraint("Do not inspect session-private state")
+work.set_current_work("Implement mutable work-state support")
+work.set_next_action("Run moon test")
+work.enqueue("Add concrete host adapters")
+work.validation_not_run("moon test")
+
+let handoff = Handoff::new(
+  cwd="/repo",
+  store~,
+  probe~,
+  work_sources=[work],
+)
+```
+
+The state object is intended to be updated as work progresses:
+
+- `complete(item)` removes the item from `queue` and records it in `completed`
+- `add_blocker` / `resolve_blocker` keep only active blockers
+- validation methods move a check between `passed`, `failed`, and `not run`
+  so one check cannot appear in contradictory buckets
+- `snapshot()` returns detached arrays so callers cannot mutate internal state
+  through a previously returned snapshot
+- `clear()` resets the state when the product intentionally starts unrelated
+  work
+
 ## HANDOFF.md contract
 
 A generated document uses the stable section order below:
