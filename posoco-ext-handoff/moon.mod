@@ -4,7 +4,6 @@ version = "0.1.0"
 
 import {
   "colmugx/posoco@0.10.1",
-  "colmugx/posoco-ext-workspace@0.1.0",
 }
 
 readme = "README.mbt.md"
