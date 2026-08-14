@@ -36,7 +36,12 @@ pub impl HandoffStore for DefaultHandoffStore with fn write_atomic(
 ) {
   handoff_atomic_counter.val += 1
   let tmp = "\{path}.tmp-\{handoff_atomic_counter.val}"
-  @fs.write_file(tmp, content, create=0o644) catch {
+  @fs.write_file(
+    tmp,
+    content,
+    create_mode=OpenOrCreate,
+    permission=0o644,
+  ) catch {
     _ => {
       @fs.remove(tmp) catch { _ => () }
       return Err("handoff store write failed: " + path)
