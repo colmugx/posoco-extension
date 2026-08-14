@@ -6,6 +6,17 @@ fn checkpoint_outcome(
     Some(id) => id
     None => return continuity_tool_error("session continuity has no active session")
   }
+  let run_id = match self.active_run_id {
+    Some(id) => id
+    None => return continuity_tool_error("session continuity has no active run")
+  }
+  match self.prepared {
+    Some(_) =>
+      return continuity_tool_error(
+        "a checkpoint is already prepared and awaiting canonical rewrite",
+      )
+    None => ()
+  }
   let fields = match continuity_argument_object(call) {
     Some(value) => value
     None => return continuity_tool_error("session_checkpoint arguments must be an object")
@@ -19,10 +30,12 @@ fn checkpoint_outcome(
     None => return continuity_tool_error("session_checkpoint requires goal")
   }
   let candidate = match self.candidate {
-    Some(value) if value.id == candidate_id && value.session_id == session_id => value
+    Some(value) if value.id == candidate_id &&
+      value.session_id == session_id &&
+      value.run_id == run_id => value
     Some(_) =>
       return continuity_tool_error(
-        "checkpoint candidate is stale or does not match the active session",
+        "checkpoint candidate is stale or does not match the active invocation",
       )
     None => return continuity_tool_error("no checkpoint candidate is currently active")
   }
@@ -50,8 +63,14 @@ fn checkpoint_outcome(
       message,
     })
   }
+  // Safety ordering: exact source messages are archived before any state can
+  // authorize their removal from the canonical transcript.
   self.archive.append(session_id, archived)
   self.prepared = Some({ checkpoint_id, candidate, summary })
+  // A candidate is single-use. The PreparedCheckpoint owns everything the
+  // next before_model boundary needs, so consuming it here also makes a
+  // duplicate session_checkpoint call fail deterministically.
+  self.candidate = None
   continuity_tool_success(
     "checkpoint \{checkpoint_id} archived and prepared for canonical rewrite",
     Json::object(
