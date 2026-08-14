@@ -19,17 +19,17 @@ pub fn Handoff::new(
 }
 
 ///|
-fn Handoff::handoff_dir(self : Handoff) -> String {
-  if self.cwd.has_suffix("/") {
-    self.cwd + ".handoff"
+fn handoff_dir(root : String) -> String {
+  if root.has_suffix("/") {
+    root + ".handoff"
   } else {
-    self.cwd + "/.handoff"
+    root + "/.handoff"
   }
 }
 
 ///|
-fn Handoff::document_path(self : Handoff) -> String {
-  self.handoff_dir() + "/HANDOFF.md"
+fn document_path(root : String) -> String {
+  handoff_dir(root) + "/HANDOFF.md"
 }
 
 ///|
@@ -266,6 +266,15 @@ fn structured_outcome(action : String, path : String) -> Json {
 }
 
 ///|
+fn Handoff::probe_workspace(self : Handoff) -> Result[WorkspaceSnapshot, String] {
+  match self.probe.snapshot(self.cwd) {
+    Err(reason) => Err("workspace snapshot failed: " + reason)
+    Ok(workspace) if workspace.root.length() == 0 => Err("workspace snapshot failed: root is empty")
+    Ok(workspace) => Ok(workspace)
+  }
+}
+
+///|
 async fn Handoff::create_handoff(
   self : Handoff,
   args : Json,
@@ -278,32 +287,35 @@ async fn Handoff::create_handoff(
     Some(reason) => return @posoco.CommandOutcome::Failure(reason~)
     None => ()
   }
-  let workspace = match self.probe.snapshot(self.cwd) {
+  let workspace = match self.probe_workspace() {
     Ok(value) => value
-    Err(reason) =>
-      return @posoco.CommandOutcome::Failure(
-        reason="workspace snapshot failed: " + reason,
-      )
+    Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
   }
+  let dir = handoff_dir(workspace.root)
+  let path = document_path(workspace.root)
   let document = render_handoff_document(work, workspace)
-  match self.store.ensure_dir(self.handoff_dir()) {
+  match self.store.ensure_dir(dir) {
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
     Ok(_) => ()
   }
-  match self.store.write_atomic(self.document_path(), document) {
+  match self.store.write_atomic(path, document) {
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
     Ok(_) => ()
   }
   @posoco.CommandOutcome::Success(
-    feedback="handoff written: " + self.document_path(),
-    structured=Some(structured_outcome("handoff_created", self.document_path())),
+    feedback="handoff written: " + path,
+    structured=Some(structured_outcome("handoff_created", path)),
     ui_hint=Some(@posoco.UiHint::None),
   )
 }
 
 ///|
 async fn Handoff::inspect_handoff(self : Handoff) -> @posoco.CommandOutcome {
-  let path = self.document_path()
+  let workspace = match self.probe_workspace() {
+    Ok(value) => value
+    Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
+  }
+  let path = document_path(workspace.root)
   let present = match self.store.exists(path) {
     Ok(value) => value
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
