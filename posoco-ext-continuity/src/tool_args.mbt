@@ -46,13 +46,6 @@ fn continuity_parse_cursor(text : String) -> Int? {
   Some(value)
 }
 
-fn continuity_option_present[T](value : T?) -> Bool {
-  match value {
-    Some(_) => true
-    None => false
-  }
-}
-
 fn continuity_tool_error(message : String) -> @posoco.ToolOutcome {
   @posoco.ToolOutcome::ToolReportedError(content=message, structured=None)
 }
