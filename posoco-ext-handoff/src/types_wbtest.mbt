@@ -1,16 +1,4 @@
 ///|
-priv struct FixedWorkSource {
-  work : WorkSnapshot
-}
-
-///|
-priv impl HandoffWorkSource for FixedWorkSource with fn handoff_work(
-  self : FixedWorkSource,
-) -> WorkSnapshot {
-  self.work
-}
-
-///|
 test "work_snapshot/empty_is_explicitly_unspecified" {
   let work = WorkSnapshot::empty()
   assert_eq(work.objective, None)
