@@ -3,13 +3,9 @@
 Deterministic current-work handoff document generation for Posoco.
 
 This extension is **not** a context compactor. It does not summarize the
-conversation, inspect another port's session state, transfer ownership, or call
-an LLM.
-
-Posoco's message tree owns conversation history. `posoco-ext-handoff` records
-the complementary state needed to continue the work now: objective, completion
-criteria, constraints, completed work, current work, decisions, blockers,
-workspace facts, validation, and one immediate next action.
+conversation, inspect another port's private state, transfer ownership, or call
+an LLM. Posoco's message tree owns conversation history; `HANDOFF.md` records
+the complementary state required to continue the work now.
 
 It writes one project-local artifact:
 
@@ -25,23 +21,49 @@ It writes one project-local artifact:
 /handoff inspect
 ```
 
-Structured callers may additionally provide:
+## Minimal composition
 
-- `objective`
-- `done_when[]`
-- `constraints[]`
-- `completed[]`
-- `current_work`
-- `decisions[]`
-- `blockers[]`
-- `next_action`
-- `queue[]`
-- `notes[]`
-- `validation_passed[]`
-- `validation_failed[]`
-- `validation_not_run[]`
+The package includes default building blocks, so a product does not need to
+implement custom handoff traits just to get started:
 
-## Work sources
+```moonbit
+let store = DefaultHandoffStore::new()
+
+let workspace = HandoffWorkspaceState::new(
+  "/repo",
+  branch=Some("feat/handoff"),
+  head=Some("abc123"),
+  changes=[
+    { path: "posoco-ext-handoff/src/handoff.mbt", status: "modified" },
+  ],
+)
+
+let work = HandoffWorkState::new()
+work.set_objective("Implement posoco-ext-handoff")
+work.add_done_when("/handoff create writes .handoff/HANDOFF.md")
+work.add_constraint("Do not inspect session-private state")
+work.set_current_work("Finish default host adapters")
+work.set_next_action("Run moon test")
+work.validation_not_run("moon test")
+
+let handoff = Handoff::new(
+  cwd="/repo",
+  store~,
+  probe=workspace,
+  work_sources=[work],
+)
+```
+
+`DefaultHandoffStore` is implemented for native and JavaScript targets. It
+creates `.handoff/` as needed and replaces `HANDOFF.md` through a sibling
+temporary file followed by rename.
+
+`HandoffWorkspaceState` is intentionally host-pushed rather than Git-aware. A
+product that already knows branch/HEAD/change facts can update the state
+explicitly. The handoff package does not spawn Git or invent a clean workspace
+when those facts are unavailable.
+
+## Work state
 
 Products may contribute deterministic work facts through one or more
 `HandoffWorkSource` implementations:
@@ -52,60 +74,71 @@ pub(open) trait HandoffWorkSource {
 }
 ```
 
-This is intentionally an extension-local seam, not a Posoco port. A handoff
-must not reverse-query another port's private state. If a planner, task manager,
-or product workflow already knows useful work facts, the product adapts those
-facts explicitly into `HandoffWorkSource`.
+`HandoffWorkState` is the included mutable implementation for products that do
+not already own structured planner/task state. It supports:
 
-Sources are merged in declaration order:
+- objective, current work, and one immediate next action
+- completion criteria and constraints
+- decisions and active blockers
+- completed work and queued follow-up work
+- notes
+- validation states (`passed`, `failed`, `not run`)
 
-- later sources override singular fields (`objective`, `current_work`,
-  `next_action`)
-- list fields append unique facts while preserving order
-- explicit `/handoff create` fields are merged last and therefore win
+State transitions avoid contradictory handoff facts:
 
-`HANDOFF.md` itself is never read as a work source. Re-running `create` takes a
-fresh snapshot from configured sources plus the current workspace, so stale
-handoff content cannot silently leak into the next handoff.
+- `complete(item)` removes the same item from `queue`
+- `resolve_blocker(item)` removes an obsolete blocker
+- recording a validation check moves it to exactly one validation bucket
+- `snapshot()` returns detached arrays
+- `clear()` resets intentionally unrelated work
 
-### Default mutable source
+Multiple work sources are merged in declaration order. Later sources override
+singular fields; list fields append unique facts while preserving order.
+Explicit `/handoff create` fields are merged last and therefore win.
 
-For products that do not already own structured planner/task state, the package
-provides `HandoffWorkState`. It is a small in-memory `HandoffWorkSource`, not a
-Posoco port and not an extension of its own.
+`HANDOFF.md` itself is never used as an input to the next `create` call.
+Repeated creation always snapshots current sources and workspace facts again.
+
+## Workspace seam
+
+Workspace facts are supplied through:
 
 ```moonbit
-let work = HandoffWorkState::new()
-work.set_objective("Implement posoco-ext-handoff")
-work.add_done_when("/handoff create writes HANDOFF.md")
-work.add_constraint("Do not inspect session-private state")
-work.set_current_work("Implement mutable work-state support")
-work.set_next_action("Run moon test")
-work.enqueue("Add concrete host adapters")
-work.validation_not_run("moon test")
-
-let handoff = Handoff::new(
-  cwd="/repo",
-  store~,
-  probe~,
-  work_sources=[work],
-)
+pub(open) trait HandoffWorkspaceProbe {
+  fn snapshot(Self, cwd : String) -> Result[WorkspaceSnapshot, String]
+}
 ```
 
-The state object is intended to be updated as work progresses:
+A snapshot contains:
 
-- `complete(item)` removes the item from `queue` and records it in `completed`
-- `add_blocker` / `resolve_blocker` keep only active blockers
-- validation methods move a check between `passed`, `failed`, and `not run`
-  so one check cannot appear in contradictory buckets
-- `snapshot()` returns detached arrays so callers cannot mutate internal state
-  through a previously returned snapshot
-- `clear()` resets the state when the product intentionally starts unrelated
-  work
+- project root
+- optional branch
+- optional HEAD
+- changed paths with factual status labels
+
+Git is one possible producer of these facts, not part of the handoff protocol.
+`HandoffWorkspaceState` is the included explicit-state implementation.
+
+## Persistence seam
+
+Persistence is supplied through:
+
+```moonbit
+pub(open) trait HandoffStore {
+  async fn exists(Self, path : String) -> Result[Bool, String]
+  async fn read(Self, path : String) -> Result[String, String]
+  async fn ensure_dir(Self, path : String) -> Result[Unit, String]
+  async fn write_atomic(Self, path : String, content : String) -> Result[Unit, String]
+}
+```
+
+`DefaultHandoffStore` provides the normal project-filesystem implementation on
+native (`moonbitlang/async/fs`) and JavaScript (`node:fs`). Products with an
+existing filesystem abstraction may inject their own store instead.
 
 ## HANDOFF.md contract
 
-A generated document uses the stable section order below:
+Generated documents use this stable section order:
 
 ```text
 # Handoff
@@ -127,126 +160,35 @@ A generated document uses the stable section order below:
 ## Notes
 ```
 
-`create` refuses to write an incomplete handoff unless all three continuation
+`create` refuses to write an incomplete handoff unless these three continuation
 anchors are known:
 
 - `Objective`
 - `Current Work`
 - exactly one `Next Action`
 
-The other sections may be empty. `Next Action` is intentionally singular;
+The remaining sections may be empty. `Next Action` is deliberately singular;
 subsequent executable work belongs in `Queue`.
 
-## Host seams
+Structured command callers may supply:
 
-Workspace discovery is supplied through `HandoffWorkspaceProbe`:
-
-```moonbit
-pub(open) trait HandoffWorkspaceProbe {
-  fn snapshot(Self, cwd : String) -> Result[WorkspaceSnapshot, String]
-}
-```
-
-It returns:
-
-- project root
-- optional branch
-- optional HEAD
-- changed paths with factual status labels
-
-The extension deliberately does not know how those values are obtained. Git is
-one possible implementation, not part of the handoff protocol.
-
-Persistence is supplied through the minimal `HandoffStore` seam:
-
-```moonbit
-pub(open) trait HandoffStore {
-  async fn exists(Self, path : String) -> Result[Bool, String]
-  async fn read(Self, path : String) -> Result[String, String]
-  async fn ensure_dir(Self, path : String) -> Result[Unit, String]
-  async fn write_atomic(Self, path : String, content : String) -> Result[Unit, String]
-}
-```
-
-This keeps the package independent of `posoco-ext-workspace` or any specific
-filesystem implementation. The host can adapt an existing filesystem service
-without making handoff aware of that service's internal architecture.
-
-## Example
-
-```markdown
-# Handoff
-
-## Objective
-
-Implement `posoco-ext-handoff` as a standalone Posoco extension.
-
-## Done When
-
-- `/handoff create` writes `.handoff/HANDOFF.md`
-- No LLM is required
-
-## Constraints
-
-- Do not inspect session or other port-private state
-- Do not modify Posoco core for handoff-specific behavior
-
-## Completed
-
-- Defined the stable handoff document shape
-
-## Current Work
-
-Implementing deterministic work-source composition and Markdown rendering.
-
-## Decisions
-
-- Conversation history remains in Posoco's message tree
-- `HANDOFF.md` records continuation state, not conversation history
-
-## Blockers
-
-- `moon` is unavailable in the current development environment
-
-## Workspace
-
-- Root: `/repo`
-- Branch: feat/handoff
-- HEAD: abc123
-
-### Changes
-
-- `posoco-ext-handoff/src/handoff.mbt` — modified
-
-## Validation
-
-### Passed
-
-- renderer fixture
-
-### Failed
-
-- _(none recorded)_
-
-### Not Run
-
-- `moon test`
-
-## Next Action
-
-Run `moon test`, then fix any MoonBit API mismatches.
-
-## Queue
-
-- Add a concrete host workspace probe adapter
-
-## Notes
-
-- The handoff file is regenerated from current sources on every create
-```
+- `objective`
+- `done_when[]`
+- `constraints[]`
+- `completed[]`
+- `current_work`
+- `decisions[]`
+- `blockers[]`
+- `next_action`
+- `queue[]`
+- `notes[]`
+- `validation_passed[]`
+- `validation_failed[]`
+- `validation_not_run[]`
 
 ## Deliberate v1 boundary
 
-The extension does not implement accept/reject/cancel state, session identity,
-workspace ownership, conversation export, or automatic conversation summary.
-Those concerns are outside the `HANDOFF.md` work-continuation artifact.
+The extension does not implement accept/reject/cancel protocol state, session
+identity, workspace ownership, conversation export, automatic conversation
+summary, or an embedded Git/process runner. Those concerns are outside the
+`HANDOFF.md` work-continuation artifact.
