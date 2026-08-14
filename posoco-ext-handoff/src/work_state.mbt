@@ -166,7 +166,10 @@ pub fn HandoffWorkState::complete(
 }
 
 ///|
-fn clear_validation(self : HandoffWorkState, check : String) -> Unit {
+fn HandoffWorkState::clear_validation(
+  self : HandoffWorkState,
+  check : String,
+) -> Unit {
   remove_value(self.work.validation_passed, check)
   remove_value(self.work.validation_failed, check)
   remove_value(self.work.validation_not_run, check)
