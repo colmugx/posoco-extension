@@ -37,7 +37,8 @@ fn content_text(content : Array[@posoco.Content]) -> String {
   for item in content {
     match item {
       @posoco.Content::Text(text) => parts.push(text)
-      @posoco.Content::Image(media_type~, ..) => parts.push("[image:" + media_type + "]")
+      @posoco.Content::Image(media_type~, ..) =>
+        parts.push("[image:" + media_type + "]")
     }
   }
   parts.join("\n")
@@ -45,7 +46,8 @@ fn content_text(content : Array[@posoco.Content]) -> String {
 
 fn message_text(message : @posoco.Message) -> String {
   match message {
-    @posoco.Message::SystemMessage(content~) => "system\n" + content_text(content)
+    @posoco.Message::SystemMessage(content~) =>
+      "system\n" + content_text(content)
     @posoco.Message::UserMessage(content~) => "user\n" + content_text(content)
     @posoco.Message::AssistantMessage(content~, tool_calls~, ..) => {
       let names : Array[String] = []
@@ -79,13 +81,28 @@ pub fn InMemoryContinuityArchive::append(
   self.entries[session_id] = existing
 }
 
+///|
+pub fn InMemoryContinuityArchive::count(
+  self : InMemoryContinuityArchive,
+  session_id : String,
+) -> Int {
+  match self.entries.get(session_id) {
+    Some(items) => items.length()
+    None => 0
+  }
+}
+
 fn preview_around(text : String, query : String, max_len : Int) -> String {
   if text.length() <= max_len { return text }
   match text.find(query) {
     Some(pos) => {
       let half = max_len / 2
       let start = if pos > half { pos - half } else { 0 }
-      let end = if start + max_len < text.length() { start + max_len } else { text.length() }
+      let end = if start + max_len < text.length() {
+        start + max_len
+      } else {
+        text.length()
+      }
       text[start:end].to_owned()
     }
     None => text[0:max_len].to_owned()
@@ -142,7 +159,11 @@ pub fn InMemoryContinuityArchive::read(
           if cursor >= text.length() {
             return Some({ ref, content: "", next_cursor: None, done: true })
           }
-          let end = if cursor + limit < text.length() { cursor + limit } else { text.length() }
+          let end = if cursor + limit < text.length() {
+            cursor + limit
+          } else {
+            text.length()
+          }
           let done = end >= text.length()
           return Some({
             ref,
