@@ -52,7 +52,7 @@ pub fn HandoffWorkspaceState::set_branch(
   self : HandoffWorkspaceState,
   branch : String?,
 ) -> Unit {
-  self.workspace = { ..self.workspace, branch }
+  self.workspace = { ..self.workspace, branch: branch }
 }
 
 ///|
@@ -60,7 +60,7 @@ pub fn HandoffWorkspaceState::set_head(
   self : HandoffWorkspaceState,
   head : String?,
 ) -> Unit {
-  self.workspace = { ..self.workspace, head }
+  self.workspace = { ..self.workspace, head: head }
 }
 
 ///|
