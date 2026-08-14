@@ -28,6 +28,18 @@ fn zen_settings(pairs : Array[(String, String)]) -> Json {
 }
 
 ///|
+test "Zen routing headers carry stable session and fresh request identity" {
+  let session = zen_new_session_id()
+  let first = zen_request_headers(session)
+  let second = zen_request_headers(session)
+  assert_eq(first["x-opencode-project"], Some("posoco"))
+  assert_eq(first["x-opencode-session"], Some(session))
+  assert_eq(first["x-opencode-client"], Some("posoco"))
+  assert_eq(first["User-Agent"], Some("posoco/opencode-zen"))
+  assert_true(first["x-opencode-request"] != second["x-opencode-request"])
+}
+
+///|
 /// A representative slice of Zen's real /models response (shape verified by
 /// probe against https://opencode.ai/zen/v1/models). Bare ids, all owned_by
 /// "opencode".
@@ -207,9 +219,7 @@ test "zen_model_catalog builds one slot per discovered model" {
   assert_eq(catalog.provider_id, "opencode")
   let slots = catalog.slots()
   inspect(slots.length(), content="3")
-  // Configured model is pinned first.
   assert_eq(slots[0].model_id, "gpt-5.1-codex")
-  // Slot id is provider-qualified.
   debug_inspect(
     slots.map(slot => slot.id),
     content=(
@@ -220,7 +230,6 @@ test "zen_model_catalog builds one slot per discovered model" {
       #|]
     ),
   )
-  // Every slot carries the Zen display group and chat capability.
   assert_true(slots.every(slot => slot.display_group == Some("zen")))
   assert_true(slots.every(slot => slot.capabilities.contains("chat")))
 }
@@ -246,7 +255,6 @@ test "zen_model_catalog falls back to server order when preferred is absent" {
   let provider = OpenCodeZenProvider::new()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let models = parse_zen_models(zen_sample_models_payload())
-  // No model matches "nonexistent" → original order preserved.
   let catalog = zen_model_catalog(
     zen_base_config(),
     models,
@@ -328,8 +336,6 @@ test "ProviderFactory::build applies the default model when omitted" {
   match factory.build(source) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
-      // The static-build default model is observable on the slot; the base
-      // URL flows into the port's private config and is not re-exposed here.
       assert_eq(slot.model_id, "claude-sonnet-5")
       assert_eq(slot.id, "opencode/claude-sonnet-5")
     }
