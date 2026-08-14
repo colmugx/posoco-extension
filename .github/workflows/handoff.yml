@@ -50,4 +50,13 @@ jobs:
         run: |
           moon fmt
           moon info
-          git diff --exit-code
+
+      - name: upload formatted handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-handoff
+          path: posoco-ext-handoff
+          include-hidden-files: true
+
+      - name: verify formatter clean
+        run: git diff --exit-code
