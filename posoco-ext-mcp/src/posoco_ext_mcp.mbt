@@ -5,9 +5,6 @@
 /// Enables posoco agents to discover and call tools from MCP servers.
 
 ///|
-/// ——— Namespace helpers ———
-
-///|
 /// Extract (cmd, args) from a StdioClientTransport for connect_stdio dispatch.
 fn stdio_cmd(t : @transport.StdioClientTransport) -> (String, Array[String]) {
   (t.cmd, t.args)
@@ -36,20 +33,20 @@ fn strip_namespace(namespaced : String, server_name : String) -> String {
 }
 
 ///|
-/// ——— Type conversion helpers ———
-
-///|
 /// Convert MCP ToolDefinition to Posoco ToolDef with namespace prefix.
 fn convert_tool_def(
   mcp_tool : @types.ToolDefinition,
   server_name : String,
 ) -> @posoco.ToolDef {
   @posoco.ToolDef::{
-    name: namespaced_tool_name(server_name, mcp_tool.name),
+    name: @posoco.ToolName::unchecked(
+      namespaced_tool_name(server_name, mcp_tool.name),
+    ),
     description: mcp_tool.description,
     input_schema: mcp_tool.input_schema,
-    metadata: None,
-    source: Some("posoco_ext_mcp:\{server_name}"),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
+    policy: @posoco.ExecutionPolicy::Parallel,
+    provenance: Some("posoco_ext_mcp:\{server_name}"),
   }
 }
 
@@ -74,9 +71,6 @@ fn convert_content_to_string(items : Array[@types.ContentItem]) -> String {
   })
   .join("\n")
 }
-
-///|
-/// ——— Configuration & Connection Types ———
 
 ///|
 /// Configuration for a single MCP server connection.
@@ -146,12 +140,13 @@ fn plan_catalog(
       return Err("MCP catalog connection order is invalid")
     }
     for tool in entry.tools {
-      if route.contains(tool.name) {
+      let tool_name = tool.name.to_string()
+      if route.contains(tool_name) {
         return Err(
-          "MCP namespaced tool collision: '\{@devkit.sanitize_label(tool.name)}'",
+          "MCP namespaced tool collision: '\{@devkit.sanitize_label(tool_name)}'",
         )
       }
-      route[tool.name] = entry.connection_index
+      route[tool_name] = entry.connection_index
     }
   }
   Ok(CatalogPlan::{ entries, tool_to_conn: route })
@@ -229,9 +224,6 @@ fn MCPToolBridge::commit_catalog(
   self.tool_to_conn = plan.tool_to_conn
 }
 
-///|
-/// ——— MCPToolBridge ———
-
 ///| Bridge struct that implements the unified ToolProvider trait (list + execute).
 
 ///|
@@ -302,7 +294,6 @@ pub async fn MCPToolBridge::connect(
     Ok(r) => r
     Err(message) => return Err(message)
   }
-  // Convert and namespace tools
   let posoco_tools = tools_result.tools.map(fn(t) {
     convert_tool_def(t, config.name)
   })
@@ -386,9 +377,6 @@ pub fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
 }
 
 ///|
-/// ——— Trait Implementations ———
-
-///|
 /// ToolProvider: return cached tools from all connected servers.
 /// Tools are fetched during connect() and refresh_tools().
 pub impl @posoco.ToolProvider for MCPToolBridge with fn list_tools(self) -> Array[
@@ -409,21 +397,18 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   self,
   _name : String,
   call : @posoco.ToolCall,
-) -> @posoco.ToolResult raise @posoco.RuntimeError {
-  // Look up which connection owns this tool
-  let conn_idx = match self.tool_to_conn.get(call.name) {
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let call_name = call.name.to_string()
+  let conn_idx = match self.tool_to_conn.get(call_name) {
     Some(idx) => idx
     None =>
       raise @posoco.RuntimeError::UnknownTool(
-        "Unknown MCP tool: \{@devkit.sanitize_label(call.name)}",
+        "Unknown MCP tool: \{@devkit.sanitize_label(call_name)}",
       )
   }
   let conn = self.connections[conn_idx]
-  // Strip namespace to get original MCP tool name
-  let original_name = strip_namespace(call.name, conn.name)
-  // Serialize arguments to JSON string
+  let original_name = strip_namespace(call_name, conn.name)
   let args_str = call.arguments.stringify()
-  // Call tool via MCP
   let call_result = conn.client.call_tool(original_name, arguments=args_str) catch {
     _ => raise mcp_call_failure(TransportFailure, original_name)
   }
@@ -432,7 +417,11 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
     Err(_) => raise mcp_call_failure(RemoteFailure, original_name)
   }
   let content = convert_content_to_string(result.content)
-  @posoco.ToolResult::{ content, structured: None, is_error: result.is_error }
+  if result.is_error {
+    @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
+  } else {
+    @posoco.ToolOutcome::Success(content~, structured=None)
+  }
 }
 
 ///|
