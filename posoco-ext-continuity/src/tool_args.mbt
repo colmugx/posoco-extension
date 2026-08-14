@@ -61,3 +61,8 @@ fn continuity_current_session(self : ContinuityExtension) -> String? {
   if !self.turn_active { return None }
   self.active_session_id
 }
+
+fn continuity_current_run(self : ContinuityExtension) -> String? {
+  if !self.turn_active { return None }
+  self.active_run_id
+}
