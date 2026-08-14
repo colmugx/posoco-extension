@@ -35,7 +35,7 @@ pub fn HandoffWorkspaceState::new(
 }
 
 ///|
-pub fn HandoffWorkspaceState::snapshot(self : HandoffWorkspaceState) -> WorkspaceSnapshot {
+pub fn HandoffWorkspaceState::current(self : HandoffWorkspaceState) -> WorkspaceSnapshot {
   copy_workspace(self.workspace)
 }
 
@@ -76,7 +76,7 @@ pub impl HandoffWorkspaceProbe for HandoffWorkspaceState with fn snapshot(
   self : HandoffWorkspaceState,
   cwd : String,
 ) -> Result[WorkspaceSnapshot, String] {
-  let workspace = self.snapshot()
+  let workspace = self.current()
   if workspace.root.length() == 0 {
     Err("handoff workspace root is empty")
   } else if cwd.length() == 0 {
