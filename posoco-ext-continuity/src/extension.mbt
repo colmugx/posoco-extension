@@ -127,8 +127,7 @@ fn make_runtime_candidate(
 ///|
 /// ModelPort owns only scope-aware candidate presentation. The actual
 /// canonical transcript rewrite remains in Hook. Candidate notices are
-/// ephemeral provider input and are removed from `processed_messages` before
-/// returning to Posoco.
+/// ephemeral provider input and never enter Posoco's canonical transcript.
 pub impl @posoco.ModelPort for ContinuityExtension with fn chat(
   self,
   scope : @posoco.InvocationScope,
@@ -140,7 +139,11 @@ pub impl @posoco.ModelPort for ContinuityExtension with fn chat(
   self.active_session_id = Some(scope.session_id.to_string())
   self.active_run_id = Some(scope.run_id.to_string())
   let provider_messages = messages.copy()
-  if self.prepared is None {
+  let has_prepared = match self.prepared {
+    Some(_) => true
+    None => false
+  }
+  if !has_prepared {
     let plan = plan_continuity(messages, self.config.context_window, self.config)
     match plan.candidate {
       Some(planned) => {
@@ -158,9 +161,18 @@ pub impl @posoco.ModelPort for ContinuityExtension with fn chat(
     options,
     stream,
   )
+  let processed = if result.processed_messages.is_empty() {
+    // Preserve PortRuntime's established convention: an empty processed tree
+    // means the inner model did not preprocess the transcript. Importantly we
+    // restore the original messages, not `provider_messages`, because the
+    // candidate notice is ephemeral.
+    messages
+  } else {
+    remove_candidate_notices(result.processed_messages)
+  }
   @posoco.ModelCallResult::{
     completion: result.completion,
-    processed_messages: remove_candidate_notices(result.processed_messages),
+    processed_messages: processed,
   }
 }
 
