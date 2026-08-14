@@ -73,29 +73,65 @@ pub fn render_handoff_document(
   workspace : WorkspaceSnapshot,
 ) -> String {
   "# Handoff\n\n" +
-  "## Objective\n\n" + markdown_optional(work.objective) + "\n\n" +
-  "## Done When\n\n" + markdown_list(work.done_when) + "\n" +
-  "## Constraints\n\n" + markdown_list(work.constraints) + "\n" +
-  "## Completed\n\n" + markdown_list(work.completed) + "\n" +
-  "## Current Work\n\n" + markdown_optional(work.current_work) + "\n\n" +
-  "## Decisions\n\n" + markdown_list(work.decisions) + "\n" +
-  "## Blockers\n\n" + markdown_list(work.blockers) + "\n" +
+  "## Objective\n\n" +
+  markdown_optional(work.objective) +
+  "\n\n" +
+  "## Done When\n\n" +
+  markdown_list(work.done_when) +
+  "\n" +
+  "## Constraints\n\n" +
+  markdown_list(work.constraints) +
+  "\n" +
+  "## Completed\n\n" +
+  markdown_list(work.completed) +
+  "\n" +
+  "## Current Work\n\n" +
+  markdown_optional(work.current_work) +
+  "\n\n" +
+  "## Decisions\n\n" +
+  markdown_list(work.decisions) +
+  "\n" +
+  "## Blockers\n\n" +
+  markdown_list(work.blockers) +
+  "\n" +
   "## Workspace\n\n" +
-  "- Root: `" + workspace.root + "`\n" +
-  "- Branch: " + markdown_optional(workspace.branch) + "\n" +
-  "- HEAD: " + markdown_optional(workspace.head) + "\n\n" +
-  "### Changes\n\n" + render_workspace_changes(workspace.changes) + "\n" +
+  "- Root: `" +
+  workspace.root +
+  "`\n" +
+  "- Branch: " +
+  markdown_optional(workspace.branch) +
+  "\n" +
+  "- HEAD: " +
+  markdown_optional(workspace.head) +
+  "\n\n" +
+  "### Changes\n\n" +
+  render_workspace_changes(workspace.changes) +
+  "\n" +
   "## Validation\n\n" +
-  "### Passed\n\n" + markdown_list(work.validation_passed) + "\n" +
-  "### Failed\n\n" + markdown_list(work.validation_failed) + "\n" +
-  "### Not Run\n\n" + markdown_list(work.validation_not_run) + "\n" +
-  "## Next Action\n\n" + markdown_optional(work.next_action) + "\n\n" +
-  "## Queue\n\n" + markdown_list(work.queue) + "\n" +
-  "## Notes\n\n" + markdown_list(work.notes)
+  "### Passed\n\n" +
+  markdown_list(work.validation_passed) +
+  "\n" +
+  "### Failed\n\n" +
+  markdown_list(work.validation_failed) +
+  "\n" +
+  "### Not Run\n\n" +
+  markdown_list(work.validation_not_run) +
+  "\n" +
+  "## Next Action\n\n" +
+  markdown_optional(work.next_action) +
+  "\n\n" +
+  "## Queue\n\n" +
+  markdown_list(work.queue) +
+  "\n" +
+  "## Notes\n\n" +
+  markdown_list(work.notes)
 }
 
 ///|
-fn array_strings_from_args(fields : Map[String, Json], key : String) -> Array[String] {
+fn array_strings_from_args(
+  fields : Map[String, Json],
+  key : String,
+) -> Array[String] {
   match fields.get(key) {
     Some(Json::Array(values)) => {
       let result : Array[String] = []
@@ -112,7 +148,10 @@ fn array_strings_from_args(fields : Map[String, Json], key : String) -> Array[St
 }
 
 ///|
-fn optional_string_from_args(fields : Map[String, Json], key : String) -> String? {
+fn optional_string_from_args(
+  fields : Map[String, Json],
+  key : String,
+) -> String? {
   match fields.get(key) {
     Some(Json::String(value)) if value.length() > 0 => Some(value)
     _ => None
@@ -173,7 +212,9 @@ fn work_from_args(args : Json, details : String?) -> WorkSnapshot {
         notes: array_strings_from_args(fields, "notes"),
         validation_passed: array_strings_from_args(fields, "validation_passed"),
         validation_failed: array_strings_from_args(fields, "validation_failed"),
-        validation_not_run: array_strings_from_args(fields, "validation_not_run"),
+        validation_not_run: array_strings_from_args(
+          fields, "validation_not_run",
+        ),
       }
     }
     _ => { ..WorkSnapshot::empty(), objective: details }
@@ -220,9 +261,18 @@ pub fn merge_work(base : WorkSnapshot, overlay : WorkSnapshot) -> WorkSnapshot {
     next_action: prefer_optional(overlay.next_action, base.next_action),
     queue: concat_unique(base.queue, overlay.queue),
     notes: concat_unique(base.notes, overlay.notes),
-    validation_passed: concat_unique(base.validation_passed, overlay.validation_passed),
-    validation_failed: concat_unique(base.validation_failed, overlay.validation_failed),
-    validation_not_run: concat_unique(base.validation_not_run, overlay.validation_not_run),
+    validation_passed: concat_unique(
+      base.validation_passed,
+      overlay.validation_passed,
+    ),
+    validation_failed: concat_unique(
+      base.validation_failed,
+      overlay.validation_failed,
+    ),
+    validation_not_run: concat_unique(
+      base.validation_not_run,
+      overlay.validation_not_run,
+    ),
   }
 }
 
@@ -239,17 +289,20 @@ fn Handoff::collect_work(self : Handoff) -> WorkSnapshot {
 fn validate_work(work : WorkSnapshot) -> String? {
   match work.objective {
     None => return Some("handoff requires an objective")
-    Some(value) if value.length() == 0 => return Some("handoff requires an objective")
+    Some(value) if value.length() == 0 =>
+      return Some("handoff requires an objective")
     _ => ()
   }
   match work.current_work {
     None => return Some("handoff requires current_work")
-    Some(value) if value.length() == 0 => return Some("handoff requires current_work")
+    Some(value) if value.length() == 0 =>
+      return Some("handoff requires current_work")
     _ => ()
   }
   match work.next_action {
     None => return Some("handoff requires exactly one next_action")
-    Some(value) if value.length() == 0 => return Some("handoff requires exactly one next_action")
+    Some(value) if value.length() == 0 =>
+      return Some("handoff requires exactly one next_action")
     _ => ()
   }
   None
@@ -266,10 +319,13 @@ fn structured_outcome(action : String, path : String) -> Json {
 }
 
 ///|
-fn Handoff::probe_workspace(self : Handoff) -> Result[WorkspaceSnapshot, String] {
+fn Handoff::probe_workspace(
+  self : Handoff,
+) -> Result[WorkspaceSnapshot, String] {
   match self.probe.snapshot(self.cwd) {
     Err(reason) => Err("workspace snapshot failed: " + reason)
-    Ok(workspace) if workspace.root.length() == 0 => Err("workspace snapshot failed: root is empty")
+    Ok(workspace) if workspace.root.length() == 0 =>
+      Err("workspace snapshot failed: root is empty")
     Ok(workspace) => Ok(workspace)
   }
 }
@@ -417,7 +473,9 @@ pub impl @posoco.CommandPort for Handoff with fn invoke(
     "inspect" => self.inspect_handoff()
     other =>
       @posoco.CommandOutcome::Failure(
-        reason="unknown handoff action: " + other + " (expected create or inspect)",
+        reason="unknown handoff action: " +
+          other +
+          " (expected create or inspect)",
       )
   }
 }

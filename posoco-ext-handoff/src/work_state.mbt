@@ -61,7 +61,11 @@ pub fn HandoffWorkState::set_objective(
 ) -> Unit {
   self.work = {
     ..self.work,
-    objective: if objective.length() == 0 { None } else { Some(objective) },
+    objective: if objective.length() == 0 {
+      None
+    } else {
+      Some(objective)
+    },
   }
 }
 
@@ -72,7 +76,11 @@ pub fn HandoffWorkState::set_current_work(
 ) -> Unit {
   self.work = {
     ..self.work,
-    current_work: if current_work.length() == 0 { None } else { Some(current_work) },
+    current_work: if current_work.length() == 0 {
+      None
+    } else {
+      Some(current_work)
+    },
   }
 }
 
@@ -83,7 +91,11 @@ pub fn HandoffWorkState::set_next_action(
 ) -> Unit {
   self.work = {
     ..self.work,
-    next_action: if next_action.length() == 0 { None } else { Some(next_action) },
+    next_action: if next_action.length() == 0 {
+      None
+    } else {
+      Some(next_action)
+    },
   }
 }
 
