@@ -6,12 +6,25 @@
 /// base_url + endpoint_prefix + "/chat/completions".
 
 ///|
-/// Build HTTP headers for OpenAI-compatible API requests.
-fn build_headers(config : OpenAICompatibleConfig) -> Map[String, String] {
-  {
-    "Authorization": "Bearer \{config.api_key}",
-    "Content-Type": "application/json",
+/// Build HTTP headers for OpenAI-compatible API requests. Provider-specific
+/// adapters may supply a per-request header factory; its values are merged
+/// first, then the adapter-owned Authorization and Content-Type headers are
+/// enforced so an identity hook cannot accidentally replace authentication.
+fn build_headers(
+  config : OpenAICompatibleConfig,
+  request_headers : (() -> Map[String, String])?,
+) -> Map[String, String] {
+  let headers : Map[String, String] = Map([])
+  match request_headers {
+    Some(factory) =>
+      for key, value in factory() {
+        headers[key] = value
+      }
+    None => ()
   }
+  headers["Authorization"] = "Bearer \{config.api_key}"
+  headers["Content-Type"] = "application/json"
+  headers
 }
 
 ///|
@@ -28,14 +41,20 @@ pub(all) struct OpenAICompatibleModelPort {
   /// Provider id this port is scoped to (e.g. "qwen"). Used only for catalog
   /// labeling; it never appears on the wire request.
   provider_id : String
+  /// Optional provider-owned hook evaluated immediately before every HTTP
+  /// request. This keeps gateway-specific routing/identity headers out of the
+  /// generic OpenAI-compatible config while allowing adapters such as
+  /// OpenCode Zen to provide fresh request metadata.
+  request_headers : (() -> Map[String, String])?
 }
 
 ///|
 pub fn OpenAICompatibleModelPort::new(
   provider_id : String,
   config : OpenAICompatibleConfig,
+  request_headers? : () -> Map[String, String],
 ) -> OpenAICompatibleModelPort {
-  { provider_id, config }
+  { provider_id, config, request_headers }
 }
 
 ///|
