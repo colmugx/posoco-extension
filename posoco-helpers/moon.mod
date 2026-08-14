@@ -3,7 +3,7 @@ name = "colmugx/posoco_helpers"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.4.4",
+  "colmugx/posoco@0.10.1",
 }
 
 readme = "README.mbt.md"
@@ -12,8 +12,6 @@ license = "Apache-2.0"
 
 keywords = [ "posoco", "helpers", "convenience", "message" ]
 
-description = "Posoco Helpers — convenience functions for building Messages, AgentConfig defaults, and common patterns"
+description = "Posoco Helpers - convenience functions for building Messages, AgentConfig defaults, and common patterns"
 
-options(
-  source: "src"
-)
+source = "src"

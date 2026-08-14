@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "colmugx/posoco-ext-permission/src"
+package "colmugx/posoco-ext-permission"
 
 import {
   "colmugx/posoco/kernel",
@@ -53,5 +53,5 @@ pub impl @port.SystemPromptContributor for PermissionPolicy
 
 // Traits
 pub(open) trait ApprovalSource {
-  fn ask(Self, ApprovalRequest) -> ApprovalDecision
+  async fn ask(Self, ApprovalRequest) -> ApprovalDecision
 }

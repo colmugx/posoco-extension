@@ -198,7 +198,7 @@ fn int_to_hex_upper(n : Int) -> String {
   if n < 10 {
     n.to_string()
   } else {
-    let ch = Char::from_int(n + 55)
+    let ch = (n + 55).unsafe_to_char()
     ch.to_string()
   }
 }

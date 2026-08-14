@@ -60,10 +60,15 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file(
   path,
   content,
 ) {
-  // `create=0o644` is required: with create=None and truncate=true (default),
-  // @fs.write_file opens in TruncateExisting mode and fails on a missing file.
-  // We want CreateOrTruncate so write creates the file when absent.
-  @fs.write_file(path, content, create=0o644) catch {
+  // `create_mode=CreateOrTruncate` is required: without it, @fs.write_file
+  // opens in TruncateExisting mode and fails on a missing file. We want
+  // CreateOrTruncate so write creates the file when absent (0o644 permission).
+  @fs.write_file(
+    path,
+    content,
+    create_mode=@fs.CreateMode::CreateOrTruncate,
+    permission=0o644,
+  ) catch {
     _ => raise fs_err("write_file")
   }
 }

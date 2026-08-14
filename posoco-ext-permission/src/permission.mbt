@@ -38,12 +38,14 @@ pub(all) enum ApprovalDecision {
 }
 
 ///|
-/// Host-implemented approval source. `ask` is synchronous by contract because
-/// `Hook::before_tool` is synchronous; the js host bridges this by
-/// blocking on an async `UiPort::request` (`.wait()`) from within the
-/// puppetry async driver.
+/// Host-implemented approval source. `ask` is `async` because
+/// `Hook::before_tool` is `async`; a host that needs UI interaction (e.g.
+/// the js host blocking on `UiPort::request` via `.wait()`) can suspend
+/// inside `ask`. A host that decides synchronously implements `ask` as a
+/// plain `fn` — a sync `fn` satisfies an `async` trait slot under MoonBit's
+/// colorless-coroutine model.
 pub(open) trait ApprovalSource {
-  fn ask(Self, request : ApprovalRequest) -> ApprovalDecision
+  async fn ask(Self, request : ApprovalRequest) -> ApprovalDecision
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -78,7 +80,7 @@ pub fn PermissionPolicy::new(
   {
     mode,
     approval,
-    session_approved: Set::new(),
+    session_approved: Set([]),
     read_tools: ["read", "grep", "glob"],
     write_tools: ["write", "edit", "apply_patch"],
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
@@ -120,7 +122,9 @@ fn preview_arguments(args : Json) -> String {
 ///|
 /// Ask the approval source (if any) and apply its decision. Returns true if
 /// the call is approved (now or from the session cache), false otherwise.
-fn PermissionPolicy::gate(
+/// `async` because the approval source may suspend (e.g. js host blocking on
+/// a UI confirm); reads/shell classification itself is synchronous.
+async fn PermissionPolicy::gate(
   self : PermissionPolicy,
   call : @posoco.ToolCall,
   category : String,

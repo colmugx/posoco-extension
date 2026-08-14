@@ -8,6 +8,7 @@ struct RouterTestPort {
 ///|
 pub impl @posoco.ModelPort for RouterTestPort with fn chat(
   _self : RouterTestPort,
+  _scope : @posoco.InvocationScope,
   _messages : Array[@posoco.Message],
   _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
@@ -21,6 +22,7 @@ pub impl @posoco.ModelPort for RouterTestPort with fn chat(
 ///|
 pub impl @posoco.ModelPort for RouterTestPort with fn compact(
   _self : RouterTestPort,
+  _scope : @posoco.InvocationScope,
   _messages : Array[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,

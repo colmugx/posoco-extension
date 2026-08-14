@@ -46,7 +46,7 @@ async test "device request matches pi form wire" {
   }
   match result {
     Ok(response) => assert_eq(response.device_code, "device")
-    Err(error) => fail("unexpected request failure: " + error.to_string())
+    Err(error) => fail("unexpected request failure: " + Show::to_string(error))
   }
   assert_eq(transport_impl.requests.length(), 1)
   let request = transport_impl.requests[0]
@@ -81,7 +81,7 @@ async test "device response missing fields stays typed" {
   match result {
     Err(OAuthError::ParseError(detail)) =>
       assert_true(detail.contains("verification_uri_complete"))
-    Err(error) => fail("expected typed parse error, got: " + error.to_string())
+    Err(error) => fail("expected typed parse error, got: " + Show::to_string(error))
     Ok(_) => fail("expected missing-field parse error")
   }
 }
@@ -108,7 +108,7 @@ async test "device response rejects untrusted verification URI" {
   match result {
     Err(OAuthError::ParseError(detail)) =>
       assert_true(detail.contains("invalid http(s) URI"))
-    Err(error) => fail("expected URI parse error, got: " + error.to_string())
+    Err(error) => fail("expected URI parse error, got: " + Show::to_string(error))
     Ok(_) => fail("untrusted URI must not be returned to the host")
   }
 }

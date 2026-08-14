@@ -1,3 +1,7 @@
 import {
   "colmugx/posoco",
 }
+
+import {
+  "moonbitlang/async",
+} for "test"
