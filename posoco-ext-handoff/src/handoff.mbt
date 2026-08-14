@@ -10,10 +10,10 @@ pub(all) struct Handoff {
 
 ///|
 pub fn Handoff::new(
-  cwd : String,
-  store : &HandoffStore,
-  probe : &HandoffWorkspaceProbe,
-  work_sources : Array[&HandoffWorkSource],
+  cwd~ : String,
+  store~ : &HandoffStore,
+  probe~ : &HandoffWorkspaceProbe,
+  work_sources~ : Array[&HandoffWorkSource],
 ) -> Handoff {
   { cwd, store, probe, work_sources }
 }
@@ -279,9 +279,7 @@ async fn Handoff::create_handoff(
   self : Handoff,
   args : Json,
   details : String?,
-) -> @posoco.CommandOutcome {
-  // Important: HANDOFF.md is an output, never a work-state source. Repeated
-  // create calls always re-snapshot the configured sources and workspace.
+) -> @posoco.CommandOutcome noraise {
   let work = merge_work(self.collect_work(), work_from_args(args, details))
   match validate_work(work) {
     Some(reason) => return @posoco.CommandOutcome::Failure(reason~)
@@ -294,11 +292,23 @@ async fn Handoff::create_handoff(
   let dir = handoff_dir(workspace.root)
   let path = document_path(workspace.root)
   let document = render_handoff_document(work, workspace)
-  match self.store.ensure_dir(dir) {
+  let ensure_result = self.store.ensure_dir(dir) catch {
+    _ =>
+      return @posoco.CommandOutcome::Failure(
+        reason="handoff store ensure_dir raised unexpectedly",
+      )
+  }
+  match ensure_result {
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
     Ok(_) => ()
   }
-  match self.store.write_atomic(path, document) {
+  let write_result = self.store.write_atomic(path, document) catch {
+    _ =>
+      return @posoco.CommandOutcome::Failure(
+        reason="handoff store write_atomic raised unexpectedly",
+      )
+  }
+  match write_result {
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
     Ok(_) => ()
   }
@@ -310,13 +320,21 @@ async fn Handoff::create_handoff(
 }
 
 ///|
-async fn Handoff::inspect_handoff(self : Handoff) -> @posoco.CommandOutcome {
+async fn Handoff::inspect_handoff(
+  self : Handoff,
+) -> @posoco.CommandOutcome noraise {
   let workspace = match self.probe_workspace() {
     Ok(value) => value
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
   }
   let path = document_path(workspace.root)
-  let present = match self.store.exists(path) {
+  let exists_result = self.store.exists(path) catch {
+    _ =>
+      return @posoco.CommandOutcome::Failure(
+        reason="handoff store exists raised unexpectedly",
+      )
+  }
+  let present = match exists_result {
     Ok(value) => value
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
   }
@@ -325,7 +343,13 @@ async fn Handoff::inspect_handoff(self : Handoff) -> @posoco.CommandOutcome {
       reason="no .handoff/HANDOFF.md exists in this project",
     )
   }
-  let document = match self.store.read(path) {
+  let read_result = self.store.read(path) catch {
+    _ =>
+      return @posoco.CommandOutcome::Failure(
+        reason="handoff store read raised unexpectedly",
+      )
+  }
+  let document = match read_result {
     Ok(value) => value
     Err(reason) => return @posoco.CommandOutcome::Failure(reason~)
   }
