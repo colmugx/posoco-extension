@@ -1,7 +1,8 @@
 ///|
 /// Static session-continuity protocol. Dynamic checkpoint candidates are
-/// injected by the Continuity Hook when the planner decides older settled work
-/// can leave the active working set.
+/// selected and presented by the scope-aware Continuity ModelPort decorator;
+/// Hook remains responsible for applying prepared checkpoints as canonical
+/// transcript rewrites.
 pub struct ContinuityPrompt {}
 
 ///|
