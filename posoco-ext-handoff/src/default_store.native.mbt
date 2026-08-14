@@ -3,10 +3,10 @@ let handoff_atomic_counter : Ref[Int] = { val: 0 }
 
 ///|
 pub impl HandoffStore for DefaultHandoffStore with fn exists(_self, path) {
-  @fs.exists(path) catch {
+  let present = @fs.exists(path) catch {
     _ => return Err("handoff store exists failed: " + path)
   }
-  |> Ok
+  Ok(present)
 }
 
 ///|
@@ -37,7 +37,10 @@ pub impl HandoffStore for DefaultHandoffStore with fn write_atomic(
   handoff_atomic_counter.val += 1
   let tmp = "\{path}.tmp-\{handoff_atomic_counter.val}"
   @fs.write_file(tmp, content, create=0o644) catch {
-    _ => return Err("handoff store write failed: " + path)
+    _ => {
+      @fs.remove(tmp) catch { _ => () }
+      return Err("handoff store write failed: " + path)
+    }
   }
   @fs.rename(tmp, path, replace=true) catch {
     _ => {
