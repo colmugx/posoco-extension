@@ -120,8 +120,11 @@ async test "handoff/inspect reads the same project-root document" {
   )
   let outcome = handoff.invoke("handoff", Json::string("inspect"))
   match outcome {
-    @posoco.CommandOutcome::Success(feedback~, ..) =>
+    @posoco.CommandOutcome::Success(feedback~, structured~, ui_hint~) => {
+      ignore(structured)
+      ignore(ui_hint)
       assert_eq(feedback, "# Handoff\n\nexisting\n")
+    }
     _ => fail("inspect should return the stored HANDOFF.md")
   }
 }
