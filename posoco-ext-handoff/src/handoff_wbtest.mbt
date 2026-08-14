@@ -11,12 +11,12 @@ fn FakeHandoffStore::new() -> FakeHandoffStore {
 }
 
 ///|
-priv impl HandoffStore for FakeHandoffStore with fn exists(self, path) {
+impl HandoffStore for FakeHandoffStore with fn exists(self, path) {
   Ok(self.path == path && self.content.length() > 0)
 }
 
 ///|
-priv impl HandoffStore for FakeHandoffStore with fn read(self, path) {
+impl HandoffStore for FakeHandoffStore with fn read(self, path) {
   if self.path == path && self.content.length() > 0 {
     Ok(self.content)
   } else {
@@ -25,13 +25,13 @@ priv impl HandoffStore for FakeHandoffStore with fn read(self, path) {
 }
 
 ///|
-priv impl HandoffStore for FakeHandoffStore with fn ensure_dir(self, path) {
+impl HandoffStore for FakeHandoffStore with fn ensure_dir(self, path) {
   self.dir = path
   Ok(())
 }
 
 ///|
-priv impl HandoffStore for FakeHandoffStore with fn write_atomic(
+impl HandoffStore for FakeHandoffStore with fn write_atomic(
   self,
   path,
   content,
@@ -47,7 +47,7 @@ priv struct FixedHandoffProbe {
 }
 
 ///|
-priv impl HandoffWorkspaceProbe for FixedHandoffProbe with fn snapshot(
+impl HandoffWorkspaceProbe for FixedHandoffProbe with fn snapshot(
   self,
   _cwd,
 ) {
@@ -60,7 +60,7 @@ priv struct FixedHandoffWork {
 }
 
 ///|
-priv impl HandoffWorkSource for FixedHandoffWork with fn handoff_work(self) {
+impl HandoffWorkSource for FixedHandoffWork with fn handoff_work(self) {
   self.work
 }
 
