@@ -1,6 +1,7 @@
 ///|
 /// Configuration for session continuity planning.
 pub(all) struct ContinuityConfig {
+  context_window : Int
   prepare_ratio : Double
   checkpoint_ratio : Double
   emergency_ratio : Double
@@ -14,6 +15,7 @@ pub(all) struct ContinuityConfig {
 ///|
 pub fn ContinuityConfig::default() -> ContinuityConfig {
   {
+    context_window: 128000,
     prepare_ratio: 0.55,
     checkpoint_ratio: 0.70,
     emergency_ratio: 0.85,
