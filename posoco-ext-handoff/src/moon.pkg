@@ -6,6 +6,10 @@ import {
 
 warnings = "-unused_package"
 
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
 options(
   targets: {
     "default_store.native.mbt": [ "native" ],
