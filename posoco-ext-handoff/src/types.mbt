@@ -79,7 +79,10 @@ pub(open) trait HandoffStore {
   async fn exists(Self, path : String) -> Result[Bool, String]
   async fn read(Self, path : String) -> Result[String, String]
   async fn ensure_dir(Self, path : String) -> Result[Unit, String]
-  async fn write_atomic(Self, path : String, content : String) -> Result[Unit, String]
+  async fn write_atomic(Self, path : String, content : String) -> Result[
+    Unit,
+    String,
+  ]
 }
 
 ///|

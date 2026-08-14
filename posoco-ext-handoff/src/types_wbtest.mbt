@@ -36,14 +36,8 @@ test "work_snapshot/merge_is_ordered_and_deduplicated" {
   assert_eq(merged.current_work, Some("Implement renderer"))
   assert_eq(merged.next_action, Some("Run tests"))
   assert_eq(merged.constraints, ["No LLM", "No session lookup"])
-  assert_eq(
-    merged.completed,
-    ["Defined objective", "Implemented types"],
-  )
-  assert_eq(
-    merged.decisions,
-    ["HANDOFF.md is the artifact", "One next action"],
-  )
+  assert_eq(merged.completed, ["Defined objective", "Implemented types"])
+  assert_eq(merged.decisions, ["HANDOFF.md is the artifact", "One next action"])
 }
 
 ///|
@@ -66,10 +60,7 @@ test "handoff_document/requires_execution_continuation" {
     validate_work(no_next),
     Some("handoff requires exactly one next_action"),
   )
-  let complete : WorkSnapshot = {
-    ..no_next,
-    next_action: Some("Run tests"),
-  }
+  let complete : WorkSnapshot = { ..no_next, next_action: Some("Run tests") }
   assert_eq(validate_work(complete), None)
 }
 
@@ -112,7 +103,9 @@ test "handoff_document/renders_continuation_state_not_history" {
   assert_true(markdown.contains("## Next Action"))
   assert_true(markdown.contains("## Queue"))
   assert_true(markdown.contains("Implement the Markdown renderer"))
-  assert_true(markdown.contains("`posoco-ext-handoff/src/handoff.mbt` — modified"))
+  assert_true(
+    markdown.contains("`posoco-ext-handoff/src/handoff.mbt` — modified"),
+  )
   assert_true(markdown.contains("Run moon test"))
   assert_true(!markdown.contains("ownership"))
 }
