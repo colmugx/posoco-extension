@@ -3,12 +3,12 @@ name = "colmugx/posoco-ext-openai-compatible"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.9.0",
+  "colmugx/posoco@0.10.1",
   "colmugx/posoco-devkit@0.1.0",
   "colmugx/posoco-kit-chat-completions@0.1.0",
   "colmugx/posoco-ext-llm@0.1.0",
   "colmugx/posoco-ext-oauth@0.1.0",
-  "moonbitlang/async@0.20.3",
+  "moonbitlang/async@0.20.4",
 }
 
 readme = "README.mbt.md"

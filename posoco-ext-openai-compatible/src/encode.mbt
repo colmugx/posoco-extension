@@ -7,19 +7,6 @@
 /// `reasoning_effort` field (set on the request body, not per-message).
 /// Tool call arguments are JSON strings (OpenAI convention). Message order
 /// is append-only.
-///
-/// Wire rules verified against opencode-zen (curl A/B/C, 2026-08):
-/// - Tool-role messages MUST carry `tool_call_id` — the correlation key for
-///   the assistant tool_call they answer. OpenAI requires it; zen's upstream
-///   drops the request silently without it. There is no "host adapter layer"
-///   that adds it later; it must be encoded here.
-/// - Assistant messages WITH tool_calls resend `reasoning_content` when the
-///   model produced reasoning: thinking-mode upstreams (DeepSeek behind zen)
-///   400 without it ("The reasoning_content in the thinking mode must be
-///   passed back to the API"). Assistant messages WITHOUT tool_calls omit it
-///   (saves tokens, preserves prefix cache). Plain OpenAI models never
-///   populate reasoning, so the field is only ever sent to endpoints that
-///   require it.
 
 ///|
 /// Encode a kernel Message into an OpenAI chat message JSON object.
@@ -81,10 +68,11 @@ fn encode_message(msg : @posoco.Message) -> Json {
     })
     obj["tool_calls"] = Json::array(tc_arr)
   }
-  // reasoning_content: thinking-mode upstreams require it to be resent when
-  // the assistant message has tool_calls (otherwise 400). Without tool_calls
-  // it is optional and wasteful (pollutes prefix cache), so we skip it.
-  if role == "assistant" && tool_calls.length() > 0 {
+  // reasoning_content: fallback policy is keep-all (Kimi-style) — resend
+  // whenever present. DeepSeek-style upstreams REQUIRE it on tool-call turns
+  // and tolerate it elsewhere; plain endpoints never produce reasoning, so
+  // nothing is ever sent to them.
+  if role == "assistant" {
     match reasoning_text {
       Some(r) => obj["reasoning_content"] = Json::string(r)
       None => ()
