@@ -1,0 +1,44 @@
+name: handoff-final
+
+on:
+  push:
+    branches:
+      - feat/handoff
+    paths:
+      - "posoco-ext-handoff/**"
+      - ".github/workflows/handoff-final.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: update dependencies
+        working-directory: posoco-ext-handoff
+        run: moon update
+
+      - name: verify format and interface
+        working-directory: posoco-ext-handoff
+        run: |
+          moon fmt
+          moon info
+          git diff --exit-code -- .
+
+      - name: check and test native
+        working-directory: posoco-ext-handoff
+        run: |
+          moon check --target native --deny-warn
+          moon test --target native
+
+      - name: check and test JavaScript
+        working-directory: posoco-ext-handoff
+        run: |
+          moon check --target js --deny-warn
+          moon test --target js
