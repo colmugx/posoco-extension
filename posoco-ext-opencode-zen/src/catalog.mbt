@@ -21,8 +21,9 @@ let zen_default_base_url : String = "https://opencode.ai/zen/v1"
 ///|
 /// Build one catalog slot for a Zen model. The port is an
 /// `OpenAICompatibleModelPort` constructed with the Zen provider id, so chat
-/// requests carry `Authorization: Bearer <key>` (probed as the scheme Zen
-/// honors) and post to `base_url + endpoint_prefix + /chat/completions`.
+/// requests carry `Authorization: Bearer <key>` and post to
+/// `base_url + endpoint_prefix + /chat/completions`. Zen-specific routing
+/// metadata is supplied through the optional request-header hook.
 ///
 /// `api_key` is the factory reference stored on the slot so credential-driven
 /// rebuilds stay inside this extension.
@@ -30,8 +31,11 @@ fn zen_catalog_slot(
   config : @openai_compatible.OpenAICompatibleConfig,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
+  let session_id = zen_new_session_id()
   let port : &@posoco.ModelPort = @openai_compatible.OpenAICompatibleModelPort::new(
-    zen_provider_id, config,
+    zen_provider_id,
+    config,
+    request_headers=fn() { zen_request_headers(session_id) },
   )
   let slot_id = zen_provider_id + "/" + config.model
   @llm.ModelSlot::ModelSlot(
