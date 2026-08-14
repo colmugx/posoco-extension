@@ -12,6 +12,9 @@ on:
       - "posoco-ext-handoff/**"
       - ".github/workflows/handoff.yml"
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -51,12 +54,15 @@ jobs:
           moon fmt
           moon info
 
-      - name: upload formatted handoff
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-handoff
-          path: posoco-ext-handoff
-          include-hidden-files: true
+      - name: commit formatter changes
+        run: |
+          if ! git diff --quiet -- posoco-ext-handoff; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -u -- posoco-ext-handoff
+            git commit -m "style(handoff): apply moon fmt"
+            git push
+          fi
 
-      - name: verify formatter clean
-        run: git diff --exit-code
+      - name: verify tracked source clean
+        run: git diff --exit-code -- posoco-ext-handoff
