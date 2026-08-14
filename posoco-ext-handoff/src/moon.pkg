@@ -1,4 +1,14 @@
 import {
   "colmugx/posoco",
   "moonbitlang/core/json",
+  "moonbitlang/async/fs",
 }
+
+warnings = "-unused_package"
+
+options(
+  targets: {
+    "default_store.native.mbt": [ "native" ],
+    "default_store.js.mbt": [ "js" ],
+  },
+)
