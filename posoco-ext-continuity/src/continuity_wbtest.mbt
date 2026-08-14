@@ -67,11 +67,11 @@ test "planner keeps small conversations active" {
 ///|
 test "prepared checkpoint rewrites only the exact source range" {
   let old_user = @posoco.tk_user_msg("old user")
-  let old_assistant : @posoco.Message = @posoco.AssistantMessage(
-    content=[@posoco.Text("old assistant")],
+  let old_assistant : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("old assistant")],
     tool_calls=[],
     reasoning=None,
-    finish_reason=@posoco.Stop,
+    finish_reason=@posoco.FinishReason::Stop,
   )
   let latest = @posoco.tk_user_msg("latest")
   let messages : Array[@posoco.Message] = [
@@ -173,11 +173,11 @@ async test "e2e checkpoint archives rewrites and remains searchable" {
         @posoco.tk_user_msg(
           "OLD_MARKER_73 historical request with enough text to create pressure",
         ),
-        @posoco.AssistantMessage(
-          content=[@posoco.Text("historical answer already completed")],
+        @posoco.Message::AssistantMessage(
+          content=[@posoco.Content::Text("historical answer already completed")],
           tool_calls=[],
           reasoning=None,
-          finish_reason=@posoco.Stop,
+          finish_reason=@posoco.FinishReason::Stop,
         ),
       ],
       metadata: Map::from_array([]),
