@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-edit"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -14,8 +15,9 @@ pub fn edit_extension() -> EditTools
 
 // Types and methods
 pub(all) struct EditTools {
+  freshness : @posoco-devkit.FreshnessGuard?
 }
-pub fn EditTools::EditTools() -> Self
+pub fn EditTools::EditTools(freshness? : @posoco-devkit.FreshnessGuard) -> Self
 pub fn EditTools::extension_id(Self) -> String
 pub fn EditTools::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for EditTools

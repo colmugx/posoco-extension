@@ -14,6 +14,8 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
+warnings = "-unused_package"
+
 options(
   targets: {
     "posoco_ext_edit.js.mbt": [ "js" ],
