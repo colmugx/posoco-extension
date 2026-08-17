@@ -92,6 +92,7 @@ pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn RouterModelPort::new(slots~ : Array[ModelSlot], default_slot_id? : String, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError
 pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
 pub impl @port.CommandPort for RouterModelPort
 pub impl @port.Extension for RouterModelPort

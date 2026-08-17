@@ -136,7 +136,11 @@ fn effort_command_selection(args : Json) -> String? raise @posoco.CommandError {
 }
 
 ///|
-fn RouterModelPort::select_effort(
+/// Select a provider-advertised reasoning effort on one slot through its
+/// rebuild hook. Public so hosts can restore a persisted effort at composition
+/// and apply ACP/config-driven effort switches; the `/effort` command remains
+/// the interactive entry point.
+pub fn RouterModelPort::select_effort(
   self : RouterModelPort,
   slot_id : String,
   effort : String,
