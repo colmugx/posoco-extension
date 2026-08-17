@@ -1,0 +1,17 @@
+import {
+  "colmugx/posoco",
+  "colmugx/acp",
+  "colmugx/posoco-devkit" @devkit,
+  "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+}
+
+import {
+  "moonbitlang/async",
+} for "test"
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+supported_targets = "+native"

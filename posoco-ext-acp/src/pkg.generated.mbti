@@ -1,0 +1,78 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-acp"
+
+import {
+  "colmugx/acp/agent",
+  "colmugx/acp/protocol",
+  "colmugx/acp/protocol/session",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+}
+
+// Values
+pub const ACP_ALLOW_ALWAYS : String = "allow-always"
+
+pub const ACP_ALLOW_ONCE : String = "allow-once"
+
+pub const ACP_REJECT_ALWAYS : String = "reject-always"
+
+pub const ACP_REJECT_ONCE : String = "reject-once"
+
+pub fn acp_content_block(@kernel.Content) -> @protocol.ContentBlock
+
+pub fn acp_decision_from_response(@protocol.RequestPermissionResponse, @kernel.ToolCall) -> @port.ToolHookDecision
+
+pub fn acp_extension(needs_permission? : (@kernel.ToolCall) -> Bool) -> AcpBridge
+
+pub fn acp_outcome_status(@kernel.ToolOutcome) -> @protocol.ToolCallStatus
+
+pub fn acp_outcome_text(@kernel.ToolOutcome) -> String
+
+pub fn acp_permission_request(String, @kernel.ToolCall) -> @protocol.RequestPermissionRequest
+
+pub fn acp_primary_arg(Json) -> String?
+
+pub fn acp_stop_reason(@kernel.FinishReason?) -> @session.StopReason
+
+pub fn acp_tool_kind(String) -> @protocol.ToolKind
+
+pub fn acp_tool_title(@kernel.ToolCall) -> String
+
+// Errors
+
+// Types and methods
+pub struct AcpBridge {
+  needs_permission : (@kernel.ToolCall) -> Bool
+  queue : @aqueue.Queue[@protocol.SessionUpdate]
+  mut context : @agent.AgentContext?
+  mut session_id : String?
+  mut message_seq : Int
+  mut current_text_id : String?
+  mut current_thought_id : String?
+  mut text_streamed : Bool
+  mut thought_streamed : Bool
+  mut used_tokens : Int
+  mut last_finish : @kernel.FinishReason?
+  mut last_failure : String?
+}
+pub fn AcpBridge::attach(Self, context~ : @agent.AgentContext, session_id~ : String) -> Unit
+pub fn AcpBridge::close(Self) -> Unit
+pub fn AcpBridge::detach(Self) -> Unit
+pub fn AcpBridge::extension_id(Self) -> String
+pub async fn AcpBridge::flush(Self) -> Int noraise
+pub fn AcpBridge::manifest(Self) -> @port.ExtensionManifest
+pub fn AcpBridge::new(needs_permission? : (@kernel.ToolCall) -> Bool) -> Self
+pub fn AcpBridge::spawn_pump(Self, @async.TaskGroup[Unit]) -> Unit
+pub fn AcpBridge::stop_reason(Self) -> @session.StopReason
+pub fn AcpBridge::take_failure(Self) -> String?
+pub impl @port.Extension for AcpBridge
+pub impl @port.Hook for AcpBridge
+pub impl @port.Lifecycle for AcpBridge
+pub impl @port.Observer for AcpBridge
+
+// Type aliases
+
+// Traits
