@@ -20,10 +20,10 @@ pub async fn fetch_zen_models(
   api_key : String,
   endpoint_prefix? : String = "",
 ) -> Array[ZenModelInfo] raise @posoco.ModelError {
-  let headers : Map[String, String] = Map::from_array([
-    ("Authorization", "Bearer " + api_key),
-    ("Accept", "application/json"),
-  ])
+  let headers : @http.Headers = {
+    "Authorization": "Bearer " + api_key,
+    "Accept": "application/json",
+  }
   let (response, body_data) = @async.with_timeout(30000, () => {
     @http.get(zen_models_url(base_url, endpoint_prefix), headers~)
   }) catch {
@@ -37,11 +37,16 @@ pub async fn fetch_zen_models(
       )
   }
   if response.code < 200 || response.code >= 300 {
+    // The gateway's error body names the failure cause; carry it verbatim.
+    let byte_length = body_data.binary().length()
+    let text = body_data.text() catch {
+      _ =>
+        raise @posoco.ModelError::Transport(
+          "OpenCode Zen list models HTTP status: \{response.code}, body_bytes=\{byte_length}, body_category=invalid_utf8",
+        )
+    }
     raise @posoco.ModelError::Transport(
-      "OpenCode Zen list models HTTP status: " +
-      response.code.to_string() +
-      ", body_bytes=" +
-      body_data.binary().length().to_string(),
+      "OpenCode Zen list models HTTP status: \{response.code}, body=\{text}",
     )
   }
   let body_text = body_data.text() catch {

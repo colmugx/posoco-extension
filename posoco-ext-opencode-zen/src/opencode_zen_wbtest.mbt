@@ -360,6 +360,85 @@ test "ProviderFactory::build prefers api_key credential over the setting" {
 }
 
 ///|
+/// The host-cached record shape: a previous refresh projected to slot
+/// records. Zen only consumes `model_id`; extra fields ride along untouched.
+fn cached_records(ids : Array[String]) -> Json {
+  let items : Array[Json] = []
+  for id in ids {
+    items.push(
+      Json::object(
+        Map::from_array([
+          ("model_id", Json::string(id)),
+          ("thinking_efforts", Json::array([])),
+          ("default_effort", Json::null()),
+        ]),
+      ),
+    )
+  }
+  Json::array(items)
+}
+
+///|
+test "ProviderFactory::build expands host-cached records into a multi-slot catalog" {
+  let provider = OpenCodeZenProvider::new()
+  let factory : &@llm.ProviderFactory = provider
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      zen_settings([("api_key", "sk-zen-test"), ("model", "gpt-5.1-codex")]),
+    ),
+    cached_models=Some(
+      cached_records(["gpt-5.1-codex", "claude-opus-5", "glm-5.2"]),
+    ),
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 3)
+      // The configured (preferred) model is pinned first, cache order after.
+      assert_eq(slots[0].id, "opencode/gpt-5.1-codex")
+      assert_eq(slots[1].id, "opencode/claude-opus-5")
+      assert_eq(slots[2].id, "opencode/glm-5.2")
+      assert_eq(slots[0].display_group, Some("zen"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog from cached records")
+  }
+}
+
+///|
+test "ProviderFactory::build degrades to the static slot on bad cached records" {
+  let provider = OpenCodeZenProvider::new()
+  let factory : &@llm.ProviderFactory = provider
+  for
+    bad in [
+      Json::array([]),
+      Json::string("not-an-array"),
+      Json::object(Map::from_array([])),
+      Json::array([Json::string("bare-id")]),
+      Json::array([
+        Json::object(Map::from_array([("model_id", Json::string("ok"))])),
+        Json::object(Map::from_array([("model_id", Json::string(""))])),
+      ]),
+    ] {
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(zen_settings([("api_key", "sk-zen-test")])),
+      cached_models=Some(bad),
+    )
+    match factory.build(source) {
+      @llm.ProviderBuildResult::Ready(catalog) => {
+        let slots = catalog.slots()
+        assert_true(slots.length() == 1)
+        assert_eq(slots[0].model_id, "claude-sonnet-5")
+      }
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail(
+          "bad cache records must degrade to the static build, not Unconfigured",
+        )
+    }
+  }
+}
+
+///|
 test "ProviderFactory::build rejects an OAuth credential with a typed error" {
   let provider = OpenCodeZenProvider::new()
   let factory : &@llm.ProviderFactory = provider
@@ -406,4 +485,99 @@ async test "ApiKeyFactory::login rejects an empty secret" {
       assert_true(message.contains("must not be empty"))
     _ => fail("expected empty API key to fail")
   }
+}
+
+///|
+test "zen_model_catalog presets per-model effort surfaces from the table" {
+  let provider = OpenCodeZenProvider::new()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let models = parse_zen_models(zen_sample_models_payload())
+  let catalog = zen_model_catalog(
+    zen_base_config(),
+    models,
+    "gpt-5.1-codex",
+    api_key_factory,
+  )
+  let slots = catalog.slots()
+  // gpt-5.1-codex: declared levels, cannot disable → no "off" entry.
+  debug_inspect(
+    slots[0].thinking_efforts,
+    content=(
+      #|["low", "medium", "high"]
+    ),
+  )
+  assert_eq(slots[0].default_effort, Some("high"))
+  // claude-opus-5: levels include xhigh/max, no "off" either.
+  debug_inspect(
+    slots[1].thinking_efforts,
+    content=(
+      #|["low", "medium", "high", "xhigh", "max"]
+    ),
+  )
+  // glm-5.2: high/max only.
+  debug_inspect(
+    slots[2].thinking_efforts,
+    content=(
+      #|["high", "max"]
+    ),
+  )
+}
+
+///|
+test "zen slot rebuild_on_effort reselects the level" {
+  let provider = OpenCodeZenProvider::new()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let catalog = zen_static_catalog(zen_base_config(), api_key_factory)
+  let slot = catalog.slots()[0]
+  assert_eq(slot.id, "opencode/gpt-5.1-codex")
+  guard slot.rebuild_on_effort is Some(rebuild) else {
+    fail("expected a rebuild_on_effort hook for a level-bearing model")
+  }
+  let lowered = rebuild("medium")
+  assert_eq(lowered.default_effort, Some("medium"))
+  debug_inspect(
+    lowered.thinking_efforts,
+    content=(
+      #|["low", "medium", "high"]
+    ),
+  )
+}
+
+///|
+test "zen effort presets cover toggle-only and unknown models" {
+  // Toggle-only: kimi-k2.6 exposes the off/on toggle with no levels and
+  // starts off (the wire omits the reasoning surface).
+  guard zen_effort_preset("kimi-k2.6") is Some(preset) else {
+    fail("expected a preset for kimi-k2.6")
+  }
+  assert_true(preset.levels.is_empty())
+  assert_true(preset.can_disable)
+  // Unknown models stay plain chat: no selector at all.
+  assert_true(zen_effort_preset("some-future-model") is None)
+
+  let provider = OpenCodeZenProvider::new()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let toggle_slot = zen_catalog_slot(
+    zen_config_for_model(zen_base_config(), "kimi-k2.6"),
+    api_key_factory,
+  )
+  debug_inspect(
+    toggle_slot.thinking_efforts,
+    content=(
+      #|["off", "on"]
+    ),
+  )
+  assert_eq(toggle_slot.default_effort, Some("off"))
+  let plain_slot = zen_catalog_slot(
+    zen_config_for_model(zen_base_config(), "some-future-model"),
+    api_key_factory,
+  )
+  debug_inspect(
+    plain_slot.thinking_efforts,
+    content=(
+      #|[]
+    ),
+  )
+  assert_eq(plain_slot.default_effort, None)
+  assert_true(plain_slot.rebuild_on_effort is None)
 }

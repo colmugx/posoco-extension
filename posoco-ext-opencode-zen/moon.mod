@@ -3,12 +3,12 @@ name = "colmugx/posoco-ext-opencode-zen"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.10.1",
+  "colmugx/posoco@0.10.2",
   "colmugx/posoco-devkit@0.1.0",
   "colmugx/posoco-ext-llm@0.1.0",
   "colmugx/posoco-ext-oauth@0.1.0",
   "colmugx/posoco-ext-openai-compatible@0.1.0",
-  "moonbitlang/async@0.20.5",
+  "moonbitlang/async@0.21.0",
 }
 
 readme = "README.mbt.md"
