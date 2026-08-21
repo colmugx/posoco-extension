@@ -83,7 +83,10 @@ test "serde: assistant message with tool_calls round-trips" {
   let msg = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("Running ls")],
     tool_calls=[tool_call],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking about ls" }),
+    reasoning=Some(@posoco.Reasoning::{
+      content: "thinking about ls",
+      raw: None,
+    }),
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
   let session = @posoco.Session::{
@@ -111,6 +114,47 @@ test "serde: assistant message with tool_calls round-trips" {
       }
     }
     Err(e) => fail("tool_call round-trip failed: \{e}")
+  }
+}
+
+///|
+test "serde: reasoning raw payload round-trips" {
+  let raw_items = Json::array([
+    Json::object(
+      Map::from_array([
+        ("id", Json::string("rs_123")),
+        ("type", Json::string("reasoning")),
+        ("summary", Json::array([])),
+      ]),
+    ),
+  ])
+  let msg = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{
+      content: "summary text",
+      raw: Some(raw_items),
+    }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let session = @posoco.Session::{
+    messages: [msg],
+    metadata: Map::from_array([]),
+  }
+  match session_from_jsonl(session_to_jsonl(session)) {
+    Ok(s) =>
+      match s.messages[0] {
+        @posoco.Message::AssistantMessage(reasoning~, ..) =>
+          match reasoning {
+            Some(r) => {
+              assert_eq(r.content, "summary text")
+              assert_true(r.raw == Some(raw_items))
+            }
+            None => fail("reasoning should round-trip")
+          }
+        _ => fail("expected AssistantMessage")
+      }
+    Err(e) => fail("reasoning raw round-trip failed: \{e}")
   }
 }
 
