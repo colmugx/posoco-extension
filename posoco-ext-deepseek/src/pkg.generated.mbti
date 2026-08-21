@@ -56,6 +56,7 @@ pub(all) struct DeepSeekProvider {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn DeepSeekProvider::new(ctx? : @posoco-devkit.ExtContext) -> Self
+pub async fn DeepSeekProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for DeepSeekProvider
 pub impl @posoco-ext-llm.ProviderFactory for DeepSeekProvider
 pub impl @posoco-ext-llm.RefreshableProviderFactory for DeepSeekProvider

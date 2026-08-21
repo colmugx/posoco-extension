@@ -1283,3 +1283,93 @@ test "ProviderFactory::build accepts reasoning_effort off and produces a disable
       fail("expected Ready catalog with reasoning_effort off")
   }
 }
+
+///|
+/// The host-cached record shape: a previous refresh projected to slot
+/// records. DeepSeek consumes only `model_id` and re-derives its reasoning
+/// policy, so the expanded catalog matches the live-refresh catalog.
+fn deepseek_cached_records(ids : Array[String]) -> Json {
+  let items : Array[Json] = []
+  for id in ids {
+    items.push(
+      Json::object(
+        Map::from_array([
+          ("model_id", Json::string(id)),
+          ("thinking_efforts", Json::array([])),
+          ("default_effort", Json::null()),
+        ]),
+      ),
+    )
+  }
+  Json::array(items)
+}
+
+///|
+test "ProviderFactory::build expands host-cached records into a multi-slot catalog" {
+  let provider = DeepSeekProvider::new()
+  let factory : &@llm.ProviderFactory = provider
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(
+        Map::from_array([
+          ("api_key", Json::string("sk-test")),
+          ("model", Json::string("deepseek-chat")),
+        ]),
+      ),
+    ),
+    cached_models=Some(
+      deepseek_cached_records(["deepseek-chat", "deepseek-reasoner"]),
+    ),
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 2)
+      // The configured model is pinned first; reasoning profiles are
+      // re-derived from ids exactly as the live refresh would.
+      assert_eq(slots[0].id, "deepseek/deepseek-chat")
+      assert_eq(slots[1].id, "deepseek/deepseek-reasoner")
+      assert_eq(slots[1].thinking_efforts, ["off", "high", "max"])
+      assert_eq(slots[1].default_effort, Some("high"))
+      assert_eq(slots[0].thinking_efforts, [])
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog from cached records")
+  }
+}
+
+///|
+test "ProviderFactory::build degrades to the static slot on bad cached records" {
+  let provider = DeepSeekProvider::new()
+  let factory : &@llm.ProviderFactory = provider
+  for
+    bad in [
+      Json::array([]),
+      Json::string("nope"),
+      Json::array([Json::number(1.0)]),
+      Json::array([
+        Json::object(
+          Map::from_array([("model_id", Json::string("deepseek-chat"))]),
+        ),
+        Json::object(Map::from_array([("model_id", Json::null())])),
+      ]),
+    ] {
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(
+        Json::object(Map::from_array([("api_key", Json::string("sk-test"))])),
+      ),
+      cached_models=Some(bad),
+    )
+    match factory.build(source) {
+      @llm.ProviderBuildResult::Ready(catalog) => {
+        let slots = catalog.slots()
+        assert_true(slots.length() == 1)
+        assert_eq(slots[0].model_id, "deepseek-v4-flash")
+      }
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail(
+          "bad cache records must degrade to the static build, not Unconfigured",
+        )
+    }
+  }
+}

@@ -19,6 +19,7 @@ pub impl @posoco.Extension for DeepSeekModelPort with fn manifest(self) -> @poso
     commands: [],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 
