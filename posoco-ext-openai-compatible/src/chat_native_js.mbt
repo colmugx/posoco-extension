@@ -10,15 +10,14 @@
 /// posoco-ext-read / posoco-ext-oauth pattern.
 
 ///|
-/// Drain a non-2xx response without exposing provider payloads. Uses
-/// `@http.Client`, so it co-resides with the chat impl on native+js.
-async fn read_error_body_summary(
-  client : @http.Client,
-) -> OaiCompatErrorBodySummary {
+/// Drain a non-2xx response, keeping the provider's error text for the
+/// failure message. Uses `@http.Client`, so it co-resides with the chat impl
+/// on native+js.
+async fn read_error_body(client : @http.Client) -> OaiCompatErrorBody {
   let data = client.read_all() catch { _ => return BodyReadFailed }
   let byte_length = data.binary().length()
-  let _ = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
-  BodyBytesUtf8(byte_length)
+  let text = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
+  BodyText(text)
 }
 
 ///|
@@ -39,22 +38,36 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         options,
         self.config.model,
         false,
+        self.config.thinking,
         self.config.reasoning_effort,
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
       let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-        _ =>
+        err =>
           raise @posoco.ModelError::Transport(
-            "openai-compatible transport failure (stage=post)",
+            "openai-compatible transport failure (stage=post): " +
+            err.to_string(),
           )
       }
       if !is_oai_compat_http_success(response.code) {
+        let byte_length = body_data.binary().length()
+        let text = body_data.text() catch {
+          _ =>
+            raise @posoco.ModelError::Transport(
+              format_oai_compat_http_error(
+                "chat.http_status",
+                response.code,
+                BodyBytesInvalidUtf8(byte_length),
+              ),
+            )
+        }
         match
           classify_oai_compat_http_status(
             "chat.http_status",
             response.code,
-            BodyBytesUtf8(body_data.binary().length()),
+            BodyText(text),
+            now_ms=@async.now(),
           ) {
           Some(err) => raise err
           None => ()
@@ -82,42 +95,45 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         options,
         self.config.model,
         true,
+        self.config.thinking,
         self.config.reasoning_effort,
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
       let client = @http.post_stream(url, headers~) catch {
-        _ =>
+        err =>
           raise @posoco.ModelError::Transport(
-            "openai-compatible transport failure (stage=post_stream)",
+            "openai-compatible transport failure (stage=post_stream): " +
+            err.to_string(),
           )
       }
       client.write(body.stringify()) catch {
-        _ => {
+        err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "openai-compatible transport failure (stage=write_body)",
+            "openai-compatible transport failure (stage=write_body): " +
+            err.to_string(),
           )
         }
       }
       let response = client.end_request() catch {
-        _ => {
+        err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "openai-compatible transport failure (stage=end_request)",
+            "openai-compatible transport failure (stage=end_request): " +
+            err.to_string(),
           )
         }
       }
       if !is_oai_compat_http_success(response.code) {
-        let err_summary = read_error_body_summary(client) catch {
-          _ => BodyUnavailable
-        }
+        let err_body = read_error_body(client) catch { _ => BodyUnavailable }
         client.close()
         match
           classify_oai_compat_http_status(
             "chat_stream.http_status",
             response.code,
-            err_summary,
+            err_body,
+            now_ms=@async.now(),
           ) {
           Some(err) => raise err
           None => ()
@@ -132,6 +148,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
       let wire_path = wire_log_path()
       let mut done = false
       let mut data_buffer = ""
+      let mut last_yield = @async.now()
       while !done {
         let line = client.read_until("\n") catch {
           _ => {
@@ -161,11 +178,33 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
           }
           None => {
             client.close()
-            match classify_oai_compat_stream_termination(CleanEof) {
-              Some(err) => raise err
-              None => done = true
+            if oai_compat_eof_tolerable(acc) {
+              let chunk = @posoco.StreamChunk::Finish(reason="tool_calls")
+              on_typed(chunk)
+              acc.push(chunk)
+              done = true
+            } else {
+              match classify_oai_compat_stream_termination(CleanEof) {
+                Some(err) => raise err
+                None => done = true
+              }
             }
           }
+        }
+        // A buffered SSE burst makes read_until complete without suspending,
+        // so this loop can spin through the whole stream in one coroutine
+        // chain and the host never dispatches stdin (ESC/interrupt). Yield at
+        // most every 16ms so the event loop can breathe; the pause is also a
+        // cancellation point, which is what makes abort responsive.
+        let now = @async.now()
+        if now - last_yield >= 16L {
+          @async.pause() catch {
+            // Turn abort is mailbox-driven (the pump checks abort_requested
+            // between effects), so a cancelled pause is safe to ride over;
+            // the next read on a torn-down client errors out of the loop.
+            _ => ()
+          }
+          last_yield = now
         }
       }
       client.close()

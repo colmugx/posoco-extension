@@ -51,69 +51,72 @@ fn oai_compat_setting_string(
 }
 
 ///|
-/// Keep URL parsing in the provider extension. The host passes one opaque
-/// base_url string; this adapter decides how its path prefix maps to chat. The
-/// convention follows DeepSeek: split "://host[/prefix]" into (base, prefix),
-/// stripping any trailing "/" on the prefix.
-fn oai_compat_endpoint_parts(url : String) -> (String, String) {
-  match url.find("://") {
-    None => (url, "")
-    Some(protocol_end) => {
-      let after_start = protocol_end + 3
-      let after = url.sub(start=after_start)
-      match after.find("/") {
-        None => (url, "")
-        Some(slash) => {
-          let host_end = after_start + slash
-          let clean = url.sub(end=host_end).to_owned()
-          let prefix = after.sub(start=slash).to_owned()
-          match prefix.strip_suffix("/") {
-            Some(value) => (clean, value.to_owned())
-            None => (clean, prefix)
-          }
-        }
-      }
+/// Validate declared effort entries: non-empty, unique, and never the reserved
+/// selector words "off"/"on" (those belong to the toggle vocabulary, never to a
+/// declared level). The values pass through verbatim — the server owns the
+/// valid level names, this adapter only owns their plumbing.
+fn oai_compat_effort_array_value(
+  key : String,
+  values : Array[Json],
+) -> Array[String] raise @posoco.CompositionError {
+  let efforts : Array[String] = []
+  for value in values {
+    match value {
+      Json::String(effort) if effort.length() > 0 => efforts.push(effort)
+      _ =>
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_openai_compatible",
+          detail=key + " entries must be non-empty strings",
+        )
     }
   }
+  let seen : Map[String, Unit] = Map::from_array([])
+  for effort in efforts {
+    if effort == "off" || effort == "on" {
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_openai_compatible",
+        detail=key +
+          " reserves 'off'/'on' for the thinking toggle; declare explicit levels instead",
+      )
+    }
+    if seen.contains(effort) {
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_openai_compatible",
+        detail=key + " entries must be unique: " + effort,
+      )
+    }
+    seen[effort] = ()
+  }
+  efforts
 }
 
 ///|
-/// Parse the optional `reasoning_efforts` settings array. Each entry must be a
-/// non-empty string; the adapter passes the values through verbatim (the
-/// server owns the valid level names, this adapter only owns their plumbing).
-fn oai_compat_setting_efforts(
+/// Parse one settings key as the declared effort array. `None` means the key
+/// is absent (the plain off/on toggle); a present but non-array value is a
+/// typed composition failure.
+fn oai_compat_setting_effort_array(
   source : @llm.ProviderConfigSource,
-) -> Array[String] raise @posoco.CompositionError {
-  match source.setting("reasoning_efforts") {
-    None => []
-    Some(Json::Array(values)) => {
-      let efforts : Array[String] = []
-      for value in values {
-        match value {
-          Json::String(effort) if effort.length() > 0 => efforts.push(effort)
-          _ =>
-            raise @posoco.CompositionError::ManifestSchemaError(
-              manifest_id="posoco_ext_openai_compatible",
-              detail="reasoning_efforts entries must be non-empty strings",
-            )
-        }
-      }
-      efforts
-    }
+  key : String,
+) -> Array[String]? raise @posoco.CompositionError {
+  match source.setting(key) {
+    None => None
+    Some(Json::Array(values)) =>
+      Some(oai_compat_effort_array_value(key, values))
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
         manifest_id="posoco_ext_openai_compatible",
-        detail="reasoning_efforts must be an array of strings",
+        detail=key + " must be an array of strings",
       )
   }
 }
 
 ///|
-/// The picker-facing effort list: an implicit leading "off" (omit the wire
-/// field) plus every declared level. Empty declared list means no selector.
+/// The picker-facing effort list: "off" plus every declared level, or just the
+/// on/off toggle when the settings declare no levels. Every custom endpoint
+/// gets at least the toggle — no conventional level set is ever fabricated.
 fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
   if config.thinking_efforts.is_empty() {
-    return []
+    return ["off", "on"]
   }
   let efforts : Array[String] = ["off"]
   efforts.append(config.thinking_efforts.copy())
@@ -121,12 +124,15 @@ fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
 }
 
 ///|
-/// The picker-facing label of the config's current effort.
+/// The picker-facing label of the config's current state.
 fn oai_compat_effort_label(config : OpenAICompatibleConfig) -> String {
-  if config.reasoning_effort == "" {
+  if config.thinking == false {
     "off"
   } else {
-    config.reasoning_effort
+    match config.reasoning_effort {
+      Some(effort) => effort
+      None => "on"
+    }
   }
 }
 
@@ -142,29 +148,20 @@ fn oai_compat_catalog_slot(
   let slot_id = provider_id + "/" + config.model
   let label = provider_id + " / " + config.model
   let slot_efforts = oai_compat_slot_efforts(config)
-  let default_effort = if slot_efforts.is_empty() {
-    None
-  } else {
-    Some(oai_compat_effort_label(config))
-  }
+  let default_effort = Some(oai_compat_effort_label(config))
   let port : &@posoco.ModelPort = OpenAICompatibleModelPort::new(
     provider_id, config,
   )
   let api_key : &@llm.ApiKeyFactory = OpenAICompatibleProvider::new(provider_id)
-  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if slot_efforts.is_empty() {
-    None
-  } else {
-    Some(fn(effort) {
-      let rebuilt_config = config.with_reasoning_effort(effort) catch {
-        err =>
-          abort(
-            "openai-compatible catalog effort rebuild failed: " +
-            err.to_string(),
-          )
-      }
-      oai_compat_catalog_slot(provider_id, rebuilt_config)
-    })
-  }
+  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = Some(fn(effort) {
+    let rebuilt_config = config.with_reasoning_effort(effort) catch {
+      err =>
+        abort(
+          "openai-compatible catalog effort rebuild failed: " + err.to_string(),
+        )
+    }
+    oai_compat_catalog_slot(provider_id, rebuilt_config)
+  })
   @llm.ModelSlot::ModelSlot(
     id=slot_id,
     label~,
@@ -182,6 +179,7 @@ fn oai_compat_catalog_slot(
         base_url=config.base_url,
         model=config.model,
         endpoint_prefix=config.endpoint_prefix,
+        thinking=config.thinking,
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=config.thinking_efforts,
       )
@@ -241,29 +239,111 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
     Some(value) => value
     None => ""
   }
-  let reasoning_effort = match
-    oai_compat_setting_string(source, "reasoning_effort") {
-    Some(value) => value
-    None => ""
+  // Declared levels: `reasoning_effort` accepts an array of levels (the
+  // canonical form) or a legacy single string; `reasoning_efforts` is the
+  // plural alias carrying the same array. No declaration means the plain
+  // off/on toggle — conventional level sets are never fabricated for an
+  // endpoint that did not declare them.
+  let (singular_array, singular_string) : (Array[String]?, String?) = match
+    source.setting("reasoning_effort") {
+    None => (None, None)
+    Some(Json::Array(values)) =>
+      (Some(oai_compat_effort_array_value("reasoning_effort", values)), None)
+    Some(Json::String(fixed)) =>
+      if fixed.length() == 0 {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_openai_compatible",
+          detail="setting must not be empty: reasoning_effort",
+        )
+      } else {
+        (None, Some(fixed))
+      }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_openai_compatible",
+        detail="reasoning_effort must be an array of levels or a single string",
+      )
   }
-  let thinking_efforts = oai_compat_setting_efforts(source)
-  if reasoning_effort != "" &&
-    !thinking_efforts.is_empty() &&
-    !thinking_efforts.contains(reasoning_effort) {
-    raise @posoco.CompositionError::ManifestSchemaError(
-      manifest_id="posoco_ext_openai_compatible",
-      detail="reasoning_effort is not one of reasoning_efforts: " +
-        reasoning_effort,
-    )
-  }
-  let config = OpenAICompatibleConfig::new(
-    api_key,
-    base_url~,
-    model~,
-    endpoint_prefix~,
-    reasoning_effort~,
-    thinking_efforts~,
+  let plural_array = oai_compat_setting_effort_array(
+    source, "reasoning_efforts",
   )
+  let declared_efforts : Array[String] = match (singular_array, plural_array) {
+    (Some(singular), Some(plural)) =>
+      if singular != plural {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_openai_compatible",
+          detail="reasoning_effort and reasoning_efforts declare different level lists; use one key",
+        )
+      } else {
+        singular
+      }
+    (Some(singular), None) => singular
+    (None, Some(plural)) => plural
+    (None, None) => []
+  }
+  // The initial selection: an explicit legacy string wins; otherwise the
+  // first declared level; an undeclared provider starts at "off".
+  let config = match singular_string {
+    Some(fixed) =>
+      if fixed == "off" || fixed == "on" {
+        if !declared_efforts.is_empty() {
+          raise @posoco.CompositionError::ManifestSchemaError(
+            manifest_id="posoco_ext_openai_compatible",
+            detail="reasoning_effort '" +
+              fixed +
+              "' selects the thinking toggle and cannot combine with a declared level list",
+          )
+        }
+        OpenAICompatibleConfig::new(
+          api_key,
+          base_url~,
+          model~,
+          endpoint_prefix~,
+          thinking=fixed == "on",
+        )
+      } else {
+        if !declared_efforts.is_empty() && !declared_efforts.contains(fixed) {
+          raise @posoco.CompositionError::ManifestSchemaError(
+            manifest_id="posoco_ext_openai_compatible",
+            detail="reasoning_effort is not one of reasoning_efforts: " + fixed,
+          )
+        }
+        OpenAICompatibleConfig::new(
+          api_key,
+          base_url~,
+          model~,
+          endpoint_prefix~,
+          thinking=true,
+          reasoning_effort=Some(fixed),
+          thinking_efforts=if declared_efforts.is_empty() {
+            [fixed]
+          } else {
+            declared_efforts
+          },
+        )
+      }
+    None =>
+      match declared_efforts.length() {
+        0 =>
+          OpenAICompatibleConfig::new(
+            api_key,
+            base_url~,
+            model~,
+            endpoint_prefix~,
+            thinking=false,
+          )
+        _ =>
+          OpenAICompatibleConfig::new(
+            api_key,
+            base_url~,
+            model~,
+            endpoint_prefix~,
+            thinking=true,
+            reasoning_effort=Some(declared_efforts[0]),
+            thinking_efforts=declared_efforts,
+          )
+      }
+  }
   let port = OpenAICompatibleModelPort::new(self.provider_id, config)
   @llm.ProviderBuildResult::Ready(port.model_catalog())
 }

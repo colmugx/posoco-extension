@@ -2,11 +2,14 @@
 /// Wire encoder: convert kernel canonical types to standard OpenAI
 /// Chat Completions API JSON.
 ///
-/// This is the plain OpenAI Chat Completions shape — no `thinking` wrapper.
-/// Servers that support reasoning expose it via the optional top-level
-/// `reasoning_effort` field (set on the request body, not per-message).
-/// Tool call arguments are JSON strings (OpenAI convention). Message order
-/// is append-only.
+/// This is the plain OpenAI Chat Completions shape with the customary
+/// reasoning surface: a selected effort level sends the top-level
+/// `reasoning_effort` field verbatim, and enabling thinking without a level
+/// sends the object form `thinking: {"type": "enabled"}`. A bare boolean is
+/// never sent — strict gateways (OpenCode Zen's upstream) only accept the
+/// object form. When thinking is off, both fields are omitted entirely so
+/// the endpoint applies its own default. Tool call arguments are JSON
+/// strings (OpenAI convention). Message order is append-only.
 
 ///|
 /// Encode a kernel Message into an OpenAI chat message JSON object.
@@ -120,7 +123,8 @@ fn build_chat_request(
   options : @posoco.ChatOptions,
   model : String,
   stream : Bool,
-  reasoning_effort : String,
+  thinking : Bool,
+  reasoning_effort : String?,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(model),
@@ -137,8 +141,17 @@ fn build_chat_request(
     Some(n) => body["max_tokens"] = Json::number(n.to_double())
     None => ()
   }
-  if reasoning_effort.length() > 0 {
-    body["reasoning_effort"] = Json::string(reasoning_effort)
+  // Thinking off omits the reasoning surface entirely — no `thinking`, no
+  // `reasoning_effort`; the endpoint applies its own default. Thinking on
+  // uses the object form (never a bare boolean, which strict gateways such
+  // as OpenCode Zen's upstream reject); a selected level additionally sends
+  // the top-level `reasoning_effort` verbatim.
+  if thinking {
+    body["thinking"] = Json::object({ "type": Json::string("enabled") })
+    match reasoning_effort {
+      Some(effort) => body["reasoning_effort"] = Json::string(effort)
+      None => ()
+    }
   }
   if stream {
     body["stream"] = Json::boolean(true)

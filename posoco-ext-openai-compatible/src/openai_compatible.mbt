@@ -7,7 +7,7 @@
 
 ///|
 /// Build HTTP headers for OpenAI-compatible API requests.
-fn build_headers(config : OpenAICompatibleConfig) -> Map[String, String] {
+fn build_headers(config : OpenAICompatibleConfig) -> @http.Headers {
   {
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",

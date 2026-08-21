@@ -22,10 +22,11 @@ pub(all) struct OpenAICompatibleConfig {
   base_url : String
   endpoint_prefix : String
   model : String
-  reasoning_effort : String
+  thinking : Bool
+  reasoning_effort : String?
   thinking_efforts : Array[String]
 } derive(Eq, @debug.Debug)
-pub fn OpenAICompatibleConfig::new(String, base_url~ : String, model~ : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
+pub fn OpenAICompatibleConfig::new(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String]) -> Self
 pub fn OpenAICompatibleConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct OpenAICompatibleModelPort {

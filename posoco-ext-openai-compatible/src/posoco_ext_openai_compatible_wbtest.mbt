@@ -40,7 +40,8 @@ test "OpenAICompatibleConfig::new records required and optional fields" {
   assert_eq(config.base_url, "https://example.com/v1")
   assert_eq(config.model, "qwen-plus")
   assert_eq(config.endpoint_prefix, "")
-  assert_eq(config.reasoning_effort, "")
+  assert_false(config.thinking)
+  assert_eq(config.reasoning_effort, None)
 }
 
 ///|
@@ -50,10 +51,12 @@ test "OpenAICompatibleConfig::new carries optional fields" {
     base_url="https://example.com",
     model="qwen-plus",
     endpoint_prefix="/v1",
-    reasoning_effort="medium",
+    thinking=true,
+    reasoning_effort=Some("medium"),
   )
   assert_eq(config.endpoint_prefix, "/v1")
-  assert_eq(config.reasoning_effort, "medium")
+  assert_true(config.thinking)
+  assert_eq(config.reasoning_effort, Some("medium"))
 }
 
 ///|
@@ -255,11 +258,11 @@ async test "ApiKeyFactory::login rejects an empty secret" {
 }
 
 ///|
-/// Build a request body and assert the optional reasoning_effort field is
-/// emitted only when non-empty. This is the protocol-shape contract: plain
-/// Chat Completions, no `thinking` wrapper, reasoning_effort as a top-level
-/// field.
-test "build_chat_request emits reasoning_effort only when non-empty" {
+/// Build a request body and assert the reasoning wire contract: thinking off
+/// omits `thinking`/`reasoning_effort` entirely; thinking on sends the object
+/// form `thinking: {"type": "enabled"}` (never a bare boolean); a selected
+/// level additionally sends the top-level `reasoning_effort` verbatim.
+test "build_chat_request omits thinking when off and uses the object form when on" {
   let opts = chat_options()
   let with_effort = build_chat_request(
     [user_msg("hi")],
@@ -267,36 +270,97 @@ test "build_chat_request emits reasoning_effort only when non-empty" {
     opts,
     "qwen-plus",
     false,
-    "medium",
+    true,
+    Some("low"),
   )
   guard with_effort is Object(with_fields) else {
     fail("expected request to be an object")
   }
-  match with_fields.get("reasoning_effort") {
-    Some(Json::String(value)) => assert_eq(value, "medium")
-    _ => fail("expected reasoning_effort to be emitted when set")
-  }
   match with_fields.get("thinking") {
-    Some(_) =>
-      fail("plain chat completions must not include a thinking wrapper")
-    None => ()
+    Some(Json::Object(thinking)) =>
+      match thinking.get("type") {
+        Some(Json::String("enabled")) => ()
+        _ => fail("expected thinking object with type=enabled")
+      }
+    _ => fail("expected the thinking object when a level is selected")
+  }
+  match with_fields.get("reasoning_effort") {
+    Some(Json::String(value)) => assert_eq(value, "low")
+    _ => fail("expected reasoning_effort to be emitted when a level is set")
   }
 
-  let without_effort = build_chat_request(
+  let toggle_on = build_chat_request(
     [user_msg("hi")],
     [],
     opts,
     "qwen-plus",
     false,
-    "",
+    true,
+    None,
   )
-  guard without_effort is Object(without_fields) else {
+  guard toggle_on is Object(on_fields) else {
     fail("expected request to be an object")
   }
-  match without_fields.get("reasoning_effort") {
-    None => ()
-    Some(_) => fail("reasoning_effort must be omitted when empty")
+  match on_fields.get("thinking") {
+    Some(Json::Object(thinking)) =>
+      match thinking.get("type") {
+        Some(Json::String("enabled")) => ()
+        _ => fail("expected thinking object with type=enabled")
+      }
+    _ => fail("expected the thinking object in plain toggle mode")
   }
+  match on_fields.get("reasoning_effort") {
+    None => ()
+    Some(_) => fail("reasoning_effort must be omitted without a level")
+  }
+
+  let toggle_off = build_chat_request(
+    [user_msg("hi")],
+    [],
+    opts,
+    "qwen-plus",
+    false,
+    false,
+    None,
+  )
+  guard toggle_off is Object(off_fields) else {
+    fail("expected request to be an object")
+  }
+  match off_fields.get("thinking") {
+    None => ()
+    Some(_) => fail("thinking must be omitted entirely when off")
+  }
+  match off_fields.get("reasoning_effort") {
+    None => ()
+    Some(_) => fail("reasoning_effort must be omitted when off")
+  }
+}
+
+///|
+/// The HTTP error message embeds the provider's UTF-8 error body verbatim —
+/// a 400 must say why it is a 400 — and caps runaway bodies.
+test "format_oai_compat_http_error embeds the provider body" {
+  let message = format_oai_compat_http_error(
+    "chat_stream.http_status",
+    400,
+    BodyText("{\"error\":{\"message\":\"thinking must be an object\"}}"),
+  )
+  assert_true(
+    message.contains(
+      "openai-compatible HTTP error (stage=chat_stream.http_status, status=400, body=",
+    ),
+  )
+  assert_true(message.contains("thinking must be an object"))
+
+  let huge = String::make(oai_compat_error_body_cap + 100, 'x')
+  let capped = format_oai_compat_http_error(
+    "chat.http_status",
+    502,
+    BodyText(huge),
+  )
+  assert_true(capped.contains("...(truncated, body_chars=2148)"))
+  // The embedded body is capped; only formatting overhead rides along.
+  assert_true(capped.length() <= huge.length() + 100)
 }
 
 ///|
@@ -308,7 +372,8 @@ test "build_chat_request serializes model and messages" {
     opts,
     "qwen-plus",
     false,
-    "",
+    false,
+    None,
   )
   guard body is Object(fields) else { fail("expected object body") }
   match fields.get("model") {
@@ -332,7 +397,15 @@ test "build_chat_request carries tools and stream options" {
     policy=@posoco.ExecutionPolicy::Sequential,
     provenance=None,
   )
-  let body = build_chat_request([user_msg("hi")], [tool], opts, "m", true, "")
+  let body = build_chat_request(
+    [user_msg("hi")],
+    [tool],
+    opts,
+    "m",
+    true,
+    false,
+    None,
+  )
   guard body is Object(fields) else { fail("expected object body") }
   match fields.get("tools") {
     Some(Json::Array(arr)) => assert_true(arr.length() == 1)
@@ -660,7 +733,8 @@ test "rebuild_on_effort off rebuilds the slot without a wire effort" {
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
-    reasoning_effort="high",
+    thinking=true,
+    reasoning_effort=Some("high"),
     thinking_efforts=["low", "high"],
   )
   let port = OpenAICompatibleModelPort::new("qwen", config)
@@ -676,16 +750,21 @@ test "rebuild_on_effort off rebuilds the slot without a wire effort" {
 }
 
 ///|
-test "OpenAICompatibleConfig::with_reasoning_effort maps off to omitted field and validates membership" {
+test "OpenAICompatibleConfig::with_reasoning_effort maps the selector vocabulary" {
   let config = OpenAICompatibleConfig::new(
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
-    reasoning_effort="high",
+    thinking=true,
+    reasoning_effort=Some("high"),
     thinking_efforts=["low", "high"],
   )
-  assert_eq(config.with_reasoning_effort("off").reasoning_effort, "")
-  assert_eq(config.with_reasoning_effort("low").reasoning_effort, "low")
+  let off = config.with_reasoning_effort("off")
+  assert_false(off.thinking)
+  assert_eq(off.reasoning_effort, None)
+  let low = config.with_reasoning_effort("low")
+  assert_true(low.thinking)
+  assert_eq(low.reasoning_effort, Some("low"))
   let invalid = Ok(config.with_reasoning_effort("max")) catch {
     err => Err(err)
   }
@@ -694,6 +773,29 @@ test "OpenAICompatibleConfig::with_reasoning_effort maps off to omitted field an
       assert_true(detail.contains("unsupported reasoning effort"))
     _ => fail("an undeclared effort must fail at the config boundary")
   }
+  let on_with_levels = Ok(config.with_reasoning_effort("on")) catch {
+    err => Err(err)
+  }
+  match on_with_levels {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("unsupported reasoning effort"))
+    _ => fail("'on' must be rejected while explicit levels are declared")
+  }
+}
+
+///|
+test "'on' selects plain thinking when no levels are declared" {
+  let config = OpenAICompatibleConfig::new(
+    "sk-test",
+    base_url="https://example.com/v1",
+    model="qwen-plus",
+  )
+  let on = config.with_reasoning_effort("on")
+  assert_true(on.thinking)
+  assert_eq(on.reasoning_effort, None)
+  let off = on.with_reasoning_effort("off")
+  assert_false(off.thinking)
+  assert_eq(off.reasoning_effort, None)
 }
 
 ///|
@@ -764,4 +866,367 @@ test "process_oai_compat_sse tolerates explicit nulls in tool-call continuation 
   assert_eq(tc.call_id.to_string(), "call_1")
   assert_eq(tc.name.to_string(), "echo")
   assert_eq(tc.arguments.stringify(), "{\"text\":\"hi\"}")
+}
+
+///|
+/// Helper: a fully-configured settings source without a `reasoning_efforts`
+/// declaration, optionally carrying a fixed singular `reasoning_effort`.
+fn undeclared_effort_settings_source(
+  reasoning_effort? : String = "",
+  reasoning_efforts? : Json = Json::null(),
+) -> @llm.ProviderConfigSource {
+  let fields : Array[(String, Json)] = [
+    ("api_key", Json::string("sk-test")),
+    ("base_url", Json::string("https://example.com/v1")),
+    ("model", Json::string("qwen-plus")),
+  ]
+  if reasoning_effort != "" {
+    fields.push(("reasoning_effort", Json::string(reasoning_effort)))
+  }
+  match reasoning_efforts {
+    Json::Null => ()
+    declared => fields.push(("reasoning_efforts", declared))
+  }
+  @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(Json::object(Map::from_array(fields.copy()))),
+  )
+}
+
+///|
+test "ProviderFactory::build exposes the plain off/on toggle when settings declare no levels" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  match factory.build(undeclared_effort_settings_source()) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      assert_eq(slot.thinking_efforts, ["off", "on"])
+      assert_eq(slot.default_effort, Some("off"))
+      assert_true(slot.rebuild_on_effort is Some(_))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with full settings")
+  }
+}
+
+///|
+test "an explicit empty reasoning_efforts array still exposes the toggle" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  match
+    factory.build(
+      undeclared_effort_settings_source(reasoning_efforts=Json::array([])),
+    ) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      assert_eq(slot.thinking_efforts, ["off", "on"])
+      assert_eq(slot.default_effort, Some("off"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with full settings")
+  }
+}
+
+///|
+test "an array reasoning_effort declares the selectable levels verbatim" {
+  let provider = OpenAICompatibleProvider::new("mtplx")
+  let factory : &@llm.ProviderFactory = provider
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(
+        Map::from_array([
+          ("api_key", Json::string("sk-test")),
+          ("base_url", Json::string("http://127.0.0.1:8000/v1")),
+          ("model", Json::string("mtplx-qwen38-27b")),
+          ("reasoning_effort", Json::array([Json::string("low")])),
+        ]),
+      ),
+    ),
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      // off is auto-prepended; each declared value surfaces as key and value.
+      assert_eq(slot.thinking_efforts, ["off", "low"])
+      assert_eq(slot.default_effort, Some("low"))
+      guard slot.rebuild_on_effort is Some(rebuild) else {
+        fail("declared levels must expose a rebuild hook")
+      }
+      // Selecting the level enables thinking and sends the value verbatim.
+      let rebuilt = rebuild("low")
+      assert_eq(rebuilt.default_effort, Some("low"))
+      let off = rebuild("off")
+      assert_eq(off.default_effort, Some("off"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with full settings")
+  }
+}
+
+///|
+test "a multi-level reasoning_effort array keeps every value selectable" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(
+        Map::from_array([
+          ("api_key", Json::string("sk-test")),
+          ("base_url", Json::string("https://example.com/v1")),
+          ("model", Json::string("qwen-plus")),
+          (
+            "reasoning_effort",
+            Json::array([Json::string("low"), Json::string("max")]),
+          ),
+        ]),
+      ),
+    ),
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      assert_eq(slot.thinking_efforts, ["off", "low", "max"])
+      assert_eq(slot.default_effort, Some("low"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with full settings")
+  }
+}
+
+///|
+test "a fixed singular reasoning_effort outside the convention stays selectable" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  match
+    factory.build(undeclared_effort_settings_source(reasoning_effort="deep")) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      assert_eq(slot.thinking_efforts, ["off", "deep"])
+      assert_eq(slot.default_effort, Some("deep"))
+      guard slot.rebuild_on_effort is Some(rebuild) else {
+        fail("the fixed effort must keep the slot rebuildable")
+      }
+      assert_eq(rebuild("deep").default_effort, Some("deep"))
+      assert_eq(rebuild("off").default_effort, Some("off"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with full settings")
+  }
+}
+
+///|
+test "a legacy toggle-word reasoning_effort sets the on/off default" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  match
+    factory.build(undeclared_effort_settings_source(reasoning_effort="on")) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      assert_eq(slot.thinking_efforts, ["off", "on"])
+      assert_eq(slot.default_effort, Some("on"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with full settings")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects reserved words inside declared levels" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let reserved = Ok(
+    factory.build(
+      undeclared_effort_settings_source(
+        reasoning_efforts=Json::array([Json::string("low"), Json::string("on")]),
+      ),
+    ),
+  ) catch {
+    err => Err(err)
+  }
+  match reserved {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("reserves"))
+    _ => fail("'on' inside a declared level list must fail composition")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects duplicate declared levels" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let duplicate = Ok(
+    factory.build(
+      undeclared_effort_settings_source(
+        reasoning_efforts=Json::array([Json::string("low"), Json::string("low")]),
+      ),
+    ),
+  ) catch {
+    err => Err(err)
+  }
+  match duplicate {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("unique"))
+    _ => fail("duplicate declared levels must fail composition")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects conflicting singular and plural level lists" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let conflicting = Ok(
+    factory.build(
+      @llm.ProviderConfigSource::ProviderConfigSource(
+        settings=Some(
+          Json::object(
+            Map::from_array([
+              ("api_key", Json::string("sk-test")),
+              ("base_url", Json::string("https://example.com/v1")),
+              ("model", Json::string("qwen-plus")),
+              ("reasoning_effort", Json::array([Json::string("low")])),
+              ("reasoning_efforts", Json::array([Json::string("high")])),
+            ]),
+          ),
+        ),
+      ),
+    ),
+  ) catch {
+    err => Err(err)
+  }
+  match conflicting {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("different level lists"))
+    _ => fail("conflicting level lists must fail composition")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects a non-string non-array reasoning_effort" {
+  let provider = OpenAICompatibleProvider::new("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let bad = Ok(
+    factory.build(
+      @llm.ProviderConfigSource::ProviderConfigSource(
+        settings=Some(
+          Json::object(
+            Map::from_array([
+              ("api_key", Json::string("sk-test")),
+              ("base_url", Json::string("https://example.com/v1")),
+              ("model", Json::string("qwen-plus")),
+              ("reasoning_effort", Json::number(3)),
+            ]),
+          ),
+        ),
+      ),
+    ),
+  ) catch {
+    err => Err(err)
+  }
+  match bad {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("array of levels or a single string"))
+    _ => fail("a numeric reasoning_effort must fail composition")
+  }
+}
+
+///|
+test "decode_chat_response extracts cached tokens via prompt_tokens_details" {
+  let payload = Json::object(
+    Map::from_array([
+      (
+        "choices",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              (
+                "message",
+                Json::object(Map::from_array([("content", Json::string("ok"))])),
+              ),
+              ("finish_reason", Json::string("stop")),
+            ]),
+          ),
+        ]),
+      ),
+      (
+        "usage",
+        Json::object(
+          Map::from_array([
+            ("prompt_tokens", Json::number(1200.0)),
+            ("completion_tokens", Json::number(5.0)),
+            ("total_tokens", Json::number(1205.0)),
+            (
+              "prompt_tokens_details",
+              Json::object(
+                Map::from_array([("cached_tokens", Json::number(1000.0))]),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    ]),
+  )
+  let completion = decode_chat_response(payload)
+  match completion.usage {
+    Some(u) => {
+      assert_eq(u.input_tokens, Some(1200))
+      assert_eq(u.cached_input_tokens, Some(1000))
+    }
+    None => fail("expected usage")
+  }
+}
+
+///|
+test "classify: 429 raises typed RateLimited with the stated reset" {
+  let body = "{\"error\":{\"type\":\"usage_limit_reached\",\"message\":\"The usage limit has been reached\",\"resets_at\":1778839243,\"resets_in_seconds\":756}}"
+  let err = classify_oai_compat_http_status(
+    "chat.http_status",
+    429,
+    BodyText(body),
+    now_ms=0L,
+  )
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  assert_eq(info.status, 429)
+  assert_eq(info.provider_code, Some("usage_limit_reached"))
+  assert_eq(info.reset_at_ms, Some(756000L))
+  let other = classify_oai_compat_http_status(
+    "chat.http_status",
+    500,
+    BodyText("boom"),
+    now_ms=0L,
+  )
+  assert_true(other is Some(@posoco.ModelError::Transport(_)))
+}
+
+///|
+test "oai_compat_eof_tolerable requires at least one tool call" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  assert_false(oai_compat_eof_tolerable(acc))
+  // Text-only accumulation is not tolerable: a cut answer must stay loud.
+  acc.push(@posoco.StreamChunk::TextDelta(token="partial answer"))
+  assert_false(oai_compat_eof_tolerable(acc))
+}
+
+///|
+test "oai_compat_eof_tolerable accepts complete tool calls" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let noop = fn(_ : @posoco.StreamChunk) -> Unit { () }
+  let first = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":null}}]},\"finish_reason\":null}]}"
+  assert_false(process_oai_compat_sse(first, acc, noop))
+  let cont = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":null,\"function\":{\"name\":null,\"arguments\":\"{\\\"cmd\\\":\\\"ls\\\"}\"}}]},\"finish_reason\":null}]}"
+  assert_false(process_oai_compat_sse(cont, acc, noop))
+  // EOF here (no finish_reason, no [DONE]): the call is complete → tolerable.
+  assert_true(oai_compat_eof_tolerable(acc))
+}
+
+///|
+test "oai_compat_eof_tolerable rejects arguments cut mid-stream" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let noop = fn(_ : @posoco.StreamChunk) -> Unit { () }
+  let first = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":null}}]},\"finish_reason\":null}]}"
+  assert_false(process_oai_compat_sse(first, acc, noop))
+  // Arguments JSON truncated: unparseable — the EOF must stay a loud failure.
+  let cont = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":null,\"function\":{\"name\":null,\"arguments\":\"{\\\"cmd\\\":\\\"ls\"}}]},\"finish_reason\":null}]}"
+  assert_false(process_oai_compat_sse(cont, acc, noop))
+  assert_false(oai_compat_eof_tolerable(acc))
 }
