@@ -1,0 +1,10 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-workspace" @workspace,
+  "moonbit-community/yaml",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
