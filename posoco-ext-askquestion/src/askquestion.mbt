@@ -297,7 +297,11 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
 pub impl @posoco.SystemPromptContributor for AskQuestionTools with fn system_prompt(
   _self : AskQuestionTools,
 ) -> String {
-  "Use ask_question only when a user decision or missing fact is required to proceed. Ask one focused question at a time. Prefer select with concise options when the available choices are known; otherwise use input. Do not ask for information that can be discovered with available tools."
+  let prompt =
+    #| ## Ask Question to User
+    #| "Use ask_question only when a user decision or missing fact is required to proceed. Ask one focused question at a time. Prefer select with concise options when the available choices are known; otherwise use input. Do not ask for information that can be discovered with available tools."
+
+  prompt
 }
 
 ///|

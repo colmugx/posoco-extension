@@ -25,7 +25,7 @@ impl ApprovalSource for ScriptedApproval with fn ask(self, _request) {
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-test "read-only mode approves inspection and rejects mutation" {
+async test "read-only mode approves inspection and rejects mutation" {
   let policy = PermissionPolicy::new(ReadOnly)
   assert_true(
     policy.before_tool(test_call("read"))
@@ -44,7 +44,7 @@ test "read-only mode approves inspection and rejects mutation" {
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-test "workspace-write without source denies shell and unknown" {
+async test "workspace-write without source denies shell and unknown" {
   let policy = PermissionPolicy::new(WorkspaceWrite)
   // write is not auto-approved in WorkspaceWrite (goes through gate); with no
   // source it is denied.
@@ -62,7 +62,7 @@ test "workspace-write without source denies shell and unknown" {
 }
 
 ///|
-test "workspace-write with source approves writes via gate, caches session" {
+async test "workspace-write with source approves writes via gate, caches session" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
   let policy = PermissionPolicy::new(
     WorkspaceWrite,
@@ -83,7 +83,7 @@ test "workspace-write with source approves writes via gate, caches session" {
 }
 
 ///|
-test "workspace-write deny surfaces the reason" {
+async test "workspace-write deny surfaces the reason" {
   let source = ScriptedApproval::{
     decision: Deny(reason="user said no"),
     asked: 0,
@@ -104,7 +104,7 @@ test "workspace-write deny surfaces the reason" {
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-test "interactive mode approves reads and gates side effects" {
+async test "interactive mode approves reads and gates side effects" {
   let source = ScriptedApproval::{ decision: AllowOnce, asked: 0 }
   let policy = PermissionPolicy::new(
     Interactive,

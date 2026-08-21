@@ -16,6 +16,7 @@
 #cfg(not(any(target="native", target="js")))
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
   _self : OpenAICompatibleModelPort,
+  _scope : @posoco.InvocationScope,
   _messages : Array[@posoco.Message],
   _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,

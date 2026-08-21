@@ -194,22 +194,24 @@ pub fn RouterModelPort::switch_slot(
 ///|
 pub impl @posoco.ModelPort for RouterModelPort with fn chat(
   self : RouterModelPort,
+  scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  self.active_slot().port.chat(messages, tools, options, stream)
+  self.active_slot().port.chat(scope, messages, tools, options, stream)
 }
 
 ///|
 pub impl @posoco.ModelPort for RouterModelPort with fn compact(
   self : RouterModelPort,
+  scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
-  self.active_slot().port.compact(messages, options, trigger)
+  self.active_slot().port.compact(scope, messages, options, trigger)
 }
 
 ///|

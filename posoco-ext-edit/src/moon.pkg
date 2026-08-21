@@ -1,7 +1,6 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-devkit" @devkit,
-  "moonbitlang/async/js_async",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",
 }
@@ -13,6 +12,8 @@ import {
 import {
   "moonbitlang/async",
 } for "wbtest"
+
+warnings = "-unused_package"
 
 options(
   targets: {

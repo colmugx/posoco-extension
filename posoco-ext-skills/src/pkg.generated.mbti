@@ -1,0 +1,149 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-skills"
+
+import {
+  "colmugx/posoco-ext-workspace",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+}
+
+// Values
+pub fn parse_skill_file(String, skill_md_path~ : String, skill_dir~ : String, scope~ : SkillScope) -> Result[ParsedSkill, String]
+
+// Errors
+
+// Types and methods
+pub(all) struct ParsedSkill {
+  descriptor : SkillDescriptor
+  body : String
+  diagnostics : Array[SkillDiagnostic]
+}
+
+pub(all) struct SkillCatalog {
+  skills : Array[SkillDescriptor]
+  diagnostics : Array[SkillDiagnostic]
+}
+pub fn SkillCatalog::empty() -> Self
+pub fn SkillCatalog::find(Self, String) -> SkillDescriptor?
+pub fn SkillCatalog::names(Self) -> Array[String]
+pub fn SkillCatalog::render_prompt_body(Self, max_chars~ : Int, activate_tool_name? : String, read_resource_tool_name? : String) -> String
+pub fn SkillCatalog::validate(Self) -> Result[Unit, String]
+
+pub(all) struct SkillDescriptor {
+  name : String
+  description : String
+  skill_md_path : String
+  skill_dir : String
+  scope : SkillScope
+  license : String?
+  compatibility : String?
+  allowed_tools : String?
+  metadata : Map[String, String]
+}
+
+pub(all) struct SkillDiagnostic {
+  severity : SkillDiagnosticSeverity
+  code : SkillDiagnosticCode
+  path : String
+  message : String
+}
+
+pub(all) enum SkillDiagnosticCode {
+  InvalidConfiguration
+  RootStatFailed
+  RootReadFailed
+  SkillPathFailed
+  SkillReadFailed
+  SkillPackageMismatch
+  ExternalSymlinkRejected
+  SkillFileTooLarge
+  DiscoveryLimitReached
+  CatalogLimitReached
+  InvalidFrontmatter
+  InvalidName
+  DescriptionTooLong
+  CompatibilityTooLong
+  MetadataIgnored
+  MetadataLimitReached
+  FieldTooLarge
+  LenientYamlRepair
+  Shadowed
+} derive(Eq)
+
+pub(all) enum SkillDiagnosticSeverity {
+  Warning
+  Error
+} derive(Eq)
+
+pub struct SkillDiscovery {
+  fs : &@posoco-ext-workspace.WorkspaceFs
+  cwd : String
+  home : String
+  options : SkillDiscoveryOptions
+}
+pub async fn SkillDiscovery::discover(Self) -> SkillCatalog noraise
+pub fn SkillDiscovery::new(&@posoco-ext-workspace.WorkspaceFs, cwd~ : String, home~ : String, options? : SkillDiscoveryOptions) -> Self
+
+pub(all) struct SkillDiscoveryOptions {
+  repo_root : String?
+  include_repository : Bool
+  allow_repository_external_symlinks : Bool
+  include_user : Bool
+  extra_roots : Array[String]
+  max_candidates : Int
+  max_skills : Int
+  max_skill_file_chars : Int
+}
+pub fn SkillDiscoveryOptions::default() -> Self
+pub fn SkillDiscoveryOptions::validate(Self) -> Result[Unit, String]
+
+pub(all) enum SkillScope {
+  Repository
+  User
+  Extra(String)
+} derive(Eq)
+
+pub struct Skills {
+  fs : &@posoco-ext-workspace.WorkspaceFs
+  catalog : SkillCatalog
+  config : SkillsConfig
+}
+pub async fn Skills::activate_skill(Self, String) -> @kernel.ToolOutcome noraise
+pub fn Skills::catalog(Self) -> SkillCatalog
+pub fn Skills::commands(Self) -> Array[@port.CommandDef]
+pub fn Skills::config(Self) -> SkillsConfig
+pub async fn Skills::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn Skills::extension_id(Self) -> String
+pub fn Skills::from_catalog(&@posoco-ext-workspace.WorkspaceFs, catalog~ : SkillCatalog, config? : SkillsConfig) -> Result[Self, String]
+pub async fn Skills::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn Skills::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn Skills::manifest(Self) -> @port.ExtensionManifest
+pub async fn Skills::new(&@posoco-ext-workspace.WorkspaceFs, cwd~ : String, home~ : String, discovery_options? : SkillDiscoveryOptions, config? : SkillsConfig) -> Self? noraise
+pub async fn Skills::read_skill_resource(Self, String, String) -> @kernel.ToolOutcome noraise
+pub fn Skills::system_prompt(Self) -> String
+pub impl @port.CommandPort for Skills
+pub impl @port.Extension for Skills
+pub impl @port.SystemPromptContributor for Skills
+pub impl @port.ToolProvider for Skills
+
+pub(all) struct SkillsConfig {
+  catalog_max_chars : Int
+  contribute_prompt : Bool
+  activate_tool_name : String
+  read_resource_tool_name : String
+  max_activation_file_chars : Int
+  max_instruction_chars : Int
+  max_resource_entries : Int
+  max_resource_listing_chars : Int
+  max_resource_warnings : Int
+  max_resource_depth : Int
+  max_resource_nodes : Int
+  max_resource_chars : Int
+}
+pub fn SkillsConfig::default() -> Self
+pub fn SkillsConfig::validate(Self) -> Result[Unit, String]
+
+// Type aliases
+
+// Traits

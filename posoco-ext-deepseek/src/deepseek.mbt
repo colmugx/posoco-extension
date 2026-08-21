@@ -6,7 +6,7 @@
 
 ///|
 /// Build HTTP headers for DeepSeek API requests.
-fn build_headers(config : DeepSeekConfig) -> Map[String, String] {
+fn build_headers(config : DeepSeekConfig) -> @http.Headers {
   {
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",
@@ -82,9 +82,9 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
       let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-        _ =>
+        err =>
           raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=post)",
+            "DeepSeek transport failure (stage=post): " + err.to_string(),
           )
       }
       if !is_deepseek_http_success(response.code) {
@@ -127,24 +127,24 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
       let client = @http.post_stream(url, headers~) catch {
-        _ =>
+        err =>
           raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=post_stream)",
+            "DeepSeek transport failure (stage=post_stream): " + err.to_string(),
           )
       }
       client.write(body.stringify()) catch {
-        _ => {
+        err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=write_body)",
+            "DeepSeek transport failure (stage=write_body): " + err.to_string(),
           )
         }
       }
       let response = client.end_request() catch {
-        _ => {
+        err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=end_request)",
+            "DeepSeek transport failure (stage=end_request): " + err.to_string(),
           )
         }
       }
@@ -175,12 +175,12 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
       let mut data_buffer = ""
       while !done {
         let line = client.read_until("\n") catch {
-          _ => {
+          err => {
             client.close()
-            match classify_deepseek_stream_termination(TransportFailure) {
-              Some(err) => raise err
-              None => None
-            }
+            raise @posoco.ModelError::Transport(
+              "DeepSeek transport failure (stage=read_stream): " +
+              err.to_string(),
+            )
           }
         }
         match line {

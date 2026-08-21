@@ -13,6 +13,8 @@ keywords = [ "posoco", "ask-question", "ui", "interactive", "coding-agent" ]
 description = "Interactive ask_question tool extension for Posoco hosts with a UiPort"
 
 import {
-  "colmugx/posoco@0.9.0",
-  "moonbitlang/async@0.20.3",
+  "colmugx/posoco@0.10.2",
+  "moonbitlang/async@0.21.0",
 }
+
+source = "src"

@@ -16,7 +16,9 @@ pub fn bash_extension() -> ShellTools
 pub(all) struct ShellTools {
 }
 pub fn ShellTools::ShellTools() -> Self
+pub async fn ShellTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn ShellTools::extension_id(Self) -> String
+pub fn ShellTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn ShellTools::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for ShellTools
 pub impl @port.ToolProvider for ShellTools

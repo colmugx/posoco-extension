@@ -111,8 +111,8 @@ fn extract_code_from_path(path : String) -> String? {
           let after_code = query.sub(start=code_pos + 5)
           // Code ends at & or end of string.
           match after_code.find("&") {
-            Some(amp) => Some(after_code.sub(end=amp).to_string())
-            None => Some(after_code.to_string())
+            Some(amp) => Some(after_code.sub(end=amp).to_owned())
+            None => Some(after_code.to_owned())
           }
         }
       }

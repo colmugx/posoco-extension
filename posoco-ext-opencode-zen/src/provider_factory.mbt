@@ -114,10 +114,12 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn credential_id(
 }
 
 ///|
-/// Static build: no network. Returns a single-slot catalog built over the
-/// resolved credential, endpoint, and (possibly defaulted) model. Composition
-/// must not block on the Zen discovery endpoint, so the full model list
-/// arrives later via `refresh`.
+/// Static build: no network. Returns a catalog built over the resolved
+/// credential, endpoint, and (possibly defaulted) model. Composition must not
+/// block on the Zen discovery endpoint: without host-cached records this is a
+/// single slot and the full list arrives later via `refresh`; with cached
+/// records (a previous refresh's projection) the full list is reconstructed
+/// offline, so restarts announce the complete catalog immediately.
 pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn build(
   self : OpenCodeZenProvider,
   source : @llm.ProviderConfigSource,
@@ -134,7 +136,10 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn build(
     model~,
   )
   let api_key_factory : &@llm.ApiKeyFactory = self
-  let catalog = zen_static_catalog(config, api_key_factory)
+  let catalog = match parse_cached_zen_models(source.cached_models) {
+    Some(models) => zen_model_catalog(config, models, model, api_key_factory)
+    None => zen_static_catalog(config, api_key_factory)
+  }
   @llm.ProviderBuildResult::Ready(catalog)
 }
 

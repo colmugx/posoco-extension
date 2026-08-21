@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-credentials"
+
+import {
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco-ext-workspace",
+  "colmugx/posoco/error",
+}
+
+// Values
+pub fn encode_provider_credential(@posoco-ext-oauth.ProviderCredential) -> String
+
+pub fn parse_provider_credential(Json, String) -> @posoco-ext-oauth.ProviderCredential raise @error.CompositionError
+
+pub fn parse_provider_credential_text(String, String) -> @posoco-ext-oauth.ProviderCredential raise @error.CompositionError
+
+// Errors
+
+// Types and methods
+pub struct FileProviderCredentialStore {
+  fs : &@posoco-ext-workspace.WorkspaceFs
+  dir : String
+}
+pub async fn FileProviderCredentialStore::delete(Self, String) -> Unit raise @posoco-ext-oauth.OAuthError
+pub fn FileProviderCredentialStore::new(&@posoco-ext-workspace.WorkspaceFs, String) -> Self
+pub async fn FileProviderCredentialStore::read(Self, String) -> @posoco-ext-oauth.ProviderCredential? raise @posoco-ext-oauth.OAuthError
+pub async fn FileProviderCredentialStore::write(Self, String, @posoco-ext-oauth.ProviderCredential) -> Unit raise @posoco-ext-oauth.OAuthError
+pub impl @posoco-ext-oauth.ProviderCredentialStore for FileProviderCredentialStore
+
+// Type aliases
+
+// Traits

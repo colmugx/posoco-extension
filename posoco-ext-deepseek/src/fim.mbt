@@ -127,9 +127,9 @@ pub async fn DeepSeekModelPort::fim_completion(
   let headers = build_headers(self.config)
   let url = fim_url(self.config)
   let (response, resp_data) = @http.post(url, body.stringify(), headers~) catch {
-    _ =>
+    err =>
       raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=fim.post)",
+        "DeepSeek transport failure (stage=fim.post): " + err.to_string(),
       )
   }
   if !is_deepseek_http_success(response.code) {
@@ -185,9 +185,9 @@ pub async fn DeepSeekModelPort::chat_prefix_completion(
   let headers = build_headers(self.config)
   let url = prefix_url(self.config)
   let (response, resp_data) = @http.post(url, body.stringify(), headers~) catch {
-    _ =>
+    err =>
       raise @posoco.ModelError::Transport(
-        "DeepSeek transport failure (stage=prefix.post)",
+        "DeepSeek transport failure (stage=prefix.post): " + err.to_string(),
       )
   }
   if !is_deepseek_http_success(response.code) {

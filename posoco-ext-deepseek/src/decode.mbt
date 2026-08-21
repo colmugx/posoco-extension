@@ -245,7 +245,12 @@ fn extract_usage(
             "DeepSeek SSE parse failure (stage=usage.total_tokens, category=missing)",
           )
       }
-      { input_tokens: prompt, output_tokens: completion, total_tokens: total }
+      {
+        input_tokens: prompt,
+        output_tokens: completion,
+        total_tokens: total,
+        cached_input_tokens: @chatkit.cached_input_tokens_from_usage(u),
+      }
     }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(

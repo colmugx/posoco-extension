@@ -7,37 +7,24 @@
 ///|
 /// Construct a User-role text Message.
 pub fn user_message(text : String) -> @posoco.Message {
-  {
-    role: @posoco.Role::User,
-    content: [@posoco.Content::Text(text)],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-  }
+  @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
 }
 
 ///|
 /// Construct an Assistant-role text Message.
 pub fn assistant_message(text : String) -> @posoco.Message {
-  {
-    role: @posoco.Role::Assistant,
-    content: [@posoco.Content::Text(text)],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-  }
+  @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text(text)],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+  )
 }
 
 ///|
 /// Construct a System-role text Message.
 pub fn system_message(text : String) -> @posoco.Message {
-  {
-    role: @posoco.Role::System,
-    content: [@posoco.Content::Text(text)],
-    tool_calls: [],
-    tool_call_id: None,
-    name: None,
-  }
+  @posoco.Message::SystemMessage(content=[@posoco.Content::Text(text)])
 }
 
 ///|
@@ -47,25 +34,21 @@ pub fn tool_message(
   name : String,
   content : String,
 ) -> @posoco.Message {
-  {
-    role: @posoco.Role::Tool,
-    content: [@posoco.Content::Text(content)],
-    tool_calls: [],
-    tool_call_id: Some(call_id),
-    name: Some(name),
-  }
+  @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked(call_id),
+    tool_name=@posoco.ToolName::unchecked(name),
+    outcome=@posoco.ToolOutcome::Success(content~, structured=None),
+  )
 }
 
 ///|
 /// Default AgentConfig with sensible values.
-/// max_tool_rounds=10, all other options None.
+/// max_tool_rounds=Some(10), all other universal options None.
 pub fn default_agent_config() -> @posoco.AgentConfig {
   {
-    max_tool_rounds: 10,
+    max_tool_rounds: Some(10),
     temperature: None,
     max_output_tokens: None,
-    tool_choice: None,
-    reasoning_effort: None,
     model_context_window: None,
   }
 }

@@ -28,6 +28,7 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
     commands: [self],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

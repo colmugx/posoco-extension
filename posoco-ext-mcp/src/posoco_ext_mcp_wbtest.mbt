@@ -47,7 +47,7 @@ test "convert_tool_def_namespaces_and_preserves_fields" {
     icon: None,
   }
   let posoco_def = convert_tool_def(mcp_def, "filesystem")
-  assert_eq(posoco_def.name, "filesystem__search")
+  assert_eq(posoco_def.name.to_string(), "filesystem__search")
   assert_eq(posoco_def.description, "Search for items")
   assert_true(posoco_def.input_schema is Json::Object(_))
 }
@@ -86,11 +86,12 @@ test "convert_content_to_string_resource_link" {
 ///|
 fn catalog_test_tool(name : String) -> @posoco.ToolDef {
   @posoco.ToolDef::{
-    name,
+    name: @posoco.ToolName::unchecked(name),
     description: "test tool",
     input_schema: Json::object(Map::from_array([])),
-    metadata: None,
-    source: Some("mcp-test"),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
+    policy: @posoco.ExecutionPolicy::Parallel,
+    provenance: Some("mcp-test"),
   }
 }
 
@@ -134,8 +135,8 @@ test "catalog_collision_does_not_mutate_previous_snapshot" {
   let ambiguous_name = "alpha__beta__gamma"
   let left = convert_tool_def(catalog_test_mcp_tool("beta__gamma"), "alpha")
   let right = convert_tool_def(catalog_test_mcp_tool("gamma"), "alpha__beta")
-  assert_eq(left.name, ambiguous_name)
-  assert_eq(right.name, ambiguous_name)
+  assert_eq(left.name.to_string(), ambiguous_name)
+  assert_eq(right.name.to_string(), ambiguous_name)
   let candidate = [
     CatalogEntry::{ connection_index: 0, tools: [left] },
     CatalogEntry::{ connection_index: 1, tools: [right] },
@@ -149,7 +150,7 @@ test "catalog_collision_does_not_mutate_previous_snapshot" {
   // leaving the known-good snapshot available unchanged.
   assert_eq(commits.length(), 0)
   assert_eq(previous_tools.length(), 1)
-  assert_eq(previous_tools[0].name, "legacy__read")
+  assert_eq(previous_tools[0].name.to_string(), "legacy__read")
   assert_true(previous_route.get("legacy__read") is Some(0))
   assert_true(previous_route.get(ambiguous_name) is None)
 }
@@ -186,7 +187,7 @@ test "refresh_fetch_failure_preserves_previous_catalog" {
   }
   assert_eq(commits.length(), 0)
   assert_eq(previous_tools.length(), 1)
-  assert_eq(previous_tools[0].name, "legacy__read")
+  assert_eq(previous_tools[0].name.to_string(), "legacy__read")
   assert_true(previous_route.get("legacy__read") is Some(0))
   assert_true(previous_route.get("fresh__read") is None)
 }

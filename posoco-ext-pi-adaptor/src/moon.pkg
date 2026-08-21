@@ -1,0 +1,48 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/runtime",
+  "moonbitlang/core/json",
+}
+
+warnings = "-unused_async"
+
+options(
+  supported_targets: "js",
+  link: {
+    "js": {
+      "format": "esm",
+      "exports": [
+        "PiAdaptor",
+        "pi_adaptor_new",
+        "pi_adaptor_load",
+        "pi_adaptor_set_cwd",
+        "pi_adaptor_set_project_trusted",
+        "pi_adaptor_tool_count",
+        "pi_adaptor_tool_name",
+        "pi_adaptor_tool_description",
+        "pi_adaptor_tool_schema_json",
+        "pi_adaptor_catalog_json",
+        "pi_adaptor_catalog_snapshot_json",
+        "pi_adaptor_execute_json_async",
+        "pi_adaptor_execute_effect_json_async",
+        "pi_adaptor_updates_json",
+        "pi_adaptor_take_updates_json",
+        "pi_adaptor_take_followups_json",
+        "pi_adaptor_cancel_call",
+        "pi_adaptor_cancel_effects_json",
+        "pi_adaptor_inflight_count",
+        "pi_adaptor_emit_event",
+        "pi_adaptor_seed_entry",
+        "pi_adaptor_event_names_json",
+        "pi_adaptor_shortcuts_json",
+        "pi_adaptor_entries_json",
+        "pi_adaptor_messages_json",
+        "pi_extension",
+        "PiRuntime",
+        "PiCatalogSource",
+        "pi_adaptor_execute_effect_via_runtime",
+      ],
+    },
+  },
+)

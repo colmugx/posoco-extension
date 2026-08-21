@@ -12,10 +12,6 @@ import {
   "moonbitlang/core/string",
 }
 
-import {
-  "moonbitlang/async",
-} for "wbtest"
-
 options(
   targets: {
     // HTTP-backed adaptors: native+js only (moonbitlang/async/http is

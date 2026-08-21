@@ -9,8 +9,10 @@
 /// as `model_id` and qualifies the slot `id` as `opencode/<bare-id>` so the
 /// picker shows the user-facing form.
 ///
-/// Zen does not publish per-model capability fields, so — unlike DeepSeek —
-/// every slot is treated as a plain chat model (no reasoning-effort selector).
+/// Zen does not publish per-model capability fields on this endpoint, so the
+/// reasoning surface (selectable effort levels, whether thinking can be
+/// disabled) is curated per model in efforts.mbt, sourced from models.dev —
+/// the same catalog OpenCode itself reads.
 
 ///|
 /// One model entry decoded from Zen's `/models` response.
@@ -112,4 +114,31 @@ fn zen_models_url(base_url : String, endpoint_prefix : String) -> String {
     None => base_url
   }
   clean + endpoint_prefix + "/models"
+}
+
+///|
+/// Tolerantly decode host-cached model records for offline catalog expansion.
+/// The cache is derived data — a previous `refresh` projected to slot records
+/// by the host — so any malformed shape degrades to `None` (the static
+/// single-slot build) instead of failing composition. Only the model id
+/// matters to Zen: every slot shares the endpoint and key, and Zen exposes no
+/// per-model capability fields.
+fn parse_cached_zen_models(records : Json?) -> Array[ZenModelInfo]? {
+  let items = match records {
+    Some(Json::Array(items)) if items.length() > 0 => items
+    _ => return None
+  }
+  let models : Array[ZenModelInfo] = []
+  for item in items {
+    let id = match item {
+      Json::Object(fields) =>
+        match fields.get("model_id") {
+          Some(Json::String(value)) if value.length() > 0 => value
+          _ => return None
+        }
+      _ => return None
+    }
+    models.push(ZenModelInfo::{ id, owned_by: "" })
+  }
+  Some(models)
 }

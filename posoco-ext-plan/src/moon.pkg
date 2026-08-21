@@ -5,6 +5,10 @@ import {
 
 import {
   "moonbitlang/async",
+} for "test"
+
+import {
+  "moonbitlang/async",
 } for "wbtest"
 
 supported_targets = "+native +js"

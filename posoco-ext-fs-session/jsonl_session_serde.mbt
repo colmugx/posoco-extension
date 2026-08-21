@@ -186,7 +186,15 @@ fn message_to_json(msg : @posoco.Message) -> Json {
         base["tool_calls"] = Json::array(tool_calls.map(tool_call_to_json))
       }
       match reasoning {
-        Some(r) => base["reasoning_content"] = Json::string(r.content)
+        Some(r) => {
+          base["reasoning_content"] = Json::string(r.content)
+          // Provider-defined replay payload (e.g. OpenAI reasoning items);
+          // persisted verbatim, absent on legacy files.
+          match r.raw {
+            Some(raw) => base["reasoning_raw"] = raw
+            None => ()
+          }
+        }
         None => ()
       }
       // finish_reason: write when non-default so default Stop does not bloat
@@ -284,8 +292,9 @@ fn finish_reason_from_json(json : Json?) -> @posoco.FinishReason {
 /// missing required fields (`role`, `content`) or shape mismatches return `None`.
 ///
 /// The role tag drives which `Message` variant is constructed. For
-/// `assistant`, optional `tool_calls` / `reasoning_content` / `finish_reason`
-/// are decoded. For `tool`, `tool_call_id` and `name` plus the first content
+/// `assistant`, optional `tool_calls` / `reasoning_content` / `reasoning_raw`
+/// / `finish_reason` are decoded. For `tool`, `tool_call_id` and `name` plus
+/// the first content
 /// text are mapped onto `ToolMessage(call_id, tool_name, outcome)`.
 fn message_from_json(json : Json) -> @posoco.Message? {
   match json {
@@ -317,8 +326,12 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                   _ => []
                 }
                 let reasoning = match map.get("reasoning_content") {
-                  Some(Json::String(s)) =>
-                    Some(@posoco.Reasoning::{ content: s })
+                  Some(Json::String(s)) => {
+                    // Provider replay payload rides along verbatim; absent on
+                    // legacy files and for text-only reasoning providers.
+                    let raw = map.get("reasoning_raw")
+                    Some(@posoco.Reasoning::{ content: s, raw })
+                  }
                   _ => None
                 }
                 let finish_reason = finish_reason_from_json(

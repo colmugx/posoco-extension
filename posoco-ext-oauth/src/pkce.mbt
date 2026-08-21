@@ -54,8 +54,8 @@ fn random_pkce_string(length : Int) -> String {
 ///|
 /// Compute SHA-256 of a string and return base64url encoding (no padding).
 fn sha256_base64url(input : String) -> String {
-  // input.to_bytes() returns Bytes which implements ByteSource.
-  let bytes : Bytes = input.to_bytes()
+  // @utf8.encode returns Bytes which implements ByteSource.
+  let bytes : Bytes = @utf8.encode(input)
   let hash = @crypto.sha256(bytes)
   // hash is FixedArray[Byte] (32 bytes). Manually base64url-encode since
   // base64.encode requires BytesView and FixedArray doesn't convert cleanly.

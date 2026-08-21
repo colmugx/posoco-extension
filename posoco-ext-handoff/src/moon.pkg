@@ -1,0 +1,18 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/core/json",
+  "moonbitlang/async/fs",
+}
+
+warnings = "-unused_package"
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: {
+    "default_store.native.mbt": [ "native" ],
+    "default_store.js.mbt": [ "js" ],
+  },
+)

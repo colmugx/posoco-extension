@@ -25,6 +25,7 @@ async fn read_error_body_summary(
 /// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
   self : OpenAICompatibleModelPort,
+  _scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,

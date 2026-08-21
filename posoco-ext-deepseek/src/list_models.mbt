@@ -133,16 +133,54 @@ fn deepseek_models_url(base_url : String, endpoint_prefix : String) -> String {
 }
 
 ///|
+/// Tolerantly decode host-cached model records for offline catalog expansion.
+/// Only the model id is consumed: reasoning profiles are a deterministic
+/// provider policy (`deepseek_model_efforts`), so a catalog rebuilt from
+/// cached ids is identical to the live-refresh catalog for those ids.
+/// Malformed shapes degrade to `None` (the static single-model build) and
+/// never fail composition — the cache is derived, re-derivable data.
+fn parse_cached_deepseek_models(records : Json?) -> Array[DeepSeekModelInfo]? {
+  let items = match records {
+    Some(Json::Array(items)) if items.length() > 0 => items
+    _ => return None
+  }
+  let models : Array[DeepSeekModelInfo] = []
+  for item in items {
+    let id = match item {
+      Json::Object(fields) =>
+        match fields.get("model_id") {
+          Some(Json::String(value)) if value.length() > 0 => value
+          _ => return None
+        }
+      _ => return None
+    }
+    let efforts = deepseek_model_efforts(id)
+    let default_effort = if efforts.is_empty() {
+      None
+    } else {
+      Some(efforts[0])
+    }
+    models.push(DeepSeekModelInfo::{
+      id,
+      owned_by: "deepseek",
+      thinking_efforts: efforts,
+      default_effort,
+    })
+  }
+  Some(models)
+}
+
+///|
 /// Fetch and decode the live DeepSeek model catalog.
 pub async fn fetch_deepseek_models(
   base_url : String,
   api_key : String,
   endpoint_prefix? : String = "",
 ) -> Array[DeepSeekModelInfo] raise @posoco.ModelError {
-  let headers : Map[String, String] = Map::from_array([
-    ("Authorization", "Bearer " + api_key),
-    ("Accept", "application/json"),
-  ])
+  let headers : @http.Headers = {
+    "Authorization": "Bearer " + api_key,
+    "Accept": "application/json",
+  }
   let (response, body_data) = @async.with_timeout(30000, () => {
     @http.get(deepseek_models_url(base_url, endpoint_prefix), headers~)
   }) catch {

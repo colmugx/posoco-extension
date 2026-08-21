@@ -19,6 +19,7 @@ pub impl @posoco.Extension for EditTools with fn manifest(self) -> @posoco.Exten
     commands: [],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

@@ -19,6 +19,7 @@ pub impl @posoco.Extension for ShellTools with fn manifest(self) -> @posoco.Exte
     commands: [],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

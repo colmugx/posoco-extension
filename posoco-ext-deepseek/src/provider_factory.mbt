@@ -123,7 +123,14 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
     reasoning_effort=effort,
   )
   let port = DeepSeekModelPort::new(config, ctx=self.ctx)
-  @llm.ProviderBuildResult::Ready(port.model_catalog())
+  // Host-cached records from a previous refresh expand into the full
+  // multi-slot catalog offline; without them the static single-model catalog
+  // stands until an explicit refresh. Bad records degrade, never fail.
+  let catalog = match parse_cached_deepseek_models(source.cached_models) {
+    Some(models) => port.model_catalog_from_models(models)
+    None => port.model_catalog()
+  }
+  @llm.ProviderBuildResult::Ready(catalog)
 }
 
 ///|

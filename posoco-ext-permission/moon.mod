@@ -12,6 +12,9 @@ keywords = [ "posoco", "permission", "policy", "coding-agent" ]
 
 description = "Composable tool permission policy extension for Posoco coding agents"
 
+source = "src"
+
 import {
-  "colmugx/posoco@0.9.0",
+  "colmugx/posoco@0.10.1",
+  "moonbitlang/async@0.20.5",
 }
