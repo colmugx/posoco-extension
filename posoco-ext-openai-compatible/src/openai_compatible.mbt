@@ -28,14 +28,20 @@ pub(all) struct OpenAICompatibleModelPort {
   /// Provider id this port is scoped to (e.g. "qwen"). Used only for catalog
   /// labeling; it never appears on the wire request.
   provider_id : String
+  /// Optional provider-owned hook evaluated immediately before every HTTP
+  /// request. This keeps gateway-specific routing/identity headers out of the
+  /// generic OpenAI-compatible config while allowing adapters such as
+  /// OpenCode Zen to provide fresh request metadata.
+  request_headers : (() -> Map[String, String])?
 }
 
 ///|
 pub fn OpenAICompatibleModelPort::new(
   provider_id : String,
   config : OpenAICompatibleConfig,
+  request_headers? : () -> Map[String, String],
 ) -> OpenAICompatibleModelPort {
-  { provider_id, config }
+  { provider_id, config, request_headers }
 }
 
 ///|

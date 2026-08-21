@@ -21,8 +21,9 @@ let zen_default_base_url : String = "https://opencode.ai/zen/v1"
 ///|
 /// Build one catalog slot for a Zen model. The port is an
 /// `OpenAICompatibleModelPort` constructed with the Zen provider id, so chat
-/// requests carry `Authorization: Bearer <key>` (probed as the scheme Zen
-/// honors) and post to `base_url + endpoint_prefix + /chat/completions`.
+/// requests carry `Authorization: Bearer <key>` and post to
+/// `base_url + endpoint_prefix + /chat/completions`. Zen-specific routing
+/// metadata is supplied through the optional request-header hook.
 ///
 /// The picker's effort surface comes from the curated preset table in
 /// efforts.mbt: "off" only when the model allows disabling thinking, "on" for
@@ -33,8 +34,11 @@ fn zen_catalog_slot(
   config : @openai_compatible.OpenAICompatibleConfig,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
+  let session_id = zen_new_session_id()
   let port : &@posoco.ModelPort = @openai_compatible.OpenAICompatibleModelPort::new(
-    zen_provider_id, config,
+    zen_provider_id,
+    config,
+    request_headers=fn() { zen_request_headers(session_id) },
   )
   let slot_id = zen_provider_id + "/" + config.model
   let (slot_efforts, default_effort, rebuild_on_effort) : (

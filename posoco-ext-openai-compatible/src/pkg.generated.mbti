@@ -32,9 +32,10 @@ pub fn OpenAICompatibleConfig::with_reasoning_effort(Self, String) -> Self raise
 pub(all) struct OpenAICompatibleModelPort {
   config : OpenAICompatibleConfig
   provider_id : String
+  request_headers : (() -> Map[String, String])?
 }
 pub fn OpenAICompatibleModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAICompatibleModelPort::new(String, OpenAICompatibleConfig) -> Self
+pub fn OpenAICompatibleModelPort::new(String, OpenAICompatibleConfig, request_headers? : () -> Map[String, String]) -> Self
 pub impl @port.ModelPort for OpenAICompatibleModelPort
 
 pub(all) struct OpenAICompatibleProvider {
