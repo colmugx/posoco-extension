@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-read"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -14,8 +15,10 @@ pub fn read_extension() -> ReadTools
 
 // Types and methods
 pub(all) struct ReadTools {
+  freshness : @posoco-devkit.FreshnessGuard?
 }
-pub fn ReadTools::ReadTools() -> Self
+pub fn ReadTools::ReadTools(freshness? : @posoco-devkit.FreshnessGuard) -> Self
+pub async fn ReadTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn ReadTools::extension_id(Self) -> String
 pub fn ReadTools::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for ReadTools

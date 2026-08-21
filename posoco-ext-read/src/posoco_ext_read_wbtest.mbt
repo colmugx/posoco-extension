@@ -99,3 +99,302 @@ test "read_sanitize_path_is_bounded_and_single_line" {
   assert_true(safe.contains("..."))
   assert_false(safe.contains("TAIL_SECRET"))
 }
+
+///|
+/// ——— v2 paging/formatting tests ———
+
+///|
+#cfg(target="native")
+fn read_call_args(
+  path : String,
+  offset? : Int,
+  limit? : Int,
+) -> @posoco.ToolCall {
+  let args : Map[String, Json] = Map::from_array([("path", Json::string(path))])
+  match offset {
+    Some(n) => args["offset"] = Json::number(n.to_double())
+    None => ()
+  }
+  match limit {
+    Some(n) => args["limit"] = Json::number(n.to_double())
+    None => ()
+  }
+  {
+    call_id: @posoco.CallId::unchecked("read-test"),
+    name: @posoco.ToolName::unchecked("read"),
+    arguments: Json::object(args),
+  }
+}
+
+///|
+#cfg(target="native")
+async fn run_read(
+  tools : ReadTools,
+  call : @posoco.ToolCall,
+) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
+  Ok(tools.execute("read", call)) catch {
+    error => Err(error)
+  }
+}
+
+///|
+#cfg(target="native")
+async fn write_ten_lines(dir : String) -> String {
+  let path = dir + "/ten.txt"
+  let content = [ for i in 1..<=10 => "line-\{i}" ].join("\n") + "\n"
+  @fs.write_file(path, content, create_mode=CreateNew)
+  path
+}
+
+///|
+#cfg(target="native")
+async test "read_pages_with_line_numbers_and_footer" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-page")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = write_ten_lines(dir)
+    let outcome = run_read(
+      ReadTools::ReadTools(),
+      read_call_args(path, limit=3),
+    )
+    match outcome {
+      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+        inspect(
+          content,
+          content="L1: line-1\nL2: line-2\nL3: line-3\n… 7 more lines; call read with offset=4",
+        )
+        assert_true(structured is Some(_))
+      }
+      _ => fail("expected paged read to succeed")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_offset_starts_at_requested_line" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-offset")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = write_ten_lines(dir)
+    let outcome = run_read(
+      ReadTools::ReadTools(),
+      read_call_args(path, offset=4, limit=2),
+    )
+    match outcome {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        inspect(
+          content,
+          content="L4: line-4\nL5: line-5\n… 5 more lines; call read with offset=6",
+        )
+      _ => fail("expected offset read to succeed")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_negative_offset_returns_tail_without_footer" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-tail")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = write_ten_lines(dir)
+    let outcome = run_read(
+      ReadTools::ReadTools(),
+      read_call_args(path, offset=-3),
+    )
+    match outcome {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        inspect(content, content="L8: line-8\nL9: line-9\nL10: line-10")
+      _ => fail("expected tail read to succeed")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_offset_past_end_names_total_lines" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-past")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = write_ten_lines(dir)
+    let outcome = run_read(
+      ReadTools::ReadTools(),
+      read_call_args(path, offset=99),
+    )
+    match outcome {
+      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
+        assert_true(content.contains("past the end"))
+        assert_true(content.contains("10 lines"))
+      }
+      _ => fail("expected past-end read to be a reported error")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_empty_file_is_a_notice" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-empty")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/empty.txt"
+    @fs.write_file(path, "", create_mode=CreateNew)
+    let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
+    match outcome {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        inspect(content, content="(file exists but is empty)")
+      _ => fail("expected empty read to succeed with a notice")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_truncates_long_lines_with_marker" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-longline")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/long.txt"
+    @fs.write_file(path, "a".repeat(3000) + "\n", create_mode=CreateNew)
+    let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
+    match outcome {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
+        assert_true(content.contains("… (line truncated)"))
+        assert_true(content.has_prefix("L1: "))
+        assert_false(content.contains("a".repeat(2500)))
+      }
+      _ => fail("expected long-line read to succeed with truncation")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_byte_cap_cuts_implicit_page_with_footer" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-bytecap")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/wide.txt"
+    let content = [ for _ in 0..<60 => "b".repeat(2500) ].join("\n") + "\n"
+    @fs.write_file(path, content, create_mode=CreateNew)
+    let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
+    match outcome {
+      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+        assert_true(content.has_prefix("L1: "))
+        assert_true(content.contains("more lines; call read with offset="))
+        assert_false(content.contains("L60: "))
+        // structured metadata must reflect the cut
+        match structured {
+          Some(Object(meta)) => assert_true(meta.get("truncated") is Some(True))
+          _ => fail("expected structured metadata")
+        }
+      }
+      _ => fail("expected byte-capped read to succeed with a footer")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_explicit_range_over_byte_cap_is_loud" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-explode")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/wide2.txt"
+    let content = [ for _ in 0..<60 => "b".repeat(2500) ].join("\n") + "\n"
+    @fs.write_file(path, content, create_mode=CreateNew)
+    let outcome = run_read(
+      ReadTools::ReadTools(),
+      read_call_args(path, limit=60),
+    )
+    match outcome {
+      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+        assert_true(message.contains("exceeds"))
+      _ => fail("expected explicit oversized range to raise")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_rejects_zero_offset_and_nonpositive_limit" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-zero")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = write_ten_lines(dir)
+    match run_read(ReadTools::ReadTools(), read_call_args(path, offset=0)) {
+      Err(@posoco.RuntimeError::UnknownTool(message)) =>
+        assert_true(message.contains("'offset' must be a nonzero"))
+      _ => fail("expected zero offset to be rejected")
+    }
+    match run_read(ReadTools::ReadTools(), read_call_args(path, limit=0)) {
+      Err(@posoco.RuntimeError::UnknownTool(message)) =>
+        assert_true(message.contains("'limit' must be greater than zero"))
+      _ => fail("expected zero limit to be rejected")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_normalizes_crlf" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-crlf")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/crlf.txt"
+    @fs.write_file(path, "alpha\r\nbeta\r\n", create_mode=CreateNew)
+    let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
+    match outcome {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        inspect(content, content="L1: alpha\nL2: beta")
+      _ => fail("expected crlf read to succeed")
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+async test "read_records_freshness_stamp_and_detects_change" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-fresh")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/fresh.txt"
+    @fs.write_file(path, "one\ntwo\n", create_mode=CreateNew)
+    let ledger = @devkit.FreshnessGuard::FreshnessGuard()
+    let tools = ReadTools::ReadTools(freshness=ledger)
+    match run_read(tools, read_call_args(path)) {
+      Ok(@posoco.ToolOutcome::Success(..)) => ()
+      _ => fail("expected guarded read to succeed")
+    }
+    // Stamp unchanged since the read: fresh.
+    let now = FsIo::stat(NativeFsIo::{  }, path)
+    debug_inspect(ledger.check(path, Some(now)), content="Fresh")
+    // External append changes the stamp: modified.
+    @fs.write_file(path, "three\n", append=true)
+    let changed = FsIo::stat(NativeFsIo::{  }, path)
+    debug_inspect(ledger.check(path, Some(changed)), content="Modified")
+  }
+}
