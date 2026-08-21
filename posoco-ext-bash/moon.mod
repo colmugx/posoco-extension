@@ -3,8 +3,8 @@ name = "colmugx/posoco-ext-bash"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.10.1",
-  "moonbitlang/async@0.20.5",
+  "colmugx/posoco@0.10.2",
+  "moonbitlang/async@0.21.0",
 }
 
 readme = "README.mbt.md"
