@@ -18,7 +18,9 @@ pub(all) struct EditTools {
   freshness : @posoco-devkit.FreshnessGuard?
 }
 pub fn EditTools::EditTools(freshness? : @posoco-devkit.FreshnessGuard) -> Self
+pub async fn EditTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn EditTools::extension_id(Self) -> String
+pub fn EditTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn EditTools::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for EditTools
 pub impl @port.ToolProvider for EditTools
