@@ -41,7 +41,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         false,
         self.config.reasoning_effort,
       )
-      let headers = build_headers(self.config)
+      let headers = build_headers(self.config, self.request_headers)
       let url = chat_url(self.config)
       let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
         _ =>
@@ -84,7 +84,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         true,
         self.config.reasoning_effort,
       )
-      let headers = build_headers(self.config)
+      let headers = build_headers(self.config, self.request_headers)
       let url = chat_url(self.config)
       let client = @http.post_stream(url, headers~) catch {
         _ =>

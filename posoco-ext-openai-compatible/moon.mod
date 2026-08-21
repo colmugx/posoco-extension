@@ -1,6 +1,6 @@
 name = "colmugx/posoco-ext-openai-compatible"
 
-version = "0.1.0"
+version = "0.1.1"
 
 import {
   "colmugx/posoco@0.10.1",
