@@ -14,34 +14,36 @@ pub impl @posoco.Observer for AcpBridge with fn on_event_at(
 }
 
 ///|
-/// Hook: gate tool execution through an ACP permission request.
+/// ApprovalSource: translate ext-permission's approval asks into ACP
+/// `session/request_permission` reverse requests.
 ///
 /// Before asking, queued updates are flushed so the client sees the pending
 /// tool-call announcement (and any streamed text) before the decision UI
-/// appears. A detached bridge approves everything; a permission transport
-/// failure fails closed — the tool never executes without an explicit
-/// client allow.
-pub impl @posoco.Hook for AcpBridge with fn before_tool(
-  self,
-  call : @posoco.ToolCall,
-) -> @posoco.ToolHookDecision {
+/// appears. A detached bridge approves every call (`AllowOnce` — nothing
+/// is remembered); a permission transport failure fails closed — the tool
+/// never executes without an explicit client allow.
+///
+/// The gating policy — which tools ask, session caching, permission modes —
+/// is NOT here: compose `@permission.PermissionPolicy` with this bridge as
+/// its approval source. This impl is pure protocol translation.
+pub impl @permission.ApprovalSource for AcpBridge with fn ask(
+  self : AcpBridge,
+  request : @permission.ApprovalRequest,
+) -> @permission.ApprovalDecision {
   match (self.context, self.session_id) {
     (Some(context), Some(session_id)) => {
       ignore(self.flush())
-      if !(self.needs_permission)(call) {
-        return @posoco.ToolHookDecision::Approve(call~)
-      }
       let response = context.request_permission(
-        acp_permission_request(session_id, call),
+        acp_permission_request(session_id, request),
       ) catch {
         _ =>
-          return @posoco.ToolHookDecision::Reject(
-            reason="acp: permission request for tool '\{@devkit.sanitize_label(call.name.to_string())}' failed; failing closed",
+          return @permission.ApprovalDecision::Deny(
+            reason="acp: permission request for tool '\{@devkit.sanitize_label(request.tool_name)}' failed; failing closed",
           )
       }
-      acp_decision_from_response(response, call)
+      acp_decision_from_approval(response, request)
     }
-    _ => @posoco.ToolHookDecision::Approve(call~)
+    _ => @permission.ApprovalDecision::AllowOnce
   }
 }
 
@@ -63,9 +65,10 @@ pub impl @posoco.Extension for AcpBridge with fn extension_id(_self) -> String {
 
 ///|
 /// Declare the ports AcpBridge contributes: Observer (event projection),
-/// Hook (permission gating), Lifecycle (session release). The same `self`
-/// reference appears under every field because AcpBridge implements all
-/// port traits on the same struct.
+/// ApprovalSource (ACP permission translation for a composed permission
+/// policy), Lifecycle (session release), UiPort (elicitation-based
+/// interactive requests). The same `self` reference appears under every
+/// field because AcpBridge implements all port traits on the same struct.
 pub impl @posoco.Extension for AcpBridge with fn manifest(self) -> @posoco.ExtensionManifest {
   {
     id: "posoco_ext_acp",
@@ -73,11 +76,11 @@ pub impl @posoco.Extension for AcpBridge with fn manifest(self) -> @posoco.Exten
     tools: [],
     sessions: [],
     observers: [self],
-    hooks: [self],
+    hooks: [],
     memory: [],
     lifecycle: [self],
     commands: [],
-    ui: [],
+    ui: [self],
     prompt_contributors: [],
     requires: [],
   }
@@ -92,8 +95,6 @@ pub extend AcpBridge with @posoco.Extension::{extension_id, manifest}
 /// Convenience factory: construct an AcpBridge and return its Extension
 /// view. Hosts that already hold an AcpBridge instance should pass it
 /// directly instead of calling this helper.
-pub fn acp_extension(
-  needs_permission? : (@posoco.ToolCall) -> Bool = _ => true,
-) -> AcpBridge {
-  AcpBridge::new(needs_permission~)
+pub fn acp_extension() -> AcpBridge {
+  AcpBridge::new()
 }

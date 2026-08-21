@@ -2,12 +2,15 @@
 /// AcpBridge — Agent Client Protocol (ACP v1) bridge for Posoco agents.
 ///
 /// One struct, many port views: `Observer` projects turn events into ACP
-/// `session/update` notifications, `Hook::before_tool` gates every tool call
-/// through an ACP `session/request_permission` reverse request, and
-/// `Lifecycle::on_shutdown` releases the attached session. Hosts (a future
-/// cetas-acp) own the acp.mbt endpoint and stdio runtime and `attach` the
-/// typed `AgentContext` plus ACP session id per prompt turn; while detached
-/// the bridge is inert — it approves every tool and drops every event.
+/// `session/update` notifications, `ApprovalSource::ask` translates
+/// ext-permission approval asks into ACP `session/request_permission`
+/// reverse requests (the gating policy itself is a composed
+/// `@permission.PermissionPolicy`), `UiPort::request` maps interactive
+/// requests onto ACP elicitations, and `Lifecycle::on_shutdown` releases
+/// the attached session. Hosts (a future cetas-acp) own the acp.mbt
+/// endpoint and stdio runtime and `attach` the typed `AgentContext` plus
+/// ACP session id per prompt turn; while detached the bridge is inert —
+/// it approves every tool and drops every event.
 ///
 /// The observer path is synchronous, so events are enqueued on an async
 /// queue; `flush` (deterministic, call it at turn end) and `spawn_pump`
@@ -38,9 +41,6 @@
 /// }
 /// ```
 pub struct AcpBridge {
-  /// Host-supplied policy: which tool calls must be asked about. Read-only
-  /// tool filtering belongs here, not in the wire mapping.
-  needs_permission : (@posoco.ToolCall) -> Bool
   /// Outbound update queue. Sync `try_put` from the observer, async `get`
   /// from flush/pump. `close` closes it; the next `attach` reopens a fresh
   /// queue, so a host can scope one pump per prompt turn.
@@ -61,15 +61,11 @@ pub struct AcpBridge {
 }
 
 ///|
-/// Canonical constructor. `needs_permission` decides which tool calls go
-/// through an ACP permission request; it defaults to asking for every call.
-/// Read-only tools can be exempted with e.g. a policy built on
-/// `acp_tool_kind` that asks only for non-`Read`/`Search`/`Think` tools.
-pub fn AcpBridge::new(
-  needs_permission? : (@posoco.ToolCall) -> Bool = _ => true,
-) -> AcpBridge {
+/// Canonical constructor. Which tools ask is not the bridge's concern: the
+/// composed `@permission.PermissionPolicy` owns that policy and calls the
+/// bridge's `ApprovalSource` implementation for pure wire translation.
+pub fn AcpBridge::new() -> AcpBridge {
   {
-    needs_permission,
     queue: @aqueue.Queue(kind=Unbounded),
     queue_closed: false,
     context: None,

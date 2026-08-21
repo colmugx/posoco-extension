@@ -6,12 +6,16 @@
 
 ///|
 /// Recording stand-in for the ACP client side. The brokers capture every
-/// typed notification and request; permission replies are scripted.
+/// typed notification and request; permission and elicitation replies are
+/// scripted.
 priv struct FakeAcpClient {
   sent : Array[@acp.SessionUpdateParams]
   asked : Array[@acp.RequestPermissionRequest]
   reply : @acp.RequestPermissionResponse
   fail_permission : Bool
+  elicitations : Array[@acp.ElicitationCreateParams]
+  elicit_reply : @acp.ElicitationCreateResult
+  mut fail_elicitation : @acp.AgentContextError?
 }
 
 ///|
@@ -21,8 +25,26 @@ fn FakeAcpClient::FakeAcpClient(
     meta: Omitted,
   },
   fail_permission? : Bool = false,
+  elicit_reply? : @acp.ElicitationCreateResult = {
+    action: Accept,
+    content: Omitted,
+    meta: Omitted,
+  },
 ) -> FakeAcpClient {
-  { sent: [], asked: [], reply, fail_permission }
+  {
+    sent: [],
+    asked: [],
+    reply,
+    fail_permission,
+    elicitations: [],
+    elicit_reply,
+    fail_elicitation: None,
+  }
+}
+
+///|
+fn elicit_accept_value(value : Json) -> @acp.ElicitationCreateResult {
+  { action: Accept, content: Value(value), meta: Omitted }
 }
 
 ///|
@@ -41,6 +63,13 @@ fn fake_acp_context(client : FakeAcpClient) -> @acp.AgentContext {
             )
           } else {
             Ok(AgentReplyRequestPermission(client.reply))
+          }
+        }
+        ElicitationCreate(params) => {
+          client.elicitations.push(params)
+          match client.fail_elicitation {
+            Some(error) => Err(error)
+            None => Ok(AgentReplyElicitationCreate(client.elicit_reply))
           }
         }
         _ => Err(AgentContextBrokerFailure(method_name="unused-request"))
@@ -97,15 +126,6 @@ fn tk_usage(total : Int) -> @posoco.Usage {
     input_tokens: Some(total - 1),
     output_tokens: Some(1),
     total_tokens: Some(total),
-  }
-}
-
-///|
-/// Ask policy used by the exemption test: read/search/think tools pass.
-fn needs_ask(call : @posoco.ToolCall) -> Bool {
-  match acp_tool_kind(call.name.to_string()) {
-    Read | Search | Think => false
-    _ => true
   }
 }
 
@@ -228,14 +248,13 @@ test "acp_stop_reason maps only length to max tokens" {
 
 ///|
 test "acp_permission_request mirrors the pending announcement" {
-  let request = acp_permission_request(
-    "session-1",
-    tk_call(
-      "edit",
-      id="c9",
-      arguments=Json::object({ "file_path": Json::string("a.txt") }),
-    ),
-  )
+  let request = acp_permission_request("session-1", {
+    tool_name: "edit",
+    call_id: "c9",
+    category: "write",
+    arguments_preview: "{\"file_path\":\"a.txt\"}",
+    arguments: Json::object({ "file_path": Json::string("a.txt") }),
+  })
   assert_eq(request.session_id, "session-1")
   assert_eq(request.tool_call.tool_call_id, "c9")
   assert_true(request.tool_call.kind is Value(Edit))
@@ -253,43 +272,43 @@ test "acp_permission_request mirrors the pending announcement" {
 }
 
 ///|
-test "acp_decision_from_response maps allow, deny, and cancel" {
-  let call = tk_call("bash")
+test "acp_decision_from_approval maps allow, deny, and cancel" {
+  let ask : @permission.ApprovalRequest = tk_approval("bash")
   assert_true(
-    acp_decision_from_response(
+    acp_decision_from_approval(
       {
         outcome: Selected({ option_id: ACP_ALLOW_ONCE, meta: Omitted }),
         meta: Omitted,
       },
-      call,
+      ask,
     )
-    is Approve(_),
+    is @permission.ApprovalDecision::AllowOnce,
   )
   assert_true(
-    acp_decision_from_response(
+    acp_decision_from_approval(
       {
         outcome: Selected({ option_id: ACP_ALLOW_ALWAYS, meta: Omitted }),
         meta: Omitted,
       },
-      call,
+      ask,
     )
-    is Approve(_),
+    is @permission.ApprovalDecision::AllowAlways,
   )
   match
-    acp_decision_from_response(
+    acp_decision_from_approval(
       {
         outcome: Selected({ option_id: ACP_REJECT_ONCE, meta: Omitted }),
         meta: Omitted,
       },
-      call,
+      ask,
     ) {
-    Reject(reason~) =>
+    @permission.ApprovalDecision::Deny(reason~) =>
       assert_eq(reason, "acp: client denied tool 'bash' (option reject-once)")
-    _ => fail("expected reject")
+    _ => fail("expected deny")
   }
   assert_true(
-    acp_decision_from_response({ outcome: Cancelled, meta: Omitted }, call)
-    is Reject(_),
+    acp_decision_from_approval({ outcome: Cancelled, meta: Omitted }, ask)
+    is @permission.ApprovalDecision::Deny(_),
   )
 }
 
@@ -545,92 +564,104 @@ async test "detach stops delivery" {
   assert_eq(client.sent.length(), 0)
 }
 
-// ------------------------------------------------------------ permission gate
+// -------------------------------------------------------- approval source
 
 ///|
-async test "before_tool flushes, asks, and approves on allow" {
+/// Approval ask fixture: the parsed shape PermissionPolicy hands the bridge.
+fn tk_approval(
+  name : String,
+  id? : String = "call-1",
+) -> @permission.ApprovalRequest {
+  {
+    tool_name: name,
+    call_id: id,
+    category: "unknown",
+    arguments_preview: "{}",
+    arguments: Json::object({}),
+  }
+}
+
+///|
+async test "ask flushes, translates, and allows once on allow-once" {
   let bridge = AcpBridge::new()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(ToolCallPending(tk_call("edit", id="c1")))
-  match bridge.before_tool(tk_call("edit", id="c1")) {
-    Approve(..) => ()
-    _ => fail("expected approve")
+  match bridge.ask(tk_approval("edit", id="c1")) {
+    @permission.ApprovalDecision::AllowOnce => ()
+    _ => fail("expected AllowOnce")
   }
-  // The pending announcement was flushed before the permission request.
+  // The pending announcement was flushed before the permission request, and
+  // the request carried the full parsed arguments as raw_input.
   assert_eq(client.sent.length(), 1)
   assert_eq(client.asked.length(), 1)
   assert_eq(client.asked[0].session_id, "s1")
+  assert_eq(client.asked[0].tool_call.raw_input, Value(Json::object({})))
 }
 
 ///|
-async test "before_tool rejects on deny" {
+async test "ask maps allow-always onto the policy-cacheable decision" {
+  let bridge = AcpBridge::new()
+  let client = FakeAcpClient::FakeAcpClient(reply={
+    outcome: Selected({ option_id: ACP_ALLOW_ALWAYS, meta: Omitted }),
+    meta: Omitted,
+  })
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  match bridge.ask(tk_approval("edit")) {
+    @permission.ApprovalDecision::AllowAlways => ()
+    _ => fail("expected AllowAlways")
+  }
+}
+
+///|
+async test "ask denies on reject and keeps the option id in the reason" {
   let bridge = AcpBridge::new()
   let client = FakeAcpClient::FakeAcpClient(reply={
     outcome: Selected({ option_id: ACP_REJECT_ALWAYS, meta: Omitted }),
     meta: Omitted,
   })
   bridge.attach(context=fake_acp_context(client), session_id="s1")
-  match bridge.before_tool(tk_call("bash")) {
-    Reject(reason~) =>
+  match bridge.ask(tk_approval("bash")) {
+    @permission.ApprovalDecision::Deny(reason~) =>
       assert_eq(reason, "acp: client denied tool 'bash' (option reject-always)")
-    _ => fail("expected reject")
+    _ => fail("expected deny")
   }
 }
 
 ///|
-async test "before_tool rejects when the client cancels" {
+async test "ask denies when the client cancels" {
   let bridge = AcpBridge::new()
   let client = FakeAcpClient::FakeAcpClient(reply={
     outcome: Cancelled,
     meta: Omitted,
   })
   bridge.attach(context=fake_acp_context(client), session_id="s1")
-  match bridge.before_tool(tk_call("bash")) {
-    Reject(_) => ()
-    _ => fail("expected reject")
+  match bridge.ask(tk_approval("bash")) {
+    @permission.ApprovalDecision::Deny(_) => ()
+    _ => fail("expected deny")
   }
 }
 
 ///|
-async test "before_tool fails closed on broker error" {
+async test "ask fails closed on broker error" {
   let bridge = AcpBridge::new()
   let client = FakeAcpClient::FakeAcpClient(fail_permission=true)
   bridge.attach(context=fake_acp_context(client), session_id="s1")
-  match bridge.before_tool(tk_call("bash")) {
-    Reject(reason~) =>
+  match bridge.ask(tk_approval("bash")) {
+    @permission.ApprovalDecision::Deny(reason~) =>
       assert_eq(
         reason, "acp: permission request for tool 'bash' failed; failing closed",
       )
-    _ => fail("expected reject")
+    _ => fail("expected deny")
   }
 }
 
 ///|
-async test "exempt tools skip the permission round-trip" {
-  let bridge = AcpBridge::new(needs_permission=needs_ask)
-  let client = FakeAcpClient::FakeAcpClient()
-  bridge.attach(context=fake_acp_context(client), session_id="s1")
-  match bridge.before_tool(tk_call("read")) {
-    Approve(..) => ()
-    _ => fail("expected approve")
-  }
-  assert_eq(client.asked.length(), 0)
-  match bridge.before_tool(tk_call("bash")) {
-    // The fake client's scripted reply allows, so bash approves — the point
-    // is that it went through the permission round-trip at all.
-    Approve(..) => ()
-    _ => fail("expected scripted-allow approve")
-  }
-  assert_eq(client.asked.length(), 1)
-}
-
-///|
-async test "detached bridge approves without asking" {
+async test "detached bridge approves every ask without asking" {
   let bridge = AcpBridge::new()
-  match bridge.before_tool(tk_call("bash")) {
-    Approve(..) => ()
-    _ => fail("expected approve")
+  match bridge.ask(tk_approval("bash")) {
+    @permission.ApprovalDecision::AllowOnce => ()
+    _ => fail("expected AllowOnce while detached")
   }
 }
 
@@ -670,4 +701,195 @@ async test "close then attach reopens the queue for the next prompt" {
   assert_eq(bridge.flush(), 1)
   assert_eq(second.sent.length(), 1)
   assert_eq(second.sent[0].session_id, "s2")
+}
+
+// ------------------------------------------------------------ UiPort (elicitation)
+
+///|
+async test "ui select request maps to an enum form and back to an index" {
+  let bridge = AcpBridge::new()
+  let client = FakeAcpClient::FakeAcpClient(
+    elicit_reply=elicit_accept_value(
+      Json::object({ "value": Json::string("second") }),
+    ),
+  )
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  let req : @posoco.UiRequest = Select(
+    prompt="Which database?",
+    options=["first", "second", "third"],
+    default=Some(1),
+  )
+  let resp = bridge.request(req)
+  assert_true(resp is @posoco.UiResponse::Selected(1))
+  assert_eq(client.elicitations.length(), 1)
+  match client.elicitations[0] {
+    Form({ scope: Session(session_id~, ..), message, requested_schema, .. }) => {
+      assert_eq(session_id, "s1")
+      assert_eq(message, "Which database?")
+      json_inspect(requested_schema, content={
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["first", "second", "third"],
+            "default": "second",
+          },
+        },
+        "required": ["value"],
+      })
+    }
+    _ => fail("expected form-mode elicitation")
+  }
+}
+
+///|
+async test "ui input request maps to a string form with pre-fill" {
+  let bridge = AcpBridge::new()
+  let client = FakeAcpClient::FakeAcpClient(
+    elicit_reply=elicit_accept_value(
+      Json::object({ "value": Json::string("v1") }),
+    ),
+  )
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  let resp = bridge.request(Input(prompt="Branch name?", default=Some("main")))
+  assert_eq(resp, @posoco.UiResponse::Text("v1"))
+  match client.elicitations[0] {
+    Form({ requested_schema, .. }) =>
+      json_inspect(requested_schema, content={
+        "type": "object",
+        "properties": { "value": { "type": "string", "default": "main" } },
+        "required": ["value"],
+      })
+    _ => fail("expected form-mode elicitation")
+  }
+}
+
+///|
+async test "ui confirm request maps to a boolean form yes/no" {
+  let bridge = AcpBridge::new()
+  let yes_client = FakeAcpClient::FakeAcpClient(
+    elicit_reply=elicit_accept_value(
+      Json::object({ "value": Json::boolean(true) }),
+    ),
+  )
+  bridge.attach(context=fake_acp_context(yes_client), session_id="s1")
+  assert_eq(
+    bridge.request(Confirm(prompt="Deploy now?")),
+    @posoco.UiResponse::Yes,
+  )
+  let no_client = FakeAcpClient::FakeAcpClient(
+    elicit_reply=elicit_accept_value(
+      Json::object({ "value": Json::boolean(false) }),
+    ),
+  )
+  bridge.attach(context=fake_acp_context(no_client), session_id="s1")
+  assert_eq(
+    bridge.request(Confirm(prompt="Deploy now?")),
+    @posoco.UiResponse::No,
+  )
+}
+
+///|
+async test "declined and cancelled elicitations map to Cancelled" {
+  let bridge = AcpBridge::new()
+  let declined = FakeAcpClient::FakeAcpClient(elicit_reply={
+    action: Decline,
+    content: Omitted,
+    meta: Omitted,
+  })
+  bridge.attach(context=fake_acp_context(declined), session_id="s1")
+  assert_eq(
+    bridge.request(Input(prompt="Anything?", default=None)),
+    @posoco.UiResponse::Cancelled,
+  )
+  let cancelled = FakeAcpClient::FakeAcpClient(elicit_reply={
+    action: Cancel,
+    content: Omitted,
+    meta: Omitted,
+  })
+  bridge.attach(context=fake_acp_context(cancelled), session_id="s1")
+  assert_eq(
+    bridge.request(Confirm(prompt="Deploy now?")),
+    @posoco.UiResponse::Cancelled,
+  )
+}
+
+///|
+async test "detached bridge raises Unsupported" {
+  let bridge = AcpBridge::new()
+  let outcome : Result[@posoco.UiResponse, @posoco.UiError] = Ok(
+    bridge.request(Input(prompt="Anyone?", default=None)),
+  ) catch {
+    error => Err(error)
+  }
+  match outcome {
+    Err(@posoco.UiError::Unsupported(detail~)) =>
+      assert_true(detail.contains("detached"))
+    _ => fail("expected Unsupported from a detached bridge")
+  }
+}
+
+///|
+async test "elicitation failures map onto the UiError shades" {
+  let bridge = AcpBridge::new()
+  // Capability gate: the runtime rejects the request outright.
+  let no_capability = FakeAcpClient::FakeAcpClient()
+  no_capability.fail_elicitation = Some(
+    AgentContextUnavailable(method_name="elicitation/create"),
+  )
+  bridge.attach(context=fake_acp_context(no_capability), session_id="s1")
+  let gated : Result[@posoco.UiResponse, @posoco.UiError] = Ok(
+    bridge.request(Input(prompt="q", default=None)),
+  ) catch {
+    error => Err(error)
+  }
+  match gated {
+    Err(@posoco.UiError::Unsupported(detail~)) =>
+      assert_true(detail.contains("elicitation"))
+    _ => fail("expected Unsupported when the client lacks the capability")
+  }
+  // Transport failure mid-request.
+  let broken = FakeAcpClient::FakeAcpClient()
+  broken.fail_elicitation = Some(
+    AgentContextBrokerFailure(method_name="elicitation/create"),
+  )
+  bridge.attach(context=fake_acp_context(broken), session_id="s1")
+  let failed : Result[@posoco.UiResponse, @posoco.UiError] = Ok(
+    bridge.request(Input(prompt="q", default=None)),
+  ) catch {
+    error => Err(error)
+  }
+  match failed {
+    Err(@posoco.UiError::IoFailure(detail~)) =>
+      assert_true(detail.contains("failed in transit"))
+    _ => fail("expected IoFailure from a broken elicitation request")
+  }
+}
+
+///|
+async test "accept with an out-of-enum answer fails loudly" {
+  let bridge = AcpBridge::new()
+  let client = FakeAcpClient::FakeAcpClient(
+    elicit_reply=elicit_accept_value(
+      Json::object({ "value": Json::string("fourth") }),
+    ),
+  )
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  let req : @posoco.UiRequest = Select(
+    prompt="Pick one",
+    options=["first", "second"],
+    default=None,
+  )
+  let outcome : Result[@posoco.UiResponse, @posoco.UiError] = Ok(
+    bridge.request(req),
+  ) catch {
+    error => Err(error)
+  }
+  assert_true(outcome is Err(@posoco.UiError::IoFailure(_)))
+}
+
+///|
+async test "manifest declares the UiPort contribution" {
+  let bridge = AcpBridge::new()
+  assert_eq(bridge.manifest().ui.length(), 1)
 }

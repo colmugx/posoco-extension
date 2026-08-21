@@ -1,11 +1,14 @@
 ///|
-/// Permission request construction and response mapping (pure).
+/// Permission translation (pure): ext-permission's approval vocabulary in,
+/// ACP `session/request_permission` payloads and verdicts out. Which tools
+/// ask, session caching, and modes are ext-permission's `PermissionPolicy`;
+/// this file only speaks ACP.
 
 ///|
 /// Stable permission option ids used by the built-in request builder. The
 /// ids are echoed back by the client in `SelectedPermissionOutcome.option_id`
 /// and are the only coupling between `acp_permission_request` and
-/// `acp_decision_from_response`.
+/// `acp_decision_from_approval`.
 pub const ACP_ALLOW_ONCE = "allow-once"
 
 ///|
@@ -18,26 +21,26 @@ pub const ACP_REJECT_ONCE = "reject-once"
 pub const ACP_REJECT_ALWAYS = "reject-always"
 
 ///|
-/// Build the `session/request_permission` payload for one Posoco tool call.
+/// Build the `session/request_permission` payload for one approval ask.
 ///
 /// The carried `ToolCallUpdate` mirrors the pending announcement the client
 /// has already seen (`ToolCallPending` projection): same call id, kind, and
-/// title, plus the raw parsed arguments as `raw_input` so the client can
+/// title, plus the full parsed arguments as `raw_input` so the client can
 /// render an informed decision UI.
 pub fn acp_permission_request(
   session_id : String,
-  call : @posoco.ToolCall,
+  request : @permission.ApprovalRequest,
 ) -> @acp.RequestPermissionRequest {
   {
     session_id,
     tool_call: {
-      tool_call_id: call.call_id.to_string(),
-      kind: Value(acp_tool_kind(call.name.to_string())),
+      tool_call_id: request.call_id,
+      kind: Value(acp_tool_kind(request.tool_name)),
       status: Value(Pending),
-      title: Value(acp_tool_title(call)),
+      title: Value(acp_title(request.tool_name, request.arguments)),
       content: Omitted,
       locations: Omitted,
-      raw_input: Value(call.arguments),
+      raw_input: Value(request.arguments),
       raw_output: Omitted,
       meta: Omitted,
     },
@@ -72,28 +75,40 @@ pub fn acp_permission_request(
 }
 
 ///|
-/// Map a client permission response onto a Posoco hook decision.
+/// Map a client permission response onto an approval decision.
 ///
-/// Both allow options approve the call unchanged; any reject option and a
-/// cancelled request reject it (the run then fails loudly with the reason,
-/// which the model-side transcript and the ACP prompt response both carry).
-pub fn acp_decision_from_response(
+/// `allow-always` maps to `AllowAlways`; the composed `PermissionPolicy`
+/// then remembers the approval for the rest of the agent lifetime per its
+/// call-shape cache (write-class keyed by (tool, path); shell and unknown
+/// tools never cache). Both reject options and a cancelled request deny
+/// the call — denial is terminal for the turn, so the model does not retry
+/// within it.
+pub fn acp_decision_from_approval(
   response : @acp.RequestPermissionResponse,
-  call : @posoco.ToolCall,
-) -> @posoco.ToolHookDecision {
-  let tool = @devkit.sanitize_label(call.name.to_string())
+  request : @permission.ApprovalRequest,
+) -> @permission.ApprovalDecision {
+  let tool = @devkit.sanitize_label(request.tool_name)
   match response.outcome {
     Selected(outcome) =>
-      if outcome.option_id == ACP_ALLOW_ONCE ||
-        outcome.option_id == ACP_ALLOW_ALWAYS {
-        @posoco.ToolHookDecision::Approve(call~)
+      if outcome.option_id == ACP_ALLOW_ONCE {
+        @permission.ApprovalDecision::AllowOnce
+      } else if outcome.option_id == ACP_ALLOW_ALWAYS {
+        @permission.ApprovalDecision::AllowAlways
+      } else if outcome.option_id == ACP_REJECT_ONCE {
+        @permission.ApprovalDecision::Deny(
+          reason="acp: client denied tool '\{tool}' (option reject-once)",
+        )
+      } else if outcome.option_id == ACP_REJECT_ALWAYS {
+        @permission.ApprovalDecision::Deny(
+          reason="acp: client denied tool '\{tool}' (option reject-always)",
+        )
       } else {
-        @posoco.ToolHookDecision::Reject(
-          reason="acp: client denied tool '\{tool}' (option \{outcome.option_id})",
+        @permission.ApprovalDecision::Deny(
+          reason="acp: unknown permission option '\{@devkit.sanitize_label(outcome.option_id)}' for tool '\{tool}'",
         )
       }
     Cancelled =>
-      @posoco.ToolHookDecision::Reject(
+      @permission.ApprovalDecision::Deny(
         reason="acp: permission request for tool '\{tool}' was cancelled by the client",
       )
   }

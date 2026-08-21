@@ -144,8 +144,14 @@ pub fn acp_primary_arg(arguments : Json) -> String? {
 /// The operand passes through `sanitize_label` so paths and commands are
 /// collapsed to a bounded single-line label.
 pub fn acp_tool_title(call : @posoco.ToolCall) -> String {
-  let name = call.name.to_string()
-  match acp_primary_arg(call.arguments) {
+  acp_title(call.name.to_string(), call.arguments)
+}
+
+///|
+/// `acp_tool_title` from raw parts — approval asks carry the parsed fields
+/// (`ApprovalRequest`), not the originating ToolCall.
+fn acp_title(name : String, arguments : Json) -> String {
+  match acp_primary_arg(arguments) {
     Some(arg) => "\{name}(\{@devkit.sanitize_label(arg, limit=48)})"
     None => name
   }
