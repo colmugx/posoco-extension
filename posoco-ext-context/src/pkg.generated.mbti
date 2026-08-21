@@ -35,6 +35,7 @@ pub struct ContextPromptContributor {
   envelope : String
 }
 pub fn ContextPromptContributor::new(bundle~ : ContextBundle, envelope~ : String) -> Self
+pub fn ContextPromptContributor::system_prompt(Self) -> String
 pub impl @port.SystemPromptContributor for ContextPromptContributor
 
 // Type aliases
