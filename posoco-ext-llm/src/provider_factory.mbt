@@ -25,6 +25,13 @@ pub(all) struct ProviderConfigSource {
   ///
   /// Deprecated compatibility input; see `credential` above.
   api_key_credential : @oauth.ApiKeyCredential?
+  /// Host-cached model-discovery records for this provider, opaque JSON the
+  /// provider interprets with its own decoder. Hosts seed it from a previous
+  /// `refresh` so the static `build` path can reconstruct a multi-slot catalog
+  /// without a network request. Providers that do not support offline
+  /// expansion ignore it; a value the provider cannot decode degrades to the
+  /// uncached build and never fails composition.
+  cached_models : Json?
 }
 
 ///|
@@ -33,8 +40,15 @@ pub fn ProviderConfigSource::ProviderConfigSource(
   provider_credential? : @oauth.ProviderCredential? = None,
   credential? : @oauth.Credential? = None,
   api_key_credential? : @oauth.ApiKeyCredential? = None,
+  cached_models? : Json? = None,
 ) -> ProviderConfigSource {
-  { settings, provider_credential, credential, api_key_credential }
+  {
+    settings,
+    provider_credential,
+    credential,
+    api_key_credential,
+    cached_models,
+  }
 }
 
 ///|

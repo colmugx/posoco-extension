@@ -50,8 +50,9 @@ pub(all) struct ProviderConfigSource {
   provider_credential : @posoco-ext-oauth.ProviderCredential?
   credential : @posoco-ext-oauth.Credential?
   api_key_credential : @posoco-ext-oauth.ApiKeyCredential?
+  cached_models : Json?
 }
-pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @posoco-ext-oauth.ProviderCredential?, credential? : @posoco-ext-oauth.Credential?, api_key_credential? : @posoco-ext-oauth.ApiKeyCredential?) -> Self
+pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @posoco-ext-oauth.ProviderCredential?, credential? : @posoco-ext-oauth.Credential?, api_key_credential? : @posoco-ext-oauth.ApiKeyCredential?, cached_models? : Json?) -> Self
 pub fn ProviderConfigSource::effective_credential(Self, String) -> @posoco-ext-oauth.ProviderCredential? raise @error.CompositionError
 pub fn ProviderConfigSource::has_settings(Self) -> Bool
 pub fn ProviderConfigSource::setting(Self, String) -> Json? raise @error.CompositionError
@@ -82,16 +83,20 @@ pub(all) struct RouterModelPort {
 }
 pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_slot_id(Self) -> String
+pub fn RouterModelPort::commands(Self) -> Array[@port.CommandDef]
 pub fn RouterModelPort::current_model_id(Self) -> String
 pub fn RouterModelPort::current_provider_id(Self) -> String
 pub fn RouterModelPort::extension_id(Self) -> String
 pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?) -> Self raise @error.CompositionError
+pub async fn RouterModelPort::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn RouterModelPort::list_auth_capabilities(Self) -> Json
 pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn RouterModelPort::new(slots~ : Array[ModelSlot], default_slot_id? : String, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
+pub fn RouterModelPort::replace_provider_slots(Self, String, Array[ModelSlot]) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError
 pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
 pub impl @port.CommandPort for RouterModelPort

@@ -192,6 +192,84 @@ pub fn RouterModelPort::switch_slot(
 }
 
 ///|
+/// Replace every slot of one provider in place, preserving composition order
+/// for all other providers. Hosts use this after a live model-discovery
+/// refresh: the refreshed catalog's slots replace the provider's previous
+/// slots without recomposing the Agent.
+///
+/// Validation mirrors `new` (non-empty, unique ids, provider id match) and
+/// fails before any mutation, so a rejected replacement leaves the routing
+/// table untouched. The active selection survives when its slot id still
+/// exists afterwards (the slot object is swapped, selection and effort stay);
+/// when the active slot disappears, selection falls back to the provider's
+/// first new slot and the effort selection is cleared.
+pub fn RouterModelPort::replace_provider_slots(
+  self : RouterModelPort,
+  provider_id : String,
+  slots : Array[ModelSlot],
+) -> Unit raise @posoco.CompositionError {
+  if slots.is_empty() {
+    raise @posoco.CompositionError::ManifestSchemaError(
+      manifest_id="posoco_ext_llm",
+      detail="replacement model slots must not be empty: " + provider_id,
+    )
+  }
+  let seen : Map[String, Unit] = Map::from_array([])
+  for slot in slots {
+    if slot.provider_id != provider_id {
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_llm",
+        detail="replacement slot provider id does not match: " + slot.id,
+      )
+    }
+    if seen.contains(slot.id) {
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_llm",
+        detail="duplicate replacement model slot id: " + slot.id,
+      )
+    }
+    seen[slot.id] = ()
+  }
+  let old_active_id = self.active_id
+  // Drop the provider's previous ids from the ordered list, then re-insert
+  // the replacement ids where the provider's first old id appeared (append
+  // when the provider contributed no slots before).
+  let replaced_order : Array[String] = []
+  let mut inserted = false
+  for id in self.slot_order {
+    if self.slots.get(id) is Some(slot) && slot.provider_id == provider_id {
+      if !inserted {
+        for new_slot in slots {
+          replaced_order.push(new_slot.id)
+        }
+        inserted = true
+      }
+    } else {
+      replaced_order.push(id)
+    }
+  }
+  if !inserted {
+    for new_slot in slots {
+      replaced_order.push(new_slot.id)
+    }
+  }
+  for old_id in self.slot_order.copy() {
+    if self.slots.get(old_id) is Some(slot) && slot.provider_id == provider_id {
+      ignore(self.slots.remove(old_id))
+    }
+  }
+  for new_slot in slots {
+    self.slots[new_slot.id] = new_slot
+  }
+  self.slot_order.clear()
+  self.slot_order.append(replaced_order)
+  if !self.slots.contains(old_active_id) {
+    self.active_id = slots[0].id
+    self.active_effort = None
+  }
+}
+
+///|
 pub impl @posoco.ModelPort for RouterModelPort with fn chat(
   self : RouterModelPort,
   scope : @posoco.InvocationScope,

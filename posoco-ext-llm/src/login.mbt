@@ -8,7 +8,7 @@
 ///|
 priv struct LoginSelection {
   provider_id : String?
-  method : String?
+  login_method : String?
 }
 
 ///|
@@ -38,17 +38,17 @@ fn login_command_selection(
   args : Json,
 ) -> LoginSelection raise @posoco.CommandError {
   match args {
-    Json::Null => { provider_id: None, method: None }
+    Json::Null => { provider_id: None, login_method: None }
     Json::String(provider_id) =>
       if provider_id.length() == 0 {
-        { provider_id: None, method: None }
+        { provider_id: None, login_method: None }
       } else {
-        { provider_id: Some(provider_id), method: None }
+        { provider_id: Some(provider_id), login_method: None }
       }
     Json::Object(fields) =>
       {
         provider_id: optional_login_string(fields, "provider"),
-        method: optional_login_string(fields, "method"),
+        login_method: optional_login_string(fields, "method"),
       }
     _ =>
       raise @posoco.CommandError::InvalidArgs(
@@ -88,8 +88,8 @@ fn auth_methods_for_slot(slot : ModelSlot) -> Array[AuthMethod] {
 ///|
 fn auth_methods_json(methods : Array[AuthMethod]) -> Json {
   let values : Array[Json] = []
-  for method in methods {
-    values.push(Json::string(method.to_id()))
+  for auth_method in methods {
+    values.push(Json::string(auth_method.to_id()))
   }
   Json::array(values)
 }
@@ -279,8 +279,10 @@ fn RouterModelPort::provider_methods(
 }
 
 ///|
-fn parse_auth_method(method : String) -> AuthMethod raise @posoco.CommandError {
-  match method {
+fn parse_auth_method(
+  requested : String,
+) -> AuthMethod raise @posoco.CommandError {
+  match requested {
     "oauth" => AuthMethod::OAuth
     "api_key" => AuthMethod::ApiKey
     _ =>
@@ -297,11 +299,11 @@ fn RouterModelPort::select_auth_method(
   requested : String?,
 ) -> AuthMethod raise @posoco.CommandError {
   match requested {
-    Some(method) => {
-      let selected = parse_auth_method(method)
+    Some(requested) => {
+      let selected = parse_auth_method(requested)
       if !self.provider_methods(provider_id).contains(selected) {
         raise @posoco.CommandError::InvalidArgs(
-          reason="provider does not expose auth method: " + method,
+          reason="provider does not expose auth method: " + requested,
         )
       }
       selected
@@ -528,8 +530,11 @@ async fn RouterModelPort::invoke_login(
       )
     Some(value) => value
   }
-  let method = self.select_auth_method(provider_id, selection.method)
-  match method {
+  let selected_method = self.select_auth_method(
+    provider_id,
+    selection.login_method,
+  )
+  match selected_method {
     AuthMethod::OAuth => self.invoke_oauth_login(provider_id)
     AuthMethod::ApiKey => self.invoke_api_key_login(provider_id)
   }
