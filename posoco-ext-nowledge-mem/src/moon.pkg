@@ -1,0 +1,47 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/js_async",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/string",
+  "moonbitlang/x/crypto",
+  "moonbitlang/x/sys",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+warnings = "-unused_package"
+
+// The extension ships per-target platform runners (.native/.js) and pins its
+// wbtests to native; wasm is out of scope for v1 (plan D6), so the package
+// declares native+js as its whole target set — the same shape as
+// posoco-ext-plan. Restricted-target packages carry no pkg.generated.mbti
+// (moon info's canonical backend is Wasm); see plan/mcp/acp/goal precedents.
+
+supported_targets = "+native +js"
+
+options(
+  targets: {
+    "runner.native.mbt": [ "native" ],
+    "runner.js.mbt": [ "js" ],
+    "config_wbtest.mbt": [ "native" ],
+    "message_map_wbtest.mbt": [ "native" ],
+    "thread_payload_wbtest.mbt": [ "native" ],
+    "delta_wbtest.mbt": [ "native" ],
+    "acks_wbtest.mbt": [ "native" ],
+    "transport_wbtest.mbt": [ "native" ],
+    "sync_engine_wbtest.mbt": [ "native" ],
+    "extension_wbtest.mbt": [ "native" ],
+    "memory_port_wbtest.mbt": [ "native" ],
+    "memory_port_e2e_wbtest.mbt": [ "native" ],
+    "tools_wbtest.mbt": [ "native" ],
+    "command_wbtest.mbt": [ "native" ],
+  },
+)
