@@ -89,9 +89,9 @@ fn PlanMode::execute_enter(
 }
 
 ///|
-/// Execute the exit tool: record the plan and move to `ReadyForApproval`.
-/// The returned message tells the model to stop and wait — exiting itself
-/// only happens when the product approves (`plan.approve` command).
+/// Review-wired: consume the verdict `before_tool` recorded for this call
+/// (Accept ⇒ approve and exit, Revise ⇒ stay planning). Otherwise record
+/// the plan as `ReadyForApproval` for the command flow.
 fn PlanMode::execute_exit(
   self : PlanMode,
   name : String,
@@ -115,16 +115,44 @@ fn PlanMode::execute_exit(
         "\{name}: arguments must be a JSON object",
       )
   }
-  if !self.submit_plan(plan) {
-    return @posoco.ToolOutcome::ToolReportedError(
-      content="\{name}: not in plan mode. Enable plan mode before submitting a plan.",
-      structured=None,
-    )
+  // A verdict keyed to a different call id is stale and ignored.
+  let verdict : PlanReviewDecision? = match self.review_result {
+    Some((call_id, decision)) =>
+      if call_id == call.call_id.to_string() {
+        self.review_result = None
+        Some(decision)
+      } else {
+        None
+      }
+    None => None
   }
-  @posoco.ToolOutcome::Success(
-    content="Plan submitted for user approval. Do not make any changes until the user approves the plan.",
-    structured=None,
-  )
+  match verdict {
+    Some(Accept) => {
+      ignore(self.submit_plan(plan))
+      ignore(self.approve())
+      @posoco.ToolOutcome::Success(
+        content="Plan accepted by the user — plan mode is off. Implement the plan now, starting with step 1.",
+        structured=None,
+      )
+    }
+    Some(Revise(feedback~)) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="Plan returned for revision: \{feedback}. Stay in plan mode, incorporate the feedback, and call '\{name}' again with the revised plan.",
+        structured=None,
+      )
+    None => {
+      if !self.submit_plan(plan) {
+        return @posoco.ToolOutcome::ToolReportedError(
+          content="\{name}: not in plan mode. Enable plan mode before submitting a plan.",
+          structured=None,
+        )
+      }
+      @posoco.ToolOutcome::Success(
+        content="Plan submitted for user approval. Do not make any changes until the user approves the plan.",
+        structured=None,
+      )
+    }
+  }
 }
 
 ///|

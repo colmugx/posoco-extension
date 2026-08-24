@@ -1,16 +1,15 @@
 ///|
 /// posoco_ext_plan — Plan mode extension for Posoco.
 ///
-/// Plan mode constrains the agent to read-only tools while it investigates
-/// and produces a plan. The model signals "plan ready" through the
-/// `exit_plan_mode` tool; the product (cetas) then approves or rejects the
-/// plan through the `plan.approve` / `plan.reject` commands. Only public
-/// Posoco ports are used; approval UI stays on the product side.
+/// The model investigates and produces a plan under the gates documented
+/// on `PlanModeConfig` (read-only shell, docs-only Markdown writes), then
+/// submits it via `exit_plan_mode`. Approval UX is product content
+/// (`PlanReviewSource` or the `plan.approve` / `plan.reject` commands).
 ///
 /// Usage:
-///   let plan = PlanMode::new(config=PlanModeConfig::{
+///   let plan = PlanMode::PlanMode(config=PlanModeConfig::{
 ///     ..PlanModeConfig::default(),
-///     allowed_tools: ["read", "glob", "grep"],
+///     allowed_tools: ["read", "glob", "grep", "browser_*"],
 ///   })
 ///   let agent = Agent(exts=[plan], config=...)
 
@@ -40,9 +39,24 @@ pub impl Show for PlanStatus with fn to_string(self : PlanStatus) -> String {
 /// Plan mode configuration.
 pub(all) struct PlanModeConfig {
   /// Tools that remain executable while planning (read-only tools such as
-  /// `read` / `glob` / `grep`). Empty = every tool except the enter/exit
-  /// tools is rejected while plan mode is active.
+  /// `read` / `glob` / `grep`). Entries may end with `*` to match a name
+  /// prefix — e.g. `browser_*` admits read-only inspection tools surfaced
+  /// by MCP bridges. Empty = every tool except the enter/exit tools and
+  /// read-only shell commands (see `shell_tools`) is rejected while plan
+  /// mode is active.
   allowed_tools : Array[String]
+  /// Shell-like tool names gated per invocation: the call passes when its
+  /// `cmd` classifies read-only (`@devkit.shell_command_is_read_only`).
+  /// Empty disables per-invocation shell gating.
+  shell_tools : Array[String]
+  /// Write-class tool names gated by TARGET: the call passes only when
+  /// its `path` is inside `writable_paths` and ends with one of
+  /// `writable_extensions`. Empty disables the target gate.
+  write_tools : Array[String]
+  /// Directory prefixes writable while planning (default `docs/`).
+  writable_paths : Array[String]
+  /// File extensions writable while planning (default `.md` only).
+  writable_extensions : Array[String]
   /// Name of the tool the model calls to submit a plan for approval.
   exit_tool_name : String
   /// Whether the model may enter plan mode on its own through the
@@ -55,11 +69,15 @@ pub(all) struct PlanModeConfig {
 } derive(Eq, Debug)
 
 ///|
-/// Default configuration: no allowed tools, exit tool named `exit_plan_mode`,
-/// model-initiated entry disabled.
+/// Default: read-only shell gating on, writes limited to `docs/**/*.md`,
+/// `exit_plan_mode` / `enter_plan_mode` names, model entry disabled.
 pub fn PlanModeConfig::default() -> PlanModeConfig {
   {
     allowed_tools: [],
+    shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
+    write_tools: ["write", "edit", "apply_patch"],
+    writable_paths: ["docs/"],
+    writable_extensions: [".md"],
     exit_tool_name: "exit_plan_mode",
     allow_model_entry: false,
     enter_tool_name: "enter_plan_mode",
@@ -67,13 +85,18 @@ pub fn PlanModeConfig::default() -> PlanModeConfig {
 }
 
 ///|
-/// Central struct: implements Hook + SystemPromptContributor +
+/// Central struct: implements PipelineHook + SystemPromptContributor +
 /// ToolProvider + CommandPort + Extension on one shared state.
 ///
 /// Pass the same instance to the agent composer once; every port view sees
 /// the same mutable status.
 pub(all) struct PlanMode {
   config : PlanModeConfig
+  /// Optional host-injected review for the exit tool (see `review.mbt`).
+  review : &PlanReviewSource?
+  /// Verdict recorded by `before_tool` for the exit-tool call it just
+  /// reviewed, keyed by call id; consumed by the tool execution.
+  mut review_result : (String, PlanReviewDecision)?
   mut status : PlanStatus
 }
 
@@ -82,8 +105,8 @@ pub(all) struct PlanMode {
 ///
 /// # Example
 /// ```mbt check
-/// test "plan mode gates write tools until the plan is approved" {
-///   let plan = PlanMode::new(config=PlanModeConfig::{
+/// async test "plan mode gates write tools until the plan is approved" {
+///   let plan = PlanMode::PlanMode(config=PlanModeConfig::{
 ///     ..PlanModeConfig::default(),
 ///     allowed_tools: ["read", "glob", "grep"],
 ///   })
@@ -94,7 +117,7 @@ pub(all) struct PlanMode {
 ///     arguments: Json::null(),
 ///   }
 ///   match plan.before_tool(call) {
-///     @posoco.ToolHookDecision::Reject(reason~) =>
+///     @posoco.ToolDecision::Reject(reason~) =>
 ///       assert_true(reason.contains("plan mode"))
 ///     _ => fail("write must be rejected while planning")
 ///   }
@@ -104,15 +127,16 @@ pub(all) struct PlanMode {
 ///     arguments: Json::null(),
 ///   }
 ///   match plan.before_tool(read_call) {
-///     @posoco.ToolHookDecision::Approve(..) => ()
+///     @posoco.ToolDecision::Approve(..) => ()
 ///     _ => fail("read must stay available while planning")
 ///   }
 /// }
 /// ```
-pub fn PlanMode::new(
+pub fn PlanMode::PlanMode(
   config? : PlanModeConfig = PlanModeConfig::default(),
+  review? : &PlanReviewSource? = None,
 ) -> PlanMode {
-  { config, status: Off }
+  { config, review, review_result: None, status: Off }
 }
 
 ///|
@@ -184,13 +208,24 @@ pub fn PlanMode::reject(self : PlanMode) -> Bool {
 }
 
 ///|
-/// Whether a tool call is allowed under the current status.
 fn PlanMode::is_tool_allowed(self : PlanMode, name : String) -> Bool {
   match self.status {
     Off => true
     _ =>
       name == self.config.exit_tool_name ||
       name == self.config.enter_tool_name ||
-      self.config.allowed_tools.contains(name)
+      self.config.allowed_tools
+      .iter()
+      .any(fn(pattern) { tool_pattern_matches(pattern, name) })
+  }
+}
+
+///|
+fn tool_pattern_matches(pattern : String, name : String) -> Bool {
+  if pattern.has_suffix("*") {
+    let prefix = pattern.sub(end=pattern.length() - 1)
+    prefix.length() > 0 && name.has_prefix(prefix)
+  } else {
+    pattern == name
   }
 }

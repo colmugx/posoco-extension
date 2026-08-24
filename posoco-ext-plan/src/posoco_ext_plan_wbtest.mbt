@@ -3,7 +3,7 @@
 
 ///|
 fn plan_mode_with_reads() -> PlanMode {
-  PlanMode::new(config=PlanModeConfig::{
+  PlanMode(config=PlanModeConfig::{
     ..PlanModeConfig::default(),
     allowed_tools: ["read", "glob", "grep"],
   })
@@ -20,6 +20,140 @@ fn tk_call_with_args(name : String, arguments : Json) -> @posoco.ToolCall {
     call_id: @posoco.CallId::unchecked("call_1"),
     name: @posoco.ToolName::unchecked(name),
     arguments,
+  }
+}
+
+///|
+fn bash_call(cmd : String) -> @posoco.ToolCall {
+  tk_call_with_args("bash", Json::object({ "cmd": Json::string(cmd) }))
+}
+
+///|
+fn write_call(tool : String, path : String) -> @posoco.ToolCall {
+  tk_call_with_args(tool, Json::object({ "path": Json::string(path) }))
+}
+
+///|
+async test "before_tool gates write tools by target while planning" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  // Markdown under docs/ passes — research notes and draft docs are part
+  // of planning.
+  for
+    target in [
+      ("write", "docs/research/notes.md"),
+      ("edit", "docs/plan-draft.md"),
+      ("edit", "./docs/x.md"),
+    ] {
+    let (tool, path) = target
+    match plan.before_tool(write_call(tool, path)) {
+      @posoco.ToolDecision::Approve(..) => ()
+      other => fail("expected Approve for '\{tool} \{path}', got \{other}")
+    }
+  }
+  // Everything else is a precise target rejection: outside docs/, wrong
+  // extension, or no target at all.
+  for
+    target in [
+      ("write", "src/main.rs"),
+      ("edit", "docs/build.sh"),
+      ("write", "package.json"),
+      ("apply_patch", "docs/styles.css"),
+    ] {
+    let (tool, path) = target
+    match plan.before_tool(write_call(tool, path)) {
+      @posoco.ToolDecision::Reject(reason~) => {
+        assert_true(reason.contains("plan mode"))
+        assert_true(reason.contains("docs/"))
+      }
+      other => fail("expected Reject for '\{tool} \{path}', got \{other}")
+    }
+  }
+  match plan.before_tool(tk_call("write")) {
+    @posoco.ToolDecision::Reject(..) => ()
+    other => fail("expected Reject for write without path, got \{other}")
+  }
+}
+
+///|
+async test "before_tool target gate is off unless write tools are configured" {
+  let plan = PlanMode(config=PlanModeConfig::{
+    ..PlanModeConfig::default(),
+    allowed_tools: ["read"],
+    write_tools: [],
+  })
+  plan.start()
+  match plan.before_tool(write_call("write", "docs/a.md")) {
+    @posoco.ToolDecision::Reject(..) => ()
+    other => fail("expected Reject with empty write_tools, got \{other}")
+  }
+}
+
+///|
+async test "before_tool admits read-only shell commands while planning" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  // Read-only investigation commands pass through the shell gate.
+  let read_only = [
+    "ls -la", "find . -name '*.mbt' | head -20", "grep -rn 'plan' docs", "git status && git diff --stat",
+    "git log --oneline -5",
+  ]
+  for cmd in read_only {
+    match plan.before_tool(bash_call(cmd)) {
+      @posoco.ToolDecision::Approve(..) => ()
+      other => fail("expected Approve for '\{cmd}', got \{other}")
+    }
+  }
+  // Mutating commands are rejected with read-only steering.
+  for cmd in ["rm -rf build", "npm install", "git push", "cat a > b"] {
+    match plan.before_tool(bash_call(cmd)) {
+      @posoco.ToolDecision::Reject(reason~) => {
+        assert_true(reason.contains("plan mode"))
+        assert_true(reason.contains("read-only"))
+      }
+      other => fail("expected Reject for '\{cmd}', got \{other}")
+    }
+  }
+  // No parseable `cmd` argument: conservative rejection.
+  match plan.before_tool(tk_call("bash")) {
+    @posoco.ToolDecision::Reject(..) => ()
+    other => fail("expected Reject for bash without cmd, got \{other}")
+  }
+}
+
+///|
+async test "before_tool shell gate is off unless the name is configured" {
+  let plan = PlanMode(config=PlanModeConfig::{
+    ..PlanModeConfig::default(),
+    allowed_tools: ["read"],
+    shell_tools: [],
+  })
+  plan.start()
+  match plan.before_tool(bash_call("ls -la")) {
+    @posoco.ToolDecision::Reject(..) => ()
+    other =>
+      fail("expected Reject for bash with empty shell_tools, got \{other}")
+  }
+}
+
+///|
+async test "allowed_tools entries match by prefix with trailing *" {
+  let plan = PlanMode(config=PlanModeConfig::{
+    ..PlanModeConfig::default(),
+    allowed_tools: ["read", "browser_*"],
+  })
+  plan.start()
+  for name in ["read", "browser_snapshot", "browser_navigate", "browser_eval"] {
+    match plan.before_tool(tk_call(name)) {
+      @posoco.ToolDecision::Approve(..) => ()
+      other => fail("expected Approve for '\{name}', got \{other}")
+    }
+  }
+  for name in ["write", "browsermaker"] {
+    match plan.before_tool(tk_call(name)) {
+      @posoco.ToolDecision::Reject(..) => ()
+      other => fail("expected Reject for '\{name}', got \{other}")
+    }
   }
 }
 
@@ -52,37 +186,37 @@ test "state machine transitions" {
 }
 
 ///|
-test "before_tool gates non-allowed tools while planning" {
+async test "before_tool gates non-allowed tools while planning" {
   let plan = plan_mode_with_reads()
   // Off: everything passes through.
   match plan.before_tool(tk_call("write")) {
-    @posoco.ToolHookDecision::Approve(..) => ()
+    @posoco.ToolDecision::Approve(..) => ()
     other => fail("expected Approve while Off, got \{other}")
   }
   plan.start()
   // Planning: allowed tools and the exit tool pass.
   for name in ["read", "glob", "grep", "exit_plan_mode"] {
     match plan.before_tool(tk_call(name)) {
-      @posoco.ToolHookDecision::Approve(..) => ()
+      @posoco.ToolDecision::Approve(..) => ()
       other => fail("expected Approve for '\{name}', got \{other}")
     }
   }
   // Planning: write tools are rejected with guidance.
   match plan.before_tool(tk_call("write")) {
-    @posoco.ToolHookDecision::Reject(reason~) =>
+    @posoco.ToolDecision::Reject(reason~) =>
       assert_true(reason.contains("plan mode"))
     other => fail("expected Reject for 'write', got \{other}")
   }
   // ReadyForApproval still gates until the user approves.
   assert_true(plan.submit_plan("plan"))
   match plan.before_tool(tk_call("write")) {
-    @posoco.ToolHookDecision::Reject(..) => ()
+    @posoco.ToolDecision::Reject(..) => ()
     other => fail("expected Reject while ReadyForApproval, got \{other}")
   }
   // After approval, everything passes again.
   ignore(plan.approve())
   match plan.before_tool(tk_call("write")) {
-    @posoco.ToolHookDecision::Approve(..) => ()
+    @posoco.ToolDecision::Approve(..) => ()
     other => fail("expected Approve after approval, got \{other}")
   }
 }
@@ -171,7 +305,7 @@ async test "list_tools declares the configured tools" {
   assert_eq(tools.length(), 1)
   assert_eq(tools[0].name.to_string(), "exit_plan_mode")
   // With allow_model_entry, the enter tool is advertised too.
-  let entering = PlanMode::new(config=PlanModeConfig::{
+  let entering = PlanMode(config=PlanModeConfig::{
     ..PlanModeConfig::default(),
     allow_model_entry: true,
   })
@@ -260,7 +394,7 @@ async test "plan command on/off/status" {
 
 ///|
 async test "enter_plan_mode tool enters without approval" {
-  let plan = PlanMode::new(config=PlanModeConfig::{
+  let plan = PlanMode(config=PlanModeConfig::{
     ..PlanModeConfig::default(),
     allow_model_entry: true,
   })
@@ -352,4 +486,117 @@ test "extension manifest wires all four port views" {
   assert_eq(manifest.hooks.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 1)
   assert_eq(manifest.commands.length(), 1)
+}
+
+///|
+/// ScriptedReview — records asks, returns a fixed verdict.
+struct ScriptedReview {
+  decision : PlanReviewDecision
+  mut asked : Int
+}
+
+///|
+impl PlanReviewSource for ScriptedReview with fn review(
+  self,
+  _request : PlanReviewRequest,
+) -> PlanReviewDecision {
+  self.asked = self.asked + 1
+  self.decision
+}
+
+///|
+fn exit_call(plan_text : String) -> @posoco.ToolCall {
+  tk_call_with_args(
+    "exit_plan_mode",
+    Json::object({ "plan": Json::string(plan_text) }),
+  )
+}
+
+///|
+async test "review source accepts the plan in one action" {
+  let review = ScriptedReview::{ decision: Accept, asked: 0 }
+  let plan = PlanMode(
+    config=PlanModeConfig::{
+      ..PlanModeConfig::default(),
+      allowed_tools: ["read"],
+    },
+    review=Some(review as &PlanReviewSource),
+  )
+  plan.start()
+  let call = exit_call("1. do it")
+  // before_tool runs the review and approves the exit call.
+  match plan.before_tool(call) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve, got \{other}")
+  }
+  assert_eq(review.asked, 1)
+  // Execution consumes the verdict: accepted + plan mode off.
+  match plan.execute("exit_plan_mode", call) {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("accepted"))
+    other => fail("expected Success, got \{other}")
+  }
+  assert_eq(plan.status(), PlanStatus::Off)
+}
+
+///|
+async test "review revise keeps planning and feeds the reason back" {
+  let review = ScriptedReview::{
+    decision: Revise(feedback="add tests"),
+    asked: 0,
+  }
+  let plan = PlanMode(
+    config=PlanModeConfig::{
+      ..PlanModeConfig::default(),
+      allowed_tools: ["read"],
+    },
+    review=Some(review as &PlanReviewSource),
+  )
+  plan.start()
+  let call = exit_call("1. do it")
+  match plan.before_tool(call) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve, got \{other}")
+  }
+  match plan.execute("exit_plan_mode", call) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("add tests"))
+    other => fail("expected ToolReportedError, got \{other}")
+  }
+  assert_eq(plan.status(), PlanStatus::Planning)
+}
+
+///|
+async test "review is only consulted while planning" {
+  let review = ScriptedReview::{ decision: Accept, asked: 0 }
+  let plan = PlanMode(review=Some(review as &PlanReviewSource))
+  // Off: the exit call is approved but NOT reviewed; execution reports
+  // not-in-plan-mode.
+  let call = exit_call("too early")
+  match plan.before_tool(call) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve, got \{other}")
+  }
+  assert_eq(review.asked, 0)
+  match plan.execute("exit_plan_mode", call) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("not in plan mode"))
+    other => fail("expected ToolReportedError, got \{other}")
+  }
+}
+
+///|
+async test "AutoAcceptReview is the unattended (yolo) posture" {
+  let plan = PlanMode(review=Some(AutoAcceptReview::{  } as &PlanReviewSource))
+  plan.start()
+  let call = exit_call("1. unattended")
+  match plan.before_tool(call) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve, got \{other}")
+  }
+  match plan.execute("exit_plan_mode", call) {
+    @posoco.ToolOutcome::Success(..) => ()
+    other => fail("expected Success, got \{other}")
+  }
+  assert_eq(plan.status(), PlanStatus::Off)
 }

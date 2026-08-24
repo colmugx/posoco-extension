@@ -22,6 +22,7 @@ pub impl @posoco.Extension for PlanMode with fn manifest(self) -> @posoco.Extens
     commands: [self],
     ui: [],
     prompt_contributors: [self],
+    requires: [],
   }
 }
 
@@ -38,5 +39,5 @@ pub extend PlanMode with @posoco.Extension::{extension_id, manifest}
 pub fn plan_extension(
   config? : PlanModeConfig = PlanModeConfig::default(),
 ) -> PlanMode {
-  PlanMode::new(config~)
+  PlanMode(config~)
 }
