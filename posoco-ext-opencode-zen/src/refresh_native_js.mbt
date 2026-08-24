@@ -25,7 +25,7 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh
   }
   let base_url = zen_resolve_base_url(source)
   let preferred = zen_resolve_model(source)
-  let config = @openai_compatible.OpenAICompatibleConfig::new(
+  let config = @openai_compatible.OpenAICompatibleConfig(
     api_key,
     base_url~,
     model=preferred,

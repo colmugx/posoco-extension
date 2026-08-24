@@ -29,13 +29,13 @@ fn zen_settings(pairs : Array[(String, String)]) -> Json {
 
 ///|
 test "Zen routing headers carry stable session and fresh request identity" {
-  let session = zen_new_session_id()
-  let first = zen_request_headers(session)
-  let second = zen_request_headers(session)
-  assert_eq(first["x-opencode-project"], Some("posoco"))
-  assert_eq(first["x-opencode-session"], Some(session))
-  assert_eq(first["x-opencode-client"], Some("posoco"))
-  assert_eq(first["User-Agent"], Some("posoco/opencode-zen"))
+  let first = zen_request_headers()
+  let second = zen_request_headers()
+  assert_eq(first["x-opencode-project"], "posoco")
+  assert_eq(first["x-opencode-client"], "posoco")
+  assert_eq(first["User-Agent"], "posoco/opencode-zen")
+  assert_eq(first["x-opencode-session"], second["x-opencode-session"])
+  assert_true(first["x-opencode-session"].length() > 0)
   assert_true(first["x-opencode-request"] != second["x-opencode-request"])
 }
 
@@ -198,7 +198,7 @@ test "parse_zen_models rejects an item with wrong object value" {
 ///|
 /// Build a base config used by the multi-slot catalog tests.
 fn zen_base_config() -> @openai_compatible.OpenAICompatibleConfig {
-  @openai_compatible.OpenAICompatibleConfig::new(
+  @openai_compatible.OpenAICompatibleConfig(
     "sk-test",
     base_url="https://opencode.ai/zen/v1",
     model="gpt-5.1-codex",
@@ -207,7 +207,7 @@ fn zen_base_config() -> @openai_compatible.OpenAICompatibleConfig {
 
 ///|
 test "zen_model_catalog builds one slot per discovered model" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let models = parse_zen_models(zen_sample_models_payload())
   let catalog = zen_model_catalog(
@@ -219,7 +219,9 @@ test "zen_model_catalog builds one slot per discovered model" {
   assert_eq(catalog.provider_id, "opencode")
   let slots = catalog.slots()
   inspect(slots.length(), content="3")
+  // Configured model is pinned first.
   assert_eq(slots[0].model_id, "gpt-5.1-codex")
+  // Slot id is provider-qualified.
   debug_inspect(
     slots.map(slot => slot.id),
     content=(
@@ -230,13 +232,14 @@ test "zen_model_catalog builds one slot per discovered model" {
       #|]
     ),
   )
+  // Every slot carries the Zen display group and chat capability.
   assert_true(slots.every(slot => slot.display_group == Some("zen")))
   assert_true(slots.every(slot => slot.capabilities.contains("chat")))
 }
 
 ///|
 test "zen_model_catalog raises on an empty model list" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let result = Ok(
     zen_model_catalog(zen_base_config(), [], "any", api_key_factory),
@@ -252,9 +255,10 @@ test "zen_model_catalog raises on an empty model list" {
 
 ///|
 test "zen_model_catalog falls back to server order when preferred is absent" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let models = parse_zen_models(zen_sample_models_payload())
+  // No model matches "nonexistent" → original order preserved.
   let catalog = zen_model_catalog(
     zen_base_config(),
     models,
@@ -272,7 +276,7 @@ test "zen_model_catalog falls back to server order when preferred is absent" {
 
 ///|
 test "zen_static_catalog builds a single slot over the resolved model" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let catalog = zen_static_catalog(zen_base_config(), api_key_factory)
   let slots = catalog.slots()
@@ -283,7 +287,7 @@ test "zen_static_catalog builds a single slot over the resolved model" {
 
 ///|
 test "OpenCodeZenProvider reports the opencode provider and credential id" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   assert_eq(factory.provider_id(), "opencode")
   assert_eq(factory.credential_id(), "opencode")
@@ -291,7 +295,7 @@ test "OpenCodeZenProvider reports the opencode provider and credential id" {
 
 ///|
 test "ProviderFactory::build returns Unconfigured without any api key" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(zen_settings([("model", "claude-opus-5")])),
@@ -305,7 +309,7 @@ test "ProviderFactory::build returns Unconfigured without any api key" {
 
 ///|
 test "ProviderFactory::build with api_key produces a single-slot Ready catalog" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -328,7 +332,7 @@ test "ProviderFactory::build with api_key produces a single-slot Ready catalog" 
 
 ///|
 test "ProviderFactory::build applies the default model when omitted" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(zen_settings([("api_key", "sk-zen-test")])),
@@ -336,6 +340,8 @@ test "ProviderFactory::build applies the default model when omitted" {
   match factory.build(source) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
+      // The static-build default model is observable on the slot; the base
+      // URL flows into the port's private config and is not re-exposed here.
       assert_eq(slot.model_id, "claude-sonnet-5")
       assert_eq(slot.id, "opencode/claude-sonnet-5")
     }
@@ -346,7 +352,7 @@ test "ProviderFactory::build applies the default model when omitted" {
 
 ///|
 test "ProviderFactory::build prefers api_key credential over the setting" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -386,7 +392,7 @@ fn cached_records(ids : Array[String]) -> Json {
 
 ///|
 test "ProviderFactory::build expands host-cached records into a multi-slot catalog" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -413,7 +419,7 @@ test "ProviderFactory::build expands host-cached records into a multi-slot catal
 
 ///|
 test "ProviderFactory::build degrades to the static slot on bad cached records" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   for
     bad in [
@@ -446,7 +452,7 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
 
 ///|
 test "ProviderFactory::build rejects an OAuth credential with a typed error" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(zen_settings([("model", "glm-5.2")])),
@@ -471,7 +477,7 @@ test "ProviderFactory::build rejects an OAuth credential with a typed error" {
 
 ///|
 async test "ApiKeyFactory::login validates and returns the secret" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = ZenApiKeyPrompt::{ value: "sk-via-login" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -481,7 +487,7 @@ async test "ApiKeyFactory::login validates and returns the secret" {
 
 ///|
 async test "ApiKeyFactory::login rejects an empty secret" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = ZenApiKeyPrompt::{ value: "" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -495,7 +501,7 @@ async test "ApiKeyFactory::login rejects an empty secret" {
 
 ///|
 test "zen_model_catalog presets per-model effort surfaces from the table" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let models = parse_zen_models(zen_sample_models_payload())
   let catalog = zen_model_catalog(
@@ -531,7 +537,7 @@ test "zen_model_catalog presets per-model effort surfaces from the table" {
 
 ///|
 test "zen slot rebuild_on_effort reselects the level" {
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let catalog = zen_static_catalog(zen_base_config(), api_key_factory)
   let slot = catalog.slots()[0]
@@ -561,7 +567,7 @@ test "zen effort presets cover toggle-only and unknown models" {
   // Unknown models stay plain chat: no selector at all.
   assert_true(zen_effort_preset("some-future-model") is None)
 
-  let provider = OpenCodeZenProvider::new()
+  let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let toggle_slot = zen_catalog_slot(
     zen_config_for_model(zen_base_config(), "kimi-k2.6"),
@@ -586,4 +592,281 @@ test "zen effort presets cover toggle-only and unknown models" {
   )
   assert_eq(plain_slot.default_effort, None)
   assert_true(plain_slot.rebuild_on_effort is None)
+}
+
+///|
+/// Flaky inner port: raises `error` until `failures_left` is exhausted, then
+/// answers with an empty stop completion.
+struct FlakyModelPort {
+  calls : Ref[Int]
+  failures_left : Ref[Int]
+  error : @posoco.ModelError
+}
+
+///|
+fn FlakyModelPort::FlakyModelPort(
+  failures : Int,
+  error : @posoco.ModelError,
+) -> FlakyModelPort {
+  FlakyModelPort::{
+    calls: Ref::{ val: 0 },
+    failures_left: Ref::{ val: failures },
+    error,
+  }
+}
+
+///|
+impl @posoco.ModelPort for FlakyModelPort with fn chat(
+  self : FlakyModelPort,
+  _scope : @posoco.InvocationScope,
+  _messages : Array[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  self.calls.val += 1
+  if self.failures_left.val > 0 {
+    self.failures_left.val -= 1
+    raise self.error
+  }
+  @posoco.ModelCallResult::{
+    completion: @posoco.Completion::Completion(
+      content=[],
+      tool_calls=[],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::Stop,
+      usage=None,
+    ),
+    processed_messages: [],
+  }
+}
+
+///|
+impl @posoco.ModelPort for FlakyModelPort with fn compact(
+  self : FlakyModelPort,
+  _scope : @posoco.InvocationScope,
+  _messages : Array[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  self.calls.val += 1
+  if self.failures_left.val > 0 {
+    self.failures_left.val -= 1
+    raise self.error
+  }
+  @posoco.CompactResult::{
+    compacted_messages: [],
+    mode: @posoco.CompactMode::Replace,
+  }
+}
+
+///|
+impl @posoco.ModelPort for FlakyModelPort with fn provider_config(
+  _self : FlakyModelPort,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
+}
+
+///|
+fn zen_flaky_scope() -> @posoco.InvocationScope {
+  @posoco.InvocationScope::{
+    session_id: @posoco.SessionId::unchecked("zen-retry-test"),
+    run_id: @posoco.RunId::unchecked("run-1"),
+    effect_id: None,
+  }
+}
+
+///|
+fn zen_flaky_options() -> @posoco.ChatOptions {
+  @posoco.ChatOptions::{ temperature: None, max_output_tokens: None }
+}
+
+///|
+fn zen_truncated_error() -> @posoco.ModelError {
+  @posoco.ModelError::ResponseParse(
+    "openai-compatible SSE truncated (stage=eof, terminal_marker=missing)",
+  )
+}
+
+///|
+fn zen_gateway_503_error() -> @posoco.ModelError {
+  @posoco.ModelError::Transport(
+    "openai-compatible HTTP error (stage=chat_stream.http_status, status=503, body_bytes=175, body_category=utf8)",
+  )
+}
+
+///|
+async test "zen retry port retries truncated SSE failures until success" {
+  let inner = FlakyModelPort(2, zen_truncated_error())
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = port.chat(
+    zen_flaky_scope(),
+    [],
+    [],
+    zen_flaky_options(),
+    @posoco.StreamMode::NoStream,
+  )
+  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
+  assert_eq(inner.calls.val, 3)
+}
+
+///|
+async test "zen retry port gives up after the retry budget" {
+  let inner = FlakyModelPort(99, zen_truncated_error())
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = Ok(
+    port.chat(
+      zen_flaky_scope(),
+      [],
+      [],
+      zen_flaky_options(),
+      @posoco.StreamMode::NoStream,
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Ok(_) => fail("expected the truncation error after the retry budget")
+    Err(error) => assert_true(zen_retryable_error(error))
+  }
+  // 1 initial attempt + 3 retries.
+  assert_eq(inner.calls.val, 4)
+}
+
+///|
+async test "zen retry port does not retry other model errors" {
+  let inner = FlakyModelPort(
+    1,
+    @posoco.ModelError::Transport("connection reset"),
+  )
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = Ok(
+    port.chat(
+      zen_flaky_scope(),
+      [],
+      [],
+      zen_flaky_options(),
+      @posoco.StreamMode::NoStream,
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Ok(_) => fail("expected the transport error to surface unretried")
+    Err(_) => ()
+  }
+  assert_eq(inner.calls.val, 1)
+}
+
+///|
+async test "zen retry port retries truncated SSE during compact" {
+  let inner = FlakyModelPort(1, zen_truncated_error())
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = port.compact(
+    zen_flaky_scope(),
+    [],
+    zen_flaky_options(),
+    @posoco.CompactTrigger::Manual,
+  )
+  assert_true(result.mode == @posoco.CompactMode::Replace)
+  assert_eq(inner.calls.val, 2)
+}
+
+///|
+/// Zero-delay retry wrapper so tests don't wait out the backoff.
+fn zen_test_retry_port(inner : &@posoco.ModelPort) -> &@posoco.ModelPort {
+  ZenRetryModelPort::{
+    inner,
+    max_retries: zen_max_retries,
+    initial_delay_ms: 0,
+  }
+}
+
+///|
+async test "zen retry port retries mid-stream transport failures" {
+  let inner = FlakyModelPort(
+    1,
+    @posoco.ModelError::Transport(
+      "openai-compatible transport failure (stage=read_stream)",
+    ),
+  )
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = port.chat(
+    zen_flaky_scope(),
+    [],
+    [],
+    zen_flaky_options(),
+    @posoco.StreamMode::NoStream,
+  )
+  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
+  assert_eq(inner.calls.val, 2)
+}
+
+///|
+async test "zen retry port does not retry pre-stream transport failures" {
+  let inner = FlakyModelPort(
+    1,
+    @posoco.ModelError::Transport(
+      "openai-compatible transport failure (stage=post)",
+    ),
+  )
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = Ok(
+    port.chat(
+      zen_flaky_scope(),
+      [],
+      [],
+      zen_flaky_options(),
+      @posoco.StreamMode::NoStream,
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Ok(_) => fail("expected the stage=post error to surface unretried")
+    Err(_) => ()
+  }
+  assert_eq(inner.calls.val, 1)
+}
+
+///|
+async test "zen retry port retries gateway 503 responses until success" {
+  let inner = FlakyModelPort(2, zen_gateway_503_error())
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = port.chat(
+    zen_flaky_scope(),
+    [],
+    [],
+    zen_flaky_options(),
+    @posoco.StreamMode::NoStream,
+  )
+  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
+  assert_eq(inner.calls.val, 3)
+}
+
+///|
+async test "zen retry port does not retry other http statuses" {
+  let inner = FlakyModelPort(
+    1,
+    @posoco.ModelError::Transport(
+      "openai-compatible HTTP error (stage=chat_stream.http_status, status=400, body=bad request)",
+    ),
+  )
+  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let result = Ok(
+    port.chat(
+      zen_flaky_scope(),
+      [],
+      [],
+      zen_flaky_options(),
+      @posoco.StreamMode::NoStream,
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Ok(_) => fail("expected the 400 error to surface unretried")
+    Err(_) => ()
+  }
+  assert_eq(inner.calls.val, 1)
 }

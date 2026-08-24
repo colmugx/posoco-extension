@@ -34,11 +34,12 @@ fn zen_catalog_slot(
   config : @openai_compatible.OpenAICompatibleConfig,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
-  let session_id = zen_new_session_id()
-  let port : &@posoco.ModelPort = @openai_compatible.OpenAICompatibleModelPort::new(
-    zen_provider_id,
-    config,
-    request_headers=fn() { zen_request_headers(session_id) },
+  let port : &@posoco.ModelPort = zen_retry_port(
+    @openai_compatible.OpenAICompatibleModelPort(
+      zen_provider_id,
+      config,
+      request_headers=zen_request_headers,
+    ),
   )
   let slot_id = zen_provider_id + "/" + config.model
   let (slot_efforts, default_effort, rebuild_on_effort) : (
@@ -89,7 +90,7 @@ fn zen_catalog_slot(
     default_effort~,
     display_group=Some("zen"),
     rebuild_on_api_key=Some(fn(credential) {
-      let rebuilt_config = @openai_compatible.OpenAICompatibleConfig::new(
+      let rebuilt_config = @openai_compatible.OpenAICompatibleConfig(
         credential.secret,
         base_url=config.base_url,
         model=config.model,
@@ -146,7 +147,7 @@ fn zen_config_for_model(
   match zen_effort_preset(model_id) {
     Some(preset) =>
       if preset.levels.is_empty() {
-        @openai_compatible.OpenAICompatibleConfig::new(
+        @openai_compatible.OpenAICompatibleConfig(
           base.api_key,
           base_url=base.base_url,
           model=model_id,
@@ -154,7 +155,7 @@ fn zen_config_for_model(
           thinking=false,
         )
       } else {
-        @openai_compatible.OpenAICompatibleConfig::new(
+        @openai_compatible.OpenAICompatibleConfig(
           base.api_key,
           base_url=base.base_url,
           model=model_id,
@@ -165,7 +166,7 @@ fn zen_config_for_model(
         )
       }
     None =>
-      @openai_compatible.OpenAICompatibleConfig::new(
+      @openai_compatible.OpenAICompatibleConfig(
         base.api_key,
         base_url=base.base_url,
         model=model_id,

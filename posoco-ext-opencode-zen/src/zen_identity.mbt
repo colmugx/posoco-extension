@@ -2,29 +2,39 @@
 /// OpenCode Zen routing metadata.
 ///
 /// Zen uses these OpenCode headers for session/provider affinity and request
-/// attribution. Posoco deliberately identifies itself as `posoco` rather than
-/// impersonating the OpenCode CLI.
+/// attribution. Like the OpenCode CLI, one session id stays stable for the
+/// whole process while every HTTP request gets a fresh request id; the values
+/// honestly identify posoco rather than impersonating the CLI.
 
 ///|
-/// Build a fresh OpenCode-compatible request id. A new value is generated for
-/// every HTTP request while the session id remains stable for the lifetime of
-/// the model port.
-pub fn zen_request_headers(session_id : String) -> Map[String, String] {
+let zen_session_cell : Ref[String?] = Ref::{ val: None }
+
+///|
+/// Process-local session id, minted lazily on first use and reused by every
+/// Zen request afterwards. Slot rebuilds (effort/model switches) and catalog
+/// refreshes do not rotate it, matching the sticky `x-opencode-session`
+/// semantics OpenCode relies on.
+fn zen_session_id() -> String {
+  match zen_session_cell.val {
+    Some(id) => id
+    None => {
+      let id = "posoco_" + zen_random_uuid_v4()
+      zen_session_cell.val = Some(id)
+      id
+    }
+  }
+}
+
+///|
+/// Build the per-request Zen headers: stable session id, fresh request id.
+fn zen_request_headers() -> Map[String, String] {
   Map::from_array([
     ("x-opencode-project", "posoco"),
-    ("x-opencode-session", session_id),
+    ("x-opencode-session", zen_session_id()),
     ("x-opencode-request", zen_random_uuid_v4()),
     ("x-opencode-client", "posoco"),
     ("User-Agent", "posoco/opencode-zen"),
   ])
-}
-
-///|
-/// Process-local session id. It is intentionally created once when the Zen
-/// catalog slot is built and reused by every request from that slot, matching
-/// the sticky-session semantics OpenCode uses with `x-opencode-session`.
-pub fn zen_new_session_id() -> String {
-  "posoco_" + zen_random_uuid_v4()
 }
 
 ///|

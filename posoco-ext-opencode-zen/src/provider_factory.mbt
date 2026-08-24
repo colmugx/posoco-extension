@@ -19,7 +19,7 @@ pub(all) struct OpenCodeZenProvider {
 /// Construct the Zen provider factory. `ctx` carries host-injected services
 /// (device id, telemetry) that the wire layer may consult; it is opaque to
 /// this adapter and threaded straight into the reused port.
-pub fn OpenCodeZenProvider::new(
+pub fn OpenCodeZenProvider::OpenCodeZenProvider(
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenCodeZenProvider {
   { ctx, }
@@ -130,7 +130,7 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn build(
   }
   let base_url = zen_resolve_base_url(source)
   let model = zen_resolve_model(source)
-  let config = @openai_compatible.OpenAICompatibleConfig::new(
+  let config = @openai_compatible.OpenAICompatibleConfig(
     api_key,
     base_url~,
     model~,

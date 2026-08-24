@@ -7,6 +7,9 @@ import {
   "colmugx/posoco-ext-oauth",
   "colmugx/posoco-ext-openai-compatible",
   "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
   "moonbitlang/core/debug",
 }
 
@@ -23,7 +26,7 @@ pub fn zen_static_catalog(@posoco-ext-openai-compatible.OpenAICompatibleConfig, 
 pub(all) struct OpenCodeZenProvider {
   ctx : @posoco-devkit.ExtContext
 }
-pub fn OpenCodeZenProvider::new(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn OpenCodeZenProvider::OpenCodeZenProvider(ctx? : @posoco-devkit.ExtContext) -> Self
 pub impl @posoco-ext-llm.ApiKeyFactory for OpenCodeZenProvider
 pub impl @posoco-ext-llm.ProviderFactory for OpenCodeZenProvider
 pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
@@ -32,6 +35,9 @@ pub(all) struct ZenModelInfo {
   id : String
   owned_by : String
 } derive(Eq, @debug.Debug)
+
+type ZenRetryModelPort
+pub impl @port.ModelPort for ZenRetryModelPort
 
 // Type aliases
 
