@@ -3,7 +3,7 @@ name = "colmugx/posoco-kit-chat-completions"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.10.1",
+  "colmugx/posoco@0.11.1",
 }
 
 license = "Apache-2.0"

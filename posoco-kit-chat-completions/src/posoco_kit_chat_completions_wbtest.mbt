@@ -340,3 +340,38 @@ test "provider error chunk surfaces bounded type/code labels only" {
     _ => fail("expected Transport without labels")
   }
 }
+
+///|
+test "cached_input_tokens_from_usage accepts every known spelling" {
+  let usage_of = fn(pairs : Array[(String, Json)]) -> Map[String, Json] {
+    Map::from_array(pairs)
+  }
+  // OpenAI spelling.
+  let openai = usage_of([
+    (
+      "prompt_tokens_details",
+      Json::object(Map::from_array([("cached_tokens", Json::number(1000.0))])),
+    ),
+  ])
+  assert_eq(cached_input_tokens_from_usage(openai), Some(1000))
+  // DeepSeek spelling.
+  let deepseek = usage_of([("prompt_cache_hit_tokens", Json::number(700.0))])
+  assert_eq(cached_input_tokens_from_usage(deepseek), Some(700))
+  // Moonshot top-level spelling.
+  let moonshot = usage_of([("cached_tokens", Json::number(80.0))])
+  assert_eq(cached_input_tokens_from_usage(moonshot), Some(80))
+  // Anthropic-compat gateway spelling.
+  let anthropic = usage_of([("cache_read_input_tokens", Json::number(90.0))])
+  assert_eq(cached_input_tokens_from_usage(anthropic), Some(90))
+  // DeepSeek reports the miss side natively.
+  let deepseek_miss = usage_of([
+    ("prompt_cache_miss_tokens", Json::number(200.0)),
+  ])
+  assert_eq(uncached_input_tokens_from_usage(deepseek_miss), Some(200))
+  assert_true(uncached_input_tokens_from_usage(openai) is None)
+  // Absent and malformed spellings read as None, never a parse failure.
+  let none_reported = usage_of([("prompt_tokens", Json::number(10.0))])
+  assert_true(cached_input_tokens_from_usage(none_reported) is None)
+  let malformed = usage_of([("cached_tokens", Json::string("n/a"))])
+  assert_true(cached_input_tokens_from_usage(malformed) is None)
+}

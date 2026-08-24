@@ -94,6 +94,8 @@ pub fn process_chat_completions_sse(
             input_tokens=usage.input_tokens.unwrap_or(0),
             output_tokens=usage.output_tokens.unwrap_or(0),
             total_tokens=usage.total_tokens.unwrap_or(0),
+            cached_input_tokens=usage.cached_input_tokens,
+            uncached_input_tokens=usage.uncached_input_tokens,
           )
           on_chunk(chunk)
           acc.push(chunk)
@@ -122,6 +124,8 @@ pub fn process_chat_completions_sse(
           input_tokens=usage.input_tokens.unwrap_or(0),
           output_tokens=usage.output_tokens.unwrap_or(0),
           total_tokens=usage.total_tokens.unwrap_or(0),
+          cached_input_tokens=usage.cached_input_tokens,
+          uncached_input_tokens=usage.uncached_input_tokens,
         )
         on_chunk(usage_chunk)
         acc.push(usage_chunk)
@@ -153,6 +157,8 @@ pub fn process_chat_completions_sse(
               input_tokens=usage.input_tokens.unwrap_or(0),
               output_tokens=usage.output_tokens.unwrap_or(0),
               total_tokens=usage.total_tokens.unwrap_or(0),
+              cached_input_tokens=usage.cached_input_tokens,
+              uncached_input_tokens=usage.uncached_input_tokens,
             )
             on_chunk(usage_chunk)
             acc.push(usage_chunk)
@@ -319,6 +325,56 @@ pub fn process_chat_completions_sse(
 }
 
 ///|
+/// Extract the cached input-token count from one chat-completions `usage`
+/// object. NO openai-compatible endpoint is obliged to report caching at
+/// all — OpenAI itself only populates the field for prompts at or above
+/// the ~1024-token caching threshold — so absence is a normal outcome,
+/// mapped to None, never a parse failure. The spellings, each tied to a
+/// documented source:
+/// - OpenAI (and vLLM following its usage schema):
+///   `prompt_tokens_details.cached_tokens`
+///   (developers.openai.com/api/docs/guides/prompt-caching)
+/// - DeepSeek: `prompt_cache_hit_tokens` (hit + miss = prompt_tokens)
+///   (api-docs.deepseek.com/guides/kv_cache)
+/// - Moonshot: usage-top-level `cached_tokens` — the spelling this repo's
+///   kimi extension has always parsed (platform.kimi.ai context caching)
+/// - Anthropic-origin field surfaced by OpenAI-compatible gateways
+///   (Portkey, LiteLLM, TrueFoundry, Zenlayer, LangWatch):
+///   `cache_read_input_tokens`
+/// An endpoint reporting some yet-unknown spelling also reads None — the
+/// consumer degrades to "no cache facts", never a fabricated rate.
+pub fn uncached_input_tokens_from_usage(usage : Map[String, Json]) -> Int? {
+  match usage.get("prompt_cache_miss_tokens") {
+    Some(Json::Number(n, ..)) => Some(n.to_int())
+    _ => None
+  }
+}
+
+///|
+pub fn cached_input_tokens_from_usage(usage : Map[String, Json]) -> Int? {
+  let spelling = match usage.get("prompt_tokens_details") {
+    Some(Json::Object(details)) => details.get("cached_tokens")
+    _ => None
+  }
+  let spelling = match spelling {
+    Some(_) => spelling
+    None => usage.get("prompt_cache_hit_tokens")
+  }
+  let spelling = match spelling {
+    Some(_) => spelling
+    None => usage.get("cached_tokens")
+  }
+  let spelling = match spelling {
+    Some(_) => spelling
+    None => usage.get("cache_read_input_tokens")
+  }
+  match spelling {
+    Some(Json::Number(n, ..)) => Some(n.to_int())
+    _ => None
+  }
+}
+
+///|
 /// Extract Usage from a chunk's `usage` object. `prompt_tokens` /
 /// `completion_tokens` / `total_tokens` are accepted. With
 /// `usage_fields_required~` every field must be present (loud on missing);
@@ -375,7 +431,13 @@ fn extract_stream_usage(
             None
           }
       }
-      { input_tokens: prompt, output_tokens: completion, total_tokens: total }
+      {
+        input_tokens: prompt,
+        output_tokens: completion,
+        total_tokens: total,
+        cached_input_tokens: cached_input_tokens_from_usage(u),
+        uncached_input_tokens: uncached_input_tokens_from_usage(u),
+      }
     }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(

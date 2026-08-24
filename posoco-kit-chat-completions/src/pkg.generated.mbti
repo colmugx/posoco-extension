@@ -7,7 +7,15 @@ import {
 }
 
 // Values
+pub fn cached_input_tokens_from_usage(Map[String, Json]) -> Int?
+
+pub fn classify_chat_completions_http_error(Int, String, default_tz_offset_minutes? : Int, retry_after_header? : String?, now_ms~ : Int64) -> @error.ModelError?
+
+pub fn parse_reset_timestamp(String, default_tz_offset_minutes? : Int, now_ms~ : Int64) -> Int64?
+
 pub fn process_chat_completions_sse(provider~ : String, usage_fields_required? : Bool, String, @types.StreamAccumulator, (@types.StreamChunk) -> Unit) -> Bool raise @error.ModelError
+
+pub fn uncached_input_tokens_from_usage(Map[String, Json]) -> Int?
 
 // Errors
 
