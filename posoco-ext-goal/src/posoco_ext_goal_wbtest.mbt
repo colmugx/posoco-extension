@@ -14,6 +14,7 @@ struct MockModelPort {
 ///|
 pub impl @posoco.ModelPort for MockModelPort with fn chat(
   self : MockModelPort,
+  _scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
@@ -40,6 +41,7 @@ pub impl @posoco.ModelPort for MockModelPort with fn chat(
 ///|
 pub impl @posoco.ModelPort for MockModelPort with fn compact(
   _self : MockModelPort,
+  _scope : @posoco.InvocationScope,
   _messages : Array[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
@@ -110,6 +112,8 @@ fn make_stop_response_with_usage(
       input_tokens: Some(total_tokens / 2),
       output_tokens: Some(total_tokens / 2),
       total_tokens: Some(total_tokens),
+      cached_input_tokens: None,
+      uncached_input_tokens: None,
     }),
   )
   { completion, processed_messages: [] }
@@ -118,10 +122,11 @@ fn make_stop_response_with_usage(
 ///|
 fn make_config() -> @posoco.AgentConfig {
   {
-    max_tool_rounds: 5,
+    max_tool_rounds: Some(5),
     temperature: None,
     max_output_tokens: None,
     model_context_window: None,
+    compact_threshold: None,
   }
 }
 
@@ -144,6 +149,7 @@ fn build_agent_with_goal(
         commands: [],
         ui: [],
         prompt_contributors: [],
+        requires: [],
       }),
       @posoco.ManifestOnly::ManifestOnly({
         id: "goal",
@@ -157,6 +163,7 @@ fn build_agent_with_goal(
         commands: [],
         ui: [],
         prompt_contributors: [],
+        requires: [],
       }),
     ],
     config=make_config(),
@@ -167,7 +174,7 @@ fn build_agent_with_goal(
 
 ///|
 async test "goal_injects_system_prompt" {
-  let runner = GoalRunner::new(default_options("fix the bug"))
+  let runner = GoalRunner(default_options("fix the bug"))
   let model = MockModelPort::{
     responses: [make_stop_response("done")],
     index: 0,
@@ -197,7 +204,7 @@ async test "goal_injects_system_prompt" {
 
 ///|
 async test "goal_detects_completion" {
-  let runner = GoalRunner::new(default_options("fix the bug"))
+  let runner = GoalRunner(default_options("fix the bug"))
   runner.status = Running
   let resp = make_stop_response("All done! [goal:complete]")
 
@@ -213,7 +220,7 @@ async test "goal_detects_completion" {
 
 ///|
 async test "goal_detects_blocked" {
-  let runner = GoalRunner::new(default_options("fix the bug"))
+  let runner = GoalRunner(default_options("fix the bug"))
   runner.status = Running
   let resp = make_stop_response("Need API key from user\n[goal:blocked]")
 
@@ -228,7 +235,7 @@ async test "goal_detects_blocked" {
 
 ///|
 test "observer_accumulates_usage" {
-  let runner = GoalRunner::new(default_options("test goal"))
+  let runner = GoalRunner(default_options("test goal"))
   assert_eq(runner.usage.total_tokens, 0)
   assert_eq(runner.usage.turns, 0)
 
@@ -244,6 +251,8 @@ test "observer_accumulates_usage" {
         input_tokens: Some(100),
         output_tokens: Some(50),
         total_tokens: Some(150),
+        cached_input_tokens: None,
+        uncached_input_tokens: None,
       }),
     ),
   )
@@ -255,7 +264,7 @@ test "observer_accumulates_usage" {
 
 ///|
 async test "execute_completes_on_marker" {
-  let runner = GoalRunner::new(default_options("write hello world"))
+  let runner = GoalRunner(default_options("write hello world"))
   let model = MockModelPort::{
     responses: [
       make_stop_response("Working on it..."),
@@ -283,7 +292,7 @@ async test "execute_completes_on_marker" {
 async test "execute_stops_on_budget" {
   let options = default_options("limited goal")
   options.budget.max_turns = 2
-  let runner = GoalRunner::new(options)
+  let runner = GoalRunner(options)
   let model = MockModelPort::{
     responses: [
       make_stop_response("step 1"),
@@ -311,7 +320,7 @@ async test "execute_sends_wrapup" {
   let options = default_options("wrapup goal")
   options.budget.max_total_tokens = 100
   options.wrapup_ratio = 0.5
-  let runner = GoalRunner::new(options)
+  let runner = GoalRunner(options)
   // First response uses 80 tokens (>= 50% of 100), triggering wrap-up.
   let model = MockModelPort::{
     responses: [
@@ -336,7 +345,7 @@ async test "execute_sends_wrapup" {
 
 ///|
 test "pause_and_resume" {
-  let runner = GoalRunner::new(default_options("test"))
+  let runner = GoalRunner(default_options("test"))
   runner.status = Running
   assert_true(runner.status() == Running)
 
@@ -355,7 +364,7 @@ test "pause_and_resume" {
 
 ///|
 test "goal_clear_resets_state" {
-  let runner = GoalRunner::new(default_options("test"))
+  let runner = GoalRunner(default_options("test"))
   runner.status = Running
   runner.usage.turns = 5
   runner.usage.total_tokens = 1000
@@ -374,7 +383,7 @@ test "goal_clear_resets_state" {
 
 ///|
 async test "goal_ignores_non_running_status" {
-  let runner = GoalRunner::new(default_options("test"))
+  let runner = GoalRunner(default_options("test"))
   runner.status = Paused
 
   // Hook::before_model should pass through without injection when not Running.
@@ -392,7 +401,7 @@ async test "stall_detection_pauses" {
   let options = default_options("stall test")
   options.stall_turn_threshold = 2
   options.stall_min_tokens = 50
-  let runner = GoalRunner::new(options)
+  let runner = GoalRunner(options)
   // Responses with no usage → 0 token delta → stall.
   let model = MockModelPort::{
     responses: [

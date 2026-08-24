@@ -1,15 +1,15 @@
 ///|
 /// posoco_ext_goal — Goal-driven autonomous looping extension for Posoco.
 ///
-/// Implements Hook (inject goal context before the model call, detect
+/// Implements PipelineHook (inject goal context before the model call, detect
 /// completion markers after the model call), and Observer (track token
 /// usage). The execute() method provides the
 /// external orchestration loop that calls agent.run_turn() until the goal
 /// is achieved, blocked, or the budget is exhausted.
 ///
 /// Usage:
-///   let runner = GoalRunner::new(default_options("fix all tests"))
-///   let agent = Agent::new(model, hooks=[runner], observers=[runner], ...)
+///   let runner = GoalRunner(default_options("fix all tests"))
+///   let agent = Agent(model, hooks=[runner], observers=[runner], ...)
 ///   let result = runner.execute(agent, "session_1")
 
 ///|
@@ -146,7 +146,7 @@ pub(all) struct GoalResult {
 } derive(Debug)
 
 ///|
-/// Central struct: implements Hook + Observer + provides execute() loop.
+/// Central struct: implements PipelineHook + Observer + provides execute() loop.
 ///
 /// Pass the same instance to both hooks=[] and observers=[] in Agent::new.
 /// Mutable state is shared between the two trait objects.
@@ -177,7 +177,7 @@ pub fn default_options(goal_condition : String) -> GoalOptions {
 
 ///|
 /// Create a GoalRunner with the given options.
-pub fn GoalRunner::new(options : GoalOptions) -> GoalRunner {
+pub fn GoalRunner::GoalRunner(options : GoalOptions) -> GoalRunner {
   GoalRunner::{
     options,
     status: Idle,
@@ -210,7 +210,17 @@ fn build_goal_system_prompt(runner : GoalRunner) -> String {
 }
 
 ///|
-pub impl @posoco.Hook for GoalRunner with fn before_model(
+/// `before_tool` passthrough: GoalRunner only intercepts `before_model` and
+/// `on_post_event`.
+pub impl @posoco.PipelineHook for GoalRunner with fn before_tool(
+  _self,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolDecision {
+  @posoco.ToolDecision::Approve(call~)
+}
+
+///|
+pub impl @posoco.PipelineHook for GoalRunner with fn before_model(
   self,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] raise @posoco.HookAbort {
@@ -230,7 +240,7 @@ pub impl @posoco.Hook for GoalRunner with fn before_model(
 }
 
 ///|
-pub impl @posoco.Hook for GoalRunner with fn on_post_event(
+pub impl @posoco.PipelineHook for GoalRunner with fn on_post_event(
   self,
   stage : @posoco.HookStage,
 ) -> Unit {
