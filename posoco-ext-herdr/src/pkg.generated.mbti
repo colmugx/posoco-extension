@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-herdr"
+
+import {
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct HerdrReporter {
+  pane : String
+  bin : String
+  spawn : (String, Array[String]) -> Unit
+}
+pub fn HerdrReporter::detect() -> Self?
+pub fn HerdrReporter::extension_id(Self) -> String
+pub fn HerdrReporter::manifest(Self) -> @port.ExtensionManifest
+pub fn HerdrReporter::on_event(Self, @types.TurnEvent) -> Unit
+pub impl @port.Extension for HerdrReporter
+pub impl @port.Observer for HerdrReporter
+
+// Type aliases
+
+// Traits
