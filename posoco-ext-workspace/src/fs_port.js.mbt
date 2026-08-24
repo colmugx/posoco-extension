@@ -256,7 +256,7 @@ extern "js" fn rm_ffi(
 pub struct JsWorkspaceFs {}
 
 ///|
-pub fn JsWorkspaceFs::new() -> JsWorkspaceFs {
+pub fn JsWorkspaceFs::JsWorkspaceFs() -> JsWorkspaceFs {
   JsWorkspaceFs::{  }
 }
 

@@ -121,7 +121,7 @@ pub(all) struct WorkspacePolicy {
 ///|
 /// Build a workspace policy with root + cwd, using safe defaults.
 /// Raises if cwd is not inside root.
-pub fn WorkspacePolicy::new(
+pub fn WorkspacePolicy::checked(
   root~ : String,
   default_cwd? : String = "",
   capability? : Capability = Capability::read_write(),

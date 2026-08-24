@@ -78,7 +78,7 @@ pub(all) struct WorkspacePolicy {
   limits : WorkspaceLimits
   allow_create_parent : Bool
 } derive(@debug.Debug)
-pub fn WorkspacePolicy::new(root~ : String, default_cwd? : String, capability? : Capability, symlink? : SymlinkPolicy, ignore_patterns? : Array[String], limits? : WorkspaceLimits, allow_create_parent? : Bool) -> Result[Self, String]
+pub fn WorkspacePolicy::checked(root~ : String, default_cwd? : String, capability? : Capability, symlink? : SymlinkPolicy, ignore_patterns? : Array[String], limits? : WorkspaceLimits, allow_create_parent? : Bool) -> Result[Self, String]
 
 // Type aliases
 

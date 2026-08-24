@@ -14,7 +14,7 @@
 pub struct NativeWorkspaceFs {}
 
 ///|
-pub fn NativeWorkspaceFs::new() -> NativeWorkspaceFs {
+pub fn NativeWorkspaceFs::NativeWorkspaceFs() -> NativeWorkspaceFs {
   NativeWorkspaceFs::{  }
 }
 
@@ -153,4 +153,19 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn mkdir(
   @fs.mkdir(path, recursive~) catch {
     _ => raise fs_err("mkdir")
   }
+}
+
+///|
+pub extend NativeWorkspaceFs with WorkspaceFs::{
+  exists,
+  kind,
+  mkdir,
+  read_file,
+  readdir,
+  realpath,
+  remove,
+  rename,
+  walk,
+  write_file,
+  write_file_atomic,
 }

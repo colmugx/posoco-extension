@@ -54,7 +54,7 @@ test "glob_match_star_and_double_star" {
 
 ///|
 test "workspace_policy_new_rejects_cwd_outside_root" {
-  let result = WorkspacePolicy::new(root="/ws", default_cwd="/other")
+  let result = WorkspacePolicy::checked(root="/ws", default_cwd="/other")
   match result {
     Err(message) => assert_true(message.contains("not inside root"))
     Ok(_) => fail("expected cwd-outside-root to be rejected")
@@ -63,7 +63,7 @@ test "workspace_policy_new_rejects_cwd_outside_root" {
 
 ///|
 test "workspace_policy_new_defaults_cwd_to_root" {
-  let result = WorkspacePolicy::new(root="/ws")
+  let result = WorkspacePolicy::checked(root="/ws")
   match result {
     Ok(policy) => assert_eq(policy.default_cwd, "/ws")
     Err(_) => fail("expected default cwd to fall back to root")
@@ -82,7 +82,7 @@ async test "native_workspace_fs_roundtrip_mkdir_write_read_readdir_rename_remove
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
     }
-    let fs = NativeWorkspaceFs::new()
+    let fs = NativeWorkspaceFs()
     // mkdir recursive, then a subdir.
     fs.mkdir(base + "/sub/deeper", recursive=true)
     // write + read back.
@@ -119,7 +119,7 @@ async test "native_workspace_fs_walk_visits_each_directory" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
     }
-    let fs = NativeWorkspaceFs::new()
+    let fs = NativeWorkspaceFs()
     fs.mkdir(base + "/a/b", recursive=true)
     fs.write_file(base + "/a/one.txt", "1")
     fs.write_file(base + "/a/b/two.txt", "2")
@@ -139,7 +139,7 @@ async test "read_file_result_missing_content_failed" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
     }
-    let fs = NativeWorkspaceFs::new()
+    let fs = NativeWorkspaceFs()
     // Missing: absent optional source.
     assert_true(read_file_result(fs, base + "/nope.txt") is Missing)
     // Content: present file round-trips.
@@ -168,7 +168,7 @@ async test "native_write_file_atomic_replaces_destination" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(base, recursive=true))
     }
-    let fs = NativeWorkspaceFs::new()
+    let fs = NativeWorkspaceFs()
     fs.write_file_atomic(base + "/cred.json", "v1")
     assert_eq(fs.read_file(base + "/cred.json"), "v1")
     // Atomic replace over an existing destination.
