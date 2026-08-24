@@ -24,7 +24,7 @@ pub(all) struct RTKHook {
 }
 
 ///|
-pub fn RTKHook::new(
+pub fn RTKHook::RTKHook(
   rtk_path : String,
   rewrite : (String) -> String?,
 ) -> RTKHook {
@@ -110,10 +110,24 @@ pub fn rewrite_tool_call(
 /// Rewrites shell-tool calls; every other tool is approved unchanged.
 /// Malformed shell arguments surface as `Reject`; a successful rewrite
 /// returns `Approve(call~)` with the rewritten call.
-pub impl @posoco.Hook for RTKHook with fn before_tool(
+pub impl @posoco.Extension for RTKHook with fn extension_id(_self : RTKHook) -> String {
+  "posoco_ext_rtk"
+}
+
+///|
+pub impl @posoco.Extension for RTKHook with fn manifest(self : RTKHook) -> @posoco.ExtensionManifest {
+  let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_rtk")
+  { ..manifest, hooks: [self] }
+}
+
+///|
+pub extend RTKHook with @posoco.Extension::{extension_id, manifest}
+
+///|
+pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
   self : RTKHook,
   call : @posoco.ToolCall,
-) -> @posoco.ToolHookDecision {
+) -> @posoco.ToolDecision {
   if !is_shell_tool(call.name, self.shell_tools) {
     return Approve(call~)
   }

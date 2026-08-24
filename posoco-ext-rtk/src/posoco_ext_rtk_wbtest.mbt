@@ -142,14 +142,14 @@ test "rewrite_tool_call_preserves_id_and_name" {
 /// Test: RTKHook Hook implementation
 async test "hook_passes_through_non_shell_tool" {
   // Setup: a rewrite that would change anything
-  let hook = RTKHook::new("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
+  let hook = RTKHook("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
   let call = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_1"),
     name: @posoco.ToolName::unchecked("echo"), // not a shell tool
     arguments: Json::null(),
   }
   match hook.before_tool(call) {
-    Approve(call~) => () // pass-through approve
+    Approve(_) => () // pass-through approve
     other => fail("expected Approve, got " + other.to_string())
   }
 }
@@ -157,7 +157,7 @@ async test "hook_passes_through_non_shell_tool" {
 ///|
 async test "hook_rewrites_shell_tool_call" {
   // Mock rewrite that prepends "rtk "
-  let hook = RTKHook::new("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
+  let hook = RTKHook("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
   let call = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_1"),
     name: @posoco.ToolName::unchecked("bash"),
@@ -182,7 +182,7 @@ async test "hook_rewrites_shell_tool_call" {
 ///|
 async test "hook_passes_through_when_rewrite_returns_none" {
   // Mock rewrite that always returns None (pass-through)
-  let hook = RTKHook::new("/usr/local/bin/rtk", fn(_cmd) { None })
+  let hook = RTKHook("/usr/local/bin/rtk", fn(_cmd) { None })
   let call = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_1"),
     name: @posoco.ToolName::unchecked("bash"),
@@ -197,9 +197,17 @@ async test "hook_passes_through_when_rewrite_returns_none" {
 }
 
 ///|
+test "manifest_registers_as_extension_with_hook" {
+  let hook = RTKHook("rtk", fn(cmd) { default_rtk_rewrite("rtk", cmd) })
+  assert_eq(hook.extension_id(), "posoco_ext_rtk")
+  let manifest = hook.manifest()
+  assert_eq(manifest.hooks.length(), 1)
+}
+
+///|
 async test "hook_identical_rewrite_passes_through" {
   // Rewrite function returns the same string (no actual rewrite)
-  let hook = RTKHook::new(
+  let hook = RTKHook(
     "/usr/local/bin/rtk",
     fn(cmd) { Some(cmd) }, // returns identical command
   )
