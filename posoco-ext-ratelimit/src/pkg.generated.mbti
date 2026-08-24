@@ -29,10 +29,10 @@ pub struct RateLimitGuard {
   now_ms : () -> Int64
   trace : (String) -> Unit
 }
+pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, now_ms? : () -> Int64, trace? : (String) -> Unit) -> Self
 pub fn RateLimitGuard::bind(Self, @posoco.Agent) -> Unit
 pub fn RateLimitGuard::extension_id(Self) -> String
 pub fn RateLimitGuard::manifest(Self) -> @port.ExtensionManifest
-pub fn RateLimitGuard::new(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, now_ms? : () -> Int64, trace? : (String) -> Unit) -> Self
 pub fn RateLimitGuard::pending_snapshots(Self) -> Array[RateLimitPending]
 pub async fn RateLimitGuard::poll(Self) -> Unit
 pub fn[G] RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[G]) -> Unit
