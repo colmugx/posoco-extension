@@ -16,6 +16,7 @@ pub fn glob_extension() -> GlobTools
 pub(all) struct GlobTools {
 }
 pub fn GlobTools::GlobTools() -> Self
+pub async fn GlobTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GlobTools::extension_id(Self) -> String
 pub fn GlobTools::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for GlobTools

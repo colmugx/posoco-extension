@@ -83,3 +83,67 @@ test "glob_diagnostic_path_is_bounded_and_single_line" {
   assert_true(safe.contains("..."))
   assert_false(safe.contains("TAIL_SECRET"))
 }
+
+///|
+async test "glob_zero_matches_fills_structured_summary" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-glob-zero")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
+    let result = GlobTools::GlobTools().execute(
+      "glob",
+      glob_call("**/*.noext", Some(Json::string(dir))),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_eq(content, "Found 0 files:\n")
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("summary") is Some(String("no files")))
+            assert_true(meta.get("count") is Some(Number(0.0, ..)))
+          }
+          _ => fail("expected structured summary payload for zero matches")
+        }
+      }
+      other =>
+        fail("expected Success for zero matches, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "glob_multi_file_fills_structured_summary" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-glob-multi")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/c.txt", "// c\n", create_mode=CreateNew)
+    let result = GlobTools::GlobTools().execute(
+      "glob",
+      glob_call("**/*.mbt", Some(Json::string(dir))),
+    )
+    match result {
+      Success(content~, structured~) => {
+        // Walk order is not alphabetical, so pin the exact shape, not the order.
+        assert_true(content.has_prefix("Found 2 files:\n"))
+        assert_true(content.contains("\{dir}/a.mbt"))
+        assert_true(content.contains("\{dir}/b.mbt"))
+        assert_false(content.contains("c.txt"))
+        assert_eq(content.split("\n").to_array().length(), 4)
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("summary") is Some(String("2 files")))
+            assert_true(meta.get("count") is Some(Number(2.0, ..)))
+          }
+          _ => fail("expected structured summary payload for multi file")
+        }
+      }
+      other => fail("expected Success for multi file, got " + other.to_string())
+    }
+  }
+}

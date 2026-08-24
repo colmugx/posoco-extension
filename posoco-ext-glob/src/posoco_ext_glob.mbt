@@ -93,6 +93,29 @@ fn extract_glob_args(
 }
 
 ///|
+/// One-line UI summary for the structured payload: "N files", or "no files"
+/// when the scan found nothing.
+fn glob_summary(count : Int) -> String {
+  if count == 0 {
+    "no files"
+  } else {
+    "\{count} files"
+  }
+}
+
+///|
+/// Structured payload for observers/UIs; never sent to the model. Carries the
+/// reserved `summary` field plus the file count.
+fn glob_structured(count : Int) -> Json {
+  Json::object(
+    Map::from_array([
+      ("summary", Json::string(glob_summary(count))),
+      ("count", Json::number(count.to_double())),
+    ]),
+  )
+}
+
+///|
 /// Shared `glob` execute logic. Target-agnostic; only the scanner differs.
 async fn execute_glob_impl(
   scanner : &GlobScanner,
@@ -107,6 +130,6 @@ async fn execute_glob_impl(
   }
   @posoco.ToolOutcome::Success(
     content="Found \{matches.length()} files:\n\{builder.to_string()}",
-    structured=None,
+    structured=Some(glob_structured(matches.length())),
   )
 }

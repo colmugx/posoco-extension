@@ -17,6 +17,7 @@ pub impl @posoco.Extension for GlobTools with fn manifest(self) -> @posoco.Exten
     commands: [],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 
