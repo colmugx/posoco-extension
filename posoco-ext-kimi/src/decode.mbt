@@ -281,21 +281,18 @@ fn extract_usage(
         "kimi response parse failure (stage=usage.total_tokens, category=missing)",
       )
   }
-  // cached_tokens: Moonshot puts it at the usage top-level.
-  // Posoco Usage doesn't have a cached field, so we subtract it from
-  // input_tokens to reflect true cost (non-cached input). The cached
-  // amount is silently absorbed — a future Usage revision can expose it.
+  // cached_tokens: Moonshot puts it at the usage top-level (and mirrors it
+  // under prompt_tokens_details on newer firmware). Exposed as-is; Usage
+  // keeps the provider-reported prompt total.
   let cached = match usage_obj.get("cached_tokens") {
-    Some(Number(n, ..)) => n.to_int()
-    _ => 0
-  }
-  let adjusted_prompt = match prompt {
-    Some(p) => Some(p - cached)
-    None => None
+    Some(Number(n, ..)) => Some(n.to_int())
+    _ => None
   }
   {
-    input_tokens: adjusted_prompt,
+    input_tokens: prompt,
     output_tokens: completion,
     total_tokens: total,
+    cached_input_tokens: cached,
+    uncached_input_tokens: None,
   }
 }

@@ -9,8 +9,8 @@
 /// X-Msh-*) form the base layer when the provider impersonates kimi-code-cli;
 /// Authorization and Content-Type always override any same-named default so
 /// the chat wire contract stays authoritative.
-fn build_headers(config : KimiConfig) -> Map[String, String] {
-  let headers : Map[String, String] = Map::from_array([])
+fn build_headers(config : KimiConfig) -> @http.Headers {
+  let headers : @http.Headers = Map([])
   for k, v in config.identity_headers {
     headers[k] = v
   }
@@ -105,17 +105,21 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
       let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-        _ =>
+        err =>
           raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=post)",
+            "kimi transport failure (stage=post): " + err.to_string(),
           )
       }
       if !is_kimi_http_success(response.code) {
+        let body_text = body_data.text() catch { _ => "" }
         match
           classify_kimi_http_status(
             "chat.http_status",
             response.code,
             BodyBytesUtf8(body_data.binary().length()),
+            body_text~,
+            retry_after=retry_after_header(response),
+            now_ms=@async.now(),
           ) {
           Some(err) => raise err
           None => ()
@@ -151,37 +155,45 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
       let client = @http.post_stream(url, headers~) catch {
-        _ =>
+        err =>
           raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=post_stream)",
+            "kimi transport failure (stage=post_stream): " + err.to_string(),
           )
       }
       client.write(body.stringify()) catch {
-        _ => {
+        err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=write_body)",
+            "kimi transport failure (stage=write_body): " + err.to_string(),
           )
         }
       }
       let response = client.end_request() catch {
-        _ => {
+        err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=end_request)",
+            "kimi transport failure (stage=end_request): " + err.to_string(),
           )
         }
       }
       if !is_kimi_http_success(response.code) {
-        let err_summary = read_error_body_summary(client) catch {
-          _ => BodyUnavailable
-        }
+        let retry_after = retry_after_header(response)
+        let err_body = read_error_body_text(client) catch { _ => None }
         client.close()
         match
           classify_kimi_http_status(
             "chat_stream.http_status",
             response.code,
-            err_summary,
+            match err_body {
+              Some(text) => BodyBytesUtf8(text.length())
+              None => BodyUnavailable
+            },
+            body_text=match err_body {
+              Some(text) => text
+              None => ""
+            },
+            retry_after~,
+            now_ms=@async.now(),
           ) {
           Some(err) => raise err
           None => ()
@@ -199,12 +211,11 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
       let mut data_buffer = ""
       while !done {
         let line = client.read_until("\n") catch {
-          _ => {
+          err => {
             client.close()
-            match classify_kimi_stream_termination(TransportFailure) {
-              Some(err) => raise err
-              None => None
-            }
+            raise @posoco.ModelError::Transport(
+              "Kimi transport failure (stage=read_stream): " + err.to_string(),
+            )
           }
         }
         match line {
@@ -318,10 +329,14 @@ pub impl @posoco.ModelPort for KimiModelPort with fn compact(
 }
 
 ///|
-/// ModelPort implementation — provider_config. Declares which reasoning_effort
-/// values this modelport accepts (M3.7 pull-based config learning).
+/// ModelPort implementation — provider_config. Reports the discovery
+/// endpoint's context capacity so the Agent can size auto-compact from the
+/// active model's own window.
 pub impl @posoco.ModelPort for KimiModelPort with fn provider_config(
-  _self : KimiModelPort,
+  self : KimiModelPort,
 ) -> @posoco.ProviderConfig {
-  @posoco.ProviderConfig::empty()
+  @posoco.ProviderConfig::ProviderConfig(
+    reasoning_effort_values=[],
+    context_window=self.config.context_window,
+  )
 }

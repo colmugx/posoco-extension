@@ -19,11 +19,14 @@ pub(all) struct KimiConfig {
   /// provider factory when impersonating kimi-code-cli; merged under the
   /// Authorization/Content-Type chat headers so the chat wire contract wins.
   identity_headers : Map[String, String]
+  /// Context capacity reported by the /models discovery endpoint, in tokens.
+  /// `None` = unknown; auto-compact stays off rather than guessing.
+  context_window : Int?
 } derive(Eq, Debug)
 
 ///|
 /// Default config builder. api_key is required; other fields use defaults.
-pub fn KimiConfig::new(
+pub fn KimiConfig::KimiConfig(
   api_key : String,
   model? : String = "kimi-v4-flash",
   base_url? : String = "https://api.moonshot.ai/v1",
@@ -31,6 +34,7 @@ pub fn KimiConfig::new(
   reasoning_effort? : String = "high",
   thinking_efforts? : Array[String]? = None,
   identity_headers? : Map[String, String] = Map::from_array([]),
+  context_window? : Int? = None,
 ) -> KimiConfig {
   let declared_efforts = match thinking_efforts {
     Some(values) => values
@@ -56,6 +60,7 @@ pub fn KimiConfig::new(
     reasoning_effort,
     thinking_efforts: declared_efforts,
     identity_headers,
+    context_window,
   }
 }
 
@@ -105,7 +110,7 @@ pub fn KimiConfig::from_oauth_credential(
   thinking_efforts? : Array[String]? = None,
   identity_headers? : Map[String, String] = Map::from_array([]),
 ) -> KimiConfig {
-  KimiConfig::new(
+  KimiConfig(
     credential.access_token,
     model~,
     base_url=kimi_oauth_api_base(),
@@ -125,7 +130,7 @@ pub(all) struct KimiModelPort {
 }
 
 ///|
-pub fn KimiModelPort::new(
+pub fn KimiModelPort::KimiModelPort(
   config : KimiConfig,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> KimiModelPort {

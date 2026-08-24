@@ -19,6 +19,7 @@ pub impl @posoco.Extension for KimiModelPort with fn manifest(self) -> @posoco.E
     commands: [],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

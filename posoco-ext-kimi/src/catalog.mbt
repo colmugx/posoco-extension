@@ -12,7 +12,7 @@ fn kimi_catalog_slot(
   capabilities? : Array[String] = [],
   default_effort? : String? = None,
 ) -> @llm.ModelSlot {
-  let port : &@posoco.ModelPort = KimiModelPort::new(config, ctx~)
+  let port : &@posoco.ModelPort = KimiModelPort(config, ctx~)
   let slot_id = "kimi/" + config.model
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if config.thinking_efforts.is_empty() {
     None
@@ -49,13 +49,14 @@ fn kimi_catalog_slot(
     capabilities~,
     default_effort~,
     rebuild_on_credential=Some(fn(credential) {
-      let refreshed = KimiConfig::new(
+      let refreshed = KimiConfig(
         credential.access_token,
         model=config.model,
         base_url=kimi_oauth_api_base(),
         endpoint_prefix=config.endpoint_prefix,
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=Some(config.thinking_efforts),
+        context_window=config.context_window,
       )
       kimi_catalog_slot(
         refreshed,
@@ -69,13 +70,14 @@ fn kimi_catalog_slot(
       )
     }),
     rebuild_on_api_key=Some(fn(credential) {
-      let refreshed = KimiConfig::new(
+      let refreshed = KimiConfig(
         credential.secret,
         model=config.model,
         base_url=config.base_url,
         endpoint_prefix=config.endpoint_prefix,
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=Some(config.thinking_efforts),
+        context_window=config.context_window,
       )
       kimi_catalog_slot(
         refreshed,
@@ -114,13 +116,14 @@ fn kimi_catalog_slot_from_info(
       None => info.thinking_efforts[0]
     }
   }
-  let config = KimiConfig::new(
+  let config = KimiConfig(
     base_config.api_key,
     model=info.id,
     base_url=base_config.base_url,
     endpoint_prefix=base_config.endpoint_prefix,
     reasoning_effort=selected_effort,
     thinking_efforts=Some(info.thinking_efforts),
+    context_window=Some(info.context_window),
   )
   kimi_catalog_slot(
     config,
@@ -172,7 +175,7 @@ pub fn KimiModelPort::model_catalog(
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   let oauth_impl = KimiOAuth::KimiOAuth()
   let oauth : &@oauth.OAuthProvider = oauth_impl
-  let api_key_impl = KimiProvider::new(ctx=self.ctx)
+  let api_key_impl = KimiProvider(ctx=self.ctx)
   let api_key : &@llm.ApiKeyFactory = api_key_impl
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="kimi",
@@ -195,7 +198,7 @@ pub fn KimiModelPort::model_catalog_from_models(
   }
   let oauth_impl = KimiOAuth::KimiOAuth()
   let oauth : &@oauth.OAuthProvider = oauth_impl
-  let api_key_impl = KimiProvider::new(ctx=self.ctx)
+  let api_key_impl = KimiProvider(ctx=self.ctx)
   let api_key : &@llm.ApiKeyFactory = api_key_impl
   let slots : Array[@llm.ModelSlot] = []
   for info in kimi_preferred_models(models, self.config.model) {

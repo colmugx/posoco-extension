@@ -386,7 +386,7 @@ pub async fn fetch_kimi_models(
   endpoint_prefix? : String = "",
   identity_headers? : Map[String, String] = Map::from_array([]),
 ) -> Array[KimiModelInfo] raise @posoco.ModelError {
-  let headers : Map[String, String] = Map::from_array([])
+  let headers : @http.Headers = Map([])
   for k, v in identity_headers {
     headers[k] = v
   }

@@ -58,7 +58,7 @@ pub impl @oauth.AuthPromptInteraction for KimiApiKeyPrompt with fn prompt(
 
 ///|
 async test "Kimi API-key factory validates and returns an opaque credential" {
-  let provider = KimiProvider::new()
+  let provider = KimiProvider()
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = KimiApiKeyPrompt::{ value: "kimi-secret" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -68,7 +68,7 @@ async test "Kimi API-key factory validates and returns an opaque credential" {
 
 ///|
 async test "Kimi API-key factory rejects an empty secret" {
-  let provider = KimiProvider::new()
+  let provider = KimiProvider()
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = KimiApiKeyPrompt::{ value: "" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -647,7 +647,7 @@ test "encode_message_tool_result_sanitizes_tool_call_id" {
 
 ///|
 test "kimi_config_defaults_to_single_model" {
-  let config = KimiConfig::new("key")
+  let config = KimiConfig("key")
   assert_eq(config.api_key, "key")
   assert_eq(config.base_url, "https://api.moonshot.ai/v1")
   assert_eq(config.model, "kimi-v4-flash")
@@ -655,7 +655,7 @@ test "kimi_config_defaults_to_single_model" {
 
 ///|
 test "kimi_config_custom_model_passes_through" {
-  let config = KimiConfig::new("key", model="custom-model")
+  let config = KimiConfig("key", model="custom-model")
   assert_eq(config.model, "custom-model")
 }
 
@@ -743,12 +743,12 @@ test "kimi_models_parser_rejects_flat_default_without_declared_efforts" {
 
 ///|
 test "kimi_dynamic_slot_rebuild_preserves_catalog_metadata" {
-  let config = KimiConfig::new(
+  let config = KimiConfig(
     "key",
     model="kimi-k2.6",
     thinking_efforts=Some(["low", "high"]),
   )
-  let port = KimiModelPort::new(config)
+  let port = KimiModelPort(config)
   let info = KimiModelInfo::{
     id: "kimi-k2.6",
     display_name: "Kimi K2.6",
@@ -770,10 +770,14 @@ test "kimi_dynamic_slot_rebuild_preserves_catalog_metadata" {
   assert_eq(slot.model_id, "kimi-k2.6")
   assert_eq(slot.context_window, Some(131072))
   assert_eq(slot.capabilities, ["chat", "streaming", "reasoning"])
+  // The discovery window crosses the ModelPort seam: auto-compact sizing
+  // reads provider_config, not the slot's display metadata.
+  assert_eq(slot.port.provider_config().context_window, Some(131072))
   match slot.rebuild_on_effort {
     Some(rebuild) => {
       let changed = rebuild("low")
       assert_eq(changed.context_window, Some(131072))
+      assert_eq(changed.port.provider_config().context_window, Some(131072))
       assert_eq(changed.capabilities, ["chat", "streaming", "reasoning"])
       assert_eq(changed.default_effort, Some("high"))
     }
@@ -783,13 +787,13 @@ test "kimi_dynamic_slot_rebuild_preserves_catalog_metadata" {
 
 ///|
 test "kimi capability-only slot does not expose effort rebuild" {
-  let config = KimiConfig::new(
+  let config = KimiConfig(
     "key",
     model="boolean-only",
     reasoning_effort="",
     thinking_efforts=Some([]),
   )
-  let port = KimiModelPort::new(config)
+  let port = KimiModelPort(config)
   let info = KimiModelInfo::{
     id: "boolean-only",
     display_name: "Boolean-only Kimi",
@@ -808,7 +812,7 @@ test "kimi capability-only slot does not expose effort rebuild" {
 
 ///|
 test "endpoint_helper_builds_chat_url" {
-  let config = KimiConfig::new("key", base_url="https://api.kimi.com")
+  let config = KimiConfig("key", base_url="https://api.kimi.com")
   assert_eq(chat_url(config), "https://api.kimi.com/chat/completions")
 }
 
@@ -816,8 +820,8 @@ test "endpoint_helper_builds_chat_url" {
 /// build_chat_request takes thinking_json + effort_str directly now; the
 /// high-effort path passes them through without warning.
 test "build_chat_request_high_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
   let body = build_chat_request(
     ctx,
     [user_msg("hi")],
@@ -840,8 +844,8 @@ test "build_chat_request_high_thinking_no_warn" {
 
 ///|
 test "build_chat_request_maximum_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
   let body = build_chat_request(
     ctx,
     [user_msg("hi")],
@@ -863,8 +867,8 @@ test "build_chat_request_maximum_thinking_no_warn" {
 
 ///|
 test "build_chat_request_off_disables_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
   let body = build_chat_request(
     ctx,
     [user_msg("hi")],
@@ -1369,7 +1373,7 @@ fn assert_kimi_http_error_summary(
   summary : KimiErrorBodySummary,
   expected : String,
 ) -> Unit raise {
-  match classify_kimi_http_status("chat.http_status", 503, summary) {
+  match classify_kimi_http_status("chat.http_status", 503, summary, now_ms=0L) {
     Some(@posoco.ModelError::Transport(message)) => {
       assert_true(message.contains("status=503"))
       assert_true(message.contains(expected))
@@ -1382,11 +1386,22 @@ fn assert_kimi_http_error_summary(
 ///|
 test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
   assert_true(
-    classify_kimi_http_status("chat.http_status", 200, BodyBytesInvalidUtf8(11))
+    classify_kimi_http_status(
+      "chat.http_status",
+      200,
+      BodyBytesInvalidUtf8(11),
+      now_ms=0L,
+    )
     is None,
   )
   assert_true(
-    classify_kimi_http_status("chat.http_status", 204, BodyBytesUtf8(0)) is None,
+    classify_kimi_http_status(
+      "chat.http_status",
+      204,
+      BodyBytesUtf8(0),
+      now_ms=0L,
+    )
+    is None,
   )
   assert_kimi_http_error_summary(
     BodyBytesUtf8(13),
@@ -1396,7 +1411,6 @@ test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
     BodyBytesInvalidUtf8(11),
     "body_bytes=11, body_category=invalid_utf8",
   )
-  assert_kimi_http_error_summary(BodyReadFailed, "body_category=read_failed")
 }
 
 ///|
@@ -1437,4 +1451,85 @@ test "kimi_default_headers mints a fallback device id when none supplied" {
   assert_true(a.length() > 0)
   assert_true(b.length() > 0)
   assert_true(a != b)
+}
+
+///|
+test "cached_tokens lands in cached_input_tokens; input stays provider-reported" {
+  let response : Json = {
+    "choices": [
+      {
+        "message": { "role": "assistant", "content": "ok" },
+        "finish_reason": "stop",
+      },
+    ],
+    "usage": {
+      "prompt_tokens": 100,
+      "completion_tokens": 5,
+      "total_tokens": 105,
+      "cached_tokens": 80,
+    },
+  }
+  let decoded = decode_chat_response(response)
+  match decoded.usage {
+    Some(u) => {
+      // input_tokens keeps the provider-reported total; the cached portion
+      // rides its own field (no more silent subtraction).
+      assert_eq(u.input_tokens, Some(100))
+      assert_eq(u.cached_input_tokens, Some(80))
+      assert_eq(u.total_tokens, Some(105))
+    }
+    None => fail("expected usage")
+  }
+}
+
+///|
+test "kimi 429 quota verdict classifies as RateLimited without a timestamp" {
+  let body = "{\"error\":{\"message\":\"You've reached your usage limit for this period. Your quota will be refreshed in the next period.\",\"type\":\"rate_limit_reached_error\"}}"
+  let err = classify_kimi_http_status(
+    "chat.http_status",
+    429,
+    BodyBytesUtf8(body.length()),
+    body_text=body,
+    now_ms=0L,
+  )
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  assert_eq(info.provider_code, Some("rate_limit_reached_error"))
+  debug_inspect(info.reset_at_ms, content="None")
+}
+
+///|
+test "kimi 429 with Retry-After header schedules from the header" {
+  let body = "{\"error\":{\"message\":\"The engine is currently overloaded, please try again later\",\"type\":\"rate_limit_error\"}}"
+  let err = classify_kimi_http_status(
+    "chat_stream.http_status",
+    429,
+    BodyBytesUtf8(body.length()),
+    body_text=body,
+    retry_after=Some("1200"),
+    now_ms=5000L,
+  )
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  assert_eq(info.provider_code, Some("rate_limit_error"))
+  debug_inspect(info.reset_at_ms, content="Some(1205000)")
+}
+
+///|
+test "kimi masked overload verdict without a header is unschedulable" {
+  let body = "{\"error\":{\"message\":\"We're receiving too many requests at the moment. Please wait a moment and try again.\",\"type\":\"rate_limit_reached_error\"}}"
+  let err = classify_kimi_http_status(
+    "chat.http_status",
+    429,
+    BodyBytesUtf8(body.length()),
+    body_text=body,
+    now_ms=0L,
+  )
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  debug_inspect(info.reset_at_ms, content="None")
+  assert_eq(info.status, 429)
 }

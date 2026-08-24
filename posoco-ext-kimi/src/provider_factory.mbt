@@ -13,7 +13,7 @@ pub(all) struct KimiProvider {
 }
 
 ///|
-pub fn KimiProvider::new(
+pub fn KimiProvider::KimiProvider(
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
   device_id? : String = "",
 ) -> KimiProvider {
@@ -82,7 +82,7 @@ fn kimi_endpoint_parts(url : String) -> (String, String) {
 
 ///|
 fn kimi_default_model() -> String {
-  KimiConfig::new("").model
+  KimiConfig("").model
 }
 
 ///|
@@ -141,7 +141,7 @@ pub impl @llm.ProviderFactory for KimiProvider with fn build(
         None => "https://api.moonshot.ai/v1"
       }
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
-      KimiConfig::new(
+      KimiConfig(
         credential.secret,
         model~,
         base_url~,
@@ -159,7 +159,7 @@ pub impl @llm.ProviderFactory for KimiProvider with fn build(
         None => "https://api.moonshot.ai/v1"
       }
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
-      KimiConfig::new(
+      KimiConfig(
         api_key,
         model~,
         base_url~,
@@ -168,7 +168,7 @@ pub impl @llm.ProviderFactory for KimiProvider with fn build(
       )
     }
   }
-  let port = KimiModelPort::new(config, ctx=self.ctx)
+  let port = KimiModelPort(config, ctx=self.ctx)
   @llm.ProviderBuildResult::Ready(port.model_catalog())
 }
 
@@ -205,7 +205,7 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
         None => "https://api.moonshot.ai/v1"
       }
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
-      KimiConfig::new(
+      KimiConfig(
         credential.secret,
         model~,
         base_url~,
@@ -224,7 +224,7 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
         None => "https://api.moonshot.ai/v1"
       }
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
-      KimiConfig::new(
+      KimiConfig(
         api_key,
         model~,
         base_url~,
@@ -249,7 +249,7 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
         detail="Kimi model catalog refresh failed: " + err.to_string(),
       )
   }
-  let port = KimiModelPort::new(config, ctx=self.ctx)
+  let port = KimiModelPort(config, ctx=self.ctx)
   @llm.ProviderBuildResult::Ready(port.model_catalog_from_models(models))
 }
 

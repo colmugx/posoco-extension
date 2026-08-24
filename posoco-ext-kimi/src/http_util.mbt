@@ -10,7 +10,6 @@
 priv enum KimiErrorBodySummary {
   BodyBytesUtf8(Int)
   BodyBytesInvalidUtf8(Int)
-  BodyReadFailed
   BodyUnavailable
 }
 
@@ -25,7 +24,6 @@ fn format_kimi_http_error(
     BodyBytesUtf8(length) => "body_bytes=\{length}, body_category=utf8"
     BodyBytesInvalidUtf8(length) =>
       "body_bytes=\{length}, body_category=invalid_utf8"
-    BodyReadFailed => "body_category=read_failed"
     BodyUnavailable => "body_category=unavailable"
   }
   "kimi HTTP error (stage=\{stage}, status=\{status}, \{summary})"
@@ -37,31 +35,56 @@ fn is_kimi_http_success(status : Int) -> Bool {
 }
 
 ///|
-/// Pure HTTP-status classifier. It accepts only redacted body metadata, so a
-/// provider payload can never cross into the observable error message.
+/// Pure HTTP-status classifier. Non-429 keeps the redacted summary. A 429 is
+/// a quota verdict and keeps the body: Kimi's coding-plan verdicts are the
+/// documented 5-hour/monthly messages, and Moonshot also phrases plan
+/// throttles as "The engine is currently overloaded" with
+/// `error.type: rate_limit_reached_error` — the body distinguishes quota
+/// walls from real overload. Kimi's message text carries no timestamp; the
+/// documented wait signal is the `Retry-After` header, passed here by the
+/// caller when one was present.
 fn classify_kimi_http_status(
   stage : String,
   status : Int,
   body_summary : KimiErrorBodySummary,
+  body_text? : String = "",
+  retry_after? : String? = None,
+  now_ms~ : Int64,
 ) -> @posoco.ModelError? {
   if is_kimi_http_success(status) {
-    None
-  } else {
-    Some(
-      @posoco.ModelError::Transport(
-        format_kimi_http_error(stage, status, body_summary),
-      ),
+    return None
+  }
+  if status == 429 {
+    return @chatkit.classify_chat_completions_http_error(
+      status,
+      body_text,
+      retry_after_header=retry_after,
+      now_ms~,
     )
+  }
+  Some(
+    @posoco.ModelError::Transport(
+      format_kimi_http_error(stage, status, body_summary),
+    ),
+  )
+}
+
+///|
+/// Read the error body of a streamed non-2xx response, bounded. `None` when
+/// the body could not be read at all.
+async fn read_error_body_text(client : @http.Client) -> String? {
+  let data = client.read_all() catch { _ => return None }
+  let text = data.text() catch { _ => return None }
+  if text.length() > 2048 {
+    Some(text.sub(start=0, end=2048).to_owned())
+  } else {
+    Some(text)
   }
 }
 
 ///|
-/// T07-B: drain a non-2xx response without exposing provider payloads.
-async fn read_error_body_summary(client : @http.Client) -> KimiErrorBodySummary {
-  let data = client.read_all() catch { _ => return BodyReadFailed }
-  let byte_length = data.binary().length()
-  let _ = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
-  BodyBytesUtf8(byte_length)
+fn retry_after_header(response : @http.Response) -> String? {
+  response.headers.get(@http.CaseInsensitiveString("Retry-After"))
 }
 
 ///|

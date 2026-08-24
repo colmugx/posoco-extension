@@ -36,9 +36,10 @@ pub(all) struct KimiConfig {
   reasoning_effort : String
   thinking_efforts : Array[String]
   identity_headers : Map[String, String]
+  context_window : Int?
 } derive(Eq, @debug.Debug)
+pub fn KimiConfig::KimiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String], context_window? : Int?) -> Self
 pub fn KimiConfig::from_oauth_credential(@posoco-ext-oauth.Credential, String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self
-pub fn KimiConfig::new(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self
 pub fn KimiConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct KimiModelInfo {
@@ -54,11 +55,11 @@ pub(all) struct KimiModelPort {
   config : KimiConfig
   ctx : @posoco-devkit.ExtContext
 }
+pub fn KimiModelPort::KimiModelPort(KimiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
 pub fn KimiModelPort::extension_id(Self) -> String
 pub fn KimiModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn KimiModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn KimiModelPort::model_catalog_from_models(Self, Array[KimiModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn KimiModelPort::new(KimiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
 pub impl @port.Extension for KimiModelPort
 pub impl @port.ModelPort for KimiModelPort
 
@@ -67,13 +68,14 @@ pub(all) struct KimiOAuth {
   device_id : String?
 }
 pub fn KimiOAuth::KimiOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?, device_id? : String) -> Self
+pub async fn KimiOAuth::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
 pub impl @posoco-ext-oauth.OAuthProvider for KimiOAuth
 
 pub(all) struct KimiProvider {
   ctx : @posoco-devkit.ExtContext
   device_id : String
 }
-pub fn KimiProvider::new(ctx? : @posoco-devkit.ExtContext, device_id? : String) -> Self
+pub fn KimiProvider::KimiProvider(ctx? : @posoco-devkit.ExtContext, device_id? : String) -> Self
 pub impl @posoco-ext-llm.ApiKeyFactory for KimiProvider
 pub impl @posoco-ext-llm.OAuthFactory for KimiProvider
 pub impl @posoco-ext-llm.ProviderFactory for KimiProvider
