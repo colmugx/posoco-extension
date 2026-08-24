@@ -746,7 +746,7 @@ async test "codex refresh sends version and account headers and preserves effort
     ],
   }
   let transport : &OpenAIModelsHttpTransport = transport_impl
-  let provider = OpenAIProvider::new(transport=Some(transport))
+  let provider = OpenAIProvider(transport=Some(transport))
   let credential = @oauth.Credential::Credential(
     access_token=codex_test_access_token(),
     refresh_token="refresh",
@@ -1139,4 +1139,70 @@ test "openai_compact_parse_rejects_bad_envelopes" {
       assert_true(msg.contains("stage=output"))
     _ => fail("expected ResponseParse for non-array output")
   }
+}
+
+///|
+test "responses usage carries cached input tokens" {
+  let resp : Json = {
+    "usage": {
+      "input_tokens": 1200,
+      "output_tokens": 50,
+      "total_tokens": 1250,
+      "input_tokens_details": { "cached_tokens": 1000 },
+    },
+  }
+  match extract_usage(resp) {
+    Some(u) => {
+      assert_eq(u.input_tokens, Some(1200))
+      assert_eq(u.cached_input_tokens, Some(1000))
+    }
+    None => fail("expected usage")
+  }
+  // Absent details read as None; a wrong type stays loud.
+  let no_details : Json = {
+    "usage": { "input_tokens": 10, "output_tokens": 5, "total_tokens": 15 },
+  }
+  match extract_usage(no_details) {
+    Some(u) => assert_true(u.cached_input_tokens is None)
+    None => fail("expected usage")
+  }
+  let bad_details : Json = {
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 5,
+      "total_tokens": 15,
+      "input_tokens_details": { "cached_tokens": "many" },
+    },
+  }
+  let outcome : Result[@posoco.Usage?, Error] = Ok(extract_usage(bad_details)) catch {
+    error => Err(error)
+  }
+  assert_true(outcome is Err(_))
+}
+
+///|
+test "codex discovery slot reports context_window through provider_config" {
+  let config = OpenAIConfig::with_base_url(
+    "sk-test", "gpt-5.2", "https://example.com/v1",
+  )
+  let port = OpenAIModelPort(config)
+  let info = CodexModelInfo::{
+    slug: "gpt-5.2-codex",
+    display_name: "GPT-5.2 Codex",
+    description: None,
+    default_reasoning_level: Some("medium"),
+    supported_reasoning_levels: [
+      CodexReasoningLevel::{ effort: "medium", description: "balanced" },
+    ],
+    visibility: "list",
+    supported_in_api: true,
+    priority: 0,
+    context_window: Some(400000),
+  }
+  let slot = port.model_catalog_from_codex_models([info]).slots()[0]
+  assert_eq(slot.model_id, "gpt-5.2-codex")
+  assert_eq(slot.context_window, Some(400000))
+  // The discovery window crosses the ModelPort seam so the Agent sizes
+  // auto-compact from the active model's own capacity.
+  assert_eq(slot.port.provider_config().context_window, Some(400000))
 }

@@ -38,7 +38,7 @@ fn openai_catalog_slot(
   capabilities? : Array[String] = [],
   default_effort? : String? = None,
 ) -> @llm.ModelSlot {
-  let port : &@posoco.ModelPort = OpenAIModelPort::new(config)
+  let port : &@posoco.ModelPort = OpenAIModelPort(config)
   let slot_id = "openai/" + config.model
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if thinking_efforts.is_empty() {
     None
@@ -74,6 +74,7 @@ fn openai_catalog_slot(
     default_effort~,
     rebuild_on_credential=Some(fn(credential) {
       let base = OpenAIConfig::from_codex_credential(credential, config.model)
+      let base = { ..base, context_window: config.context_window }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
         refreshed,
@@ -92,6 +93,7 @@ fn openai_catalog_slot(
         config.model,
         openai_api_base_for_key(config),
       )
+      let base = { ..base, context_window: config.context_window }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
         refreshed,
@@ -116,7 +118,7 @@ fn openai_oauth_factory() -> &@oauth.OAuthProvider {
 
 ///|
 fn openai_api_key_factory() -> &@llm.ApiKeyFactory {
-  let implementation = OpenAIProvider::new()
+  let implementation = OpenAIProvider()
   implementation
 }
 
@@ -252,6 +254,7 @@ fn codex_catalog_slot_from_info(
     ..config,
     account_id: base_config.account_id,
     reasoning_effort: selected_effort,
+    context_window: info.context_window,
   }
   let capabilities : Array[String] = ["chat", "streaming", "oauth"]
   if !efforts.is_empty() {

@@ -16,11 +16,18 @@ pub(all) struct OpenAIConfig {
   account_id : String?
   /// Provider-declared reasoning effort selected by the model catalog.
   reasoning_effort : String?
+  /// Context capacity reported by Codex model discovery, in tokens. `None`
+  /// = unknown (API-key discovery reports no window); auto-compact stays
+  /// off rather than guessing.
+  context_window : Int?
 }
 
 ///|
 /// Create an OpenAIConfig with defaults.
-pub fn OpenAIConfig::new(api_key : String, model : String) -> OpenAIConfig {
+pub fn OpenAIConfig::OpenAIConfig(
+  api_key : String,
+  model : String,
+) -> OpenAIConfig {
   {
     api_key,
     model,
@@ -28,6 +35,7 @@ pub fn OpenAIConfig::new(api_key : String, model : String) -> OpenAIConfig {
     organization: None,
     account_id: None,
     reasoning_effort: None,
+    context_window: None,
   }
 }
 
@@ -49,6 +57,7 @@ pub fn OpenAIConfig::with_base_url(
     organization: None,
     account_id: None,
     reasoning_effort: None,
+    context_window: None,
   }
 }
 
@@ -85,7 +94,9 @@ pub(all) struct OpenAIModelPort {
 }
 
 ///|
-pub fn OpenAIModelPort::new(config : OpenAIConfig) -> OpenAIModelPort {
+pub fn OpenAIModelPort::OpenAIModelPort(
+  config : OpenAIConfig,
+) -> OpenAIModelPort {
   { config, }
 }
 
@@ -170,8 +181,8 @@ fn classify_openai_http_status(
 
 ///|
 /// Build the HTTP headers for OpenAI API requests.
-fn build_headers(config : OpenAIConfig) -> Map[String, String] {
-  let headers : Map[String, String] = {
+fn build_headers(config : OpenAIConfig) -> @http.Headers {
+  let headers : @http.Headers = {
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",
   }
@@ -317,40 +328,40 @@ async fn OpenAIModelPort::chat_stream(
   )
   let headers = build_headers(self.config)
   let client = @http.Client::Client(self.config.base_url, headers~) catch {
-    _ =>
+    err =>
       raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=create_client)",
+        "OpenAI transport failure (stage=create_client): " + err.to_string(),
       )
   }
   client.request(@http.RequestMethod::Post, "/responses") catch {
-    _ => {
+    err => {
       client.close()
       raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=send_request)",
+        "OpenAI transport failure (stage=send_request): " + err.to_string(),
       )
     }
   }
   client.write(body.stringify()) catch {
-    _ => {
+    err => {
       client.close()
       raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=write_body)",
+        "OpenAI transport failure (stage=write_body): " + err.to_string(),
       )
     }
   }
   client.flush() catch {
-    _ => {
+    err => {
       client.close()
       raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=flush)",
+        "OpenAI transport failure (stage=flush): " + err.to_string(),
       )
     }
   }
   let response = client.end_request() catch {
-    _ => {
+    err => {
       client.close()
       raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=end_request)",
+        "OpenAI transport failure (stage=end_request): " + err.to_string(),
       )
     }
   }
@@ -374,12 +385,11 @@ async fn OpenAIModelPort::chat_stream(
   let mut done = false
   while !done {
     let line = client.read_until("\n") catch {
-      _ => {
+      err => {
         client.close()
-        match classify_stream_termination(TransportFailure) {
-          Some(err) => raise err
-          None => None
-        }
+        raise @posoco.ModelError::Transport(
+          "OpenAI transport failure (stage=read_stream): " + err.to_string(),
+        )
       }
     }
     match line {
@@ -514,16 +524,16 @@ async fn openai_post_json(
 ) -> Json raise @posoco.ModelError {
   let headers = build_headers(config)
   let client = @http.Client::Client(config.base_url, headers~) catch {
-    _ =>
+    err =>
       raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=create_client)",
+        "OpenAI transport failure (stage=create_client): " + err.to_string(),
       )
   }
   let response = client.post(path, body.stringify()) catch {
-    _ => {
+    err => {
       client.close()
       raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=send_request)",
+        "OpenAI transport failure (stage=send_request): " + err.to_string(),
       )
     }
   }
@@ -671,7 +681,10 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
 
 ///|
 pub impl @posoco.ModelPort for OpenAIModelPort with fn provider_config(
-  _self : OpenAIModelPort,
+  self : OpenAIModelPort,
 ) -> @posoco.ProviderConfig {
-  @posoco.ProviderConfig::empty()
+  @posoco.ProviderConfig::ProviderConfig(
+    reasoning_effort_values=[],
+    context_window=self.config.context_window,
+  )
 }

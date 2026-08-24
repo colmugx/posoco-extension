@@ -7,7 +7,7 @@ pub(all) struct OpenAIProvider {
 }
 
 ///|
-pub fn OpenAIProvider::new(
+pub fn OpenAIProvider::OpenAIProvider(
   transport? : &OpenAIModelsHttpTransport? = None,
 ) -> OpenAIProvider {
   OpenAIProvider::{ models_transport: transport }
@@ -77,7 +77,7 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
       match openai_setting_string(source, "base_url") {
         Some(base_url) =>
           OpenAIConfig::with_base_url(credential.secret, model, base_url)
-        None => OpenAIConfig::new(credential.secret, model)
+        None => OpenAIConfig(credential.secret, model)
       }
     None => {
       let api_key = match openai_setting_string(source, "api_key") {
@@ -86,11 +86,11 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
       }
       match openai_setting_string(source, "base_url") {
         Some(base_url) => OpenAIConfig::with_base_url(api_key, model, base_url)
-        None => OpenAIConfig::new(api_key, model)
+        None => OpenAIConfig(api_key, model)
       }
     }
   }
-  let port = OpenAIModelPort::new(config)
+  let port = OpenAIModelPort(config)
   @llm.ProviderBuildResult::Ready(port.model_catalog())
 }
 
@@ -147,7 +147,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
             detail="Codex model catalog refresh failed: " + err.to_string(),
           )
       }
-      let port = OpenAIModelPort::new(config)
+      let port = OpenAIModelPort(config)
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_codex_models(models),
       )
@@ -182,7 +182,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
             detail="OpenAI API model catalog refresh failed: " + err.to_string(),
           )
       }
-      let port = OpenAIModelPort::new(config)
+      let port = OpenAIModelPort(config)
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_api_models(models),
       )
@@ -217,7 +217,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
             detail="OpenAI API model catalog refresh failed: " + err.to_string(),
           )
       }
-      let port = OpenAIModelPort::new(config)
+      let port = OpenAIModelPort(config)
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_api_models(models),
       )

@@ -67,7 +67,13 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
   headers : Map[String, String],
 ) -> OpenAIModelsHttpResponse raise @posoco.ModelError {
   @async.with_timeout(openai_models_timeout_ms, () => {
-    let (response, body_data) = @http.get(url, headers~) catch {
+    // async 0.21: convert at this single @http boundary; the transport
+    // contract stays Map[String, String] so fakes stay http-free.
+    let http_headers : @http.Headers = Map([])
+    for k, v in headers {
+      http_headers[k] = v
+    }
+    let (response, body_data) = @http.get(url, headers=http_headers) catch {
       err =>
         raise @posoco.ModelError::Transport(
           "OpenAI models request failed: " + err.to_string(),

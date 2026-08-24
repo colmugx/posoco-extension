@@ -204,6 +204,8 @@ fn process_sse_event(
             input_tokens=usage.input_tokens.unwrap_or(0),
             output_tokens=usage.output_tokens.unwrap_or(0),
             total_tokens=usage.total_tokens.unwrap_or(0),
+            cached_input_tokens=usage.cached_input_tokens,
+            uncached_input_tokens=usage.uncached_input_tokens,
           )
           on_chunk(usage_chunk)
           acc.push(usage_chunk)

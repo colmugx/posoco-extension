@@ -392,7 +392,30 @@ fn extract_usage(resp : Json) -> @posoco.Usage? raise @posoco.ModelError {
               )
             None => None
           }
-          Some(@posoco.Usage::{ input_tokens, output_tokens, total_tokens })
+          let cached_input_tokens = match
+            usage_map.get("input_tokens_details") {
+            Some(Json::Object(details)) =>
+              match details.get("cached_tokens") {
+                Some(Json::Number(n, ..)) => Some(n.to_int())
+                Some(Json::Null) | None => None
+                Some(_) =>
+                  raise @posoco.ModelError::ResponseParse(
+                    "OpenAI response parse failure (stage=usage.input_tokens_details.cached_tokens, category=wrong_type)",
+                  )
+              }
+            Some(Json::Null) | None => None
+            Some(_) =>
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI response parse failure (stage=usage.input_tokens_details, category=wrong_type)",
+              )
+          }
+          Some(@posoco.Usage::{
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            cached_input_tokens,
+            uncached_input_tokens: None,
+          })
         }
         Some(Json::Null) | None => None
         Some(_) =>

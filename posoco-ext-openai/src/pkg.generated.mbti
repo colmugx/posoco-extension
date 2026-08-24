@@ -54,6 +54,7 @@ pub(all) struct CodexOAuth {
   transport : &@posoco-ext-oauth.OAuthHttpTransport?
 }
 pub fn CodexOAuth::CodexOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?) -> Self
+pub async fn CodexOAuth::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
 pub impl @posoco-ext-oauth.OAuthProvider for CodexOAuth
 
 pub(all) struct CodexReasoningLevel {
@@ -73,9 +74,10 @@ pub(all) struct OpenAIConfig {
   organization : String?
   account_id : String?
   reasoning_effort : String?
+  context_window : Int?
 }
+pub fn OpenAIConfig::OpenAIConfig(String, String) -> Self
 pub fn OpenAIConfig::from_codex_credential(@posoco-ext-oauth.Credential, String) -> Self
-pub fn OpenAIConfig::new(String, String) -> Self
 pub fn OpenAIConfig::with_base_url(String, String, String) -> Self
 pub fn OpenAIConfig::with_reasoning_effort(Self, String) -> Self
 
@@ -87,10 +89,10 @@ pub(all) struct OpenAIModelInfo {
 pub(all) struct OpenAIModelPort {
   config : OpenAIConfig
 }
+pub fn OpenAIModelPort::OpenAIModelPort(OpenAIConfig) -> Self
 pub fn OpenAIModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_codex_models(Self, Array[CodexModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAIModelPort::new(OpenAIConfig) -> Self
 pub impl @port.ModelPort for OpenAIModelPort
 
 pub(all) struct OpenAIModelsHttpResponse {
@@ -101,7 +103,8 @@ pub(all) struct OpenAIModelsHttpResponse {
 pub(all) struct OpenAIProvider {
   models_transport : &OpenAIModelsHttpTransport?
 }
-pub fn OpenAIProvider::new(transport? : &OpenAIModelsHttpTransport?) -> Self
+pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?) -> Self
+pub async fn OpenAIProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for OpenAIProvider
 pub impl @posoco-ext-llm.OAuthFactory for OpenAIProvider
 pub impl @posoco-ext-llm.ProviderFactory for OpenAIProvider
