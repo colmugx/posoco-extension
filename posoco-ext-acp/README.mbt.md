@@ -63,7 +63,7 @@ Compose it like any Posoco extension:
 
 ```moonbit nocheck
 ///|
-let bridge = @ext_acp.AcpBridge::new(
+let bridge = @ext_acp.AcpBridge(
   needs_permission=call =>
     @ext_acp.acp_tool_kind(call.name.to_string()) is not @acp.ToolKind::Read, // e.g. ask for everything but reads
 )

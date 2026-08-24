@@ -34,7 +34,7 @@
 /// # Example
 /// ```mbt check
 /// async test "detached bridge stays inert" {
-///   let bridge = AcpBridge::new()
+///   let bridge = AcpBridge::AcpBridge()
 ///   inspect(bridge.flush(), content="0")
 ///   assert_true(bridge.stop_reason() is @acp.StopReason::EndTurn)
 ///   assert_true(bridge.take_failure() is None)
@@ -64,7 +64,7 @@ pub struct AcpBridge {
 /// Canonical constructor. Which tools ask is not the bridge's concern: the
 /// composed `@permission.PermissionPolicy` owns that policy and calls the
 /// bridge's `ApprovalSource` implementation for pure wire translation.
-pub fn AcpBridge::new() -> AcpBridge {
+pub fn AcpBridge::AcpBridge() -> AcpBridge {
   {
     queue: @aqueue.Queue(kind=Unbounded),
     queue_closed: false,

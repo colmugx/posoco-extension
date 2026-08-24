@@ -126,6 +126,8 @@ fn tk_usage(total : Int) -> @posoco.Usage {
     input_tokens: Some(total - 1),
     output_tokens: Some(1),
     total_tokens: Some(total),
+    cached_input_tokens: None,
+    uncached_input_tokens: None,
   }
 }
 
@@ -316,7 +318,7 @@ test "acp_decision_from_approval maps allow, deny, and cancel" {
 
 ///|
 async test "flush delivers pending and result sequence with session stamp" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(TurnStarted)
@@ -362,7 +364,7 @@ async test "flush delivers pending and result sequence with session stamp" {
 
 ///|
 async test "tool failure outcome maps to failed status" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(
@@ -388,7 +390,7 @@ async test "tool failure outcome maps to failed status" {
 
 ///|
 async test "deferred tool stays pending with a deferred title" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(
@@ -407,7 +409,7 @@ async test "deferred tool stays pending with a deferred title" {
 
 ///|
 async test "streamed deltas share one message id and suppress final text" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(TurnStarted)
@@ -448,7 +450,7 @@ async test "streamed deltas share one message id and suppress final text" {
 
 ///|
 async test "reasoning deltas stream as thought chunks" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(StreamChunkReceived(chunk=ReasoningDelta(token="thinking")))
@@ -469,7 +471,7 @@ async test "reasoning deltas stream as thought chunks" {
 
 ///|
 async test "model response projects thought, blocks, and cumulative usage" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(TurnStarted)
@@ -517,7 +519,7 @@ async test "model response projects thought, blocks, and cumulative usage" {
 
 ///|
 async test "turn failure is recorded once and consumed by the host" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   bridge.ingest(TurnStarted)
   assert_true(bridge.take_failure() is None)
   bridge.ingest(TurnFailed("model unavailable"))
@@ -531,7 +533,7 @@ async test "turn failure is recorded once and consumed by the host" {
 
 ///|
 async test "stop reason follows the last observed finish reason" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   assert_true(bridge.stop_reason() is EndTurn)
   bridge.ingest(
     ModelResponseReceived(
@@ -544,7 +546,7 @@ async test "stop reason follows the last observed finish reason" {
 
 ///|
 async test "flush before attach sends nothing and keeps items queued" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   bridge.ingest(ToolCallPending(tk_call("read")))
   assert_eq(bridge.flush(), 0)
   let client = FakeAcpClient::FakeAcpClient()
@@ -555,7 +557,7 @@ async test "flush before attach sends nothing and keeps items queued" {
 
 ///|
 async test "detach stops delivery" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.detach()
@@ -583,7 +585,7 @@ fn tk_approval(
 
 ///|
 async test "ask flushes, translates, and allows once on allow-once" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(ToolCallPending(tk_call("edit", id="c1")))
@@ -601,7 +603,7 @@ async test "ask flushes, translates, and allows once on allow-once" {
 
 ///|
 async test "ask maps allow-always onto the policy-cacheable decision" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(reply={
     outcome: Selected({ option_id: ACP_ALLOW_ALWAYS, meta: Omitted }),
     meta: Omitted,
@@ -615,7 +617,7 @@ async test "ask maps allow-always onto the policy-cacheable decision" {
 
 ///|
 async test "ask denies on reject and keeps the option id in the reason" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(reply={
     outcome: Selected({ option_id: ACP_REJECT_ALWAYS, meta: Omitted }),
     meta: Omitted,
@@ -630,7 +632,7 @@ async test "ask denies on reject and keeps the option id in the reason" {
 
 ///|
 async test "ask denies when the client cancels" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(reply={
     outcome: Cancelled,
     meta: Omitted,
@@ -644,7 +646,7 @@ async test "ask denies when the client cancels" {
 
 ///|
 async test "ask fails closed on broker error" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(fail_permission=true)
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   match bridge.ask(tk_approval("bash")) {
@@ -658,7 +660,7 @@ async test "ask fails closed on broker error" {
 
 ///|
 async test "detached bridge approves every ask without asking" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   match bridge.ask(tk_approval("bash")) {
     @permission.ApprovalDecision::AllowOnce => ()
     _ => fail("expected AllowOnce while detached")
@@ -669,7 +671,7 @@ async test "detached bridge approves every ask without asking" {
 
 ///|
 async test "spawn_pump forwards updates concurrently and stops on close" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   @async.with_task_group(group => {
@@ -683,7 +685,7 @@ async test "spawn_pump forwards updates concurrently and stops on close" {
 
 ///|
 async test "close then attach reopens the queue for the next prompt" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let first = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(first), session_id="s1")
   @async.with_task_group(group => {
@@ -707,7 +709,7 @@ async test "close then attach reopens the queue for the next prompt" {
 
 ///|
 async test "ui select request maps to an enum form and back to an index" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(
     elicit_reply=elicit_accept_value(
       Json::object({ "value": Json::string("second") }),
@@ -744,7 +746,7 @@ async test "ui select request maps to an enum form and back to an index" {
 
 ///|
 async test "ui input request maps to a string form with pre-fill" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(
     elicit_reply=elicit_accept_value(
       Json::object({ "value": Json::string("v1") }),
@@ -766,7 +768,7 @@ async test "ui input request maps to a string form with pre-fill" {
 
 ///|
 async test "ui confirm request maps to a boolean form yes/no" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let yes_client = FakeAcpClient::FakeAcpClient(
     elicit_reply=elicit_accept_value(
       Json::object({ "value": Json::boolean(true) }),
@@ -791,7 +793,7 @@ async test "ui confirm request maps to a boolean form yes/no" {
 
 ///|
 async test "declined and cancelled elicitations map to Cancelled" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let declined = FakeAcpClient::FakeAcpClient(elicit_reply={
     action: Decline,
     content: Omitted,
@@ -816,7 +818,7 @@ async test "declined and cancelled elicitations map to Cancelled" {
 
 ///|
 async test "detached bridge raises Unsupported" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let outcome : Result[@posoco.UiResponse, @posoco.UiError] = Ok(
     bridge.request(Input(prompt="Anyone?", default=None)),
   ) catch {
@@ -831,7 +833,7 @@ async test "detached bridge raises Unsupported" {
 
 ///|
 async test "elicitation failures map onto the UiError shades" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   // Capability gate: the runtime rejects the request outright.
   let no_capability = FakeAcpClient::FakeAcpClient()
   no_capability.fail_elicitation = Some(
@@ -868,7 +870,7 @@ async test "elicitation failures map onto the UiError shades" {
 
 ///|
 async test "accept with an out-of-enum answer fails loudly" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(
     elicit_reply=elicit_accept_value(
       Json::object({ "value": Json::string("fourth") }),
@@ -890,6 +892,6 @@ async test "accept with an out-of-enum answer fails loudly" {
 
 ///|
 async test "manifest declares the UiPort contribution" {
-  let bridge = AcpBridge::new()
+  let bridge = AcpBridge()
   assert_eq(bridge.manifest().ui.length(), 1)
 }

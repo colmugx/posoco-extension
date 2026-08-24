@@ -96,5 +96,5 @@ pub extend AcpBridge with @posoco.Extension::{extension_id, manifest}
 /// view. Hosts that already hold an AcpBridge instance should pass it
 /// directly instead of calling this helper.
 pub fn acp_extension() -> AcpBridge {
-  AcpBridge::new()
+  AcpBridge()
 }
