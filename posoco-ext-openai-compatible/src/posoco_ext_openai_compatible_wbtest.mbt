@@ -30,8 +30,8 @@ pub impl @oauth.AuthPromptInteraction for OaiCompatApiKeyPrompt with fn prompt(
 }
 
 ///|
-test "OpenAICompatibleConfig::new records required and optional fields" {
-  let config = OpenAICompatibleConfig::new(
+test "OpenAICompatibleConfig records required and optional fields" {
+  let config = OpenAICompatibleConfig(
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
@@ -45,8 +45,8 @@ test "OpenAICompatibleConfig::new records required and optional fields" {
 }
 
 ///|
-test "OpenAICompatibleConfig::new carries optional fields" {
-  let config = OpenAICompatibleConfig::new(
+test "OpenAICompatibleConfig carries optional fields" {
+  let config = OpenAICompatibleConfig(
     "sk-test",
     base_url="https://example.com",
     model="qwen-plus",
@@ -60,8 +60,8 @@ test "OpenAICompatibleConfig::new carries optional fields" {
 }
 
 ///|
-test "OpenAICompatibleProvider::new scopes to the given provider id" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+test "OpenAICompatibleProvider scopes to the given provider id" {
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   assert_eq(factory.provider_id(), "qwen")
   assert_eq(factory.credential_id(), "qwen")
@@ -71,7 +71,7 @@ test "OpenAICompatibleProvider::new scopes to the given provider id" {
 /// Build with no credential and no api_key setting → Unconfigured (the host
 /// shows no slot rather than failing composition).
 test "ProviderFactory::build returns Unconfigured without api_key" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -92,7 +92,7 @@ test "ProviderFactory::build returns Unconfigured without api_key" {
 
 ///|
 test "ProviderFactory::build returns Unconfigured without base_url" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -113,7 +113,7 @@ test "ProviderFactory::build returns Unconfigured without base_url" {
 
 ///|
 test "ProviderFactory::build returns Unconfigured without model" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -134,7 +134,7 @@ test "ProviderFactory::build returns Unconfigured without model" {
 
 ///|
 test "ProviderFactory::build with api_key setting produces a Ready catalog" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -174,7 +174,7 @@ test "ProviderFactory::build with api_key setting produces a Ready catalog" {
 /// api_key credential takes precedence over the api_key setting, mirroring
 /// DeepSeek. The credential store is the canonical source once /login ran.
 test "ProviderFactory::build prefers api_key credential over the setting" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -203,7 +203,7 @@ test "ProviderFactory::build prefers api_key credential over the setting" {
 /// OAuth credential is rejected with a typed composition error: this adapter
 /// is api-key only, and a stale OAuth credential must not silently be ignored.
 test "ProviderFactory::build rejects OAuth credential with typed error" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -235,7 +235,7 @@ test "ProviderFactory::build rejects OAuth credential with typed error" {
 
 ///|
 async test "ApiKeyFactory::login validates and returns an opaque credential" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = OaiCompatApiKeyPrompt::{ value: "sk-via-login" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -245,7 +245,7 @@ async test "ApiKeyFactory::login validates and returns an opaque credential" {
 
 ///|
 async test "ApiKeyFactory::login rejects an empty secret" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = OaiCompatApiKeyPrompt::{ value: "" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -708,7 +708,7 @@ fn effort_settings_source(
 
 ///|
 test "ProviderFactory::build advertises declared efforts with an implicit off and the custom display group" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = effort_settings_source(
     "high",
@@ -729,7 +729,7 @@ test "ProviderFactory::build advertises declared efforts with an implicit off an
 
 ///|
 test "rebuild_on_effort off rebuilds the slot without a wire effort" {
-  let config = OpenAICompatibleConfig::new(
+  let config = OpenAICompatibleConfig(
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
@@ -737,7 +737,7 @@ test "rebuild_on_effort off rebuilds the slot without a wire effort" {
     reasoning_effort=Some("high"),
     thinking_efforts=["low", "high"],
   )
-  let port = OpenAICompatibleModelPort::new("qwen", config)
+  let port = OpenAICompatibleModelPort("qwen", config)
   let catalog = port.model_catalog()
   let slot = catalog.slots()[0]
   guard slot.rebuild_on_effort is Some(rebuild) else {
@@ -751,7 +751,7 @@ test "rebuild_on_effort off rebuilds the slot without a wire effort" {
 
 ///|
 test "OpenAICompatibleConfig::with_reasoning_effort maps the selector vocabulary" {
-  let config = OpenAICompatibleConfig::new(
+  let config = OpenAICompatibleConfig(
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
@@ -785,7 +785,7 @@ test "OpenAICompatibleConfig::with_reasoning_effort maps the selector vocabulary
 
 ///|
 test "'on' selects plain thinking when no levels are declared" {
-  let config = OpenAICompatibleConfig::new(
+  let config = OpenAICompatibleConfig(
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
@@ -800,7 +800,7 @@ test "'on' selects plain thinking when no levels are declared" {
 
 ///|
 test "ProviderFactory::build rejects a singular effort outside the declared list" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = effort_settings_source(
     "max",
@@ -817,7 +817,7 @@ test "ProviderFactory::build rejects a singular effort outside the declared list
 
 ///|
 test "ProviderFactory::build rejects malformed reasoning_efforts" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let not_array = Ok(
     factory.build(effort_settings_source("high", Json::string("low,high"))),
@@ -894,7 +894,7 @@ fn undeclared_effort_settings_source(
 
 ///|
 test "ProviderFactory::build exposes the plain off/on toggle when settings declare no levels" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   match factory.build(undeclared_effort_settings_source()) {
     @llm.ProviderBuildResult::Ready(catalog) => {
@@ -910,7 +910,7 @@ test "ProviderFactory::build exposes the plain off/on toggle when settings decla
 
 ///|
 test "an explicit empty reasoning_efforts array still exposes the toggle" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   match
     factory.build(
@@ -928,7 +928,7 @@ test "an explicit empty reasoning_efforts array still exposes the toggle" {
 
 ///|
 test "an array reasoning_effort declares the selectable levels verbatim" {
-  let provider = OpenAICompatibleProvider::new("mtplx")
+  let provider = OpenAICompatibleProvider("mtplx")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -964,7 +964,7 @@ test "an array reasoning_effort declares the selectable levels verbatim" {
 
 ///|
 test "a multi-level reasoning_effort array keeps every value selectable" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -994,7 +994,7 @@ test "a multi-level reasoning_effort array keeps every value selectable" {
 
 ///|
 test "a fixed singular reasoning_effort outside the convention stays selectable" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   match
     factory.build(undeclared_effort_settings_source(reasoning_effort="deep")) {
@@ -1015,7 +1015,7 @@ test "a fixed singular reasoning_effort outside the convention stays selectable"
 
 ///|
 test "a legacy toggle-word reasoning_effort sets the on/off default" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   match
     factory.build(undeclared_effort_settings_source(reasoning_effort="on")) {
@@ -1031,7 +1031,7 @@ test "a legacy toggle-word reasoning_effort sets the on/off default" {
 
 ///|
 test "ProviderFactory::build rejects reserved words inside declared levels" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let reserved = Ok(
     factory.build(
@@ -1051,7 +1051,7 @@ test "ProviderFactory::build rejects reserved words inside declared levels" {
 
 ///|
 test "ProviderFactory::build rejects duplicate declared levels" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let duplicate = Ok(
     factory.build(
@@ -1071,7 +1071,7 @@ test "ProviderFactory::build rejects duplicate declared levels" {
 
 ///|
 test "ProviderFactory::build rejects conflicting singular and plural level lists" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let conflicting = Ok(
     factory.build(
@@ -1101,7 +1101,7 @@ test "ProviderFactory::build rejects conflicting singular and plural level lists
 
 ///|
 test "ProviderFactory::build rejects a non-string non-array reasoning_effort" {
-  let provider = OpenAICompatibleProvider::new("qwen")
+  let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   let bad = Ok(
     factory.build(
@@ -1229,4 +1229,198 @@ test "oai_compat_eof_tolerable rejects arguments cut mid-stream" {
   let cont = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":null,\"function\":{\"name\":null,\"arguments\":\"{\\\"cmd\\\":\\\"ls\"}}]},\"finish_reason\":null}]}"
   assert_false(process_oai_compat_sse(cont, acc, noop))
   assert_false(oai_compat_eof_tolerable(acc))
+}
+
+// ---------------------------------------------------------------------------
+// models[] settings — per-model context_window / compact_threshold / efforts
+// ---------------------------------------------------------------------------
+
+///|
+/// Build a source whose settings carry `models` = the parsed fixture text.
+/// `Json::Array` is read-only, so fixture arrays come from `@json.parse`.
+fn models_source(models_text : String) -> @llm.ProviderConfigSource {
+  let models : Json = @json.parse(models_text) catch {
+    _ => abort("models fixture JSON must parse")
+  }
+  @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(
+        Map::from_array([
+          ("api_key", Json::string("sk-test")),
+          ("base_url", Json::string("https://example.com/v1")),
+          ("models", models),
+        ]),
+      ),
+    ),
+  )
+}
+
+///|
+test "ProviderFactory::build with models produces per-model slots with metadata" {
+  let provider = OpenAICompatibleProvider("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let source = models_source(
+    "[{\"id\":\"qwen3-max\",\"context_window\":262144,\"compact_threshold\":0.85,\"reasoning_effort\":[\"low\",\"high\"]},{\"id\":\"qwen3-flash\",\"context_window\":131072}]",
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      assert_eq(catalog.provider_id, "qwen")
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 2)
+      assert_eq(slots[0].id, "qwen/qwen3-max")
+      assert_eq(slots[0].context_window, Some(262144))
+      assert_eq(slots[0].port.provider_config().context_window, Some(262144))
+      assert_eq(slots[0].port.provider_config().compact_threshold, Some(0.85))
+      assert_eq(slots[0].thinking_efforts, ["off", "low", "high"])
+      assert_eq(slots[1].id, "qwen/qwen3-flash")
+      assert_eq(slots[1].context_window, Some(131072))
+      // Undeclared threshold: the provider reports None and the core
+      // default (0.88) applies downstream.
+      assert_true(slots[1].port.provider_config().compact_threshold is None)
+      assert_eq(slots[1].thinking_efforts, ["off", "on"])
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog from models array")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects models combined with the flat model key" {
+  let provider = OpenAICompatibleProvider("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let settings : Json = @json.parse(
+    "{\"api_key\":\"sk-test\",\"base_url\":\"https://example.com/v1\",\"models\":[{\"id\":\"qwen3-max\"}],\"model\":\"qwen-plus\"}",
+  ) catch {
+    _ => abort("fixture JSON must parse")
+  }
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(settings),
+  )
+  try factory.build(source) catch {
+    error =>
+      match error {
+        @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+          assert_true(detail.contains("cannot combine"))
+        _ => fail("expected ManifestSchemaError for models + flat model")
+      }
+  } noraise {
+    _ => fail("expected composition failure for models + flat model")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects out-of-range compact_threshold" {
+  let provider = OpenAICompatibleProvider("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let source = models_source(
+    "[{\"id\":\"qwen3-max\",\"context_window\":100000,\"compact_threshold\":1.5}]",
+  )
+  try factory.build(source) catch {
+    error =>
+      match error {
+        @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+          assert_true(detail.contains("fraction in (0, 1]"))
+        _ => fail("expected ManifestSchemaError for threshold 1.5")
+      }
+  } noraise {
+    _ => fail("expected composition failure for threshold 1.5")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects compact_threshold without context_window" {
+  let provider = OpenAICompatibleProvider("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let source = models_source(
+    "[{\"id\":\"qwen3-max\",\"compact_threshold\":0.85}]",
+  )
+  try factory.build(source) catch {
+    error =>
+      match error {
+        @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+          assert_true(detail.contains("requires context_window"))
+        _ => fail("expected ManifestSchemaError for orphan threshold")
+      }
+  } noraise {
+    _ => fail("expected composition failure for orphan threshold")
+  }
+}
+
+///|
+test "ProviderFactory::build rejects duplicate and empty models declarations" {
+  let provider = OpenAICompatibleProvider("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  try
+    factory.build(
+      models_source(
+        "[{\"id\":\"qwen3-max\",\"context_window\":100000},{\"id\":\"qwen3-max\",\"context_window\":200000}]",
+      ),
+    )
+  catch {
+    error =>
+      match error {
+        @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+          assert_true(detail.contains("unique"))
+        _ => fail("expected ManifestSchemaError for duplicate ids")
+      }
+  } noraise {
+    _ => fail("expected composition failure for duplicate ids")
+  }
+  try factory.build(models_source("[]")) catch {
+    error =>
+      match error {
+        @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+          assert_true(detail.contains("must not be empty"))
+        _ => fail("expected ManifestSchemaError for empty models")
+      }
+  } noraise {
+    _ => fail("expected composition failure for empty models")
+  }
+}
+
+///|
+test "compact summarize renderer covers roles, tool calls and outcomes" {
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("call_1"),
+    name: @posoco.ToolName::unchecked("echo"),
+    arguments: Json::object(Map::from_array([])),
+  }
+  let messages : Array[@posoco.Message] = [
+    @posoco.Message::SystemMessage(content=[@posoco.Content::Text("sys")]),
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
+    @posoco.Message::AssistantMessage(
+      content=[],
+      tool_calls=[call],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::ToolCalls,
+    ),
+    @posoco.Message::ToolMessage(
+      call_id=@posoco.CallId::unchecked("call_1"),
+      tool_name=@posoco.ToolName::unchecked("echo"),
+      outcome=@posoco.ToolOutcome::Success(content="echoed", structured=None),
+    ),
+  ]
+  let rendered = oai_compat_compact_messages(messages)
+  assert_eq(rendered.length(), 2)
+  match rendered[0] {
+    @posoco.Message::SystemMessage(content~) =>
+      match content[0] {
+        @posoco.Content::Text(instruction) =>
+          assert_true(instruction.contains("summarization engine"))
+        _ => fail("expected instruction text")
+      }
+    _ => fail("expected system instruction")
+  }
+  match rendered[1] {
+    @posoco.Message::UserMessage(content~) =>
+      match content[0] {
+        @posoco.Content::Text(text) => {
+          assert_true(text.contains("user: hello"))
+          assert_true(text.contains("[tool call echo"))
+          assert_true(text.contains("tool echo: echoed"))
+        }
+        _ => fail("expected transcript text")
+      }
+    _ => fail("expected transcript user message")
+  }
 }

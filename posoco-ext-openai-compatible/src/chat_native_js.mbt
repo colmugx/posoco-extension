@@ -41,50 +41,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         self.config.thinking,
         self.config.reasoning_effort,
       )
-      let headers = build_headers(self.config, self.request_headers)
-      let url = chat_url(self.config)
-      let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "openai-compatible transport failure (stage=post): " +
-            err.to_string(),
-          )
-      }
-      if !is_oai_compat_http_success(response.code) {
-        let byte_length = body_data.binary().length()
-        let text = body_data.text() catch {
-          _ =>
-            raise @posoco.ModelError::Transport(
-              format_oai_compat_http_error(
-                "chat.http_status",
-                response.code,
-                BodyBytesInvalidUtf8(byte_length),
-              ),
-            )
-        }
-        match
-          classify_oai_compat_http_status(
-            "chat.http_status",
-            response.code,
-            BodyText(text),
-            now_ms=@async.now(),
-          ) {
-          Some(err) => raise err
-          None => ()
-        }
-      }
-      let body_text = body_data.text() catch {
-        _ =>
-          raise @posoco.ModelError::ResponseParse(
-            "openai-compatible response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
-          )
-      }
-      let resp_json : Json = @json.parse(body_text) catch {
-        _ =>
-          raise @posoco.ModelError::ResponseParse(
-            "openai-compatible response parse failure (stage=json, category=malformed, body_chars=\{body_text.length()})",
-          )
-      }
+      let resp_json = self.oai_compat_post_chat_json(body, "chat")
       let completion = decode_chat_response(resp_json)
       @posoco.ModelCallResult::{ completion, processed_messages: messages }
     }

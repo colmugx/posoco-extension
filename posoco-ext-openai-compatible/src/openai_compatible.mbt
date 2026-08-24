@@ -6,12 +6,25 @@
 /// base_url + endpoint_prefix + "/chat/completions".
 
 ///|
-/// Build HTTP headers for OpenAI-compatible API requests.
-fn build_headers(config : OpenAICompatibleConfig) -> @http.Headers {
-  {
+/// Build HTTP headers for OpenAI-compatible API requests. When
+/// `request_headers` is supplied it is evaluated per request and its entries
+/// override the defaults, so adapters can rotate identity headers.
+fn build_headers(
+  config : OpenAICompatibleConfig,
+  request_headers : (() -> Map[String, String])?,
+) -> @http.Headers {
+  let headers : @http.Headers = {
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",
   }
+  match request_headers {
+    Some(supply) =>
+      for key, value in supply() {
+        headers[@http.CaseInsensitiveString(key)] = value
+      }
+    None => ()
+  }
+  headers
 }
 
 ///|
@@ -22,7 +35,9 @@ fn chat_url(config : OpenAICompatibleConfig) -> String {
 
 ///|
 /// The OpenAI-compatible ModelPort implementation. Implements @posoco.ModelPort
-/// for chat/chat_streaming; compact declines (no provider-side endpoint).
+/// for chat/chat_streaming (chat_native_js.mbt) and a summarize-based compact
+/// (compact_native_js.mbt); wasm keeps raising fallbacks in the
+/// *_wasm_fallback.mbt files.
 pub(all) struct OpenAICompatibleModelPort {
   config : OpenAICompatibleConfig
   /// Provider id this port is scoped to (e.g. "qwen"). Used only for catalog
@@ -36,7 +51,7 @@ pub(all) struct OpenAICompatibleModelPort {
 }
 
 ///|
-pub fn OpenAICompatibleModelPort::new(
+pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(
   provider_id : String,
   config : OpenAICompatibleConfig,
   request_headers? : () -> Map[String, String],
@@ -102,32 +117,22 @@ fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
 }
 
 ///|
-/// ModelPort implementation — chat lives in chat_native_js.mbt (it drives
-/// moonbitlang/async/http, which is native+js only). compact and
-/// provider_config below are pure and compile on every backend.
+/// ModelPort implementation — chat and compact live in chat_native_js.mbt /
+/// compact_native_js.mbt (they drive moonbitlang/async/http, which is
+/// native+js only). provider_config below is pure and compiles on every
+/// backend.
 
 ///|
-/// ModelPort implementation — compact. This generic adapter exposes no
-/// dedicated compact endpoint; the modelport declines by raising ResponseParse
-/// so the pump's compact safe-point reports a typed failure rather than
-/// silently no-op'ing.
-pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn compact(
-  _self : OpenAICompatibleModelPort,
-  _scope : @posoco.InvocationScope,
-  _messages : Array[@posoco.Message],
-  _options : @posoco.ChatOptions,
-  _trigger : @posoco.CompactTrigger,
-) -> @posoco.CompactResult raise @posoco.ModelError {
-  raise @posoco.ModelError::ResponseParse(
-    "openai-compatible provider does not implement compact (no provider-side endpoint)",
-  )
-}
-
-///|
-/// ModelPort implementation — provider_config. The generic adapter declares no
-/// provider-config fields (M3.7 pull-based config learning).
+/// ModelPort implementation — provider_config. Reasoning vocabulary stays
+/// undeclared (the router learns levels from the slot, not from here); the
+/// auto-compact metadata from `models[]` settings IS reported so the Agent
+/// can build its per-turn RunPolicy from the active model's own numbers.
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn provider_config(
-  _self : OpenAICompatibleModelPort,
+  self : OpenAICompatibleModelPort,
 ) -> @posoco.ProviderConfig {
-  @posoco.ProviderConfig::empty()
+  @posoco.ProviderConfig::ProviderConfig(
+    reasoning_effort_values=[],
+    context_window=self.config.context_window,
+    compact_threshold=self.config.compact_threshold,
+  )
 }

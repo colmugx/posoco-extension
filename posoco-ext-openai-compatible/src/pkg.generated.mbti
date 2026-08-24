@@ -25,8 +25,10 @@ pub(all) struct OpenAICompatibleConfig {
   thinking : Bool
   reasoning_effort : String?
   thinking_efforts : Array[String]
+  context_window : Int?
+  compact_threshold : Double?
 } derive(Eq, @debug.Debug)
-pub fn OpenAICompatibleConfig::new(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String]) -> Self
+pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?) -> Self
 pub fn OpenAICompatibleConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct OpenAICompatibleModelPort {
@@ -34,15 +36,15 @@ pub(all) struct OpenAICompatibleModelPort {
   provider_id : String
   request_headers : (() -> Map[String, String])?
 }
+pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(String, OpenAICompatibleConfig, request_headers? : () -> Map[String, String]) -> Self
 pub fn OpenAICompatibleModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAICompatibleModelPort::new(String, OpenAICompatibleConfig, request_headers? : () -> Map[String, String]) -> Self
 pub impl @port.ModelPort for OpenAICompatibleModelPort
 
 pub(all) struct OpenAICompatibleProvider {
   provider_id : String
   ctx : @posoco-devkit.ExtContext
 }
-pub fn OpenAICompatibleProvider::new(String, ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn OpenAICompatibleProvider::OpenAICompatibleProvider(String, ctx? : @posoco-devkit.ExtContext) -> Self
 pub impl @posoco-ext-llm.ApiKeyFactory for OpenAICompatibleProvider
 pub impl @posoco-ext-llm.ProviderFactory for OpenAICompatibleProvider
 

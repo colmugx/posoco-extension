@@ -35,11 +35,19 @@ pub(all) struct OpenAICompatibleConfig {
   /// picker-facing slot prepends the implicit "off" entry; it is never stored
   /// here.
   thinking_efforts : Array[String]
+  /// Declared context capacity of `model`, in tokens (settings
+  /// `models[].context_window`). `None` = undeclared; auto-compact stays off
+  /// for this model rather than guessing a window.
+  context_window : Int?
+  /// Declared auto-compact trigger point as a fraction of the context window,
+  /// in (0, 1] (settings `models[].compact_threshold`). `None` = the
+  /// host/core default (0.88) applies.
+  compact_threshold : Double?
 } derive(Eq, Debug)
 
 ///|
 /// Config builder. `api_key`, `base_url`, and `model` are required.
-pub fn OpenAICompatibleConfig::new(
+pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(
   api_key : String,
   base_url~ : String,
   model~ : String,
@@ -47,6 +55,8 @@ pub fn OpenAICompatibleConfig::new(
   thinking? : Bool = false,
   reasoning_effort? : String? = None,
   thinking_efforts? : Array[String] = [],
+  context_window? : Int? = None,
+  compact_threshold? : Double? = None,
 ) -> OpenAICompatibleConfig {
   {
     api_key,
@@ -56,6 +66,8 @@ pub fn OpenAICompatibleConfig::new(
     thinking,
     reasoning_effort,
     thinking_efforts,
+    context_window,
+    compact_threshold,
   }
 }
 

@@ -17,13 +17,15 @@ import {
 
 options(
   targets: {
-    // HTTP-backed chat impl: native+js only (moonbitlang/async/http is
-    // unavailable on wasm). The struct definition, config, encode/decode, SSE
-    // parsing, error classification, compact, provider_config, and the factory
-    // all live in the unrestricted core files and compile on every backend —
-    // so the package exports a complete mbti. Only the live chat request and
-    // the tests are target-restricted. Mirrors posoco-ext-read / posoco-ext-oauth.
+    // HTTP-backed chat and compact impls: native+js only
+    // (moonbitlang/async/http is unavailable on wasm). The struct
+    // definition, config, encode/decode, SSE parsing, error classification,
+    // provider_config, and the factory all live in the unrestricted core
+    // files and compile on every backend — so the package exports a complete
+    // mbti. #cfg-guarded fallbacks (chat/compact_wasm_fallback.mbt) satisfy
+    // the trait on wasm. Mirrors posoco-ext-read / posoco-ext-oauth.
     "chat_native_js.mbt": [ "native", "js" ],
+    "compact_native_js.mbt": [ "native", "js" ],
     "wire_log.js.mbt": [ "js" ],
     "wire_log_native.mbt": [ "native" ],
     "posoco_ext_openai_compatible_wbtest.mbt": [ "native" ],
