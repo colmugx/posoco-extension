@@ -46,7 +46,7 @@ test "DeepSeek models parser rejects a non-list envelope" {
 
 ///|
 async test "DeepSeek refresh rejects an unknown effort as composition error" {
-  let provider = DeepSeekProvider::new()
+  let provider = DeepSeekProvider()
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
       @json.parse("{\"api_key\":\"key\",\"reasoning_effort\":\"unknown\"}"),
@@ -63,8 +63,8 @@ async test "DeepSeek refresh rejects an unknown effort as composition error" {
 
 ///|
 test "DeepSeek refreshed catalog keeps configured model first" {
-  let config = DeepSeekConfig::new("key", model="deepseek-chat")
-  let port = DeepSeekModelPort::new(config)
+  let config = DeepSeekConfig("key", model="deepseek-chat")
+  let port = DeepSeekModelPort(config)
   let models : Array[DeepSeekModelInfo] = [
     DeepSeekModelInfo::{
       id: "deepseek-v4-pro",

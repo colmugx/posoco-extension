@@ -250,6 +250,7 @@ fn extract_usage(
         output_tokens: completion,
         total_tokens: total,
         cached_input_tokens: @chatkit.cached_input_tokens_from_usage(u),
+        uncached_input_tokens: @chatkit.uncached_input_tokens_from_usage(u),
       }
     }
     Some(_) =>

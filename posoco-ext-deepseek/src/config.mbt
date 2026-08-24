@@ -19,7 +19,7 @@ pub(all) struct DeepSeekConfig {
 
 ///|
 /// Default config builder. api_key is required; other fields use defaults.
-pub fn DeepSeekConfig::new(
+pub fn DeepSeekConfig::DeepSeekConfig(
   api_key : String,
   model? : String = "deepseek-v4-flash",
   base_url? : String = "https://api.deepseek.com",
@@ -77,7 +77,7 @@ pub(all) struct DeepSeekModelPort {
 }
 
 ///|
-pub fn DeepSeekModelPort::new(
+pub fn DeepSeekModelPort::DeepSeekModelPort(
   config : DeepSeekConfig,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> DeepSeekModelPort {

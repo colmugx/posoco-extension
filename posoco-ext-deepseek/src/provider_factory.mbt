@@ -7,7 +7,7 @@ pub(all) struct DeepSeekProvider {
 }
 
 ///|
-pub fn DeepSeekProvider::new(
+pub fn DeepSeekProvider::DeepSeekProvider(
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> DeepSeekProvider {
   { ctx, }
@@ -115,14 +115,14 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
       detail="unsupported reasoning_effort: " + effort,
     )
   }
-  let config = DeepSeekConfig::new(
+  let config = DeepSeekConfig(
     api_key,
     model~,
     base_url~,
     endpoint_prefix~,
     reasoning_effort=effort,
   )
-  let port = DeepSeekModelPort::new(config, ctx=self.ctx)
+  let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
   // multi-slot catalog offline; without them the static single-model catalog
   // stands until an explicit refresh. Bad records degrade, never fail.
@@ -179,7 +179,7 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
   }
   // Keep live refresh validation identical to the static build path.  In
   // particular, an unknown configured effort is a typed composition failure,
-  // not the abort emitted by DeepSeekConfig::new for an invalid value.
+  // not the abort emitted by DeepSeekConfig for an invalid value.
   if requested_effort != "" &&
     requested_effort != "high" &&
     requested_effort != "max" {
@@ -188,7 +188,7 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
       detail="unsupported reasoning_effort: " + requested_effort,
     )
   }
-  let config = DeepSeekConfig::new(
+  let config = DeepSeekConfig(
     api_key,
     model~,
     base_url~,
@@ -206,7 +206,7 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
         detail="DeepSeek model catalog refresh failed: " + err.to_string(),
       )
   }
-  let port = DeepSeekModelPort::new(config, ctx=self.ctx)
+  let port = DeepSeekModelPort(config, ctx=self.ctx)
   @llm.ProviderBuildResult::Ready(port.model_catalog_from_models(models))
 }
 

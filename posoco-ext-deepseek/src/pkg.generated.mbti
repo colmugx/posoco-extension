@@ -28,7 +28,7 @@ pub(all) struct DeepSeekConfig {
   reasoning_effort : String
   thinking_efforts : Array[String]
 } derive(Eq, @debug.Debug)
-pub fn DeepSeekConfig::new(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
+pub fn DeepSeekConfig::DeepSeekConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
 pub fn DeepSeekConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct DeepSeekModelInfo {
@@ -42,20 +42,20 @@ pub(all) struct DeepSeekModelPort {
   config : DeepSeekConfig
   ctx : @posoco-devkit.ExtContext
 }
+pub fn DeepSeekModelPort::DeepSeekModelPort(DeepSeekConfig, ctx? : @posoco-devkit.ExtContext) -> Self
 pub async fn DeepSeekModelPort::chat_prefix_completion(Self, Array[@kernel.Message], String, Array[String]?) -> String raise @error.ModelError
 pub fn DeepSeekModelPort::extension_id(Self) -> String
 pub async fn DeepSeekModelPort::fim_completion(Self, String, String?, max_tokens? : Int) -> String raise @error.ModelError
 pub fn DeepSeekModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn DeepSeekModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn DeepSeekModelPort::model_catalog_from_models(Self, Array[DeepSeekModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn DeepSeekModelPort::new(DeepSeekConfig, ctx? : @posoco-devkit.ExtContext) -> Self
 pub impl @port.Extension for DeepSeekModelPort
 pub impl @port.ModelPort for DeepSeekModelPort
 
 pub(all) struct DeepSeekProvider {
   ctx : @posoco-devkit.ExtContext
 }
-pub fn DeepSeekProvider::new(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn DeepSeekProvider::DeepSeekProvider(ctx? : @posoco-devkit.ExtContext) -> Self
 pub async fn DeepSeekProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for DeepSeekProvider
 pub impl @posoco-ext-llm.ProviderFactory for DeepSeekProvider

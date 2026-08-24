@@ -43,7 +43,7 @@ pub impl @oauth.AuthPromptInteraction for DeepSeekApiKeyPrompt with fn prompt(
 
 ///|
 async test "DeepSeek API-key factory validates and returns an opaque credential" {
-  let provider = DeepSeekProvider::new()
+  let provider = DeepSeekProvider()
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = DeepSeekApiKeyPrompt::{ value: "deepseek-secret" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -53,7 +53,7 @@ async test "DeepSeek API-key factory validates and returns an opaque credential"
 
 ///|
 async test "DeepSeek API-key factory rejects an empty secret" {
-  let provider = DeepSeekProvider::new()
+  let provider = DeepSeekProvider()
   let api : &@llm.ApiKeyFactory = provider
   let prompt_impl = DeepSeekApiKeyPrompt::{ value: "" }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
@@ -477,7 +477,7 @@ test "encode_message_tool_result_carries_tool_call_id" {
 
 ///|
 test "deepseek_config_defaults_to_single_model" {
-  let config = DeepSeekConfig::new("key")
+  let config = DeepSeekConfig("key")
   assert_eq(config.api_key, "key")
   assert_eq(config.base_url, "https://api.deepseek.com")
   assert_eq(config.model, "deepseek-v4-flash")
@@ -485,23 +485,20 @@ test "deepseek_config_defaults_to_single_model" {
 
 ///|
 test "deepseek_config_custom_model_passes_through" {
-  let config = DeepSeekConfig::new("key", model="custom-model")
+  let config = DeepSeekConfig("key", model="custom-model")
   assert_eq(config.model, "custom-model")
 }
 
 ///|
 test "endpoint_helpers_build_chat_and_fim_url" {
-  let config = DeepSeekConfig::new("key", base_url="https://api.deepseek.com")
+  let config = DeepSeekConfig("key", base_url="https://api.deepseek.com")
   assert_eq(chat_url(config), "https://api.deepseek.com/chat/completions")
   assert_eq(fim_url(config), "https://api.deepseek.com/beta/completions")
 }
 
 ///|
 test "fim_url_does_not_duplicate_suffix" {
-  let config = DeepSeekConfig::new(
-    "key",
-    base_url="https://api.deepseek.com/beta",
-  )
+  let config = DeepSeekConfig("key", base_url="https://api.deepseek.com/beta")
   assert_eq(fim_url(config), "https://api.deepseek.com/beta/completions")
 }
 
@@ -509,8 +506,8 @@ test "fim_url_does_not_duplicate_suffix" {
 /// build_chat_request takes thinking_json + effort_str directly now; the
 /// high-effort path passes them through without warning.
 test "build_chat_request_high_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
   let body = build_chat_request(
     ctx,
     [user_msg("hi")],
@@ -533,8 +530,8 @@ test "build_chat_request_high_thinking_no_warn" {
 
 ///|
 test "build_chat_request_maximum_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
   let body = build_chat_request(
     ctx,
     [user_msg("hi")],
@@ -556,8 +553,8 @@ test "build_chat_request_maximum_thinking_no_warn" {
 
 ///|
 test "build_chat_request_off_disables_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger::new()
-  let ctx = @devkit.ExtContext::new(logger~)
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
   let body = build_chat_request(
     ctx,
     [user_msg("hi")],
@@ -582,7 +579,7 @@ test "build_chat_request_off_disables_thinking_no_warn" {
 
 ///|
 test "fim_request_body_uses_config_model" {
-  let config = DeepSeekConfig::new("key", model="same-model")
+  let config = DeepSeekConfig("key", model="same-model")
   let body = build_fim_request_body(config, "prefix", Some("suffix"), 64)
   guard body is Object(root) else { fail("expected object") }
   assert_json_field_string(root, "model", "same-model")
@@ -592,7 +589,7 @@ test "fim_request_body_uses_config_model" {
 
 ///|
 test "prefix_request_body_uses_config_model_and_appends_prefix" {
-  let config = DeepSeekConfig::new("key", model="same-model")
+  let config = DeepSeekConfig("key", model="same-model")
   let body = build_prefix_request_body(
     config,
     [user_msg("hi")],
@@ -1204,7 +1201,7 @@ test "t07b_deepseek_valid_fim_response_still_decodes" {
 /// exact public call shapes type-checked here without performing HTTP I/O.
 async test "t08_deepseek_public_fim_examples_compile" {
   @async.protect_from_cancel(() => ())
-  let port = DeepSeekModelPort::new(DeepSeekConfig::new("fixture-key"))
+  let port = DeepSeekModelPort(DeepSeekConfig("fixture-key"))
   let messages : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("output JSON")]),
   ]
@@ -1219,7 +1216,7 @@ async test "t08_deepseek_public_fim_examples_compile" {
 
 ///|
 test "DeepSeekConfig::with_reasoning_effort maps off to empty and validates membership" {
-  let config = DeepSeekConfig::new("sk-test", reasoning_effort="high")
+  let config = DeepSeekConfig("sk-test", reasoning_effort="high")
   assert_eq(config.with_reasoning_effort("off").reasoning_effort, "")
   assert_eq(config.with_reasoning_effort("max").reasoning_effort, "max")
   let invalid = Ok(config.with_reasoning_effort("low")) catch {
@@ -1234,8 +1231,8 @@ test "DeepSeekConfig::with_reasoning_effort maps off to empty and validates memb
 
 ///|
 test "default_thinking_config disables thinking whenever the effort is empty" {
-  let config = DeepSeekConfig::new("sk-test", reasoning_effort="")
-  let port = DeepSeekModelPort::new(config)
+  let config = DeepSeekConfig("sk-test", reasoning_effort="")
+  let port = DeepSeekModelPort(config)
   let (thinking, effort) = port.default_thinking_config()
   guard thinking is Json::Object({ "type": Json::String("disabled"), .. }) else {
     fail("an empty effort must emit disabled thinking")
@@ -1245,8 +1242,8 @@ test "default_thinking_config disables thinking whenever the effort is empty" {
 
 ///|
 test "model_catalog slot advertises an implicit off and derives the default effort" {
-  let config = DeepSeekConfig::new("sk-test", reasoning_effort="high")
-  let port = DeepSeekModelPort::new(config)
+  let config = DeepSeekConfig("sk-test", reasoning_effort="high")
+  let port = DeepSeekModelPort(config)
   let catalog = port.model_catalog()
   let slot = catalog.slots()[0]
   assert_eq(slot.thinking_efforts, ["off", "high", "max"])
@@ -1261,7 +1258,7 @@ test "model_catalog slot advertises an implicit off and derives the default effo
 
 ///|
 test "ProviderFactory::build accepts reasoning_effort off and produces a disabled slot" {
-  let provider = DeepSeekProvider::new()
+  let provider = DeepSeekProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -1306,7 +1303,7 @@ fn deepseek_cached_records(ids : Array[String]) -> Json {
 
 ///|
 test "ProviderFactory::build expands host-cached records into a multi-slot catalog" {
-  let provider = DeepSeekProvider::new()
+  let provider = DeepSeekProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
@@ -1340,7 +1337,7 @@ test "ProviderFactory::build expands host-cached records into a multi-slot catal
 
 ///|
 test "ProviderFactory::build degrades to the static slot on bad cached records" {
-  let provider = DeepSeekProvider::new()
+  let provider = DeepSeekProvider()
   let factory : &@llm.ProviderFactory = provider
   for
     bad in [
@@ -1371,5 +1368,34 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
           "bad cache records must degrade to the static build, not Unconfigured",
         )
     }
+  }
+}
+
+///|
+test "decode_chat_response extracts DeepSeek prompt_cache_hit_tokens" {
+  let resp_json : Json = {
+    "choices": [
+      {
+        "message": { "role": "assistant", "content": "ok" },
+        "finish_reason": "stop",
+      },
+    ],
+    "usage": {
+      "prompt_tokens": 1200,
+      "completion_tokens": 5,
+      "total_tokens": 1205,
+      "prompt_cache_hit_tokens": 1000,
+      "prompt_cache_miss_tokens": 200,
+    },
+  }
+  let resp = decode_chat_response(resp_json)
+  match resp.usage {
+    Some(u) => {
+      assert_eq(u.input_tokens, Some(1200))
+      assert_eq(u.cached_input_tokens, Some(1000))
+      // DeepSeek reports hit and miss as a pair; consumers never derive.
+      assert_eq(u.uncached_input_tokens, Some(200))
+    }
+    None => fail("expected usage")
   }
 }
