@@ -218,46 +218,15 @@ test "sanitize_label_is_single_line_and_bounded" {
 }
 
 ///|
-test "failed_initialization_result_runs_cleanup_once" {
-  let cleanups : Array[Unit] = []
-  let result : Result[Int, String] = result_or_cleanup(
-    Err("transport body must not escape"),
-    () => cleanups.push(()),
-    "safe list_tools failure",
-  )
-  assert_eq(cleanups.length(), 1)
-  match result {
-    Err(message) => assert_eq(message, "safe list_tools failure")
-    Ok(_) => fail("expected initialization failure")
-  }
-}
-
-///|
-test "successful_initialization_result_keeps_resource_open" {
-  let cleanups : Array[Unit] = []
-  let input : Result[Int, String] = Ok(7)
-  let result : Result[Int, String] = result_or_cleanup(
-    input,
-    () => cleanups.push(()),
-    "unused",
-  )
-  assert_eq(cleanups.length(), 0)
-  match result {
-    Ok(value) => assert_eq(value, 7)
-    Err(_) => fail("expected initialization success")
-  }
-}
-
-///|
 async test "list_tools_returns_empty_before_connect" {
-  let bridge = MCPToolBridge::new()
+  let bridge = MCPToolBridge()
   let tools = bridge.list_tools()
   assert_true(tools.is_empty())
 }
 
 ///|
 async test "close_clears_state" {
-  let bridge = MCPToolBridge::new()
+  let bridge = MCPToolBridge()
   bridge.close()
   let tools = bridge.list_tools()
   assert_true(tools.is_empty())

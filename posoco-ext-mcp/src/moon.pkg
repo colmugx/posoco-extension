@@ -1,10 +1,14 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/runtime",
   "colmugx/posoco-devkit" @devkit,
   "colmugx/mcp/client",
   "colmugx/mcp/transport",
   "colmugx/mcp/protocol/types",
   "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
 }
 
 supported_targets = "+native"

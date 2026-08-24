@@ -5,9 +5,12 @@
 /// Enables posoco agents to discover and call tools from MCP servers.
 
 ///|
-/// Extract (cmd, args) from a StdioClientTransport for connect_stdio dispatch.
-fn stdio_cmd(t : @transport.StdioClientTransport) -> (String, Array[String]) {
-  (t.cmd, t.args)
+/// Extract (cmd, args, extra_env) from a StdioClientTransport for
+/// connect_stdio dispatch.
+fn stdio_cmd(
+  t : @transport.StdioClientTransport,
+) -> (String, Array[String], Map[String, String]) {
+  (t.cmd, t.args, t.extra_env)
 }
 
 ///|
@@ -102,24 +105,6 @@ priv struct CatalogEntry {
 priv struct CatalogPlan {
   entries : Array[CatalogEntry]
   tool_to_conn : Map[String, Int]
-}
-
-///|
-/// Convert an initialization result while guaranteeing that a resource
-/// acquired earlier in the sequence is closed on failure. The source error is
-/// deliberately discarded so transport bodies and credentials cannot leak.
-fn[T, E] result_or_cleanup(
-  result : Result[T, E],
-  cleanup : () -> Unit,
-  safe_error : String,
-) -> Result[T, String] {
-  match result {
-    Ok(value) => Ok(value)
-    Err(_) => {
-      cleanup()
-      Err(safe_error)
-    }
-  }
 }
 
 ///|
@@ -228,25 +213,126 @@ fn MCPToolBridge::commit_catalog(
 
 ///|
 /// Manages multiple MCP server connections with namespaced tool routing.
+///
+/// Servers come either from explicit `connect` calls or from self-governed
+/// mcp.json discovery (`discover`); discovered servers activate through
+/// `attach` + `activate` in the mode chosen at discovery time.
 pub(all) struct MCPToolBridge {
   mut connections : Array[MCPServerConn]
   mut tool_to_conn : Map[String, Int]
+  /// Activation posture chosen at discovery time; never changes after.
+  mode : LoadMode
+  /// Discovered-but-not-yet-connected server configs (mcp.json path).
+  pending : Array[MCPServerConfig]
+  /// Host-provided long-lived task group; stdio servers need it to spawn
+  /// their child process. `None` until `attach`.
+  mut group : @async.TaskGroup[Unit]?
+  /// Flips on the first `activate`; guards the Lazy on_start hook.
+  mut activated : Bool
+  /// Change signal for the runtime-seam catalog source. Bumped once per
+  /// activation and per successful refresh, so prompt boundaries re-read.
+  mut catalog_revision : Int
+  /// (server, sanitized reason) for servers that failed activation.
+  startup_failures : Array[(String, String)]
 }
 
 ///|
-pub fn MCPToolBridge::new() -> MCPToolBridge {
-  { connections: [], tool_to_conn: Map::from_array([]) }
+pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
+  {
+    connections: [],
+    tool_to_conn: Map::from_array([]),
+    mode: LoadMode::Eager,
+    pending: [],
+    group: None,
+    activated: false,
+    catalog_revision: 0,
+    startup_failures: [],
+  }
 }
 
 ///|
-/// Connect to an MCP server. Fetches and caches tools during init.
-///
-/// Must be called before the agent loop starts. Dispatches to connect_http
-/// or connect_stdio based on the transport variant (mcp 0.14 API).
+/// Discover servers from mcp.json (`<cwd>/.mcp.json` overriding
+/// `<home>/.cetas/mcp.json`) and return a bridge ready to `attach` +
+/// `activate`. A malformed file fails loud here — before any connection is
+/// attempted — with a sanitized message.
+pub async fn MCPToolBridge::discover(
+  cwd~ : String,
+  home~ : String,
+  mode? : LoadMode = LoadMode::Eager,
+) -> Result[MCPToolBridge, String] noraise {
+  match discover_mcp_servers(cwd, home) {
+    Ok(pending) =>
+      Ok({
+        connections: [],
+        tool_to_conn: Map::from_array([]),
+        mode,
+        pending,
+        group: None,
+        activated: false,
+        catalog_revision: 0,
+        startup_failures: [],
+      })
+    Err(message) => Err(message)
+  }
+}
+
+///|
+/// Hand the bridge the host's long-lived task group. stdio servers spawn
+/// their child process on it, so the group must outlive every connection —
+/// a temporary group would SIGTERM the children when it closes.
+pub fn MCPToolBridge::attach(
+  self : MCPToolBridge,
+  group : @async.TaskGroup[Unit],
+) -> Unit {
+  self.group = Some(group)
+}
+
+///|
+/// Connect every discovered server. Per-server failures are returned (and
+/// recorded) instead of raised: a down server degrades to "its tools are
+/// absent from the catalog", it never aborts the host. Eager hosts call
+/// this right after `attach`; in Lazy mode the bridge activates itself in
+/// `Lifecycle::on_start` (before the first turn's catalog read).
+pub async fn MCPToolBridge::activate(
+  self : MCPToolBridge,
+) -> Array[(String, String)] {
+  self.activated = true
+  for config in self.pending {
+    match self.connect_with_group(config, self.group) {
+      Ok(_) => ()
+      Err(message) => self.startup_failures.push((config.name, message))
+    }
+  }
+  // One bump per activation attempt: the catalog source re-reads at the
+  // next prompt boundary even when every server failed (empty = honest).
+  self.catalog_revision = self.catalog_revision + 1
+  self.startup_failures
+}
+
+///|
+/// Servers that failed the latest activation, as (name, sanitized reason).
+pub fn MCPToolBridge::failures(self : MCPToolBridge) -> Array[(String, String)] {
+  self.startup_failures
+}
+
+///|
+/// Connect to an MCP server with an explicit task group. Fetches and caches
+/// tools during init. Must be called before the agent loop starts.
 pub async fn MCPToolBridge::connect(
   self : MCPToolBridge,
   config : MCPServerConfig,
   group : @async.TaskGroup[Unit],
+) -> Result[Unit, String] {
+  self.connect_with_group(config, Some(group))
+}
+
+///|
+/// Core connect: `group` may be `None` only for http servers (stdio spawns a
+/// child process on the group and cannot proceed without one).
+async fn MCPToolBridge::connect_with_group(
+  self : MCPToolBridge,
+  config : MCPServerConfig,
+  group : @async.TaskGroup[Unit]?,
 ) -> Result[Unit, String] {
   for conn in self.connections {
     if conn.name == config.name {
@@ -255,18 +341,26 @@ pub async fn MCPToolBridge::connect(
       )
     }
   }
-  // Create MCP client via connect_* factory (mcp 0.14: connect replaces new+initialize)
+  // Create MCP client via connect_* factory (mcp 0.15: connect replaces new+initialize)
   let client_result : Result[@client.MCPClient, @types.MCPError] = match
     config.transport {
     @transport.AnyTransport::StdioClient(t) => {
-      let (cmd, args) = stdio_cmd(t)
-      @client.MCPClient::connect_stdio(
-        cmd~,
-        args~,
-        name=config.name,
-        version="0.1.0",
-        group~,
-      )
+      let (cmd, args, extra_env) = stdio_cmd(t)
+      match group {
+        Some(group) =>
+          @client.MCPClient::connect_stdio(
+            cmd~,
+            args~,
+            name=config.name,
+            version="0.1.0",
+            extra_env~,
+            group~,
+          )
+        None =>
+          return Err(
+            "MCP connect needs a task group (call attach first) for '\{@devkit.sanitize_label(config.name)}'",
+          )
+      }
     }
     @transport.AnyTransport::HttpClient(t) => {
       let url = http_url(t)
@@ -284,15 +378,18 @@ pub async fn MCPToolBridge::connect(
         "MCP connect failed for '\{@devkit.sanitize_label(config.name)}'",
       )
   }
-  // Fetch tools (connect_* already did initialize/handshake)
-  let tools_result = match
-    result_or_cleanup(
-      client.list_tools(),
-      () => client.close(),
-      "MCP list_tools failed for '\{@devkit.sanitize_label(config.name)}'",
-    ) {
-    Ok(r) => r
-    Err(message) => return Err(message)
+  // Fetch tools (connect_* already did initialize/handshake). On failure the
+  // freshly connected client is closed inline (close is async in mcp 0.15, so
+  // it cannot live in a sync cleanup callback); the source error is discarded
+  // so transport bodies and credentials cannot leak.
+  let tools_result = match client.list_tools() {
+    Ok(result) => result
+    Err(_) => {
+      client.close()
+      return Err(
+        "MCP list_tools failed for '\{@devkit.sanitize_label(config.name)}'",
+      )
+    }
   }
   let posoco_tools = tools_result.tools.map(fn(t) {
     convert_tool_def(t, config.name)
@@ -361,14 +458,20 @@ pub async fn MCPToolBridge::refresh_tools(
     plan => self.commit_catalog(plan),
   )
   match update {
-    Ok(_) => Ok(())
+    Ok(_) => {
+      // A committed refresh changes the advertised tool set; bump the
+      // revision so a wired McpCatalogSource is re-read at the next turn.
+      self.catalog_revision = self.catalog_revision + 1
+      Ok(())
+    }
     Err(message) => Err(message)
   }
 }
 
 ///|
-/// Close all MCP connections and clear state.
-pub fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
+/// Close all MCP connections and clear state. Async since mcp 0.15: the
+/// underlying client close performs I/O and cannot block the caller.
+pub async fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
   for conn in self.connections {
     conn.client.close()
   }
@@ -425,6 +528,53 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
 }
 
 ///|
+/// Lazy activation point: the first turn's `on_start` runs before that
+/// turn's catalog read, so servers connected here are advertised in the
+/// same turn through a wired `McpCatalogSource`. Activation failures are
+/// recorded, never raised — a down server must not kill the first turn.
+pub impl @posoco.Lifecycle for MCPToolBridge with fn on_start(self) -> Unit {
+  if self.mode is Lazy && !self.activated {
+    let _ = self.activate()
+  }
+}
+
+///|
+/// The async slot accepts this impl: the body's async close call is inferred.
 pub impl @posoco.Lifecycle for MCPToolBridge with fn on_shutdown(self) -> Unit {
   self.close()
 }
+
+///|
+pub impl @posoco.Extension for MCPToolBridge with fn extension_id(
+  _self : MCPToolBridge,
+) -> String {
+  "posoco_ext_mcp"
+}
+
+///|
+/// Ports the bridge contributes: tools (ToolProvider) and lifecycle (lazy
+/// activation + shutdown close) on the same struct.
+pub impl @posoco.Extension for MCPToolBridge with fn manifest(
+  self : MCPToolBridge,
+) -> @posoco.ExtensionManifest {
+  {
+    id: "posoco_ext_mcp",
+    models: [],
+    tools: [self],
+    sessions: [],
+    observers: [],
+    hooks: [],
+    memory: [],
+    lifecycle: [self],
+    commands: [],
+    ui: [],
+    prompt_contributors: [],
+    requires: [],
+  }
+}
+
+///|
+pub extend MCPToolBridge with @posoco.Extension::{extension_id, manifest}
+
+///|
+pub extend MCPToolBridge with @posoco.Lifecycle::{on_start, on_shutdown}
