@@ -4,7 +4,7 @@ pub(all) enum LogLevel {
   Info
   Warn
   Error
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct LogEvent {
@@ -13,7 +13,7 @@ pub(all) struct LogEvent {
   code : String
   message : String
   data : Json?
-}
+} derive(Debug)
 
 ///|
 pub(open) trait Logger {

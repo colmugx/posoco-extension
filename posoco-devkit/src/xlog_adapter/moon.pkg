@@ -1,6 +1,0 @@
-import {
-  "colmugx/posoco-devkit" @devkit,
-  "tonyfettes/xlog",
-}
-
-supported_targets = "+native"

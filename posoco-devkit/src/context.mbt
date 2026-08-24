@@ -5,19 +5,31 @@ pub(all) struct ExtContext {
 
 ///|
 pub fn ExtContext::default() -> ExtContext {
-  { logger: NoopLogger::{  } }
+  ExtContext::ExtContext()
 }
 
 ///|
-pub fn ExtContext::new(logger? : &Logger = NoopLogger::{  }) -> ExtContext {
+pub fn ExtContext::ExtContext(
+  logger? : &Logger = NoopLogger::{  },
+) -> ExtContext {
   { logger, }
 }
 
 ///|
 pub fn ExtContext::log(self : ExtContext, event : LogEvent) -> Unit {
-  let read_logger = @reader.asks(fn(env : ExtContext) { env.logger })
-  let logger = @reader.Reader::run(read_logger, self)
-  logger.log(event)
+  self.logger.log(event)
+}
+
+///|
+fn ExtContext::log_at(
+  self : ExtContext,
+  level : LogLevel,
+  source~ : String,
+  code~ : String,
+  message~ : String,
+  data? : Json? = None,
+) -> Unit {
+  self.log({ level, source, code, message, data })
 }
 
 ///|
@@ -28,7 +40,7 @@ pub fn ExtContext::debug(
   message~ : String,
   data? : Json? = None,
 ) -> Unit {
-  self.log({ level: Debug, source, code, message, data })
+  self.log_at(Debug, source~, code~, message~, data~)
 }
 
 ///|
@@ -39,7 +51,7 @@ pub fn ExtContext::info(
   message~ : String,
   data? : Json? = None,
 ) -> Unit {
-  self.log({ level: Info, source, code, message, data })
+  self.log_at(Info, source~, code~, message~, data~)
 }
 
 ///|
@@ -50,7 +62,7 @@ pub fn ExtContext::warn(
   message~ : String,
   data? : Json? = None,
 ) -> Unit {
-  self.log({ level: Warn, source, code, message, data })
+  self.log_at(Warn, source~, code~, message~, data~)
 }
 
 ///|
@@ -61,5 +73,5 @@ pub fn ExtContext::error(
   message~ : String,
   data? : Json? = None,
 ) -> Unit {
-  self.log({ level: Error, source, code, message, data })
+  self.log_at(Error, source~, code~, message~, data~)
 }

@@ -1,24 +1,70 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "colmugx/posoco-devkit"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn render_context_envelope(envelope~ : String, kind~ : String, trust~ : Bool, source? : String, content~ : String) -> String
+
 pub fn sanitize_label(String, limit? : Int) -> String
 
 pub fn sanitize_path(String, limit? : Int) -> String
 
+pub fn shell_command_is_read_only(String) -> Bool
+
 // Errors
 
 // Types and methods
+pub(all) struct BusEvent {
+  source : String
+  topic : String
+  data : Json
+} derive(@debug.Debug)
+
+pub struct EventBus {
+  subscribers : Array[&BusSubscriber]
+  mut pending : Array[BusEvent]
+  mut dispatching : Bool
+}
+pub fn EventBus::EventBus() -> Self
+pub fn EventBus::publish(Self, BusEvent) -> Unit
+pub fn EventBus::subscribe(Self, &BusSubscriber) -> Unit
+pub fn EventBus::subscriber_count(Self) -> Int
+
 pub(all) struct ExtContext {
   logger : &Logger
 }
+pub fn ExtContext::ExtContext(logger? : &Logger) -> Self
 pub fn ExtContext::debug(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
 pub fn ExtContext::default() -> Self
 pub fn ExtContext::error(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
 pub fn ExtContext::info(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
 pub fn ExtContext::log(Self, LogEvent) -> Unit
-pub fn ExtContext::new(logger? : &Logger) -> Self
 pub fn ExtContext::warn(Self, source~ : String, code~ : String, message~ : String, data? : Json?) -> Unit
+
+pub(all) struct FileStamp {
+  mtime_s : Int64
+  mtime_ns : Int
+  size : Int64
+} derive(Eq, @debug.Debug)
+
+pub struct FreshnessGuard {
+  records : Map[String, FileStamp]
+}
+pub fn FreshnessGuard::FreshnessGuard() -> Self
+pub fn FreshnessGuard::check(Self, String, FileStamp?) -> FreshnessVerdict
+pub fn FreshnessGuard::forget(Self, String) -> Unit
+pub fn FreshnessGuard::note_read(Self, String, FileStamp) -> Unit
+
+pub(all) enum FreshnessVerdict {
+  Fresh
+  NeverRead
+  Modified
+} derive(Eq, @debug.Debug)
+#as_free_fn(freshness_hint, deprecated)
+pub fn FreshnessVerdict::hint(Self) -> String
 
 pub(all) struct LogEvent {
   level : LogLevel
@@ -26,19 +72,20 @@ pub(all) struct LogEvent {
   code : String
   message : String
   data : Json?
-}
+} derive(@debug.Debug)
 
 pub(all) enum LogLevel {
   Debug
   Info
   Warn
   Error
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct MemoryLogger {
   events : Array[LogEvent]
 }
-pub fn MemoryLogger::new() -> Self
+pub fn MemoryLogger::MemoryLogger() -> Self
+pub fn MemoryLogger::log(Self, LogEvent) -> Unit
 pub impl Logger for MemoryLogger
 
 pub(all) struct NoopLogger {
@@ -48,6 +95,10 @@ pub impl Logger for NoopLogger
 // Type aliases
 
 // Traits
+pub(open) trait BusSubscriber {
+  fn on_bus_event(Self, BusEvent) -> Unit
+}
+
 pub(open) trait Logger {
   fn log(Self, LogEvent) -> Unit
 }

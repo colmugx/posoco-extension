@@ -1,6 +1,6 @@
 ///|
 test "memory_logger_records_warn_events" {
-  let logger = MemoryLogger::new()
+  let logger = MemoryLogger()
   logger.log({
     level: Warn,
     source: "test",
@@ -14,8 +14,8 @@ test "memory_logger_records_warn_events" {
 
 ///|
 test "ext_context_warn_emits_log_event" {
-  let logger = MemoryLogger::new()
-  let ctx = ExtContext::new(logger~)
+  let logger = MemoryLogger()
+  let ctx = ExtContext(logger~)
   ctx.warn(
     source="devkit-test",
     code="devkit.warn",
