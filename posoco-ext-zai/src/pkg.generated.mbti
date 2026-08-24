@@ -1,0 +1,55 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-zai"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco-ext-llm",
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn zai_profile_endpoint(String) -> (String, String)?
+
+// Errors
+
+// Types and methods
+pub(all) struct ZaiConfig {
+  api_key : String
+  base_url : String
+  model : String
+  endpoint_prefix : String
+  reasoning_effort : String
+  thinking_efforts : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
+pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String) -> Self raise @error.CompositionError
+pub fn ZaiConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+type ZaiModelInfo
+
+pub(all) struct ZaiModelPort {
+  config : ZaiConfig
+  ctx : @posoco-devkit.ExtContext
+}
+pub fn ZaiModelPort::ZaiModelPort(ZaiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn ZaiModelPort::extension_id(Self) -> String
+pub fn ZaiModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn ZaiModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub impl @port.Extension for ZaiModelPort
+pub impl @port.ModelPort for ZaiModelPort
+
+pub(all) struct ZaiProvider {
+  ctx : @posoco-devkit.ExtContext
+}
+pub fn ZaiProvider::ZaiProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub impl @posoco-ext-llm.ApiKeyFactory for ZaiProvider
+pub impl @posoco-ext-llm.ProviderFactory for ZaiProvider
+
+// Type aliases
+
+// Traits
