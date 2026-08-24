@@ -9,7 +9,7 @@ pub(all) struct Handoff {
 }
 
 ///|
-pub fn Handoff::new(
+pub fn Handoff::Handoff(
   cwd~ : String,
   store~ : &HandoffStore,
   probe~ : &HandoffWorkspaceProbe,

@@ -17,6 +17,7 @@ pub impl @posoco.Extension for Handoff with fn manifest(self : Handoff) -> @poso
     commands: [self],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

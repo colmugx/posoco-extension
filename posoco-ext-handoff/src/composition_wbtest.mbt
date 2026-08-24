@@ -2,15 +2,15 @@
 /// Compile fixture for the intended public composition surface. This keeps
 /// trait-object coercions explicit so API drift is caught by `moon test`.
 test "handoff/public composition surface" {
-  let store = DefaultHandoffStore::new()
-  let workspace = HandoffWorkspaceState::new("/repo")
-  let work = HandoffWorkState::new()
+  let store = DefaultHandoffStore()
+  let workspace = HandoffWorkspaceState("/repo")
+  let work = HandoffWorkState()
 
   let store_port : &HandoffStore = store
   let workspace_probe : &HandoffWorkspaceProbe = workspace
   let work_source : &HandoffWorkSource = work
 
-  let handoff = Handoff::new(
+  let handoff = Handoff(
     cwd="/repo",
     store=store_port,
     probe=workspace_probe,

@@ -6,7 +6,7 @@ priv struct FakeHandoffStore {
 }
 
 ///|
-fn FakeHandoffStore::new() -> FakeHandoffStore {
+fn FakeHandoffStore::FakeHandoffStore() -> FakeHandoffStore {
   { dir: "", path: "", content: "" }
 }
 
@@ -59,7 +59,7 @@ impl HandoffWorkSource for FixedHandoffWork with fn handoff_work(self) {
 
 ///|
 async test "handoff/create writes project-root document" {
-  let store = FakeHandoffStore::new()
+  let store = FakeHandoffStore()
   let probe = FixedHandoffProbe::{
     workspace: {
       root: "/repo",
@@ -76,7 +76,7 @@ async test "handoff/create writes project-root document" {
       next_action: Some("Run moon test"),
     },
   }
-  let handoff = Handoff::new(cwd="/repo/src/nested", store~, probe~, work_sources=[
+  let handoff = Handoff(cwd="/repo/src/nested", store~, probe~, work_sources=[
     source,
   ])
   let outcome = handoff.invoke("handoff", Json::string("create"))
@@ -90,14 +90,14 @@ async test "handoff/create writes project-root document" {
 
 ///|
 async test "handoff/inspect reads the same project-root document" {
-  let store = FakeHandoffStore::new()
+  let store = FakeHandoffStore()
   store.dir = "/repo/.handoff"
   store.path = "/repo/.handoff/HANDOFF.md"
   store.content = "# Handoff\n\nexisting\n"
   let probe = FixedHandoffProbe::{
     workspace: { root: "/repo", branch: None, head: None, changes: [] },
   }
-  let handoff = Handoff::new(cwd="/repo/src", store~, probe~, work_sources=[])
+  let handoff = Handoff(cwd="/repo/src", store~, probe~, work_sources=[])
   let outcome = handoff.invoke("handoff", Json::string("inspect"))
   match outcome {
     @posoco.CommandOutcome::Success(feedback~, structured~, ui_hint~) => {
@@ -111,11 +111,11 @@ async test "handoff/inspect reads the same project-root document" {
 
 ///|
 async test "handoff/create refuses incomplete continuation state" {
-  let store = FakeHandoffStore::new()
+  let store = FakeHandoffStore()
   let probe = FixedHandoffProbe::{
     workspace: { root: "/repo", branch: None, head: None, changes: [] },
   }
-  let handoff = Handoff::new(cwd="/repo", store~, probe~, work_sources=[])
+  let handoff = Handoff(cwd="/repo", store~, probe~, work_sources=[])
   let outcome = handoff.invoke("handoff", Json::string("create"))
   match outcome {
     @posoco.CommandOutcome::Failure(reason~) =>

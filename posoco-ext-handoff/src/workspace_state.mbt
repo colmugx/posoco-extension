@@ -18,7 +18,7 @@ fn copy_workspace(workspace : WorkspaceSnapshot) -> WorkspaceSnapshot {
 }
 
 ///|
-pub fn HandoffWorkspaceState::new(
+pub fn HandoffWorkspaceState::HandoffWorkspaceState(
   root : String,
   branch? : String? = None,
   head? : String? = None,

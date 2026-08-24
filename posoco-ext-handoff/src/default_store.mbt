@@ -7,6 +7,6 @@
 pub struct DefaultHandoffStore {}
 
 ///|
-pub fn DefaultHandoffStore::new() -> DefaultHandoffStore {
+pub fn DefaultHandoffStore::DefaultHandoffStore() -> DefaultHandoffStore {
   DefaultHandoffStore::{  }
 }

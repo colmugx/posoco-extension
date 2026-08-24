@@ -1,6 +1,6 @@
 ///|
 test "work_state/snapshot_is_detached" {
-  let state = HandoffWorkState::new()
+  let state = HandoffWorkState()
   state.set_objective("Implement handoff")
   state.add_done_when("HANDOFF.md is written")
   let first = state.snapshot()
@@ -12,7 +12,7 @@ test "work_state/snapshot_is_detached" {
 
 ///|
 test "work_state/complete_moves_item_out_of_queue" {
-  let state = HandoffWorkState::new()
+  let state = HandoffWorkState()
   state.enqueue("write renderer")
   state.enqueue("run tests")
   state.complete("write renderer")
@@ -23,7 +23,7 @@ test "work_state/complete_moves_item_out_of_queue" {
 
 ///|
 test "work_state/resolve_blocker_removes_active_blocker" {
-  let state = HandoffWorkState::new()
+  let state = HandoffWorkState()
   state.add_blocker("Posoco API mismatch")
   state.add_blocker("moon unavailable")
   state.resolve_blocker("Posoco API mismatch")
@@ -32,7 +32,7 @@ test "work_state/resolve_blocker_removes_active_blocker" {
 
 ///|
 test "work_state/validation_check_has_one_status" {
-  let state = HandoffWorkState::new()
+  let state = HandoffWorkState()
   state.validation_not_run("moon test")
   state.validation_failed("moon test")
   let failed = state.snapshot()
@@ -49,7 +49,7 @@ test "work_state/validation_check_has_one_status" {
 
 ///|
 test "work_state/empty_string_clears_singular_field" {
-  let state = HandoffWorkState::new()
+  let state = HandoffWorkState()
   state.set_current_work("Implement renderer")
   state.set_next_action("Run tests")
   state.set_current_work("")

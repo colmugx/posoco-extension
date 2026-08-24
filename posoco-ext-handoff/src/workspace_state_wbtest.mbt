@@ -1,6 +1,6 @@
 ///|
 test "workspace_state/snapshot_is_detached" {
-  let state = HandoffWorkspaceState::new(
+  let state = HandoffWorkspaceState(
     "/repo",
     branch=Some("main"),
     head=Some("abc123"),
@@ -14,7 +14,7 @@ test "workspace_state/snapshot_is_detached" {
 
 ///|
 test "workspace_state/replaces_branch_head_and_changes" {
-  let state = HandoffWorkspaceState::new("/repo")
+  let state = HandoffWorkspaceState("/repo")
   state.set_branch(Some("feat/handoff"))
   state.set_head(Some("def456"))
   state.set_changes([
@@ -29,7 +29,7 @@ test "workspace_state/replaces_branch_head_and_changes" {
 
 ///|
 test "workspace_state/rejects_empty_root" {
-  let state = HandoffWorkspaceState::new("")
+  let state = HandoffWorkspaceState("")
   match state.snapshot("/repo") {
     Err(reason) => assert_true(reason.contains("root"))
     Ok(_) => fail("empty workspace root must be rejected")
