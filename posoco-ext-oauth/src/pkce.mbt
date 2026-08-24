@@ -42,7 +42,7 @@ fn random_pkce_string(length : Int) -> String {
   let buf = StringBuilder::new()
   let seed = @async.now()
   let mut state = seed
-  for i in 0..<length {
+  for _ in 0..<length {
     // Simple LCG.
     state = state * 6364136223846793005L + 1442695040888963407L
     let idx = ((state >> 33).to_int() & 0x7FFFFFFF) % pkce_chars.length()

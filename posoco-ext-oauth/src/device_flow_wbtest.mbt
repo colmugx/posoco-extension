@@ -81,7 +81,8 @@ async test "device response missing fields stays typed" {
   match result {
     Err(OAuthError::ParseError(detail)) =>
       assert_true(detail.contains("verification_uri_complete"))
-    Err(error) => fail("expected typed parse error, got: " + Show::to_string(error))
+    Err(error) =>
+      fail("expected typed parse error, got: " + Show::to_string(error))
     Ok(_) => fail("expected missing-field parse error")
   }
 }
@@ -108,7 +109,8 @@ async test "device response rejects untrusted verification URI" {
   match result {
     Err(OAuthError::ParseError(detail)) =>
       assert_true(detail.contains("invalid http(s) URI"))
-    Err(error) => fail("expected URI parse error, got: " + Show::to_string(error))
+    Err(error) =>
+      fail("expected URI parse error, got: " + Show::to_string(error))
     Ok(_) => fail("untrusted URI must not be returned to the host")
   }
 }

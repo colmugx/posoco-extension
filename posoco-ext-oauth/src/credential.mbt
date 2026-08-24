@@ -184,7 +184,7 @@ pub fn ProviderCredential::to_json(self : ProviderCredential) -> Json {
 pub fn ProviderCredential::from_json(json : Json) -> ProviderCredential? {
   match json {
     Json::Object(map) => {
-      let method = match map.get("method") {
+      let method_tag = match map.get("method") {
         Some(Json::String(value)) => value
         _ => return None
       }
@@ -192,7 +192,7 @@ pub fn ProviderCredential::from_json(json : Json) -> ProviderCredential? {
         Some(value) => value
         None => return None
       }
-      match method {
+      match method_tag {
         "oauth" =>
           match Credential::from_json(payload) {
             Some(value) => Some(OAuth(value))

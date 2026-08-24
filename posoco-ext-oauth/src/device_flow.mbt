@@ -21,7 +21,7 @@ pub(all) struct DeviceFlowConfig {
 ///|
 /// Build a `DeviceFlowConfig` with a sane empty `default_headers`. Providers
 /// that carry identity headers call `.with_default_headers` after.
-pub fn DeviceFlowConfig::new(
+pub fn DeviceFlowConfig::DeviceFlowConfig(
   client_id~ : String,
   device_auth_endpoint~ : String,
   token_endpoint~ : String,

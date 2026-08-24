@@ -95,25 +95,25 @@ pub(all) struct DeviceFlowConfig {
   scope : String
   default_headers : Map[String, String]
 }
-pub fn DeviceFlowConfig::new(client_id~ : String, device_auth_endpoint~ : String, token_endpoint~ : String, scope? : String) -> Self
+pub fn DeviceFlowConfig::DeviceFlowConfig(client_id~ : String, device_auth_endpoint~ : String, token_endpoint~ : String, scope? : String) -> Self
 pub fn DeviceFlowConfig::with_default_headers(Self, Map[String, String]) -> Self
 
 pub(all) struct InMemoryApiKeyStore {
   credentials : Map[String, ApiKeyCredential]
 }
-pub fn InMemoryApiKeyStore::new() -> Self
+pub fn InMemoryApiKeyStore::InMemoryApiKeyStore() -> Self
 pub impl ApiKeyStore for InMemoryApiKeyStore
 
 pub(all) struct InMemoryCredentialStore {
   credentials : Map[String, Credential]
 }
-pub fn InMemoryCredentialStore::new() -> Self
+pub fn InMemoryCredentialStore::InMemoryCredentialStore() -> Self
 pub impl CredentialStore for InMemoryCredentialStore
 
 pub(all) struct InMemoryProviderCredentialStore {
   credentials : Map[String, ProviderCredential]
 }
-pub fn InMemoryProviderCredentialStore::new() -> Self
+pub fn InMemoryProviderCredentialStore::InMemoryProviderCredentialStore() -> Self
 pub impl ProviderCredentialStore for InMemoryProviderCredentialStore
 
 pub(all) struct NoopAuthInteraction {

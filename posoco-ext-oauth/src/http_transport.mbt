@@ -75,10 +75,17 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn post(
   // bound in the provider-independent transport so every OAuth endpoint gets
   // the same fail-fast deadline, including refresh calls.
   @async.with_timeout(30000, () => {
+    // async 0.21: @http headers are case-insensitively keyed. The
+    // transport-agnostic contract stays Map[String, String] (fakes and
+    // providers keep plain keys) and converts at this single @http boundary.
+    let http_headers : @http.Headers = Map([])
+    for k, v in request.headers {
+      http_headers[k] = v
+    }
     let (response, body_data) = @http.post(
       request.url,
       request.body,
-      headers=request.headers,
+      headers=http_headers,
     ) catch {
       err =>
         raise OAuthError::HttpError(
