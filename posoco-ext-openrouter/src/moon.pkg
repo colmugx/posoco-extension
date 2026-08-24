@@ -1,0 +1,36 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-kit-chat-completions" @chatkit,
+  "colmugx/posoco-ext-llm" @llm,
+  "colmugx/posoco-ext-oauth" @oauth,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: {
+    // HTTP-backed chat and compact impls: native+js only
+    // (moonbitlang/async/http is unavailable on wasm). The struct
+    // definition, config, encode/decode, SSE parsing, error classification,
+    // provider_config, factory, and manifest all live in the unrestricted
+    // core files and compile on every backend — so the package exports a
+    // complete mbti. #cfg-guarded fallbacks (chat/compact/refresh
+    // _wasm_fallback.mbt) satisfy the trait on wasm. Mirrors
+    // posoco-ext-read / posoco-ext-oauth / posoco-ext-openai-compatible /
+    // posoco-ext-opencode-zen.
+    "chat_native_js.mbt": [ "native", "js" ],
+    "compact_native_js.mbt": [ "native", "js" ],
+    "models_native_js.mbt": [ "native", "js" ],
+    "refresh_native_js.mbt": [ "native", "js" ],
+    "wire_log.js.mbt": [ "js" ],
+    "wire_log_native.mbt": [ "native" ],
+    "posoco_ext_openrouter_wbtest.mbt": [ "native" ],
+    "sse_wbtest.mbt": [ "native" ],
+  },
+)

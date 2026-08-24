@@ -1,0 +1,73 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-openrouter"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco-ext-llm",
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn openrouter_model_catalog(String, String, Array[OpenRouterModelInfo], String, &@posoco-ext-llm.ApiKeyFactory, http_referer? : String?, title? : String?) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+
+pub fn parse_cached_openrouter_models(Json?) -> Array[OpenRouterModelInfo]?
+
+pub fn parse_openrouter_models(Json) -> Array[OpenRouterModelInfo] raise @error.ModelError
+
+// Errors
+
+// Types and methods
+pub(all) struct OpenRouterApiKeyFactory {
+  ctx : @posoco-devkit.ExtContext
+}
+pub fn OpenRouterApiKeyFactory::OpenRouterApiKeyFactory(ctx? : @posoco-devkit.ExtContext) -> Self
+pub impl @posoco-ext-llm.ApiKeyFactory for OpenRouterApiKeyFactory
+
+pub(all) struct OpenRouterConfig {
+  api_key : String
+  model : String
+  base_url : String
+  thinking : Bool
+  reasoning_effort : String?
+  thinking_efforts : Array[String]
+  context_window : Int?
+  compact_threshold : Double?
+  http_referer : String?
+  title : String?
+} derive(Eq, @debug.Debug)
+pub fn OpenRouterConfig::OpenRouterConfig(String, model~ : String, base_url? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, http_referer? : String?, title? : String?) -> Self
+pub fn OpenRouterConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+pub(all) struct OpenRouterModelInfo {
+  id : String
+  context_length : Int?
+  reasoning_supported : Bool
+  supported_efforts : Array[String]
+  default_effort : String?
+  default_enabled : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) struct OpenRouterModelPort {
+  config : OpenRouterConfig
+}
+pub fn OpenRouterModelPort::OpenRouterModelPort(OpenRouterConfig) -> Self
+pub fn OpenRouterModelPort::extension_id(Self) -> String
+pub fn OpenRouterModelPort::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.Extension for OpenRouterModelPort
+pub impl @port.ModelPort for OpenRouterModelPort
+
+pub(all) struct OpenRouterProvider {
+  ctx : @posoco-devkit.ExtContext
+}
+pub fn OpenRouterProvider::OpenRouterProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub impl @posoco-ext-llm.ProviderFactory for OpenRouterProvider
+pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenRouterProvider
+
+// Type aliases
+
+// Traits
