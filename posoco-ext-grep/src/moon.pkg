@@ -11,6 +11,8 @@ import {
   "moonbitlang/async/fs",
 } for "wbtest"
 
+warnings = "-unused_package"
+
 options(
   targets: {
     "posoco_ext_grep.js.mbt": [ "js" ],

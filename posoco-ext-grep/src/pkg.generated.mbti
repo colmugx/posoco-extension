@@ -16,6 +16,7 @@ pub fn grep_extension() -> GrepTools
 pub(all) struct GrepTools {
 }
 pub fn GrepTools::GrepTools() -> Self
+pub async fn GrepTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GrepTools::extension_id(Self) -> String
 pub fn GrepTools::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for GrepTools

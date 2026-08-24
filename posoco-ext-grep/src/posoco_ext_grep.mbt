@@ -121,6 +121,31 @@ fn grep_result_text(results : Array[String], pattern : String) -> String {
 }
 
 ///|
+/// One-line UI summary for the structured payload: "1 match", "N matches",
+/// or "no matches" when the search found nothing.
+fn grep_summary(count : Int) -> String {
+  if count == 0 {
+    "no matches"
+  } else if count == 1 {
+    "1 match"
+  } else {
+    "\{count} matches"
+  }
+}
+
+///|
+/// Structured payload for observers/UIs; never sent to the model. Carries the
+/// reserved `summary` field plus the match count.
+fn grep_structured(count : Int) -> Json {
+  Json::object(
+    Map::from_array([
+      ("summary", Json::string(grep_summary(count))),
+      ("count", Json::number(count.to_double())),
+    ]),
+  )
+}
+
+///|
 /// Shared `grep` execute logic. Target-agnostic; only the searcher differs.
 async fn execute_grep_impl(
   searcher : &GrepSearcher,
@@ -130,6 +155,6 @@ async fn execute_grep_impl(
   let results = searcher.search(pattern, base, file_glob)
   @posoco.ToolOutcome::Success(
     content=grep_result_text(results, pattern),
-    structured=None,
+    structured=Some(grep_structured(results.length())),
   )
 }

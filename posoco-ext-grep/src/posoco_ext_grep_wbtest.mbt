@@ -120,9 +120,54 @@ async test "grep_zero_matches_is_success" {
     // ToolOutcome is now a variant: Success carries content; business
     // errors are ToolReportedError. Zero matches is still Success.
     match result {
-      Success(content~, ..) => assert_true(content.contains("No matches found"))
+      Success(content~, structured~) => {
+        assert_eq(content, "No matches found for: missing")
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("summary") is Some(String("no matches")))
+            assert_true(meta.get("count") is Some(Number(0.0, ..)))
+          }
+          _ => fail("expected structured summary payload for zero matches")
+        }
+      }
       other =>
         fail("expected Success for zero matches, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_multi_match_fills_structured_summary" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-multi")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file(
+      "\{dir}/hits.txt",
+      "needle alpha\nplain\nneedle beta\nneedle gamma\n",
+      create_mode=CreateNew,
+    )
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call("needle", dir),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_eq(
+          content,
+          "Found 3 matches:\n\{dir}/hits.txt:1:needle alpha\n\{dir}/hits.txt:3:needle beta\n\{dir}/hits.txt:4:needle gamma\n",
+        )
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("summary") is Some(String("3 matches")))
+            assert_true(meta.get("count") is Some(Number(3.0, ..)))
+          }
+          _ => fail("expected structured summary payload for multi match")
+        }
+      }
+      other =>
+        fail("expected Success for multi match, got " + other.to_string())
     }
   }
 }
