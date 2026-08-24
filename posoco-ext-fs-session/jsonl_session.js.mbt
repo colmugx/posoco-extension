@@ -11,7 +11,9 @@ pub(all) struct JsonlSessionStore {
 }
 
 ///|
-pub fn JsonlSessionStore::new(root_dir : String) -> JsonlSessionStore {
+pub fn JsonlSessionStore::JsonlSessionStore(
+  root_dir : String,
+) -> JsonlSessionStore {
   { root_dir, }
 }
 

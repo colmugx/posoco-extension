@@ -19,7 +19,7 @@ test "session id rejects native and windows separators" {
 
 ///|
 test "jsonl store contributes exactly one session port" {
-  let store = JsonlSessionStore::new("sessions")
+  let store = JsonlSessionStore::JsonlSessionStore("sessions")
   let manifest = store.manifest()
   assert_eq(manifest.id, "posoco_ext_fs_session")
   assert_eq(manifest.sessions.length(), 1)

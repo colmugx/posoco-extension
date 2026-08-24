@@ -22,9 +22,9 @@ pub fn validate_session_id(String) -> Result[Unit, String]
 pub(all) struct JsonlSessionStore {
   root_dir : String
 }
+pub fn JsonlSessionStore::JsonlSessionStore(String) -> Self
 pub fn JsonlSessionStore::extension_id(Self) -> String
 pub fn JsonlSessionStore::manifest(Self) -> @port.ExtensionManifest
-pub fn JsonlSessionStore::new(String) -> Self
 pub impl @port.Extension for JsonlSessionStore
 pub impl @port.SessionStore for JsonlSessionStore
 

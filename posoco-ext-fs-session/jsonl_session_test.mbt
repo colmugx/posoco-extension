@@ -261,7 +261,7 @@ async fn fresh_root(prefix : String) -> String {
 ///|
 async test "io[native]: load non-existent session returns empty" {
   let root = fresh_root("load-missing")
-  let store = JsonlSessionStore::new(root)
+  let store = JsonlSessionStore::JsonlSessionStore(root)
   let s = store.load("does_not_exist") catch {
     e => fail("missing session should Ok empty: \{e}")
   }
@@ -275,7 +275,7 @@ async test "io[native]: load non-existent session returns empty" {
 ///|
 async test "io[native]: save then load round-trips a full session" {
   let root = fresh_root("roundtrip")
-  let store = JsonlSessionStore::new(root)
+  let store = JsonlSessionStore::JsonlSessionStore(root)
   let session = @posoco.Session::{
     messages: [
       @posoco.Message::SystemMessage(content=[
@@ -312,7 +312,7 @@ async test "io[native]: save creates parent directory lazily" {
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
-  let store = JsonlSessionStore::new(root)
+  let store = JsonlSessionStore::JsonlSessionStore(root)
   let session = @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
   store.save("s", session) catch {
     e => fail("save should lazily create root: \{e}")
@@ -326,7 +326,7 @@ async test "io[native]: save creates parent directory lazily" {
 ///|
 async test "io[native]: overwrite existing session truncates correctly" {
   let root = fresh_root("overwrite")
-  let store = JsonlSessionStore::new(root)
+  let store = JsonlSessionStore::JsonlSessionStore(root)
   let big = @posoco.Session::{
     messages: [
       @posoco.Message::UserMessage(content=[
