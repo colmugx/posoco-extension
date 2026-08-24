@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-permission"
 
 import {
+  "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
@@ -25,28 +26,31 @@ pub(all) struct ApprovalRequest {
   call_id : String
   category : String
   arguments_preview : String
+  arguments : Json
 }
 
 pub(all) enum PermissionMode {
   ReadOnly
   WorkspaceWrite
   Interactive
+  Yolo
 } derive(Eq, @debug.Debug)
 
 pub(all) struct PermissionPolicy {
-  mode : PermissionMode
+  mut mode : PermissionMode
   approval : &ApprovalSource?
   mut session_approved : @set.Set[String]
   read_tools : Array[String]
   write_tools : Array[String]
   shell_tools : Array[String]
 }
+pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?) -> Self
 pub fn PermissionPolicy::extension_id(Self) -> String
 pub fn PermissionPolicy::manifest(Self) -> @port.ExtensionManifest
 pub fn PermissionPolicy::mode(Self) -> PermissionMode
-pub fn PermissionPolicy::new(PermissionMode, approval? : &ApprovalSource?) -> Self
+pub impl @port.CommandPort for PermissionPolicy
 pub impl @port.Extension for PermissionPolicy
-pub impl @port.Hook for PermissionPolicy
+pub impl @port.PipelineHook for PermissionPolicy
 pub impl @port.SystemPromptContributor for PermissionPolicy
 
 // Type aliases
