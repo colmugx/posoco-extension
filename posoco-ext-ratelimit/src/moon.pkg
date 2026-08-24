@@ -1,0 +1,13 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+}
+
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: { "rate_limit_guard_wbtest.mbt": [ "native" ] },
+)
