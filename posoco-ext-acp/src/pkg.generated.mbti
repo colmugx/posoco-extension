@@ -60,6 +60,7 @@ pub struct AcpBridge {
   mut last_finish : @kernel.FinishReason?
   mut last_failure : String?
 }
+pub fn AcpBridge::AcpBridge() -> Self
 pub async fn AcpBridge::ask(Self, @posoco-ext-permission.ApprovalRequest) -> @posoco-ext-permission.ApprovalDecision
 pub fn AcpBridge::attach(Self, context~ : @agent.AgentContext, session_id~ : String) -> Unit
 pub fn AcpBridge::close(Self) -> Unit
@@ -67,7 +68,6 @@ pub fn AcpBridge::detach(Self) -> Unit
 pub fn AcpBridge::extension_id(Self) -> String
 pub async fn AcpBridge::flush(Self) -> Int noraise
 pub fn AcpBridge::manifest(Self) -> @port.ExtensionManifest
-pub fn AcpBridge::new() -> Self
 pub async fn AcpBridge::request(Self, @port.UiRequest) -> @port.UiResponse raise @error.UiError
 pub fn[G] AcpBridge::spawn_pump(Self, @async.TaskGroup[G]) -> Unit
 pub fn AcpBridge::stop_reason(Self) -> @session.StopReason
