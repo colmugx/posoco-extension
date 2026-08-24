@@ -98,7 +98,7 @@ pub struct SkillDiscovery {
 }
 
 ///|
-pub fn SkillDiscovery::new(
+pub fn SkillDiscovery::SkillDiscovery(
   fs : &@workspace.WorkspaceFs,
   cwd~ : String,
   home~ : String,

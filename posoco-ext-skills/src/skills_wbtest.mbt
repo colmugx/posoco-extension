@@ -10,7 +10,7 @@ struct FakeFs {
 }
 
 ///|
-fn FakeFs::new() -> FakeFs {
+fn FakeFs::FakeFs() -> FakeFs {
   {
     files: Map([]),
     dirs: Map([]),
@@ -526,7 +526,7 @@ test "catalog: duplicate names and paths are rejected before composition" {
 
 ///|
 test "tools: empty catalog advertises no activation surface" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let skills = must_skills(fs, SkillCatalog::empty())
   assert_eq(skills.list_tools().length(), 0)
   let manifest = skills.manifest()
@@ -536,7 +536,7 @@ test "tools: empty catalog advertises no activation surface" {
 
 ///|
 test "tools: populated catalog constrains names with enum" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let skills = must_skills(
     fs,
     catalog_of([
@@ -572,7 +572,7 @@ test "tools: populated catalog constrains names with enum" {
 
 ///|
 test "manifest: populated extension composes tools and optional prompt" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let catalog = catalog_of([descriptor("alpha", "Alpha", "/skills/alpha")])
   let skills = must_skills(fs, catalog)
   let manifest = skills.manifest()
@@ -615,7 +615,7 @@ test "paths: canonical helpers handle Windows drives and UNC roots" {
 
 ///|
 test "catalog: runtime snapshots caller-owned mutable arrays and metadata" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let metadata : Map[String, String] = Map([("version", "1")])
   let original : SkillDescriptor = {
     ..descriptor("alpha", "Alpha", "/skills/alpha"),
@@ -688,7 +688,7 @@ test "discovery options: repository scope defaults on but can be trust-gated" {
 
 ///|
 test "manifest: too-small catalog budget does not advertise an empty prompt contributor" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let config = SkillsConfig::{ ..SkillsConfig::default(), catalog_max_chars: 1 }
   let skills = must_skills(
     fs,
@@ -721,7 +721,7 @@ test "configuration: tool whitespace and resource-node limits fail fast" {
 
 ///|
 async test "discovery: hidden skill directories remain eligible for lenient loading" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let root = "/home/u/.agents/skills"
   let dir = root + "/.shared"
   fs.add_dir(root, [".shared"])
@@ -734,14 +734,14 @@ async test "discovery: hidden skill directories remain eligible for lenient load
     ..SkillDiscoveryOptions::default(),
     include_repository: false,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="", home="/home/u", options~).discover()
   assert_true(catalog.find("shared") is Some(_))
   assert_true(has_diagnostic(catalog.diagnostics, InvalidName))
 }
 
 ///|
 async test "discovery: repository scope can be disabled for an untrusted workspace" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.agents/skills", ["repo-skill"])
   fs.add_dir("/repo/.agents/skills/repo-skill", ["SKILL.md"])
   fs.add_file(
@@ -756,14 +756,14 @@ async test "discovery: repository scope can be disabled for an untrusted workspa
     ..SkillDiscoveryOptions::default(),
     include_repository: false,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="", home="/home/u", options~).discover()
   assert_true(catalog.find("repo-skill") is None)
   assert_true(catalog.find("user-skill") is Some(_))
 }
 
 ///|
 async test "discovery: deterministic precedence is child project then ancestors then user" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.git", [])
   fs.add_dir("/repo/sub/.agents/skills", ["local-only", "same"])
   fs.add_dir("/repo/sub/.agents/skills/local-only", ["SKILL.md"])
@@ -792,7 +792,7 @@ async test "discovery: deterministic precedence is child project then ancestors 
   fs.add_file(
     "/home/u/.agents/skills/user-only/SKILL.md", "---\nname: user-only\ndescription: user\n---\nuser body",
   )
-  let catalog = SkillDiscovery::new(fs, cwd="/repo/sub", home="/home/u").discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo/sub", home="/home/u").discover()
   assert_eq(catalog.skills.length(), 4)
   match catalog.find("same") {
     Some(skill) => assert_eq(skill.description, "child wins")
@@ -809,7 +809,7 @@ async test "discovery: deterministic precedence is child project then ancestors 
 
 ///|
 async test "discovery: invalid and oversized skills are diagnosed without aborting catalog" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.agents/skills", ["bad", "good", "large"])
   fs.add_dir("/repo/.agents/skills/bad", ["SKILL.md"])
   fs.add_dir("/repo/.agents/skills/good", ["SKILL.md"])
@@ -828,7 +828,7 @@ async test "discovery: invalid and oversized skills are diagnosed without aborti
     include_user: false,
     max_skill_file_chars: 80,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="/repo", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 1)
   assert_true(catalog.find("good") is Some(_))
   assert_true(has_diagnostic(catalog.diagnostics, InvalidFrontmatter))
@@ -837,7 +837,7 @@ async test "discovery: invalid and oversized skills are diagnosed without aborti
 
 ///|
 async test "activation: instructions are re-read on demand and resources are listed not loaded" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "references", "script.sh"])
   fs.add_dir(dir + "/references", ["guide.md"])
@@ -868,7 +868,7 @@ async test "activation: instructions are re-read on demand and resources are lis
 
 ///|
 async test "activation: stale metadata requires rediscovery" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md"])
   fs.add_file(
@@ -888,7 +888,7 @@ async test "activation: stale metadata requires rediscovery" {
 
 ///|
 async test "resource read: nested text succeeds but traversal and SKILL alias are rejected" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "references", "skill.md"])
   fs.add_dir(dir + "/references", ["guide.md"])
@@ -918,7 +918,7 @@ async test "resource read: nested text succeeds but traversal and SKILL alias ar
 
 ///|
 async test "resource read: symlink escape is rejected before outside content is read" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "escape.txt"])
   fs.add_file(
@@ -939,7 +939,7 @@ async test "resource read: symlink escape is rejected before outside content is 
 
 ///|
 async test "discovery: max_skills bounds the collision-resolved catalog" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.agents/skills", ["a", "b", "c"])
   for name in ["a", "b", "c"] {
     let dir = "/repo/.agents/skills/" + name
@@ -955,7 +955,7 @@ async test "discovery: max_skills bounds the collision-resolved catalog" {
     include_user: false,
     max_skills: 2,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="/repo", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 2)
   assert_true(catalog.find("a") is Some(_))
   assert_true(catalog.find("b") is Some(_))
@@ -965,7 +965,7 @@ async test "discovery: max_skills bounds the collision-resolved catalog" {
 
 ///|
 async test "activation: resource listing preserves safe logical symlink paths" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "alias"])
   fs.add_dir(dir + "/alias", ["guide.md"])
@@ -993,7 +993,7 @@ async test "activation: resource listing preserves safe logical symlink paths" {
 
 ///|
 async test "activation: resource node budget truncates wide trees" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "a.txt", "b.txt", "c.txt"])
   fs.add_file(
@@ -1025,7 +1025,7 @@ async test "activation: resource node budget truncates wide trees" {
 
 ///|
 async test "tool outcomes avoid duplicating large skill text in structured metadata" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "guide.md"])
   fs.add_file(
@@ -1077,7 +1077,7 @@ test "parser: directory-name validation normalizes Windows separators" {
 
 ///|
 async test "discovery: repository skills cannot escape repo boundary through symlinks by default" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let logical_dir = "/repo/.agents/skills/demo"
   let logical_skill = logical_dir + "/SKILL.md"
   fs.add_dir("/repo/.agents/skills", ["demo"])
@@ -1092,7 +1092,7 @@ async test "discovery: repository skills cannot escape repo boundary through sym
     repo_root: Some("/repo"),
     include_user: false,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="/repo", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 0)
   assert_true(has_diagnostic(catalog.diagnostics, ExternalSymlinkRejected))
   // Reject before reading repo-controlled external skill contents.
@@ -1101,7 +1101,7 @@ async test "discovery: repository skills cannot escape repo boundary through sym
 
 ///|
 async test "discovery: trusted host can opt into external repository skill symlinks using logical install name" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let logical_dir = "/repo/.agents/skills/demo"
   let logical_skill = logical_dir + "/SKILL.md"
   fs.add_dir("/repo/.agents/skills", ["demo"])
@@ -1118,7 +1118,7 @@ async test "discovery: trusted host can opt into external repository skill symli
     include_user: false,
     allow_repository_external_symlinks: true,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="/repo", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 1)
   match catalog.find("demo") {
     Some(skill) => {
@@ -1135,7 +1135,7 @@ async test "discovery: trusted host can opt into external repository skill symli
 
 ///|
 async test "tool provider: execute routes activation and resource reads through public seam" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "guide.md"])
   fs.add_file(
@@ -1170,7 +1170,7 @@ async test "tool provider: execute routes activation and resource reads through 
 
 ///|
 async test "tool provider: malformed arguments and unknown routes raise typed runtime errors" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md"])
   fs.add_file(
@@ -1222,7 +1222,7 @@ async test "tool provider: malformed arguments and unknown routes raise typed ru
 
 ///|
 async test "activation and resource size limits fail closed" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "guide.md"])
   fs.add_file(
@@ -1267,7 +1267,7 @@ async test "activation and resource size limits fail closed" {
 
 ///|
 async test "discovery: malformed adapter child names are skipped before path lookup" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.agents/skills", ["../outside", "a/b", "good"])
   fs.add_dir("/repo/.agents/skills/good", ["SKILL.md"])
   fs.add_file(
@@ -1281,7 +1281,7 @@ async test "discovery: malformed adapter child names are skipped before path loo
     repo_root: Some("/repo"),
     include_user: false,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="/repo", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 1)
   assert_true(catalog.find("good") is Some(_))
   assert_true(has_diagnostic(catalog.diagnostics, SkillPathFailed))
@@ -1290,7 +1290,7 @@ async test "discovery: malformed adapter child names are skipped before path loo
 
 ///|
 async test "discovery: candidate limit bounds directory inspection deterministically" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.agents/skills", ["c", "a", "b"])
   for name in ["a", "b", "c"] {
     let dir = "/repo/.agents/skills/" + name
@@ -1306,7 +1306,7 @@ async test "discovery: candidate limit bounds directory inspection deterministic
     include_user: false,
     max_candidates: 2,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="/repo", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 2)
   assert_true(catalog.find("a") is Some(_))
   assert_true(catalog.find("b") is Some(_))
@@ -1316,7 +1316,7 @@ async test "discovery: candidate limit bounds directory inspection deterministic
 
 ///|
 async test "activation listing treats all contained package directories uniformly" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", ".note", ".git", "node_modules"])
   fs.add_dir(dir + "/.git", ["config"])
@@ -1346,7 +1346,7 @@ async test "activation listing treats all contained package directories uniforml
 
 ///|
 async test "discovery: direct SKILL.md symlink cannot split instructions from package resources" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/home/u/.agents/skills/demo"
   let logical_skill = dir + "/SKILL.md"
   fs.add_dir("/home/u/.agents/skills", ["demo"])
@@ -1359,7 +1359,7 @@ async test "discovery: direct SKILL.md symlink cannot split instructions from pa
     ..SkillDiscoveryOptions::default(),
     include_repository: false,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 0)
   assert_true(has_diagnostic(catalog.diagnostics, SkillPackageMismatch))
   // Reject package topology before consuming the linked instruction file.
@@ -1387,7 +1387,7 @@ test "resource path normalization rejects control characters" {
 
 ///|
 async test "discovery: symlinked skill package reads the validated canonical SKILL.md" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let logical_dir = "/home/u/.agents/skills/demo"
   let logical_skill = logical_dir + "/SKILL.md"
   let canonical_dir = "/shared/demo"
@@ -1405,7 +1405,7 @@ async test "discovery: symlinked skill package reads the validated canonical SKI
     ..SkillDiscoveryOptions::default(),
     include_repository: false,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="", home="/home/u", options~).discover()
   match catalog.find("demo") {
     Some(skill) => assert_eq(skill.description, "Canonical")
     None => fail("expected canonical symlinked skill")
@@ -1548,7 +1548,7 @@ test "prompt quoting escapes arbitrary ASCII controls, not only whitespace" {
 
 ///|
 test "system prompt contributor respects tools-only configuration on direct calls" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let skills = must_skills(
     fs,
     catalog_of([descriptor("demo", "Demo", "/skills/demo")]),
@@ -1561,7 +1561,7 @@ test "system prompt contributor respects tools-only configuration on direct call
 
 ///|
 async test "discovery: skill-root symlink is canonicalized before directory enumeration" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let logical_root = "/home/u/.agents/skills"
   let canonical_root = "/shared/user-skills"
   fs.add_dir(logical_root, ["stale-entry"])
@@ -1576,7 +1576,7 @@ async test "discovery: skill-root symlink is canonicalized before directory enum
     ..SkillDiscoveryOptions::default(),
     include_repository: false,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="", home="/home/u", options~).discover()
   assert_true(catalog.find("demo") is Some(_))
   assert_true(fs.was_readdir(canonical_root))
   assert_false(fs.was_readdir(logical_root))
@@ -1612,7 +1612,7 @@ test "parser rejects control-bearing skill names as a hard safety violation" {
 
 ///|
 async test "tool provider rejects pathological name arguments even when schema validation is bypassed" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let skills = must_skills(
     fs,
     catalog_of([descriptor("demo", "Demo", "/skills/demo")]),
@@ -1643,7 +1643,7 @@ async test "tool provider rejects pathological name arguments even when schema v
 
 ///|
 async test "discovery: repository skill-root symlink is rejected before outside enumeration" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let logical_root = "/repo/project/.agents/skills"
   let outside_root = "/outside/shared-skills"
   fs.add_dir(logical_root, ["should-not-be-seen"])
@@ -1654,7 +1654,7 @@ async test "discovery: repository skill-root symlink is rejected before outside 
     repo_root: Some("/repo"),
     include_user: false,
   }
-  let catalog = SkillDiscovery::new(
+  let catalog = SkillDiscovery(
     fs,
     cwd="/repo/project",
     home="/home/u",
@@ -1704,7 +1704,7 @@ test "config validates resource listing output budgets" {
 
 ///|
 async test "activation: resource entries are classified from the resolved canonical target" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   let alias_path = dir + "/alias"
   let real_dir = dir + "/real-target"
@@ -1730,7 +1730,7 @@ async test "activation: resource entries are classified from the resolved canoni
 
 ///|
 async test "activation: resource directory retarget is detected before stale entries enter context" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   let refs = dir + "/refs"
   fs.add_dir(dir, ["SKILL.md", "refs"])
@@ -1755,7 +1755,7 @@ async test "activation: resource directory retarget is detected before stale ent
 
 ///|
 async test "activation: resource directory retarget after readdir discards enumerated entries" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   let refs = dir + "/refs"
   fs.add_dir(dir, ["SKILL.md", "refs"])
@@ -1780,7 +1780,7 @@ async test "activation: resource directory retarget after readdir discards enume
 
 ///|
 async test "activation: resource listing budget counts quoted model-visible path length" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   let quoted_name = repeat_text("\"", 20) + ".txt"
   fs.add_dir(dir, ["SKILL.md", quoted_name])
@@ -1809,7 +1809,7 @@ async test "activation: resource listing budget counts quoted model-visible path
 
 ///|
 async test "activation: resource listing has an aggregate model-visible character budget" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, [
     "SKILL.md", "first-long-resource.md", "second-long-resource.md",
@@ -1842,7 +1842,7 @@ async test "activation: resource listing has an aggregate model-visible characte
 
 ///|
 async test "activation: resource warning details are bounded with an omitted count" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/demo"
   fs.add_dir(dir, ["SKILL.md", "../bad-1", "a/b", "bad:three", "ok.txt"])
   fs.add_file(
@@ -1883,7 +1883,7 @@ test "product defaults bound model-visible activation payloads" {
 
 ///|
 async test "discovery: exhausted global candidate budget does not enumerate lower-precedence roots" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.agents/skills", ["a", "b"])
   for name in ["a", "b"] {
     let dir = "/repo/.agents/skills/" + name
@@ -1899,7 +1899,7 @@ async test "discovery: exhausted global candidate budget does not enumerate lowe
     repo_root: Some("/repo"),
     max_candidates: 1,
   }
-  let catalog = SkillDiscovery::new(fs, cwd="/repo", home="/home/u", options~).discover()
+  let catalog = SkillDiscovery(fs, cwd="/repo", home="/home/u", options~).discover()
   assert_eq(catalog.skills.length(), 1)
   assert_true(has_diagnostic(catalog.diagnostics, DiscoveryLimitReached))
   assert_false(fs.was_readdir("/home/u/.agents/skills"))
@@ -1970,7 +1970,7 @@ test "prompt: Unicode line, bidi, and invisible controls are rendered visibly" {
 
 ///|
 async test "host API: explicit activation and resource read share guarded runtime paths" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let dir = "/skills/explicit"
   fs.add_dir(dir, ["SKILL.md", "guide.md"])
   fs.add_file(
@@ -2011,7 +2011,7 @@ test "resource paths: Unicode line and bidi controls are rejected" {
 
 ///|
 async test "host API: unsafe skill names are rejected without reflecting attacker text" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let skills = must_skills(fs, SkillCatalog::empty())
   let huge = repeat_text("x", hard_max_skill_name_chars + 1000)
   match skills.activate_skill(huge) {
@@ -2061,7 +2061,7 @@ test "parser: required fields must be YAML strings" {
 
 ///|
 async test "tool provider: unknown routes do not reflect attacker-controlled route names" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let skills = must_skills(
     fs,
     catalog_of([descriptor("demo", "Demo", "/skills/demo")]),
@@ -2092,7 +2092,7 @@ async test "tool provider: unknown routes do not reflect attacker-controlled rou
 
 ///|
 async test "registration constructor: discovery path yields Some with snapshot" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_dir("/repo/.agents/skills", ["demo"])
   fs.add_dir("/repo/.agents/skills/demo", ["SKILL.md"])
   fs.add_file(
@@ -2104,7 +2104,7 @@ async test "registration constructor: discovery path yields Some with snapshot" 
     include_user: false,
   }
   match
-    Skills::new(fs, cwd="/repo", home="/home/u", discovery_options=options) {
+    Skills::discover(fs, cwd="/repo", home="/home/u", discovery_options=options) {
     Some(skills) => {
       assert_eq(skills.catalog().names(), ["demo"])
       assert_eq(skills.extension_id(), "posoco_ext_skills")
@@ -2115,13 +2115,13 @@ async test "registration constructor: discovery path yields Some with snapshot" 
 
 ///|
 async test "registration constructor: statically invalid config yields None without raising" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   let bad_config = SkillsConfig::{
     ..SkillsConfig::default(),
     activate_tool_name: "activate_skill",
     read_resource_tool_name: "activate_skill", // collision → invalid
   }
-  match Skills::new(fs, cwd="/repo", home="/home/u", config=bad_config) {
+  match Skills::discover(fs, cwd="/repo", home="/home/u", config=bad_config) {
     Some(_) => fail("expected None for colliding tool names")
     None => ()
   }
@@ -2130,7 +2130,12 @@ async test "registration constructor: statically invalid config yields None with
     max_skills: 0, // invalid
   }
   match
-    Skills::new(fs, cwd="/repo", home="/home/u", discovery_options=bad_options) {
+    Skills::discover(
+      fs,
+      cwd="/repo",
+      home="/home/u",
+      discovery_options=bad_options,
+    ) {
     Some(_) => fail("expected None for zero max_skills")
     None => ()
   }
@@ -2138,8 +2143,8 @@ async test "registration constructor: statically invalid config yields None with
 
 ///|
 async test "registration constructor: empty environment still registers with diagnostics" {
-  let fs = FakeFs::new()
-  match Skills::new(fs, cwd="/repo", home="/home/u") {
+  let fs = FakeFs()
+  match Skills::discover(fs, cwd="/repo", home="/home/u") {
     Some(skills) => assert_eq(skills.catalog().skills.length(), 0)
     None =>
       fail("empty environment must register with an empty catalog, not None")

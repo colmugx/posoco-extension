@@ -6,7 +6,7 @@
 ///|
 async test "command: list returns catalog snapshot with scope labels" {
   let skills = must_skills(
-    FakeFs::new(),
+    FakeFs(),
     catalog_of([
       descriptor("review-pr", "Review a PR", "/repo/.agents/skills/review-pr"),
       descriptor("tdd", "Test first", "/repo/.agents/skills/tdd"),
@@ -81,7 +81,7 @@ async test "command: list returns catalog snapshot with scope labels" {
 
 ///|
 async test "command: list on empty catalog stays registered and reports clearly" {
-  let skills = must_skills(FakeFs::new(), SkillCatalog::empty())
+  let skills = must_skills(FakeFs(), SkillCatalog::empty())
   assert_eq(skills.commands().length(), 1)
   let manifest = skills.manifest()
   assert_eq(manifest.commands.length(), 1)
@@ -111,7 +111,7 @@ async test "command: list on empty catalog stays registered and reports clearly"
 
 ///|
 async test "command: activate returns instructions through the guarded path" {
-  let fs = FakeFs::new()
+  let fs = FakeFs()
   fs.add_file(
     "/s/demo/SKILL.md", "---\nname: demo\ndescription: Demo skill\n---\n\nDo the demo.",
   )
@@ -156,7 +156,7 @@ async test "command: activate returns instructions through the guarded path" {
 ///|
 async test "command: unknown names and actions fail without raising" {
   let skills = must_skills(
-    FakeFs::new(),
+    FakeFs(),
     catalog_of([descriptor("demo", "Demo skill", "/s/demo")]),
   )
   match
@@ -196,7 +196,7 @@ async test "command: unknown names and actions fail without raising" {
 ///|
 async test "command: malformed arguments raise typed InvalidArgs" {
   let skills = must_skills(
-    FakeFs::new(),
+    FakeFs(),
     catalog_of([descriptor("demo", "Demo skill", "/s/demo")]),
   )
   try

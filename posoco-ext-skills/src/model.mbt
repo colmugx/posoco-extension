@@ -215,7 +215,7 @@ pub(all) struct ParsedSkill {
 ///|
 pub(all) struct SkillCatalog {
   /// Collision-resolved skills. At most one descriptor per name when produced
-  /// by SkillDiscovery. Skills::new re-validates this invariant for manually
+  /// by SkillDiscovery. Skills::discover re-validates this invariant for manually
   /// constructed catalogs.
   skills : Array[SkillDescriptor]
   diagnostics : Array[SkillDiagnostic]

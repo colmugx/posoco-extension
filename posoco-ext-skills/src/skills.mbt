@@ -14,7 +14,7 @@ pub struct Skills {
 /// tests). Config and catalog invariants are validated before any ToolDef is
 /// exposed; manually supplied data is runtime data, so failures return
 /// `Result` for the caller to recover from. The registration-form
-/// constructor is `Skills::new`.
+/// constructor is `Skills::discover`.
 pub fn Skills::from_catalog(
   fs : &@workspace.WorkspaceFs,
   catalog~ : SkillCatalog,
@@ -44,7 +44,7 @@ pub fn Skills::from_catalog(
 /// problems (unreadable roots, broken SKILL.md files) are never construction
 /// failures; they surface as catalog diagnostics. `Skills::from_catalog` is
 /// the manual-catalog form for embedding/tests.
-pub async fn Skills::new(
+pub async fn Skills::discover(
   fs : &@workspace.WorkspaceFs,
   cwd~ : String,
   home~ : String,
@@ -59,12 +59,7 @@ pub async fn Skills::new(
     Err(_) => return None
     Ok(_) => ()
   }
-  let discovery = SkillDiscovery::new(
-    fs,
-    cwd~,
-    home~,
-    options=discovery_options,
-  )
+  let discovery = SkillDiscovery(fs, cwd~, home~, options=discovery_options)
   let catalog = discovery.discover()
   match Skills::from_catalog(fs, catalog~, config~) {
     Ok(skills) => Some(skills)
