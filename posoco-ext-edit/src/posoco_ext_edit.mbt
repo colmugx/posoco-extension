@@ -255,7 +255,7 @@ async fn execute_edit_impl(
         @devkit.Fresh => ()
         verdict =>
           return @posoco.ToolOutcome::ToolReportedError(
-            content="edit: refused: '\{@devkit.sanitize_path(path)}' \{@devkit.freshness_hint(verdict)}",
+            content="edit: refused: '\{@devkit.sanitize_path(path)}' \{verdict.hint()}",
             structured=None,
           )
       }
