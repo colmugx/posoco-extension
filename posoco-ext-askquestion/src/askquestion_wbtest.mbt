@@ -96,7 +96,7 @@ test "ask_question_rejects_empty_select" {
 
 ///|
 test "ask_question_manifest_and_policy" {
-  let tools = AskQuestionTools::new(NoopUi::{  })
+  let tools = AskQuestionTools(NoopUi::{  })
   let defs = tools.list_tools()
   assert_eq(defs.length(), 1)
   assert_eq(defs[0].name.to_string(), "ask_question")

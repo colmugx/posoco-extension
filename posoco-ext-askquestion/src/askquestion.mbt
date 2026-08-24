@@ -6,7 +6,9 @@ pub(all) struct AskQuestionTools {
 
 ///|
 /// Construct an ask-question extension over a host-provided UI port.
-pub fn AskQuestionTools::new(ui : &@posoco.UiPort) -> AskQuestionTools {
+pub fn AskQuestionTools::AskQuestionTools(
+  ui : &@posoco.UiPort,
+) -> AskQuestionTools {
   { ui, }
 }
 

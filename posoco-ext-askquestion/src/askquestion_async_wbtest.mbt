@@ -6,7 +6,7 @@ priv struct ScriptedUi {
 }
 
 ///|
-fn ScriptedUi::new(response : @posoco.UiResponse) -> ScriptedUi {
+fn ScriptedUi::ScriptedUi(response : @posoco.UiResponse) -> ScriptedUi {
   { response, request_count: 0, last_request: None }
 }
 
@@ -44,8 +44,8 @@ fn ask_call(arguments : Json) -> @posoco.ToolCall {
 
 ///|
 async test "ask_question_input_returns_text" {
-  let ui = ScriptedUi::new(@posoco.UiResponse::Text("MoonBit"))
-  let tools = AskQuestionTools::new(ui)
+  let ui = ScriptedUi(@posoco.UiResponse::Text("MoonBit"))
+  let tools = AskQuestionTools(ui)
   let outcome = tools.execute(
     "ask_question",
     ask_call(Json::object({ "question": Json::string("Language?") })),
@@ -64,8 +64,8 @@ async test "ask_question_input_returns_text" {
 
 ///|
 async test "ask_question_select_returns_selected_value" {
-  let ui = ScriptedUi::new(@posoco.UiResponse::Selected(1))
-  let tools = AskQuestionTools::new(ui)
+  let ui = ScriptedUi(@posoco.UiResponse::Selected(1))
+  let tools = AskQuestionTools(ui)
   let outcome = tools.execute(
     "ask_question",
     ask_call(
@@ -85,8 +85,8 @@ async test "ask_question_select_returns_selected_value" {
 
 ///|
 async test "ask_question_cancel_is_tool_reported_error" {
-  let ui = ScriptedUi::new(@posoco.UiResponse::Cancelled)
-  let tools = AskQuestionTools::new(ui)
+  let ui = ScriptedUi(@posoco.UiResponse::Cancelled)
+  let tools = AskQuestionTools(ui)
   let outcome = tools.execute(
     "ask_question",
     ask_call(Json::object({ "question": Json::string("Continue?") })),
@@ -100,8 +100,8 @@ async test "ask_question_cancel_is_tool_reported_error" {
 
 ///|
 async test "ask_question_rejects_empty_select_before_ui" {
-  let ui = ScriptedUi::new(@posoco.UiResponse::Selected(0))
-  let tools = AskQuestionTools::new(ui)
+  let ui = ScriptedUi(@posoco.UiResponse::Selected(0))
+  let tools = AskQuestionTools(ui)
   let result : Result[@posoco.ToolOutcome, @posoco.RuntimeError] = Ok(
     tools.execute(
       "ask_question",
