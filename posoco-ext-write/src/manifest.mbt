@@ -19,6 +19,7 @@ pub impl @posoco.Extension for WriteTools with fn manifest(self) -> @posoco.Exte
     commands: [],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

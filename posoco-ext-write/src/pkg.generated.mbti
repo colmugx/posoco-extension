@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-write"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -14,9 +15,12 @@ pub fn write_extension() -> WriteTools
 
 // Types and methods
 pub(all) struct WriteTools {
+  freshness : @posoco-devkit.FreshnessGuard?
 }
-pub fn WriteTools::WriteTools() -> Self
+pub fn WriteTools::WriteTools(freshness? : @posoco-devkit.FreshnessGuard) -> Self
+pub async fn WriteTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn WriteTools::extension_id(Self) -> String
+pub fn WriteTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn WriteTools::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for WriteTools
 pub impl @port.ToolProvider for WriteTools
