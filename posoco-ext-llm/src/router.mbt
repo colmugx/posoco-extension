@@ -28,7 +28,7 @@ pub(all) struct RouterModelPort {
 /// An empty default id selects the first slot in insertion order. Composition
 /// failures are raised before the router is returned, so callers never see a
 /// partially populated routing table.
-pub fn RouterModelPort::new(
+pub fn RouterModelPort::RouterModelPort(
   slots~ : Array[ModelSlot],
   default_slot_id? : String = "",
   provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
@@ -103,7 +103,7 @@ pub fn RouterModelPort::from_catalogs(
       slots.push(slot)
     }
   }
-  RouterModelPort::new(
+  RouterModelPort(
     slots~,
     default_slot_id~,
     provider_credential_store~,

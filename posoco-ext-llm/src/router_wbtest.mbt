@@ -71,7 +71,7 @@ fn router_effort_slot(
 
 ///|
 test "router rejects an empty slot list" {
-  let result = Ok(RouterModelPort::new(slots=[])) catch { error => Err(error) }
+  let result = Ok(RouterModelPort(slots=[])) catch { error => Err(error) }
   match result {
     Err(@posoco.CompositionError::EmptyPort(name)) =>
       assert_eq(name, "posoco_ext_llm.slots")
@@ -83,7 +83,7 @@ test "router rejects an empty slot list" {
 test "router rejects duplicate slot ids" {
   let first = router_test_slot("same", "one", "model-a", [])
   let second = router_test_slot("same", "two", "model-b", [])
-  let result = Ok(RouterModelPort::new(slots=[first, second])) catch {
+  let result = Ok(RouterModelPort(slots=[first, second])) catch {
     error => Err(error)
   }
   match result {
@@ -99,10 +99,7 @@ test "router rejects duplicate slot ids" {
 test "router selects the configured default and switches slots" {
   let first = router_test_slot("first", "one", "model-a", [])
   let second = router_test_slot("second", "two", "model-b", [])
-  let router = RouterModelPort::new(
-    slots=[first, second],
-    default_slot_id="second",
-  )
+  let router = RouterModelPort(slots=[first, second], default_slot_id="second")
   assert_eq(router.active_slot_id(), "second")
   assert_eq(router.current_provider_id(), "two")
   assert_eq(router.current_model_id(), "model-b")
@@ -117,7 +114,7 @@ test "router selects the configured default and switches slots" {
 test "router delegates provider config to the active slot" {
   let first = router_test_slot("first", "one", "model-a", ["low", "high"])
   let second = router_test_slot("second", "two", "model-b", ["minimal"])
-  let router = RouterModelPort::new(slots=[first, second])
+  let router = RouterModelPort(slots=[first, second])
   assert_eq(router.provider_config().reasoning_effort_values, ["low", "high"])
   router.switch_slot("second") catch {
     _ => fail("unexpected slot switch failure")
@@ -153,10 +150,7 @@ test "provider config rejects ambiguous legacy and tagged credentials" {
 test "replace_provider_slots expands a provider in place and keeps order" {
   let outer = router_test_slot("outer", "other", "model-o", [])
   let single = router_test_slot("one/a", "one", "model-a", [])
-  let router = RouterModelPort::new(
-    slots=[outer, single],
-    default_slot_id="one/a",
-  )
+  let router = RouterModelPort(slots=[outer, single], default_slot_id="one/a")
   let replacements = [
     router_test_slot("one/a", "one", "model-a", []),
     router_test_slot("one/b", "one", "model-b", []),
@@ -174,7 +168,7 @@ test "replace_provider_slots expands a provider in place and keeps order" {
 test "replace_provider_slots falls back when the active slot disappears" {
   let first = router_effort_slot("one/a", "one", "model-a")
   let second = router_test_slot("two/z", "two", "model-z", [])
-  let router = RouterModelPort::new(slots=[first, second])
+  let router = RouterModelPort(slots=[first, second])
   router.select_effort("one/a", "high") catch {
     _ => fail("unexpected effort selection failure")
   }
@@ -194,7 +188,7 @@ test "replace_provider_slots falls back when the active slot disappears" {
 ///|
 test "replace_provider_slots rejects invalid replacements without mutation" {
   let single = router_test_slot("one/a", "one", "model-a", [])
-  let router = RouterModelPort::new(slots=[single])
+  let router = RouterModelPort(slots=[single])
   let empty = Ok(router.replace_provider_slots("one", [])) catch {
     error => Err(error)
   }
@@ -219,7 +213,7 @@ test "replace_provider_slots rejects invalid replacements without mutation" {
 ///|
 test "replace_provider_slots appends when the provider contributed no slots" {
   let single = router_test_slot("one/a", "one", "model-a", [])
-  let router = RouterModelPort::new(slots=[single])
+  let router = RouterModelPort(slots=[single])
   let replacements = [
     router_test_slot("three/a", "three", "model-a", []),
     router_test_slot("three/b", "three", "model-b", []),

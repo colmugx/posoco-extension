@@ -6,7 +6,7 @@ fn command_test_router() -> RouterModelPort raise @posoco.CompositionError {
   let second_port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: [],
   }
-  RouterModelPort::new(slots=[
+  RouterModelPort(slots=[
     ModelSlot::ModelSlot(
       id="first",
       label="First",
@@ -122,7 +122,7 @@ async test "model command validates and applies provider effort" {
       )
     }),
   )
-  let router = RouterModelPort::new(slots=[slot])
+  let router = RouterModelPort(slots=[slot])
   let outcome = router.invoke(
     "model",
     Json::object(
@@ -153,7 +153,7 @@ fn effort_test_router() -> RouterModelPort raise @posoco.CompositionError {
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: [],
   }
-  RouterModelPort::new(slots=[
+  RouterModelPort(slots=[
     ModelSlot::ModelSlot(
       id="effort-slot",
       label="Effort",
@@ -279,7 +279,7 @@ async test "model command emits the provider-declared display group" {
     model_id="deepseek-v4-flash",
     port~,
   )
-  let router = RouterModelPort::new(slots=[grouped, ungrouped])
+  let router = RouterModelPort(slots=[grouped, ungrouped])
   let outcome = router.invoke("model", Json::null())
   match outcome {
     @posoco.CommandOutcome::Success(structured~, ..) =>
