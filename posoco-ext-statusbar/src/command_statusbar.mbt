@@ -109,8 +109,17 @@ fn statusbar_command_selection(
 }
 
 ///|
-fn validate_items(items : Array[String]) -> Unit raise @posoco.CommandError {
+/// Layout validation: built-in segment ids plus any live custom segment
+/// (a peer-published fact). A custom id that has no fact yet is rejected —
+/// otherwise a typo would silently render nothing forever.
+fn StatusBar::validate_layout(
+  self : StatusBar,
+  items : Array[String],
+) -> Unit raise @posoco.CommandError {
   let known = available_segments()
+  for item in self.custom_segments() {
+    known.push(item)
+  }
   for item in items {
     if !known.contains(item) {
       raise @posoco.CommandError::InvalidArgs(
@@ -180,7 +189,7 @@ pub impl @posoco.CommandPort for StatusBar with fn invoke(
           )
         }
         SetItems(items) => {
-          validate_items(items) catch {
+          self.validate_layout(items) catch {
             err =>
               return @posoco.CommandOutcome::Failure(reason=err.to_string())
           }

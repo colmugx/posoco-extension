@@ -21,6 +21,7 @@ pub impl @posoco.Extension for StatusBar with fn manifest(self) -> @posoco.Exten
     commands: [self],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

@@ -16,20 +16,23 @@ async test "query reports the current layout without re-rendering" {
       inspect(
         feedback,
         content=(
-          #|statusbar segments: model | effort | turn | tools | tok | session | lat
+          #|statusbar segments: model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
         ),
       )
       match structured {
         Some(json) =>
           json_inspect(json, content={
             "items": [
-              "model", "effort", "turn", "tools", "tok", "session", "lat",
+              "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps",
+              "avg", "session", "lat",
             ],
             "available": [
-              "model", "effort", "turn", "tools", "tok", "session", "lat",
+              "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps",
+              "avg", "session", "lat",
             ],
             "defaults": [
-              "model", "effort", "turn", "tools", "tok", "session", "lat",
+              "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps",
+              "avg", "session", "lat",
             ],
           })
         None => fail("expected a structured layout payload")
@@ -72,7 +75,7 @@ async test "unknown segment id fails with the available list" {
       inspect(
         reason,
         content=(
-          #|CommandError::InvalidArgs(unknown statusbar segment 'bogus'; available: model, effort, turn, tools, tok, session, lat)
+          #|CommandError::InvalidArgs(unknown statusbar segment 'bogus'; available: model, effort, turn, tools, tok, cache, ttft, tps, avg, session, lat)
         ),
       )
     _ => fail("expected failure")
@@ -92,7 +95,7 @@ async test "reset restores the default layout" {
       inspect(
         feedback,
         content=(
-          #|statusbar reset: model | effort | turn | tools | tok | session | lat
+          #|statusbar reset: model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
         ),
       )
     _ => fail("expected success")
@@ -100,7 +103,19 @@ async test "reset restores the default layout" {
   debug_inspect(
     bar.items(),
     content=(
-      #|["model", "effort", "turn", "tools", "tok", "session", "lat"]
+      #|[
+      #|  "model",
+      #|  "effort",
+      #|  "turn",
+      #|  "tools",
+      #|  "tok",
+      #|  "cache",
+      #|  "ttft",
+      #|  "tps",
+      #|  "avg",
+      #|  "session",
+      #|  "lat",
+      #|]
     ),
   )
 }
@@ -167,4 +182,19 @@ async test "unknown command id raises NotFound" {
   } noraise {
     _ => fail("expected NotFound")
   }
+}
+
+///|
+async test "custom segments join the available list and validate" {
+  let ui = RecordingUi()
+  let bar = StatusBar(ui as &@posoco.UiPort)
+  bar.set_custom("hitrate", "62%")
+  // Referencing the live custom id is accepted and reorders it first.
+  let outcome = bar.invoke("statusbar", items_args(["hitrate", "model"]))
+  assert_true(outcome is @posoco.CommandOutcome::Success(_))
+  let pairs = key_value_pairs(ui.last())
+  assert_eq(pairs[0], ("hitrate", "62%"))
+  // An id with no fact (built-in-unknown AND custom-dead) is still rejected.
+  let outcome = bar.invoke("statusbar", items_args(["sprint"]))
+  assert_true(outcome is @posoco.CommandOutcome::Failure(_))
 }
