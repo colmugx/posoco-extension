@@ -20,29 +20,19 @@ pub fn is_shell_tool(name : @posoco.ToolName, tools : ShellTools) -> Bool {
 pub(all) struct RTKHook {
   rtk_path : String
   shell_tools : ShellTools
-  rewrite : (String) -> String?
 }
 
 ///|
-pub fn RTKHook::RTKHook(
-  rtk_path : String,
-  rewrite : (String) -> String?,
-) -> RTKHook {
-  RTKHook::{ rtk_path, shell_tools: default_shell_tools(), rewrite }
+pub fn RTKHook::RTKHook(rtk_path : String) -> RTKHook {
+  RTKHook::{ rtk_path, shell_tools: default_shell_tools() }
 }
 
 ///|
 pub fn RTKHook::with_shell_tools(
   rtk_path : String,
   shell_tools : ShellTools,
-  rewrite : (String) -> String?,
 ) -> RTKHook {
-  RTKHook::{ rtk_path, shell_tools, rewrite }
-}
-
-///|
-pub fn default_rtk_rewrite(_rtk_path : String, _cmd : String) -> String? {
-  None
+  RTKHook::{ rtk_path, shell_tools }
 }
 
 ///|
@@ -107,9 +97,6 @@ pub fn rewrite_tool_call(
 }
 
 ///|
-/// Rewrites shell-tool calls; every other tool is approved unchanged.
-/// Malformed shell arguments surface as `Reject`; a successful rewrite
-/// returns `Approve(call~)` with the rewritten call.
 pub impl @posoco.Extension for RTKHook with fn extension_id(_self : RTKHook) -> String {
   "posoco_ext_rtk"
 }
@@ -131,23 +118,12 @@ pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
   if !is_shell_tool(call.name, self.shell_tools) {
     return Approve(call~)
   }
-  let extracted : Result[String, @posoco.RuntimeError] = Ok(
-    extract_command(call.arguments),
-  ) catch {
-    error => Err(error)
+  let cmd = extract_command(call.arguments) catch {
+    error => return Reject(reason=error.to_string())
   }
-  match extracted {
-    Err(error) =>
-      // Malformed shell arguments: reject so the pump stops the run loudly.
-      Reject(reason=error.to_string())
-    Ok(cmd) =>
-      match (self.rewrite)(cmd) {
-        Some(rewritten) if rewritten != cmd => {
-          let new_call = rewrite_tool_call(call, rewritten)
-          Approve(call=new_call)
-        }
-        // Pass through: no rewrite, or rewrite identical to original.
-        _ => Approve(call~)
-      }
+  match rtk_rewrite(self.rtk_path, cmd) {
+    Some(rewritten) if rewritten != cmd =>
+      Approve(call=rewrite_tool_call(call, rewritten))
+    _ => Approve(call~)
   }
 }

@@ -1,6 +1,6 @@
 name = "colmugx/posoco-ext-rtk"
 
-version = "0.1.0"
+version = "0.3.0"
 
 import {
   "colmugx/posoco@0.11.1",

@@ -1,12 +1,4 @@
 ///|
-/// rtk_hook_test.mbt — Tests for RTKHook
-///
-/// Note: Tests use a mock rewrite function (not the default stub) so they
-/// don't require the `rtk` binary to be installed.
-
-///|
-
-///|
 /// Test: is_shell_tool
 test "is_shell_tool_recognizes_shells" {
   let tools = default_shell_tools()
@@ -139,87 +131,94 @@ test "rewrite_tool_call_preserves_id_and_name" {
 }
 
 ///|
-/// Test: RTKHook Hook implementation
+/// Test: RTKHook PipelineHook implementation
 async test "hook_passes_through_non_shell_tool" {
-  // Setup: a rewrite that would change anything
-  let hook = RTKHook("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
+  let hook = RTKHook("rtk")
   let call = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_1"),
-    name: @posoco.ToolName::unchecked("echo"), // not a shell tool
+    name: @posoco.ToolName::unchecked("echo"),
     arguments: Json::null(),
   }
   match hook.before_tool(call) {
-    Approve(_) => () // pass-through approve
+    Approve(_) => ()
     other => fail("expected Approve, got " + other.to_string())
   }
 }
 
 ///|
 async test "hook_rewrites_shell_tool_call" {
-  // Mock rewrite that prepends "rtk "
-  let hook = RTKHook("/usr/local/bin/rtk", fn(cmd) { Some("rtk " + cmd) })
-  let call = @posoco.ToolCall::{
-    call_id: @posoco.CallId::unchecked("call_1"),
-    name: @posoco.ToolName::unchecked("bash"),
-    arguments: Json::object(Map::from_array([("cmd", Json::string("ls -la"))])),
-  }
-  match hook.before_tool(call) {
-    Approve(call~) =>
-      // Should have been rewritten
-      match call.arguments {
-        Object(map) =>
-          match map.get("cmd") {
-            Some(String(s)) => assert_eq(s, "rtk ls -la")
-            _ => fail("expected cmd field")
-          }
-        _ => fail("expected Object")
+  match rtk_rewrite("rtk", "git status") {
+    None => () // rtk absent/inert (wasm, not installed): soft-skip
+    Some(expected) => {
+      let hook = RTKHook("rtk")
+      let call = @posoco.ToolCall::{
+        call_id: @posoco.CallId::unchecked("call_1"),
+        name: @posoco.ToolName::unchecked("bash"),
+        arguments: Json::object(
+          Map::from_array([("cmd", Json::string("git status"))]),
+        ),
       }
-    other =>
-      fail("expected Approve with rewritten call, got " + other.to_string())
+      match hook.before_tool(call) {
+        Approve(call~) =>
+          match call.arguments {
+            Object(map) =>
+              match map.get("cmd") {
+                Some(String(s)) => assert_eq(s, expected)
+                _ => fail("expected cmd field")
+              }
+            _ => fail("expected Object")
+          }
+        other =>
+          fail("expected Approve with rewritten call, got " + other.to_string())
+      }
+    }
   }
 }
 
 ///|
-async test "hook_passes_through_when_rewrite_returns_none" {
-  // Mock rewrite that always returns None (pass-through)
-  let hook = RTKHook("/usr/local/bin/rtk", fn(_cmd) { None })
+/// Holds with rtk installed (no equivalent → empty stdout → pass-through)
+/// and without it (spawn failure → pass-through).
+async test "hook_passes_through_when_no_rtk_equivalent" {
+  let hook = RTKHook("rtk")
   let call = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_1"),
     name: @posoco.ToolName::unchecked("bash"),
-    arguments: Json::object(Map::from_array([("cmd", Json::string("ls -la"))])),
+    arguments: Json::object(
+      Map::from_array([("cmd", Json::string("echo rtk_no_equivalent_probe"))]),
+    ),
   }
   match hook.before_tool(call) {
     Approve(call~) =>
-      // Call should be unchanged (pass-through)
-      assert_eq(call.call_id.to_string(), "call_1")
+      match call.arguments {
+        Object(map) =>
+          match map.get("cmd") {
+            Some(String(s)) => assert_eq(s, "echo rtk_no_equivalent_probe")
+            _ => fail("expected cmd field")
+          }
+        _ => fail("expected Object")
+      }
     other => fail("expected Approve pass-through, got " + other.to_string())
+  }
+}
+
+///|
+async test "hook_rejects_malformed_shell_args" {
+  let hook = RTKHook("rtk")
+  let call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call_1"),
+    name: @posoco.ToolName::unchecked("bash"),
+    arguments: Json::null(), // not a JSON object
+  }
+  match hook.before_tool(call) {
+    Reject(reason~) => assert_true(reason.contains("rtk"))
+    other => fail("expected Reject, got " + other.to_string())
   }
 }
 
 ///|
 test "manifest_registers_as_extension_with_hook" {
-  let hook = RTKHook("rtk", fn(cmd) { default_rtk_rewrite("rtk", cmd) })
+  let hook = RTKHook("rtk")
   assert_eq(hook.extension_id(), "posoco_ext_rtk")
   let manifest = hook.manifest()
   assert_eq(manifest.hooks.length(), 1)
-}
-
-///|
-async test "hook_identical_rewrite_passes_through" {
-  // Rewrite function returns the same string (no actual rewrite)
-  let hook = RTKHook(
-    "/usr/local/bin/rtk",
-    fn(cmd) { Some(cmd) }, // returns identical command
-  )
-  let call = @posoco.ToolCall::{
-    call_id: @posoco.CallId::unchecked("call_1"),
-    name: @posoco.ToolName::unchecked("bash"),
-    arguments: Json::object(Map::from_array([("cmd", Json::string("ls -la"))])),
-  }
-  match hook.before_tool(call) {
-    Approve(call~) =>
-      // Should pass through unchanged since rewrite output == original
-      assert_eq(call.call_id.to_string(), "call_1")
-    other => fail("expected Approve pass-through, got " + other.to_string())
-  }
 }

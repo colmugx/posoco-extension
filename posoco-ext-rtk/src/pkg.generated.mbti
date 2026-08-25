@@ -8,8 +8,6 @@ import {
 }
 
 // Values
-pub fn default_rtk_rewrite(String, String) -> String?
-
 pub fn default_shell_tools() -> ShellTools
 
 pub fn extract_command(Json) -> String raise @error.RuntimeError
@@ -24,13 +22,12 @@ pub fn rewrite_tool_call(@kernel.ToolCall, String) -> @kernel.ToolCall
 pub(all) struct RTKHook {
   rtk_path : String
   shell_tools : ShellTools
-  rewrite : (String) -> String?
 }
-pub fn RTKHook::RTKHook(String, (String) -> String?) -> Self
+pub fn RTKHook::RTKHook(String) -> Self
 pub async fn RTKHook::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn RTKHook::extension_id(Self) -> String
 pub fn RTKHook::manifest(Self) -> @port.ExtensionManifest
-pub fn RTKHook::with_shell_tools(String, ShellTools, (String) -> String?) -> Self
+pub fn RTKHook::with_shell_tools(String, ShellTools) -> Self
 pub impl @port.Extension for RTKHook
 pub impl @port.PipelineHook for RTKHook
 

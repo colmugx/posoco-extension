@@ -1,6 +1,15 @@
 import {
   "colmugx/posoco",
   "moonbitlang/async",
+  "moonbitlang/async/js_async",
+  "moonbitlang/async/process",
 }
 
 warnings = "-unused_package"
+
+options(
+  targets: {
+    "posoco_ext_rtk.native.mbt": [ "native" ],
+    "posoco_ext_rtk.js.mbt": [ "js" ],
+  },
+)
