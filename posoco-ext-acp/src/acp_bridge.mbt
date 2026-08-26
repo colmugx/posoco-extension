@@ -300,6 +300,7 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | SessionRedirect(..)
     | ConfigWarning(..)
     | ConfigChanged(..)
+    | StreamChunksDropped(..)
     | Custom(..) => ()
   }
 }
