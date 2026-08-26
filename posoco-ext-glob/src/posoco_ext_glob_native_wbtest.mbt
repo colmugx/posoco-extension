@@ -50,10 +50,6 @@ async test "glob_rejects_malformed_optional_path" {
 }
 
 ///|
-/// Native-only: drives `@fs.tmpdir`/`@fs.rmdir` and asserts the native
-/// `@fs.walk`-specific failure message. Bun.Glob has different failure modes
-/// on js, so this test is skipped there.
-#cfg(target="native")
 async test "glob_missing_base_is_loud_without_os_error" {
   let dir = @fs.tmpdir(prefix="posoco-glob-missing")
   @fs.rmdir(dir, recursive=true)
@@ -144,6 +140,52 @@ async test "glob_multi_file_fills_structured_summary" {
         }
       }
       other => fail("expected Success for multi file, got " + other.to_string())
+    }
+  }
+}
+
+///|
+/// Anchored glob scans the resolved base and returns base-relative results,
+/// so the workspace root never appears in the output.
+async test "glob_anchored_base_resolves_and_stays_base_relative" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-glob-anchor")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file(dir + "/a.txt", "x", create_mode=CreateNew)
+    @fs.mkdir(dir + "/sub")
+    @fs.write_file(dir + "/sub/b.txt", "y", create_mode=CreateNew)
+    let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
+    let tools = GlobTools::GlobTools(anchor=Some(anchor))
+    let call : @posoco.ToolCall = {
+      call_id: @posoco.CallId::unchecked("glob-anchor"),
+      name: @posoco.ToolName::unchecked("glob"),
+      arguments: Json::object({ "pattern": Json::string("**/*.txt") }),
+    }
+    match tools.execute("glob", call) {
+      @posoco.ToolOutcome::Success(content~, ..) => {
+        assert_true(content.contains("a.txt"))
+        assert_true(content.contains("sub/b.txt"))
+        assert_false(content.contains(dir))
+      }
+      _ => fail("expected anchored glob to succeed")
+    }
+    // An explicit subdirectory base keeps results relative to that base.
+    let sub_call : @posoco.ToolCall = {
+      call_id: @posoco.CallId::unchecked("glob-anchor-sub"),
+      name: @posoco.ToolName::unchecked("glob"),
+      arguments: Json::object({
+        "pattern": Json::string("*.txt"),
+        "path": Json::string("sub"),
+      }),
+    }
+    match tools.execute("glob", sub_call) {
+      @posoco.ToolOutcome::Success(content~, ..) => {
+        assert_true(content.contains("b.txt"))
+        assert_false(content.contains(dir))
+      }
+      _ => fail("expected anchored sub-base glob to succeed")
     }
   }
 }

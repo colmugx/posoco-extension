@@ -146,9 +146,9 @@ impl GlobScanner for JsGlobScanner with fn scan(
 }
 
 ///|
-pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
-  _self : GlobTools,
-) -> Array[@posoco.ToolDef] {
+pub impl @posoco.ToolProvider for GlobTools with fn list_tools(self : GlobTools) -> Array[
+  @posoco.ToolDef,
+] {
   shared_list_tools()
 }
 
@@ -157,9 +157,9 @@ pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
 /// `execute_glob_impl`; this method only supplies the walker + Bun.Glob
 /// matcher.
 pub impl @posoco.ToolProvider for GlobTools with fn execute(
-  _self : GlobTools,
+  self : GlobTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_glob_impl(JsGlobScanner::{  }, call)
+  execute_glob_impl(JsGlobScanner::{  }, self.anchor, call)
 }

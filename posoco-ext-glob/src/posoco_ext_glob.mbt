@@ -7,13 +7,17 @@
 /// on js (bun), scanning delegates to `Bun.Glob`. On wasm/wasm-gc, the tool
 /// is not listed and execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct GlobTools {
-  // Stateless — all configuration comes from ToolCall arguments at execute time.
+  // Resolves the scan base against the workspace root; None keeps legacy
+  // behavior (the base lands on the process working directory).
+  anchor : @devkit.WorkspaceAnchor?
 }
 
 ///|
 /// Canonical constructor. Use this everywhere.
-pub fn GlobTools::GlobTools() -> GlobTools {
-  GlobTools::{  }
+pub fn GlobTools::GlobTools(
+  anchor? : @devkit.WorkspaceAnchor? = None,
+) -> GlobTools {
+  GlobTools::{ anchor, }
 }
 
 ///|
@@ -117,12 +121,32 @@ fn glob_structured(count : Int) -> Json {
 
 ///|
 /// Shared `glob` execute logic. Target-agnostic; only the scanner differs.
+///
+/// When anchored, the scan runs in the resolved directory and results are
+/// re-anchored relative to the scan base (the js scanner's native format),
+/// so the workspace root never leaks into model-visible output.
 async fn execute_glob_impl(
   scanner : &GlobScanner,
+  anchor : @devkit.WorkspaceAnchor?,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (pattern, base) = extract_glob_args(call.arguments)
-  let matches = scanner.scan(pattern, base)
+  let (pattern, raw_base) = extract_glob_args(call.arguments)
+  let matches = match anchor {
+    Some(anchor) => {
+      let resolved = anchor.resolve(raw_base)
+      let found = scanner.scan(pattern, resolved) catch {
+        _ =>
+          raise @posoco.RuntimeError::InvocationFailed(
+            "glob: scan failed for '\{@devkit.sanitize_path(raw_base)}'",
+          )
+      }
+      let prefix = if resolved == "/" { "/" } else { "\{resolved}/" }
+      [
+        for m in found => glob_strip_prefix(m, prefix)
+      ]
+    }
+    None => scanner.scan(pattern, raw_base)
+  }
   let builder = StringBuilder::new()
   for m in matches {
     builder.write_string(m)
@@ -132,4 +156,14 @@ async fn execute_glob_impl(
     content="Found \{matches.length()} files:\n\{builder.to_string()}",
     structured=Some(glob_structured(matches.length())),
   )
+}
+
+///|
+/// Drop `prefix` from `s` when present; on an impossible slice boundary the
+/// string passes through unchanged.
+fn glob_strip_prefix(s : String, prefix : String) -> String {
+  if !s.has_prefix(prefix) {
+    return s
+  }
+  s[prefix.length():].to_owned()
 }

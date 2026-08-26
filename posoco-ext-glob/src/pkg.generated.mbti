@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-glob"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -14,8 +15,9 @@ pub fn glob_extension() -> GlobTools
 
 // Types and methods
 pub(all) struct GlobTools {
+  anchor : @posoco-devkit.WorkspaceAnchor?
 }
-pub fn GlobTools::GlobTools() -> Self
+pub fn GlobTools::GlobTools(anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
 pub async fn GlobTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GlobTools::extension_id(Self) -> String
 pub fn GlobTools::manifest(Self) -> @port.ExtensionManifest

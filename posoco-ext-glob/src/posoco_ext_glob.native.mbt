@@ -9,10 +9,14 @@ impl GlobScanner for NativeGlobScanner with fn scan(
   base : String,
 ) -> Array[String] {
   let matches : Array[String] = []
+  let prefix = if base == "/" { "/" } else { "\{base}/" }
   @fs.walk(base, fn(dir : String, entries : Array[String]) {
     for entry in entries {
       let full = if dir == "." { entry } else { "\{dir}/\{entry}" }
-      if glob_match(pattern, full) {
+      // Match base-relative so pattern semantics match the js scanner; the
+      // returned paths keep the base prefix (the shared impl re-anchors
+      // them when a workspace anchor is configured).
+      if glob_match(pattern, glob_strip_prefix(full, prefix)) {
         matches.push(full)
       }
     }
@@ -122,9 +126,9 @@ pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
 
 ///|
 pub impl @posoco.ToolProvider for GlobTools with fn execute(
-  _self : GlobTools,
+  self : GlobTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_glob_impl(NativeGlobScanner::{  }, call)
+  execute_glob_impl(NativeGlobScanner::{  }, self.anchor, call)
 }

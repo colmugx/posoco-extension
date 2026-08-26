@@ -5,10 +5,6 @@ import {
   "moonbitlang/core/json",
 }
 
-// No per-file targets: each file uses #cfg attributes for conditional
-// compilation. All files compile on every target; inactive #cfg branches
-// are simply excluded by the compiler.
-
 import {
   "moonbitlang/async",
 } for "wbtest"
@@ -17,5 +13,6 @@ options(
   targets: {
     "posoco_ext_glob.js.mbt": [ "js" ],
     "posoco_ext_glob.native.mbt": [ "native" ],
+    "posoco_ext_glob_native_wbtest.mbt": [ "native" ],
   },
 )
