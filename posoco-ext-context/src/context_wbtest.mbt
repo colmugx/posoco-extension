@@ -22,23 +22,23 @@ test "parent_dir: strips trailing slash" {
   assert_eq(parent_dir("/a/b/"), Some("/a"))
 }
 
-// ContextPromptContributor: envelope rendering (pure)
+// ContextPromptContributor: namespace rendering (pure)
 
 ///|
 test "system_prompt: empty bundle renders nothing" {
   let bundle = ContextBundle::empty()
-  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
+  let c = ContextPromptContributor(bundle~, ns="posoco")
   assert_eq(c.system_prompt(), "")
 }
 
 ///|
-test "system_prompt: renders caller-selected envelope with attributes" {
+test "system_prompt: renders caller-selected namespace with attributes" {
   let bundle : ContextBundle = {
     global: None,
     ancestors: [{ path: "/repo/AGENTS.md", content: "build: make test" }],
     warnings: [],
   }
-  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
+  let c = ContextPromptContributor(bundle~, ns="posoco")
   let rendered = c.system_prompt()
   assert_true(rendered.contains("<posoco-context "))
   assert_true(rendered.contains("type=\"project_instructions\""))
@@ -49,13 +49,13 @@ test "system_prompt: renders caller-selected envelope with attributes" {
 }
 
 ///|
-test "system_prompt: envelope is not hardcoded" {
+test "system_prompt: namespace is not hardcoded" {
   let bundle : ContextBundle = {
     global: None,
     ancestors: [{ path: "/repo/AGENTS.md", content: "repo" }],
     warnings: [],
   }
-  let c = ContextPromptContributor::new(bundle~, envelope="example-context")
+  let c = ContextPromptContributor(bundle~, ns="example")
   let rendered = c.system_prompt()
   assert_true(rendered.contains("<example-context "))
   assert_true(rendered.contains("</example-context>"))
@@ -72,7 +72,7 @@ test "system_prompt: multiple documents render as parallel elements" {
     ],
     warnings: [],
   }
-  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
+  let c = ContextPromptContributor(bundle~, ns="posoco")
   let rendered = c.system_prompt()
   let parts = rendered.split("<posoco-context ")
   assert_eq(parts.length() - 1, 3)
@@ -97,7 +97,7 @@ test "system_prompt: xml-escapes special characters in content" {
     ],
     warnings: [],
   }
-  let c = ContextPromptContributor::new(bundle~, envelope="posoco-context")
+  let c = ContextPromptContributor(bundle~, ns="posoco")
   let rendered = c.system_prompt()
   assert_true(rendered.contains("&lt;tag&gt;"))
   assert_true(rendered.contains("&amp;"))

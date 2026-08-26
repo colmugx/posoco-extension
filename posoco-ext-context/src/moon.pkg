@@ -1,9 +1,11 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-ext-workspace" @workspace,
 }
 
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "moonbitlang/async",
 } for "wbtest"

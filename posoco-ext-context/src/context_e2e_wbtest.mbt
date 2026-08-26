@@ -12,10 +12,7 @@ async test "e2e: context contributor injects configured envelope into model requ
     ],
     warnings: [],
   }
-  let contributor = ContextPromptContributor::new(
-    bundle~,
-    envelope="posoco-context",
-  )
+  let contributor = ContextPromptContributor(bundle~, ns="posoco")
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])
@@ -56,10 +53,7 @@ async test "e2e: context contributor injects configured envelope into model requ
 ///|
 async test "e2e: empty bundle contributes no configured envelope" {
   let bundle = ContextBundle::empty()
-  let contributor = ContextPromptContributor::new(
-    bundle~,
-    envelope="posoco-context",
-  )
+  let contributor = ContextPromptContributor(bundle~, ns="posoco")
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])

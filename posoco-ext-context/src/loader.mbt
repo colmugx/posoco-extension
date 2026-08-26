@@ -44,7 +44,7 @@ pub struct ContextLoader {
 }
 
 ///|
-pub fn ContextLoader::new(
+pub fn ContextLoader::ContextLoader(
   fs : &@workspace.WorkspaceFs,
   home~ : String,
 ) -> ContextLoader {

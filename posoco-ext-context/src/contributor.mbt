@@ -1,34 +1,23 @@
 ///|
-/// Renders a loaded ContextBundle through a caller-selected XML envelope for
-/// the SystemPromptContributor seam. The envelope name belongs to the host or
-/// product composing this extension; the context package does not define one.
+/// Renders a loaded ContextBundle through a caller-selected namespace for
+/// the SystemPromptContributor seam. The host passes a bare namespace (e.g.
+/// "cetas"); elements render as `<{ns}-context …>`. The namespace belongs
+/// to the host or product composing this extension; the context package
+/// does not define one.
 pub struct ContextPromptContributor {
   bundle : ContextBundle
-  envelope : String
+  ns : String
 }
 
 ///|
-/// Construct a context contributor using the caller-owned envelope element
-/// name. The value is trusted host configuration and must be a valid XML
-/// element name.
-pub fn ContextPromptContributor::new(
+/// Construct a context contributor using the caller-owned bare namespace
+/// (e.g. "cetas"). Elements render as `{ns}-context`. The value is trusted
+/// host configuration and must be a valid XML name stem.
+pub fn ContextPromptContributor::ContextPromptContributor(
   bundle~ : ContextBundle,
-  envelope~ : String,
+  ns~ : String,
 ) -> ContextPromptContributor {
-  { bundle, envelope }
-}
-
-///|
-/// XML-escape text content so file contents cannot break out of the
-/// envelope or inject attributes. Applied to both content and the source
-/// path (paths are filesystem-controlled but escape defensively).
-fn escape_xml(s : String) -> String {
-  s
-  .replace_all(old="&", new="&amp;")
-  .replace_all(old="<", new="&lt;")
-  .replace_all(old=">", new="&gt;")
-  .replace_all(old="\"", new="&quot;")
-  .replace_all(old="'", new="&apos;")
+  { bundle, ns }
 }
 
 // All context docs are trust="false" (untrusted): they come from the
@@ -36,44 +25,35 @@ fn escape_xml(s : String) -> String {
 // should interpret this flag as data provenance, not as elevated authority.
 
 ///|
-/// Render one document using the configured envelope element.
-fn ContextPromptContributor::render_context(
+/// Render one document as a `{ns}-context` element. Escaping and layout
+/// live in devkit's render_context_envelope.
+fn ContextPromptContributor::render_doc(
   self : ContextPromptContributor,
   doc : ContextDocument,
 ) -> String {
-  let type_ = "project_instructions"
-  let trust = "false"
-  let source = escape_xml(doc.path)
-  let content = escape_xml(doc.content)
-  "<" +
-  self.envelope +
-  " type=\"" +
-  type_ +
-  "\" trust=\"" +
-  trust +
-  "\" source=\"" +
-  source +
-  "\">\n" +
-  content +
-  "\n</" +
-  self.envelope +
-  ">"
+  @devkit.render_context_envelope(
+    ns=self.ns,
+    kind="project_instructions",
+    trust=false,
+    source=doc.path,
+    content=doc.content,
+  )
 }
 
 ///|
 /// SystemPromptContributor: emit all loaded context documents as parallel
-/// elements using the configured envelope. Returns "" for an empty bundle
+/// elements using the configured namespace. Returns "" for an empty bundle
 /// (no global, no ancestors) so SystemPromptHook::assemble skips this section.
 pub impl @posoco.SystemPromptContributor for ContextPromptContributor with fn system_prompt(
   self : ContextPromptContributor,
 ) -> String {
   let parts : Array[String] = []
   match self.bundle.global {
-    Some(doc) => parts.push(self.render_context(doc))
+    Some(doc) => parts.push(self.render_doc(doc))
     None => ()
   }
   for doc in self.bundle.ancestors {
-    parts.push(self.render_context(doc))
+    parts.push(self.render_doc(doc))
   }
   parts.join("\n\n")
 }

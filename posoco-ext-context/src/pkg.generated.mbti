@@ -27,14 +27,14 @@ pub struct ContextLoader {
   fs : &@posoco-ext-workspace.WorkspaceFs
   home : String
 }
+pub fn ContextLoader::ContextLoader(&@posoco-ext-workspace.WorkspaceFs, home~ : String) -> Self
 pub async fn ContextLoader::load(Self, String) -> ContextBundle
-pub fn ContextLoader::new(&@posoco-ext-workspace.WorkspaceFs, home~ : String) -> Self
 
 pub struct ContextPromptContributor {
   bundle : ContextBundle
-  envelope : String
+  ns : String
 }
-pub fn ContextPromptContributor::new(bundle~ : ContextBundle, envelope~ : String) -> Self
+pub fn ContextPromptContributor::ContextPromptContributor(bundle~ : ContextBundle, ns~ : String) -> Self
 pub fn ContextPromptContributor::system_prompt(Self) -> String
 pub impl @port.SystemPromptContributor for ContextPromptContributor
 
