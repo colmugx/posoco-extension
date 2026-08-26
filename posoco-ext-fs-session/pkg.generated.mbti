@@ -3,6 +3,7 @@ package "colmugx/posoco-ext-fs-session"
 
 import {
   "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
 }

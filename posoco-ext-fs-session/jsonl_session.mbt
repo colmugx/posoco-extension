@@ -117,3 +117,59 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
       )
   }
 }
+
+///|
+/// SessionStore::append_messages — append just the new JSONL message lines to
+/// the file. If the session file does not exist yet, write a full JSONL file
+/// (metadata + messages) so the first append behaves like a save.
+pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
+  self,
+  id : String,
+  from_index : Int,
+  messages : ArrayView[@posoco.Message],
+) -> Unit raise @posoco.SessionError {
+  let _ = from_index
+  let path = save_session_path(self.root_dir, id)
+  self.ensure_root_dir()
+  let exists = @xfs.path_exists(path)
+  if !exists {
+    // First persistence for this id: write metadata + all messages.
+    let session : @posoco.Session = {
+      messages: messages.to_owned(),
+      metadata: Map::from_array([]),
+    }
+    let jsonl = session_to_jsonl(session)
+    @xfs.write_string_to_file(path, jsonl) catch {
+      e =>
+        raise @posoco.SessionError::Save(
+          "jsonl: failed to write " + path + ": " + xfs_error_detail(e),
+        )
+    }
+    return
+  }
+  // File exists: open in append mode and write each new message line.
+  let file = @fs.open(
+    path,
+    mode=@fs.Mode::WriteOnly,
+    append=true,
+    create_mode=@fs.CreateMode::OpenExisting,
+  ) catch {
+    e =>
+      raise @posoco.SessionError::Save(
+        "jsonl: failed to open " + path + " for append: " + e.to_string(),
+      )
+  }
+  let writer = file as &@io.Writer
+  for msg in messages {
+    let line = "\n" + message_to_json(msg).stringify()
+    writer.write(line) catch {
+      e => {
+        file.close()
+        raise @posoco.SessionError::Save(
+          "jsonl: failed to append to " + path + ": " + e.to_string(),
+        )
+      }
+    }
+  }
+  file.close()
+}

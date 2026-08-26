@@ -1,43 +1,4 @@
 ///|
-/// jsonl_session_serde.mbt — Shared Session↔JSONL codec (target-agnostic).
-///
-/// Why manual codec: posoco's kernel `Message`/`Content`/`ToolCall` do NOT
-/// implement `@json.ToJson`/`FromJson`. Rather than modify core types just for
-/// this extension, we hand-roll a compact JSONL codec here.
-///
-/// Format (one JSON value per line):
-///   line 1: metadata object — `{"k": <json>, ...}` (may be `{}` for empty)
-///   line 2..: messages in order — each line is `{"role": ..., "content": [...], ...}`
-///
-/// Disk-format compatibility (M3.6/M3.7 migration):
-/// The on-disk JSON shape is unchanged from the legacy `Role`+struct `Message`
-/// era. The `role` field is still one of `"system" | "user" | "assistant" | "tool"`.
-/// What changed is only the in-memory representation: `Message` is now a kernel
-/// enum where the role is encoded in the variant tag (`UserMessage`,
-/// `AssistantMessage`, etc.) instead of a separate `Role` field. This codec
-/// maps between the two.
-///
-///   role="system"    ↔ Message::SystemMessage(content~)
-///   role="user"      ↔ Message::UserMessage(content~)
-///   role="assistant" ↔ Message::AssistantMessage(content~, tool_calls~,
-///                       reasoning~, finish_reason~)
-///   role="tool"      ↔ Message::ToolMessage(call_id~, tool_name~, outcome~)
-///
-/// For `ToolMessage`, the legacy fields map onto the new variant as:
-///   - `tool_call_id` ↔ ToolMessage.call_id   (CallId)
-///   - `name`         ↔ ToolMessage.tool_name (ToolName)
-///   - `content[0]` text ↔ ToolMessage.outcome Success/ToolReportedError content
-/// A round-trip preserves the role tag and these fields; the remaining
-/// `finish_reason` is stored as a best-effort string when non-default.
-///
-/// Design constraints:
-/// - Pure functions (no IO, no async). Parse failures are returned via
-///   `Result[_, SessionError]` so the async SessionStore implementation can
-///   raise the typed codec failure at its boundary.
-/// - Output is deterministic so save→load round-trips are stable.
-/// - Empty session serialises to a single metadata line.
-
-///|
 /// Serialise a `Content` enum to JSON.
 /// - `Text(s)`  → `{"type": "text", "text": s}`
 /// - `Image(media_type, data)` → `{"type": "image", "media_type": mt, "data": d}`
