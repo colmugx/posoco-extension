@@ -14,7 +14,24 @@ It writes one project-local artifact:
 └── HANDOFF.md
 ```
 
-## Commands
+## Ports contributed
+
+| Port | Contribution |
+|------|--------------|
+| `CommandPort` | the `/handoff` command (`create` / `inspect`) |
+| `Extension` | composes into `Agent(exts=[...])` as a command extension |
+
+## Usage
+
+```bash
+moon add colmugx/posoco-ext-handoff
+```
+
+```moonbit
+// moon.pkg: "colmugx/posoco-ext-handoff" @handoff
+```
+
+Commands:
 
 ```text
 /handoff create [objective]
@@ -24,21 +41,22 @@ It writes one project-local artifact:
 ## Minimal composition
 
 The package includes default building blocks, so a product does not need to
-implement custom handoff traits just to get started:
+implement custom handoff traits just to get started. Trait-object coercions
+are kept explicit, mirroring the package's own compile fixture:
 
 ```moonbit
-let store = DefaultHandoffStore::new()
+let store = DefaultHandoffStore()
 
-let workspace = HandoffWorkspaceState::new(
+let workspace = HandoffWorkspaceState(
   "/repo",
   branch=Some("feat/handoff"),
   head=Some("abc123"),
   changes=[
-    { path: "posoco-ext-handoff/src/handoff.mbt", status: "modified" },
+    { path: "src/handoff.mbt", status: "modified" },
   ],
 )
 
-let work = HandoffWorkState::new()
+let work = HandoffWorkState()
 work.set_objective("Implement posoco-ext-handoff")
 work.add_done_when("/handoff create writes .handoff/HANDOFF.md")
 work.add_constraint("Do not inspect session-private state")
@@ -46,12 +64,17 @@ work.set_current_work("Finish default host adapters")
 work.set_next_action("Run moon test")
 work.validation_not_run("moon test")
 
-let handoff = Handoff::new(
+let store_port : &HandoffStore = store
+let workspace_probe : &HandoffWorkspaceProbe = workspace
+let work_source : &HandoffWorkSource = work
+
+let handoff = Handoff(
   cwd="/repo",
-  store~,
-  probe=workspace,
-  work_sources=[work],
+  store=store_port,
+  probe=workspace_probe,
+  work_sources=[work_source],
 )
+let agent = @posoco.Agent(exts=[handoff, ..other_extensions], config~)
 ```
 
 `DefaultHandoffStore` is implemented for native and JavaScript targets. It
