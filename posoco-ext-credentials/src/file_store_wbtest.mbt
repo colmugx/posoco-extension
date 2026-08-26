@@ -11,7 +11,7 @@ priv struct FakeFs {
 }
 
 ///|
-fn FakeFs::new() -> FakeFs {
+fn FakeFs::FakeFs() -> FakeFs {
   { files: Map::from_array([]), fail_ops: Map::from_array([]) }
 }
 
@@ -154,8 +154,8 @@ test "record codec rejects malformed shapes with a typed error" {
 
 ///|
 async test "file store read missing content malformed" {
-  let fs = FakeFs::new()
-  let store = FileProviderCredentialStore::new(fs, "/cfg/credentials")
+  let fs = FakeFs()
+  let store = FileProviderCredentialStore(fs, "/cfg/credentials")
   // Missing → None (unconfigured), never an error.
   assert_true(store.read("kimi") is None)
   // Round-trip: write then read back the same method.
@@ -177,8 +177,8 @@ async test "file store read missing content malformed" {
 
 ///|
 async test "file store delete is idempotent and failure is observable" {
-  let fs = FakeFs::new()
-  let store = FileProviderCredentialStore::new(fs, "/cfg/credentials")
+  let fs = FakeFs()
+  let store = FileProviderCredentialStore(fs, "/cfg/credentials")
   // Deleting an absent record is a successful logout.
   store.delete("kimi")
   store.write("kimi", api_key_credential())
@@ -196,8 +196,8 @@ async test "file store delete is idempotent and failure is observable" {
 
 ///|
 async test "file store write failure keeps previous record" {
-  let fs = FakeFs::new()
-  let store = FileProviderCredentialStore::new(fs, "/cfg/credentials")
+  let fs = FakeFs()
+  let store = FileProviderCredentialStore(fs, "/cfg/credentials")
   store.write("kimi", api_key_credential())
   let before = fs.files["/cfg/credentials/kimi.json"]
   fs.fail_ops["write_file_atomic"] = true

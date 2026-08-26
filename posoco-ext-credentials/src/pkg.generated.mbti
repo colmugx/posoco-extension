@@ -21,8 +21,8 @@ pub struct FileProviderCredentialStore {
   fs : &@posoco-ext-workspace.WorkspaceFs
   dir : String
 }
+pub fn FileProviderCredentialStore::FileProviderCredentialStore(&@posoco-ext-workspace.WorkspaceFs, String) -> Self
 pub async fn FileProviderCredentialStore::delete(Self, String) -> Unit raise @posoco-ext-oauth.OAuthError
-pub fn FileProviderCredentialStore::new(&@posoco-ext-workspace.WorkspaceFs, String) -> Self
 pub async fn FileProviderCredentialStore::read(Self, String) -> @posoco-ext-oauth.ProviderCredential? raise @posoco-ext-oauth.OAuthError
 pub async fn FileProviderCredentialStore::write(Self, String, @posoco-ext-oauth.ProviderCredential) -> Unit raise @posoco-ext-oauth.OAuthError
 pub impl @posoco-ext-oauth.ProviderCredentialStore for FileProviderCredentialStore

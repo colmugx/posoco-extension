@@ -20,7 +20,7 @@ pub struct FileProviderCredentialStore {
 }
 
 ///|
-pub fn FileProviderCredentialStore::new(
+pub fn FileProviderCredentialStore::FileProviderCredentialStore(
   fs : &@workspace.WorkspaceFs,
   dir : String,
 ) -> FileProviderCredentialStore {
