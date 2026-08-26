@@ -167,5 +167,5 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_edit_impl(JsFsIo::{  }, self.freshness, call)
+  execute_edit_impl(JsFsIo::{  }, self.freshness, self.anchor, call)
 }

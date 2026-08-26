@@ -77,5 +77,5 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_edit_impl(NativeFsIo::{  }, self.freshness, call)
+  execute_edit_impl(NativeFsIo::{  }, self.freshness, self.anchor, call)
 }

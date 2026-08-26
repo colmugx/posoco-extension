@@ -14,12 +14,18 @@
 pub(all) struct EditTools {
   // Shared read-before-modify ledger; None disables the gate (library use).
   freshness : @devkit.FreshnessGuard?
+  // Resolves relative paths against the workspace root; None keeps legacy
+  // behavior (relative paths land on the process working directory).
+  anchor : @devkit.WorkspaceAnchor?
 }
 
 ///|
 /// Canonical constructor. Use this everywhere.
-pub fn EditTools::EditTools(freshness? : @devkit.FreshnessGuard) -> EditTools {
-  EditTools::{ freshness, }
+pub fn EditTools::EditTools(
+  freshness? : @devkit.FreshnessGuard,
+  anchor? : @devkit.WorkspaceAnchor? = None,
+) -> EditTools {
+  EditTools::{ freshness, anchor }
 }
 
 ///|
@@ -239,12 +245,19 @@ fn describe_match_lines(lines : Array[Int]) -> String {
 async fn execute_edit_impl(
   io : &FsIo,
   freshness : @devkit.FreshnessGuard?,
+  anchor : @devkit.WorkspaceAnchor?,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (path, old_text, new_text, all) = extract_edit_args(call.arguments)
+  let (raw_path, old_text, new_text, all) = extract_edit_args(call.arguments)
+  // The resolved path drives IO and the freshness ledger; messages echo the
+  // argument as written so the anchor root never leaks into results.
+  let path = match anchor {
+    Some(anchor) => anchor.resolve(raw_path)
+    None => raw_path
+  }
   if !io.exists(path) {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="File not found: \{@devkit.sanitize_path(path)}",
+      content="File not found: \{@devkit.sanitize_path(raw_path)}",
       structured=None,
     )
   }
@@ -255,7 +268,7 @@ async fn execute_edit_impl(
         @devkit.Fresh => ()
         verdict =>
           return @posoco.ToolOutcome::ToolReportedError(
-            content="edit: refused: '\{@devkit.sanitize_path(path)}' \{verdict.hint()}",
+            content="edit: refused: '\{@devkit.sanitize_path(raw_path)}' \{verdict.hint()}",
             structured=None,
           )
       }
@@ -283,14 +296,14 @@ async fn execute_edit_impl(
   }
   if matches.length() == 0 {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="edit: old_text not found in \{@devkit.sanitize_path(path)}; the file may have changed since your last read — read it again and retry with the exact current text",
+      content="edit: old_text not found in \{@devkit.sanitize_path(raw_path)}; the file may have changed since your last read — read it again and retry with the exact current text",
       structured=None,
     )
   }
   let match_lines = [ for m in matches => m.1 ]
   if matches.length() > 1 && !all {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="edit: old_text matches \{matches.length()} locations in \{@devkit.sanitize_path(path)} at line(s) \{describe_match_lines(match_lines)}; add surrounding lines to make it unique, or pass replace_all: true",
+      content="edit: old_text matches \{matches.length()} locations in \{@devkit.sanitize_path(raw_path)} at line(s) \{describe_match_lines(match_lines)}; add surrounding lines to make it unique, or pass replace_all: true",
       structured=None,
     )
   }
@@ -321,7 +334,7 @@ async fn execute_edit_impl(
     ""
   }
   @posoco.ToolOutcome::Success(
-    content="Edited \{@devkit.sanitize_path(path)}: replaced \{matches.length()} \{occurrence_word} at \{line_word} \{describe_match_lines(match_lines)}\{stripped_note}",
+    content="Edited \{@devkit.sanitize_path(raw_path)}: replaced \{matches.length()} \{occurrence_word} at \{line_word} \{describe_match_lines(match_lines)}\{stripped_note}",
     structured=None,
   )
 }

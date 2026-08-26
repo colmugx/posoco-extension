@@ -344,3 +344,28 @@ test "edit_policy_is_exclusive" {
   inspect(defs.length(), content="1")
   assert_true(defs[0].policy is @posoco.ExecutionPolicy::Exclusive)
 }
+
+///|
+/// Anchored edit resolves a relative path against the anchor root and echoes
+/// the argument spelling in its result message.
+#cfg(target="native")
+async test "edit_anchored_relative_path_resolves" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-edit-anchor")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    write_file_native(dir + "/u.txt", "alpha\nbeta\ngamma\n")
+    let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
+    let tools = EditTools::EditTools(anchor=Some(anchor))
+    match run_edit(tools, edit_text_call("u.txt", "beta", "BETA", None)) {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
+        assert_true(content.contains("u.txt"))
+        assert_false(content.contains(dir))
+        let after = @fs.read_file(dir + "/u.txt").text()
+        inspect(after, content="alpha\nBETA\ngamma\n")
+      }
+      _ => fail("expected anchored edit to succeed")
+    }
+  }
+}
