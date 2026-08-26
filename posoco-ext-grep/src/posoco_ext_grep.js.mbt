@@ -138,9 +138,9 @@ impl GrepSearcher for JsGrepSearcher with fn search(
 }
 
 ///|
-pub impl @posoco.ToolProvider for GrepTools with fn list_tools(
-  _self : GrepTools,
-) -> Array[@posoco.ToolDef] {
+pub impl @posoco.ToolProvider for GrepTools with fn list_tools(self : GrepTools) -> Array[
+  @posoco.ToolDef,
+] {
   shared_list_tools()
 }
 
@@ -148,9 +148,9 @@ pub impl @posoco.ToolProvider for GrepTools with fn list_tools(
 /// Execute the `grep` tool on js. Business logic lives in the shared
 /// `execute_grep_impl`; this method only supplies the rg-based searcher.
 pub impl @posoco.ToolProvider for GrepTools with fn execute(
-  _self : GrepTools,
+  self : GrepTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_grep_impl(JsGrepSearcher::{  }, call)
+  execute_grep_impl(JsGrepSearcher::{  }, self.anchor, call)
 }

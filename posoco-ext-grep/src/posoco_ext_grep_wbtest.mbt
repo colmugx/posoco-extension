@@ -240,3 +240,35 @@ async test "grep_unreadable_file_is_loud" {
     }
   }
 }
+
+///|
+/// Anchored grep searches the resolved base and rewrites result paths back
+/// to the argument spelling, so the workspace root never appears in output.
+#cfg(target="native")
+async test "grep_anchored_base_resolves_and_rebases_paths" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-anchor")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file(
+      dir + "/a.txt",
+      "needle here\nplain line\n",
+      create_mode=CreateNew,
+    )
+    let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
+    let tools = GrepTools::GrepTools(anchor=Some(anchor))
+    let call : @posoco.ToolCall = {
+      call_id: @posoco.CallId::unchecked("grep-anchor"),
+      name: @posoco.ToolName::unchecked("grep"),
+      arguments: Json::object({ "pattern": Json::string("needle") }),
+    }
+    match tools.execute("grep", call) {
+      @posoco.ToolOutcome::Success(content~, ..) => {
+        assert_true(content.contains("a.txt:1:needle here"))
+        assert_false(content.contains(dir))
+      }
+      _ => fail("expected anchored grep to succeed")
+    }
+  }
+}

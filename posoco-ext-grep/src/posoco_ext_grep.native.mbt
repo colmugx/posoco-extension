@@ -93,9 +93,9 @@ pub impl @posoco.ToolProvider for GrepTools with fn list_tools(
 /// Execute the `grep` tool on native. Business logic lives in the shared
 /// `execute_grep_impl`; this method only supplies the walk-based searcher.
 pub impl @posoco.ToolProvider for GrepTools with fn execute(
-  _self : GrepTools,
+  self : GrepTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_grep_impl(NativeGrepSearcher::{  }, call)
+  execute_grep_impl(NativeGrepSearcher::{  }, self.anchor, call)
 }

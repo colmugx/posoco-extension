@@ -6,13 +6,17 @@
 /// on js (bun), delegates to `rg` (ripgrep). On wasm/wasm-gc, the tool is not
 /// listed and execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct GrepTools {
-  // Stateless — all configuration comes from ToolCall arguments at execute time.
+  // Resolves the search base against the workspace root; None keeps legacy
+  // behavior (the base lands on the process working directory).
+  anchor : @devkit.WorkspaceAnchor?
 }
 
 ///|
 /// Canonical constructor.
-pub fn GrepTools::GrepTools() -> GrepTools {
-  GrepTools::{  }
+pub fn GrepTools::GrepTools(
+  anchor? : @devkit.WorkspaceAnchor? = None,
+) -> GrepTools {
+  GrepTools::{ anchor, }
 }
 
 ///|
@@ -147,14 +151,50 @@ fn grep_structured(count : Int) -> Json {
 
 ///|
 /// Shared `grep` execute logic. Target-agnostic; only the searcher differs.
+///
+/// When anchored, the search runs in the resolved directory and result paths
+/// are re-anchored to the argument spelling, so the workspace root never
+/// leaks into model-visible output.
 async fn execute_grep_impl(
   searcher : &GrepSearcher,
+  anchor : @devkit.WorkspaceAnchor?,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (pattern, base, file_glob) = extract_grep_args(call.arguments)
-  let results = searcher.search(pattern, base, file_glob)
+  let (pattern, raw_base, file_glob) = extract_grep_args(call.arguments)
+  let results = match anchor {
+    Some(anchor) => {
+      let resolved = anchor.resolve(raw_base)
+      let found = searcher.search(pattern, resolved, file_glob) catch {
+        _ =>
+          raise @posoco.RuntimeError::InvocationFailed(
+            "grep: search failed for '\{@devkit.sanitize_path(raw_base)}'",
+          )
+      }
+      [
+        for r in found => grep_rebase(r, resolved, raw_base)
+      ]
+    }
+    None => searcher.search(pattern, raw_base, file_glob)
+  }
   @posoco.ToolOutcome::Success(
     content=grep_result_text(results, pattern),
     structured=Some(grep_structured(results.length())),
   )
+}
+
+///|
+/// Rewrite a `path:line:content` result produced under `resolved` back to the
+/// `raw_base` spelling (no prefix when the base was the default "."). Results
+/// whose path does not carry the resolved prefix pass through unchanged.
+fn grep_rebase(result : String, resolved : String, raw_base : String) -> String {
+  let prefix = if resolved == "/" { "/" } else { "\{resolved}/" }
+  if !result.has_prefix(prefix) {
+    return result
+  }
+  let rest = result[prefix.length():].to_owned()
+  if raw_base == "." || raw_base == "" {
+    rest
+  } else {
+    "\{raw_base}/\{rest}"
+  }
 }
