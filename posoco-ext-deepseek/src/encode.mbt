@@ -37,19 +37,17 @@ fn encode_message(msg : @posoco.Message) -> Json {
       ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
-  // Concatenate Text content blocks into a single string (DeepSeek does not
-  // support content arrays, only a string field).
-  let text_builder = StringBuilder::new()
-  for block in content_blocks {
-    match block {
-      Text(s) => text_builder.write_string(s)
-      Image(..) => () // DeepSeek chat does not support images
-    }
+  // Shared content encoding: string form (this endpoint does not accept
+  // content parts), with any Image block downgraded to an explicit
+  // placeholder instead of a silent drop.
+  let content_json : Json = match
+    @chatkit.encode_chat_message_content(content_blocks) {
+    TextContent(s) => Json::string(s)
+    PartsContent(parts) => Json::array(parts)
   }
-  let content_str = text_builder.to_string()
   let obj : Map[String, Json] = {
     "role": Json::string(role),
-    "content": Json::string(content_str),
+    "content": content_json,
   }
   match tool_call_id {
     Some(id) => obj["tool_call_id"] = Json::string(id)

@@ -61,17 +61,18 @@ fn DeepSeekModelPort::default_thinking_config(
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   self : DeepSeekModelPort,
   _scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let (thinking_json, effort_str) = self.default_thinking_config()
+  let messages_owned = messages.to_owned()
   match stream {
     NoStream => {
       let body = build_chat_request(
         self.ctx,
-        messages,
+        messages_owned,
         tools,
         options,
         self.config.model,
@@ -111,12 +112,15 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
           )
       }
       let completion = decode_chat_response(resp_json)
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
     Stream(on_chunk) => {
       let body = build_chat_request(
         self.ctx,
-        messages,
+        messages_owned,
         tools,
         options,
         self.config.model,
@@ -164,15 +168,12 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
         }
       }
       let acc = @posoco.StreamAccumulator::StreamAccumulator()
-      // Bridge: forward each StreamChunk to the host as a Json chunk matching
-      // the {kind, token} convention PortHostAdapter decodes. The accumulator
-      // is owned by process_deepseek_sse, which pushes every chunk exactly
-      // once; pushing here too would double every text/reasoning delta.
-      let on_typed = fn(chunk : @posoco.StreamChunk) {
-        on_chunk(streamchunk_to_json(chunk))
-      }
+      // Forward typed StreamChunks directly to the host callback. The
+      // accumulator is owned by process_deepseek_sse, which pushes every chunk
+      // exactly once; pushing here too would double every text/reasoning delta.
       let mut done = false
       let mut data_buffer = ""
+      let mut last_yield = @async.now()
       while !done {
         let line = client.read_until("\n") catch {
           err => {
@@ -190,7 +191,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
               let payload = trimmed[5:].trim().to_owned()
               if payload.length() > 0 {
                 data_buffer = payload
-                done = process_deepseek_sse(payload, acc, on_typed)
+                done = process_deepseek_sse(payload, acc, on_chunk)
               }
             } else if trimmed == "" && data_buffer.length() > 0 {
               data_buffer = ""
@@ -204,6 +205,15 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
             }
           }
         }
+        // Yield at most every 16ms so the event loop can breathe during a
+        // buffered SSE burst; the pause is also a cancellation point.
+        let now = @async.now()
+        if now - last_yield >= 16L {
+          @async.pause() catch {
+            _ => ()
+          }
+          last_yield = now
+        }
       }
       client.close()
       match classify_deepseek_stream_termination(ExplicitTerminal) {
@@ -212,68 +222,11 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
       }
       validate_deepseek_stream_tool_calls(acc)
       let completion = acc.to_completion()
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
-  }
-}
-
-///|
-/// Serialize a StreamChunk to the Json chunk convention PortHostAdapter
-/// decodes: `{kind: "text"|"reasoning", token: "..."}` for deltas. Other
-/// chunk kinds (ToolCallDelta/Usage/Finish) are forwarded as a structured
-/// object so a host can inspect them, but the primary text/reasoning path
-/// matches what agent_puppet's stream callback expects.
-fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
-  match chunk {
-    TextDelta(token~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("text")),
-          ("token", Json::string(token)),
-        ]),
-      )
-    ReasoningDelta(token~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("reasoning")),
-          ("token", Json::string(token)),
-        ]),
-      )
-    ToolCallDelta(index~, id~, name~, arguments_delta~) => {
-      let m : Map[String, Json] = {
-        "kind": Json::string("tool_call_delta"),
-        "index": Json::number(index.to_double()),
-      }
-      match id {
-        Some(s) => m["id"] = Json::string(s)
-        None => ()
-      }
-      match name {
-        Some(s) => m["name"] = Json::string(s)
-        None => ()
-      }
-      match arguments_delta {
-        Some(s) => m["arguments_delta"] = Json::string(s)
-        None => ()
-      }
-      Json::object(m)
-    }
-    Usage(input_tokens~, output_tokens~, total_tokens~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("usage")),
-          ("input_tokens", Json::number(input_tokens.to_double())),
-          ("output_tokens", Json::number(output_tokens.to_double())),
-          ("total_tokens", Json::number(total_tokens.to_double())),
-        ]),
-      )
-    Finish(reason~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("finish")),
-          ("reason", Json::string(reason)),
-        ]),
-      )
   }
 }
 
@@ -284,7 +237,7 @@ fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
   _self : DeepSeekModelPort,
   _scope : @posoco.InvocationScope,
-  _messages : Array[@posoco.Message],
+  _messages : ArrayView[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

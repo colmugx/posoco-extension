@@ -278,7 +278,7 @@ test "sse_text_delta" {
   assert_false(done)
   assert_eq(chunks.length(), 1)
   assert_true(chunks[0] is @posoco.StreamChunk::TextDelta(token="hello"))
-  assert_eq(acc.text, "hello")
+  assert_eq(acc.text(), "hello")
 }
 
 ///|
@@ -291,7 +291,7 @@ test "sse_reasoning_delta" {
   assert_true(
     chunks[0] is @posoco.StreamChunk::ReasoningDelta(token="thinking"),
   )
-  assert_eq(acc.reasoning, "thinking")
+  assert_eq(acc.reasoning(), "thinking")
 }
 
 ///|
@@ -373,8 +373,8 @@ test "sse_no_double_push_with_forwarding_callback" {
   // Each token forwarded exactly once to the host.
   assert_eq(forwarded.length(), 2)
   // Each token accumulated exactly once — NOT doubled.
-  assert_eq(acc.text, "早上好")
-  assert_eq(acc.reasoning, "思考中")
+  assert_eq(acc.text(), "早上好")
+  assert_eq(acc.reasoning(), "思考中")
 }
 
 ///|
@@ -1084,7 +1084,8 @@ test "t07b_deepseek_valid_stream_usage_still_decodes" {
     is @posoco.StreamChunk::Usage(
       input_tokens=1,
       output_tokens=2,
-      total_tokens=3
+      total_tokens=3,
+      ..
     ),
   )
 }
