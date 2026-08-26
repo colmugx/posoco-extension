@@ -41,7 +41,7 @@ fn sanitize_tool_call_id(id : String) -> String {
 
 ///|
 /// Encode a kernel Message into a kimi chat message JSON object.
-fn encode_message(msg : @posoco.Message) -> Json {
+fn encode_message(msg : @posoco.Message, supports_images : Bool) -> Json {
   let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
     msg {
     SystemMessage(content~) => ("system", content, [], None, None)
@@ -69,16 +69,13 @@ fn encode_message(msg : @posoco.Message) -> Json {
       ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
-  // Concatenate Text content blocks into a single string (kimi does not
-  // support content arrays, only a string field).
-  let text_builder = StringBuilder::new()
-  for block in content_blocks {
-    match block {
-      Text(s) => text_builder.write_string(s)
-      Image(..) => () // kimi chat does not support images
-    }
-  }
-  let content_str = text_builder.to_string()
+  // Shared content encoding: string form by default (kimi rejects content
+  // arrays for text-only models), typed parts when the model declares image
+  // input, explicit placeholder downgrade otherwise.
+  let encoded = @chatkit.encode_chat_message_content(
+    content_blocks,
+    supports_images~,
+  )
   let obj : Map[String, Json] = { "role": Json::string(role) }
   match tool_call_id {
     Some(id) => obj["tool_call_id"] = Json::string(sanitize_tool_call_id(id))
@@ -86,9 +83,14 @@ fn encode_message(msg : @posoco.Message) -> Json {
   }
   // K3: Kimi rejects empty content on assistant messages ("must not be empty").
   // When an assistant message only has tool_calls, omit content entirely.
-  // Non-assistant messages always carry content (even if empty).
-  if content_str.length() > 0 || tool_calls.length() == 0 {
-    obj["content"] = Json::string(content_str)
+  // Non-assistant messages always carry content (even if empty). The parts
+  // form is non-empty by construction (it only appears when images exist).
+  match encoded {
+    TextContent(s) =>
+      if s.length() > 0 || tool_calls.length() == 0 {
+        obj["content"] = Json::string(s)
+      }
+    PartsContent(parts) => obj["content"] = Json::array(parts)
   }
   // Tool calls (assistant messages requesting tool execution)
   if tool_calls.length() > 0 {
@@ -171,10 +173,13 @@ fn build_chat_request(
   thinking_json : Json,
   cache_key : String?,
   reasoning_effort_str? : String? = None,
+  supports_images? : Bool = false,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(model),
-    "messages": Json::array(messages.map(encode_message)),
+    "messages": Json::array(
+      messages.map(fn(m) { encode_message(m, supports_images) }),
+    ),
   }
   if tools.length() > 0 {
     body["tools"] = encode_tools(tools)

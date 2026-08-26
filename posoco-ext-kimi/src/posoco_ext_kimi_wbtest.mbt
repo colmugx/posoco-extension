@@ -228,7 +228,7 @@ fn assert_json_field_string(
 ///|
 test "encode_message_basic" {
   let msg = user_msg("hello")
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("role") {
     Some(String(r)) => assert_eq(r, "user")
@@ -250,7 +250,7 @@ test "encode_message_assistant_no_reasoning" {
   // Even an assistant message from a reasoning model must not carry
   // reasoning_content when re-serialized (prefix cache protection).
   let msg = assistant_msg("answer")
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("role") {
     Some(String(r)) => assert_eq(r, "assistant")
@@ -276,7 +276,7 @@ test "encode_message_with_tool_calls" {
     reasoning=None,
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("tool_calls") {
     Some(Array(tcs)) => {
@@ -428,7 +428,7 @@ test "sse_text_delta" {
   assert_false(done)
   assert_eq(chunks.length(), 1)
   assert_true(chunks[0] is @posoco.StreamChunk::TextDelta(token="hello"))
-  assert_eq(acc.text, "hello")
+  assert_eq(acc.text(), "hello")
 }
 
 ///|
@@ -441,7 +441,7 @@ test "sse_reasoning_delta" {
   assert_true(
     chunks[0] is @posoco.StreamChunk::ReasoningDelta(token="thinking"),
   )
-  assert_eq(acc.reasoning, "thinking")
+  assert_eq(acc.reasoning(), "thinking")
 }
 
 ///|
@@ -524,8 +524,8 @@ test "sse_no_double_push_with_forwarding_callback" {
   // Each token forwarded exactly once to the host.
   assert_eq(forwarded.length(), 2)
   // Each token accumulated exactly once — NOT doubled.
-  assert_eq(acc.text, "早上好")
-  assert_eq(acc.reasoning, "思考中")
+  assert_eq(acc.text(), "早上好")
+  assert_eq(acc.reasoning(), "思考中")
 }
 
 ///|
@@ -547,7 +547,7 @@ test "encode_message_reasoning_resent_with_tool_calls" {
     }),
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
     Some(String(r)) => assert_eq(r, "thinking about this...")
@@ -568,7 +568,7 @@ test "encode_message_reasoning_preserved_without_tool_calls" {
     reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
     Some(String(r)) => assert_eq(r, "thinking...")
@@ -595,7 +595,7 @@ test "encode_message_tool_calls_no_reasoning" {
     reasoning=None,
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
     None => () // correct: None means don't emit
@@ -616,7 +616,7 @@ test "encode_message_tool_result_carries_tool_call_id" {
       structured=None,
     ),
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("role") {
     Some(String(r)) => assert_eq(r, "tool")
@@ -637,7 +637,7 @@ test "encode_message_tool_result_sanitizes_tool_call_id" {
     tool_name=@posoco.ToolName::unchecked("read_file"),
     outcome=@posoco.ToolOutcome::Success(content="ok", structured=None),
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("tool_call_id") {
     Some(String(id)) => assert_eq(id, "call_42__x")
@@ -650,7 +650,7 @@ test "kimi_config_defaults_to_single_model" {
   let config = KimiConfig("key")
   assert_eq(config.api_key, "key")
   assert_eq(config.base_url, "https://api.moonshot.ai/v1")
-  assert_eq(config.model, "kimi-v4-flash")
+  assert_eq(config.model, "kimi-k2.7-code")
 }
 
 ///|
@@ -1363,7 +1363,8 @@ test "t07b_kimi_valid_stream_usage_still_decodes" {
     is @posoco.StreamChunk::Usage(
       input_tokens=1,
       output_tokens=2,
-      total_tokens=3
+      total_tokens=3,
+      ..
     ),
   )
 }

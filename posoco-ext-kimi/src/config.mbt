@@ -22,19 +22,24 @@ pub(all) struct KimiConfig {
   /// Context capacity reported by the /models discovery endpoint, in tokens.
   /// `None` = unknown; auto-compact stays off rather than guessing.
   context_window : Int?
+  /// The model accepts image input (models discovery `supports_image_in`).
+  /// Image blocks then encode as typed content parts; otherwise they
+  /// downgrade to explicit placeholders.
+  supports_images : Bool
 } derive(Eq, Debug)
 
 ///|
 /// Default config builder. api_key is required; other fields use defaults.
 pub fn KimiConfig::KimiConfig(
   api_key : String,
-  model? : String = "kimi-v4-flash",
+  model? : String = "kimi-k2.7-code",
   base_url? : String = "https://api.moonshot.ai/v1",
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
   thinking_efforts? : Array[String]? = None,
   identity_headers? : Map[String, String] = Map::from_array([]),
   context_window? : Int? = None,
+  supports_images? : Bool = false,
 ) -> KimiConfig {
   let declared_efforts = match thinking_efforts {
     Some(values) => values
@@ -61,6 +66,7 @@ pub fn KimiConfig::KimiConfig(
     thinking_efforts: declared_efforts,
     identity_headers,
     context_window,
+    supports_images,
   }
 }
 
