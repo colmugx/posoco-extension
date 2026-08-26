@@ -3,11 +3,11 @@ name = "colmugx/posoco-ext-herdr"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.11.1",
+  "colmugx/posoco@0.12.0",
   "moonbitlang/async@0.21.0",
 }
 
-readme = "README.md"
+readme = "README.mbt.md"
 
 license = "Apache-2.0"
 
