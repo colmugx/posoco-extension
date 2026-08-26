@@ -322,4 +322,12 @@ pub impl @posoco.Extension for AskQuestionTools with fn manifest(
 }
 
 ///|
+pub extend AskQuestionTools with @posoco.ToolProvider::{list_tools, execute}
+
+///|
+pub extend AskQuestionTools with @posoco.SystemPromptContributor::{
+  system_prompt,
+}
+
+///|
 pub extend AskQuestionTools with @posoco.Extension::{extension_id, manifest}

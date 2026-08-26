@@ -16,8 +16,11 @@ pub(all) struct AskQuestionTools {
   ui : &@port.UiPort
 }
 pub fn AskQuestionTools::AskQuestionTools(&@port.UiPort) -> Self
+pub async fn AskQuestionTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn AskQuestionTools::extension_id(Self) -> String
+pub fn AskQuestionTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn AskQuestionTools::manifest(Self) -> @port.ExtensionManifest
+pub fn AskQuestionTools::system_prompt(Self) -> String
 pub impl @port.Extension for AskQuestionTools
 pub impl @port.SystemPromptContributor for AskQuestionTools
 pub impl @port.ToolProvider for AskQuestionTools

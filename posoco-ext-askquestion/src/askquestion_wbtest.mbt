@@ -97,7 +97,7 @@ test "ask_question_rejects_empty_select" {
 ///|
 test "ask_question_manifest_and_policy" {
   let tools = AskQuestionTools(NoopUi::{  })
-  let defs = tools.list_tools()
+  let defs = @posoco.ToolProvider::list_tools(tools)
   assert_eq(defs.length(), 1)
   assert_eq(defs[0].name.to_string(), "ask_question")
   assert_true(defs[0].policy is @posoco.ExecutionPolicy::Exclusive)
