@@ -2,7 +2,7 @@
 test "render_context_envelope: full attributes match ext-context output" {
   inspect(
     render_context_envelope(
-      envelope="cetas-context",
+      ns="cetas",
       kind="project_instructions",
       trust=false,
       source="/repo/AGENTS.md",
@@ -15,22 +15,21 @@ test "render_context_envelope: full attributes match ext-context output" {
 ///|
 test "render_context_envelope: omits source attribute when absent" {
   inspect(
-    render_context_envelope(envelope="e", kind="t", trust=true, content="c"),
-    content="<e type=\"t\" trust=\"true\">\nc\n</e>",
+    render_context_envelope(ns="e", kind="t", trust=true, content="c"),
+    content="<e-context type=\"t\" trust=\"true\">\nc\n</e-context>",
   )
 }
 
 ///|
 test "render_context_envelope: escapes source and content" {
-  let rendered = render_context_envelope(
-    envelope="e",
-    kind="t",
-    trust=false,
-    source="/p?a=<x>",
-    content="<tag> & \"q\" 'a'",
-  )
-  assert_true(rendered.contains("source=\"/p?a=&lt;x&gt;\""))
-  assert_true(
-    rendered.contains("&lt;tag&gt; &amp; &quot;q&quot; &apos;a&apos;"),
+  inspect(
+    render_context_envelope(
+      ns="e",
+      kind="t",
+      trust=false,
+      source="a\"b&c",
+      content="<script>",
+    ),
+    content="<e-context type=\"t\" trust=\"false\" source=\"a&quot;b&amp;c\">\n&lt;script&gt;\n</e-context>",
   )
 }

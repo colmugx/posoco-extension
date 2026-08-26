@@ -19,13 +19,13 @@ fn escape_xml(s : String) -> String {
 
 ///|
 /// Render one context envelope element:
-/// `<{envelope} type="{kind}" trust="{trust}" source="{source}">…</{envelope}>`.
-/// The `envelope` element name belongs to the composing host (e.g. cetas hosts
-/// use `cetas-context`); it and `kind` are trusted host configuration and are
-/// not escaped. `source` (rendered only when passed) and `content` are escaped
-/// because they carry filesystem-derived text.
+/// `<{ns}-context type="{kind}" trust="{trust}"[ source="{source}">…</{ns}-context>`.
+/// `ns` is the composing host's bare namespace (e.g. cetas hosts pass
+/// `"cetas"` and get `<cetas-context>`); it and `kind` are trusted host
+/// configuration and are not escaped. `source` (rendered only when passed)
+/// and `content` are escaped because they may carry external text.
 pub fn render_context_envelope(
-  envelope~ : String,
+  ns~ : String,
   kind~ : String,
   trust~ : Bool,
   source? : String,
@@ -33,10 +33,10 @@ pub fn render_context_envelope(
 ) -> String {
   let trust_str = if trust { "true" } else { "false" }
   let sb : StringBuilder = StringBuilder::new()
-  sb <+ "<\{envelope} type=\"\{kind}\" trust=\"\{trust_str}\""
+  sb <+ "<\{ns}-context type=\"\{kind}\" trust=\"\{trust_str}\""
   if source is Some(s) {
     sb <+ " source=\"\{escape_xml(s)}\""
   }
-  sb <+ ">\n\{escape_xml(content)}\n</\{envelope}>"
+  sb <+ ">\n\{escape_xml(content)}\n</\{ns}-context>"
   sb.to_string()
 }

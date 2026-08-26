@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn render_context_envelope(envelope~ : String, kind~ : String, trust~ : Bool, source? : String, content~ : String) -> String
+pub fn render_context_envelope(ns~ : String, kind~ : String, trust~ : Bool, source? : String, content~ : String) -> String
 
 pub fn sanitize_label(String, limit? : Int) -> String
 
@@ -91,6 +91,12 @@ pub impl Logger for MemoryLogger
 pub(all) struct NoopLogger {
 }
 pub impl Logger for NoopLogger
+
+pub struct WorkspaceAnchor {
+  root : String
+} derive(@debug.Debug)
+pub fn WorkspaceAnchor::WorkspaceAnchor(String) -> Self
+pub fn WorkspaceAnchor::resolve(Self, String) -> String
 
 // Type aliases
 

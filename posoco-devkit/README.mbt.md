@@ -69,7 +69,8 @@ assert_false(shell_command_is_read_only("cat a > b"))
 ## Context prompt envelopes
 
 `render_context_envelope` builds one
-`<{envelope} type="…" trust="…" source="…">…</{envelope}>` element with XML
-escaping of `source` and `content` — the same builder posoco-ext-context's
+`<{ns}-context type="…" trust="…" source="…">…</{ns}-context>` element with
+XML-escaping of `source` and `content` — the same builder posoco-ext-context's
 `ContextPromptContributor` uses, available to any host that assembles context
-prompts.
+prompts. `ns` is the host's bare namespace (`"cetas"` renders `cetas-context`
+elements); the `-context` suffix is appended by the builder.
