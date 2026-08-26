@@ -7,7 +7,7 @@
 ///|
 /// Test: ShellTools.list_tools
 async test "list_tools_contains_bash" {
-  let tools = ShellTools::{  }
+  let tools = ShellTools()
   let tool_defs = tools.list_tools()
   let names = tool_defs.map(fn(t) { t.name.to_string() })
   assert_true(names.contains("bash"))
@@ -16,7 +16,7 @@ async test "list_tools_contains_bash" {
 
 ///|
 async test "list_tools_tool_defs_have_descriptions" {
-  let tools = ShellTools::{  }
+  let tools = ShellTools()
   let tool_defs = tools.list_tools()
   for tool in tool_defs {
     assert_true(tool.description.length() > 0)
@@ -25,7 +25,7 @@ async test "list_tools_tool_defs_have_descriptions" {
 
 ///|
 async test "list_tools_tool_defs_have_input_schema" {
-  let tools = ShellTools::{  }
+  let tools = ShellTools()
   let tool_defs = tools.list_tools()
   for tool in tool_defs {
     assert_true(tool.input_schema is Json::Object(_))
@@ -34,7 +34,7 @@ async test "list_tools_tool_defs_have_input_schema" {
 
 ///|
 async test "list_tools_have_provenance" {
-  let tools = ShellTools::{  }
+  let tools = ShellTools()
   let tool_defs = tools.list_tools()
   for tool in tool_defs {
     match tool.provenance {
@@ -157,5 +157,45 @@ async test "non_utf8_output_is_explicit_tool_error" {
       fail(
         "expected ToolReportedError for invalid UTF-8, got " + other.to_string(),
       )
+  }
+}
+
+///|
+/// An anchored shell always starts in the anchor root — `pwd` must report it
+/// regardless of the host process working directory. `/` is used as the root
+/// because its printed form is stable (no symlink resolution surprises).
+async test "anchored_shell_starts_in_anchor_root" {
+  let tools = ShellTools(
+    anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor("/")),
+  )
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_pwd"),
+    name: @posoco.ToolName::unchecked("bash"),
+    arguments: Json::object(Map::from_array([("cmd", Json::string("pwd"))])),
+  }
+  match tools.execute("bash", call) {
+    Success(content~, ..) => assert_eq(content.trim(), "/")
+    _ => fail("expected Success for pwd")
+  }
+}
+
+///|
+/// Each call is a fresh shell in the anchor root: `cd` inside one call works,
+/// and relative paths resolve against the root (`/etc` exists on the native
+/// test hosts).
+async test "anchored_shell_resolves_relative_paths_from_root" {
+  let tools = ShellTools(
+    anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor("/")),
+  )
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_cd_pwd"),
+    name: @posoco.ToolName::unchecked("bash"),
+    arguments: Json::object(
+      Map::from_array([("cmd", Json::string("cd etc && pwd"))]),
+    ),
+  }
+  match tools.execute("bash", call) {
+    Success(content~, ..) => assert_eq(content.trim(), "/etc")
+    _ => fail("expected Success for cd etc and pwd")
   }
 }

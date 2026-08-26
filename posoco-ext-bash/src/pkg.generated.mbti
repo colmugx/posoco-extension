@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-bash"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -14,8 +15,9 @@ pub fn bash_extension() -> ShellTools
 
 // Types and methods
 pub(all) struct ShellTools {
+  anchor : @posoco-devkit.WorkspaceAnchor?
 }
-pub fn ShellTools::ShellTools() -> Self
+pub fn ShellTools::ShellTools(anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
 pub async fn ShellTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn ShellTools::extension_id(Self) -> String
 pub fn ShellTools::list_tools(Self) -> Array[@kernel.ToolDef]

@@ -9,7 +9,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
 
 ///|
 pub impl @posoco.ToolProvider for ShellTools with fn execute(
-  _self : ShellTools,
+  self : ShellTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
@@ -17,10 +17,17 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   if cmd == "" {
     raise bash_empty_command_failure()
   }
-  let (exit_code, output_data) = @process.collect_output_merged("sh", [
-    "-c", cmd,
-  ]) catch {
-    _ => raise bash_collect_output_failure()
+  // cwd is passed explicitly (never inherited) when an anchor is set, so the
+  // child cannot drift from the workspace root the model was told about.
+  let (exit_code, output_data) = match self.anchor {
+    Some(anchor) =>
+      @process.collect_output_merged("sh", ["-c", cmd], cwd=anchor.root) catch {
+        _ => raise bash_collect_output_failure()
+      }
+    None =>
+      @process.collect_output_merged("sh", ["-c", cmd]) catch {
+        _ => raise bash_collect_output_failure()
+      }
   }
   // Decode failure must not masquerade as success. If the process produced
   // non-UTF-8 / undecodable output, surface it as a business-level error

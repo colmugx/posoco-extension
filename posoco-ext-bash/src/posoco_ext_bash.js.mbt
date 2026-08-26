@@ -12,8 +12,9 @@ priv type BunProc
 
 ///|
 /// Spawn `sh -c <cmd>` with piped stdout+stderr. Synchronous in bun.
-extern "js" fn bun_spawn_shell(cmd : String) -> BunProc =
-  #| (cmd) => Bun.spawn({ cmd: ["sh", "-c", cmd], stdout: "pipe", stderr: "pipe" })
+/// An empty `cwd` inherits the bun process working directory.
+extern "js" fn bun_spawn_shell(cmd : String, cwd : String) -> BunProc =
+  #| (cmd, cwd) => Bun.spawn({ cmd: ["sh", "-c", cmd], stdout: "pipe", stderr: "pipe", ...(cwd ? { cwd } : {}) })
 
 ///|
 /// `Subprocess.prototype.exited` — Promise<number> (exit code).
@@ -44,7 +45,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
 
 ///|
 pub impl @posoco.ToolProvider for ShellTools with fn execute(
-  _self : ShellTools,
+  self : ShellTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
@@ -52,7 +53,11 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   if cmd == "" {
     raise bash_empty_command_failure()
   }
-  let proc = bun_spawn_shell(cmd)
+  let cwd = match self.anchor {
+    Some(anchor) => anchor.root
+    None => ""
+  }
+  let proc = bun_spawn_shell(cmd, cwd)
   let exit_code = proc.exit_code().wait() catch {
       _ =>
         raise @posoco.RuntimeError::InvocationFailed(

@@ -1,17 +1,23 @@
 ///|
 /// ShellTools — shell command execution tool provider.
 ///
+/// When `anchor` is set, every command runs in a fresh shell with its
+/// working directory pinned to the anchor root; when unset, the child
+/// inherits the host process working directory (legacy behavior).
+///
 /// On native, executes via `@process.collect_output_merged("sh", ...)`.
 /// On js (bun), executes via `Bun.spawn`. On wasm/wasm-gc, the tool is not
 /// listed and execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct ShellTools {
-  // Stateless — all configuration comes from ToolCall arguments at execute time.
+  anchor : @devkit.WorkspaceAnchor?
 }
 
 ///|
 /// Canonical constructor. Use this everywhere.
-pub fn ShellTools::ShellTools() -> ShellTools {
-  ShellTools::{  }
+pub fn ShellTools::ShellTools(
+  anchor? : @devkit.WorkspaceAnchor? = None,
+) -> ShellTools {
+  ShellTools::{ anchor, }
 }
 
 // ToolProvider is split into two complete #cfg partitions (native/js real, others inert); shared_list_tools avoids duplicating the ToolDef construction.
@@ -49,7 +55,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash"),
-      description: "Execute a shell command and return its output",
+      description: "Run a shell command. Use only when the other tools cannot do the job — e.g. builds, tests, git, or multi-step pipelines. Each call runs in a fresh shell in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root.",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
