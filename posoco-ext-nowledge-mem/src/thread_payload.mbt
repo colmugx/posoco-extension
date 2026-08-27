@@ -89,7 +89,10 @@ pub fn should_sync(messages : Array[NmemThreadMessage]) -> Bool {
 
 ///|
 /// Assemble the POST /threads request body (upstream buildSyncPayload).
-/// `project` is null: Posoco has no per-session cwd source in this milestone.
+/// `project` is still null: hosts do not pass a workspace root into this
+/// extension. Since the workspace-anchoring milestone, `HostContext.cwd` is
+/// the single cwd source (`WorkspaceAnchor`); threading it here is future
+/// work.
 pub fn build_thread_body(
   thread_id~ : String,
   title~ : String,

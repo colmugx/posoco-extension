@@ -385,7 +385,7 @@ pub(all) struct SyncEngine {
 }
 
 ///|
-pub fn SyncEngine::new() -> SyncEngine {
+pub fn SyncEngine::SyncEngine() -> SyncEngine {
   { lanes: Map::from_array([]), stopped: false }
 }
 

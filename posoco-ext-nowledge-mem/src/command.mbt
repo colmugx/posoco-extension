@@ -20,7 +20,7 @@ const NMEM_STATUS_REPORT_CHARS : Int = 200
 ///|
 /// `/memory status`: one nmem CLI probe plus the extension's own state —
 /// connectivity, one line per thread lane, the write-after queue depth, and
-/// the local index size. Returns the text report and its structured twin.
+/// the passive-read gate. Returns the text report and its structured twin.
 async fn NowledgeMem::memory_status_report(
   self : NowledgeMem,
 ) -> (String, Json) {
@@ -83,7 +83,7 @@ async fn NowledgeMem::memory_status_report(
   }
   lines.push("memory queue: \{self.mem.queue.length()} pending write(s)")
   lines.push(
-    "local index: \{self.mem.index.length()} entr\{if self.mem.index.length() == 1 { "y" } else { "ies" }}",
+    "passive read: \{if self.passive_read_done { "done" } else { "pending" }}",
   )
   match self.mem.last_error {
     Some(err) => lines.push("memory last_error: \{err}")
@@ -93,7 +93,7 @@ async fn NowledgeMem::memory_status_report(
     "nmem_connected": Json::boolean(connectivity),
     "lanes": Json::array(lanes_json),
     "queue_depth": Json::number(self.mem.queue.length().to_double()),
-    "index_entries": Json::number(self.mem.index.length().to_double()),
+    "passive_read_done": Json::boolean(self.passive_read_done),
     "memory_last_error": match self.mem.last_error {
       Some(err) => Json::string(err)
       None => Json::null()
@@ -106,11 +106,11 @@ async fn NowledgeMem::memory_status_report(
 /// `/memory` usage — the outcome for a bare invocation or an unknown
 /// subcommand.
 fn memory_usage() -> String {
-  [
-    "/memory — Nowledge Mem diagnostics", "  /memory status   nmem connectivity, thread lanes, write queue, local index",
-    "  /memory flush    drain pending thread lanes and queued memory writes now",
-    "  /memory refresh  reload the local memory index from the server",
-  ].join("\n")
+  (
+    #|/memory — Nowledge Mem diagnostics
+    #|  /memory status   nmem connectivity, thread lanes, write queue, passive-read gate
+    #|  /memory flush    drain pending thread lanes and queued memory writes now
+  )
 }
 
 ///|
@@ -166,8 +166,8 @@ fn pending_lane_count(engine : SyncEngine) -> Int {
 /// `/memory` — the synchronous diagnostics surface over the extension's own
 /// state (the Observer port is core-to-extension read-only, so without this
 /// command a lane's `last_error` would live only in memory). `status`
-/// reports connectivity + lanes + queue + index; `flush` forces one drain;
-/// `refresh` reloads the local index from the server.
+/// reports connectivity + lanes + queue + the passive-read gate; `flush`
+/// forces one drain.
 pub impl @posoco.CommandPort for NowledgeMem with fn commands(
   _self : NowledgeMem,
 ) -> Array[@posoco.CommandDef] {
@@ -175,18 +175,18 @@ pub impl @posoco.CommandPort for NowledgeMem with fn commands(
     @posoco.CommandDef::{
       id: "memory",
       label: "Nowledge Mem",
-      description: "Inspect and maintain Nowledge Mem: status (connectivity, thread lanes, write queue), flush pending writes, refresh the memory index",
+      description: "Inspect and maintain Nowledge Mem: status (connectivity, thread lanes, write queue), flush pending writes",
       category: "memory",
       ctype: @posoco.CommandType::Action,
       params: [
         @posoco.CommandParam::{
           name: "action",
           label: "Action",
-          description: "status / flush / refresh (default: usage)",
+          description: "status / flush (default: usage)",
           ptype: @posoco.ParamType::Str,
           required: false,
           default: None,
-          choices: Some(["status", "flush", "refresh"]),
+          choices: Some(["status", "flush"]),
           positional: true,
         },
       ],
@@ -265,42 +265,6 @@ pub impl @posoco.CommandPort for NowledgeMem with fn invoke(
         ),
         ui_hint=Some(@posoco.UiHint::Toast),
       )
-    }
-    Some("refresh") => {
-      // refresh_memory_index records failures in mem.last_error; clearing it
-      // first makes the field the refresh's own outcome.
-      self.mem.last_error = None
-      let refreshed : Bool = try {
-        self.refresh_memory_index()
-        true
-      } catch {
-        _ => false
-      } noraise {
-        ok => ok
-      }
-      if !refreshed {
-        return @posoco.CommandOutcome::Failure(
-          reason="memory index refresh failed: the CLI read raised",
-        )
-      }
-      match self.mem.last_error {
-        Some(err) =>
-          @posoco.CommandOutcome::Failure(
-            reason="memory index refresh failed: \{err}",
-          )
-        None =>
-          @posoco.CommandOutcome::Success(
-            feedback="memory index refreshed: \{self.mem.index.length()} entries",
-            structured=Some(
-              Json::object({
-                "index_entries": Json::number(
-                  self.mem.index.length().to_double(),
-                ),
-              }),
-            ),
-            ui_hint=Some(@posoco.UiHint::Toast),
-          )
-      }
     }
     Some(other) =>
       @posoco.CommandOutcome::Failure(

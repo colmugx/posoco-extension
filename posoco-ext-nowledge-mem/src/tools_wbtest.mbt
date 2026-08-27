@@ -15,7 +15,7 @@ fn tool_ext(
   expose_delete_tool? : Bool = false,
   space? : String? = None,
 ) -> NowledgeMem {
-  let ext = NowledgeMem::new(
+  let ext = NowledgeMem(
     source_app="posoco",
     transport=EchoNmemTransport::EchoNmemTransport(),
     runner~,
@@ -195,6 +195,7 @@ async test "memory_add: queues through MemoryPort, drain maps metadata to flags"
   inspect(runner.calls.length(), content="0")
   inspect(ext.mem.queue.length(), content="1")
   ext.drain_memory_ops()
+  inspect(ext.mem.queue.length(), content="0")
   debug_inspect(
     runner.calls[0],
     content=(
@@ -214,7 +215,6 @@ async test "memory_add: queues through MemoryPort, drain maps metadata to flags"
       #|]
     ),
   )
-  inspect(ext.mem.index[0].id, content="mem_5")
 }
 
 ///|
@@ -268,14 +268,13 @@ async test "memory_search: CLI failure surfaces a bounded stderr excerpt" {
 }
 
 ///|
-async test "memory_update: CLI success refreshes the local index entry" {
+async test "memory_update: CLI argv maps id, content, and title" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
       ("m:update", { exit: 0, stdout: "{}", stderr: "" }),
     ]),
   )
   let ext = tool_ext(runner~)
-  ext.mem.index.push(mem_entry(id="mem_3", content="old text", title="Old"))
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "memory_update",
@@ -287,12 +286,6 @@ async test "memory_update: CLI success refreshes the local index entry" {
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
-  inspect(ext.mem.index.length(), content="1")
-  inspect(ext.mem.index[0].content, content="new text")
-  inspect(
-    ext.mem.index[0].metadata.get("title") is Some(Json::String("New")),
-    content="true",
-  )
   debug_inspect(
     runner.calls[0],
     content=(
@@ -302,14 +295,13 @@ async test "memory_update: CLI success refreshes the local index entry" {
 }
 
 ///|
-async test "memory_delete: hard delete with -f and local index eviction" {
+async test "memory_delete: hard delete with -f straight to the server" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
       ("m:delete", { exit: 0, stdout: "{}", stderr: "" }),
     ]),
   )
   let ext = tool_ext(runner~, expose_delete_tool=true)
-  ext.mem.index.push(mem_entry(id="mem_4", content="doomed"))
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "memory_delete",
@@ -318,7 +310,6 @@ async test "memory_delete: hard delete with -f and local index eviction" {
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
-  inspect(ext.mem.index.length(), content="0")
   debug_inspect(
     runner.calls[0],
     content=(

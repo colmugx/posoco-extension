@@ -438,7 +438,7 @@ async test "SyncEngine: mark_dirty keeps the latest pending; drain_once flushes 
       j("{\"thread\":{\"thread_id\":\"posoco-s1\",\"message_count\":4}}"),
     ),
   ])
-  let engine = SyncEngine::new()
+  let engine = SyncEngine()
   let stale = sync_request()
   let latest = sync_request(messages=[
     delta_msg(User, "q1", "e0"),
@@ -478,7 +478,7 @@ async test "SyncEngine: flusher_loop drains pending lanes until stop" {
       j("{\"thread\":{\"thread_id\":\"posoco-s1\",\"message_count\":2}}"),
     ),
   ])
-  let engine = SyncEngine::new()
+  let engine = SyncEngine()
   let request = sync_request()
   engine.mark_dirty(request)
   @async.with_task_group(group => {

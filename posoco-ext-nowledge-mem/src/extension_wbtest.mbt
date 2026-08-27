@@ -179,7 +179,7 @@ fn nmem_agent(
       @posoco.tk_ext(
         id="nowledge_mem",
         observers=[ext as &@posoco.Observer],
-        hooks=[ext as &@posoco.Hook],
+        hooks=[ext as &@posoco.PipelineHook],
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
@@ -194,7 +194,10 @@ fn nmem_agent(
 }
 
 ///|
-async test "e2e: startup context and guidance land in the system prompt" {
+/// The system-prompt contribution is instructions only: guidance lands,
+/// recalled data never does (it travels the MemoryPort section instead —
+/// see memory_port_e2e_wbtest).
+async test "e2e: the system prompt carries guidance only, never data" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
       (
@@ -205,9 +208,10 @@ async test "e2e: startup context and guidance land in the system prompt" {
           stderr: "",
         },
       ),
+      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
     ]),
   )
-  let ext = NowledgeMem::new(
+  let ext = NowledgeMem(
     source_app="posoco",
     transport=EchoNmemTransport::EchoNmemTransport(),
     runner~,
@@ -219,25 +223,26 @@ async test "e2e: startup context and guidance land in the system prompt" {
   ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
   assert_true(model.received_messages.length() > 0)
   let prompt = first_system_text(model.received_messages[0])
-  assert_true(prompt.contains("## Nowledge Mem Context Bundle"))
-  assert_true(prompt.contains("# Owner Rules"))
-  assert_true(prompt.contains("Be terse."))
   assert_true(prompt.contains("## Nowledge Mem Guidance"))
   assert_true(prompt.contains("search"))
+  assert_false(prompt.contains("## Nowledge Mem Context Bundle"))
+  assert_false(prompt.contains("# Owner Rules"))
+  assert_false(prompt.contains("Be terse."))
+  // No CLI read anywhere: boot runs no chain, and this wiring declares no
+  // memory port, so nothing searches either — the scripted replies stay
+  // untouched.
+  inspect(runner.calls.length(), content="0")
 }
 
 ///|
 async test "e2e: completed turns sync create then incremental append" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
-      (
-        "context",
-        { exit: 0, stdout: "{\"rendered_markdown\":\"ctx\"}", stderr: "" },
-      ),
+      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
     ]),
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem::new(source_app="posoco", transport~, runner~)
+  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
@@ -271,36 +276,14 @@ async test "e2e: completed turns sync create then incremental append" {
 }
 
 ///|
-async test "e2e: degraded startup injects the unavailable notice" {
-  let runner = FakeRunner::FakeRunner()
-  let ext = NowledgeMem::new(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner~,
-  )
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
-  ])
-  let agent = nmem_agent(ext, model)
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
-  let prompt = first_system_text(model.received_messages[0])
-  assert_true(prompt.contains("## Nowledge Mem Context Bundle"))
-  assert_true(prompt.contains("unavailable"))
-  assert_true(prompt.contains("## Nowledge Mem Guidance"))
-}
-
-///|
 async test "attach runs the flusher loop inside a host task group" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
-      (
-        "context",
-        { exit: 0, stdout: "{\"rendered_markdown\":\"ctx\"}", stderr: "" },
-      ),
+      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
     ]),
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem::new(source_app="posoco", transport~, runner~)
+  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
   ])
@@ -321,14 +304,11 @@ async test "attach runs the flusher loop inside a host task group" {
 async test "on_shutdown stops the flusher and drains pending lanes" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
-      (
-        "context",
-        { exit: 0, stdout: "{\"rendered_markdown\":\"ctx\"}", stderr: "" },
-      ),
+      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
     ]),
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem::new(source_app="posoco", transport~, runner~)
+  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
   ])
@@ -340,8 +320,8 @@ async test "on_shutdown stops the flusher and drains pending lanes" {
 }
 
 ///|
-test "on_event_at: TurnFailed stages a turn_failed sync request" {
-  let ext = NowledgeMem::new(
+async test "on_event_at: TurnFailed stages a turn_failed sync request" {
+  let ext = NowledgeMem(
     source_app="posoco",
     transport=EchoNmemTransport::EchoNmemTransport(),
     runner=FakeRunner::FakeRunner(),
@@ -361,7 +341,7 @@ test "on_event_at: TurnFailed stages a turn_failed sync request" {
     @posoco.tk_user_msg("hello"),
     assistant_msg("hi"),
   ]
-  ignore(@posoco.Hook::before_model(ext, snapshot))
+  ignore(@posoco.PipelineHook::before_model(ext, snapshot))
   @posoco.Observer::on_event_at(
     ext,
     Some(scope),
@@ -379,15 +359,15 @@ test "on_event_at: TurnFailed stages a turn_failed sync request" {
 }
 
 ///|
-test "on_event_at: ModelResponseReceived completes the snapshot deduplicated" {
-  let ext = NowledgeMem::new(
+async test "on_event_at: ModelResponseReceived completes the snapshot deduplicated" {
+  let ext = NowledgeMem(
     source_app="posoco",
     transport=EchoNmemTransport::EchoNmemTransport(),
     runner=FakeRunner::FakeRunner(),
   )
   ext.config = Some(lane_config())
   let snapshot : Array[@posoco.Message] = [@posoco.tk_user_msg("hello")]
-  ignore(@posoco.Hook::before_model(ext, snapshot))
+  ignore(@posoco.PipelineHook::before_model(ext, snapshot))
   @posoco.Observer::on_event_at(
     ext,
     None,
@@ -414,14 +394,11 @@ test "on_event_at: ModelResponseReceived completes the snapshot deduplicated" {
 async test "on_event_at: SessionRedirect stages the old lane and switches the session" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
-      (
-        "context",
-        { exit: 0, stdout: "{\"rendered_markdown\":\"ctx\"}", stderr: "" },
-      ),
+      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
     ]),
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem::new(source_app="posoco", transport~, runner~)
+  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
@@ -470,155 +447,9 @@ async test "on_event_at: SessionRedirect stages the old lane and switches the se
 }
 
 ///|
-test "assemble_prompt_sections: context bundle then guidance" {
-  let sections = assemble_prompt_sections(
-    { context: Some("bundle text"), degraded_reason: None },
-    "posoco",
-  )
-  assert_true(
-    sections.has_prefix("## Nowledge Mem Context Bundle\n\nbundle text"),
-  )
-  assert_true(sections.contains("## Nowledge Mem Guidance"))
-}
-
-///|
-test "assemble_prompt_sections: degraded notice under the bundle header" {
-  let sections = assemble_prompt_sections(
-    { context: None, degraded_reason: Some(STARTUP_CONTEXT_FAILED) },
-    "posoco",
-  )
-  assert_true(sections.contains("## Nowledge Mem Context Bundle"))
-  assert_true(
-    sections.contains(
-      "[Nowledge Mem startup context unavailable: startup context reads failed.]",
-    ),
-  )
-  assert_true(sections.contains("## Nowledge Mem Guidance"))
-}
-
-///|
-test "assemble_prompt_sections: empty startup yields guidance only" {
-  let sections = assemble_prompt_sections(
-    { context: None, degraded_reason: None },
-    "posoco",
-  )
-  assert_false(sections.contains("Context Bundle"))
-  assert_true(sections.has_prefix("## Nowledge Mem Guidance"))
-}
-
-///|
-async test "read_startup_context: context bundle wins on the first attempt" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "context",
-        {
-          exit: 0,
-          stdout: "{\"rendered_markdown\":\"ctx\",\"markdown\":\"shadowed\"}",
-          stderr: "",
-        },
-      ),
-      ("wm", { exit: 0, stdout: "{\"content\":\"wm\"}", stderr: "" }),
-    ]),
-  )
-  let startup = read_startup_context(runner, lane_config())
-  guard startup.context is Some(context) else { fail("expected a context") }
-  inspect(context, content="ctx")
-  inspect(startup.degraded_reason is None, content="true")
-  inspect(runner.calls.length(), content="1")
-}
-
-///|
-async test "read_startup_context: wm read after context fails" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("context", { exit: 1, stdout: "", stderr: "boom" }),
-      (
-        "wm",
-        {
-          exit: 0,
-          stdout: "{\"content\":\"wm text\",\"exists\":true}",
-          stderr: "",
-        },
-      ),
-    ]),
-  )
-  let startup = read_startup_context(runner, lane_config())
-  guard startup.context is Some(context) else { fail("expected a context") }
-  inspect(context, content="wm text")
-  inspect(runner.calls.length(), content="2")
-}
-
-///|
-async test "read_startup_context: local memory file after CLI misses" {
-  let runner = FakeRunner::FakeRunner(
-    home_files=Map::from_array([("ai-now/memory.md", "local notes")]),
-  )
-  let startup = read_startup_context(runner, lane_config())
-  guard startup.context is Some("local notes") else {
-    fail("expected the local fallback content")
-  }
-  inspect(startup.degraded_reason is None, content="true")
-}
-
-///|
-async test "read_startup_context: everything fails reports degraded reads" {
-  let runner = FakeRunner::FakeRunner()
-  let startup = read_startup_context(runner, lane_config())
-  inspect(startup.context is None, content="true")
-  guard startup.degraded_reason is Some(reason) else {
-    fail("expected a degraded reason")
-  }
-  inspect(reason, content=STARTUP_CONTEXT_FAILED)
-}
-
-///|
-async test "read_startup_context: timeouts report the timeout reason" {
-  let runner = FakeRunner::FakeRunner(timeout_calls=10)
-  let startup = read_startup_context(runner, lane_config())
-  inspect(startup.context is None, content="true")
-  guard startup.degraded_reason is Some(reason) else {
-    fail("expected a degraded reason")
-  }
-  inspect(reason, content=STARTUP_CONTEXT_TIMED_OUT)
-}
-
-///|
-async test "read_startup_context: configured space scopes the first attempt" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "context",
-        { exit: 0, stdout: "{\"rendered_markdown\":\"scoped\"}", stderr: "" },
-      ),
-    ]),
-  )
-  let startup = read_startup_context(runner, lane_config(space=Some("team")))
-  guard startup.context is Some("scoped") else { fail("expected a context") }
-  inspect(runner.calls.length(), content="1")
-  let first = runner.calls[0]
-  assert_true(first.contains("--source-app"))
-  assert_true(first.contains("--space"))
-  assert_true(first.contains("team"))
-}
-
-///|
-async test "read_startup_context: remote service never reads the local file" {
-  let runner = FakeRunner::FakeRunner(
-    home_files=Map::from_array([("ai-now/memory.md", "local notes")]),
-  )
-  let startup = read_startup_context(
-    runner,
-    lane_config(api_url="https://mem.example.com"),
-  )
-  inspect(startup.context is None, content="true")
-  inspect(runner.home_reads.length(), content="0")
-}
-
-///|
-test "truncate_startup_context: oversized bundles carry the tail note" {
+test "truncate_context: oversized payloads carry the tail note" {
   let oversized = String::from_array(Array::make(20001, 'a'))
-  let truncated = truncate_startup_context(oversized, "cetas")
+  let truncated = truncate_context(oversized, "cetas")
   let note = context_truncation_note("cetas")
   inspect(truncated.length(), content="\{20000 + 2 + note.length()}")
   assert_true(truncated.contains(note))
@@ -626,7 +457,7 @@ test "truncate_startup_context: oversized bundles carry the tail note" {
 }
 
 ///|
-test "truncate_startup_context: bundles at the cap pass through" {
+test "truncate_context: payloads at the cap pass through" {
   let exact = String::from_array(Array::make(20000, 'a'))
-  inspect(truncate_startup_context(exact, "cetas") == exact, content="true")
+  inspect(truncate_context(exact, "cetas") == exact, content="true")
 }

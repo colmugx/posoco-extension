@@ -1,6 +1,8 @@
 ///|
-/// Timeout for the startup index refresh (`nmem --json m -n 200`).
-const NMEM_MEMORY_REFRESH_TIMEOUT_MS : Int = 8000
+/// Timeout for the one-shot passive working-memory read (`wm read`) —
+/// passive retrieval sits on the model-call path, so it fails faster than
+/// the tool budget.
+const NMEM_PASSIVE_READ_TIMEOUT_MS : Int = 5000
 
 ///|
 /// Timeout for one queued write-back (`m add` / `m delete`) during drain.
@@ -8,18 +10,9 @@ const NMEM_MEMORY_OP_TIMEOUT_MS : Int = 30000
 
 ///|
 /// Prefix marking a store ticket whose write-back has not been acknowledged
-/// yet (D8): the index entry carries it until the drain swaps in the server
-/// id.
+/// yet (D8): `delete` recognizes it and drops the queued `Add` instead of
+/// issuing a remote delete.
 const NMEM_PENDING_PREFIX : String = "pending:"
-
-///|
-/// How many server memories the startup refresh pulls into the local index.
-const NMEM_MEMORY_INDEX_LIMIT : Int = 200
-
-///|
-/// Importance applied to entries whose metadata carries no numeric
-/// "importance" key (D8 cheap-scoring default).
-const NMEM_DEFAULT_IMPORTANCE : Double = 0.5
 
 ///|
 /// One queued write-back operation (D8 write-after queue). `Add` carries the
@@ -30,12 +23,11 @@ pub(all) enum MemoryOp {
 } derive(Debug)
 
 ///|
-/// Local memory state (D8): `index` is the in-memory copy `search` scores
-/// synchronously, and `queue` holds the writes the drain replays against the
-/// CLI. Only the drain coroutine and the sync MemoryPort slots touch this
-/// state; the sync slots only append, so no locking is needed (R7).
+/// Write-after queue state (D8): `queue` holds the writes the drain replays
+/// against the CLI. Only the drain coroutine and the sync MemoryPort slots
+/// touch this state; the sync slots only append, so no locking is needed
+/// (R7).
 pub(all) struct MemoryState {
-  index : Array[@posoco.MemoryEntry]
   queue : Array[MemoryOp]
   mut last_error : String?
   mut next_pending : Int
@@ -43,45 +35,112 @@ pub(all) struct MemoryState {
 
 ///|
 pub fn MemoryState::MemoryState() -> MemoryState {
-  { index: [], queue: [], last_error: None, next_pending: 0 }
+  { queue: [], last_error: None, next_pending: 0 }
 }
 
 ///|
-/// Store through the local copy: stage the entry in the index under a pending
-/// ticket id, queue the `Add` for the drain, and return the ticket
-/// synchronously. Pure memory work — no IO can appear in this slot (D8).
+/// Store through the write-after queue: queue the `Add` for the drain and
+/// return the pending ticket synchronously. Pure memory work — no IO can
+/// appear in this slot (D8).
 pub impl @posoco.MemoryPort for NowledgeMem with fn store(
   self : NowledgeMem,
   entry : @posoco.MemoryEntry,
 ) -> String raise @posoco.MemoryError {
   self.mem.next_pending = self.mem.next_pending + 1
   let pending_id = "\{NMEM_PENDING_PREFIX}\{self.mem.next_pending}"
-  let staged : @posoco.MemoryEntry = { ..entry, id: pending_id }
-  self.mem.index.push(staged)
   self.mem.queue.push(Add(pending_id~, entry~))
   pending_id
 }
 
 ///|
-/// Search the local index with the D8 cheap scoring: token overlap (each
-/// whitespace-separated query token hit in content or title counts 1) * 2.0
-/// + metadata importance (default 0.5) + 1.0 when the whole query string
-/// appears. Entries with no token hit and no whole-string hit are not
-/// matches; `threshold` filters on the score, the filter's "labels" key
-/// (Json array) intersects entry labels, and results come back score-
-/// descending up to `top_k`. Synchronous by construction.
+/// One-shot gated working-memory read (D9/M10): the first call of the
+/// process run ignores the query entirely and reads the Nowledge Mem
+/// working memory — `nmem --json wm read`, the same surface the
+/// `read_working_memory` tool exposes — and core's MemoryRetrievalHook
+/// renders it as the "Any Memory About This Work" section that persists
+/// for the session (a later hit replaces it in place). Every later call
+/// returns `[]` without touching the CLI: recall past the startup read is
+/// the model's job, via the `memory_search` tool. The gate is spent before
+/// the attempt, so a failure also exhausts it; raising is the intended
+/// observability path — core's `search_all` catches the raise and reports
+/// it as a secondary-failure observer event. A resumed process starts with
+/// a fresh gate, so its first call re-reads and core swaps the old section
+/// for the new content.
 pub impl @posoco.MemoryPort for NowledgeMem with fn search(
   self : NowledgeMem,
-  query : @posoco.MemoryQuery,
+  _query : @posoco.MemoryQuery,
 ) -> Array[@posoco.MemoryEntry] raise @posoco.MemoryError {
-  local_memory_search(self.mem, query)
+  if self.passive_read_done {
+    return []
+  }
+  self.passive_read_done = true
+  let outcome : CliOutcome? = try
+    NmemRunner::run_cli(
+      self.runner,
+      with_ambient_space(["--json", "wm", "read"], self.config),
+      timeout_ms=NMEM_PASSIVE_READ_TIMEOUT_MS,
+    )
+  catch {
+    _ => None
+  } noraise {
+    value => Some(value)
+  }
+  let outcome = match outcome {
+    None => {
+      self.mem.last_error = Some("working memory read failed: CLI run raised")
+      raise @posoco.MemoryError::Search("working memory read raised")
+    }
+    Some(outcome) => outcome
+  }
+  if outcome.exit != 0 {
+    self.mem.last_error = Some(
+      "working memory read failed (\{outcome.exit}): \{outcome.stderr}",
+    )
+    raise @posoco.MemoryError::Search("nmem exited with code \{outcome.exit}")
+  }
+  match clean_json_object(outcome.stdout) {
+    None =>
+      raise @posoco.MemoryError::Search("unparseable working-memory payload")
+    Some(fields) =>
+      // `exists: false` or a clean object without usable content is an
+      // empty working memory — a clean state, not a failure.
+      if fields.get("exists") is Some(Json::False) {
+        []
+      } else {
+        match first_string_field(fields, ["content"]) {
+          Some(content) => [self.wm_entry(content)]
+          None => []
+        }
+      }
+  }
 }
 
 ///|
-/// Delete through the local copy: an empty id is rejected; a pending ticket
-/// never reached the server, so dropping the staged entry (and its queued
-/// `Add`) is the whole operation; a real id leaves the index immediately and
-/// queues the remote delete for the drain.
+/// The working-memory read as one MemoryEntry: `kind` marks it as the
+/// server-managed briefing rather than a deletable distilled memory, and
+/// the content carries the 20k recall cap so a runaway working memory
+/// cannot bloat every model call.
+fn NowledgeMem::wm_entry(
+  self : NowledgeMem,
+  content : String,
+) -> @posoco.MemoryEntry {
+  let source_app = match self.config {
+    Some(config) => config.source_app
+    None => self.source_app
+  }
+  {
+    id: "wm",
+    content: truncate_context(content, source_app),
+    metadata: Map::from_array([("kind", Json::string("working_memory"))]),
+    score: None,
+  }
+}
+
+///|
+/// Delete through the write-after queue: an empty id is rejected; a pending
+/// ticket never reached the server, so dropping its queued `Add` is the whole
+/// operation; a real id queues the remote delete for the drain. The server
+/// is the single source of truth — there is no local replica to evict.
 pub impl @posoco.MemoryPort for NowledgeMem with fn delete(
   self : NowledgeMem,
   id : String,
@@ -89,7 +148,6 @@ pub impl @posoco.MemoryPort for NowledgeMem with fn delete(
   if id == "" {
     raise @posoco.MemoryError::Delete("empty id")
   }
-  remove_index_entry(self.mem, id)
   if id.has_prefix(NMEM_PENDING_PREFIX) {
     drop_queued_add(self.mem, id)
   } else {
@@ -98,152 +156,20 @@ pub impl @posoco.MemoryPort for NowledgeMem with fn delete(
 }
 
 ///|
-pub extend NowledgeMem with @posoco.MemoryPort::{store, search, delete}
-
-///|
-/// Entry title from the metadata convention key, "" when absent.
-fn memory_entry_title(entry : @posoco.MemoryEntry) -> String {
-  match entry.metadata.get("title") {
-    Some(Json::String(title)) => title
-    _ => ""
-  }
+/// Self-described provenance for core's memory-injection provenance line:
+/// recalled entries render under "from Nowledge Mem. For Your Information.".
+pub impl @posoco.MemoryPort for NowledgeMem with fn source_name(
+  _self : NowledgeMem,
+) -> String {
+  "Nowledge Mem"
 }
 
 ///|
-/// Entry importance from the metadata convention key, defaulting to
-/// NMEM_DEFAULT_IMPORTANCE for absent/non-numeric values.
-fn memory_entry_importance(entry : @posoco.MemoryEntry) -> Double {
-  match entry.metadata.get("importance") {
-    Some(Json::Number(value, ..)) => value
-    _ => NMEM_DEFAULT_IMPORTANCE
-  }
-}
-
-///|
-/// Entry labels from the metadata convention key; non-array or non-string
-/// items read as no labels.
-fn memory_entry_labels(entry : @posoco.MemoryEntry) -> Array[String] {
-  match entry.metadata.get("labels") {
-    Some(Json::Array(items)) => {
-      let labels : Array[String] = []
-      for item in items {
-        match item {
-          Json::String(label) => labels.push(label)
-          _ => ()
-        }
-      }
-      labels
-    }
-    _ => []
-  }
-}
-
-///|
-/// Synchronous local search over a MemoryState (D8 passive read path).
-fn local_memory_search(
-  state : MemoryState,
-  query : @posoco.MemoryQuery,
-) -> Array[@posoco.MemoryEntry] {
-  let query_text = query.query.to_lower()
-  let tokens : Array[String] = []
-  for token in query_text.split(" ") {
-    let owned = token.to_owned()
-    if owned != "" {
-      tokens.push(owned)
-    }
-  }
-  let filter_labels : Array[String] = match query.filter.get("labels") {
-    Some(Json::Array(items)) => {
-      let labels : Array[String] = []
-      for item in items {
-        match item {
-          Json::String(label) => labels.push(label)
-          _ => ()
-        }
-      }
-      labels
-    }
-    _ => []
-  }
-  // Decorated with the original position: sort_by is unstable, so the index
-  // breaks score ties deterministically.
-  let scored : Array[(Double, Int, @posoco.MemoryEntry)] = []
-  for position, entry in state.index {
-    let content = entry.content.to_lower()
-    let title = memory_entry_title(entry).to_lower()
-    let mut token_hits = 0
-    for token in tokens {
-      if content.contains(token) || title.contains(token) {
-        token_hits = token_hits + 1
-      }
-    }
-    let whole_hit = query_text != "" &&
-      (content.contains(query_text) || title.contains(query_text))
-    if token_hits == 0 && !whole_hit {
-      continue
-    }
-    if !filter_labels.is_empty() {
-      let entry_labels = memory_entry_labels(entry)
-      let mut intersects = false
-      for label in entry_labels {
-        if filter_labels.contains(label) {
-          intersects = true
-          break
-        }
-      }
-      if !intersects {
-        continue
-      }
-    }
-    let whole_bonus = if whole_hit { 1.0 } else { 0.0 }
-    let score = token_hits.to_double() * 2.0 +
-      memory_entry_importance(entry) +
-      whole_bonus
-    scored.push((score, position, entry))
-  }
-  scored.sort_by((a, b) => {
-    if a.0 != b.0 {
-      if a.0 > b.0 {
-        -1
-      } else {
-        1
-      }
-    } else if a.1 < b.1 {
-      -1
-    } else if a.1 > b.1 {
-      1
-    } else {
-      0
-    }
-  })
-  let out : Array[@posoco.MemoryEntry] = []
-  for scored_entry in scored {
-    if out.length() >= query.top_k {
-      break
-    }
-    let (score, _, entry) = scored_entry
-    match query.threshold {
-      Some(threshold) =>
-        if score >= threshold {
-          out.push({ ..entry, score: Some(score) })
-        }
-      None => out.push({ ..entry, score: Some(score) })
-    }
-  }
-  out
-}
-
-///|
-/// Remove the entry with `id` from the index, if present.
-fn remove_index_entry(state : MemoryState, id : String) -> Unit {
-  let mut i = 0
-  while i < state.index.length() {
-    if state.index[i].id == id {
-      ignore(state.index.remove(i))
-    } else {
-      i = i + 1
-    }
-  }
+pub extend NowledgeMem with @posoco.MemoryPort::{
+  store,
+  search,
+  delete,
+  source_name,
 }
 
 ///|
@@ -269,104 +195,6 @@ fn json_string_field(data : Json, key : String) -> String? {
   match json_field(data, key) {
     Some(Json::String(value)) => Some(value)
     _ => None
-  }
-}
-
-///|
-/// One item of `nmem --json m` output as a MemoryEntry; `None` when the item
-/// carries no usable id (it could never be addressed by delete/update).
-fn parse_memory_item(item : Json) -> @posoco.MemoryEntry? {
-  guard item is Json::Object(_) else { return None }
-  let id = match json_string_field(item, "id") {
-    Some(id) => id
-    None => return None
-  }
-  let metadata : Map[String, Json] = Map::from_array([])
-  match json_string_field(item, "title") {
-    Some(title) => metadata["title"] = Json::string(title)
-    None => ()
-  }
-  match json_string_field(item, "unit_type") {
-    Some(unit_type) => metadata["unit_type"] = Json::string(unit_type)
-    None => ()
-  }
-  match json_field(item, "importance") {
-    Some(Json::Number(value, ..)) =>
-      metadata["importance"] = Json::number(value)
-    _ => ()
-  }
-  match json_field(item, "labels") {
-    Some(labels) => if labels is Json::Array(_) { metadata["labels"] = labels }
-    None => ()
-  }
-  let content = match json_string_field(item, "content") {
-    Some(content) => content
-    None => ""
-  }
-  Some({ id, content, metadata, score: None })
-}
-
-///|
-/// Parsed `memories` array of a memory-list CLI payload; `None` for any other
-/// shape.
-fn parse_memory_list(stdout : String) -> Array[@posoco.MemoryEntry]? {
-  let parsed = @json.parse(stdout) catch { _ => return None }
-  match json_field(parsed, "memories") {
-    Some(Json::Array(items)) => {
-      let entries : Array[@posoco.MemoryEntry] = []
-      for item in items {
-        match parse_memory_item(item) {
-          Some(entry) => entries.push(entry)
-          None => ()
-        }
-      }
-      Some(entries)
-    }
-    _ => None
-  }
-}
-
-///|
-/// Replace the local index with the server's current memories
-/// (`nmem --json m -n 200`), keeping not-yet-flushed pending entries at the
-/// front so a store staged before the refresh stays searchable. Any failure
-/// leaves the index untouched and records `last_error`.
-pub async fn NowledgeMem::refresh_memory_index(self : NowledgeMem) -> Unit {
-  let args = with_ambient_space(
-    ["--json", "m", "-n", "\{NMEM_MEMORY_INDEX_LIMIT}"],
-    self.config,
-  )
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    args,
-    timeout_ms=NMEM_MEMORY_REFRESH_TIMEOUT_MS,
-  )
-  if outcome.exit != 0 {
-    self.mem.last_error = Some(
-      "memory index refresh failed (\{outcome.exit}): \{outcome.stderr}",
-    )
-    return
-  }
-  match parse_memory_list(outcome.stdout) {
-    Some(remote) => {
-      let merged : Array[@posoco.MemoryEntry] = []
-      for entry in self.mem.index {
-        if entry.id.has_prefix(NMEM_PENDING_PREFIX) {
-          merged.push(entry)
-        }
-      }
-      for entry in remote {
-        merged.push(entry)
-      }
-      self.mem.index.clear()
-      for entry in merged {
-        self.mem.index.push(entry)
-      }
-    }
-    None =>
-      self.mem.last_error = Some(
-        "memory index refresh failed: unparseable memories payload",
-      )
   }
 }
 
@@ -450,13 +278,13 @@ fn parse_memory_add_id(stdout : String) -> String? {
 }
 
 ///|
-/// Flush one queued `Add`: run `m add`, and on an acknowledged id swap the
-/// pending ticket for the server id in the index. Any failure re-enqueues at
-/// the queue tail (the drain caller) and leaves the pending entry searchable
-/// — the thread-sync "retry next drain" philosophy.
+/// Flush one queued `Add`: run `m add` and treat an acknowledged id in the
+/// response as success (no id = failure). Any failure re-enqueues at the
+/// queue tail (the drain caller) — the thread-sync "retry next drain"
+/// philosophy. The server is the source of truth; there is no local replica
+/// to swap the ticket against.
 async fn NowledgeMem::flush_memory_add(
   self : NowledgeMem,
-  pending_id~ : String,
   entry~ : @posoco.MemoryEntry,
 ) -> Bool {
   let args = with_ambient_space(memory_add_args(entry), self.config)
@@ -472,15 +300,7 @@ async fn NowledgeMem::flush_memory_add(
     return false
   }
   match parse_memory_add_id(outcome.stdout) {
-    Some(real_id) => {
-      for i, indexed in self.mem.index {
-        if indexed.id == pending_id {
-          self.mem.index[i] = { ..indexed, id: real_id }
-          break
-        }
-      }
-      true
-    }
+    Some(_id) => true
     None => {
       self.mem.last_error = Some("memory add response carried no id")
       false
@@ -523,7 +343,7 @@ pub async fn NowledgeMem::drain_memory_ops(self : NowledgeMem) -> Unit {
     remaining = remaining - 1
     let op = self.mem.queue.remove(0)
     let flushed = match op {
-      Add(pending_id~, entry~) => self.flush_memory_add(pending_id~, entry~)
+      Add(entry~, ..) => self.flush_memory_add(entry~)
       Delete(id~) => self.flush_memory_delete(id~)
     }
     if !flushed {

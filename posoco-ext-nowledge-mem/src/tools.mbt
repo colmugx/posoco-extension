@@ -493,9 +493,9 @@ fn parse_memory_search_args(args : Json) -> MemorySearchArgs raise ToolArgError 
 }
 
 ///|
-/// `memory_search`: server-side semantic retrieval — deliberately NOT the
-/// local index the passive MemoryPort surface scores (D8: the passive path
-/// favors speed, the active path favors accuracy).
+/// `memory_search`: server-side semantic retrieval, never gated — after the
+/// passive one-shot is spent this tool is the only recall path, so it must
+/// stay unconditionally available.
 async fn NowledgeMem::run_memory_search(
   self : NowledgeMem,
   args : Json,
@@ -579,9 +579,9 @@ fn parse_memory_add_args(args : Json) -> MemoryAddArgs raise ToolArgError {
 
 ///|
 /// `memory_add`: the single write path is MemoryPort::store — the entry
-/// lands in the local copy synchronously and reaches the server via the
-/// write-after queue, exactly like passive stores.
-fn NowledgeMem::run_memory_add(
+/// enters the write-after queue and reaches the server on the next drain,
+/// exactly like passive stores.
+async fn NowledgeMem::run_memory_add(
   self : NowledgeMem,
   args : Json,
 ) -> @posoco.ToolOutcome {
@@ -643,8 +643,8 @@ fn parse_memory_update_args(
 
 ///|
 /// `memory_update`: straight to the CLI (update semantics are not on the
-/// MemoryPort surface); a success also refreshes the local index entry so
-/// passive search stops serving the stale text.
+/// MemoryPort surface). The server is the single source of truth — there is
+/// no local index to refresh.
 async fn NowledgeMem::run_memory_update(
   self : NowledgeMem,
   args : Json,
@@ -675,31 +675,14 @@ async fn NowledgeMem::run_memory_update(
   if outcome.exit != 0 {
     return cli_tool_error("memory_update", outcome)
   }
-  for i, entry in self.mem.index {
-    if entry.id == id {
-      let updated : @posoco.MemoryEntry = {
-        ..entry,
-        content: match content {
-          Some(content) => content
-          None => entry.content
-        },
-      }
-      match title {
-        Some(title) => updated.metadata["title"] = Json::string(title)
-        None => ()
-      }
-      self.mem.index[i] = updated
-      break
-    }
-  }
   cli_tool_success(outcome)
 }
 
 ///|
 /// `memory_delete`: straight to `m delete -f` (the -f flag is mandatory —
 /// without it the CLI blocks interactively). Only registered when the host
-/// opts in. The local index drops the entry on success so passive search
-/// stops serving it.
+/// opts in. The server is the single source of truth — there is no local
+/// index to evict from.
 async fn NowledgeMem::run_memory_delete(
   self : NowledgeMem,
   args : Json,
@@ -715,7 +698,6 @@ async fn NowledgeMem::run_memory_delete(
   if outcome.exit != 0 {
     return cli_tool_error("memory_delete", outcome)
   }
-  remove_index_entry(self.mem, id)
   cli_tool_success(outcome)
 }
 

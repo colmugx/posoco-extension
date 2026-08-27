@@ -47,14 +47,14 @@ fn part_to_text(part : @posoco.Content) -> String {
 /// Join content parts with "\n", dropping empty segments (upstream
 /// contentToText).
 fn parts_to_text(parts : Array[@posoco.Content]) -> String {
-  let lines : Array[String] = []
-  for part in parts {
-    let text = part_to_text(part)
-    if text != "" {
-      lines.push(text)
+  parts
+  .filter_map(fn(part) {
+    match part_to_text(part) {
+      "" => None
+      text => Some(text)
     }
-  }
-  lines.join("\n")
+  })
+  .join("\n")
 }
 
 ///|
@@ -64,19 +64,15 @@ fn assistant_text(
   parts : Array[@posoco.Content],
   tool_calls : Array[@posoco.ToolCall],
 ) -> String {
-  let lines : Array[String] = []
-  for call in tool_calls {
-    lines.push("[Tool: \{call.name.to_string()}]")
-  }
-  if lines.is_empty() {
+  let tool_lines = tool_calls
+    .map(fn(call) { "[Tool: \{call.name.to_string()}]" })
+    .join("\n")
+  if tool_calls.is_empty() {
     parts_to_text(parts)
   } else {
-    let tool_lines = lines.join("\n")
-    let text = parts_to_text(parts)
-    if text == "" {
-      tool_lines
-    } else {
-      text + "\n" + tool_lines
+    match parts_to_text(parts) {
+      "" => tool_lines
+      text => "\{text}\n\{tool_lines}"
     }
   }
 }

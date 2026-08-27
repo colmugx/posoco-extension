@@ -4,42 +4,48 @@
 const NMEM_FLUSHER_INTERVAL_MS : Int = 750
 
 ///|
+/// Minimum spacing between mid-turn drains (ms): `before_tool` drains only
+/// shrink the crash window, so they run at the flusher's cadence, not per
+/// tool call.
+const NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS : Int64 = 750L
+
+///|
 /// The Nowledge Mem agent extension — one struct, many port views:
 ///
 /// - `Lifecycle` — `on_start` resolves the config (env + home config file
-///   through the runner), reads the startup context degradation chain, and
-///   warms the system-prompt cache; `on_shutdown` stops the flusher and
-///   performs the final drain;
-/// - `Hook` — `before_model` passthrough that snapshots the model-visible
-///   transcript (D2: what the model sees is what syncs);
+///   through the runner) and drains once; `on_shutdown` stops the flusher
+///   and performs the final drain;
+/// - `PipelineHook` — `before_model` passthrough that snapshots the
+///   model-visible transcript (D2: what the model sees is what syncs);
+///   `before_tool` drains under a 750ms throttle; `on_turn_end` is the
+///   load-bearing commit boundary;
 /// - `Observer` — records the current session from the `TurnStarted` scope,
 ///   completes the snapshot with each committed assistant reply, marks the
-///   lane dirty on `TurnCompleted` / `TurnFailed` (D3: the observer slot
-///   is synchronous, so it only stages work), and follows
+///   lane dirty on `TurnCompleted` / `TurnFailed`, and follows
 ///   `SessionRedirect` by staging the old session's snapshot and switching
 ///   to the new session id;
-/// - `SystemPromptContributor` — the cached context bundle plus the startup
-///   guidance;
+/// - `SystemPromptContributor` — instructions only: what the plugin is,
+///   when to search, when to save, routing, provenance. Recalled DATA
+///   never travels here — the working-memory briefing arrives through the
+///   `MemoryPort` section (core's `MemoryRetrievalHook`) at the session's
+///   first turn, and the model re-reads deliberately via the tools;
 /// - `ToolProvider` — the §5 tool set over the `nmem` CLI (the official MCP
 ///   names read_context_bundle / read_working_memory / memory_search /
-///   thread_search / memory_add plus posoco-native additions;
-///   memory_search goes straight to the server; memory_add enters through
-///   MemoryPort's single write path);
-/// - `MemoryPort` — the D8 passive surface: synchronous local-copy
-///   store/search/delete whose writes drain to the CLI after the thread
-///   lanes;
-/// - `CommandPort` — `/memory status|flush|refresh`, the user-facing
-///   diagnostics over the same state (lane last_errors, queue depth,
-///   index size, connectivity).
+///   thread_search / memory_add plus posoco-native additions);
+/// - `MemoryPort` — the D9 passive surface: a one-shot gated working-memory
+///   read (`wm read`) plus the store/delete write-after queue whose writes
+///   drain to the CLI after the thread lanes;
+/// - `CommandPort` — `/memory status|flush`, the user-facing diagnostics
+///   over the same state (lane last_errors, queue depth, passive-read
+///   gate, connectivity).
 ///
 /// The background flusher is deliberately NOT spawned from `on_start`:
 /// `moonbitlang/async` has no detached spawn — every task lives in a
-/// host-owned `TaskGroup`. Hosts call `attach` inside their `with_task_group`
-/// scope (mcp / ratelimit precedent); `flush_pending` serves hosts and tests
-/// that prefer explicit draining.
+/// host-owned `TaskGroup`. Hosts may call `attach` inside their
+/// `with_task_group` scope (mcp / ratelimit precedent); `flush_pending`
+/// serves hosts and tests that prefer explicit draining.
 pub struct NowledgeMem {
   mut config : NmemConfig?
-  mut startup : StartupContext
   /// Latest model-visible transcript snapshot (before_model) completed with
   /// the committed assistant replies; the unit the sync engine flushes.
   mut transcript : Array[@posoco.Message]
@@ -47,15 +53,23 @@ pub struct NowledgeMem {
   engine : SyncEngine
   transport : &NmemTransport
   runner : &NmemRunner
-  mut prompt_cache : String
   mut timeout_ms : Int
+  /// Wall-clock ms (`@async.now`, Int64) of the last drain — start, turn
+  /// end, or a `before_tool` throttle hit — gating the mid-turn drain
+  /// cadence.
+  mut last_drain_ms : Int64
   /// Host product identity: prefixes synced thread ids, scopes the CLI
   /// `--source-app` reads, and labels user-visible copy. The extension is a
   /// reusable library, so this comes from the constructor — never hardcoded.
   source_app : String
-  /// Local memory copy + write-after queue (D8); the MemoryPort slots read
-  /// and append synchronously, the drain replays against the CLI.
+  /// Local memory write-after queue (D8); the MemoryPort store/delete slots
+  /// append synchronously, the drain replays against the CLI. The server is
+  /// the single read source — there is no local index.
   mem : MemoryState
+  /// One-shot passive read gate (D9/M10): `false` until the first
+  /// `MemoryPort::search` of this process run attempts the working-memory
+  /// read; every later search returns empty without IO.
+  mut passive_read_done : Bool
   /// Whether `memory_delete` appears in the tool surface. Deleting is a
   /// destructive remote operation, so the model only sees it when the host
   /// opts in.
@@ -73,7 +87,7 @@ pub struct NowledgeMem {
 /// # Example
 /// ```mbt check
 /// test "nowledge mem exposes guidance before on_start" {
-///   let ext = NowledgeMem::new(
+///   let ext = NowledgeMem::NowledgeMem(
 ///     source_app="cetas",
 ///     transport=HttpNmemTransport::HttpNmemTransport() as &NmemTransport,
 ///     runner=PlatformRunner::PlatformRunner() as &NmemRunner,
@@ -83,7 +97,7 @@ pub struct NowledgeMem {
 ///   assert_false(ext.system_prompt().contains("Context Bundle"))
 /// }
 /// ```
-pub fn NowledgeMem::new(
+pub fn NowledgeMem::NowledgeMem(
   source_app~ : String,
   transport~ : &NmemTransport,
   runner~ : &NmemRunner,
@@ -91,15 +105,15 @@ pub fn NowledgeMem::new(
 ) -> NowledgeMem {
   {
     config: None,
-    startup: { context: None, degraded_reason: None },
     transcript: [],
     current_session: None,
-    engine: SyncEngine::new(),
+    engine: SyncEngine(),
     transport,
     runner,
-    prompt_cache: "",
     timeout_ms: DEFAULT_THREAD_SYNC_TIMEOUT_MS,
+    last_drain_ms: 0L,
     mem: MemoryState::MemoryState(),
+    passive_read_done: false,
     source_app,
     expose_delete_tool,
   }
@@ -107,11 +121,11 @@ pub fn NowledgeMem::new(
 
 ///|
 /// Agent boot (inside the first `run_turn`): resolve config and sync
-/// timeout, run the startup-context degradation chain, cache the prompt
-/// sections, pull the server memories into the local index (D8 passive-read
-/// warm-up), then drain once — a host that staged state before boot loses
-/// nothing, and one that never calls `attach` still gets boundary syncs via
-/// the next `flush_pending`.
+/// timeout, then drain once — a host that staged state before boot loses
+/// nothing, and one that never calls `attach` still gets every boundary
+/// committed at turn end. Passive retrieval stays gated: the first model
+/// call's read (not boot) spends it. The system-prompt contribution is
+/// static guidance and needs no IO here.
 pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) -> Unit {
   let config = NmemConfig::resolve(
     runner_get_env,
@@ -122,10 +136,8 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) 
   self.timeout_ms = resolve_thread_sync_timeout_ms(
     runner_get_env("NMEM_SYNC_TIMEOUT_MS"),
   )
-  self.startup = read_startup_context(self.runner, config)
-  self.prompt_cache = assemble_prompt_sections(self.startup, config.source_app)
-  self.refresh_memory_index()
   self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
+  self.last_drain_ms = @async.now()
 }
 
 ///|
@@ -175,12 +187,84 @@ pub async fn NowledgeMem::flush_pending(self : NowledgeMem) -> Unit {
 }
 
 ///|
+/// One bounded, silent drain of both write channels: thread lanes, then the
+/// memory queue, under a single `with_timeout(self.timeout_ms)` budget. Every
+/// failure — transport raises and timeout cancellation included — is recorded
+/// on the lane/memory state instead of raising: the silent-retry philosophy is
+/// unchanged (visibility goes through `/memory status`), and the core's
+/// secondary-failure channel stays reserved for genuine defects. `on_turn_end`
+/// and the throttled `before_tool` drain share this path. Lanes carry full
+/// snapshots, so a dropped in-flight request just waits for the next staging.
+async fn NowledgeMem::drain_silent(self : NowledgeMem) -> Unit noraise {
+  if self.config is None {
+    return
+  }
+  self.last_drain_ms = @async.now()
+  @async.with_timeout(self.timeout_ms, () => {
+    self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
+    self.drain_memory_ops()
+  }) catch {
+    error => {
+      let message = "drain failed: " + error.to_string()
+      let lane_keys : Array[String] = []
+      for lane_key, _lane in self.engine.lanes {
+        lane_keys.push(lane_key)
+      }
+      for lane_key in lane_keys {
+        self.engine.lanes[lane_key] = {
+          ..self.engine.lanes[lane_key],
+          last_error: Some(message),
+        }
+      }
+      if !self.mem.queue.is_empty() {
+        self.mem.last_error = Some(message)
+      }
+    }
+  }
+}
+
+///|
+/// Turn-end commit (plan D3, 2026-08-23 revision): core awaits this slot once
+/// per `run_turn`, after the terminal observer projection and before the call
+/// returns — on both the completed and the failed path. Any path that stops a
+/// turn commits first, so a host that never calls `attach` and never shuts
+/// down still gets its staged transcripts and memory writes submitted; the
+/// crash window narrows to the turn in progress. The observer slot already
+/// staged the snapshot (`TurnCompleted`/`TurnFailed` fire first), so this is
+/// drain-only.
+pub impl @posoco.PipelineHook for NowledgeMem with fn on_turn_end(
+  self : NowledgeMem,
+) -> Unit {
+  self.drain_silent()
+}
+
+///|
+/// `before_tool` passthrough that drains under a throttle: when the last
+/// drain (start, turn end, or an earlier hit here) is at least
+/// NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS old, run the same bounded silent drain
+/// before approving. Long tool-heavy turns shed staged state mid-flight
+/// instead of accumulating it until turn end, without paying a round trip on
+/// every call.
+pub impl @posoco.PipelineHook for NowledgeMem with fn before_tool(
+  self : NowledgeMem,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolDecision {
+  if self.config is Some(_) {
+    let now = @async.now()
+    if now - self.last_drain_ms >= NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS {
+      self.drain_silent()
+    }
+  }
+  @posoco.ToolDecision::Approve(call~)
+}
+
+///|
 /// Passthrough that snapshots the model-visible transcript (D2). The final
 /// assistant reply of a turn is never model-visible — the pump terminates
 /// after it — so `record_assistant` completes the snapshot from
 /// `ModelResponseReceived` events; without it every sync would lag one
 /// assistant message behind.
-pub impl @posoco.Hook for NowledgeMem with fn before_model(
+pub impl @posoco.PipelineHook for NowledgeMem with fn before_model(
   self : NowledgeMem,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
@@ -269,20 +353,21 @@ pub impl @posoco.Observer for NowledgeMem with fn on_event_at(
 }
 
 ///|
-/// Cached `on_start` result. Before boot (or when the host never runs turns)
-/// the fallback is pure guidance with no context section — an empty string
-/// would drop the guidance entirely, and un-booted must not mean un-guided.
+/// The plugin's instructions, and nothing else: what Nowledge Mem is, when
+/// to search, when to save, how to route, and the provenance this host's
+/// synced threads carry. Recalled DATA never travels here — the
+/// working-memory briefing arrives through the `MemoryPort` section
+/// (core's `MemoryRetrievalHook`) at the session's first turn, and the
+/// model re-reads deliberately via the `read_working_memory` /
+/// `read_context_bundle` tools.
 pub impl @posoco.SystemPromptContributor for NowledgeMem with fn system_prompt(
   self : NowledgeMem,
 ) -> String {
-  if self.prompt_cache != "" {
-    self.prompt_cache
-  } else {
-    assemble_prompt_sections(
-      { context: None, degraded_reason: None },
-      self.source_app,
-    )
+  let source_app = match self.config {
+    Some(config) => config.source_app
+    None => self.source_app
   }
+  startup_guidance(source_app)
 }
 
 ///|
@@ -293,13 +378,13 @@ pub impl @posoco.Extension for NowledgeMem with fn extension_id(
 }
 
 ///|
-/// Ports the extension contributes: Hook (transcript snapshot), Observer
+/// Ports the extension contributes: PipelineHook (transcript snapshot), Observer
 /// (dirty marking + session-redirect follow), Lifecycle (boot + final
 /// drain), SystemPromptContributor (context bundle + guidance),
-/// ToolProvider (§5 tool set), MemoryPort (D8 local copy + write-after
-/// queue — declaring it here is what wires core's MemoryRetrievalHook), and
-/// CommandPort (`/memory` diagnostics: status / flush / refresh) — all
-/// views of one state.
+/// ToolProvider (§5 tool set), MemoryPort (D9 one-shot server search +
+/// write-after queue — declaring it here is what wires core's
+/// MemoryRetrievalHook), and CommandPort (`/memory` diagnostics:
+/// status / flush) — all views of one state.
 pub impl @posoco.Extension for NowledgeMem with fn manifest(self : NowledgeMem) -> @posoco.ExtensionManifest {
   {
     id: NMEM_EXTENSION_ID,

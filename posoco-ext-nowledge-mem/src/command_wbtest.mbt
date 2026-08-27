@@ -1,5 +1,5 @@
 ///|
-test "commands: /memory declares a positional status/flush/refresh action" {
+test "commands: /memory declares a positional status/flush action" {
   let ext = tool_ext()
   let defs = @posoco.CommandPort::commands(ext)
   inspect(defs.length(), content="1")
@@ -10,16 +10,13 @@ test "commands: /memory declares a positional status/flush/refresh action" {
   inspect(def.params[0].name, content="action")
   inspect(def.params[0].positional, content="true")
   inspect(def.shortcut is None, content="true")
-  inspect(
-    def.params[0].choices is Some(["status", "flush", "refresh"]),
-    content="true",
-  )
+  inspect(def.params[0].choices is Some(["status", "flush"]), content="true")
   // The manifest carries the command port view.
   inspect(@posoco.Extension::manifest(ext).commands.length(), content="1")
 }
 
 ///|
-async test "/memory status: connectivity, lanes, queue, and index in one report" {
+async test "/memory status: connectivity, lanes, queue, and the passive-read gate" {
   let runner = FakeRunner::FakeRunner(
     replies=Map::from_array([
       (
@@ -30,10 +27,11 @@ async test "/memory status: connectivity, lanes, queue, and index in one report"
           stderr: "",
         },
       ),
+      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
     ]),
   )
   let ext = tool_ext(runner~)
-  // One dirty lane, one queued write, one index entry.
+  // One dirty lane, one queued write, one spent passive-read gate.
   let scope : @posoco.EventScope = {
     session_id: @posoco.SessionId::unchecked("s1"),
     run_id: @posoco.RunId::unchecked("r1"),
@@ -45,7 +43,7 @@ async test "/memory status: connectivity, lanes, queue, and index in one report"
     @posoco.TurnEvent::TurnStarted,
   )
   ignore(
-    @posoco.Hook::before_model(ext, [
+    @posoco.PipelineHook::before_model(ext, [
       @posoco.tk_user_msg("hi"),
       assistant_msg("hello"),
     ]),
@@ -58,6 +56,7 @@ async test "/memory status: connectivity, lanes, queue, and index in one report"
   ignore(
     @posoco.MemoryPort::store(ext, mem_entry(id="", content="queued note")),
   )
+  ignore(@posoco.MemoryPort::search(ext, mem_query(query="anchor query")))
   let outcome = @posoco.CommandPort::invoke(
     ext,
     "memory",
@@ -72,7 +71,7 @@ async test "/memory status: connectivity, lanes, queue, and index in one report"
   assert_true(feedback.contains("pending=true"))
   assert_true(feedback.contains("last_error=none"))
   assert_true(feedback.contains("memory queue: 1 pending write"))
-  assert_true(feedback.contains("local index: 1 entry"))
+  assert_true(feedback.contains("passive read: done"))
   guard structured is Some(payload) else { fail("expected structured") }
   inspect(
     json_field(payload, "nmem_connected") is Some(Json::True),
@@ -92,11 +91,32 @@ async test "/memory status: connectivity, lanes, queue, and index in one report"
     fail("expected queue_depth")
   }
   inspect(queue_depth == 1.0, content="true")
-  guard json_field(payload, "index_entries")
-    is Some(Json::Number(index_entries, ..)) else {
-    fail("expected index_entries")
+  inspect(
+    json_field(payload, "passive_read_done") is Some(Json::True),
+    content="true",
+  )
+}
+
+///|
+async test "/memory status: an unspent gate reports pending" {
+  let runner = FakeRunner::FakeRunner(
+    replies=Map::from_array([("status", { exit: 0, stdout: "{}", stderr: "" })]),
+  )
+  let ext = tool_ext(runner~)
+  let outcome = @posoco.CommandPort::invoke(
+    ext,
+    "memory",
+    Json::string("status"),
+  )
+  guard outcome is @posoco.CommandOutcome::Success(feedback~, structured~, ..) else {
+    fail("expected success")
   }
-  inspect(index_entries == 1.0, content="true")
+  assert_true(feedback.contains("passive read: pending"))
+  guard structured is Some(payload) else { fail("expected structured") }
+  inspect(
+    json_field(payload, "passive_read_done") is Some(Json::False),
+    content="true",
+  )
 }
 
 ///|
@@ -145,7 +165,6 @@ async test "/memory flush drains staged lanes and the write queue" {
   }
   assert_true(feedback.contains("write queue empty"))
   inspect(ext.mem.queue.length(), content="0")
-  inspect(ext.mem.index[0].id, content="mem_7")
   guard structured is Some(payload) else { fail("expected structured") }
   inspect(
     json_field(payload, "lanes_attempted") is Some(Json::Number(0.0, ..)),
@@ -176,52 +195,6 @@ async test "/memory flush drains staged lanes and the write queue" {
 }
 
 ///|
-async test "/memory refresh reloads the index and reports the entry count" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "m:-n",
-        {
-          exit: 0,
-          stdout: "{\"memories\":[{\"id\":\"m1\",\"content\":\"a\"},{\"id\":\"m2\",\"content\":\"b\"}]}",
-          stderr: "",
-        },
-      ),
-    ]),
-  )
-  let ext = tool_ext(runner~)
-  let outcome = @posoco.CommandPort::invoke(
-    ext,
-    "memory",
-    Json::string("refresh"),
-  )
-  guard outcome is @posoco.CommandOutcome::Success(feedback~, structured~, ..) else {
-    fail("expected success")
-  }
-  inspect(feedback, content="memory index refreshed: 2 entries")
-  inspect(ext.mem.index.length(), content="2")
-  guard structured is Some(payload) else { fail("expected structured") }
-  inspect(
-    json_field(payload, "index_entries") is Some(Json::Number(2.0, ..)),
-    content="true",
-  )
-  // A failed refresh surfaces the recorded error instead of a count.
-  let fail_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([("m:-n", { exit: 1, stdout: "", stderr: "boom" })]),
-  )
-  let fail_ext = tool_ext(runner=fail_runner)
-  let failed = @posoco.CommandPort::invoke(
-    fail_ext,
-    "memory",
-    Json::string("refresh"),
-  )
-  guard failed is @posoco.CommandOutcome::Failure(reason~) else {
-    fail("expected failure")
-  }
-  assert_true(reason.contains("boom"))
-}
-
-///|
 async test "/memory with no action or an unknown action returns usage" {
   let ext = tool_ext()
   let bare = @posoco.CommandPort::invoke(ext, "memory", Json::null())
@@ -230,7 +203,7 @@ async test "/memory with no action or an unknown action returns usage" {
   }
   assert_true(bare_feedback.contains("/memory status"))
   assert_true(bare_feedback.contains("/memory flush"))
-  assert_true(bare_feedback.contains("/memory refresh"))
+  assert_false(bare_feedback.contains("/memory refresh"))
   // An empty {action} object reads as no action.
   let empty_obj = @posoco.CommandPort::invoke(
     ext,
@@ -251,6 +224,16 @@ async test "/memory with no action or an unknown action returns usage" {
   }
   assert_true(reason.contains("unknown /memory action 'vaporize'"))
   assert_true(reason.contains("/memory status"))
+  // The removed refresh subcommand is now an unknown action.
+  let refresh = @posoco.CommandPort::invoke(
+    ext,
+    "memory",
+    Json::string("refresh"),
+  )
+  guard refresh is @posoco.CommandOutcome::Failure(reason~) else {
+    fail("expected failure")
+  }
+  assert_true(reason.contains("unknown /memory action 'refresh'"))
 }
 
 ///|

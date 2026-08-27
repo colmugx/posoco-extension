@@ -39,6 +39,7 @@ options(
     "transport_wbtest.mbt": [ "native" ],
     "sync_engine_wbtest.mbt": [ "native" ],
     "extension_wbtest.mbt": [ "native" ],
+    "turn_end_submit_wbtest.mbt": [ "native" ],
     "memory_port_wbtest.mbt": [ "native" ],
     "memory_port_e2e_wbtest.mbt": [ "native" ],
     "tools_wbtest.mbt": [ "native" ],
