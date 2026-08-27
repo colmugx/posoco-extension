@@ -19,5 +19,6 @@ options(
     "manifest.mbt": [ "native", "js" ],
     "session_id_test.mbt": [ "native", "js" ],
     "jsonl_session_test.mbt": [ "native" ],
+    "jsonl_session_js_test.mbt": [ "js" ],
   },
 )

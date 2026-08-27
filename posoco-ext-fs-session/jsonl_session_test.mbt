@@ -324,6 +324,27 @@ async test "io[native]: save creates parent directory lazily" {
 }
 
 ///|
+async test "io[native]: save into nested non-existent root creates all levels" {
+  // Per-project roots look like <home>/.cetas/sessions/--proj--; the whole
+  // chain below the tmpdir base must be created on first save.
+  let base = fresh_root("nested-root")
+  let root = base + "/.cetas/sessions/--Users-foo-bar--"
+  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let session = @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
+  store.save("s", session) catch {
+    e => fail("save should create nested root levels: \{e}")
+  }
+  assert_true(@fs.exists(root))
+  let loaded = store.load("s") catch {
+    e => fail("load after nested save failed: \{e}")
+  }
+  assert_eq(loaded.messages.length(), 0)
+  @fs.rmdir(base, recursive=true) catch {
+    _ => ()
+  }
+}
+
+///|
 async test "io[native]: overwrite existing session truncates correctly" {
   let root = fresh_root("overwrite")
   let store = JsonlSessionStore::JsonlSessionStore(root)

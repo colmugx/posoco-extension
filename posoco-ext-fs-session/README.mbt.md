@@ -17,10 +17,13 @@ per session under a root directory.
 moon add colmugx/posoco-ext-fs-session
 ```
 
-```moonbit
+```moonbit nocheck
 // moon.pkg: "colmugx/posoco-ext-fs-session" @fs_session
 
+///|
 let store = @fs_session.JsonlSessionStore(home + "/.cetas/sessions")
+
+///|
 let agent = @posoco.Agent(exts=[store, ..other_extensions], config~)
 ```
 
@@ -35,9 +38,10 @@ loading.
 ## Target contract
 
 - **Native** implements the store with `moonbitlang/x/fs`.
-- **Bun/js** implements the same trait directly with Bun's Promise-based
-  filesystem APIs (`Bun.file` / `Bun.write`; writes auto-create parent
-  directories).
+- **Bun/js** implements the same trait directly with Promise-based filesystem
+  APIs (`Bun.file` / `Bun.write` for load and full writes — writes
+  auto-create parent directories — and `fs.promises.appendFile` for
+  `append_messages` on an existing file).
 
 Both targets return an empty session when the requested file does not exist.
 Filesystem and codec failures remain observable as typed `SessionError`

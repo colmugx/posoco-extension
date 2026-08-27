@@ -44,7 +44,10 @@ fn save_session_path(
 }
 
 ///|
-fn JsonlSessionStore::ensure_root_dir(
+/// root_dir may be a nested path (e.g. `<home>/.cetas/sessions/--proj--`);
+/// @xfs.create_dir is single-level on native, so missing parents are created
+/// with the recursive mkdir from moonbitlang/async/fs.
+async fn JsonlSessionStore::ensure_root_dir(
   self : JsonlSessionStore,
 ) -> Unit raise @posoco.SessionError {
   if @xfs.path_exists(self.root_dir) {
@@ -63,13 +66,10 @@ fn JsonlSessionStore::ensure_root_dir(
       )
     }
   } else {
-    @xfs.create_dir(self.root_dir) catch {
+    @fs.mkdir(self.root_dir, recursive=true) catch {
       e =>
         raise @posoco.SessionError::Save(
-          "jsonl: failed to create root " +
-          self.root_dir +
-          ": " +
-          xfs_error_detail(e),
+          "jsonl: failed to create root " + self.root_dir + ": " + e.to_string(),
         )
     }
   }
