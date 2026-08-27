@@ -298,14 +298,16 @@ fn append_options(
 pub impl @posoco.ModelPort for OpenAIModelPort with fn chat(
   self : OpenAIModelPort,
   _scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  let messages_owned = messages.to_owned()
   match stream {
-    NoStream => self.chat_nonstream(messages, tools, options)
-    Stream(on_chunk) => self.chat_stream(messages, tools, options, on_chunk)
+    NoStream => self.chat_nonstream(messages_owned, tools, options)
+    Stream(on_chunk) =>
+      self.chat_stream(messages_owned, tools, options, on_chunk)
   }
 }
 
@@ -315,7 +317,7 @@ async fn OpenAIModelPort::chat_stream(
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
-  on_chunk : (Json) -> Unit,
+  on_chunk : (@posoco.StreamChunk) -> Unit,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   validate_openai_config(self.config)
   let body = build_request_body(
@@ -380,9 +382,10 @@ async fn OpenAIModelPort::chat_stream(
   let reasoning_sink = ReasoningSink::{ items: [], summary: "" }
   let on_typed = fn(chunk : @posoco.StreamChunk) {
     acc.push(chunk)
-    on_chunk(streamchunk_to_json(chunk))
+    on_chunk(chunk)
   }
   let mut done = false
+  let mut last_yield = @async.now()
   while !done {
     let line = client.read_until("\n") catch {
       err => {
@@ -417,6 +420,21 @@ async fn OpenAIModelPort::chat_stream(
           None => done = true
         }
       }
+    }
+    // A buffered SSE burst makes read_until complete without suspending,
+    // so this loop can spin through the whole stream in one coroutine
+    // chain and the host never dispatches stdin (ESC/interrupt). Yield at
+    // most every 16ms so the event loop can breathe; the pause is also a
+    // cancellation point, which is what makes abort responsive.
+    let now = @async.now()
+    if now - last_yield >= 16L {
+      @async.pause() catch {
+        // Turn abort is mailbox-driven (the pump checks abort_requested
+        // between effects), so a cancelled pause is safe to ride over;
+        // the next read on a torn-down client errors out of the loop.
+        _ => ()
+      }
+      last_yield = now
     }
   }
   client.close()
@@ -456,61 +474,6 @@ fn attach_reasoning_items(
     finish_reason=completion.message.finish_reason,
     usage=completion.usage,
   )
-}
-
-///|
-fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
-  match chunk {
-    TextDelta(token~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("text")),
-          ("token", Json::string(token)),
-        ]),
-      )
-    ReasoningDelta(token~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("reasoning")),
-          ("token", Json::string(token)),
-        ]),
-      )
-    ToolCallDelta(index~, id~, name~, arguments_delta~) => {
-      let m : Map[String, Json] = {
-        "kind": Json::string("tool_call_delta"),
-        "index": Json::number(index.to_double()),
-      }
-      match id {
-        Some(s) => m["id"] = Json::string(s)
-        None => ()
-      }
-      match name {
-        Some(s) => m["name"] = Json::string(s)
-        None => ()
-      }
-      match arguments_delta {
-        Some(s) => m["arguments_delta"] = Json::string(s)
-        None => ()
-      }
-      Json::object(m)
-    }
-    Usage(input_tokens~, output_tokens~, total_tokens~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("usage")),
-          ("input_tokens", Json::number(input_tokens.to_double())),
-          ("output_tokens", Json::number(output_tokens.to_double())),
-          ("total_tokens", Json::number(total_tokens.to_double())),
-        ]),
-      )
-    Finish(reason~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("finish")),
-          ("reason", Json::string(reason)),
-        ]),
-      )
-  }
 }
 
 ///|
@@ -665,12 +628,12 @@ fn parse_compact_response(
 pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
   self : OpenAIModelPort,
   _scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   validate_openai_config(self.config)
-  let body = build_compact_request_body(messages, self.config.model)
+  let body = build_compact_request_body(messages.to_owned(), self.config.model)
   let resp_json = openai_post_json(self.config, "/responses/compact", body)
   let compacted = parse_compact_response(resp_json)
   @posoco.CompactResult::{

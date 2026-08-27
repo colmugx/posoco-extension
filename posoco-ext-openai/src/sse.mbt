@@ -50,15 +50,15 @@ fn validate_stream_tool_calls(
         "OpenAI SSE parse failure (stage=tool.name, category=missing)",
       )
     }
-    if tc.arguments_json == "" {
+    if tc.arguments_json() == "" {
       raise @posoco.ModelError::ResponseParse(
         "OpenAI SSE parse failure (stage=tool.arguments, category=missing)",
       )
     }
-    let _ : Json = @json.parse(tc.arguments_json) catch {
+    let _ : Json = @json.parse(tc.arguments_json()) catch {
       _ =>
         raise @posoco.ModelError::ResponseParse(
-          "OpenAI SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json.length()})",
+          "OpenAI SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
         )
     }
   }

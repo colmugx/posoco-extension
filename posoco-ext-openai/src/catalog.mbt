@@ -130,7 +130,11 @@ pub fn OpenAIModelPort::model_catalog(
   let api_key = openai_api_key_factory()
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="openai",
-    slots=[openai_catalog_slot(self.config, oauth, api_key)],
+    slots=[
+      openai_catalog_slot(self.config, oauth, api_key, capabilities=[
+        "chat", "streaming", "image_in",
+      ]),
+    ],
     capabilities=["chat", "streaming", "api_key", "oauth"],
   )
 }
@@ -185,7 +189,7 @@ pub fn OpenAIModelPort::model_catalog_from_api_models(
         oauth,
         api_key,
         label=Some(info.display_name),
-        capabilities=["chat", "streaming", "api_key"],
+        capabilities=["chat", "streaming", "api_key", "image_in"],
       ),
     )
   }
@@ -256,7 +260,7 @@ fn codex_catalog_slot_from_info(
     reasoning_effort: selected_effort,
     context_window: info.context_window,
   }
-  let capabilities : Array[String] = ["chat", "streaming", "oauth"]
+  let capabilities : Array[String] = ["chat", "streaming", "oauth", "image_in"]
   if !efforts.is_empty() {
     capabilities.push("reasoning")
   }

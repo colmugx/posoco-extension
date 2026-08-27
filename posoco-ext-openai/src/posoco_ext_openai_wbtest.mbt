@@ -79,7 +79,7 @@ test "t07b_llm_valid_delta_and_completed_events" {
     #|{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}}
   assert_false(process_sse_event(delta, acc, fn(c) { chunks.push(c) }))
   assert_true(process_sse_event(completed, acc, fn(c) { chunks.push(c) }))
-  assert_eq(acc.text, "hello")
+  assert_eq(acc.text(), "hello")
   assert_true(acc.usage_input == Some(2))
   assert_true(acc.usage_output == Some(1))
   assert_true(acc.usage_total == Some(3))
@@ -176,7 +176,7 @@ test "t07b_llm_explicit_null_fields_are_tolerated" {
   let null_delta =
     #|{"type":"response.output_text.delta","delta":null}
   assert_false(process_sse_event(null_delta, acc, fn(_) { () }))
-  assert_eq(acc.text, "")
+  assert_eq(acc.text(), "")
   let null_call_id =
     #|{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":null,"id":"fc_1","name":"read"}}
   let chunks : Array[@posoco.StreamChunk] = []
