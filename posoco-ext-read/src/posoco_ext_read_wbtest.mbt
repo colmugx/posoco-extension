@@ -398,3 +398,48 @@ async test "read_records_freshness_stamp_and_detects_change" {
     debug_inspect(ledger.check(path, Some(changed)), content="Modified")
   }
 }
+
+///|
+/// Anchored read resolves a relative path against the anchor root, echoes the
+/// argument spelling in the structured output, and records the resolved path
+/// as the freshness key so write/edit see the same canonical file identity.
+#cfg(target="native")
+async test "read_anchored_relative_path_resolves_and_keys_canonically" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-anchor")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let abs = write_ten_lines(dir)
+    let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
+    let fresh = @devkit.FreshnessGuard::FreshnessGuard()
+    let tools = ReadTools::ReadTools(freshness=fresh, anchor=Some(anchor))
+    // Two different relative spellings of the same file must both read it…
+    for rel in ["ten.txt", "./ten.txt"] {
+      let outcome = run_read(tools, read_call_args(rel))
+      match outcome {
+        Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+          assert_true(content.contains("line-1"))
+          // …and echo the argument, not the resolved absolute path.
+          match structured {
+            Some(Json::Object(fields)) =>
+              if fields.contains("path") {
+                assert_eq(fields["path"], Json::string(rel))
+              } else {
+                fail("structured output missing path")
+              }
+            _ => fail("expected structured object")
+          }
+        }
+        _ => fail("expected anchored relative read to succeed")
+      }
+    }
+    // Both spellings collapse to one canonical (resolved) freshness key.
+    let stamp = (NativeFsIo::{  } as &FsIo).stat(abs)
+    assert_eq(fresh.check(abs, Some(stamp)), @devkit.FreshnessVerdict::Fresh)
+    assert_eq(
+      fresh.check("ten.txt", Some(stamp)),
+      @devkit.FreshnessVerdict::NeverRead,
+    )
+  }
+}

@@ -13,14 +13,20 @@
 pub(all) struct ReadTools {
   // Shared read-before-modify ledger; None disables recording (library use).
   freshness : @devkit.FreshnessGuard?
+  // Resolves relative paths against the workspace root; None keeps legacy
+  // behavior (relative paths land on the process working directory).
+  anchor : @devkit.WorkspaceAnchor?
 }
 
 ///|
 /// Canonical constructor. Use this everywhere to avoid cross-target naming
 /// drift. `guard` is optional: without it the tool still reads, it just does
 /// not participate in freshness tracking.
-pub fn ReadTools::ReadTools(freshness? : @devkit.FreshnessGuard) -> ReadTools {
-  ReadTools::{ freshness, }
+pub fn ReadTools::ReadTools(
+  freshness? : @devkit.FreshnessGuard,
+  anchor? : @devkit.WorkspaceAnchor? = None,
+) -> ReadTools {
+  ReadTools::{ freshness, anchor }
 }
 
 ///|
@@ -220,12 +226,20 @@ fn format_read_page(
 
 ///|
 /// Shared `read` execute logic. Target-agnostic; only the IO adaptor differs.
+/// The resolved `path` is used for filesystem access and freshness keys;
+/// model-facing messages and the structured `path` echo the argument as
+/// written, so the anchor root never leaks into results.
 async fn execute_read_impl(
   io : &FsIo,
   freshness : @devkit.FreshnessGuard?,
+  anchor : @devkit.WorkspaceAnchor?,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (path, offset_opt, limit_opt) = extract_read_args(call.arguments)
+  let (raw_path, offset_opt, limit_opt) = extract_read_args(call.arguments)
+  let path = match anchor {
+    Some(anchor) => anchor.resolve(raw_path)
+    None => raw_path
+  }
   match offset_opt {
     Some(0) =>
       raise @posoco.RuntimeError::UnknownTool(
@@ -244,7 +258,7 @@ async fn execute_read_impl(
   // it raises RuntimeError only on a genuine IO error (permission, etc).
   if !io.exists(path) {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="File not found: \{@devkit.sanitize_path(path)}",
+      content="File not found: \{@devkit.sanitize_path(raw_path)}",
       structured=None,
     )
   }
@@ -292,7 +306,7 @@ async fn execute_read_impl(
   )
   if byte_cut && explicit_range {
     raise @posoco.RuntimeError::InvocationFailed(
-      "read: requested range for '\{@devkit.sanitize_path(path)}' exceeds the \{READ_BYTE_CAP} byte output cap; use a smaller limit or grep for the specific content",
+      "read: requested range for '\{@devkit.sanitize_path(raw_path)}' exceeds the \{READ_BYTE_CAP} byte output cap; use a smaller limit or grep for the specific content",
     )
   }
   let end_line = start_line + returned - 1
@@ -309,7 +323,7 @@ async fn execute_read_impl(
     content~,
     structured=Some(
       Json::object({
-        "path": Json::string(path),
+        "path": Json::string(raw_path),
         "start_line": Json::number(start_line.to_double()),
         "end_line": Json::number(end_line.to_double()),
         "total_lines": Json::number(page.total_lines.to_double()),

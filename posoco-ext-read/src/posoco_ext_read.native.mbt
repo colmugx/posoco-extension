@@ -123,5 +123,5 @@ pub impl @posoco.ToolProvider for ReadTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_read_impl(NativeFsIo::{  }, self.freshness, call)
+  execute_read_impl(NativeFsIo::{  }, self.freshness, self.anchor, call)
 }

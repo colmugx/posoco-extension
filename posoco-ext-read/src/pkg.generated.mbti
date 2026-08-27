@@ -16,8 +16,9 @@ pub fn read_extension() -> ReadTools
 // Types and methods
 pub(all) struct ReadTools {
   freshness : @posoco-devkit.FreshnessGuard?
+  anchor : @posoco-devkit.WorkspaceAnchor?
 }
-pub fn ReadTools::ReadTools(freshness? : @posoco-devkit.FreshnessGuard) -> Self
+pub fn ReadTools::ReadTools(freshness? : @posoco-devkit.FreshnessGuard, anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
 pub async fn ReadTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn ReadTools::extension_id(Self) -> String
 pub fn ReadTools::manifest(Self) -> @port.ExtensionManifest
