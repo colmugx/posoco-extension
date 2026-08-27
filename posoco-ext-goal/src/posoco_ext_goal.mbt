@@ -1,13 +1,5 @@
 ///|
 /// posoco_ext_goal — Goal-driven autonomous looping extension for Posoco.
-///
-/// One `GoalRunner` contributes three port views of a single state machine:
-/// `SystemPromptContributor` (the run charter, frozen per `execute` call),
-/// `ToolProvider` (whole-plan rewriting via the plan tool), and `Observer`
-/// (turn/token accounting plus tool-repetition tracking). `GoalRunner::execute`
-/// drives `agent.run_turn` until the goal is achieved and verified, the model
-/// declares itself blocked, the budget is exhausted, or the run stalls.
-///
 /// Compose it like any other extension — see `goal_extension`.
 
 ///|
@@ -94,11 +86,15 @@ pub(all) struct GoalResult {
 } derive(Debug)
 
 ///|
-/// Central struct: SystemPromptContributor + ToolProvider + Observer +
-/// the execute() loop.
+/// Central struct: ToolProvider + Observer + the execute() loop.
 ///
-/// Opaque on purpose: hosts drive it through `execute`, `status`, `pause`,
-/// `resume_goal`, `plan` and `clear`; the mutable bookkeeping stays
+/// The run charter is built at each `execute()` start from the goal options
+/// and delivered once, on the run's first working turn, merged above that
+/// turn's progress envelope. Later turns carry the progress envelope alone;
+/// the charter stays in the append-only transcript. The core's system prompt
+/// is static (one lazy injection per Agent lifetime) and is never touched by
+/// this extension. Hosts drive the runner through `execute`, `status`,
+/// `pause`, `resume_goal`, `plan` and `clear`; the mutable bookkeeping stays
 /// package-private.
 pub struct GoalRunner {
   options : GoalOptions
@@ -110,7 +106,8 @@ pub struct GoalRunner {
   mut stall_count : Int // consecutive low-output turns
   mut wrapup_sent : Bool // prevent duplicate wrap-up
   mut plan : GoalPlan // replaced wholesale by the plan tool / reset
-  mut charter : String // frozen per run; "" when idle
+  mut charter : String // rebuilt at each execute() start from options
+  mut charter_delivered : Bool // true once this run's first working turn carried the charter
   mut completion_claimed : Bool
   mut verifying : Bool
   mut verifier_rounds : Int
@@ -156,7 +153,7 @@ pub fn GoalOptions::default(goal_condition~ : String) -> GoalOptions {
 ///   assert_eq(manifest.hooks.length(), 0)
 ///   assert_eq(manifest.observers.length(), 1)
 ///   assert_eq(manifest.tools.length(), 1)
-///   assert_eq(manifest.prompt_contributors.length(), 1)
+///   assert_eq(manifest.prompt_contributors.length(), 0)
 ///   match goal.status() {
 ///     Idle => ()
 ///     _ => fail("a fresh runner is Idle")
@@ -175,6 +172,7 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
     wrapup_sent: false,
     plan: GoalPlan::empty(),
     charter: "",
+    charter_delivered: false,
     completion_claimed: false,
     verifying: false,
     verifier_rounds: 0,
@@ -192,13 +190,6 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
 /// Current plan (defensive copy of the items).
 pub fn GoalRunner::plan(self : GoalRunner) -> GoalPlan {
   GoalPlan::{ items: self.plan.items.copy() }
-}
-
-///|
-pub impl @posoco.SystemPromptContributor for GoalRunner with fn system_prompt(
-  self,
-) -> String {
-  self.charter
 }
 
 ///|
@@ -378,8 +369,10 @@ fn GoalRunner::near_budget_limit(self : GoalRunner) -> Bool {
 ///|
 /// Choose this iteration's turn input: a verification prompt while a
 /// completion claim is being checked, a one-shot wrap-up prompt near the
-/// budget limit, otherwise the per-turn progress recitation (prefixed once
-/// with a failed-verification retraction).
+/// budget limit, otherwise the per-turn progress recitation. On the run's
+/// first working turn (verifier and wrap-up turns are not working turns),
+/// the recitation is prefixed with the charter; a failed-verification
+/// retraction, when present, comes first of all.
 fn GoalRunner::build_turn_prompt(self : GoalRunner) -> String {
   if self.verifying {
     return build_verification_prompt(
@@ -402,7 +395,14 @@ fn GoalRunner::build_turn_prompt(self : GoalRunner) -> String {
     None => ""
   }
   self.last_retraction = None
+  let charter_prefix = if self.charter_delivered {
+    ""
+  } else {
+    self.charter + "\n\n"
+  }
+  self.charter_delivered = true
   intro +
+  charter_prefix +
   build_progress(
     turn=self.current_turn + 1,
     max_turns=self.options.budget.max_turns,
@@ -447,7 +447,6 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.stall_count = 0
   self.wrapup_sent = false
   self.plan = GoalPlan::empty()
-  self.charter = ""
   self.completion_claimed = false
   self.verifying = false
   self.verifier_rounds = 0
@@ -458,6 +457,7 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.repeat_count = 0
   self.plan_streak = 0
   self.prev_plan_fp = None
+  self.charter_delivered = false
 }
 
 ///|
@@ -500,6 +500,7 @@ pub async fn GoalRunner::execute(
     blocked_marker=self.options.blocked_marker,
     plan_tool_name=self.options.plan_tool_name,
   )
+  self.charter_delivered = false
 
   while self.status == Running {
     if self.is_budget_exhausted() {

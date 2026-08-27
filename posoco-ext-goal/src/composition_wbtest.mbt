@@ -1,7 +1,7 @@
 ///|
 /// Composition tests: the real posoco Agent wired to a GoalRunner —
 /// manifest wiring, catalog exposure, plan rewriting through a scripted
-/// tool-call turn, charter injection, and error recovery.
+/// tool-call turn, first-turn charter delivery, and error recovery.
 
 ///|
 /// Compose a real Agent from a ScriptedModel, an io extension, and the goal
@@ -48,19 +48,30 @@ fn cw_plan_item(title : String, status : String) -> Json {
 }
 
 ///|
-/// First Content Text of the SystemMessage at index 0 of the given model call.
-fn cw_system_text(model : @posoco.ScriptedModel, call_index : Int) -> String {
+/// Concatenated text of every message in one recorded model-call input.
+fn cw_call_text(model : @posoco.ScriptedModel, call_index : Int) -> String {
   if model.received_messages.length() <= call_index {
     abort("model call \{call_index} was never made")
   }
-  match model.received_messages[call_index][0] {
-    @posoco.Message::SystemMessage(content~) =>
-      match content {
-        [@posoco.Content::Text(t), ..] => t
-        _ => abort("system message content should begin with text")
-      }
-    _ => abort("model call \{call_index}: message 0 should be a SystemMessage")
+  let parts : Array[String] = []
+  for msg in model.received_messages[call_index] {
+    parts.push(text_of_message(msg))
   }
+  parts.join("\n")
+}
+
+///|
+/// Text of the freshly appended input message (the last one) of a recorded
+/// model call.
+fn cw_latest_input_text(
+  model : @posoco.ScriptedModel,
+  call_index : Int,
+) -> String {
+  if model.received_messages.length() <= call_index {
+    abort("model call \{call_index} was never made")
+  }
+  let msgs = model.received_messages[call_index]
+  text_of_message(msgs[msgs.length() - 1])
 }
 
 ///|
@@ -71,7 +82,7 @@ test "manifest_reports_v2_ports" {
   assert_eq(manifest.hooks.length(), 0)
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.observers.length(), 1)
-  assert_eq(manifest.prompt_contributors.length(), 1)
+  assert_eq(manifest.prompt_contributors.length(), 0)
 }
 
 ///|
@@ -157,30 +168,62 @@ async test "update_plan_tool_rewrites_state_through_agent" {
 }
 
 ///|
-async test "charter_injected_as_stable_system_message" {
+/// Under core 0.13.0 the system prompt is assembled once per Agent lifetime,
+/// so the charter rides the first working turn's user input instead: that
+/// turn's input merges the charter above the progress envelope, later turns
+/// append user inputs carrying only the progress envelope (the charter
+/// survives in the append-only transcript), and no model call ever sees a
+/// goal-authored SystemMessage.
+async test "charter_rides_first_work_turn_input" {
   let goal = goal_extension(goal_condition="make tests green")
-  goal.charter = build_charter(
-    goal_condition="make tests green",
-    checklist=[],
-    completion_marker="<goal-complete/>",
-    blocked_marker="<goal-blocked/>",
-    plan_tool_name="goal_update_plan",
-  )
-  goal.status = Running
-  let model = @posoco.ScriptedModel([
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("one")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("two")),
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("working")),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("<goal-complete/>"),
+    ),
   ])
   let agent = cw_compose_agent(model, goal)
-  ignore(cw_run_turn(agent, "first", "session_charter"))
-  ignore(cw_run_turn(agent, "second", "session_charter"))
+  let result = goal.execute(agent, "session_charter")
+  match result.final_status {
+    Completed => ()
+    other => fail("expected Completed, got \{other}")
+  }
+  // work → claim → verifier: three model calls.
+  assert_eq(model.received_messages.length(), 3)
 
-  let sys1 = cw_system_text(model, 0)
-  let sys2 = cw_system_text(model, 1)
-  assert_true(sys1.contains("posoco_ext_goal:"))
-  assert_true(sys1.contains("<goal-context type=\"charter\""))
-  assert_true(sys1.contains("Goal: make tests green"))
-  assert_eq(sys2, sys1)
+  // First working turn: charter and progress merged into one user input.
+  assert_eq(model.received_messages[0].length(), 1)
+  let first_text = cw_call_text(model, 0)
+  assert_true(first_text.contains("<goal-context type=\"charter\""))
+  assert_true(first_text.contains("Goal: make tests green"))
+  assert_true(first_text.contains("<goal-context type=\"progress\""))
+
+  // Claim turn (a later working turn): the freshly appended input message
+  // carries progress alone; the earlier merged entry stays in the
+  // append-only transcript that precedes it.
+  let claim_newest = cw_latest_input_text(model, 1)
+  assert_true(claim_newest.contains("<goal-context type=\"progress\""))
+  assert_false(claim_newest.contains("<goal-context type=\"charter\""))
+  assert_true(cw_call_text(model, 1).contains("<goal-context type=\"charter\""))
+
+  // No goal-injected system message anywhere: with no prompt contributors
+  // the hook is not even registered and messages pass through untouched.
+  for i in 0..<model.received_messages.length() {
+    match model.received_messages[i][0] {
+      @posoco.Message::SystemMessage(content~) =>
+        for c in content {
+          match c {
+            @posoco.Content::Text(t) =>
+              assert_false(t.contains("posoco_ext_goal"))
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
 }
 
 ///|

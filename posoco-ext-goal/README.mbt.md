@@ -3,12 +3,15 @@
 Goal-driven autonomous looping extension for [Posoco](https://mooncakes.io/docs/colmugx/posoco).
 
 One `GoalRunner` turns an agent into a verified autonomous loop: it
-publishes a byte-stable run charter as a `SystemPromptContributor`,
-contributes the `goal_update_plan` tool, and accounts for turns and tokens
-as an `Observer`. `GoalRunner::execute` drives `agent.run_turn` one turn
-at a time — feeding a per-turn progress recitation — until the model's
-completion claim survives a verifier turn, the model declares itself
-blocked, the budget is exhausted, or the run stalls.
+contributes the `goal_update_plan` tool and accounts for turns and tokens
+as an `Observer`. Core 0.13.0 assembles the system prompt once per Agent
+lifetime, so the extension never touches it; instead the run charter is
+folded into the first working turn's user input, merged above that turn's
+progress envelope.
+`GoalRunner::execute` drives `agent.run_turn` one turn at a time — feeding
+a per-turn progress recitation — until the model's completion claim
+survives a verifier turn, the model declares itself blocked, the budget is
+exhausted, or the run stalls.
 
 > **Targets: native + js** for the library; tests run native-only.
 
@@ -16,13 +19,14 @@ blocked, the budget is exhausted, or the run stalls.
 
 | Port | Contribution |
 |------|--------------|
-| `SystemPromptContributor` | the run charter, byte-stable for the whole run |
 | `ToolProvider` | `goal_update_plan` — whole-plan rewrite, one item active |
 | `Observer` | turn/token accounting, tool-call repetition tracking |
 
-The same `GoalRunner` reference appears under every field, so the three
+The same `GoalRunner` reference appears under both fields, so the two
 views share one state machine; goal-run turn inputs are driven by
-`execute`, not by a pipeline hook.
+`execute`, not by a pipeline hook. There is no prompt contributor: under
+core 0.13.0 static system-prompt semantics, the charter is folded into
+the first working turn's user input instead.
 
 ## Usage
 
@@ -61,14 +65,19 @@ let goal = @goal.GoalRunner(options~)
 
 All harness output is rendered as trusted `<goal-context>` envelopes so the model can tell goal protocol from conversation. The charter forbids the model from emitting the envelope itself; its only protocol outputs are the two end-of-message tags.
 
-- **Charter** — `SystemPromptContributor.system_prompt` returns one
-  string frozen at the start of `execute` and byte-stable for the whole
-  run: envelope vocabulary, the goal condition, the numbered definition
-  of done, plan rules, and the tag protocol. It never changes, so it
-  lives in the system prompt.
-- **Progress recitation** — every work turn appends one user message, a
-  `<goal-context type="progress">` envelope carrying `turn` and (when a
-  token budget is set) `tokens` attributes: plan snapshot (markdown
+- **Charter** — envelope vocabulary, the goal condition, the numbered
+  definition of done, plan rules, and the tag protocol. It is built at
+  each `execute()` start from the `GoalOptions` values and delivered once:
+  on the run's first working turn, merged into the user input above that
+  turn's progress envelope. The core injects the system prompt once,
+  statically (posoco 0.13.0 single static injection), so this extension
+  never touches it; after the first working turn the charter stays in the
+  append-only transcript and later turns carry only fresh progress
+  envelopes.
+- **Progress recitation** — every work turn appends one user message with a
+  `<goal-context type="progress">` envelope; on the first working turn the
+  charter precedes it in that same message. Progress carries `turn` and
+  (when a token budget is set) `tokens` attributes: plan snapshot (markdown
   checklist), a `NEXT STEP:` line, and a continue instruction cycling
   through three phrasings that all end with the same
   verify-before-assuming sentence. Recitations are append-only — earlier
@@ -152,7 +161,7 @@ runs; `resume_goal` requires calling `execute` again to continue.
 
 | Field | Default | Meaning |
 |-------|---------|---------|
-| `goal_condition` | required | the goal statement, frozen into the charter |
+| `goal_condition` | required | the goal statement the charter is built from |
 | `budget.max_turns` | 0 | max turns; 0 = unlimited |
 | `budget.max_total_tokens` | 0 | max accumulated tokens; 0 = unlimited |
 | `completion_marker` | `<goal-complete/>` | claims completion (exact match) |
@@ -171,8 +180,10 @@ Build with `GoalOptions::default(goal_condition~)`, mutate, then
 ## Scope
 
 GoalRunner is **not** a model port — compose a `ModelPort` extension
-alongside it. It contributes exactly one tool, one prompt contributor,
-and one observer: no hooks, commands, or session stores. There are no
+alongside it. It contributes exactly one tool and one observer: no hooks,
+commands, session stores, or prompt contributors (under core 0.13.0 static
+system-prompt semantics the charter rides the first working turn's user
+input). There are no
 parallel subagents inside a goal — the loop drives one `agent.run_turn`
 at a time, sequentially, against a tool-set fixed for the agent's
 lifetime (composed once at `Agent` construction; a goal run never adds

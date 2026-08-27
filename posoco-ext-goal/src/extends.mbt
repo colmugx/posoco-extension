@@ -8,9 +8,6 @@
 pub extend GoalRunner with @posoco.Observer::{on_event}
 
 ///|
-pub extend GoalRunner with @posoco.SystemPromptContributor::{system_prompt}
-
-///|
 // `execute` is NOT promoted: the dot-method slot is taken by the
 // `GoalRunner::execute` loop (MoonBit has no overloading). Call the tool
 // view via `@posoco.ToolProvider::execute(goal, name, call)`.

@@ -97,6 +97,7 @@ pub struct GoalRunner {
   mut wrapup_sent : Bool
   mut plan : GoalPlan
   mut charter : String
+  mut charter_delivered : Bool
   mut completion_claimed : Bool
   mut verifying : Bool
   mut verifier_rounds : Int
@@ -119,10 +120,8 @@ pub fn GoalRunner::pause(Self) -> Unit
 pub fn GoalRunner::plan(Self) -> GoalPlan
 pub fn GoalRunner::resume_goal(Self) -> Unit
 pub fn GoalRunner::status(Self) -> GoalStatus
-pub fn GoalRunner::system_prompt(Self) -> String
 pub impl @port.Extension for GoalRunner
 pub impl @port.Observer for GoalRunner
-pub impl @port.SystemPromptContributor for GoalRunner
 pub impl @port.ToolProvider for GoalRunner
 
 pub(all) enum GoalStatus {

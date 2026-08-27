@@ -5,11 +5,13 @@ pub impl @posoco.Extension for GoalRunner with fn extension_id(_self) -> String 
 }
 
 ///|
-/// Declare the ports GoalRunner contributes: ToolProvider (plan rewriting),
-/// Observer (turn/token accounting, tool-repetition tracking), and
-/// SystemPromptContributor (run charter). The same `self` reference appears
-/// under every field so the views share one state machine; goal-run turn
-/// inputs are driven by `execute`, not by a PipelineHook view.
+/// Declare the ports GoalRunner contributes: ToolProvider (plan rewriting)
+/// and Observer (turn/token accounting, tool-repetition tracking). There is
+/// no SystemPromptContributor — core 0.13.0 assembles the system prompt once
+/// per Agent lifetime — so the charter rides the first working turn's user
+/// input instead. The same `self` reference appears under every field so the
+/// views share one state machine; goal-run turn inputs are driven by
+/// `execute`, not by a pipeline hook.
 pub impl @posoco.Extension for GoalRunner with fn manifest(self) -> @posoco.ExtensionManifest {
   {
     id: "posoco_ext_goal",
@@ -22,7 +24,7 @@ pub impl @posoco.Extension for GoalRunner with fn manifest(self) -> @posoco.Exte
     lifecycle: [],
     commands: [],
     ui: [],
-    prompt_contributors: [self],
+    prompt_contributors: [],
     requires: [],
   }
 }

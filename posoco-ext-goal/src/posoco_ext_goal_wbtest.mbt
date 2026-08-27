@@ -80,7 +80,6 @@ test "goal_clear_resets_state" {
   goal.usage.turns = 5
   goal.usage.total_tokens = 1000
   goal.current_turn = 3
-  goal.charter = "stale charter"
   goal.verifying = true
   goal.last_stall_reason = Some("old reason")
 
@@ -93,7 +92,6 @@ test "goal_clear_resets_state" {
   assert_eq(goal.usage.turns, 0)
   assert_eq(goal.usage.total_tokens, 0)
   assert_eq(goal.current_turn, 0)
-  assert_eq(goal.charter, "")
   assert_false(goal.verifying)
   assert_eq(goal.plan.items.length(), 0)
   match goal.last_stall_reason {
@@ -169,7 +167,21 @@ async test "tool_unknown_name" {
 }
 
 ///|
-test "charter_while_idle_is_empty" {
-  let goal = goal_extension(goal_condition="idle")
-  assert_eq(goal.system_prompt(), "")
+/// Core 0.13.0 owns the static system prompt, so the extension exposes no
+/// prompt-contributor surface at all; the charter rides the first working
+/// turn's user input instead (delivery asserted at the composition level).
+test "charter_not_a_prompt_contributor" {
+  let goal = goal_extension(goal_condition="make tests green")
+  assert_eq(goal.manifest().prompt_contributors.length(), 0)
+}
+
+///|
+/// The charter is options-derived and rebuilt at each execute() start;
+/// clear() never touches the options and re-arms first-turn delivery.
+test "clear_keeps_options_derived_charter" {
+  let goal = goal_extension(goal_condition="idle after clear")
+  goal.status = Running
+  goal.clear()
+  assert_eq(goal.options.goal_condition, "idle after clear")
+  assert_false(goal.charter_delivered)
 }
