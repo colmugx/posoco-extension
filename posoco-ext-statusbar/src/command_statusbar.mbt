@@ -123,10 +123,7 @@ fn StatusBar::validate_layout(
   for item in items {
     if !known.contains(item) {
       raise @posoco.CommandError::InvalidArgs(
-        reason="unknown statusbar segment '" +
-          item +
-          "'; available: " +
-          known.join(", "),
+        reason="unknown statusbar segment '\{item}'; available: \{known.join(", ")}",
       )
     }
   }
@@ -175,7 +172,7 @@ pub impl @posoco.CommandPort for StatusBar with fn invoke(
       match statusbar_command_selection(args) {
         Query =>
           @posoco.CommandOutcome::Success(
-            feedback="statusbar segments: " + self.items.join(" | "),
+            feedback="statusbar segments: \{self.items.join(" | ")}",
             structured=Some(self.layout_json()),
             ui_hint=Some(@posoco.UiHint::None),
           )
@@ -183,7 +180,7 @@ pub impl @posoco.CommandPort for StatusBar with fn invoke(
           self.items = default_items()
           self.render()
           @posoco.CommandOutcome::Success(
-            feedback="statusbar reset: " + self.items.join(" | "),
+            feedback="statusbar reset: \{self.items.join(" | ")}",
             structured=Some(self.layout_json()),
             ui_hint=Some(@posoco.UiHint::None),
           )
@@ -198,7 +195,7 @@ pub impl @posoco.CommandPort for StatusBar with fn invoke(
           let feedback = if items.is_empty() {
             "statusbar hidden (no segments)"
           } else {
-            "statusbar segments: " + items.join(" | ")
+            "statusbar segments: \{items.join(" | ")}"
           }
           @posoco.CommandOutcome::Success(
             feedback~,

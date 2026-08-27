@@ -208,7 +208,7 @@ test "host-pushed custom segment renders and clears" {
 test "bus publish on topic status updates custom segments once per event" {
   let bus = @devkit.EventBus()
   let ui = RecordingUi()
-  let bar = StatusBar(ui as &@posoco.UiPort, bus=Some(bus))
+  let _bar = StatusBar(ui as &@posoco.UiPort, bus=Some(bus))
   let renders_before = ui.renders.length()
   bus.publish({
     source: "posoco_ext_scrum",

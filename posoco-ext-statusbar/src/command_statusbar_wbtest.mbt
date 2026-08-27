@@ -16,23 +16,23 @@ async test "query reports the current layout without re-rendering" {
       inspect(
         feedback,
         content=(
-          #|statusbar segments: model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
+          #|statusbar segments: plan | model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
         ),
       )
       match structured {
         Some(json) =>
           json_inspect(json, content={
             "items": [
-              "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps",
-              "avg", "session", "lat",
+              "plan", "model", "effort", "turn", "tools", "tok", "cache", "ttft",
+              "tps", "avg", "session", "lat",
             ],
             "available": [
-              "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps",
-              "avg", "session", "lat",
+              "plan", "model", "effort", "turn", "tools", "tok", "cache", "ttft",
+              "tps", "avg", "session", "lat",
             ],
             "defaults": [
-              "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps",
-              "avg", "session", "lat",
+              "plan", "model", "effort", "turn", "tools", "tok", "cache", "ttft",
+              "tps", "avg", "session", "lat",
             ],
           })
         None => fail("expected a structured layout payload")
@@ -75,7 +75,7 @@ async test "unknown segment id fails with the available list" {
       inspect(
         reason,
         content=(
-          #|CommandError::InvalidArgs(unknown statusbar segment 'bogus'; available: model, effort, turn, tools, tok, cache, ttft, tps, avg, session, lat)
+          #|CommandError::InvalidArgs(unknown statusbar segment 'bogus'; available: plan, model, effort, turn, tools, tok, cache, ttft, tps, avg, session, lat)
         ),
       )
     _ => fail("expected failure")
@@ -95,7 +95,7 @@ async test "reset restores the default layout" {
       inspect(
         feedback,
         content=(
-          #|statusbar reset: model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
+          #|statusbar reset: plan | model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
         ),
       )
     _ => fail("expected success")
@@ -104,6 +104,7 @@ async test "reset restores the default layout" {
     bar.items(),
     content=(
       #|[
+      #|  "plan",
       #|  "model",
       #|  "effort",
       #|  "turn",

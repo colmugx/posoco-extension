@@ -17,11 +17,15 @@
 /// silent no-op.
 
 ///|
-/// Segment ids the bar knows how to render, in default order.
+/// Segment ids the bar knows how to render, in default order. `"plan"`
+/// leads the line: plan mode publishes a `"plan"` fact on the bus (topic
+/// `"status"`) while planning/awaiting approval and a `null` to drop it,
+/// so the segment renders "Plan" before the model name and disappears
+/// entirely outside plan mode.
 pub fn available_segments() -> Array[String] {
   [
-    "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps", "avg", "session",
-    "lat",
+    "plan", "model", "effort", "turn", "tools", "tok", "cache", "ttft", "tps", "avg",
+    "session", "lat",
   ]
 }
 
