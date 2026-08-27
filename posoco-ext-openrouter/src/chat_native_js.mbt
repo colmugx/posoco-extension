@@ -39,26 +39,36 @@ fn rate_limit_reset_header(response : @http.Response) -> String? {
 pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
   self : OpenRouterModelPort,
   _scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  let messages_owned = messages.to_owned()
   match stream {
     NoStream => {
       let body = build_chat_request(
         self.config,
-        messages,
+        messages_owned,
         tools,
         options,
         false,
       )
       let resp_json = self.openrouter_post_chat_json(body, "chat")
       let completion = decode_chat_response(resp_json)
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
     Stream(on_chunk) => {
-      let body = build_chat_request(self.config, messages, tools, options, true)
+      let body = build_chat_request(
+        self.config,
+        messages_owned,
+        tools,
+        options,
+        true,
+      )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
       let client = @http.post_stream(url, headers~) catch {
@@ -103,9 +113,6 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
         }
       }
       let state = OpenRouterStreamState()
-      let on_typed = fn(chunk : @posoco.StreamChunk) {
-        on_chunk(streamchunk_to_json(chunk))
-      }
       // Optional wire log (POSOCO_WIRE_LOG): verbatim raw SSE data payloads,
       // one per line, for diagnosing provider streams. js/bun only today.
       let wire_path = wire_log_path()
@@ -142,10 +149,10 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
                 // state.terminated keeps the recorded finish reason from
                 // being clobbered by the marker.
                 if payload == "[DONE]" {
-                  let _ = process_openrouter_sse(payload, state, on_typed)
+                  let _ = process_openrouter_sse(payload, state, on_chunk)
                   done = true
                 } else {
-                  let _ = process_openrouter_sse(payload, state, on_typed)
+                  let _ = process_openrouter_sse(payload, state, on_chunk)
                 }
               }
             } else if trimmed == "" && data_buffer.length() > 0 {
@@ -156,7 +163,7 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
             client.close()
             if openrouter_eof_tolerable(state.acc) {
               let chunk = @posoco.StreamChunk::Finish(reason="tool_calls")
-              on_typed(chunk)
+              on_chunk(chunk)
               state.acc.push(chunk)
               done = true
             } else {
@@ -190,7 +197,10 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
       }
       validate_openrouter_stream_tool_calls(state.acc)
       let completion = state.to_completion()
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
   }
 }

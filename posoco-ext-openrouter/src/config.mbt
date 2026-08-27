@@ -40,6 +40,10 @@ pub(all) struct OpenRouterConfig {
   http_referer : String?
   /// Optional attribution header value sent as `X-Title`.
   title : String?
+  /// The model accepts image input (models discovery
+  /// `architecture.input_modalities`). Image blocks then encode as typed
+  /// content parts; otherwise they downgrade to explicit placeholders.
+  supports_images : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -56,6 +60,7 @@ pub fn OpenRouterConfig::OpenRouterConfig(
   compact_threshold? : Double? = None,
   http_referer? : String? = None,
   title? : String? = None,
+  supports_images? : Bool = false,
 ) -> OpenRouterConfig {
   {
     api_key,
@@ -68,6 +73,7 @@ pub fn OpenRouterConfig::OpenRouterConfig(
     compact_threshold,
     http_referer,
     title,
+    supports_images,
   }
 }
 

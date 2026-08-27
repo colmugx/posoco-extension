@@ -176,6 +176,13 @@ fn openrouter_catalog_slot(
     }
     openrouter_catalog_slot(rebuilt_config, api_key)
   })
+  let capabilities : Array[String] = ["chat", "streaming", "api_key"]
+  if !slot_efforts.is_empty() || config.thinking {
+    capabilities.push("reasoning")
+  }
+  if config.supports_images {
+    capabilities.push("image_in")
+  }
   @llm.ModelSlot::ModelSlot(
     id=slot_id,
     label~,
@@ -185,7 +192,7 @@ fn openrouter_catalog_slot(
     api_key=Some(api_key),
     thinking_efforts=slot_efforts,
     context_window=config.context_window,
-    capabilities=["chat", "streaming", "reasoning", "api_key"],
+    capabilities~,
     default_effort~,
     rebuild_on_api_key=Some(fn(credential) {
       let rebuilt_config = OpenRouterConfig(
@@ -197,6 +204,7 @@ fn openrouter_catalog_slot(
         thinking_efforts=config.thinking_efforts,
         context_window=config.context_window,
         compact_threshold=config.compact_threshold,
+        supports_images=config.supports_images,
         http_referer=config.http_referer,
         title=config.title,
       )

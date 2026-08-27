@@ -39,8 +39,9 @@ pub(all) struct OpenRouterConfig {
   compact_threshold : Double?
   http_referer : String?
   title : String?
+  supports_images : Bool
 } derive(Eq, @debug.Debug)
-pub fn OpenRouterConfig::OpenRouterConfig(String, model~ : String, base_url? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, http_referer? : String?, title? : String?) -> Self
+pub fn OpenRouterConfig::OpenRouterConfig(String, model~ : String, base_url? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, http_referer? : String?, title? : String?, supports_images? : Bool) -> Self
 pub fn OpenRouterConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct OpenRouterModelInfo {
@@ -50,6 +51,7 @@ pub(all) struct OpenRouterModelInfo {
   supported_efforts : Array[String]
   default_effort : String?
   default_enabled : Bool
+  supports_images : Bool
 } derive(Eq, @debug.Debug)
 
 pub(all) struct OpenRouterModelPort {

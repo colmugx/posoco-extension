@@ -268,7 +268,7 @@ test "encode_message assistant replays raw reasoning as reasoning_details" {
     }),
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_details") {
     Some(Json::Array(details)) =>
@@ -293,7 +293,7 @@ test "encode_message assistant falls back to the reasoning string without raw" {
     reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning") {
     Some(String(r)) => assert_eq(r, "thinking...")
@@ -315,7 +315,7 @@ test "encode_message tool result carries tool_call_id and outcome text" {
       structured=None,
     ),
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("role") {
     Some(String(r)) => assert_eq(r, "tool")
@@ -335,13 +335,14 @@ test "encode_message tool result carries tool_call_id and outcome text" {
 test "encode_message system and user roles carry plain text content" {
   let sys_json = encode_message(
     @posoco.Message::SystemMessage(content=[Text("sys")]),
+    false,
   )
   guard sys_json is Object(sys_obj) else { fail("expected object") }
   match sys_obj.get("role") {
     Some(String(r)) => assert_eq(r, "system")
     _ => fail("expected system role")
   }
-  let user_json = encode_message(user_msg("hello"))
+  let user_json = encode_message(user_msg("hello"), false)
   guard user_json is Object(user_obj) else { fail("expected object") }
   match user_obj.get("role") {
     Some(String(r)) => assert_eq(r, "user")
@@ -727,19 +728,6 @@ test "openrouter_eof_tolerable rejects arguments cut mid-stream" {
 }
 
 ///|
-test "streamchunk_to_json emits the host chunk convention" {
-  let json = streamchunk_to_json(@posoco.StreamChunk::TextDelta(token="hi"))
-  guard json is Object(fields) else { fail("expected object") }
-  match (fields.get("kind"), fields.get("token")) {
-    (Some(String(kind)), Some(String(token))) => {
-      assert_eq(kind, "text")
-      assert_eq(token, "hi")
-    }
-    _ => fail("expected kind/token strings")
-  }
-}
-
-///|
 /// Provider-neutral prompt fake used to exercise OpenRouter's API-key seam.
 struct OpenRouterApiKeyPrompt {
   value : String
@@ -1114,6 +1102,7 @@ test "openrouter_model_catalog expands discovery into ordered slots" {
       supported_efforts: ["low", "high"],
       default_effort: Some("high"),
       default_enabled: true,
+      supports_images: false,
     },
     {
       id: "b/plain",
@@ -1122,6 +1111,7 @@ test "openrouter_model_catalog expands discovery into ordered slots" {
       supported_efforts: [],
       default_effort: None,
       default_enabled: false,
+      supports_images: false,
     },
   ]
   let catalog = openrouter_model_catalog(
@@ -1219,4 +1209,67 @@ test "ProviderFactory::build degrades on malformed cache records" {
     @llm.ProviderBuildResult::Unconfigured =>
       fail("settings model must still build when the cache is malformed")
   }
+}
+
+///|
+/// Vision capability three-state: discovery parses
+/// `architecture.input_modalities` onto the model info, the slot advertises
+/// `image_in` only for image-capable models, and the encoder sends typed
+/// parts or an explicit placeholder accordingly.
+test "vision capability flows from discovery to slot to encoder" {
+  // 1. Discovery: architecture.input_modalities carries the modality vector.
+  let payload : Json = @json.parse(
+    (
+      #|{
+      #|  "data": [
+      #|    { "id": "vendor/vision",
+      #|      "architecture": { "input_modalities": ["text", "image"] } },
+      #|    { "id": "vendor/text",
+      #|      "architecture": { "input_modalities": ["text"] } },
+      #|    { "id": "vendor/legacy" }
+      #|  ]
+      #|}
+    ),
+  ) catch {
+    _ => fail("fixture parse failed")
+  }
+  let models = parse_openrouter_models(payload)
+  inspect(models[0].supports_images, content="true")
+  inspect(models[1].supports_images, content="false")
+  inspect(models[2].supports_images, content="false")
+  // 2. Slot capability: only the image model advertises image_in.
+  let factory : &@llm.ApiKeyFactory = OpenRouterApiKeyFactory()
+  let catalog = openrouter_model_catalog(
+    "key", "https://openrouter.ai/api/v1", models, "", factory,
+  )
+  let vision_caps : Array[String] = []
+  let text_caps : Array[String] = []
+  for slot in catalog.slots() {
+    match slot.id {
+      "openrouter/vendor/vision" => vision_caps.append(slot.capabilities.copy())
+      "openrouter/vendor/text" => text_caps.append(slot.capabilities.copy())
+      _ => ()
+    }
+  }
+  assert_true(vision_caps.contains("image_in"))
+  assert_false(text_caps.contains("image_in"))
+  // 3. Encoder: parts when the config supports images, placeholder otherwise.
+  let img_msg : @posoco.Message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("look"),
+    @posoco.Content::Image(media_type="image/png", data="aW1n"),
+  ])
+  guard encode_message(img_msg, true) is Object(v) else {
+    fail("expected object")
+  }
+  guard v.get("content") is Some(Array([_, _])) else {
+    fail("expected two content parts")
+  }
+  guard encode_message(img_msg, false) is Object(t) else {
+    fail("expected object")
+  }
+  guard t.get("content") is Some(String(downgraded)) else {
+    fail("expected string content")
+  }
+  assert_true(downgraded.contains("look"))
+  assert_true(downgraded.contains("[Attached image/png"))
 }

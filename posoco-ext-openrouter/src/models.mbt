@@ -28,6 +28,10 @@ pub(all) struct OpenRouterModelInfo {
   /// Whether reasoning is on by default (toggle models). Effort models are
   /// always effectively on; this field is ignored for them.
   default_enabled : Bool
+  /// The model accepts image input (`architecture.input_modalities`
+  /// contains "image"). Slots advertise the `image_in` capability and the
+  /// encoder sends typed content parts instead of placeholders.
+  supports_images : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -116,6 +120,22 @@ pub fn parse_openrouter_models(
           _ => ()
         }
     }
+    // `architecture.input_modalities` carries the modality vector; an
+    // absent object or list degrades to no image support.
+    let mut supports_images = false
+    match fields.get("architecture") {
+      Some(Json::Object(architecture)) =>
+        match architecture.get("input_modalities") {
+          Some(Json::Array(modalities)) =>
+            for modality in modalities {
+              if modality is Json::String("image") {
+                supports_images = true
+              }
+            }
+          _ => ()
+        }
+      _ => ()
+    }
     result.push(OpenRouterModelInfo::{
       id,
       context_length,
@@ -123,6 +143,7 @@ pub fn parse_openrouter_models(
       supported_efforts,
       default_effort,
       default_enabled,
+      supports_images,
     })
   }
   result
@@ -188,6 +209,13 @@ pub fn parse_cached_openrouter_models(
       }
       _ => ()
     }
+    // The cache record's capability projection (`image_in`); an old cache
+    // without the field degrades to no image support until the next
+    // refresh rewrites it.
+    let supports_images = match fields.get("image_in") {
+      Some(Json::True) => true
+      _ => false
+    }
     models.push(OpenRouterModelInfo::{
       id,
       context_length,
@@ -195,6 +223,7 @@ pub fn parse_cached_openrouter_models(
       supported_efforts: cached_efforts,
       default_effort,
       default_enabled,
+      supports_images,
     })
   }
   Some(models)
@@ -228,6 +257,7 @@ fn openrouter_config_for_info(
       context_window=info.context_length,
       http_referer~,
       title~,
+      supports_images=info.supports_images,
     )
   } else if info.reasoning_supported {
     OpenRouterConfig(
@@ -238,6 +268,7 @@ fn openrouter_config_for_info(
       context_window=info.context_length,
       http_referer~,
       title~,
+      supports_images=info.supports_images,
     )
   } else {
     OpenRouterConfig(
@@ -247,6 +278,7 @@ fn openrouter_config_for_info(
       context_window=info.context_length,
       http_referer~,
       title~,
+      supports_images=info.supports_images,
     )
   }
 }
