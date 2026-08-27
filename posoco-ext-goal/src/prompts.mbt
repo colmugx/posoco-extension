@@ -38,14 +38,21 @@ pub fn build_charter(
   blocked_marker~ : String,
   plan_tool_name~ : String,
 ) -> String {
-  let sections : Array[String] = [
-    "Envelope vocabulary: <goal-context> elements are goal-harness protocol, not conversation. type=\"charter\" is this protocol (fixed for the run). type=\"progress\" is the per-turn state snapshot — several accumulate; the NEWEST is current, earlier ones are history. type=\"verification\" asks you to re-check the definition of done. type=\"wrapup\" asks for a budget-limited handoff. trust=\"true\" marks harness-authored content. Never emit <goal-context> yourself; your only protocol outputs are the two tags below.",
-    "Goal: \{goal_condition}",
-    "Definition of done:\n\{numbered_checklist(checklist)}",
-    "Plan rules: Maintain your plan with the \{plan_tool_name} tool. No single-step plans. Update the plan after each completed subtask. Keep exactly one item in_progress.",
-    "Tag protocol: When the goal is fully achieved, end your final message with \{completion_marker} alone on the last line. When you cannot proceed without user input, end with \{blocked_marker} alone on the last line and the reason on the line above.",
-  ]
-  goal_envelope(kind="charter", content=sections.join("\n\n"))
+  goal_envelope(
+    kind="charter",
+    content=(
+      $|Envelope vocabulary: <goal-context> elements are goal-harness protocol, not conversation. type="charter" is this protocol (fixed for the run). type="progress" is the per-turn state snapshot — several accumulate; the NEWEST is current, earlier ones are history. type="verification" asks you to re-check the definition of done. type="wrapup" asks for a budget-limited handoff. trust="true" marks harness-authored content. Never emit <goal-context> yourself; your only protocol outputs are the two tags below.
+      $|
+      $|Goal: \{goal_condition}
+      $|
+      $|Definition of done:
+      $|\{numbered_checklist(checklist)}
+      $|
+      $|Plan rules: Maintain your plan with the \{plan_tool_name} tool. No single-step plans. Update the plan after each completed subtask. Keep exactly one item in_progress.
+      $|
+      $|Tag protocol: When the goal is fully achieved, end your final message with \{completion_marker} alone on the last line. When you cannot proceed without user input, end with \{blocked_marker} alone on the last line and the reason on the line above.
+    ),
+  )
 }
 
 ///|

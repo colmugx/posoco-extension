@@ -26,12 +26,12 @@ pub fn ContextPromptContributor::ContextPromptContributor(
 
 ///|
 /// Render one document as a `{ns}-context` element. Escaping and layout
-/// live in devkit's render_context_envelope.
+/// live in devkit's context_envelope.
 fn ContextPromptContributor::render_doc(
   self : ContextPromptContributor,
   doc : ContextDocument,
 ) -> String {
-  @devkit.render_context_envelope(
+  @devkit.context_envelope(
     ns=self.ns,
     kind="project_instructions",
     trust=false,
@@ -47,13 +47,20 @@ fn ContextPromptContributor::render_doc(
 pub impl @posoco.SystemPromptContributor for ContextPromptContributor with fn system_prompt(
   self : ContextPromptContributor,
 ) -> String {
-  let parts : Array[String] = []
+  let buf = StringBuilder::new()
+  let mut prefix = ""
   match self.bundle.global {
-    Some(doc) => parts.push(self.render_doc(doc))
+    Some(doc) => {
+      buf.write_string(prefix)
+      buf.write_string(self.render_doc(doc))
+      prefix = "\n\n"
+    }
     None => ()
   }
   for doc in self.bundle.ancestors {
-    parts.push(self.render_doc(doc))
+    buf.write_string(prefix)
+    buf.write_string(self.render_doc(doc))
+    prefix = "\n\n"
   }
-  parts.join("\n\n")
+  buf.to_string()
 }

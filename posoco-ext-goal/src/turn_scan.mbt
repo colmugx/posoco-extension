@@ -1,14 +1,14 @@
 ///|
 /// Concatenated text of the Text items of a Content array.
 fn text_of_content(content : Array[@posoco.Content]) -> String {
-  let parts : Array[String] = []
-  for c in content {
+  content
+  .filter_map(fn(c) {
     match c {
-      @posoco.Content::Text(t) => parts.push(t)
-      _ => ()
+      @posoco.Content::Text(t) => Some(t)
+      _ => None
     }
-  }
-  parts.join("")
+  })
+  .join("")
 }
 
 ///|

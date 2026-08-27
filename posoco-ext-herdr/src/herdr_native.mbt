@@ -47,10 +47,6 @@ async fn herdr_detect() -> HerdrConfig? noraise {
 
 ///|
 fn herdr_spawn_report(bin : String, args : Array[String]) -> Unit {
-  let parts : Array[String] = [herdr_shell_quote(bin)]
-  for arg in args {
-    parts.push(herdr_shell_quote(arg))
-  }
-  let line = parts.join(" ") + " >/dev/null 2>&1 &"
+  let line = "\{[bin, ..args].map(fn(x) { herdr_shell_quote(x) }).join(" ")} >/dev/null 2>&1 &"
   ignore(ffi_system(herdr_c_string(line)))
 }

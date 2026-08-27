@@ -127,14 +127,13 @@ pub fn GoalPlan::render(plan : GoalPlan) -> String {
   if plan.items.length() == 0 {
     return "(no plan yet — decompose the goal)"
   }
-  let lines : Array[String] = []
-  for item in plan.items {
+  let lines = plan.items.mapi(fn(_, item) {
     match item.status {
-      Done => lines.push("- [x] \{item.title}")
-      InProgress => lines.push("- [ ] \{item.title} (in progress)")
-      Pending => lines.push("- [ ] \{item.title}")
+      Done => "- [x] \{item.title}"
+      InProgress => "- [ ] \{item.title} (in progress)"
+      Pending => "- [ ] \{item.title}"
     }
-  }
+  })
   lines.join("\n")
 }
 
@@ -169,9 +168,5 @@ pub fn GoalPlan::next_step(plan : GoalPlan) -> String? {
 ///|
 /// Stable serialization for stall detection: items joined as "title:status" with "|" (empty plan → "")
 pub fn GoalPlan::fingerprint(plan : GoalPlan) -> String {
-  let parts : Array[String] = []
-  for item in plan.items {
-    parts.push("\{item.title}:\{item.status}")
-  }
-  parts.join("|")
+  plan.items.map(fn(item) { "\{item.title}:\{item.status}" }).join("|")
 }
