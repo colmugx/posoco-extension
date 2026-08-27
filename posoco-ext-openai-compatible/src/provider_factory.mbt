@@ -51,6 +51,45 @@ fn oai_compat_setting_string(
 }
 
 ///|
+/// Optional boolean setting. `None` = absent; anything but a boolean is a
+/// typed composition failure, matching the strictness of the sibling parsers.
+fn oai_compat_setting_bool(
+  source : @llm.ProviderConfigSource,
+  key : String,
+) -> Bool raise @posoco.CompositionError {
+  match source.setting(key) {
+    None => false
+    Some(Json::True) => true
+    Some(Json::False) => false
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_openai_compatible",
+        detail="setting must be a boolean: " + key,
+      )
+  }
+}
+
+///|
+/// `image_input` on one `models[]` entry: absent or `false` means the model
+/// does not accept image parts (attachments downgrade to placeholders);
+/// `true` opts the model into typed content parts.
+fn oai_compat_parse_image_input(
+  fields : Map[String, Json],
+  model : String,
+) -> Bool raise @posoco.CompositionError {
+  match fields.get("image_input") {
+    None => false
+    Some(Json::True) => true
+    Some(Json::False) => false
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_openai_compatible",
+        detail="models entry image_input must be a boolean: " + model,
+      )
+  }
+}
+
+///|
 /// Validate declared effort entries: non-empty, unique, and never the reserved
 /// selector words "off"/"on" (those belong to the toggle vocabulary, never to a
 /// declared level). The values pass through verbatim — the server owns the
@@ -149,6 +188,10 @@ fn oai_compat_catalog_slot(
   let label = provider_id + " / " + config.model
   let slot_efforts = oai_compat_slot_efforts(config)
   let default_effort = Some(oai_compat_effort_label(config))
+  let capabilities : Array[String] = ["chat", "streaming", "api_key"]
+  if config.supports_images {
+    capabilities.push("image_in")
+  }
   let port : &@posoco.ModelPort = OpenAICompatibleModelPort(provider_id, config)
   let api_key : &@llm.ApiKeyFactory = OpenAICompatibleProvider(provider_id)
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = Some(fn(effort) {
@@ -169,7 +212,7 @@ fn oai_compat_catalog_slot(
     api_key=Some(api_key),
     thinking_efforts=slot_efforts,
     context_window=config.context_window,
-    capabilities=["chat", "streaming", "api_key"],
+    capabilities~,
     default_effort~,
     display_group=Some("custom"),
     rebuild_on_api_key=Some(fn(credential) {
@@ -183,6 +226,7 @@ fn oai_compat_catalog_slot(
         thinking_efforts=config.thinking_efforts,
         context_window=config.context_window,
         compact_threshold=config.compact_threshold,
+        supports_images=config.supports_images,
       )
       oai_compat_catalog_slot(provider_id, rebuilt_config)
     }),
@@ -213,6 +257,7 @@ priv struct OaiCompatModelEntry {
   compact_threshold : Double?
   declared_efforts : Array[String]
   fixed_effort : String?
+  supports_images : Bool
 }
 
 ///|
@@ -368,6 +413,7 @@ fn oai_compat_parse_models(
       compact_threshold,
       declared_efforts,
       fixed_effort,
+      supports_images: oai_compat_parse_image_input(fields, model),
     })
   }
   entries
@@ -387,6 +433,7 @@ fn oai_compat_config_from_selection(
   fixed_effort? : String? = None,
   context_window? : Int? = None,
   compact_threshold? : Double? = None,
+  supports_images? : Bool = false,
 ) -> OpenAICompatibleConfig raise @posoco.CompositionError {
   match fixed_effort {
     Some(fixed) =>
@@ -407,6 +454,7 @@ fn oai_compat_config_from_selection(
           thinking=fixed == "on",
           context_window~,
           compact_threshold~,
+          supports_images~,
         )
       } else {
         if !declared_efforts.is_empty() && !declared_efforts.contains(fixed) {
@@ -429,6 +477,7 @@ fn oai_compat_config_from_selection(
           },
           context_window~,
           compact_threshold~,
+          supports_images~,
         )
       }
     None =>
@@ -442,6 +491,7 @@ fn oai_compat_config_from_selection(
             thinking=false,
             context_window~,
             compact_threshold~,
+            supports_images~,
           )
         _ =>
           OpenAICompatibleConfig(
@@ -454,6 +504,7 @@ fn oai_compat_config_from_selection(
             thinking_efforts=declared_efforts,
             context_window~,
             compact_threshold~,
+            supports_images~,
           )
       }
   }
@@ -519,6 +570,7 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
           fixed_effort=entry.fixed_effort,
           context_window=entry.context_window,
           compact_threshold=entry.compact_threshold,
+          supports_images=entry.supports_images,
         )
         slots.push(oai_compat_catalog_slot(self.provider_id, config))
       }
@@ -593,6 +645,7 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
         endpoint_prefix~,
         declared_efforts~,
         fixed_effort=singular_string,
+        supports_images=oai_compat_setting_bool(source, "image_input"),
       )
       let port = OpenAICompatibleModelPort(self.provider_id, config)
       @llm.ProviderBuildResult::Ready(port.model_catalog())

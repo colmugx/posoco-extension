@@ -27,8 +27,9 @@ pub(all) struct OpenAICompatibleConfig {
   thinking_efforts : Array[String]
   context_window : Int?
   compact_threshold : Double?
+  supports_images : Bool
 } derive(Eq, @debug.Debug)
-pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?) -> Self
+pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, supports_images? : Bool) -> Self
 pub fn OpenAICompatibleConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct OpenAICompatibleModelPort {

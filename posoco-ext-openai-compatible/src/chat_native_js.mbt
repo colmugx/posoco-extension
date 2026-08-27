@@ -3,9 +3,9 @@
 ///
 /// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
 /// The `OpenAICompatibleModelPort` struct, `compact`, `provider_config`, and
-/// all pure helpers (build_headers, chat_url, streamchunk_to_json, SSE
-/// processing, error classification) live in the target-agnostic core files
-/// and compile on every backend. Only this chat method — which drives the
+/// all pure helpers (build_headers, chat_url, SSE processing, error
+/// classification) live in the target-agnostic core files and compile on every
+/// backend. Only this chat method — which drives the
 /// actual HTTP request/response — is target-restricted, mirroring the
 /// posoco-ext-read / posoco-ext-oauth pattern.
 
@@ -25,35 +25,41 @@ async fn read_error_body(client : @http.Client) -> OaiCompatErrorBody {
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
   self : OpenAICompatibleModelPort,
   _scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  let messages_owned = messages.to_owned()
   match stream {
     NoStream => {
       let body = build_chat_request(
-        messages,
+        messages_owned,
         tools,
         options,
         self.config.model,
         false,
         self.config.thinking,
         self.config.reasoning_effort,
+        self.config.supports_images,
       )
       let resp_json = self.oai_compat_post_chat_json(body, "chat")
       let completion = decode_chat_response(resp_json)
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
     Stream(on_chunk) => {
       let body = build_chat_request(
-        messages,
+        messages_owned,
         tools,
         options,
         self.config.model,
         true,
         self.config.thinking,
         self.config.reasoning_effort,
+        self.config.supports_images,
       )
       let headers = build_headers(self.config, self.request_headers)
       let url = chat_url(self.config)
@@ -97,9 +103,6 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         }
       }
       let acc = @posoco.StreamAccumulator::StreamAccumulator()
-      let on_typed = fn(chunk : @posoco.StreamChunk) {
-        on_chunk(streamchunk_to_json(chunk))
-      }
       // Optional wire log (POSOCO_WIRE_LOG): verbatim raw SSE data payloads,
       // one per line, for diagnosing provider streams. js/bun only today.
       let wire_path = wire_log_path()
@@ -127,7 +130,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
                   None => ()
                 }
                 data_buffer = payload
-                done = process_oai_compat_sse(payload, acc, on_typed)
+                done = process_oai_compat_sse(payload, acc, on_chunk)
               }
             } else if trimmed == "" && data_buffer.length() > 0 {
               data_buffer = ""
@@ -137,7 +140,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
             client.close()
             if oai_compat_eof_tolerable(acc) {
               let chunk = @posoco.StreamChunk::Finish(reason="tool_calls")
-              on_typed(chunk)
+              on_chunk(chunk)
               acc.push(chunk)
               done = true
             } else {
@@ -171,7 +174,10 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
       }
       validate_oai_compat_stream_tool_calls(acc)
       let completion = acc.to_completion()
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
   }
 }

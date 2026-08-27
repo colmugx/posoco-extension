@@ -17,7 +17,7 @@
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
   _self : OpenAICompatibleModelPort,
   _scope : @posoco.InvocationScope,
-  _messages : Array[@posoco.Message],
+  _messages : ArrayView[@posoco.Message],
   _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _stream : @posoco.StreamMode,

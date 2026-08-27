@@ -227,7 +227,7 @@ test "ProviderFactory::build rejects OAuth credential with typed error" {
   )
   let result = Ok(factory.build(source)) catch { error => Err(error) }
   match result {
-    Err(@posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~)) =>
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
       assert_true(detail.contains("OAuth credential is not supported"))
     _ => fail("expected ManifestSchemaError for OAuth credential")
   }
@@ -272,6 +272,7 @@ test "build_chat_request omits thinking when off and uses the object form when o
     false,
     true,
     Some("low"),
+    false,
   )
   guard with_effort is Object(with_fields) else {
     fail("expected request to be an object")
@@ -297,6 +298,7 @@ test "build_chat_request omits thinking when off and uses the object form when o
     false,
     true,
     None,
+    false,
   )
   guard toggle_on is Object(on_fields) else {
     fail("expected request to be an object")
@@ -322,6 +324,7 @@ test "build_chat_request omits thinking when off and uses the object form when o
     false,
     false,
     None,
+    false,
   )
   guard toggle_off is Object(off_fields) else {
     fail("expected request to be an object")
@@ -374,6 +377,7 @@ test "build_chat_request serializes model and messages" {
     false,
     false,
     None,
+    false,
   )
   guard body is Object(fields) else { fail("expected object body") }
   match fields.get("model") {
@@ -405,6 +409,7 @@ test "build_chat_request carries tools and stream options" {
     true,
     false,
     None,
+    false,
   )
   guard body is Object(fields) else { fail("expected object body") }
   match fields.get("tools") {
@@ -434,7 +439,7 @@ test "encode_message_tool_result_carries_tool_call_id" {
       structured=None,
     ),
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("role") {
     Some(String(r)) => assert_eq(r, "tool")
@@ -469,7 +474,7 @@ test "encode_message_reasoning_resent_with_tool_calls" {
     }),
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
     Some(String(r)) => assert_eq(r, "thinking about this...")
@@ -487,7 +492,7 @@ test "encode_message_reasoning_preserved_without_tool_calls" {
     reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let json = encode_message(msg)
+  let json = encode_message(msg, false)
   guard json is Object(obj) else { fail("expected object") }
   match obj.get("reasoning_content") {
     Some(String(r)) => assert_eq(r, "thinking...")
@@ -1423,4 +1428,79 @@ test "compact summarize renderer covers roles, tool calls and outcomes" {
       }
     _ => fail("expected transcript user message")
   }
+}
+
+///|
+/// Image content three-state contract: no images → string content (some
+/// compatible servers reject arrays); images + supports_images → typed parts;
+/// images without support → string with an explicit placeholder, never a
+/// silent drop.
+test "build_chat_request encodes image content by model capability" {
+  let opts = chat_options()
+  let img_msg : @posoco.Message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("look"),
+    @posoco.Content::Image(media_type="image/png", data="aW1n"),
+  ])
+  // supports_images=true: typed parts array.
+  let vision_body = build_chat_request(
+    [img_msg],
+    [],
+    opts,
+    "vision-model",
+    false,
+    false,
+    None,
+    true,
+  )
+  guard vision_body is Object(vf) else { fail("expected object") }
+  guard vf.get("messages") is Some(Array([first, ..])) else {
+    fail("expected one message")
+  }
+  guard first is Object(mf) else { fail("expected message object") }
+  inspect(
+    mf.get("content").unwrap_or(Json::null()).stringify(),
+    content="[{\"type\":\"text\",\"text\":\"look\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,aW1n\"}}]",
+  )
+  // supports_images=false: string content with a visible placeholder.
+  let text_body = build_chat_request(
+    [img_msg],
+    [],
+    opts,
+    "text-model",
+    false,
+    false,
+    None,
+    false,
+  )
+  guard text_body is Object(tf) else { fail("expected object") }
+  guard tf.get("messages") is Some(Array([plain, ..])) else {
+    fail("expected one message")
+  }
+  guard plain is Object(pf) else { fail("expected message object") }
+  guard pf.get("content") is Some(String(content_str)) else {
+    fail("expected string content")
+  }
+  assert_true(content_str.contains("look"))
+  assert_true(content_str.contains("[Attached image/png"))
+  assert_true(content_str.contains("omitted"))
+  // Text-only message stays a plain string even with supports_images=true.
+  let text_only = build_chat_request(
+    [user_msg("hi")],
+    [],
+    opts,
+    "vision-model",
+    false,
+    false,
+    None,
+    true,
+  )
+  guard text_only is Object(of) else { fail("expected object") }
+  guard of.get("messages") is Some(Array([tmsg, ..])) else {
+    fail("expected one message")
+  }
+  guard tmsg is Object(tmf) else { fail("expected message object") }
+  inspect(
+    tmf.get("content").unwrap_or(Json::null()).stringify(),
+    content="\"hi\"",
+  )
 }

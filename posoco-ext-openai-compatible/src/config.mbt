@@ -43,6 +43,11 @@ pub(all) struct OpenAICompatibleConfig {
   /// in (0, 1] (settings `models[].compact_threshold`). `None` = the
   /// host/core default (0.88) applies.
   compact_threshold : Double?
+  /// Declares that `model` accepts image input (settings
+  /// `image_input` / `models[].image_input`). When true, messages carrying
+  /// Image blocks encode as typed content parts; when false, images downgrade
+  /// to an explicit placeholder instead of being sent or silently dropped.
+  supports_images : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -57,6 +62,7 @@ pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(
   thinking_efforts? : Array[String] = [],
   context_window? : Int? = None,
   compact_threshold? : Double? = None,
+  supports_images? : Bool = false,
 ) -> OpenAICompatibleConfig {
   {
     api_key,
@@ -68,6 +74,7 @@ pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(
     thinking_efforts,
     context_window,
     compact_threshold,
+    supports_images,
   }
 }
 

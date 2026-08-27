@@ -60,63 +60,6 @@ pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(
 }
 
 ///|
-/// Serialize a StreamChunk to the Json chunk convention the host stream
-/// callback decodes: `{kind: "text"|"reasoning", token: "..."}` for deltas.
-fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
-  match chunk {
-    TextDelta(token~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("text")),
-          ("token", Json::string(token)),
-        ]),
-      )
-    ReasoningDelta(token~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("reasoning")),
-          ("token", Json::string(token)),
-        ]),
-      )
-    ToolCallDelta(index~, id~, name~, arguments_delta~) => {
-      let m : Map[String, Json] = {
-        "kind": Json::string("tool_call_delta"),
-        "index": Json::number(index.to_double()),
-      }
-      match id {
-        Some(s) => m["id"] = Json::string(s)
-        None => ()
-      }
-      match name {
-        Some(s) => m["name"] = Json::string(s)
-        None => ()
-      }
-      match arguments_delta {
-        Some(s) => m["arguments_delta"] = Json::string(s)
-        None => ()
-      }
-      Json::object(m)
-    }
-    Usage(input_tokens~, output_tokens~, total_tokens~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("usage")),
-          ("input_tokens", Json::number(input_tokens.to_double())),
-          ("output_tokens", Json::number(output_tokens.to_double())),
-          ("total_tokens", Json::number(total_tokens.to_double())),
-        ]),
-      )
-    Finish(reason~) =>
-      Json::object(
-        Map::from_array([
-          ("kind", Json::string("finish")),
-          ("reason", Json::string(reason)),
-        ]),
-      )
-  }
-}
-
-///|
 /// ModelPort implementation — chat and compact live in chat_native_js.mbt /
 /// compact_native_js.mbt (they drive moonbitlang/async/http, which is
 /// native+js only). provider_config below is pure and compiles on every

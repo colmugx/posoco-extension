@@ -68,41 +68,41 @@ async fn OpenAICompatibleModelPort::oai_compat_post_chat_json(
 ///|
 /// Render one content block array: text verbatim, images as placeholders.
 fn oai_compat_render_content(content : Array[@posoco.Content]) -> String {
-  let parts : Array[String] = []
-  for block in content {
+  content
+  .map(fn(block) {
     match block {
-      Text(text) => parts.push(text)
-      Image(media_type~, ..) => parts.push("[image: \{media_type}]")
+      Text(text) => text
+      Image(media_type~, ..) => "[image: \{media_type}]"
     }
-  }
-  parts.join(" ")
+  })
+  .join(" ")
 }
 
 ///|
 /// Render one transcript message as a labeled block for the summarize call.
 fn oai_compat_render_message(message : @posoco.Message) -> String {
   match message {
-    SystemMessage(content~) => "system: " + oai_compat_render_content(content)
-    UserMessage(content~) => "user: " + oai_compat_render_content(content)
+    SystemMessage(content~) => "system: \{oai_compat_render_content(content)}"
+    UserMessage(content~) => "user: \{oai_compat_render_content(content)}"
     AssistantMessage(content~, tool_calls~, ..) => {
-      let parts : Array[String] = [
-        "assistant: " + oai_compat_render_content(content),
-      ]
-      for call in tool_calls {
-        parts.push(
-          "  [tool call \{call.name.to_string()} args=\{call.arguments.stringify()}]",
-        )
+      let head = "assistant: \{oai_compat_render_content(content)}"
+      let calls = tool_calls.map(fn(call) {
+        "  [tool call \{call.name.to_string()} args=\{call.arguments.stringify()}]"
+      })
+      if calls.is_empty() {
+        head
+      } else {
+        "\{head}\n\{calls.join("\n")}"
       }
-      parts.join("\n")
     }
     ToolMessage(tool_name~, outcome~, ..) => {
       let outcome_text = match outcome {
         Success(content~, ..) => content
-        ToolReportedError(content~, ..) => "error: " + content
-        RuntimeFailure(message~) => "runtime failure: " + message
+        ToolReportedError(content~, ..) => "error: \{content}"
+        RuntimeFailure(message~, ..) => "runtime failure: \{message}"
         NotExecuted(..) => "not executed"
       }
-      "tool \{tool_name.to_string()}: " + outcome_text
+      "tool \{tool_name.to_string()}: \{outcome_text}"
     }
   }
 }
@@ -114,17 +114,15 @@ fn oai_compat_render_message(message : @posoco.Message) -> String {
 fn oai_compat_compact_messages(
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
-  let lines : Array[String] = []
-  for message in messages {
-    lines.push(oai_compat_render_message(message))
-  }
   [
     SystemMessage(content=[
       Text(
         "You are a summarization engine for a coding agent's conversation. Produce a dense, self-contained summary of the transcript below so the conversation can continue with full context: tasks and their status, key decisions and their reasons, important file paths, identifiers, and unresolved problems with next steps. Write plain prose with short bullet lines where it helps. Do not ask questions. Output only the summary.",
       ),
     ]),
-    UserMessage(content=[Text(lines.join("\n\n"))]),
+    UserMessage(content=[
+      Text(messages.map(fn(m) { oai_compat_render_message(m) }).join("\n\n")),
+    ]),
   ]
 }
 
@@ -135,29 +133,32 @@ fn oai_compat_compact_messages(
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn compact(
   self : OpenAICompatibleModelPort,
   _scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   let body = build_chat_request(
-    oai_compat_compact_messages(messages),
+    oai_compat_compact_messages(messages.to_owned()),
     [],
     options,
     self.config.model,
     false,
     false,
     None,
+    false,
   )
   let resp_json = self.oai_compat_post_chat_json(body, "compact")
   let completion = decode_chat_response(resp_json)
-  let summary_parts : Array[String] = []
-  for block in completion.message.content {
-    match block {
-      Text(text) => summary_parts.push(text)
-      Image(..) => ()
-    }
-  }
-  let summary = summary_parts.join(" ").trim().to_owned()
+  let summary = completion.message.content
+    .filter_map(fn(block) {
+      match block {
+        Text(text) => Some(text)
+        Image(..) => None
+      }
+    })
+    .join(" ")
+    .trim()
+    .to_owned()
   if summary.length() == 0 {
     raise @posoco.ModelError::ResponseParse(
       "openai-compatible compact produced an empty summary",

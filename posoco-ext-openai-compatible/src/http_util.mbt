@@ -169,15 +169,15 @@ fn validate_oai_compat_stream_tool_calls(
         "openai-compatible SSE parse failure (stage=tool.name, category=missing)",
       )
     }
-    if tc.arguments_json == "" {
+    if tc.arguments_json() == "" {
       raise @posoco.ModelError::ResponseParse(
         "openai-compatible SSE parse failure (stage=tool.arguments, category=missing)",
       )
     }
-    let _ : Json = @json.parse(tc.arguments_json) catch {
+    let _ : Json = @json.parse(tc.arguments_json()) catch {
       _ =>
         raise @posoco.ModelError::ResponseParse(
-          "openai-compatible SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json.length()})",
+          "openai-compatible SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
         )
     }
   }

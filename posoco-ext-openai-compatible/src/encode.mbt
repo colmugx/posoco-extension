@@ -13,7 +13,7 @@
 
 ///|
 /// Encode a kernel Message into an OpenAI chat message JSON object.
-fn encode_message(msg : @posoco.Message) -> Json {
+fn encode_message(msg : @posoco.Message, supports_images : Bool) -> Json {
   let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
     msg {
     SystemMessage(content~) => ("system", content, [], None, None)
@@ -37,20 +37,18 @@ fn encode_message(msg : @posoco.Message) -> Json {
       ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
-  // OpenAI Chat Completions accepts either a string or an array of content
-  // blocks. Concatenate Text blocks into a single string for widest server
-  // compatibility (some compatible servers reject content arrays).
-  let text_builder = StringBuilder::new()
-  for block in content_blocks {
-    match block {
-      Text(s) => text_builder.write_string(s)
-      Image(..) => () // plain chat completions: images not supported here
-    }
+  // Content encoding is shared across the chat-completions adapters: string
+  // form by default (some compatible servers reject content arrays), typed
+  // parts when images are present and the model accepts them, explicit
+  // placeholder downgrade otherwise.
+  let content_json : Json = match
+    @chatkit.encode_chat_message_content(content_blocks, supports_images~) {
+    TextContent(s) => Json::string(s)
+    PartsContent(parts) => Json::array(parts)
   }
-  let content_str = text_builder.to_string()
   let obj : Map[String, Json] = {
     "role": Json::string(role),
-    "content": Json::string(content_str),
+    "content": content_json,
   }
   match tool_call_id {
     Some(id) => obj["tool_call_id"] = Json::string(id)
@@ -125,10 +123,13 @@ fn build_chat_request(
   stream : Bool,
   thinking : Bool,
   reasoning_effort : String?,
+  supports_images : Bool,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(model),
-    "messages": Json::array(messages.map(encode_message)),
+    "messages": Json::array(
+      messages.map(fn(m) { encode_message(m, supports_images) }),
+    ),
   }
   if tools.length() > 0 {
     body["tools"] = encode_tools(tools)
