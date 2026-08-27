@@ -59,10 +59,10 @@ fn McpRuntime::handles(self : McpRuntime, name : String) -> Bool {
 pub impl @runtime.Runtime for McpRuntime with fn call_model(
   self,
   scope : @kernel.InvocationScope,
-  messages : Array[@kernel.Message],
+  messages : ArrayView[@kernel.Message],
   tool_definitions : Array[@kernel.ToolDef],
   call_options : Json,
-  on_chunk : ((Json) -> Unit)?,
+  on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
   self.fallback.call_model(
     scope, messages, tool_definitions, call_options, on_chunk,
@@ -81,7 +81,7 @@ pub impl @runtime.Runtime for McpRuntime with fn execute_tool(
       name: context.tool_name,
       arguments: context.arguments,
     }
-    self.bridge.execute(name, call) catch {
+    @posoco.ToolProvider::execute(self.bridge, name, call) catch {
       error =>
         @kernel.RuntimeFailure(
           error_category="ToolProviderError",
@@ -109,7 +109,7 @@ pub impl @runtime.Runtime for McpRuntime with fn cancel_effects(
 pub impl @runtime.Runtime for McpRuntime with fn compact(
   self,
   scope : @kernel.InvocationScope,
-  messages : Array[@kernel.Message],
+  messages : ArrayView[@kernel.Message],
   call_options : Json,
   trigger : @kernel.CompactTrigger,
 ) -> Result[@kernel.CompactResult, @kernel.ModelFailure] {
@@ -131,7 +131,7 @@ pub impl @runtime.CatalogSource for McpCatalogSource with fn tools(
   for tool in self.base_tools {
     defs.push(tool)
   }
-  for tool in self.bridge.list_tools() {
+  for tool in @posoco.ToolProvider::list_tools(self.bridge) {
     defs.push(tool)
   }
   defs

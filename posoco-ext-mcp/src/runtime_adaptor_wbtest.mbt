@@ -11,10 +11,10 @@ struct RecordingRuntime {
 pub impl @runtime.Runtime for RecordingRuntime with fn call_model(
   self,
   scope : @kernel.InvocationScope,
-  _messages : Array[@kernel.Message],
+  _messages : ArrayView[@kernel.Message],
   _tool_definitions : Array[@kernel.ToolDef],
   _call_options : Json,
-  _on_chunk : ((Json) -> Unit)?,
+  _on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
   ignore(self)
   ignore(scope)
@@ -44,7 +44,7 @@ pub impl @runtime.Runtime for RecordingRuntime with fn cancel_effects(
 pub impl @runtime.Runtime for RecordingRuntime with fn compact(
   self,
   scope : @kernel.InvocationScope,
-  _messages : Array[@kernel.Message],
+  _messages : ArrayView[@kernel.Message],
   _call_options : Json,
   _trigger : @kernel.CompactTrigger,
 ) -> Result[@kernel.CompactResult, @kernel.ModelFailure] {

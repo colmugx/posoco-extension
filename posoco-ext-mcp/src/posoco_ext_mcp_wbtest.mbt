@@ -220,7 +220,7 @@ test "sanitize_label_is_single_line_and_bounded" {
 ///|
 async test "list_tools_returns_empty_before_connect" {
   let bridge = MCPToolBridge()
-  let tools = bridge.list_tools()
+  let tools = @posoco.ToolProvider::list_tools(bridge)
   assert_true(tools.is_empty())
 }
 
@@ -228,6 +228,6 @@ async test "list_tools_returns_empty_before_connect" {
 async test "close_clears_state" {
   let bridge = MCPToolBridge()
   bridge.close()
-  let tools = bridge.list_tools()
+  let tools = @posoco.ToolProvider::list_tools(bridge)
   assert_true(tools.is_empty())
 }
