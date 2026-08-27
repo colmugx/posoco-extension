@@ -1,0 +1,152 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-goal"
+
+import {
+  "colmugx/posoco",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn build_charter(goal_condition~ : String, checklist~ : Array[String], completion_marker~ : String, blocked_marker~ : String, plan_tool_name~ : String) -> String
+
+pub fn build_progress(turn~ : Int, max_turns~ : Int, total_tokens~ : Int, max_total_tokens~ : Int, plan_snapshot~ : String, next_step~ : String?, variant~ : Int) -> String
+
+pub fn build_verification_prompt(checklist~ : Array[String], completion_marker~ : String, blocked_marker~ : String) -> String
+
+pub fn build_wrapup_prompt(goal_condition~ : String, plan_tool_name~ : String, completion_marker~ : String) -> String
+
+pub fn continue_instruction(Int) -> String
+
+pub fn goal_extension(goal_condition~ : String) -> GoalRunner
+
+pub fn scan_final_message(message~ : @kernel.Message, completion_marker~ : String, blocked_marker~ : String) -> TurnVerdict
+
+// Errors
+
+// Types and methods
+pub(all) struct GoalBudget {
+  mut max_turns : Int
+  mut max_total_tokens : Int
+} derive(@debug.Debug)
+
+pub(all) struct GoalHistoryEntry {
+  turn : Int
+  usage : GoalUsage
+  summary : String
+} derive(Eq, @debug.Debug)
+
+pub(all) struct GoalOptions {
+  goal_condition : String
+  budget : GoalBudget
+  completion_marker : String
+  blocked_marker : String
+  mut wrapup_ratio : Double
+  mut stall_turn_threshold : Int
+  mut stall_min_tokens : Int
+  completion_checklist : Array[String]
+  mut max_verifier_rounds : Int
+  mut stall_repeat_threshold : Int
+  mut plan_tool_name : String
+} derive(@debug.Debug)
+pub fn GoalOptions::default(goal_condition~ : String) -> Self
+
+pub(all) struct GoalPlan {
+  items : Array[GoalPlanItem]
+} derive(Eq, @debug.Debug)
+pub fn GoalPlan::empty() -> Self
+pub fn GoalPlan::fingerprint(Self) -> String
+pub fn GoalPlan::from_tool_args(Json) -> Result[Self, String]
+pub fn GoalPlan::next_step(Self) -> String?
+pub fn GoalPlan::normalize(Self) -> Self
+pub fn GoalPlan::progress_line(Self) -> String
+pub fn GoalPlan::render(Self) -> String
+
+pub(all) struct GoalPlanItem {
+  title : String
+  status : GoalPlanStatus
+} derive(Eq, @debug.Debug)
+
+pub(all) enum GoalPlanStatus {
+  Pending
+  InProgress
+  Done
+} derive(Eq, @debug.Debug)
+pub impl Show for GoalPlanStatus
+
+pub(all) struct GoalResult {
+  final_status : GoalStatus
+  total_usage : GoalUsage
+  turns_completed : Int
+  history : Array[GoalHistoryEntry]
+  final_plan : GoalPlan
+  stall_reason : String?
+} derive(@debug.Debug)
+
+pub struct GoalRunner {
+  options : GoalOptions
+  mut status : GoalStatus
+  mut usage : GoalUsage
+  mut history : Array[GoalHistoryEntry]
+  mut current_turn : Int
+  mut last_total_tokens : Int
+  mut stall_count : Int
+  mut wrapup_sent : Bool
+  mut plan : GoalPlan
+  mut charter : String
+  mut completion_claimed : Bool
+  mut verifying : Bool
+  mut verifier_rounds : Int
+  mut prompt_variant : Int
+  mut last_stall_reason : String?
+  mut last_retraction : String?
+  mut last_tool_fp : String?
+  mut repeat_count : Int
+  mut plan_streak : Int
+  mut prev_plan_fp : String?
+} derive(@debug.Debug)
+pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> Self
+pub fn GoalRunner::clear(Self) -> Unit
+pub async fn GoalRunner::execute(Self, @posoco.Agent, String) -> GoalResult
+pub fn GoalRunner::extension_id(Self) -> String
+pub fn GoalRunner::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn GoalRunner::manifest(Self) -> @port.ExtensionManifest
+pub fn GoalRunner::on_event(Self, @types.TurnEvent) -> Unit
+pub fn GoalRunner::pause(Self) -> Unit
+pub fn GoalRunner::plan(Self) -> GoalPlan
+pub fn GoalRunner::resume_goal(Self) -> Unit
+pub fn GoalRunner::status(Self) -> GoalStatus
+pub fn GoalRunner::system_prompt(Self) -> String
+pub impl @port.Extension for GoalRunner
+pub impl @port.Observer for GoalRunner
+pub impl @port.SystemPromptContributor for GoalRunner
+pub impl @port.ToolProvider for GoalRunner
+
+pub(all) enum GoalStatus {
+  Idle
+  Running
+  Paused
+  Completed
+  Blocked(String)
+  BudgetExhausted
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for GoalStatus
+
+pub(all) struct GoalUsage {
+  mut turns : Int
+  mut total_tokens : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum TurnVerdict {
+  NoSignal
+  CompletionClaimed
+  BlockedClaimed(reason~ : String)
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

@@ -1,72 +1,14 @@
 ///|
 /// posoco_ext_goal — Goal-driven autonomous looping extension for Posoco.
 ///
-/// Implements PipelineHook (inject goal context before the model call, detect
-/// completion markers after the model call), and Observer (track token
-/// usage). The execute() method provides the
-/// external orchestration loop that calls agent.run_turn() until the goal
-/// is achieved, blocked, or the budget is exhausted.
+/// One `GoalRunner` contributes three port views of a single state machine:
+/// `SystemPromptContributor` (the run charter, frozen per `execute` call),
+/// `ToolProvider` (whole-plan rewriting via the plan tool), and `Observer`
+/// (turn/token accounting plus tool-repetition tracking). `GoalRunner::execute`
+/// drives `agent.run_turn` until the goal is achieved and verified, the model
+/// declares itself blocked, the budget is exhausted, or the run stalls.
 ///
-/// Usage:
-///   let runner = GoalRunner(default_options("fix all tests"))
-///   let agent = Agent(model, hooks=[runner], observers=[runner], ...)
-///   let result = runner.execute(agent, "session_1")
-
-///|
-/// Extract plain text from a Content array.
-fn extract_text(content : Array[@posoco.Content]) -> String {
-  let parts : Array[String] = []
-  for c in content {
-    match c {
-      @posoco.Content::Text(t) => parts.push(t)
-      _ => ()
-    }
-  }
-  parts.join("")
-}
-
-///|
-/// Extract plain text from a Message, regardless of which variant it is.
-fn extract_text_from_message(message : @posoco.Message) -> String {
-  match message {
-    @posoco.Message::SystemMessage(content~) => extract_text(content)
-    @posoco.Message::UserMessage(content~) => extract_text(content)
-    @posoco.Message::AssistantMessage(content~, ..) => extract_text(content)
-    @posoco.Message::ToolMessage(..) => ""
-  }
-}
-
-///|
-/// Extract the reason preceding a [goal:blocked] marker.
-/// Looks for the marker and returns the last non-empty line before it.
-fn extract_block_reason(text : String, marker : String) -> String {
-  match text.find(marker) {
-    Some(pos) => {
-      let before = text[0:pos].trim()
-      let non_empty = before
-        .split("\n")
-        .to_array()
-        .filter_map(fn(line) {
-          let t = line.trim()
-          if t != "" {
-            Some(t.to_owned())
-          } else {
-            None
-          }
-        })
-      match non_empty {
-        [] => ""
-        [.., last] =>
-          if last.length() > 200 {
-            last[0:200].to_owned() + "…"
-          } else {
-            last
-          }
-      }
-    }
-    None => ""
-  }
-}
+/// Compose it like any other extension — see `goal_extension`.
 
 ///|
 /// Truncate text to max_len characters, appending "…" if truncated.
@@ -82,8 +24,8 @@ fn truncate_text(text : String, max_len : Int) -> String {
 pub(all) enum GoalStatus {
   Idle // No goal set
   Running // Actively pursuing a goal
-  Paused // Goal paused by user
-  Completed // Goal condition satisfied
+  Paused // Goal paused (user or stall detection)
+  Completed // Goal condition satisfied and verified
   Blocked(String) // Agent declared it cannot proceed
   BudgetExhausted // Hit turn or token limit
   Failed(String) // Error during execution
@@ -121,11 +63,15 @@ pub(all) struct GoalUsage {
 pub(all) struct GoalOptions {
   goal_condition : String
   budget : GoalBudget
-  completion_marker : String // "[goal:complete]"
-  blocked_marker : String // "[goal:blocked]"
+  completion_marker : String // "<goal-complete/>"
+  blocked_marker : String // "<goal-blocked/>"
   mut wrapup_ratio : Double // e.g. 0.9 = trigger wrap-up at 90% budget
-  mut stall_turn_threshold : Int // consecutive low-output turns before flagging
+  mut stall_turn_threshold : Int // consecutive low-output/unchanged-plan turns
   mut stall_min_tokens : Int // what counts as "low output"
+  completion_checklist : Array[String] // empty = implicit whole-goal item
+  mut max_verifier_rounds : Int // completion claims routed to a verifier turn
+  mut stall_repeat_threshold : Int // consecutive identical tool calls
+  mut plan_tool_name : String
 } derive(Debug)
 
 ///|
@@ -143,14 +89,18 @@ pub(all) struct GoalResult {
   total_usage : GoalUsage
   turns_completed : Int
   history : Array[GoalHistoryEntry]
+  final_plan : GoalPlan
+  stall_reason : String?
 } derive(Debug)
 
 ///|
-/// Central struct: implements PipelineHook + Observer + provides execute() loop.
+/// Central struct: SystemPromptContributor + ToolProvider + Observer +
+/// the execute() loop.
 ///
-/// Pass the same instance to both hooks=[] and observers=[] in Agent::new.
-/// Mutable state is shared between the two trait objects.
-pub(all) struct GoalRunner {
+/// Opaque on purpose: hosts drive it through `execute`, `status`, `pause`,
+/// `resume_goal`, `plan` and `clear`; the mutable bookkeeping stays
+/// package-private.
+pub struct GoalRunner {
   options : GoalOptions
   mut status : GoalStatus
   mut usage : GoalUsage
@@ -159,25 +109,61 @@ pub(all) struct GoalRunner {
   mut last_total_tokens : Int // for delta tracking
   mut stall_count : Int // consecutive low-output turns
   mut wrapup_sent : Bool // prevent duplicate wrap-up
+  mut plan : GoalPlan // replaced wholesale by the plan tool / reset
+  mut charter : String // frozen per run; "" when idle
+  mut completion_claimed : Bool
+  mut verifying : Bool
+  mut verifier_rounds : Int
+  mut prompt_variant : Int
+  mut last_stall_reason : String?
+  mut last_retraction : String? // failed-verifier reason, surfaced once
+  mut last_tool_fp : String?
+  mut repeat_count : Int // consecutive identical tool-call fingerprints
+  mut plan_streak : Int // consecutive turns with unchanged plan fingerprint
+  mut prev_plan_fp : String?
 } derive(Debug)
 
 ///|
-/// Create default options with unlimited budget.
-pub fn default_options(goal_condition : String) -> GoalOptions {
+/// Default options for a goal condition: unlimited budget, standard
+/// `<goal-complete/>` / `<goal-blocked/>` markers, wrap-up at 90% of the
+/// budget, stall flagging after 3 turns below 50 tokens / 3 identical tool
+/// calls / 3 turns with an unchanged plan, at most 2 verifier rounds.
+pub fn GoalOptions::default(goal_condition~ : String) -> GoalOptions {
   GoalOptions::{
     goal_condition,
     budget: { max_turns: 0, max_total_tokens: 0 },
-    completion_marker: "[goal:complete]",
-    blocked_marker: "[goal:blocked]",
+    completion_marker: "<goal-complete/>",
+    blocked_marker: "<goal-blocked/>",
     wrapup_ratio: 0.9,
     stall_turn_threshold: 3,
     stall_min_tokens: 50,
+    completion_checklist: [],
+    max_verifier_rounds: 2,
+    stall_repeat_threshold: 3,
+    plan_tool_name: "goal_update_plan",
   }
 }
 
 ///|
-/// Create a GoalRunner with the given options.
-pub fn GoalRunner::GoalRunner(options : GoalOptions) -> GoalRunner {
+/// Create a GoalRunner with the given options, starting `Idle`.
+///
+/// # Example
+/// ```mbt check
+/// test "goal extension self-reports its port views" {
+///   let goal = goal_extension(goal_condition="make the build green")
+///   let manifest = goal.manifest()
+///   assert_eq(manifest.id, "posoco_ext_goal")
+///   assert_eq(manifest.hooks.length(), 0)
+///   assert_eq(manifest.observers.length(), 1)
+///   assert_eq(manifest.tools.length(), 1)
+///   assert_eq(manifest.prompt_contributors.length(), 1)
+///   match goal.status() {
+///     Idle => ()
+///     _ => fail("a fresh runner is Idle")
+///   }
+/// }
+/// ```
+pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
   GoalRunner::{
     options,
     status: Idle,
@@ -187,79 +173,144 @@ pub fn GoalRunner::GoalRunner(options : GoalOptions) -> GoalRunner {
     last_total_tokens: 0,
     stall_count: 0,
     wrapup_sent: false,
+    plan: GoalPlan::empty(),
+    charter: "",
+    completion_claimed: false,
+    verifying: false,
+    verifier_rounds: 0,
+    prompt_variant: 0,
+    last_stall_reason: None,
+    last_retraction: None,
+    last_tool_fp: None,
+    repeat_count: 0,
+    plan_streak: 0,
+    prev_plan_fp: None,
   }
 }
 
 ///|
-/// Build the goal system prompt injected before the model call.
-fn build_goal_system_prompt(runner : GoalRunner) -> String {
-  let budget_line = if runner.options.budget.max_turns > 0 {
-    "Turn budget: \{runner.current_turn}/\{runner.options.budget.max_turns}\n"
-  } else {
-    ""
-  }
-  let token_line = if runner.options.budget.max_total_tokens > 0 {
-    "Token budget: \{runner.usage.total_tokens}/\{runner.options.budget.max_total_tokens}\n"
-  } else {
-    ""
-  }
-  let goal = runner.options.goal_condition
-  let marker = runner.options.completion_marker
-  let blocked = runner.options.blocked_marker
-  "[GOAL CONTEXT]\nGoal: \{goal}\n\{budget_line}\{token_line}Output \{marker} when the goal is fully achieved.\nOutput \{blocked} with a reason if you cannot proceed without user input."
+/// Current plan (defensive copy of the items).
+pub fn GoalRunner::plan(self : GoalRunner) -> GoalPlan {
+  GoalPlan::{ items: self.plan.items.copy() }
 }
 
 ///|
-/// `before_tool` passthrough: GoalRunner only intercepts `before_model` and
-/// `on_post_event`.
-pub impl @posoco.PipelineHook for GoalRunner with fn before_tool(
-  _self,
-  call : @posoco.ToolCall,
-) -> @posoco.ToolDecision {
-  @posoco.ToolDecision::Approve(call~)
-}
-
-///|
-pub impl @posoco.PipelineHook for GoalRunner with fn before_model(
+pub impl @posoco.SystemPromptContributor for GoalRunner with fn system_prompt(
   self,
-  messages : Array[@posoco.Message],
-) -> Array[@posoco.Message] raise @posoco.HookAbort {
-  // Pass-through when no goal is running.
-  if self.status != Running {
-    return messages
-  }
-  let sys_text = build_goal_system_prompt(self)
-  let sys_msg : @posoco.Message = @posoco.Message::SystemMessage(content=[
-    @posoco.Content::Text(sys_text),
+) -> String {
+  self.charter
+}
+
+///|
+/// JSON Schema for the plan tool arguments:
+/// {"items": [{"title": string, "status": "pending"|"in_progress"|"done"}]}.
+fn plan_input_schema() -> Json {
+  let status_enum = Json::array([
+    Json::string("pending"),
+    Json::string("in_progress"),
+    Json::string("done"),
   ])
-  let new_msgs : Array[@posoco.Message] = [sys_msg]
-  for m in messages {
-    new_msgs.push(m)
-  }
-  new_msgs
+  let item_schema = Json::object(
+    Map::from_array([
+      ("type", Json::string("object")),
+      (
+        "properties",
+        Json::object(
+          Map::from_array([
+            (
+              "title",
+              Json::object(Map::from_array([("type", Json::string("string"))])),
+            ),
+            (
+              "status",
+              Json::object(
+                Map::from_array([
+                  ("type", Json::string("string")),
+                  ("enum", status_enum),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      ),
+      ("required", Json::array([Json::string("title"), Json::string("status")])),
+    ]),
+  )
+  Json::object(
+    Map::from_array([
+      ("type", Json::string("object")),
+      (
+        "properties",
+        Json::object(
+          Map::from_array([
+            (
+              "items",
+              Json::object(
+                Map::from_array([
+                  ("type", Json::string("array")),
+                  ("items", item_schema),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      ),
+      ("required", Json::array([Json::string("items")])),
+    ]),
+  )
 }
 
 ///|
-pub impl @posoco.PipelineHook for GoalRunner with fn on_post_event(
+pub impl @posoco.ToolProvider for GoalRunner with fn list_tools(self) -> Array[
+  @posoco.ToolDef,
+] {
+  [
+    @posoco.ToolDef::ToolDef(
+      name=@posoco.ToolName::unchecked(self.options.plan_tool_name),
+      description="Rewrite the full goal plan. Pass every item with status pending/in_progress/done; keep exactly one in_progress.",
+      input_schema=plan_input_schema(),
+      owner=@posoco.OwnerId::unchecked("posoco_ext_goal"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_goal"),
+    ),
+  ]
+}
+
+///|
+pub impl @posoco.ToolProvider for GoalRunner with fn execute(
   self,
-  stage : @posoco.HookStage,
-) -> Unit {
-  // Read-only hook: status mutation only, never aborts the run.
-  if self.status != Running {
-    return
+  name : String,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  if name != self.options.plan_tool_name {
+    return @posoco.ToolOutcome::ToolReportedError(
+      content="unknown tool",
+      structured=None,
+    )
   }
-  match stage {
-    @posoco.HookStage::ModelCompleted(completion~) => {
-      let text = extract_text(completion.message.content)
-      if text.contains(self.options.completion_marker) {
-        self.status = Completed
-      } else if text.contains(self.options.blocked_marker) {
-        self.status = Blocked(
-          extract_block_reason(text, self.options.blocked_marker),
-        )
+  match GoalPlan::from_tool_args(call.arguments) {
+    Err(msg) =>
+      @posoco.ToolOutcome::ToolReportedError(content=msg, structured=None)
+    Ok(parsed) => {
+      let normalized = GoalPlan::normalize(parsed)
+      self.plan = normalized
+      let mut done = 0
+      let total = normalized.items.length()
+      for item in normalized.items {
+        if item.status == Done {
+          done = done + 1
+        }
       }
+      let content = "plan updated (\{done}/\{total} done)"
+      let structured = Json::object(
+        Map::from_array([
+          ("summary", Json::string(content)),
+          ("done", Json::number(done.to_double())),
+          ("total", Json::number(total.to_double())),
+        ]),
+      )
+      @posoco.ToolOutcome::Success(content~, structured=Some(structured))
     }
-    _ => ()
   }
 }
 
@@ -279,6 +330,22 @@ pub impl @posoco.Observer for GoalRunner with fn on_event(
         None => ()
       }
     @posoco.TurnEvent::TurnCompleted => self.usage.turns = self.usage.turns + 1
+    @posoco.TurnEvent::ToolCallPending(call) => {
+      let fp = call.name.to_string() + "|" + call.arguments.stringify()
+      match self.last_tool_fp {
+        Some(prev) =>
+          if prev == fp {
+            self.repeat_count = self.repeat_count + 1
+          } else {
+            self.last_tool_fp = Some(fp)
+            self.repeat_count = 1
+          }
+        None => {
+          self.last_tool_fp = Some(fp)
+          self.repeat_count = 1
+        }
+      }
+    }
     _ => ()
   }
 }
@@ -309,18 +376,42 @@ fn GoalRunner::near_budget_limit(self : GoalRunner) -> Bool {
 }
 
 ///|
-fn GoalRunner::format_continue_prompt(self : GoalRunner) -> String {
-  let goal = self.options.goal_condition
-  let marker = self.options.completion_marker
-  let blocked = self.options.blocked_marker
-  "Continue working toward the goal: \{goal}\n\nTake the next concrete step. Verify actual state before assuming prior work succeeded.\n\nEnd with \{marker} when fully done, or \{blocked} if you need user input."
-}
-
-///|
-fn GoalRunner::format_wrapup_prompt(self : GoalRunner) -> String {
-  let goal = self.options.goal_condition
-  let marker = self.options.completion_marker
-  "You are approaching the token budget limit for goal: \{goal}\n\nFinish the current step if it is small and safe. Then write a concise handoff summary:\n- What is done\n- What remains\n- The next concrete action to take\n\nDo NOT output \{marker} unless the goal is actually finished."
+/// Choose this iteration's turn input: a verification prompt while a
+/// completion claim is being checked, a one-shot wrap-up prompt near the
+/// budget limit, otherwise the per-turn progress recitation (prefixed once
+/// with a failed-verification retraction).
+fn GoalRunner::build_turn_prompt(self : GoalRunner) -> String {
+  if self.verifying {
+    return build_verification_prompt(
+      checklist=self.options.completion_checklist,
+      completion_marker=self.options.completion_marker,
+      blocked_marker=self.options.blocked_marker,
+    )
+  }
+  if self.near_budget_limit() && !self.wrapup_sent {
+    self.wrapup_sent = true
+    return build_wrapup_prompt(
+      goal_condition=self.options.goal_condition,
+      plan_tool_name=self.options.plan_tool_name,
+      completion_marker=self.options.completion_marker,
+    )
+  }
+  let intro = match self.last_retraction {
+    Some(r) =>
+      "The previous completion claim failed verification: " + r + "\n\n"
+    None => ""
+  }
+  self.last_retraction = None
+  intro +
+  build_progress(
+    turn=self.current_turn + 1,
+    max_turns=self.options.budget.max_turns,
+    total_tokens=self.usage.total_tokens,
+    max_total_tokens=self.options.budget.max_total_tokens,
+    plan_snapshot=GoalPlan::render(self.plan),
+    next_step=GoalPlan::next_step(self.plan),
+    variant=self.prompt_variant,
+  )
 }
 
 ///|
@@ -355,15 +446,28 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.last_total_tokens = 0
   self.stall_count = 0
   self.wrapup_sent = false
+  self.plan = GoalPlan::empty()
+  self.charter = ""
+  self.completion_claimed = false
+  self.verifying = false
+  self.verifier_rounds = 0
+  self.prompt_variant = 0
+  self.last_stall_reason = None
+  self.last_retraction = None
+  self.last_tool_fp = None
+  self.repeat_count = 0
+  self.plan_streak = 0
+  self.prev_plan_fp = None
 }
 
 ///|
 /// Run the goal-driven autonomous loop.
 ///
 /// Loops agent.run_turn() until:
-/// - Hook detects [goal:complete] → Completed
-/// - Hook detects [goal:blocked] → Blocked(reason)
-/// - Budget exhausted (turns or tokens) → BudgetExhausted
+/// - the model outputs the completion marker and a verifier turn confirms → Completed
+/// - the model outputs the blocked marker → Blocked(reason)
+/// - budget exhausted (turns or tokens) → BudgetExhausted
+/// - the run stalls (low output, repeated identical tool calls, frozen plan) → Paused
 /// - agent.run_turn() raises an error → Failed(msg)
 /// - pause() called externally → Paused
 pub async fn GoalRunner::execute(
@@ -378,6 +482,24 @@ pub async fn GoalRunner::execute(
   self.current_turn = 0
   self.last_total_tokens = 0
   self.stall_count = 0
+  self.completion_claimed = false
+  self.verifying = false
+  self.verifier_rounds = 0
+  self.prompt_variant = 0
+  self.last_stall_reason = None
+  self.last_retraction = None
+  self.last_tool_fp = None
+  self.repeat_count = 0
+  self.plan_streak = 0
+  self.prev_plan_fp = None
+  self.plan = GoalPlan::empty()
+  self.charter = build_charter(
+    goal_condition=self.options.goal_condition,
+    checklist=self.options.completion_checklist,
+    completion_marker=self.options.completion_marker,
+    blocked_marker=self.options.blocked_marker,
+    plan_tool_name=self.options.plan_tool_name,
+  )
 
   while self.status == Running {
     if self.is_budget_exhausted() {
@@ -385,30 +507,28 @@ pub async fn GoalRunner::execute(
       break
     }
 
-    let prompt = if self.near_budget_limit() && !self.wrapup_sent {
-      self.wrapup_sent = true
-      self.format_wrapup_prompt()
-    } else {
-      self.format_continue_prompt()
-    }
-
+    let prompt = self.build_turn_prompt()
+    self.prompt_variant = self.prompt_variant + 1
     self.current_turn = self.current_turn + 1
 
     let input : @posoco.Message = @posoco.Message::UserMessage(content=[
       @posoco.Content::Text(prompt),
     ])
 
-    let turn_result = agent.run_turn(input, session_id) catch {
-      e => {
-        self.status = Failed(e.to_string())
+    let outcome : Result[@posoco.TurnResult, String] = Ok(
+      agent.run_turn(input, session_id),
+    ) catch {
+      e => Err(e.to_string())
+    }
+    let turn_result = match outcome {
+      Ok(r) => r
+      Err(msg) => {
+        self.status = Failed(msg)
         break
       }
     }
 
-    let summary = truncate_text(
-      extract_text_from_message(turn_result.message),
-      200,
-    )
+    let summary = truncate_text(text_of_message(turn_result.message), 200)
     let usage_snapshot : GoalUsage = {
       turns: self.usage.turns,
       total_tokens: self.usage.total_tokens,
@@ -419,24 +539,78 @@ pub async fn GoalRunner::execute(
       summary,
     })
 
-    // Stall detection: only if the hook didn't set a terminal status
-    if self.status == Running {
-      let token_delta = self.usage.total_tokens - self.last_total_tokens
-      if token_delta < self.options.stall_min_tokens {
-        self.stall_count = self.stall_count + 1
-        if self.stall_count >= self.options.stall_turn_threshold {
-          self.status = Paused
+    let verdict = scan_final_message(
+      message=turn_result.message,
+      completion_marker=self.options.completion_marker,
+      blocked_marker=self.options.blocked_marker,
+    )
+
+    // Gate: route completion/blocked claims through the verifier protocol.
+    match verdict {
+      CompletionClaimed => {
+        self.completion_claimed = true
+        if self.verifying {
+          self.verifying = false
+          self.status = Completed
+          break
+        } else if self.verifier_rounds >= self.options.max_verifier_rounds {
+          self.status = Blocked("verification budget exhausted")
+          break
+        } else {
+          self.verifier_rounds = self.verifier_rounds + 1
+          self.verifying = true
+          continue
+        }
+      }
+      BlockedClaimed(reason~) =>
+        if self.verifying {
+          // Verifier rejected the claim: retract and go back to work.
+          self.verifying = false
+          self.last_retraction = Some(reason)
+          continue
+        } else {
+          self.status = Blocked(reason)
           break
         }
+      NoSignal =>
+        // Ambiguous verifier answer: back to work, fall through to stall checks.
+        if self.verifying {
+          self.verifying = false
+        }
+    }
+
+    // Stall detection: only on work turns that did not end the run.
+    if self.status == Running && !self.verifying {
+      let delta = self.usage.total_tokens - self.last_total_tokens
+      if delta < self.options.stall_min_tokens {
+        self.stall_count = self.stall_count + 1
       } else {
         self.stall_count = 0
       }
+      if self.stall_count >= self.options.stall_turn_threshold {
+        self.status = Paused
+        self.last_stall_reason = Some("token output below threshold")
+        break
+      }
+      if self.repeat_count >= self.options.stall_repeat_threshold {
+        self.status = Paused
+        self.last_stall_reason = Some("repeated identical tool calls")
+        break
+      }
+      let fp = GoalPlan::fingerprint(self.plan)
+      if Some(fp) == self.prev_plan_fp {
+        self.plan_streak = self.plan_streak + 1
+      } else {
+        self.plan_streak = 1
+        self.prev_plan_fp = Some(fp)
+      }
+      if self.plan_streak >= self.options.stall_turn_threshold {
+        self.status = Paused
+        self.last_stall_reason = Some("plan unchanged")
+        break
+      }
     }
     self.last_total_tokens = self.usage.total_tokens
-
-    // Note: the hook may have set status to Completed or Blocked
-    // during agent.run_turn(). The while condition will catch this
-    // on the next iteration.
   }
 
   GoalResult::{
@@ -447,5 +621,7 @@ pub async fn GoalRunner::execute(
     },
     turns_completed: self.current_turn,
     history: self.history.copy(),
+    final_plan: GoalPlan::{ items: self.plan.items.copy() },
+    stall_reason: self.last_stall_reason,
   }
 }

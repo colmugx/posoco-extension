@@ -5,7 +5,13 @@
 // that are actually dot-called within this module.
 
 ///|
-pub extend GoalRunner with @posoco.PipelineHook::{before_model, on_post_event}
+pub extend GoalRunner with @posoco.Observer::{on_event}
 
 ///|
-pub extend GoalRunner with @posoco.Observer::{on_event}
+pub extend GoalRunner with @posoco.SystemPromptContributor::{system_prompt}
+
+///|
+// `execute` is NOT promoted: the dot-method slot is taken by the
+// `GoalRunner::execute` loop (MoonBit has no overloading). Call the tool
+// view via `@posoco.ToolProvider::execute(goal, name, call)`.
+pub extend GoalRunner with @posoco.ToolProvider::{list_tools}

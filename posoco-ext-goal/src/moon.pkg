@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "moonbitlang/core/json",
 }
 
@@ -7,4 +8,12 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
-supported_targets = "+native"
+warnings = "-unused_package"
+
+options(
+  targets: {
+    "posoco_ext_goal_wbtest.mbt": [ "native" ],
+    "gate_loop_wbtest.mbt": [ "native" ],
+    "composition_wbtest.mbt": [ "native" ],
+  },
+)
