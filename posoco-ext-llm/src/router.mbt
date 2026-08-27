@@ -273,7 +273,7 @@ pub fn RouterModelPort::replace_provider_slots(
 pub impl @posoco.ModelPort for RouterModelPort with fn chat(
   self : RouterModelPort,
   scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
@@ -285,7 +285,7 @@ pub impl @posoco.ModelPort for RouterModelPort with fn chat(
 pub impl @posoco.ModelPort for RouterModelPort with fn compact(
   self : RouterModelPort,
   scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
