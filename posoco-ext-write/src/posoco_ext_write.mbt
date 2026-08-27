@@ -15,14 +15,18 @@
 pub(all) struct WriteTools {
   // Shared read-before-modify ledger; None disables the gate (library use).
   freshness : @devkit.FreshnessGuard?
+  // Resolves relative paths against the workspace root; None keeps legacy
+  // behavior (relative paths land on the process working directory).
+  anchor : @devkit.WorkspaceAnchor?
 }
 
 ///|
 /// Canonical constructor. Use this everywhere.
 pub fn WriteTools::WriteTools(
   freshness? : @devkit.FreshnessGuard,
+  anchor? : @devkit.WorkspaceAnchor? = None,
 ) -> WriteTools {
-  WriteTools::{ freshness, }
+  WriteTools::{ freshness, anchor }
 }
 
 ///|
@@ -135,9 +139,16 @@ fn parent_dir(path : String) -> String {
 async fn execute_write_impl(
   io : &FsIo,
   freshness : @devkit.FreshnessGuard?,
+  anchor : @devkit.WorkspaceAnchor?,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (path, content) = extract_path_content(call.arguments)
+  let (raw_path, content) = extract_path_content(call.arguments)
+  // The resolved path drives IO and the freshness ledger; messages echo the
+  // argument as written so the anchor root never leaks into results.
+  let path = match anchor {
+    Some(anchor) => anchor.resolve(raw_path)
+    None => raw_path
+  }
   let content_bytes = @utf8.encode(content).length()
   if content_bytes > WRITE_MAX_BYTES {
     return @posoco.ToolOutcome::ToolReportedError(
@@ -153,7 +164,7 @@ async fn execute_write_impl(
           @devkit.Fresh => ()
           verdict =>
             return @posoco.ToolOutcome::ToolReportedError(
-              content="write: refused: '\{@devkit.sanitize_path(path)}' \{verdict.hint()}",
+              content="write: refused: '\{@devkit.sanitize_path(raw_path)}' \{verdict.hint()}",
               structured=None,
             )
         }
@@ -172,7 +183,7 @@ async fn execute_write_impl(
     None => ()
   }
   @posoco.ToolOutcome::Success(
-    content="Wrote \{content_bytes} bytes to \{@devkit.sanitize_path(path)}",
+    content="Wrote \{content_bytes} bytes to \{@devkit.sanitize_path(raw_path)}",
     structured=None,
   )
 }

@@ -16,8 +16,9 @@ pub fn write_extension() -> WriteTools
 // Types and methods
 pub(all) struct WriteTools {
   freshness : @posoco-devkit.FreshnessGuard?
+  anchor : @posoco-devkit.WorkspaceAnchor?
 }
-pub fn WriteTools::WriteTools(freshness? : @posoco-devkit.FreshnessGuard) -> Self
+pub fn WriteTools::WriteTools(freshness? : @posoco-devkit.FreshnessGuard, anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
 pub async fn WriteTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn WriteTools::extension_id(Self) -> String
 pub fn WriteTools::list_tools(Self) -> Array[@kernel.ToolDef]

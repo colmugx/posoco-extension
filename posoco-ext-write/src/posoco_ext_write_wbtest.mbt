@@ -243,3 +243,37 @@ test "write_diagnostic_path_is_bounded_and_single_line" {
   assert_true(safe.contains("..."))
   assert_false(safe.contains("TAIL_SECRET"))
 }
+
+///|
+/// Anchored write lands relative paths at the anchor root and keys the
+/// freshness ledger canonically: an overwrite via a different relative
+/// spelling still passes the read-before-modify gate, and messages echo the
+/// argument spelling instead of the resolved absolute path.
+#cfg(target="native")
+async test "write_anchored_relative_path_resolves_and_keys_canonically" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-write-anchor")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
+    let fresh = @devkit.FreshnessGuard::FreshnessGuard()
+    let tools = WriteTools::WriteTools(freshness=fresh, anchor=Some(anchor))
+    // First write records the canonical (resolved) key.
+    match run_write(tools, write_call("notes/a.txt", "v1")) {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        assert_true(content.contains("notes/a.txt"))
+      _ => fail("expected anchored write to succeed")
+    }
+    assert_true(@fs.exists(dir + "/notes/a.txt"))
+    // Overwrite through a different spelling hits the same ledger entry.
+    match run_write(tools, write_call("./notes/a.txt", "v2")) {
+      Ok(@posoco.ToolOutcome::Success(..)) => ()
+      _ => fail("expected overwrite via different spelling to pass the gate")
+    }
+    let text = @fs.read_file(dir + "/notes/a.txt").text() catch {
+      _ => fail("expected written file to exist")
+    }
+    assert_eq(text, "v2")
+  }
+}

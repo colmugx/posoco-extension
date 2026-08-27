@@ -161,5 +161,5 @@ pub impl @posoco.ToolProvider for WriteTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_write_impl(JsFsIo::{  }, self.freshness, call)
+  execute_write_impl(JsFsIo::{  }, self.freshness, self.anchor, call)
 }
