@@ -8,7 +8,17 @@ import {
   "colmugx/mcp/protocol/types",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/js_async",
   "moonbitlang/core/json",
 }
 
-supported_targets = "+native"
+supported_targets = "+native+js"
+
+// js gates out the async/fs read path, so the import is unused on that
+// target; the warning cannot be suppressed per-target.
+
+warnings = "-unused_package"
+
+options(
+  targets: { "config_wbtest.mbt": [ "native" ] },
+)

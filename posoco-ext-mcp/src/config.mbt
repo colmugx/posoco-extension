@@ -60,22 +60,17 @@ async fn read_mcp_json(
   path : String,
   label : String,
 ) -> Result[Json?, String] noraise {
-  let exists = @fs.exists(path) catch {
-    _ => return Err("mcp.json read failed for '\{label}'")
+  match read_file_text(path) {
+    Missing => Ok(None)
+    IoFailed => Err("mcp.json read failed for '\{label}'")
+    NotUtf8 => Err("mcp.json is not valid UTF-8: '\{label}'")
+    Text(text) => {
+      let json = @json.parse(text) catch {
+        _ => return Err("mcp.json is not valid JSON: '\{label}'")
+      }
+      Ok(Some(json))
+    }
   }
-  if !exists {
-    return Ok(None)
-  }
-  let data = @fs.read_file(path) catch {
-    _ => return Err("mcp.json read failed for '\{label}'")
-  }
-  let text = data.text() catch {
-    _ => return Err("mcp.json is not valid UTF-8: '\{label}'")
-  }
-  let json = @json.parse(text) catch {
-    _ => return Err("mcp.json is not valid JSON: '\{label}'")
-  }
-  Ok(Some(json))
 }
 
 ///|

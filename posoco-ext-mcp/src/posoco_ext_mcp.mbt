@@ -37,6 +37,8 @@ fn strip_namespace(namespaced : String, server_name : String) -> String {
 
 ///|
 /// Convert MCP ToolDefinition to Posoco ToolDef with namespace prefix.
+/// The external input schema is sanitized to the Kernel's supported subset
+/// here — see schema_sanitize.mbt for why this cannot wait for the catalog.
 fn convert_tool_def(
   mcp_tool : @types.ToolDefinition,
   server_name : String,
@@ -46,7 +48,7 @@ fn convert_tool_def(
       namespaced_tool_name(server_name, mcp_tool.name),
     ),
     description: mcp_tool.description,
-    input_schema: mcp_tool.input_schema,
+    input_schema: sanitize_tool_schema(mcp_tool.input_schema),
     owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
     policy: @posoco.ExecutionPolicy::Parallel,
     provenance: Some("posoco_ext_mcp:\{server_name}"),

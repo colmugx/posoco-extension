@@ -3,10 +3,10 @@ name = "colmugx/posoco-ext-mcp"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.13.0",
+  "colmugx/posoco@0.13.1",
   "colmugx/posoco-devkit@0.1.0",
   "moonbitlang/async@0.21.0",
-  "colmugx/mcp@0.15.1",
+  "colmugx/mcp@0.16.0",
 }
 
 readme = "README.mbt.md"
