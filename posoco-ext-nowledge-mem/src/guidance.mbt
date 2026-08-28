@@ -50,6 +50,7 @@ fn startup_guidance(source_app : String) -> String {
     $| ### Routing
     $| - Use memory search for distilled knowledge; use thread search for conversation history and context.
     $| - Keep working-session state in the current conversation; only promote it to memory once it is settled and reusable.
+    $| - If the user asks something like 'What should I do today?' or 'What should I do now?' or "今天做点什么好", you SHOULD to refer to `# Working Memory` first. If the information here is sufficient, rely on it directly and avoid calling external tools (as the tool results are likely identical).
     $|
     $| ### Provenance
     $| - Threads synced by this \{host_label(source_app)} agent are recorded under source app "\{source_app}"; threads from other tools carry their own source app.
