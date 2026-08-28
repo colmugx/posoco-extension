@@ -9,6 +9,7 @@
 fn cw_compose_agent(
   model : @posoco.ScriptedModel,
   goal : GoalRunner,
+  observers? : Array[&@posoco.Observer] = [],
 ) -> @posoco.Agent {
   @posoco.Agent(
     exts=[
@@ -16,12 +17,40 @@ fn cw_compose_agent(
       @posoco.tk_ext(id="io", sessions=[
         @posoco.RecordingSessionStore::RecordingSessionStore(),
       ]),
+      @posoco.tk_ext(id="obs", observers~),
       goal,
     ],
     config=@posoco.tk_config(),
   ) catch {
     e => abort("Agent failed: \{e}")
   }
+}
+
+///|
+/// The call must be observed as ToolCallPending strictly before its
+/// ToolCallResult, and both must be present.
+fn cw_assert_pending_then_result(
+  observer : @posoco.RecordingObserver,
+  call_id : String,
+) -> Unit raise {
+  let mut seen_pending = false
+  for event in observer.events() {
+    match event {
+      @posoco.TurnEvent::ToolCallPending(call) =>
+        if call.call_id.to_string() == call_id {
+          seen_pending = true
+        }
+      @posoco.TurnEvent::ToolCallResult(call~, ..) =>
+        if call.call_id.to_string() == call_id {
+          if !seen_pending {
+            fail("ToolCallResult before ToolCallPending for \{call_id}")
+          }
+          return
+        }
+      _ => ()
+    }
+  }
+  fail("missing pending/result pair for \{call_id}")
 }
 
 ///|
@@ -229,12 +258,10 @@ async test "charter_rides_first_work_turn_input" {
 ///|
 /// Bad args that reach the provider (schema-valid but semantically invalid:
 /// zero items) come back as ToolReportedError, the turn recovers, and the
-/// plan stays empty. Spec deviation note: the originally scripted
-/// `Json::null()` arguments never reach the provider — posoco 0.12.0's
-/// catalog schema validation rejects them pre-execution, and an all-rejected
-/// tool wave makes `run_turn` RAISE `AgentError::Runtime` (the reducer emits
-/// ToolCompleted without ToolBatchStarted; the agent event subscriber treats
-/// that as a contract violation). See unknown_tool_name_reported.
+/// plan stays empty. Note: the originally scripted `Json::null()` arguments
+/// never reach the provider — the catalog schema validation rejects them
+/// pre-execution as NotExecuted, the turn still completes, and the model
+/// sees its rejected call on the next step.
 async test "bad_tool_args_reported_not_crashed" {
   let goal = goal_extension(goal_condition="bad args recovery")
   let args = Json::object(Map::from_array([("items", Json::array([]))]))
@@ -257,13 +284,11 @@ async test "bad_tool_args_reported_not_crashed" {
 }
 
 ///|
-/// Unknown tool names never corrupt the goal state. Spec deviation note:
-/// posoco 0.12.0 does NOT complete such a turn — the catalog routes by exact
-/// name, the goal provider is never consulted, and the all-rejected wave
-/// raises `AgentError::Runtime` from `run_turn` (ToolCompleted without
-/// ToolBatchStarted → agent event subscriber ContractViolation). The agent
-/// phase below accepts completion (per spec) or the known raise (per the
-/// current core); the provider phase pins the ext's own unknown-name guard.
+/// Unknown tool names never corrupt the goal state. The core completes the
+/// turn normally: the catalog routes by exact name, the goal provider is
+/// never consulted, and the rejected call is reported as ToolCallPending
+/// followed by ToolCallResult(NotExecuted). The provider phase below pins
+/// the ext's own unknown-name guard.
 async test "unknown_tool_name_reported" {
   let goal = goal_extension(goal_condition="unknown tool recovery")
   let model = @posoco.ScriptedModel([
@@ -272,17 +297,19 @@ async test "unknown_tool_name_reported" {
     ),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("recovered")),
   ])
-  let agent = cw_compose_agent(model, goal)
-  let outcome : Result[@posoco.TurnResult, String] = Ok(
-    agent.run_turn(@posoco.tk_user_msg("typo tool"), "session_typo"),
-  ) catch {
-    e => Err(e.to_string())
-  }
-  match outcome {
-    Ok(_) => ()
-    Err(msg) => assert_true(msg.contains("SubscriberFailed"))
-  }
+  let observer = @posoco.RecordingObserver::RecordingObserver()
+  let agent = cw_compose_agent(model, goal, observers=[observer])
+  let turn = agent.run_turn(@posoco.tk_user_msg("typo tool"), "session_typo")
   assert_eq(goal.plan().items.length(), 0)
+  assert_eq(turn.tool_results.length(), 1)
+  match turn.tool_results[0] {
+    @posoco.ToolOutcome::NotExecuted(
+      reason=@posoco.NotExecutedReason::UnknownTool,
+      ..
+    ) => ()
+    _ => fail("expected NotExecuted(UnknownTool) for the unknown tool call")
+  }
+  cw_assert_pending_then_result(observer, "c2")
 
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("c3"),
