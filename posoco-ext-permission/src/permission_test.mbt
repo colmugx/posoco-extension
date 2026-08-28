@@ -28,6 +28,12 @@ fn test_call_cmd(name : String, cmd : String) -> @posoco.ToolCall {
 }
 
 ///|
+/// Build a user text message for `before_model` transcript tests.
+fn user_message(text : String) -> @kernel.Message {
+  @kernel.Message::UserMessage(content=[@kernel.Content::Text(text)])
+}
+
+///|
 /// Scripted approval source: returns a fixed decision, records every ask.
 struct ScriptedApproval {
   decision : ApprovalDecision
@@ -148,31 +154,64 @@ async test "shell approvals are remembered per segment scope" {
 }
 
 ///|
-async test "shim commands scope to shim + subcommand (rtk)" {
+async test "rtk prefix is stripped: rtk moon and bare moon share one scope" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
-  // ext-rtk rewrites shell commands through `rtk`; approving
-  // `rtk moon check` must scope to `rtk moon`, not bare `rtk`.
+  // rtk is a transparent project-local wrapper: `rtk moon check` scopes to
+  // the underlying `moon`, so one approval covers both spellings (models
+  // guided by AGENTS.md and hosts wiring posoco-ext-rtk both emit rtk).
   assert_true(
     policy.before_tool(test_call_cmd("bash", "rtk moon check --target native"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
-  // `rtk moon test` shares the `rtk moon` scope: pre-approved.
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "rtk moon test"))
+    policy.before_tool(test_call_cmd("bash", "moon test"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
-  // `rtk git status` is a different scope: asks again.
+  // A different underlying command is a different scope: asks again.
   assert_true(
     policy.before_tool(test_call_cmd("bash", "rtk git status"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 2)
+  // A bare `rtk` carries no underlying command: keyless, asks every time.
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "rtk"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 3)
+}
+
+///|
+async test "non-transparent shims keep shim + subcommand scope" {
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  // sudo is not transparent: `sudo rm` keeps its own scope.
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "sudo rm -rf /tmp/x"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "sudo rm -rf /tmp/y"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+  // The rtk strip happens before shim refinement: `rtk sudo rm` scopes to
+  // `sudo rm`, sharing the approval above — never to bare `rm`.
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "rtk sudo rm -rf /tmp/z"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
 }
 
 ///|
@@ -347,11 +386,11 @@ async test "read-only shell commands are pre-approved in every mode" {
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-test "permission policy contributes hook, prompt, and command" {
+test "permission policy contributes hook and command, no system prompt contributor" {
   let policy = PermissionPolicy::PermissionPolicy(Interactive)
   let manifest = policy.manifest()
   assert_eq(manifest.hooks.length(), 1)
-  assert_eq(manifest.prompt_contributors.length(), 1)
+  assert_eq(manifest.prompt_contributors.length(), 0)
   assert_eq(manifest.commands.length(), 1)
 }
 
@@ -430,7 +469,73 @@ async test "yolo mode pre-approves every tool without a source" {
       policy.before_tool(test_call(name)) is @posoco.ToolDecision::Approve(_),
     )
   }
-  assert_true(policy.system_prompt().contains("yolo"))
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Per-turn mode reminder (before_model)
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+async test "before_model injects current mode reminder as user message" {
+  let modes : Array[PermissionMode] = [
+    ReadOnly,
+    WorkspaceWrite,
+    Interactive,
+    Yolo,
+  ]
+  let expected_phrases : Array[String] = [
+    "read-only", "workspace reads and writes", "interactive", "yolo",
+  ]
+  for i, mode in modes {
+    let policy = PermissionPolicy::PermissionPolicy(mode)
+    let messages = [user_message("hello")]
+    let result = policy.before_model(messages)
+    assert_eq(result.length(), 2)
+    match result[1] {
+      @kernel.Message::UserMessage(content~) =>
+        match content {
+          [@kernel.Content::Text(text)] => {
+            assert_true(text.has_prefix("<permission-context"))
+            assert_true(text.contains(expected_phrases[i]))
+          }
+          _ => fail("expected single text content")
+        }
+      _ => fail("expected user message")
+    }
+  }
+}
+
+///|
+async test "before_model is idempotent" {
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let messages = [user_message("hello")]
+  let r1 = policy.before_model(messages)
+  let r2 = policy.before_model(r1)
+  assert_eq(r1.length(), 2)
+  assert_eq(r2.length(), 2)
+  assert_eq(r1[1], r2[1])
+}
+
+///|
+async test "before_model replaces reminder in place when mode changes" {
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let messages = [user_message("hello")]
+  let r1 = policy.before_model(messages)
+  assert_eq(r1.length(), 2)
+  policy.mode = Yolo
+  let r2 = policy.before_model(r1)
+  assert_eq(r2.length(), 2)
+  match r2[1] {
+    @kernel.Message::UserMessage(content~) =>
+      match content {
+        [@kernel.Content::Text(text)] => {
+          assert_true(text.contains("yolo"))
+          assert_false(text.contains("read-only"))
+        }
+        _ => fail("expected single text content")
+      }
+    _ => fail("expected user message")
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -533,4 +638,87 @@ async test "/permission reports status, switches mode, resets approvals" {
   } noraise {
     _ => fail("expected NotFound for unknown command id")
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Exemption reports (bus topic `tool_exemptions`)
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+async test "bus-reported tools bypass the gate in every mode" {
+  let bus = @devkit.EventBus::EventBus()
+  // Subscribe the gate BEFORE the reporting extension publishes — the bus
+  // is fire-and-forget, a report with no subscriber is dropped.
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly, bus=Some(bus))
+  // Unknown tool, not yet reported: rejected in ReadOnly.
+  assert_true(
+    policy.before_tool(test_call("enter_plan_mode"))
+    is @posoco.ToolDecision::Reject(_),
+  )
+  @devkit.publish_tool_exemptions(bus, source="posoco_ext_plan", tools=[
+    "enter_plan_mode", "exit_plan_mode",
+  ])
+  // Reported: bypasses the gate even in ReadOnly...
+  assert_true(
+    policy.before_tool(test_call("enter_plan_mode"))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  assert_true(
+    policy.before_tool(test_call("exit_plan_mode"))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  // ...while other unknown tools stay gated.
+  assert_true(
+    policy.before_tool(test_call("deploy")) is @posoco.ToolDecision::Reject(_),
+  )
+}
+
+///|
+async test "exempted tools never consult the approval source" {
+  let source = ScriptedApproval::{ decision: AllowOnce, asked: 0 }
+  let bus = @devkit.EventBus::EventBus()
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+    bus=Some(bus),
+  )
+  @devkit.publish_tool_exemptions(bus, source="posoco_ext_plan", tools=[
+    "exit_plan_mode",
+  ])
+  assert_true(
+    policy.before_tool(test_call("exit_plan_mode"))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(source.asked, 0)
+  // Status surfaces the exemption set for code review.
+  match @posoco.CommandPort::invoke(policy, "permission", Json::null()) {
+    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
+      assert_true(feedback.contains("exit_plan_mode"))
+      let exempted : Array[Json] = match structured {
+        Some(Object(fields)) =>
+          match fields.get("exempted_tools") {
+            Some(Array(entries)) => entries
+            _ => []
+          }
+        _ => []
+      }
+      assert_true(
+        exempted.contains(Json::string("posoco_ext_plan:exit_plan_mode")),
+      )
+    }
+    _ => fail("expected /permission status to succeed")
+  }
+}
+
+///|
+async test "malformed exemption payloads are ignored" {
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  @devkit.BusSubscriber::on_bus_event(policy, {
+    source: "rogue_ext",
+    topic: @devkit.tool_exemptions_topic,
+    data: Json::object({ "tools": Json::string("not-an-array") }),
+  })
+  assert_true(
+    policy.before_tool(test_call("anything")) is @posoco.ToolDecision::Reject(_),
+  )
 }

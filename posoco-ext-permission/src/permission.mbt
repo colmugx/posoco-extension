@@ -42,10 +42,11 @@ pub(all) struct ApprovalRequest {
 /// rest of this agent's lifetime — **per tool name** for write-class and
 /// unknown tools (approving `edit` once approves every later `edit`), and
 /// **per command-segment scope** for shell tools: the command is split on
-/// `&` `|` `;` newlines, each segment scopes to its first word (a leading
-/// shim like `rtk`/`sudo` refines to shim + next word, e.g. `bash:rtk moon`),
-/// and the call is remembered only with *all* its segment scopes — approving
-/// `rtk moon check` never greenlights `rtk git` or a compound `... && rm`.
+/// `&` `|` `;` newlines, a leading `rtk` is stripped (transparent wrapper),
+/// each segment scopes to its first word (a non-transparent leading shim
+/// like `sudo` refines to shim + next word, e.g. `bash:sudo rm`), and the
+/// call is remembered only with *all* its segment scopes — approving
+/// `moon check` never greenlights `git push` or a compound `... && rm`.
 /// A shell call without a parseable `cmd` string is never remembered.
 /// `AllowAlways` is session-scoped (no on-disk persistence).
 pub(all) enum ApprovalDecision {
@@ -82,7 +83,7 @@ pub(open) trait ApprovalSource {
 ///|
 /// Classifies well-known coding tools and gates them through the approval
 /// source. Construct once per agent; the same struct is the `PipelineHook`,
-/// `SystemPromptContributor`, and `Extension`.
+/// `CommandPort`, and `Extension`.
 pub(all) struct PermissionPolicy {
   /// Active mode; mutable so `/permission <mode>` can switch at runtime.
   mut mode : PermissionMode
@@ -92,9 +93,17 @@ pub(all) struct PermissionPolicy {
   approval : &ApprovalSource?
   /// Approvals remembered this agent lifetime, keyed by approval scope: the
   /// bare tool name for write/unknown tools, `"<tool>:<segment-scope>"` per
-  /// shell command segment (e.g. `bash:ls`, `bash:rtk moon` — see
-  /// `shell_scopes`). Approving `ls` must not approve `rm`.
+  /// shell command segment (e.g. `bash:ls`, `bash:moon` — a leading `rtk`
+  /// is stripped; see `shell_scopes`). Approving `ls` must not approve
+  /// `rm`.
   mut session_approved : Set[String]
+  /// Tools reported exempt by composed extensions (bus topic
+  /// `tool_exemptions`), keyed by tool name and remembering the reporting
+  /// source id — exemptions self-identify as `source:name` so status and
+  /// code review can see who vouched for what. They skip this gate
+  /// entirely — trust channel, guaranteed by code review, not runtime
+  /// checks.
+  mut exempted : Map[String, String]
   read_tools : Array[String]
   write_tools : Array[String]
   shell_tools : Array[String]
@@ -103,15 +112,20 @@ pub(all) struct PermissionPolicy {
 ///|
 /// Construct a policy. `approval` is optional so a host can run ReadOnly
 /// without wiring up a UI; non-ReadOnly modes without a source deny every
-/// non-read tool.
+/// non-read tool. `bus`, when given, subscribes the policy to the
+/// cross-extension event bus so peer extensions can report tools that
+/// bypass this gate (topic `tool_exemptions`); construct subscribing gates
+/// before the extensions that report to them — the bus is fire-and-forget.
 pub fn PermissionPolicy::PermissionPolicy(
   mode : PermissionMode,
   approval? : &ApprovalSource? = None,
+  bus? : @devkit.EventBus? = None,
 ) -> PermissionPolicy {
-  {
+  let policy : PermissionPolicy = {
     mode,
     approval,
     session_approved: Set([]),
+    exempted: Map::from_array([]),
     // ask_question rides the read class: it talks to the user and touches
     // nothing else — asking permission to ask a question is an extra
     // approval dialog before the actual question dialog. Skill activation
@@ -124,12 +138,57 @@ pub fn PermissionPolicy::PermissionPolicy(
     write_tools: ["write", "edit", "apply_patch"],
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
   }
+  match bus {
+    Some(bus) => bus.subscribe(policy as &@devkit.BusSubscriber)
+    None => ()
+  }
+  policy
+}
+
+///|
+/// Receive bus events. Only the `tool_exemptions` convention is
+/// understood: a report records each tool name → the reporting extension's
+/// id, and entries accumulate — there is no revocation. Everything else,
+/// including malformed payloads, is ignored per the bus contract.
+pub impl @devkit.BusSubscriber for PermissionPolicy with fn on_bus_event(
+  self,
+  event : @devkit.BusEvent,
+) -> Unit {
+  if event.topic == @devkit.tool_exemptions_topic {
+    match @devkit.parse_tool_exemptions(event.data) {
+      Some(names) =>
+        for name in names {
+          self.exempted[name] = event.source
+        }
+      None => ()
+    }
+  }
 }
 
 ///|
 /// Read-only accessor for the active mode.
 pub fn PermissionPolicy::mode(self : PermissionPolicy) -> PermissionMode {
   self.mode
+}
+
+///|
+/// Returns the per-turn reminder text for the active mode, wrapped in a
+/// `<permission-context>` envelope so `before_model` can recognize and
+/// deduplicate it. Dynamic because `/permission` can switch mode at runtime,
+/// so this content is injected via `PipelineHook::before_model` rather than
+/// the cached system prompt.
+fn PermissionPolicy::mode_reminder_text(self : PermissionPolicy) -> String {
+  let content = match self.mode {
+    ReadOnly =>
+      "Permission mode is read-only. Read-only shell commands (ls, cat, grep, git status, find) are pre-approved; file mutation and other shell execution are rejected."
+    WorkspaceWrite =>
+      "Permission mode allows workspace reads and writes. Read-only shell commands are pre-approved; other shell and unknown tools require host approval."
+    Interactive =>
+      "Permission mode is interactive. Read-only inspection — including read-only shell commands — is pre-approved; mutating, shell, and unknown tools require confirmation."
+    Yolo =>
+      "Permission mode is yolo: every tool call is pre-approved without confirmation. Proceed carefully."
+  }
+  @devkit.context_envelope(ns="permission", kind="mode", trust=true, content~)
 }
 
 ///|
@@ -159,21 +218,26 @@ fn preview_arguments(args : Json) -> String {
 }
 
 ///|
-/// Shell shims whose first token is not the real command. For these the
-/// approval scope refines to shim + next word, so `rtk moon` and `rtk git`
-/// stay separate scopes — with posoco-ext-rtk rewriting every shell command
-/// through `rtk`, plain first-word scoping would whitelist all of `rtk *`
-/// after a single approval.
+/// Shell shims whose first token is not the real command and which are not
+/// transparent — they raise privileges (`sudo`, `doas`) or reshape the
+/// executed command (`xargs`, `env`, …) — so they stay in the scope: it
+/// refines to shim + next word, keeping `sudo rm` and `sudo ls` separate.
+/// `rtk` is deliberately absent: it is a transparent project-local wrapper
+/// and is stripped entirely by `segment_scope`.
 let shell_shims : Array[String] = [
-  "rtk", "sudo", "doas", "env", "time", "nice", "nohup", "xargs", "watch",
+  "sudo", "doas", "env", "time", "nice", "nohup", "xargs", "watch",
 ]
 
 ///|
 /// First one or two whitespace-delimited words of a single command segment —
-/// the segment's approval scope. A leading shim refines to shim + next word.
-/// v0 does not skip shim flags: `sudo -u root ls` scopes to `sudo -u`
+/// the segment's approval scope. A leading `rtk` is stripped first: rtk is a
+/// transparent project-local wrapper, so `rtk moon check` shares the `moon`
+/// scope with a bare `moon check` (models guided by AGENTS.md and hosts
+/// wiring posoco-ext-rtk both produce rtk-prefixed commands; either spelling
+/// should honor one approval). Other leading shims refine to shim + next
+/// word. v0 does not skip shim flags: `sudo -u root ls` scopes to `sudo -u`
 /// (coarse but safe-ish: different flag spellings simply ask again). An
-/// empty segment has no scope.
+/// empty segment — or a bare `rtk` — has no scope.
 fn segment_scope(segment : StringView) -> String? {
   let words : Array[String] = []
   let current = StringBuilder()
@@ -182,7 +246,9 @@ fn segment_scope(segment : StringView) -> String? {
       if current.to_string().length() > 0 {
         words.push(current.to_string())
         current.reset()
-        if words.length() == 2 {
+        // Three words cover `rtk <shim> <subcommand>`; the scope itself uses
+        // at most two after the strip.
+        if words.length() == 3 {
           break
         }
       }
@@ -190,15 +256,19 @@ fn segment_scope(segment : StringView) -> String? {
       current.write_char(c)
     }
   }
-  if words.length() < 2 && current.to_string().length() > 0 {
+  if words.length() < 3 && current.to_string().length() > 0 {
     words.push(current.to_string())
   }
-  if words.length() == 0 {
+  let start = if words.length() > 0 && words[0] == "rtk" { 1 } else { 0 }
+  if start == words.length() {
     None
-  } else if words.length() >= 2 && shell_shims.contains(words[0]) {
-    Some(words[0] + " " + words[1])
   } else {
-    Some(words[0])
+    let first = words[start]
+    if start + 1 < words.length() && shell_shims.contains(first) {
+      Some(first + " " + words[start + 1])
+    } else {
+      Some(first)
+    }
   }
 }
 
@@ -341,11 +411,58 @@ fn shell_call_is_read_only(call : @posoco.ToolCall) -> Bool {
 }
 
 ///|
+/// Inject (or refresh) a single per-turn user message reminding the model of
+/// the active permission mode. Idempotent: if the current mode's reminder is
+/// already present, the transcript is unchanged. When `/permission` switches
+/// mode, the existing reminder is replaced in place so the transcript stays
+/// compact.
+pub impl @posoco.PipelineHook for PermissionPolicy with fn before_model(
+  self : PermissionPolicy,
+  messages : Array[@kernel.Message],
+) -> Array[@kernel.Message] {
+  let reminder = self.mode_reminder_text()
+  let prefix = "<permission-context"
+  // Search for an existing permission-context user message.
+  let mut existing_idx = -1
+  let mut existing_text = ""
+  for i, msg in messages {
+    match msg {
+      @kernel.Message::UserMessage(content~) =>
+        match content {
+          [@kernel.Content::Text(text), ..] =>
+            if text.has_prefix(prefix) {
+              existing_idx = i
+              existing_text = text
+              break
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  if existing_idx < 0 {
+    messages.push(
+      @kernel.Message::UserMessage(content=[@kernel.Content::Text(reminder)]),
+    )
+  } else if existing_text != reminder {
+    messages[existing_idx] = @kernel.Message::UserMessage(content=[
+      @kernel.Content::Text(reminder),
+    ])
+  }
+  messages
+}
+
+///|
 pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
   self : PermissionPolicy,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
   let name = call.name.to_string()
+  // Exemption reports from composed extensions: these tools carry their
+  // own governance and skip this gate entirely (trust: code review).
+  if self.exempted.contains(name) {
+    return @posoco.ToolDecision::Approve(call~)
+  }
   let category = self.classify(name)
   // Provably read-only shell is inspection: pre-approved in every mode
   // without asking; anything unprovable falls through to the gate.
@@ -376,22 +493,6 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
         self.gate(call, category)
       }
     Yolo => @posoco.ToolDecision::Approve(call~)
-  }
-}
-
-///|
-pub impl @posoco.SystemPromptContributor for PermissionPolicy with fn system_prompt(
-  self : PermissionPolicy,
-) -> String {
-  match self.mode {
-    ReadOnly =>
-      "Permission mode is read-only. Read-only shell commands (ls, cat, grep, git status, find) are pre-approved; file mutation and other shell execution are rejected."
-    WorkspaceWrite =>
-      "Permission mode allows workspace reads and writes. Read-only shell commands are pre-approved; other shell and unknown tools require host approval."
-    Interactive =>
-      "Permission mode is interactive. Read-only inspection — including read-only shell commands — is pre-approved; mutating, shell, and unknown tools require confirmation."
-    Yolo =>
-      "Permission mode is yolo: every tool call is pre-approved without confirmation. Proceed carefully."
   }
 }
 
@@ -506,17 +607,26 @@ pub impl @posoco.CommandPort for PermissionPolicy with fn invoke(
         None | Some("status") => {
           let approved = self.session_approved.to_array()
           let remembered = if approved.length() == 0 {
-            "none".to_string()
+            "none"
           } else {
             approved.join(", ")
           }
-          let feedback = "permission mode: " +
-            self.mode_name() +
-            " — session approvals: " +
-            remembered
+          // Self-identifying entries: "source:name" shows who vouched for
+          // each exemption.
+          let exempted : Array[String] = []
+          for name, source in self.exempted {
+            exempted.push("\{source}:\{name}")
+          }
+          let exempt_list = if exempted.length() == 0 {
+            "none"
+          } else {
+            exempted.join(", ")
+          }
+          let feedback = "permission mode: \{self.mode_name()} — session approvals: \{remembered} — exempted tools: \{exempt_list}"
           let structured : Json = {
             "mode": Json::string(self.mode_name()),
             "session_approvals": Json::array(approved.map(Json::string)),
+            "exempted_tools": Json::array(exempted.map(Json::string)),
           }
           @posoco.CommandOutcome::Success(
             feedback~,
@@ -567,7 +677,7 @@ pub impl @posoco.Extension for PermissionPolicy with fn manifest(
   self : PermissionPolicy,
 ) -> @posoco.ExtensionManifest {
   let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_permission")
-  { ..manifest, hooks: [self], prompt_contributors: [self], commands: [self] }
+  { ..manifest, hooks: [self], commands: [self] }
 }
 
 ///|

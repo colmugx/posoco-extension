@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-permission"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -40,18 +41,19 @@ pub(all) struct PermissionPolicy {
   mut mode : PermissionMode
   approval : &ApprovalSource?
   mut session_approved : @set.Set[String]
+  mut exempted : Map[String, String]
   read_tools : Array[String]
   write_tools : Array[String]
   shell_tools : Array[String]
 }
-pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?) -> Self
+pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, bus? : @posoco-devkit.EventBus?) -> Self
 pub fn PermissionPolicy::extension_id(Self) -> String
 pub fn PermissionPolicy::manifest(Self) -> @port.ExtensionManifest
 pub fn PermissionPolicy::mode(Self) -> PermissionMode
+pub impl @posoco-devkit.BusSubscriber for PermissionPolicy
 pub impl @port.CommandPort for PermissionPolicy
 pub impl @port.Extension for PermissionPolicy
 pub impl @port.PipelineHook for PermissionPolicy
-pub impl @port.SystemPromptContributor for PermissionPolicy
 
 // Type aliases
 
