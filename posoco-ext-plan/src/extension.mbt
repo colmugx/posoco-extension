@@ -5,10 +5,10 @@ pub impl @posoco.Extension for PlanMode with fn extension_id(_self) -> String {
 }
 
 ///|
-/// Declare the ports PlanMode contributes: Hook (tool gating),
-/// SystemPromptContributor (plan prompt), ToolProvider (exit_plan_mode),
-/// CommandPort (plan / plan.approve / plan.reject). The same `self`
-/// reference appears under every field so all views share one status.
+/// Declare the ports PlanMode contributes: Hook (tool gating + per-turn
+/// reminder injection), ToolProvider (exit_plan_mode + optional
+/// enter_plan_mode), CommandPort (plan / plan.approve / plan.reject). The same
+/// `self` reference appears under every field so all views share one status.
 pub impl @posoco.Extension for PlanMode with fn manifest(self) -> @posoco.ExtensionManifest {
   {
     id: "posoco_ext_plan",
@@ -21,7 +21,7 @@ pub impl @posoco.Extension for PlanMode with fn manifest(self) -> @posoco.Extens
     lifecycle: [],
     commands: [self],
     ui: [],
-    prompt_contributors: [self],
+    prompt_contributors: [],
     requires: [],
   }
 }
@@ -31,13 +31,3 @@ pub impl @posoco.Extension for PlanMode with fn manifest(self) -> @posoco.Extens
 /// `&PlanMode` coerces to `&@posoco.Extension` when placed in an
 /// `Array[&@posoco.Extension]`.
 pub extend PlanMode with @posoco.Extension::{extension_id, manifest}
-
-///|
-/// Convenience factory: construct a PlanMode with the given config.
-/// Hosts that already hold a PlanMode instance should pass it directly
-/// instead of calling this helper.
-pub fn plan_extension(
-  config? : PlanModeConfig = PlanModeConfig::default(),
-) -> PlanMode {
-  PlanMode(config~)
-}

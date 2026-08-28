@@ -3,13 +3,11 @@
 /// (inline prompt, editor reverse request, external surface) is product
 /// content; this port only carries the verdict.
 ///
-/// With a source wired (`PlanMode(review=…)`), the review runs in
-/// `before_tool` on the exit-tool call — the async seam, since
-/// `ToolProvider::execute` is sync — and the execution consumes the
-/// verdict: `Accept` approves and leaves plan mode in one action;
-/// `Revise(feedback)` keeps planning with the feedback as the tool result.
-/// Without a source the flow stays command-driven (`ReadyForApproval` +
-/// `plan.approve` / `plan.reject`).
+/// With a source wired (`PlanMode(review=…)`), the review runs inside the
+/// `exit_plan_mode` execution: `Accept` approves and leaves plan mode in
+/// one action; `Revise(feedback)` keeps planning with the feedback as the
+/// tool result. Without a source the flow stays command-driven
+/// (`ReadyForApproval` + `plan.approve` / `plan.reject`).
 pub(open) trait PlanReviewSource {
   /// `review` is `async` because rendering the plan to a user may suspend
   /// (editor reverse request, browser surface). A host that decides
@@ -32,8 +30,13 @@ pub impl Show for PlanReviewRequest with fn to_string(self : PlanReviewRequest) 
 /// The reviewer's verdict.
 pub(all) enum PlanReviewDecision {
   Accept
-  /// Back to planning; the feedback reaches the model.
+  /// Back to planning; the feedback reaches the model. Rejection always
+  /// carries a reason — the type has no reasonless Revise.
   Revise(feedback~ : String)
+  /// Cancel the plan and stop the turn. Posoco has no tool-level turn
+  /// kill switch, so the stop is best-effort: plan mode goes `Off` and
+  /// the tool result instructs the model to make no further tool calls.
+  Dismiss
 }
 
 ///|
@@ -43,6 +46,7 @@ pub impl Show for PlanReviewDecision with fn to_string(
   match self {
     Accept => "Accept"
     Revise(feedback~) => "Revise(\{feedback.length()} chars)"
+    Dismiss => "Dismiss"
   }
 }
 

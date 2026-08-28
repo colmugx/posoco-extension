@@ -1,7 +1,8 @@
 ///|
 /// Plan mode commands: `/plan on|off|status`, `/plan.approve`,
-/// `/plan.reject`. Slash and panel consumers use these to drive the state
-/// machine; approval stays an explicit user action on the product side.
+/// `/plan.reject <feedback>` (reason required), `/plan.dismiss`. Slash and
+/// panel consumers use these to drive the state machine; approval stays an
+/// explicit user action on the product side.
 
 ///|
 /// Machine-readable status for panel consumers.
@@ -70,7 +71,7 @@ fn str_param(
 }
 
 ///|
-pub impl @posoco.CommandPort for PlanMode with fn commands(self) -> Array[
+pub impl @posoco.CommandPort for PlanMode with fn commands(_self) -> Array[
   @posoco.CommandDef,
 ] {
   [
@@ -112,7 +113,7 @@ pub impl @posoco.CommandPort for PlanMode with fn commands(self) -> Array[
     @posoco.CommandDef::{
       id: "plan.reject",
       label: "Reject Plan",
-      description: "Reject the submitted plan and keep planning",
+      description: "Reject the submitted plan and keep planning (feedback required)",
       category: "plan",
       ctype: @posoco.CommandType::Action,
       params: [
@@ -120,11 +121,24 @@ pub impl @posoco.CommandPort for PlanMode with fn commands(self) -> Array[
           "feedback",
           "Feedback",
           "Why the plan was rejected, fed back to the model",
-          false,
+          true,
           true,
           None,
         ),
       ],
+      aliases: [],
+      shortcut: None,
+      icon: None,
+      visible: true,
+      metadata: None,
+    },
+    @posoco.CommandDef::{
+      id: "plan.dismiss",
+      label: "Dismiss Plan",
+      description: "Discard the submitted plan and leave plan mode",
+      category: "plan",
+      ctype: @posoco.CommandType::Action,
+      params: [],
       aliases: [],
       shortcut: None,
       icon: None,
@@ -198,18 +212,36 @@ pub impl @posoco.CommandPort for PlanMode with fn invoke(
           )
       }
     "plan.reject" => {
+      // Rejection always carries a reason — it is the feedback the model
+      // revises against; a reasonless reject would send it back blind.
       let feedback = match args {
         Object(fields) => parse_optional_string(fields, "feedback")
-        String(value) => Some(value)
+        String(value) => if value.length() == 0 { None } else { Some(value) }
         _ => None
       }
-      if self.reject() {
-        let suffix = match feedback {
-          Some(text) => " — feedback: \{text}"
-          None => ""
-        }
+      match feedback {
+        None =>
+          @posoco.CommandOutcome::Failure(
+            reason="plan rejection needs a reason: /plan.reject <feedback>",
+          )
+        Some(text) =>
+          if self.reject() {
+            @posoco.CommandOutcome::Success(
+              feedback="plan rejected, still planning — feedback: \{text}",
+              structured=Some(self.status_json()),
+              ui_hint=Some(@posoco.UiHint::Toast),
+            )
+          } else {
+            @posoco.CommandOutcome::Failure(
+              reason="no plan is waiting for approval",
+            )
+          }
+      }
+    }
+    "plan.dismiss" =>
+      if self.dismiss() {
         @posoco.CommandOutcome::Success(
-          feedback="plan rejected, still planning\{suffix}",
+          feedback="plan dismissed — plan mode off, nothing executes",
           structured=Some(self.status_json()),
           ui_hint=Some(@posoco.UiHint::Toast),
         )
@@ -218,7 +250,6 @@ pub impl @posoco.CommandPort for PlanMode with fn invoke(
           reason="no plan is waiting for approval",
         )
       }
-    }
     other => raise @posoco.CommandError::NotFound(other)
   }
 }

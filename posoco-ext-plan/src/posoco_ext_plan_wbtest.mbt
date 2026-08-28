@@ -34,16 +34,46 @@ fn write_call(tool : String, path : String) -> @posoco.ToolCall {
 }
 
 ///|
+fn user_msg(text : String) -> @kernel.Message {
+  @kernel.UserMessage(content=[@kernel.Text(text)])
+}
+
+///|
+fn text_of(msg : @kernel.Message) -> String? {
+  match msg {
+    @kernel.UserMessage(content~) =>
+      match content {
+        [@kernel.Text(text)] => Some(text)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn plan_reminder_count(messages : Array[@kernel.Message]) -> Int {
+  let mut count = 0
+  for msg in messages {
+    match text_of(msg) {
+      Some(text) => if text.has_prefix("<plan-context") { count = count + 1 }
+      None => ()
+    }
+  }
+  count
+}
+
+///|
 async test "before_tool gates write tools by target while planning" {
   let plan = plan_mode_with_reads()
   plan.start()
-  // Markdown under docs/ passes — research notes and draft docs are part
-  // of planning.
+  // Markdown passes anywhere in the workspace — research notes and draft
+  // plans are part of planning.
   for
     target in [
       ("write", "docs/research/notes.md"),
-      ("edit", "docs/plan-draft.md"),
-      ("edit", "./docs/x.md"),
+      ("edit", "src/scratch/plan-draft.md"),
+      ("edit", "./x.md"),
+      ("apply_patch", "PLAN.md"),
     ] {
     let (tool, path) = target
     match plan.before_tool(write_call(tool, path)) {
@@ -51,8 +81,8 @@ async test "before_tool gates write tools by target while planning" {
       other => fail("expected Approve for '\{tool} \{path}', got \{other}")
     }
   }
-  // Everything else is a precise target rejection: outside docs/, wrong
-  // extension, or no target at all.
+  // Every non-Markdown target is a precise rejection: wrong extension or no
+  // target at all.
   for
     target in [
       ("write", "src/main.rs"),
@@ -64,7 +94,7 @@ async test "before_tool gates write tools by target while planning" {
     match plan.before_tool(write_call(tool, path)) {
       @posoco.ToolDecision::Reject(reason~) => {
         assert_true(reason.contains("plan mode"))
-        assert_true(reason.contains("docs/"))
+        assert_true(reason.contains(".md"))
       }
       other => fail("expected Reject for '\{tool} \{path}', got \{other}")
     }
@@ -222,18 +252,70 @@ async test "before_tool gates non-allowed tools while planning" {
 }
 
 ///|
-test "system_prompt section only while planning" {
+async test "before_model injects planning reminder at the end" {
   let plan = plan_mode_with_reads()
-  assert_eq(plan.system_prompt(), "")
   plan.start()
-  let prompt = plan.system_prompt()
-  assert_true(prompt.contains("PLAN MODE"))
-  assert_true(prompt.contains("read, glob, grep"))
-  assert_true(prompt.contains("exit_plan_mode"))
-  assert_true(plan.submit_plan("plan"))
-  assert_true(plan.system_prompt().contains("awaiting user approval"))
+  let messages : Array[@kernel.Message] = [user_msg("hello")]
+  let result = plan.before_model(messages)
+  assert_eq(result.length(), 2)
+  let reminder = text_of(result[1]).unwrap()
+  assert_true(reminder.has_prefix("<plan-context"))
+  assert_true(reminder.contains("PLAN MODE"))
+  assert_true(reminder.contains("read, glob, grep"))
+  assert_true(reminder.contains("exit_plan_mode"))
+}
+
+///|
+async test "before_model is idempotent when the reminder is already present" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  let messages : Array[@kernel.Message] = [user_msg("hello")]
+  let first = plan.before_model(messages)
+  let second = plan.before_model(first)
+  assert_eq(second.length(), 2)
+  assert_eq(plan_reminder_count(second), 1)
+  assert_eq(text_of(second[1]), text_of(first[1]))
+}
+
+///|
+async test "before_model replaces the reminder in place on mode switch" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  let messages = plan.before_model([user_msg("hello")])
+  assert_true(plan.submit_plan("the plan"))
+  let switched = plan.before_model(messages)
+  assert_eq(switched.length(), 2)
+  assert_eq(plan_reminder_count(switched), 1)
+  let reminder = text_of(switched[1]).unwrap()
+  assert_true(reminder.contains("awaiting user approval"))
+  assert_false(reminder.contains("Investigate freely"))
+}
+
+///|
+async test "before_model appends a one-time exit reminder when leaving plan mode" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  let messages = plan.before_model([user_msg("hello")])
+  assert_eq(plan_reminder_count(messages), 1)
   plan.stop()
-  assert_eq(plan.system_prompt(), "")
+  let exited = plan.before_model(messages)
+  assert_eq(exited.length(), 3)
+  assert_eq(plan_reminder_count(exited), 2)
+  let exit_text = text_of(exited[2]).unwrap()
+  assert_true(exit_text.contains("Plan mode has been exited"))
+  // Subsequent Off turns do not add more reminders.
+  let again = plan.before_model(exited)
+  assert_eq(again.length(), 3)
+  assert_eq(plan_reminder_count(again), 2)
+}
+
+///|
+async test "before_model does nothing while Off" {
+  let plan = plan_mode_with_reads()
+  let messages : Array[@kernel.Message] = [user_msg("hello")]
+  let result = plan.before_model(messages)
+  assert_eq(result.length(), 1)
+  assert_eq(plan_reminder_count(result), 0)
 }
 
 ///|
@@ -244,7 +326,10 @@ async test "exit_plan_mode tool records the plan" {
     "exit_plan_mode",
     tk_call_with_args(
       "exit_plan_mode",
-      Json::object({ "plan": Json::string("1. read foo\n2. edit bar") }),
+      Json::object({
+        "name": Json::string("read then edit"),
+        "plan": Json::string("1. read foo\n2. edit bar"),
+      }),
     ),
   )
   match outcome {
@@ -265,7 +350,10 @@ async test "exit_plan_mode tool outside plan mode reports an error" {
     "exit_plan_mode",
     tk_call_with_args(
       "exit_plan_mode",
-      Json::object({ "plan": Json::string("too early") }),
+      Json::object({
+        "name": Json::string("too early"),
+        "plan": Json::string("too early"),
+      }),
     ),
   )
   match outcome {
@@ -398,12 +486,20 @@ async test "enter_plan_mode tool enters without approval" {
     ..PlanModeConfig::default(),
     allow_model_entry: true,
   })
-  // Off prompt advertises the enter tool.
-  assert_true(plan.system_prompt().contains("enter_plan_mode"))
+  // The enter tool is advertised through ToolProvider, not system prompt.
+  let tools = plan.list_tools()
+  assert_eq(tools.length(), 2)
+  assert_eq(tools[1].name.to_string(), "enter_plan_mode")
+  assert_true(tools[1].description.contains("read-only investigation"))
+  assert_true(
+    tools[1].description.contains("Markdown files anywhere in the workspace"),
+  )
   let outcome = plan.execute("enter_plan_mode", tk_call("enter_plan_mode"))
   match outcome {
-    @posoco.ToolOutcome::Success(content~, ..) =>
+    @posoco.ToolOutcome::Success(content~, ..) => {
       assert_true(content.contains("Plan mode is now active"))
+      assert_true(content.contains("traceable"))
+    }
     other => fail("expected Success, got \{other}")
   }
   assert_eq(plan.status(), PlanStatus::Planning)
@@ -478,13 +574,15 @@ async test "unknown command id raises NotFound" {
 }
 
 ///|
-test "extension manifest wires all four port views" {
+test "extension manifest wires the three port views" {
   let plan = plan_mode_with_reads()
   assert_eq(plan.extension_id(), "posoco_ext_plan")
   let manifest = plan.manifest()
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.hooks.length(), 1)
-  assert_eq(manifest.prompt_contributors.length(), 1)
+  // Plan-mode discovery is through the advertised tool description and the
+  // per-turn `before_model` reminder; no static system-prompt advertisement.
+  assert_eq(manifest.prompt_contributors.length(), 0)
   assert_eq(manifest.commands.length(), 1)
 }
 
@@ -505,10 +603,33 @@ impl PlanReviewSource for ScriptedReview with fn review(
 }
 
 ///|
+/// FailingReview — simulates a host review surface that errors out.
+struct FailingReview {
+  mut asked : Int
+}
+
+///|
+suberror ReviewUnavailable {
+  ReviewUnavailable(String)
+}
+
+///|
+impl PlanReviewSource for FailingReview with fn review(
+  self,
+  _request : PlanReviewRequest,
+) -> PlanReviewDecision raise {
+  self.asked = self.asked + 1
+  raise ReviewUnavailable::ReviewUnavailable("surface disconnected")
+}
+
+///|
 fn exit_call(plan_text : String) -> @posoco.ToolCall {
   tk_call_with_args(
     "exit_plan_mode",
-    Json::object({ "plan": Json::string(plan_text) }),
+    Json::object({
+      "name": Json::string("test plan"),
+      "plan": Json::string(plan_text),
+    }),
   )
 }
 
@@ -524,18 +645,20 @@ async test "review source accepts the plan in one action" {
   )
   plan.start()
   let call = exit_call("1. do it")
-  // before_tool runs the review and approves the exit call.
+  // before_tool is a pure gate: it approves the exit call without
+  // consulting the review.
   match plan.before_tool(call) {
     @posoco.ToolDecision::Approve(..) => ()
     other => fail("expected Approve, got \{other}")
   }
-  assert_eq(review.asked, 1)
-  // Execution consumes the verdict: accepted + plan mode off.
+  assert_eq(review.asked, 0)
+  // The review runs inside the execution: accepted + plan mode off.
   match plan.execute("exit_plan_mode", call) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("accepted"))
     other => fail("expected Success, got \{other}")
   }
+  assert_eq(review.asked, 1)
   assert_eq(plan.status(), PlanStatus::Off)
 }
 
@@ -599,4 +722,398 @@ async test "AutoAcceptReview is the unattended (yolo) posture" {
     other => fail("expected Success, got \{other}")
   }
   assert_eq(plan.status(), PlanStatus::Off)
+}
+
+///|
+async test "a failing review keeps planning with a retryable tool error" {
+  let review = FailingReview::{ asked: 0 }
+  let plan = PlanMode(
+    config=PlanModeConfig::{
+      ..PlanModeConfig::default(),
+      allowed_tools: ["read"],
+    },
+    review=Some(review as &PlanReviewSource),
+  )
+  plan.start()
+  match plan.execute("exit_plan_mode", exit_call("1. do it")) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      // Error::to_string only carries the constructor path, so the tool
+      // result names the failure generically; the host logs the detail.
+      assert_true(content.contains("plan review failed"))
+    other => fail("expected ToolReportedError, got \{other}")
+  }
+  assert_eq(review.asked, 1)
+  // The turn survives: still planning, the model may resubmit.
+  assert_eq(plan.status(), PlanStatus::Planning)
+}
+
+///|
+/// RecordingGate — captures bus events for exemption-report tests.
+struct RecordingGate {
+  events : Array[@devkit.BusEvent]
+}
+
+///|
+impl @devkit.BusSubscriber for RecordingGate with fn on_bus_event(
+  self : RecordingGate,
+  event : @devkit.BusEvent,
+) -> Unit {
+  self.events.push(event)
+}
+
+///|
+async test "constructor reports the enter/exit tools on the bus" {
+  let bus = @devkit.EventBus::EventBus()
+  let gate = RecordingGate::{ events: [] }
+  bus.subscribe(gate as &@devkit.BusSubscriber)
+  ignore(
+    PlanMode(
+      config=PlanModeConfig::{
+        ..PlanModeConfig::default(),
+        allow_model_entry: true,
+      },
+      bus=Some(bus),
+    ),
+  )
+  assert_eq(gate.events.length(), 1)
+  assert_eq(gate.events[0].source, "posoco_ext_plan")
+  assert_eq(gate.events[0].topic, @devkit.tool_exemptions_topic)
+  assert_eq(
+    @devkit.parse_tool_exemptions(gate.events[0].data),
+    Some(["exit_plan_mode", "enter_plan_mode"]),
+  )
+}
+
+///|
+async test "without model entry only the exit tool is reported" {
+  let bus = @devkit.EventBus::EventBus()
+  let gate = RecordingGate::{ events: [] }
+  bus.subscribe(gate as &@devkit.BusSubscriber)
+  ignore(PlanMode(bus=Some(bus)))
+  assert_eq(gate.events.length(), 1)
+  assert_eq(
+    @devkit.parse_tool_exemptions(gate.events[0].data),
+    Some(["exit_plan_mode"]),
+  )
+}
+
+///|
+async test "plan.reject without a reason fails" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  assert_true(plan.submit_plan("the plan"))
+  for
+    args in [Json::null(), Json::string(""), Json::object(Map::from_array([]))] {
+    match plan.invoke("plan.reject", args) {
+      @posoco.CommandOutcome::Failure(reason~) =>
+        assert_true(reason.contains("needs a reason"))
+      _ => fail("expected Failure for reject without feedback")
+    }
+  }
+  // State untouched: still awaiting approval.
+  assert_eq(plan.status(), PlanStatus::ReadyForApproval(plan="the plan"))
+}
+
+///|
+async test "plan.dismiss discards the pending plan and exits" {
+  let plan = plan_mode_with_reads()
+  match plan.invoke("plan.dismiss", Json::null()) {
+    @posoco.CommandOutcome::Failure(reason~) =>
+      assert_true(reason.contains("no plan"))
+    _ => fail("expected Failure with nothing pending")
+  }
+  plan.start()
+  assert_true(plan.submit_plan("the plan"))
+  match plan.invoke("plan.dismiss", Json::null()) {
+    @posoco.CommandOutcome::Success(feedback~, ..) =>
+      assert_true(feedback.contains("dismissed"))
+    _ => fail("expected Success")
+  }
+  assert_eq(plan.status(), PlanStatus::Off)
+}
+
+///|
+async test "review dismiss cancels the plan and instructs the model to stop" {
+  let review = ScriptedReview::{ decision: Dismiss, asked: 0 }
+  let plan = PlanMode(
+    config=PlanModeConfig::{
+      ..PlanModeConfig::default(),
+      allowed_tools: ["read"],
+    },
+    review=Some(review as &PlanReviewSource),
+  )
+  plan.start()
+  match plan.execute("exit_plan_mode", exit_call("1. do it")) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+      assert_true(content.contains("dismissed"))
+      assert_true(content.contains("no further tool calls"))
+    }
+    other => fail("expected ToolReportedError, got \{other}")
+  }
+  assert_eq(plan.status(), PlanStatus::Off)
+}
+
+///|
+async test "completed plans are echoed once in the tool result" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  match
+    plan.execute("exit_plan_mode", exit_call("1. first step\n2. second step")) {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("1. first step\n2. second step"))
+    other => fail("expected Success, got \{other}")
+  }
+}
+
+///|
+async test "plan transitions publish status facts on the bus" {
+  let bus = @devkit.EventBus::EventBus()
+  let gate = RecordingGate::{ events: [] }
+  bus.subscribe(gate as &@devkit.BusSubscriber)
+  let plan = PlanMode(
+    config=PlanModeConfig::{
+      ..PlanModeConfig::default(),
+      allowed_tools: ["read"],
+    },
+    bus=Some(bus),
+  )
+  // The exemption report is the first event; status facts follow on the
+  // statusbar convention topic.
+  plan.start()
+  assert_true(plan.submit_plan("p"))
+  ignore(plan.approve())
+  let status_facts : Array[Json] = gate.events
+    .iter()
+    .filter(fn(event) { event.topic == "status" })
+    .map(fn(event) {
+      match event.data {
+        Object(fields) => fields.get("plan").unwrap()
+        _ => Json::null()
+      }
+    })
+    .collect()
+  assert_eq(status_facts.length(), 3)
+  assert_eq(status_facts[0], Json::string("Plan"))
+  assert_eq(status_facts[1], Json::string("Plan"))
+  assert_eq(status_facts[2], Json::null())
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Plan-file persistence
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+/// MemoryFs — in-memory WorkspaceFs fake for persistence tests.
+struct MemoryFs {
+  files : Map[String, String]
+  dirs : Set[String]
+}
+
+///|
+fn MemoryFs::MemoryFs() -> MemoryFs {
+  { files: Map::from_array([]), dirs: Set([]) }
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn exists(self, path : String) -> Bool raise @workspace.WorkspaceFsError {
+  self.files.contains(path) || self.dirs.contains(path)
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn kind(
+  self,
+  path : String,
+  follow_symlink~ : Bool,
+) -> @workspace.WorkspaceFileKind raise @workspace.WorkspaceFsError {
+  if self.files.contains(path) {
+    @workspace.WorkspaceFileKind::File
+  } else if self.dirs.contains(path) {
+    @workspace.WorkspaceFileKind::Dir
+  } else {
+    raise @workspace.WorkspaceFsError::WorkspaceFsError("missing \{path}")
+  }
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn read_file(self, path : String) -> String raise @workspace.WorkspaceFsError {
+  match self.files.get(path) {
+    Some(content) => content
+    None =>
+      raise @workspace.WorkspaceFsError::WorkspaceFsError("missing \{path}")
+  }
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn write_file(
+  self,
+  path : String,
+  content : String,
+) -> Unit raise @workspace.WorkspaceFsError {
+  self.files[path] = content
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn write_file_atomic(
+  self,
+  path : String,
+  content : String,
+) -> Unit raise @workspace.WorkspaceFsError {
+  self.files[path] = content
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn remove(self, path : String) -> Unit raise @workspace.WorkspaceFsError {
+  ignore(self.files.remove(path))
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn rename(
+  self,
+  from : String,
+  to_ : String,
+  replace~ : Bool,
+) -> Unit raise @workspace.WorkspaceFsError {
+  match self.files.get(from) {
+    Some(content) => {
+      ignore(self.files.remove(from))
+      self.files[to_] = content
+    }
+    None =>
+      raise @workspace.WorkspaceFsError::WorkspaceFsError("missing \{from}")
+  }
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn realpath(self, path : String) -> String raise @workspace.WorkspaceFsError {
+  path
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn readdir(
+  self,
+  path : String,
+  include_hidden~ : Bool,
+) -> Array[String] raise @workspace.WorkspaceFsError {
+  []
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn walk(
+  self,
+  root : String,
+  callback : async (String, Array[String]) -> Unit,
+) -> Unit raise @workspace.WorkspaceFsError {
+  ()
+}
+
+///|
+impl @workspace.WorkspaceFs for MemoryFs with fn mkdir(
+  self,
+  path : String,
+  recursive~ : Bool,
+) -> Unit raise @workspace.WorkspaceFsError {
+  self.dirs.add(path)
+}
+
+///|
+fn planning_assistant_message(text : String) -> @kernel.Message {
+  @kernel.Message::AssistantMessage(
+    content=[@kernel.Content::Text(text)],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@kernel.FinishReason::Stop,
+  )
+}
+
+///|
+async test "planning narrative accumulates into the session draft file" {
+  let fs = MemoryFs::MemoryFs()
+  let plan = PlanMode(
+    config=PlanModeConfig::{
+      ..PlanModeConfig::default(),
+      allowed_tools: ["read"],
+    },
+    fs=Some(fs as &@workspace.WorkspaceFs),
+    session_name="cetas-1",
+  )
+  plan.start()
+  let messages : Array[@kernel.Message] = [
+    planning_assistant_message("Reading the module layout."),
+    planning_assistant_message("Found the seam in hooks.mbt."),
+  ]
+  ignore(plan.before_model(messages))
+  let draft = fs.read_file(".cetas/plan/cetas-1.md")
+  assert_true(draft.contains("Reading the module layout."))
+  assert_true(draft.contains("Found the seam in hooks.mbt."))
+}
+
+///|
+async test "exit saves the named plan file and removes the draft" {
+  let fs = MemoryFs::MemoryFs()
+  let plan = PlanMode(
+    config=PlanModeConfig::{
+      ..PlanModeConfig::default(),
+      allowed_tools: ["read"],
+    },
+    fs=Some(fs as &@workspace.WorkspaceFs),
+    session_name="cetas-1",
+  )
+  plan.start()
+  ignore(plan.before_model([planning_assistant_message("investigation notes")]))
+  match
+    plan.execute(
+      "exit_plan_mode",
+      tk_call_with_args(
+        "exit_plan_mode",
+        Json::object({
+          "name": Json::string("Fix: the/bug v2"),
+          "plan": Json::string("1. step"),
+        }),
+      ),
+    ) {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(
+        content.contains("Saved to .cetas/plan/Fix-the-bug-v2_cetas-1.md"),
+      )
+    other => fail("expected Success")
+  }
+  // Final file carries the header and plan; the draft is gone.
+  let saved = fs.read_file(".cetas/plan/Fix-the-bug-v2_cetas-1.md")
+  assert_true(saved.contains("# Fix: the/bug v2"))
+  assert_true(saved.contains("1. step"))
+  assert_false(fs.exists(".cetas/plan/cetas-1.md"))
+}
+
+///|
+async test "without a filesystem persistence is skipped silently" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  match plan.execute("exit_plan_mode", exit_call("1. step")) {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_false(content.contains("Saved to"))
+    other => fail("expected Success")
+  }
+}
+
+///|
+async test "exit rejects an empty or missing plan name" {
+  let plan = plan_mode_with_reads()
+  plan.start()
+  for
+    args in [
+      Json::object(Map::from_array([("plan", Json::string("p"))])),
+      Json::object({ "name": Json::string("  "), "plan": Json::string("p") }),
+      Json::object({ "name": Json::number(1), "plan": Json::string("p") }),
+    ] {
+    try
+      plan.execute("exit_plan_mode", tk_call_with_args("exit_plan_mode", args))
+    catch {
+      @posoco.RuntimeError::InvocationFailed(message) =>
+        assert_true(message.contains("name"))
+      other => fail("expected InvocationFailed about name")
+    } noraise {
+      _ => fail("expected InvocationFailed about name")
+    }
+  }
+  assert_eq(plan.status(), PlanStatus::Planning)
 }

@@ -8,10 +8,7 @@
 pub extend PlanMode with @posoco.CommandPort::{invoke}
 
 ///|
-pub extend PlanMode with @posoco.PipelineHook::{before_tool}
-
-///|
-pub extend PlanMode with @posoco.SystemPromptContributor::{system_prompt}
+pub extend PlanMode with @posoco.PipelineHook::{before_model, before_tool}
 
 ///|
 pub extend PlanMode with @posoco.ToolProvider::{execute, list_tools}
