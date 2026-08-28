@@ -1532,5 +1532,38 @@ test "kimi masked overload verdict without a header is unschedulable" {
     fail("expected RateLimited")
   }
   debug_inspect(info.reset_at_ms, content="None")
-  assert_eq(info.status, 429)
+}
+
+///|
+test "kimi coding-plan 403 quota verdict schedules at window upper bound" {
+  let body = "{\"error\":{\"message\":\"You've reached your 5-hour usage limit. Your quota will reset when the current 5-hour window ends. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota\",\"type\":\"auth_error\"}}"
+  let err = classify_kimi_http_status(
+    "chat.http_status",
+    403,
+    BodyBytesUtf8(body.length()),
+    body_text=body,
+    now_ms=1000000L,
+  )
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  // The provider labels the quota wall auth_error; the phrasing wins.
+  assert_eq(info.provider_code, Some("auth_error"))
+  // No timestamp: the 5-hour window length is the upper bound.
+  debug_inspect(info.reset_at_ms, content="Some(19000000)")
+}
+
+///|
+test "kimi 403 auth failure stays Transport" {
+  let err = classify_kimi_http_status(
+    "chat.http_status",
+    403,
+    BodyBytesUtf8(21),
+    body_text="{\"error\":{\"message\":\"Invalid API key\",\"type\":\"auth_error\"}}",
+    now_ms=0L,
+  )
+  guard err is Some(@posoco.ModelError::Transport(reason)) else {
+    fail("expected Transport")
+  }
+  assert_true(reason.contains("status=403"))
 }

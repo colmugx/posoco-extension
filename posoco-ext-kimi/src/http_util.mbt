@@ -35,14 +35,15 @@ fn is_kimi_http_success(status : Int) -> Bool {
 }
 
 ///|
-/// Pure HTTP-status classifier. Non-429 keeps the redacted summary. A 429 is
-/// a quota verdict and keeps the body: Kimi's coding-plan verdicts are the
-/// documented 5-hour/monthly messages, and Moonshot also phrases plan
-/// throttles as "The engine is currently overloaded" with
-/// `error.type: rate_limit_reached_error` — the body distinguishes quota
-/// walls from real overload. Kimi's message text carries no timestamp; the
-/// documented wait signal is the `Retry-After` header, passed here by the
-/// caller when one was present.
+/// Pure HTTP-status classifier. Non-quota failures keep the redacted
+/// summary. A quota verdict keeps the body: 429 (Moonshot's plan throttles
+/// are the documented 5-hour/monthly messages, also phrased "The engine is
+/// currently overloaded" with `error.type: rate_limit_reached_error`) and
+/// 403 (the coding plan's "You've reached your 5-hour usage limit" quota
+/// wall — the kit gates non-429 bodies on quota phrasing so auth 403s stay
+/// Transport). The body distinguishes quota walls from real overload; the
+/// message text carries no timestamp, so the documented wait signal is the
+/// `Retry-After` header, passed here by the caller when one was present.
 fn classify_kimi_http_status(
   stage : String,
   status : Int,
@@ -54,13 +55,17 @@ fn classify_kimi_http_status(
   if is_kimi_http_success(status) {
     return None
   }
-  if status == 429 {
-    return @chatkit.classify_chat_completions_http_error(
+  if status == 429 || status == 403 {
+    let verdict = @chatkit.classify_chat_completions_http_error(
       status,
       body_text,
       retry_after_header=retry_after,
       now_ms~,
     )
+    match verdict {
+      Some(err) => return Some(err)
+      None => ()
+    }
   }
   Some(
     @posoco.ModelError::Transport(
