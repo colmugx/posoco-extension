@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-ps1"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+}
+
+// Values
+pub fn detect_platform() -> String
+
+pub fn is_windows() -> Bool
+
+pub fn ps1_extension() -> PowerShellTools
+
+// Errors
+
+// Types and methods
+pub(all) struct PowerShellTools {
+  exe : String
+  anchor : @posoco-devkit.WorkspaceAnchor?
+}
+pub fn PowerShellTools::PowerShellTools(exe? : String, anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub async fn PowerShellTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn PowerShellTools::extension_id(Self) -> String
+pub fn PowerShellTools::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn PowerShellTools::manifest(Self) -> @port.ExtensionManifest
+pub fn PowerShellTools::system_prompt(Self) -> String
+pub impl @port.Extension for PowerShellTools
+pub impl @port.SystemPromptContributor for PowerShellTools
+pub impl @port.ToolProvider for PowerShellTools
+
+// Type aliases
+
+// Traits
