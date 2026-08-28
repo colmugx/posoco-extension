@@ -52,6 +52,9 @@ pub(all) struct RateLimitPending {
 /// Verdicts without a reset time (`reset_at_ms = None`, e.g. transient
 /// concurrency 429s) are ignored: nothing is schedulable.
 ///
+/// Both time sources are injectable (`now_ms`, `sleep_ms`), so tests can
+/// drive a virtual clock instead of waiting real milliseconds.
+///
 /// # Example
 /// ```mbt nocheck
 /// let guard = RateLimitGuard()
@@ -70,6 +73,8 @@ pub struct RateLimitGuard {
   poll_interval_ms : Int
   probe_interval_ms : Int64
   now_ms : () -> Int64
+  sleep_ms : async (Int) -> Unit
+  turn_lock : @semaphore.Semaphore
   trace : (String) -> Unit
 }
 
@@ -81,6 +86,7 @@ pub fn RateLimitGuard::RateLimitGuard(
   poll_interval_ms? : Int = 500,
   probe_interval_ms? : Int64 = 900000,
   now_ms? : () -> Int64 = fn() { @async.now() },
+  sleep_ms? : async (Int) -> Unit = async fn(ms : Int) { @async.sleep(ms) },
   trace? : (String) -> Unit = fn(_ : String) { () },
 ) -> RateLimitGuard {
   {
@@ -94,6 +100,8 @@ pub fn RateLimitGuard::RateLimitGuard(
     poll_interval_ms,
     probe_interval_ms,
     now_ms,
+    sleep_ms,
+    turn_lock: @semaphore.Semaphore::Semaphore(1),
     trace,
   }
 }
@@ -123,15 +131,6 @@ pub fn RateLimitGuard::pending_snapshots(
       provider_code: entry.provider_code,
     }
   })
-}
-
-///|
-fn copy_user_message(message : @posoco.Message) -> @posoco.Message {
-  match message {
-    UserMessage(content~) =>
-      @posoco.Message::UserMessage(content=content.copy())
-    other => other
-  }
 }
 
 ///|
@@ -190,7 +189,7 @@ fn RateLimitGuard::record_limit(
     })
   }
   (self.trace)(
-    "rate limit on session \{session_id} (code=\{to_repr(provider_code)}), resume scheduled at \{resume_at}",
+    "rate limit on session \{session_id} (code=\{Repr(provider_code)}), resume scheduled at \{resume_at}",
   )
 }
 
@@ -269,67 +268,98 @@ pub impl @posoco.Extension for RateLimitGuard with fn manifest(
 pub extend RateLimitGuard with @posoco.Extension::{extension_id, manifest}
 
 ///|
-/// Resume every due entry now. A resumed turn that 429s again re-records
-/// itself via the hook; any other failure is retried after a short delay
-/// until `max_attempts` is exhausted.
+/// Remove and return the entries whose resume time has passed.
+fn RateLimitGuard::take_due(
+  self : RateLimitGuard,
+  now_ms : Int64,
+) -> Array[PendingResume] {
+  if self.stopped {
+    return []
+  }
+  let due = self.pending.filter(fn(entry) { entry.resume_at_ms <= now_ms })
+  self.pending = self.pending.filter(fn(entry) { entry.resume_at_ms > now_ms })
+  due
+}
+
+///|
+/// Run one scheduled recovery: send the continue note; a resumed turn that
+/// hits a quota verdict again re-records itself via the hook, and any other
+/// failure is retried after a short delay until `max_attempts` is exhausted.
+async fn RateLimitGuard::resume_entry(
+  self : RateLimitGuard,
+  entry : PendingResume,
+  now_ms : Int64,
+) -> Unit {
+  let agent = match self.agent {
+    Some(agent) => agent
+    None => {
+      (self.trace)(
+        "rate-limit resume skipped for session \{entry.session_id}: no agent bound",
+      )
+      return
+    }
+  }
+  let input = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text(self.resume_note),
+  ])
+  // The Agent owns a single execution loop (one long-lived Puppet), so
+  // resumed turns must serialize even though each runs as its own task;
+  // concurrent run_turn on one Agent is not a supported operation. Queued
+  // resumes wait here while the monitor stays free to keep scheduling.
+  self.turn_lock.acquire() catch {
+    _ => return
+  }
+  let outcome : Result[@posoco.TurnResult, @posoco.AgentError] = Ok(
+    agent.run_turn(input, entry.session_id),
+  ) catch {
+    error => Err(error)
+  }
+  self.turn_lock.release()
+  match outcome {
+    Ok(_) => ()
+    Err(_) => {
+      let re_recorded = find_pending(self.pending, entry.session_id)
+      match re_recorded {
+        Some(_) => ()
+        None => {
+          let prior = match self.attempts.get(entry.session_id) {
+            Some(count) => count + 1
+            None => 2
+          }
+          self.attempts[entry.session_id] = prior
+          if prior <= self.max_attempts {
+            self.pending.push({
+              session_id: entry.session_id,
+              resume_at_ms: now_ms + 2000,
+              attempts: prior,
+              provider_code: entry.provider_code,
+            })
+            (self.trace)(
+              "rate-limit resume failed for session \{entry.session_id}, retry scheduled",
+            )
+          } else {
+            (self.trace)(
+              "rate-limit resume gave up on session \{entry.session_id}",
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Resume every due entry inline. Hosts that already own a periodic
+/// synchronous loop can drive this instead of `spawn_monitor`; hosts that
+/// want resumes off the monitor's back should use `spawn_monitor`, where
+/// each recovery runs as its own task.
 async fn RateLimitGuard::poll_due(
   self : RateLimitGuard,
   now_ms : Int64,
 ) -> Unit {
-  let due = self.pending.filter(fn(entry) {
-    entry.resume_at_ms <= now_ms && !self.stopped
-  })
-  for entry in due {
-    self.pending = self.pending.filter(fn(other) {
-      other.session_id != entry.session_id
-    })
-    let agent = match self.agent {
-      Some(agent) => agent
-      None => {
-        (self.trace)(
-          "rate-limit resume skipped for session \{entry.session_id}: no agent bound",
-        )
-        continue
-      }
-    }
-    let input = @posoco.Message::UserMessage(content=[
-      @posoco.Content::Text(self.resume_note),
-    ])
-    let outcome : Result[@posoco.TurnResult, @posoco.AgentError] = Ok(
-      agent.run_turn(input, entry.session_id),
-    ) catch {
-      error => Err(error)
-    }
-    match outcome {
-      Ok(_) => ()
-      Err(_) => {
-        let re_recorded = find_pending(self.pending, entry.session_id)
-        match re_recorded {
-          Some(_) => ()
-          None => {
-            let prior = match self.attempts.get(entry.session_id) {
-              Some(count) => count + 1
-              None => 2
-            }
-            self.attempts[entry.session_id] = prior
-            if prior <= self.max_attempts {
-              self.pending.push({
-                session_id: entry.session_id,
-                resume_at_ms: now_ms + 2000,
-                attempts: prior,
-                provider_code: entry.provider_code,
-              })
-              (self.trace)(
-                "rate-limit resume failed for session \{entry.session_id}, retry scheduled",
-              )
-            } else {
-              (self.trace)(
-                "rate-limit resume gave up on session \{entry.session_id}",
-              )
-            }
-          }
-        }
-      }
+  for entry in self.take_due(now_ms) {
+    self.resume_entry(entry, now_ms) catch {
+      _ => ()
     }
   }
 }
@@ -342,15 +372,25 @@ pub async fn RateLimitGuard::poll(self : RateLimitGuard) -> Unit {
 }
 
 ///|
-/// Spawn the background timer loop into a host-owned task group.
+/// Spawn the background timer loop into a host-owned task group. The
+/// monitor only schedules: each due resume runs as its own task in the same
+/// group, so a slow or failing turn never stalls the monitor, and resume
+/// errors are swallowed — a failing resume must not cancel the host group.
+/// The resumed turns themselves serialize on an internal lock because the
+/// bound Agent executes one turn at a time. The loop parks on the injected
+/// sleep until the earliest due time, so an idle guard costs nothing.
 pub fn[G] RateLimitGuard::spawn_monitor(
   self : RateLimitGuard,
   group : @async.TaskGroup[G],
 ) -> Unit {
   group.spawn_bg(() => {
     while !self.stopped {
-      self.poll_due((self.now_ms)()) catch {
-        _ => ()
+      for entry in self.take_due((self.now_ms)()) {
+        group.spawn_bg(() => {
+          self.resume_entry(entry, (self.now_ms)()) catch {
+            _ => ()
+          }
+        })
       }
       let now = (self.now_ms)()
       let mut delay = self.poll_interval_ms
@@ -370,7 +410,7 @@ pub fn[G] RateLimitGuard::spawn_monitor(
       if delay < 1 {
         delay = 1
       }
-      @async.sleep(delay) catch {
+      (self.sleep_ms)(delay) catch {
         _ => ()
       }
     }
