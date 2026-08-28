@@ -619,7 +619,7 @@ fn FlakyModelPort::FlakyModelPort(
 impl @posoco.ModelPort for FlakyModelPort with fn chat(
   self : FlakyModelPort,
   _scope : @posoco.InvocationScope,
-  _messages : Array[@posoco.Message],
+  _messages : ArrayView[@posoco.Message],
   _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _stream : @posoco.StreamMode,
@@ -645,7 +645,7 @@ impl @posoco.ModelPort for FlakyModelPort with fn chat(
 impl @posoco.ModelPort for FlakyModelPort with fn compact(
   self : FlakyModelPort,
   _scope : @posoco.InvocationScope,
-  _messages : Array[@posoco.Message],
+  _messages : ArrayView[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

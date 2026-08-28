@@ -49,7 +49,7 @@ fn zen_retryable_error(error : @posoco.ModelError) -> Bool {
 pub impl @posoco.ModelPort for ZenRetryModelPort with fn chat(
   self : ZenRetryModelPort,
   scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
@@ -81,7 +81,7 @@ pub impl @posoco.ModelPort for ZenRetryModelPort with fn chat(
 pub impl @posoco.ModelPort for ZenRetryModelPort with fn compact(
   self : ZenRetryModelPort,
   scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
