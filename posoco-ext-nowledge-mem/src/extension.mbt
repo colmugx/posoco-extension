@@ -13,8 +13,9 @@ const NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS : Int64 = 750L
 /// The Nowledge Mem agent extension — one struct, many port views:
 ///
 /// - `Lifecycle` — `on_start` resolves the config (env + home config file
-///   through the runner) and drains once; `on_shutdown` stops the flusher
-///   and performs the final drain;
+///   through the platform seam), hands the MCP endpoint to the lazy client,
+///   and drains once; `on_shutdown` stops the flusher, performs the final
+///   drain, and closes the MCP connection;
 /// - `PipelineHook` — `before_model` passthrough that snapshots the
 ///   model-visible transcript (D2: what the model sees is what syncs);
 ///   `before_tool` drains under a 750ms throttle; `on_turn_end` is the
@@ -29,12 +30,14 @@ const NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS : Int64 = 750L
 ///   never travels here — the working-memory briefing arrives through the
 ///   `MemoryPort` section (core's `MemoryRetrievalHook`) at the session's
 ///   first turn, and the model re-reads deliberately via the tools;
-/// - `ToolProvider` — the §5 tool set over the `nmem` CLI (the official MCP
-///   names read_context_bundle / read_working_memory / memory_search /
-///   thread_search / memory_add plus posoco-native additions);
+/// - `ToolProvider` — the §5 tool set over the extension's own lazy MCP
+///   client (the official names read_context_bundle / read_working_memory /
+///   memory_search / thread_search / memory_add plus posoco-native
+///   additions);
 /// - `MemoryPort` — the D9 passive surface: a one-shot gated working-memory
-///   read (`wm read`) plus the store/delete write-after queue whose writes
-///   drain to the CLI after the thread lanes;
+///   read (the read_working_memory MCP call) plus the store/delete
+///   write-after queue whose writes drain to the memory_add /
+///   memory_delete MCP calls after the thread lanes;
 /// - `CommandPort` — `/memory status|flush`, the user-facing diagnostics
 ///   over the same state (lane last_errors, queue depth, passive-read
 ///   gate, connectivity).
@@ -52,7 +55,8 @@ pub struct NowledgeMem {
   mut current_session : String?
   engine : SyncEngine
   transport : &NmemTransport
-  runner : &NmemRunner
+  mcp : &NmemMcp
+  platform : &NmemPlatform
   mut timeout_ms : Int
   /// Wall-clock ms (`@async.now`, Int64) of the last drain — start, turn
   /// end, or a `before_tool` throttle hit — gating the mid-turn drain
@@ -78,11 +82,12 @@ pub struct NowledgeMem {
 
 ///|
 /// Build a Nowledge Mem extension over an injected transport (thread sync
-/// HTTP) and runner (nmem CLI + home-file access). `source_app~` is the host
-/// product identity (e.g. cetas passes `"cetas"`): it prefixes synced thread
-/// ids and labels user-visible copy, and `NMEM_PLUGIN_SOURCE_APP` can still
-/// override it. Production hosts pass `HttpNmemTransport` and `PlatformRunner`;
-/// tests script both seams.
+/// HTTP), MCP seam (tool calls), and platform seam (env + home-file access).
+/// `source_app~` is the host product identity (e.g. cetas passes `"cetas"`):
+/// it prefixes synced thread ids, labels user-visible copy, and scopes MCP
+/// tool calls, and `NMEM_PLUGIN_SOURCE_APP` can still override it.
+/// Production hosts pass `HttpNmemTransport`, `LazyNmemMcp`, and
+/// `PlatformFs`; tests script all three seams.
 ///
 /// # Example
 /// ```mbt check
@@ -90,7 +95,8 @@ pub struct NowledgeMem {
 ///   let ext = NowledgeMem::NowledgeMem(
 ///     source_app="cetas",
 ///     transport=HttpNmemTransport::HttpNmemTransport() as &NmemTransport,
-///     runner=PlatformRunner::PlatformRunner() as &NmemRunner,
+///     mcp=LazyNmemMcp::LazyNmemMcp() as &NmemMcp,
+///     platform=PlatformFs::PlatformFs() as &NmemPlatform,
 ///   )
 ///   assert_true(ext.system_prompt().contains("## Nowledge Mem Guidance"))
 ///   assert_true(ext.system_prompt().contains("Cetas"))
@@ -100,7 +106,8 @@ pub struct NowledgeMem {
 pub fn NowledgeMem::NowledgeMem(
   source_app~ : String,
   transport~ : &NmemTransport,
-  runner~ : &NmemRunner,
+  mcp~ : &NmemMcp,
+  platform~ : &NmemPlatform,
   expose_delete_tool? : Bool = false,
 ) -> NowledgeMem {
   {
@@ -109,7 +116,8 @@ pub fn NowledgeMem::NowledgeMem(
     current_session: None,
     engine: SyncEngine(),
     transport,
-    runner,
+    mcp,
+    platform,
     timeout_ms: DEFAULT_THREAD_SYNC_TIMEOUT_MS,
     last_drain_ms: 0L,
     mem: MemoryState::MemoryState(),
@@ -121,20 +129,27 @@ pub fn NowledgeMem::NowledgeMem(
 
 ///|
 /// Agent boot (inside the first `run_turn`): resolve config and sync
-/// timeout, then drain once — a host that staged state before boot loses
-/// nothing, and one that never calls `attach` still gets every boundary
-/// committed at turn end. Passive retrieval stays gated: the first model
-/// call's read (not boot) spends it. The system-prompt contribution is
-/// static guidance and needs no IO here.
+/// timeout, hand the resolved MCP endpoint to the lazy client (it connects
+/// on first use — nothing pays for a connection until a tool, probe, or
+/// passive read actually needs one), then drain once — a host that staged
+/// state before boot loses nothing, and one that never calls `attach`
+/// still gets every boundary committed at turn end. Passive retrieval
+/// stays gated: the first model call's read (not boot) spends it. The
+/// system-prompt contribution is static guidance and needs no IO here.
 pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) -> Unit {
   let config = NmemConfig::resolve(
     runner_get_env,
-    NmemRunner::read_home_file(self.runner, ".nowledge-mem/config.json"),
+    NmemPlatform::read_home_file(self.platform, ".nowledge-mem/config.json"),
     source_app=self.source_app,
   )
   self.config = Some(config)
   self.timeout_ms = resolve_thread_sync_timeout_ms(
     runner_get_env("NMEM_SYNC_TIMEOUT_MS"),
+  )
+  self.mcp.configure(
+    url=config.mcp_url,
+    auth_token=config.api_key,
+    name=config.source_app,
   )
   self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
   self.last_drain_ms = @async.now()
@@ -143,13 +158,15 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) 
 ///|
 /// Agent shutdown: stop the flusher loop, then flush whatever the last turns
 /// staged — the boundary flush upstream performs on session close — including
-/// any memory writes still queued (D8 final drain).
+/// any memory writes still queued (D8 final drain), then close the MCP
+/// connection.
 pub impl @posoco.Lifecycle for NowledgeMem with fn on_shutdown(
   self : NowledgeMem,
 ) -> Unit {
   self.engine.stop()
   self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
   self.drain_memory_ops()
+  self.mcp.shutdown()
 }
 
 ///|

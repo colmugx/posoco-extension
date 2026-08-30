@@ -1,6 +1,6 @@
 ///|
 fn thread_msg(role : NmemRole, content : String) -> NmemThreadMessage {
-  { role, content, metadata: Map::from_array([]) }
+  { role, content, metadata: Map::from_array([]), }
 }
 
 ///|
@@ -70,6 +70,7 @@ test "should_sync: needs at least one user and one assistant message" {
 test "build_thread_body: full JSON shape with optional agent ids" {
   let config : NmemConfig = {
     api_url: "http://127.0.0.1:14242",
+    mcp_url: "http://127.0.0.1:14242/mcp",
     api_key: None,
     space: None,
     agent_id: Some("agent-1"),

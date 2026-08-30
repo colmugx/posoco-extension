@@ -1,25 +1,15 @@
 ///|
-/// Outcome of one `nmem` CLI invocation. `exit` follows the platform process
-/// exit code on a completed run; the sentinel `-1` marks a run that never
-/// completed — cancelled by timeout (`stderr = "timeout"`) or failed to spawn
-/// (`stderr` carries the spawn failure text).
-pub(all) struct CliOutcome {
-  exit : Int
-  stdout : String
-  stderr : String
-} derive(Debug)
-
-///|
-/// Exit sentinel shared by both platform runners: the CLI never ran to
-/// completion (timed out or failed to spawn).
-pub const NMEM_CLI_ABORT_EXIT : Int = -1
-
-///|
-/// Narrow platform seam for Nowledge Mem CLI and home-file access (plan D7):
-/// `run_cli` spawns `nmem` with `args` under `timeout_ms`; `read_home_file`
-/// reads a path relative to the user's home directory. Production uses
-/// `PlatformRunner` (per-target file); tests inject a scripted fake.
-pub(open) trait NmemRunner {
-  async fn run_cli(Self, args : Array[String], timeout_ms~ : Int) -> CliOutcome
+/// Narrow platform seam for Nowledge Mem local-file access (plan D7,
+/// reduced to its surviving slice): `read_home_file` reads a path relative
+/// to the user's home directory, `write_home_file` writes one back (the
+/// `/nmem url` persistence path) — the only local IO the extension does
+/// after the tool surface moved to MCP (env lookups go through the
+/// per-target `runner_get_env`). Production uses `PlatformFs`
+/// (per-target file); tests inject a scripted fake.
+pub(open) trait NmemPlatform {
   async fn read_home_file(Self, rel : String) -> String?
+  async fn write_home_file(Self, rel : String, content : String) -> Result[
+    Unit,
+    String,
+  ]
 }

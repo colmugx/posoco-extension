@@ -360,7 +360,7 @@ pub async fn flush_once(
       created = true
       {
         created,
-        acknowledged: Some({ ..delta.next, remote_count: count }),
+        acknowledged: Some({ ..delta.next, remote_count: count, }),
         last_error: None,
         pending: None,
       }
@@ -386,7 +386,7 @@ pub(all) struct SyncEngine {
 
 ///|
 pub fn SyncEngine::SyncEngine() -> SyncEngine {
-  { lanes: Map::from_array([]), stopped: false }
+  { lanes: Map::from_array([]), stopped: false, }
 }
 
 ///|
@@ -395,7 +395,7 @@ pub fn SyncEngine::SyncEngine() -> SyncEngine {
 /// Existing created/acknowledged/error state is preserved.
 pub fn SyncEngine::mark_dirty(self : SyncEngine, request : SyncRequest) -> Unit {
   let staged : LaneState = if self.lanes.contains(request.lane_key) {
-    { ..self.lanes[request.lane_key], pending: Some(request) }
+    { ..self.lanes[request.lane_key], pending: Some(request), }
   } else {
     {
       created: false,
@@ -439,7 +439,7 @@ pub async fn SyncEngine::drain_once(
   for lane_key in dirty {
     match self.lanes[lane_key].pending {
       Some(request) => {
-        self.lanes[lane_key] = { ..self.lanes[lane_key], pending: None }
+        self.lanes[lane_key] = { ..self.lanes[lane_key], pending: None, }
         let result = flush_once(
           transport,
           request,
@@ -447,7 +447,7 @@ pub async fn SyncEngine::drain_once(
           timeout_ms~,
         )
         let staged = self.lanes[lane_key].pending
-        self.lanes[lane_key] = { ..result, pending: staged }
+        self.lanes[lane_key] = { ..result, pending: staged, }
       }
       None => ()
     }

@@ -1,5 +1,5 @@
 ///|
-/// CLI timeout for the `/memory status` connectivity probe — a diagnostics
+/// Timeout for the `/memory status` MCP connectivity probe — a diagnostics
 /// surface should fail faster than the tool budget.
 const NMEM_COMMAND_STATUS_TIMEOUT_MS : Int = 10000
 
@@ -18,38 +18,36 @@ fn lane_thread_id(lane_key : String) -> String {
 const NMEM_STATUS_REPORT_CHARS : Int = 200
 
 ///|
-/// `/memory status`: one nmem CLI probe plus the extension's own state —
+/// `/memory status`: one MCP probe plus the extension's own state —
 /// connectivity, one line per thread lane, the write-after queue depth, and
 /// the passive-read gate. Returns the text report and its structured twin.
 async fn NowledgeMem::memory_status_report(
   self : NowledgeMem,
 ) -> (String, Json) {
-  let probe = NmemRunner::run_cli(
-    self.runner,
-    ["--json", "status"],
-    timeout_ms=NMEM_COMMAND_STATUS_TIMEOUT_MS,
-  )
+  let probe : Result[String, String] = try
+    self.mcp.probe(timeout_ms=NMEM_COMMAND_STATUS_TIMEOUT_MS)
+  catch {
+    err => Err("probe raised: " + err.to_string())
+  } noraise {
+    value => value
+  }
   let lines : Array[String] = []
   let lanes_json : Array[Json] = []
-  let connectivity = if probe.exit == 0 {
-    let excerpt = take_prefix(
-      probe.stdout.trim().to_owned(),
-      NMEM_STATUS_REPORT_CHARS,
-    )
-    lines.push("nmem: connected (\{excerpt})")
-    true
-  } else {
-    let detail = if probe.stderr != "" {
-      probe.stderr
-    } else if probe.stdout != "" {
-      probe.stdout
-    } else {
-      "nmem unavailable"
+  let connectivity = match probe {
+    Ok(report) => {
+      let excerpt = take_prefix(
+        report.trim().to_owned(),
+        NMEM_STATUS_REPORT_CHARS,
+      )
+      lines.push("nowledge-mem: connected (\{excerpt})")
+      true
     }
-    lines.push(
-      "nmem: unreachable (exit \{probe.exit}: \{take_prefix(detail, NMEM_TOOL_ERROR_CHARS)})",
-    )
-    false
+    Err(detail) => {
+      lines.push(
+        "nowledge-mem: unreachable (\{take_prefix(detail, NMEM_TOOL_ERROR_CHARS)})",
+      )
+      false
+    }
   }
   if self.engine.lanes.length() == 0 {
     lines.push("thread lanes: none yet")
@@ -167,7 +165,8 @@ fn pending_lane_count(engine : SyncEngine) -> Int {
 /// state (the Observer port is core-to-extension read-only, so without this
 /// command a lane's `last_error` would live only in memory). `status`
 /// reports connectivity + lanes + queue + the passive-read gate; `flush`
-/// forces one drain.
+/// forces one drain. Connection management (endpoint switching for nmem
+/// cloud and friends) lives on the sibling `/nmem` command.
 pub impl @posoco.CommandPort for NowledgeMem with fn commands(
   _self : NowledgeMem,
 ) -> Array[@posoco.CommandDef] {
@@ -196,6 +195,7 @@ pub impl @posoco.CommandPort for NowledgeMem with fn commands(
       visible: true,
       metadata: None,
     },
+    nmem_command_def(),
   ]
 }
 
@@ -205,9 +205,19 @@ pub impl @posoco.CommandPort for NowledgeMem with fn invoke(
   id : String,
   args : Json,
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
-  if id != "memory" {
-    raise @posoco.CommandError::NotFound(id)
+  match id {
+    "memory" => self.invoke_memory(args)
+    "nmem" => self.invoke_nmem(args)
+    _ => raise @posoco.CommandError::NotFound(id)
   }
+}
+
+///|
+/// The `/memory` body behind the id dispatch.
+async fn NowledgeMem::invoke_memory(
+  self : NowledgeMem,
+  args : Json,
+) -> @posoco.CommandOutcome raise @posoco.CommandError {
   match parse_memory_action(args) {
     None =>
       @posoco.CommandOutcome::Success(

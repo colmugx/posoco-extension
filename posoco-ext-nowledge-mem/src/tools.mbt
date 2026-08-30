@@ -1,18 +1,18 @@
 ///|
-/// CLI timeout for `nmem_status` — a health check should fail fast.
+/// MCP timeout for `nmem_status` — a health check should fail fast.
 const NMEM_STATUS_TIMEOUT_MS : Int = 15000
 
 ///|
-/// CLI timeout for every other tool invocation.
+/// MCP timeout for every other tool invocation.
 const NMEM_TOOL_TIMEOUT_MS : Int = 30000
 
 ///|
-/// Cap on the stderr/stdout excerpt surfaced in a tool error.
+/// Cap on the error-text excerpt surfaced in a tool error.
 const NMEM_TOOL_ERROR_CHARS : Int = 500
 
 ///|
 /// Unit types the upstream distill-memory skill documents for
-/// `--unit-type`.
+/// `unit_type`.
 let nmem_unit_types : Array[String] = [
   "fact", "preference", "decision", "plan", "procedure", "learning", "context", "event",
 ]
@@ -68,18 +68,20 @@ fn schema_enum_prop(values : Array[String], description : String) -> Json {
 }
 
 ///|
-/// Declare the §5 tool surface: nine tools by default — the five official
+/// Declare the tool surface: eight tools by default — the five official
 /// MCP names (read_context_bundle, read_working_memory, memory_search,
 /// thread_search, memory_add) plus posoco-native additions; the destructive
 /// `memory_delete` is advertised only when the host constructed the
-/// extension with `expose_delete_tool=true`.
+/// extension with `expose_delete_tool=true`. Every tool dispatches through
+/// the extension's lazy MCP client; `thread_create` was dropped when the
+/// CLI runner retired — the server's MCP surface has no counterpart.
 pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
   self : NowledgeMem,
 ) -> Array[@posoco.ToolDef] {
   let tools : Array[@posoco.ToolDef] = [
     nmem_tool_def(
       name="nmem_status",
-      description="Check the Nowledge Mem service connection: mode (local/remote), server and CLI versions. Use this first when memory or thread tools misbehave.",
+      description="Check the Nowledge Mem MCP connection: server identity, version, and tool count. Use this first when memory or thread tools misbehave.",
       properties=Map::from_array([]),
       required=[],
     ),
@@ -113,12 +115,6 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
           ),
         ),
         ("limit", schema_prop("integer", "Maximum memories to return.")),
-        (
-          "importance_min",
-          schema_prop(
-            "number", "Only return memories with at least this importance (0.0-1.0).",
-          ),
-        ),
         (
           "labels",
           schema_prop(
@@ -184,35 +180,20 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
       required=["query"],
     ),
     nmem_tool_def(
-      name="thread_show",
-      description="Load one past conversation thread with progressive detail: page through messages and cap per-message content length as needed.",
+      name="thread_fetch_messages",
+      description="Load one past conversation thread with progressive detail: page through messages as needed.",
       properties=Map::from_array([
         ("thread_id", schema_prop("string", "Id of the thread to show.")),
-        ("limit", schema_prop("integer", "Messages per page (default 8).")),
+        (
+          "limit",
+          schema_prop("integer", "Messages per page (server default 8)."),
+        ),
         (
           "offset",
           schema_prop("integer", "Message offset into the thread (default 0)."),
         ),
-        (
-          "content_limit",
-          schema_prop(
-            "integer", "Per-message content cap in characters (default 1200).",
-          ),
-        ),
       ]),
       required=["thread_id"],
-    ),
-    nmem_tool_def(
-      name="thread_create",
-      description="Create a curated handoff thread summarizing the current session for future continuity.",
-      properties=Map::from_array([
-        ("title", schema_prop("string", "Handoff title.")),
-        (
-          "content",
-          schema_prop("string", "Curated summary of what was done and decided."),
-        ),
-      ]),
-      required=["title", "content"],
     ),
   ]
   if self.expose_delete_tool {
@@ -319,35 +300,45 @@ fn tool_error(tool : String, message : String) -> @posoco.ToolOutcome {
 }
 
 ///|
-/// Map a failed CLI run to a ToolReportedError: the stderr excerpt (stdout
-/// when stderr is empty; "nmem unavailable" when both are, e.g. a missing
-/// CLI), capped at NMEM_TOOL_ERROR_CHARS.
-fn cli_tool_error(tool : String, outcome : CliOutcome) -> @posoco.ToolOutcome {
-  let detail = if outcome.stderr != "" {
-    outcome.stderr
-  } else if outcome.stdout != "" {
-    outcome.stdout
-  } else {
-    "nmem unavailable"
+/// Tool-call arguments with the ambient scope injected. The SDK transport
+/// carries only the auth token, so scope rides the arguments (the upstream
+/// header-scoping equivalent): `identity=true` adds source_app and the
+/// agent ids on the tools whose server schema accepts them; every tool gets
+/// space_id when a space is configured.
+fn mcp_args(
+  config : NmemConfig?,
+  fields : Map[String, Json],
+  identity? : Bool = false,
+) -> Json {
+  match config {
+    Some(config) => {
+      match config.space {
+        Some(space) => fields["space_id"] = Json::string(space)
+        None => ()
+      }
+      if identity {
+        fields["source_app"] = Json::string(config.source_app)
+        match config.agent_id {
+          Some(agent_id) => fields["agent_id"] = Json::string(agent_id)
+          None => ()
+        }
+        match config.host_agent_id {
+          Some(host_agent_id) =>
+            fields["host_agent_id"] = Json::string(host_agent_id)
+          None => ()
+        }
+      }
+    }
+    None => ()
   }
-  tool_error(
-    tool,
-    "nmem exited with code \{outcome.exit}: \{take_prefix(detail, NMEM_TOOL_ERROR_CHARS)}",
-  )
+  Json::object(fields)
 }
 
 ///|
-/// Success carrying the CLI's stdout verbatim — the tools return the
-/// server's own --json payload for the model to read.
-fn cli_tool_success(outcome : CliOutcome) -> @posoco.ToolOutcome {
-  @posoco.ToolOutcome::Success(content=outcome.stdout, structured=None)
-}
-
-///|
-/// Parsed CLI stdout for the structured channel: a JSON object or array
+/// Parsed reply text for the structured channel: a JSON object or array
 /// passes through verbatim; anything else stays `None`.
-fn cli_structured(stdout : String) -> Json? {
-  let parsed = @json.parse(stdout) catch { _ => return None }
+fn parsed_structured(text : String) -> Json? {
+  let parsed = @json.parse(text) catch { _ => return None }
   match parsed {
     Json::Object(_) | Json::Array(_) => Some(parsed)
     _ => None
@@ -355,14 +346,30 @@ fn cli_structured(stdout : String) -> Json? {
 }
 
 ///|
-/// Success carrying the CLI's stdout verbatim plus the parsed payload in
-/// the structured channel (official-surface tools: nmem_status,
-/// memory_search, thread_search).
-fn cli_tool_success_structured(outcome : CliOutcome) -> @posoco.ToolOutcome {
-  @posoco.ToolOutcome::Success(
-    content=outcome.stdout,
-    structured=cli_structured(outcome.stdout),
-  )
+/// One MCP tool call mapped onto a ToolOutcome. A transport-level failure
+/// or the server's own error flag is a ToolReportedError the model can
+/// react to (the CLI's nonzero-exit mapping carries over); a clean reply
+/// returns the text content verbatim plus its parsed JSON in the structured
+/// channel when it is an object or array.
+async fn NowledgeMem::call_mcp_tool(
+  self : NowledgeMem,
+  tool : String,
+  args : Json,
+  timeout_ms~ : Int,
+) -> @posoco.ToolOutcome {
+  let outcome = self.mcp.call_tool(tool, args, timeout_ms~) catch {
+    err => return tool_error(tool, err.to_string())
+  }
+  match outcome {
+    Err(message) => tool_error(tool, message)
+    Ok({ is_error: true, text, }) =>
+      tool_error(tool, "mcp error: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}")
+    Ok({ text, .. }) =>
+      @posoco.ToolOutcome::Success(
+        content=text,
+        structured=parsed_structured(text),
+      )
+  }
 }
 
 ///|
@@ -374,7 +381,7 @@ const NMEM_WM_EMPTY_HINT : String = "No working memory yet — use memory_add to
 ///|
 /// Body of a `read_working_memory` hit: the payload's `content` when the
 /// working memory exists, a hint when the payload reports `exists: false`
-/// (or carries no usable content), and the raw stdout when nothing parsed.
+/// (or carries no usable content), and the raw reply when nothing parsed.
 fn wm_tool_text(stdout : String) -> String {
   match parse_wm_payload(stdout) {
     Some(content) => content
@@ -388,74 +395,73 @@ fn wm_tool_text(stdout : String) -> String {
 }
 
 ///|
-/// `nmem_status`: `nmem --json status` under the short health-check budget.
+/// `nmem_status`: MCP connectivity probe — server identity plus tool count
+/// — under the short health-check budget.
 async fn NowledgeMem::run_nmem_status(
   self : NowledgeMem,
 ) -> @posoco.ToolOutcome {
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    ["--json", "status"],
-    timeout_ms=NMEM_STATUS_TIMEOUT_MS,
-  )
-  if outcome.exit == 0 {
-    cli_tool_success_structured(outcome)
-  } else {
-    cli_tool_error("nmem_status", outcome)
+  let probe = self.mcp.probe(timeout_ms=NMEM_STATUS_TIMEOUT_MS) catch {
+    err => return tool_error("nmem_status", err.to_string())
+  }
+  match probe {
+    Ok(report) =>
+      @posoco.ToolOutcome::Success(
+        content=report,
+        structured=Some(
+          Json::object({
+            "connected": Json::boolean(true),
+            "report": Json::string(report),
+          }),
+        ),
+      )
+    Err(message) => tool_error("nmem_status", message)
   }
 }
 
 ///|
-/// `read_working_memory` (official MCP surface): `--json wm read` scoped by
-/// the ambient space. The stdout object's `content` field is the body;
-/// `exists === false` degrades to a hint instead of an error.
+/// `read_working_memory` (official MCP surface): the same read the passive
+/// MemoryPort gate performs, scoped by the ambient identity. The payload's
+/// `content` field is the body; `exists === false` degrades to a hint
+/// instead of an error.
 async fn NowledgeMem::run_read_working_memory(
   self : NowledgeMem,
 ) -> @posoco.ToolOutcome {
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(["--json", "wm", "read"], self.config),
+  let fields : Map[String, Json] = Map([])
+  let outcome = self.call_mcp_tool(
+    "read_working_memory",
+    mcp_args(self.config, fields, identity=true),
     timeout_ms=NMEM_TOOL_TIMEOUT_MS,
   )
-  if outcome.exit != 0 {
-    return cli_tool_error("read_working_memory", outcome)
+  match outcome {
+    @posoco.ToolOutcome::Success(content=stdout, structured~) =>
+      @posoco.ToolOutcome::Success(content=wm_tool_text(stdout), structured~)
+    other => other
   }
-  @posoco.ToolOutcome::Success(
-    content=wm_tool_text(outcome.stdout),
-    structured=cli_structured(outcome.stdout),
-  )
 }
 
 ///|
-/// `read_context_bundle` (official MCP surface): `--json context
-/// --source-app <app>` scoped by the ambient space. The payload's
+/// `read_context_bundle` (official MCP surface): the payload's
 /// rendered_markdown, markdown, or content field (in that order) is the
-/// body; the raw stdout serves as a last-resort fallback.
+/// body; the raw reply serves as a last-resort fallback.
 async fn NowledgeMem::run_read_context_bundle(
   self : NowledgeMem,
 ) -> @posoco.ToolOutcome {
-  let source_app = match self.config {
-    Some(config) => config.source_app
-    None => self.source_app
-  }
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(
-      ["--json", "context", "--source-app", source_app],
-      self.config,
-    ),
+  let fields : Map[String, Json] = Map([])
+  let outcome = self.call_mcp_tool(
+    "read_context_bundle",
+    mcp_args(self.config, fields, identity=true),
     timeout_ms=NMEM_TOOL_TIMEOUT_MS,
   )
-  if outcome.exit != 0 {
-    return cli_tool_error("read_context_bundle", outcome)
+  match outcome {
+    @posoco.ToolOutcome::Success(content=raw, structured~) => {
+      let content = match parse_context_payload(raw) {
+        Some(content) => content
+        None => raw
+      }
+      @posoco.ToolOutcome::Success(content~, structured~)
+    }
+    other => other
   }
-  let content = match parse_context_payload(outcome.stdout) {
-    Some(content) => content
-    None => outcome.stdout
-  }
-  @posoco.ToolOutcome::Success(
-    content~,
-    structured=cli_structured(outcome.stdout),
-  )
 }
 
 ///|
@@ -463,7 +469,6 @@ priv struct MemorySearchArgs {
   query : String
   mode : String?
   limit : Int?
-  importance_min : Double?
   labels : Array[String]?
 }
 
@@ -487,7 +492,6 @@ fn parse_memory_search_args(args : Json) -> MemorySearchArgs raise ToolArgError 
       Some(mode)
     },
     limit: opt_int(fields, "limit"),
-    importance_min: opt_double(fields, "importance_min"),
     labels: opt_string_array(fields, "labels"),
   }
 }
@@ -495,7 +499,8 @@ fn parse_memory_search_args(args : Json) -> MemorySearchArgs raise ToolArgError 
 ///|
 /// `memory_search`: server-side semantic retrieval, never gated — after the
 /// passive one-shot is spent this tool is the only recall path, so it must
-/// stay unconditionally available.
+/// stay unconditionally available. The posoco `labels` argument maps to the
+/// server's `filter_labels` property.
 async fn NowledgeMem::run_memory_search(
   self : NowledgeMem,
   args : Json,
@@ -503,46 +508,27 @@ async fn NowledgeMem::run_memory_search(
   let parsed = parse_memory_search_args(args) catch {
     ToolArgError(message) => return tool_error("memory_search", message)
   }
-  let cli_args : Array[String] = ["--json", "m", "search", parsed.query]
+  let fields : Map[String, Json] = { "query": Json::string(parsed.query) }
   match parsed.mode {
-    Some(mode) => {
-      cli_args.push("--mode")
-      cli_args.push(mode)
-    }
+    Some(mode) => fields["mode"] = Json::string(mode)
     None => ()
   }
   match parsed.limit {
-    Some(limit) => {
-      cli_args.push("-n")
-      cli_args.push("\{limit}")
-    }
-    None => ()
-  }
-  match parsed.importance_min {
-    Some(importance) => {
-      cli_args.push("--importance")
-      cli_args.push("\{importance}")
-    }
+    Some(limit) => fields["limit"] = Json::number(limit.to_double())
     None => ()
   }
   match parsed.labels {
     Some(labels) =>
-      for label in labels {
-        cli_args.push("-l")
-        cli_args.push(label)
-      }
+      fields["filter_labels"] = Json::array(
+        labels.map(label => Json::string(label)),
+      )
     None => ()
   }
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(cli_args, self.config),
+  self.call_mcp_tool(
+    "memory_search",
+    mcp_args(self.config, fields, identity=true),
     timeout_ms=NMEM_TOOL_TIMEOUT_MS,
   )
-  if outcome.exit == 0 {
-    cli_tool_success_structured(outcome)
-  } else {
-    cli_tool_error("memory_search", outcome)
-  }
 }
 
 ///|
@@ -579,8 +565,8 @@ fn parse_memory_add_args(args : Json) -> MemoryAddArgs raise ToolArgError {
 
 ///|
 /// `memory_add`: the single write path is MemoryPort::store — the entry
-/// enters the write-after queue and reaches the server on the next drain,
-/// exactly like passive stores.
+/// enters the write-after queue and reaches the server (as the memory_add
+/// MCP call) on the next drain, exactly like passive stores.
 async fn NowledgeMem::run_memory_add(
   self : NowledgeMem,
   args : Json,
@@ -642,9 +628,9 @@ fn parse_memory_update_args(
 }
 
 ///|
-/// `memory_update`: straight to the CLI (update semantics are not on the
-/// MemoryPort surface). The server is the single source of truth — there is
-/// no local index to refresh.
+/// `memory_update`: straight to the server (update semantics are not on the
+/// MemoryPort surface). The posoco `id` argument maps to the server's
+/// `memory_id` property.
 async fn NowledgeMem::run_memory_update(
   self : NowledgeMem,
   args : Json,
@@ -652,37 +638,26 @@ async fn NowledgeMem::run_memory_update(
   let (id, content, title) = parse_memory_update_args(args) catch {
     ToolArgError(message) => return tool_error("memory_update", message)
   }
-  let cli_args : Array[String] = ["--json", "m", "update", id]
+  let fields : Map[String, Json] = { "memory_id": Json::string(id) }
   match content {
-    Some(content) => {
-      cli_args.push("-c")
-      cli_args.push(content)
-    }
+    Some(content) => fields["content"] = Json::string(content)
     None => ()
   }
   match title {
-    Some(title) => {
-      cli_args.push("-t")
-      cli_args.push(title)
-    }
+    Some(title) => fields["title"] = Json::string(title)
     None => ()
   }
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(cli_args, self.config),
+  self.call_mcp_tool(
+    "memory_update",
+    mcp_args(self.config, fields),
     timeout_ms=NMEM_TOOL_TIMEOUT_MS,
   )
-  if outcome.exit != 0 {
-    return cli_tool_error("memory_update", outcome)
-  }
-  cli_tool_success(outcome)
 }
 
 ///|
-/// `memory_delete`: straight to `m delete -f` (the -f flag is mandatory —
-/// without it the CLI blocks interactively). Only registered when the host
-/// opts in. The server is the single source of truth — there is no local
-/// index to evict from.
+/// `memory_delete`: the server's `memory_delete` tool (posoco `id` maps to
+/// `memory_id`). Only registered when the host opts in. The server is the
+/// single source of truth — there is no local index to evict from.
 async fn NowledgeMem::run_memory_delete(
   self : NowledgeMem,
   args : Json,
@@ -690,15 +665,12 @@ async fn NowledgeMem::run_memory_delete(
   let id = req_string(arg_fields(args), "id") catch {
     ToolArgError(message) => return tool_error("memory_delete", message)
   }
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(["--json", "m", "delete", id, "-f"], self.config),
+  let fields : Map[String, Json] = { "memory_id": Json::string(id) }
+  self.call_mcp_tool(
+    "memory_delete",
+    mcp_args(self.config, fields),
     timeout_ms=NMEM_TOOL_TIMEOUT_MS,
   )
-  if outcome.exit != 0 {
-    return cli_tool_error("memory_delete", outcome)
-  }
-  cli_tool_success(outcome)
 }
 
 ///|
@@ -716,117 +688,51 @@ async fn NowledgeMem::run_thread_search(
   let limit = opt_int(fields, "limit") catch {
     ToolArgError(message) => return tool_error("thread_search", message)
   }
-  let cli_args : Array[String] = ["--json", "t", "search", query]
+  let mcp_fields : Map[String, Json] = { "query": Json::string(query) }
   match limit {
-    Some(limit) => {
-      cli_args.push("--limit")
-      cli_args.push("\{limit}")
-    }
+    Some(limit) => mcp_fields["limit"] = Json::number(limit.to_double())
     None => ()
   }
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(cli_args, self.config),
+  self.call_mcp_tool(
+    "thread_search",
+    mcp_args(self.config, mcp_fields, identity=true),
     timeout_ms=NMEM_TOOL_TIMEOUT_MS,
   )
-  if outcome.exit == 0 {
-    cli_tool_success_structured(outcome)
-  } else {
-    cli_tool_error("thread_search", outcome)
-  }
 }
 
 ///|
-/// `thread_show` with the upstream progressive-loading defaults (limit 8,
-/// offset 0, content cap 1200).
-async fn NowledgeMem::run_thread_show(
+/// `thread_fetch_messages`: one past conversation thread with progressive
+/// paging (server defaults apply when limit/offset are omitted).
+async fn NowledgeMem::run_thread_fetch_messages(
   self : NowledgeMem,
   args : Json,
 ) -> @posoco.ToolOutcome {
   let fields = arg_fields(args) catch {
-    ToolArgError(message) => return tool_error("thread_show", message)
+    ToolArgError(message) => return tool_error("thread_fetch_messages", message)
   }
   let thread_id = req_string(fields, "thread_id") catch {
-    ToolArgError(message) => return tool_error("thread_show", message)
+    ToolArgError(message) => return tool_error("thread_fetch_messages", message)
   }
-  let limit_opt = opt_int(fields, "limit") catch {
-    ToolArgError(message) => return tool_error("thread_show", message)
+  let limit = opt_int(fields, "limit") catch {
+    ToolArgError(message) => return tool_error("thread_fetch_messages", message)
   }
-  let offset_opt = opt_int(fields, "offset") catch {
-    ToolArgError(message) => return tool_error("thread_show", message)
+  let offset = opt_int(fields, "offset") catch {
+    ToolArgError(message) => return tool_error("thread_fetch_messages", message)
   }
-  let content_limit_opt = opt_int(fields, "content_limit") catch {
-    ToolArgError(message) => return tool_error("thread_show", message)
+  let mcp_fields : Map[String, Json] = { "thread_id": Json::string(thread_id) }
+  match limit {
+    Some(limit) => mcp_fields["limit"] = Json::number(limit.to_double())
+    None => ()
   }
-  let limit = match limit_opt {
-    Some(limit) => limit
-    None => 8
+  match offset {
+    Some(offset) => mcp_fields["offset"] = Json::number(offset.to_double())
+    None => ()
   }
-  let offset = match offset_opt {
-    Some(offset) => offset
-    None => 0
-  }
-  let content_limit = match content_limit_opt {
-    Some(content_limit) => content_limit
-    None => 1200
-  }
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(
-      [
-        "--json",
-        "t",
-        "show",
-        thread_id,
-        "--limit",
-        "\{limit}",
-        "--offset",
-        "\{offset}",
-        "--content-limit",
-        "\{content_limit}",
-      ],
-      self.config,
-    ),
+  self.call_mcp_tool(
+    "thread_fetch_messages",
+    mcp_args(self.config, mcp_fields),
     timeout_ms=NMEM_TOOL_TIMEOUT_MS,
   )
-  if outcome.exit == 0 {
-    cli_tool_success(outcome)
-  } else {
-    cli_tool_error("thread_show", outcome)
-  }
-}
-
-///|
-/// `thread_create`: an explicit handoff thread (`t create -t .. -c ..
-/// -s generic-agent`, per the upstream save-thread skill).
-async fn NowledgeMem::run_thread_create(
-  self : NowledgeMem,
-  args : Json,
-) -> @posoco.ToolOutcome {
-  let fields = arg_fields(args) catch {
-    ToolArgError(message) => return tool_error("thread_create", message)
-  }
-  let title = req_string(fields, "title") catch {
-    ToolArgError(message) => return tool_error("thread_create", message)
-  }
-  let content = req_string(fields, "content") catch {
-    ToolArgError(message) => return tool_error("thread_create", message)
-  }
-  let outcome = NmemRunner::run_cli(
-    self.runner,
-    with_ambient_space(
-      [
-        "--json", "t", "create", "-t", title, "-c", content, "-s", "generic-agent",
-      ],
-      self.config,
-    ),
-    timeout_ms=NMEM_TOOL_TIMEOUT_MS,
-  )
-  if outcome.exit == 0 {
-    cli_tool_success(outcome)
-  } else {
-    cli_tool_error("thread_create", outcome)
-  }
 }
 
 ///|
@@ -846,8 +752,7 @@ async fn NowledgeMem::dispatch_tool(
     "memory_update" => self.run_memory_update(args)
     "memory_delete" => self.run_memory_delete(args)
     "thread_search" => self.run_thread_search(args)
-    "thread_show" => self.run_thread_show(args)
-    "thread_create" => self.run_thread_create(args)
+    "thread_fetch_messages" => self.run_thread_fetch_messages(args)
     _ =>
       @posoco.ToolOutcome::RuntimeFailure(
         error_category=NMEM_EXTENSION_ID,
@@ -860,7 +765,7 @@ async fn NowledgeMem::dispatch_tool(
 /// Dispatch one tool call. Argument-shape problems (missing required
 /// fields, wrong types, non-enum unit_type) are ToolReportedError the model
 /// can correct; an unknown name raises RuntimeError for the runtime's
-/// catch-all; an error escaping a CLI helper (the async slots' general
+/// catch-all; an error escaping an MCP helper (the async slots' general
 /// error) surfaces as RuntimeFailure so the run continues.
 pub impl @posoco.ToolProvider for NowledgeMem with fn execute(
   self : NowledgeMem,
@@ -876,8 +781,7 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn execute(
     | "memory_update"
     | "memory_delete"
     | "thread_search"
-    | "thread_show"
-    | "thread_create" => ()
+    | "thread_fetch_messages" => ()
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
         "\{NMEM_EXTENSION_ID}: unknown tool '\{name}'",

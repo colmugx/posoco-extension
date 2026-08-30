@@ -14,12 +14,21 @@ fn delta_msg(
 ///|
 fn lane_config(
   api_url? : String = "http://127.0.0.1:14242",
+  mcp_url? : String = "http://127.0.0.1:14242/mcp",
   api_key? : String? = None,
   space? : String? = None,
   agent_id? : String? = None,
   host_agent_id? : String? = None,
 ) -> NmemConfig {
-  { api_url, api_key, space, agent_id, host_agent_id, source_app: "posoco" }
+  {
+    api_url,
+    mcp_url,
+    api_key,
+    space,
+    agent_id,
+    host_agent_id,
+    source_app: "posoco",
+  }
 }
 
 ///|
@@ -105,11 +114,11 @@ test "select_acked_delta: stale last external id forces a reset" {
     delta_msg(Assistant, "hi", "e2"),
   ]
   let good = select_acked_delta(messages, None).next
-  let stale_id : AckedCursor = { ..good, last_external_id: Some("e-other") }
+  let stale_id : AckedCursor = { ..good, last_external_id: Some("e-other"), }
   inspect(select_acked_delta(messages, Some(stale_id)).reset, content="true")
   // A count>0 cursor without last_external_id never matches: upstream
   // compares the message's "" against undefined and treats it as a mismatch.
-  let missing_id : AckedCursor = { ..good, last_external_id: None }
+  let missing_id : AckedCursor = { ..good, last_external_id: None, }
   inspect(select_acked_delta(messages, Some(missing_id)).reset, content="true")
 }
 
@@ -146,7 +155,7 @@ test "select_acked_delta: out-of-range cursor count resets without indexing erro
   inspect(past.start, content="0")
   inspect(past.reset, content="true")
   inspect(past.messages.length(), content="2")
-  let negative : AckedCursor = { ..beyond, count: -1 }
+  let negative : AckedCursor = { ..beyond, count: -1, }
   let before = select_acked_delta(messages, Some(negative))
   inspect(before.start, content="0")
   inspect(before.reset, content="true")
@@ -238,7 +247,7 @@ test "sync_lane_key: deterministic and sensitive to every destination component"
   inspect(sync_lane_key("demo-s2", base) != base_key, content="true")
   // source_app is not a lane component (upstream hashes five fields only).
   inspect(
-    sync_lane_key("demo-s1", { ..lane_config(), source_app: "demo" }) ==
+    sync_lane_key("demo-s1", { ..lane_config(), source_app: "demo", }) ==
     base_key,
     content="true",
   )

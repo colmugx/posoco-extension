@@ -38,32 +38,21 @@ memory staying welded to its own platform.
 ### Prerequisites
 
 1. The Nowledge Mem service — local (default `http://127.0.0.1:14242`) or
-   remote.
-2. `nmem` CLI in `PATH` — required by the ten tools and the one-shot
-   passive working-memory read:
-
-```bash
-nmem status             # verify connection
-```
-
-Thread sync needs neither — it talks HTTP directly, so a headless host with
-only the server reachable still syncs transcripts.
+   remote. The service serves MCP at `{api_url}/mcp`; no `nmem` CLI is
+   needed — every tool and the passive working-memory read go through MCP,
+   and thread sync talks HTTP directly.
 
 ### Configuration
 
-Per key: **env var > `~/.nowledge-mem/config.json` > default.** Values are
-trimmed; blanks count as missing. The file takes camelCase and snake_case
-and is shared with every other Nowledge Mem integration — existing spaces
-and threads are visible as-is.
-
-| Env var | config.json keys | Meaning | Default |
+| env | config.json key | effect | default |
 |---------|------------------|---------|---------|
 | `NMEM_API_URL` | `apiUrl` / `api_url` | Service base URL | `http://127.0.0.1:14242` |
-| `NMEM_API_KEY` | `apiKey` / `api_key` | API key (`Authorization: Bearer` + `X-NMEM-API-Key`) | — |
-| `NMEM_SPACE` / `NMEM_SPACE_ID` | `space` / `spaceId` / `space_id` | Space scoping (`space_id` in request bodies, `--space` on CLI calls) | — |
+| `NMEM_MCP_URL` | `mcpUrl` / `mcp_url` | MCP endpoint override | `{api_url}/mcp` (legacy `/remote-api` prefixes strip first) |
+| `NMEM_API_KEY` | `apiKey` / `api_key` | API key (`Authorization: Bearer` on both channels) | — |
+| `NMEM_SPACE` / `NMEM_SPACE_ID` | `space` / `spaceId` / `space_id` | Space scoping (`space_id` rides sync bodies and tool arguments) | — |
 | `NMEM_AGENT_ID` | `agentId` / `agent_id` | Agent id (AI identity) | — |
 | `NMEM_HOST_AGENT_ID` | `hostAgentId` / `host_agent_id` | Host agent id | — |
-| `NMEM_PLUGIN_SOURCE_APP` | — (env only) | Runtime override of the constructor's `source_app`; thread ids are `{source_app}-{session_id}` | constructor value |
+| `NMEM_PLUGIN_SOURCE_APP` | — (env only) | Runtime override of the constructor's `source_app`; thread ids are `{source_app}-{session_id}` and MCP calls attribute writes to it | constructor value |
 | `NMEM_SYNC_TIMEOUT_MS` | — (env only) | Thread sync HTTP timeout | `120000`, clamped to 1s–30min |
 
 ### Assembly
@@ -72,7 +61,8 @@ and threads are visible as-is.
 let nmem = NowledgeMem(
   source_app="cetas",
   transport=HttpNmemTransport::HttpNmemTransport() as &NmemTransport,
-  runner=PlatformRunner::PlatformRunner() as &NmemRunner,
+  mcp=LazyNmemMcp::LazyNmemMcp() as &NmemMcp,
+  platform=PlatformFs::PlatformFs() as &NmemPlatform,
 )
 
 let agent = Agent(
@@ -91,45 +81,73 @@ let agent = Agent(
 nmem.attach(group)
 ```
 
-- `NowledgeMem(source_app~, transport~, runner~, expose_delete_tool?)` —
+- `NowledgeMem(source_app~, transport~, mcp~, platform~, expose_delete_tool?)` —
   `source_app~` is the required host product identity (cetas passes
-  `"cetas"`): it prefixes synced thread ids and labels user-visible copy.
-  Production passes `HttpNmemTransport` + `PlatformRunner`; both IO seams
-  are injectable (tests script them with fakes).
+  `"cetas"`): it prefixes synced thread ids, labels user-visible copy, and
+  scopes MCP tool calls. Production passes `HttpNmemTransport` (thread sync
+  HTTP) + `LazyNmemMcp` (tools) + `PlatformFs` (env + home-file access); all
+  three IO seams are injectable (tests script them with fakes).
 - `attach(group)` — optional optimization: a 750ms flusher poll loop draining
   thread lanes, then the memory write queue. Committing does not depend on
   it — every turn commits at turn end, `on_start` drains once at boot, and
-  `on_shutdown` does the final drain; `flush_pending()` forces a drain
-  anytime.
+  `on_shutdown` does the final drain and closes the MCP connection;
+  `flush_pending()` forces a drain anytime.
+
+### The MCP connection
+
+An MCP client is 1:1 with its server, so the extension owns one
+lazily-connected client itself (the elyra builtin-web-search pattern) rather
+than depending on a multi-server MCP host:
+
+- **Lazy** — `on_start` only installs the resolved endpoint
+  (`{mcp_url}`, Bearer key, client name `source_app`); the connection opens
+  on the first tool call, probe, or passive read, so a host that never
+  touches memory pays nothing.
+- **Scoped by arguments** — the SDK transport carries only the auth token,
+  so ambient scope rides the tool arguments (`space_id` everywhere,
+  `source_app` / `agent_id` / `host_agent_id` on the tools whose server
+  schema accepts them) — the same injection the upstream langgraph
+  connector performs via its interceptor.
+- **Reactive reconnect** — a wire-level failure or timeout drops the client;
+  the next call reconnects in place. A server-side JSON-RPC error is a
+  genuine answer and keeps the connection. Cancellation is never swallowed.
+- **Bounded** — every call carries its own budget (5s passive read, 15s
+  status probe, 30s tools and write-backs).
 
 ### Tools
 
-| Tool | nmem CLI | Notes |
+Every tool dispatches through the MCP client; the posoco argument shapes map
+onto the server's tool schemas (`id` → `memory_id`, `labels` →
+`filter_labels`).
+
+| Tool | MCP tool | Notes |
 |------|----------|-------|
-| `nmem_status` | `--json status` | health check (15s budget) |
-| `read_context_bundle` | `context` | official MCP name; context bundle as rendered markdown (`rendered_markdown` \| `markdown` \| `content`) — usually already injected into the system prompt, so re-read only after major context changes |
-| `read_working_memory` | `wm read` | official MCP name; working-memory body — usually already injected into the system prompt, so re-read only after major context changes |
-| `memory_search` | `m search` | official MCP name; server-side semantic search (deep mode, importance/label filters) — the recall path once the injected working-memory briefing is spent |
-| `memory_add` | `m add` | official MCP name; enters through `MemoryPort::store` — the single write path shared with passive stores |
-| `memory_update` | `m update` | direct CLI; the server is the single source of truth for search |
-| `memory_delete` | `m delete -f` | hidden by default; `expose_delete_tool=true` registers it (hard delete, irreversible) |
-| `thread_search` | `t search` | official MCP name; past threads, including other tools' sessions |
-| `thread_show` | `t show` | progressive loading (limit / offset / content cap) |
-| `thread_create` | `t create` | curated handoff summary for future sessions |
+| `nmem_status` | connectivity probe | MCP probe (list_tools + server identity, 15s budget) |
+| `read_context_bundle` | `read_context_bundle` | official name; context bundle as rendered markdown (`rendered_markdown` \| `markdown` \| `content`) — usually already injected into the system prompt, so re-read only after major context changes |
+| `read_working_memory` | `read_working_memory` | official name; working-memory body — usually already injected into the system prompt, so re-read only after major context changes |
+| `memory_search` | `memory_search` | official name; server-side semantic search (deep mode, label filter) — the recall path once the injected working-memory briefing is spent |
+| `memory_add` | `memory_add` | official name; enters through `MemoryPort::store` — the single write path shared with passive stores, flushed as the `memory_add` MCP call |
+| `memory_update` | `memory_update` | direct call; the server is the single source of truth for search |
+| `memory_delete` | `memory_delete` | hidden by default; `expose_delete_tool=true` registers it (hard delete, irreversible) |
+| `thread_search` | `thread_search` | official name; past threads, including other tools' sessions |
+| `thread_fetch_messages` | `thread_fetch_messages` | progressive loading (limit / offset) |
 
 The five official MCP tool names (`read_context_bundle`,
 `read_working_memory`, `memory_search`, `thread_search`, `memory_add`) are
 name-aligned with the [official Nowledge Mem MCP surface](https://mem.nowledge.co/SKILL.md);
-`nmem_status`, `memory_update`, `memory_delete`, `thread_show`, and
-`thread_create` are posoco-native additions. `memory_search`, `thread_search`,
-and `nmem_status` also carry the CLI's parsed JSON in the tool result's
-`structured` channel.
+`nmem_status`, `memory_update`, `memory_delete`, and
+`thread_fetch_messages` are posoco-native additions. `thread_create` was
+dropped when the CLI runner retired — the server's MCP surface has no
+counterpart; the automatic thread sync covers handoff continuity.
+`memory_search`, `thread_search`, and the read tools also carry the reply's
+parsed JSON in the tool result's `structured` channel when it is an object
+or array.
 
 ### Commands
 
 | Command | Effect |
 |---------|--------|
-| `/memory status` | nmem connectivity probe (10s budget), one line per thread lane (thread_id / created / acknowledged count / last_error), write-queue depth, passive-read state (done / pending) |
+| `/memory status` | MCP connectivity probe (10s budget), one line per thread lane (thread_id / created / acknowledged count / last_error), write-queue depth, passive-read state (done / pending) |
 | `/memory flush` | force one drain of pending thread lanes and queued memory writes now |
 
 `/memory` with no or an unknown subcommand prints usage. This is the
@@ -137,14 +155,34 @@ synchronous diagnostics face: lane `last_error`s become user-checkable
 instead of living only in memory — the Observer port is core-to-extension
 read-only, so the extension cannot emit its own observer events.
 
+### Commands — `/nmem` (connection management)
+
+| Command | Effect |
+|---------|--------|
+| `/nmem` / `/nmem status` | connection picture as a toast: tool channel (MCP endpoint), sync channel + local/remote mode, identity (`source_app`/space), any env override that outranks the config file, and an MCP connectivity probe |
+| `/nmem url <api>` | switch the service base URL (thread sync + the derived `{api}/mcp` endpoint); staged syncs flush to the old address first; persists to the shared config file; probes the new endpoint |
+| `/nmem mcp <url>` | override the MCP endpoint only (sync base untouched); same flush/persist/probe behavior |
+
+`/nmem` is the answer to pointing the agent at nmem cloud: the base stops
+being `http://127.0.0.1:14242`, and everything follows. The switch is live
+immediately (config + lazy MCP client reconfigured in place) and is also
+merged into `~/.nowledge-mem/config.json` so future processes start there —
+sibling keys are preserved and the file's existing key spelling is kept
+(snake_case files stay snake_case). A malformed config file is refused
+rather than clobbered, and a failed persist degrades the switch to
+runtime-only with a warning line; either way the feedback text states
+exactly what happened. env overrides (`NMEM_API_URL` etc.) still outrank
+the config file, and `/nmem status` lists them so a surprising address has
+a visible explanation.
+
 ### What happens automatically
 
 - First turn of the run: core's `MemoryRetrievalHook` calls the port once;
-  the port ignores the query and reads the working memory (`nmem --json wm
-  read`, the same surface the `read_working_memory` tool exposes), and the
-  content lands as one SystemMessage right after the system prompt — a plain
-  section headed `## Any Memory About This Work` with a provenance line
-  (`from Nowledge Mem. For Your Information.` — recalled memory may be
+  the port ignores the query and reads the working memory (the
+  `read_working_memory` MCP call, the same surface the tool exposes), and
+  the content lands as one SystemMessage right after the system prompt — a
+  plain section headed `## Any Memory About This Work` with a provenance
+  line (`from Nowledge Mem. For Your Information.` — recalled memory may be
   stale and must not override live instructions; the name comes from the
   port's self-declared `source_name`). The message persists for the session
   and later reads replace it in place; a resumed process re-reads at its
@@ -163,44 +201,69 @@ read-only, so the extension cannot emit its own observer events.
   snapshot is staged under the old session's lane (sync reason
   `session_redirect`, best effort), and syncs follow the new session id from
   the next turn on.
-- Boot: resolve config (env + `~/.nowledge-mem/config.json`) and drain once.
-  The system-prompt contribution is instructions only — `## Nowledge Mem
+- Boot: resolve config (env + `~/.nowledge-mem/config.json`), hand the
+  resolved MCP endpoint to the lazy client, and drain once. The
+  system-prompt contribution is instructions only — `## Nowledge Mem
   Guidance` — with no data fetch at boot; recalled data travels the memory
   section above, and `read_context_bundle` / `read_working_memory` re-read
   on demand.
 - `MemoryPort::store` returns a `pending:<n>` id synchronously and queues
-  the write for `nmem m add`; metadata keys: `title`, `unit_type`,
-  `importance`, `labels`.
+  the write for the `memory_add` MCP call; metadata keys: `title`,
+  `unit_type`, `importance`, `labels`.
 
 ### Platform notes
 
-- **native** — `nmem` via `@process.collect_output`, home files via
-  `moonbitlang/async/fs`, env via `moonbitlang/core/env`.
-- **js (Bun)** — the same `NmemRunner` seam over `Bun.spawn`, `Bun.file`,
+- **native** — MCP over `moonbitlang/async/http` (inside colmugx/mcp), home
+  files via `moonbitlang/async/fs`, env via `moonbitlang/core/env`.
+- **js (Bun)** — the same seams; home files via `Bun.file`, env via
   `process.env`; HTTP shared with native (`moonbitlang/async/http`, fetch
   backend on js).
+- **colmugx/mcp fixes carried in the workspace `.mooncakes`** — the Nowledge
+  Mem server (2025-11-25 streamable HTTP) exposed two SDK client defects,
+  both fixed in the colmugx/mcp source tree (pending a release); this
+  workspace's `.mooncakes` copy is synced byte-identical with that tree
+  until the dependency pin can move to the released version:
+  1. `client/era_probe.mbt` — an HTTP 4xx rejection of the
+     `server/discover` probe now falls back to the legacy initialize
+     handshake (the server answers non-initialize first messages with
+     `422 "Unexpected message, expect initialize request"`), instead of
+     dying fatally.
+  2. `transport/sse.mbt` (`sse_event_verdict`) + both response loops — SSE
+     streams that open with a keepalive event whose data payload is empty
+     (`data:` + `id:` + `retry:`) no longer queue the empty string as a
+     JSON-RPC message (that desynced the response queue right at
+     initialize); a comment heartbeat carrying an `id` no longer ends the
+     scan early.
+
+  Verified live against a local nowledge-mem 0.10.72: connect, `tools/list`
+  (67 tools), `read_working_memory`, and `memory_search` all work. Once the
+  fixed colmugx/mcp is published, bump the pin in `moon.mod` and drop the
+  `.mooncakes` sync.
 
 ### Testing
 
 From this module directory:
 
 ```bash
-rtk moon test src --target native   # 150 tests
-rtk moon check src --target js      # gates the Bun runner
+rtk moon test src --target native   # 154 tests
+rtk moon check src --target js      # gates the Bun platform seam
 ```
 
-Covers config resolution, message mapping, delta engine, transport acks,
-sync state machine, port wiring, MemoryPort semantics, the turn-end commit
-paths (completed, failed, timeout-bounded, before_tool throttle — with no
-flush_pending/attach in the loop), all ten tools (with
-structured payloads), the `/memory` command, and session-redirect handling —
-all against scripted fakes; no Nowledge Mem install or `nmem` binary.
+Covers config resolution (including `mcp_url` derivation), message mapping,
+delta engine, transport acks, sync state machine, port wiring, MemoryPort
+semantics, the turn-end commit paths (completed, failed, timeout-bounded,
+before_tool throttle — with no flush_pending/attach in the loop), all eight
+tools (argument mapping and structured payloads), the MCP client contract
+(scripted fake), the `/memory` and `/nmem` commands (status lines, URL
+switching with flush-first + persistence merge semantics + failure
+degradation), and session-redirect handling — all
+against scripted fakes; no Nowledge Mem install, no `nmem` binary.
 
 ### Troubleshooting
 
 **Server not running** — call `nmem_status` for a structured connectivity
 report, run `/memory status` for the full diagnostics (lanes, queue,
-passive-read state), or run `nmem status` yourself.
+passive-read state).
 
 **Sync failures are silent by design** — a failed or timed-out commit
 records the lane's `last_error` (memory writes, `mem.last_error`) and

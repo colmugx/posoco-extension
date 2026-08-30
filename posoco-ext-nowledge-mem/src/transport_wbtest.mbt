@@ -2,6 +2,7 @@
 fn transport_test_config(api_key : String?) -> NmemConfig {
   {
     api_url: "http://127.0.0.1:14242",
+    mcp_url: "http://127.0.0.1:14242/mcp",
     api_key,
     space: None,
     agent_id: None,

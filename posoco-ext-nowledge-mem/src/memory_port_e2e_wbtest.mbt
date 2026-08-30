@@ -45,15 +45,9 @@ fn memory_section_count(messages : Array[@posoco.Message]) -> Int {
 }
 
 ///|
-/// How many `wm read` CLI calls the runner saw.
-fn wm_read_call_count(runner : FakeRunner) -> Int {
-  let mut count = 0
-  for call in runner.calls {
-    if call.contains("wm") {
-      count = count + 1
-    }
-  }
-  count
+/// How many read_working_memory calls the MCP fake saw.
+fn wm_read_call_count(mcp : FakeNmemMcp) -> Int {
+  call_count(mcp, "read_working_memory")
 }
 
 ///|
@@ -102,23 +96,17 @@ fn mem_agent_store(
 /// SystemMessage (header + provenance line), positioned right after the
 /// system prompt.
 async test "e2e A: first-turn working-memory read lands as a memory section after the system prompt" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
       (
-        "wm",
-        {
-          exit: 0,
-          stdout: "{\"exists\":true,\"content\":\"Ship the zephyr widget via the staging pipeline\"}",
-          stderr: "",
-        },
+        "read_working_memory",
+        mcp_ok(
+          "{\"exists\":true,\"content\":\"Ship the zephyr widget via the staging pipeline\"}",
+        ),
       ),
     ]),
   )
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner~,
-  )
+  let ext = nmem_ext(mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])
@@ -141,7 +129,7 @@ async test "e2e A: first-turn working-memory read lands as a memory section afte
   // Position: the memory section sits directly after the assembled system prompt.
   inspect(memory_section_count(messages), content="1")
   inspect(memory_message_text([messages[1]]) is Some(_), content="true")
-  inspect(wm_read_call_count(runner), content="1")
+  inspect(wm_read_call_count(mcp), content="1")
 }
 
 ///|
@@ -149,23 +137,15 @@ async test "e2e A: first-turn working-memory read lands as a memory section afte
 /// gate keeps the second call off the CLI, and the injected memory section
 /// persists verbatim in both payloads.
 async test "e2e: same-turn second model call does not re-run the CLI and keeps the memory section" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
       (
-        "wm",
-        {
-          exit: 0,
-          stdout: "{\"exists\":true,\"content\":\"answer with beta flags\"}",
-          stderr: "",
-        },
+        "read_working_memory",
+        mcp_ok("{\"exists\":true,\"content\":\"answer with beta flags\"}"),
       ),
     ]),
   )
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner~,
-  )
+  let ext = nmem_ext(mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_tool_call_response(
@@ -208,7 +188,7 @@ async test "e2e: same-turn second model call does not re-run the CLI and keeps t
   ignore(agent.run_turn(@posoco.tk_user_msg("beta flags please"), "session_1"))
   inspect(model.received_messages.length(), content="2")
   // One working-memory read for the whole turn, not one per model call.
-  inspect(wm_read_call_count(runner), content="1")
+  inspect(wm_read_call_count(mcp), content="1")
   guard memory_message_text(model.received_messages[0]) is Some(first) else {
     fail("expected the memory section in the first payload")
   }
@@ -223,17 +203,13 @@ async test "e2e: same-turn second model call does not re-run the CLI and keeps t
 /// and the drain replays every op against the CLI (`m add` then
 /// `m delete -f`).
 async test "e2e B: store-delete round trip drains both ops to the CLI" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:add", { exit: 0, stdout: "{\"id\":\"mem_42\"}", stderr: "" }),
-      ("m:delete", { exit: 0, stdout: "{}", stderr: "" }),
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("memory_add", mcp_ok("{\"id\":\"mem_42\"}")),
+      ("memory_delete", mcp_ok("{}")),
     ]),
   )
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner~,
-  )
+  let ext = nmem_ext(mcp~)
   ignore(
     @posoco.MemoryPort::store(
       ext,
@@ -245,18 +221,18 @@ async test "e2e B: store-delete round trip drains both ops to the CLI" {
   @posoco.MemoryPort::delete(ext, "mem_42")
   ext.drain_memory_ops()
   inspect(ext.mem.queue.length(), content="0")
-  inspect(runner.calls.length(), content="2")
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|["--json", "m", "add", "deploy fridays only", "-i", "0.5"]
-    ),
+  inspect(mcp.calls.length(), content="2")
+  inspect(mcp.calls[0].0, content="memory_add")
+  inspect(
+    json_field(recorded_args(mcp, 0), "content")
+    is Some(Json::String("deploy fridays only")),
+    content="true",
   )
-  debug_inspect(
-    runner.calls[1],
-    content=(
-      #|["--json", "m", "delete", "mem_42", "-f"]
-    ),
+  inspect(mcp.calls[1].0, content="memory_delete")
+  inspect(
+    json_field(recorded_args(mcp, 1), "memory_id")
+    is Some(Json::String("mem_42")),
+    content="true",
   )
 }
 
@@ -267,22 +243,17 @@ async test "e2e B: store-delete round trip drains both ops to the CLI" {
 /// message, new content) instead of appending a second one.
 async test "e2e: a resumed process re-reads working memory and replaces the memory section in place" {
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
-  let runner1 = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "wm",
-        {
-          exit: 0,
-          stdout: "{\"exists\":true,\"content\":\"alpha fact from the first process\"}",
-          stderr: "",
-        },
-      ),
-    ]),
-  )
-  let ext1 = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner=runner1,
+  let ext1 = nmem_ext(
+    mcp=FakeNmemMcp::FakeNmemMcp(
+      script=Map::from_array([
+        (
+          "read_working_memory",
+          mcp_ok(
+            "{\"exists\":true,\"content\":\"alpha fact from the first process\"}",
+          ),
+        ),
+      ]),
+    ),
   )
   let model1 = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
@@ -295,22 +266,17 @@ async test "e2e: a resumed process re-reads working memory and replaces the memo
   assert_true(first.contains("alpha fact"))
   let first_count = model1.received_messages[0].length()
   // A fresh process on the same session: new gate, new scripted hit.
-  let runner2 = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "wm",
-        {
-          exit: 0,
-          stdout: "{\"exists\":true,\"content\":\"beta fact from the resumed process\"}",
-          stderr: "",
-        },
-      ),
-    ]),
-  )
-  let ext2 = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner=runner2,
+  let ext2 = nmem_ext(
+    mcp=FakeNmemMcp::FakeNmemMcp(
+      script=Map::from_array([
+        (
+          "read_working_memory",
+          mcp_ok(
+            "{\"exists\":true,\"content\":\"beta fact from the resumed process\"}",
+          ),
+        ),
+      ]),
+    ),
   )
   inspect(ext2.passive_read_done, content="false")
   let model2 = @posoco.ScriptedModel([
@@ -337,13 +303,17 @@ async test "e2e: a resumed process re-reads working memory and replaces the memo
 /// e2e C: the constructor's source_app is the one identity that reaches every
 /// surface — synced thread ids, prompt guidance, and truncation markers.
 async test "e2e C: source_app propagates to thread ids, guidance, and markers" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-    ]),
-  )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="cetas", transport~, runner~)
+  let ext = NowledgeMem(
+    source_app="cetas",
+    transport~,
+    mcp=FakeNmemMcp::FakeNmemMcp(
+      script=Map::from_array([
+        ("read_working_memory", mcp_ok("{\"exists\":false}")),
+      ]),
+    ),
+    platform=FakePlatform::FakePlatform(),
+  )
   let prompt = ext.system_prompt()
   assert_true(prompt.contains("Cetas"))
   assert_true(prompt.contains("\"cetas\""))

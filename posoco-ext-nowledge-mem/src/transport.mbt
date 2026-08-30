@@ -32,7 +32,7 @@ pub(all) struct HttpNmemTransport {
 
 ///|
 pub fn HttpNmemTransport::HttpNmemTransport() -> HttpNmemTransport {
-  HttpNmemTransport::{  }
+  HttpNmemTransport::{ }
 }
 
 ///|
@@ -229,7 +229,7 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
     }
     client.close()
     let body_json = @json.parse(body_data.text()) catch { _ => Json::null() }
-    Ok({ status: response.code, body: body_json })
+    Ok({ status: response.code, body: body_json, })
   }) catch {
     @async.TimeoutError =>
       Err(

@@ -40,7 +40,7 @@ fn assistant_with_reasoning() -> @posoco.Message {
   @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("answer")],
     tool_calls=[],
-    reasoning=Some({ content: "secret thought", raw: None }),
+    reasoning=Some({ content: "secret thought", raw: None, }),
     finish_reason=@posoco.FinishReason::Stop,
   )
 }

@@ -1,9 +1,10 @@
 import {
   "colmugx/posoco",
+  "colmugx/mcp/client",
+  "colmugx/mcp/protocol/types",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/http",
-  "moonbitlang/async/process",
   "moonbitlang/async/js_async",
   "moonbitlang/core/env",
   "moonbitlang/core/json",

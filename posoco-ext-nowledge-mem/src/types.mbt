@@ -13,9 +13,12 @@ pub(all) enum NmemRole {
 /// Resolved Nowledge Mem client configuration. Produced by
 /// `NmemConfig::resolve`; values are pre-trimmed and blanks have already been
 /// treated as missing, so `api_key`/`space`/`agent_id`/`host_agent_id` being
-/// `None` means "absent at every source".
+/// `None` means "absent at every source". `api_url` feeds the thread-sync
+/// HTTP transport; `mcp_url` is the streamable-HTTP MCP endpoint the lazy
+/// tool client connects to (`{api_url}/mcp` by default).
 pub(all) struct NmemConfig {
   api_url : String
+  mcp_url : String
   api_key : String?
   space : String?
   agent_id : String?

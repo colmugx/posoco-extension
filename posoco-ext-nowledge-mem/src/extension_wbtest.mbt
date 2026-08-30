@@ -1,73 +1,163 @@
 ///|
-/// One scripted `nmem` CLI outcome keyed by subcommand ("context" / "wm"):
-/// tests address attempts by what they ask for, not by the full argv, so a
-/// host environment variable (NMEM_SPACE, NMEM_PLUGIN_SOURCE_APP, ...) cannot
-/// change which reply a test hits.
-priv struct FakeRunner {
-  replies : Map[String, CliOutcome]
+/// Platform fake: scripted home files (the config-file source), recording
+/// every read.
+priv struct FakePlatform {
   home_files : Map[String, String]
-  mut timeout_calls : Int
-  calls : Array[Array[String]]
   home_reads : Array[String]
+  writes : Array[(String, String)]
+  write_error : String?
 }
 
 ///|
-fn FakeRunner::FakeRunner(
-  replies? : Map[String, CliOutcome] = Map::from_array([]),
+fn FakePlatform::FakePlatform(
   home_files? : Map[String, String] = Map::from_array([]),
-  timeout_calls? : Int = 0,
-) -> FakeRunner {
-  { replies, home_files, timeout_calls, calls: [], home_reads: [] }
+  write_error? : String? = None,
+) -> FakePlatform {
+  { home_files, home_reads: [], writes: [], write_error, }
 }
 
 ///|
-fn fake_cli_key(args : Array[String]) -> String {
-  if args.contains("context") {
-    return "context"
-  }
-  if args.contains("wm") {
-    return "wm"
-  }
-  // Memory/thread commands key by the subcommand after the scope token
-  // ("m add" → "m:add"), so one fake can answer each surface separately.
-  for i, arg in args {
-    if arg == "m" || arg == "t" {
-      let sub = if i + 1 < args.length() { args[i + 1] } else { "" }
-      return "\{arg}:\{sub}"
-    }
-  }
-  if args.contains("status") {
-    "status"
-  } else {
-    "other"
-  }
-}
-
-///|
-impl NmemRunner for FakeRunner with fn run_cli(
-  self : FakeRunner,
-  args : Array[String],
-  timeout_ms~ : Int,
-) -> CliOutcome {
-  ignore(timeout_ms)
-  self.calls.push(args.copy())
-  if self.timeout_calls > 0 {
-    self.timeout_calls = self.timeout_calls - 1
-    return { exit: NMEM_CLI_ABORT_EXIT, stdout: "", stderr: "timeout" }
-  }
-  match self.replies.get(fake_cli_key(args)) {
-    Some(outcome) => outcome
-    None => { exit: 1, stdout: "", stderr: "not scripted" }
-  }
-}
-
-///|
-impl NmemRunner for FakeRunner with fn read_home_file(
-  self : FakeRunner,
+impl NmemPlatform for FakePlatform with fn read_home_file(
+  self : FakePlatform,
   rel : String,
 ) -> String? {
   self.home_reads.push(rel)
   self.home_files.get(rel)
+}
+
+///|
+impl NmemPlatform for FakePlatform with fn write_home_file(
+  self : FakePlatform,
+  rel : String,
+  content : String,
+) -> Result[Unit, String] {
+  match self.write_error {
+    Some(message) => Err(message)
+    None => {
+      self.writes.push((rel, content))
+      Ok(())
+    }
+  }
+}
+
+///|
+/// One scripted MCP reply keyed by tool name. `Fail` scripts a
+/// transport-level failure; `Reply` scripts the server's answer (text and
+/// its own error flag).
+priv enum FakeMcpEntry {
+  Reply(McpCallOutcome)
+  Fail(String)
+}
+
+///|
+/// A clean server reply carrying `text`.
+fn mcp_ok(text : String) -> FakeMcpEntry {
+  FakeMcpEntry::Reply({ is_error: false, text, })
+}
+
+///|
+/// A server reply whose own error flag is set, carrying `text`.
+fn mcp_server_error(text : String) -> FakeMcpEntry {
+  FakeMcpEntry::Reply({ is_error: true, text, })
+}
+
+///|
+/// MCP fake: records every call as (tool, args-json-text) and answers from
+/// a per-tool script; a tool without an entry is a loud "not scripted"
+/// failure so a drifted surface cannot pass silently.
+priv struct FakeNmemMcp {
+  script : Map[String, FakeMcpEntry]
+  probe_result : Result[String, String]
+  mut configured : (String, String?, String)?
+  calls : Array[(String, String)]
+  mut probes : Int
+  mut shutdowns : Int
+}
+
+///|
+fn FakeNmemMcp::FakeNmemMcp(
+  script? : Map[String, FakeMcpEntry] = Map::from_array([]),
+  probe_result? : Result[String, String] = Ok("nowledge-mem 0.10.72, 64 tools"),
+) -> FakeNmemMcp {
+  {
+    script,
+    probe_result,
+    configured: None,
+    calls: [],
+    probes: 0,
+    shutdowns: 0,
+  }
+}
+
+///|
+impl NmemMcp for FakeNmemMcp with fn configure(
+  self : FakeNmemMcp,
+  url~ : String,
+  auth_token~ : String?,
+  name~ : String,
+) -> Unit {
+  self.configured = Some((url, auth_token, name))
+}
+
+///|
+impl NmemMcp for FakeNmemMcp with fn call_tool(
+  self : FakeNmemMcp,
+  tool : String,
+  args : Json,
+  timeout_ms~ : Int,
+) -> Result[McpCallOutcome, String] {
+  ignore(timeout_ms)
+  self.calls.push((tool, args.stringify()))
+  match self.script.get(tool) {
+    Some(FakeMcpEntry::Reply(outcome)) => Ok(outcome)
+    Some(FakeMcpEntry::Fail(message)) => Err(message)
+    None => Err("no script for '\{tool}'")
+  }
+}
+
+///|
+impl NmemMcp for FakeNmemMcp with fn probe(
+  self : FakeNmemMcp,
+  timeout_ms~ : Int,
+) -> Result[String, String] {
+  ignore(timeout_ms)
+  self.probes = self.probes + 1
+  self.probe_result
+}
+
+///|
+impl NmemMcp for FakeNmemMcp with fn shutdown(self : FakeNmemMcp) -> Unit {
+  self.shutdowns = self.shutdowns + 1
+}
+
+///|
+/// Parsed arguments of recorded call `index` (the fake stores the args as
+/// JSON text; tests read fields instead of matching on key order).
+fn recorded_args(fake : FakeNmemMcp, index : Int) -> Json {
+  j(fake.calls[index].1)
+}
+
+///|
+/// How many calls went to one tool.
+fn call_count(fake : FakeNmemMcp, tool : String) -> Int {
+  let mut count = 0
+  for call in fake.calls {
+    if call.0 == tool {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
+/// Extension over the test fakes: echo transport, scripted MCP, scripted
+/// home files.
+fn nmem_ext(
+  transport? : &NmemTransport = EchoNmemTransport::EchoNmemTransport(),
+  mcp? : &NmemMcp = FakeNmemMcp::FakeNmemMcp(),
+  platform? : &NmemPlatform = FakePlatform::FakePlatform(),
+) -> NowledgeMem {
+  NowledgeMem(source_app="posoco", transport~, mcp~, platform~)
 }
 
 ///|
@@ -82,7 +172,7 @@ priv struct EchoNmemTransport {
 
 ///|
 fn EchoNmemTransport::EchoNmemTransport() -> EchoNmemTransport {
-  { requests: [], remote_total: 0 }
+  { requests: [], remote_total: 0, }
 }
 
 ///|
@@ -198,24 +288,8 @@ fn nmem_agent(
 /// recalled data never does (it travels the MemoryPort section instead —
 /// see memory_port_e2e_wbtest).
 async test "e2e: the system prompt carries guidance only, never data" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "context",
-        {
-          exit: 0,
-          stdout: "{\"rendered_markdown\":\"# Owner Rules\\nBe terse.\",\"markdown\":\"unused\"}",
-          stderr: "",
-        },
-      ),
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-    ]),
-  )
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner~,
-  )
+  let mcp = FakeNmemMcp::FakeNmemMcp()
+  let ext = nmem_ext(mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])
@@ -227,22 +301,37 @@ async test "e2e: the system prompt carries guidance only, never data" {
   assert_true(prompt.contains("search"))
   assert_false(prompt.contains("## Nowledge Mem Context Bundle"))
   assert_false(prompt.contains("# Owner Rules"))
-  assert_false(prompt.contains("Be terse."))
-  // No CLI read anywhere: boot runs no chain, and this wiring declares no
-  // memory port, so nothing searches either — the scripted replies stay
-  // untouched.
-  inspect(runner.calls.length(), content="0")
+  // No MCP call anywhere: boot runs no chain, and this wiring declares no
+  // memory port, so nothing searches either.
+  inspect(mcp.calls.length(), content="0")
+}
+
+///|
+async test "on_start configures the mcp client with the resolved endpoint" {
+  let platform = FakePlatform::FakePlatform(
+    home_files=Map::from_array([
+      (
+        ".nowledge-mem/config.json", "{\"apiUrl\": \"http://mem.test\", \"apiKey\": \"file-key\"}",
+      ),
+    ]),
+  )
+  let mcp = FakeNmemMcp::FakeNmemMcp()
+  let ext = nmem_ext(mcp~, platform~)
+  @posoco.Lifecycle::on_start(ext)
+  guard mcp.configured is Some((url, auth_token, name)) else {
+    fail("expected the client to be configured")
+  }
+  inspect(url, content="http://mem.test/mcp")
+  debug_inspect(auth_token, content="Some(\"file-key\")")
+  inspect(name, content="posoco")
+  guard ext.config is Some(config) else { fail("config was not resolved") }
+  inspect(config.mcp_url, content="http://mem.test/mcp")
 }
 
 ///|
 async test "e2e: completed turns sync create then incremental append" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-    ]),
-  )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
@@ -277,13 +366,8 @@ async test "e2e: completed turns sync create then incremental append" {
 
 ///|
 async test "attach runs the flusher loop inside a host task group" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-    ]),
-  )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
   ])
@@ -301,14 +385,10 @@ async test "attach runs the flusher loop inside a host task group" {
 }
 
 ///|
-async test "on_shutdown stops the flusher and drains pending lanes" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-    ]),
-  )
+async test "on_shutdown stops the flusher, drains pending lanes, closes mcp" {
+  let mcp = FakeNmemMcp::FakeNmemMcp()
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~, mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
   ])
@@ -317,15 +397,12 @@ async test "on_shutdown stops the flusher and drains pending lanes" {
   @posoco.Lifecycle::on_shutdown(ext)
   inspect(transport.requests.length(), content="1")
   inspect(ext.engine.stopped, content="true")
+  inspect(mcp.shutdowns, content="1")
 }
 
 ///|
 async test "on_event_at: TurnFailed stages a turn_failed sync request" {
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner=FakeRunner::FakeRunner(),
-  )
+  let ext = nmem_ext()
   ext.config = Some(lane_config())
   let scope : @posoco.EventScope = {
     session_id: @posoco.SessionId::unchecked("s9"),
@@ -360,11 +437,7 @@ async test "on_event_at: TurnFailed stages a turn_failed sync request" {
 
 ///|
 async test "on_event_at: ModelResponseReceived completes the snapshot deduplicated" {
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner=FakeRunner::FakeRunner(),
-  )
+  let ext = nmem_ext()
   ext.config = Some(lane_config())
   let snapshot : Array[@posoco.Message] = [@posoco.tk_user_msg("hello")]
   ignore(@posoco.PipelineHook::before_model(ext, snapshot))
@@ -392,13 +465,8 @@ async test "on_event_at: ModelResponseReceived completes the snapshot deduplicat
 
 ///|
 async test "on_event_at: SessionRedirect stages the old lane and switches the session" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-    ]),
-  )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),

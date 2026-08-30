@@ -8,17 +8,18 @@ fn tool_call(name : String, arguments : Json) -> @posoco.ToolCall {
 }
 
 ///|
-/// Extension over echo transport with a scripted runner, an optional
+/// Extension over echo transport with a scripted MCP client, an optional
 /// space-scoped config, and the delete-tool toggle.
 fn tool_ext(
-  runner? : FakeRunner = FakeRunner::FakeRunner(),
+  mcp? : FakeNmemMcp = FakeNmemMcp::FakeNmemMcp(),
   expose_delete_tool? : Bool = false,
   space? : String? = None,
 ) -> NowledgeMem {
   let ext = NowledgeMem(
     source_app="posoco",
     transport=EchoNmemTransport::EchoNmemTransport(),
-    runner~,
+    mcp~,
+    platform=FakePlatform::FakePlatform(),
     expose_delete_tool~,
   )
   ext.config = Some(lane_config(space~))
@@ -36,9 +37,9 @@ fn outcome_text(outcome : @posoco.ToolOutcome) -> String {
 }
 
 ///|
-test "list_tools: nine tools by default, memory_delete only when exposed" {
+test "list_tools: eight tools by default, memory_delete only when exposed" {
   let default = @posoco.ToolProvider::list_tools(tool_ext())
-  inspect(default.length(), content="9")
+  inspect(default.length(), content="8")
   let names : Array[String] = []
   for def in default {
     names.push(def.name.to_string())
@@ -46,15 +47,18 @@ test "list_tools: nine tools by default, memory_delete only when exposed" {
   for
     expected in [
       "nmem_status", "read_context_bundle", "read_working_memory", "memory_search",
-      "memory_add", "memory_update", "thread_search", "thread_show", "thread_create",
+      "memory_add", "memory_update", "thread_search", "thread_fetch_messages",
     ] {
     assert_true(names.contains(expected))
   }
+  // thread_create went away with the CLI runner — no MCP counterpart.
+  assert_false(names.contains("thread_create"))
+  assert_false(names.contains("thread_show"))
   assert_false(names.contains("memory_delete"))
   let exposed = @posoco.ToolProvider::list_tools(
     tool_ext(expose_delete_tool=true),
   )
-  inspect(exposed.length(), content="10")
+  inspect(exposed.length(), content="9")
   let exposed_names : Array[String] = []
   for def in exposed {
     exposed_names.push(def.name.to_string())
@@ -69,20 +73,18 @@ test "list_tools: nine tools by default, memory_delete only when exposed" {
 }
 
 ///|
-async test "memory_search: assembles the server-side search argv and returns stdout" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:search", { exit: 0, stdout: "{\"memories\":[]}", stderr: "" }),
-    ]),
+async test "memory_search: maps the query onto the server tool args and returns the reply" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("memory_search", mcp_ok("{\"memories\":[]}"))]),
   )
-  let ext = tool_ext(runner~)
+  let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "memory_search",
     tool_call(
       "memory_search",
       j(
-        "{\"query\":\"auth flow\",\"mode\":\"deep\",\"limit\":3,\"importance_min\":0.5,\"labels\":[\"backend\"]}",
+        "{\"query\":\"auth flow\",\"mode\":\"deep\",\"limit\":3,\"labels\":[\"backend\"]}",
       ),
     ),
   )
@@ -90,35 +92,52 @@ async test "memory_search: assembles the server-side search argv and returns std
     fail("expected success")
   }
   inspect(outcome_text(outcome), content="{\"memories\":[]}")
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|[
-      #|  "--json",
-      #|  "m",
-      #|  "search",
-      #|  "auth flow",
-      #|  "--mode",
-      #|  "deep",
-      #|  "-n",
-      #|  "3",
-      #|  "--importance",
-      #|  "0.5",
-      #|  "-l",
-      #|  "backend",
-      #|]
-    ),
+  inspect(mcp.calls.length(), content="1")
+  inspect(mcp.calls[0].0, content="memory_search")
+  let args = recorded_args(mcp, 0)
+  inspect(
+    json_field(args, "query") is Some(Json::String("auth flow")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "mode") is Some(Json::String("deep")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "limit") is Some(Json::Number(3.0, ..)),
+    content="true",
+  )
+  inspect(
+    json_field(args, "filter_labels")
+    is Some(Json::Array([Json::String("backend")])),
+    content="true",
+  )
+  // No importance filter exists server-side; none may be invented.
+  inspect(json_field(args, "importance_min") is None, content="true")
+  inspect(
+    json_field(args, "source_app") is Some(Json::String("posoco")),
+    content="true",
   )
 }
 
 ///|
-async test "memory_search: ambient space scopes m and t commands" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:search", { exit: 0, stdout: "{}", stderr: "" }),
-    ]),
+async test "memory_search: ambient space and agent ids scope the call" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("memory_search", mcp_ok("{}"))]),
   )
-  let ext = tool_ext(runner~, space=Some("team"))
+  let ext = NowledgeMem(
+    source_app="posoco",
+    transport=EchoNmemTransport::EchoNmemTransport(),
+    mcp~,
+    platform=FakePlatform::FakePlatform(),
+  )
+  ext.config = Some(
+    lane_config(
+      space=Some("team"),
+      agent_id=Some("agent-1"),
+      host_agent_id=Some("host-1"),
+    ),
+  )
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "memory_search",
@@ -127,51 +146,61 @@ async test "memory_search: ambient space scopes m and t commands" {
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
-  assert_true(runner.calls[0].contains("--space"))
-  assert_true(runner.calls[0].contains("team"))
+  let args = recorded_args(mcp, 0)
+  inspect(
+    json_field(args, "space_id") is Some(Json::String("team")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "agent_id") is Some(Json::String("agent-1")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "host_agent_id") is Some(Json::String("host-1")),
+    content="true",
+  )
 }
 
 ///|
-async test "nmem_status: success returns stdout, missing CLI reports unavailable" {
-  let ok_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("status", { exit: 0, stdout: "{\"mode\":\"local\"}", stderr: "" }),
-    ]),
+async test "nmem_status: probe report on success, failure message on error" {
+  let ok_mcp = FakeNmemMcp::FakeNmemMcp(
+    probe_result=Ok("nowledge-mem 0.10.72, 64 tools"),
   )
-  let ok_ext = tool_ext(runner=ok_runner)
+  let ok_ext = tool_ext(mcp=ok_mcp)
   let ok = @posoco.ToolProvider::execute(
     ok_ext,
     "nmem_status",
     tool_call("nmem_status", Json::object(Map::from_array([]))),
   )
-  guard ok is @posoco.ToolOutcome::Success(..) else { fail("expected success") }
-  inspect(outcome_text(ok), content="{\"mode\":\"local\"}")
-  // exit -1 with empty output — the "nmem is missing" shape.
-  let missing_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("status", { exit: NMEM_CLI_ABORT_EXIT, stdout: "", stderr: "" }),
-    ]),
+  guard ok is @posoco.ToolOutcome::Success(content~, structured~) else {
+    fail("expected success")
+  }
+  inspect(content, content="nowledge-mem 0.10.72, 64 tools")
+  inspect(
+    json_field(structured.unwrap(), "connected") is Some(Json::True),
+    content="true",
   )
-  let missing_ext = tool_ext(runner=missing_runner)
-  let missing = @posoco.ToolProvider::execute(
-    missing_ext,
+  let down_mcp = FakeNmemMcp::FakeNmemMcp(
+    probe_result=Err("nowledge-mem mcp connect failed: refused"),
+  )
+  let down_ext = tool_ext(mcp=down_mcp)
+  let down = @posoco.ToolProvider::execute(
+    down_ext,
     "nmem_status",
     tool_call("nmem_status", Json::object(Map::from_array([]))),
   )
-  guard missing is @posoco.ToolOutcome::ToolReportedError(..) else {
+  guard down is @posoco.ToolOutcome::ToolReportedError(..) else {
     fail("expected a reported error")
   }
-  assert_true(outcome_text(missing).contains("nmem unavailable"))
+  assert_true(outcome_text(down).contains("refused"))
 }
 
 ///|
-async test "memory_add: queues through MemoryPort, drain maps metadata to flags" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:add", { exit: 0, stdout: "{\"id\":\"mem_5\"}", stderr: "" }),
-    ]),
+async test "memory_add: queues through MemoryPort, drain maps metadata to tool args" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("memory_add", mcp_ok("{\"id\":\"mem_5\"}"))]),
   )
-  let ext = tool_ext(runner~)
+  let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "memory_add",
@@ -191,29 +220,30 @@ async test "memory_add: queues through MemoryPort, drain maps metadata to flags"
     json_field(payload, "pending_id") is Some(Json::String("pending:1")),
     content="true",
   )
-  // The write went to the queue, not the CLI.
-  inspect(runner.calls.length(), content="0")
+  // The write went to the queue, not the server.
+  inspect(mcp.calls.length(), content="0")
   inspect(ext.mem.queue.length(), content="1")
   ext.drain_memory_ops()
   inspect(ext.mem.queue.length(), content="0")
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|[
-      #|  "--json",
-      #|  "m",
-      #|  "add",
-      #|  "note",
-      #|  "-t",
-      #|  "N",
-      #|  "--unit-type",
-      #|  "fact",
-      #|  "-i",
-      #|  "0.8",
-      #|  "-l",
-      #|  "a",
-      #|]
-    ),
+  inspect(mcp.calls.length(), content="1")
+  inspect(mcp.calls[0].0, content="memory_add")
+  let args = recorded_args(mcp, 0)
+  inspect(
+    json_field(args, "content") is Some(Json::String("note")),
+    content="true",
+  )
+  inspect(json_field(args, "title") is Some(Json::String("N")), content="true")
+  inspect(
+    json_field(args, "unit_type") is Some(Json::String("fact")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "importance") is Some(Json::Number(0.8, ..)),
+    content="true",
+  )
+  inspect(
+    json_field(args, "labels") is Some(Json::Array([Json::String("a")])),
+    content="true",
   )
 }
 
@@ -247,34 +277,47 @@ async test "memory_search: missing query is a reported error naming the field" {
 }
 
 ///|
-async test "memory_search: CLI failure surfaces a bounded stderr excerpt" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:search", { exit: 2, stdout: "", stderr: "boom happened" }),
-    ]),
+async test "memory_search: transport failure and server error flag both surface" {
+  let fail_ext = tool_ext(
+    mcp=FakeNmemMcp::FakeNmemMcp(
+      script=Map::from_array([
+        ("memory_search", FakeMcpEntry::Fail("boom happened")),
+      ]),
+    ),
   )
-  let ext = tool_ext(runner~)
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
+  let transport_failure = @posoco.ToolProvider::execute(
+    fail_ext,
     "memory_search",
     tool_call("memory_search", j("{\"query\":\"x\"}")),
   )
-  guard outcome is @posoco.ToolOutcome::ToolReportedError(..) else {
+  guard transport_failure is @posoco.ToolOutcome::ToolReportedError(..) else {
     fail("expected a reported error")
   }
-  let text = outcome_text(outcome)
-  assert_true(text.contains("boom happened"))
-  assert_true(text.contains("2"))
+  assert_true(outcome_text(transport_failure).contains("boom happened"))
+  let flag_ext = tool_ext(
+    mcp=FakeNmemMcp::FakeNmemMcp(
+      script=Map::from_array([
+        ("memory_search", mcp_server_error("rate limited")),
+      ]),
+    ),
+  )
+  let flagged = @posoco.ToolProvider::execute(
+    flag_ext,
+    "memory_search",
+    tool_call("memory_search", j("{\"query\":\"x\"}")),
+  )
+  guard flagged is @posoco.ToolOutcome::ToolReportedError(..) else {
+    fail("expected a reported error")
+  }
+  assert_true(outcome_text(flagged).contains("rate limited"))
 }
 
 ///|
-async test "memory_update: CLI argv maps id, content, and title" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:update", { exit: 0, stdout: "{}", stderr: "" }),
-    ]),
+async test "memory_update: tool args map id to memory_id with content and title" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("memory_update", mcp_ok("{}"))]),
   )
-  let ext = tool_ext(runner~)
+  let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "memory_update",
@@ -286,22 +329,28 @@ async test "memory_update: CLI argv maps id, content, and title" {
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|["--json", "m", "update", "mem_3", "-c", "new text", "-t", "New"]
-    ),
+  inspect(mcp.calls[0].0, content="memory_update")
+  let args = recorded_args(mcp, 0)
+  inspect(
+    json_field(args, "memory_id") is Some(Json::String("mem_3")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "content") is Some(Json::String("new text")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "title") is Some(Json::String("New")),
+    content="true",
   )
 }
 
 ///|
-async test "memory_delete: hard delete with -f straight to the server" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:delete", { exit: 0, stdout: "{}", stderr: "" }),
-    ]),
+async test "memory_delete: tool args map id to memory_id" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("memory_delete", mcp_ok("{}"))]),
   )
-  let ext = tool_ext(runner~, expose_delete_tool=true)
+  let ext = tool_ext(mcp~, expose_delete_tool=true)
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "memory_delete",
@@ -310,81 +359,74 @@ async test "memory_delete: hard delete with -f straight to the server" {
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|["--json", "m", "delete", "mem_4", "-f"]
-    ),
+  inspect(mcp.calls[0].0, content="memory_delete")
+  let args = recorded_args(mcp, 0)
+  inspect(
+    json_field(args, "memory_id") is Some(Json::String("mem_4")),
+    content="true",
   )
 }
 
 ///|
-async test "thread_show: applies progressive-loading defaults" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([("t:show", { exit: 0, stdout: "{}", stderr: "" })]),
+async test "thread_fetch_messages: thread_id with optional paging args" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("thread_fetch_messages", mcp_ok("{}"))]),
   )
-  let ext = tool_ext(runner~)
+  let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "thread_show",
-    tool_call("thread_show", j("{\"thread_id\":\"th_1\"}")),
-  )
-  guard outcome is @posoco.ToolOutcome::Success(..) else {
-    fail("expected success")
-  }
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|[
-      #|  "--json",
-      #|  "t",
-      #|  "show",
-      #|  "th_1",
-      #|  "--limit",
-      #|  "8",
-      #|  "--offset",
-      #|  "0",
-      #|  "--content-limit",
-      #|  "1200",
-      #|]
-    ),
-  )
-}
-
-///|
-async test "thread_create: curated handoff thread with the generic-agent source" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("t:create", { exit: 0, stdout: "{}", stderr: "" }),
-    ]),
-  )
-  let ext = tool_ext(runner~)
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
-    "thread_create",
+    "thread_fetch_messages",
     tool_call(
-      "thread_create",
-      j("{\"title\":\"Handoff\",\"content\":\"did things\"}"),
+      "thread_fetch_messages",
+      j("{\"thread_id\":\"th_1\",\"limit\":5,\"offset\":8}"),
     ),
   )
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|[
-      #|  "--json",
-      #|  "t",
-      #|  "create",
-      #|  "-t",
-      #|  "Handoff",
-      #|  "-c",
-      #|  "did things",
-      #|  "-s",
-      #|  "generic-agent",
-      #|]
-    ),
+  inspect(mcp.calls[0].0, content="thread_fetch_messages")
+  let args = recorded_args(mcp, 0)
+  inspect(
+    json_field(args, "thread_id") is Some(Json::String("th_1")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "limit") is Some(Json::Number(5.0, ..)),
+    content="true",
+  )
+  inspect(
+    json_field(args, "offset") is Some(Json::Number(8.0, ..)),
+    content="true",
+  )
+}
+
+///|
+async test "thread_search: query and limit with identity scope" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("thread_search", mcp_ok("{}"))]),
+  )
+  let ext = tool_ext(mcp~)
+  let outcome = @posoco.ToolProvider::execute(
+    ext,
+    "thread_search",
+    tool_call("thread_search", j("{\"query\":\"deploy\",\"limit\":5}")),
+  )
+  guard outcome is @posoco.ToolOutcome::Success(..) else {
+    fail("expected success")
+  }
+  inspect(mcp.calls[0].0, content="thread_search")
+  let args = recorded_args(mcp, 0)
+  inspect(
+    json_field(args, "query") is Some(Json::String("deploy")),
+    content="true",
+  )
+  inspect(
+    json_field(args, "limit") is Some(Json::Number(5.0, ..)),
+    content="true",
+  )
+  inspect(
+    json_field(args, "source_app") is Some(Json::String("posoco")),
+    content="true",
   )
 }
 
@@ -394,8 +436,8 @@ async test "execute: unknown tool raises RuntimeError::UnknownTool" {
   try
     @posoco.ToolProvider::execute(
       ext,
-      "memory_vaporize",
-      tool_call("memory_vaporize", Json::object(Map::from_array([]))),
+      "thread_create",
+      tool_call("thread_create", Json::object(Map::from_array([]))),
     )
   catch {
     @posoco.RuntimeError::UnknownTool(_) => ()
@@ -406,20 +448,16 @@ async test "execute: unknown tool raises RuntimeError::UnknownTool" {
 }
 
 ///|
-async test "read_working_memory: content body, exists=false hint, ambient space" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
+async test "read_working_memory: content body, exists=false hint, ambient scope" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
       (
-        "wm",
-        {
-          exit: 0,
-          stdout: "{\"content\":\"wm body\",\"exists\":true}",
-          stderr: "",
-        },
+        "read_working_memory",
+        mcp_ok("{\"content\":\"wm body\",\"exists\":true}"),
       ),
     ]),
   )
-  let ext = tool_ext(runner~)
+  let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "read_working_memory",
@@ -430,22 +468,19 @@ async test "read_working_memory: content body, exists=false hint, ambient space"
   }
   inspect(content, content="wm body")
   inspect(structured is Some(Json::Object(_)), content="true")
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|["--json", "wm", "read"]
-    ),
+  inspect(mcp.calls[0].0, content="read_working_memory")
+  inspect(
+    json_field(recorded_args(mcp, 0), "source_app")
+    is Some(Json::String("posoco")),
+    content="true",
   )
   // exists=false is a clean state: a hint, not an error.
-  let empty_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "wm",
-        { exit: 0, stdout: "{\"content\":\"\",\"exists\":false}", stderr: "" },
-      ),
+  let empty_mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"content\":\"\",\"exists\":false}")),
     ]),
   )
-  let empty_ext = tool_ext(runner=empty_runner)
+  let empty_ext = tool_ext(mcp=empty_mcp)
   let empty = @posoco.ToolProvider::execute(
     empty_ext,
     "read_working_memory",
@@ -456,12 +491,12 @@ async test "read_working_memory: content body, exists=false hint, ambient space"
   }
   inspect(empty_content, content=NMEM_WM_EMPTY_HINT)
   // A configured space scopes the read.
-  let scoped_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"content\":\"scoped\"}", stderr: "" }),
+  let scoped_mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"content\":\"scoped\"}")),
     ]),
   )
-  let scoped_ext = tool_ext(runner=scoped_runner, space=Some("team"))
+  let scoped_ext = tool_ext(mcp=scoped_mcp, space=Some("team"))
   let scoped = @posoco.ToolProvider::execute(
     scoped_ext,
     "read_working_memory",
@@ -471,25 +506,24 @@ async test "read_working_memory: content body, exists=false hint, ambient space"
     fail("expected success")
   }
   inspect(scoped_content, content="scoped")
-  assert_true(scoped_runner.calls[0].contains("--space"))
-  assert_true(scoped_runner.calls[0].contains("team"))
+  inspect(
+    json_field(recorded_args(scoped_mcp, 0), "space_id")
+    is Some(Json::String("team")),
+    content="true",
+  )
 }
 
 ///|
-async test "read_context_bundle: source-app argv, markdown chain, ambient space" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
+async test "read_context_bundle: markdown chain, ambient scope" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
       (
-        "context",
-        {
-          exit: 0,
-          stdout: "{\"rendered_markdown\":\"# Bundle\",\"markdown\":\"shadowed\"}",
-          stderr: "",
-        },
+        "read_context_bundle",
+        mcp_ok("{\"rendered_markdown\":\"# Bundle\",\"markdown\":\"shadowed\"}"),
       ),
     ]),
   )
-  let ext = tool_ext(runner~)
+  let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
     "read_context_bundle",
@@ -500,26 +534,22 @@ async test "read_context_bundle: source-app argv, markdown chain, ambient space"
   }
   inspect(content, content="# Bundle")
   inspect(structured is Some(Json::Object(_)), content="true")
-  debug_inspect(
-    runner.calls[0],
-    content=(
-      #|["--json", "context", "--source-app", "posoco"]
-    ),
+  inspect(mcp.calls[0].0, content="read_context_bundle")
+  inspect(
+    json_field(recorded_args(mcp, 0), "source_app")
+    is Some(Json::String("posoco")),
+    content="true",
   )
   // rendered_markdown absent: markdown, then content, carry the body.
-  let md_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
+  let md_mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
       (
-        "context",
-        {
-          exit: 0,
-          stdout: "{\"markdown\":\"md body\",\"content\":\"shadowed\"}",
-          stderr: "",
-        },
+        "read_context_bundle",
+        mcp_ok("{\"markdown\":\"md body\",\"content\":\"shadowed\"}"),
       ),
     ]),
   )
-  let md_ext = tool_ext(runner=md_runner)
+  let md_ext = tool_ext(mcp=md_mcp)
   let md = @posoco.ToolProvider::execute(
     md_ext,
     "read_context_bundle",
@@ -529,15 +559,12 @@ async test "read_context_bundle: source-app argv, markdown chain, ambient space"
     fail("expected success")
   }
   inspect(md_content, content="md body")
-  let plain_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "context",
-        { exit: 0, stdout: "{\"content\":\"plain body\"}", stderr: "" },
-      ),
+  let plain_mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_context_bundle", mcp_ok("{\"content\":\"plain body\"}")),
     ]),
   )
-  let plain_ext = tool_ext(runner=plain_runner)
+  let plain_ext = tool_ext(mcp=plain_mcp)
   let plain = @posoco.ToolProvider::execute(
     plain_ext,
     "read_context_bundle",
@@ -548,15 +575,12 @@ async test "read_context_bundle: source-app argv, markdown chain, ambient space"
   }
   inspect(plain_content, content="plain body")
   // A configured space scopes the read.
-  let scoped_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      (
-        "context",
-        { exit: 0, stdout: "{\"rendered_markdown\":\"scoped\"}", stderr: "" },
-      ),
+  let scoped_mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_context_bundle", mcp_ok("{\"rendered_markdown\":\"scoped\"}")),
     ]),
   )
-  let scoped_ext = tool_ext(runner=scoped_runner, space=Some("team"))
+  let scoped_ext = tool_ext(mcp=scoped_mcp, space=Some("team"))
   let scoped = @posoco.ToolProvider::execute(
     scoped_ext,
     "read_context_bundle",
@@ -566,20 +590,21 @@ async test "read_context_bundle: source-app argv, markdown chain, ambient space"
     fail("expected success")
   }
   inspect(scoped_content, content="scoped")
-  assert_true(scoped_runner.calls[0].contains("--space"))
-  assert_true(scoped_runner.calls[0].contains("team"))
+  inspect(
+    json_field(recorded_args(scoped_mcp, 0), "space_id")
+    is Some(Json::String("team")),
+    content="true",
+  )
 }
 
 ///|
-async test "official-surface tools attach parsed stdout as structured payload" {
+async test "official-surface tools attach parsed reply text as structured payload" {
   // memory_search: a parseable object payload passes through verbatim.
-  let search_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("m:search", { exit: 0, stdout: "{\"memories\":[]}", stderr: "" }),
-    ]),
+  let search_mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("memory_search", mcp_ok("{\"memories\":[]}"))]),
   )
   let search = @posoco.ToolProvider::execute(
-    tool_ext(runner=search_runner),
+    tool_ext(mcp=search_mcp),
     "memory_search",
     tool_call("memory_search", j("{\"query\":\"x\"}")),
   )
@@ -592,14 +617,12 @@ async test "official-surface tools attach parsed stdout as structured payload" {
   }
   inspect(search_content, content="{\"memories\":[]}")
   inspect(search_structured is Some(Json::Object(_)), content="true")
-  // thread_search: a non-JSON stdout keeps structured None, content verbatim.
-  let thread_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("t:search", { exit: 0, stdout: "plain text table", stderr: "" }),
-    ]),
+  // thread_search: non-JSON reply text keeps structured None, content verbatim.
+  let thread_mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([("thread_search", mcp_ok("plain text table"))]),
   )
   let thread = @posoco.ToolProvider::execute(
-    tool_ext(runner=thread_runner),
+    tool_ext(mcp=thread_mcp),
     "thread_search",
     tool_call("thread_search", j("{\"query\":\"x\"}")),
   )
@@ -612,19 +635,18 @@ async test "official-surface tools attach parsed stdout as structured payload" {
   }
   inspect(thread_content, content="plain text table")
   inspect(thread_structured is None, content="true")
-  // nmem_status: a parseable object payload passes through verbatim.
-  let status_runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("status", { exit: 0, stdout: "{\"mode\":\"local\"}", stderr: "" }),
-    ]),
+}
+
+///|
+async test "unscripted tool surfaces a reported error instead of hanging" {
+  let ext = tool_ext()
+  let outcome = @posoco.ToolProvider::execute(
+    ext,
+    "thread_search",
+    tool_call("thread_search", j("{\"query\":\"x\"}")),
   )
-  let status = @posoco.ToolProvider::execute(
-    tool_ext(runner=status_runner),
-    "nmem_status",
-    tool_call("nmem_status", Json::object(Map::from_array([]))),
-  )
-  guard status is @posoco.ToolOutcome::Success(structured=status_structured, ..) else {
-    fail("expected success")
+  guard outcome is @posoco.ToolOutcome::ToolReportedError(..) else {
+    fail("expected a reported error")
   }
-  inspect(status_structured is Some(Json::Object(_)), content="true")
+  assert_true(outcome_text(outcome).contains("no script for 'thread_search'"))
 }

@@ -21,7 +21,7 @@ struct FakeNmemTransport {
 fn FakeNmemTransport::FakeNmemTransport(
   script : Array[ScriptedReply],
 ) -> FakeNmemTransport {
-  { script, next: 0, requests: [] }
+  { script, next: 0, requests: [], }
 }
 
 ///|
@@ -40,7 +40,7 @@ impl NmemTransport for FakeNmemTransport with fn post_json(
   let reply = self.script[self.next]
   self.next = self.next + 1
   match reply {
-    Reply(status, body_json) => Ok({ status, body: body_json })
+    Reply(status, body_json) => Ok({ status, body: body_json, })
     Fail(message) => Err(message)
   }
 }
@@ -48,7 +48,7 @@ impl NmemTransport for FakeNmemTransport with fn post_json(
 ///|
 /// A lane that has never talked to the server.
 fn fresh_lane() -> LaneState {
-  { created: false, acknowledged: None, last_error: None, pending: None }
+  { created: false, acknowledged: None, last_error: None, pending: None, }
 }
 
 ///|
@@ -194,7 +194,7 @@ async test "flush_once: cursor checkpoint append carries expected_message_count"
     ),
   ])
   let request = sync_request(messages~)
-  let cursor : AckedCursor = { ..cursor_over(messages, 2), remote_count: 5 }
+  let cursor : AckedCursor = { ..cursor_over(messages, 2), remote_count: 5, }
   let state : LaneState = {
     ..fresh_lane(),
     created: true,
@@ -205,7 +205,7 @@ async test "flush_once: cursor checkpoint append carries expected_message_count"
   guard result.acknowledged is Some(acked) else {
     fail("expected an acknowledged cursor")
   }
-  let expected : AckedCursor = { ..cursor_over(messages, 4), remote_count: 9 }
+  let expected : AckedCursor = { ..cursor_over(messages, 4), remote_count: 9, }
   inspect(acked == expected, content="true")
   inspect(transport.requests.length(), content="1")
   let (url, body) = transport.requests[0]
@@ -237,7 +237,7 @@ async test "flush_once: checkpoint conflict retries the full transcript as recon
     ),
   ])
   let request = sync_request(messages~)
-  let cursor : AckedCursor = { ..cursor_over(messages, 2), remote_count: 5 }
+  let cursor : AckedCursor = { ..cursor_over(messages, 2), remote_count: 5, }
   let state : LaneState = {
     ..fresh_lane(),
     created: true,
@@ -261,7 +261,7 @@ async test "flush_once: checkpoint conflict retries the full transcript as recon
   guard result.acknowledged is Some(acked) else {
     fail("expected an acknowledged cursor")
   }
-  let expected : AckedCursor = { ..cursor_over(messages, 4), remote_count: 12 }
+  let expected : AckedCursor = { ..cursor_over(messages, 4), remote_count: 12, }
   inspect(acked == expected, content="true")
 }
 
@@ -294,7 +294,7 @@ async test "flush_once: append 404 recreates the thread via the create body" {
   guard result.acknowledged is Some(acked) else {
     fail("expected an acknowledged cursor")
   }
-  let expected : AckedCursor = { ..cursor_over(messages, 3), remote_count: 3 }
+  let expected : AckedCursor = { ..cursor_over(messages, 3), remote_count: 3, }
   inspect(acked == expected, content="true")
 }
 

@@ -141,7 +141,7 @@ pub fn select_acked_delta(
     },
     prefix_fingerprint: prefix_fingerprint(messages, stop),
   }
-  { start, stop, messages: messages[start:stop].to_owned(), next, reset }
+  { start, stop, messages: messages[start:stop].to_owned(), next, reset, }
 }
 
 ///|

@@ -14,11 +14,86 @@ fn env_of(entries : Array[(String, String)]) -> (String) -> String? {
 test "resolve: defaults when nothing is set; source_app comes from the parameter" {
   let config = NmemConfig::resolve(env_of([]), None, source_app="cetas")
   inspect(config.api_url, content="http://127.0.0.1:14242")
+  inspect(config.mcp_url, content="http://127.0.0.1:14242/mcp")
   debug_inspect(config.api_key, content="None")
   debug_inspect(config.space, content="None")
   debug_inspect(config.agent_id, content="None")
   debug_inspect(config.host_agent_id, content="None")
   inspect(config.source_app, content="cetas")
+}
+
+///|
+test "resolve: mcp_url derives from api_url with the /mcp suffix" {
+  let remote = NmemConfig::resolve(
+    env_of([("NMEM_API_URL", "https://mem.example.com/")]),
+    None,
+    source_app="cetas",
+  )
+  inspect(remote.mcp_url, content="https://mem.example.com/mcp")
+  let from_file = NmemConfig::resolve(
+    env_of([]),
+    Some("{\"apiUrl\": \"http://file.example.com\"}"),
+    source_app="cetas",
+  )
+  inspect(from_file.mcp_url, content="http://file.example.com/mcp")
+  let pathful = NmemConfig::resolve(
+    env_of([("NMEM_API_URL", "https://mem.example.com/gateway/")]),
+    None,
+    source_app="cetas",
+  )
+  inspect(pathful.mcp_url, content="https://mem.example.com/gateway/mcp")
+  let exact = NmemConfig::resolve(
+    env_of([("NMEM_API_URL", "https://mem.example.com/mcp/")]),
+    None,
+    source_app="cetas",
+  )
+  inspect(exact.mcp_url, content="https://mem.example.com/mcp")
+}
+
+///|
+test "resolve: explicit mcp_url beats the derived one (env > config file)" {
+  let from_env = NmemConfig::resolve(
+    env_of([
+      ("NMEM_API_URL", "http://api.example.com"),
+      ("NMEM_MCP_URL", " http://mcp.example.com/mcp "),
+    ]),
+    Some("{\"mcpUrl\": \"http://file-mcp.example.com/mcp\"}"),
+    source_app="cetas",
+  )
+  inspect(from_env.mcp_url, content="http://mcp.example.com/mcp")
+  let from_file = NmemConfig::resolve(
+    env_of([("NMEM_API_URL", "http://api.example.com")]),
+    Some("{\"mcpUrl\": \"http://file-mcp.example.com/mcp/\"}"),
+    source_app="cetas",
+  )
+  inspect(from_file.mcp_url, content="http://file-mcp.example.com/mcp")
+  let from_snake = NmemConfig::resolve(
+    env_of([("NMEM_API_URL", "http://api.example.com")]),
+    Some("{\"mcp_url\": \"http://snake-mcp.example.com/mcp\"}"),
+    source_app="cetas",
+  )
+  inspect(from_snake.mcp_url, content="http://snake-mcp.example.com/mcp")
+}
+
+///|
+test "normalize_mcp_path: legacy /remote-api prefixes strip before suffixing" {
+  inspect(
+    normalize_mcp_path("https://mem.example.com/remote-api"),
+    content="https://mem.example.com/mcp",
+  )
+  inspect(
+    normalize_mcp_path("https://mem.example.com/remote-api/v2"),
+    content="https://mem.example.com/v2/mcp",
+  )
+  inspect(
+    normalize_mcp_path("http://127.0.0.1:14242"),
+    content="http://127.0.0.1:14242/mcp",
+  )
+  inspect(
+    normalize_mcp_path("http://127.0.0.1:14242/"),
+    content="http://127.0.0.1:14242/mcp",
+  )
+  inspect(normalize_mcp_path("http://host/mcp"), content="http://host/mcp")
 }
 
 ///|

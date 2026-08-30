@@ -76,12 +76,49 @@ fn strip_trailing_slashes(url : String) -> String {
 }
 
 ///|
+/// Derive the MCP endpoint from an api base (upstream `normalizeMcpPath` +
+/// `stripLegacyRemoteApiPrefix`): strip a legacy `/remote-api` prefix, then
+/// keep an exact `/mcp` path, turn the bare origin into `/mcp`, and append
+/// `/mcp` to any other path.
+pub fn normalize_mcp_path(url : String) -> String {
+  let scheme_len = if url.has_prefix("https://") {
+    "https://".length()
+  } else if url.has_prefix("http://") {
+    "http://".length()
+  } else {
+    return url
+  }
+  let rest = url[scheme_len:]
+  let path_start = match rest.find("/") {
+    Some(i) => scheme_len + i
+    None => return url + "/mcp"
+  }
+  let origin = url[:path_start].to_owned()
+  let mut path = strip_trailing_slashes(url[path_start:].to_owned())
+  if path == "/remote-api" {
+    path = "/"
+  } else if path.has_prefix("/remote-api/") {
+    path = path["/remote-api".length():].to_owned()
+  }
+  if path == "/mcp" {
+    origin + path
+  } else if path == "/" {
+    origin + "/mcp"
+  } else {
+    origin + path + "/mcp"
+  }
+}
+
+///|
 /// Resolve Nowledge Mem configuration from an env lookup function and the
 /// already-read text of ~/.nowledge-mem/config.json (`None` = absent). The IO
-/// stays with the caller (runner milestone); this function is pure.
+/// stays with the caller (platform seam); this function is pure.
 ///
 /// Priority per key: env var > config.json entry (camelCase and snake_case
 /// both accepted) > default. All values are trimmed; blanks count as missing.
+///
+/// `mcp_url` resolves explicitly (`NMEM_MCP_URL`, then config `mcpUrl` /
+/// `mcp_url`) before falling back to `normalize_mcp_path(api_url)`.
 ///
 /// `source_app~` is the host product identity (the extension is a reusable
 /// library — the label belongs to the embedding product, not to Posoco); the
@@ -103,8 +140,19 @@ pub fn NmemConfig::resolve(
       None => NMEM_DEFAULT_API_URL
     },
   )
+  let mcp_url = strip_trailing_slashes(
+    match
+      first_present([
+        env_string(env_get, ["NMEM_MCP_URL"]),
+        config_string(config, ["mcpUrl", "mcp_url"]),
+      ]) {
+      Some(url) => url
+      None => normalize_mcp_path(api_url)
+    },
+  )
   {
     api_url,
+    mcp_url,
     api_key: first_present([
       env_string(env_get, ["NMEM_API_KEY"]),
       config_string(config, ["apiKey", "api_key"]),

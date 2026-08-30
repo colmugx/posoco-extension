@@ -39,14 +39,13 @@ fn turn_end_agent(
 /// no shutdown — the create POST has already reached the transport and the
 /// memory queue is empty.
 async test "turn_end: completed turn commits the create before run_turn returns" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-      ("m:-n", { exit: 0, stdout: "{\"memories\":[]}", stderr: "" }),
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
     ]),
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~, mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
   ])
@@ -75,14 +74,13 @@ async test "turn_end: completed turn commits the create before run_turn returns"
 /// The second turn commits an incremental append by itself: only the new
 /// user/assistant pair rides the append body.
 async test "turn_end: second turn commits only the incremental append" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-      ("m:-n", { exit: 0, stdout: "{\"memories\":[]}", stderr: "" }),
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
     ]),
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~, mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
@@ -107,14 +105,13 @@ async test "turn_end: second turn commits only the incremental append" {
 /// yet the turn-2 submission (carrying the new user message) still reached
 /// the transport before the raise escaped.
 async test "turn_end: failed turn still commits before run_turn raises" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-      ("m:-n", { exit: 0, stdout: "{\"memories\":[]}", stderr: "" }),
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
     ]),
   )
   let transport = EchoNmemTransport::EchoNmemTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~, mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Fail(@posoco.ModelError::Transport("boom")),
@@ -144,17 +141,13 @@ async test "turn_end: failed turn still commits before run_turn raises" {
 /// Queued memory writes ride the same turn-end drain: after run_turn
 /// returns, the `m add` already ran against the CLI and the queue is empty.
 async test "turn_end: queued memory write drains before run_turn returns" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-      ("m:add", { exit: 0, stdout: "{\"id\":\"mem_7\"}", stderr: "" }),
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
+      ("memory_add", mcp_ok("{\"id\":\"mem_7\"}")),
     ]),
   )
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    runner~,
-  )
+  let ext = nmem_ext(mcp~)
   ignore(
     @posoco.MemoryPort::store(ext, {
       id: "",
@@ -170,10 +163,7 @@ async test "turn_end: queued memory write drains before run_turn returns" {
   let agent = turn_end_agent(ext, model)
   ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
   inspect(ext.mem.queue.length(), content="0")
-  inspect(
-    runner.calls.filter(fn(args) { args.contains("add") }).length(),
-    content="1",
-  )
+  inspect(call_count(mcp, "memory_add"), content="1")
 }
 
 ///|
@@ -186,7 +176,7 @@ priv struct HangingAppendTransport {
 
 ///|
 fn HangingAppendTransport::HangingAppendTransport() -> HangingAppendTransport {
-  { requests: [], hang_ms: 0 }
+  { requests: [], hang_ms: 0, }
 }
 
 ///|
@@ -227,14 +217,13 @@ impl NmemTransport for HangingAppendTransport with fn post_json(
 /// chain floors NMEM_SYNC_TIMEOUT_MS at 1s, so the sub-second budget is
 /// injected through the field the drain reads (white-box).
 async test "turn_end: drain timeout is bounded and stays silent" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-      ("m:-n", { exit: 0, stdout: "{\"memories\":[]}", stderr: "" }),
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
     ]),
   )
   let transport = HangingAppendTransport::HangingAppendTransport()
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~, mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
@@ -276,7 +265,7 @@ priv struct LoggingEchoTransport {
 fn LoggingEchoTransport::LoggingEchoTransport(
   log : Array[String],
 ) -> LoggingEchoTransport {
-  { requests: [], log, remote_total: 0 }
+  { requests: [], log, remote_total: 0, }
 }
 
 ///|
@@ -347,15 +336,14 @@ impl @posoco.ToolProvider for LogToolProvider with fn execute(
 /// (turn 3), the drain fires BEFORE the tool executes. Fresh lanes staged
 /// per phase make each drain visible as its own create.
 async test "before_tool: mid-turn drain is throttled to one per interval" {
-  let runner = FakeRunner::FakeRunner(
-    replies=Map::from_array([
-      ("wm", { exit: 0, stdout: "{\"exists\":false}", stderr: "" }),
-      ("m:-n", { exit: 0, stdout: "{\"memories\":[]}", stderr: "" }),
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
     ]),
   )
   let log : Array[String] = []
   let transport = LoggingEchoTransport::LoggingEchoTransport(log)
-  let ext = NowledgeMem(source_app="posoco", transport~, runner~)
+  let ext = nmem_ext(transport~, mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
     @posoco.ScriptedModelStep::Respond(
