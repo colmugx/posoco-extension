@@ -3,7 +3,9 @@ import {
   "colmugx/posoco",
   "moonbitlang/async/fs",
   "moonbitlang/async/js_async",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
+  "moonbitlang/core/string",
 }
 
 import {

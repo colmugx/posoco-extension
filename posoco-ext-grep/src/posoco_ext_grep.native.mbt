@@ -1,83 +1,117 @@
 ///|
-
-///|
-/// Record the precise stage before aborting `@fs.walk`. The walk API wraps
-/// callback failures, so the caller reads this side channel instead of
-/// serializing the underlying OS error (which may contain sensitive data).
-fn[T] abort_file(
-  failures : Array[String],
-  stage : String,
-  path : String,
-) -> T raise Failure {
-  failures.push("grep: \{stage} failed for '\{@devkit.sanitize_path(path)}'")
-  raise Failure::Failure("grep aborted")
+priv struct NativeGrepSearcher {
+  ignores : Array[String]
 }
 
 ///|
-/// Check if a file path matches a simple glob (e.g. "*.mbt").
-fn file_matches(path : String, glob : String) -> Bool {
-  if glob.has_prefix("*.") {
-    let ext = glob[2:].to_owned()
-    return path.has_suffix("." + ext)
+/// Kind of `path`, or None when the stat fails (vanished or unreadable).
+async fn grep_file_kind(path : String) -> @fs.FileKind? {
+  Some(@fs.kind(path) catch { _ => return None })
+}
+
+///|
+/// Decoded text of `path`, or None when reading or decoding fails.
+async fn grep_file_text(path : String) -> String? {
+  let data = @fs.read_file(path) catch { _ => return None }
+  Some(data.text() catch { _ => return None })
+}
+
+///|
+/// Filter `file_glob` against the base-relative path: a glob containing "/"
+/// must match the whole relative path; a bare name pattern (e.g. "*.mbt")
+/// matches the basename at any depth (rg --glob parity).
+fn file_glob_matches(file_glob : String, rel : String) -> Bool {
+  if file_glob.contains("/") {
+    return @devkit.glob_match(file_glob, rel)
   }
-  path == glob
+  let mut last = rel
+  let mut start = 0
+  match rel.rev_find("/") {
+    Some(idx) => {
+      start = idx + 1
+      last = rel[start:].to_owned()
+    }
+    None => ()
+  }
+  @devkit.glob_match(file_glob, last)
 }
 
 ///|
-priv struct NativeGrepSearcher {}
-
-///|
-/// Walk the tree sequentially (max_concurrency=1) so the first failure and
-/// its diagnostic are deterministic. Returns `path:line:content` entries.
+/// Walk the tree sequentially (max_concurrency=1) so result order is
+/// deterministic. Hidden entries and `ignores` directories are pruned;
+/// unreadable or binary-looking files are skipped (rg parity) instead of
+/// failing the whole search. Returns flat `GrepMatch` entries.
 impl GrepSearcher for NativeGrepSearcher with fn search(
-  _self : NativeGrepSearcher,
+  self : NativeGrepSearcher,
   pattern : String,
   base : String,
   file_glob : String,
-) -> Array[String] {
-  let results : Array[String] = []
-  let failures : Array[String] = []
+  case_insensitive : Bool,
+) -> Array[GrepMatch] {
+  let results : Array[GrepMatch] = []
+  let needle = if case_insensitive { pattern.to_lower() } else { pattern }
   @fs.walk(
     base,
     (dir : String, entries : Array[String]) => {
       for entry in entries {
         let full = if dir == "." { entry } else { "\{dir}/\{entry}" }
-        if file_glob != "" && !file_matches(full, file_glob) {
+        if entry.has_prefix(".") {
           continue
         }
-        // `walk` includes directory names in `entries`; inspect the kind so
-        // directories are deliberately skipped while stat errors stay loud.
-        let kind = @fs.kind(full) catch {
-          _ => abort_file(failures, "stat", full)
-        }
-        if kind == @fs.FileKind::Directory {
+        let rel = @devkit.relative_to_base(base, full)
+        if @devkit.matches_ignore(rel, self.ignores) {
           continue
         }
-        let data = @fs.read_file(full) catch {
-          _ => abort_file(failures, "read", full)
+        let kind = grep_file_kind(full)
+        if kind is None || kind is Some(@fs.FileKind::Directory) {
+          continue
         }
-        let content = data.text() catch {
-          _ => abort_file(failures, "decode", full)
+        if file_glob != "" && !file_glob_matches(file_glob, rel) {
+          continue
+        }
+        if is_binary_extension(full) {
+          continue
+        }
+        let content = grep_file_text(full)
+        if content is None {
+          continue
+        }
+        let text = content.unwrap()
+        if looks_binary(text) {
+          continue
         }
         let mut line_num = 0
-        for line in content.split("\n") {
+        for line in text.split("\n") {
           line_num += 1
-          if line.contains(pattern) {
-            results.push("\{full}:\{line_num}:\{line}")
+          let hit = if case_insensitive {
+            line.to_lower().contains(needle)
+          } else {
+            line.contains(pattern)
+          }
+          if hit {
+            results.push(GrepMatch::{
+              path: full,
+              line: line_num,
+              content: line.to_owned(),
+            })
           }
         }
       }
     },
+    exclude=dir => {
+      let rel = @devkit.relative_to_base(base, dir)
+      rel != "" &&
+      (
+        @devkit.has_hidden_segment(rel) ||
+        @devkit.matches_ignore(rel, self.ignores)
+      )
+    },
     max_concurrency=1,
   ) catch {
     _ =>
-      match failures {
-        [message, ..] => raise @posoco.RuntimeError::InvocationFailed(message)
-        [] =>
-          raise @posoco.RuntimeError::InvocationFailed(
-            "grep: walk failed for '\{@devkit.sanitize_path(base)}'",
-          )
-      }
+      raise @posoco.RuntimeError::InvocationFailed(
+        "grep: walk failed for '\{@devkit.sanitize_path(base)}'",
+      )
   }
   results
 }
@@ -97,5 +131,9 @@ pub impl @posoco.ToolProvider for GrepTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_grep_impl(NativeGrepSearcher::{  }, self.anchor, call)
+  execute_grep_impl(
+    NativeGrepSearcher::{ ignores: self.ignores, },
+    self.anchor,
+    call,
+  )
 }

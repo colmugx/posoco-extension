@@ -22,6 +22,11 @@ fn grep_call_with_arguments(arguments : Json) -> @posoco.ToolCall {
 }
 
 ///|
+fn grep_call_fields(fields : Array[(String, Json)]) -> @posoco.ToolCall {
+  grep_call_with_arguments(Json::object(Map::from_array(fields)))
+}
+
+///|
 async test "grep_required_pattern_distinguishes_wrong_type_from_missing" {
   let cases : Array[(@posoco.ToolCall, String, Bool)] = [
     (
@@ -50,6 +55,23 @@ async test "grep_required_pattern_distinguishes_wrong_type_from_missing" {
       }
       _ => fail("required grep pattern must be rejected before traversal")
     }
+  }
+}
+
+///|
+async test "grep_empty_pattern_is_rejected" {
+  let result = Ok(
+    GrepTools::GrepTools().execute(
+      "grep",
+      grep_call_fields([("pattern", Json::string(""))]),
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@posoco.RuntimeError::UnknownTool(message)) =>
+      assert_true(message.contains("non-empty"))
+    _ => fail("empty pattern would match every line and must be rejected")
   }
 }
 
@@ -102,6 +124,37 @@ async test "grep_wrong_type_optional_glob_is_loud" {
 }
 
 ///|
+async test "grep_unknown_output_mode_and_bad_max_matches_are_loud" {
+  let cases : Array[@posoco.ToolCall] = [
+    grep_call_fields([
+      ("pattern", Json::string("needle")),
+      ("output_mode", Json::string("regex")),
+    ]),
+    grep_call_fields([
+      ("pattern", Json::string("needle")),
+      ("output_mode", Json::boolean(true)),
+    ]),
+    grep_call_fields([
+      ("pattern", Json::string("needle")),
+      ("max_matches", Json::number(0.0)),
+    ]),
+    grep_call_fields([
+      ("pattern", Json::string("needle")),
+      ("case_insensitive", Json::string("yes")),
+    ]),
+  ]
+  for call in cases {
+    let result = Ok(GrepTools::GrepTools().execute("grep", call)) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(@posoco.RuntimeError::UnknownTool(_)) => ()
+      _ => fail("expected UnknownTool for invalid optional argument")
+    }
+  }
+}
+
+///|
 async test "grep_zero_matches_is_success" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-zero")
@@ -126,6 +179,7 @@ async test "grep_zero_matches_is_success" {
           Some(Object(meta)) => {
             assert_true(meta.get("summary") is Some(String("no matches")))
             assert_true(meta.get("count") is Some(Number(0.0, ..)))
+            assert_true(meta.get("truncated") is Some(Json::False))
           }
           _ => fail("expected structured summary payload for zero matches")
         }
@@ -137,7 +191,7 @@ async test "grep_zero_matches_is_success" {
 }
 
 ///|
-async test "grep_multi_match_fills_structured_summary" {
+async test "grep_multi_match_groups_by_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-grep-multi")
     group.add_defer() <| () => {
@@ -156,18 +210,156 @@ async test "grep_multi_match_fills_structured_summary" {
       Success(content~, structured~) => {
         assert_eq(
           content,
-          "Found 3 matches:\n\{dir}/hits.txt:1:needle alpha\n\{dir}/hits.txt:3:needle beta\n\{dir}/hits.txt:4:needle gamma\n",
+          "Found 3 matches in 1 file:\n\{dir}/hits.txt\n  L1: needle alpha\n  L3: needle beta\n  L4: needle gamma\n",
         )
         match structured {
           Some(Object(meta)) => {
             assert_true(meta.get("summary") is Some(String("3 matches")))
             assert_true(meta.get("count") is Some(Number(3.0, ..)))
+            assert_true(meta.get("truncated") is Some(Json::False))
           }
           _ => fail("expected structured summary payload for multi match")
         }
       }
       other =>
         fail("expected Success for multi match, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_max_matches_caps_output_with_footer" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-cap")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/hits.txt", "n1\nn2\nn3\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call_fields([
+        ("pattern", Json::string("n")),
+        ("path", Json::string(dir)),
+        ("max_matches", Json::number(2.0)),
+      ]),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(
+          content.contains(
+            "Found 3 matches in 1 file:\n\{dir}/hits.txt\n  L1: n1\n  L2: n2\n",
+          ),
+        )
+        assert_true(content.contains("… 1 more matches"))
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("count") is Some(Number(3.0, ..)))
+            assert_true(meta.get("truncated") is Some(Json::True))
+          }
+          _ => fail("expected truncated structured payload")
+        }
+      }
+      other =>
+        fail("expected Success for capped match list, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_files_with_matches_mode_lists_paths_only" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-files")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/b.txt", "x needle y\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/c.txt", "nothing\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call_fields([
+        ("pattern", Json::string("needle")),
+        ("path", Json::string(dir)),
+        ("output_mode", Json::string("files_with_matches")),
+      ]),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(content.has_prefix("Found 2 files:\n"))
+        assert_true(content.contains("\{dir}/a.txt"))
+        assert_true(content.contains("\{dir}/b.txt"))
+        assert_false(content.contains("c.txt"))
+        assert_false(content.contains("L1:"))
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("summary") is Some(String("2 files")))
+            assert_true(meta.get("count") is Some(Number(2.0, ..)))
+          }
+          _ => fail("expected files-mode structured payload")
+        }
+      }
+      other => fail("expected Success for files mode, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_count_mode_reports_matches_per_file" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-count")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.txt", "needle\nneedle\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call_fields([
+        ("pattern", Json::string("needle")),
+        ("path", Json::string(dir)),
+        ("output_mode", Json::string("count")),
+      ]),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(content.has_prefix("Found 2 files:\n"))
+        assert_true(content.contains("\{dir}/a.txt:2"))
+        assert_true(content.contains("\{dir}/b.txt:1"))
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("count") is Some(Number(2.0, ..)))
+          _ => fail("expected count-mode structured payload")
+        }
+      }
+      other => fail("expected Success for count mode, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_case_insensitive_flag_broadens_matching" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-case")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/mixed.txt", "NEEDLE here\n", create_mode=CreateNew)
+    let plain = GrepTools::GrepTools().execute("grep", grep_call("needle", dir))
+    match plain {
+      Success(content~, ..) => assert_true(content.contains("No matches found"))
+      other => fail("expected case-sensitive miss, got " + other.to_string())
+    }
+    let insensitive = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call_fields([
+        ("pattern", Json::string("needle")),
+        ("path", Json::string(dir)),
+        ("case_insensitive", Json::boolean(true)),
+      ]),
+    )
+    match insensitive {
+      Success(content~, ..) => assert_true(content.contains("L1: NEEDLE here"))
+      other => fail("expected case-insensitive hit, got " + other.to_string())
     }
   }
 }
@@ -191,52 +383,138 @@ async test "grep_missing_base_is_loud" {
 }
 
 ///|
-async test "grep_decode_failure_is_loud" {
+async test "grep_skips_binary_and_unreadable_files_without_failing" {
   @async.with_task_group() <| group => {
-    let dir = @fs.tmpdir(prefix="posoco-grep-decode")
+    let dir = @fs.tmpdir(prefix="posoco-grep-skip")
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     @fs.write_file("\{dir}/invalid.bin", b"\xff", create_mode=CreateNew)
-    let result = Ok(
-      GrepTools::GrepTools().execute("grep", grep_call("anything", dir)),
-    ) catch {
-      e => Err(e)
-    }
+    @fs.write_file("\{dir}/image.png", b"\x89PNG", create_mode=CreateNew)
+    @fs.write_file(
+      "\{dir}/unreadable.txt",
+      "must not be surfaced",
+      create_mode=CreateNew,
+      permission=0o000,
+    )
+    @fs.write_file("\{dir}/hit.txt", "needle\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call("needle", dir),
+    )
     match result {
-      Err(@posoco.RuntimeError::InvocationFailed(message)) => {
-        assert_true(message.contains("decode failed"))
-        assert_true(message.contains("invalid.bin"))
+      Success(content~, structured~) => {
+        assert_true(content.contains("\{dir}/hit.txt"))
+        assert_true(content.contains("L1: needle"))
+        assert_false(content.contains("invalid.bin"))
+        assert_false(content.contains("image.png"))
+        assert_false(content.contains("unreadable.txt"))
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("count") is Some(Number(1.0, ..)))
+          _ => fail("expected structured payload after skips")
+        }
       }
-      _ => fail("expected invalid UTF-8 to fail decoding")
+      other =>
+        fail(
+          "expected Success with binary/unreadable files skipped, got " +
+          other.to_string(),
+        )
     }
   }
 }
 
 ///|
-async test "grep_unreadable_file_is_loud" {
+async test "grep_prunes_ignores_and_hidden_entries" {
   @async.with_task_group() <| group => {
-    let dir = @fs.tmpdir(prefix="posoco-grep-unreadable")
+    let dir = @fs.tmpdir(prefix="posoco-grep-ignore")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/top.txt", "needle\n", create_mode=CreateNew)
+    @fs.mkdir("\{dir}/node_modules")
+    @fs.write_file(
+      "\{dir}/node_modules/dep.txt",
+      "needle\n",
+      create_mode=CreateNew,
+    )
+    @fs.mkdir("\{dir}/.hidden")
+    @fs.write_file(
+      "\{dir}/.hidden/secret.txt",
+      "needle\n",
+      create_mode=CreateNew,
+    )
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call("needle", dir),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(content.contains("\{dir}/top.txt"))
+        assert_false(content.contains("node_modules"))
+        assert_false(content.contains(".hidden"))
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("count") is Some(Number(1.0, ..)))
+          _ => fail("expected exactly the top-level match")
+        }
+      }
+      other =>
+        fail("expected Success with pruned traversal, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_glob_filter_narrows_searched_files" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-glob")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.mbt", "needle\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call_fields([
+        ("pattern", Json::string("needle")),
+        ("path", Json::string(dir)),
+        ("glob", Json::string("*.mbt")),
+      ]),
+    )
+    match result {
+      Success(content~, ..) => {
+        assert_true(content.contains("a.mbt"))
+        assert_false(content.contains("b.txt"))
+      }
+      other =>
+        fail("expected Success for filtered search, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_long_line_is_truncated_with_marker" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-long")
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     @fs.write_file(
-      "\{dir}/unreadable.txt",
-      "must not be skipped",
+      "\{dir}/long.txt",
+      "needle " + "x".repeat(3000) + "\n",
       create_mode=CreateNew,
-      permission=0o000,
     )
-    let result = Ok(
-      GrepTools::GrepTools().execute("grep", grep_call("anything", dir)),
-    ) catch {
-      e => Err(e)
-    }
+    let result = GrepTools::GrepTools().execute(
+      "grep",
+      grep_call("needle", dir),
+    )
     match result {
-      Err(@posoco.RuntimeError::InvocationFailed(message)) => {
-        assert_true(message.contains("read failed"))
-        assert_true(message.contains("unreadable.txt"))
+      Success(content~, ..) => {
+        assert_true(content.contains("… (line truncated)"))
+        assert_true(content.length() < 4000)
       }
-      _ => fail("expected unreadable file to fail reading")
+      other => fail("expected Success for long line, got " + other.to_string())
     }
   }
 }
@@ -265,7 +543,8 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
     }
     match tools.execute("grep", call) {
       @posoco.ToolOutcome::Success(content~, ..) => {
-        assert_true(content.contains("a.txt:1:needle here"))
+        assert_true(content.contains("a.txt"))
+        assert_true(content.contains("L1: needle here"))
         assert_false(content.contains(dir))
       }
       _ => fail("expected anchored grep to succeed")

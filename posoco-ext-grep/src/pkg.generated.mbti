@@ -16,8 +16,9 @@ pub fn grep_extension() -> GrepTools
 // Types and methods
 pub(all) struct GrepTools {
   anchor : @posoco-devkit.WorkspaceAnchor?
+  ignores : Array[String]
 }
-pub fn GrepTools::GrepTools(anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub fn GrepTools::GrepTools(anchor? : @posoco-devkit.WorkspaceAnchor?, ignores? : Array[String]) -> Self
 pub async fn GrepTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GrepTools::extension_id(Self) -> String
 pub fn GrepTools::manifest(Self) -> @port.ExtensionManifest
