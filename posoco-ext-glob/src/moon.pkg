@@ -1,3 +1,5 @@
+warnings = "-unused_package"
+
 import {
   "colmugx/posoco",
   "colmugx/posoco-devkit" @devkit,

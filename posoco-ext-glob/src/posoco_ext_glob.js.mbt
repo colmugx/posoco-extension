@@ -15,12 +15,13 @@ extern "js" fn js_readdir_envelope(path : String) -> String =
   #| }
 
 ///|
-extern "js" fn js_is_directory_envelope(path : String) -> String =
+/// One stat envelope for both the directory check and the mtime sort.
+extern "js" fn js_stat_envelope(path : String) -> String =
   #| (path) => {
   #|   const fs = require("node:fs");
   #|   try {
   #|     const st = fs.statSync(path);
-  #|     return JSON.stringify({ ok: true, dir: st.isDirectory() });
+  #|     return JSON.stringify({ ok: true, dir: st.isDirectory(), mtimeMs: st.mtimeMs });
   #|   } catch { return JSON.stringify({ ok: false }); }
   #| }
 
@@ -63,10 +64,17 @@ fn js_readdir_entries(path : String) -> Array[String]? {
 }
 
 ///|
-/// Decode the is-directory envelope; None means the stat failed or the
-/// envelope is malformed.
-fn js_is_directory(path : String) -> Bool? {
-  let envelope : Json = @json.parse(js_is_directory_envelope(path)) catch {
+/// Decoded stat envelope.
+priv struct JsStat {
+  dir : Bool
+  mtime_ms : Double
+}
+
+///|
+/// Decode the stat envelope; None means the stat failed or the envelope is
+/// malformed.
+fn js_stat(path : String) -> JsStat? {
+  let envelope : Json = @json.parse(js_stat_envelope(path)) catch {
     _ => return None
   }
   let fields = match envelope {
@@ -74,8 +82,16 @@ fn js_is_directory(path : String) -> Bool? {
     _ => return None
   }
   match (fields.get("ok"), fields.get("dir")) {
-    (Some(Json::True), Some(Json::True)) => Some(true)
-    (Some(Json::True), _) => Some(false)
+    (Some(Json::True), dir) => {
+      let mtime_ms = match fields.get("mtimeMs") {
+        Some(Json::Number(value, ..)) => value
+        _ => 0.0
+      }
+      match dir {
+        Some(Json::True) => Some({ dir: true, mtime_ms, })
+        _ => Some({ dir: false, mtime_ms, })
+      }
+    }
     _ => None
   }
 }
@@ -93,14 +109,16 @@ fn js_path_join(dir : String, entry : String) -> String {
 }
 
 ///|
-/// One recursion step: collect matches under `dir` (whose path relative to
-/// the scan base is `rel`), skipping dot entries the way Bun.Glob's
-/// `dot: false` default does — both as results and as traversal targets.
+/// One recursion step: collect matching files under `dir` (whose path
+/// relative to the scan base is `rel`), skipping dot entries and `ignores`
+/// names the way the native scanner does — as results and as traversal
+/// targets. Directories are never returned.
 fn js_scan_dir(
   glob : BunGlob,
+  ignores : Array[String],
   dir : String,
   rel : String,
-  out : Array[String],
+  out : Array[(Double, String)],
 ) -> Unit raise @posoco.RuntimeError {
   let entries = match js_readdir_entries(dir) {
     Some(entries) => entries
@@ -114,41 +132,64 @@ fn js_scan_dir(
       continue
     }
     let entry_rel = js_path_join(rel, entry)
-    if glob.match_(entry_rel) {
-      out.push(entry_rel)
+    if @devkit.matches_ignore(entry_rel, ignores) {
+      continue
     }
     let entry_full = js_path_join(dir, entry)
-    // A failed stat means the entry vanished or is unreadable; skip
-    // recursion for it rather than failing the whole scan.
-    match js_is_directory(entry_full) {
-      Some(true) => js_scan_dir(glob, entry_full, entry_rel, out)
-      _ => ()
+    match js_stat(entry_full) {
+      Some(stat) =>
+        if stat.dir {
+          js_scan_dir(glob, ignores, entry_full, entry_rel, out)
+        } else if glob.match_(entry_rel) {
+          out.push((stat.mtime_ms, entry_rel))
+        }
+      // A failed stat means the entry vanished or is unreadable; skip it
+      // rather than failing the whole scan.
+      None => ()
     }
   }
 }
 
 ///|
-priv struct JsGlobScanner {}
+priv struct JsGlobScanner {
+  ignores : Array[String]
+}
 
 ///|
-/// Walk the base directory and match every non-hidden path against the
-/// pattern through Bun.Glob's matcher.
+/// Walk the base directory and collect matching non-hidden files, newest
+/// first (path ascending breaks mtime ties).
 impl GlobScanner for JsGlobScanner with fn scan(
-  _self,
+  self : JsGlobScanner,
   pattern : String,
   base : String,
 ) -> Array[String] {
   let glob = bun_glob_new(pattern)
   let normalized = if base == "" { "." } else { base }
+  let found : Array[(Double, String)] = []
+  js_scan_dir(glob, self.ignores, normalized, "", found)
+  found.sort_by((a, b) => {
+    let (a_ms, a_path) = a
+    let (b_ms, b_path) = b
+    if a_ms == b_ms {
+      a_path.compare(b_path)
+    } else if a_ms < b_ms {
+      1
+    } else {
+      -1
+    }
+  })
   let out : Array[String] = []
-  js_scan_dir(glob, normalized, "", out)
+  for entry in found {
+    let (_, path) = entry
+    out.push(path)
+  }
   out
 }
 
 ///|
-pub impl @posoco.ToolProvider for GlobTools with fn list_tools(self : GlobTools) -> Array[
-  @posoco.ToolDef,
-] {
+pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
+  _self : GlobTools,
+) -> Array[@posoco.ToolDef] {
   shared_list_tools()
 }
 
@@ -161,5 +202,9 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_glob_impl(JsGlobScanner::{  }, self.anchor, call)
+  execute_glob_impl(
+    JsGlobScanner::{ ignores: self.ignores, },
+    self.anchor,
+    call,
+  )
 }

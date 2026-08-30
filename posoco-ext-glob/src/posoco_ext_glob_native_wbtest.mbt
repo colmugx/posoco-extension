@@ -5,6 +5,11 @@ fn glob_call(pattern : String, path : Json?) -> @posoco.ToolCall {
     Some(value) => fields.push(("path", value))
     None => ()
   }
+  glob_call_fields(fields)
+}
+
+///|
+fn glob_call_fields(fields : Array[(String, Json)]) -> @posoco.ToolCall {
   {
     call_id: @posoco.CallId::unchecked("glob-test"),
     name: @posoco.ToolName::unchecked("glob"),
@@ -186,6 +191,180 @@ async test "glob_anchored_base_resolves_and_stays_base_relative" {
         assert_false(content.contains(dir))
       }
       _ => fail("expected anchored sub-base glob to succeed")
+    }
+  }
+}
+
+///|
+async test "glob_limit_caps_output_with_footer" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-glob-limit")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/c.mbt", "// c\n", create_mode=CreateNew)
+    let result = GlobTools::GlobTools().execute(
+      "glob",
+      glob_call_fields([
+        ("pattern", Json::string("*.mbt")),
+        ("path", Json::string(dir)),
+        ("limit", Json::number(2.0)),
+      ]),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(content.has_prefix("Found 3 files:\n"))
+        assert_true(
+          content.contains(
+            "… 1 more files; narrow the pattern or raise limit",
+          ),
+        )
+        // Header counts the total; body lists only the capped two.
+        assert_eq(content.split("\n").to_array().length(), 5)
+        match structured {
+          Some(Object(meta)) => {
+            assert_true(meta.get("count") is Some(Number(3.0, ..)))
+            assert_true(meta.get("truncated") is Some(Json::True))
+          }
+          _ => fail("expected truncated structured payload")
+        }
+      }
+      other =>
+        fail("expected Success for capped glob, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "glob_limit_wrong_type_and_value_are_loud" {
+  let cases : Array[Json] = [
+    Json::boolean(true),
+    Json::number(0.0),
+    Json::number(-3.0),
+  ]
+  for value in cases {
+    let outcome = Ok(
+      GlobTools::GlobTools().execute(
+        "glob",
+        glob_call_fields([("pattern", Json::string("*.mbt")), ("limit", value)]),
+      ),
+    ) catch {
+      error => Err(error)
+    }
+    match outcome {
+      Err(@posoco.RuntimeError::UnknownTool(message)) =>
+        assert_true(message.contains("limit"))
+      _ => fail("expected invalid limit to be rejected")
+    }
+  }
+}
+
+///|
+async test "glob_returns_files_only_and_prunes_ignores_and_hidden" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-glob-prune")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/top.mbt", "// top\n", create_mode=CreateNew)
+    @fs.mkdir("\{dir}/sub")
+    @fs.write_file("\{dir}/sub/nested.mbt", "// n\n", create_mode=CreateNew)
+    @fs.mkdir("\{dir}/node_modules")
+    @fs.write_file(
+      "\{dir}/node_modules/dep.mbt",
+      "// dep\n",
+      create_mode=CreateNew,
+    )
+    @fs.mkdir("\{dir}/.hidden")
+    @fs.write_file("\{dir}/.hidden/x.mbt", "// x\n", create_mode=CreateNew)
+    let result = GlobTools::GlobTools().execute(
+      "glob",
+      glob_call_fields([
+        ("pattern", Json::string("**/*.mbt")),
+        ("path", Json::string(dir)),
+      ]),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_true(content.contains("\{dir}/top.mbt"))
+        assert_true(content.contains("\{dir}/sub/nested.mbt"))
+        assert_false(content.contains("node_modules"))
+        assert_false(content.contains(".hidden"))
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("count") is Some(Number(2.0, ..)))
+          _ => fail("expected exactly two matches after pruning")
+        }
+      }
+      other =>
+        fail("expected Success for pruned glob, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "glob_directory_pattern_yields_no_results" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-glob-dironly")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.mkdir("\{dir}/sub")
+    @fs.write_file("\{dir}/sub/keep.txt", "x", create_mode=CreateNew)
+    let result = GlobTools::GlobTools().execute(
+      "glob",
+      glob_call_fields([
+        ("pattern", Json::string("sub")),
+        ("path", Json::string(dir)),
+      ]),
+    )
+    match result {
+      Success(content~, structured~) => {
+        assert_eq(content, "Found 0 files:\n")
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("summary") is Some(String("no files")))
+          _ => fail("expected no-files payload for directory-only match")
+        }
+      }
+      other =>
+        fail(
+          "expected Success without directory entries, got " + other.to_string(),
+        )
+    }
+  }
+}
+
+///|
+async test "glob_sorts_newest_first" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-glob-mtime")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/older.mbt", "// older\n", create_mode=CreateNew)
+    @async.sleep(60)
+    @fs.write_file("\{dir}/newer.mbt", "// newer\n", create_mode=CreateNew)
+    let result = GlobTools::GlobTools().execute(
+      "glob",
+      glob_call_fields([
+        ("pattern", Json::string("*.mbt")),
+        ("path", Json::string(dir)),
+      ]),
+    )
+    match result {
+      Success(content~, ..) => {
+        let newer_at = content.find("\{dir}/newer.mbt")
+        let older_at = content.find("\{dir}/older.mbt")
+        match (newer_at, older_at) {
+          (Some(n), Some(o)) => assert_true(n < o)
+          _ => fail("expected both files listed once each")
+        }
+      }
+      other =>
+        fail("expected Success for mtime-sorted glob, got " + other.to_string())
     }
   }
 }

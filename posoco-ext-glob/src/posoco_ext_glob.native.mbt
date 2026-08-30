@@ -1,134 +1,109 @@
 ///|
-priv struct NativeGlobScanner {}
+priv struct NativeGlobScanner {
+  ignores : Array[String]
+}
 
 ///|
-/// Walk the directory tree and collect paths matching the glob pattern.
+/// Kind of `path`, or None when the stat fails (vanished or unreadable).
+async fn glob_file_kind(path : String) -> @fs.FileKind? {
+  Some(@fs.kind(path) catch { _ => return None })
+}
+
+///|
+/// Walk the directory tree and collect file paths matching the glob pattern.
+/// Hidden entries and `ignores` directories are pruned; directories are
+/// never returned. Results are sorted newest-first (path ascending breaks
+/// mtime ties so bulk checkouts with equal timestamps stay deterministic).
 impl GlobScanner for NativeGlobScanner with fn scan(
-  _self,
+  self : NativeGlobScanner,
   pattern : String,
   base : String,
 ) -> Array[String] {
   let matches : Array[String] = []
-  let prefix = if base == "/" { "/" } else { "\{base}/" }
-  @fs.walk(base, fn(dir : String, entries : Array[String]) {
-    for entry in entries {
-      let full = if dir == "." { entry } else { "\{dir}/\{entry}" }
-      // Match base-relative so pattern semantics match the js scanner; the
-      // returned paths keep the base prefix (the shared impl re-anchors
-      // them when a workspace anchor is configured).
-      if glob_match(pattern, glob_strip_prefix(full, prefix)) {
-        matches.push(full)
+  @fs.walk(
+    base,
+    (dir : String, entries : Array[String]) => {
+      for entry in entries {
+        let full = if dir == "." { entry } else { "\{dir}/\{entry}" }
+        if entry.has_prefix(".") {
+          continue
+        }
+        let rel = @devkit.relative_to_base(base, full)
+        if @devkit.matches_ignore(rel, self.ignores) {
+          continue
+        }
+        match glob_file_kind(full) {
+          None => continue
+          Some(@fs.FileKind::Directory) => continue
+          Some(_) => ()
+        }
+        if @devkit.glob_match(pattern, rel) {
+          matches.push(full)
+        }
       }
-    }
-  }) catch {
+    },
+    exclude=dir => {
+      let rel = @devkit.relative_to_base(base, dir)
+      rel != "" &&
+      (
+        @devkit.has_hidden_segment(rel) ||
+        @devkit.matches_ignore(rel, self.ignores)
+      )
+    },
+    max_concurrency=1,
+  ) catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
         "glob: walk failed for '\{@devkit.sanitize_path(base)}'",
       )
   }
+  sort_newest_first(matches)
   matches
 }
 
 ///|
-/// Match a path against a glob pattern. Supports * and **.
-/// `*` matches any characters except `/`; `**` matches any path segments.
-fn glob_match(pattern : String, path : String) -> Bool {
-  let pat_segs = pattern.split("/").to_array()
-  let path_segs = path.split("/").to_array()
-  match_segments(pat_segs, 0, path_segs, 0)
-}
-
-///|
-fn match_segments(
-  pat : Array[StringView],
-  pi : Int,
-  path : Array[StringView],
-  si : Int,
-) -> Bool {
-  if pi >= pat.length() {
-    return si >= path.length()
+/// Sort paths by mtime descending; ties fall back to path ascending.
+/// A failed stat sinks the entry to the end.
+async fn sort_newest_first(paths : Array[String]) -> Unit noraise {
+  let stamps : Array[(Int64, Int, String)] = []
+  for path in paths {
+    let (s, ns) = @fs.mtime(path) catch { _ => (0L, 0) }
+    stamps.push((s, ns, path))
   }
-  if pat[pi] == "**" {
-    // ** matches zero or more path segments
-    // Try matching the rest of the pattern at every position
-    let mut next = si
-    while true {
-      if match_segments(pat, pi + 1, path, next) {
-        return true
-      }
-      if next >= path.length() {
-        return false
-      }
-      next += 1
+  stamps.sort_by((a, b) => {
+    let (a_s, a_ns, a_path) = a
+    let (b_s, b_ns, b_path) = b
+    let by_time = if a_s == b_s { b_ns - a_ns } else { (b_s - a_s).to_int() }
+    if by_time != 0 {
+      by_time
+    } else {
+      a_path.compare(b_path)
     }
-    return false // unreachable
+  })
+  for i in 0..<stamps.length() {
+    let (_, _, path) = stamps[i]
+    paths[i] = path
   }
-  if si >= path.length() {
-    return false
-  }
-  if seg_match(pat[pi], path[si]) {
-    return match_segments(pat, pi + 1, path, si + 1)
-  }
-  false
-}
-
-///|
-/// Match a single path segment against a pattern segment (with * wildcards).
-fn seg_match(pat_seg : StringView, path_seg : StringView) -> Bool {
-  if !pat_seg.contains("*") {
-    return pat_seg == path_seg
-  }
-  // Simple wildcard matching for single segment
-  wildcard_match(pat_seg.iter().collect(), 0, path_seg.iter().collect(), 0)
-}
-
-///|
-fn wildcard_match(
-  pat : Array[Char],
-  pi : Int,
-  text : Array[Char],
-  ti : Int,
-) -> Bool {
-  if pi >= pat.length() {
-    return ti >= text.length()
-  }
-  if pat[pi] == '*' {
-    // * matches zero or more chars
-    let mut next = ti
-    while true {
-      if wildcard_match(pat, pi + 1, text, next) {
-        return true
-      }
-      if next >= text.length() {
-        return false
-      }
-      next += 1
-    }
-    return false // unreachable
-  }
-  if ti >= text.length() {
-    return false
-  }
-  if pat[pi] == text[ti] {
-    return wildcard_match(pat, pi + 1, text, ti + 1)
-  }
-  false
 }
 
 ///|
 /// Execute the `glob` tool on native. Business logic lives in the shared
 /// `execute_glob_impl`; this method only supplies the walk-based scanner.
-pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
-  _self : GlobTools,
-) -> Array[@posoco.ToolDef] {
-  shared_list_tools()
-}
-
-///|
 pub impl @posoco.ToolProvider for GlobTools with fn execute(
   self : GlobTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_glob_impl(NativeGlobScanner::{  }, self.anchor, call)
+  execute_glob_impl(
+    NativeGlobScanner::{ ignores: self.ignores, },
+    self.anchor,
+    call,
+  )
+}
+
+///|
+pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
+  _self : GlobTools,
+) -> Array[@posoco.ToolDef] {
+  shared_list_tools()
 }

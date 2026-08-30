@@ -16,8 +16,9 @@ pub fn glob_extension() -> GlobTools
 // Types and methods
 pub(all) struct GlobTools {
   anchor : @posoco-devkit.WorkspaceAnchor?
+  ignores : Array[String]
 }
-pub fn GlobTools::GlobTools(anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub fn GlobTools::GlobTools(anchor? : @posoco-devkit.WorkspaceAnchor?, ignores? : Array[String]) -> Self
 pub async fn GlobTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GlobTools::extension_id(Self) -> String
 pub fn GlobTools::manifest(Self) -> @port.ExtensionManifest
