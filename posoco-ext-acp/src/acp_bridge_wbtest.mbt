@@ -21,7 +21,7 @@ priv struct FakeAcpClient {
 ///|
 fn FakeAcpClient::FakeAcpClient(
   reply? : @acp.RequestPermissionResponse = {
-    outcome: Selected({ option_id: ACP_ALLOW_ONCE, meta: Omitted }),
+    outcome: Selected({ option_id: ACP_ALLOW_ONCE, meta: Omitted, }),
     meta: Omitted,
   },
   fail_permission? : Bool = false,
@@ -44,7 +44,7 @@ fn FakeAcpClient::FakeAcpClient(
 
 ///|
 fn elicit_accept_value(value : Json) -> @acp.ElicitationCreateResult {
-  { action: Accept, content: Value(value), meta: Omitted }
+  { action: Accept, content: Value(value), meta: Omitted, }
 }
 
 ///|
@@ -110,7 +110,7 @@ fn tk_assistant(
   let reasoning_value : @posoco.Reasoning? = if reasoning == "" {
     None
   } else {
-    Some({ content: reasoning, raw: None })
+    Some({ content: reasoning, raw: None, })
   }
   @posoco.Message::AssistantMessage(
     content~,
@@ -187,7 +187,7 @@ test "acp_tool_title prefers primary arg and stays single-line" {
 test "acp_content_block maps text and image" {
   assert_eq(
     acp_content_block(@posoco.Content::Text("hi")),
-    Text({ annotations: Omitted, text: "hi", meta: Omitted }),
+    Text({ annotations: Omitted, text: "hi", meta: Omitted, }),
   )
   assert_true(
     acp_content_block(
@@ -279,7 +279,7 @@ test "acp_decision_from_approval maps allow, deny, and cancel" {
   assert_true(
     acp_decision_from_approval(
       {
-        outcome: Selected({ option_id: ACP_ALLOW_ONCE, meta: Omitted }),
+        outcome: Selected({ option_id: ACP_ALLOW_ONCE, meta: Omitted, }),
         meta: Omitted,
       },
       ask,
@@ -289,7 +289,7 @@ test "acp_decision_from_approval maps allow, deny, and cancel" {
   assert_true(
     acp_decision_from_approval(
       {
-        outcome: Selected({ option_id: ACP_ALLOW_ALWAYS, meta: Omitted }),
+        outcome: Selected({ option_id: ACP_ALLOW_ALWAYS, meta: Omitted, }),
         meta: Omitted,
       },
       ask,
@@ -299,7 +299,7 @@ test "acp_decision_from_approval maps allow, deny, and cancel" {
   match
     acp_decision_from_approval(
       {
-        outcome: Selected({ option_id: ACP_REJECT_ONCE, meta: Omitted }),
+        outcome: Selected({ option_id: ACP_REJECT_ONCE, meta: Omitted, }),
         meta: Omitted,
       },
       ask,
@@ -309,7 +309,7 @@ test "acp_decision_from_approval maps allow, deny, and cancel" {
     _ => fail("expected deny")
   }
   assert_true(
-    acp_decision_from_approval({ outcome: Cancelled, meta: Omitted }, ask)
+    acp_decision_from_approval({ outcome: Cancelled, meta: Omitted, }, ask)
     is @permission.ApprovalDecision::Deny(_),
   )
 }
@@ -566,6 +566,118 @@ async test "detach stops delivery" {
   assert_eq(client.sent.length(), 0)
 }
 
+// ------------------------------------------------------ _meta decorator seam
+
+///|
+async test "meta decorator stamps _meta on flushed frames and None omits it" {
+  let client = FakeAcpClient::FakeAcpClient()
+  let bridge = AcpBridge(
+    meta=Some((event : @posoco.TurnEvent, _update : @acp.SessionUpdate) => {
+      match event {
+        ToolCallPending(call) =>
+          Some(Json::object({ "tool": Json::string(call.name.to_string()) }))
+        ToolCallResult(..) => Some(Json::string("done"))
+        _ => None
+      }
+    }),
+  )
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  bridge.ingest(ToolCallPending(tk_call("read", id="c1")))
+  bridge.ingest(
+    ToolCallResult(
+      call=tk_call("read", id="c1"),
+      result=Success(content="ok", structured=None),
+      is_error=false,
+    ),
+  )
+  bridge.ingest(StreamChunkReceived(chunk=TextDelta(token="hi")))
+  assert_eq(bridge.flush(), 3)
+  // Meta derived at projection time reaches the wire verbatim, per update.
+  assert_eq(
+    client.sent[0].meta,
+    Value(Json::object({ "tool": Json::string("read") })),
+  )
+  assert_eq(client.sent[1].meta, Value(Json::string("done")))
+  assert_true(client.sent[2].meta is Omitted)
+  // Without a decorator every frame omits `_meta`, exactly like before.
+  let bare = AcpBridge()
+  let bare_client = FakeAcpClient::FakeAcpClient()
+  bare.attach(context=fake_acp_context(bare_client), session_id="s1")
+  bare.ingest(ToolCallPending(tk_call("read", id="c1")))
+  ignore(bare.flush())
+  assert_true(bare_client.sent[0].meta is Omitted)
+}
+
+///|
+async test "usage meta decorator reads the triggering event's raw usage" {
+  let client = FakeAcpClient::FakeAcpClient()
+  let bridge = AcpBridge(
+    meta=Some((event : @posoco.TurnEvent, update : @acp.SessionUpdate) => {
+      match (event, update) {
+        (ModelResponseReceived(usage~, ..), UsageUpdate(_)) =>
+          match usage {
+            Some(u) =>
+              Some(
+                Json::object({
+                  "total": Json::number(u.total_tokens.unwrap_or(0).to_double()),
+                }),
+              )
+            None => None
+          }
+        _ => None
+      }
+    }),
+  )
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  bridge.ingest(TurnStarted)
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("a")], finish=Stop),
+      usage=Some(tk_usage(10)),
+    ),
+  )
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("b")], finish=Stop),
+      usage=Some(tk_usage(20)),
+    ),
+  )
+  ignore(bridge.flush())
+  // text, usage(10), text, usage(10+20): the wire value accumulates...
+  assert_eq(client.sent.length(), 4)
+  match client.sent[3].update {
+    UsageUpdate(usage) => assert_eq(usage.used, 30)
+    _ => fail("expected usage update")
+  }
+  // ...while the decorator saw each round's raw triggering usage.
+  assert_eq(
+    client.sent[1].meta,
+    Value(Json::object({ "total": Json::number(10.0) })),
+  )
+  assert_eq(
+    client.sent[3].meta,
+    Value(Json::object({ "total": Json::number(20.0) })),
+  )
+}
+
+///|
+async test "pump forwards projection-time meta without re-deriving it" {
+  let client = FakeAcpClient::FakeAcpClient()
+  let stamp = (_event : @posoco.TurnEvent, _update : @acp.SessionUpdate) => {
+    Some(Json::string("m"))
+  }
+  let bridge = AcpBridge(meta=Some(stamp))
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  @async.with_task_group(group => {
+    bridge.spawn_pump(group)
+    bridge.ingest(ToolCallPending(tk_call("read", id="c1")))
+    @async.pause()
+    assert_eq(client.sent.length(), 1)
+    assert_eq(client.sent[0].meta, Value(Json::string("m")))
+    bridge.close()
+  })
+}
+
 // -------------------------------------------------------- approval source
 
 ///|
@@ -605,7 +717,7 @@ async test "ask flushes, translates, and allows once on allow-once" {
 async test "ask maps allow-always onto the policy-cacheable decision" {
   let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(reply={
-    outcome: Selected({ option_id: ACP_ALLOW_ALWAYS, meta: Omitted }),
+    outcome: Selected({ option_id: ACP_ALLOW_ALWAYS, meta: Omitted, }),
     meta: Omitted,
   })
   bridge.attach(context=fake_acp_context(client), session_id="s1")
@@ -619,7 +731,7 @@ async test "ask maps allow-always onto the policy-cacheable decision" {
 async test "ask denies on reject and keeps the option id in the reason" {
   let bridge = AcpBridge()
   let client = FakeAcpClient::FakeAcpClient(reply={
-    outcome: Selected({ option_id: ACP_REJECT_ALWAYS, meta: Omitted }),
+    outcome: Selected({ option_id: ACP_REJECT_ALWAYS, meta: Omitted, }),
     meta: Omitted,
   })
   bridge.attach(context=fake_acp_context(client), session_id="s1")
@@ -696,13 +808,161 @@ async test "close then attach reopens the queue for the next prompt" {
   // Events enqueued while closed are dropped...
   bridge.ingest(ToolCallPending(tk_call("read", id="c2")))
   assert_eq(first.sent.length(), 1)
-  // ...and the next attach delivers a fresh queue to the next client.
+  // ...and re-attaching the same session delivers a fresh queue to the
+  // next client context of that session.
   let second = FakeAcpClient::FakeAcpClient()
-  bridge.attach(context=fake_acp_context(second), session_id="s2")
+  bridge.attach(context=fake_acp_context(second), session_id="s1")
   bridge.ingest(ToolCallPending(tk_call("read", id="c3")))
   assert_eq(bridge.flush(), 1)
   assert_eq(second.sent.length(), 1)
-  assert_eq(second.sent[0].session_id, "s2")
+  assert_eq(second.sent[0].session_id, "s1")
+}
+
+// ------------------------------------------------- one bridge, one session
+
+///|
+async test "same-session reattach is idempotent and keeps session counters" {
+  let first = FakeAcpClient::FakeAcpClient()
+  let bridge = AcpBridge()
+  bridge.attach(context=fake_acp_context(first), session_id="s1")
+  bridge.ingest(TurnStarted)
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("r1")]),
+      usage=Some(tk_usage(10)),
+    ),
+  )
+  assert_eq(bridge.flush(), 2)
+  // A failed turn leaves per-turn state behind...
+  bridge.ingest(TurnFailed("boom"))
+  // ...and re-attaching the same session clears only that per-turn state.
+  let second = FakeAcpClient::FakeAcpClient()
+  bridge.attach(context=fake_acp_context(second), session_id="s1")
+  assert_eq(bridge.session_id(), Some("s1"))
+  assert_true(bridge.take_failure() is None)
+  bridge.ingest(StreamChunkReceived(chunk=TextDelta(token="next")))
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("next")]),
+      usage=Some(tk_usage(20)),
+    ),
+  )
+  assert_eq(bridge.flush(), 2)
+  // message_seq persisted across attach: the new round mints msg-2.
+  match second.sent[0].update {
+    AgentMessageChunk(chunk) => assert_eq(chunk.message_id, Value("msg-2"))
+    _ => fail("expected agent message chunk")
+  }
+  // used_tokens persisted across attach: session-cumulative usage.
+  match second.sent[1].update {
+    UsageUpdate(usage) => assert_eq(usage.used, 30)
+    _ => fail("expected usage update")
+  }
+}
+
+///|
+async test "panic cross-session attach aborts with a diagnostic" {
+  let bridge = AcpBridge()
+  bridge.attach(
+    context=fake_acp_context(FakeAcpClient::FakeAcpClient()),
+    session_id="s1",
+  )
+  // One bridge serves one session: wiring a second session must fail loudly.
+  bridge.attach(
+    context=fake_acp_context(FakeAcpClient::FakeAcpClient()),
+    session_id="s2",
+  )
+}
+
+///|
+async test "panic close does not unbind: different session still aborts" {
+  let bridge = AcpBridge()
+  bridge.attach(
+    context=fake_acp_context(FakeAcpClient::FakeAcpClient()),
+    session_id="s1",
+  )
+  bridge.close()
+  // `close` ends the queue, not the session binding; only `detach` unbinds.
+  bridge.attach(
+    context=fake_acp_context(FakeAcpClient::FakeAcpClient()),
+    session_id="s2",
+  )
+}
+
+///|
+async test "detach is the explicit teardown and allows a rebind" {
+  let bridge = AcpBridge()
+  bridge.attach(
+    context=fake_acp_context(FakeAcpClient::FakeAcpClient()),
+    session_id="s1",
+  )
+  bridge.detach()
+  assert_true(bridge.session_id() is None)
+  let rebound = FakeAcpClient::FakeAcpClient()
+  bridge.attach(context=fake_acp_context(rebound), session_id="s2")
+  bridge.ingest(ToolCallPending(tk_call("read", id="c1")))
+  assert_eq(bridge.flush(), 1)
+  assert_eq(rebound.sent[0].session_id, "s2")
+}
+
+///|
+async test "session_id reader tracks attach and detach" {
+  let bridge = AcpBridge()
+  assert_true(bridge.session_id() is None)
+  bridge.attach(
+    context=fake_acp_context(FakeAcpClient::FakeAcpClient()),
+    session_id="s1",
+  )
+  assert_eq(bridge.session_id(), Some("s1"))
+  bridge.detach()
+  assert_true(bridge.session_id() is None)
+}
+
+///|
+async test "on_shutdown closes the queue and detaches the session" {
+  let bridge = AcpBridge()
+  let client = FakeAcpClient::FakeAcpClient()
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  @posoco.Lifecycle::on_shutdown(bridge)
+  assert_true(bridge.session_id() is None)
+  // The queue is closed: events enqueued now are dropped for good...
+  bridge.ingest(ToolCallPending(tk_call("read", id="c1")))
+  // ...and even a same-session reattach flushes nothing.
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  assert_eq(bridge.flush(), 0)
+  assert_eq(client.sent.length(), 0)
+}
+
+///|
+async test "two bridges drive two sessions without cross-talk" {
+  let bridge_a = AcpBridge()
+  let client_a = FakeAcpClient::FakeAcpClient()
+  bridge_a.attach(context=fake_acp_context(client_a), session_id="s-a")
+  let stamp_b = (_event : @posoco.TurnEvent, _update : @acp.SessionUpdate) => {
+    Some(Json::string("b"))
+  }
+  let bridge_b = AcpBridge(meta=Some(stamp_b))
+  let client_b = FakeAcpClient::FakeAcpClient()
+  bridge_b.attach(context=fake_acp_context(client_b), session_id="s-b")
+  bridge_a.ingest(ToolCallPending(tk_call("read", id="a1")))
+  bridge_b.ingest(ToolCallPending(tk_call("write", id="b1")))
+  bridge_a.ingest(
+    ToolCallResult(
+      call=tk_call("read", id="a1"),
+      result=Success(content="a", structured=None),
+      is_error=false,
+    ),
+  )
+  assert_eq(bridge_a.flush(), 2)
+  assert_eq(bridge_b.flush(), 1)
+  for frame in client_a.sent {
+    assert_eq(frame.session_id, "s-a")
+    assert_true(frame.meta is Omitted)
+  }
+  for frame in client_b.sent {
+    assert_eq(frame.session_id, "s-b")
+    assert_eq(frame.meta, Value(Json::string("b")))
+  }
 }
 
 // ------------------------------------------------------------ UiPort (elicitation)

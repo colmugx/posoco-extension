@@ -11,7 +11,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async",
-  "moonbitlang/async/aqueue",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -44,13 +44,22 @@ pub fn acp_tool_kind(String) -> @protocol.ToolKind
 pub fn acp_tool_title(@kernel.ToolCall) -> String
 
 // Errors
+pub(all) suberror AcpHostFsError {
+  HostFsCallFailed(method_name~ : String, cause~ : @agent.AgentContextError)
+} derive(Eq, @debug.Debug)
+
+pub(all) suberror AcpTerminalError {
+  HostCallFailed(method_name~ : String, cause~ : @agent.AgentContextError)
+  TerminalTimedOut(timeout_ms~ : Int, partial_output~ : String)
+  TerminalCancelled(partial_output~ : String)
+} derive(Eq, @debug.Debug)
 
 // Types and methods
 pub struct AcpBridge {
-  mut queue : @aqueue.Queue[@protocol.SessionUpdate]
   mut queue_closed : Bool
   mut context : @agent.AgentContext?
   mut session_id : String?
+  meta_decorator : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?
   mut message_seq : Int
   mut current_text_id : String?
   mut current_thought_id : String?
@@ -59,8 +68,9 @@ pub struct AcpBridge {
   mut used_tokens : Int
   mut last_finish : @kernel.FinishReason?
   mut last_failure : String?
+  // private fields
 }
-pub fn AcpBridge::AcpBridge() -> Self
+pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?) -> Self
 pub async fn AcpBridge::ask(Self, @posoco-ext-permission.ApprovalRequest) -> @posoco-ext-permission.ApprovalDecision
 pub fn AcpBridge::attach(Self, context~ : @agent.AgentContext, session_id~ : String) -> Unit
 pub fn AcpBridge::close(Self) -> Unit
@@ -69,6 +79,7 @@ pub fn AcpBridge::extension_id(Self) -> String
 pub async fn AcpBridge::flush(Self) -> Int noraise
 pub fn AcpBridge::manifest(Self) -> @port.ExtensionManifest
 pub async fn AcpBridge::request(Self, @port.UiRequest) -> @port.UiResponse raise @error.UiError
+pub fn AcpBridge::session_id(Self) -> String?
 pub fn[G] AcpBridge::spawn_pump(Self, @async.TaskGroup[G]) -> Unit
 pub fn AcpBridge::stop_reason(Self) -> @session.StopReason
 pub fn AcpBridge::take_failure(Self) -> String?
@@ -77,6 +88,26 @@ pub impl @port.Extension for AcpBridge
 pub impl @port.Lifecycle for AcpBridge
 pub impl @port.Observer for AcpBridge
 pub impl @port.UiPort for AcpBridge
+
+pub struct AcpHostFs {
+  context : @agent.AgentContext
+  session_id : String
+}
+pub fn AcpHostFs::AcpHostFs(context~ : @agent.AgentContext, session_id~ : String) -> Self
+pub async fn AcpHostFs::read_text_file(Self, path~ : String) -> String raise AcpHostFsError
+pub async fn AcpHostFs::write_text_file(Self, path~ : String, content~ : String) -> Unit raise AcpHostFsError
+
+pub struct AcpTerminal {
+  context : @agent.AgentContext
+  session_id : String
+}
+pub fn AcpTerminal::AcpTerminal(context~ : @agent.AgentContext, session_id~ : String) -> Self
+pub async fn AcpTerminal::run(Self, String, cwd~ : String, on_output? : (String) -> Unit, timeout_ms? : Int) -> AcpTerminalResult raise AcpTerminalError
+
+pub(all) struct AcpTerminalResult {
+  exit_code : Int?
+  output : String
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

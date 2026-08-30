@@ -48,9 +48,10 @@ pub impl @permission.ApprovalSource for AcpBridge with fn ask(
 }
 
 ///|
-/// Lifecycle: release the session on shutdown. The queue is left to the
-/// host's `close` (a running pump exits once it closes).
+/// Lifecycle: close the outbound queue (a long-lived pump drains and exits
+/// once it closes) and release the session binding on shutdown.
 pub impl @posoco.Lifecycle for AcpBridge with fn on_shutdown(self) -> Unit {
+  self.close()
   self.detach()
 }
 

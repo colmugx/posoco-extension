@@ -163,7 +163,7 @@ fn acp_title(name : String, arguments : Json) -> String {
 /// opaque payload verbatim (the kernel never interprets image data).
 pub fn acp_content_block(content : @posoco.Content) -> @acp.ContentBlock {
   match content {
-    Text(text) => Text({ annotations: Omitted, text, meta: Omitted })
+    Text(text) => Text({ annotations: Omitted, text, meta: Omitted, })
     Image(media_type~, data~) =>
       Image({
         annotations: Omitted,
