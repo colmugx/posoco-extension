@@ -4,10 +4,10 @@ test "workspace_state/snapshot_is_detached" {
     "/repo",
     branch=Some("main"),
     head=Some("abc123"),
-    changes=[{ path: "src/a.mbt", status: "modified" }],
+    changes=[{ path: "src/a.mbt", status: "modified", }],
   )
   let snapshot = state.current()
-  snapshot.changes.push({ path: "README.md", status: "modified" })
+  snapshot.changes.push({ path: "README.md", status: "modified", })
   let again = state.current()
   assert_eq(again.changes.length(), 1)
 }
@@ -18,8 +18,8 @@ test "workspace_state/replaces_branch_head_and_changes" {
   state.set_branch(Some("feat/handoff"))
   state.set_head(Some("def456"))
   state.set_changes([
-    { path: "src/handoff.mbt", status: "modified" },
-    { path: "README.mbt.md", status: "modified" },
+    { path: "src/handoff.mbt", status: "modified", },
+    { path: "README.mbt.md", status: "modified", },
   ])
   let snapshot = state.current()
   assert_eq(snapshot.branch, Some("feat/handoff"))

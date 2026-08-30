@@ -24,7 +24,7 @@ pub fn HandoffWorkspaceState::HandoffWorkspaceState(
   head? : String? = None,
   changes? : Array[WorkspaceChange] = [],
 ) -> HandoffWorkspaceState {
-  { workspace: { root, branch, head, changes: changes.copy() } }
+  { workspace: { root, branch, head, changes: changes.copy(), }, }
 }
 
 ///|
@@ -63,7 +63,7 @@ pub fn HandoffWorkspaceState::set_changes(
   self : HandoffWorkspaceState,
   changes : Array[WorkspaceChange],
 ) -> Unit {
-  self.workspace = { ..self.workspace, changes: changes.copy() }
+  self.workspace = { ..self.workspace, changes: changes.copy(), }
 }
 
 ///|

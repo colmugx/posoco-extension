@@ -7,7 +7,7 @@ priv struct FakeHandoffStore {
 
 ///|
 fn FakeHandoffStore::FakeHandoffStore() -> FakeHandoffStore {
-  { dir: "", path: "", content: "" }
+  { dir: "", path: "", content: "", }
 }
 
 ///|
@@ -44,7 +44,7 @@ priv struct FixedHandoffProbe {
 
 ///|
 impl HandoffWorkspaceProbe for FixedHandoffProbe with fn snapshot(self, _cwd) {
-  Ok({ ..self.workspace, changes: self.workspace.changes.copy() })
+  Ok({ ..self.workspace, changes: self.workspace.changes.copy(), })
 }
 
 ///|
@@ -65,7 +65,7 @@ async test "handoff/create writes project-root document" {
       root: "/repo",
       branch: Some("feat/handoff"),
       head: Some("abc123"),
-      changes: [{ path: "src/a.mbt", status: "modified" }],
+      changes: [{ path: "src/a.mbt", status: "modified", }],
     },
   }
   let source = FixedHandoffWork::{
@@ -95,7 +95,7 @@ async test "handoff/inspect reads the same project-root document" {
   store.path = "/repo/.handoff/HANDOFF.md"
   store.content = "# Handoff\n\nexisting\n"
   let probe = FixedHandoffProbe::{
-    workspace: { root: "/repo", branch: None, head: None, changes: [] },
+    workspace: { root: "/repo", branch: None, head: None, changes: [], },
   }
   let handoff = Handoff(cwd="/repo/src", store~, probe~, work_sources=[])
   let outcome = handoff.invoke("handoff", Json::string("inspect"))
@@ -113,7 +113,7 @@ async test "handoff/inspect reads the same project-root document" {
 async test "handoff/create refuses incomplete continuation state" {
   let store = FakeHandoffStore()
   let probe = FixedHandoffProbe::{
-    workspace: { root: "/repo", branch: None, head: None, changes: [] },
+    workspace: { root: "/repo", branch: None, head: None, changes: [], },
   }
   let handoff = Handoff(cwd="/repo", store~, probe~, work_sources=[])
   let outcome = handoff.invoke("handoff", Json::string("create"))

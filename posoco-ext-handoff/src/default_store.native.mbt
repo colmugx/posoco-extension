@@ -1,5 +1,5 @@
 ///|
-let handoff_atomic_counter : Ref[Int] = { val: 0 }
+let handoff_atomic_counter : Ref[Int] = { val: 0, }
 
 ///|
 pub impl HandoffStore for DefaultHandoffStore with fn exists(_self, path) {

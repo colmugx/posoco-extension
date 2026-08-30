@@ -15,7 +15,7 @@ pub fn Handoff::Handoff(
   probe~ : &HandoffWorkspaceProbe,
   work_sources~ : Array[&HandoffWorkSource],
 ) -> Handoff {
-  { cwd, store, probe, work_sources }
+  { cwd, store, probe, work_sources, }
 }
 
 ///|
@@ -217,7 +217,7 @@ fn work_from_args(args : Json, details : String?) -> WorkSnapshot {
         ),
       }
     }
-    _ => { ..WorkSnapshot::empty(), objective: details }
+    _ => { ..WorkSnapshot::empty(), objective: details, }
   }
 }
 

@@ -1,0 +1,113 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-handoff"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn merge_work(WorkSnapshot, WorkSnapshot) -> WorkSnapshot
+
+pub fn render_handoff_document(WorkSnapshot, WorkspaceSnapshot) -> String
+
+// Errors
+
+// Types and methods
+pub struct DefaultHandoffStore {
+}
+pub fn DefaultHandoffStore::DefaultHandoffStore() -> Self
+
+pub(all) struct Handoff {
+  cwd : String
+  store : &HandoffStore
+  probe : &HandoffWorkspaceProbe
+  work_sources : Array[&HandoffWorkSource]
+}
+pub fn Handoff::Handoff(cwd~ : String, store~ : &HandoffStore, probe~ : &HandoffWorkspaceProbe, work_sources~ : Array[&HandoffWorkSource]) -> Self
+pub fn Handoff::extension_id(Self) -> String
+pub fn Handoff::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.CommandPort for Handoff
+pub impl @port.Extension for Handoff
+
+pub struct HandoffWorkState {
+  mut work : WorkSnapshot
+}
+pub fn HandoffWorkState::HandoffWorkState(initial? : WorkSnapshot) -> Self
+pub fn HandoffWorkState::add_blocker(Self, String) -> Unit
+pub fn HandoffWorkState::add_constraint(Self, String) -> Unit
+pub fn HandoffWorkState::add_decision(Self, String) -> Unit
+pub fn HandoffWorkState::add_done_when(Self, String) -> Unit
+pub fn HandoffWorkState::add_note(Self, String) -> Unit
+pub fn HandoffWorkState::clear(Self) -> Unit
+pub fn HandoffWorkState::complete(Self, String) -> Unit
+pub fn HandoffWorkState::enqueue(Self, String) -> Unit
+pub fn HandoffWorkState::replace(Self, WorkSnapshot) -> Unit
+pub fn HandoffWorkState::resolve_blocker(Self, String) -> Unit
+pub fn HandoffWorkState::set_current_work(Self, String) -> Unit
+pub fn HandoffWorkState::set_next_action(Self, String) -> Unit
+pub fn HandoffWorkState::set_objective(Self, String) -> Unit
+pub fn HandoffWorkState::snapshot(Self) -> WorkSnapshot
+pub fn HandoffWorkState::validation_failed(Self, String) -> Unit
+pub fn HandoffWorkState::validation_not_run(Self, String) -> Unit
+pub fn HandoffWorkState::validation_passed(Self, String) -> Unit
+pub impl HandoffWorkSource for HandoffWorkState
+
+pub struct HandoffWorkspaceState {
+  mut workspace : WorkspaceSnapshot
+}
+pub fn HandoffWorkspaceState::HandoffWorkspaceState(String, branch? : String?, head? : String?, changes? : Array[WorkspaceChange]) -> Self
+pub fn HandoffWorkspaceState::current(Self) -> WorkspaceSnapshot
+pub fn HandoffWorkspaceState::replace(Self, WorkspaceSnapshot) -> Unit
+pub fn HandoffWorkspaceState::set_branch(Self, String?) -> Unit
+pub fn HandoffWorkspaceState::set_changes(Self, Array[WorkspaceChange]) -> Unit
+pub fn HandoffWorkspaceState::set_head(Self, String?) -> Unit
+pub impl HandoffWorkspaceProbe for HandoffWorkspaceState
+
+pub(all) struct WorkSnapshot {
+  objective : String?
+  done_when : Array[String]
+  constraints : Array[String]
+  completed : Array[String]
+  current_work : String?
+  decisions : Array[String]
+  blockers : Array[String]
+  next_action : String?
+  queue : Array[String]
+  notes : Array[String]
+  validation_passed : Array[String]
+  validation_failed : Array[String]
+  validation_not_run : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn WorkSnapshot::empty() -> Self
+
+pub(all) struct WorkspaceChange {
+  path : String
+  status : String
+} derive(Eq, @debug.Debug)
+
+pub(all) struct WorkspaceSnapshot {
+  root : String
+  branch : String?
+  head : String?
+  changes : Array[WorkspaceChange]
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+pub(open) trait HandoffStore {
+  async fn exists(Self, String) -> Result[Bool, String]
+  async fn read(Self, String) -> Result[String, String]
+  async fn ensure_dir(Self, String) -> Result[Unit, String]
+  async fn write_atomic(Self, String, String) -> Result[Unit, String]
+}
+
+pub(open) trait HandoffWorkSource {
+  fn handoff_work(Self) -> WorkSnapshot
+}
+
+pub(open) trait HandoffWorkspaceProbe {
+  fn snapshot(Self, String) -> Result[WorkspaceSnapshot, String]
+}

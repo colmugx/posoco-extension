@@ -60,7 +60,7 @@ test "handoff_document/requires_execution_continuation" {
     validate_work(no_next),
     Some("handoff requires exactly one next_action"),
   )
-  let complete : WorkSnapshot = { ..no_next, next_action: Some("Run tests") }
+  let complete : WorkSnapshot = { ..no_next, next_action: Some("Run tests"), }
   assert_eq(validate_work(complete), None)
 }
 
@@ -86,8 +86,8 @@ test "handoff_document/renders_continuation_state_not_history" {
     branch: Some("feat/handoff"),
     head: Some("abc123"),
     changes: [
-      { path: "posoco-ext-handoff/src/handoff.mbt", status: "modified" },
-      { path: "posoco-ext-handoff/README.mbt.md", status: "modified" },
+      { path: "posoco-ext-handoff/src/handoff.mbt", status: "modified", },
+      { path: "posoco-ext-handoff/README.mbt.md", status: "modified", },
     ],
   }
   let markdown = render_handoff_document(work, workspace)

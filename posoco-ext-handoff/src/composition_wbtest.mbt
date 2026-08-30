@@ -10,12 +10,9 @@ test "handoff/public composition surface" {
   let workspace_probe : &HandoffWorkspaceProbe = workspace
   let work_source : &HandoffWorkSource = work
 
-  let handoff = Handoff(
-    cwd="/repo",
-    store=store_port,
-    probe=workspace_probe,
-    work_sources=[work_source],
-  )
+  let handoff = Handoff(cwd="/repo", store=store_port, probe=workspace_probe, work_sources=[
+    work_source,
+  ])
 
   let command_port : &@posoco.CommandPort = handoff
   let extension : &@posoco.Extension = handoff
