@@ -25,6 +25,7 @@ pub(all) struct JsonlSessionStore {
 }
 pub fn JsonlSessionStore::JsonlSessionStore(String) -> Self
 pub fn JsonlSessionStore::extension_id(Self) -> String
+pub async fn JsonlSessionStore::list_ids(Self) -> Array[String] raise @error.SessionError
 pub fn JsonlSessionStore::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.Extension for JsonlSessionStore
 pub impl @port.SessionStore for JsonlSessionStore

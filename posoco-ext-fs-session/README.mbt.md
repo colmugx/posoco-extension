@@ -47,6 +47,16 @@ Both targets return an empty session when the requested file does not exist.
 Filesystem and codec failures remain observable as typed `SessionError`
 values.
 
+## Listing sessions
+
+`JsonlSessionStore::list_ids()` (inherent method, both targets) returns every
+persisted session id: the stems of the `<id>.jsonl` entries in the root,
+re-checked by `validate_session_id`, deduplicated, and sorted
+character-lexicographically — clock-minted ids (`cetas-<ms>`) therefore sort
+chronologically. A missing root directory is an empty list, the same
+missing-means-empty rule `load` applies; entries that are not `<id>.jsonl`
+files or whose stem fails validation are ignored.
+
 ## Behavior
 
 - **Session ids are filename stems** — validated at the storage boundary

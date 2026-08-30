@@ -86,7 +86,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
         )
     }
   if !exists {
-    return @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
+    return @posoco.Session::{ messages: [], metadata: Map::from_array([]), }
   }
   let content = file.text().wait() catch {
       error =>
@@ -155,7 +155,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   }
   // File exists: append only the new message lines, each prefixed with \n to
   // terminate the previous line (same on-disk shape as the native writer).
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for msg in messages {
     buf.write_char('\n')
     buf.write_string(message_to_json(msg).stringify())

@@ -291,7 +291,7 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                     // Provider replay payload rides along verbatim; absent on
                     // legacy files and for text-only reasoning providers.
                     let raw = map.get("reasoning_raw")
-                    Some(@posoco.Reasoning::{ content: s, raw })
+                    Some(@posoco.Reasoning::{ content: s, raw, })
                   }
                   _ => None
                 }
@@ -350,7 +350,7 @@ fn message_from_json(json : Json) -> @posoco.Message? {
 /// so a truncate-rewrite is just one write call.
 pub fn session_to_jsonl(session : @posoco.Session) -> String {
   let metadata_json = Json::object(session.metadata)
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string(metadata_json.stringify())
   for msg in session.messages {
     buf.write_char('\n')
@@ -381,7 +381,7 @@ pub fn session_from_jsonl(
     }
   }
   if non_empty.is_empty() {
-    return Ok(@posoco.Session::{ messages: [], metadata: Map::from_array([]) })
+    return Ok(@posoco.Session::{ messages: [], metadata: Map::from_array([]), })
   }
   // First non-empty line: metadata object. `@json.parse` raises ParseError.
   let metadata_parse : Result[Json, Error] = Ok(@json.parse(non_empty[0])) catch {
@@ -423,7 +423,7 @@ pub fn session_from_jsonl(
         )
     }
   }
-  Ok(@posoco.Session::{ messages, metadata })
+  Ok(@posoco.Session::{ messages, metadata, })
 }
 
 ///|

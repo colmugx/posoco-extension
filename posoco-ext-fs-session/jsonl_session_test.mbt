@@ -14,7 +14,10 @@
 
 ///|
 test "serde: empty session round-trips" {
-  let session = @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
+  let session = @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([]),
+  }
   let jsonl = session_to_jsonl(session)
   // Empty session = just the metadata line + newline.
   assert_eq(jsonl, "{}\n")
@@ -212,7 +215,7 @@ test "serde: metadata preserved" {
     ("parent_session_id", Json::string("sess_parent")),
     ("turn_count", Json::number(3.0)),
   ])
-  let session = @posoco.Session::{ messages: [], metadata }
+  let session = @posoco.Session::{ messages: [], metadata, }
   match session_from_jsonl(session_to_jsonl(session)) {
     Ok(s) => {
       assert_true(s.metadata.contains("parent_session_id"))
@@ -313,7 +316,10 @@ async test "io[native]: save creates parent directory lazily" {
     _ => ()
   }
   let store = JsonlSessionStore::JsonlSessionStore(root)
-  let session = @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
+  let session = @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([]),
+  }
   store.save("s", session) catch {
     e => fail("save should lazily create root: \{e}")
   }
@@ -330,7 +336,10 @@ async test "io[native]: save into nested non-existent root creates all levels" {
   let base = fresh_root("nested-root")
   let root = base + "/.cetas/sessions/--Users-foo-bar--"
   let store = JsonlSessionStore::JsonlSessionStore(root)
-  let session = @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
+  let session = @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([]),
+  }
   store.save("s", session) catch {
     e => fail("save should create nested root levels: \{e}")
   }
@@ -356,7 +365,7 @@ async test "io[native]: overwrite existing session truncates correctly" {
     ],
     metadata: Map::from_array([]),
   }
-  let small = @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
+  let small = @posoco.Session::{ messages: [], metadata: Map::from_array([]), }
   store.save("s", big) catch {
     _ => ()
   }

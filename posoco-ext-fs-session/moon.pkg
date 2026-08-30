@@ -18,7 +18,10 @@ options(
     "session_id.mbt": [ "native", "js" ],
     "manifest.mbt": [ "native", "js" ],
     "session_id_test.mbt": [ "native", "js" ],
+    "list_ids.mbt": [ "native", "js" ],
+    "list_ids.js.mbt": [ "js" ],
     "jsonl_session_test.mbt": [ "native" ],
     "jsonl_session_js_test.mbt": [ "js" ],
+    "list_ids_test.mbt": [ "native" ],
   },
 )

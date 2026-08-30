@@ -76,6 +76,37 @@ async fn JsonlSessionStore::ensure_root_dir(
 }
 
 ///|
+/// Directory entries of root_dir (native): an empty list when the root does
+/// not exist; a non-directory root is a load-side defect.
+async fn JsonlSessionStore::raw_dir_entries(
+  self : JsonlSessionStore,
+) -> Array[String] raise @posoco.SessionError {
+  if !@xfs.path_exists(self.root_dir) {
+    return []
+  }
+  let root_is_dir : Bool = @xfs.is_dir(self.root_dir) catch {
+    e =>
+      raise @posoco.SessionError::Load(
+        "jsonl: failed to inspect session root " +
+        self.root_dir +
+        ": " +
+        xfs_error_detail(e),
+      )
+  }
+  if !root_is_dir {
+    raise @posoco.SessionError::Load(
+      "jsonl: session root is not a directory " + self.root_dir,
+    )
+  }
+  @fs.readdir(self.root_dir, include_hidden=false) catch {
+    e =>
+      raise @posoco.SessionError::Load(
+        "jsonl: failed to list " + self.root_dir + ": " + e.to_string(),
+      )
+  }
+}
+
+///|
 /// SessionStore::load — read JSONL, parse, return Session.
 /// Missing file → empty session (not an error). Parse failure → SessionError::Load.
 pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
@@ -85,7 +116,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
   let path = load_session_path(self.root_dir, id)
   let exists = @xfs.path_exists(path)
   if !exists {
-    return @posoco.Session::{ messages: [], metadata: Map::from_array([]) }
+    return @posoco.Session::{ messages: [], metadata: Map::from_array([]), }
   }
   let content = @xfs.read_file_to_string(path) catch {
     e =>
