@@ -193,7 +193,7 @@ fn decode_chat_response(
     [@posoco.Content::Text(text)]
   }
   let reasoning_val : @posoco.Reasoning? = match reasoning {
-    Some(r) => Some(@posoco.Reasoning::{ content: r, raw: None })
+    Some(r) => Some(@posoco.Reasoning::{ content: r, raw: None, })
     None => None
   }
   @posoco.Completion::Completion(

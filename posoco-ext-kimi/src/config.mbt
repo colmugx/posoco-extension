@@ -99,7 +99,7 @@ pub fn KimiConfig::with_reasoning_effort(
         self.model,
     )
   }
-  { ..self, reasoning_effort: effort }
+  { ..self, reasoning_effort: effort, }
 }
 
 ///|
@@ -140,5 +140,5 @@ pub fn KimiModelPort::KimiModelPort(
   config : KimiConfig,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> KimiModelPort {
-  { config, ctx }
+  { config, ctx, }
 }

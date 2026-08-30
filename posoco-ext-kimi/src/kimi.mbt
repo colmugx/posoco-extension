@@ -268,30 +268,20 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
 }
 
 ///|
-/// ModelPort implementation — compact. kimi has no dedicated compact
-/// endpoint; the modelport declines by raising ResponseParse so the pump's
-/// compact safe-point reports a typed failure rather than silently no-op'ing.
-pub impl @posoco.ModelPort for KimiModelPort with fn compact(
-  _self : KimiModelPort,
-  _scope : @posoco.InvocationScope,
-  _messages : ArrayView[@posoco.Message],
-  _options : @posoco.ChatOptions,
-  _trigger : @posoco.CompactTrigger,
-) -> @posoco.CompactResult raise @posoco.ModelError {
-  raise @posoco.ModelError::ResponseParse(
-    "kimi does not implement compact (no provider-side endpoint)",
-  )
-}
+/// ModelPort implementation — compact lives in compact.mbt (kit-based
+/// summary of everything older than the last two user/assistant messages).
 
 ///|
 /// ModelPort implementation — provider_config. Reports the discovery
 /// endpoint's context capacity so the Agent can size auto-compact from the
-/// active model's own window.
+/// active model's own window, plus kimi-cli's trigger ratio (0.85) so the
+/// core auto-compact fires at the same point kimi-code would.
 pub impl @posoco.ModelPort for KimiModelPort with fn provider_config(
   self : KimiModelPort,
 ) -> @posoco.ProviderConfig {
   @posoco.ProviderConfig::ProviderConfig(
     reasoning_effort_values=[],
     context_window=self.config.context_window,
+    compact_threshold=Some(0.85),
   )
 }

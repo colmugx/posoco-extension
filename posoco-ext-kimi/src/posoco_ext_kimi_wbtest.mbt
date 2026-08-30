@@ -24,7 +24,7 @@ fn assistant_msg(text : String) -> @posoco.Message {
 
 ///|
 fn chat_options() -> @posoco.ChatOptions {
-  { temperature: None, max_output_tokens: None }
+  { temperature: None, max_output_tokens: None, }
 }
 
 ///|
@@ -60,7 +60,7 @@ pub impl @oauth.AuthPromptInteraction for KimiApiKeyPrompt with fn prompt(
 async test "Kimi API-key factory validates and returns an opaque credential" {
   let provider = KimiProvider()
   let api : &@llm.ApiKeyFactory = provider
-  let prompt_impl = KimiApiKeyPrompt::{ value: "kimi-secret" }
+  let prompt_impl = KimiApiKeyPrompt::{ value: "kimi-secret", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let credential = api.login(prompt)
   assert_eq(credential.secret, "kimi-secret")
@@ -70,7 +70,7 @@ async test "Kimi API-key factory validates and returns an opaque credential" {
 async test "Kimi API-key factory rejects an empty secret" {
   let provider = KimiProvider()
   let api : &@llm.ApiKeyFactory = provider
-  let prompt_impl = KimiApiKeyPrompt::{ value: "" }
+  let prompt_impl = KimiApiKeyPrompt::{ value: "", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let result = Ok(api.login(prompt)) catch { error => Err(error) }
   match result {
@@ -86,7 +86,7 @@ async test "Kimi OAuth refresh matches form wire and preserves token fields" {
     #|{"access_token":"access","refresh_token":"refresh-next","expires_in":3600,"token_type":"Bearer"}
   let transport_impl = KimiOAuthTransport::{
     requests: [],
-    response: @oauth.OAuthHttpResponse::{ status: 200, body: token_body },
+    response: @oauth.OAuthHttpResponse::{ status: 200, body: token_body, },
   }
   let transport : &@oauth.OAuthHttpTransport = transport_impl
   let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
@@ -131,7 +131,7 @@ async test "Kimi OAuth refresh maps invalid_grant to typed error" {
     #|{"error":"invalid_grant"}
   let transport_impl = KimiOAuthTransport::{
     requests: [],
-    response: @oauth.OAuthHttpResponse::{ status: 400, body: invalid_body },
+    response: @oauth.OAuthHttpResponse::{ status: 400, body: invalid_body, },
   }
   let transport : &@oauth.OAuthHttpTransport = transport_impl
   let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
@@ -168,7 +168,7 @@ async test "Kimi OAuth refresh retries transient 5xx once then succeeds" {
   let transport_impl = KimiRetryOAuthTransport::{
     requests: [],
     responses: [
-      @oauth.OAuthHttpResponse::{ status: 503, body: "proxy unavailable" },
+      @oauth.OAuthHttpResponse::{ status: 503, body: "proxy unavailable", },
       @oauth.OAuthHttpResponse::{
         status: 200,
         body: "{\"access_token\":\"access\",\"refresh_token\":\"refresh-next\",\"expires_in\":3600}",
@@ -565,7 +565,7 @@ test "encode_message_reasoning_preserved_without_tool_calls" {
   let msg : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("answer")],
     tool_calls=[],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None, }),
     finish_reason=@posoco.FinishReason::Stop,
   )
   let json = encode_message(msg, false)
@@ -1270,7 +1270,7 @@ test "t07b_kimi_valid_nonstream_response_still_decodes" {
   assert_true(decoded.finish_reason() is @posoco.FinishReason::Stop)
   assert_true(
     decoded.message.reasoning ==
-    Some(@posoco.Reasoning::{ content: "checked", raw: None }),
+    Some(@posoco.Reasoning::{ content: "checked", raw: None, }),
   )
   match decoded.usage {
     Some(usage) => {
@@ -1566,4 +1566,68 @@ test "kimi 403 auth failure stays Transport" {
     fail("expected Transport")
   }
   assert_true(reason.contains("status=403"))
+}
+
+///|
+fn tool_msg(text : String) -> @posoco.Message {
+  @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_1"),
+    tool_name=@posoco.ToolName::unchecked("read"),
+    outcome=@posoco.ToolOutcome::Success(content=text, structured=None),
+  )
+}
+
+///|
+test "kimi_tail_start keeps the last two user/assistant messages" {
+  let messages = [
+    user_msg("one"),
+    assistant_msg("two"),
+    user_msg("three"),
+    assistant_msg("four"),
+  ]
+  // Second UA from the end is "three" (index 2): head=[one, two].
+  guard kimi_compact_split(messages) is Some((head, tail)) else {
+    fail("expected a split")
+  }
+  assert_eq(head.length(), 2)
+  assert_eq(tail.length(), 2)
+  guard tail[0] is @posoco.Message::UserMessage(..) else { fail("user") }
+}
+
+///|
+test "kimi_tail_start counts only user and assistant roles" {
+  // Tool messages and trailing tool results do not consume the budget.
+  let messages = [
+    user_msg("one"),
+    assistant_msg("two"),
+    tool_msg("t1"),
+    user_msg("three"),
+    assistant_msg("four"),
+    tool_msg("t2"),
+  ]
+  guard kimi_compact_split(messages) is Some((head, tail)) else {
+    fail("expected a split")
+  }
+  // head = [one, two, t1]; tail = [three, four, t2] — the pair stays whole.
+  assert_eq(head.length(), 3)
+  assert_eq(tail.length(), 3)
+}
+
+///|
+test "kimi_compact_split refuses when there is nothing to summarize" {
+  let messages = [user_msg("only"), assistant_msg("once")]
+  assert_true(kimi_compact_split(messages) is None)
+  assert_true(kimi_compact_split([]) is None)
+}
+
+///|
+test "kimi_summary_text takes text blocks and trims" {
+  let completion = @posoco.Completion::Completion(
+    content=[@posoco.Content::Text("  summary text  ")],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+    usage=None,
+  )
+  assert_eq(kimi_summary_text(completion), "summary text")
 }

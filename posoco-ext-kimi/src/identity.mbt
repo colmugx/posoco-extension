@@ -57,7 +57,7 @@ pub fn kimi_user_agent() -> String {
 /// fallback when the cleaned value is empty so a blank field never reports as
 /// the empty string to the OAuth host.
 fn kimi_ascii_header(value : String, fallback? : String = "unknown") -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in value {
     let code = ch.to_int()
     if code >= 0x20 && code <= 0x7e {
@@ -91,7 +91,7 @@ fn kimi_random_uuid_v4() -> String {
   ]
   // Group byte offsets for the canonical 8-4-4-4-12 textual layout.
   let group_sizes = [4, 2, 2, 2, 6]
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut idx = 0
   for i, size in group_sizes {
     if i > 0 {

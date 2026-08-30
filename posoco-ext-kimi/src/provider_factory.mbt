@@ -17,7 +17,7 @@ pub fn KimiProvider::KimiProvider(
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
   device_id? : String = "",
 ) -> KimiProvider {
-  { ctx, device_id }
+  { ctx, device_id, }
 }
 
 ///|

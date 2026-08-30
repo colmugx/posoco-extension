@@ -19,7 +19,7 @@
 /// with `_`, then truncate to 64 chars. Kimi rejects ids with colons,
 /// slashes, pipes, etc. (verified against kimi-code/kosong tool-call-id.ts).
 fn sanitize_tool_call_id(id : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in id {
     if (ch >= 'a' && ch <= 'z') ||
       (ch >= 'A' && ch <= 'Z') ||
