@@ -231,20 +231,6 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
 }
 
 ///|
-/// ModelPort implementation — compact. DeepSeek has no dedicated compact
-/// endpoint; the modelport declines by raising ResponseParse so the pump's
-/// compact safe-point reports a typed failure rather than silently no-op'ing.
-pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
-  _self : DeepSeekModelPort,
-  _scope : @posoco.InvocationScope,
-  _messages : ArrayView[@posoco.Message],
-  _options : @posoco.ChatOptions,
-  _trigger : @posoco.CompactTrigger,
-) -> @posoco.CompactResult raise @posoco.ModelError {
-  raise @posoco.ModelError::ResponseParse(
-    "DeepSeek does not implement compact (no provider-side endpoint)",
-  )
-}
 
 ///|
 /// ModelPort implementation — provider_config. Declares which reasoning_effort

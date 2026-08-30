@@ -56,7 +56,7 @@ pub fn DeepSeekConfig::with_reasoning_effort(
   effort : String,
 ) -> DeepSeekConfig raise @posoco.CompositionError {
   if effort == "off" {
-    return { ..self, reasoning_effort: "" }
+    return { ..self, reasoning_effort: "", }
   }
   if !self.thinking_efforts.contains(effort) {
     raise @posoco.CompositionError::ManifestSchemaError(
@@ -64,7 +64,7 @@ pub fn DeepSeekConfig::with_reasoning_effort(
       detail="unsupported reasoning effort: " + effort,
     )
   }
-  { ..self, reasoning_effort: effort }
+  { ..self, reasoning_effort: effort, }
 }
 
 ///|
@@ -81,5 +81,5 @@ pub fn DeepSeekModelPort::DeepSeekModelPort(
   config : DeepSeekConfig,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> DeepSeekModelPort {
-  { config, ctx }
+  { config, ctx, }
 }
