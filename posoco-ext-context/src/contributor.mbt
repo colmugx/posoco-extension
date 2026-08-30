@@ -17,7 +17,7 @@ pub fn ContextPromptContributor::ContextPromptContributor(
   bundle~ : ContextBundle,
   ns~ : String,
 ) -> ContextPromptContributor {
-  { bundle, ns }
+  { bundle, ns, }
 }
 
 // All context docs are trust="false" (untrusted): they come from the
@@ -47,7 +47,7 @@ fn ContextPromptContributor::render_doc(
 pub impl @posoco.SystemPromptContributor for ContextPromptContributor with fn system_prompt(
   self : ContextPromptContributor,
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut prefix = ""
   match self.bundle.global {
     Some(doc) => {

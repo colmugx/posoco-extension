@@ -35,7 +35,7 @@ test "system_prompt: empty bundle renders nothing" {
 test "system_prompt: renders caller-selected namespace with attributes" {
   let bundle : ContextBundle = {
     global: None,
-    ancestors: [{ path: "/repo/AGENTS.md", content: "build: make test" }],
+    ancestors: [{ path: "/repo/AGENTS.md", content: "build: make test", }],
     warnings: [],
   }
   let c = ContextPromptContributor(bundle~, ns="posoco")
@@ -52,7 +52,7 @@ test "system_prompt: renders caller-selected namespace with attributes" {
 test "system_prompt: namespace is not hardcoded" {
   let bundle : ContextBundle = {
     global: None,
-    ancestors: [{ path: "/repo/AGENTS.md", content: "repo" }],
+    ancestors: [{ path: "/repo/AGENTS.md", content: "repo", }],
     warnings: [],
   }
   let c = ContextPromptContributor(bundle~, ns="example")
@@ -65,10 +65,10 @@ test "system_prompt: namespace is not hardcoded" {
 ///|
 test "system_prompt: multiple documents render as parallel elements" {
   let bundle : ContextBundle = {
-    global: Some({ path: "/home/.cetas/agent/AGENTS.md", content: "global" }),
+    global: Some({ path: "/home/.cetas/agent/AGENTS.md", content: "global", }),
     ancestors: [
-      { path: "/repo/AGENTS.md", content: "repo" },
-      { path: "/repo/sub/AGENTS.md", content: "sub" },
+      { path: "/repo/AGENTS.md", content: "repo", },
+      { path: "/repo/sub/AGENTS.md", content: "sub", },
     ],
     warnings: [],
   }
@@ -93,7 +93,10 @@ test "system_prompt: xml-escapes special characters in content" {
   let bundle : ContextBundle = {
     global: None,
     ancestors: [
-      { path: "/repo/AGENTS.md", content: "use <tag> & \"quotes\" for 'attrs'" },
+      {
+        path: "/repo/AGENTS.md",
+        content: "use <tag> & \"quotes\" for 'attrs'",
+      },
     ],
     warnings: [],
   }

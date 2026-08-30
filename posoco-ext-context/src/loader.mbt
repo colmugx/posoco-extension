@@ -31,7 +31,7 @@ pub(all) struct ContextBundle {
 ///|
 /// Empty bundle — no global, no ancestors, no warnings.
 pub fn ContextBundle::empty() -> ContextBundle {
-  { global: None, ancestors: [], warnings: [] }
+  { global: None, ancestors: [], warnings: [], }
 }
 
 ///|
@@ -48,7 +48,7 @@ pub fn ContextLoader::ContextLoader(
   fs : &@workspace.WorkspaceFs,
   home~ : String,
 ) -> ContextLoader {
-  { fs, home }
+  { fs, home, }
 }
 
 ///|
@@ -137,7 +137,7 @@ async fn ContextLoader::load_first_candidate(
       _ => return Err("read_file failed for \{candidate}")
     }
     seen.set(real, ())
-    return Ok(Some({ path: real, content }))
+    return Ok(Some({ path: real, content, }))
   }
   Ok(None)
 }
@@ -187,5 +187,5 @@ pub async fn ContextLoader::load(
   for i = walked.length() - 1; i >= 0; i = i - 1 {
     ancestors.push(walked[i])
   }
-  { global, ancestors, warnings }
+  { global, ancestors, warnings, }
 }
