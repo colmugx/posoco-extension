@@ -326,14 +326,14 @@ async test "edit_fresh_file_succeeds_and_ledger_stays_fresh" {
     let path = dir + "/f.txt"
     write_file_native(path, "alpha\n")
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
-    ledger.note_read(path, FsIo::stat(NativeFsIo::{  }, path))
+    ledger.note_read(path, FsIo::stat(NativeFsIo::{ }, path))
     let tools = EditTools::EditTools(freshness=ledger)
     match run_edit(tools, edit_text_call(path, "alpha", "beta", None)) {
       Ok(@posoco.ToolOutcome::Success(..)) => ()
       _ => fail("expected fresh edit to succeed")
     }
     // The edit refreshed the stamp: a follow-up edit is not refused.
-    let after = FsIo::stat(NativeFsIo::{  }, path)
+    let after = FsIo::stat(NativeFsIo::{ }, path)
     debug_inspect(ledger.check(path, Some(after)), content="Fresh")
   }
 }

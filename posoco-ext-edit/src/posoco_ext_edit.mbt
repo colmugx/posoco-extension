@@ -25,7 +25,7 @@ pub fn EditTools::EditTools(
   freshness? : @devkit.FreshnessGuard,
   anchor? : @devkit.WorkspaceAnchor? = None,
 ) -> EditTools {
-  EditTools::{ freshness, anchor }
+  EditTools::{ freshness, anchor, }
 }
 
 ///|

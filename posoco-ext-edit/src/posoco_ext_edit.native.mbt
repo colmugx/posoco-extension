@@ -3,7 +3,7 @@ priv struct NativeFsIo {}
 
 ///|
 /// Process-local counter for sibling temp-file names (workspace-ext pattern).
-let edit_tmp_counter : Ref[Int] = { val: 0 }
+let edit_tmp_counter : Ref[Int] = { val: 0, }
 
 ///|
 impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
@@ -28,7 +28,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
     }
   }
   file.close()
-  { mtime_s, mtime_ns, size }
+  { mtime_s, mtime_ns, size, }
 }
 
 ///|
@@ -77,5 +77,5 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_edit_impl(NativeFsIo::{  }, self.freshness, self.anchor, call)
+  execute_edit_impl(NativeFsIo::{ }, self.freshness, self.anchor, call)
 }

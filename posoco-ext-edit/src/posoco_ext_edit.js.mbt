@@ -62,18 +62,18 @@ priv struct JsStatInfo {
 ///|
 fn js_stat_info(path : String) -> JsStatInfo {
   let json : Json = @json.parse(js_stat_envelope(path)) catch {
-    _ => return { ok: false, size: 0, ms: 0.0 }
+    _ => return { ok: false, size: 0, ms: 0.0, }
   }
   let fields = match json {
     Json::Object(fields) => fields
-    _ => return { ok: false, size: 0, ms: 0.0 }
+    _ => return { ok: false, size: 0, ms: 0.0, }
   }
   let ok = match fields.get("ok") {
     Some(Json::True) => true
     _ => false
   }
   if !ok {
-    return { ok: false, size: 0, ms: 0.0 }
+    return { ok: false, size: 0, ms: 0.0, }
   }
   let size = match fields.get("size") {
     Some(Json::Number(value, ..)) => value.to_int()
@@ -83,7 +83,7 @@ fn js_stat_info(path : String) -> JsStatInfo {
     Some(Json::Number(value, ..)) => value
     _ => 0.0
   }
-  { ok: true, size, ms }
+  { ok: true, size, ms, }
 }
 
 ///|
@@ -118,7 +118,7 @@ impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
   }
   let mtime_s = (info.ms / 1000.0).to_int64()
   let mtime_ns = (info.ms % 1000.0 * 1_000_000.0).to_int()
-  { mtime_s, mtime_ns, size: info.size.to_int64() }
+  { mtime_s, mtime_ns, size: info.size.to_int64(), }
 }
 
 ///|
@@ -167,5 +167,5 @@ pub impl @posoco.ToolProvider for EditTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_edit_impl(JsFsIo::{  }, self.freshness, self.anchor, call)
+  execute_edit_impl(JsFsIo::{ }, self.freshness, self.anchor, call)
 }
