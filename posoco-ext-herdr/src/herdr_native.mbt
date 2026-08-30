@@ -40,9 +40,9 @@ async fn herdr_detect() -> HerdrConfig? noraise {
     return None
   }
   if bin == "" {
-    return Some({ pane, bin: "herdr" })
+    return Some({ pane, bin: "herdr", })
   }
-  Some({ pane, bin })
+  Some({ pane, bin, })
 }
 
 ///|

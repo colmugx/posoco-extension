@@ -46,7 +46,7 @@ pub fn HerdrReporter::detect() -> HerdrReporter? {
     Some(bin) => bin
     None => "herdr"
   }
-  let reporter = HerdrReporter::from_config({ pane, bin })
+  let reporter = HerdrReporter::from_config({ pane, bin, })
   reporter.emit(Idle)
   Some(reporter)
 }

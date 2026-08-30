@@ -40,7 +40,7 @@ pub struct HerdrReporter {
 
 ///|
 fn HerdrReporter::from_config(cfg : HerdrConfig) -> HerdrReporter {
-  { pane: cfg.pane, bin: cfg.bin, spawn: herdr_spawn_report }
+  { pane: cfg.pane, bin: cfg.bin, spawn: herdr_spawn_report, }
 }
 
 ///|

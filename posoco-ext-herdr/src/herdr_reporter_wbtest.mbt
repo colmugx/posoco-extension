@@ -10,7 +10,7 @@ fn recorder() -> (Array[String], (String, Array[String]) -> Unit) {
 ///|
 test "observer maps turn lifecycle onto herdr states" {
   let (calls, record) = recorder()
-  let reporter : HerdrReporter = { pane: "1-2", bin: "herdr", spawn: record }
+  let reporter : HerdrReporter = { pane: "1-2", bin: "herdr", spawn: record, }
   reporter.on_event(@posoco.TurnEvent::TurnStarted)
   reporter.on_event(@posoco.TurnEvent::TurnCompleted)
   reporter.on_event(@posoco.TurnEvent::TurnFailed("boom"))
@@ -42,7 +42,7 @@ test "emit builds the report-agent argv from pane and bin" {
 ///|
 test "extension manifest contributes exactly one observer" {
   let (_, record) = recorder()
-  let reporter : HerdrReporter = { pane: "1-1", bin: "herdr", spawn: record }
+  let reporter : HerdrReporter = { pane: "1-1", bin: "herdr", spawn: record, }
   inspect(reporter.extension_id(), content="posoco_ext_herdr")
   let m = reporter.manifest()
   inspect(m.id, content="posoco_ext_herdr")
