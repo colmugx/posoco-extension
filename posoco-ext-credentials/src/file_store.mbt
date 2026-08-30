@@ -24,7 +24,7 @@ pub fn FileProviderCredentialStore::FileProviderCredentialStore(
   fs : &@workspace.WorkspaceFs,
   dir : String,
 ) -> FileProviderCredentialStore {
-  { fs, dir }
+  { fs, dir, }
 }
 
 ///|

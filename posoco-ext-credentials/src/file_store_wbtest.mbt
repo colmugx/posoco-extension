@@ -12,7 +12,7 @@ priv struct FakeFs {
 
 ///|
 fn FakeFs::FakeFs() -> FakeFs {
-  { files: Map::from_array([]), fail_ops: Map::from_array([]) }
+  { files: Map::from_array([]), fail_ops: Map::from_array([]), }
 }
 
 ///|
