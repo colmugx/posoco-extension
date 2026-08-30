@@ -128,7 +128,7 @@ pub struct GoalRunner {
 pub fn GoalOptions::default(goal_condition~ : String) -> GoalOptions {
   GoalOptions::{
     goal_condition,
-    budget: { max_turns: 0, max_total_tokens: 0 },
+    budget: { max_turns: 0, max_total_tokens: 0, },
     completion_marker: "<goal-complete/>",
     blocked_marker: "<goal-blocked/>",
     wrapup_ratio: 0.9,
@@ -164,7 +164,7 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
   GoalRunner::{
     options,
     status: Idle,
-    usage: { turns: 0, total_tokens: 0 },
+    usage: { turns: 0, total_tokens: 0, },
     history: [],
     current_turn: 0,
     last_total_tokens: 0,
@@ -189,7 +189,7 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
 ///|
 /// Current plan (defensive copy of the items).
 pub fn GoalRunner::plan(self : GoalRunner) -> GoalPlan {
-  GoalPlan::{ items: self.plan.items.copy() }
+  GoalPlan::{ items: self.plan.items.copy(), }
 }
 
 ///|
@@ -440,7 +440,7 @@ pub fn GoalRunner::resume_goal(self : GoalRunner) -> Unit {
 /// Clear the goal entirely, resetting all state to Idle.
 pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.status = Idle
-  self.usage = { turns: 0, total_tokens: 0 }
+  self.usage = { turns: 0, total_tokens: 0, }
   self.history = []
   self.current_turn = 0
   self.last_total_tokens = 0
@@ -476,7 +476,7 @@ pub async fn GoalRunner::execute(
   session_id : String,
 ) -> GoalResult {
   self.status = Running
-  self.usage = { turns: 0, total_tokens: 0 }
+  self.usage = { turns: 0, total_tokens: 0, }
   self.history = []
   self.wrapup_sent = false
   self.current_turn = 0
@@ -622,7 +622,7 @@ pub async fn GoalRunner::execute(
     },
     turns_completed: self.current_turn,
     history: self.history.copy(),
-    final_plan: GoalPlan::{ items: self.plan.items.copy() },
+    final_plan: GoalPlan::{ items: self.plan.items.copy(), },
     stall_reason: self.last_stall_reason,
   }
 }

@@ -178,9 +178,9 @@ test "plan_from_tool_args_rejects_unknown_status" {
 test "plan_normalize_demotes_extra_in_progress" {
   let plan = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "first", status: InProgress },
-      GoalPlanItem::{ title: "second", status: InProgress },
-      GoalPlanItem::{ title: "third", status: Pending },
+      GoalPlanItem::{ title: "first", status: InProgress, },
+      GoalPlanItem::{ title: "second", status: InProgress, },
+      GoalPlanItem::{ title: "third", status: Pending, },
     ],
   }
   let normalized = GoalPlan::normalize(plan)
@@ -197,9 +197,9 @@ test "plan_normalize_demotes_extra_in_progress" {
 test "plan_render_checklist" {
   let plan = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "done thing", status: Done },
-      GoalPlanItem::{ title: "active thing", status: InProgress },
-      GoalPlanItem::{ title: "later thing", status: Pending },
+      GoalPlanItem::{ title: "done thing", status: Done, },
+      GoalPlanItem::{ title: "active thing", status: InProgress, },
+      GoalPlanItem::{ title: "later thing", status: Pending, },
     ],
   }
   inspect(
@@ -216,11 +216,11 @@ test "plan_render_checklist" {
 test "plan_progress_line" {
   let plan = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "a", status: Done },
-      GoalPlanItem::{ title: "b", status: Done },
-      GoalPlanItem::{ title: "c", status: InProgress },
-      GoalPlanItem::{ title: "d", status: Pending },
-      GoalPlanItem::{ title: "e", status: Pending },
+      GoalPlanItem::{ title: "a", status: Done, },
+      GoalPlanItem::{ title: "b", status: Done, },
+      GoalPlanItem::{ title: "c", status: InProgress, },
+      GoalPlanItem::{ title: "d", status: Pending, },
+      GoalPlanItem::{ title: "e", status: Pending, },
     ],
   }
   inspect(GoalPlan::progress_line(plan), content="plan: 2/5 done")
@@ -231,9 +231,9 @@ test "plan_progress_line" {
 test "plan_next_step_prefers_in_progress" {
   let plan = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "queued", status: Pending },
-      GoalPlanItem::{ title: "active", status: InProgress },
-      GoalPlanItem::{ title: "later", status: Pending },
+      GoalPlanItem::{ title: "queued", status: Pending, },
+      GoalPlanItem::{ title: "active", status: InProgress, },
+      GoalPlanItem::{ title: "later", status: Pending, },
     ],
   }
   match GoalPlan::next_step(plan) {
@@ -246,9 +246,9 @@ test "plan_next_step_prefers_in_progress" {
 test "plan_next_step_falls_back_to_first_pending" {
   let plan = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "finished", status: Done },
-      GoalPlanItem::{ title: "first queued", status: Pending },
-      GoalPlanItem::{ title: "second queued", status: Pending },
+      GoalPlanItem::{ title: "finished", status: Done, },
+      GoalPlanItem::{ title: "first queued", status: Pending, },
+      GoalPlanItem::{ title: "second queued", status: Pending, },
     ],
   }
   match GoalPlan::next_step(plan) {
@@ -261,8 +261,8 @@ test "plan_next_step_falls_back_to_first_pending" {
 test "plan_next_step_none_when_all_done" {
   let plan = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "finished", status: Done },
-      GoalPlanItem::{ title: "also finished", status: Done },
+      GoalPlanItem::{ title: "finished", status: Done, },
+      GoalPlanItem::{ title: "also finished", status: Done, },
     ],
   }
   match GoalPlan::next_step(plan) {
@@ -275,14 +275,14 @@ test "plan_next_step_none_when_all_done" {
 test "plan_fingerprint_stable_and_sensitive" {
   let before = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "write", status: Pending },
-      GoalPlanItem::{ title: "ship", status: Done },
+      GoalPlanItem::{ title: "write", status: Pending, },
+      GoalPlanItem::{ title: "ship", status: Done, },
     ],
   }
   let after = GoalPlan::{
     items: [
-      GoalPlanItem::{ title: "write", status: InProgress },
-      GoalPlanItem::{ title: "ship", status: Done },
+      GoalPlanItem::{ title: "write", status: InProgress, },
+      GoalPlanItem::{ title: "ship", status: Done, },
     ],
   }
   inspect(GoalPlan::fingerprint(before), content="write:pending|ship:done")

@@ -40,7 +40,7 @@ fn gate_usage_step(text : String, total : Int) -> @posoco.ScriptedModelStep {
     finish_reason=@posoco.FinishReason::Stop,
     usage=Some(usage),
   )
-  let result : @posoco.ModelCallResult = { completion, processed_messages: [] }
+  let result : @posoco.ModelCallResult = { completion, processed_messages: [], }
   @posoco.ScriptedModelStep::Respond(result)
 }
 

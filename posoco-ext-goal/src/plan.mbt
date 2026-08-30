@@ -28,7 +28,7 @@ pub(all) struct GoalPlan {
 
 ///|
 pub fn GoalPlan::empty() -> GoalPlan {
-  GoalPlan::{ items: [] }
+  GoalPlan::{ items: [], }
 }
 
 ///|
@@ -65,7 +65,7 @@ fn parse_plan_item(elem : Json) -> Result[GoalPlanItem, String] {
         (Ok(_), None) => Err("plan item is missing \"status\"")
         (Ok(title), Some(Json::String(raw))) =>
           match parse_plan_status(raw) {
-            Some(status) => Ok(GoalPlanItem::{ title, status })
+            Some(status) => Ok(GoalPlanItem::{ title, status, })
             None => Err("unknown status \"\{raw}\" for plan item \"\{title}\"")
           }
         (Ok(_), Some(_)) => Err("plan item field \"status\" must be a string")
@@ -109,7 +109,7 @@ pub fn GoalPlan::normalize(plan : GoalPlan) -> GoalPlan {
   for item in plan.items {
     match item.status {
       InProgress if seen_in_progress =>
-        items.push(GoalPlanItem::{ title: item.title, status: Pending })
+        items.push(GoalPlanItem::{ title: item.title, status: Pending, })
       InProgress => {
         seen_in_progress = true
         items.push(item)
