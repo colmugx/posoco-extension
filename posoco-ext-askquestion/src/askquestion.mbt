@@ -318,7 +318,7 @@ pub impl @posoco.Extension for AskQuestionTools with fn manifest(
   self : AskQuestionTools,
 ) -> @posoco.ExtensionManifest {
   let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_askquestion")
-  { ..manifest, tools: [self], prompt_contributors: [self] }
+  { ..manifest, tools: [self], prompt_contributors: [self], }
 }
 
 ///|

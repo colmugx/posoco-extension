@@ -7,7 +7,7 @@ priv struct ScriptedUi {
 
 ///|
 fn ScriptedUi::ScriptedUi(response : @posoco.UiResponse) -> ScriptedUi {
-  { response, request_count: 0, last_request: None }
+  { response, request_count: 0, last_request: None, }
 }
 
 ///|
