@@ -9,9 +9,19 @@ import {
 #alias(render_context_envelope, deprecated)
 pub fn context_envelope(ns~ : String, kind~ : String, trust~ : Bool, source? : String, attrs? : Array[(String, String)], content~ : String) -> String
 
+pub fn default_ignore_patterns() -> Array[String]
+
+pub fn glob_match(String, String) -> Bool
+
+pub fn has_hidden_segment(String) -> Bool
+
+pub fn matches_ignore(String, Array[String]) -> Bool
+
 pub fn parse_tool_exemptions(Json) -> Array[String]?
 
 pub fn publish_tool_exemptions(EventBus, source~ : String, tools~ : Array[String]) -> Unit
+
+pub fn relative_to_base(String, String) -> String
 
 pub fn sanitize_label(String, limit? : Int) -> String
 
@@ -19,7 +29,11 @@ pub fn sanitize_path(String, limit? : Int) -> String
 
 pub fn shell_command_is_read_only(String) -> Bool
 
+pub fn strip_dot_prefix(String) -> String
+
 pub let tool_exemptions_topic : String
+
+pub fn truncate_chars(String, Int) -> String
 
 // Errors
 

@@ -50,13 +50,13 @@ fn split_shell_segments(cmd : String) -> Array[String] {
 /// Blank input yields `("", None)`.
 fn first_two_words(text : String) -> (String, String?) {
   let words : Array[String] = []
-  let mut sb = StringBuilder::new()
+  let mut sb = StringBuilder()
   let mut word_len = 0
   for c in text {
     if c == ' ' || c == '\t' || c == '\r' {
       if word_len > 0 {
         words.push(sb.to_string())
-        sb = StringBuilder::new()
+        sb = StringBuilder()
         word_len = 0
         if words.length() == 2 {
           break

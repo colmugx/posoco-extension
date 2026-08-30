@@ -13,7 +13,7 @@ pub(all) struct MemoryLogger {
 
 ///|
 pub fn MemoryLogger::MemoryLogger() -> MemoryLogger {
-  { events: [] }
+  { events: [], }
 }
 
 ///|

@@ -4,7 +4,7 @@
 /// Every control character (newlines, tabs, escape sequences, DEL, …) is
 /// replaced with a space so the result cannot forge terminal output.
 pub fn sanitize_path(path : String, limit? : Int = 160) -> String {
-  let builder = StringBuilder::new()
+  let builder = StringBuilder()
   let mut count = 0
   for ch in path {
     if count >= limit {

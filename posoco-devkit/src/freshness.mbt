@@ -35,7 +35,7 @@ pub struct FreshnessGuard {
 
 ///|
 pub fn FreshnessGuard::FreshnessGuard() -> FreshnessGuard {
-  { records: {} }
+  { records: {}, }
 }
 
 ///|

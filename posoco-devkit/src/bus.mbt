@@ -61,7 +61,7 @@ pub(open) trait BusSubscriber {
 ///|
 /// Construct an empty bus. Typically done once per host process.
 pub fn EventBus::EventBus() -> EventBus {
-  { subscribers: [], pending: [], dispatching: false }
+  { subscribers: [], pending: [], dispatching: false, }
 }
 
 ///|

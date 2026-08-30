@@ -10,7 +10,7 @@ priv struct RecordingSubscriber {
 
 ///|
 fn RecordingSubscriber::RecordingSubscriber(id : String) -> RecordingSubscriber {
-  { id, seen: [] }
+  { id, seen: [], }
 }
 
 ///|
@@ -23,7 +23,7 @@ impl BusSubscriber for RecordingSubscriber with fn on_bus_event(
 
 ///|
 fn bus_event(source : String, topic? : String = "status") -> BusEvent {
-  { source, topic, data: Json::null() }
+  { source, topic, data: Json::null(), }
 }
 
 ///|
@@ -54,7 +54,7 @@ priv struct ReentrantSubscriber {
 
 ///|
 fn ReentrantSubscriber::ReentrantSubscriber() -> ReentrantSubscriber {
-  { bus: None, seen: [] }
+  { bus: None, seen: [], }
 }
 
 ///|
@@ -103,7 +103,7 @@ test "subscriber added during dispatch sees the next event onward" {
   let bus = EventBus()
   let late = RecordingSubscriber("late")
   let late_sub : &BusSubscriber = late
-  let registrar : RegistrarSubscriber = { bus, late: late_sub }
+  let registrar : RegistrarSubscriber = { bus, late: late_sub, }
   bus.subscribe(registrar)
   bus.publish(bus_event("first"))
   bus.publish(bus_event("second"))
@@ -154,7 +154,7 @@ test "registration mid-batch waits for the next batch" {
   let late = RecordingSubscriber("late")
   let late_sub : &BusSubscriber = late
   bus.subscribe(FanoutSubscriber::{ bus, })
-  bus.subscribe(RegisterOnBOne::{ bus, late: late_sub })
+  bus.subscribe(RegisterOnBOne::{ bus, late: late_sub, })
   bus.publish(bus_event("outer"))
   // Batch 2 = [b_one, b_two]; late subscribed during b_one, so the
   // batch-2 snapshot must not include it: "b_two" is not delivered.

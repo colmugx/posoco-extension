@@ -3,7 +3,7 @@
 /// envelope or inject attributes. Single pass; only the five significant
 /// characters are rewritten.
 fn escape_xml(s : String) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for ch in s {
     match ch {
       '&' => sb.write_string("&amp;")
@@ -36,7 +36,7 @@ pub fn context_envelope(
   content~ : String,
 ) -> String {
   let trust_str = if trust { "true" } else { "false" }
-  let sb : StringBuilder = StringBuilder::new()
+  let sb : StringBuilder = StringBuilder()
   sb <+ "<\{ns}-context type=\"\{kind}\" trust=\"\{trust_str}\""
   if source is Some(s) {
     sb <+ " source=\"\{escape_xml(s)}\""

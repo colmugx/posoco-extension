@@ -10,7 +10,7 @@ pub fn ExtContext::default() -> ExtContext {
 
 ///|
 pub fn ExtContext::ExtContext(
-  logger? : &Logger = NoopLogger::{  },
+  logger? : &Logger = NoopLogger::{ },
 ) -> ExtContext {
   { logger, }
 }
@@ -29,7 +29,7 @@ fn ExtContext::log_at(
   message~ : String,
   data? : Json? = None,
 ) -> Unit {
-  self.log({ level, source, code, message, data })
+  self.log({ level, source, code, message, data, })
 }
 
 ///|
