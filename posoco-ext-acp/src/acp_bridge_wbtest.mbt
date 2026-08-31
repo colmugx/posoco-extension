@@ -246,6 +246,125 @@ test "acp_stop_reason maps only length to max tokens" {
   assert_true(acp_stop_reason(None) is EndTurn)
 }
 
+///|
+test "acp_tool_locations gates on a POSIX absolute path argument" {
+  // Absolute paths pass through verbatim...
+  assert_eq(
+    acp_tool_locations(Json::object({ "path": Json::string("/repo/a.txt") })),
+    Value([{ path: "/repo/a.txt", line: Omitted, meta: Omitted, }]),
+  )
+  // ...while relative paths (cetas prompts the model to use them) are
+  // omitted: the SDK wire encoder would reject the frame otherwise.
+  assert_true(
+    acp_tool_locations(Json::object({ "path": Json::string("a.txt") }))
+    is Omitted,
+  )
+  assert_true(
+    acp_tool_locations(Json::object({ "path": Json::string("src/x.mbt") }))
+    is Omitted,
+  )
+  // A non-string path is skipped too.
+  assert_true(
+    acp_tool_locations(Json::object({ "path": Json::number(7.0) })) is Omitted,
+  )
+  // A bare (non-object) payload carries no location.
+  assert_true(acp_tool_locations(Json::string("bare")) is Omitted)
+}
+
+// ------------------------------------------------- tool call jump locations
+
+///|
+async test "pending announcement carries one location for a path argument" {
+  let bridge = AcpBridge()
+  let client = FakeAcpClient::FakeAcpClient()
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  bridge.ingest(
+    ToolCallPending(
+      tk_call(
+        "edit",
+        id="c1",
+        arguments=Json::object({ "path": Json::string("/repo/src/main.mbt") }),
+      ),
+    ),
+  )
+  assert_eq(bridge.flush(), 1)
+  match client.sent[0].update {
+    ToolCall(announcement) =>
+      match announcement.locations {
+        Value([location]) => {
+          assert_eq(location.path, "/repo/src/main.mbt")
+          assert_true(location.line is Omitted)
+          assert_true(location.meta is Omitted)
+        }
+        _ => fail("expected exactly one location")
+      }
+    _ => fail("expected tool call announcement")
+  }
+}
+
+///|
+async test "tools without a string path announce no location" {
+  let bridge = AcpBridge()
+  let client = FakeAcpClient::FakeAcpClient()
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  // bash carries only a command; a numeric path is skipped, not a crash.
+  bridge.ingest(
+    ToolCallPending(
+      tk_call(
+        "bash",
+        id="c2",
+        arguments=Json::object({ "cmd": Json::string("ls") }),
+      ),
+    ),
+  )
+  bridge.ingest(
+    ToolCallPending(
+      tk_call(
+        "read",
+        id="c3",
+        arguments=Json::object({ "path": Json::number(7.0) }),
+      ),
+    ),
+  )
+  assert_eq(bridge.flush(), 2)
+  for frame in client.sent {
+    match frame.update {
+      ToolCall(announcement) => assert_true(announcement.locations is Omitted)
+      _ => fail("expected tool call announcement")
+    }
+  }
+}
+
+///|
+async test "completion update keeps locations omitted" {
+  let bridge = AcpBridge()
+  let client = FakeAcpClient::FakeAcpClient()
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  bridge.ingest(
+    ToolCallPending(
+      tk_call(
+        "edit",
+        id="c1",
+        arguments=Json::object({ "path": Json::string("/repo/a.txt") }),
+      ),
+    ),
+  )
+  bridge.ingest(
+    ToolCallResult(
+      call=tk_call("edit", id="c1"),
+      result=Success(content="ok", structured=None),
+      is_error=false,
+    ),
+  )
+  assert_eq(bridge.flush(), 2)
+  // Locations live on the pending announcement only; they do not change with
+  // the result.
+  match client.sent[1].update {
+    ToolCallUpdate(update) => assert_true(update.locations is Omitted)
+    _ => fail("expected tool call update")
+  }
+}
+
 // ------------------------------------------------- permission request build
 
 ///|

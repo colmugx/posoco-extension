@@ -51,7 +51,7 @@ fn acp_wire_meta(meta : Json?) -> @acp.ProtocolNullable[Json] {
 ///
 /// Wire contract (ACP v1):
 /// - `ToolCallPending` → `ToolCall` announcement (status `Pending`, kind,
-///   title, raw input)
+///   title, raw input, jump location when the arguments carry a `path`)
 /// - `ToolCallResult` → `ToolCallUpdate` (status `Completed`/`Failed`, text
 ///   content)
 /// - `ToolCallDeferred` → `ToolCallUpdate` (status `Pending`, deferred title)
@@ -339,7 +339,7 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
           kind: Value(acp_tool_kind(call.name.to_string())),
           status: Value(Pending),
           content: Omitted,
-          locations: Omitted,
+          locations: acp_tool_locations(call.arguments),
           raw_input: Value(call.arguments),
           raw_output: Omitted,
           meta: Omitted,

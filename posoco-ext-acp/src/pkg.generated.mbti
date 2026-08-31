@@ -41,6 +41,8 @@ pub fn acp_stop_reason(@kernel.FinishReason?) -> @session.StopReason
 
 pub fn acp_tool_kind(String) -> @protocol.ToolKind
 
+pub fn acp_tool_locations(Json) -> @protocol.ProtocolNullable[Array[@protocol.ToolCallLocation]]
+
 pub fn acp_tool_title(@kernel.ToolCall) -> String
 
 // Errors

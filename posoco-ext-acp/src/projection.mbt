@@ -158,6 +158,40 @@ fn acp_title(name : String, arguments : Json) -> String {
 }
 
 ///|
+/// Client jump target for a tool call, taken from the arguments' `path`
+/// field (the cetas tool vocabulary passes the operand there for file
+/// tools). The path is passed through verbatim — no resolution or joining —
+/// and no line is claimed (tool arguments carry no line number this bridge
+/// can trust).
+///
+/// Only POSIX absolute paths (leading `/`) are announced: the acp SDK's
+/// wire encoder (`encode_tool_location`) validates absolute paths at
+/// serialization time and a relative path would fail the frame and break
+/// the pump. Cetas prompts the model to use workspace-relative paths, so
+/// relative operands are left `Omitted` until a future host-side resolve
+/// enhancement can absolutize them. Windows drive letters (`C:\...`) are
+/// outside the supported surface (cetas-acp runs in a native POSIX
+/// context); the SDK also accepts UNC/drive-letter forms, but the stricter
+/// `/` gate here is always a subset of its check.
+pub fn acp_tool_locations(
+  arguments : Json,
+) -> @acp.ProtocolNullable[Array[@acp.ToolCallLocation]] {
+  match arguments {
+    Object(fields) =>
+      match fields.get("path") {
+        Some(String(path)) =>
+          if path.has_prefix("/") {
+            Value([{ path, line: Omitted, meta: Omitted, }])
+          } else {
+            Omitted
+          }
+        _ => Omitted
+      }
+    _ => Omitted
+  }
+}
+
+///|
 /// Map one Posoco content block onto an ACP content block.
 /// `Text` is the common case; `Image` carries the provider's media type and
 /// opaque payload verbatim (the kernel never interprets image data).
