@@ -1,0 +1,23 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbit-community/html",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+warnings = "-unused_package"
+
+options(
+  targets: {
+    "posoco_ext_webfetch_wbtest.mbt": [ "native" ],
+    "http_io.mbt": [ "native", "js" ],
+    "posoco_ext_webfetch.mbt": [ "native", "js" ],
+    "wasm_fallback.mbt": [ "wasm", "wasm-gc" ],
+  },
+)

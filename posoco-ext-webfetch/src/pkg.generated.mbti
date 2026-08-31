@@ -1,0 +1,71 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-webfetch"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct CachedDoc {
+  title : String
+  content : String
+  content_type : String
+  url_requested : String
+  url_final : String
+  status : Int
+  bytes_fetched : Int
+  retrieved_ms : Int64
+}
+
+pub struct DocCache {
+  ttl_ms : Int64
+  cap : Int
+  now_ms : () -> Int64
+  entries : Map[String, CachedDoc]
+  order : Array[String]
+}
+pub fn DocCache::DocCache(ttl_ms? : Int64, cap? : Int, now_ms? : () -> Int64) -> Self
+pub fn DocCache::drop_key(Self, String) -> Unit
+pub fn DocCache::get(Self, String) -> CachedDoc?
+pub fn DocCache::put(Self, String, CachedDoc) -> Unit
+pub fn DocCache::shift_out(Self, String) -> Bool
+pub fn DocCache::touch(Self, String) -> Unit
+
+pub(all) struct HttpReply {
+  status : Int
+  reason : String
+  content_type : String
+  location : String?
+  body : String
+  bytes_read : Int
+  truncated : Bool
+}
+
+pub struct WebFetchTools {
+  timeout_ms : Int
+  max_chars : Int
+  byte_cap : Int
+  cache : DocCache
+  io : &HttpIo?
+}
+pub fn WebFetchTools::WebFetchTools(timeout_ms? : Int, max_chars? : Int, byte_cap? : Int, cache? : DocCache, io? : &HttpIo?) -> Self
+pub async fn WebFetchTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn WebFetchTools::extension_id(Self) -> String
+pub fn WebFetchTools::manifest(Self) -> @port.ExtensionManifest
+pub fn WebFetchTools::system_prompt(Self) -> String
+pub impl @port.Extension for WebFetchTools
+pub impl @port.SystemPromptContributor for WebFetchTools
+pub impl @port.ToolProvider for WebFetchTools
+
+// Type aliases
+
+// Traits
+pub(open) trait HttpIo {
+  async fn fetch(Self, String, Int) -> HttpReply raise @error.RuntimeError
+}
