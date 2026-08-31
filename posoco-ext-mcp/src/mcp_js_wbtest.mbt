@@ -45,5 +45,45 @@ async test "js end-to-end discover activate list execute" {
     Success(content~, ..) => inspect(content, content="echo:{\"k\":\"v\"}")
     _ => fail("expected success outcome")
   }
+  // Live `/mcp` status after activation: connected rows carry real tool
+  // counts, which is exactly the visibility a down server was missing.
+  let status = @posoco.CommandPort::invoke(bridge, "mcp", Json::null()) catch {
+    error => fail("mcp invoke failed: " + error.to_string())
+  }
+  match status {
+    Success(feedback~, structured=Some(structured), ..) => {
+      inspect(
+        feedback,
+        content=(
+          #|1 server: 1 connected, 0 failed, 0 pending
+          #|- echo: connected, 2 tools
+        ),
+      )
+      inspect(
+        structured.stringify(),
+        content="{\"kind\":\"mcp_status\",\"mode\":\"lazy\",\"servers\":[{\"name\":\"echo\",\"status\":\"connected\",\"tools\":2}]}",
+      )
+    }
+    _ => fail("expected mcp status success")
+  }
+  let refreshed = @posoco.CommandPort::invoke(
+    bridge,
+    "mcp",
+    Json::object(Map::from_array([("action", Json::string("refresh"))])),
+  ) catch {
+    error => fail("mcp refresh invoke failed: " + error.to_string())
+  }
+  match refreshed {
+    Success(feedback~, ..) =>
+      inspect(
+        feedback,
+        content=(
+          #|1 server: 1 connected, 0 failed, 0 pending
+          #|- echo: connected, 2 tools
+          #|(refreshed tool lists from connected servers)
+        ),
+      )
+    _ => fail("expected mcp refresh success")
+  }
   bridge.close()
 }

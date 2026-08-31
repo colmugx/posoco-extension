@@ -125,6 +125,142 @@ test "parse_entry_typed_fields_rejected" {
 }
 
 ///|
+test "parse_entry_resilience_knobs_parse" {
+  let stdio = obj([
+    ("command", Json::string("npx")),
+    ("timeout_ms", Json::number(5_000)),
+    ("max_reconnects", Json::number(3)),
+  ])
+  match parse_server_entry("s", stdio) {
+    Ok(config) => {
+      assert_eq(config.timeout_ms, 5_000)
+      assert_eq(config.max_reconnects, 3)
+    }
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+  let http = obj([
+    ("url", Json::string("http://127.0.0.1:8001/mcp")),
+    ("timeout_ms", Json::number(60_000)),
+    ("max_reconnects", Json::number(5)),
+  ])
+  match parse_server_entry("h", http) {
+    Ok(config) => {
+      assert_eq(config.timeout_ms, 60_000)
+      assert_eq(config.max_reconnects, 5)
+    }
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+}
+
+///|
+test "parse_entry_resilience_knobs_zero_disables" {
+  let entry = obj([
+    ("command", Json::string("npx")),
+    ("timeout_ms", Json::number(0)),
+    ("max_reconnects", Json::number(0)),
+  ])
+  match parse_server_entry("a", entry) {
+    Ok(config) => {
+      assert_eq(config.timeout_ms, 0)
+      assert_eq(config.max_reconnects, 0)
+    }
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+}
+
+///|
+test "parse_entry_resilience_knobs_default_to_constructor" {
+  let stdio = obj([("command", Json::string("npx"))])
+  match parse_server_entry("s", stdio) {
+    Ok(config) => {
+      assert_eq(config.timeout_ms, 30_000)
+      assert_eq(config.max_reconnects, 1)
+    }
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+  let http = obj([("url", Json::string("http://127.0.0.1:8001/mcp"))])
+  match parse_server_entry("h", http) {
+    Ok(config) => {
+      assert_eq(config.timeout_ms, 30_000)
+      assert_eq(config.max_reconnects, 1)
+    }
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+}
+
+///|
+test "parse_entry_resilience_knobs_reject_invalid" {
+  let cases : Array[(String, Json, String)] = [
+    ("timeout_ms", Json::number(-1), "must not be negative"),
+    ("timeout_ms", Json::string("abc"), "must be an integer"),
+    ("timeout_ms", Json::number(1.5), "must be an integer"),
+    ("timeout_ms", Json::boolean(true), "must be an integer"),
+    ("timeout_ms", Json::number(10000000000.0), "out of range"),
+    ("max_reconnects", Json::number(-1), "must not be negative"),
+    ("max_reconnects", Json::string("abc"), "must be an integer"),
+    ("max_reconnects", Json::number(1.5), "must be an integer"),
+    ("max_reconnects", Json::boolean(true), "must be an integer"),
+  ]
+  for case in cases {
+    let (field, value, fragment) = case
+    let entry = obj([("command", Json::string("npx")), (field, value)])
+    match parse_server_entry("a", entry) {
+      Ok(_) => fail("expected '\{field}' validation failure")
+      Err(message) => {
+        assert_true(message.contains(field))
+        assert_true(message.contains(fragment))
+      }
+    }
+  }
+}
+
+///|
+test "parse_entry_legacy_era_tri_state" {
+  // absent -> Auto (the modern default; stdio and http alike)
+  let stdio_plain = obj([("command", Json::string("npx"))])
+  match parse_server_entry("s", stdio_plain) {
+    Ok(config) => assert_true(config.era is @client.ProtocolEra::Auto)
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+  let http_plain = obj([("url", Json::string("http://127.0.0.1:8001/mcp"))])
+  match parse_server_entry("h", http_plain) {
+    Ok(config) => assert_true(config.era is @client.ProtocolEra::Auto)
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+  // true -> Legacy
+  let legacy = obj([
+    ("command", Json::string("npx")),
+    ("legacy", Json::boolean(true)),
+  ])
+  match parse_server_entry("old", legacy) {
+    Ok(config) => assert_true(config.era is @client.ProtocolEra::Legacy)
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+  // false -> Modern
+  let modern = obj([
+    ("type", Json::string("http")),
+    ("url", Json::string("http://127.0.0.1:8001/mcp")),
+    ("legacy", Json::boolean(false)),
+  ])
+  match parse_server_entry("strict", modern) {
+    Ok(config) => assert_true(config.era is @client.ProtocolEra::Modern)
+    Err(message) => fail("unexpected parse error: " + message)
+  }
+}
+
+///|
+test "parse_entry_legacy_rejects_non_boolean" {
+  let cases : Array[Json] = [Json::string("yes"), Json::number(1)]
+  for value in cases {
+    let entry = obj([("command", Json::string("npx")), ("legacy", value)])
+    match parse_server_entry("a", entry) {
+      Ok(_) => fail("expected 'legacy' validation failure")
+      Err(message) => assert_true(message.contains("must be a boolean"))
+    }
+  }
+}
+
+///|
 test "parse_document_shapes" {
   // missing mcpServers -> empty
   match parse_mcp_document(obj([]), "test") {
@@ -155,6 +291,10 @@ fn stdio_config(name : String) -> MCPServerConfig {
         extra_env=Map::from_array([]),
       ),
     ),
+    auth: ServerAuth::NoAuth,
+    era: @client.ProtocolEra::Auto,
+    timeout_ms: 30_000,
+    max_reconnects: 1,
   }
 }
 
@@ -285,6 +425,9 @@ fn bridge_with_mode(mode : LoadMode) -> MCPToolBridge {
     activated: false,
     catalog_revision: 0,
     startup_failures: [],
+    server_tokens: Map::from_array([]),
+    auth_challenges: Map::from_array([]),
+    configs: Map::from_array([]),
   }
 }
 

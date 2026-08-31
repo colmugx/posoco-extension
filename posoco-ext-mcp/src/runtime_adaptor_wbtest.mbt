@@ -56,7 +56,7 @@ pub impl @runtime.Runtime for RecordingRuntime with fn compact(
 ///|
 fn effect_for(name : String) -> @runtime.EffectContext {
   {
-    effect_id: @kernel.EffectId::{ value: 1 },
+    effect_id: @kernel.EffectId::{ value: 1, },
     owner: @kernel.OwnerId::unchecked("posoco_ext_mcp"),
     call_id: @kernel.CallId::unchecked("call_1"),
     tool_name: @kernel.ToolName::unchecked(name),
@@ -66,7 +66,7 @@ fn effect_for(name : String) -> @runtime.EffectContext {
 
 ///|
 async test "mcp_runtime_delegates_unknown_names_to_fallback" {
-  let fallback = RecordingRuntime::{ executed: [] }
+  let fallback = RecordingRuntime::{ executed: [], }
   let bridge = MCPToolBridge()
   let runtime = McpRuntime(bridge~, fallback=fallback as &@runtime.Runtime)
   let outcome = runtime.execute_tool(effect_for("read"))
@@ -77,7 +77,7 @@ async test "mcp_runtime_delegates_unknown_names_to_fallback" {
 
 ///|
 test "mcp_runtime_routing_decision_follows_live_map" {
-  let fallback = RecordingRuntime::{ executed: [] }
+  let fallback = RecordingRuntime::{ executed: [], }
   let bridge = MCPToolBridge()
   let runtime = McpRuntime(bridge~, fallback=fallback as &@runtime.Runtime)
   assert_false(runtime.handles("srv__tool"))
@@ -110,4 +110,53 @@ async test "mcp_catalog_source_revision_advances_on_activation" {
   let _ = bridge.activate() // empty pending: bump, no failures
   assert_eq(source.revision(), 1)
   assert_true(source.tools().is_empty())
+}
+
+///|
+/// Marker error that fails the harness task group below.
+suberror HarnessTrigger
+
+///|
+/// Ambient-cancellation harness for `execute_tool`: a spawned child fails
+/// the task group, which cancels the group body (the current task). The
+/// Cancelled raised at the body's suspension point is swallowed; the
+/// cancelled state is sticky, so everything after the catch runs with
+/// `@async.is_being_cancelled() == true`.
+///
+/// Known limitation: the MCP-handled branch of `McpRuntime::execute_tool`
+/// cannot reach a deterministic provider raise in this suite — the mcp SDK
+/// has no injectable transport (`AnyTransport` is a closed enum, `MCPClient`
+/// has no public constructor), so a bridge raise requires a live server.
+/// This test pins the constructible half of the contract (the delegation
+/// path stays transparent while ambient-cancelled); Wave 2 e2e with
+/// test_fixtures servers asserts the handled-branch re-raise identity.
+async test "mcp_runtime_execute_tool_delegates_under_ambient_cancellation" {
+  let fallback = RecordingRuntime::{ executed: [], }
+  let bridge = MCPToolBridge()
+  let runtime = McpRuntime(bridge~, fallback=fallback as &@runtime.Runtime)
+  let outcome : Ref[@kernel.ToolOutcome?] = Ref(None)
+  let cancelled_before : Ref[Bool] = Ref(false)
+  let cancelled_after : Ref[Bool] = Ref(false)
+  let triggered = try {
+    @async.with_task_group(group => {
+      group.spawn_bg(no_wait=true) <| () => { raise HarnessTrigger }
+      // Suspension gate: only the group's cancellation wakes this early.
+      @async.sleep(5_000) catch {
+        _ => ()
+      }
+      cancelled_before.val = @async.is_being_cancelled()
+      outcome.val = Some(runtime.execute_tool(effect_for("read")))
+      cancelled_after.val = @async.is_being_cancelled()
+    })
+    false
+  } catch {
+    HarnessTrigger => true
+    _ => false
+  }
+  assert_true(triggered)
+  assert_true(cancelled_before.val)
+  assert_true(cancelled_after.val)
+  assert_eq(fallback.executed.length(), 1)
+  assert_eq(fallback.executed[0], "read")
+  assert_true(outcome.val is Some(_))
 }

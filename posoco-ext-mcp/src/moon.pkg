@@ -9,6 +9,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/js_async",
+  "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
 
@@ -19,6 +20,13 @@ supported_targets = "+native+js"
 
 warnings = "-unused_package"
 
+import {
+  "colmugx/posoco-ext-oauth" @oauth,
+} for "wbtest"
+
 options(
-  targets: { "config_wbtest.mbt": [ "native" ] },
+  targets: {
+    "config_wbtest.mbt": [ "native" ],
+    "resilience_e2e_wbtest.mbt": [ "native" ],
+  },
 )

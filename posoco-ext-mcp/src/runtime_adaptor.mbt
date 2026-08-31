@@ -29,7 +29,7 @@ pub fn McpRuntime::McpRuntime(
   bridge~ : MCPToolBridge,
   fallback~ : &@runtime.Runtime,
 ) -> McpRuntime {
-  { bridge, fallback }
+  { bridge, fallback, }
 }
 
 ///|
@@ -45,7 +45,7 @@ pub fn McpCatalogSource::McpCatalogSource(
   bridge~ : MCPToolBridge,
   base_tools? : Array[@kernel.ToolDef] = [],
 ) -> McpCatalogSource {
-  { bridge, base_tools }
+  { bridge, base_tools, }
 }
 
 ///|
@@ -81,12 +81,21 @@ pub impl @runtime.Runtime for McpRuntime with fn execute_tool(
       name: context.tool_name,
       arguments: context.arguments,
     }
+    // Every error-translating catch must re-raise while the task is being
+    // cancelled: a cancellation injected at a suspension point inside the
+    // bridge would otherwise be re-labeled `ToolProviderError` and lose the
+    // identity the run loop's abort depends on (same rule as the colmugx/mcp
+    // transport catches).
     @posoco.ToolProvider::execute(self.bridge, name, call) catch {
       error =>
-        @kernel.RuntimeFailure(
-          error_category="ToolProviderError",
-          message=error.to_string(),
-        )
+        if @async.is_being_cancelled() {
+          raise error
+        } else {
+          @kernel.RuntimeFailure(
+            error_category="ToolProviderError",
+            message=error.to_string(),
+          )
+        }
     }
   } else {
     self.fallback.execute_tool(context)
@@ -94,9 +103,11 @@ pub impl @runtime.Runtime for McpRuntime with fn execute_tool(
 }
 
 ///|
-/// The MCP client exposes no per-effect cancellation, so every effect is
-/// delegated: plain tools report `NotPropagated` via the fallback, which is
-/// the same contract a ports-only agent has.
+/// The bridge keeps no effect→MCP-request correlation (`execute` never
+/// records the request id `cancel_request` would target), so per-effect
+/// cancellation has nothing to act on: every effect is delegated, and plain
+/// tools report `NotPropagated` via the fallback — the same contract a
+/// ports-only agent has.
 pub impl @runtime.Runtime for McpRuntime with fn cancel_effects(
   self,
   effect_ids : Array[@kernel.EffectId],

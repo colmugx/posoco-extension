@@ -43,8 +43,6 @@ test "convert_tool_def_namespaces_and_preserves_fields" {
     input_schema: Json::object(
       Map::from_array([("query", Json::string("string"))]),
     ),
-    cached_schema_json: "",
-    icon: None,
   }
   let posoco_def = convert_tool_def(mcp_def, "filesystem")
   assert_eq(posoco_def.name.to_string(), "filesystem__search")
@@ -101,8 +99,6 @@ fn catalog_test_mcp_tool(name : String) -> @types.ToolDefinition {
     name,
     description: "test tool",
     input_schema: Json::object(Map::from_array([])),
-    cached_schema_json: "",
-    icon: None,
   }
 }
 
@@ -138,8 +134,8 @@ test "catalog_collision_does_not_mutate_previous_snapshot" {
   assert_eq(left.name.to_string(), ambiguous_name)
   assert_eq(right.name.to_string(), ambiguous_name)
   let candidate = [
-    CatalogEntry::{ connection_index: 0, tools: [left] },
-    CatalogEntry::{ connection_index: 1, tools: [right] },
+    CatalogEntry::{ connection_index: 0, tools: [left], },
+    CatalogEntry::{ connection_index: 1, tools: [right], },
   ]
   let commits : Array[Unit] = []
   match replace_catalog(candidate, 2, _plan => commits.push(())) {
@@ -230,4 +226,140 @@ async test "close_clears_state" {
   bridge.close()
   let tools = @posoco.ToolProvider::list_tools(bridge)
   assert_true(tools.is_empty())
+}
+
+///|
+fn tuning_test_transport() -> @transport.AnyTransport {
+  @transport.AnyTransport::StdioClient(
+    @transport.StdioClientTransport::StdioClientTransport(
+      cmd="echo",
+      args=[],
+      extra_env=Map::from_array([]),
+    ),
+  )
+}
+
+///|
+test "server_config_constructor_applies_resilience_defaults" {
+  let config = MCPServerConfig::MCPServerConfig(
+    name="srv",
+    transport=tuning_test_transport(),
+    auth=ServerAuth::NoAuth,
+  )
+  assert_eq(config.timeout_ms, 30_000)
+  assert_eq(config.max_reconnects, 1)
+  let tuned = MCPServerConfig::MCPServerConfig(
+    name="srv",
+    transport=tuning_test_transport(),
+    auth=ServerAuth::NoAuth,
+    timeout_ms=250,
+    max_reconnects=0,
+  )
+  assert_eq(tuned.timeout_ms, 250)
+  assert_eq(tuned.max_reconnects, 0)
+}
+
+///|
+test "mcp_call_failure_timeout_stage_carries_deadline" {
+  match mcp_call_failure(MCPCallFailure::TimedOut(1234), "tool") {
+    @posoco.RuntimeError::InvocationFailed(message) => {
+      assert_true(message.contains("MCP call failed"))
+      assert_true(message.contains("stage=timeout"))
+      assert_true(message.contains("timeout_ms=1234"))
+      assert_false(message.contains("\n"))
+    }
+    _ => fail("expected typed MCP timeout failure")
+  }
+}
+
+///|
+test "connection_level_errors_are_distinguished_from_remote_errors" {
+  let connection_level : Array[@types.MCPError] = [
+    @types.InternalError("Send failed: broken pipe"),
+    @types.InternalError("Receive failed: eof"),
+    @types.InternalError("Connection closed"),
+    @types.InternalError("Response timeout"),
+    @types.TransportError(
+      @types.InvalidState("Cannot send on closed transport"),
+    ),
+    @types.TransportError(@types.ConnectionClosed),
+  ]
+  for e in connection_level {
+    assert_true(is_connection_level_error(e))
+  }
+  let remote : Array[@types.MCPError] = [
+    @types.InternalError("Server error: tool exploded"),
+    @types.ParseError("Invalid JSON response"),
+    @types.InvalidRequest("Response missing 'result' field"),
+    @types.ToolError("business failure"),
+  ]
+  for e in remote {
+    assert_false(is_connection_level_error(e))
+  }
+}
+
+///|
+test "list_tools_failure_message_distinguishes_timeout" {
+  let timeout = list_tools_failure_message(
+    "MCP list_tools failed",
+    "srv",
+    ListToolsFailure::TimedOut(2500),
+  )
+  assert_eq(
+    timeout, "MCP list_tools failed for 'srv' (stage=timeout, timeout_ms=2500)",
+  )
+  let plain = list_tools_failure_message(
+    "MCP list_tools failed",
+    "srv",
+    ListToolsFailure::Failed,
+  )
+  assert_eq(plain, "MCP list_tools failed for 'srv'")
+}
+
+///|
+/// Validates the classification assumption behind the timeout wrappers: the
+/// with_timeout abort makes the wrapped call see the sticky cancel flag,
+/// while the enclosing catch sees the sentinel error — not a cancellation
+/// error — so a fired deadline can be classified without swallowing real
+/// ambient cancellation.
+async test "timeout_aborts_inner_but_outer_sees_sentinel_not_cancel" {
+  let inner_flags : Array[Bool] = []
+  let outer_flags : Array[Bool] = []
+  let escaped_is_cancel = @async.with_timeout(30, async fn() {
+    @async.sleep(60_000) catch {
+      error => {
+        inner_flags.push(@async.is_being_cancelled())
+        raise error
+      }
+    }
+    true
+  }) catch {
+    error => {
+      outer_flags.push(@async.is_being_cancelled())
+      @async.is_cancellation_error(error)
+    }
+  }
+  assert_eq(inner_flags.length(), 1)
+  assert_true(inner_flags[0])
+  assert_eq(outer_flags.length(), 1)
+  assert_false(outer_flags[0])
+  assert_false(escaped_is_cancel)
+}
+
+///|
+async test "reconnect_one_rejects_missing_connection" {
+  let bridge = MCPToolBridge()
+  match bridge.reconnect_one(0) {
+    Err(message) => assert_true(message.contains("no longer present"))
+    Ok(_) => fail("expected missing connection rejection")
+  }
+}
+
+///|
+async test "refresh_tools_on_empty_bridge_bumps_revision" {
+  let bridge = MCPToolBridge()
+  match bridge.refresh_tools() {
+    Ok(_) => assert_eq(bridge.catalog_revision, 1)
+    Err(message) => fail("unexpected refresh error: " + message)
+  }
 }

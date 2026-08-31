@@ -11,9 +11,13 @@
 //
 // Server entry shapes (unknown keys are ignored for forward compatibility):
 //   stdio: { "command": "npx", "args": ["..."], "env": {"K": "V"}, "type": "stdio" }
-//   http:  { "url": "http://host/mcp", "type": "http" }
+//   http:  { "url": "http://host/mcp", "type": "http", "auth": "oauth" }
 // `type` is optional; the transport is inferred from which of `command`/`url`
-// is present. Env values are literals — no ${VAR} expansion.
+// is present. `auth` is http-only. `legacy` is an optional boolean tri-state
+// for the protocol era: absent = Auto (probe, legacy fallback allowed),
+// true = Legacy (2025-11-25 initialize, probe skipped), false = Modern
+// (probe, legacy fallback refused). Env values are literals — no ${VAR}
+// expansion.
 
 ///|
 /// When the bridge connects the servers declared by mcp.json.
@@ -158,6 +162,93 @@ fn env_field(
 }
 
 ///|
+/// Extract an optional non-negative integer knob (`timeout_ms`,
+/// `max_reconnects`; 0 = disabled). Absent → `Ok(None)` and the constructor
+/// defaults apply. Fractional values and magnitudes beyond `Int` are rejected
+/// so a JSON typo cannot silently disable a knob via truncation.
+fn int_field(
+  entry : Map[String, Json],
+  key : String,
+  server : String,
+) -> Result[Int?, String] {
+  match entry.get(key) {
+    None => Ok(None)
+    Some(Json::Number(value, ..)) =>
+      if value != value.floor() {
+        Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': '\{key}' must be an integer",
+        )
+      } else if value < 0.0 {
+        Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': '\{key}' must not be negative",
+        )
+      } else if value > 2147483647.0 {
+        Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': '\{key}' is out of range (max 2147483647)",
+        )
+      } else {
+        Ok(Some(value.to_int()))
+      }
+    Some(_) =>
+      Err(
+        "mcp.json server '\{@devkit.sanitize_label(server)}': '\{key}' must be an integer",
+      )
+  }
+}
+
+///|
+/// Parse the optional `auth` key. Absent → NoAuth; `"oauth"` → OAuth (the
+/// host acquires tokens at runtime). Stdio entries reject the key outright —
+/// their secrets travel on `env`, so an `auth` key there signals a confused
+/// config rather than a runnable one.
+fn parse_server_auth(
+  fields : Map[String, Json],
+  server : String,
+  use_stdio~ : Bool,
+) -> Result[ServerAuth, String] {
+  match fields.get("auth") {
+    None => Ok(ServerAuth::NoAuth)
+    Some(Json::String(value)) =>
+      if use_stdio {
+        Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': 'auth' is not valid for stdio servers (secrets go through 'env')",
+        )
+      } else if value == "oauth" {
+        Ok(ServerAuth::OAuth)
+      } else {
+        Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': unsupported auth '\{@devkit.sanitize_label(value)}' (expected 'oauth')",
+        )
+      }
+    Some(_) =>
+      Err(
+        "mcp.json server '\{@devkit.sanitize_label(server)}': 'auth' must be a string",
+      )
+  }
+}
+
+///|
+/// Parse the optional `legacy` key, a boolean tri-state for the client's
+/// protocol era: absent → `Auto` (probe the server, legacy fallback allowed),
+/// `true` → `Legacy` (dial the 2025-11-25 legacy initialize directly, probe
+/// skipped), `false` → `Modern` (probe, legacy fallback refused). Only
+/// servers known to speak the legacy protocol should set `true`.
+fn parse_server_era(
+  fields : Map[String, Json],
+  server : String,
+) -> Result[@client.ProtocolEra, String] {
+  match fields.get("legacy") {
+    None => Ok(@client.ProtocolEra::Auto)
+    Some(Json::True) => Ok(@client.ProtocolEra::Legacy)
+    Some(Json::False) => Ok(@client.ProtocolEra::Modern)
+    Some(_) =>
+      Err(
+        "mcp.json server '\{@devkit.sanitize_label(server)}': 'legacy' must be a boolean",
+      )
+  }
+}
+
+///|
 /// Parse one server entry into a transport-ready config.
 fn parse_server_entry(
   server : String,
@@ -217,38 +308,143 @@ fn parse_server_entry(
       "mcp.json server '\{@devkit.sanitize_label(server)}': http server needs 'url'",
     )
   }
+  // Resilience knobs shared by both transports. Absent keys forward None so
+  // the constructor defaults stay the single source for 30_000 / 1.
+  let timeout_ms = match int_field(fields, "timeout_ms", server) {
+    Ok(value) => value
+    Err(message) => return Err(message)
+  }
+  let max_reconnects = match int_field(fields, "max_reconnects", server) {
+    Ok(value) => value
+    Err(message) => return Err(message)
+  }
+  let era = match parse_server_era(fields, server) {
+    Ok(value) => value
+    Err(message) => return Err(message)
+  }
   if use_stdio {
     let cmd = string_field(fields, "command", server)
     let args = string_array_field(fields, "args", server)
     let env = env_field(fields, server)
-    match (cmd, args, env) {
-      (Ok(cmd), Ok(args), Ok(env)) => {
+    let auth = parse_server_auth(fields, server, use_stdio=true)
+    match (cmd, args, env, auth) {
+      (Ok(cmd), Ok(args), Ok(env), Ok(auth)) => {
         let transport = @transport.StdioClientTransport::StdioClientTransport(
           cmd~,
           args~,
           extra_env=env,
         )
-        Ok({
-          name: server,
-          transport: @transport.AnyTransport::StdioClient(transport),
-        })
+        Ok(
+          MCPServerConfig::MCPServerConfig(
+            name=server,
+            transport=@transport.AnyTransport::StdioClient(transport),
+            auth~,
+            era~,
+            timeout_ms?,
+            max_reconnects?,
+          ),
+        )
+      }
+      (Err(message), _, _, _)
+      | (_, Err(message), _, _)
+      | (_, _, Err(message), _)
+      | (_, _, _, Err(message)) => Err(message)
+    }
+  } else {
+    let url = string_field(fields, "url", server)
+    let auth_token = match fields.get("auth_token") {
+      None => Ok("")
+      Some(Json::String(value)) => expand_env_vars(value, server)
+      Some(_) =>
+        Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': 'auth_token' must be a string",
+        )
+    }
+    let auth = parse_server_auth(fields, server, use_stdio=false)
+    match (url, auth_token, auth) {
+      (Ok(url), Ok(auth_token), Ok(auth)) => {
+        let transport = @transport.HttpClientTransport::HttpClientTransport(
+          url,
+          auth_token~,
+        )
+        Ok(
+          MCPServerConfig::MCPServerConfig(
+            name=server,
+            transport=@transport.AnyTransport::HttpClient(transport),
+            auth~,
+            era~,
+            timeout_ms?,
+            max_reconnects?,
+          ),
+        )
       }
       (Err(message), _, _) | (_, Err(message), _) | (_, _, Err(message)) =>
         Err(message)
     }
-  } else {
-    let url = string_field(fields, "url", server)
-    match url {
-      Ok(url) => {
-        let transport = @transport.HttpClientTransport::HttpClientTransport(url)
-        Ok({
-          name: server,
-          transport: @transport.AnyTransport::HttpClient(transport),
-        })
-      }
-      Err(message) => Err(message)
-    }
   }
+}
+
+///|
+/// Expand `${VAR}` references against the process environment so secrets
+/// stay out of mcp.json. An unset variable is a loud configuration error —
+/// the server must not silently connect unauthenticated.
+fn expand_env_vars(
+  template : String,
+  server : String,
+) -> Result[String, String] {
+  let out = StringBuilder()
+  let mut i = 0
+  let mut plain_start = 0
+  while i < template.length() {
+    if template[i] == '$' && i + 1 < template.length() && template[i + 1] == '{' {
+      // Scan for the closing brace from inside the reference.
+      let mut end = -1
+      let mut j = i + 2
+      while j < template.length() {
+        if template[j] == '}' {
+          end = j
+          break
+        }
+        j += 1
+      }
+      if end < 0 {
+        return Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': unterminated '${' in 'auth_token'",
+        )
+      }
+      out.write_string(template[plain_start:i].to_owned())
+      let name = template[i + 2:end].to_owned()
+      let mut name_ok = name.length() > 0
+      for c in name {
+        if !((c >= 'a' && c <= 'z') ||
+          (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') ||
+          c == '_') {
+          name_ok = false
+        }
+      }
+      if !name_ok {
+        return Err(
+          "mcp.json server '\{@devkit.sanitize_label(server)}': invalid variable name in 'auth_token'",
+        )
+      }
+      match @env.get_env_var(name) {
+        Some(value) => {
+          out.write_string(value)
+          i = end + 1
+          plain_start = i
+          continue
+        }
+        None =>
+          return Err(
+            "mcp.json server '\{@devkit.sanitize_label(server)}': environment variable '\{@devkit.sanitize_label(name)}' (auth_token) is not set",
+          )
+      }
+    }
+    i += 1
+  }
+  out.write_string(template[plain_start:].to_owned())
+  Ok(out.to_string())
 }
 
 ///|
