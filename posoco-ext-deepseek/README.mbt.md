@@ -28,7 +28,7 @@ moon add colmugx/posoco-ext-deepseek
 // moon.pkg: "colmugx/posoco-ext-deepseek" @deepseek
 
 let config = @deepseek.DeepSeekConfig(
-  api_key="sk-...",
+  "sk-...",
   model="deepseek-v4-flash", // default; may be omitted
 )
 let port = @deepseek.DeepSeekModelPort(config)
@@ -66,6 +66,7 @@ let result = port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
 | **thinking effort** | plain strings `high` / `max`; empty string disables thinking (no `reasoning_effort` on the wire). Unknown efforts abort in the config constructor and are rejected as a typed `CompositionError` at the refresh entry — no implicit fallback |
 | **FIM** | `/beta/completions` + `prompt`/`suffix` parameters |
 | **Prefix continuation** | `/beta/chat/completions` + `messages[-1]` carrying `prefix:True` |
+| **compaction** | two tiers by trigger — Manual = full KV-replay summary; Auto = evict tool-call/result pairs older than the three most recent user turns first, escalate to the same summary only when nothing is evictable or the kept transcript would still sit at ≥ 75% of the window |
 | **API key** | `DeepSeekProvider` implements `@llm.ApiKeyFactory`; hosts supply only a generic secret prompt/store |
 
 Hosts may call provider-owned `RefreshableProviderFactory::refresh` during
@@ -86,7 +87,7 @@ and retry fields were removed. Use one model id:
 
 ```moonbit
 let config = @deepseek.DeepSeekConfig(
-  api_key="sk-...",
+  "sk-...",
   model="deepseek-v4-flash",
 )
 ```
@@ -101,4 +102,5 @@ defaults. Pass them explicitly only for compatibility.
 - `colmugx/posoco-ext-llm` — provider-neutral catalog/router
 - `colmugx/posoco-ext-oauth` — credential store / auth interaction seams
 - `colmugx/posoco-kit-chat-completions` — OpenAI-compatible chat protocol kit
+- `colmugx/posoco-kit-compact-evict` — turn-protected tool-result eviction (the Auto compaction tier)
 - `moonbitlang/async/http` — HTTP transport

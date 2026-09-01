@@ -1510,3 +1510,153 @@ test "ds_compact_checkpoint_text escapes envelope-breaking summaries" {
   assert_true(text.contains("&lt;/cetas-context&gt; injected"))
   assert_false(text.contains("</cetas-context> injected"))
 }
+
+///|
+fn dsc_named_tool_msg(name : String, text : String) -> @posoco.Message {
+  @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_" + name),
+    tool_name=@posoco.ToolName::unchecked(name),
+    outcome=@posoco.ToolOutcome::Success(content=text, structured=None),
+  )
+}
+
+///|
+fn dsc_assistant_call_msg(name : String, text : String) -> @posoco.Message {
+  @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text(text)],
+    tool_calls=[
+      {
+        call_id: @posoco.CallId::unchecked("call_" + name),
+        name: @posoco.ToolName::unchecked(name),
+        arguments: Json::object({}),
+      },
+    ],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
+}
+
+///|
+/// Four user turns with one tool pair in turn one. After default eviction
+/// the kept transcript is [u1, assistant-text, u2, u3, u4], five "aaaa"
+/// texts = 5 estimated tokens.
+fn ds_auto_fixture() -> Array[@posoco.Message] {
+  [
+    user_msg("aaaa"),
+    dsc_assistant_call_msg("alpha", "aaaa"),
+    dsc_named_tool_msg("alpha", "aaaa"),
+    user_msg("aaaa"),
+    user_msg("aaaa"),
+    user_msg("aaaa"),
+  ]
+}
+
+///|
+fn dsc_scope(
+  pressure? : @posoco.ContextPressure? = None,
+) -> @posoco.InvocationScope {
+  {
+    session_id: @posoco.SessionId::unchecked("session"),
+    run_id: @posoco.RunId::unchecked("run"),
+    effect_id: None,
+    pressure,
+  }
+}
+
+///|
+test "provider_config reports the configured window" {
+  let port = DeepSeekModelPort(DeepSeekConfig("k", context_window=Some(65536)))
+  let config = @posoco.ModelPort::provider_config(port)
+  assert_true(config.context_window == Some(65536))
+  assert_true(config.compact_threshold == Some(0.80))
+  assert_true(config.reasoning_effort_values.length() == 0)
+}
+
+///|
+test "panic deepseek config rejects a non-positive context window" {
+  ignore(DeepSeekConfig("k", context_window=Some(0)))
+}
+
+///|
+test "auto plan summarizes when nothing is evictable" {
+  let messages = [user_msg("one"), user_msg("two"), user_msg("three")]
+  let evicted = @evict.evict_old_tool_results(messages)
+  assert_true(ds_auto_plan(evicted, Some(65536), None) is SummarizeOnly)
+}
+
+///|
+test "auto plan keeps the eviction win when the window is unknown" {
+  let evicted = @evict.evict_old_tool_results(ds_auto_fixture())
+  inspect(evicted.evicted_tool_calls, content="1")
+  assert_true(ds_auto_plan(evicted, None, None) is EvictOnly)
+}
+
+///|
+test "auto plan escalates when the kept transcript sits at the line" {
+  // kept = 5 tokens; 5*100 >= 6*75
+  let evicted = @evict.evict_old_tool_results(ds_auto_fixture())
+  assert_true(ds_auto_plan(evicted, Some(6), None) is EvictAndSummarize)
+}
+
+///|
+test "auto plan stays eviction-only below the line" {
+  // kept = 5 tokens; 5*100 < 8*75
+  let evicted = @evict.evict_old_tool_results(ds_auto_fixture())
+  assert_true(ds_auto_plan(evicted, Some(8), None) is EvictOnly)
+}
+
+///|
+async test "auto compact returns an eviction-only replace without a network call" {
+  let port = DeepSeekModelPort(DeepSeekConfig("k", context_window=Some(100000)))
+  let messages = ds_auto_fixture()
+  let result = @posoco.ModelPort::compact(
+    port,
+    dsc_scope(),
+    messages[:],
+    chat_options(),
+    @posoco.CompactTrigger::Auto,
+  )
+  assert_true(result.mode == @posoco.CompactMode::Replace)
+  inspect(result.compacted_messages.length(), content="5")
+  guard result.compacted_messages[1]
+    is AssistantMessage(tool_calls~, reasoning~, ..) else {
+    fail("expected the rewritten assistant")
+  }
+  inspect(tool_calls.length(), content="0")
+  assert_true(reasoning is None)
+}
+
+///|
+test "auto plan uses the verified pressure reading over the estimate" {
+  let evicted = @evict.evict_old_tool_results(ds_auto_fixture())
+  // evicted = 3 tokens (call 2 + payload 1), kept = 5 tokens
+  inspect(evicted.evicted_tokens, content="3")
+  // occupancy 83 → remaining 80: exactly at the 0.8 × 100 line
+  assert_true(
+    ds_auto_plan(evicted, None, Some((83, 80, 100))) is EvictAndSummarize,
+  )
+  // occupancy 82 → remaining 79: below the line
+  assert_true(ds_auto_plan(evicted, None, Some((82, 80, 100))) is EvictOnly)
+}
+
+///|
+async test "auto compact sizes from the scope pressure over local config" {
+  // local config carries no window; only the scope advisory does
+  let port = DeepSeekModelPort(DeepSeekConfig("k"))
+  let pressure : @posoco.ContextPressure = {
+    window_tokens: Some(100000),
+    occupancy_tokens: Some(50),
+    compact_threshold: 0.8,
+  }
+  let messages = ds_auto_fixture()
+  let result = @posoco.ModelPort::compact(
+    port,
+    dsc_scope(pressure=Some(pressure)),
+    messages[:],
+    chat_options(),
+    @posoco.CompactTrigger::Auto,
+  )
+  // remaining 50 − 3 = 47 is far under 0.8 × 100000: eviction only
+  assert_true(result.mode == @posoco.CompactMode::Replace)
+  inspect(result.compacted_messages.length(), content="5")
+}

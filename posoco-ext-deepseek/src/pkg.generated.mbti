@@ -27,8 +27,9 @@ pub(all) struct DeepSeekConfig {
   endpoint_prefix : String
   reasoning_effort : String
   thinking_efforts : Array[String]
+  context_window : Int?
 } derive(Eq, @debug.Debug)
-pub fn DeepSeekConfig::DeepSeekConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
+pub fn DeepSeekConfig::DeepSeekConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String], context_window? : Int?) -> Self
 pub fn DeepSeekConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct DeepSeekModelInfo {

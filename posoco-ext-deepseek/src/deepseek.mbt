@@ -233,10 +233,13 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
 ///|
 
 ///|
-/// ModelPort implementation — provider_config. Declares which reasoning_effort
-/// values this modelport accepts (M3.7 pull-based config learning).
+/// ModelPort implementation — provider_config.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn provider_config(
-  _self : DeepSeekModelPort,
+  self : DeepSeekModelPort,
 ) -> @posoco.ProviderConfig {
-  @posoco.ProviderConfig::empty()
+  @posoco.ProviderConfig::ProviderConfig(
+    reasoning_effort_values=[],
+    context_window=self.config.context_window,
+    compact_threshold=Some(0.80),
+  )
 }

@@ -1,12 +1,18 @@
-// compact.mbt — DeepSeek client-side compaction: the summary request
+// compact.mbt — DeepSeek client-side compaction, two tiers by trigger.
+//
+// Manual `/compact` runs the full replay summary: the summary request
 // REPLAYS the head messages byte for byte and appends the compaction
-// instruction as the FINAL user message, so the auxiliary call is a
-// genuine prefix of the last routed request and the provider's KV cache
-// is reused instead of invalidated. The result replaces the head with one
-// checkpoint user message (preamble plus the summary sealed in a
+// instruction as the FINAL user message, so the auxiliary call is a genuine
+// prefix of the last routed request and the provider's KV cache is reused
+// instead of invalidated. The result replaces the head with one checkpoint
+// user message (preamble plus the summary sealed in a
 // <cetas-context type="compact"> envelope) followed by the verbatim tail.
-// Self-contained on purpose: no compact-kit dependency, this provider's
-// replay shape is its own.
+//
+// Auto runs the cheaper tier first: tool-call/result pairs older than the
+// three most recent user turns are evicted wholesale (evict kit — skeleton
+// and protected turns survive verbatim). Only when nothing is evictable, or
+// the kept transcript would still sit at or above the escalation line (75%
+// of the context window), does Auto fall back to the same replay summary.
 
 ///|
 /// The compaction directive, delivered as the final user message after the replayed conversation.
@@ -251,18 +257,77 @@ async fn DeepSeekModelPort::ds_compact_completion(
 }
 
 ///|
-/// ModelPort implementation — compact: replay the head verbatim with the
-/// instruction trailing as the final user message, then replace the
-/// transcript with one checkpoint user message (summary sealed in a
-/// compact envelope) plus the verbatim tail.
-pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
+/// The Auto-tier escalation line, as a percentage of the context window:
+/// eviction alone is considered enough only below it.
+const DS_AUTO_ESCALATION_PERCENT : Int = 75
+
+///|
+/// Plan for one Auto compact: evict old tool pairs, summarize, or both.
+priv enum DS_AutoPlan {
+  SummarizeOnly
+  EvictOnly
+  EvictAndSummarize
+}
+
+///|
+/// Pure decision for the Auto tier. Nothing evictable → summarize. With a
+/// verified pressure reading (`exact` = occupancy, threshold×100, window) →
+/// escalate when the occupancy left after eviction would still sit at or
+/// above the resolved trigger line. Window unknown → keep the eviction win
+/// and never guess a ceiling. Otherwise → escalate when the kept
+/// transcript estimate still sits at or above the escalation line, so the
+/// single per-run auto-compact budget is spent on real relief.
+fn ds_auto_plan(
+  evicted : @evict.EvictResult,
+  window : Int?,
+  exact : (Int, Int, Int)?,
+) -> DS_AutoPlan {
+  if evicted.evicted_tool_calls == 0 {
+    return SummarizeOnly
+  }
+  match exact {
+    Some((occupancy, threshold_percent, w)) => {
+      let remaining = occupancy - evicted.evicted_tokens
+      if remaining * 100 >= threshold_percent * w {
+        EvictAndSummarize
+      } else {
+        EvictOnly
+      }
+    }
+    None =>
+      match window {
+        None => EvictOnly
+        Some(w) => {
+          let kept = @evict.estimate_transcript_tokens(evicted.messages)
+          if kept * 100 >= w * DS_AUTO_ESCALATION_PERCENT {
+            EvictAndSummarize
+          } else {
+            EvictOnly
+          }
+        }
+      }
+  }
+}
+
+///|
+/// The eviction-only CompactResult: kept transcript as-is, in-place
+/// replace.
+fn ds_evict_result(evicted : @evict.EvictResult) -> @posoco.CompactResult {
+  @posoco.CompactResult::{
+    compacted_messages: evicted.messages,
+    mode: @posoco.CompactMode::Replace,
+  }
+}
+
+///|
+/// The replay summary over `messages`: split, one auxiliary LLM call, and
+/// the rebuilt transcript (checkpoint user message plus verbatim tail).
+async fn DeepSeekModelPort::ds_compact_summarize(
   self : DeepSeekModelPort,
-  _scope : @posoco.InvocationScope,
-  messages : ArrayView[@posoco.Message],
+  messages : Array[@posoco.Message],
   options : @posoco.ChatOptions,
-  _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
-  let (head, tail) = match ds_compact_split(messages.to_owned()) {
+  let (head, tail) = match ds_compact_split(messages) {
     Some(split) => split
     None =>
       raise @posoco.ModelError::ResponseParse(
@@ -287,5 +352,53 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
   @posoco.CompactResult::{
     compacted_messages: checkpoint,
     mode: @posoco.CompactMode::Replace,
+  }
+}
+
+///|
+/// ModelPort implementation — compact. Manual replays the head verbatim
+/// with the instruction trailing as the final user message (full summary).
+/// Auto runs the cheaper tier first: evict tool pairs older than the three
+/// most recent user turns; summarize only when nothing is evictable or the
+/// kept transcript would still sit above the escalation line — and when the
+/// post-eviction transcript is too small to summarize, keep the eviction
+/// win instead of failing. The scope's pressure advisory (posoco's resolved
+/// window plus the latest verified occupancy) overrides the local config
+/// and the character estimate whenever present.
+pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
+  self : DeepSeekModelPort,
+  scope : @posoco.InvocationScope,
+  messages : ArrayView[@posoco.Message],
+  options : @posoco.ChatOptions,
+  trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  let owned = messages.to_owned()
+  match trigger {
+    Manual => self.ds_compact_summarize(owned, options)
+    Auto => {
+      let evicted = @evict.evict_old_tool_results(owned)
+      let window = match scope.pressure {
+        Some(pressure) => pressure.window_tokens
+        None => self.config.context_window
+      }
+      let exact : (Int, Int, Int)? = match scope.pressure {
+        Some(pressure) =>
+          match (pressure.window_tokens, pressure.occupancy_tokens) {
+            (Some(w), Some(o)) =>
+              Some((o, (pressure.compact_threshold * 100.0).to_int(), w))
+            _ => None
+          }
+        None => None
+      }
+      match ds_auto_plan(evicted, window, exact) {
+        SummarizeOnly => self.ds_compact_summarize(owned, options)
+        EvictOnly => ds_evict_result(evicted)
+        EvictAndSummarize =>
+          match ds_compact_split(evicted.messages) {
+            Some(_) => self.ds_compact_summarize(evicted.messages, options)
+            None => ds_evict_result(evicted)
+          }
+      }
+    }
   }
 }

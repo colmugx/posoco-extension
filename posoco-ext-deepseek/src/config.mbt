@@ -15,6 +15,10 @@ pub(all) struct DeepSeekConfig {
   reasoning_effort : String
   /// Effort values declared by the provider catalog for this model.
   thinking_efforts : Array[String]
+  /// Token budget ceiling reported to the host so auto-compact can size
+  /// itself. None leaves auto-compact disabled — an unknown window is never
+  /// guessed (the /models endpoint carries no context length).
+  context_window : Int?
 } derive(Eq, Debug)
 
 ///|
@@ -26,6 +30,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
   thinking_efforts? : Array[String] = ["high", "max"],
+  context_window? : Int? = None,
 ) -> DeepSeekConfig {
   if (thinking_efforts.is_empty() && reasoning_effort != "") ||
     (
@@ -37,6 +42,13 @@ pub fn DeepSeekConfig::DeepSeekConfig(
       "posoco-ext-deepseek: unsupported reasoning effort: " + reasoning_effort,
     )
   }
+  match context_window {
+    Some(n) =>
+      if n <= 0 {
+        abort("posoco-ext-deepseek: context_window must be positive")
+      }
+    None => ()
+  }
   {
     api_key,
     base_url,
@@ -44,6 +56,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     endpoint_prefix,
     reasoning_effort,
     thinking_efforts,
+    context_window,
   }
 }
 
