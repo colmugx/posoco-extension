@@ -5,8 +5,7 @@
 // the only commit trigger.
 
 ///|
-/// Agent wiring for the blind-zone cases: the memory port declared is what
-/// attaches core's MemoryRetrievalHook, mirroring the e2e conventions.
+/// Agent wiring for the blind-zone cases, mirroring the e2e conventions.
 fn turn_end_agent(
   ext : NowledgeMem,
   model : @posoco.ScriptedModel,
@@ -18,7 +17,6 @@ fn turn_end_agent(
       @posoco.tk_ext(id="tools", tools~),
       @posoco.tk_ext(
         id="nowledge_mem",
-        memory=[ext as &@posoco.MemoryPort],
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
         lifecycle=[ext as &@posoco.Lifecycle],
@@ -149,12 +147,11 @@ async test "turn_end: queued memory write drains before run_turn returns" {
   )
   let ext = nmem_ext(mcp~)
   ignore(
-    @posoco.MemoryPort::store(ext, {
-      id: "",
-      content: "deploy fridays only",
-      metadata: Map::from_array([]),
-      score: None,
-    }),
+    @posoco.MemoryPort::store(
+      ext,
+      content="deploy fridays only",
+      metadata=Map::from_array([]),
+    ),
   )
   inspect(ext.mem.queue.length(), content="1")
   let model = @posoco.ScriptedModel([

@@ -65,17 +65,3 @@ fn parse_context_payload(stdout : String) -> String? {
     None => None
   }
 }
-
-///|
-/// Working-memory payload: only when exists is not false, take content.
-fn parse_wm_payload(stdout : String) -> String? {
-  match clean_json_object(stdout) {
-    Some(fields) =>
-      if fields.get("exists") is Some(Json::False) {
-        None
-      } else {
-        first_string_field(fields, ["content"])
-      }
-    None => None
-  }
-}

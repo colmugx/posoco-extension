@@ -270,6 +270,7 @@ fn nmem_agent(
         id="nowledge_mem",
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
+        memory=[ext as &@posoco.MemoryPort],
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
@@ -285,10 +286,14 @@ fn nmem_agent(
 
 ///|
 /// The system-prompt contribution is instructions only: guidance lands,
-/// recalled data never does (it travels the MemoryPort section instead —
-/// see memory_port_e2e_wbtest).
+/// recalled data never does (it travels the core-injected memory message —
+/// see inbound_e2e_wbtest).
 async test "e2e: the system prompt carries guidance only, never data" {
-  let mcp = FakeNmemMcp::FakeNmemMcp()
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
+    ]),
+  )
   let ext = nmem_ext(mcp~)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
@@ -296,14 +301,16 @@ async test "e2e: the system prompt carries guidance only, never data" {
   let agent = nmem_agent(ext, model)
   ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
   assert_true(model.received_messages.length() > 0)
-  let prompt = first_system_text(model.received_messages[0])
+  let messages = model.received_messages[0]
+  let prompt = first_system_text(messages)
   assert_true(prompt.contains("## Nowledge Mem Guidance"))
   assert_true(prompt.contains("search"))
   assert_false(prompt.contains("## Nowledge Mem Context Bundle"))
   assert_false(prompt.contains("# Owner Rules"))
-  // No MCP call anywhere: boot runs no chain, and this wiring declares no
-  // memory port, so nothing searches either.
-  inspect(mcp.calls.length(), content="0")
+  // The one MCP call is the session's inbound working-memory read, and with
+  // empty working memory no memory message reaches the payload.
+  inspect(mcp.calls.length(), content="1")
+  inspect(injected_memory_count(messages), content="0")
 }
 
 ///|
@@ -382,6 +389,35 @@ async test "attach runs the flusher loop inside a host task group" {
   })
   inspect(transport.requests.length(), content="1")
   assert_true(transport.requests[0].0.has_suffix("/threads"))
+}
+
+///|
+/// Cancellation regression for the attach-level loop (cetas-acp stdin EOF):
+/// the aborting host body fails the group and run_flusher is cancelled
+/// mid-sleep; the loop must re-raise so the teardown completes instead of
+/// spinning the idle loop forever. The with_timeout watchdog bounds the
+/// assertion; `stopped` staying false proves the exit came from
+/// cancellation, not stop().
+async test "attach: flusher loop terminates on task group cancellation" {
+  let transport = EchoNmemTransport::EchoNmemTransport()
+  let ext = nmem_ext(transport~)
+  let outcome : Result[Unit, Error] = Ok(
+    @async.with_timeout(5000, () => {
+      @async.with_task_group(group => {
+        ext.attach(group)
+        @async.sleep(20)
+        raise HostEof
+      })
+    }),
+  ) catch {
+    error => Err(error)
+  }
+  guard outcome is Err(error) else {
+    fail("expected the host abort to propagate out of the group")
+  }
+  assert_true(error is HostEof)
+  inspect(ext.engine.stopped, content="false")
+  inspect(transport.requests.length(), content="0")
 }
 
 ///|

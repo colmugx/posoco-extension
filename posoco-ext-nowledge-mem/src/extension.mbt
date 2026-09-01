@@ -16,8 +16,9 @@ const NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS : Int64 = 750L
 ///   through the platform seam), hands the MCP endpoint to the lazy client,
 ///   and drains once; `on_shutdown` stops the flusher, performs the final
 ///   drain, and closes the MCP connection;
-/// - `PipelineHook` — `before_model` passthrough that snapshots the
-///   model-visible transcript (D2: what the model sees is what syncs);
+/// - `PipelineHook` — `before_model` snapshots the model-visible
+///   transcript (D2: what the model sees is what syncs; the
+///   core-injected memory message is skipped by `map_messages`);
 ///   `before_tool` drains under a 750ms throttle; `on_turn_end` is the
 ///   load-bearing commit boundary;
 /// - `Observer` — records the current session from the `TurnStarted` scope,
@@ -27,20 +28,16 @@ const NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS : Int64 = 750L
 ///   to the new session id;
 /// - `SystemPromptContributor` — instructions only: what the plugin is,
 ///   when to search, when to save, routing, provenance. Recalled DATA
-///   never travels here — the working-memory briefing arrives through the
-///   `MemoryPort` section (core's `MemoryRetrievalHook`) at the session's
-///   first turn, and the model re-reads deliberately via the tools;
-/// - `ToolProvider` — the §5 tool set over the extension's own lazy MCP
-///   client (the official names read_context_bundle / read_working_memory /
-///   memory_search / thread_search / memory_add plus posoco-native
-///   additions);
-/// - `MemoryPort` — the D9 passive surface: a one-shot gated working-memory
-///   read (the read_working_memory MCP call) plus the store/delete
-///   write-after queue whose writes drain to the memory_add /
-///   memory_delete MCP calls after the thread lanes;
+///   never travels here — the session-opening memory message arrives as the
+///   core-injected `<nmem-context>` envelope at the session's first turn
+///   (see `inbound.mbt`), and the model re-reads deliberately via the
+///   tools;
+/// - `ToolProvider` — the extension's own tool set over its lazy MCP client
+///   (retrieval and saving ride core's built-in memory tools, which fan out
+///   over the MemoryPort slots);
 /// - `CommandPort` — `/memory status|flush`, the user-facing diagnostics
-///   over the same state (lane last_errors, queue depth, passive-read
-///   gate, connectivity).
+///   over the same state (lane last_errors, queue depth, session inbound,
+///   connectivity).
 ///
 /// The background flusher is deliberately NOT spawned from `on_start`:
 /// `moonbitlang/async` has no detached spawn — every task lives in a
@@ -66,14 +63,11 @@ pub struct NowledgeMem {
   /// `--source-app` reads, and labels user-visible copy. The extension is a
   /// reusable library, so this comes from the constructor — never hardcoded.
   source_app : String
-  /// Local memory write-after queue (D8); the MemoryPort store/delete slots
-  /// append synchronously, the drain replays against the CLI. The server is
-  /// the single read source — there is no local index.
+  /// Local memory write-after queue (D8); the `MemoryPort` storage slots
+  /// (`store` / `delete`) append synchronously, the drain replays against
+  /// the server. The server is the single read source — there is no local
+  /// index.
   mem : MemoryState
-  /// One-shot passive read gate (D9/M10): `false` until the first
-  /// `MemoryPort::search` of this process run attempts the working-memory
-  /// read; every later search returns empty without IO.
-  mut passive_read_done : Bool
   /// Whether `memory_delete` appears in the tool surface. Deleting is a
   /// destructive remote operation, so the model only sees it when the host
   /// opts in.
@@ -121,7 +115,6 @@ pub fn NowledgeMem::NowledgeMem(
     timeout_ms: DEFAULT_THREAD_SYNC_TIMEOUT_MS,
     last_drain_ms: 0L,
     mem: MemoryState::MemoryState(),
-    passive_read_done: false,
     source_app,
     expose_delete_tool,
   }
@@ -133,9 +126,9 @@ pub fn NowledgeMem::NowledgeMem(
 /// on first use — nothing pays for a connection until a tool, probe, or
 /// passive read actually needs one), then drain once — a host that staged
 /// state before boot loses nothing, and one that never calls `attach`
-/// still gets every boundary committed at turn end. Passive retrieval
-/// stays gated: the first model call's read (not boot) spends it. The
-/// system-prompt contribution is static guidance and needs no IO here.
+/// still gets every boundary committed at turn end. The session inbound
+/// read stays gated: a session's first model call performs it (not boot).
+/// The system-prompt contribution is static guidance and needs no IO here.
 pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) -> Unit {
   let config = NmemConfig::resolve(
     runner_get_env,
@@ -184,12 +177,14 @@ pub fn[G] NowledgeMem::attach(
 ///|
 /// The flusher loop body; also directly runnable for hosts that own their
 /// own scheduling loop. Each tick drains the thread lanes first, then the
-/// memory write-after queue (D8: one loop, two channels).
+/// memory write-after queue (D8: one loop, two channels). Cancellation
+/// re-raises so a host task group teardown terminates the loop.
 pub async fn NowledgeMem::run_flusher(self : NowledgeMem) -> Unit {
   while !self.engine.stopped {
     self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
     self.drain_memory_ops()
     @async.sleep(NMEM_FLUSHER_INTERVAL_MS) catch {
+      err if @async.is_cancellation_error(err) => raise err
       _ => ()
     }
   }
@@ -276,11 +271,14 @@ pub impl @posoco.PipelineHook for NowledgeMem with fn before_tool(
 }
 
 ///|
-/// Passthrough that snapshots the model-visible transcript (D2). The final
-/// assistant reply of a turn is never model-visible — the pump terminates
-/// after it — so `record_assistant` completes the snapshot from
-/// `ModelResponseReceived` events; without it every sync would lag one
-/// assistant message behind.
+/// Snapshot the model-visible transcript (D2 — what the model sees is what
+/// syncs; the core-injected session-opening memory message is skipped by
+/// `map_messages`). The inbound injection itself is core's `MemoryPort`
+/// machinery (this extension runs after it in the hook chain, so the
+/// snapshot it takes already includes the message). The final assistant
+/// reply of a turn is never model-visible — the pump terminates after it —
+/// so `record_assistant` completes the snapshot from `ModelResponseReceived`
+/// events; without it every sync would lag one assistant message behind.
 pub impl @posoco.PipelineHook for NowledgeMem with fn before_model(
   self : NowledgeMem,
   messages : Array[@posoco.Message],
@@ -373,10 +371,9 @@ pub impl @posoco.Observer for NowledgeMem with fn on_event_at(
 /// The plugin's instructions, and nothing else: what Nowledge Mem is, when
 /// to search, when to save, how to route, and the provenance this host's
 /// synced threads carry. Recalled DATA never travels here — the
-/// working-memory briefing arrives through the `MemoryPort` section
-/// (core's `MemoryRetrievalHook`) at the session's first turn, and the
-/// model re-reads deliberately via the `read_working_memory` /
-/// `read_context_bundle` tools.
+/// session-opening memory message arrives as the core-injected
+/// `<nmem-context>` envelope at the session's first turn, and the model
+/// re-reads deliberately via the `read_context_bundle` tool.
 pub impl @posoco.SystemPromptContributor for NowledgeMem with fn system_prompt(
   self : NowledgeMem,
 ) -> String {
@@ -395,13 +392,15 @@ pub impl @posoco.Extension for NowledgeMem with fn extension_id(
 }
 
 ///|
-/// Ports the extension contributes: PipelineHook (transcript snapshot), Observer
-/// (dirty marking + session-redirect follow), Lifecycle (boot + final
-/// drain), SystemPromptContributor (context bundle + guidance),
-/// ToolProvider (§5 tool set), MemoryPort (D9 one-shot server search +
-/// write-after queue — declaring it here is what wires core's
-/// MemoryRetrievalHook), and CommandPort (`/memory` diagnostics:
-/// status / flush) — all views of one state.
+/// Ports the extension contributes: MemoryPort (session inbound — core
+/// injects the `<nmem-context>` envelope once per session lifetime — plus
+/// the storage/retrieval slots `store` / `search` / `delete` that core's
+/// built-in memory_search / memory_add tools fan out over), PipelineHook
+/// (transcript snapshot + drains), Observer (dirty marking +
+/// session-redirect follow), Lifecycle (boot + final drain),
+/// SystemPromptContributor (guidance only), ToolProvider (the extension's
+/// own tool set), and CommandPort (`/memory` diagnostics: status / flush) —
+/// all views of one state.
 pub impl @posoco.Extension for NowledgeMem with fn manifest(self : NowledgeMem) -> @posoco.ExtensionManifest {
   {
     id: NMEM_EXTENSION_ID,

@@ -11,13 +11,6 @@ const NMEM_TOOL_TIMEOUT_MS : Int = 30000
 const NMEM_TOOL_ERROR_CHARS : Int = 500
 
 ///|
-/// Unit types the upstream distill-memory skill documents for
-/// `unit_type`.
-let nmem_unit_types : Array[String] = [
-  "fact", "preference", "decision", "plan", "procedure", "learning", "context", "event",
-]
-
-///|
 /// Argument-shape rejection: the payload parsed but a field was missing,
 /// mistyped, or out of enum. Raised while parsing, surfaced to the model as
 /// a ToolReportedError it can correct.
@@ -58,19 +51,11 @@ fn schema_prop(type_ : String, description : String) -> Json {
 }
 
 ///|
-/// String-typed schema property restricted to an enum of values.
-fn schema_enum_prop(values : Array[String], description : String) -> Json {
-  Json::object({
-    "type": Json::string("string"),
-    "enum": Json::array(values.map(item => Json::string(item))),
-    "description": Json::string(description),
-  })
-}
-
-///|
-/// Declare the tool surface: eight tools by default — the five official
-/// MCP names (read_context_bundle, read_working_memory, memory_search,
-/// thread_search, memory_add) plus posoco-native additions; the destructive
+/// Declare the tool surface: five tools by default — nmem_status,
+/// read_context_bundle, memory_update, thread_search, and
+/// thread_fetch_messages. Retrieval and saving ride core's built-in
+/// `memory_search` / `memory_add` (a provider declaring its own tools under
+/// those names would fail composition with a ToolCollision). The destructive
 /// `memory_delete` is advertised only when the host constructed the
 /// extension with `expose_delete_tool=true`. Every tool dispatches through
 /// the extension's lazy MCP client; `thread_create` was dropped when the
@@ -87,75 +72,9 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
     ),
     nmem_tool_def(
       name="read_context_bundle",
-      description="Read the Nowledge Mem context bundle: working memory plus related distilled knowledge rendered as markdown. Usually already injected into the system prompt by this extension — call only to re-read after major context changes, not routinely.",
+      description="Read the Nowledge Mem context bundle: working memory plus related distilled knowledge rendered as markdown. The working-memory part is injected once at the session's opening — call this to re-read the combined bundle on demand after major context changes, not routinely.",
       properties=Map::from_array([]),
       required=[],
-    ),
-    nmem_tool_def(
-      name="read_working_memory",
-      description="Read the Nowledge Mem working memory for the current scope. Usually already injected into the system prompt by this extension — call only to re-read after major context changes, not routinely.",
-      properties=Map::from_array([]),
-      required=[],
-    ),
-    nmem_tool_def(
-      name="memory_search",
-      description="Semantic search over distilled Nowledge Mem memories (server-side; deep mode trades speed for recall). Search before answering questions prior sessions may have settled, and before saving anything new.",
-      properties=Map::from_array([
-        (
-          "query",
-          schema_prop(
-            "string", "What to look for; a phrase works better than a keyword bag.",
-          ),
-        ),
-        (
-          "mode",
-          schema_enum_prop(
-            ["normal", "deep"],
-            "Recall mode; omit for the default normal mode.",
-          ),
-        ),
-        ("limit", schema_prop("integer", "Maximum memories to return.")),
-        (
-          "labels",
-          schema_prop(
-            "array", "Restrict the search to memories carrying any of these labels.",
-          ),
-        ),
-      ]),
-      required=["query"],
-    ),
-    nmem_tool_def(
-      name="memory_add",
-      description="Queue a distilled memory for Nowledge Mem: durable decisions, preferences, workflows, project facts. Search first to avoid duplicates; prefer fewer, high-quality memories.",
-      properties=Map::from_array([
-        (
-          "content",
-          schema_prop(
-            "string", "Atomic, standalone memory text; future sessions read it verbatim.",
-          ),
-        ),
-        ("title", schema_prop("string", "Searchable title, max 60 characters.")),
-        (
-          "unit_type",
-          schema_enum_prop(
-            nmem_unit_types.copy(),
-            "Classification of the memory.",
-          ),
-        ),
-        (
-          "importance",
-          schema_prop(
-            "number", "0.8-1.0 major decisions, 0.5-0.7 useful patterns, 0.3-0.4 minor notes.",
-          ),
-        ),
-        (
-          "labels",
-          schema_prop(
-            "array", "0-3 retrieval labels; only when they improve retrieval.",
-          ),
-        ),
-      ]),
-      required=["content"],
     ),
     nmem_tool_def(
       name="memory_update",
@@ -244,48 +163,16 @@ fn req_string(
 }
 
 ///|
-fn opt_double(
-  fields : Map[String, Json],
-  key : String,
-) -> Double? raise ToolArgError {
+fn opt_int(fields : Map[String, Json], key : String) -> Int? raise ToolArgError {
   match fields.get(key) {
     None => None
-    Some(Json::Number(value, ..)) => Some(value)
-    Some(_) => raise ToolArgError("field '\{key}' must be a number")
-  }
-}
-
-///|
-fn opt_int(fields : Map[String, Json], key : String) -> Int? raise ToolArgError {
-  match opt_double(fields, key) {
-    Some(value) =>
+    Some(Json::Number(value, ..)) =>
       if value.floor() == value {
         Some(value.to_int())
       } else {
         raise ToolArgError("field '\{key}' must be an integer")
       }
-    None => None
-  }
-}
-
-///|
-fn opt_string_array(
-  fields : Map[String, Json],
-  key : String,
-) -> Array[String]? raise ToolArgError {
-  match fields.get(key) {
-    None => None
-    Some(Json::Array(items)) => {
-      let values : Array[String] = []
-      for item in items {
-        match item {
-          Json::String(value) => values.push(value)
-          _ => raise ToolArgError("field '\{key}' must be an array of strings")
-        }
-      }
-      Some(values)
-    }
-    Some(_) => raise ToolArgError("field '\{key}' must be an array of strings")
+    Some(_) => raise ToolArgError("field '\{key}' must be an integer")
   }
 }
 
@@ -373,28 +260,6 @@ async fn NowledgeMem::call_mcp_tool(
 }
 
 ///|
-/// Hint returned by `read_working_memory` when the payload reports
-/// `exists: false` or carries no usable content — an empty working memory
-/// is a clean state, not an error.
-const NMEM_WM_EMPTY_HINT : String = "No working memory yet — use memory_add to save knowledge first."
-
-///|
-/// Body of a `read_working_memory` hit: the payload's `content` when the
-/// working memory exists, a hint when the payload reports `exists: false`
-/// (or carries no usable content), and the raw reply when nothing parsed.
-fn wm_tool_text(stdout : String) -> String {
-  match parse_wm_payload(stdout) {
-    Some(content) => content
-    None =>
-      if clean_json_object(stdout) is Some(_) {
-        NMEM_WM_EMPTY_HINT
-      } else {
-        stdout
-      }
-  }
-}
-
-///|
 /// `nmem_status`: MCP connectivity probe — server identity plus tool count
 /// — under the short health-check budget.
 async fn NowledgeMem::run_nmem_status(
@@ -415,27 +280,6 @@ async fn NowledgeMem::run_nmem_status(
         ),
       )
     Err(message) => tool_error("nmem_status", message)
-  }
-}
-
-///|
-/// `read_working_memory` (official MCP surface): the same read the passive
-/// MemoryPort gate performs, scoped by the ambient identity. The payload's
-/// `content` field is the body; `exists === false` degrades to a hint
-/// instead of an error.
-async fn NowledgeMem::run_read_working_memory(
-  self : NowledgeMem,
-) -> @posoco.ToolOutcome {
-  let fields : Map[String, Json] = Map([])
-  let outcome = self.call_mcp_tool(
-    "read_working_memory",
-    mcp_args(self.config, fields, identity=true),
-    timeout_ms=NMEM_TOOL_TIMEOUT_MS,
-  )
-  match outcome {
-    @posoco.ToolOutcome::Success(content=stdout, structured~) =>
-      @posoco.ToolOutcome::Success(content=wm_tool_text(stdout), structured~)
-    other => other
   }
 }
 
@@ -462,155 +306,6 @@ async fn NowledgeMem::run_read_context_bundle(
     }
     other => other
   }
-}
-
-///|
-priv struct MemorySearchArgs {
-  query : String
-  mode : String?
-  limit : Int?
-  labels : Array[String]?
-}
-
-///|
-fn parse_memory_search_args(args : Json) -> MemorySearchArgs raise ToolArgError {
-  let fields = arg_fields(args)
-  let mode = match opt_string(fields, "mode") {
-    Some(mode) =>
-      if mode == "normal" || mode == "deep" {
-        mode
-      } else {
-        raise ToolArgError("field 'mode' must be \"normal\" or \"deep\"")
-      }
-    None => ""
-  }
-  {
-    query: req_string(fields, "query"),
-    mode: if mode == "" {
-      None
-    } else {
-      Some(mode)
-    },
-    limit: opt_int(fields, "limit"),
-    labels: opt_string_array(fields, "labels"),
-  }
-}
-
-///|
-/// `memory_search`: server-side semantic retrieval, never gated — after the
-/// passive one-shot is spent this tool is the only recall path, so it must
-/// stay unconditionally available. The posoco `labels` argument maps to the
-/// server's `filter_labels` property.
-async fn NowledgeMem::run_memory_search(
-  self : NowledgeMem,
-  args : Json,
-) -> @posoco.ToolOutcome {
-  let parsed = parse_memory_search_args(args) catch {
-    ToolArgError(message) => return tool_error("memory_search", message)
-  }
-  let fields : Map[String, Json] = { "query": Json::string(parsed.query) }
-  match parsed.mode {
-    Some(mode) => fields["mode"] = Json::string(mode)
-    None => ()
-  }
-  match parsed.limit {
-    Some(limit) => fields["limit"] = Json::number(limit.to_double())
-    None => ()
-  }
-  match parsed.labels {
-    Some(labels) =>
-      fields["filter_labels"] = Json::array(
-        labels.map(label => Json::string(label)),
-      )
-    None => ()
-  }
-  self.call_mcp_tool(
-    "memory_search",
-    mcp_args(self.config, fields, identity=true),
-    timeout_ms=NMEM_TOOL_TIMEOUT_MS,
-  )
-}
-
-///|
-priv struct MemoryAddArgs {
-  content : String
-  title : String?
-  unit_type : String?
-  importance : Double?
-  labels : Array[String]?
-}
-
-///|
-fn parse_memory_add_args(args : Json) -> MemoryAddArgs raise ToolArgError {
-  let fields = arg_fields(args)
-  let unit_type = match opt_string(fields, "unit_type") {
-    Some(unit_type) =>
-      if nmem_unit_types.contains(unit_type) {
-        Some(unit_type)
-      } else {
-        raise ToolArgError(
-          "field 'unit_type' must be one of \{nmem_unit_types.join("|")}",
-        )
-      }
-    None => None
-  }
-  {
-    content: req_string(fields, "content"),
-    title: opt_string(fields, "title"),
-    unit_type,
-    importance: opt_double(fields, "importance"),
-    labels: opt_string_array(fields, "labels"),
-  }
-}
-
-///|
-/// `memory_add`: the single write path is MemoryPort::store — the entry
-/// enters the write-after queue and reaches the server (as the memory_add
-/// MCP call) on the next drain, exactly like passive stores.
-async fn NowledgeMem::run_memory_add(
-  self : NowledgeMem,
-  args : Json,
-) -> @posoco.ToolOutcome {
-  let parsed = parse_memory_add_args(args) catch {
-    ToolArgError(message) => return tool_error("memory_add", message)
-  }
-  let metadata : Map[String, Json] = Map::from_array([])
-  match parsed.title {
-    Some(title) => metadata["title"] = Json::string(title)
-    None => ()
-  }
-  match parsed.unit_type {
-    Some(unit_type) => metadata["unit_type"] = Json::string(unit_type)
-    None => ()
-  }
-  match parsed.importance {
-    Some(importance) => metadata["importance"] = Json::number(importance)
-    None => ()
-  }
-  match parsed.labels {
-    Some(labels) =>
-      metadata["labels"] = Json::array(labels.map(label => Json::string(label)))
-    None => ()
-  }
-  let entry : @posoco.MemoryEntry = {
-    id: "",
-    content: parsed.content,
-    metadata,
-    score: None,
-  }
-  let pending_id = @posoco.MemoryPort::store(self, entry) catch {
-    err => return tool_error("memory_add", err.to_string())
-  }
-  @posoco.ToolOutcome::Success(
-    content="queued as \{pending_id}; will sync to Nowledge Mem",
-    structured=Some(
-      Json::object({
-        "queued": Json::boolean(true),
-        "pending_id": Json::string(pending_id),
-        "summary": Json::string("queued as \{pending_id}"),
-      }),
-    ),
-  )
 }
 
 ///|
@@ -655,9 +350,10 @@ async fn NowledgeMem::run_memory_update(
 }
 
 ///|
-/// `memory_delete`: the server's `memory_delete` tool (posoco `id` maps to
-/// `memory_id`). Only registered when the host opts in. The server is the
-/// single source of truth — there is no local index to evict from.
+/// `memory_delete`: the `MemoryPort` `delete` slot — the same write-after
+/// queue as adds (D8). A pending ticket is dropped locally (it never
+/// reached the server); a real id queues the remote delete for the drain
+/// (`/memory flush` forces it). Only registered when the host opts in.
 async fn NowledgeMem::run_memory_delete(
   self : NowledgeMem,
   args : Json,
@@ -665,11 +361,14 @@ async fn NowledgeMem::run_memory_delete(
   let id = req_string(arg_fields(args), "id") catch {
     ToolArgError(message) => return tool_error("memory_delete", message)
   }
-  let fields : Map[String, Json] = { "memory_id": Json::string(id) }
-  self.call_mcp_tool(
-    "memory_delete",
-    mcp_args(self.config, fields),
-    timeout_ms=NMEM_TOOL_TIMEOUT_MS,
+  @posoco.MemoryPort::delete(self, id) catch {
+    err => return tool_error("memory_delete", err.to_string())
+  }
+  @posoco.ToolOutcome::Success(
+    content="delete queued for \{id}; will sync to Nowledge Mem",
+    structured=Some(
+      Json::object({ "queued": Json::boolean(true), "id": Json::string(id) }),
+    ),
   )
 }
 
@@ -746,9 +445,6 @@ async fn NowledgeMem::dispatch_tool(
   match name {
     "nmem_status" => self.run_nmem_status()
     "read_context_bundle" => self.run_read_context_bundle()
-    "read_working_memory" => self.run_read_working_memory()
-    "memory_search" => self.run_memory_search(args)
-    "memory_add" => self.run_memory_add(args)
     "memory_update" => self.run_memory_update(args)
     "memory_delete" => self.run_memory_delete(args)
     "thread_search" => self.run_thread_search(args)
@@ -763,10 +459,10 @@ async fn NowledgeMem::dispatch_tool(
 
 ///|
 /// Dispatch one tool call. Argument-shape problems (missing required
-/// fields, wrong types, non-enum unit_type) are ToolReportedError the model
-/// can correct; an unknown name raises RuntimeError for the runtime's
-/// catch-all; an error escaping an MCP helper (the async slots' general
-/// error) surfaces as RuntimeFailure so the run continues.
+/// fields, wrong types) are ToolReportedError the model can correct; an
+/// unknown name raises RuntimeError for the runtime's catch-all; an error
+/// escaping an MCP helper (the async slots' general error) surfaces as
+/// RuntimeFailure so the run continues.
 pub impl @posoco.ToolProvider for NowledgeMem with fn execute(
   self : NowledgeMem,
   name : String,
@@ -775,9 +471,6 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn execute(
   match name {
     "nmem_status"
     | "read_context_bundle"
-    | "read_working_memory"
-    | "memory_search"
-    | "memory_add"
     | "memory_update"
     | "memory_delete"
     | "thread_search"

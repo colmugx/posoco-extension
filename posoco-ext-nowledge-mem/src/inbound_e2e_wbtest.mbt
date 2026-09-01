@@ -1,58 +1,13 @@
 ///|
-/// Opening of core's injected memory section — the header the retrieval
-/// hook injects and replaces in place.
-let memory_section_prefix : String = "## Any Memory About This Work"
-
-///|
-/// Text of the first memory-section SystemMessage in a model payload;
-/// `None` when the retrieval hook injected nothing.
-fn memory_message_text(messages : Array[@posoco.Message]) -> String? {
-  for message in messages {
-    match message {
-      @posoco.Message::SystemMessage(content~) =>
-        match content {
-          [@posoco.Content::Text(text), ..] =>
-            if text.has_prefix(memory_section_prefix) {
-              return Some(text)
-            }
-          _ => ()
-        }
-      _ => ()
-    }
-  }
-  None
-}
-
-///|
-/// How many memory-section SystemMessages a payload carries (replace-in-
-/// place keeps this at 1).
-fn memory_section_count(messages : Array[@posoco.Message]) -> Int {
-  let mut count = 0
-  for message in messages {
-    match message {
-      @posoco.Message::SystemMessage(content~) =>
-        match content {
-          [@posoco.Content::Text(text), ..] =>
-            if text.has_prefix(memory_section_prefix) {
-              count = count + 1
-            }
-          _ => ()
-        }
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 /// How many read_working_memory calls the MCP fake saw.
 fn wm_read_call_count(mcp : FakeNmemMcp) -> Int {
   call_count(mcp, "read_working_memory")
 }
 
 ///|
-/// Agent wiring for the e2e cases: declaring the extension's memory port is
-/// what attaches core's MemoryRetrievalHook.
+/// Agent wiring for the e2e cases: the extension contributes its ports
+/// directly — the memory declaration is what hands core the session-opening
+/// inbound injection and the built-in memory tools.
 fn mem_agent(
   ext : NowledgeMem,
   model : @posoco.ScriptedModel,
@@ -77,9 +32,9 @@ fn mem_agent_store(
       @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
       @posoco.tk_ext(
         id="nowledge_mem",
-        memory=[ext as &@posoco.MemoryPort],
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
+        memory=[ext as &@posoco.MemoryPort],
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
@@ -92,10 +47,9 @@ fn mem_agent_store(
 }
 
 ///|
-/// e2e A: the one-shot working-memory read lands as one memory-section
-/// SystemMessage (header + provenance line), positioned right after the
-/// system prompt.
-async test "e2e A: first-turn working-memory read lands as a memory section after the system prompt" {
+/// e2e A: the session's one working-memory read lands as ONE user-role
+/// memory message, positioned before the real first user input.
+async test "e2e A: first-turn inbound lands as a memory message before the real user input" {
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
       (
@@ -119,24 +73,30 @@ async test "e2e A: first-turn working-memory read lands as a memory section afte
   )
   inspect(model.received_messages.length() > 0, content="true")
   let messages = model.received_messages[0]
-  guard memory_message_text(messages) is Some(memory) else {
-    fail("expected a memory section system message")
+  guard injected_memory_text(messages) is Some(injected) else {
+    fail("expected an injected memory message")
   }
-  assert_true(memory.contains("from Nowledge Mem. For Your Information."))
+  assert_true(injected.contains("## Memory"))
   assert_true(
-    memory.contains("- Ship the zephyr widget via the staging pipeline"),
+    injected.contains("Ship the zephyr widget via the staging pipeline"),
   )
-  // Position: the memory section sits directly after the assembled system prompt.
-  inspect(memory_section_count(messages), content="1")
-  inspect(memory_message_text([messages[1]]) is Some(_), content="true")
+  // Position: the memory message sits directly after the assembled system
+  // prompt, and the real user input follows it.
+  inspect(injected_memory_count(messages), content="1")
+  inspect(injected_memory_text([messages[1]]) is Some(_), content="true")
+  guard messages[2] is @posoco.Message::UserMessage(content~) &&
+    content is [@posoco.Content::Text(real_input), ..] else {
+    fail("expected the real user input after the injected memory message")
+  }
+  inspect(real_input, content="how do I ship the zephyr widget")
   inspect(wm_read_call_count(mcp), content="1")
 }
 
 ///|
-/// e2e: a tool round-trip means two model calls in one turn — the spent
-/// gate keeps the second call off the CLI, and the injected memory section
-/// persists verbatim in both payloads.
-async test "e2e: same-turn second model call does not re-run the CLI and keeps the memory section" {
+/// e2e: a tool round-trip means two model calls in one turn — the second
+/// call does not re-read, and the frozen memory message persists verbatim
+/// in both payloads.
+async test "e2e: same-turn second model call does not re-read and keeps the injection" {
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
       (
@@ -170,9 +130,9 @@ async test "e2e: same-turn second model call does not re-run the CLI and keeps t
       @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
       @posoco.tk_ext(
         id="nowledge_mem",
-        memory=[ext as &@posoco.MemoryPort],
         observers=[ext as &@posoco.Observer],
         hooks=[ext as &@posoco.PipelineHook],
+        memory=[ext as &@posoco.MemoryPort],
         lifecycle=[ext as &@posoco.Lifecycle],
         prompt_contributors=[ext as &@posoco.SystemPromptContributor],
       ),
@@ -187,22 +147,73 @@ async test "e2e: same-turn second model call does not re-run the CLI and keeps t
   )
   ignore(agent.run_turn(@posoco.tk_user_msg("beta flags please"), "session_1"))
   inspect(model.received_messages.length(), content="2")
-  // One working-memory read for the whole turn, not one per model call.
+  // One working-memory read for the whole session, not one per model call.
   inspect(wm_read_call_count(mcp), content="1")
-  guard memory_message_text(model.received_messages[0]) is Some(first) else {
-    fail("expected the memory section in the first payload")
+  guard injected_memory_text(model.received_messages[0]) is Some(first) else {
+    fail("expected the memory message in the first payload")
   }
-  guard memory_message_text(model.received_messages[1]) is Some(second) else {
-    fail("expected the memory section to persist into the second payload")
+  guard injected_memory_text(model.received_messages[1]) is Some(second) else {
+    fail("expected the memory message to persist into the second payload")
   }
   inspect(first == second, content="true")
 }
 
 ///|
-/// e2e B: the port loop that remains — store and delete queue their ops,
-/// and the drain replays every op against the CLI (`m add` then
-/// `m delete -f`).
-async test "e2e B: store-delete round trip drains both ops to the CLI" {
+/// e2e: with a memory provider composed, core registers its built-in
+/// memory_search / memory_add exactly once each — no collision with this
+/// extension's own tool surface, which rides alongside.
+async test "e2e: composition carries core's builtin memory tools without collision" {
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_working_memory", mcp_ok("{\"exists\":false}")),
+    ]),
+  )
+  let ext = nmem_ext(mcp~)
+  let model = @posoco.ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
+  ])
+  // Composition itself succeeding is the ToolCollision fail-fast passing.
+  let agent = @posoco.Agent(
+    exts=[
+      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+      @posoco.tk_ext(
+        id="nowledge_mem",
+        tools=[ext as &@posoco.ToolProvider],
+        memory=[ext as &@posoco.MemoryPort],
+        lifecycle=[ext as &@posoco.Lifecycle],
+      ),
+      @posoco.tk_ext(
+        id="io",
+        sessions=[@posoco.RecordingSessionStore::RecordingSessionStore()],
+        observers=[@posoco.RecordingObserver::RecordingObserver()],
+      ),
+    ],
+    config=@posoco.tk_config(),
+  )
+  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+  let names : Array[String] = []
+  for def in model.received_tools[0] {
+    names.push(def.name.to_string())
+  }
+  for builtin in ["memory_search", "memory_add"] {
+    let mut seen = 0
+    for name in names {
+      if name == builtin {
+        seen = seen + 1
+      }
+    }
+    inspect(seen, content="1")
+  }
+  // This extension's own surface rides alongside, minus the retired names.
+  assert_true(names.contains("nmem_status"))
+  assert_true(names.contains("read_context_bundle"))
+  assert_false(names.contains("read_working_memory"))
+}
+
+///|
+/// e2e B: the write queue loop — add and delete queue their ops, and the
+/// drain replays every op against the MCP tools.
+async test "e2e B: add-delete round trip drains both ops to the server" {
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
       ("memory_add", mcp_ok("{\"id\":\"mem_42\"}")),
@@ -213,7 +224,8 @@ async test "e2e B: store-delete round trip drains both ops to the CLI" {
   ignore(
     @posoco.MemoryPort::store(
       ext,
-      mem_entry(id="", content="deploy fridays only"),
+      content="deploy fridays only",
+      metadata=Map::from_array([]),
     ),
   )
   ext.drain_memory_ops()
@@ -237,65 +249,63 @@ async test "e2e B: store-delete round trip drains both ops to the CLI" {
 }
 
 ///|
-/// e2e: resume gets a fresh gate — a second extension instance on the SAME
-/// session store re-reads the working memory at its first turn, and core's
-/// hook replaces the persisted memory section in place (one section
-/// message, new content) instead of appending a second one.
-async test "e2e: a resumed process re-reads working memory and replaces the memory section in place" {
+/// e2e: a resumed process on the SAME session keeps the persisted memory
+/// message byte-identical and reads nothing — the session's history was
+/// derived under that injection, so it is never swapped for a newer one.
+async test "e2e: a resumed process keeps the persisted injection and reads nothing" {
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
-  let ext1 = nmem_ext(
-    mcp=FakeNmemMcp::FakeNmemMcp(
-      script=Map::from_array([
-        (
-          "read_working_memory",
-          mcp_ok(
-            "{\"exists\":true,\"content\":\"alpha fact from the first process\"}",
-          ),
+  let mcp1 = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      (
+        "read_working_memory",
+        mcp_ok(
+          "{\"exists\":true,\"content\":\"alpha fact from the first process\"}",
         ),
-      ]),
-    ),
+      ),
+    ]),
   )
+  let ext1 = nmem_ext(mcp=mcp1)
   let model1 = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])
   let agent1 = mem_agent_store(ext1, model1, store)
   ignore(agent1.run_turn(@posoco.tk_user_msg("first question"), "session_1"))
-  guard memory_message_text(model1.received_messages[0]) is Some(first) else {
-    fail("expected the first process to inject a memory section")
+  guard injected_memory_text(model1.received_messages[0]) is Some(first) else {
+    fail("expected the first process to inject memory")
   }
   assert_true(first.contains("alpha fact"))
   let first_count = model1.received_messages[0].length()
-  // A fresh process on the same session: new gate, new scripted hit.
-  let ext2 = nmem_ext(
-    mcp=FakeNmemMcp::FakeNmemMcp(
-      script=Map::from_array([
-        (
-          "read_working_memory",
-          mcp_ok(
-            "{\"exists\":true,\"content\":\"beta fact from the resumed process\"}",
-          ),
+  // A fresh process on the same session: even though the server's working
+  // memory changed, the persisted injection wins.
+  let mcp2 = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      (
+        "read_working_memory",
+        mcp_ok(
+          "{\"exists\":true,\"content\":\"beta fact from the resumed process\"}",
         ),
-      ]),
-    ),
+      ),
+    ]),
   )
-  inspect(ext2.passive_read_done, content="false")
+  let ext2 = nmem_ext(mcp=mcp2)
   let model2 = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
   ])
   let agent2 = mem_agent_store(ext2, model2, store)
   ignore(agent2.run_turn(@posoco.tk_user_msg("second question"), "session_1"))
   let messages = model2.received_messages[0]
-  guard memory_message_text(messages) is Some(second) else {
-    fail("expected the resumed process to inject a memory section")
+  guard injected_memory_text(messages) is Some(second) else {
+    fail("expected the persisted injection to survive the resume")
   }
-  assert_true(second.contains("beta fact"))
-  assert_false(second.contains("alpha fact"))
-  // Replaced in place, not appended: still exactly one memory-section message,
-  // still directly after the system prompt.
-  inspect(memory_section_count(messages), content="1")
-  inspect(memory_message_text([messages[1]]) is Some(_), content="true")
+  inspect(first == second, content="true")
+  assert_false(second.contains("beta fact"))
+  // Still exactly one injected memory message, still directly after the
+  // system prompt, and the resumed process read the server zero times.
+  inspect(injected_memory_count(messages), content="1")
+  inspect(injected_memory_text([messages[1]]) is Some(_), content="true")
+  inspect(wm_read_call_count(mcp2), content="0")
   // One prior user message and its assistant reply precede the new user
-  // message: the count grew by exactly those, never by an extra memory section.
+  // message: the count grew by exactly those, never by an extra injection.
   inspect(messages.length() - first_count, content="2")
 }
 

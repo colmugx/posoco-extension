@@ -126,6 +126,9 @@ fn build_thread_message(
 ///
 /// - SystemMessage is skipped: index 0 of a before_model payload is the
 ///   aggregated system prompt, not user transcript (design §10-2).
+/// - Core's injected session-opening memory message is filtered the same
+///   way: injected context is not user speech — and dropping it keeps the
+///   thread title the first real user message.
 /// - ToolMessage becomes Assistant carrying the outcome's model-visible text
 ///   (upstream maps toolResult → assistant).
 /// - Messages whose normalized content is empty are dropped.
@@ -139,13 +142,17 @@ pub fn map_messages(
     let mapped : NmemThreadMessage? = match message {
       @posoco.Message::SystemMessage(..) => None
       @posoco.Message::UserMessage(content~) =>
-        build_thread_message(
-          User,
-          parts_to_text(content),
-          config~,
-          session_id~,
-          index~,
-        )
+        if is_injected_memory_message(message) {
+          None
+        } else {
+          build_thread_message(
+            User,
+            parts_to_text(content),
+            config~,
+            session_id~,
+            index~,
+          )
+        }
       @posoco.Message::AssistantMessage(content~, tool_calls~, ..) =>
         build_thread_message(
           Assistant,

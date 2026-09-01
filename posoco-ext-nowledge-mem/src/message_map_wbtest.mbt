@@ -284,3 +284,35 @@ test "map_messages: content at exactly the limit is not truncated" {
   guard messages is [first] else { fail("expected exactly one message") }
   inspect(first.content.length(), content="20000")
 }
+
+///|
+/// Core's injected session-opening memory message must never reach the
+/// synced thread: injected context is not user speech — and dropping it
+/// keeps the thread title the first real user message, with external ids
+/// unshifted.
+test "map_messages: skips the injected memory message and titles from the real user message" {
+  let envelope = "<nmem-context type=\"memory\" trust=\"false\">\n- fact\n</nmem-context>"
+  let injected = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text(@posoco.MEMORY_INBOUND_LEAD + "\n\n" + envelope),
+  ])
+  let messages = map_messages(
+    [
+      @posoco.Message::SystemMessage(content=[@posoco.Content::Text("sys")]),
+      injected,
+      user_message([@posoco.Content::Text("first real question")]),
+      assistant_message([@posoco.Content::Text("answer")], []),
+    ],
+    config=plain_config(),
+    session_id="s1",
+  )
+  guard messages is [user_msg, assistant_msg] else {
+    fail("expected only the real user/assistant pair to sync")
+  }
+  inspect(user_msg.content, content="first real question")
+  inspect(assistant_msg.content, content="answer")
+  inspect(
+    user_msg.metadata.get("external_id") is Some(Json::String("posoco-s1-2")),
+    content="true",
+  )
+  inspect(thread_title(messages, "posoco"), content="first real question")
+}

@@ -37,20 +37,24 @@ fn outcome_text(outcome : @posoco.ToolOutcome) -> String {
 }
 
 ///|
-test "list_tools: eight tools by default, memory_delete only when exposed" {
+test "list_tools: five tools by default, memory_delete only when exposed" {
   let default = @posoco.ToolProvider::list_tools(tool_ext())
-  inspect(default.length(), content="8")
+  inspect(default.length(), content="5")
   let names : Array[String] = []
   for def in default {
     names.push(def.name.to_string())
   }
   for
     expected in [
-      "nmem_status", "read_context_bundle", "read_working_memory", "memory_search",
-      "memory_add", "memory_update", "thread_search", "thread_fetch_messages",
+      "nmem_status", "read_context_bundle", "memory_update", "thread_search", "thread_fetch_messages",
     ] {
     assert_true(names.contains(expected))
   }
+  // Retrieval and saving ride core's builtin memory tools — this extension
+  // must neither shadow nor rename them.
+  assert_false(names.contains("memory_search"))
+  assert_false(names.contains("memory_add"))
+  assert_false(names.contains("read_working_memory"))
   // thread_create went away with the CLI runner — no MCP counterpart.
   assert_false(names.contains("thread_create"))
   assert_false(names.contains("thread_show"))
@@ -58,7 +62,7 @@ test "list_tools: eight tools by default, memory_delete only when exposed" {
   let exposed = @posoco.ToolProvider::list_tools(
     tool_ext(expose_delete_tool=true),
   )
-  inspect(exposed.length(), content="9")
+  inspect(exposed.length(), content="6")
   let exposed_names : Array[String] = []
   for def in exposed {
     exposed_names.push(def.name.to_string())
@@ -68,95 +72,6 @@ test "list_tools: eight tools by default, memory_delete only when exposed" {
   inspect(exposed[0].owner.to_string() == "placeholder", content="true")
   inspect(
     exposed[0].policy is @posoco.ExecutionPolicy::Parallel,
-    content="true",
-  )
-}
-
-///|
-async test "memory_search: maps the query onto the server tool args and returns the reply" {
-  let mcp = FakeNmemMcp::FakeNmemMcp(
-    script=Map::from_array([("memory_search", mcp_ok("{\"memories\":[]}"))]),
-  )
-  let ext = tool_ext(mcp~)
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
-    "memory_search",
-    tool_call(
-      "memory_search",
-      j(
-        "{\"query\":\"auth flow\",\"mode\":\"deep\",\"limit\":3,\"labels\":[\"backend\"]}",
-      ),
-    ),
-  )
-  guard outcome is @posoco.ToolOutcome::Success(..) else {
-    fail("expected success")
-  }
-  inspect(outcome_text(outcome), content="{\"memories\":[]}")
-  inspect(mcp.calls.length(), content="1")
-  inspect(mcp.calls[0].0, content="memory_search")
-  let args = recorded_args(mcp, 0)
-  inspect(
-    json_field(args, "query") is Some(Json::String("auth flow")),
-    content="true",
-  )
-  inspect(
-    json_field(args, "mode") is Some(Json::String("deep")),
-    content="true",
-  )
-  inspect(
-    json_field(args, "limit") is Some(Json::Number(3.0, ..)),
-    content="true",
-  )
-  inspect(
-    json_field(args, "filter_labels")
-    is Some(Json::Array([Json::String("backend")])),
-    content="true",
-  )
-  // No importance filter exists server-side; none may be invented.
-  inspect(json_field(args, "importance_min") is None, content="true")
-  inspect(
-    json_field(args, "source_app") is Some(Json::String("posoco")),
-    content="true",
-  )
-}
-
-///|
-async test "memory_search: ambient space and agent ids scope the call" {
-  let mcp = FakeNmemMcp::FakeNmemMcp(
-    script=Map::from_array([("memory_search", mcp_ok("{}"))]),
-  )
-  let ext = NowledgeMem(
-    source_app="posoco",
-    transport=EchoNmemTransport::EchoNmemTransport(),
-    mcp~,
-    platform=FakePlatform::FakePlatform(),
-  )
-  ext.config = Some(
-    lane_config(
-      space=Some("team"),
-      agent_id=Some("agent-1"),
-      host_agent_id=Some("host-1"),
-    ),
-  )
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
-    "memory_search",
-    tool_call("memory_search", j("{\"query\":\"x\"}")),
-  )
-  guard outcome is @posoco.ToolOutcome::Success(..) else {
-    fail("expected success")
-  }
-  let args = recorded_args(mcp, 0)
-  inspect(
-    json_field(args, "space_id") is Some(Json::String("team")),
-    content="true",
-  )
-  inspect(
-    json_field(args, "agent_id") is Some(Json::String("agent-1")),
-    content="true",
-  )
-  inspect(
-    json_field(args, "host_agent_id") is Some(Json::String("host-1")),
     content="true",
   )
 }
@@ -196,123 +111,6 @@ async test "nmem_status: probe report on success, failure message on error" {
 }
 
 ///|
-async test "memory_add: queues through MemoryPort, drain maps metadata to tool args" {
-  let mcp = FakeNmemMcp::FakeNmemMcp(
-    script=Map::from_array([("memory_add", mcp_ok("{\"id\":\"mem_5\"}"))]),
-  )
-  let ext = tool_ext(mcp~)
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
-    "memory_add",
-    tool_call(
-      "memory_add",
-      j(
-        "{\"content\":\"note\",\"title\":\"N\",\"unit_type\":\"fact\",\"importance\":0.8,\"labels\":[\"a\"]}",
-      ),
-    ),
-  )
-  guard outcome is @posoco.ToolOutcome::Success(content~, structured~) else {
-    fail("expected success")
-  }
-  inspect(content, content="queued as pending:1; will sync to Nowledge Mem")
-  guard structured is Some(payload) else { fail("expected structured") }
-  inspect(
-    json_field(payload, "pending_id") is Some(Json::String("pending:1")),
-    content="true",
-  )
-  // The write went to the queue, not the server.
-  inspect(mcp.calls.length(), content="0")
-  inspect(ext.mem.queue.length(), content="1")
-  ext.drain_memory_ops()
-  inspect(ext.mem.queue.length(), content="0")
-  inspect(mcp.calls.length(), content="1")
-  inspect(mcp.calls[0].0, content="memory_add")
-  let args = recorded_args(mcp, 0)
-  inspect(
-    json_field(args, "content") is Some(Json::String("note")),
-    content="true",
-  )
-  inspect(json_field(args, "title") is Some(Json::String("N")), content="true")
-  inspect(
-    json_field(args, "unit_type") is Some(Json::String("fact")),
-    content="true",
-  )
-  inspect(
-    json_field(args, "importance") is Some(Json::Number(0.8, ..)),
-    content="true",
-  )
-  inspect(
-    json_field(args, "labels") is Some(Json::Array([Json::String("a")])),
-    content="true",
-  )
-}
-
-///|
-async test "memory_add: invalid unit_type is a reported error naming the field" {
-  let ext = tool_ext()
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
-    "memory_add",
-    tool_call("memory_add", j("{\"content\":\"x\",\"unit_type\":\"vibe\"}")),
-  )
-  guard outcome is @posoco.ToolOutcome::ToolReportedError(..) else {
-    fail("expected a reported error")
-  }
-  assert_true(outcome_text(outcome).contains("unit_type"))
-  inspect(ext.mem.queue.length(), content="0")
-}
-
-///|
-async test "memory_search: missing query is a reported error naming the field" {
-  let ext = tool_ext()
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
-    "memory_search",
-    tool_call("memory_search", Json::object(Map::from_array([]))),
-  )
-  guard outcome is @posoco.ToolOutcome::ToolReportedError(..) else {
-    fail("expected a reported error")
-  }
-  assert_true(outcome_text(outcome).contains("query"))
-}
-
-///|
-async test "memory_search: transport failure and server error flag both surface" {
-  let fail_ext = tool_ext(
-    mcp=FakeNmemMcp::FakeNmemMcp(
-      script=Map::from_array([
-        ("memory_search", FakeMcpEntry::Fail("boom happened")),
-      ]),
-    ),
-  )
-  let transport_failure = @posoco.ToolProvider::execute(
-    fail_ext,
-    "memory_search",
-    tool_call("memory_search", j("{\"query\":\"x\"}")),
-  )
-  guard transport_failure is @posoco.ToolOutcome::ToolReportedError(..) else {
-    fail("expected a reported error")
-  }
-  assert_true(outcome_text(transport_failure).contains("boom happened"))
-  let flag_ext = tool_ext(
-    mcp=FakeNmemMcp::FakeNmemMcp(
-      script=Map::from_array([
-        ("memory_search", mcp_server_error("rate limited")),
-      ]),
-    ),
-  )
-  let flagged = @posoco.ToolProvider::execute(
-    flag_ext,
-    "memory_search",
-    tool_call("memory_search", j("{\"query\":\"x\"}")),
-  )
-  guard flagged is @posoco.ToolOutcome::ToolReportedError(..) else {
-    fail("expected a reported error")
-  }
-  assert_true(outcome_text(flagged).contains("rate limited"))
-}
-
-///|
 async test "memory_update: tool args map id to memory_id with content and title" {
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([("memory_update", mcp_ok("{}"))]),
@@ -346,7 +144,10 @@ async test "memory_update: tool args map id to memory_id with content and title"
 }
 
 ///|
-async test "memory_delete: tool args map id to memory_id" {
+/// `memory_delete` goes through the `MemoryPort` `delete` slot: a real id
+/// queues a remote delete (nothing reaches the server until the drain),
+/// and the drain replays it as the server's `memory_id` argument.
+async test "memory_delete: queues through the port and drains with memory_id" {
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([("memory_delete", mcp_ok("{}"))]),
   )
@@ -359,6 +160,15 @@ async test "memory_delete: tool args map id to memory_id" {
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
+  inspect(
+    outcome_text(outcome),
+    content="delete queued for mem_4; will sync to Nowledge Mem",
+  )
+  inspect(mcp.calls.length(), content="0")
+  inspect(ext.mem.queue.length(), content="1")
+  ext.drain_memory_ops()
+  inspect(ext.mem.queue.length(), content="0")
+  inspect(mcp.calls.length(), content="1")
   inspect(mcp.calls[0].0, content="memory_delete")
   let args = recorded_args(mcp, 0)
   inspect(
@@ -448,69 +258,21 @@ async test "execute: unknown tool raises RuntimeError::UnknownTool" {
 }
 
 ///|
-async test "read_working_memory: content body, exists=false hint, ambient scope" {
-  let mcp = FakeNmemMcp::FakeNmemMcp(
-    script=Map::from_array([
-      (
-        "read_working_memory",
-        mcp_ok("{\"content\":\"wm body\",\"exists\":true}"),
-      ),
-    ]),
-  )
-  let ext = tool_ext(mcp~)
-  let outcome = @posoco.ToolProvider::execute(
-    ext,
-    "read_working_memory",
-    tool_call("read_working_memory", Json::object(Map::from_array([]))),
-  )
-  guard outcome is @posoco.ToolOutcome::Success(content~, structured~) else {
-    fail("expected success")
+/// Retired names stay retired: the extension no longer dispatches the tools
+/// core now owns (memory_search / memory_add) or the WM read the inbound
+/// slot replaced.
+async test "execute: retired tool names are unknown" {
+  let ext = tool_ext()
+  for name in ["memory_search", "memory_add", "read_working_memory"] {
+    try
+      @posoco.ToolProvider::execute(ext, name, tool_call(name, Json::null()))
+    catch {
+      @posoco.RuntimeError::UnknownTool(_) => ()
+      _ => fail("expected UnknownTool for \{name}")
+    } noraise {
+      _ => fail("expected execute to raise for \{name}")
+    }
   }
-  inspect(content, content="wm body")
-  inspect(structured is Some(Json::Object(_)), content="true")
-  inspect(mcp.calls[0].0, content="read_working_memory")
-  inspect(
-    json_field(recorded_args(mcp, 0), "source_app")
-    is Some(Json::String("posoco")),
-    content="true",
-  )
-  // exists=false is a clean state: a hint, not an error.
-  let empty_mcp = FakeNmemMcp::FakeNmemMcp(
-    script=Map::from_array([
-      ("read_working_memory", mcp_ok("{\"content\":\"\",\"exists\":false}")),
-    ]),
-  )
-  let empty_ext = tool_ext(mcp=empty_mcp)
-  let empty = @posoco.ToolProvider::execute(
-    empty_ext,
-    "read_working_memory",
-    tool_call("read_working_memory", Json::object(Map::from_array([]))),
-  )
-  guard empty is @posoco.ToolOutcome::Success(content=empty_content, ..) else {
-    fail("expected success for an empty working memory")
-  }
-  inspect(empty_content, content=NMEM_WM_EMPTY_HINT)
-  // A configured space scopes the read.
-  let scoped_mcp = FakeNmemMcp::FakeNmemMcp(
-    script=Map::from_array([
-      ("read_working_memory", mcp_ok("{\"content\":\"scoped\"}")),
-    ]),
-  )
-  let scoped_ext = tool_ext(mcp=scoped_mcp, space=Some("team"))
-  let scoped = @posoco.ToolProvider::execute(
-    scoped_ext,
-    "read_working_memory",
-    tool_call("read_working_memory", Json::object(Map::from_array([]))),
-  )
-  guard scoped is @posoco.ToolOutcome::Success(content=scoped_content, ..) else {
-    fail("expected success")
-  }
-  inspect(scoped_content, content="scoped")
-  inspect(
-    json_field(recorded_args(scoped_mcp, 0), "space_id")
-    is Some(Json::String("team")),
-    content="true",
-  )
 }
 
 ///|
@@ -598,25 +360,7 @@ async test "read_context_bundle: markdown chain, ambient scope" {
 }
 
 ///|
-async test "official-surface tools attach parsed reply text as structured payload" {
-  // memory_search: a parseable object payload passes through verbatim.
-  let search_mcp = FakeNmemMcp::FakeNmemMcp(
-    script=Map::from_array([("memory_search", mcp_ok("{\"memories\":[]}"))]),
-  )
-  let search = @posoco.ToolProvider::execute(
-    tool_ext(mcp=search_mcp),
-    "memory_search",
-    tool_call("memory_search", j("{\"query\":\"x\"}")),
-  )
-  guard search
-    is @posoco.ToolOutcome::Success(
-      content=search_content,
-      structured=search_structured
-    ) else {
-    fail("expected success")
-  }
-  inspect(search_content, content="{\"memories\":[]}")
-  inspect(search_structured is Some(Json::Object(_)), content="true")
+async test "thread tools attach parsed reply text as structured payload" {
   // thread_search: non-JSON reply text keeps structured None, content verbatim.
   let thread_mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([("thread_search", mcp_ok("plain text table"))]),

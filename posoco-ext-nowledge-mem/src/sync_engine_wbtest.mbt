@@ -496,3 +496,40 @@ async test "SyncEngine: flusher_loop drains pending lanes until stop" {
   inspect(lane.created, content="true")
   inspect(lane.pending is None, content="true")
 }
+
+///|
+/// Host-style teardown error: raised by the group body to model a host
+/// abort (cetas-acp stdin EOF), which puts the group into failure and
+/// cancels every remaining child mid-flight.
+suberror HostEof derive(Debug)
+
+///|
+/// Cancellation regression: when a host group tears down (cetas-acp stdin
+/// EOF), the aborting body fails the group and the flusher is cancelled
+/// mid-sleep; the loop must re-raise the cancellation so the teardown
+/// completes. Swallowing it used to leave the idle loop spinning — the
+/// sleep is its only suspension point. The with_timeout watchdog bounds
+/// the assertion, and `stopped` staying false proves the exit came from
+/// cancellation, not stop().
+async test "SyncEngine: flusher_loop terminates on task group cancellation" {
+  let transport = FakeNmemTransport::FakeNmemTransport([])
+  let engine = SyncEngine()
+  let outcome : Result[Unit, Error] = Ok(
+    @async.with_timeout(5000, () => {
+      @async.with_task_group(group => {
+        group.spawn_bg(() => {
+          engine.flusher_loop(transport, interval_ms=1, timeout_ms=1000)
+        })
+        @async.sleep(10)
+        raise HostEof
+      })
+    }),
+  ) catch {
+    error => Err(error)
+  }
+  guard outcome is Err(error) else {
+    fail("expected the host abort to propagate out of the group")
+  }
+  assert_true(error is HostEof)
+  inspect(engine.stopped, content="false")
+}

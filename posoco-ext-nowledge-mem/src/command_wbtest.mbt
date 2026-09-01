@@ -297,15 +297,21 @@ async test "/nmem: malformed invocations fail with usage" {
 }
 
 ///|
-async test "/memory status: connectivity, lanes, queue, and the passive-read gate" {
+async test "/memory status: connectivity, lanes, queue, and the session inbound" {
   let ext = tool_ext(
     mcp=FakeNmemMcp::FakeNmemMcp(
       script=Map::from_array([
-        ("read_working_memory", mcp_ok("{\"exists\":false}")),
+        (
+          "read_working_memory",
+          mcp_ok("{\"exists\":true,\"content\":\"working memory briefing\"}"),
+        ),
       ]),
     ),
   )
-  // One dirty lane, one queued write, one spent passive-read gate.
+  // One dirty lane, one queued write, one injected session memory message.
+  // Core injects it before this extension's hook runs in a real agent, so
+  // the test feeds the transcript the message core assembles from this
+  // extension's MemoryPort inbound body.
   let scope : @posoco.EventScope = {
     session_id: @posoco.SessionId::unchecked("s1"),
     run_id: @posoco.RunId::unchecked("r1"),
@@ -316,8 +322,16 @@ async test "/memory status: connectivity, lanes, queue, and the passive-read gat
     Some(scope),
     @posoco.TurnEvent::TurnStarted,
   )
+  guard @posoco.MemoryPort::inbound(ext, session_id="s1", request="hi")
+    is Some(body) else {
+    fail("expected an inbound body")
+  }
+  let injected : @posoco.Message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text(@posoco.MEMORY_INBOUND_LEAD + "\n\n" + body),
+  ])
   ignore(
     @posoco.PipelineHook::before_model(ext, [
+      injected,
       @posoco.tk_user_msg("hi"),
       assistant_msg("hello"),
     ]),
@@ -328,9 +342,12 @@ async test "/memory status: connectivity, lanes, queue, and the passive-read gat
     @posoco.TurnEvent::TurnCompleted,
   )
   ignore(
-    @posoco.MemoryPort::store(ext, mem_entry(id="", content="queued note")),
+    @posoco.MemoryPort::store(
+      ext,
+      content="queued note",
+      metadata=Map::from_array([]),
+    ),
   )
-  ignore(@posoco.MemoryPort::search(ext, mem_query(query="anchor query")))
   let outcome = @posoco.CommandPort::invoke(
     ext,
     "memory",
@@ -345,7 +362,7 @@ async test "/memory status: connectivity, lanes, queue, and the passive-read gat
   assert_true(feedback.contains("pending=true"))
   assert_true(feedback.contains("last_error=none"))
   assert_true(feedback.contains("memory queue: 1 pending write"))
-  assert_true(feedback.contains("passive read: done"))
+  assert_true(feedback.contains("inbound: injected"))
   guard structured is Some(payload) else { fail("expected structured") }
   inspect(
     json_field(payload, "nmem_connected") is Some(Json::True),
@@ -366,13 +383,13 @@ async test "/memory status: connectivity, lanes, queue, and the passive-read gat
   }
   inspect(queue_depth == 1.0, content="true")
   inspect(
-    json_field(payload, "passive_read_done") is Some(Json::True),
+    json_field(payload, "inbound_injected") is Some(Json::True),
     content="true",
   )
 }
 
 ///|
-async test "/memory status: an unspent gate reports pending" {
+async test "/memory status: a session without an injection reports pending" {
   let ext = tool_ext()
   let outcome = @posoco.CommandPort::invoke(
     ext,
@@ -382,10 +399,10 @@ async test "/memory status: an unspent gate reports pending" {
   guard outcome is @posoco.CommandOutcome::Success(feedback~, structured~, ..) else {
     fail("expected success")
   }
-  assert_true(feedback.contains("passive read: pending"))
+  assert_true(feedback.contains("inbound: pending"))
   guard structured is Some(payload) else { fail("expected structured") }
   inspect(
-    json_field(payload, "passive_read_done") is Some(Json::False),
+    json_field(payload, "inbound_injected") is Some(Json::False),
     content="true",
   )
 }
@@ -423,7 +440,9 @@ async test "/memory flush drains staged lanes and the write queue" {
       script=Map::from_array([("memory_add", mcp_ok("{\"id\":\"mem_7\"}"))]),
     ),
   )
-  ignore(@posoco.MemoryPort::store(ext, mem_entry(id="", content="note")))
+  ignore(
+    @posoco.MemoryPort::store(ext, content="note", metadata=Map::from_array([])),
+  )
   let outcome = @posoco.CommandPort::invoke(
     ext,
     "memory",
@@ -450,7 +469,11 @@ async test "/memory flush drains staged lanes and the write queue" {
     ),
   )
   ignore(
-    @posoco.MemoryPort::store(fail_ext, mem_entry(id="", content="doomed")),
+    @posoco.MemoryPort::store(
+      fail_ext,
+      content="doomed",
+      metadata=Map::from_array([]),
+    ),
   )
   let failed = @posoco.CommandPort::invoke(
     fail_ext,

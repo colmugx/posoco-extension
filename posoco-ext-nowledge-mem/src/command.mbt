@@ -18,9 +18,23 @@ fn lane_thread_id(lane_key : String) -> String {
 const NMEM_STATUS_REPORT_CHARS : Int = 200
 
 ///|
+/// Whether the current transcript snapshot already carries core's injected
+/// session-opening memory message — the observable state of the inbound
+/// gate.
+fn NowledgeMem::inbound_injected(self : NowledgeMem) -> Bool {
+  for message in self.transcript {
+    if is_injected_memory_message(message) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// `/memory status`: one MCP probe plus the extension's own state —
 /// connectivity, one line per thread lane, the write-after queue depth, and
-/// the passive-read gate. Returns the text report and its structured twin.
+/// the session inbound state. Returns the text report and its structured
+/// twin.
 async fn NowledgeMem::memory_status_report(
   self : NowledgeMem,
 ) -> (String, Json) {
@@ -81,7 +95,7 @@ async fn NowledgeMem::memory_status_report(
   }
   lines.push("memory queue: \{self.mem.queue.length()} pending write(s)")
   lines.push(
-    "passive read: \{if self.passive_read_done { "done" } else { "pending" }}",
+    "inbound: \{if self.inbound_injected() { "injected" } else { "pending" }}",
   )
   match self.mem.last_error {
     Some(err) => lines.push("memory last_error: \{err}")
@@ -91,7 +105,7 @@ async fn NowledgeMem::memory_status_report(
     "nmem_connected": Json::boolean(connectivity),
     "lanes": Json::array(lanes_json),
     "queue_depth": Json::number(self.mem.queue.length().to_double()),
-    "passive_read_done": Json::boolean(self.passive_read_done),
+    "inbound_injected": Json::boolean(self.inbound_injected()),
     "memory_last_error": match self.mem.last_error {
       Some(err) => Json::string(err)
       None => Json::null()
@@ -106,7 +120,7 @@ async fn NowledgeMem::memory_status_report(
 fn memory_usage() -> String {
   (
     #|/memory — Nowledge Mem diagnostics
-    #|  /memory status   nmem connectivity, thread lanes, write queue, passive-read gate
+    #|  /memory status   nmem connectivity, thread lanes, write queue, session inbound
     #|  /memory flush    drain pending thread lanes and queued memory writes now
   )
 }

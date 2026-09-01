@@ -9,13 +9,7 @@ pub(all) struct McpCallOutcome {
 } derive(Debug)
 
 ///|
-/// Narrow seam for the Nowledge Mem MCP connection. An MCP client is 1:1
-/// with its server, so the extension owns one lazily-connected client
-/// itself (elyra builtin-web-search pattern) instead of depending on a
-/// multi-server MCP host: `configure` installs the resolved endpoint at
-/// `on_start`, the first call connects, and a connection-level failure
-/// drops the client so the next call reconnects in place. Production uses
-/// `LazyNmemMcp`; tests inject a scripted fake.
+/// Narrow seam for the Nowledge Mem MCP connection.
 pub(open) trait NmemMcp {
   /// Install the resolved endpoint. Called once from `on_start`; calls
   /// before `configure` fail with a clear message instead of guessing a

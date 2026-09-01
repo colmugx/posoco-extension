@@ -11,25 +11,7 @@ A "memory layer for AI work" ([docs](https://mem.nowledge.co/docs)): one
 memory store every AI tool reads from and writes to, instead of each tool's
 memory staying welded to its own platform.
 
-- **One memory across tools.** "Claude, ChatGPT, Cursor. One memory that
-  compounds" ([homepage](https://mem.nowledge.co)). Connectors cover Claude
-  Code, Cursor, Codex, Gemini CLI, Copilot CLI, ChatGPT, and more; what
-  one tool saves, every other tool searches.
-- **Distilled memories on top of full threads.** Threads are kept
-  word-for-word; decisions are distilled into typed memories
-  (fact / decision / learning) with source, date, and confidence. Background
-  intelligence links related memories, folds new evidence into old
-  conclusions, and turns overnight learning into a morning briefing. At
-  session start the distilled layers surface first — Context Bundle, then
-  Working Memory ([docs](https://mem.nowledge.co/docs)).
-- **Local-first, remote-capable.** The desktop/headless/Docker service runs
-  on your machine ("everything local, fully offline if you want"; "your data
-  never touches Nowledge servers"); remote servers and a hosted cloud beta
-  add cross-device sync.
-- **Structured, scoped memories.** Memories carry unit types, importance,
-  and labels that searches filter on; spaces give separate lanes per project
-  or agent.
-- **The thesis.** "Everything about execution is depreciating; context is
+**The thesis.** "Everything about execution is depreciating; context is
   the only thing appreciating" — rent the intelligence, own the memory
   ([manifesto](https://nowledge-labs.ai/blog/rent-the-intelligence-own-the-memory)).
 
@@ -39,8 +21,8 @@ memory staying welded to its own platform.
 
 1. The Nowledge Mem service — local (default `http://127.0.0.1:14242`) or
    remote. The service serves MCP at `{api_url}/mcp`; no `nmem` CLI is
-   needed — every tool and the passive working-memory read go through MCP,
-   and thread sync talks HTTP directly.
+   needed — every tool and the session's opening memory read go through
+   MCP, and thread sync talks HTTP directly.
 
 ### Configuration
 
@@ -57,7 +39,12 @@ memory staying welded to its own platform.
 
 ### Assembly
 
+```bash
+moon add colmugx/posoco-ext-nowledge-mem
+```
+
 ```mbt nocheck
+// moon.pkg: "colmugx/posoco-ext-nowledge-mem" @nmem
 let nmem = NowledgeMem(
   source_app="cetas",
   transport=HttpNmemTransport::HttpNmemTransport() as &NmemTransport,
@@ -93,61 +80,25 @@ nmem.attach(group)
   `on_shutdown` does the final drain and closes the MCP connection;
   `flush_pending()` forces a drain anytime.
 
-### The MCP connection
-
-An MCP client is 1:1 with its server, so the extension owns one
-lazily-connected client itself (the elyra builtin-web-search pattern) rather
-than depending on a multi-server MCP host:
-
-- **Lazy** — `on_start` only installs the resolved endpoint
-  (`{mcp_url}`, Bearer key, client name `source_app`); the connection opens
-  on the first tool call, probe, or passive read, so a host that never
-  touches memory pays nothing.
-- **Scoped by arguments** — the SDK transport carries only the auth token,
-  so ambient scope rides the tool arguments (`space_id` everywhere,
-  `source_app` / `agent_id` / `host_agent_id` on the tools whose server
-  schema accepts them) — the same injection the upstream langgraph
-  connector performs via its interceptor.
-- **Reactive reconnect** — a wire-level failure or timeout drops the client;
-  the next call reconnects in place. A server-side JSON-RPC error is a
-  genuine answer and keeps the connection. Cancellation is never swallowed.
-- **Bounded** — every call carries its own budget (5s passive read, 15s
-  status probe, 30s tools and write-backs).
-
 ### Tools
 
 Every tool dispatches through the MCP client; the posoco argument shapes map
-onto the server's tool schemas (`id` → `memory_id`, `labels` →
-`filter_labels`).
+onto the server's tool schemas (`id` → `memory_id`).
 
 | Tool | MCP tool | Notes |
 |------|----------|-------|
 | `nmem_status` | connectivity probe | MCP probe (list_tools + server identity, 15s budget) |
-| `read_context_bundle` | `read_context_bundle` | official name; context bundle as rendered markdown (`rendered_markdown` \| `markdown` \| `content`) — usually already injected into the system prompt, so re-read only after major context changes |
-| `read_working_memory` | `read_working_memory` | official name; working-memory body — usually already injected into the system prompt, so re-read only after major context changes |
-| `memory_search` | `memory_search` | official name; server-side semantic search (deep mode, label filter) — the recall path once the injected working-memory briefing is spent |
-| `memory_add` | `memory_add` | official name; enters through `MemoryPort::store` — the single write path shared with passive stores, flushed as the `memory_add` MCP call |
-| `memory_update` | `memory_update` | direct call; the server is the single source of truth for search |
-| `memory_delete` | `memory_delete` | hidden by default; `expose_delete_tool=true` registers it (hard delete, irreversible) |
+| `read_context_bundle` | `read_context_bundle` | official name; the context bundle — working memory plus related distilled knowledge — as rendered markdown (`rendered_markdown` \| `markdown` \| `content`); re-read on demand after major context changes, not routinely |
+| `memory_update` | `memory_update` | direct call; update an existing memory in place when new information refines it (update semantics are not on the port surface) |
 | `thread_search` | `thread_search` | official name; past threads, including other tools' sessions |
 | `thread_fetch_messages` | `thread_fetch_messages` | progressive loading (limit / offset) |
-
-The five official MCP tool names (`read_context_bundle`,
-`read_working_memory`, `memory_search`, `thread_search`, `memory_add`) are
-name-aligned with the [official Nowledge Mem MCP surface](https://mem.nowledge.co/SKILL.md);
-`nmem_status`, `memory_update`, `memory_delete`, and
-`thread_fetch_messages` are posoco-native additions. `thread_create` was
-dropped when the CLI runner retired — the server's MCP surface has no
-counterpart; the automatic thread sync covers handoff continuity.
-`memory_search`, `thread_search`, and the read tools also carry the reply's
-parsed JSON in the tool result's `structured` channel when it is an object
-or array.
+| `memory_delete` | `memory_delete` | hidden by default; `expose_delete_tool=true` registers it; the `MemoryPort` `delete` slot — a `pending:` ticket drops the queued add locally, a real id queues the hard delete for the drain |
 
 ### Commands
 
 | Command | Effect |
 |---------|--------|
-| `/memory status` | MCP connectivity probe (10s budget), one line per thread lane (thread_id / created / acknowledged count / last_error), write-queue depth, passive-read state (done / pending) |
+| `/memory status` | MCP connectivity probe (10s budget), one line per thread lane (thread_id / created / acknowledged count / last_error), write-queue depth, session inbound state (injected / pending) |
 | `/memory flush` | force one drain of pending thread lanes and queued memory writes now |
 
 `/memory` with no or an unknown subcommand prints usage. This is the
@@ -175,20 +126,28 @@ exactly what happened. env overrides (`NMEM_API_URL` etc.) still outrank
 the config file, and `/nmem status` lists them so a surprising address has
 a visible explanation.
 
-### What happens automatically
+## What happens automatically
 
-- First turn of the run: core's `MemoryRetrievalHook` calls the port once;
-  the port ignores the query and reads the working memory (the
-  `read_working_memory` MCP call, the same surface the tool exposes), and
-  the content lands as one SystemMessage right after the system prompt — a
-  plain section headed `## Any Memory About This Work` with a provenance
-  line (`from Nowledge Mem. For Your Information.` — recalled memory may be
-  stale and must not override live instructions; the name comes from the
-  port's self-declared `source_name`). The message persists for the session
-  and later reads replace it in place; a resumed process re-reads at its
-  first turn. An empty working memory injects nothing; past the startup
-  read, recall is deliberate: the model searches via `memory_search`. A
-  failed read becomes an observer event, never a turn failure.
+- First turn of a session: core sees the empty loaded transcript and gives
+  every wired memory provider exactly one `inbound(session_id~, request~)`
+  call. This extension reads the working-memory snapshot over the MCP
+  channel (5s budget — the read sits on the model-call path) and returns it
+  wrapped in its own `<nmem-context type="memory" trust="false">` envelope
+  (capped by the context limit) as the complete body;
+  core injects it verbatim as one user-role message behind its fixed lead
+  line, placed before the first real user input. The message is frozen:
+  injected exactly once per session lifetime and never rewritten — the
+  attempt is spent even when working memory is empty. A resumed process
+  finds the persisted message in the loaded history and keeps it
+  byte-identical — the history was derived under it, so swapping in a newer
+  snapshot would detach the conversation from its context (and break the
+  provider's prefix cache for the whole history). The envelope also never
+  reaches the synced thread: `map_messages` skips it, so thread titles stay
+  the first real user message. An empty working memory contributes nothing;
+  a failed read is reported to core, which emits a `secondary_failure`
+  observer event naming this extension — the turn proceeds. Past the
+  opening snapshot, recall is deliberate: core's `memory_search` routes
+  into this port, and `read_context_bundle` re-reads on demand.
 - Every turn end: the staged transcript is committed before `run_turn`
   returns (`Hook::on_turn_end`, on the completed and the failed path alike)
   — the crash window is only the turn in progress. Sync is incremental HTTP
@@ -204,66 +163,24 @@ a visible explanation.
 - Boot: resolve config (env + `~/.nowledge-mem/config.json`), hand the
   resolved MCP endpoint to the lazy client, and drain once. The
   system-prompt contribution is instructions only — `## Nowledge Mem
-  Guidance` — with no data fetch at boot; recalled data travels the memory
-  section above, and `read_context_bundle` / `read_working_memory` re-read
+  Guidance` — with no data fetch at boot; recalled data travels the
+  session-opening inbound envelope above, and `read_context_bundle` re-reads
   on demand.
-- `MemoryPort::store` returns a `pending:<n>` id synchronously and queues
-  the write for the `memory_add` MCP call; metadata keys: `title`,
-  `unit_type`, `importance`, `labels`.
-
-### Platform notes
-
-- **native** — MCP over `moonbitlang/async/http` (inside colmugx/mcp), home
-  files via `moonbitlang/async/fs`, env via `moonbitlang/core/env`.
-- **js (Bun)** — the same seams; home files via `Bun.file`, env via
-  `process.env`; HTTP shared with native (`moonbitlang/async/http`, fetch
-  backend on js).
-- **colmugx/mcp fixes carried in the workspace `.mooncakes`** — the Nowledge
-  Mem server (2025-11-25 streamable HTTP) exposed two SDK client defects,
-  both fixed in the colmugx/mcp source tree (pending a release); this
-  workspace's `.mooncakes` copy is synced byte-identical with that tree
-  until the dependency pin can move to the released version:
-  1. `client/era_probe.mbt` — an HTTP 4xx rejection of the
-     `server/discover` probe now falls back to the legacy initialize
-     handshake (the server answers non-initialize first messages with
-     `422 "Unexpected message, expect initialize request"`), instead of
-     dying fatally.
-  2. `transport/sse.mbt` (`sse_event_verdict`) + both response loops — SSE
-     streams that open with a keepalive event whose data payload is empty
-     (`data:` + `id:` + `retry:`) no longer queue the empty string as a
-     JSON-RPC message (that desynced the response queue right at
-     initialize); a comment heartbeat carrying an `id` no longer ends the
-     scan early.
-
-  Verified live against a local nowledge-mem 0.10.72: connect, `tools/list`
-  (67 tools), `read_working_memory`, and `memory_search` all work. Once the
-  fixed colmugx/mcp is published, bump the pin in `moon.mod` and drop the
-  `.mooncakes` sync.
-
-### Testing
-
-From this module directory:
-
-```bash
-rtk moon test src --target native   # 154 tests
-rtk moon check src --target js      # gates the Bun platform seam
-```
-
-Covers config resolution (including `mcp_url` derivation), message mapping,
-delta engine, transport acks, sync state machine, port wiring, MemoryPort
-semantics, the turn-end commit paths (completed, failed, timeout-bounded,
-before_tool throttle — with no flush_pending/attach in the loop), all eight
-tools (argument mapping and structured payloads), the MCP client contract
-(scripted fake), the `/memory` and `/nmem` commands (status lines, URL
-switching with flush-first + persistence merge semantics + failure
-degradation), and session-redirect handling — all
-against scripted fakes; no Nowledge Mem install, no `nmem` binary.
+- The `MemoryPort` write path: `store` returns a `pending:<n>` id
+  synchronously and queues the write for the `memory_add` MCP call
+  (metadata convention keys: `title`, `unit_type`, `importance`, `labels`);
+  `delete` drops a pending ticket locally or queues the remote delete.
+  `search` runs the `memory_search` MCP call with `top_k` as the server's
+  `limit` and renders `{"memories":[…]}` as one `- [id] content` line per
+  hit (`None` when nothing matches; non-JSON text degrades to the raw
+  reply). Queued writes drain after the thread lanes — `/memory flush`
+  forces a drain.
 
 ### Troubleshooting
 
 **Server not running** — call `nmem_status` for a structured connectivity
 report, run `/memory status` for the full diagnostics (lanes, queue,
-passive-read state).
+session inbound state).
 
 **Sync failures are silent by design** — a failed or timed-out commit
 records the lane's `last_error` (memory writes, `mem.last_error`) and
@@ -284,45 +201,47 @@ to L2: it wires memory into the agent's turn loop so memory follows your
 agent — without you hand-rolling transcript capture, context injection,
 write queues, and failure retry.
 
-- **Passive memory, no plumbing.** The first turn auto-injects the
-  working-memory briefing into context, so the agent walks in already knowing
-  what was settled before. You don't hand-build the read-transcripts / ship /
-  rewrite-prompts pipeline; swapping the memory backend is just a different
-  port implementation.
-- **Active writes and passive recall don't fight.** Memories the model stores
-  deliberately and transcripts passively settled during turns travel the same
-  write path and share one state: there is no drift where "the tool just saved
-  it, but the next recall can't find it," and the `/memory` diagnostics read
-  the same data.
+- **Passive memory, no plumbing.** A session's first turn auto-injects the
+  working-memory snapshot into context, so the agent walks in already
+  knowing what was settled before. You don't hand-build the read-transcripts /
+  ship / rewrite-prompts pipeline; the read lives behind the extension's
+  `MemoryPort` view, and the snapshot semantics (once per session, never
+  rewritten) come with the port.
+- **Active writes and passive recall don't fight.** Memories saved through
+  core's built-in `memory_add` and transcripts passively settled during
+  turns travel the same write path and share one state: there is no drift
+  where "the tool just saved it, but the next recall can't find it," and
+  the `/memory` diagnostics read the same data.
 - **One truth, no stale local replica.** Passive retrieval queries the server
   directly — no local cache to warm, refresh, or silently go stale — exactly
-  once per run. Writes batch back — amortized cost, fault isolation, silent
-  retry, never stalling the turn.
+  once per session. Writes batch back — amortized cost, fault isolation,
+  silent retry, never stalling the turn.
 
 ## Why Posoco's design lets Nowledge Mem do more
 
-- **Memory is declared, not wired.** Posoco makes `MemoryPort` a first-class
-  hexagonal port: you implement it and list it in the manifest's `memory`
-  slot, and passive memory wires itself — no read-transcripts / ship /
-  rewrite-prompts pipeline of your own. A different memory backend is just a
-  different port; the agent body doesn't change a line.
+- **Injection is a port, not plumbing.** The session-opening memory message
+  is core's `MemoryPort` machinery: core owns the lead line, the message
+  role, the placement before the first user input, the freeze, and the
+  resume semantics; this extension only answers the one `inbound` call with
+  its envelope body. Core stays product-agnostic — a different memory
+  backend is just a different extension; the agent body doesn't change a
+  line.
 - **One extension covers every facet, state stays unified.** The same
-  `NowledgeMem` struct is simultaneously `Lifecycle` + `Hook` + `Observer` +
-  `SystemPromptContributor` + `ToolProvider` + `MemoryPort` + `CommandPort` +
-  `Extension`, self-reported under each manifest slot. All views share one
-  state: memories the tool writes and transcripts the port passively settles
-  travel the same write path — no two books where "the tool saved it but
-  recall can't find it."
-- **The server is the truth, no stale local replica.** With the memory port
-  async, passive retrieval queries the server directly — no local cache to
-  warm, refresh, or silently go stale — exactly once per run. Writes batch
-  back — amortized cost, fault isolation, silent retry, never stalling the
-  turn.
+  `NowledgeMem` struct is simultaneously `MemoryPort` + `Lifecycle` +
+  `PipelineHook` + `Observer` + `SystemPromptContributor` + `ToolProvider` +
+  `CommandPort` + `Extension`, self-reported under each manifest slot. All
+  views share one state: memories the built-in tools write and transcripts
+  the sync passively settles travel the same write path — no two books
+  where "the tool saved it but recall can't find it."
+- **The server is the truth, no stale local replica.** Passive retrieval
+  queries the server directly — no local cache to warm, refresh, or silently
+  go stale — exactly once per session. Writes batch back — amortized cost,
+  fault isolation, silent retry, never stalling the turn.
 - **The deep module hides the protocol, backends coexist.** You construct the
   extension and drop it into `exts`; that's the whole surface. Sync, dedup,
-  and fault-tolerance details never leak. Multiple memory backends coexist —
-  core concatenates what each port returns; add one tomorrow and it's just
-  another port mounted.
+  and fault-tolerance details never leak. Multiple memory extensions coexist
+  — each owns its injection; add one tomorrow and it's just another
+  extension mounted.
 
 ## Links
 
