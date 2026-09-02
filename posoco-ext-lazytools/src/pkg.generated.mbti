@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-lazytools"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct LazyTools {
+  // private fields
+}
+pub fn LazyTools::build(providers~ : Array[&@port.ToolProvider]) -> Result[Self, String]
+pub fn LazyTools::defer_extensions(exts~ : Array[&@port.Extension]) -> Result[(Self, Array[&@port.Extension]), String]
+pub fn LazyTools::deferred_count(Self) -> Int
+pub fn LazyTools::deferred_names(Self) -> Array[String]
+pub async fn LazyTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn LazyTools::extension_id(Self) -> String
+pub fn LazyTools::is_meta_tool(String) -> Bool
+pub fn LazyTools::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn LazyTools::manifest(Self) -> @port.ExtensionManifest
+pub fn LazyTools::rewrap_call(@kernel.ToolCall, @kernel.ToolCall) -> @kernel.ToolCall
+pub fn LazyTools::unwrap_call(@kernel.ToolCall) -> (String, @kernel.ToolCall)
+pub impl @port.Extension for LazyTools
+pub impl @port.Observer for LazyTools
+pub impl @port.PipelineHook for LazyTools
+pub impl @port.SystemPromptContributor for LazyTools
+pub impl @port.ToolProvider for LazyTools
+
+// Type aliases
+
+// Traits
