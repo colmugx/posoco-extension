@@ -11,11 +11,11 @@ pub(all) struct PiRuntime {
 }
 
 ///|
-pub fn PiRuntime::new(
+pub fn PiRuntime::PiRuntime(
   adaptor~ : PiAdaptor,
   fallback~ : &@runtime.Runtime,
 ) -> PiRuntime {
-  { adaptor, fallback, control: None }
+  { adaptor, fallback, control: None, }
 }
 
 ///|
@@ -83,11 +83,11 @@ pub(all) struct PiCatalogSource {
 }
 
 ///|
-pub fn PiCatalogSource::new(
+pub fn PiCatalogSource::PiCatalogSource(
   adaptor~ : PiAdaptor,
   base_tools? : Array[@kernel.ToolDef] = [],
 ) -> PiCatalogSource {
-  { adaptor, base_tools }
+  { adaptor, base_tools, }
 }
 
 ///|
@@ -181,12 +181,15 @@ fn pi_cancel_disposition(
 ///|
 pub impl @runtime.Runtime for PiRuntime with fn call_model(
   self,
-  messages : Array[@kernel.Message],
-  tools : Array[@kernel.ToolDef],
-  options : Json,
-  on_chunk : ((Json) -> Unit)?,
+  scope : @kernel.InvocationScope,
+  messages : ArrayView[@kernel.Message],
+  tool_definitions : Array[@kernel.ToolDef],
+  call_options : Json,
+  on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
-  self.fallback.call_model(messages, tools, options, on_chunk)
+  self.fallback.call_model(
+    scope, messages, tool_definitions, call_options, on_chunk,
+  )
 }
 
 ///|
@@ -246,11 +249,12 @@ pub impl @runtime.Runtime for PiRuntime with fn cancel_effects(
 ///|
 pub impl @runtime.Runtime for PiRuntime with fn compact(
   self,
-  messages : Array[@kernel.Message],
-  options : Json,
+  scope : @kernel.InvocationScope,
+  messages : ArrayView[@kernel.Message],
+  call_options : Json,
   trigger : @kernel.CompactTrigger,
 ) -> Result[@kernel.CompactResult, @kernel.ModelFailure] {
-  self.fallback.compact(messages, options, trigger)
+  self.fallback.compact(scope, messages, call_options, trigger)
 }
 
 ///|
@@ -298,7 +302,7 @@ pub fn pi_adaptor_execute_effect_via_runtime(
   let task : async () -> Unit noraise = async fn() noraise {
     let arguments = @json.parse(arguments_json) catch { _ => Json::null() }
     let context : @runtime.EffectContext = {
-      effect_id: @kernel.EffectId::{ value: effect_id },
+      effect_id: @kernel.EffectId::{ value: effect_id, },
       owner: @kernel.OwnerId::unchecked(pi_owner_id),
       call_id: @kernel.CallId::unchecked(call_id),
       tool_name: @kernel.ToolName::unchecked(name),
@@ -350,5 +354,8 @@ pub fn pi_adaptor_execute_effect_via_runtime(
     }
     callback(output)
   }
-  run_async_detached(task)
+  // Schedule through the async runtime's coroutine registry (like the real
+  // turn path), not the bare %async.run root: the root has no current
+  // coroutine, so Promise-based waits cannot park there.
+  ignore(@js_async.Promise::from_async(async fn() { task() }))
 }

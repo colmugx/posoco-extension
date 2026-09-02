@@ -1,3 +1,5 @@
+import { appendFileSync } from "node:fs";
+
 export default function fixtureExtension(pi) {
   pi.registerTool({
     name: "echo",
@@ -98,9 +100,74 @@ export default function fixtureExtension(pi) {
   });
 
 
+  pi.registerTool({
+    name: "constrained_echo",
+    label: "Constrained Echo",
+    description: "Echo tool whose parameters mirror TypeBox numeric/union constraints.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Text to echo", minLength: 1 },
+        count: {
+          type: "number",
+          description: "Echo repeat count",
+          minimum: 1,
+          maximum: 10,
+          default: 1,
+        },
+        mode: {
+          anyOf: [{ type: "string" }, { type: "null" }],
+          description: "Optional echo mode",
+        },
+        tags: {
+          type: "array",
+          description: "Optional tags appended to the echo",
+          items: { type: "string", minLength: 1 },
+          minItems: 1,
+          maxItems: 5,
+        },
+      },
+      required: ["text"],
+      additionalProperties: false,
+    },
+    execute(callId, params) {
+      const count = typeof params.count === "number" ? params.count : 1;
+      const base = Array.isArray(params.tags) && params.tags.length > 0
+        ? `${params.text}:${params.tags.join(",")}`
+        : params.text;
+      return {
+        content: [{ type: "text", text: Array(count).fill(base).join("|") }],
+        details: { callId, count, mode: params.mode ?? null },
+      };
+    },
+  });
+
   pi.on("session_start", () => {
     pi.appendEntry("fixture-session-start", { entry: "primary" });
   });
+
+  // Events-recorder family: active only when PI_EVENTS_LOG is set, so the
+  // adaptor host tests above stay unaffected.
+  const eventsLogPath = process.env.PI_EVENTS_LOG;
+  if (eventsLogPath) {
+    for (const name of [
+      "agent_start",
+      "agent_end",
+      "agent_settled",
+      "turn_start",
+      "turn_end",
+      "message_start",
+      "message_update",
+      "message_end",
+      "tool_execution_start",
+      "tool_execution_update",
+      "tool_execution_end",
+    ]) {
+      pi.on(name, (payload) => {
+        appendFileSync(eventsLogPath, JSON.stringify({ type: name, ...payload }) + "\n");
+      });
+    }
+  }
 
   let lateToolRegistered = false;
   pi.on("session_tree", () => {

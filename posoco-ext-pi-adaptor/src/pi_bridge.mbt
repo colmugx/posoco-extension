@@ -94,6 +94,14 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     },
   #|   });
   #|
+  #|   const emitFireAndForget = (event, payload) => {
+  #|     (async () => {
+  #|       const handlers = state.handlers.get(event) ?? [];
+  #|       const context = makeContext();
+  #|       for (const handler of handlers) await handler(payload, context);
+  #|     })().catch(() => {});
+  #|   };
+  #|
   #|   const registerTool = (tool) => {
   #|     if (!tool || typeof tool !== "object") throw new TypeError("registerTool expects an object");
   #|     if (typeof tool.name !== "string" || tool.name.length === 0) throw new TypeError("Pi tool name must be non-empty");
@@ -166,7 +174,17 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|       state.effects.set(effectKey, token);
   #|       state.settledEffects.delete(effectKey);
   #|     }
-  #|     const onUpdate = (update) => state.updates.push({ effectId, callId, name, update });
+  #|     // Direct pi event plus the legacy state capture: hosts that drain
+  #|     // state.updates keep working; registered handlers see the update live.
+  #|     const onUpdate = (update) => {
+  #|       state.updates.push({ effectId, callId, name, update });
+  #|       emitFireAndForget("tool_execution_update", {
+  #|         toolCallId: callId,
+  #|         toolName: name,
+  #|         args: params,
+  #|         partialResult: update,
+  #|       });
+  #|     };
   #|
   #|     try {
   #|       const result = await tool.execute(callId, params, controller.signal, onUpdate, makeContext());
@@ -187,7 +205,7 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     }
   #|   };
   #|
-  #|   return { state, api, makeContext, executeAsync, normalizePiResult, errorResult, renderContent };
+  #|   return { state, api, makeContext, executeAsync, normalizePiResult, errorResult, renderContent, emitFireAndForget };
   #| }
 
 ///|
@@ -267,7 +285,15 @@ extern "js" fn js_execute_sync(
   #|   catch (error) { return syncError(`Invalid arguments JSON: ${error.message}`); }
   #|
   #|   const controller = new AbortController();
-  #|   const onUpdate = (update) => host.state.updates.push({ effectId: null, callId, name, update });
+  #|   const onUpdate = (update) => {
+  #|     host.state.updates.push({ effectId: null, callId, name, update });
+  #|     host.emitFireAndForget("tool_execution_update", {
+  #|       toolCallId: callId,
+  #|       toolName: name,
+  #|       args: params,
+  #|       partialResult: update,
+  #|     });
+  #|   };
   #|   try {
   #|     const raw = tool.execute(callId, params, controller.signal, onUpdate, host.makeContext());
   #|     if (raw && typeof raw.then === "function") {
@@ -418,18 +444,6 @@ extern "js" fn JsToolResult::content(self : JsToolResult) -> String =
 ///|
 extern "js" fn JsToolResult::details_json(self : JsToolResult) -> String =
   #| (result) => result.detailsJson ?? "null"
-
-///|
-/// Attach MoonBit continuations to a JavaScript Promise resolving to String.
-extern "js" fn JsPromise::attach_string(
-  self : JsPromise,
-  on_ok : (String) -> Unit,
-  on_error : (String) -> Unit,
-) -> Unit =
-  #| (self, onOk, onError) => self.then(
-  #|   value => onOk(String(value)),
-  #|   error => onError(error instanceof Error ? error.message : String(error)),
-  #| )
 
 ///|
 /// Current monotonic Pi tool catalog revision.

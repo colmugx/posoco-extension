@@ -1,11 +1,14 @@
 ///|
 pub(all) struct PiAdaptor {
   host : JsPiHost
+  /// Event bridge over the same JsPiHost, contributed via the manifest.
+  events : PiEventObserver
 }
 
 ///|
 pub fn PiAdaptor::PiAdaptor() -> PiAdaptor {
-  { host: js_host_new() }
+  let host = js_host_new()
+  { host: host, events: PiEventObserver::PiEventObserver(host~), }
 }
 
 ///|
@@ -60,13 +63,15 @@ pub fn pi_adaptor_tool_schema_json(adaptor : PiAdaptor, index : Int) -> String {
 
 ///|
 pub fn pi_adaptor_catalog_json(adaptor : PiAdaptor) -> String {
-  js_catalog_json(adaptor.host)
+  project_catalog_json(parse_json_or_null(js_catalog_json(adaptor.host))).stringify()
 }
 
 ///|
 /// Versioned catalog snapshot for Posoco Runtime/CatalogSource composition.
 pub fn pi_adaptor_catalog_snapshot_json(adaptor : PiAdaptor) -> String {
-  js_catalog_snapshot_json(adaptor.host)
+  project_catalog_json(
+    parse_json_or_null(js_catalog_snapshot_json(adaptor.host)),
+  ).stringify()
 }
 
 ///|
@@ -202,7 +207,9 @@ pub impl @posoco.ToolProvider for PiAdaptor with fn list_tools(
     tools.push({
       name: @posoco.ToolName::unchecked(name),
       description: js_tool_description(adaptor.host, index),
-      input_schema: parse_json_or_null(js_tool_schema_json(adaptor.host, index)),
+      input_schema: project_tool_schema(
+        parse_json_or_null(js_tool_schema_json(adaptor.host, index)),
+      ),
       owner: @posoco.OwnerId::unchecked("posoco_ext_pi_adaptor"),
       policy: @posoco.ExecutionPolicy::Parallel,
       provenance: Some("pi"),
@@ -251,13 +258,14 @@ pub impl @posoco.Extension for PiAdaptor with fn manifest(adaptor : PiAdaptor) -
     models: [],
     tools: [adaptor],
     sessions: [],
-    observers: [],
+    observers: [adaptor.events as &@posoco.Observer],
     hooks: [],
     memory: [],
     lifecycle: [],
     commands: [],
     ui: [],
     prompt_contributors: [],
+    requires: [],
   }
 }
 

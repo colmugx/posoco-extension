@@ -24,12 +24,13 @@ test("loads all package entries and emits session_start once", async () => {
 
   assert.equal(loaded.name, "pi-adaptor-test-fixture");
   assert.deepEqual(loaded.extensions, ["./index.mjs", "./second.mjs"]);
-  assert.equal(loaded.registeredTools, 4);
+  assert.equal(loaded.registeredTools, 5);
   assert.deepEqual(host.catalog().map((tool) => tool.name), [
     "echo",
     "delayed_echo",
     "cancellable_echo",
     "background_notify",
+    "constrained_echo",
   ]);
 
   const starts = host.entries().filter((entry) => entry.customType === "fixture-session-start");
@@ -106,7 +107,7 @@ test("correlates cancellation by Posoco EffectId", async () => {
 test("records follow-ups and refreshes the dynamic catalog", async () => {
   const { host } = await loadHost();
   const before = host.catalogSnapshot();
-  assert.equal(before.version, 4);
+  assert.equal(before.version, 5);
 
   const queued = await host.execute("background_notify", "background-1", { text: "ready" });
   assert.equal(queued.ok, true);
@@ -115,11 +116,48 @@ test("records follow-ups and refreshes the dynamic catalog", async () => {
 
   assert.equal(await host.emit("session_tree"), 1);
   const after = host.catalogSnapshot();
-  assert.equal(after.version, 5);
+  assert.equal(after.version, 6);
   assert.equal(after.tools.some((tool) => tool.name === "late_echo"), true);
 
   const dynamic = await host.execute("late_echo", "late-1", { text: "registered" });
   assert.equal(dynamic.content, "late:registered");
+});
+
+test("projects unsupported schema keywords out of the Posoco-visible catalog", async () => {
+  const { host } = await loadHost();
+
+  const tool = host.catalog().find((entry) => entry.name === "constrained_echo");
+  const params = tool.parameters;
+
+  // TypeBox numeric constraints are stripped...
+  assert.equal("minimum" in params.properties.count, false);
+  assert.equal("maximum" in params.properties.count, false);
+  assert.equal("default" in params.properties.count, false);
+  assert.equal(params.properties.count.type, "number");
+  assert.equal(params.properties.count.description, "Echo repeat count");
+  // ...anyOf unions collapse to an unconstrained but present parameter...
+  assert.equal("anyOf" in params.properties.mode, false);
+  assert.equal(params.properties.mode.description, "Optional echo mode");
+  // ...string/array constraints vanish at every nesting level...
+  assert.equal("minLength" in params.properties.text, false);
+  assert.equal(params.properties.text.type, "string");
+  assert.equal("minItems" in params.properties.tags, false);
+  assert.equal("maxItems" in params.properties.tags, false);
+  assert.equal("minLength" in params.properties.tags.items, false);
+  assert.equal(params.properties.tags.items.type, "string");
+  // ...and the supported skeleton survives intact.
+  assert.deepEqual(params.required, ["text"]);
+  assert.equal(params.additionalProperties, false);
+
+  // The tool still executes end-to-end; validation authority stays Pi-side.
+  const result = await host.execute("constrained_echo", "constrained-1", {
+    text: "hi",
+    count: 2,
+    mode: null,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "hi|hi");
+  assert.equal(result.details.mode, null);
 });
 
 async function waitFor(predicate, timeoutMs = 1_000) {
@@ -140,7 +178,11 @@ async function findBuiltModule() {
     "posoco-ext-pi-adaptor",
     "posoco-ext-pi-adaptor.js",
   );
-  const candidates = [join(packageRoot, relative), join(dirname(packageRoot), relative)];
+  const candidates = [
+    join(packageRoot, relative),
+    join(dirname(packageRoot), relative),
+    join(dirname(dirname(packageRoot)), relative),
+  ];
   for (const candidate of candidates) {
     try {
       await access(candidate);

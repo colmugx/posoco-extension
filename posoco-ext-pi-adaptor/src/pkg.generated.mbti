@@ -6,6 +6,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/runtime",
+  "colmugx/posoco/types",
 }
 
 // Values
@@ -75,6 +76,7 @@ pub type JsPromise
 
 pub(all) struct PiAdaptor {
   host : JsPiHost
+  events : PiEventObserver
 }
 pub fn PiAdaptor::PiAdaptor() -> Self
 pub async fn PiAdaptor::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
@@ -88,25 +90,42 @@ pub(all) struct PiCatalogSource {
   adaptor : PiAdaptor
   base_tools : Array[@kernel.ToolDef]
 }
-pub fn PiCatalogSource::new(adaptor~ : PiAdaptor, base_tools? : Array[@kernel.ToolDef]) -> Self
+pub fn PiCatalogSource::PiCatalogSource(adaptor~ : PiAdaptor, base_tools? : Array[@kernel.ToolDef]) -> Self
 pub fn PiCatalogSource::revision(Self) -> Int
 pub fn PiCatalogSource::tools(Self) -> Array[@kernel.ToolDef]
 pub impl @runtime.CatalogSource for PiCatalogSource
+
+pub struct PiEventObserver {
+  host : JsPiHost
+  mut run_active : Bool
+  mut turn_index : Int
+  mut message_started : Bool
+  mut text_started : Bool
+  mut thinking_started : Bool
+  mut text_buf : StringBuilder
+  mut thinking_buf : StringBuilder
+  mut last_assistant : Json?
+  mut turn_tool_results : Array[Json]
+  mut run_messages : Array[Json]
+}
+pub fn PiEventObserver::PiEventObserver(host~ : JsPiHost) -> Self
+pub fn PiEventObserver::emit_agent_boundary(Self) -> Unit
+pub fn PiEventObserver::reset_agent_run(Self) -> Unit
+pub impl @port.Observer for PiEventObserver
 
 pub(all) struct PiRuntime {
   adaptor : PiAdaptor
   fallback : &@runtime.Runtime
   mut control : @runtime.RuntimeControl?
 }
+pub fn PiRuntime::PiRuntime(adaptor~ : PiAdaptor, fallback~ : &@runtime.Runtime) -> Self
 pub fn PiRuntime::attach_control(Self, @runtime.RuntimeControl) -> Unit
-pub async fn PiRuntime::call_model(Self, Array[@kernel.Message], Array[@kernel.ToolDef], Json, ((Json) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
+pub async fn PiRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
 pub async fn PiRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
-pub async fn PiRuntime::compact(Self, Array[@kernel.Message], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
+pub async fn PiRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
 pub async fn PiRuntime::execute_tool(Self, @runtime.EffectContext) -> @kernel.ToolOutcome
-pub fn PiRuntime::new(adaptor~ : PiAdaptor, fallback~ : &@runtime.Runtime) -> Self
 pub impl @runtime.Runtime for PiRuntime
 
 // Type aliases
 
 // Traits
-

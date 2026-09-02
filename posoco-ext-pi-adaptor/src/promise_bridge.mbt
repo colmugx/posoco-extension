@@ -8,19 +8,18 @@ pub(all) suberror JsPromiseError {
 }
 
 ///|
-async fn[X] suspend_js_promise(
-  register : ((X) -> Unit, (JsPromiseError) -> Unit) -> Unit,
-) -> X raise JsPromiseError = "%async.suspend"
+/// JsPromise and @js_async.Promise are both opaque wrappers of the same JS
+/// Promise object, so the identity cast is sound.
+fn js_promise_as_async(promise : JsPromise) -> @js_async.Promise[String] = "%identity"
 
 ///|
+/// On the JS target nothing pumps moonbitlang/async's scheduler in the
+/// background, so a foreign-promise wait must perform wake + reschedule
+/// itself, which @js_async's Promise::wait does. A raw %async.suspend resumed
+/// straight from the settling JS microtask deadlocks any caller parked inside
+/// a spawned sub-coroutine (e.g. the agent turn's @async.all wave executor).
 async fn wait_js_string(promise : JsPromise) -> String raise JsPromiseError {
-  suspend_js_promise(fn(resolve, reject) {
-    promise.attach_string(resolve, fn(reason) {
-      reject(JsPromiseError::Rejected(reason))
-    })
-  })
+  js_promise_as_async(promise).wait() catch {
+    err => raise JsPromiseError::Rejected(err.to_string())
+  }
 }
-
-///|
-/// Start a top-level coroutine from a synchronous JS export.
-fn run_async_detached(task : async () -> Unit noraise) -> Unit = "%async.run"
