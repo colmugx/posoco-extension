@@ -8,13 +8,15 @@
 /// Persistent JSONL-backed session store (bun runtime).
 pub(all) struct JsonlSessionStore {
   root_dir : String
+  bus : @devkit.EventBus?
 }
 
 ///|
 pub fn JsonlSessionStore::JsonlSessionStore(
   root_dir : String,
+  bus? : @devkit.EventBus? = None,
 ) -> JsonlSessionStore {
-  { root_dir, }
+  { root_dir, bus, }
 }
 
 ///|
@@ -116,6 +118,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
         "jsonl[js]: Bun.write rejected for " + path + ": " + error.to_string(),
       )
   }
+  publish_session_status(self.bus, id)
 }
 
 ///|
@@ -151,6 +154,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
           "jsonl[js]: Bun.write rejected for " + path + ": " + error.to_string(),
         )
     }
+    publish_session_status(self.bus, id)
     return
   }
   // File exists: append only the new message lines, each prefixed with \n to
@@ -168,4 +172,5 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
         "jsonl[js]: appendFile rejected for " + path + ": " + error.to_string(),
       )
   }
+  publish_session_status(self.bus, id)
 }

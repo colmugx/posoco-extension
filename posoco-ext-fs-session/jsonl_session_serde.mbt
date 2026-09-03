@@ -189,6 +189,12 @@ fn message_to_json(msg : @posoco.Message) -> Json {
         ("tool_call_id", Json::string(call_id.to_string())),
         ("name", Json::string(tool_name.to_string())),
       ])
+      // Compat contract: is_error is written only when true; absent means
+      // success, so legacy files stay valid and older readers ignore the
+      // unknown field.
+      if outcome.is_failure() {
+        base["is_error"] = Json::boolean(true)
+      }
       Json::object(base)
     }
   }
@@ -323,10 +329,20 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                   Some(@posoco.Content::Text(t)) => t
                   _ => ""
                 }
-                let outcome = @posoco.ToolOutcome::Success(
-                  content=content_text,
-                  structured=None,
-                )
+                // is_error is only ever written as true; absent (legacy
+                // files) or anything else means success.
+                let outcome = match map.get("is_error") {
+                  Some(Json::True) =>
+                    @posoco.ToolOutcome::ToolReportedError(
+                      content=content_text,
+                      structured=None,
+                    )
+                  _ =>
+                    @posoco.ToolOutcome::Success(
+                      content=content_text,
+                      structured=None,
+                    )
+                }
                 Some(
                   @posoco.Message::ToolMessage(
                     call_id=@posoco.CallId::unchecked(call_id_str),

@@ -20,6 +20,62 @@ extern "js" fn js_now_ms() -> Int =
   #| () => Date.now()
 
 ///|
+priv struct StatusCapture {
+  events : Array[@devkit.BusEvent]
+}
+
+///|
+fn StatusCapture::StatusCapture() -> StatusCapture {
+  { events: [], }
+}
+
+///|
+impl @devkit.BusSubscriber for StatusCapture with fn on_bus_event(
+  self : StatusCapture,
+  event : @devkit.BusEvent,
+) -> Unit {
+  self.events.push(event)
+}
+
+///|
+async test "io[js]: save and append publish the session status register" {
+  if !js_bun_available() {
+    return
+  }
+  let root = "/tmp/posoco-fs-session-js-status-" + js_now_ms().to_string()
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let store = JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
+  let msgs : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
+  ]
+  store.save("sess_s", @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([]),
+  }) catch {
+    e => fail("save failed: \{e}")
+  }
+  store.append_messages("sess_a", 0, msgs[:]) catch {
+    e => fail("append failed: \{e}")
+  }
+  assert_eq(capture.events.length(), 2)
+  assert_eq(capture.events[0].source, "posoco_ext_fs_session")
+  debug_inspect(
+    @devkit.decode_status_op(capture.events[0]),
+    content=(
+      #|Some(Register(segment="session", label=None, priority=80, value=Some("sess_s")))
+    ),
+  )
+  debug_inspect(
+    @devkit.decode_status_op(capture.events[1]),
+    content=(
+      #|Some(Register(segment="session", label=None, priority=80, value=Some("sess_a")))
+    ),
+  )
+}
+
+///|
 async test "io[js]: append_messages first write stores full jsonl" {
   if !js_bun_available() {
     return

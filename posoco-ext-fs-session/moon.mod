@@ -3,7 +3,7 @@
 
 name = "colmugx/posoco-ext-fs-session"
 
-version = "0.2.0"
+version = "0.3.0"
 
 readme = "README.mbt.md"
 
@@ -18,7 +18,8 @@ preferred_target = "native"
 description = "Posoco JSONL File Session Store"
 
 import {
-  "colmugx/posoco@0.13.2",
+  "colmugx/posoco@0.14.3",
+  "colmugx/posoco-devkit@0.2.0",
   "moonbitlang/async@0.21.0",
   "moonbitlang/x@0.4.50",
 }

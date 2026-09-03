@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-fs-session"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -22,8 +23,9 @@ pub fn validate_session_id(String) -> Result[Unit, String]
 // Types and methods
 pub(all) struct JsonlSessionStore {
   root_dir : String
+  bus : @posoco-devkit.EventBus?
 }
-pub fn JsonlSessionStore::JsonlSessionStore(String) -> Self
+pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @posoco-devkit.EventBus?) -> Self
 pub fn JsonlSessionStore::extension_id(Self) -> String
 pub async fn JsonlSessionStore::list_ids(Self) -> Array[String] raise @error.SessionError
 pub fn JsonlSessionStore::manifest(Self) -> @port.ExtensionManifest

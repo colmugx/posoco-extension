@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/io",
@@ -17,6 +18,7 @@ options(
     "jsonl_session_serde.mbt": [ "native", "js" ],
     "session_id.mbt": [ "native", "js" ],
     "manifest.mbt": [ "native", "js" ],
+    "status_publish.mbt": [ "native", "js" ],
     "session_id_test.mbt": [ "native", "js" ],
     "list_ids.mbt": [ "native", "js" ],
     "list_ids.js.mbt": [ "js" ],

@@ -5,13 +5,15 @@
 /// Persistent JSONL-backed session store.
 pub(all) struct JsonlSessionStore {
   root_dir : String
+  bus : @devkit.EventBus?
 }
 
 ///|
 pub fn JsonlSessionStore::JsonlSessionStore(
   root_dir : String,
+  bus? : @devkit.EventBus? = None,
 ) -> JsonlSessionStore {
-  { root_dir, }
+  { root_dir, bus, }
 }
 
 ///|
@@ -147,6 +149,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
         "jsonl: failed to write " + path + ": " + xfs_error_detail(e),
       )
   }
+  publish_session_status(self.bus, id)
 }
 
 ///|
@@ -176,6 +179,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
           "jsonl: failed to write " + path + ": " + xfs_error_detail(e),
         )
     }
+    publish_session_status(self.bus, id)
     return
   }
   // File exists: open in append mode and write each new message line.
@@ -203,4 +207,5 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
     }
   }
   file.close()
+  publish_session_status(self.bus, id)
 }

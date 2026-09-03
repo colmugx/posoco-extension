@@ -184,6 +184,103 @@ test "serde: tool message with tool_call_id round-trips" {
 }
 
 ///|
+test "serde: tool error outcome persists is_error and round-trips as failure" {
+  let msg = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_err"),
+    tool_name=@posoco.ToolName::unchecked("bash"),
+    outcome=@posoco.ToolOutcome::ToolReportedError(
+      content="exit code 1: file not found",
+      structured=None,
+    ),
+  )
+  let session = @posoco.Session::{
+    messages: [msg],
+    metadata: Map::from_array([]),
+  }
+  let jsonl = session_to_jsonl(session)
+  assert_true(jsonl.contains("\"is_error\":true"))
+  match session_from_jsonl(jsonl) {
+    Ok(s) =>
+      match s.messages[0] {
+        @posoco.Message::ToolMessage(outcome~, ..) =>
+          match outcome {
+            @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+              assert_eq(content, "exit code 1: file not found")
+            _ => fail("expected ToolReportedError after round-trip")
+          }
+        _ => fail("expected ToolMessage")
+      }
+    Err(e) => fail("tool error round-trip failed: \{e}")
+  }
+}
+
+///|
+test "serde: tool success outcome writes no is_error field" {
+  let msg = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_ok"),
+    tool_name=@posoco.ToolName::unchecked("read"),
+    outcome=@posoco.ToolOutcome::Success(content="file body", structured=None),
+  )
+  let session = @posoco.Session::{
+    messages: [msg],
+    metadata: Map::from_array([]),
+  }
+  let jsonl = session_to_jsonl(session)
+  assert_true(!jsonl.contains("is_error"))
+}
+
+///|
+test "serde: legacy tool line without is_error loads as success" {
+  let legacy = "{}\n{\"role\":\"tool\",\"content\":[{\"type\":\"text\",\"text\":\"old result\"}],\"tool_call_id\":\"call_old\",\"name\":\"read\"}\n"
+  match session_from_jsonl(legacy) {
+    Ok(s) =>
+      match s.messages[0] {
+        @posoco.Message::ToolMessage(outcome~, ..) =>
+          match outcome {
+            @posoco.ToolOutcome::Success(content~, ..) =>
+              assert_eq(content, "old result")
+            _ => fail("legacy line should load as Success")
+          }
+        _ => fail("expected ToolMessage")
+      }
+    Err(e) => fail("legacy tool line failed to load: \{e}")
+  }
+}
+
+///|
+test "serde: runtime failure outcome also persists is_error" {
+  let msg = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_rt"),
+    tool_name=@posoco.ToolName::unchecked("bash"),
+    outcome=@posoco.ToolOutcome::RuntimeFailure(
+      error_category="spawn",
+      message="binary not found",
+    ),
+  )
+  let session = @posoco.Session::{
+    messages: [msg],
+    metadata: Map::from_array([]),
+  }
+  let jsonl = session_to_jsonl(session)
+  assert_true(jsonl.contains("\"is_error\":true"))
+  match session_from_jsonl(jsonl) {
+    Ok(s) =>
+      match s.messages[0] {
+        @posoco.Message::ToolMessage(outcome~, ..) =>
+          // Failure-ness survives the round-trip; the codec collapses the
+          // exact failure variant into ToolReportedError, carrying the
+          // summary text as content.
+          match outcome {
+            @posoco.ToolOutcome::ToolReportedError(..) => ()
+            _ => fail("RuntimeFailure should load back as a failure outcome")
+          }
+        _ => fail("expected ToolMessage")
+      }
+    Err(e) => fail("runtime failure round-trip failed: \{e}")
+  }
+}
+
+///|
 test "serde: image content round-trips" {
   let msg = @posoco.Message::UserMessage(content=[
     @posoco.Content::Image(media_type="image/png", data="data:..."),
@@ -376,6 +473,149 @@ async test "io[native]: overwrite existing session truncates correctly" {
     e => fail("load after overwrite failed: \{e}")
   }
   assert_eq(s.messages.length(), 0)
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
+}
+
+// Native status-publish tests (devkit status protocol, segment "session")
+
+///|
+priv struct StatusCapture {
+  events : Array[@devkit.BusEvent]
+}
+
+///|
+fn StatusCapture::StatusCapture() -> StatusCapture {
+  { events: [], }
+}
+
+///|
+impl @devkit.BusSubscriber for StatusCapture with fn on_bus_event(
+  self : StatusCapture,
+  event : @devkit.BusEvent,
+) -> Unit {
+  self.events.push(event)
+}
+
+///|
+async test "io[native]: save and append publish the session status register" {
+  let root = fresh_root("status-publish")
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let store = JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
+  let session = @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([]),
+  }
+  store.save("sess_save", session) catch {
+    e => fail("save failed: \{e}")
+  }
+  let msgs : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
+  ]
+  // First append writes a full jsonl file; the second takes the
+  // existing-file append path. Each successful persist publishes once.
+  store.append_messages("sess_append", 0, msgs[:]) catch {
+    e => fail("first append failed: \{e}")
+  }
+  store.append_messages("sess_append", 1, msgs[:]) catch {
+    e => fail("second append failed: \{e}")
+  }
+  assert_eq(capture.events.length(), 3)
+  assert_eq(capture.events[0].source, "posoco_ext_fs_session")
+  debug_inspect(
+    @devkit.decode_status_op(capture.events[0]),
+    content=(
+      #|Some(
+      #|  Register(
+      #|    segment="session",
+      #|    label=None,
+      #|    priority=80,
+      #|    value=Some("sess_save"),
+      #|    color=None,
+      #|  ),
+      #|)
+    ),
+  )
+  debug_inspect(
+    @devkit.decode_status_op(capture.events[1]),
+    content=(
+      #|Some(
+      #|  Register(
+      #|    segment="session",
+      #|    label=None,
+      #|    priority=80,
+      #|    value=Some("sess_append"),
+      #|    color=None,
+      #|  ),
+      #|)
+    ),
+  )
+  debug_inspect(
+    @devkit.decode_status_op(capture.events[2]),
+    content=(
+      #|Some(
+      #|  Register(
+      #|    segment="session",
+      #|    label=None,
+      #|    priority=80,
+      #|    value=Some("sess_append"),
+      #|    color=None,
+      #|  ),
+      #|)
+    ),
+  )
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
+}
+
+///|
+async test "io[native]: bus=None store behaves exactly as before" {
+  let root = fresh_root("status-silent")
+  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let session = @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([]),
+  }
+  store.save("sess_c", session) catch {
+    e => fail("save without bus failed: \{e}")
+  }
+  let msgs : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
+  ]
+  store.append_messages("sess_c", 0, msgs[:]) catch {
+    e => fail("append without bus failed: \{e}")
+  }
+  let loaded = store.load("sess_c") catch {
+    e => fail("load without bus failed: \{e}")
+  }
+  assert_eq(loaded.messages.length(), 1)
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
+}
+
+///|
+async test "io[native]: failed persist publishes nothing" {
+  let root = fresh_root("status-error")
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let store = JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
+  let session = @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([]),
+  }
+  try store.save("bad/id", session) catch {
+    @posoco.SessionError::Save(_) => ()
+    e => fail("expected Save error, got \{e}")
+  } noraise {
+    _ => fail("invalid session id should fail save")
+  }
+  assert_eq(capture.events.length(), 0)
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
