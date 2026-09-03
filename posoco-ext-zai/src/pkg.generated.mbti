@@ -13,11 +13,31 @@ import {
 }
 
 // Values
-pub fn zai_profile_endpoint(String) -> (String, String)?
+pub async fn fetch_zai_models(String, String, endpoint_prefix? : String) -> Array[String] raise @error.ModelError
+
+pub fn parse_cached_zai_models(Json?) -> Array[String]?
+
+pub fn parse_zai_models(Json) -> Array[String] raise @error.ModelError
+
+pub fn zai_endpoint_parts(String, String) -> (String, String)
+
+pub fn zai_model_catalog(ZaiConfig, @posoco-devkit.ExtContext, ZaiCatalogIdentity, &@posoco-ext-llm.ApiKeyFactory, capabilities? : Array[String]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+
+pub fn zai_model_catalog_from_ids(Array[String], ZaiConfig, @posoco-devkit.ExtContext, ZaiCatalogIdentity, &@posoco-ext-llm.ApiKeyFactory, capabilities? : Array[String]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+
+pub fn zai_platform_endpoint(String) -> (String, String)?
 
 // Errors
 
 // Types and methods
+pub(all) struct ZaiCatalogIdentity {
+  provider_id : String
+  label_prefix : String
+  manifest_id : String
+  endpoint_for_credential : ((@posoco-ext-oauth.ApiKeyCredential) -> (String, String)?)?
+}
+pub fn ZaiCatalogIdentity::ZaiCatalogIdentity(provider_id~ : String, label_prefix~ : String, manifest_id~ : String, endpoint_for_credential~ : ((@posoco-ext-oauth.ApiKeyCredential) -> (String, String)?)?) -> Self
+
 pub(all) struct ZaiConfig {
   api_key : String
   base_url : String
@@ -27,10 +47,8 @@ pub(all) struct ZaiConfig {
   thinking_efforts : Array[String]
 } derive(Eq, @debug.Debug)
 pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
-pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String) -> Self raise @error.CompositionError
-pub fn ZaiConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
-
-type ZaiModelInfo
+pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String) -> Self
+pub fn ZaiConfig::with_reasoning_effort(Self, String, manifest_id? : String) -> Self raise @error.CompositionError
 
 pub(all) struct ZaiModelPort {
   config : ZaiConfig
@@ -47,8 +65,10 @@ pub(all) struct ZaiProvider {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn ZaiProvider::ZaiProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub async fn ZaiProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for ZaiProvider
 pub impl @posoco-ext-llm.ProviderFactory for ZaiProvider
+pub impl @posoco-ext-llm.RefreshableProviderFactory for ZaiProvider
 
 // Type aliases
 

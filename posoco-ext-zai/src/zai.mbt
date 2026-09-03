@@ -36,16 +36,17 @@ fn ZaiModelPort::thinking_state(self : ZaiModelPort) -> (Bool, String?) {
 pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
   self : ZaiModelPort,
   _scope : @posoco.InvocationScope,
-  messages : Array[@posoco.Message],
+  messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let (thinking_enabled, effort_str) = self.thinking_state()
+  let messages_owned = messages.to_owned()
   match stream {
     NoStream => {
       let body = build_chat_request(
-        messages,
+        messages_owned,
         tools,
         options,
         self.config.model,
@@ -88,11 +89,14 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
           )
       }
       let completion = decode_chat_response(resp_json)
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
     Stream(on_chunk) => {
       let body = build_chat_request(
-        messages,
+        messages_owned,
         tools,
         options,
         self.config.model,
@@ -143,11 +147,10 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
         }
       }
       let acc = @posoco.StreamAccumulator::StreamAccumulator()
-      let on_typed = fn(chunk : @posoco.StreamChunk) {
-        on_chunk(streamchunk_to_json(chunk))
-      }
+      // Forward typed StreamChunks directly to the host callback.
       let mut done = false
       let mut data_buffer = ""
+      let mut last_yield = @async.now()
       while !done {
         let line = client.read_until("\n") catch {
           err => {
@@ -164,7 +167,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
               let payload = trimmed[5:].trim().to_owned()
               if payload.length() > 0 {
                 data_buffer = payload
-                done = process_zai_sse(payload, acc, on_typed)
+                done = process_zai_sse(payload, acc, on_chunk)
               }
             } else if trimmed == "" && data_buffer.length() > 0 {
               data_buffer = ""
@@ -177,59 +180,24 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
             )
           }
         }
+        // Yield at most every 16ms so the event loop can breathe during a
+        // buffered SSE burst; the pause is also a cancellation point.
+        let now = @async.now()
+        if now - last_yield >= 16L {
+          @async.pause() catch {
+            _ => ()
+          }
+          last_yield = now
+        }
       }
       client.close()
       validate_zai_stream_tool_calls(acc)
       let completion = acc.to_completion()
-      @posoco.ModelCallResult::{ completion, processed_messages: messages }
+      @posoco.ModelCallResult::{
+        completion,
+        processed_messages: messages_owned,
+      }
     }
-  }
-}
-
-///|
-fn streamchunk_to_json(chunk : @posoco.StreamChunk) -> Json {
-  match chunk {
-    TextDelta(token~) =>
-      Json::object({
-        "kind": Json::string("text"),
-        "token": Json::string(token),
-      })
-    ReasoningDelta(token~) =>
-      Json::object({
-        "kind": Json::string("reasoning"),
-        "token": Json::string(token),
-      })
-    ToolCallDelta(index~, id~, name~, arguments_delta~) => {
-      let m : Map[String, Json] = {
-        "kind": Json::string("tool_call_delta"),
-        "index": Json::number(index.to_double()),
-      }
-      match id {
-        Some(s) => m["id"] = Json::string(s)
-        None => ()
-      }
-      match name {
-        Some(s) => m["name"] = Json::string(s)
-        None => ()
-      }
-      match arguments_delta {
-        Some(s) => m["arguments_delta"] = Json::string(s)
-        None => ()
-      }
-      Json::object(m)
-    }
-    Usage(input_tokens~, output_tokens~, total_tokens~) =>
-      Json::object({
-        "kind": Json::string("usage"),
-        "input_tokens": Json::number(input_tokens.to_double()),
-        "output_tokens": Json::number(output_tokens.to_double()),
-        "total_tokens": Json::number(total_tokens.to_double()),
-      })
-    Finish(reason~) =>
-      Json::object({
-        "kind": Json::string("finish"),
-        "reason": Json::string(reason),
-      })
   }
 }
 
@@ -248,31 +216,18 @@ fn validate_zai_stream_tool_calls(
         "zai SSE parse failure (stage=tool.name, category=missing)",
       )
     }
-    if tc.arguments_json == "" {
+    if tc.arguments_json() == "" {
       raise @posoco.ModelError::ResponseParse(
         "zai SSE parse failure (stage=tool.arguments, category=missing)",
       )
     }
-    let _ : Json = @json.parse(tc.arguments_json) catch {
+    let _ : Json = @json.parse(tc.arguments_json()) catch {
       _ =>
         raise @posoco.ModelError::ResponseParse(
-          "zai SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json.length()})",
+          "zai SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
         )
     }
   }
-}
-
-///|
-pub impl @posoco.ModelPort for ZaiModelPort with fn compact(
-  _self : ZaiModelPort,
-  _scope : @posoco.InvocationScope,
-  _messages : Array[@posoco.Message],
-  _options : @posoco.ChatOptions,
-  _trigger : @posoco.CompactTrigger,
-) -> @posoco.CompactResult raise @posoco.ModelError {
-  raise @posoco.ModelError::ResponseParse(
-    "zai does not implement compact (no provider-side endpoint)",
-  )
 }
 
 ///|

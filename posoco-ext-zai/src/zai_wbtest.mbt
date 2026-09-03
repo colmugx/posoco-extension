@@ -1,14 +1,14 @@
 ///|
-test "profile endpoints" {
+test "platform endpoints" {
   debug_inspect(
-    zai_profile_endpoint("coding"),
-    content="Some((\"https://api.z.ai\", \"/api/coding/paas/v4\"))",
+    zai_platform_endpoint("zai"),
+    content="Some((\"https://api.z.ai\", \"/api/paas/v4\"))",
   )
   debug_inspect(
-    zai_profile_endpoint("cn_coding"),
-    content="Some((\"https://open.bigmodel.cn\", \"/api/coding/paas/v4\"))",
+    zai_platform_endpoint("bigmodel"),
+    content="Some((\"https://open.bigmodel.cn\", \"/api/paas/v4\"))",
   )
-  debug_inspect(zai_profile_endpoint("bogus"), content="None")
+  debug_inspect(zai_platform_endpoint("bogus"), content="None")
 }
 
 ///|
@@ -17,14 +17,14 @@ test "for_model picks per-model thinking defaults" {
     "key",
     "glm-5.3",
     base_url="https://api.z.ai",
-    endpoint_prefix="/api/coding/paas/v4",
+    endpoint_prefix="/api/paas/v4",
   )
   inspect(glm5.reasoning_effort, content="high")
   let glm4 = ZaiConfig::for_model(
     "key",
-    "glm-4.7",
+    "glm-4.5-air",
     base_url="https://api.z.ai",
-    endpoint_prefix="/api/coding/paas/v4",
+    endpoint_prefix="/api/paas/v4",
   )
   inspect(glm4.reasoning_effort, content="")
   inspect(glm4.thinking_efforts.length(), content="0")
@@ -42,7 +42,7 @@ test "with_reasoning_effort rejects unknown levels" {
     "key",
     "glm-5.3",
     base_url="https://api.z.ai",
-    endpoint_prefix="/api/coding/paas/v4",
+    endpoint_prefix="/api/paas/v4",
   )
   try config.with_reasoning_effort("ultra") catch {
     @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
@@ -61,12 +61,12 @@ test "encode: thinking and reasoning_effort on the wire" {
     "key",
     "glm-5.3",
     base_url="https://api.z.ai",
-    endpoint_prefix="/api/coding/paas/v4",
+    endpoint_prefix="/api/paas/v4",
   )
   let body = build_chat_request(
     [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
     [],
-    { temperature: None, max_output_tokens: None },
+    { temperature: None, max_output_tokens: None, },
     config.model,
     false,
     true,
@@ -81,8 +81,61 @@ test "encode: thinking and reasoning_effort on the wire" {
 }
 
 ///|
+/// Encode a minimal request and expose its top-level fields.
+fn encode_request(model : String, stream : Bool) -> Map[String, Json] {
+  let body = build_chat_request(
+    [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
+    [],
+    { temperature: None, max_output_tokens: None, },
+    model,
+    stream,
+    true,
+    None,
+  )
+  guard body is Object(fields) else { abort("expected JSON object") }
+  fields
+}
+
+///|
+test "encode: tool_stream rides along when streaming glm-4.6+" {
+  json_inspect(encode_request("glm-5.3", true), content={
+    "model": "glm-5.3",
+    "messages": [{ "role": "user", "content": "hi" }],
+    "thinking": { "type": "enabled" },
+    "stream": true,
+    "stream_options": { "include_usage": true },
+    "tool_stream": true,
+  })
+  for model in ["glm-5", "glm-5.1", "glm-4.6", "glm-4.7", "glm-5.3-air"] {
+    let fields = encode_request(model, true)
+    guard fields.contains("tool_stream") else {
+      fail("expected tool_stream for \{model}")
+    }
+    assert_true(fields["tool_stream"] is True)
+  }
+}
+
+///|
+test "encode: tool_stream omitted for unsupported models and non-streaming" {
+  for model in ["glm-4.5", "glm-4.5-air", "some-other"] {
+    inspect(
+      encode_request(model, true).contains("tool_stream"),
+      content="false",
+    )
+  }
+  inspect(
+    encode_request("glm-4.6", false).contains("tool_stream"),
+    content="false",
+  )
+  assert_false(supports_tool_stream("glm"))
+  assert_false(supports_tool_stream("glm-4"))
+  assert_true(supports_tool_stream("prefix-glm-4.6v"))
+  assert_false(supports_tool_stream("glm-4."))
+}
+
+///|
 test "encode: reasoning_content only resent with tool_calls" {
-  let reasoning : @posoco.Reasoning? = Some({ content: "thought", raw: None })
+  let reasoning : @posoco.Reasoning? = Some({ content: "thought", raw: None, })
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("c1"),
     name: @posoco.ToolName::unchecked("grep"),
@@ -184,10 +237,10 @@ test "classify: quota 429 keeps typed reset, others redact" {
   guard err is Some(@posoco.ModelError::RateLimited(info)) else {
     fail("expected RateLimited")
   }
-  inspect(
+  debug_inspect(
     info.provider_code,
     content=(
-      #|Some(1308)
+      #|Some("1308")
     ),
   )
   // No explicit tz in the message -> z.ai default UTC+8.
@@ -211,92 +264,8 @@ test "classify: quota 429 keeps typed reset, others redact" {
   guard server_error is Some(@posoco.ModelError::Transport(_)) else {
     fail("expected Transport")
   }
-  inspect(
+  debug_inspect(
     classify_zai_http_error("chat.http_status", 200, "", now_ms=0L),
     content="None",
   )
-}
-
-///|
-fn zai_settings(pairs : Array[(String, Json)]) -> @llm.ProviderConfigSource {
-  @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(Json::object(Map::from_array(pairs))),
-  )
-}
-
-///|
-test "factory: unconfigured without a key" {
-  let provider = ZaiProvider()
-  let result = provider.build(zai_settings([]))
-  inspect(result is @llm.ProviderBuildResult::Unconfigured, content="true")
-}
-
-///|
-test "factory: ready catalog with coding-plan default endpoint" {
-  let provider = ZaiProvider()
-  let result = provider.build(
-    zai_settings([
-      ("api_key", Json::string("k")),
-      ("model", Json::string("glm-4.7")),
-    ]),
-  )
-  guard result is @llm.ProviderBuildResult::Ready(catalog) else {
-    fail("expected Ready")
-  }
-  inspect(catalog.provider_id, content="zai")
-  inspect(catalog.slots.length(), content="8")
-  inspect(catalog.slots[0].model_id, content="glm-4.7")
-  inspect(catalog.slots[0].id, content="zai/glm-4.7")
-  assert_true(catalog.capabilities.contains("coding_plan"))
-}
-
-///|
-test "factory: OAuth credential is a typed failure" {
-  let provider = ZaiProvider()
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(Json::object({ "api_key": Json::string("k") })),
-    provider_credential=Some(
-      @oauth.ProviderCredential::OAuth({
-        access_token: "t",
-        refresh_token: "",
-        expires_at: 0,
-        token_type: "Bearer",
-        metadata: Map::from_array([]),
-      }),
-    ),
-  )
-  try provider.build(source) catch {
-    @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
-      inspect(manifest_id, content="posoco_ext_zai")
-      inspect(
-        detail,
-        content="z.ai has no OAuth; use an API key from z.ai/model-api",
-      )
-    }
-    _ => fail("expected ManifestSchemaError")
-  } noraise {
-    _ => fail("expected failure")
-  }
-}
-
-///|
-test "factory: unknown profile is a typed failure" {
-  let provider = ZaiProvider()
-  try
-    provider.build(
-      zai_settings([
-        ("api_key", Json::string("k")),
-        ("profile", Json::string("eu")),
-      ]),
-    )
-  catch {
-    @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
-      inspect(
-        detail,
-        content="unknown profile: eu (expected coding | general | cn | cn_coding)",
-      )
-    _ => fail("expected ManifestSchemaError")
-  } noraise {
-    _ => fail("expected failure")
-  }
 }

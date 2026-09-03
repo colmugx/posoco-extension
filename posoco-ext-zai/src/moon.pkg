@@ -2,6 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-kit-chat-completions" @chatkit,
+  "colmugx/posoco-kit-compact-summary" @compact_summary,
   "colmugx/posoco-ext-llm" @llm,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",
@@ -17,5 +18,9 @@ import {
 } for "wbtest"
 
 options(
-  targets: { "zai_wbtest.mbt": [ "native" ] },
+  targets: {
+    "zai_wbtest.mbt": [ "native" ],
+    "posoco_ext_zai_wbtest.mbt": [ "native" ],
+    "list_models_wbtest.mbt": [ "native" ],
+  },
 )

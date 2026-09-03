@@ -1,21 +1,20 @@
 ///|
-/// z.ai/bigmodel GLM endpoint presets. The Coding Plan only honors plan
-/// quota on the coding endpoints; the general endpoints bill balance.
-pub fn zai_profile_endpoint(profile : String) -> (String, String)? {
-  match profile {
-    "coding" => Some(("https://api.z.ai", "/api/coding/paas/v4"))
-    "general" => Some(("https://api.z.ai", "/api/paas/v4"))
-    "cn" => Some(("https://open.bigmodel.cn", "/api/paas/v4"))
-    "cn_coding" => Some(("https://open.bigmodel.cn", "/api/coding/paas/v4"))
+/// Z.ai / BigModel platform endpoint presets for direct API access
+/// (pay-as-you-go balance). The GLM Coding Plan endpoints live in
+/// posoco-ext-zai-coding-plan.
+pub fn zai_platform_endpoint(platform : String) -> (String, String)? {
+  match platform {
+    "zai" => Some(("https://api.z.ai", "/api/paas/v4"))
+    "bigmodel" => Some(("https://open.bigmodel.cn", "/api/paas/v4"))
     _ => None
   }
 }
 
 ///|
-/// GLM models the plan serves, with their picker-facing reasoning efforts.
-/// GLM-4.x takes `thinking: {type}` but no `reasoning_effort` (that field is
-/// GLM-5.2+); those models are always-on thinkers with no selector.
-struct ZaiModelInfo {
+/// GLM models the platform serves, with their picker-facing reasoning
+/// efforts. GLM-4.x takes `thinking: {type}` but no `reasoning_effort` (that
+/// field is GLM-5.2+); those models are always-on thinkers with no selector.
+priv struct ZaiModelInfo {
   id : String
   efforts : Array[String]
   default_effort : String
@@ -25,6 +24,12 @@ struct ZaiModelInfo {
 ///|
 fn zai_models() -> Array[ZaiModelInfo] {
   [
+    {
+      id: "glm-5.3-flash",
+      efforts: ["low", "high", "max"],
+      default_effort: "high",
+      thinking_always: false,
+    },
     {
       id: "glm-5.3",
       efforts: ["low", "high", "max"],
@@ -37,26 +42,6 @@ fn zai_models() -> Array[ZaiModelInfo] {
       default_effort: "high",
       thinking_always: false,
     },
-    {
-      id: "glm-5.1",
-      efforts: ["low", "high", "max"],
-      default_effort: "high",
-      thinking_always: false,
-    },
-    {
-      id: "glm-5",
-      efforts: ["low", "high", "max"],
-      default_effort: "high",
-      thinking_always: false,
-    },
-    {
-      id: "glm-5-turbo",
-      efforts: ["low", "high", "max"],
-      default_effort: "high",
-      thinking_always: false,
-    },
-    { id: "glm-4.7", efforts: [], default_effort: "", thinking_always: true },
-    { id: "glm-4.6", efforts: [], default_effort: "", thinking_always: true },
     {
       id: "glm-4.5-air",
       efforts: [],
@@ -73,7 +58,26 @@ fn zai_model_info(model : String) -> ZaiModelInfo? {
       return Some(info)
     }
   }
-  None
+  // Unknown ids (a release discovered through `/models` that the preset has
+  // not caught up with) get their generation's thinking policy, so a live
+  // model list yields correct pickers without a release lag.
+  if model.has_prefix("glm-5") {
+    Some(ZaiModelInfo::{
+      id: model,
+      efforts: ["low", "high", "max"],
+      default_effort: "high",
+      thinking_always: false,
+    })
+  } else if model.has_prefix("glm-4") {
+    Some(ZaiModelInfo::{
+      id: model,
+      efforts: [],
+      default_effort: "",
+      thinking_always: true,
+    })
+  } else {
+    None
+  }
 }
 
 ///|
@@ -93,7 +97,7 @@ pub fn ZaiConfig::ZaiConfig(
   api_key : String,
   model? : String = "glm-5.3",
   base_url? : String = "https://api.z.ai",
-  endpoint_prefix? : String = "/api/coding/paas/v4",
+  endpoint_prefix? : String = "/api/paas/v4",
   reasoning_effort? : String = "",
   thinking_efforts? : Array[String] = ["low", "high", "max"],
 ) -> ZaiConfig {
@@ -119,7 +123,7 @@ pub fn ZaiConfig::for_model(
   model : String,
   base_url~ : String,
   endpoint_prefix~ : String,
-) -> ZaiConfig raise @posoco.CompositionError {
+) -> ZaiConfig {
   match zai_model_info(model) {
     Some(info) => {
       let effort = if info.thinking_always || info.efforts.is_empty() {
@@ -153,17 +157,18 @@ pub fn ZaiConfig::for_model(
 pub fn ZaiConfig::with_reasoning_effort(
   self : ZaiConfig,
   effort : String,
+  manifest_id? : String = "posoco_ext_zai",
 ) -> ZaiConfig raise @posoco.CompositionError {
   if effort == "off" {
-    return { ..self, reasoning_effort: "" }
+    return { ..self, reasoning_effort: "", }
   }
   if !self.thinking_efforts.contains(effort) {
     raise @posoco.CompositionError::ManifestSchemaError(
-      manifest_id="posoco_ext_zai",
+      manifest_id~,
       detail="unsupported reasoning effort: " + effort,
     )
   }
-  { ..self, reasoning_effort: effort }
+  { ..self, reasoning_effort: effort, }
 }
 
 ///|
@@ -177,5 +182,5 @@ pub fn ZaiModelPort::ZaiModelPort(
   config : ZaiConfig,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> ZaiModelPort {
-  { config, ctx }
+  { config, ctx, }
 }

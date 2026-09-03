@@ -7,6 +7,8 @@
 /// - `reasoning_content` on assistant messages MUST be resent when the
 ///   message carries tool_calls (same contract as DeepSeek; GLM 400s
 ///   otherwise). Without tool_calls it is omitted to save tokens.
+/// - `tool_stream: true` for streaming tool-call arguments on glm-4.6+;
+///   omitted otherwise (docs.bigmodel.cn stream-tool).
 /// - Message order is append-only (prefix-cache friendly).
 
 ///|
@@ -32,17 +34,17 @@ fn encode_message(msg : @posoco.Message) -> Json {
       ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
-  let text_builder = StringBuilder::new()
-  for block in content_blocks {
-    match block {
-      Text(s) => text_builder.write_string(s)
-      Image(..) => () // GLM coding-plan chat does not accept images
-    }
+  // Shared content encoding: string form (this endpoint does not accept
+  // content parts), with any Image block downgraded to an explicit
+  // placeholder instead of a silent drop.
+  let content_json : Json = match
+    @chatkit.encode_chat_message_content(content_blocks) {
+    TextContent(s) => Json::string(s)
+    PartsContent(parts) => Json::array(parts)
   }
-  let content_str = text_builder.to_string()
   let obj : Map[String, Json] = {
     "role": Json::string(role),
-    "content": Json::string(content_str),
+    "content": content_json,
   }
   match tool_call_id {
     Some(id) => obj["tool_call_id"] = Json::string(id)
@@ -135,6 +137,52 @@ fn build_chat_request(
     body["stream_options"] = Json::object({
       "include_usage": Json::boolean(true),
     })
+    if supports_tool_stream(model) {
+      body["tool_stream"] = Json::boolean(true)
+    }
   }
   Json::object(body)
+}
+
+///|
+/// Only glm-4.6+ documents `tool_stream`; older models may reject unknown
+/// fields (docs.bigmodel.cn stream-tool).
+fn supports_tool_stream(model : String) -> Bool {
+  let ver_start = match model.find("glm-") {
+    Some(i) => i + "glm-".length()
+    None => return false
+  }
+  let len = model.length()
+  let mut i = ver_start
+  let mut major = 0
+  while i < len && is_digit_code(model[i]) {
+    major = major * 10 + digit_value(model[i])
+    i += 1
+  }
+  if i == ver_start {
+    return false
+  }
+  let mut minor = 0
+  if i < len && model[i] == '.' {
+    i += 1
+    let minor_start = i
+    while i < len && is_digit_code(model[i]) {
+      minor = minor * 10 + digit_value(model[i])
+      i += 1
+    }
+    if i == minor_start {
+      return false
+    }
+  }
+  major > 4 || (major == 4 && minor >= 6)
+}
+
+///|
+fn is_digit_code(code : UInt16) -> Bool {
+  code >= '0' && code <= '9'
+}
+
+///|
+fn digit_value(code : UInt16) -> Int {
+  (code - '0').to_int()
 }
