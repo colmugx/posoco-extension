@@ -8,4 +8,4 @@
 pub extend StatusBar with @posoco.CommandPort::{invoke}
 
 ///|
-pub extend StatusBar with @posoco.Observer::{on_event}
+pub extend StatusBar with @posoco.Lifecycle::{on_compose}

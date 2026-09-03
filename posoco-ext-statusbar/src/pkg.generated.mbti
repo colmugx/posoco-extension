@@ -5,63 +5,38 @@ import {
   "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
-  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
-pub const STATUSBAR_TOPIC : String = "status"
-
-pub fn available_segments() -> Array[String]
-
-pub fn default_items() -> Array[String]
 
 // Errors
 
 // Types and methods
+pub(all) struct SegmentInfo {
+  segment : String
+  owner : String
+  label : String?
+  priority : Int
+  value : String?
+  color : String?
+} derive(Eq, @debug.Debug)
+
 pub struct StatusBar {
-  ui : &@port.UiPort
-  state : StatusBarState
-  clock : () -> Int64
-  mut items : Array[String]
+  // private fields
 }
-pub fn StatusBar::StatusBar(&@port.UiPort, items? : Array[String], bus? : @posoco-devkit.EventBus?, clock? : () -> Int64) -> Self
-pub fn StatusBar::clear_custom(Self, String) -> Unit
-pub fn StatusBar::custom_segments(Self) -> Array[String]
+pub fn StatusBar::StatusBar(bus? : @posoco-devkit.EventBus?) -> Self
+pub fn StatusBar::clear_segment(Self, source~ : String, segment~ : String) -> Unit
 pub fn StatusBar::extension_id(Self) -> String
 pub async fn StatusBar::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
-pub fn StatusBar::items(Self) -> Array[String]
 pub fn StatusBar::manifest(Self) -> @port.ExtensionManifest
-pub fn StatusBar::on_event(Self, @types.TurnEvent) -> Unit
-pub fn StatusBar::set_custom(Self, String, String) -> Unit
-pub fn StatusBar::set_latency(Self, Int) -> Unit
-pub fn StatusBar::set_model(Self, String, effort~ : String?) -> Unit
-pub fn StatusBar::set_session(Self, String) -> Unit
+pub fn StatusBar::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn StatusBar::segments(Self) -> Array[SegmentInfo]
+pub fn StatusBar::set_segment(Self, source~ : String, segment~ : String, value~ : String) -> Unit
 pub impl @posoco-devkit.BusSubscriber for StatusBar
 pub impl @port.CommandPort for StatusBar
 pub impl @port.Extension for StatusBar
-pub impl @port.Observer for StatusBar
-
-pub struct StatusBarState {
-  mut model : String?
-  mut effort : String?
-  mut turn_count : Int
-  mut tool_calls : Int
-  mut tokens_in : Int
-  mut tokens_out : Int
-  mut round_cached : Int?
-  mut round_input : Int?
-  mut round_started_ms : Int64?
-  mut first_token_ms : Int64?
-  mut ttft_ms : Int?
-  mut round_gen_ms : Int?
-  mut round_tps : Double?
-  mut sum_tps : Double
-  mut tps_rounds : Int
-  mut turn_started_ms : Int64?
-  mut session_id : String?
-  mut latency_ms : Int?
-  custom : Map[String, String]
-}
+pub impl @port.Lifecycle for StatusBar
 
 // Type aliases
 

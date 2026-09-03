@@ -7,7 +7,7 @@ priv struct RecordingUi {
 
 ///|
 fn RecordingUi::RecordingUi() -> RecordingUi {
-  { renders: [] }
+  { renders: [], }
 }
 
 ///|
@@ -19,10 +19,25 @@ fn RecordingUi::last(self : RecordingUi) -> @posoco.UiRender {
 }
 
 ///|
-fn key_value_pairs(render : @posoco.UiRender) -> Array[(String, String)] {
+fn bar_entries(render : @posoco.UiRender) -> Array[@posoco.UiEntry] {
   match render.body {
-    @posoco.UiBody::KeyValue(pairs) => pairs
-    _ => abort("expected a KeyValue body")
+    @posoco.UiBody::Entries(entries) => entries
+    _ => abort("expected an Entries body")
+  }
+}
+
+///|
+/// UiEntry does not derive Eq, so two Entries bodies are compared
+/// field-wise.
+fn assert_same_entries(
+  a : Array[@posoco.UiEntry],
+  b : Array[@posoco.UiEntry],
+) -> Unit raise {
+  assert_eq(a.length(), b.length())
+  for i in 0..<a.length() {
+    assert_eq(a[i].key, b[i].key)
+    assert_eq(a[i].value, b[i].value)
+    assert_eq(a[i].color, b[i].color)
   }
 }
 
@@ -50,349 +65,519 @@ impl @posoco.UiPort for RecordingUi with fn request(
 }
 
 ///|
-fn new_bar() -> (StatusBar, RecordingUi) {
+/// A bridge subscribed to a real devkit bus and composed against a
+/// RecordingUi — the full wiring the agent composer would build. Publishes
+/// on the bus exercise the cross-package protocol end to end.
+fn new_composed_bar() -> (StatusBar, RecordingUi, @devkit.EventBus) raise @posoco.CompositionError {
   let ui = RecordingUi()
-  (StatusBar(ui as &@posoco.UiPort), ui)
+  let bus = @devkit.EventBus()
+  let bar = StatusBar(bus=Some(bus))
+  let model = @posoco.ScriptedModel([])
+  bar.on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Ui],
+      model=model as &@posoco.ModelPort,
+      ui=ui as &@posoco.UiPort,
+    ),
+  )
+  (bar, ui, bus)
 }
 
 ///|
-test "set_model renders model and effort through the status slot" {
-  let (bar, ui) = new_bar()
-  inspect(ui.renders.length(), content="0")
-  bar.set_model("deepseek-v4-pro", effort=Some("high"))
+test "register with a value renders the segment through the status slot" {
+  let (_bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_plan",
+    segment="plan",
+    label="Plan",
+    priority=10,
+    value="Plan",
+  )
+  assert_eq(ui.renders.length(), 1)
   let render = ui.last()
   assert_eq(render.slot, @posoco.UiSlot::Status)
   assert_eq(render.key, "statusbar")
+  assert_eq(render.title, None)
+  assert_eq(render.ttl_ms, None)
   debug_inspect(
-    key_value_pairs(render),
+    bar_entries(render),
+    content=(
+      #|[{ key: "plan", value: "Plan", color: None }]
+    ),
+  )
+}
+
+///|
+test "update on an unknown segment auto-registers it" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_update(
+    bus,
+    source="posoco_ext_stats",
+    segment="tps",
+    value="42.0/s",
+  )
+  assert_eq(ui.renders.length(), 1)
+  let entries = bar_entries(ui.last())
+  assert_eq(entries.length(), 1)
+  assert_eq(entries[0].key, "tps")
+  assert_eq(entries[0].value, "42.0/s")
+  assert_eq(entries[0].color, None)
+  assert_eq(bar.segments(), [
+    {
+      segment: "tps",
+      owner: "posoco_ext_stats",
+      label: None,
+      priority: 0,
+      value: Some("42.0/s"),
+      color: None,
+    },
+  ])
+}
+
+///|
+test "unregister renders the emptied bar" {
+  let (_bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_plan",
+    segment="plan",
+    priority=10,
+    value="Plan",
+  )
+  assert_eq(ui.renders.length(), 1)
+  @devkit.publish_status_unregister(
+    bus,
+    source="posoco_ext_plan",
+    segment="plan",
+  )
+  // The applied change that empties the bar still renders: an empty
+  // Entries body tells the host to clear the line.
+  assert_eq(ui.renders.length(), 2)
+  debug_inspect(
+    bar_entries(ui.last()),
+    content=(
+      #|[]
+    ),
+  )
+}
+
+///|
+test "ownership: a second source cannot update, clear, or re-register" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_llm",
+    segment="model",
+    priority=20,
+    value="deepseek-v4-pro",
+  )
+  assert_eq(ui.renders.length(), 1)
+  // Foreign update: ignored — no state change, no render.
+  @devkit.publish_status_update(
+    bus,
+    source="posoco_ext_imposter",
+    segment="model",
+    value="hijacked",
+  )
+  assert_eq(ui.renders.length(), 1)
+  // Foreign unregister: ignored.
+  @devkit.publish_status_unregister(
+    bus,
+    source="posoco_ext_imposter",
+    segment="model",
+  )
+  assert_eq(ui.renders.length(), 1)
+  // Foreign register: ignored.
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_imposter",
+    segment="model",
+    priority=99,
+    value="stolen",
+  )
+  assert_eq(ui.renders.length(), 1)
+  assert_eq(bar.segments(), [
+    {
+      segment: "model",
+      owner: "posoco_ext_llm",
+      label: None,
+      priority: 20,
+      value: Some("deepseek-v4-pro"),
+      color: None,
+    },
+  ])
+  // The direct paths enforce the same rule.
+  bar.set_segment(
+    source="posoco_ext_imposter",
+    segment="model",
+    value="hijacked",
+  )
+  assert_eq(ui.renders.length(), 1)
+  bar.clear_segment(source="posoco_ext_imposter", segment="model")
+  assert_eq(ui.renders.length(), 1)
+  assert_eq(bar.segments().length(), 1)
+}
+
+///|
+test "owner re-register overwrites metadata but keeps first_seen order" {
+  let (bar, _ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="first",
+    priority=50,
+    value="1",
+  )
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="second",
+    priority=50,
+    value="2",
+  )
+  // Same priority: registration order so far.
+  debug_inspect(
+    bar.segments().map(fn(info) { info.segment }),
+    content=(
+      #|["first", "second"]
+    ),
+  )
+  // Overwriting "first" must not move it behind "second".
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="first",
+    label="Renamed",
+    priority=50,
+    value="1b",
+  )
+  assert_eq(bar.segments(), [
+    {
+      segment: "first",
+      owner: "ext",
+      label: Some("Renamed"),
+      priority: 50,
+      value: Some("1b"),
+      color: None,
+    },
+    {
+      segment: "second",
+      owner: "ext",
+      label: None,
+      priority: 50,
+      value: Some("2"),
+      color: None,
+    },
+  ])
+}
+
+///|
+test "ordering is priority ascending then first-seen ascending" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="c",
+    priority=30,
+    value="C",
+  )
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="a",
+    priority=10,
+    value="A",
+  )
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="d",
+    priority=30,
+    value="D",
+  )
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="b",
+    priority=20,
+    value="B",
+  )
+  debug_inspect(
+    bar.segments().map(fn(info) { info.segment }),
+    content=(
+      #|["a", "b", "c", "d"]
+    ),
+  )
+  debug_inspect(
+    bar_entries(ui.last()),
     content=(
       #|[
-      #|  ("model", "deepseek-v4-pro"),
-      #|  ("effort", "high"),
-      #|  ("turn", "0"),
-      #|  ("tools", "0"),
-      #|  ("tok", "0↑ 0↓"),
-      #|  ("session", "—"),
+      #|  { key: "a", value: "A", color: None },
+      #|  { key: "b", value: "B", color: None },
+      #|  { key: "c", value: "C", color: None },
+      #|  { key: "d", value: "D", color: None },
       #|]
     ),
   )
 }
 
 ///|
-test "effort segment is skipped when the model has no effort selection" {
-  let (bar, ui) = new_bar()
-  bar.set_model("deepseek-v4-flash", effort=None)
-  let pairs = key_value_pairs(ui.last())
-  assert_false(pairs.any(pair => pair.0 == "effort"))
+test "valueless segments render nothing but stay listed" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_plan",
+    segment="plan",
+    priority=10,
+  )
+  // Applied registration, so one render fires — with the segment absent.
+  assert_eq(ui.renders.length(), 1)
   debug_inspect(
-    pairs,
+    bar_entries(ui.last()),
     content=(
-      #|[
-      #|  ("model", "deepseek-v4-flash"),
-      #|  ("turn", "0"),
-      #|  ("tools", "0"),
-      #|  ("tok", "0↑ 0↓"),
-      #|  ("session", "—"),
-      #|]
+      #|[]
     ),
   )
-}
-
-///|
-test "observer collects turn, tool, and token telemetry" {
-  let (bar, ui) = new_bar()
-  bar.on_event(@posoco.TurnEvent::TurnStarted)
-  bar.on_event(
-    @posoco.TurnEvent::ToolCallPending(@posoco.ToolCall::{
-      call_id: @posoco.CallId::unchecked("tc_1"),
-      name: @posoco.ToolName::unchecked("read"),
-      arguments: Json::null(),
-    }),
+  // Known to the registry and the listing, just not visible.
+  assert_eq(bar.segments().length(), 1)
+  assert_eq(bar.segments()[0].value, None)
+  // A later update makes it visible, keeping priority and owner.
+  @devkit.publish_status_update(
+    bus,
+    source="posoco_ext_plan",
+    segment="plan",
+    value="Plan",
   )
-  bar.on_event(
-    @posoco.TurnEvent::ModelResponseReceived(
-      message=@posoco.tk_user_msg("hi"),
-      usage=Some(@posoco.Usage::{
-        input_tokens: Some(10),
-        output_tokens: Some(4),
-        total_tokens: None,
-        cached_input_tokens: None,
-        uncached_input_tokens: None,
-      }),
-    ),
-  )
-  bar.on_event(@posoco.TurnEvent::TurnCompleted)
   debug_inspect(
-    key_value_pairs(ui.last()),
+    bar_entries(ui.last()),
     content=(
-      #|[
-      #|  ("model", "—"),
-      #|  ("turn", "1"),
-      #|  ("tools", "1"),
-      #|  ("tok", "10↑ 4↓"),
-      #|  ("session", "—"),
-      #|  ("lat", "0ms"),
-      #|]
+      #|[{ key: "plan", value: "Plan", color: None }]
     ),
   )
+  assert_eq(bar.segments()[0].priority, 10)
+  assert_eq(bar.segments()[0].owner, "posoco_ext_plan")
 }
 
 ///|
-test "session redirect refreshes the session segment" {
-  let (bar, ui) = new_bar()
-  bar.on_event(
-    @posoco.TurnEvent::SessionRedirect(
-      from="s1",
-      to="s2",
-      messages_before=3,
-      messages_after=1,
-    ),
-  )
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.any(pair => pair == ("session", "s2")))
-  debug_inspect(
-    pairs,
-    content=(
-      #|[
-      #|  ("model", "—"),
-      #|  ("turn", "0"),
-      #|  ("tools", "0"),
-      #|  ("tok", "0↑ 0↓"),
-      #|  ("session", "s2"),
-      #|]
-    ),
-  )
-}
-
-///|
-test "latency segment appears only after the host pushes it" {
-  let (bar, ui) = new_bar()
-  bar.set_model("deepseek-v4-pro", effort=Some("high"))
-  assert_false(key_value_pairs(ui.last()).any(pair => pair.0 == "lat"))
-  bar.set_latency(830)
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.any(pair => pair == ("lat", "830ms")))
-  debug_inspect(
-    pairs,
-    content=(
-      #|[
-      #|  ("model", "deepseek-v4-pro"),
-      #|  ("effort", "high"),
-      #|  ("turn", "0"),
-      #|  ("tools", "0"),
-      #|  ("tok", "0↑ 0↓"),
-      #|  ("session", "—"),
-      #|  ("lat", "830ms"),
-      #|]
-    ),
-  )
-}
-
-// ------------------------------------------------------------ custom segments (bus + setters)
-
-///|
-test "host-pushed custom segment renders and clears" {
-  let (bar, ui) = new_bar()
-  bar.set_model("test-model", effort=None)
-  bar.set_custom("hitrate", "62% (48/77)")
-  let pairs = key_value_pairs(ui.last())
-  // Built-in layout first, custom fact appended in first-arrival order.
-  assert_true(pairs.contains(("model", "test-model")))
-  assert_true(pairs.contains(("hitrate", "62% (48/77)")))
-  bar.clear_custom("hitrate")
-  let pairs = key_value_pairs(ui.last())
-  assert_false(pairs.contains(("hitrate", "62% (48/77)")))
-}
-
-///|
-test "bus publish on topic status updates custom segments once per event" {
+test "direct set_segment matches the bus path" {
+  let bus_bar = StatusBar(bus=None)
+  let bus_ui = RecordingUi()
   let bus = @devkit.EventBus()
-  let ui = RecordingUi()
-  let _bar = StatusBar(ui as &@posoco.UiPort, bus=Some(bus))
-  let renders_before = ui.renders.length()
-  bus.publish({
-    source: "posoco_ext_scrum",
-    topic: "status",
-    data: Json::object({
-      "sprint": Json::string("S12 day 4/10"),
-      "hitrate": Json::string("62%"),
-    }),
-  })
-  // One event → one render, even though two segments changed.
-  assert_eq(ui.renders.length(), renders_before + 1)
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.contains(("sprint", "S12 day 4/10")))
-  assert_true(pairs.contains(("hitrate", "62%")))
-  // A second publish updates in place; a null drops the segment.
-  bus.publish({
-    source: "posoco_ext_scrum",
-    topic: "status",
-    data: Json::object({
-      "hitrate": Json::string("71%"),
-      "sprint": Json::null(),
-    }),
-  })
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.contains(("hitrate", "71%")))
-  assert_false(pairs.contains(("sprint", "S12 day 4/10")))
+  let wired = StatusBar(bus=Some(bus))
+  let model = @posoco.ScriptedModel([])
+  wired.on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Ui],
+      model=model as &@posoco.ModelPort,
+      ui=bus_ui as &@posoco.UiPort,
+    ),
+  )
+  let direct_ui = RecordingUi()
+  let direct = StatusBar()
+  direct.on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Ui],
+      model=model as &@posoco.ModelPort,
+      ui=direct_ui as &@posoco.UiPort,
+    ),
+  )
+  // Same op sequence, same order, through both doors: updates
+  // auto-register at priority 0 on either path.
+  @devkit.publish_status_update(bus, source="llm", segment="model", value="m1")
+  direct.set_segment(source="llm", segment="model", value="m1")
+  @devkit.publish_status_update(
+    bus,
+    source="llm",
+    segment="session",
+    value="s1",
+  )
+  direct.set_segment(source="llm", segment="session", value="s1")
+  assert_eq(wired.segments(), direct.segments())
+  assert_same_entries(bar_entries(bus_ui.last()), bar_entries(direct_ui.last()))
+  // The clear path lands in the same state too.
+  @devkit.publish_status_unregister(bus, source="llm", segment="model")
+  direct.clear_segment(source="llm", segment="model")
+  assert_eq(wired.segments(), direct.segments())
+  assert_same_entries(bar_entries(bus_ui.last()), bar_entries(direct_ui.last()))
+  assert_eq(bus_bar.segments().length(), 0)
 }
 
 ///|
-test "bus events the bar does not understand are ignored without a render" {
-  let bus = @devkit.EventBus()
-  let ui = RecordingUi()
-  let bar = StatusBar(ui as &@posoco.UiPort, bus=Some(bus))
-  let renders_before = ui.renders.length()
-  // Unknown topic, non-object payload, non-string field value: all ignored.
-  bus.publish({ source: "ext", topic: "other", data: Json::null() })
-  bus.publish({ source: "ext", topic: "status", data: Json::string("text") })
+test "malformed bus events render nothing" {
+  let (_bar, ui, bus) = new_composed_bar()
+  bus.publish({ source: "ext", topic: "other", data: Json::null(), })
+  bus.publish({ source: "ext", topic: "status", data: Json::string("text"), })
   bus.publish({
     source: "ext",
     topic: "status",
-    data: Json::object({ "bad": Json::boolean(true) }),
+    data: Json::object({ "op": Json::string("nonsense") }),
   })
-  assert_eq(ui.renders.length(), renders_before)
-  assert_eq(bar.custom_segments().length(), 0)
+  bus.publish({
+    source: "ext",
+    topic: "status",
+    data: Json::object({
+      "op": Json::string("update"),
+      "segment": Json::string("x"),
+    }),
+  })
+  bus.publish({
+    source: "ext",
+    topic: "status",
+    data: Json::object({
+      "op": Json::string("update"),
+      "segment": Json::string("x"),
+      "value": Json::boolean(true),
+    }),
+  })
+  assert_eq(ui.renders.length(), 0)
 }
 
 ///|
-test "a layout referencing a live custom segment places it explicitly" {
-  let (bar, ui) = new_bar()
-  bar.set_custom("hitrate", "62%")
-  bar.items = ["hitrate", "model"]
-  bar.render()
-  let pairs = key_value_pairs(ui.last())
-  assert_eq(pairs[0], ("hitrate", "62%"))
-  assert_eq(pairs[1], ("model", "—"))
-  // Not appended twice.
-  assert_eq(pairs.length(), 2)
+test "renders start only after the composed UI arrives" {
+  let ui = RecordingUi()
+  let bus = @devkit.EventBus()
+  let bar = StatusBar(bus=Some(bus))
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="model",
+    priority=20,
+    value="m",
+  )
+  // Applied (registry updated) but silent: no UI to render through.
+  assert_eq(ui.renders.length(), 0)
+  assert_eq(bar.segments().length(), 1)
+  let model = @posoco.ScriptedModel([])
+  bar.on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Ui],
+      model=model as &@posoco.ModelPort,
+      ui=ui as &@posoco.UiPort,
+    ),
+  )
+  @devkit.publish_status_update(bus, source="ext", segment="model", value="m2")
+  // The first render carries the full current registry, not just the delta.
+  assert_eq(ui.renders.length(), 1)
+  debug_inspect(
+    bar_entries(ui.last()),
+    content=(
+      #|[{ key: "model", value: "m2", color: None }]
+    ),
+  )
 }
 
 ///|
-test "tool count is session-cumulative across turns" {
-  let (bar, ui) = new_bar()
-  bar.on_event(@posoco.TurnEvent::TurnStarted)
-  bar.on_event(@posoco.TurnEvent::ToolCallPending(tk_pending_call("c1")))
-  bar.on_event(@posoco.TurnEvent::ToolCallPending(tk_pending_call("c2")))
-  bar.on_event(@posoco.TurnEvent::TurnCompleted)
-  // Turn 2 runs zero tools: the count must survive, not flash back to 0.
-  bar.on_event(@posoco.TurnEvent::TurnStarted)
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.contains(("turn", "2")))
-  assert_true(pairs.contains(("tools", "2")))
+test "manifest declares the Ui requirement, lifecycle, and command" {
+  let bar = StatusBar()
+  let manifest = bar.manifest()
+  assert_eq(manifest.id, "posoco_ext_statusbar")
+  assert_eq(manifest.requires, [@posoco.Capability::Ui])
+  assert_eq(manifest.observers.length(), 0)
+  assert_eq(manifest.lifecycle.length(), 1)
+  assert_eq(manifest.commands.length(), 1)
+  assert_eq(manifest.ui.length(), 0)
+  assert_eq(bar.extension_id(), "posoco_ext_statusbar")
 }
 
 ///|
-fn tk_pending_call(id : String) -> @posoco.ToolCall {
-  {
-    call_id: @posoco.CallId::unchecked(id),
-    name: @posoco.ToolName::unchecked("bash"),
-    arguments: Json::object(Map([])),
+async test "register with a color role round-trips to a colored entry" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_plan",
+    segment="plan",
+    priority=10,
+    value="Plan",
+    color="accent",
+  )
+  assert_eq(ui.renders.length(), 1)
+  let entries = bar_entries(ui.last())
+  assert_eq(entries.length(), 1)
+  assert_eq(entries[0].key, "plan")
+  assert_eq(entries[0].value, "Plan")
+  assert_eq(entries[0].color, Some("accent"))
+  assert_eq(bar.segments()[0].color, Some("accent"))
+  // /statusbar surfaces the role in both the line and the JSON payload.
+  let outcome = bar.invoke("statusbar", Json::null())
+  match outcome {
+    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
+      inspect(
+        feedback,
+        content=(
+          #|statusbar segments: 1
+          #|plan | posoco_ext_plan | p10 | accent | Plan
+        ),
+      )
+      match structured {
+        Some(json) =>
+          json_inspect(json, content=[
+            {
+              "segment": "plan",
+              "owner": "posoco_ext_plan",
+              "priority": 10,
+              "color": "accent",
+              "value": "Plan",
+            },
+          ])
+        None => fail("expected a structured listing payload")
+      }
+    }
+    _ => fail("expected success")
   }
 }
 
 ///|
-fn tk_round(input : Int, cached : Int?) -> @posoco.TurnEvent {
-  @posoco.TurnEvent::ModelResponseReceived(
-    message=@posoco.tk_user_msg("hi"),
-    usage=Some(@posoco.Usage::{
-      input_tokens: Some(input),
-      output_tokens: Some(4),
-      total_tokens: None,
-      cached_input_tokens: cached,
-      uncached_input_tokens: None,
-    }),
+test "unknown color role decolors instead of failing the register" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="mood",
+    priority=5,
+    value="sparkling",
+    color="sparkly",
   )
+  // The register still applies and renders — just without a color.
+  assert_eq(ui.renders.length(), 1)
+  let entries = bar_entries(ui.last())
+  assert_eq(entries.length(), 1)
+  assert_eq(entries[0].key, "mood")
+  assert_eq(entries[0].value, "sparkling")
+  assert_eq(entries[0].color, None)
+  assert_eq(bar.segments()[0].color, None)
 }
 
 ///|
-test "cache segment summarizes the latest round's hit rate" {
-  let (bar, ui) = new_bar()
-  bar.on_event(@posoco.TurnEvent::TurnStarted)
-  // No cached reporting yet: segment hidden.
-  bar.on_event(tk_round(1200, None))
-  assert_false(key_value_pairs(ui.last()).any(pair => pair.0 == "cache"))
-  // Round reports 1000 of 1200 input tokens cached → 83%.
-  bar.on_event(tk_round(1200, Some(1000)))
-  assert_true(key_value_pairs(ui.last()).contains(("cache", "83%")))
-  // Next round re-summarizes: 300 of 1200 → 25%.
-  bar.on_event(tk_round(1200, Some(300)))
-  assert_true(key_value_pairs(ui.last()).contains(("cache", "25%")))
-  // A round whose provider reports no cached portion hides the segment
-  // again (stale rates are never shown as current).
-  bar.on_event(tk_round(900, None))
-  assert_false(key_value_pairs(ui.last()).any(pair => pair.0 == "cache"))
-}
-
-///|
-priv struct FakeClock {
-  mut now_ms : Int64
-}
-
-///|
-fn new_timed_bar() -> (StatusBar, RecordingUi, FakeClock) {
-  let ui = RecordingUi()
-  let clock = FakeClock::{ now_ms: 0 }
-  let bar = StatusBar(ui as &@posoco.UiPort, clock=fn() { clock.now_ms })
-  (bar, ui, clock)
-}
-
-///|
-fn tk_delta(text : String) -> @posoco.TurnEvent {
-  @posoco.TurnEvent::StreamChunkReceived(
-    chunk=@posoco.StreamChunk::TextDelta(token=text),
+test "owner re-register overwrites the color role" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="plan",
+    priority=10,
+    value="Plan",
+    color="accent",
   )
-}
-
-///|
-test "per-round efficiency segments from the injected clock" {
-  let (bar, ui, clock) = new_timed_bar()
-  clock.now_ms = 1000
-  bar.on_event(@posoco.TurnEvent::TurnStarted)
-  clock.now_ms = 1500
-  bar.on_event(tk_delta("he"))
-  bar.on_event(tk_delta("llo")) // second delta: anchor unchanged
-  clock.now_ms = 3500
-  bar.on_event(
-    @posoco.TurnEvent::ModelResponseReceived(
-      message=@posoco.tk_user_msg("hi"),
-      usage=Some(@posoco.Usage::{
-        input_tokens: Some(10),
-        output_tokens: Some(40),
-        total_tokens: None,
-        cached_input_tokens: None,
-        uncached_input_tokens: None,
-      }),
-    ),
+  assert_eq(bar.segments()[0].color, Some("accent"))
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="plan",
+    priority=10,
+    value="Plan",
+    color="warning",
   )
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.contains(("ttft", "500ms")))
-  assert_true(pairs.contains(("tps", "16.0/s")))
-  assert_true(pairs.contains(("avg", "16.0/s")))
-  // Round 2 of the same turn (tool loop): re-anchored at the previous
-  // response; a fresh TTFT and tps, average now spans both rounds.
-  clock.now_ms = 3600
-  bar.on_event(tk_delta("x"))
-  clock.now_ms = 4100
-  bar.on_event(
-    @posoco.TurnEvent::ModelResponseReceived(
-      message=@posoco.tk_user_msg("hi"),
-      usage=Some(@posoco.Usage::{
-        input_tokens: Some(10),
-        output_tokens: Some(10),
-        total_tokens: None,
-        cached_input_tokens: None,
-        uncached_input_tokens: None,
-      }),
-    ),
+  assert_eq(ui.renders.length(), 2)
+  assert_eq(bar.segments()[0].color, Some("warning"))
+  // Color is register metadata like label: a re-register without one
+  // clears it.
+  @devkit.publish_status_register(
+    bus,
+    source="ext",
+    segment="plan",
+    priority=10,
+    value="Plan",
   )
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.contains(("ttft", "100ms")))
-  assert_true(pairs.contains(("tps", "16.7/s")))
-  assert_true(pairs.contains(("avg", "16.3/s")))
-  // Turn latency is self-computed from the same clock.
-  clock.now_ms = 5000
-  bar.on_event(@posoco.TurnEvent::TurnCompleted)
-  let pairs = key_value_pairs(ui.last())
-  assert_true(pairs.contains(("lat", "4000ms")))
+  assert_eq(bar.segments()[0].color, None)
 }

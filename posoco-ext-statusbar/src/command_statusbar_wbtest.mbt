@@ -1,176 +1,123 @@
 ///|
-fn items_args(items : Array[String]) -> Json {
-  Json::object(
-    Map::from_array([
-      ("items", Json::array(items.map(item => Json::string(item)))),
-    ]),
-  )
-}
+/// `/statusbar` listing command tests. The bus side uses a real devkit
+/// EventBus so the command is exercised against the same protocol path
+/// publishers use.
 
 ///|
-async test "query reports the current layout without re-rendering" {
-  let (bar, ui) = new_bar()
+async test "listing reports every registered segment with its owner" {
+  let (bar, ui, bus) = new_composed_bar()
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_plan",
+    segment="plan",
+    label="Plan",
+    priority=10,
+  )
+  @devkit.publish_status_register(
+    bus,
+    source="posoco_ext_llm",
+    segment="model",
+    label="Model",
+    priority=20,
+    value="deepseek-v4-pro",
+  )
+  let renders_before = ui.renders.length()
   let outcome = bar.invoke("statusbar", Json::null())
   match outcome {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
       inspect(
         feedback,
         content=(
-          #|statusbar segments: plan | model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
+          #|statusbar segments: 2
+          #|plan | posoco_ext_plan | p10 | — | —
+          #|model | posoco_ext_llm | p20 | — | deepseek-v4-pro
         ),
       )
       match structured {
         Some(json) =>
-          json_inspect(json, content={
-            "items": [
-              "plan", "model", "effort", "turn", "tools", "tok", "cache", "ttft",
-              "tps", "avg", "session", "lat",
-            ],
-            "available": [
-              "plan", "model", "effort", "turn", "tools", "tok", "cache", "ttft",
-              "tps", "avg", "session", "lat",
-            ],
-            "defaults": [
-              "plan", "model", "effort", "turn", "tools", "tok", "cache", "ttft",
-              "tps", "avg", "session", "lat",
-            ],
-          })
-        None => fail("expected a structured layout payload")
+          json_inspect(json, content=[
+            {
+              "segment": "plan",
+              "owner": "posoco_ext_plan",
+              "priority": 10,
+              "label": "Plan",
+            },
+            {
+              "segment": "model",
+              "owner": "posoco_ext_llm",
+              "priority": 20,
+              "label": "Model",
+              "value": "deepseek-v4-pro",
+            },
+          ])
+        None => fail("expected a structured listing payload")
       }
     }
     _ => fail("expected success")
   }
-  inspect(ui.renders.length(), content="0")
+  // The listing is read-only: no extra render.
+  assert_eq(ui.renders.length(), renders_before)
 }
 
 ///|
-async test "set items reorders the rendered segments" {
-  let (bar, ui) = new_bar()
-  bar.set_model("deepseek-v4-pro", effort=Some("high"))
-  let outcome = bar.invoke("statusbar", items_args(["tok", "model"]))
+async test "empty bar lists a zero count" {
+  let (bar, _ui, _bus) = new_composed_bar()
+  let outcome = bar.invoke("statusbar", Json::null())
   match outcome {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
       inspect(
         feedback,
         content=(
-          #|statusbar segments: tok | model
+          #|statusbar segments: 0
         ),
       )
     _ => fail("expected success")
   }
-  debug_inspect(
-    key_value_pairs(ui.last()),
-    content=(
-      #|[("tok", "0↑ 0↓"), ("model", "deepseek-v4-pro")]
-    ),
+}
+
+///|
+async test "host slash spellings of no arguments are accepted" {
+  let (bar, _ui, _bus) = new_composed_bar()
+  for
+    args in [Json::null(), Json::string(""), Json::object(Map::from_array([]))] {
+    assert_true(
+      bar.invoke("statusbar", args) is @posoco.CommandOutcome::Success(_),
+    )
+  }
+  assert_true(
+    bar.invoke(
+      "statusbar",
+      Json::object(Map::from_array([("_positional", Json::string(""))])),
+    )
+    is @posoco.CommandOutcome::Success(_),
   )
 }
 
 ///|
-async test "unknown segment id fails with the available list" {
-  let (bar, _ui) = new_bar()
-  let outcome = bar.invoke("statusbar", items_args(["bogus"]))
-  match outcome {
-    @posoco.CommandOutcome::Failure(reason~) =>
+async test "non-empty arguments are rejected" {
+  let (bar, _ui, _bus) = new_composed_bar()
+  try
+    bar.invoke(
+      "statusbar",
+      Json::object(Map::from_array([("_positional", Json::string("model"))])),
+    )
+  catch {
+    @posoco.CommandError::InvalidArgs(reason~) =>
       inspect(
         reason,
         content=(
-          #|CommandError::InvalidArgs(unknown statusbar segment 'bogus'; available: plan, model, effort, turn, tools, tok, cache, ttft, tps, avg, session, lat)
+          #|/statusbar takes no arguments
         ),
       )
-    _ => fail("expected failure")
+    _ => fail("expected InvalidArgs")
+  } noraise {
+    _ => fail("expected InvalidArgs")
   }
-}
-
-///|
-async test "reset restores the default layout" {
-  let (bar, _ui) = new_bar()
-  let _ = bar.invoke("statusbar", items_args(["tok"]))
-  let outcome = bar.invoke(
-    "statusbar",
-    Json::object(Map::from_array([("reset", Json::boolean(true))])),
-  )
-  match outcome {
-    @posoco.CommandOutcome::Success(feedback~, ..) =>
-      inspect(
-        feedback,
-        content=(
-          #|statusbar reset: plan | model | effort | turn | tools | tok | cache | ttft | tps | avg | session | lat
-        ),
-      )
-    _ => fail("expected success")
-  }
-  debug_inspect(
-    bar.items(),
-    content=(
-      #|[
-      #|  "plan",
-      #|  "model",
-      #|  "effort",
-      #|  "turn",
-      #|  "tools",
-      #|  "tok",
-      #|  "cache",
-      #|  "ttft",
-      #|  "tps",
-      #|  "avg",
-      #|  "session",
-      #|  "lat",
-      #|]
-    ),
-  )
-}
-
-///|
-async test "positional comma string sets items" {
-  let (bar, _ui) = new_bar()
-  let outcome = bar.invoke(
-    "statusbar",
-    Json::object(Map::from_array([("_positional", Json::string("model, tok"))])),
-  )
-  match outcome {
-    @posoco.CommandOutcome::Success(feedback~, ..) =>
-      inspect(
-        feedback,
-        content=(
-          #|statusbar segments: model | tok
-        ),
-      )
-    _ => fail("expected success")
-  }
-  debug_inspect(
-    bar.items(),
-    content=(
-      #|["model", "tok"]
-    ),
-  )
-}
-
-///|
-async test "empty items hides the bar" {
-  let (bar, ui) = new_bar()
-  let outcome = bar.invoke("statusbar", items_args([]))
-  match outcome {
-    @posoco.CommandOutcome::Success(feedback~, ..) =>
-      inspect(
-        feedback,
-        content=(
-          #|statusbar hidden (no segments)
-        ),
-      )
-    _ => fail("expected success")
-  }
-  debug_inspect(
-    key_value_pairs(ui.last()),
-    content=(
-      #|[]
-    ),
-  )
 }
 
 ///|
 async test "unknown command id raises NotFound" {
-  let (bar, _ui) = new_bar()
+  let (bar, _ui, _bus) = new_composed_bar()
   try bar.invoke("bogus", Json::null()) catch {
     @posoco.CommandError::NotFound(id) =>
       inspect(
@@ -183,19 +130,4 @@ async test "unknown command id raises NotFound" {
   } noraise {
     _ => fail("expected NotFound")
   }
-}
-
-///|
-async test "custom segments join the available list and validate" {
-  let ui = RecordingUi()
-  let bar = StatusBar(ui as &@posoco.UiPort)
-  bar.set_custom("hitrate", "62%")
-  // Referencing the live custom id is accepted and reorders it first.
-  let outcome = bar.invoke("statusbar", items_args(["hitrate", "model"]))
-  assert_true(outcome is @posoco.CommandOutcome::Success(_))
-  let pairs = key_value_pairs(ui.last())
-  assert_eq(pairs[0], ("hitrate", "62%"))
-  // An id with no fact (built-in-unknown AND custom-dead) is still rejected.
-  let outcome = bar.invoke("statusbar", items_args(["sprint"]))
-  assert_true(outcome is @posoco.CommandOutcome::Failure(_))
 }
