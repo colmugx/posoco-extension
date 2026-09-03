@@ -1,0 +1,22 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-zai" @zai,
+  "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-ext-llm" @llm,
+  "colmugx/posoco-ext-oauth" @oauth,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+}
+
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: {
+    "zai_coding_plan_wbtest.mbt": [ "native" ],
+    "quota_wbtest.mbt": [ "native" ],
+  },
+)

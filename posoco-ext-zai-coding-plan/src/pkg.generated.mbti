@@ -1,0 +1,54 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-zai-coding-plan"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco-ext-llm",
+  "colmugx/posoco-ext-oauth",
+  "colmugx/posoco-ext-zai",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+pub async fn fetch_zai_coding_plan_quota(String, String, now_ms? : () -> Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
+
+pub fn parse_zai_coding_plan_quota(Json, fetched_at_ms~ : Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
+
+pub fn zai_coding_plan_profile_endpoint(String) -> (String, String)?
+
+pub fn zai_coding_plan_quota_url(String) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct ZaiCodingPlanModelPort {
+  inner : @posoco-ext-zai.ZaiModelPort
+}
+pub fn ZaiCodingPlanModelPort::ZaiCodingPlanModelPort(@posoco-ext-zai.ZaiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn ZaiCodingPlanModelPort::extension_id(Self) -> String
+pub fn ZaiCodingPlanModelPort::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.Extension for ZaiCodingPlanModelPort
+pub impl @port.ModelPort for ZaiCodingPlanModelPort
+
+pub(all) struct ZaiCodingPlanProvider {
+  ctx : @posoco-devkit.ExtContext
+}
+pub fn ZaiCodingPlanProvider::ZaiCodingPlanProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn ZaiCodingPlanProvider::quota_source(Self, @posoco-ext-llm.ProviderConfigSource) -> ZaiCodingPlanQuotaSource? raise @error.CompositionError
+pub impl @posoco-ext-llm.ApiKeyFactory for ZaiCodingPlanProvider
+pub impl @posoco-ext-llm.ProviderFactory for ZaiCodingPlanProvider
+
+pub(all) struct ZaiCodingPlanQuotaSource {
+  base_url : String
+  api_key : String
+  now_ms : () -> Int64
+}
+pub fn ZaiCodingPlanQuotaSource::ZaiCodingPlanQuotaSource(base_url? : String, api_key~ : String, now_ms? : () -> Int64) -> Self
+pub impl @posoco-devkit.QuotaSource for ZaiCodingPlanQuotaSource
+
+// Type aliases
+
+// Traits
