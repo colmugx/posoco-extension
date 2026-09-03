@@ -31,7 +31,7 @@ fn PlanMode::session_label(self : PlanMode) -> String {
 /// path/hostile characters become `-`, runs collapse, edges trim, the
 /// result caps at 80 chars; `plan` when nothing usable remains.
 fn sanitize_plan_name(name : String) -> String {
-  let collapsed = StringBuilder::new()
+  let collapsed = StringBuilder()
   let mut previous_dash = true // true skips a leading dash
   for ch in name {
     let code = ch.to_int()
@@ -83,7 +83,7 @@ fn PlanMode::record_draft_delta(
   messages : Array[@kernel.Message],
 ) -> Unit {
   let mut total = 0
-  let block = StringBuilder::new()
+  let block = StringBuilder()
   for msg in messages {
     if msg is AssistantMessage(..) {
       if total >= self.draft_recorded {

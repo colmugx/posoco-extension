@@ -196,22 +196,31 @@ pub fn PlanMode::set_session_name(self : PlanMode, name : String) -> Unit {
 
 ///|
 /// Publish the plan status on the bus so peers (status bar, host UI) can
-/// render it without polling. Convention: topic `"status"` (the statusbar
-/// segment namespace), field `"plan"` — `"Plan"` while planning or awaiting
-/// approval, `null` once off.
+/// render it without polling. Convention: the devkit status protocol —
+/// segment `"plan"` at priority 10, value `"Plan"` while planning or
+/// awaiting approval, unregistered once off. Register is idempotent on the
+/// consumer side (the owner's re-register keeps `first_seen`), so calling
+/// it on every active transition is safe.
 fn PlanMode::publish_status(self : PlanMode) -> Unit {
   match self.bus {
-    Some(bus) => {
-      let value : Json = match self.status {
-        Off => Json::null()
-        _ => Json::string("Plan")
+    Some(bus) =>
+      match self.status {
+        Off =>
+          @devkit.publish_status_unregister(
+            bus,
+            source="posoco_ext_plan",
+            segment="plan",
+          )
+        _ =>
+          @devkit.publish_status_register(
+            bus,
+            source="posoco_ext_plan",
+            segment="plan",
+            priority=10,
+            value="Plan",
+            color="accent",
+          )
       }
-      bus.publish({
-        source: "posoco_ext_plan",
-        topic: "status",
-        data: Json::object({ "plan": value }),
-      })
-    }
     None => ()
   }
 }

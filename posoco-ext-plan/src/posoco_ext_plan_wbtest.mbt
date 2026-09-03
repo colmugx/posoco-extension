@@ -635,7 +635,7 @@ fn exit_call(plan_text : String) -> @posoco.ToolCall {
 
 ///|
 async test "review source accepts the plan in one action" {
-  let review = ScriptedReview::{ decision: Accept, asked: 0 }
+  let review = ScriptedReview::{ decision: Accept, asked: 0, }
   let plan = PlanMode(
     config=PlanModeConfig::{
       ..PlanModeConfig::default(),
@@ -691,7 +691,7 @@ async test "review revise keeps planning and feeds the reason back" {
 
 ///|
 async test "review is only consulted while planning" {
-  let review = ScriptedReview::{ decision: Accept, asked: 0 }
+  let review = ScriptedReview::{ decision: Accept, asked: 0, }
   let plan = PlanMode(review=Some(review as &PlanReviewSource))
   // Off: the exit call is approved but NOT reviewed; execution reports
   // not-in-plan-mode.
@@ -710,7 +710,7 @@ async test "review is only consulted while planning" {
 
 ///|
 async test "AutoAcceptReview is the unattended (yolo) posture" {
-  let plan = PlanMode(review=Some(AutoAcceptReview::{  } as &PlanReviewSource))
+  let plan = PlanMode(review=Some(AutoAcceptReview::{ } as &PlanReviewSource))
   plan.start()
   let call = exit_call("1. unattended")
   match plan.before_tool(call) {
@@ -726,7 +726,7 @@ async test "AutoAcceptReview is the unattended (yolo) posture" {
 
 ///|
 async test "a failing review keeps planning with a retryable tool error" {
-  let review = FailingReview::{ asked: 0 }
+  let review = FailingReview::{ asked: 0, }
   let plan = PlanMode(
     config=PlanModeConfig::{
       ..PlanModeConfig::default(),
@@ -764,7 +764,7 @@ impl @devkit.BusSubscriber for RecordingGate with fn on_bus_event(
 ///|
 async test "constructor reports the enter/exit tools on the bus" {
   let bus = @devkit.EventBus::EventBus()
-  let gate = RecordingGate::{ events: [] }
+  let gate = RecordingGate::{ events: [], }
   bus.subscribe(gate as &@devkit.BusSubscriber)
   ignore(
     PlanMode(
@@ -787,7 +787,7 @@ async test "constructor reports the enter/exit tools on the bus" {
 ///|
 async test "without model entry only the exit tool is reported" {
   let bus = @devkit.EventBus::EventBus()
-  let gate = RecordingGate::{ events: [] }
+  let gate = RecordingGate::{ events: [], }
   bus.subscribe(gate as &@devkit.BusSubscriber)
   ignore(PlanMode(bus=Some(bus)))
   assert_eq(gate.events.length(), 1)
@@ -834,7 +834,7 @@ async test "plan.dismiss discards the pending plan and exits" {
 
 ///|
 async test "review dismiss cancels the plan and instructs the model to stop" {
-  let review = ScriptedReview::{ decision: Dismiss, asked: 0 }
+  let review = ScriptedReview::{ decision: Dismiss, asked: 0, }
   let plan = PlanMode(
     config=PlanModeConfig::{
       ..PlanModeConfig::default(),
@@ -868,7 +868,7 @@ async test "completed plans are echoed once in the tool result" {
 ///|
 async test "plan transitions publish status facts on the bus" {
   let bus = @devkit.EventBus::EventBus()
-  let gate = RecordingGate::{ events: [] }
+  let gate = RecordingGate::{ events: [], }
   bus.subscribe(gate as &@devkit.BusSubscriber)
   let plan = PlanMode(
     config=PlanModeConfig::{
@@ -877,25 +877,40 @@ async test "plan transitions publish status facts on the bus" {
     },
     bus=Some(bus),
   )
-  // The exemption report is the first event; status facts follow on the
-  // statusbar convention topic.
+  // The exemption report is the first event; status ops follow the devkit
+  // protocol on the status topic: segment "plan" (priority 10, value
+  // "Plan") while active, unregister once off.
   plan.start()
   assert_true(plan.submit_plan("p"))
   ignore(plan.approve())
-  let status_facts : Array[Json] = gate.events
+  plan.start()
+  plan.stop()
+  plan.start()
+  assert_true(plan.submit_plan("p2"))
+  match plan.invoke("plan.dismiss", Json::null()) {
+    @posoco.CommandOutcome::Success(..) => ()
+    _ => fail("expected Success")
+  }
+  let ops : Array[@devkit.StatusOp] = gate.events
     .iter()
-    .filter(fn(event) { event.topic == "status" })
-    .map(fn(event) {
-      match event.data {
-        Object(fields) => fields.get("plan").unwrap()
-        _ => Json::null()
-      }
-    })
+    .filter_map(fn(event) { @devkit.decode_status_op(event) })
     .collect()
-  assert_eq(status_facts.length(), 3)
-  assert_eq(status_facts[0], Json::string("Plan"))
-  assert_eq(status_facts[1], Json::string("Plan"))
-  assert_eq(status_facts[2], Json::null())
+  let registered = @devkit.Register(
+    segment="plan",
+    label=None,
+    priority=10,
+    value=Some("Plan"),
+    color=Some("accent"),
+  )
+  assert_eq(ops.length(), 8)
+  assert_eq(ops[0], registered)
+  assert_eq(ops[1], registered)
+  assert_eq(ops[2], @devkit.Unregister(segment="plan"))
+  assert_eq(ops[3], registered)
+  assert_eq(ops[4], @devkit.Unregister(segment="plan"))
+  assert_eq(ops[5], registered)
+  assert_eq(ops[6], registered)
+  assert_eq(ops[7], @devkit.Unregister(segment="plan"))
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -911,7 +926,7 @@ struct MemoryFs {
 
 ///|
 fn MemoryFs::MemoryFs() -> MemoryFs {
-  { files: Map::from_array([]), dirs: Set([]) }
+  { files: Map::from_array([]), dirs: Set([]), }
 }
 
 ///|
@@ -925,6 +940,7 @@ impl @workspace.WorkspaceFs for MemoryFs with fn kind(
   path : String,
   follow_symlink~ : Bool,
 ) -> @workspace.WorkspaceFileKind raise @workspace.WorkspaceFsError {
+  ignore(follow_symlink)
   if self.files.contains(path) {
     @workspace.WorkspaceFileKind::File
   } else if self.dirs.contains(path) {
@@ -973,6 +989,7 @@ impl @workspace.WorkspaceFs for MemoryFs with fn rename(
   to_ : String,
   replace~ : Bool,
 ) -> Unit raise @workspace.WorkspaceFsError {
+  ignore(replace)
   match self.files.get(from) {
     Some(content) => {
       ignore(self.files.remove(from))
@@ -984,24 +1001,25 @@ impl @workspace.WorkspaceFs for MemoryFs with fn rename(
 }
 
 ///|
-impl @workspace.WorkspaceFs for MemoryFs with fn realpath(self, path : String) -> String raise @workspace.WorkspaceFsError {
+impl @workspace.WorkspaceFs for MemoryFs with fn realpath(_self, path : String) -> String raise @workspace.WorkspaceFsError {
   path
 }
 
 ///|
 impl @workspace.WorkspaceFs for MemoryFs with fn readdir(
-  self,
-  path : String,
+  _self,
+  _path : String,
   include_hidden~ : Bool,
 ) -> Array[String] raise @workspace.WorkspaceFsError {
+  ignore(include_hidden)
   []
 }
 
 ///|
 impl @workspace.WorkspaceFs for MemoryFs with fn walk(
-  self,
-  root : String,
-  callback : async (String, Array[String]) -> Unit,
+  _self,
+  _root : String,
+  _callback : async (String, Array[String]) -> Unit,
 ) -> Unit raise @workspace.WorkspaceFsError {
   ()
 }
@@ -1012,6 +1030,7 @@ impl @workspace.WorkspaceFs for MemoryFs with fn mkdir(
   path : String,
   recursive~ : Bool,
 ) -> Unit raise @workspace.WorkspaceFsError {
+  ignore(recursive)
   self.dirs.add(path)
 }
 
@@ -1042,7 +1061,7 @@ async test "planning narrative accumulates into the session draft file" {
     planning_assistant_message("Found the seam in hooks.mbt."),
   ]
   ignore(plan.before_model(messages))
-  let draft = fs.read_file(".cetas/plan/cetas-1.md")
+  let draft = @workspace.WorkspaceFs::read_file(fs, ".cetas/plan/cetas-1.md")
   assert_true(draft.contains("Reading the module layout."))
   assert_true(draft.contains("Found the seam in hooks.mbt."))
 }
@@ -1075,13 +1094,15 @@ async test "exit saves the named plan file and removes the draft" {
       assert_true(
         content.contains("Saved to .cetas/plan/Fix-the-bug-v2_cetas-1.md"),
       )
-    other => fail("expected Success")
+    _ => fail("expected Success")
   }
   // Final file carries the header and plan; the draft is gone.
-  let saved = fs.read_file(".cetas/plan/Fix-the-bug-v2_cetas-1.md")
+  let saved = @workspace.WorkspaceFs::read_file(
+    fs, ".cetas/plan/Fix-the-bug-v2_cetas-1.md",
+  )
   assert_true(saved.contains("# Fix: the/bug v2"))
   assert_true(saved.contains("1. step"))
-  assert_false(fs.exists(".cetas/plan/cetas-1.md"))
+  assert_false(@workspace.WorkspaceFs::exists(fs, ".cetas/plan/cetas-1.md"))
 }
 
 ///|
@@ -1091,7 +1112,7 @@ async test "without a filesystem persistence is skipped silently" {
   match plan.execute("exit_plan_mode", exit_call("1. step")) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_false(content.contains("Saved to"))
-    other => fail("expected Success")
+    _ => fail("expected Success")
   }
 }
 
@@ -1110,7 +1131,7 @@ async test "exit rejects an empty or missing plan name" {
     catch {
       @posoco.RuntimeError::InvocationFailed(message) =>
         assert_true(message.contains("name"))
-      other => fail("expected InvocationFailed about name")
+      _ => fail("expected InvocationFailed about name")
     } noraise {
       _ => fail("expected InvocationFailed about name")
     }
