@@ -133,7 +133,7 @@ pub fn PermissionPolicy::PermissionPolicy(
     // the read class too (these are the skills extension's default tool
     // names; a host that renames them must classify its own names).
     read_tools: [
-      "read", "grep", "glob", "ask_question", "activate_skill", "read_skill_resource",
+      "read", "webfetch", "grep", "glob", "ask_question", "activate_skill", "read_skill_resource",
     ],
     write_tools: ["write", "edit", "apply_patch"],
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
@@ -172,23 +172,27 @@ pub fn PermissionPolicy::mode(self : PermissionPolicy) -> PermissionMode {
 }
 
 ///|
-/// Returns the per-turn reminder text for the active mode, wrapped in a
-/// `<permission-context>` envelope so `before_model` can recognize and
-/// deduplicate it. Dynamic because `/permission` can switch mode at runtime,
-/// so this content is injected via `PipelineHook::before_model` rather than
-/// the cached system prompt.
-fn PermissionPolicy::mode_reminder_text(self : PermissionPolicy) -> String {
-  let content = match self.mode {
+/// Standing reminder for the active mode: `Some` only for ReadOnly. It is
+/// the sole behavior-changing mode — mutation is refused, not merely asked —
+/// so the model needs the contract restated each turn; the approval-routing
+/// modes (WorkspaceWrite/Interactive/Yolo) change only who approves and stay
+/// silent, with deny feedback as the steering signal (rationale:
+/// docs/permission-injection-research.md). The text is wrapped in a
+/// `<permission-context>` envelope so `before_model` can locate, replace, or
+/// remove it in the transcript.
+fn PermissionPolicy::mode_reminder_text(self : PermissionPolicy) -> String? {
+  match self.mode {
     ReadOnly =>
-      "Permission mode is read-only. Read-only shell commands (ls, cat, grep, git status, find) are pre-approved; file mutation and other shell execution are rejected."
-    WorkspaceWrite =>
-      "Permission mode allows workspace reads and writes. Read-only shell commands are pre-approved; other shell and unknown tools require host approval."
-    Interactive =>
-      "Permission mode is interactive. Read-only inspection — including read-only shell commands — is pre-approved; mutating, shell, and unknown tools require confirmation."
-    Yolo =>
-      "Permission mode is yolo: every tool call is pre-approved without confirmation. Proceed carefully."
+      Some(
+        @devkit.context_envelope(
+          ns="permission",
+          kind="mode",
+          trust=true,
+          content="Permission mode is read-only. Read-only inspection — including provably read-only shell commands — is pre-approved; file mutation, other shell execution, and unknown tools are rejected. Do not attempt them.",
+        ),
+      )
+    WorkspaceWrite | Interactive | Yolo => None
   }
-  @devkit.context_envelope(ns="permission", kind="mode", trust=true, content~)
 }
 
 ///|
@@ -336,13 +340,19 @@ fn PermissionPolicy::cache_keys(
 /// `ApproveAfterConsent` — explicit user consent that outranks other
 /// hooks' `Reject` in the pump's lattice. `async` because the source may
 /// suspend on a UI confirm; classification itself is synchronous.
+///
+/// `call` is the kernel call and is what approvals return — the pump
+/// executes it by its outer name. `effective` (see `effective_tool`) is
+/// what the call will run, and drives the approval prompt, preview, and
+/// session scope so deferred tools are approved per inner tool name.
 async fn PermissionPolicy::gate(
   self : PermissionPolicy,
   call : @posoco.ToolCall,
+  effective : @posoco.ToolCall,
   category : String,
 ) -> @posoco.ToolDecision {
-  let name = call.name.to_string()
-  let keys = self.cache_keys(call, category)
+  let name = effective.name.to_string()
+  let keys = self.cache_keys(effective, category)
   // Session cache hit: every approval scope of this call was already
   // remembered this session. Keyless calls (shell without a parseable
   // `cmd`) never hit and always ask.
@@ -369,8 +379,8 @@ async fn PermissionPolicy::gate(
         tool_name: name,
         call_id: call.call_id.to_string(),
         category,
-        arguments_preview: preview_arguments(call.arguments),
-        arguments: call.arguments,
+        arguments_preview: preview_arguments(effective.arguments),
+        arguments: effective.arguments,
       }
       match source.ask(request) {
         AllowOnce =>
@@ -411,45 +421,86 @@ fn shell_call_is_read_only(call : @posoco.ToolCall) -> Bool {
 }
 
 ///|
-/// Inject (or refresh) a single per-turn user message reminding the model of
-/// the active permission mode. Idempotent: if the current mode's reminder is
-/// already present, the transcript is unchanged. When `/permission` switches
-/// mode, the existing reminder is replaced in place so the transcript stays
-/// compact.
-pub impl @posoco.PipelineHook for PermissionPolicy with fn before_model(
-  self : PermissionPolicy,
-  messages : Array[@kernel.Message],
-) -> Array[@kernel.Message] {
-  let reminder = self.mode_reminder_text()
-  let prefix = "<permission-context"
-  // Search for an existing permission-context user message.
-  let mut existing_idx = -1
-  let mut existing_text = ""
+/// Prefix marking a mode-reminder user message in the transcript.
+fn mode_reminder_prefix() -> String {
+  "<permission-context"
+}
+
+///|
+/// The reminder as a user message.
+fn mode_reminder_message(text : String) -> @kernel.Message {
+  @kernel.Message::UserMessage(content=[@kernel.Content::Text(text)])
+}
+
+///|
+/// Index of an existing mode-reminder user message, if any.
+fn find_mode_reminder(messages : Array[@kernel.Message]) -> Int? {
   for i, msg in messages {
     match msg {
       @kernel.Message::UserMessage(content~) =>
         match content {
           [@kernel.Content::Text(text), ..] =>
-            if text.has_prefix(prefix) {
-              existing_idx = i
-              existing_text = text
-              break
+            if text.has_prefix(mode_reminder_prefix()) {
+              return Some(i)
             }
           _ => ()
         }
       _ => ()
     }
   }
-  if existing_idx < 0 {
-    messages.push(
-      @kernel.Message::UserMessage(content=[@kernel.Content::Text(reminder)]),
-    )
-  } else if existing_text != reminder {
-    messages[existing_idx] = @kernel.Message::UserMessage(content=[
-      @kernel.Content::Text(reminder),
-    ])
+  None
+}
+
+///|
+/// Standing reminder only while ReadOnly is active (the behavior-changing
+/// mode); other modes are silent enforcement + deny feedback, and an
+/// existing reminder left over from a ReadOnly turn is removed (rationale:
+/// docs/permission-injection-research.md). Inject when the transcript has
+/// none (first turn, or compaction dropped it), replace in place when the
+/// text is stale, remove when the mode is no longer ReadOnly; steady-state
+/// turns touch nothing, so the hook is idempotent.
+pub impl @posoco.PipelineHook for PermissionPolicy with fn before_model(
+  self : PermissionPolicy,
+  messages : Array[@kernel.Message],
+) -> Array[@kernel.Message] {
+  match self.mode_reminder_text() {
+    Some(text) =>
+      match find_mode_reminder(messages) {
+        None => messages.push(mode_reminder_message(text))
+        Some(idx) => {
+          let stale = match messages[idx] {
+            @kernel.Message::UserMessage(content~) =>
+              match content {
+                [@kernel.Content::Text(existing)] => existing != text
+                _ => true
+              }
+            _ => true
+          }
+          if stale {
+            messages[idx] = mode_reminder_message(text)
+          }
+        }
+      }
+    None =>
+      match find_mode_reminder(messages) {
+        Some(idx) => ignore(messages.remove(idx))
+        None => ()
+      }
   }
   messages
+}
+
+///|
+/// Resolve the tool identity a call will actually execute, for permission
+/// classification and approval scoping. The lazytools convention is shared
+/// (`LazyTools::unwrap_call`): gateway `execute` calls classify by the
+/// inner tool name — the gateway executes exactly the named tool, so
+/// classifying and scoping by that name is faithful. Malformed gateway
+/// calls classify as `execute` itself and fail downstream at the gateway.
+/// The original call is always returned untouched — the kernel routes
+/// execution by the outer name.
+fn effective_tool(call : @posoco.ToolCall) -> (String, @posoco.ToolCall) {
+  @lazytools.LazyTools::unwrap_call(call)
 }
 
 ///|
@@ -457,7 +508,16 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
   self : PermissionPolicy,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
-  let name = call.name.to_string()
+  let (name, effective) = effective_tool(call)
+  // Gateway meta tools skip this gate: tool_list only browses the folded
+  // catalog, and a well-formed tool_execute never reaches this check under
+  // its own name — effective_tool already unwrapped it to the inner tool,
+  // which is classified and gated below. The literal name survives
+  // unwrapping only for a malformed call, which executes nothing and fails
+  // at the gateway with a precise argument error.
+  if @lazytools.LazyTools::is_meta_tool(name) {
+    return @posoco.ToolDecision::Approve(call~)
+  }
   // Exemption reports from composed extensions: these tools carry their
   // own governance and skip this gate entirely (trust: code review).
   if self.exempted.contains(name) {
@@ -466,7 +526,7 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
   let category = self.classify(name)
   // Provably read-only shell is inspection: pre-approved in every mode
   // without asking; anything unprovable falls through to the gate.
-  if category == "shell" && shell_call_is_read_only(call) {
+  if category == "shell" && shell_call_is_read_only(effective) {
     return @posoco.ToolDecision::Approve(call~)
   }
   match self.mode {
@@ -483,14 +543,14 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
         @posoco.ToolDecision::Approve(call~)
       } else {
         // writes/shell/unknown go through the approval gate.
-        self.gate(call, category)
+        self.gate(call, effective, category)
       }
     Interactive =>
       if category == "read" {
         @posoco.ToolDecision::Approve(call~)
       } else {
         // every side-effecting tool goes through the approval gate.
-        self.gate(call, category)
+        self.gate(call, effective, category)
       }
     Yolo => @posoco.ToolDecision::Approve(call~)
   }
@@ -677,7 +737,7 @@ pub impl @posoco.Extension for PermissionPolicy with fn manifest(
   self : PermissionPolicy,
 ) -> @posoco.ExtensionManifest {
   let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_permission")
-  { ..manifest, hooks: [self], commands: [self] }
+  { ..manifest, hooks: [self], commands: [self], }
 }
 
 ///|

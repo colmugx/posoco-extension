@@ -87,7 +87,7 @@ async test "workspace-write without source denies shell and unknown" {
 
 ///|
 async test "workspace-write with source approves writes via gate, caches per tool" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -115,7 +115,7 @@ async test "workspace-write with source approves writes via gate, caches per too
 
 ///|
 async test "shell approvals are remembered per segment scope" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -155,7 +155,7 @@ async test "shell approvals are remembered per segment scope" {
 
 ///|
 async test "rtk prefix is stripped: rtk moon and bare moon share one scope" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -189,7 +189,7 @@ async test "rtk prefix is stripped: rtk moon and bare moon share one scope" {
 
 ///|
 async test "non-transparent shims keep shim + subcommand scope" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -216,7 +216,7 @@ async test "non-transparent shims keep shim + subcommand scope" {
 
 ///|
 async test "compound commands require every segment scope" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -245,7 +245,7 @@ async test "compound commands require every segment scope" {
 
 ///|
 async test "write approval without a path is still cached per tool" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -266,7 +266,7 @@ async test "write approval without a path is still cached per tool" {
 
 ///|
 async test "unknown tools are cached per tool name" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -313,7 +313,7 @@ async test "workspace-write deny surfaces the reason" {
 
 ///|
 async test "interactive mode approves reads and gates side effects" {
-  let source = ScriptedApproval::{ decision: AllowOnce, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
@@ -369,7 +369,7 @@ async test "read-only shell commands are pre-approved in every mode" {
   )
   // Opaque commands still go through the approval gate — the fast path
   // never widens what arbitrary scripts may do.
-  let allow_source = ScriptedApproval::{ decision: AllowOnce, asked: 0 }
+  let allow_source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
   let ww = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(allow_source as &ApprovalSource),
@@ -472,69 +472,114 @@ async test "yolo mode pre-approves every tool without a source" {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Per-turn mode reminder (before_model)
+// Mode reminder (before_model)
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-async test "before_model injects current mode reminder as user message" {
-  let modes : Array[PermissionMode] = [
-    ReadOnly,
-    WorkspaceWrite,
-    Interactive,
-    Yolo,
-  ]
-  let expected_phrases : Array[String] = [
-    "read-only", "workspace reads and writes", "interactive", "yolo",
-  ]
-  for i, mode in modes {
-    let policy = PermissionPolicy::PermissionPolicy(mode)
-    let messages = [user_message("hello")]
-    let result = policy.before_model(messages)
-    assert_eq(result.length(), 2)
-    match result[1] {
-      @kernel.Message::UserMessage(content~) =>
-        match content {
-          [@kernel.Content::Text(text)] => {
-            assert_true(text.has_prefix("<permission-context"))
-            assert_true(text.contains(expected_phrases[i]))
-          }
-          _ => fail("expected single text content")
-        }
-      _ => fail("expected user message")
-    }
+/// Text of a single-text user message, for reminder assertions.
+fn user_text(msg : @kernel.Message) -> String? {
+  match msg {
+    @kernel.Message::UserMessage(content~) =>
+      match content {
+        [@kernel.Content::Text(text)] => Some(text)
+        _ => None
+      }
+    _ => None
   }
 }
 
 ///|
-async test "before_model is idempotent" {
+async test "before_model injects the read-only reminder as one user message, idempotently" {
   let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
   let messages = [user_message("hello")]
   let r1 = policy.before_model(messages)
-  let r2 = policy.before_model(r1)
   assert_eq(r1.length(), 2)
+  match r1[1] {
+    @kernel.Message::UserMessage(content~) =>
+      match content {
+        [@kernel.Content::Text(text)] => {
+          assert_true(text.has_prefix("<permission-context"))
+          assert_true(text.contains("read-only"))
+        }
+        _ => fail("expected single text content")
+      }
+    _ => fail("expected user message")
+  }
+  // Second call with the same transcript: no duplicate reminder.
+  let r2 = policy.before_model(r1)
   assert_eq(r2.length(), 2)
   assert_eq(r1[1], r2[1])
 }
 
 ///|
-async test "before_model replaces reminder in place when mode changes" {
+async test "switching away from ReadOnly removes the reminder" {
   let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
-  let messages = [user_message("hello")]
-  let r1 = policy.before_model(messages)
+  let r1 = policy.before_model([user_message("hello")])
   assert_eq(r1.length(), 2)
-  policy.mode = Yolo
+  policy.mode = WorkspaceWrite
   let r2 = policy.before_model(r1)
-  assert_eq(r2.length(), 2)
-  match r2[1] {
-    @kernel.Message::UserMessage(content~) =>
-      match content {
-        [@kernel.Content::Text(text)] => {
-          assert_true(text.contains("yolo"))
-          assert_false(text.contains("read-only"))
-        }
-        _ => fail("expected single text content")
-      }
-    _ => fail("expected user message")
+  assert_eq(r2.length(), 1)
+  assert_eq(r2[0], user_message("hello"))
+  // Silent mode stays silent: no reminder reappears on later turns.
+  let r3 = policy.before_model(r2)
+  assert_eq(r3.length(), 1)
+  // Switching back re-injects the standing reminder.
+  policy.mode = ReadOnly
+  let r4 = policy.before_model(r3)
+  assert_eq(r4.length(), 2)
+  assert_true(user_text(r4[1]) is Some(text) && text.contains("read-only"))
+}
+
+///|
+async test "approval-routing modes inject no reminder from a clean transcript" {
+  let modes : Array[PermissionMode] = [WorkspaceWrite, Interactive, Yolo]
+  for mode in modes {
+    let policy = PermissionPolicy::PermissionPolicy(mode)
+    let messages = [user_message("hello")]
+    let result = policy.before_model(messages)
+    assert_eq(result.length(), 1)
+    assert_eq(result[0], user_message("hello"))
+  }
+}
+
+///|
+async test "second turn with unchanged mode leaves the transcript untouched" {
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let turn1 = policy.before_model([user_message("hello")])
+  // Simulate the next turn: persisted history carrying the turn-1 reminder,
+  // plus a fresh user input at the end.
+  let history : Array[@kernel.Message] = []
+  for msg in turn1 {
+    history.push(msg)
+  }
+  history.push(user_message("task two"))
+  let reminder_before = user_text(history[1])
+  let r2 = policy.before_model(history)
+  assert_eq(r2.length(), 3)
+  assert_eq(user_text(r2[1]), reminder_before)
+  // The reminder stays at its original position; the new input is last.
+  assert_eq(r2[2], user_message("task two"))
+}
+
+///|
+async test "before_model replaces a stale reminder in place" {
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  // An envelope from an earlier wording: located by prefix, refreshed in
+  // place because its text differs from the current reminder.
+  let stale = @kernel.Message::UserMessage(content=[
+    @kernel.Content::Text(
+      "<permission-context>stale wording</permission-context>",
+    ),
+  ])
+  let r1 = policy.before_model([user_message("hello"), stale])
+  assert_eq(r1.length(), 2)
+  match user_text(r1[1]) {
+    Some(text) => {
+      assert_true(text.has_prefix("<permission-context"))
+      assert_true(text.contains("read-only"))
+      assert_false(text.contains("stale wording"))
+    }
+    None => fail("expected the stale reminder replaced by the envelope")
   }
 }
 
@@ -544,7 +589,7 @@ async test "before_model replaces reminder in place when mode changes" {
 
 ///|
 async test "/permission reports status, switches mode, resets approvals" {
-  let source = ScriptedApproval::{ decision: AllowSession, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
@@ -675,7 +720,7 @@ async test "bus-reported tools bypass the gate in every mode" {
 
 ///|
 async test "exempted tools never consult the approval source" {
-  let source = ScriptedApproval::{ decision: AllowOnce, asked: 0 }
+  let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
   let bus = @devkit.EventBus::EventBus()
   let policy = PermissionPolicy::PermissionPolicy(
     Interactive,
@@ -721,4 +766,119 @@ async test "malformed exemption payloads are ignored" {
   assert_true(
     policy.before_tool(test_call("anything")) is @posoco.ToolDecision::Reject(_),
   )
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// gateway calls (`tool_execute` classifies by the inner tool)
+// ──────────────────────────────────────────────────────────────────────
+
+///|
+/// A gateway call: `tool_execute` with `tool` + nested `arguments`.
+fn test_call_lazy(tool : String, args : Map[String, Json]) -> @posoco.ToolCall {
+  @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call-1"),
+    name: @posoco.ToolName::unchecked("tool_execute"),
+    arguments: Json::object(
+      Map::from_array([
+        ("tool", Json::string(tool)),
+        ("arguments", Json::object(args)),
+      ]),
+    ),
+  }
+}
+
+///|
+/// A bare `tool_list` browse call.
+fn test_call_list() -> @posoco.ToolCall {
+  @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call-1"),
+    name: @posoco.ToolName::unchecked("tool_list"),
+    arguments: Json::object(Map::from_array([])),
+  }
+}
+
+///|
+async test "read-only mode classifies deferred tools by inner name" {
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  // webfetch rides the read class even behind the gateway.
+  assert_true(
+    policy.before_tool(
+      test_call_lazy(
+        "webfetch",
+        Map::from_array([("url", Json::string("https://example.com"))]),
+      ),
+    )
+    is @posoco.ToolDecision::Approve(_),
+  )
+  // Deferred unknown tools stay rejected, named by the inner tool.
+  match
+    policy.before_tool(test_call_lazy("memory_search", Map::from_array([]))) {
+    @posoco.ToolDecision::Reject(reason~) =>
+      assert_true(reason.contains("memory_search"))
+    _ => fail("expected rejection naming the inner tool")
+  }
+}
+
+///|
+async test "gateway unknown tools are gated and scoped per inner tool name" {
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+  )
+  // First deferred memory call: asks once; the prompt sees the inner name.
+  match
+    policy.before_tool(
+      test_call_lazy(
+        "memory_search",
+        Map::from_array([("query", Json::string("x"))]),
+      ),
+    ) {
+    @posoco.ToolDecision::ApproveAfterConsent(call~, ..) =>
+      // The consent keeps the ORIGINAL gateway call for execution.
+      assert_eq(call.name.to_string(), "tool_execute")
+    _ => fail("expected ApproveAfterConsent for the deferred call")
+  }
+  assert_eq(source.asked, 1)
+  // A different deferred tool does not inherit the approval.
+  match
+    policy.before_tool(test_call_lazy("obsidian_search", Map::from_array([]))) {
+    @posoco.ToolDecision::ApproveAfterConsent(..) => ()
+    _ => fail("expected a fresh ask for a different inner tool")
+  }
+  assert_eq(source.asked, 2)
+  // Same inner tool: session cache hit, no re-ask.
+  assert_true(
+    policy.before_tool(test_call_lazy("memory_search", Map::from_array([])))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 2)
+}
+
+///|
+async test "gateway meta tools skip the gate" {
+  // Catalog browsing is inspection: pre-approved even in read-only mode,
+  // where it used to be rejected as an unknown tool.
+  let ro = PermissionPolicy::PermissionPolicy(ReadOnly)
+  assert_true(
+    ro.before_tool(test_call_list()) is @posoco.ToolDecision::Approve(_),
+  )
+  // Interactive never asks for the meta surface either.
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+  )
+  assert_true(
+    policy.before_tool(test_call_list()) is @posoco.ToolDecision::Approve(_),
+  )
+  // Missing `tool`: no inner identity, nothing can execute — the meta name
+  // is exempt and the gateway raises the argument error instead.
+  let malformed : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("call-2"),
+    name: @posoco.ToolName::unchecked("tool_execute"),
+    arguments: Json::object(Map::from_array([])),
+  }
+  assert_true(policy.before_tool(malformed) is @posoco.ToolDecision::Approve(_))
+  assert_eq(source.asked, 0)
 }
