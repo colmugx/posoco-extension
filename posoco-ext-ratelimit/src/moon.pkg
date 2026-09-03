@@ -1,11 +1,13 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "moonbitlang/async",
   "moonbitlang/async/semaphore",
 }
 
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
 } for "wbtest"

@@ -90,7 +90,7 @@ priv struct VClock {
 
 ///|
 fn vclock() -> VClock {
-  { now_ms: 0L, stop_requested: false, cv: @cond_var.Cond::Cond() }
+  { now_ms: 0L, stop_requested: false, cv: @cond_var.Cond::Cond(), }
 }
 
 ///|
@@ -233,7 +233,7 @@ pub impl @posoco.ModelPort for DelayedModel with fn provider_config(
 ///|
 async test "two due sessions both resume; turns serialize on one agent" {
   let clock = vclock()
-  let model : DelayedModel = { delay_ms: 150, started: 0, finished: 0 }
+  let model : DelayedModel = { delay_ms: 150, started: 0, finished: 0, }
   let guard_ext = RateLimitGuard(
     margin_ms=0,
     poll_interval_ms=5,
@@ -348,4 +348,296 @@ async test "failing resume is rescheduled and does not kill the monitor" {
     assert_eq(model.call_count(), 3)
     assert_eq(guard_ext.pending_snapshots().length(), 0)
   })
+}
+
+///|
+/// Host-style teardown error: raised by the group body to model a host
+/// abort (cetas-acp stdin EOF), which puts the group into failure and
+/// cancels every remaining child mid-flight.
+suberror HostEof derive(Debug)
+
+///|
+/// Cancellation regression: when a host group tears down (cetas-acp stdin
+/// EOF), the aborting body fails the group and the monitor is cancelled
+/// mid-sleep; the loop must re-raise the cancellation so the teardown
+/// completes. Swallowing it used to spin the idle monitor forever — the
+/// sleep is the loop's only suspension point. The real injected sleep is
+/// used (no virtual clock), the with_timeout watchdog bounds the assertion,
+/// and `stopped` staying false proves the exit came from cancellation,
+/// not stop().
+async test "spawn_monitor terminates on task group cancellation" {
+  let guard_ext = RateLimitGuard(poll_interval_ms=1)
+  let outcome : Result[Unit, Error] = Ok(
+    @async.with_timeout(5000, () => {
+      @async.with_task_group(group => {
+        guard_ext.spawn_monitor(group)
+        @async.sleep(10)
+        raise HostEof
+      })
+    }),
+  ) catch {
+    error => Err(error)
+  }
+  guard outcome is Err(error) else {
+    fail("expected the host abort to propagate out of the group")
+  }
+  assert_true(error is HostEof)
+  assert_true(!guard_ext.stopped)
+}
+
+///|
+/// Capture subscriber over a real bus, mirroring the devkit status_op
+/// white-box tests: every published event is decoded back into a StatusOp.
+priv struct BusCapture {
+  events : Array[@devkit.BusEvent]
+}
+
+///|
+fn BusCapture::BusCapture() -> BusCapture {
+  { events: [], }
+}
+
+///|
+impl @devkit.BusSubscriber for BusCapture with fn on_bus_event(
+  self : BusCapture,
+  event : @devkit.BusEvent,
+) -> Unit {
+  self.events.push(event)
+}
+
+///|
+async test "429 with reset time registers the resume countdown" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let guard_ext = RateLimitGuard(margin_ms=15000, bus=Some(bus), now_ms=fn() {
+    1000L
+  })
+  let hook : &@posoco.PipelineHook = guard_ext
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(900000L)))
+  // resume_at 915000 - now 1000 = 914s.
+  assert_eq(capture.events.length(), 1)
+  assert_eq(capture.events[0].source, "posoco_ext_ratelimit")
+  assert_eq(capture.events[0].topic, "status")
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 15m14s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+}
+
+///|
+async test "TurnCompleted after a pending resume unregisters the segment" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let guard_ext = RateLimitGuard(margin_ms=1000, bus=Some(bus), now_ms=fn() {
+    1000L
+  })
+  let hook : &@posoco.PipelineHook = guard_ext
+  let observer : &@posoco.Observer = guard_ext
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(50000L)))
+  observer.on_event_at(Some(test_scope("s1")), @posoco.TurnEvent::TurnCompleted)
+  assert_eq(capture.events.length(), 2)
+  assert_true(
+    @devkit.decode_status_op(capture.events[0])
+    is Some(@devkit.StatusOp::Register(..)),
+  )
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(@devkit.StatusOp::Unregister(segment="resume")),
+  )
+}
+
+///|
+async test "giving up over max_attempts unregisters the segment" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let guard_ext = RateLimitGuard(max_attempts=1, margin_ms=0, bus=Some(bus), now_ms=fn() {
+    1000L
+  })
+  let hook : &@posoco.PipelineHook = guard_ext
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(61000L)))
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 1m0s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(71000L)))
+  assert_eq(capture.events.length(), 2)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(@devkit.StatusOp::Unregister(segment="resume")),
+  )
+}
+
+///|
+async test "published countdown reflects the earliest pending resume" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let guard_ext = RateLimitGuard(margin_ms=0, bus=Some(bus), now_ms=fn() {
+    1000L
+  })
+  let hook : &@posoco.PipelineHook = guard_ext
+  hook.on_post_event_at(Some(test_scope("late")), quota_failure(Some(301000L)))
+  hook.on_post_event_at(Some(test_scope("early")), quota_failure(Some(11000L)))
+  assert_eq(capture.events.length(), 2)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 5m0s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+  // The latest publish tracks the earliest schedule, not the last verdict.
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 10s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+}
+
+///|
+async test "a second 429 updates the same session's countdown in place" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let guard_ext = RateLimitGuard(margin_ms=0, bus=Some(bus), now_ms=fn() {
+    1000L
+  })
+  let hook : &@posoco.PipelineHook = guard_ext
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(61000L)))
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(121000L)))
+  assert_eq(guard_ext.pending_snapshots().length(), 1)
+  // One fresh Register per verdict: the update-in-place republishes the
+  // rescheduled countdown.
+  assert_eq(capture.events.length(), 2)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 1m0s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 2m0s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+}
+
+///|
+async test "countdown formatting covers hours and due-now resumes" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let now = Ref(1000L)
+  let guard_ext = RateLimitGuard(margin_ms=0, bus=Some(bus), now_ms=fn() {
+    now.val
+  })
+  let hook : &@posoco.PipelineHook = guard_ext
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(3601000L)))
+  now.val = 2000L
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(2500L)))
+  assert_eq(capture.events.length(), 2)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 1h00m"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+  // 500ms past the reset time: due-now collapses to zero.
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 0s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
+}
+
+///|
+async test "a fired resume republishes the countdown for the remaining session" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let now = Ref(1000L)
+  let guard_ext = RateLimitGuard(margin_ms=0, bus=Some(bus), now_ms=fn() {
+    now.val
+  })
+  let hook : &@posoco.PipelineHook = guard_ext
+  hook.on_post_event_at(Some(test_scope("s1")), quota_failure(Some(11000L)))
+  hook.on_post_event_at(Some(test_scope("s2")), quota_failure(Some(301000L)))
+  // An empty take (nothing due) publishes nothing — the monitor polls every
+  // interval and must not emit no-op events.
+  assert_eq(guard_ext.take_due(now.val).length(), 0)
+  assert_eq(capture.events.length(), 2)
+  now.val = 20000L
+  let fired = guard_ext.take_due(now.val)
+  assert_eq(fired.length(), 1)
+  assert_eq(fired[0].session_id, "s1")
+  // now 20000, s2 resumes at 301000 -> 281s.
+  assert_eq(
+    @devkit.decode_status_op(capture.events[2]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="resume",
+        label=None,
+        priority=90,
+        value=Some("in 4m41s"),
+        color=Some("warning"),
+      ),
+    ),
+  )
 }

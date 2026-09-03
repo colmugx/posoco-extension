@@ -76,6 +76,10 @@ pub struct RateLimitGuard {
   sleep_ms : async (Int) -> Unit
   turn_lock : @semaphore.Semaphore
   trace : (String) -> Unit
+  /// Optional cross-extension bus: after every schedule change the guard
+  /// republishes the `resume` status segment (devkit status protocol) so a
+  /// status bar can show when the interrupted task restarts.
+  bus : @devkit.EventBus?
 }
 
 ///|
@@ -88,6 +92,7 @@ pub fn RateLimitGuard::RateLimitGuard(
   now_ms? : () -> Int64 = fn() { @async.now() },
   sleep_ms? : async (Int) -> Unit = async fn(ms : Int) { @async.sleep(ms) },
   trace? : (String) -> Unit = fn(_ : String) { () },
+  bus? : @devkit.EventBus? = None,
 ) -> RateLimitGuard {
   {
     agent: None,
@@ -103,6 +108,62 @@ pub fn RateLimitGuard::RateLimitGuard(
     sleep_ms,
     turn_lock: @semaphore.Semaphore::Semaphore(1),
     trace,
+    bus,
+  }
+}
+
+///|
+/// Republish the `resume` status segment after a schedule change: with
+/// nothing pending the segment is released, otherwise it registers a
+/// countdown snapshot to the earliest resume time, taken at publish time.
+fn RateLimitGuard::publish_resume_status(self : RateLimitGuard) -> Unit {
+  match self.bus {
+    Some(bus) =>
+      if self.pending.is_empty() {
+        @devkit.publish_status_unregister(
+          bus,
+          source="posoco_ext_ratelimit",
+          segment="resume",
+        )
+      } else {
+        let mut earliest = self.pending[0].resume_at_ms
+        for entry in self.pending {
+          if entry.resume_at_ms < earliest {
+            earliest = entry.resume_at_ms
+          }
+        }
+        @devkit.publish_status_register(
+          bus,
+          source="posoco_ext_ratelimit",
+          segment="resume",
+          priority=90,
+          value=fmt_countdown(earliest - (self.now_ms)()),
+          color="warning",
+        )
+      }
+    None => ()
+  }
+}
+
+///|
+/// Countdown snapshot for the status bar: "in 1h05m", "in 4m32s",
+/// "in 32s"; a resume that is already due renders as "in 0s".
+fn fmt_countdown(delta_ms : Int64) -> String {
+  if delta_ms <= 0L {
+    return "in 0s"
+  }
+  let total_s = delta_ms / 1000L
+  if total_s >= 3600L {
+    let h = total_s / 3600L
+    let mm = total_s % 3600L / 60L
+    let mm_str = if mm < 10L { "0\{mm}" } else { "\{mm}" }
+    "in \{h}h\{mm_str}m"
+  } else if total_s >= 60L {
+    let m = total_s / 60L
+    let s = total_s % 60L
+    "in \{m}m\{s}s"
+  } else {
+    "in \{total_s}s"
   }
 }
 
@@ -149,6 +210,7 @@ fn RateLimitGuard::record_limit(
     self.pending = self.pending.filter(fn(entry) {
       entry.session_id != session_id
     })
+    self.publish_resume_status()
     (self.trace)(
       "rate-limit resume gave up on session \{session_id} after \{prior} attempts",
     )
@@ -175,7 +237,7 @@ fn RateLimitGuard::record_limit(
   if already {
     self.pending = self.pending.map(fn(entry) {
       if entry.session_id == session_id {
-        { ..entry, resume_at_ms: resume_at, attempts: prior, provider_code }
+        { ..entry, resume_at_ms: resume_at, attempts: prior, provider_code, }
       } else {
         entry
       }
@@ -188,6 +250,7 @@ fn RateLimitGuard::record_limit(
       provider_code,
     })
   }
+  self.publish_resume_status()
   (self.trace)(
     "rate limit on session \{session_id} (code=\{Repr(provider_code)}), resume scheduled at \{resume_at}",
   )
@@ -225,6 +288,7 @@ pub impl @posoco.Observer for RateLimitGuard with fn on_event_at(
       self.pending = self.pending.filter(fn(entry) {
         entry.session_id != scope.session_id.to_string()
       })
+      self.publish_resume_status()
     }
     _ => ()
   }
@@ -278,6 +342,11 @@ fn RateLimitGuard::take_due(
   }
   let due = self.pending.filter(fn(entry) { entry.resume_at_ms <= now_ms })
   self.pending = self.pending.filter(fn(entry) { entry.resume_at_ms > now_ms })
+  // Republish only when resumes actually fired — the monitor polls every
+  // interval and an empty take must not emit a no-op unregister each time.
+  if due.length() > 0 {
+    self.publish_resume_status()
+  }
   due
 }
 
@@ -334,6 +403,7 @@ async fn RateLimitGuard::resume_entry(
               attempts: prior,
               provider_code: entry.provider_code,
             })
+            self.publish_resume_status()
             (self.trace)(
               "rate-limit resume failed for session \{entry.session_id}, retry scheduled",
             )
@@ -376,9 +446,12 @@ pub async fn RateLimitGuard::poll(self : RateLimitGuard) -> Unit {
 /// monitor only schedules: each due resume runs as its own task in the same
 /// group, so a slow or failing turn never stalls the monitor, and resume
 /// errors are swallowed — a failing resume must not cancel the host group.
-/// The resumed turns themselves serialize on an internal lock because the
-/// bound Agent executes one turn at a time. The loop parks on the injected
-/// sleep until the earliest due time, so an idle guard costs nothing.
+/// Cancellation of the sleep re-raises so a host task group teardown
+/// terminates the monitor (a swallowed cancellation here spins the idle
+/// loop forever). The resumed turns themselves serialize on an internal
+/// lock because the bound Agent executes one turn at a time. The loop
+/// parks on the injected sleep until the earliest due time, so an idle
+/// guard costs nothing.
 pub fn[G] RateLimitGuard::spawn_monitor(
   self : RateLimitGuard,
   group : @async.TaskGroup[G],
@@ -411,6 +484,7 @@ pub fn[G] RateLimitGuard::spawn_monitor(
         delay = 1
       }
       (self.sleep_ms)(delay) catch {
+        err if @async.is_cancellation_error(err) => raise err
         _ => ()
       }
     }

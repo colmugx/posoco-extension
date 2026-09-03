@@ -3,6 +3,7 @@ package "colmugx/posoco-ext-ratelimit"
 
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async",
@@ -31,8 +32,9 @@ pub struct RateLimitGuard {
   sleep_ms : async (Int) -> Unit
   turn_lock : @semaphore.Semaphore
   trace : (String) -> Unit
+  bus : @posoco-devkit.EventBus?
 }
-pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, now_ms? : () -> Int64, sleep_ms? : async (Int) -> Unit, trace? : (String) -> Unit) -> Self
+pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, now_ms? : () -> Int64, sleep_ms? : async (Int) -> Unit, trace? : (String) -> Unit, bus? : @posoco-devkit.EventBus?) -> Self
 pub fn RateLimitGuard::bind(Self, @posoco.Agent) -> Unit
 pub fn RateLimitGuard::extension_id(Self) -> String
 pub fn RateLimitGuard::manifest(Self) -> @port.ExtensionManifest
