@@ -14,5 +14,6 @@ options(
   targets: {
     "posoco_ext_bash.js.mbt": [ "js" ],
     "posoco_ext_bash.native.mbt": [ "native" ],
+    "bash_native_path_wbtest.mbt": [ "native" ],
   },
 )

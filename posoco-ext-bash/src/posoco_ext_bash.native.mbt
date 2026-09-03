@@ -48,3 +48,17 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     @posoco.ToolOutcome::Success(content~, structured=None)
   }
 }
+
+///|
+/// Native decode failure — non-UTF-8 output must not masquerade as success.
+fn bash_decode_failure(exit_code : Int) -> String {
+  "bash: decode failed (stage=decode_output, category=invalid_utf8, exit_code=\{exit_code})"
+}
+
+///|
+/// Native collect_output failure.
+fn bash_collect_output_failure() -> @posoco.RuntimeError {
+  @posoco.RuntimeError::InvocationFailed(
+    "bash: process failed (stage=collect_output)",
+  )
+}

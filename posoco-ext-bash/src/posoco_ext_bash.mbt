@@ -55,7 +55,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash"),
-      description: "Run a shell command. Use only when the other tools cannot do the job — e.g. builds, tests, git, or multi-step pipelines. Each call runs in a fresh shell in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root.",
+      description: "Run a shell command. Use only when the other tools cannot do the job — e.g. builds, tests, git, or multi-step pipelines. Each call runs in a fresh shell in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root. Read-only commands (ls, cat, grep, git status, find) are pre-approved by the permission policy and run without approval; all other commands may require user approval.",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
@@ -108,15 +108,15 @@ fn bash_empty_command_failure() -> @posoco.RuntimeError {
 }
 
 ///|
-/// Native decode failure — non-UTF-8 output must not masquerade as success.
-fn bash_decode_failure(exit_code : Int) -> String {
-  "bash: decode failed (stage=decode_output, category=invalid_utf8, exit_code=\{exit_code})"
-}
+/// Per-target import keepers: each backend compiles only one execute path,
+/// so the other backend's import would trip `unused_package`. `@process`
+/// backs the native runner, `@js_async` the bun runner.
+#cfg(not(target="native"))
+let _process_import_keeper : Unit = ignore(@process.unimplemented)
 
 ///|
-/// Native collect_output failure.
-fn bash_collect_output_failure() -> @posoco.RuntimeError {
-  @posoco.RuntimeError::InvocationFailed(
-    "bash: process failed (stage=collect_output)",
-  )
-}
+#cfg(not(target="js"))
+// The reference intentionally targets the native js_async stub, whose
+// unimplemented alert is noise for a value that is never evaluated.
+#warnings("-alert_unimplemented")
+let _js_async_import_keeper : Unit = ignore(@js_async.AbortController::new)
