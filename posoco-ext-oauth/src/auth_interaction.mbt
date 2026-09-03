@@ -30,7 +30,7 @@ pub(all) struct NoopAuthInteraction {}
 
 ///|
 pub fn NoopAuthInteraction::NoopAuthInteraction() -> NoopAuthInteraction {
-  NoopAuthInteraction::{  }
+  NoopAuthInteraction::{ }
 }
 
 ///|
@@ -63,7 +63,7 @@ pub fn AuthPromptOption::AuthPromptOption(
   label~ : String,
   description? : String? = None,
 ) -> AuthPromptOption {
-  { id, label, description }
+  { id, label, description, }
 }
 
 ///|
@@ -91,7 +91,7 @@ pub(all) struct NoopAuthPromptInteraction {}
 
 ///|
 pub fn NoopAuthPromptInteraction::NoopAuthPromptInteraction() -> NoopAuthPromptInteraction {
-  NoopAuthPromptInteraction::{  }
+  NoopAuthPromptInteraction::{ }
 }
 
 ///|

@@ -50,7 +50,7 @@ pub fn DeviceFlowConfig::with_default_headers(
   for k, v in headers {
     merged[k] = v
   }
-  { ..self, default_headers: merged }
+  { ..self, default_headers: merged, }
 }
 
 ///|
@@ -423,7 +423,9 @@ pub async fn run_device_flow_with_transport(
     if interaction.is_cancelled() {
       raise Cancelled
     }
-    @async.sleep(interval) catch {
+    // RFC 8628 interval is seconds; @async.sleep takes milliseconds. This is
+    // the single sleep point, so slow_down-derived intervals convert here too.
+    @async.sleep(interval * 1000) catch {
       err =>
         raise OAuthError::HttpError("sleep interrupted: " + err.to_string())
     }

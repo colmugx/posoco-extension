@@ -53,6 +53,10 @@ pub(all) struct JsCallbackServer {
 }
 
 ///|
+/// See callback_server.native.mbt: the impl is pub API for
+/// `run_pkce_browser_flow`; only `&CallbackServer` dispatch exists in-workspace
+/// and the compiler flags `start`, so silence just that diagnostic here.
+#warnings("-unused_value")
 impl CallbackServer for JsCallbackServer with fn start(
   self : JsCallbackServer,
   port : Int,
@@ -92,5 +96,5 @@ impl CallbackServer for JsCallbackServer with fn stop(self : JsCallbackServer) -
 ///|
 /// Factory: create a js CallbackServer.
 pub fn create_callback_server() -> JsCallbackServer {
-  { code: "", bun_server: None }
+  { code: "", bun_server: None, }
 }

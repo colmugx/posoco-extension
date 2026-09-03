@@ -173,7 +173,7 @@ fn parse_token_response(json : Json) -> Credential raise OAuthError {
 ///|
 /// Minimal URL-encode for OAuth query params (encode spaces, &, =, etc).
 fn url_encode(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if (ch >= 'a' && ch <= 'z') ||
       (ch >= 'A' && ch <= 'Z') ||

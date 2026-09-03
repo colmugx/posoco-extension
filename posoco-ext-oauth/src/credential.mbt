@@ -20,7 +20,7 @@ pub fn Credential::Credential(
   token_type? : String = "Bearer",
   metadata? : Map[String, String] = Map([]),
 ) -> Credential {
-  { access_token, refresh_token, expires_at, token_type, metadata }
+  { access_token, refresh_token, expires_at, token_type, metadata, }
 }
 
 ///|
@@ -130,7 +130,7 @@ pub fn ApiKeyCredential::ApiKeyCredential(
   secret~ : String,
   metadata? : Map[String, String] = Map([]),
 ) -> ApiKeyCredential {
-  { secret, metadata }
+  { secret, metadata, }
 }
 
 ///|
@@ -252,7 +252,7 @@ pub fn ApiKeyCredential::from_json(json : Json) -> ApiKeyCredential? {
         Some(_) => return None
         None => ()
       }
-      Some(ApiKeyCredential::{ secret, metadata })
+      Some(ApiKeyCredential::{ secret, metadata, })
     }
     _ => None
   }

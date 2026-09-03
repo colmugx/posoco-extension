@@ -39,7 +39,7 @@ pub(all) struct InMemoryProviderCredentialStore {
 
 ///|
 pub fn InMemoryProviderCredentialStore::InMemoryProviderCredentialStore() -> InMemoryProviderCredentialStore {
-  { credentials: Map([]) }
+  { credentials: Map([]), }
 }
 
 ///|
@@ -75,7 +75,7 @@ pub(all) struct InMemoryCredentialStore {
 
 ///|
 pub fn InMemoryCredentialStore::InMemoryCredentialStore() -> InMemoryCredentialStore {
-  { credentials: Map([]) }
+  { credentials: Map([]), }
 }
 
 ///|
@@ -124,7 +124,7 @@ pub(all) struct InMemoryApiKeyStore {
 
 ///|
 pub fn InMemoryApiKeyStore::InMemoryApiKeyStore() -> InMemoryApiKeyStore {
-  { credentials: Map([]) }
+  { credentials: Map([]), }
 }
 
 ///|

@@ -9,10 +9,15 @@ pub(all) struct NativeCallbackServer {
 
 ///|
 pub fn NativeCallbackServer::NativeCallbackServer() -> NativeCallbackServer {
-  { code: "", server: None }
+  { code: "", server: None, }
 }
 
 ///|
+/// The CallbackServer impls are target-specific pub API for
+/// `run_pkce_browser_flow`, which no in-workspace product calls yet; the
+/// compiler's unused-impl analysis only sees dispatch through `&CallbackServer`
+/// and flags `start`, so silence just that diagnostic here.
+#warnings("-unused_value")
 impl CallbackServer for NativeCallbackServer with fn start(
   self : NativeCallbackServer,
   port : Int,

@@ -39,7 +39,7 @@ pub fn generate_pkce() -> PkcePair {
 ///|
 /// Generate a random string of the given length from the PKCE charset.
 fn random_pkce_string(length : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let seed = @async.now()
   let mut state = seed
   for _ in 0..<length {
@@ -74,7 +74,7 @@ let b64url_chars : Array[Char] = [
 ///|
 /// Encode a FixedArray[Byte] to base64url string (no padding).
 fn fixed_array_to_base64url(data : FixedArray[Byte]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let len = data.length()
   let mut i = 0
   while i < len {

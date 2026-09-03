@@ -6,15 +6,23 @@ import {
 }
 
 // Values
+pub async fn fetch_resource_metadata(String, &OAuthHttpTransport) -> ResourceMetadata raise OAuthError
+
+pub async fn fetch_server_metadata(String, &OAuthHttpTransport) -> ServerMetadata raise OAuthError
+
 pub fn generate_pkce() -> PkcePair
 
 pub fn oauth_form_url_encode(String) -> String
+
+pub async fn register_client(String, String, &OAuthHttpTransport) -> String raise OAuthError
 
 pub fn run_device_flow(DeviceFlowConfig, &AuthInteraction) -> Credential raise OAuthError
 
 pub async fn run_device_flow_with_transport(DeviceFlowConfig, &AuthInteraction, &OAuthHttpTransport) -> Credential raise OAuthError
 
 pub async fn run_pkce_browser_flow(PkceFlowConfig, &AuthInteraction, &CallbackServer, &OAuthHttpTransport) -> Credential raise OAuthError
+
+pub async fn run_refresh_flow(token_endpoint~ : String, client_id~ : String, refresh_token~ : String, transport~ : &OAuthHttpTransport) -> Credential raise OAuthError
 
 // Errors
 pub(all) suberror OAuthError {
@@ -162,6 +170,20 @@ pub fn ProviderCredential::from_json(Json) -> Self?
 pub fn ProviderCredential::method_id(Self) -> String
 pub fn ProviderCredential::to_json(Self) -> Json
 
+pub(all) struct ResourceMetadata {
+  authorization_servers : Array[String]
+}
+pub fn ResourceMetadata::ResourceMetadata(authorization_servers~ : Array[String]) -> Self
+
+pub(all) struct ServerMetadata {
+  authorization_endpoint : String
+  token_endpoint : String
+  device_authorization_endpoint : String?
+  registration_endpoint : String?
+  scopes_supported : Array[String]
+}
+pub fn ServerMetadata::ServerMetadata(authorization_endpoint~ : String, token_endpoint~ : String, device_authorization_endpoint? : String, registration_endpoint? : String, scopes_supported? : Array[String]) -> Self
+
 // Type aliases
 
 // Traits
@@ -194,6 +216,7 @@ pub(open) trait CredentialStore {
 
 pub(open) trait OAuthHttpTransport {
   async fn post(Self, OAuthHttpRequest) -> OAuthHttpResponse raise OAuthError
+  async fn get(Self, String, Map[String, String]) -> OAuthHttpResponse raise OAuthError = _
 }
 
 pub(open) trait OAuthProvider {

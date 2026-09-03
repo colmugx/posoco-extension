@@ -31,7 +31,7 @@ async test "device request matches pi form wire" {
     #|{"device_code":"device","user_code":"user","verification_uri":"https://auth.kimi.com/device","verification_uri_complete":"https://auth.kimi.com/device?code=user","expires_in":900,"interval":5}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 200, body: success_body },
+    response: OAuthHttpResponse::{ status: 200, body: success_body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
@@ -65,7 +65,7 @@ async test "device response missing fields stays typed" {
     #|{"device_code":"device","user_code":"user","verification_uri":"https://auth.kimi.com/device"}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 200, body: missing_field_body },
+    response: OAuthHttpResponse::{ status: 200, body: missing_field_body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
@@ -93,7 +93,7 @@ async test "device response rejects untrusted verification URI" {
     #|{"device_code":"device","user_code":"user","verification_uri":"javascript:alert(1)","verification_uri_complete":"https://auth.kimi.com/device?code=user"}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 200, body },
+    response: OAuthHttpResponse::{ status: 200, body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
@@ -121,7 +121,7 @@ async test "token request matches pi form wire and parses credential" {
     #|{"access_token":"access","refresh_token":"refresh","expires_in":3600,"token_type":"Bearer"}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 200, body: token_body },
+    response: OAuthHttpResponse::{ status: 200, body: token_body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
@@ -155,7 +155,7 @@ async test "token slow down remains typed control flow" {
     #|{"error":"slow_down","interval":11}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 400, body: slow_down_body },
+    response: OAuthHttpResponse::{ status: 400, body: slow_down_body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
@@ -178,7 +178,7 @@ async test "fractional token timing values are rejected" {
     #|{"access_token":"access","refresh_token":"refresh","expires_in":3600.5}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 200, body },
+    response: OAuthHttpResponse::{ status: 200, body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
@@ -201,7 +201,7 @@ async test "token non-success status cannot masquerade as a credential" {
     #|{"access_token":"access","refresh_token":"refresh","expires_in":3600}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 500, body: error_status_body },
+    response: OAuthHttpResponse::{ status: 500, body: error_status_body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
@@ -225,7 +225,7 @@ async test "config default_headers are merged and flow headers override" {
     #|{"device_code":"device","user_code":"user","verification_uri":"https://auth.kimi.com/device","verification_uri_complete":"https://auth.kimi.com/device?code=user","expires_in":900,"interval":5}
   let transport_impl = RecordingOAuthTransport::{
     requests: [],
-    response: OAuthHttpResponse::{ status: 200, body: success_body },
+    response: OAuthHttpResponse::{ status: 200, body: success_body, },
   }
   let transport : &OAuthHttpTransport = transport_impl
   let config : DeviceFlowConfig = {
