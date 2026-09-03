@@ -310,3 +310,92 @@ async test "model command emits the provider-declared display group" {
     _ => fail("expected successful model catalog")
   }
 }
+
+///|
+async test "model switch republishes the model segment with the new slot" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let port : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: [],
+  }
+  let router = RouterModelPort(
+    slots=[
+      ModelSlot::ModelSlot(
+        id="first",
+        label="First",
+        provider_id="provider-a",
+        model_id="model-a",
+        port~,
+      ),
+      ModelSlot::ModelSlot(
+        id="second",
+        label="Second",
+        provider_id="provider-b",
+        model_id="model-b",
+        port~,
+      ),
+    ],
+    bus=Some(bus),
+  )
+  let outcome = router.invoke(
+    "model",
+    Json::object(Map::from_array([("slot", Json::string("second"))])),
+  )
+  assert_true(outcome is @posoco.CommandOutcome::Success(..))
+  assert_eq(capture.events.length(), 1)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("model-b:default"),
+        color=None,
+      ),
+    ),
+  )
+}
+
+///|
+async test "effort switch republishes the model segment" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  let outcome = router.invoke(
+    "effort",
+    Json::object(Map::from_array([("effort", Json::string("high"))])),
+  )
+  assert_true(outcome is @posoco.CommandOutcome::Success(..))
+  assert_eq(capture.events.length(), 1)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("slot-a:high"),
+        color=None,
+      ),
+    ),
+  )
+}
+
+///|
+async test "commands with no bus stay silent and succeed" {
+  let router = command_test_router()
+  let outcome = router.invoke(
+    "model",
+    Json::object(Map::from_array([("slot", Json::string("second"))])),
+  )
+  assert_true(outcome is @posoco.CommandOutcome::Success(..))
+  assert_eq(router.active_slot_id(), "second")
+  let listed = router.invoke("model", Json::null())
+  assert_true(listed is @posoco.CommandOutcome::Success(..))
+}

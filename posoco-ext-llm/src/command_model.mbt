@@ -96,12 +96,12 @@ fn model_command_selection(
   args : Json,
 ) -> ModelSelection raise @posoco.CommandError {
   match args {
-    Json::Null => { slot_id: None, effort: None }
+    Json::Null => { slot_id: None, effort: None, }
     Json::String(slot_id) =>
       if slot_id.length() == 0 {
-        { slot_id: None, effort: None }
+        { slot_id: None, effort: None, }
       } else {
-        { slot_id: Some(slot_id), effort: None }
+        { slot_id: Some(slot_id), effort: None, }
       }
     Json::Object(fields) =>
       {
@@ -282,13 +282,13 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
   match id {
     "model" =>
       match model_command_selection(args) {
-        { slot_id: None, effort: None } =>
+        { slot_id: None, effort: None, } =>
           @posoco.CommandOutcome::Success(
             feedback="Available model slots",
             structured=Some(self.slot_catalog_json()),
             ui_hint=Some(@posoco.UiHint::RefreshModelList),
           )
-        { slot_id: Some(slot_id), effort } =>
+        { slot_id: Some(slot_id), effort, } =>
           if !self.slots.contains(slot_id) {
             @posoco.CommandOutcome::Failure(
               reason="unknown model slot: " + slot_id,
@@ -305,13 +305,14 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
               None => self.active_effort = None
             }
             self.active_id = slot_id
+            self.publish_model_status()
             @posoco.CommandOutcome::Success(
               feedback="switched to model slot: " + slot_id,
               structured=Some(self.slot_catalog_json()),
               ui_hint=Some(@posoco.UiHint::RefreshModelList),
             )
           }
-        { slot_id: None, effort: Some(_) } =>
+        { slot_id: None, effort: Some(_), } =>
           @posoco.CommandOutcome::Failure(
             reason="/model effort requires a slot",
           )
@@ -347,6 +348,7 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
               err =>
                 return @posoco.CommandOutcome::Failure(reason=err.to_string())
             }
+            self.publish_model_status()
             @posoco.CommandOutcome::Success(
               feedback="switched effort: " + level + " (" + self.active_id + ")",
               structured=Some(self.slot_catalog_json()),

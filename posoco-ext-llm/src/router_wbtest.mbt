@@ -223,3 +223,276 @@ test "replace_provider_slots appends when the provider contributed no slots" {
   }
   assert_eq(router.list_slot_ids(), ["one/a", "three/a", "three/b"])
 }
+
+///|
+/// Bus capture for the status-protocol tests: records every published
+/// event so assertions can decode the wire ops.
+priv struct StatusCapture {
+  events : Array[@devkit.BusEvent]
+}
+
+///|
+fn StatusCapture::StatusCapture() -> StatusCapture {
+  { events: [], }
+}
+
+///|
+impl @devkit.BusSubscriber for StatusCapture with fn on_bus_event(
+  self : StatusCapture,
+  event : @devkit.BusEvent,
+) -> Unit {
+  self.events.push(event)
+}
+
+///|
+fn router_test_usage(
+  input~ : Int?,
+  output~ : Int?,
+  cached~ : Int?,
+) -> @posoco.Usage {
+  {
+    input_tokens: input,
+    output_tokens: output,
+    total_tokens: None,
+    cached_input_tokens: cached,
+    uncached_input_tokens: None,
+  }
+}
+
+///|
+fn router_test_message() -> @posoco.Message {
+  @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("done")],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+}
+
+///|
+test "model response publishes model tok and cache segments" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  router.select_effort("slot-a", "high") catch {
+    _ => fail("unexpected effort selection failure")
+  }
+  router.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=router_test_message(),
+      usage=Some(
+        router_test_usage(input=Some(1200), output=Some(80), cached=Some(600)),
+      ),
+    ),
+  )
+  assert_eq(capture.events.length(), 3)
+  assert_eq(capture.events[0].source, "posoco_ext_llm")
+  assert_eq(capture.events[0].topic, "status")
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="tok",
+        label=None,
+        priority=30,
+        value=Some("1200↑ 80↓"),
+        color=None,
+      ),
+    ),
+  )
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="cache",
+        label=None,
+        priority=40,
+        value=Some("50%"),
+        color=None,
+      ),
+    ),
+  )
+  assert_eq(
+    @devkit.decode_status_op(capture.events[2]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("slot-a:high"),
+        color=None,
+      ),
+    ),
+  )
+}
+
+///|
+test "model effort falls back to slot default then to default" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let with_default = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  with_default.publish_model_status()
+  let without_default = RouterModelPort(
+    slots=[router_test_slot("model-b", "two", "model-b", [])],
+    bus=Some(bus),
+  )
+  without_default.publish_model_status()
+  assert_eq(capture.events.length(), 2)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("slot-a:low"),
+        color=None,
+      ),
+    ),
+  )
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("model-b:default"),
+        color=None,
+      ),
+    ),
+  )
+}
+
+///|
+test "tok accumulates across rounds and TurnStarted resets it" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  router.on_event(@posoco.TurnEvent::TurnStarted)
+  router.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=router_test_message(),
+      usage=Some(
+        router_test_usage(input=Some(1200), output=Some(80), cached=Some(600)),
+      ),
+    ),
+  )
+  router.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=router_test_message(),
+      usage=Some(
+        router_test_usage(input=Some(300), output=Some(40), cached=None),
+      ),
+    ),
+  )
+  router.on_event(@posoco.TurnEvent::TurnStarted)
+  assert_eq(capture.events.length(), 8)
+  let tok_value = fn(event : @devkit.BusEvent) -> String? {
+    match @devkit.decode_status_op(event) {
+      Some(@devkit.StatusOp::Register(segment="tok", value~, ..)) => value
+      _ => None
+    }
+  }
+  assert_eq(tok_value(capture.events[0]), Some("0↑ 0↓"))
+  assert_eq(tok_value(capture.events[1]), Some("1200↑ 80↓"))
+  assert_eq(tok_value(capture.events[4]), Some("1500↑ 120↓"))
+  assert_eq(tok_value(capture.events[7]), Some("0↑ 0↓"))
+}
+
+///|
+test "missing cached or absent usage unregisters the cache segment" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  // No cache segment exists before the first response.
+  assert_eq(capture.events.length(), 0)
+  router.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=router_test_message(),
+      usage=Some(
+        router_test_usage(input=Some(100), output=Some(10), cached=None),
+      ),
+    ),
+  )
+  assert_eq(capture.events.length(), 3)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(@devkit.StatusOp::Unregister(segment="cache")),
+  )
+  router.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=router_test_message(),
+      usage=None,
+    ),
+  )
+  assert_eq(capture.events.length(), 6)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[4]),
+    Some(@devkit.StatusOp::Unregister(segment="cache")),
+  )
+}
+
+///|
+test "switch_slot republishes the model segment" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let first = router_test_slot("first", "one", "model-a", [])
+  let second = router_test_slot("second", "two", "model-b", [])
+  let router = RouterModelPort(slots=[first, second], bus=Some(bus))
+  router.switch_slot("second") catch {
+    _ => fail("unexpected slot switch failure")
+  }
+  assert_eq(capture.events.length(), 1)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("model-b:default"),
+        color=None,
+      ),
+    ),
+  )
+}
+
+///|
+test "router without a bus keeps observing and mutating silently" {
+  let router = RouterModelPort(slots=[
+    router_effort_slot("slot-a", "one", "slot-a"),
+  ])
+  router.on_event(@posoco.TurnEvent::TurnStarted)
+  router.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=router_test_message(),
+      usage=Some(
+        router_test_usage(input=Some(1200), output=Some(80), cached=Some(600)),
+      ),
+    ),
+  )
+  router.select_effort("slot-a", "low") catch {
+    _ => fail("unexpected effort selection failure")
+  }
+  assert_eq(router.active_effort(), Some("low"))
+  assert_eq(router.tokens_in, 1200)
+  assert_eq(router.tokens_out, 80)
+}

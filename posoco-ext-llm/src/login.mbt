@@ -38,12 +38,12 @@ fn login_command_selection(
   args : Json,
 ) -> LoginSelection raise @posoco.CommandError {
   match args {
-    Json::Null => { provider_id: None, login_method: None }
+    Json::Null => { provider_id: None, login_method: None, }
     Json::String(provider_id) =>
       if provider_id.length() == 0 {
-        { provider_id: None, login_method: None }
+        { provider_id: None, login_method: None, }
       } else {
-        { provider_id: Some(provider_id), login_method: None }
+        { provider_id: Some(provider_id), login_method: None, }
       }
     Json::Object(fields) =>
       {

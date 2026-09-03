@@ -21,7 +21,7 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
     models: [self],
     tools: [],
     sessions: [],
-    observers: [],
+    observers: [self],
     hooks: [],
     memory: [],
     lifecycle: [],

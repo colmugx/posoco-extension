@@ -173,7 +173,7 @@ fn login_test_slot(
 
 ///|
 async test "login command lists provider auth capabilities" {
-  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential() }
+  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential(), }
   let oauth : &@oauth.OAuthProvider = oauth_impl
   let router = RouterModelPort(slots=[login_test_slot(oauth)])
   let outcome = router.invoke("login", Json::null())
@@ -203,7 +203,7 @@ async test "login persists credential and rebuilds matching slots" {
   let credential = login_test_credential()
   let oauth_impl = LoginTestOAuth::{ credential, }
   let oauth : &@oauth.OAuthProvider = oauth_impl
-  let store_impl = LoginTestStore::{ credentials: Map::from_array([]) }
+  let store_impl = LoginTestStore::{ credentials: Map::from_array([]), }
   let store : &@oauth.CredentialStore = store_impl
   let interaction_impl = @oauth.NoopAuthInteraction::NoopAuthInteraction()
   let interaction : &@oauth.AuthInteraction = interaction_impl
@@ -241,7 +241,7 @@ async test "login persists credential and rebuilds matching slots" {
 
 ///|
 async test "login rejects OAuth provider without configured dependencies" {
-  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential() }
+  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential(), }
   let oauth : &@oauth.OAuthProvider = oauth_impl
   // Provide the auth interaction (so the login flow advances past it) but omit
   // the credential store; the store-missing branch is the documented rejection.
@@ -268,11 +268,11 @@ async test "login rejects OAuth provider without configured dependencies" {
 
 ///|
 async test "login persists API key and rebuilds matching slots" {
-  let api_impl = LoginTestApiKeyProvider::{  }
+  let api_impl = LoginTestApiKeyProvider::{ }
   let api : &ApiKeyFactory = api_impl
   let store_impl = @oauth.InMemoryApiKeyStore()
   let store : &@oauth.ApiKeyStore = store_impl
-  let prompt_impl = LoginTestPrompt::{ value: "api-secret" }
+  let prompt_impl = LoginTestPrompt::{ value: "api-secret", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: ["before-login"],
@@ -324,9 +324,9 @@ async test "login persists API key and rebuilds matching slots" {
 
 ///|
 async test "login requires a method when a provider exposes both methods" {
-  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential() }
+  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential(), }
   let oauth : &@oauth.OAuthProvider = oauth_impl
-  let api_impl = LoginTestApiKeyProvider::{  }
+  let api_impl = LoginTestApiKeyProvider::{ }
   let api : &ApiKeyFactory = api_impl
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: [],
@@ -353,15 +353,15 @@ async test "login requires a method when a provider exposes both methods" {
 
 ///|
 async test "canonical credential store replaces OAuth with API key atomically" {
-  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential() }
+  let oauth_impl = LoginTestOAuth::{ credential: login_test_credential(), }
   let oauth : &@oauth.OAuthProvider = oauth_impl
-  let api_impl = LoginTestBothApiKeyProvider::{  }
+  let api_impl = LoginTestBothApiKeyProvider::{ }
   let api : &ApiKeyFactory = api_impl
   let store_impl = @oauth.InMemoryProviderCredentialStore()
   let store : &@oauth.ProviderCredentialStore = store_impl
   let auth_impl = @oauth.NoopAuthInteraction::NoopAuthInteraction()
   let auth : &@oauth.AuthInteraction = auth_impl
-  let prompt_impl = LoginTestPrompt::{ value: "api-secret" }
+  let prompt_impl = LoginTestPrompt::{ value: "api-secret", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: [],

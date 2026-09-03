@@ -51,7 +51,7 @@ pub fn ProviderModelCatalog::ProviderModelCatalog(
     }
     seen[slot.id] = true
   }
-  { provider_id, slots, capabilities }
+  { provider_id, slots, capabilities, }
 }
 
 ///|

@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/core/json",
 }

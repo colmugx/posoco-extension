@@ -11,6 +11,13 @@ pub(all) struct RouterModelPort {
   slot_order : Array[String]
   mut active_id : String
   mut active_effort : String?
+  /// Devkit status bus for the model/tok/cache status segments; `None`
+  /// disables publication entirely.
+  bus : @devkit.EventBus?
+  /// Per-turn token totals accumulated from reported usage and reset on
+  /// `TurnStarted`.
+  mut tokens_in : Int
+  mut tokens_out : Int
   /// Canonical one-record store. When present, login writes a tagged
   /// ProviderCredential and replaces the previous method atomically.
   provider_credential_store : &@oauth.ProviderCredentialStore?
@@ -31,6 +38,7 @@ pub(all) struct RouterModelPort {
 pub fn RouterModelPort::RouterModelPort(
   slots~ : Array[ModelSlot],
   default_slot_id? : String = "",
+  bus? : @devkit.EventBus? = None,
   provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
   cred_store? : &@oauth.CredentialStore? = None,
   auth_interaction? : &@oauth.AuthInteraction? = None,
@@ -74,6 +82,9 @@ pub fn RouterModelPort::RouterModelPort(
     slot_order,
     active_id,
     active_effort: None,
+    bus,
+    tokens_in: 0,
+    tokens_out: 0,
     provider_credential_store,
     cred_store,
     auth_interaction,
@@ -91,6 +102,7 @@ pub fn RouterModelPort::RouterModelPort(
 pub fn RouterModelPort::from_catalogs(
   catalogs : Array[ProviderModelCatalog],
   default_slot_id? : String = "",
+  bus? : @devkit.EventBus? = None,
   provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
   cred_store? : &@oauth.CredentialStore? = None,
   auth_interaction? : &@oauth.AuthInteraction? = None,
@@ -106,6 +118,7 @@ pub fn RouterModelPort::from_catalogs(
   RouterModelPort(
     slots~,
     default_slot_id~,
+    bus~,
     provider_credential_store~,
     cred_store~,
     auth_interaction~,
@@ -189,6 +202,7 @@ pub fn RouterModelPort::switch_slot(
   }
   self.active_id = slot_id
   self.active_effort = None
+  self.publish_model_status()
 }
 
 ///|
