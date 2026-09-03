@@ -6,8 +6,12 @@ import {
 }
 
 // Values
+pub const STATUS_TOPIC : String = "status"
+
 #alias(render_context_envelope, deprecated)
 pub fn context_envelope(ns~ : String, kind~ : String, trust~ : Bool, source? : String, attrs? : Array[(String, String)], content~ : String) -> String
+
+pub fn decode_status_op(BusEvent) -> StatusOp?
 
 pub fn default_ignore_patterns() -> Array[String]
 
@@ -15,9 +19,17 @@ pub fn glob_match(String, String) -> Bool
 
 pub fn has_hidden_segment(String) -> Bool
 
+pub fn is_status_color_role(String) -> Bool
+
 pub fn matches_ignore(String, Array[String]) -> Bool
 
 pub fn parse_tool_exemptions(Json) -> Array[String]?
+
+pub fn publish_status_register(EventBus, source~ : String, segment~ : String, label? : String, priority? : Int, value? : String, color? : String) -> Unit
+
+pub fn publish_status_unregister(EventBus, source~ : String, segment~ : String) -> Unit
+
+pub fn publish_status_update(EventBus, source~ : String, segment~ : String, value~ : String) -> Unit
 
 pub fn publish_tool_exemptions(EventBus, source~ : String, tools~ : Array[String]) -> Unit
 
@@ -28,6 +40,8 @@ pub fn sanitize_label(String, limit? : Int) -> String
 pub fn sanitize_path(String, limit? : Int) -> String
 
 pub fn shell_command_is_read_only(String) -> Bool
+
+pub fn status_color_roles() -> Array[String]
 
 pub fn strip_dot_prefix(String) -> String
 
@@ -113,6 +127,29 @@ pub(all) struct NoopLogger {
 }
 pub impl Logger for NoopLogger
 
+pub(all) struct QuotaReading {
+  window : QuotaWindow
+  used_percent : Double?
+  amount : (String, String)?
+  available : Bool?
+  reset_at_ms : Int64?
+  fetched_at_ms : Int64
+} derive(Eq, @debug.Debug)
+
+pub(all) enum QuotaWindow {
+  FiveHours
+  Weekly
+  Monthly
+  Balance
+  Other(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum StatusOp {
+  Register(segment~ : String, label~ : String?, priority~ : Int, value~ : String?, color~ : String?)
+  Update(segment~ : String, value~ : String)
+  Unregister(segment~ : String)
+} derive(Eq, @debug.Debug)
+
 pub struct WorkspaceAnchor {
   root : String
 } derive(@debug.Debug)
@@ -128,4 +165,8 @@ pub(open) trait BusSubscriber {
 
 pub(open) trait Logger {
   fn log(Self, LogEvent) -> Unit
+}
+
+pub(open) trait QuotaSource {
+  async fn read(Self) -> Result[Array[QuotaReading], String]
 }
