@@ -1,0 +1,74 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-obsidian"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn check_read_path(ObsidianConfig, String) -> String
+
+pub fn check_write_path(ObsidianConfig, String) -> String
+
+pub fn escape_cli_content(String) -> String
+
+pub fn normalize_vault_path(String) -> String
+
+pub fn path_allowed(Array[String], String) -> Bool
+
+pub fn path_reserved(String) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) struct CliResult {
+  exit_code : Int
+  output : String
+}
+
+pub(all) struct ObsidianConfig {
+  cli_path : String
+  vault : String?
+  read_paths : Array[String]
+  read_only : Bool
+  write_paths : Array[String]
+  allow_delete : Bool
+  cli_eval_enabled : Bool
+}
+pub fn ObsidianConfig::ObsidianConfig(cli_path? : String, vault? : String?, read_paths? : Array[String], read_only? : Bool, write_paths? : Array[String], allow_delete? : Bool, cli_eval_enabled? : Bool) -> Self
+
+pub struct ObsidianTools {
+  // private fields
+}
+pub async fn ObsidianTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn ObsidianTools::extension_id(Self) -> String
+pub fn ObsidianTools::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn ObsidianTools::manifest(Self) -> @port.ExtensionManifest
+pub fn ObsidianTools::new(config? : ObsidianConfig, freshness? : @posoco-devkit.FreshnessGuard) -> Self
+pub fn ObsidianTools::system_prompt(Self) -> String
+pub impl @port.CommandPort for ObsidianTools
+pub impl @port.Extension for ObsidianTools
+pub impl @port.Lifecycle for ObsidianTools
+pub impl @port.PipelineHook for ObsidianTools
+pub impl @port.SystemPromptContributor for ObsidianTools
+pub impl @port.ToolProvider for ObsidianTools
+
+pub(all) struct OutlineEntry {
+  level : Int
+  heading : String
+  line : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SearchHit {
+  file : String
+  line : Int
+  text : String
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
