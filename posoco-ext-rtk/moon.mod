@@ -3,7 +3,8 @@ name = "colmugx/posoco-ext-rtk"
 version = "0.3.0"
 
 import {
-  "colmugx/posoco@0.13.0",
+  "colmugx/posoco@0.14.3",
+  "colmugx/posoco-ext-lazytools@0.1.0",
   "moonbitlang/async@0.21.0",
 }
 

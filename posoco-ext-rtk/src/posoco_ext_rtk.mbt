@@ -6,7 +6,7 @@ pub(all) struct ShellTools {
 ///|
 /// Default shell tools — used when no custom list is provided.
 pub fn default_shell_tools() -> ShellTools {
-  ShellTools::{ names: ["bash", "sh", "zsh", "shell", "cmd", "powershell"] }
+  ShellTools::{ names: ["bash", "sh", "zsh", "shell", "cmd", "powershell"], }
 }
 
 ///|
@@ -24,7 +24,7 @@ pub(all) struct RTKHook {
 
 ///|
 pub fn RTKHook::RTKHook(rtk_path : String) -> RTKHook {
-  RTKHook::{ rtk_path, shell_tools: default_shell_tools() }
+  RTKHook::{ rtk_path, shell_tools: default_shell_tools(), }
 }
 
 ///|
@@ -32,7 +32,7 @@ pub fn RTKHook::with_shell_tools(
   rtk_path : String,
   shell_tools : ShellTools,
 ) -> RTKHook {
-  RTKHook::{ rtk_path, shell_tools }
+  RTKHook::{ rtk_path, shell_tools, }
 }
 
 ///|
@@ -104,26 +104,42 @@ pub impl @posoco.Extension for RTKHook with fn extension_id(_self : RTKHook) -> 
 ///|
 pub impl @posoco.Extension for RTKHook with fn manifest(self : RTKHook) -> @posoco.ExtensionManifest {
   let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_rtk")
-  { ..manifest, hooks: [self] }
+  { ..manifest, hooks: [self], }
 }
 
 ///|
 pub extend RTKHook with @posoco.Extension::{extension_id, manifest}
 
 ///|
+/// Rewrite shell calls, deferred or direct: a lazytools gateway `execute`
+/// call names the real tool in `tool` and nests the shell arguments under
+/// `arguments`. Unwrap to classify (inner name in the shell list), rewrite
+/// the inner `cmd`, and hand the kernel back the shape it dispatched —
+/// gateway calls are rewrapped, direct calls rewritten in place. Deferred
+/// bash keeps rtk routing and per-scope approvals.
 pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
   self : RTKHook,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
-  if !is_shell_tool(call.name, self.shell_tools) {
+  let is_gateway = call.name.to_string() == "tool_execute"
+  let (name, effective) = @lazytools.LazyTools::unwrap_call(call)
+  if !self.shell_tools.names.contains(name) {
     return Approve(call~)
   }
-  let cmd = extract_command(call.arguments) catch {
+  let cmd = extract_command(effective.arguments) catch {
     error => return Reject(reason=error.to_string())
   }
   match rtk_rewrite(self.rtk_path, cmd) {
-    Some(rewritten) if rewritten != cmd =>
-      Approve(call=rewrite_tool_call(call, rewritten))
+    Some(rewritten) if rewritten != cmd => {
+      let inner = rewrite_tool_call(effective, rewritten)
+      Approve(
+        call=if is_gateway {
+          @lazytools.LazyTools::rewrap_call(call, inner)
+        } else {
+          inner
+        },
+      )
+    }
     _ => Approve(call~)
   }
 }

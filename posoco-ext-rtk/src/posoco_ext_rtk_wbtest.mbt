@@ -222,3 +222,82 @@ test "manifest_registers_as_extension_with_hook" {
   let manifest = hook.manifest()
   assert_eq(manifest.hooks.length(), 1)
 }
+
+///|
+async test "hook_classifies_gateway_calls_by_inner_tool_name" {
+  let hook = RTKHook("rtk")
+  // A gateway call carrying a non-shell inner tool passes through.
+  let read_call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call_g"),
+    name: @posoco.ToolName::unchecked("tool_execute"),
+    arguments: Json::object(
+      Map::from_array([
+        ("tool", Json::string("read")),
+        (
+          "arguments",
+          Json::object(Map::from_array([("path", Json::string("/a"))])),
+        ),
+      ]),
+    ),
+  }
+  match hook.before_tool(read_call) {
+    Approve(_) => ()
+    other =>
+      fail("expected Approve for deferred non-shell, got " + other.to_string())
+  }
+  // A gateway call carrying a shell tool but malformed inner arguments is
+  // rejected loudly (the extract error surfaces as Reject).
+  let malformed = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call_g2"),
+    name: @posoco.ToolName::unchecked("tool_execute"),
+    arguments: Json::object(Map::from_array([("tool", Json::string("bash"))])),
+  }
+  match hook.before_tool(malformed) {
+    Reject(_) => ()
+    other =>
+      fail(
+        "expected Reject for malformed deferred shell, got " + other.to_string(),
+      )
+  }
+}
+
+///|
+test "gateway_shell_rewrite_composes_unwrap_rewrite_rewrap" {
+  let gateway_call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call_g3"),
+    name: @posoco.ToolName::unchecked("tool_execute"),
+    arguments: Json::object(
+      Map::from_array([
+        ("tool", Json::string("bash")),
+        (
+          "arguments",
+          Json::object(
+            Map::from_array([
+              ("cmd", Json::string("git status")),
+              ("timeout", Json::number(5.0)),
+            ]),
+          ),
+        ),
+      ]),
+    ),
+  }
+  let (name, effective) = @lazytools.LazyTools::unwrap_call(gateway_call)
+  assert_eq(name, "bash")
+  let rewritten = rewrite_tool_call(effective, "rtk git status")
+  let outer = @lazytools.LazyTools::rewrap_call(gateway_call, rewritten)
+  // The kernel-executable shape: outer name and call id preserved, the
+  // nested cmd rewritten, sibling inner keys intact.
+  assert_eq(outer.name.to_string(), "tool_execute")
+  assert_eq(outer.call_id.to_string(), "call_g3")
+  match outer.arguments {
+    Object(args) =>
+      match args.get("arguments") {
+        Some(Object(inner_args)) => {
+          assert_eq(inner_args.get("cmd"), Some(Json::string("rtk git status")))
+          assert_eq(inner_args.get("timeout"), Some(Json::number(5.0)))
+        }
+        _ => fail("expected nested arguments object")
+      }
+    _ => fail("expected outer arguments object")
+  }
+}
