@@ -4,6 +4,7 @@ import {
   "colmugx/posoco-ext-llm" @llm,
   "colmugx/posoco-ext-oauth" @oauth,
   "colmugx/posoco-ext-openai-compatible" @openai_compatible,
+  "colmugx/posoco-kit-compact-summary" @compact_summary,
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/json",

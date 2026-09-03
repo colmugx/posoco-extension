@@ -102,7 +102,7 @@ pub fn parse_zen_models(
           "OpenCode Zen models item is missing string owned_by",
         )
     }
-    result.push(ZenModelInfo::{ id, owned_by })
+    result.push(ZenModelInfo::{ id, owned_by, })
   }
   result
 }
@@ -138,7 +138,7 @@ fn parse_cached_zen_models(records : Json?) -> Array[ZenModelInfo]? {
         }
       _ => return None
     }
-    models.push(ZenModelInfo::{ id, owned_by: "" })
+    models.push(ZenModelInfo::{ id, owned_by: "", })
   }
   Some(models)
 }

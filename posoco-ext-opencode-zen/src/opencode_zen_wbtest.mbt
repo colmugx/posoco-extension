@@ -479,7 +479,7 @@ test "ProviderFactory::build rejects an OAuth credential with a typed error" {
 async test "ApiKeyFactory::login validates and returns the secret" {
   let provider = OpenCodeZenProvider()
   let api : &@llm.ApiKeyFactory = provider
-  let prompt_impl = ZenApiKeyPrompt::{ value: "sk-via-login" }
+  let prompt_impl = ZenApiKeyPrompt::{ value: "sk-via-login", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let credential = api.login(prompt)
   assert_eq(credential.secret, "sk-via-login")
@@ -489,7 +489,7 @@ async test "ApiKeyFactory::login validates and returns the secret" {
 async test "ApiKeyFactory::login rejects an empty secret" {
   let provider = OpenCodeZenProvider()
   let api : &@llm.ApiKeyFactory = provider
-  let prompt_impl = ZenApiKeyPrompt::{ value: "" }
+  let prompt_impl = ZenApiKeyPrompt::{ value: "", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let result = Ok(api.login(prompt)) catch { error => Err(error) }
   match result {
@@ -609,8 +609,8 @@ fn FlakyModelPort::FlakyModelPort(
   error : @posoco.ModelError,
 ) -> FlakyModelPort {
   FlakyModelPort::{
-    calls: Ref::{ val: 0 },
-    failures_left: Ref::{ val: failures },
+    calls: Ref::{ val: 0, },
+    failures_left: Ref::{ val: failures, },
     error,
   }
 }
@@ -673,12 +673,13 @@ fn zen_flaky_scope() -> @posoco.InvocationScope {
     session_id: @posoco.SessionId::unchecked("zen-retry-test"),
     run_id: @posoco.RunId::unchecked("run-1"),
     effect_id: None,
+    pressure: None,
   }
 }
 
 ///|
 fn zen_flaky_options() -> @posoco.ChatOptions {
-  @posoco.ChatOptions::{ temperature: None, max_output_tokens: None }
+  @posoco.ChatOptions::{ temperature: None, max_output_tokens: None, }
 }
 
 ///|
@@ -759,16 +760,113 @@ async test "zen retry port does not retry other model errors" {
 }
 
 ///|
+/// Inner port for compact-retry tests: raises the given error until
+/// `failures_left` is exhausted, then answers with a completion carrying
+/// the summary text (an empty stop completion would fail the compact with
+/// the typed empty-summary error instead).
+struct ZenSummaryModelPort {
+  calls : Ref[Int]
+  failures_left : Ref[Int]
+  error : @posoco.ModelError
+  summary : String
+}
+
+///|
+fn ZenSummaryModelPort::ZenSummaryModelPort(
+  failures : Int,
+  error : @posoco.ModelError,
+  summary : String,
+) -> ZenSummaryModelPort {
+  ZenSummaryModelPort::{
+    calls: Ref::{ val: 0, },
+    failures_left: Ref::{ val: failures, },
+    error,
+    summary,
+  }
+}
+
+///|
+impl @posoco.ModelPort for ZenSummaryModelPort with fn chat(
+  self : ZenSummaryModelPort,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  self.calls.val += 1
+  if self.failures_left.val > 0 {
+    self.failures_left.val -= 1
+    raise self.error
+  }
+  let completion = @posoco.Completion::Completion(
+    content=[@posoco.Content::Text(self.summary)],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+    usage=None,
+  )
+  @posoco.ModelCallResult::{ completion, processed_messages: [], }
+}
+
+///|
+impl @posoco.ModelPort for ZenSummaryModelPort with fn compact(
+  _self : ZenSummaryModelPort,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  abort("zen compact no longer forwards to the inner port")
+}
+
+///|
+impl @posoco.ModelPort for ZenSummaryModelPort with fn provider_config(
+  _self : ZenSummaryModelPort,
+) -> @posoco.ProviderConfig {
+  // 28k window -> keep_recent = 2000 (quarter of the 8k usable), so short
+  // test transcripts still produce a nonempty head to summarize.
+  @posoco.ProviderConfig::ProviderConfig(
+    reasoning_effort_values=[],
+    context_window=Some(28_000),
+  )
+}
+
+///|
 async test "zen retry port retries truncated SSE during compact" {
-  let inner = FlakyModelPort(1, zen_truncated_error())
+  let inner = ZenSummaryModelPort::ZenSummaryModelPort(
+    1,
+    zen_truncated_error(),
+    "anchored summary text",
+  )
   let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  // Two ~2500-token turns: the keep-recent walk stops at the second long
+  // turn (a safe user boundary), leaving the first turn as a nonempty head.
+  let long_history = "detail ".repeat(1200)
+  let messages = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text(long_history)]),
+    @posoco.Message::AssistantMessage(
+      content=[@posoco.Content::Text("first answer")],
+      tool_calls=[],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::Stop,
+    ),
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text(long_history)]),
+    @posoco.Message::AssistantMessage(
+      content=[@posoco.Content::Text("second answer")],
+      tool_calls=[],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::Stop,
+    ),
+  ]
   let result = port.compact(
     zen_flaky_scope(),
-    [],
+    messages[:],
     zen_flaky_options(),
     @posoco.CompactTrigger::Manual,
   )
   assert_true(result.mode == @posoco.CompactMode::Replace)
+  // 1 failed summarize attempt + 1 successful retry.
   assert_eq(inner.calls.val, 2)
 }
 
@@ -869,4 +967,42 @@ async test "zen retry port does not retry other http statuses" {
     Err(_) => ()
   }
   assert_eq(inner.calls.val, 1)
+}
+
+///|
+test "zen_keep_recent_tokens clamps the opencode quarter-of-usable budget" {
+  // Unknown window → 15k ceiling fallback.
+  assert_eq(zen_keep_recent_tokens(None), 15_000)
+  // Window too small to reserve from → fallback.
+  assert_eq(zen_keep_recent_tokens(Some(20_000)), 15_000)
+  // quarter of usable (80k) = 20k, above the 15k ceiling.
+  assert_eq(zen_keep_recent_tokens(Some(100_000)), 15_000)
+  // quarter of usable (60k) = 15k, exactly the ceiling.
+  assert_eq(zen_keep_recent_tokens(Some(80_000)), 15_000)
+  // quarter of usable (30k) = 7.5k, within the clamp.
+  assert_eq(zen_keep_recent_tokens(Some(50_000)), 7_500)
+  // quarter below floor.
+  assert_eq(zen_keep_recent_tokens(Some(24_000)), 2_000)
+  // quarter above ceiling.
+  assert_eq(zen_keep_recent_tokens(Some(200_000)), 15_000)
+}
+
+///|
+test "zen_previous_summary extracts the latest anchored summary stripped" {
+  let prefix = @compact_summary.SUMMARY_PREFIX
+  let head = [
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text(prefix + "\n\nfirst summary"),
+    ]),
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("plain")]),
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text(prefix + "\n\nsecond summary"),
+    ]),
+  ]
+  guard zen_previous_summary(head) is Some(text) else {
+    fail("expected a previous summary")
+  }
+  assert_true(text.contains("second summary"))
+  // No summary present → None.
+  assert_true(zen_previous_summary([]) is None)
 }

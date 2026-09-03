@@ -7,7 +7,7 @@
 /// honestly identify posoco rather than impersonating the CLI.
 
 ///|
-let zen_session_cell : Ref[String?] = Ref::{ val: None }
+let zen_session_cell : Ref[String?] = Ref::{ val: None, }
 
 ///|
 /// Process-local session id, minted lazily on first use and reused by every
@@ -53,7 +53,7 @@ fn zen_random_uuid_v4() -> String {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
   let group_sizes = [4, 2, 2, 2, 6]
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut idx = 0
   for i, size in group_sizes {
     if i > 0 {
