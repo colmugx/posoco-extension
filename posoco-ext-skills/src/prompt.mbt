@@ -16,7 +16,7 @@ fn quote_prompt_scalar(value : String) -> String {
   // non-ASCII format/line controls literal. Replace those with visible decimal
   // code-point markers first so untrusted metadata cannot hide direction or
   // line-structure changes from a reviewer or model.
-  let visible = StringBuilder::new()
+  let visible = StringBuilder()
   for ch in value {
     let code = ch.to_int()
     if code >= 128 && is_unsafe_control_code(code) {
@@ -110,7 +110,7 @@ pub fn SkillCatalog::render_prompt_body(
       return ""
     }
   }
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   b.write_string(header)
   for i = 0; i < count; i = i + 1 {
     b.write_string(items[i])

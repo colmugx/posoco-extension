@@ -104,7 +104,7 @@ pub fn SkillDiscovery::SkillDiscovery(
   home~ : String,
   options? : SkillDiscoveryOptions = SkillDiscoveryOptions::default(),
 ) -> SkillDiscovery {
-  { fs, cwd, home, options: options.snapshot() }
+  { fs, cwd, home, options: options.snapshot(), }
 }
 
 ///|
@@ -536,15 +536,15 @@ pub async fn SkillDiscovery::discover(
         path: "",
         message: reason,
       })
-      return { skills: ordered, diagnostics }
+      return { skills: ordered, diagnostics, }
     }
     Ok(_) => ()
   }
   let seen_paths : Map[String, Unit] = Map([])
   let winners : Map[String, SkillDescriptor] = Map([])
-  let candidate_count : Ref[Int] = { val: 0 }
-  let candidate_limit_reported : Ref[Bool] = { val: false }
-  let catalog_limit_reported : Ref[Bool] = { val: false }
+  let candidate_count : Ref[Int] = { val: 0, }
+  let candidate_limit_reported : Ref[Bool] = { val: false, }
+  let catalog_limit_reported : Ref[Bool] = { val: false, }
   if self.options.include_repository {
     let cwd_input = normalize_dir_input(self.cwd)
     if cwd_input.is_empty() {
@@ -648,5 +648,5 @@ pub async fn SkillDiscovery::discover(
       catalog_limit_reported,
     )
   }
-  { skills: ordered, diagnostics }
+  { skills: ordered, diagnostics, }
 }

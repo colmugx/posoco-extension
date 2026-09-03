@@ -204,22 +204,18 @@ fn descriptor(
   dir : String,
   scope? : SkillScope = SkillScope::Repository,
 ) -> SkillDescriptor {
-  {
-    name,
-    description,
-    skill_md_path: dir + "/SKILL.md",
-    skill_dir: dir,
-    scope,
-    license: None,
-    compatibility: None,
-    allowed_tools: None,
-    metadata: Map([]),
-  }
+  SkillDescriptor::SkillDescriptor(
+    name~,
+    description~,
+    skill_md_path=dir + "/SKILL.md",
+    skill_dir=dir,
+    scope~,
+  )
 }
 
 ///|
 fn catalog_of(skills : Array[SkillDescriptor]) -> SkillCatalog {
-  { skills, diagnostics: [] }
+  { skills, diagnostics: [], }
 }
 
 ///|
@@ -246,7 +242,7 @@ fn has_diagnostic(
 
 ///|
 fn repeat_text(ch : String, count : Int) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let mut i = 0
   while i < count {
     b.write_string(ch)
@@ -496,7 +492,7 @@ test "resource path normalization rejects traversal and instruction bypass" {
 ///|
 test "configuration: invalid runtime and discovery limits fail fast" {
   assert_true(
-    SkillsConfig::{ ..SkillsConfig::default(), max_resource_chars: 0 }.validate()
+    SkillsConfig::{ ..SkillsConfig::default(), max_resource_chars: 0, }.validate()
     is Err(_),
   )
   assert_true(
@@ -681,7 +677,7 @@ test "prompt: truncation is explicit rather than silently hiding skills" {
 test "discovery options: repository scope defaults on but can be trust-gated" {
   let defaults = SkillDiscoveryOptions::default()
   assert_true(defaults.include_repository)
-  let gated = SkillDiscoveryOptions::{ ..defaults, include_repository: false }
+  let gated = SkillDiscoveryOptions::{ ..defaults, include_repository: false, }
   assert_false(gated.include_repository)
   assert_true(gated.validate() is Ok(_))
 }
@@ -689,7 +685,10 @@ test "discovery options: repository scope defaults on but can be trust-gated" {
 ///|
 test "manifest: too-small catalog budget does not advertise an empty prompt contributor" {
   let fs = FakeFs()
-  let config = SkillsConfig::{ ..SkillsConfig::default(), catalog_max_chars: 1 }
+  let config = SkillsConfig::{
+    ..SkillsConfig::default(),
+    catalog_max_chars: 1,
+  }
   let skills = must_skills(
     fs,
     catalog_of([descriptor("alpha", "Alpha skill", "/skills/alpha")]),
@@ -710,11 +709,14 @@ test "configuration: tool whitespace and resource-node limits fail fast" {
     is Err(_),
   )
   assert_true(
-    SkillsConfig::{ ..SkillsConfig::default(), max_resource_nodes: 0 }.validate()
+    SkillsConfig::{ ..SkillsConfig::default(), max_resource_nodes: 0, }.validate()
     is Err(_),
   )
   assert_true(
-    SkillDiscoveryOptions::{ ..SkillDiscoveryOptions::default(), max_skills: 0 }.validate()
+    SkillDiscoveryOptions::{
+      ..SkillDiscoveryOptions::default(),
+      max_skills: 0,
+    }.validate()
     is Err(_),
   )
 }
@@ -1043,6 +1045,7 @@ async test "tool outcomes avoid duplicating large skill text in structured metad
             values.get("instruction_chars"),
             Some(Json::number("Large instruction body".length().to_double())),
           )
+          assert_eq(values.get("summary"), Some(Json::string("demo")))
         }
         _ => fail("expected structured activation metadata")
       }
@@ -1233,7 +1236,10 @@ async test "activation and resource size limits fail closed" {
   let instruction_limited = must_skills(
     fs,
     catalog_of([descriptor("demo", "Demo", dir)]),
-    config=SkillsConfig::{ ..SkillsConfig::default(), max_instruction_chars: 5 },
+    config=SkillsConfig::{
+      ..SkillsConfig::default(),
+      max_instruction_chars: 5,
+    },
   )
   match instruction_limited.activate("demo") {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
@@ -1256,7 +1262,7 @@ async test "activation and resource size limits fail closed" {
   let resource_limited = must_skills(
     fs,
     catalog_of([descriptor("demo", "Demo", dir)]),
-    config=SkillsConfig::{ ..SkillsConfig::default(), max_resource_chars: 5 },
+    config=SkillsConfig::{ ..SkillsConfig::default(), max_resource_chars: 5, },
   )
   match resource_limited.read_resource("demo", "guide.md") {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
@@ -1473,7 +1479,7 @@ test "parser: oversized optional metadata is ignored rather than retained" {
 
 ///|
 test "parser: metadata entry amplification is dropped deterministically" {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   b.write_string("---\nname: demo\ndescription: Demo\nmetadata:\n")
   for i = 0; i < hard_max_metadata_entries + 1; i = i + 1 {
     b.write_string("  k" + i.to_string() + ": v\n")
@@ -1502,7 +1508,7 @@ test "runtime validation bounds canonical skill locations" {
 ///|
 test "resource warning details have an independent model-visible hard ceiling" {
   let warnings : Array[String] = []
-  let omitted : Ref[Int] = { val: 0 }
+  let omitted : Ref[Int] = { val: 0, }
   record_listing_warning(
     warnings,
     omitted,
@@ -1552,7 +1558,10 @@ test "system prompt contributor respects tools-only configuration on direct call
   let skills = must_skills(
     fs,
     catalog_of([descriptor("demo", "Demo", "/skills/demo")]),
-    config=SkillsConfig::{ ..SkillsConfig::default(), contribute_prompt: false },
+    config=SkillsConfig::{
+      ..SkillsConfig::default(),
+      contribute_prompt: false,
+    },
   )
   assert_eq(skills.system_prompt(), "")
   assert_true(skills.manifest().prompt_contributors.is_empty())
@@ -1693,11 +1702,11 @@ test "resource path normalization rejects leading and trailing whitespace instea
 ///|
 test "config validates resource listing output budgets" {
   assert_true(
-    SkillsConfig::{ ..SkillsConfig::default(), max_resource_listing_chars: -1 }.validate()
+    SkillsConfig::{ ..SkillsConfig::default(), max_resource_listing_chars: -1, }.validate()
     is Err(_),
   )
   assert_true(
-    SkillsConfig::{ ..SkillsConfig::default(), max_resource_warnings: -1 }.validate()
+    SkillsConfig::{ ..SkillsConfig::default(), max_resource_warnings: -1, }.validate()
     is Err(_),
   )
 }
@@ -2032,7 +2041,7 @@ async test "host API: unsafe skill names are rejected without reflecting attacke
 test "configuration: tool names have a hard schema-amplification ceiling" {
   let huge = repeat_text("x", hard_max_tool_name_chars + 1)
   assert_true(
-    SkillsConfig::{ ..SkillsConfig::default(), activate_tool_name: huge }.validate()
+    SkillsConfig::{ ..SkillsConfig::default(), activate_tool_name: huge, }.validate()
     is Err(_),
   )
 }

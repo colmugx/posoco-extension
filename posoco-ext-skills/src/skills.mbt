@@ -32,7 +32,7 @@ pub fn Skills::from_catalog(
   // supplied by the host. Tool schemas and lookup semantics must remain stable
   // for the lifetime of one Agent composition.
   let catalog = catalog.snapshot()
-  Ok({ fs, catalog, config })
+  Ok({ fs, catalog, config, })
 }
 
 ///|

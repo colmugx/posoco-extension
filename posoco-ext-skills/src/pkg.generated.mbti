@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub fn merge_builtin_skills(SkillCatalog, Array[SkillDescriptor]) -> SkillCatalog
+
 pub fn parse_skill_file(String, skill_md_path~ : String, skill_dir~ : String, scope~ : SkillScope) -> Result[ParsedSkill, String]
 
 // Errors
@@ -40,7 +42,10 @@ pub(all) struct SkillDescriptor {
   compatibility : String?
   allowed_tools : String?
   metadata : Map[String, String]
+  body : String?
 }
+pub fn SkillDescriptor::SkillDescriptor(name~ : String, description~ : String, skill_md_path~ : String, skill_dir~ : String, scope~ : SkillScope, license? : String?, compatibility? : String?, allowed_tools? : String?, metadata? : Map[String, String], body? : String?) -> Self
+pub fn SkillDescriptor::builtin(name~ : String, description~ : String, body~ : String) -> Self
 
 pub(all) struct SkillDiagnostic {
   severity : SkillDiagnosticSeverity

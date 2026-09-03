@@ -48,7 +48,7 @@ fn split_skill_source(source : String) -> Result[SkillSourceParts, String] {
   if !closed {
     return Err("SKILL.md frontmatter is not terminated")
   }
-  Ok({ frontmatter: fm.join("\n"), body: body.join("\n") })
+  Ok({ frontmatter: fm.join("\n"), body: body.join("\n"), })
 }
 
 ///|
@@ -360,20 +360,20 @@ fn parse_skill_file_with_expected_dir_name(
       })
     _ => ()
   }
-  let descriptor : SkillDescriptor = {
-    name,
-    description,
-    skill_md_path,
-    skill_dir,
-    scope,
-    license: optional_string(mapping, "license", skill_md_path, diagnostics),
-    compatibility,
-    allowed_tools: optional_string(
+  let descriptor = SkillDescriptor::SkillDescriptor(
+    name~,
+    description~,
+    skill_md_path~,
+    skill_dir~,
+    scope~,
+    license=optional_string(mapping, "license", skill_md_path, diagnostics),
+    compatibility~,
+    allowed_tools=optional_string(
       mapping, "allowed-tools", skill_md_path, diagnostics,
     ),
-    metadata: metadata_map(mapping, skill_md_path, diagnostics),
-  }
-  Ok({ descriptor, body: parts.body, diagnostics })
+    metadata=metadata_map(mapping, skill_md_path, diagnostics),
+  )
+  Ok({ descriptor, body: parts.body, diagnostics, })
 }
 
 ///|

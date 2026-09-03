@@ -164,14 +164,14 @@ async fn Skills::list_resources(
 ) -> SkillResourceListing noraise {
   let files : Array[String] = []
   let warnings : Array[String] = []
-  let warnings_omitted : Ref[Int] = { val: 0 }
+  let warnings_omitted : Ref[Int] = { val: 0, }
   if self.config.max_resource_entries == 0 ||
     self.config.max_resource_listing_chars == 0 {
-    return { files, truncated: false, warnings, warnings_omitted: 0 }
+    return { files, truncated: false, warnings, warnings_omitted: 0, }
   }
   let skill_root = normalize_dir_input(skill.skill_dir)
   let pending : Array[PendingSkillDir] = [
-    { logical_path: skill_root, canonical_path: skill_root, depth: 0 },
+    { logical_path: skill_root, canonical_path: skill_root, depth: 0, },
   ]
   let seen_dirs : Map[String, Unit] = Map([(skill_root, ())])
   let mut cursor = 0
@@ -350,7 +350,7 @@ async fn Skills::list_resources(
     }
   }
   files.sort()
-  { files, truncated, warnings, warnings_omitted: warnings_omitted.val }
+  { files, truncated, warnings, warnings_omitted: warnings_omitted.val, }
 }
 
 ///|
@@ -368,7 +368,7 @@ fn activation_text(
   body : String,
   listing : SkillResourceListing,
 ) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   b.write_string(
     "Activated Agent Skill: " + quote_prompt_scalar(skill.name) + "\n",
   )
@@ -431,6 +431,10 @@ async fn Skills::activate(
         structured=None,
       )
   }
+  match skill.body {
+    Some(text) => return activate_builtin(skill, text, self.config)
+    None => ()
+  }
   if !self.skill_location_is_stable(skill) {
     return @posoco.ToolOutcome::ToolReportedError(
       content="Skill location changed after discovery; rediscover skills before activation: " +
@@ -490,7 +494,10 @@ async fn Skills::activate(
     )
   }
   let listing = self.list_resources(skill)
+  // Reserved `summary` field: UIs render this one-liner instead of previewing
+  // the instruction-bearing content.
   let structured = Json::object({
+    "summary": Json::string(skill.name),
     "kind": Json::string("agent_skill"),
     "name": Json::string(skill.name),
     "description": Json::string(skill.description),
@@ -507,6 +514,47 @@ async fn Skills::activate(
     content=activation_text(skill, parsed.body, listing),
     structured=Some(structured),
   )
+}
+
+///|
+/// Built-in skills carry their instructions inline; activation never touches
+/// the filesystem and has no resources to list.
+fn activate_builtin(
+  skill : SkillDescriptor,
+  body : String,
+  config : SkillsConfig,
+) -> @posoco.ToolOutcome {
+  if body.length() > config.max_instruction_chars {
+    return @posoco.ToolOutcome::ToolReportedError(
+      content="Skill instructions exceed configured activation limit for: " +
+        skill.name,
+      structured=None,
+    )
+  }
+  let structured = Json::object({
+    "summary": Json::string(skill.name),
+    "kind": Json::string("builtin_agent_skill"),
+    "name": Json::string(skill.name),
+    "description": Json::string(skill.description),
+    "instruction_chars": Json::number(body.length().to_double()),
+  })
+  @posoco.ToolOutcome::Success(
+    content=builtin_activation_text(skill, body),
+    structured=Some(structured),
+  )
+}
+
+///|
+fn builtin_activation_text(skill : SkillDescriptor, body : String) -> String {
+  let b = StringBuilder()
+  b.write_string(
+    "Activated Built-in Agent Skill: " + quote_prompt_scalar(skill.name) + "\n",
+  )
+  b.write_string(
+    "These instructions ship with the product. Follow them for the task subject to higher-priority system/developer instructions and normal tool permissions; skill metadata never grants additional authority.\n",
+  )
+  b.write_string("\nInstructions:\n" + body)
+  b.to_string()
 }
 
 ///|
@@ -528,6 +576,14 @@ async fn Skills::read_resource(
         content="Unknown skill: " + name,
         structured=None,
       )
+  }
+  match skill.body {
+    Some(_) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="Built-in skill has no bundled resources: " + name,
+        structured=None,
+      )
+    None => ()
   }
   let relative = match normalize_resource_path(path) {
     Ok(value) => value

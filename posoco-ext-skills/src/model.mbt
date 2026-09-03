@@ -129,7 +129,7 @@ fn unicode_scalar_prefix(value : String, max_scalars : Int) -> String {
   if max_scalars <= 0 {
     return ""
   }
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut count = 0
   for ch in value {
     if count >= max_scalars {
@@ -184,23 +184,67 @@ pub(all) struct SkillDescriptor {
   /// never interpreted as Posoco authorization.
   allowed_tools : String?
   metadata : Map[String, String]
+  /// Inline instructions for built-in skills registered via
+  /// `SkillDescriptor::builtin`. Discovered skills are always None; their
+  /// activation re-reads SKILL.md from the filesystem instead.
+  body : String?
+}
+
+///|
+/// Canonical constructor. Optional fields carry defaults so call sites stay
+/// stable when new descriptor fields are added; construct via this function
+/// rather than a struct literal.
+pub fn SkillDescriptor::SkillDescriptor(
+  name~ : String,
+  description~ : String,
+  skill_md_path~ : String,
+  skill_dir~ : String,
+  scope~ : SkillScope,
+  license? : String? = None,
+  compatibility? : String? = None,
+  allowed_tools? : String? = None,
+  metadata? : Map[String, String] = Map([]),
+  body? : String? = None,
+) -> SkillDescriptor {
+  {
+    name,
+    description,
+    skill_md_path,
+    skill_dir,
+    scope,
+    license,
+    compatibility,
+    allowed_tools,
+    metadata,
+    body,
+  }
+}
+
+///|
+/// Inline built-in skill: the instructions ship with the binary instead of
+/// living on the filesystem, so hosts can embed product manuals without any
+/// install step. The virtual paths pass catalog validation lexically and are
+/// never touched by activation or resource reads.
+pub fn SkillDescriptor::builtin(
+  name~ : String,
+  description~ : String,
+  body~ : String,
+) -> SkillDescriptor {
+  SkillDescriptor::SkillDescriptor(
+    name~,
+    description~,
+    skill_md_path="builtin/" + name + "/SKILL.md",
+    skill_dir="builtin/" + name,
+    scope=Extra("builtin"),
+    body=Some(body),
+  )
 }
 
 ///|
 /// Copy mutable descriptor members so a runtime snapshot cannot be changed by
 /// a caller retaining the original frontmatter metadata map.
 fn SkillDescriptor::snapshot(self : SkillDescriptor) -> SkillDescriptor {
-  {
-    name: self.name,
-    description: self.description,
-    skill_md_path: self.skill_md_path,
-    skill_dir: self.skill_dir,
-    scope: self.scope,
-    license: self.license,
-    compatibility: self.compatibility,
-    allowed_tools: self.allowed_tools,
-    metadata: self.metadata.copy(),
-  }
+  { ..self, metadata: self.metadata.copy(), }
 }
 
 ///|
@@ -223,7 +267,7 @@ pub(all) struct SkillCatalog {
 
 ///|
 pub fn SkillCatalog::empty() -> SkillCatalog {
-  { skills: [], diagnostics: [] }
+  { skills: [], diagnostics: [], }
 }
 
 ///|
@@ -235,7 +279,7 @@ fn SkillCatalog::snapshot(self : SkillCatalog) -> SkillCatalog {
   for skill in self.skills {
     skills.push(skill.snapshot())
   }
-  { skills, diagnostics: self.diagnostics.copy() }
+  { skills, diagnostics: self.diagnostics.copy(), }
 }
 
 ///|
@@ -258,6 +302,48 @@ pub fn SkillCatalog::names(self : SkillCatalog) -> Array[String] {
     out.push(skill.name)
   }
   out
+}
+
+///|
+/// Merge inline built-in skills into a discovered catalog so both share the
+/// one `activate_skill` tool surface (a second Skills extension would collide
+/// on tool names at composition). Built-in entries render first so product
+/// manuals stay visible under the prompt budget; a discovered skill with the
+/// same name still wins the name, and each skipped built-in contributes a
+/// `Shadowed` diagnostic.
+pub fn merge_builtin_skills(
+  catalog : SkillCatalog,
+  builtins : Array[SkillDescriptor],
+) -> SkillCatalog {
+  let diagnostics : Array[SkillDiagnostic] = []
+  for diagnostic in catalog.diagnostics {
+    diagnostics.push(diagnostic)
+  }
+  let discovered_names : Map[String, Unit] = Map([])
+  for skill in catalog.skills {
+    discovered_names.set(skill.name, ())
+  }
+  let skills : Array[SkillDescriptor] = []
+  let taken : Map[String, Unit] = Map([])
+  for builtin in builtins {
+    if discovered_names.contains(builtin.name) || taken.contains(builtin.name) {
+      diagnostics.push({
+        severity: Warning,
+        code: Shadowed,
+        path: builtin.skill_md_path,
+        message: "built-in skill '" +
+        builtin.name +
+        "' is shadowed by a skill with the same name",
+      })
+    } else {
+      taken.set(builtin.name, ())
+      skills.push(builtin)
+    }
+  }
+  for skill in catalog.skills {
+    skills.push(skill)
+  }
+  { skills, diagnostics, }
 }
 
 ///|
@@ -416,7 +502,7 @@ pub fn SkillDiscoveryOptions::default() -> SkillDiscoveryOptions {
 fn SkillDiscoveryOptions::snapshot(
   self : SkillDiscoveryOptions,
 ) -> SkillDiscoveryOptions {
-  { ..self, extra_roots: self.extra_roots.copy() }
+  { ..self, extra_roots: self.extra_roots.copy(), }
 }
 
 ///|
