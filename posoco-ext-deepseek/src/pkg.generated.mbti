@@ -13,13 +13,27 @@ import {
 }
 
 // Values
+pub fn deepseek_balance_url(String) -> String
+
+pub async fn fetch_deepseek_balance(String, String, now_ms? : () -> Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
+
 pub async fn fetch_deepseek_models(String, String, endpoint_prefix? : String) -> Array[DeepSeekModelInfo] raise @error.ModelError
+
+pub fn parse_deepseek_balance(Json, fetched_at_ms~ : Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
 
 pub fn parse_deepseek_models(Json) -> Array[DeepSeekModelInfo] raise @error.ModelError
 
 // Errors
 
 // Types and methods
+pub(all) struct DeepSeekBalanceSource {
+  base_url : String
+  api_key : String
+  now_ms : () -> Int64
+}
+pub fn DeepSeekBalanceSource::DeepSeekBalanceSource(base_url? : String, api_key~ : String, now_ms? : () -> Int64) -> Self
+pub impl @posoco-devkit.QuotaSource for DeepSeekBalanceSource
+
 pub(all) struct DeepSeekConfig {
   api_key : String
   base_url : String
@@ -57,6 +71,7 @@ pub(all) struct DeepSeekProvider {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn DeepSeekProvider::DeepSeekProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn DeepSeekProvider::balance_source(Self, @posoco-ext-llm.ProviderConfigSource) -> DeepSeekBalanceSource? raise @error.CompositionError
 pub async fn DeepSeekProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for DeepSeekProvider
 pub impl @posoco-ext-llm.ProviderFactory for DeepSeekProvider

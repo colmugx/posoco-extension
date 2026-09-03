@@ -80,6 +80,33 @@ fallback to a static model; the standard OpenAI envelope must also carry
 `object: "list"`, and the configured model id keeps priority in the refreshed
 result.
 
+## Balance readings
+
+DeepSeek has no subscription plan: the account spends a prepaid balance,
+and what the platform announces is "how much money is left" plus "can the
+account still serve requests" — never a used percentage or a reset time.
+`DeepSeekProvider::balance_source(source)` returns a `devkit.QuotaSource`
+(or `None` when unconfigured) backed by
+`GET {base}/user/balance` (Bearer key, reusing the settings + credential
+the model catalog uses).
+
+Each `balance_infos[]` currency entry becomes one `devkit.QuotaReading`
+with `window: Balance`, `amount: (total_balance, currency)`, the envelope's
+`is_available` as `available`, and no `used_percent` / `reset_at_ms` —
+exhaustion recovery is a manual top-up, so nothing is schedulable. Entries
+missing `currency` or `total_balance` are skipped; with no usable entries
+the availability-only reading still reports `is_available`.
+
+```moonbit nocheck
+match provider.balance_source(source) {
+  Some(source) => match QuotaSource::read(source) {
+    Ok(readings) => // compare amount against a configured floor
+    Err(reason) => // reading unavailable; never fall back to estimates
+  }
+  None => // provider not configured
+}
+```
+
 ## Migration
 
 Old config fields `chat_model`, `reasoner_model`, `coder_model`, `thinking`,

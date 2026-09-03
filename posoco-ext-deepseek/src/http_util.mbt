@@ -69,10 +69,11 @@ async fn read_error_body_summary(
 ///|
 /// Pure classification for stream termination; used by the HTTP loop and
 /// offline tests so EOF is never inferred from accumulated content.
+/// (Transport failures raise `ModelError::Transport` directly at the read
+/// site so the underlying error detail is preserved.)
 priv enum DeepSeekStreamTermination {
   ExplicitTerminal
   CleanEof
-  TransportFailure
 }
 
 ///|
@@ -85,12 +86,6 @@ fn classify_deepseek_stream_termination(
       Some(
         @posoco.ModelError::ResponseParse(
           "DeepSeek SSE truncated (stage=eof, terminal_marker=missing)",
-        ),
-      )
-    TransportFailure =>
-      Some(
-        @posoco.ModelError::Transport(
-          "DeepSeek transport failure (stage=read_stream)",
         ),
       )
   }

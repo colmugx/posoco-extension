@@ -77,23 +77,52 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn credential_id(
 }
 
 ///|
-pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
-  self : DeepSeekProvider,
+/// DeepSeek API key from settings + credential; `None` when no key is present
+/// anywhere. Shared by the catalog build/refresh and the balance probe so
+/// both read the account through one credential.
+fn deepseek_api_key(
   source : @llm.ProviderConfigSource,
-) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
+) -> String? raise @posoco.CompositionError {
   let credential = source.effective_credential("deepseek")
-  let api_key = match credential {
+  match credential {
     Some(@oauth.ProviderCredential::OAuth(_)) =>
       raise @posoco.CompositionError::ManifestSchemaError(
         manifest_id="posoco_ext_deepseek",
         detail="OAuth credential is not supported for provider deepseek",
       )
-    Some(@oauth.ProviderCredential::ApiKey(credential)) => credential.secret
-    None =>
-      match deepseek_setting_string(source, "api_key") {
-        Some(value) => value
-        None => return @llm.ProviderBuildResult::Unconfigured
-      }
+    Some(@oauth.ProviderCredential::ApiKey(value)) => Some(value.secret)
+    None => deepseek_setting_string(source, "api_key")
+  }
+}
+
+///|
+/// A balance probe wired from the same settings + credential the model
+/// catalog uses; `None` when the provider is unconfigured. The balance
+/// endpoint lives on the platform root, not under the chat prefix.
+pub fn DeepSeekProvider::balance_source(
+  _self : DeepSeekProvider,
+  source : @llm.ProviderConfigSource,
+) -> DeepSeekBalanceSource? raise @posoco.CompositionError {
+  let api_key = match deepseek_api_key(source) {
+    Some(value) => value
+    None => return None
+  }
+  let base_setting = match deepseek_setting_string(source, "base_url") {
+    Some(value) => value
+    None => "https://api.deepseek.com"
+  }
+  let (base_url, _endpoint_prefix) = deepseek_endpoint_parts(base_setting)
+  Some(DeepSeekBalanceSource(api_key~, base_url~))
+}
+
+///|
+pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
+  self : DeepSeekProvider,
+  source : @llm.ProviderConfigSource,
+) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
+  let api_key = match deepseek_api_key(source) {
+    Some(value) => value
+    None => return @llm.ProviderBuildResult::Unconfigured
   }
   let model = match deepseek_setting_string(source, "model") {
     Some(value) => value
@@ -148,19 +177,9 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
   self : DeepSeekProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
-  let credential = source.effective_credential("deepseek")
-  let api_key = match credential {
-    Some(@oauth.ProviderCredential::OAuth(_)) =>
-      raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_deepseek",
-        detail="OAuth credential is not supported for provider deepseek",
-      )
-    Some(@oauth.ProviderCredential::ApiKey(value)) => value.secret
-    None =>
-      match deepseek_setting_string(source, "api_key") {
-        Some(value) => value
-        None => return @llm.ProviderBuildResult::Unconfigured
-      }
+  let api_key = match deepseek_api_key(source) {
+    Some(value) => value
+    None => return @llm.ProviderBuildResult::Unconfigured
   }
   let model = match deepseek_setting_string(source, "model") {
     Some(value) => value

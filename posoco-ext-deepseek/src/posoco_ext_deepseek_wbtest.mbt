@@ -755,11 +755,6 @@ test "t07b_deepseek_stream_termination_is_protocol_driven" {
       assert_true(msg.contains("terminal_marker=missing"))
     _ => fail("clean EOF before terminal marker must be ResponseParse")
   }
-  match classify_deepseek_stream_termination(TransportFailure) {
-    Some(@posoco.ModelError::Transport(msg)) =>
-      assert_true(msg.contains("stage=read_stream"))
-    _ => fail("read failure must be Transport")
-  }
 }
 
 ///|

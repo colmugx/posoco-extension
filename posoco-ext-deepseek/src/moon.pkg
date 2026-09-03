@@ -20,5 +20,6 @@ options(
   targets: {
     "posoco_ext_deepseek_wbtest.mbt": [ "native" ],
     "list_models_wbtest.mbt": [ "native" ],
+    "balance_wbtest.mbt": [ "native" ],
   },
 )
