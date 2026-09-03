@@ -1036,11 +1036,6 @@ test "t07b_kimi_stream_termination_is_protocol_driven" {
       assert_true(msg.contains("terminal_marker=missing"))
     _ => fail("clean EOF before terminal marker must be ResponseParse")
   }
-  match classify_kimi_stream_termination(TransportFailure) {
-    Some(@posoco.ModelError::Transport(msg)) =>
-      assert_true(msg.contains("stage=read_stream"))
-    _ => fail("read failure must be Transport")
-  }
 }
 
 ///|
@@ -1390,7 +1385,7 @@ test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
     classify_kimi_http_status(
       "chat.http_status",
       200,
-      BodyBytesInvalidUtf8(11),
+      BodyUnavailable,
       now_ms=0L,
     )
     is None,
@@ -1407,10 +1402,6 @@ test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
   assert_kimi_http_error_summary(
     BodyBytesUtf8(13),
     "body_bytes=13, body_category=utf8",
-  )
-  assert_kimi_http_error_summary(
-    BodyBytesInvalidUtf8(11),
-    "body_bytes=11, body_category=invalid_utf8",
   )
 }
 

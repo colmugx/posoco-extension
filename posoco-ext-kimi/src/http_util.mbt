@@ -9,7 +9,6 @@
 /// provider body from crossing the HTTP-error formatting boundary.
 priv enum KimiErrorBodySummary {
   BodyBytesUtf8(Int)
-  BodyBytesInvalidUtf8(Int)
   BodyUnavailable
 }
 
@@ -22,8 +21,6 @@ fn format_kimi_http_error(
 ) -> String {
   let summary = match body_summary {
     BodyBytesUtf8(length) => "body_bytes=\{length}, body_category=utf8"
-    BodyBytesInvalidUtf8(length) =>
-      "body_bytes=\{length}, body_category=invalid_utf8"
     BodyUnavailable => "body_category=unavailable"
   }
   "kimi HTTP error (stage=\{stage}, status=\{status}, \{summary})"
@@ -95,10 +92,11 @@ fn retry_after_header(response : @http.Response) -> String? {
 ///|
 /// Pure classification for stream termination; used by the HTTP loop and
 /// offline tests so EOF is never inferred from accumulated content.
+/// (Transport failures raise `ModelError::Transport` directly at the read
+/// site so the underlying error detail is preserved.)
 priv enum KimiStreamTermination {
   ExplicitTerminal
   CleanEof
-  TransportFailure
 }
 
 ///|
@@ -111,12 +109,6 @@ fn classify_kimi_stream_termination(
       Some(
         @posoco.ModelError::ResponseParse(
           "kimi SSE truncated (stage=eof, terminal_marker=missing)",
-        ),
-      )
-    TransportFailure =>
-      Some(
-        @posoco.ModelError::Transport(
-          "kimi transport failure (stage=read_stream)",
         ),
       )
   }

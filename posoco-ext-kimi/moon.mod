@@ -3,11 +3,11 @@ name = "colmugx/posoco-ext-kimi"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.13.2",
-  "colmugx/posoco-devkit@0.1.0",
+  "colmugx/posoco@0.14.3",
+  "colmugx/posoco-devkit@0.3.0",
   "colmugx/posoco-kit-chat-completions@0.1.0",
   "colmugx/posoco-kit-compact-summary@0.1.0",
-  "colmugx/posoco-ext-llm@0.1.0",
+  "colmugx/posoco-ext-llm@0.2.0",
   "colmugx/posoco-ext-oauth@0.1.0",
   "moonbitlang/async@0.21.0",
 }
