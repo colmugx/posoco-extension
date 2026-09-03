@@ -14,20 +14,20 @@ fn stdio_cmd(
 }
 
 ///|
-/// Extract base_url from an HttpClientTransport for connect_http dispatch.
-fn http_url(t : @transport.HttpClientTransport) -> String {
-  t.base_url
-}
-
-///|
-/// Extract the Bearer token parsed into the http transport (empty when the
-/// server entry declared none). connect_http rebuilds its own transport, so
-/// the token must be carried across explicitly.
-fn http_auth_token(t : @transport.HttpClientTransport) -> String {
-  match t.auth_token {
+/// Extract (base_url, bearer token, extra headers) from an HttpClientTransport
+/// for connect_http dispatch. The token is empty when the server entry
+/// declared none. The extra headers keep their injected order — they are
+/// appended to every request the rebuilt transport issues (host-scoped
+/// context headers such as `x-lody-mcp-*` ride on this), so this must stay in
+/// the dispatch path of every connect.
+fn http_connect_params(
+  t : @transport.HttpClientTransport,
+) -> (String, String, Array[(String, String)]) {
+  let token = match t.auth_token {
     Some(token) => token
     None => ""
   }
+  (t.base_url, token, t.extra_headers)
 }
 
 ///|
@@ -603,7 +603,7 @@ async fn MCPToolBridge::open_client(
             Err(e) => {
               self.record_auth_challenge(config.name, e.message())
               Err(
-                "MCP connect failed for '\{@devkit.sanitize_label(config.name)}'",
+                "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=handshake, error=\{e.message()})",
               )
             }
           }
@@ -614,8 +614,7 @@ async fn MCPToolBridge::open_client(
       }
     }
     @transport.AnyTransport::HttpClient(t) => {
-      let url = http_url(t)
-      let static_token = http_auth_token(t)
+      let (url, static_token, extra_headers) = http_connect_params(t)
       let auth_token = effective_http_token(
         self.server_tokens,
         config.name,
@@ -628,13 +627,14 @@ async fn MCPToolBridge::open_client(
             name=config.name,
             version="0.1.0",
             auth_token~,
+            extra_headers~,
             era=config.era,
           ) {
           Ok(client) => Ok(client)
           Err(e) => {
             self.record_auth_challenge(config.name, e.message())
             Err(
-              "MCP connect failed for '\{@devkit.sanitize_label(config.name)}'",
+              "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=handshake, error=\{e.message()})",
             )
           }
         }

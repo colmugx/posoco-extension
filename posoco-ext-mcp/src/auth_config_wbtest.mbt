@@ -5,15 +5,18 @@
 ///|
 test "auth_token expands env references and literal text" {
   @env.set_env_var("POSOCO_MCP_TEST_TOKEN", "tok-123")
-  inspect(
+  debug_inspect(
     expand_env_vars("${POSOCO_MCP_TEST_TOKEN}", "srv"),
-    content="Ok(tok-123)",
+    content="Ok(\"tok-123\")",
   )
-  inspect(
+  debug_inspect(
     expand_env_vars("Bearer ${POSOCO_MCP_TEST_TOKEN}!", "srv"),
-    content="Ok(Bearer tok-123!)",
+    content="Ok(\"Bearer tok-123!\")",
   )
-  inspect(expand_env_vars("plain-key", "srv"), content="Ok(plain-key)")
+  debug_inspect(
+    expand_env_vars("plain-key", "srv"),
+    content="Ok(\"plain-key\")",
+  )
   @env.unset_env_var("POSOCO_MCP_TEST_TOKEN")
 }
 

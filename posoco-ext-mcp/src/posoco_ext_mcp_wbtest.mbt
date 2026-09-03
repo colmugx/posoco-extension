@@ -326,12 +326,8 @@ async test "timeout_aborts_inner_but_outer_sees_sentinel_not_cancel" {
   let inner_flags : Array[Bool] = []
   let outer_flags : Array[Bool] = []
   let escaped_is_cancel = @async.with_timeout(30, async fn() {
-    @async.sleep(60_000) catch {
-      error => {
-        inner_flags.push(@async.is_being_cancelled())
-        raise error
-      }
-    }
+    errdefer inner_flags.push(@async.is_being_cancelled())
+    @async.sleep(60_000)
     true
   }) catch {
     error => {
@@ -361,5 +357,84 @@ async test "refresh_tools_on_empty_bridge_bumps_revision" {
   match bridge.refresh_tools() {
     Ok(_) => assert_eq(bridge.catalog_revision, 1)
     Err(message) => fail("unexpected refresh error: " + message)
+  }
+}
+
+///|
+/// Parse-test surface over `http_connect_params` (url slice).
+fn http_url(t : @transport.HttpClientTransport) -> String {
+  let (url, _, _) = http_connect_params(t)
+  url
+}
+
+///|
+/// Parse-test surface over `http_connect_params` (token slice).
+fn http_auth_token(t : @transport.HttpClientTransport) -> String {
+  let (_, token, _) = http_connect_params(t)
+  token
+}
+
+///|
+fn http_params_test_transport(
+  auth_token? : String = "",
+  extra_headers? : Array[(String, String)] = [],
+) -> @transport.AnyTransport {
+  @transport.AnyTransport::HttpClient(
+    @transport.HttpClientTransport::HttpClientTransport(
+      "http://127.0.0.1:8001/mcp",
+      auth_token~,
+      extra_headers~,
+    ),
+  )
+}
+
+///|
+test "http_connect_params_extracts_url_token_and_headers" {
+  match http_params_test_transport(auth_token="k-1") {
+    @transport.AnyTransport::HttpClient(t) => {
+      let (url, token, extra_headers) = http_connect_params(t)
+      assert_eq(url, "http://127.0.0.1:8001/mcp")
+      assert_eq(token, "k-1")
+      assert_eq(extra_headers, [])
+    }
+    _ => fail("expected http transport")
+  }
+  // No auth_token and no headers → empty token, empty header list.
+  match http_params_test_transport() {
+    @transport.AnyTransport::HttpClient(t) => {
+      let (url, token, extra_headers) = http_connect_params(t)
+      assert_eq(url, "http://127.0.0.1:8001/mcp")
+      assert_eq(token, "")
+      assert_eq(extra_headers, [])
+    }
+    _ => fail("expected http transport")
+  }
+}
+
+///|
+test "http_connect_params_preserves_injected_header_order" {
+  // lody-scoped context headers must reach connect_http in injection order:
+  // the transport array is passed through by reference, not re-sorted or
+  // rebuilt.
+  let headers = [
+    ("x-lody-mcp-session", "s-1"),
+    ("x-lody-mcp-workspace", "w-2"),
+    ("x-lody-mcp-agent", "a-3"),
+    ("x-lody-mcp-turn", "t-4"),
+    ("x-lody-mcp-trace", "r-5"),
+  ]
+  match http_params_test_transport(extra_headers=headers) {
+    @transport.AnyTransport::HttpClient(t) => {
+      let (url, token, extra_headers) = http_connect_params(t)
+      assert_eq(url, "http://127.0.0.1:8001/mcp")
+      assert_eq(token, "")
+      assert_eq(extra_headers.length(), 5)
+      assert_eq(extra_headers[0], ("x-lody-mcp-session", "s-1"))
+      assert_eq(extra_headers[1], ("x-lody-mcp-workspace", "w-2"))
+      assert_eq(extra_headers[2], ("x-lody-mcp-agent", "a-3"))
+      assert_eq(extra_headers[3], ("x-lody-mcp-turn", "t-4"))
+      assert_eq(extra_headers[4], ("x-lody-mcp-trace", "r-5"))
+    }
+    _ => fail("expected http transport")
   }
 }

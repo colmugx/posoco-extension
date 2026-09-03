@@ -135,6 +135,38 @@ async fn e2e_read_text(path : String) -> String? {
 }
 
 ///|
+/// Collect the requestId of every `notifications/cancelled` in a fixture
+/// notification log (one JSON-RPC message per line, recorded verbatim);
+/// only notifications carrying a non-empty string requestId count.
+fn e2e_cancelled_request_ids(log_text : String) -> Array[String] {
+  let ids : Array[String] = []
+  for line in log_text.split("\n") {
+    let trimmed = line.trim()
+    if trimmed.is_empty() {
+      continue
+    }
+    let msg : Json = @json.parse(trimmed) catch { _ => continue }
+    match msg {
+      Object(fields) =>
+        match fields.get("method") {
+          Some(String("notifications/cancelled")) =>
+            match fields.get("params") {
+              Some(Object(params)) =>
+                match params.get("requestId") {
+                  Some(String(id)) => if !id.is_empty() { ids.push(id) }
+                  _ => ()
+                }
+              _ => ()
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  ids
+}
+
+///|
 /// Contract 1+2: timeout_ms bounds one tools/call with a distinguishable
 /// error, and the stale-response safety default force-reconnects the
 /// connection so the very next call succeeds.
@@ -314,13 +346,18 @@ async fn e2e_cancel_scenario(node : String, notification_log : String) -> Unit {
         )
     }
     bridge.close()
-    // Contract 6 evidence: the bridge never sends notifications/cancelled
-    // (the ext layer has no request-id correlation), so the fixture log must
-    // not contain one — or must not exist at all.
+    // Contract 6' evidence: the SDK abort path now best-effort notifies the
+    // server before re-raising the cancellation, so the fixture log must
+    // contain a notifications/cancelled whose requestId is a non-empty
+    // string (string form of the in-flight request id, "client aborted").
     if notification_log != "" {
-      match e2e_read_text(notification_log) {
-        Some(text) => assert_false(text.contains("notifications/cancelled"))
-        None => () // no notification ever reached the server: gap confirmed
+      let text = match e2e_read_text(notification_log) {
+        Some(text) => text
+        None => fail("expected a fixture notification log, none was written")
+      }
+      let ids = e2e_cancelled_request_ids(text)
+      if ids.is_empty() {
+        fail("fixture log has no notifications/cancelled with a requestId")
       }
     }
   })
@@ -335,7 +372,7 @@ async test "e2e cancellation keeps identity and the connection usable" {
 }
 
 ///|
-async test "e2e cancellation sends no cancelled notification" {
+async test "e2e cancellation now delivers a cancelled notification" {
   match e2e_find_node() {
     Some(node) => {
       let root = @fs.tmpdir(prefix="posoco-mcp-e2e-notify")

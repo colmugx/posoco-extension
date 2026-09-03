@@ -7,6 +7,10 @@
 // Node interop lives in an inline `extern "js"` snippet like colmugx/mcp).
 
 ///|
+/// `NotUtf8` is only constructible by the native reader (node's utf-8
+/// `readFileSync` replaces instead of failing), so suppress the js-target
+/// unused-constructor diagnostic rather than drop the native distinction.
+#warnings("-unused_constructor")
 priv enum ReadFileOutcome {
   Missing
   Text(String)
