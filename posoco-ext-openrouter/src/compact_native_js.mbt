@@ -1,12 +1,14 @@
 ///|
-/// compact_native_js.mbt — ModelPort::compact via one summarize chat call.
+/// compact_native_js.mbt — ModelPort::compact via the summary kit.
 ///
 /// OpenRouter exposes no dedicated compact endpoint, so compaction is
-/// client-orchestrated: render the transcript, ask the model for a dense
-/// handoff summary in one non-streaming call (thinking off — the summary must
-/// be plain prose, not a reasoning exercise), and Replace the transcript with
-/// that summary. The URL/headers/encode/decode and error classification are
-/// exactly the ones `chat` uses.
+/// client-orchestrated: cut the transcript at a safe boundary (keep the
+/// most recent 20k tokens), serialize the head, ask the model for a
+/// structured summary in one non-streaming call (thinking off — the summary
+/// must be plain prose, not a reasoning exercise), and Replace the
+/// transcript with (summary user message + verbatim tail). The
+/// URL/headers/encode/decode and error classification are exactly the ones
+/// `chat` uses.
 ///
 /// Compiled on native and js only (`@http` is unavailable on wasm);
 /// compact_wasm_fallback.mbt satisfies the trait elsewhere.
@@ -68,70 +70,10 @@ async fn OpenRouterModelPort::openrouter_post_chat_json(
 }
 
 ///|
-/// Render one content block array: text verbatim, images as placeholders.
-fn openrouter_render_content(content : Array[@posoco.Content]) -> String {
-  content
-  .map(fn(block) {
-    match block {
-      Text(text) => text
-      Image(media_type~, ..) => "[image: \{media_type}]"
-    }
-  })
-  .join(" ")
-}
-
-///|
-/// Render one transcript message as a labeled block for the summarize call.
-fn openrouter_render_message(message : @posoco.Message) -> String {
-  match message {
-    SystemMessage(content~) => "system: \{openrouter_render_content(content)}"
-    UserMessage(content~) => "user: \{openrouter_render_content(content)}"
-    AssistantMessage(content~, tool_calls~, ..) => {
-      let head = "assistant: \{openrouter_render_content(content)}"
-      let calls = tool_calls.map(fn(call) {
-        "  [tool call \{call.name.to_string()} args=\{call.arguments.stringify()}]"
-      })
-      if calls.is_empty() {
-        head
-      } else {
-        "\{head}\n\{calls.join("\n")}"
-      }
-    }
-    ToolMessage(tool_name~, outcome~, ..) => {
-      let outcome_text = match outcome {
-        Success(content~, ..) => content
-        ToolReportedError(content~, ..) => "error: \{content}"
-        RuntimeFailure(message~, ..) => "runtime failure: \{message}"
-        NotExecuted(..) => "not executed"
-      }
-      "tool \{tool_name.to_string()}: \{outcome_text}"
-    }
-  }
-}
-
-///|
-/// Build the summarize request: a fixed instruction plus the rendered
-/// transcript. The summary only needs substance, not fidelity — tool calls
-/// and outcomes are summarized inline, and images count as placeholders.
-fn openrouter_compact_messages(
-  messages : Array[@posoco.Message],
-) -> Array[@posoco.Message] {
-  [
-    SystemMessage(content=[
-      Text(
-        "You are a summarization engine for a coding agent's conversation. Produce a dense, self-contained summary of the transcript below so the conversation can continue with full context: tasks and their status, key decisions and their reasons, important file paths, identifiers, and unresolved problems with next steps. Write plain prose with short bullet lines where it helps. Do not ask questions. Output only the summary.",
-      ),
-    ]),
-    UserMessage(content=[
-      Text(messages.map(fn(m) { openrouter_render_message(m) }).join("\n\n")),
-    ]),
-  ]
-}
-
-///|
-/// ModelPort implementation — compact. One non-streaming summarize call,
-/// thinking off, tools empty; the summary text replaces the transcript
-/// (mode Replace) as a single user message.
+/// ModelPort implementation — compact. One non-streaming summarize call via
+/// the summary kit, thinking off, tools empty; the summary text replaces
+/// the transcript head (mode Replace) as a single user message followed by
+/// the kept tail.
 pub impl @posoco.ModelPort for OpenRouterModelPort with fn compact(
   self : OpenRouterModelPort,
   _scope : @posoco.InvocationScope,
@@ -139,16 +81,29 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn compact(
   options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
+  let all = messages.to_owned()
+  let cut = @compact_summary.select_cut(all, 20000)
+  if cut.head_end == 0 {
+    raise @posoco.ModelError::ResponseParse(
+      "openrouter compact has nothing to summarize",
+    )
+  }
+  let head : Array[@posoco.Message] = []
+  let tail : Array[@posoco.Message] = []
+  for i in 0..<cut.head_end {
+    head.push(all[i])
+  }
+  for i in cut.kept_from..<all.length() {
+    tail.push(all[i])
+  }
+  let prompt = @compact_summary.build_summary_prompt(
+    @compact_summary.SummaryTemplate::StructuredMd,
+    @compact_summary.serialize_for_summary(head),
+  )
   // Thinking off for the summarize call: the summary must be plain prose,
   // not a reasoning exercise, and must not burn reasoning tokens.
-  let config = { ..self.config, thinking: false, reasoning_effort: None }
-  let body = build_chat_request(
-    config,
-    openrouter_compact_messages(messages.to_owned()),
-    [],
-    options,
-    false,
-  )
+  let config = { ..self.config, thinking: false, reasoning_effort: None, }
+  let body = build_chat_request(config, prompt, [], options, false)
   let resp_json = self.openrouter_post_chat_json(body, "compact")
   let completion = decode_chat_response(resp_json)
   let summary = completion.message.content
@@ -166,8 +121,5 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn compact(
       "openrouter compact produced an empty summary",
     )
   }
-  @posoco.CompactResult::{
-    compacted_messages: [UserMessage(content=[Text(summary)])],
-    mode: @posoco.CompactMode::Replace,
-  }
+  @compact_summary.build_replace_result(summary, tail)
 }

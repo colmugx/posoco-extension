@@ -218,10 +218,10 @@ fn decode_chat_response(
   }
   let reasoning_val : @posoco.Reasoning? = match
     (reasoning_text, reasoning_raw) {
-    (Some(r), _) => Some(@posoco.Reasoning::{ content: r, raw: reasoning_raw })
+    (Some(r), _) => Some(@posoco.Reasoning::{ content: r, raw: reasoning_raw, })
     // Details without a text summary still replay — content is empty.
     (None, Some(raw)) =>
-      Some(@posoco.Reasoning::{ content: "", raw: Some(raw) })
+      Some(@posoco.Reasoning::{ content: "", raw: Some(raw), })
     (None, None) => None
   }
   @posoco.Completion::Completion(

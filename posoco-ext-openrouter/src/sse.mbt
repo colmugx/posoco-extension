@@ -74,12 +74,12 @@ fn OpenRouterStreamState::to_completion(
   let raw : Json = Json::array(self.details)
   let payload = completion.message
   let reasoning = match payload.reasoning {
-    Some(r) => Some(@posoco.Reasoning::{ content: r.content, raw: Some(raw) })
+    Some(r) => Some(@posoco.Reasoning::{ content: r.content, raw: Some(raw), })
     None =>
       // Details arrived without any `reasoning` string increment. The
       // details themselves are what must replay; stitching display text out
       // of them would risk reordering encrypted blocks — content stays "".
-      Some(@posoco.Reasoning::{ content: "", raw: Some(raw) })
+      Some(@posoco.Reasoning::{ content: "", raw: Some(raw), })
   }
   @posoco.Completion::Completion(
     content=payload.content,

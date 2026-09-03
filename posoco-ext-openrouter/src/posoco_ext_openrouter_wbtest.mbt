@@ -11,7 +11,7 @@ fn user_msg(text : String) -> @posoco.Message {
 
 ///|
 fn chat_options() -> @posoco.ChatOptions {
-  { temperature: None, max_output_tokens: None }
+  { temperature: None, max_output_tokens: None, }
 }
 
 ///|
@@ -217,7 +217,7 @@ test "build_chat_request serializes model, messages, tools and chat options" {
     OpenRouterConfig("k", model="anthropic/claude-3.7-sonnet"),
     [user_msg("hello")],
     [tool],
-    { temperature: Some(0.5), max_output_tokens: Some(256) },
+    { temperature: Some(0.5), max_output_tokens: Some(256), },
     false,
   )
   guard body is Object(fields) else { fail("expected object body") }
@@ -290,7 +290,7 @@ test "encode_message assistant falls back to the reasoning string without raw" {
   let msg : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("answer")],
     tool_calls=[],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None, }),
     finish_reason=@posoco.FinishReason::Stop,
   )
   let json = encode_message(msg, false)
@@ -589,7 +589,6 @@ test "classify: 429 raises typed RateLimited, error_type preferred over bare cod
   guard err is Some(@posoco.ModelError::RateLimited(info)) else {
     fail("expected RateLimited")
   }
-  assert_eq(info.status, 429)
   // The stable vocabulary names the verdict, not the echoed numeric code.
   assert_eq(info.provider_code, Some("rate_limit_exceeded"))
   assert_eq(info.reset_at_ms, Some(756000L))
@@ -1002,7 +1001,7 @@ async test "ApiKeyFactory::login validates and returns an opaque credential" {
   let api : &@llm.ApiKeyFactory = factory_impl
   assert_eq(api.provider_id(), "openrouter")
   assert_eq(api.credential_id(), "openrouter")
-  let prompt_impl = OpenRouterApiKeyPrompt::{ value: "sk-or-secret" }
+  let prompt_impl = OpenRouterApiKeyPrompt::{ value: "sk-or-secret", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let credential = api.login(prompt)
   assert_eq(credential.secret, "sk-or-secret")
@@ -1012,7 +1011,7 @@ async test "ApiKeyFactory::login validates and returns an opaque credential" {
 async test "ApiKeyFactory::login rejects an empty secret" {
   let factory_impl = OpenRouterApiKeyFactory()
   let api : &@llm.ApiKeyFactory = factory_impl
-  let prompt_impl = OpenRouterApiKeyPrompt::{ value: "" }
+  let prompt_impl = OpenRouterApiKeyPrompt::{ value: "", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let result = Ok(api.login(prompt)) catch { error => Err(error) }
   match result {

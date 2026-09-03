@@ -31,7 +31,7 @@ fn cap_openrouter_error_body(text : String) -> String {
   if text.length() <= openrouter_error_body_cap {
     text
   } else {
-    let sb = StringBuilder::new()
+    let sb = StringBuilder()
     let mut count = 0
     for c in text {
       if count >= openrouter_error_body_cap {
@@ -183,7 +183,7 @@ fn classify_openrouter_http_status(
             match rate_limit_reset_header {
               Some(value) =>
                 match openrouter_epoch_seconds_ms(value) {
-                  Some(ms) => { ..info, reset_at_ms: Some(ms) }
+                  Some(ms) => { ..info, reset_at_ms: Some(ms), }
                   None => info
                 }
               None => info
@@ -192,7 +192,7 @@ fn classify_openrouter_http_status(
         // The stable error_type label names the verdict better than the bare
         // provider code (e.g. "rate_limit_exceeded" over a numeric code).
         let with_code = match error_type {
-          Some(t) => { ..with_reset, provider_code: Some(t) }
+          Some(t) => { ..with_reset, provider_code: Some(t), }
           None => with_reset
         }
         return Some(@posoco.ModelError::RateLimited(with_code))
