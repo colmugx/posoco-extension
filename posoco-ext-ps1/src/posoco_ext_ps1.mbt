@@ -22,7 +22,7 @@ pub fn PowerShellTools::PowerShellTools(
   exe? : String = "pwsh",
   anchor? : @devkit.WorkspaceAnchor? = None,
 ) -> PowerShellTools {
-  PowerShellTools::{ exe: resolve_exe(exe), anchor }
+  PowerShellTools::{ exe: resolve_exe(exe), anchor, }
 }
 
 // ToolProvider is split into two complete #cfg partitions (native/js real,
@@ -70,7 +70,7 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("powershell"),
-      description: "Run a PowerShell command via \{exe} (-NoProfile -NonInteractive). \{chaining} Read environment variables with $env:NAME. Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root.",
+      description: "Run a PowerShell command via \{exe} (-NoProfile -NonInteractive) on Windows. This is PowerShell, not bash — use PowerShell syntax and cmdlets (Select-String, Get-ChildItem, $env:NAME). \{chaining} Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root.",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_ps1"),
       policy: @posoco.ExecutionPolicy::Parallel,
@@ -123,18 +123,18 @@ fn ps1_empty_command_failure() -> @posoco.RuntimeError {
 }
 
 ///|
-/// Native decode failure — non-UTF-8 output must not masquerade as success.
-fn ps1_decode_failure(exit_code : Int) -> String {
-  "powershell: decode failed (stage=decode_output, category=invalid_utf8, exit_code=\{exit_code})"
-}
+/// Per-target import keepers: each backend compiles only one execute path,
+/// so the other backend's import would trip `unused_package`. `@process`
+/// backs the native runner, `@js_async` the bun runner.
+#cfg(not(target="native"))
+let _process_import_keeper : Unit = ignore(@process.unimplemented)
 
 ///|
-/// Native collect_output failure.
-fn ps1_collect_output_failure() -> @posoco.RuntimeError {
-  @posoco.RuntimeError::InvocationFailed(
-    "powershell: process failed (stage=collect_output)",
-  )
-}
+#cfg(not(target="js"))
+// The reference intentionally targets the native js_async stub, whose
+// unimplemented alert is noise for a value that is never evaluated.
+#warnings("-alert_unimplemented")
+let _js_async_import_keeper : Unit = ignore(@js_async.AbortController::new)
 
 ///|
 /// True when the current process runs on Windows. Target-split internally:

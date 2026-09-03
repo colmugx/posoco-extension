@@ -139,8 +139,15 @@ test "windows_guidance_pwsh_flavor" {
   assert_true(text.contains("Environment: Windows (win32 10.0.26244)"))
   assert_true(text.contains("pipeline chains are supported"))
   assert_true(text.contains("$env:NAME"))
+  assert_true(text.contains("NOT bash"))
+  assert_true(text.contains(".NET objects"))
   assert_true(text.contains("Select-String"))
-  assert_true(text.contains("Get-ChildItem"))
+  assert_true(text.contains("awk '{print $1}'"))
+  assert_true(text.contains("Get-ChildItem -Force"))
+  assert_true(text.contains("Get-ChildItem -Recurse"))
+  assert_true(text.contains("2>$null"))
+  assert_true(text.contains("backslashes"))
+  assert_true(text.contains("C:\\repo\\src\\main.rs"))
 }
 
 ///|
@@ -149,6 +156,7 @@ test "windows_guidance_ps51_flavor" {
   assert_false(text.contains("Environment: Windows ("))
   assert_true(text.contains("NOT supported"))
   assert_true(text.contains("if ($?)"))
+  assert_true(text.contains("NOT bash"))
 }
 
 ///|
