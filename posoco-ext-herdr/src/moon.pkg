@@ -1,9 +1,14 @@
 import {
   "colmugx/posoco",
-  "moonbitlang/async/process",
+  "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
 }
 
 options(
-  targets: { "herdr_native.mbt": [ "native" ], "herdr_js.mbt": [ "js" ] },
+  targets: {
+    "herdr_native.mbt": [ "native" ],
+    "herdr_js.mbt": [ "js" ],
+    "herdr_gate_wbtest.mbt": [ "native", "js" ],
+    "herdr_shell_quote_wbtest.mbt": [ "native" ],
+  },
 )

@@ -1,9 +1,9 @@
 ///|
-// Native backend. Detection shells out once (async @process) to read the
-// herdr-injected environment. Per-event reports run through libc system()
-// with the command backgrounded and silenced: the sync Observer callback
-// blocks only for the fork+exec of /bin/sh, at turn boundaries, and never
-// propagates failure.
+// Native backend. Detection reads the herdr-injected environment directly
+// (@env, synchronous, no subprocess). Per-event reports run through libc
+// system() with the command backgrounded and silenced: the sync Observer
+// callback blocks only for the fork+exec of /bin/sh, at turn boundaries, and
+// never propagates failure.
 
 #borrow(cmd)
 extern "C" fn ffi_system(cmd : Bytes) -> Int = "system"
@@ -14,8 +14,13 @@ fn herdr_c_string(s : String) -> Bytes {
 }
 
 ///|
-pub async fn HerdrReporter::detect() -> HerdrReporter? noraise {
-  let reporter = match herdr_detect() {
+pub fn HerdrReporter::detect() -> HerdrReporter? {
+  let reporter = match
+    herdr_gate(
+      @env.get_env_var("HERDR_ENV"),
+      @env.get_env_var("HERDR_PANE_ID"),
+      @env.get_env_var("HERDR_BIN_PATH"),
+    ) {
     Some(cfg) => HerdrReporter::from_config(cfg)
     None => return None
   }
@@ -24,29 +29,14 @@ pub async fn HerdrReporter::detect() -> HerdrReporter? noraise {
 }
 
 ///|
-async fn herdr_detect() -> HerdrConfig? noraise {
-  // Exactly three lines, no trailing newline: gate marker, pane id, bin.
-  let script = "printf '%s\\n%s\\n%s' \"$HERDR_ENV\" \"$HERDR_PANE_ID\" \"${HERDR_BIN_PATH:-herdr}\""
-  let (_, out) = @process.collect_stdout("sh", ["-c", script]) catch {
-    _ => return None
-  }
-  let text = out.text() catch { _ => return None }
-  let parts = text.split("\n").collect()
-  guard parts.length() == 3 else { return None }
-  let marker = parts[0]
-  let pane = parts[1].to_owned()
-  let bin = parts[2].to_owned()
-  if marker == "" || pane == "" {
-    return None
-  }
-  if bin == "" {
-    return Some({ pane, bin: "herdr", })
-  }
-  Some({ pane, bin, })
-}
-
-///|
 fn herdr_spawn_report(bin : String, args : Array[String]) -> Unit {
   let line = "\{[bin, ..args].map(fn(x) { herdr_shell_quote(x) }).join(" ")} >/dev/null 2>&1 &"
   ignore(ffi_system(herdr_c_string(line)))
+}
+
+///|
+/// Single-quote an argument for the shell command line built by the native
+/// report path. `'` inside the value is closed, escaped, and reopened.
+fn herdr_shell_quote(s : String) -> String {
+  "'" + s.replace(old="'", new="'\\''") + "'"
 }

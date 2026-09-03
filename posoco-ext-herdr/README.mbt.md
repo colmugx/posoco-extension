@@ -58,7 +58,7 @@ reserved for a future UiPort hook.
 
 | target | detection | report | notes |
 |---|---|---|---|
-| native | one `sh -c printf` via `@process` at startup | libc `system()` with the command backgrounded and silenced | the sync `Observer` callback blocks only for the fork+exec of `/bin/sh`, at turn boundaries; failures are swallowed by design — presence reporting must never fail a turn |
+| native | `@env` reads (synchronous, no subprocess) | libc `system()` with the command backgrounded and silenced | the sync `Observer` callback blocks only for the fork+exec of `/bin/sh`, at turn boundaries; failures are swallowed by design — presence reporting must never fail a turn |
 | js (bun) | `Bun.env` (synchronous) | `Bun.spawn` with stdio ignored, fire-and-forget | genuinely non-blocking |
 | wasm / wasm-gc | — | — | compiles as fully inert; constructor returns `None` |
 

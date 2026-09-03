@@ -50,10 +50,3 @@ test "extension manifest contributes exactly one observer" {
   inspect(m.tools.length(), content="0")
   inspect(m.prompt_contributors.length(), content="0")
 }
-
-///|
-test "shell quoting wraps args and escapes single quotes" {
-  inspect(herdr_shell_quote("plain"), content="'plain'")
-  inspect(herdr_shell_quote("it's"), content="'it'\\''s'")
-  inspect(herdr_shell_quote(""), content="''")
-}

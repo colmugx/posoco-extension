@@ -44,6 +44,25 @@ fn HerdrReporter::from_config(cfg : HerdrConfig) -> HerdrReporter {
 }
 
 ///|
+/// Shared presence gate for the targets with environment access: HERDR_ENV
+/// and HERDR_PANE_ID must be present and non-empty; HERDR_BIN_PATH defaults
+/// to "herdr" when absent or blank. Pure, so native and js share one
+/// detection decision.
+#cfg(any(target="native", target="js"))
+fn herdr_gate(marker : String?, pane : String?, bin : String?) -> HerdrConfig? {
+  match (marker, pane) {
+    (Some(marker), Some(pane)) if marker != "" && pane != "" => {
+      let bin = match bin {
+        Some(bin) if bin != "" => bin
+        _ => "herdr"
+      }
+      Some({ pane, bin, })
+    }
+    _ => None
+  }
+}
+
+///|
 fn HerdrReporter::emit(self : HerdrReporter, state : HerdrAgentState) -> Unit {
   (self.spawn)(self.bin, [
     "pane",
@@ -69,11 +88,4 @@ pub impl @posoco.Observer for HerdrReporter with fn on_event(
     @posoco.TurnEvent::TurnFailed(_) => self.emit(Idle)
     _ => ()
   }
-}
-
-///|
-/// Single-quote an argument for the `sh -c` command line used by the native
-/// backend. `'` inside the value is closed, escaped, and reopened.
-fn herdr_shell_quote(s : String) -> String {
-  "'" + s.replace(old="'", new="'\\''") + "'"
 }

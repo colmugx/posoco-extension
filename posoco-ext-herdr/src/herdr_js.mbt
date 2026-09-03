@@ -25,7 +25,10 @@ fn herdr_env(name : String) -> String? {
 ///|
 // The JS-side catch mirrors the native side's ignored system() status:
 // presence telemetry must never fail Agent composition.
-extern "js" fn bun_spawn_detached(bin : String, args : Array[String]) -> Unit =
+extern "js" fn bun_spawn_detached(
+  bin : String,
+  args : FixedArray[String],
+) -> Unit =
   #| (bin, args) => {
   #|   try {
   #|     Bun.spawn({ cmd: [bin, ...args], stdout: "ignore", stderr: "ignore", stdin: "ignore" })
@@ -34,24 +37,20 @@ extern "js" fn bun_spawn_detached(bin : String, args : Array[String]) -> Unit =
 
 ///|
 pub fn HerdrReporter::detect() -> HerdrReporter? {
-  match herdr_env("HERDR_ENV") {
+  let reporter = match
+    herdr_gate(
+      herdr_env("HERDR_ENV"),
+      herdr_env("HERDR_PANE_ID"),
+      herdr_env("HERDR_BIN_PATH"),
+    ) {
+    Some(cfg) => HerdrReporter::from_config(cfg)
     None => return None
-    Some(_) => ()
   }
-  let pane = match herdr_env("HERDR_PANE_ID") {
-    Some(pane) => pane
-    None => return None
-  }
-  let bin = match herdr_env("HERDR_BIN_PATH") {
-    Some(bin) => bin
-    None => "herdr"
-  }
-  let reporter = HerdrReporter::from_config({ pane, bin, })
   reporter.emit(Idle)
   Some(reporter)
 }
 
 ///|
 fn herdr_spawn_report(bin : String, args : Array[String]) -> Unit {
-  bun_spawn_detached(bin, args)
+  bun_spawn_detached(bin, FixedArray::from_array(args))
 }
