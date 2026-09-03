@@ -156,7 +156,7 @@ async test "write_allows_fresh_file_and_updates_ledger" {
     let path = dir + "/target.txt"
     @fs.write_file(path, "old", create_mode=CreateNew)
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
-    ledger.note_read(path, FsIo::stat(NativeFsIo::{  }, path))
+    ledger.note_read(path, FsIo::stat(NativeFsIo::{ }, path))
     let tools = WriteTools::WriteTools(freshness=ledger)
     match run_write(tools, write_call(path, "new")) {
       Ok(@posoco.ToolOutcome::Success(..)) => ()
@@ -164,7 +164,7 @@ async test "write_allows_fresh_file_and_updates_ledger" {
     }
     // The write itself refreshed the stamp, so an immediate follow-up edit
     // is not rejected as externally modified.
-    let after = FsIo::stat(NativeFsIo::{  }, path)
+    let after = FsIo::stat(NativeFsIo::{ }, path)
     debug_inspect(ledger.check(path, Some(after)), content="Fresh")
   }
 }

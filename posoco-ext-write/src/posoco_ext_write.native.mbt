@@ -3,7 +3,7 @@ priv struct NativeFsIo {}
 
 ///|
 /// Process-local counter for sibling temp-file names (workspace-ext pattern).
-let write_tmp_counter : Ref[Int] = { val: 0 }
+let write_tmp_counter : Ref[Int] = { val: 0, }
 
 ///|
 /// `@fs.exists` returns false for a missing file; a raise means a real IO
@@ -31,7 +31,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
     }
   }
   file.close()
-  { mtime_s, mtime_ns, size }
+  { mtime_s, mtime_ns, size, }
 }
 
 ///|
@@ -79,5 +79,5 @@ pub impl @posoco.ToolProvider for WriteTools with fn execute(
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_write_impl(NativeFsIo::{  }, self.freshness, self.anchor, call)
+  execute_write_impl(NativeFsIo::{ }, self.freshness, self.anchor, call)
 }

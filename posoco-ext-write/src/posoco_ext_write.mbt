@@ -26,7 +26,7 @@ pub fn WriteTools::WriteTools(
   freshness? : @devkit.FreshnessGuard,
   anchor? : @devkit.WorkspaceAnchor? = None,
 ) -> WriteTools {
-  WriteTools::{ freshness, anchor }
+  WriteTools::{ freshness, anchor, }
 }
 
 ///|
