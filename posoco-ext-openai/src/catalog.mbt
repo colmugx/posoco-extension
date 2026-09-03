@@ -74,7 +74,7 @@ fn openai_catalog_slot(
     default_effort~,
     rebuild_on_credential=Some(fn(credential) {
       let base = OpenAIConfig::from_codex_credential(credential, config.model)
-      let base = { ..base, context_window: config.context_window }
+      let base = { ..base, context_window: config.context_window, }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
         refreshed,
@@ -93,7 +93,7 @@ fn openai_catalog_slot(
         config.model,
         openai_api_base_for_key(config),
       )
-      let base = { ..base, context_window: config.context_window }
+      let base = { ..base, context_window: config.context_window, }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
         refreshed,

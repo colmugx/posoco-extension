@@ -489,7 +489,7 @@ fn extract_reasoning_items(
       )
   }
   let raw : Array[Json] = []
-  let summary = StringBuilder::new()
+  let summary = StringBuilder()
   for item in items {
     match item {
       Json::Object(map) =>
@@ -532,7 +532,7 @@ fn message_item_text(
   match map.get("content") {
     Some(Json::String(s)) => s
     Some(Json::Array(parts)) => {
-      let b = StringBuilder::new()
+      let b = StringBuilder()
       for part in parts {
         match part {
           Json::Object(pmap) =>
@@ -589,7 +589,7 @@ fn openai_items_to_posoco_messages(
     } else {
       let raw = Some(Json::array(pending_state.copy()))
       pending_state.clear()
-      Some(@posoco.Reasoning::{ content: "", raw })
+      Some(@posoco.Reasoning::{ content: "", raw, })
     }
   }
   let take_calls = fn() -> Array[@posoco.ToolCall] {

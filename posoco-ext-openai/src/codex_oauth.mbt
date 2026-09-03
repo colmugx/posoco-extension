@@ -26,7 +26,7 @@ let codex_api_base : String = "https://chatgpt.com/backend-api/codex"
 /// the exchange must still be correct if the provider emits a reserved
 /// character in either value.
 fn codex_form_encode(value : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in value {
     if (ch >= 'a' && ch <= 'z') ||
       (ch >= 'A' && ch <= 'Z') ||
@@ -247,16 +247,6 @@ fn parse_codex_poll_response(
       Ready(authorization_code, code_verifier)
     }
   }
-}
-
-///|
-/// Decode one successful-status poll body. Kept as a small compatibility
-/// helper for package-local conformance tests and callers that have already
-/// checked the HTTP status.
-fn parse_codex_poll_body(
-  body : String,
-) -> CodexPollResponse raise @oauth.OAuthError {
-  parse_codex_poll_response(200, body)
 }
 
 ///|

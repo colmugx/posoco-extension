@@ -10,7 +10,7 @@ pub(all) struct OpenAIProvider {
 pub fn OpenAIProvider::OpenAIProvider(
   transport? : &OpenAIModelsHttpTransport? = None,
 ) -> OpenAIProvider {
-  OpenAIProvider::{ models_transport: transport }
+  OpenAIProvider::{ models_transport: transport, }
 }
 
 ///|

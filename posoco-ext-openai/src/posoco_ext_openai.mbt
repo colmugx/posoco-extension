@@ -73,7 +73,7 @@ pub fn OpenAIConfig::from_codex_credential(
     model,
     codex_oauth_api_base(),
   )
-  { ..config, account_id: credential.metadata_value("account_id") }
+  { ..config, account_id: credential.metadata_value("account_id"), }
 }
 
 ///|
@@ -84,20 +84,24 @@ pub fn OpenAIConfig::with_reasoning_effort(
   self : OpenAIConfig,
   effort : String,
 ) -> OpenAIConfig {
-  { ..self, reasoning_effort: Some(effort) }
+  { ..self, reasoning_effort: Some(effort), }
 }
 
 ///|
 /// OpenAI ModelPort adapter — implements posoco's ModelPort trait.
 pub(all) struct OpenAIModelPort {
   config : OpenAIConfig
+  /// Captures Codex quota headers from chat responses when present. `None`
+  /// on API-key endpoints and hosts that do not consume quota readings.
+  quota_tracker : CodexQuotaTracker?
 }
 
 ///|
 pub fn OpenAIModelPort::OpenAIModelPort(
   config : OpenAIConfig,
+  quota_tracker? : CodexQuotaTracker? = None,
 ) -> OpenAIModelPort {
-  { config, }
+  { config, quota_tracker, }
 }
 
 ///|
@@ -367,6 +371,12 @@ async fn OpenAIModelPort::chat_stream(
       )
     }
   }
+  // Capture before the status branch: an exhausted 429 still states the
+  // authoritative percentages and reset times.
+  match self.quota_tracker {
+    Some(tracker) => tracker.capture(response.headers)
+    None => ()
+  }
   if !is_openai_http_success(response.code) {
     let err_summary = read_error_body_summary(client) catch {
       _ => BodyUnavailable
@@ -379,7 +389,7 @@ async fn OpenAIModelPort::chat_stream(
     }
   }
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let reasoning_sink = ReasoningSink::{ items: [], summary: "" }
+  let reasoning_sink = ReasoningSink::{ items: [], summary: "", }
   let on_typed = fn(chunk : @posoco.StreamChunk) {
     acc.push(chunk)
     on_chunk(chunk)
@@ -444,7 +454,7 @@ async fn OpenAIModelPort::chat_stream(
   }
   validate_stream_tool_calls(acc)
   let completion = attach_reasoning_items(acc.to_completion(), reasoning_sink)
-  @posoco.ModelCallResult::{ completion, processed_messages: messages }
+  @posoco.ModelCallResult::{ completion, processed_messages: messages, }
 }
 
 ///|
@@ -484,6 +494,7 @@ async fn openai_post_json(
   config : OpenAIConfig,
   path : String,
   body : Json,
+  quota_tracker? : CodexQuotaTracker? = None,
 ) -> Json raise @posoco.ModelError {
   let headers = build_headers(config)
   let client = @http.Client::Client(config.base_url, headers~) catch {
@@ -499,6 +510,10 @@ async fn openai_post_json(
         "OpenAI transport failure (stage=send_request): " + err.to_string(),
       )
     }
+  }
+  match quota_tracker {
+    Some(tracker) => tracker.capture(response.headers)
+    None => ()
   }
   let body_data = client.read_all() catch {
     _ => {
@@ -561,9 +576,14 @@ async fn OpenAIModelPort::chat_nonstream(
     self.config.model,
     self.config.reasoning_effort,
   )
-  let resp_json = openai_post_json(self.config, "/responses", body)
+  let resp_json = openai_post_json(
+    self.config,
+    "/responses",
+    body,
+    quota_tracker=self.quota_tracker,
+  )
   let completion = parse_openai_response(resp_json)
-  @posoco.ModelCallResult::{ completion, processed_messages: messages }
+  @posoco.ModelCallResult::{ completion, processed_messages: messages, }
 }
 
 ///|
@@ -634,7 +654,12 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   validate_openai_config(self.config)
   let body = build_compact_request_body(messages.to_owned(), self.config.model)
-  let resp_json = openai_post_json(self.config, "/responses/compact", body)
+  let resp_json = openai_post_json(
+    self.config,
+    "/responses/compact",
+    body,
+    quota_tracker=self.quota_tracker,
+  )
   let compacted = parse_compact_response(resp_json)
   @posoco.CompactResult::{
     compacted_messages: compacted,

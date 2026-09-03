@@ -46,7 +46,7 @@ pub(all) struct DefaultOpenAIModelsHttpTransport {}
 
 ///|
 pub fn DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport() -> DefaultOpenAIModelsHttpTransport {
-  DefaultOpenAIModelsHttpTransport::{  }
+  DefaultOpenAIModelsHttpTransport::{ }
 }
 
 ///|
@@ -85,7 +85,7 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
           "OpenAI models response body read failed: " + err.to_string(),
         )
     }
-    OpenAIModelsHttpResponse::{ status: response.code, body }
+    OpenAIModelsHttpResponse::{ status: response.code, body, }
   }) catch {
     @async.TimeoutError =>
       raise @posoco.ModelError::Transport(
@@ -237,7 +237,7 @@ fn parse_codex_reasoning_levels(
     let description = parse_required_nonempty_string(
       level, "description", "Codex models reasoning level",
     )
-    result.push(CodexReasoningLevel::{ effort, description })
+    result.push(CodexReasoningLevel::{ effort, description, })
   }
   let default_effort = parse_optional_nonempty_string(
     fields, "default_reasoning_level",
@@ -309,7 +309,7 @@ pub fn parse_openai_models(
           "OpenAI models item display_name must be a string",
         )
     }
-    result.push(OpenAIModelInfo::{ id, display_name })
+    result.push(OpenAIModelInfo::{ id, display_name, })
   }
   result
 }

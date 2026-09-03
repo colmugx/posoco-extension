@@ -2,12 +2,14 @@
 package "colmugx/posoco-ext-openai"
 
 import {
+  "colmugx/posoco-devkit",
   "colmugx/posoco-ext-llm",
   "colmugx/posoco-ext-oauth",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
+  "moonbitlang/async/http",
 }
 
 // Values
@@ -26,6 +28,8 @@ pub async fn fetch_openai_models_with_transport(&OpenAIModelsHttpTransport, Stri
 pub fn openai_codex_models_client_version() -> String
 
 pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
+
+pub fn parse_codex_quota_headers(Map[@http.CaseInsensitiveString, String], fetched_at_ms~ : Int64) -> Array[@posoco-devkit.QuotaReading]
 
 pub fn parse_openai_models(Json) -> Array[OpenAIModelInfo] raise @error.ModelError
 
@@ -56,6 +60,15 @@ pub(all) struct CodexOAuth {
 pub fn CodexOAuth::CodexOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?) -> Self
 pub async fn CodexOAuth::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
 pub impl @posoco-ext-oauth.OAuthProvider for CodexOAuth
+
+pub(all) struct CodexQuotaTracker {
+  mut latest : Array[@posoco-devkit.QuotaReading]?
+  now_ms : () -> Int64
+}
+pub fn CodexQuotaTracker::CodexQuotaTracker(now_ms? : () -> Int64) -> Self
+pub fn CodexQuotaTracker::capture(Self, Map[@http.CaseInsensitiveString, String]) -> Unit
+pub fn CodexQuotaTracker::snapshots(Self) -> Array[@posoco-devkit.QuotaReading]
+pub impl @posoco-devkit.QuotaSource for CodexQuotaTracker
 
 pub(all) struct CodexReasoningLevel {
   effort : String
@@ -88,8 +101,9 @@ pub(all) struct OpenAIModelInfo {
 
 pub(all) struct OpenAIModelPort {
   config : OpenAIConfig
+  quota_tracker : CodexQuotaTracker?
 }
-pub fn OpenAIModelPort::OpenAIModelPort(OpenAIConfig) -> Self
+pub fn OpenAIModelPort::OpenAIModelPort(OpenAIConfig, quota_tracker? : CodexQuotaTracker?) -> Self
 pub fn OpenAIModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_codex_models(Self, Array[CodexModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError

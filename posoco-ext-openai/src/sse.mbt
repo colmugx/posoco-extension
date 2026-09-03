@@ -7,10 +7,11 @@
 ///|
 /// Pure classification for stream termination; used by the HTTP loop and
 /// offline tests so EOF is never inferred from accumulated content.
+/// (Transport failures raise `ModelError::Transport` directly at the read
+/// site so the underlying error detail is preserved.)
 priv enum StreamTermination {
   ExplicitTerminal
   CleanEof
-  TransportFailure
 }
 
 ///|
@@ -23,12 +24,6 @@ fn classify_stream_termination(
       Some(
         @posoco.ModelError::ResponseParse(
           "OpenAI SSE truncated (stage=eof, terminal_marker=missing)",
-        ),
-      )
-    TransportFailure =>
-      Some(
-        @posoco.ModelError::Transport(
-          "OpenAI transport failure (stage=read_stream)",
         ),
       )
   }
@@ -80,7 +75,7 @@ fn process_sse_event(
   data : String,
   acc : @posoco.StreamAccumulator,
   on_chunk : (@posoco.StreamChunk) -> Unit,
-  reasoning_sink? : ReasoningSink = ReasoningSink::{ items: [], summary: "" },
+  reasoning_sink? : ReasoningSink = ReasoningSink::{ items: [], summary: "", },
 ) -> Bool raise @posoco.ModelError {
   let event_json : Json = @json.parse(data) catch {
     _ =>
@@ -453,7 +448,7 @@ fn extract_sse_output_item(
 /// along). Mirrors the helper in posoco-kit-chat-completions (this package
 /// intentionally does not depend on the chat-completions kit).
 fn extract_error_labels(err : Map[String, Json]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   match err.get("type") {
     Some(Json::String(t)) =>
       match sanitize_error_label(t) {

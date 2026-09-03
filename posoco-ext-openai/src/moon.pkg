@@ -1,11 +1,13 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-ext-llm" @llm,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/async/io",
   "moonbitlang/core/json",
+  "moonbitlang/core/strconv",
   "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/codec/base64",
@@ -14,5 +16,8 @@ import {
 warnings = "-unused_package"
 
 options(
-  targets: { "posoco_ext_openai_wbtest.mbt": [ "native" ] },
+  targets: {
+    "posoco_ext_openai_wbtest.mbt": [ "native" ],
+    "codex_quota_wbtest.mbt": [ "native" ],
+  },
 )

@@ -222,11 +222,6 @@ test "t07b_llm_stream_termination_is_protocol_driven" {
       assert_true(msg.contains("terminal_marker=missing"))
     _ => fail("clean EOF before terminal marker must be ResponseParse")
   }
-  match classify_stream_termination(TransportFailure) {
-    Some(@posoco.ModelError::Transport(msg)) =>
-      assert_true(msg.contains("stage=read_stream"))
-    _ => fail("read failure must be Transport")
-  }
 }
 
 ///|
@@ -796,7 +791,7 @@ test "openai reasoning effort is carried in responses request body" {
   let body = build_request_body(
     [],
     [],
-    { temperature: None, max_output_tokens: None },
+    { temperature: None, max_output_tokens: None, },
     "gpt-codex",
     Some("high"),
   )
@@ -951,7 +946,7 @@ test "openai_parse_captures_reasoning_items" {
 /// captured into the sink and attached to the accumulated completion.
 test "openai_stream_captures_reasoning_items_from_completed" {
   let acc = @posoco.StreamAccumulator()
-  let sink = ReasoningSink::{ items: [], summary: "" }
+  let sink = ReasoningSink::{ items: [], summary: "", }
   let completed =
     #|{"type":"response.completed","response":{"status":"completed","output":[{"id":"rs_1","type":"reasoning","summary":[{"type":"summary_text","text":"s"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}}
   assert_true(
@@ -1192,7 +1187,7 @@ test "codex discovery slot reports context_window through provider_config" {
     description: None,
     default_reasoning_level: Some("medium"),
     supported_reasoning_levels: [
-      CodexReasoningLevel::{ effort: "medium", description: "balanced" },
+      CodexReasoningLevel::{ effort: "medium", description: "balanced", },
     ],
     visibility: "list",
     supported_in_api: true,
@@ -1205,4 +1200,14 @@ test "codex discovery slot reports context_window through provider_config" {
   // The discovery window crosses the ModelPort seam so the Agent sizes
   // auto-compact from the active model's own capacity.
   assert_eq(slot.port.provider_config().context_window, Some(400000))
+}
+
+///|
+/// Decode one successful-status poll body. Kept as a small compatibility
+/// helper for package-local conformance tests and callers that have already
+/// checked the HTTP status.
+fn parse_codex_poll_body(
+  body : String,
+) -> CodexPollResponse raise @oauth.OAuthError {
+  parse_codex_poll_response(200, body)
 }
