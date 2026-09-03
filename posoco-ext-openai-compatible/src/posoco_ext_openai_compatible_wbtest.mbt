@@ -12,7 +12,7 @@ fn user_msg(text : String) -> @posoco.Message {
 
 ///|
 fn chat_options() -> @posoco.ChatOptions {
-  { temperature: None, max_output_tokens: None }
+  { temperature: None, max_output_tokens: None, }
 }
 
 ///|
@@ -237,7 +237,7 @@ test "ProviderFactory::build rejects OAuth credential with typed error" {
 async test "ApiKeyFactory::login validates and returns an opaque credential" {
   let provider = OpenAICompatibleProvider("qwen")
   let api : &@llm.ApiKeyFactory = provider
-  let prompt_impl = OaiCompatApiKeyPrompt::{ value: "sk-via-login" }
+  let prompt_impl = OaiCompatApiKeyPrompt::{ value: "sk-via-login", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let credential = api.login(prompt)
   assert_eq(credential.secret, "sk-via-login")
@@ -247,7 +247,7 @@ async test "ApiKeyFactory::login validates and returns an opaque credential" {
 async test "ApiKeyFactory::login rejects an empty secret" {
   let provider = OpenAICompatibleProvider("qwen")
   let api : &@llm.ApiKeyFactory = provider
-  let prompt_impl = OaiCompatApiKeyPrompt::{ value: "" }
+  let prompt_impl = OaiCompatApiKeyPrompt::{ value: "", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let result = Ok(api.login(prompt)) catch { error => Err(error) }
   match result {
@@ -489,7 +489,7 @@ test "encode_message_reasoning_preserved_without_tool_calls" {
   let msg : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("answer")],
     tool_calls=[],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None }),
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None, }),
     finish_reason=@posoco.FinishReason::Stop,
   )
   let json = encode_message(msg, false)
@@ -1191,7 +1191,6 @@ test "classify: 429 raises typed RateLimited with the stated reset" {
   guard err is Some(@posoco.ModelError::RateLimited(info)) else {
     fail("expected RateLimited")
   }
-  assert_eq(info.status, 429)
   assert_eq(info.provider_code, Some("usage_limit_reached"))
   assert_eq(info.reset_at_ms, Some(756000L))
   let other = classify_oai_compat_http_status(

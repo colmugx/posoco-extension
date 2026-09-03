@@ -28,7 +28,7 @@ fn cap_oai_compat_error_body(text : String) -> String {
   if text.length() <= oai_compat_error_body_cap {
     text
   } else {
-    let sb = StringBuilder::new()
+    let sb = StringBuilder()
     let mut count = 0
     for c in text {
       if count >= oai_compat_error_body_cap {

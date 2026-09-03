@@ -90,7 +90,7 @@ pub fn OpenAICompatibleConfig::with_reasoning_effort(
   effort : String,
 ) -> OpenAICompatibleConfig raise @posoco.CompositionError {
   if effort == "off" {
-    return { ..self, thinking: false, reasoning_effort: None }
+    return { ..self, thinking: false, reasoning_effort: None, }
   }
   if effort == "on" {
     if !self.thinking_efforts.is_empty() {
@@ -99,7 +99,7 @@ pub fn OpenAICompatibleConfig::with_reasoning_effort(
         detail="unsupported reasoning effort: on (this endpoint declares explicit levels)",
       )
     }
-    return { ..self, thinking: true, reasoning_effort: None }
+    return { ..self, thinking: true, reasoning_effort: None, }
   }
   if !self.thinking_efforts.contains(effort) {
     raise @posoco.CompositionError::ManifestSchemaError(
@@ -107,5 +107,5 @@ pub fn OpenAICompatibleConfig::with_reasoning_effort(
       detail="unsupported reasoning effort: " + effort,
     )
   }
-  { ..self, thinking: true, reasoning_effort: Some(effort) }
+  { ..self, thinking: true, reasoning_effort: Some(effort), }
 }

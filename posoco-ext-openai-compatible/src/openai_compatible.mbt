@@ -56,7 +56,7 @@ pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(
   config : OpenAICompatibleConfig,
   request_headers? : () -> Map[String, String],
 ) -> OpenAICompatibleModelPort {
-  { provider_id, config, request_headers }
+  { provider_id, config, request_headers, }
 }
 
 ///|

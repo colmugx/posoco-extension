@@ -23,7 +23,7 @@ pub fn OpenAICompatibleProvider::OpenAICompatibleProvider(
   provider_id : String,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenAICompatibleProvider {
-  { provider_id, ctx }
+  { provider_id, ctx, }
 }
 
 ///|
