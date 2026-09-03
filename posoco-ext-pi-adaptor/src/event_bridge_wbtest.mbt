@@ -34,7 +34,11 @@ extern "js" fn wbtest_push_updating_tool(host : JsPiHost) -> Unit =
   #| }
 
 ///|
-fn wbtest_register(adaptor : PiAdaptor, captured : Array[String], name : String) -> Unit {
+fn wbtest_register(
+  adaptor : PiAdaptor,
+  captured : Array[String],
+  name : String,
+) -> Unit {
   wbtest_on_capture(adaptor.host, name, fn(payload : String) {
     captured.push(name + "|" + payload)
   })
@@ -42,9 +46,8 @@ fn wbtest_register(adaptor : PiAdaptor, captured : Array[String], name : String)
 
 ///|
 let wbtest_family : Array[String] = [
-  "agent_start", "turn_start", "message_start", "message_update",
-  "message_end", "tool_execution_start", "tool_execution_end",
-  "turn_end", "agent_end", "agent_settled",
+  "agent_start", "turn_start", "message_start", "message_update", "message_end",
+  "tool_execution_start", "tool_execution_end", "turn_end", "agent_end", "agent_settled",
 ]
 
 ///|
@@ -67,9 +70,7 @@ async test "event bridge projects posoco turn events into pi handler payloads" {
   }
   let events : Array[@posoco.TurnEvent] = [
     TurnStarted,
-    StreamChunkReceived(
-      chunk=@posoco.StreamChunk::ReasoningDelta(token="hm"),
-    ),
+    StreamChunkReceived(chunk=@posoco.StreamChunk::ReasoningDelta(token="hm")),
     StreamChunkReceived(chunk=@posoco.StreamChunk::TextDelta(token="Hel")),
     StreamChunkReceived(chunk=@posoco.StreamChunk::TextDelta(token="lo")),
     ModelResponseReceived(

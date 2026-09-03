@@ -8,6 +8,10 @@ pub(all) struct PiRuntime {
   adaptor : PiAdaptor
   fallback : &@runtime.Runtime
   mut control : @runtime.RuntimeControl?
+  /// triggerTurn envelopes that could not enter the active run's queue (no
+  /// run active, queue full, or no control yet). Flushed into control at the
+  /// next in-window drain point; never silently dropped.
+  mut parked_followups : Array[String]
 }
 
 ///|
@@ -15,23 +19,25 @@ pub fn PiRuntime::PiRuntime(
   adaptor~ : PiAdaptor,
   fallback~ : &@runtime.Runtime,
 ) -> PiRuntime {
-  { adaptor, fallback, control: None, }
+  { adaptor, fallback, control: None, parked_followups: [], }
 }
 
 ///|
 /// Attach the Agent-owned control handle after Agent::with_runtime returns.
-/// Existing queued follow-ups are flushed first; subsequent Pi triggerTurn
-/// messages are forwarded immediately by the JS host callback.
+/// No envelope is enqueued here: composition has no active run, so anything
+/// queued (pre-attach JS followUps and later idle triggerTurn sends) parks
+/// and flushes at the next turn's first model call. Subsequent Pi triggerTurn
+/// messages during an active run forward immediately via the JS callback.
 pub fn PiRuntime::attach_control(
   self : PiRuntime,
   control : @runtime.RuntimeControl,
 ) -> Unit {
   self.control = Some(control)
   for envelope in take_followup_envelopes(self.adaptor) {
-    self.enqueue_followup_envelope(envelope) |> ignore
+    self.parked_followups.push(envelope)
   }
   js_host_set_followup_callback(self.adaptor.host, fn(envelope_json) {
-    self.enqueue_followup_envelope(envelope_json) |> ignore
+    self.enqueue_followup_envelope(envelope_json)
   })
 }
 
@@ -64,15 +70,59 @@ fn followup_message_from_json(envelope_json : String) -> @kernel.Message? {
 }
 
 ///|
+/// Route one triggerTurn envelope into the active run's follow-up queue,
+/// parking it when that is not possible. Returns the outcome string the JS
+/// side keys on: "Accepted" consumed the envelope; anything else means it was
+/// parked (or ignored for an unparsable/empty payload).
 fn PiRuntime::enqueue_followup_envelope(
   self : PiRuntime,
   envelope_json : String,
-) -> @runtime.EnqueueOutcome? {
-  guard self.control is Some(control) else { return None }
+) -> String {
   guard followup_message_from_json(envelope_json) is Some(message) else {
-    return None
+    return "Ignored"
   }
-  Some(control.enqueue_follow_up(message))
+  match self.control {
+    Some(control) =>
+      match control.enqueue_follow_up(message) {
+        @runtime.Accepted(..) => "Accepted"
+        outcome => {
+          ignore(outcome)
+          self.parked_followups.push(envelope_json)
+          "Parked"
+        }
+      }
+    None => {
+      self.parked_followups.push(envelope_json)
+      "Parked"
+    }
+  }
+}
+
+///|
+/// Flush follow-ups parked while idle into the now-active run. Called at the
+/// top of call_model — the earliest point where the control mailbox is bound,
+/// so enqueues are accepted and the Agent's post-turn drain loop then runs
+/// each parked message as its own follow-up turn on the same session.
+fn PiRuntime::flush_parked_followups(self : PiRuntime) -> Unit {
+  let control = match self.control {
+    Some(control) => control
+    None => return
+  }
+  if self.parked_followups.is_empty() {
+    return
+  }
+  let parked = self.parked_followups
+  self.parked_followups = []
+  for envelope_json in parked {
+    match followup_message_from_json(envelope_json) {
+      Some(message) =>
+        match control.enqueue_follow_up(message) {
+          @runtime.Accepted(..) => ()
+          _ => self.parked_followups.push(envelope_json)
+        }
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -187,6 +237,7 @@ pub impl @runtime.Runtime for PiRuntime with fn call_model(
   call_options : Json,
   on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
+  self.flush_parked_followups()
   self.fallback.call_model(
     scope, messages, tool_definitions, call_options, on_chunk,
   )

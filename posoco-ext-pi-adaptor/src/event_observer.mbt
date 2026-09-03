@@ -345,7 +345,11 @@ pub impl @posoco.Observer for PiEventObserver with fn on_event_at(
         ),
       )
       let tool_result = pi_message_json(
-        @kernel.ToolMessage(call_id=call.call_id, tool_name=call.name, outcome=result),
+        @kernel.ToolMessage(
+          call_id=call.call_id,
+          tool_name=call.name,
+          outcome=result,
+        ),
       )
       self.turn_tool_results.push(tool_result)
       self.run_messages.push(tool_result)

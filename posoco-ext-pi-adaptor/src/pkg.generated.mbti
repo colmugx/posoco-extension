@@ -7,6 +7,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/runtime",
   "colmugx/posoco/types",
+  "moonbitlang/async/js_async",
 }
 
 // Values
@@ -18,11 +19,15 @@ pub fn pi_adaptor_catalog_json(PiAdaptor) -> String
 
 pub fn pi_adaptor_catalog_snapshot_json(PiAdaptor) -> String
 
+pub fn pi_adaptor_commands_json(PiAdaptor) -> String
+
 pub fn pi_adaptor_emit_event(PiAdaptor, String, String) -> JsPromise
 
 pub fn pi_adaptor_entries_json(PiAdaptor) -> String
 
 pub fn pi_adaptor_event_names_json(PiAdaptor) -> String
+
+pub fn pi_adaptor_exec_json_async(PiAdaptor, String, String, String) -> JsPromise
 
 pub fn pi_adaptor_execute_effect_json_async(PiAdaptor, Int, String, String, String) -> JsPromise
 
@@ -32,19 +37,31 @@ pub fn pi_adaptor_execute_json_async(PiAdaptor, String, String, String) -> JsPro
 
 pub fn pi_adaptor_inflight_count(PiAdaptor) -> Int
 
+pub fn pi_adaptor_invoke_command_json_async(PiAdaptor, String, String) -> @js_async.Promise[String]
+
 pub fn pi_adaptor_load(PiAdaptor, String) -> JsPromise
 
 pub fn pi_adaptor_messages_json(PiAdaptor) -> String
 
 pub fn pi_adaptor_new() -> PiAdaptor
 
+pub fn pi_adaptor_prompt_block_json(PiAdaptor) -> String
+
 pub fn pi_adaptor_seed_entry(PiAdaptor, String, String) -> Unit
+
+pub fn pi_adaptor_set_custom_entry_callback(PiAdaptor, (String, String) -> Unit) -> Unit
 
 pub fn pi_adaptor_set_cwd(PiAdaptor, String) -> Unit
 
+pub fn pi_adaptor_set_hidden_tools_json(PiAdaptor, String) -> Unit
+
 pub fn pi_adaptor_set_project_trusted(PiAdaptor, Bool) -> Unit
 
+pub fn pi_adaptor_set_ui_callbacks(PiAdaptor, JsUiRequestFn, JsUiRenderFn) -> Unit
+
 pub fn pi_adaptor_shortcuts_json(PiAdaptor) -> String
+
+pub fn pi_adaptor_take_custom_entries_json(PiAdaptor) -> String
 
 pub fn pi_adaptor_take_followups_json(PiAdaptor) -> String
 
@@ -74,9 +91,18 @@ pub type JsPiHost
 #external
 pub type JsPromise
 
+#external
+pub type JsUiRenderFn
+
+#external
+pub type JsUiRequestFn
+
 pub(all) struct PiAdaptor {
   host : JsPiHost
   events : PiEventObserver
+  commands : PiCommandPort
+  hook : PiHook
+  mut hidden_tools : Map[String, Bool]
 }
 pub fn PiAdaptor::PiAdaptor() -> Self
 pub async fn PiAdaptor::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
@@ -94,6 +120,12 @@ pub fn PiCatalogSource::PiCatalogSource(adaptor~ : PiAdaptor, base_tools? : Arra
 pub fn PiCatalogSource::revision(Self) -> Int
 pub fn PiCatalogSource::tools(Self) -> Array[@kernel.ToolDef]
 pub impl @runtime.CatalogSource for PiCatalogSource
+
+pub struct PiCommandPort {
+  host : JsPiHost
+}
+pub fn PiCommandPort::PiCommandPort(host~ : JsPiHost) -> Self
+pub impl @port.CommandPort for PiCommandPort
 
 pub struct PiEventObserver {
   host : JsPiHost
@@ -113,10 +145,17 @@ pub fn PiEventObserver::emit_agent_boundary(Self) -> Unit
 pub fn PiEventObserver::reset_agent_run(Self) -> Unit
 pub impl @port.Observer for PiEventObserver
 
+pub struct PiHook {
+  host : JsPiHost
+}
+pub fn PiHook::PiHook(host~ : JsPiHost) -> Self
+pub impl @port.PipelineHook for PiHook
+
 pub(all) struct PiRuntime {
   adaptor : PiAdaptor
   fallback : &@runtime.Runtime
   mut control : @runtime.RuntimeControl?
+  mut parked_followups : Array[String]
 }
 pub fn PiRuntime::PiRuntime(adaptor~ : PiAdaptor, fallback~ : &@runtime.Runtime) -> Self
 pub fn PiRuntime::attach_control(Self, @runtime.RuntimeControl) -> Unit
