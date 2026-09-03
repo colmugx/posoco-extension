@@ -136,7 +136,7 @@ multi-parameter closure needs explicit parameter type annotations.
 | `ToolCallResult` | `ToolCallUpdate` (status `Completed`/`Failed`, text content) |
 | `ToolCallDeferred` | `ToolCallUpdate` (status `Pending`, deferred title) |
 | `StreamChunkReceived(TextDelta/ReasoningDelta)` | `AgentMessageChunk` / `AgentThoughtChunk` sharing one per-round `messageId` |
-| `ModelResponseReceived` | full `AgentThoughtChunk` + `AgentMessageChunk` (suppressed when the same text/thought already streamed this round) + cumulative `UsageUpdate` |
+| `ModelResponseReceived` | full `AgentThoughtChunk` + `AgentMessageChunk` (suppressed when the same text/thought already streamed this round) + cumulative `UsageUpdate` (`used` session-cumulative; `size` = the `context_window~` the host declared at construction, 0 when it did not) |
 | `TurnFailed` | recorded for the host (`take_failure`) — v1 has no error-chunk update; turn errors belong on the `session/prompt` response |
 
 Tool kind is derived from the tool name (`read`/`grep`/`bash`/... plus

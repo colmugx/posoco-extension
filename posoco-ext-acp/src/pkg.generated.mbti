@@ -72,7 +72,7 @@ pub struct AcpBridge {
   mut last_failure : String?
   // private fields
 }
-pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?) -> Self
+pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?, context_window? : Int?) -> Self
 pub async fn AcpBridge::ask(Self, @posoco-ext-permission.ApprovalRequest) -> @posoco-ext-permission.ApprovalDecision
 pub fn AcpBridge::attach(Self, context~ : @agent.AgentContext, session_id~ : String) -> Unit
 pub fn AcpBridge::close(Self) -> Unit

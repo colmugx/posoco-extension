@@ -59,7 +59,8 @@ fn acp_wire_meta(meta : Json?) -> @acp.ProtocolNullable[Json] {
 ///   one per-round `messageId`
 /// - `ModelResponseReceived` → full `AgentThoughtChunk`/`AgentMessageChunk`
 ///   (suppressed when the same text or thought already streamed this model
-///   round) plus a cumulative `UsageUpdate`
+///   round) plus a cumulative `UsageUpdate` (`size` from the host-declared
+///   `context_window~`, 0 when absent)
 /// - `TurnFailed` → recorded for the host (`take_failure`); v1 has no
 ///   error-chunk update, turn errors belong on the `session/prompt` response
 ///
@@ -86,6 +87,8 @@ pub struct AcpBridge {
   // `_meta` seam: pure decorator consulted once per queued update at
   // projection time with (triggering event, projected update).
   meta_decorator : ((@posoco.TurnEvent, @acp.SessionUpdate) -> Json?)?
+  // Host-declared model context window; `None` keeps UsageUpdate.size at 0.
+  priv context_window : Int?
   // Self-collected per-turn state (via Observer events). `message_seq` and
   // `used_tokens` persist across prompts (unique ids, session-cumulative
   // usage); everything below them is reset per turn or per attach.
@@ -109,8 +112,14 @@ pub struct AcpBridge {
 /// projected update). `Some(json)` is sent as the `_meta` of the
 /// `session/update` frame; `None` omits it (no decorator behaves exactly
 /// like today's wire).
+///
+/// `context_window~` is the model context window the host knows about:
+/// `Some(n)` stamps every `UsageUpdate.size` with n; `None` keeps size 0
+/// (the host did not provide one). `used` stays session-cumulative either
+/// way.
 pub fn AcpBridge::AcpBridge(
   meta? : ((@posoco.TurnEvent, @acp.SessionUpdate) -> Json?)? = None,
+  context_window? : Int? = None,
 ) -> AcpBridge {
   {
     queue: @aqueue.Queue(kind=Unbounded),
@@ -118,6 +127,7 @@ pub fn AcpBridge::AcpBridge(
     context: None,
     session_id: None,
     meta_decorator: meta,
+    context_window,
     message_seq: 0,
     current_text_id: None,
     current_thought_id: None,
@@ -503,7 +513,10 @@ fn AcpBridge::ingest_model_response(
             trigger,
             UsageUpdate({
               used: self.used_tokens.to_uint64(),
-              size: 0, // posoco does not know the context window size here
+              size: match self.context_window {
+                Some(window) => window.to_uint64()
+                None => 0 // host 未提供 context_window~，size 维持 0
+              },
               cost: Omitted,
               meta: Omitted,
             }),

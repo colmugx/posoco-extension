@@ -637,6 +637,63 @@ async test "model response projects thought, blocks, and cumulative usage" {
 }
 
 ///|
+async test "usage update size comes from the declared context window" {
+  let client = FakeAcpClient::FakeAcpClient()
+  let bridge = AcpBridge(context_window=Some(200000))
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("a")]),
+      usage=Some(tk_usage(10)),
+    ),
+  )
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("b")]),
+      usage=Some(tk_usage(20)),
+    ),
+  )
+  ignore(bridge.flush())
+  // size is the declared window on every usage update; used keeps
+  // accumulating (10, then 10+20) exactly as without a window.
+  match client.sent[1].update {
+    UsageUpdate(usage) => {
+      assert_eq(usage.used, 10)
+      assert_eq(usage.size, 200000)
+    }
+    _ => fail("expected usage update")
+  }
+  match client.sent[3].update {
+    UsageUpdate(usage) => {
+      assert_eq(usage.used, 30)
+      assert_eq(usage.size, 200000)
+    }
+    _ => fail("expected usage update")
+  }
+}
+
+///|
+async test "usage update size stays zero without a context window" {
+  let client = FakeAcpClient::FakeAcpClient()
+  let bridge = AcpBridge()
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("a")]),
+      usage=Some(tk_usage(10)),
+    ),
+  )
+  ignore(bridge.flush())
+  match client.sent[1].update {
+    UsageUpdate(usage) => {
+      assert_eq(usage.used, 10)
+      assert_eq(usage.size, 0)
+    }
+    _ => fail("expected usage update")
+  }
+}
+
+///|
 async test "turn failure is recorded once and consumed by the host" {
   let bridge = AcpBridge()
   bridge.ingest(TurnStarted)
