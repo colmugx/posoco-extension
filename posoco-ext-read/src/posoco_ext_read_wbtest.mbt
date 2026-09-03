@@ -69,7 +69,7 @@ async test "read_directory_is_loud_without_os_error" {
 
 ///|
 #cfg(target="native")
-async test "read_invalid_utf8_is_explicit_decode_failure" {
+async test "read_invalid_utf8_names_binary_file" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-read-decode")
     group.add_defer() <| () => {
@@ -81,11 +81,10 @@ async test "read_invalid_utf8_is_explicit_decode_failure" {
       error => Err(error)
     }
     match outcome {
-      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
-        assert_eq(
-          message,
-          "read: decode failed for '" + @devkit.sanitize_path(path) + "'",
-        )
+      Err(@posoco.RuntimeError::InvocationFailed(message)) => {
+        assert_true(message.contains("is not valid UTF-8 (binary file)"))
+        assert_true(message.contains(@devkit.sanitize_path(path)))
+      }
       _ => fail("expected invalid UTF-8 to fail decoding")
     }
   }
@@ -390,11 +389,11 @@ async test "read_records_freshness_stamp_and_detects_change" {
       _ => fail("expected guarded read to succeed")
     }
     // Stamp unchanged since the read: fresh.
-    let now = FsIo::stat(NativeFsIo::{  }, path)
+    let now = FsIo::stat(NativeFsIo::{ }, path)
     debug_inspect(ledger.check(path, Some(now)), content="Fresh")
     // External append changes the stamp: modified.
     @fs.write_file(path, "three\n", append=true)
-    let changed = FsIo::stat(NativeFsIo::{  }, path)
+    let changed = FsIo::stat(NativeFsIo::{ }, path)
     debug_inspect(ledger.check(path, Some(changed)), content="Modified")
   }
 }
@@ -435,11 +434,213 @@ async test "read_anchored_relative_path_resolves_and_keys_canonically" {
       }
     }
     // Both spellings collapse to one canonical (resolved) freshness key.
-    let stamp = (NativeFsIo::{  } as &FsIo).stat(abs)
+    let stamp = (NativeFsIo::{ } as &FsIo).stat(abs)
     assert_eq(fresh.check(abs, Some(stamp)), @devkit.FreshnessVerdict::Fresh)
     assert_eq(
       fresh.check("ten.txt", Some(stamp)),
       @devkit.FreshnessVerdict::NeverRead,
     )
+  }
+}
+
+///|
+/// ——— delegated fs injection tests ———
+
+///|
+/// Minimal `WorkspaceFs` fake serving an in-memory buffer as file content
+/// and recording every `read_file` path, so tests can assert the read call
+/// reached the injected implementation. Untouched ops raise like a failing
+/// backend.
+#cfg(target="native")
+priv struct FakeDelegatedFs {
+  buffer : String
+  present : Bool
+  reads : Array[String]
+}
+
+///|
+#cfg(target="native")
+fn FakeDelegatedFs::FakeDelegatedFs(
+  buffer~ : String,
+  present? : Bool = true,
+) -> FakeDelegatedFs {
+  { buffer, present, reads: [], }
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn exists(self, _path) {
+  self.present
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn read_file(self, path) {
+  self.reads.push(path)
+  self.buffer
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn kind(
+  _self,
+  _path,
+  follow_symlink~,
+) {
+  abort(
+    "FakeDelegatedFs.kind is unavailable (follow_symlink=\{follow_symlink})",
+  )
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn write_file(
+  _self,
+  _path,
+  _content,
+) {
+  abort("FakeDelegatedFs.write_file is unavailable")
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn write_file_atomic(
+  _self,
+  _path,
+  _content,
+) {
+  abort("FakeDelegatedFs.write_file_atomic is unavailable")
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn remove(_self, _path) {
+  abort("FakeDelegatedFs.remove is unavailable")
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn rename(
+  _self,
+  _from,
+  _to_,
+  replace~,
+) {
+  abort("FakeDelegatedFs.rename is unavailable (replace=\{replace})")
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn realpath(_self, _path) {
+  abort("FakeDelegatedFs.realpath is unavailable")
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn readdir(
+  _self,
+  _path,
+  include_hidden~,
+) {
+  abort(
+    "FakeDelegatedFs.readdir is unavailable (include_hidden=\{include_hidden})",
+  )
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn walk(
+  _self,
+  _root,
+  _callback,
+) {
+  abort("FakeDelegatedFs.walk is unavailable")
+}
+
+///|
+#cfg(target="native")
+impl @workspace.WorkspaceFs for FakeDelegatedFs with fn mkdir(
+  _self,
+  _path,
+  recursive~,
+) {
+  abort("FakeDelegatedFs.mkdir is unavailable (recursive=\{recursive})")
+}
+
+///|
+/// The injected fs owns content: the disk file's bytes are ignored, the
+/// shared output contract (line numbers, footer, CRLF normalization, tail)
+/// applies unchanged, and every read lands on the injected implementation.
+#cfg(target="native")
+async test "read_delegated_fs_serves_buffer_and_records_reads" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-delegate")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    // Disk bytes deliberately differ from the injected buffer.
+    let path = dir + "/buffer.txt"
+    @fs.write_file(path, "disk-content\n", create_mode=CreateNew)
+    let fake = FakeDelegatedFs::FakeDelegatedFs(
+      buffer=[ for i in 1..<=8 => "buf-\{i}" ].join("\n") +
+        "\nbuf-9\r\nbuf-10\n",
+    )
+    let tools = ReadTools::ReadTools(fs=Some(fake as &@workspace.WorkspaceFs))
+    match run_read(tools, read_call_args(path, limit=3)) {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        inspect(
+          content,
+          content="L1: buf-1\nL2: buf-2\nL3: buf-3\n… 7 more lines; call read with offset=4",
+        )
+      _ => fail("expected delegated paged read to succeed")
+    }
+    match run_read(tools, read_call_args(path, offset=-2)) {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        inspect(content, content="L9: buf-9\nL10: buf-10")
+      _ => fail("expected delegated tail read to succeed")
+    }
+    assert_eq(fake.reads.length(), 2)
+    for p in fake.reads {
+      assert_eq(p, path)
+    }
+  }
+}
+
+///|
+/// Delegated reads still stamp the local freshness ledger (comparable with
+/// write/edit), and a missing file reported by the injected fs stays the
+/// recoverable ToolReportedError.
+#cfg(target="native")
+async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-delegate-fresh")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/fresh.txt"
+    @fs.write_file(path, "one\n", create_mode=CreateNew)
+    let ledger = @devkit.FreshnessGuard::FreshnessGuard()
+    let fake = FakeDelegatedFs::FakeDelegatedFs(buffer="served\n")
+    let tools = ReadTools::ReadTools(
+      freshness=ledger,
+      fs=Some(fake as &@workspace.WorkspaceFs),
+    )
+    match run_read(tools, read_call_args(path)) {
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+        inspect(content, content="L1: served")
+      _ => fail("expected delegated read to succeed")
+    }
+    let stamp = (NativeFsIo::{ } as &FsIo).stat(path)
+    assert_eq(ledger.check(path, Some(stamp)), @devkit.FreshnessVerdict::Fresh)
+    // Injected fs reports the file missing: recoverable reported error.
+    let absent = FakeDelegatedFs::FakeDelegatedFs(buffer="", present=false)
+    let absent_tools = ReadTools::ReadTools(
+      fs=Some(absent as &@workspace.WorkspaceFs),
+    )
+    match run_read(absent_tools, read_call_args(path)) {
+      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
+        assert_true(content.contains("File not found"))
+      _ => fail("expected missing delegated file to be a reported error")
+    }
   }
 }

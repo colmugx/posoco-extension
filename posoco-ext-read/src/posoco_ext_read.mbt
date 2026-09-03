@@ -2,8 +2,15 @@
 /// ReadTools — file reading tool provider.
 ///
 /// On native, reads via `@fs` with line streaming (lines before `offset` are
-/// never materialized). On js (bun), reads via `Bun.file`. On wasm/wasm-gc,
+/// never materialized). On js (bun), reads via node:fs. On wasm/wasm-gc,
 /// the tool is not listed and execute raises `RuntimeError::InvocationFailed`.
+///
+/// `fs` injects a `WorkspaceFs` as the content source: when `Some`, file
+/// content (and the existence check) ride the injected implementation —
+/// `read_file` is the delegation seam and may return unsaved-buffer state —
+/// while the freshness `stat` stays on the target-local filesystem so
+/// recorded stamps remain comparable with the local write/edit tools.
+/// `None` (the default) keeps the legacy direct-IO path byte-for-byte.
 ///
 /// Output contract: lines are prefixed `L<line>: ` (1-indexed, no padding),
 /// long lines are truncated at 2000 characters with a marker, and reads cut
@@ -16,6 +23,8 @@ pub(all) struct ReadTools {
   // Resolves relative paths against the workspace root; None keeps legacy
   // behavior (relative paths land on the process working directory).
   anchor : @devkit.WorkspaceAnchor?
+  // Content source for reads; None = target-local direct IO.
+  fs : &@workspace.WorkspaceFs?
 }
 
 ///|
@@ -25,8 +34,9 @@ pub(all) struct ReadTools {
 pub fn ReadTools::ReadTools(
   freshness? : @devkit.FreshnessGuard,
   anchor? : @devkit.WorkspaceAnchor? = None,
+  fs? : &@workspace.WorkspaceFs? = None,
 ) -> ReadTools {
-  ReadTools::{ freshness, anchor }
+  ReadTools::{ freshness, anchor, fs, }
 }
 
 ///|
@@ -70,6 +80,80 @@ priv trait FsIo {
 
   /// Return the last `take` lines of the file (tail window).
   async fn read_last_lines(self : Self, path : String, take : Int) -> LinePage raise @posoco.RuntimeError
+}
+
+///|
+/// FsIo adaptor serving file content through an injected `WorkspaceFs`
+/// (editor delegation). `read_file` is the delegation seam; `exists` also
+/// rides the injected implementation (the production delegate passes it
+/// through locally anyway). `stat` stays on the target-local filesystem:
+/// `WorkspaceFs` exposes no mtime/size, and freshness stamps must remain
+/// comparable with the local write/edit tools.
+priv struct DelegatedFsIo {
+  fs : &@workspace.WorkspaceFs
+  direct : &FsIo
+}
+
+///|
+impl FsIo for DelegatedFsIo with fn exists(self, path : String) -> Bool {
+  self.fs.exists(path) catch {
+    _ => raise read_failure("stat", path)
+  }
+}
+
+///|
+impl FsIo for DelegatedFsIo with fn stat(self, path : String) -> @devkit.FileStamp {
+  self.direct.stat(path)
+}
+
+///|
+/// Whole-text read through the injected fs, then windowed in memory. The
+/// delegate owns content fidelity (unsaved buffers included); failures map
+/// to the shared `read` stage.
+async fn delegated_read_page(
+  fs : &@workspace.WorkspaceFs,
+  path : String,
+) -> LinePage raise @posoco.RuntimeError {
+  let text = fs.read_file(path) catch { _ => raise read_failure("read", path) }
+  let lines = split_file_lines(text)
+  let total_bytes = @utf8.encode(text).length()
+  { lines, total_lines: lines.length(), total_bytes: total_bytes.to_int64(), }
+}
+
+///|
+impl FsIo for DelegatedFsIo with fn read_lines(
+  self,
+  path : String,
+  skip : Int,
+  take : Int,
+) -> LinePage {
+  let page = delegated_read_page(self.fs, path)
+  let window : Array[String] = []
+  for i in 0..<page.total_lines {
+    if i >= skip && window.length() < take {
+      window.push(page.lines[i])
+    }
+  }
+  {
+    lines: window,
+    total_lines: page.total_lines,
+    total_bytes: page.total_bytes,
+  }
+}
+
+///|
+impl FsIo for DelegatedFsIo with fn read_last_lines(
+  self,
+  path : String,
+  take : Int,
+) -> LinePage {
+  let page = delegated_read_page(self.fs, path)
+  let take_eff = if take < page.total_lines { take } else { page.total_lines }
+  {
+    lines: page.lines[page.total_lines - take_eff:].to_owned(),
+    total_lines: page.total_lines,
+    total_bytes: page.total_bytes,
+  }
 }
 
 ///|
@@ -170,12 +254,33 @@ fn strip_trailing_cr(s : String) -> String {
 }
 
 ///|
+/// Split decoded text into normalized lines: split on `\n`, strip one
+/// trailing `\r` per line, drop the phantom empty line produced by a final
+/// newline. An empty text yields zero lines. Shared by the whole-file
+/// read paths so js and delegated reads agree with the native streaming
+/// line counter.
+fn split_file_lines(text : String) -> Array[String] {
+  let raw = text.split("\n").to_array()
+  let has_final_newline = text.length() > 0 && text[text.length() - 1] == '\n'
+  let effective = if has_final_newline && raw.length() > 0 {
+    raw.length() - 1
+  } else {
+    raw.length()
+  }
+  let lines : Array[String] = []
+  for i in 0..<effective {
+    lines.push(strip_trailing_cr(raw[i].to_owned()))
+  }
+  lines
+}
+
+///|
 /// Truncate `s` to at most `cap` characters, cutting at a char boundary.
 fn truncate_chars(s : String, cap : Int) -> String {
   if s.length() <= cap {
     return s
   }
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut count = 0
   for c in s {
     if count == cap {
@@ -199,7 +304,7 @@ fn format_read_page(
   start_line : Int,
   cap_bytes : Int,
 ) -> (String, Int, Bool) {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut returned = 0
   let mut bytes = 0
   let mut byte_cut = false

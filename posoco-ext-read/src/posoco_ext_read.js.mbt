@@ -43,18 +43,18 @@ priv struct JsStatInfo {
 ///|
 fn js_stat_info(path : String) -> JsStatInfo {
   let json : Json = @json.parse(js_stat_envelope(path)) catch {
-    _ => return { ok: false, size: 0, ms: 0.0, is_dir: false }
+    _ => return { ok: false, size: 0, ms: 0.0, is_dir: false, }
   }
   let fields = match json {
     Json::Object(fields) => fields
-    _ => return { ok: false, size: 0, ms: 0.0, is_dir: false }
+    _ => return { ok: false, size: 0, ms: 0.0, is_dir: false, }
   }
   let ok = match fields.get("ok") {
     Some(Json::True) => true
     _ => false
   }
   if !ok {
-    return { ok: false, size: 0, ms: 0.0, is_dir: false }
+    return { ok: false, size: 0, ms: 0.0, is_dir: false, }
   }
   let size = match fields.get("size") {
     Some(Json::Number(value, ..)) => value.to_int()
@@ -68,7 +68,7 @@ fn js_stat_info(path : String) -> JsStatInfo {
     Some(Json::True) => true
     _ => false
   }
-  { ok: true, size, ms, is_dir }
+  { ok: true, size, ms, is_dir, }
 }
 
 ///|
@@ -96,26 +96,7 @@ impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
   }
   let mtime_s = (info.ms / 1000.0).to_int64()
   let mtime_ns = (info.ms % 1000.0 * 1_000_000.0).to_int()
-  { mtime_s, mtime_ns, size: info.size.to_int64() }
-}
-
-///|
-/// Split decoded text into normalized lines: split on `\n`, strip one
-/// trailing `\r` per line, drop the phantom empty line produced by a final
-/// newline. An empty file yields zero lines.
-fn js_split_lines(text : String) -> Array[String] {
-  let raw = text.split("\n").to_array()
-  let has_final_newline = text.length() > 0 && text[text.length() - 1] == '\n'
-  let effective = if has_final_newline && raw.length() > 0 {
-    raw.length() - 1
-  } else {
-    raw.length()
-  }
-  let lines : Array[String] = []
-  for i in 0..<effective {
-    lines.push(strip_trailing_cr(raw[i].to_owned()))
-  }
-  lines
+  { mtime_s, mtime_ns, size: info.size.to_int64(), }
 }
 
 ///|
@@ -137,7 +118,7 @@ fn js_read_page(
     _ => raise read_failure("decode", path)
   }
   let total_bytes = @utf8.encode(text).length()
-  (js_split_lines(text), total_bytes.to_int64())
+  (split_file_lines(text), total_bytes.to_int64())
 }
 
 ///|
@@ -155,7 +136,7 @@ impl FsIo for JsFsIo with fn read_lines(
       window.push(lines[i])
     }
   }
-  { lines: window, total_lines: total, total_bytes }
+  { lines: window, total_lines: total, total_bytes, }
 }
 
 ///|
@@ -164,7 +145,7 @@ impl FsIo for JsFsIo with fn read_last_lines(_self, path : String, take : Int) -
   let total = lines.length()
   let take_eff = if take < total { take } else { total }
   let window = lines[total - take_eff:].to_owned()
-  { lines: window, total_lines: total, total_bytes }
+  { lines: window, total_lines: total, total_bytes, }
 }
 
 ///|
@@ -176,11 +157,17 @@ pub impl @posoco.ToolProvider for ReadTools with fn list_tools(
 
 ///|
 /// Execute the `read` tool on js. Business logic lives in the shared
-/// `execute_read_impl`; this method only supplies the node:fs-backed adaptor.
+/// `execute_read_impl`; this method only supplies the IO adaptor: the
+/// node:fs-backed one by default, or the injected-WorkspaceFs adaptor (with
+/// node:fs kept for the freshness stat) when `fs` was provided.
 pub impl @posoco.ToolProvider for ReadTools with fn execute(
   self : ReadTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_read_impl(JsFsIo::{  }, self.freshness, self.anchor, call)
+  let io : &FsIo = match self.fs {
+    Some(fs) => DelegatedFsIo::{ fs, direct: JsFsIo::{ }, } as &FsIo
+    None => JsFsIo::{ } as &FsIo
+  }
+  execute_read_impl(io, self.freshness, self.anchor, call)
 }

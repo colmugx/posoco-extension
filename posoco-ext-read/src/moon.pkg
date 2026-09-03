@@ -2,12 +2,14 @@ import {
   "moonbitlang/async/fs",
   "colmugx/posoco",
   "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-ext-workspace" @workspace,
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
 
 import {
   "moonbitlang/async",
+  "colmugx/posoco-ext-workspace" @workspace,
 } for "wbtest"
 
 warnings = "-unused_package"

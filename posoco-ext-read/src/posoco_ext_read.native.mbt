@@ -33,7 +33,7 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
     }
   }
   file.close()
-  { mtime_s, mtime_ns, size }
+  { mtime_s, mtime_ns, size, }
 }
 
 ///|
@@ -62,7 +62,10 @@ async fn native_read_lines(
       e => {
         file.close()
         match e {
-          @utf8.Malformed(_) => raise read_failure("decode", path)
+          @utf8.Malformed(_) =>
+            raise @posoco.RuntimeError::InvocationFailed(
+              "read: '\{@devkit.sanitize_path(path)}' is not valid UTF-8 (binary file); use grep or bash to inspect it",
+            )
           _ => raise read_failure("read", path)
         }
       }
@@ -78,7 +81,7 @@ async fn native_read_lines(
     }
   }
   file.close()
-  { lines, total_lines: total, total_bytes }
+  { lines, total_lines: total, total_bytes, }
 }
 
 ///|
@@ -117,11 +120,17 @@ pub impl @posoco.ToolProvider for ReadTools with fn list_tools(
 
 ///|
 /// Execute the `read` tool on native. Business logic lives in the shared
-/// `execute_read_impl`; this method only supplies the @fs-backed adaptor.
+/// `execute_read_impl`; this method only supplies the IO adaptor: the
+/// @fs-backed one by default, or the injected-WorkspaceFs adaptor (with
+/// @fs kept for the freshness stat) when `fs` was provided.
 pub impl @posoco.ToolProvider for ReadTools with fn execute(
   self : ReadTools,
   _name : String,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  execute_read_impl(NativeFsIo::{  }, self.freshness, self.anchor, call)
+  let io : &FsIo = match self.fs {
+    Some(fs) => DelegatedFsIo::{ fs, direct: NativeFsIo::{ }, } as &FsIo
+    None => NativeFsIo::{ } as &FsIo
+  }
+  execute_read_impl(io, self.freshness, self.anchor, call)
 }
