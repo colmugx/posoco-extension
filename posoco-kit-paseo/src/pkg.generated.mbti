@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-paseo"
+
+import {
+  "colmugx/posoco-kit-delegation",
+}
+
+// Values
+pub const PASEO_MCP_SERVER_NAME : String = "paseo"
+
+pub const PASEO_TOOL_ARCHIVE_AGENT : String = "archive_agent"
+
+pub const PASEO_TOOL_CANCEL_AGENT : String = "cancel_agent"
+
+pub const PASEO_TOOL_CREATE_AGENT : String = "create_agent"
+
+pub const PASEO_TOOL_GET_AGENT_STATUS : String = "get_agent_status"
+
+pub const PASEO_TOOL_KILL_AGENT : String = "kill_agent"
+
+pub const PASEO_TOOL_LIST_AGENTS : String = "list_agents"
+
+pub const PASEO_TOOL_SEND_AGENT_PROMPT : String = "send_agent_prompt"
+
+pub const PASEO_TOOL_UPDATE_AGENT : String = "update_agent"
+
+pub fn detect_from_server_names(Array[String]) -> Bool
+
+pub fn detect_from_tool_names(Array[String]) -> Bool
+
+pub fn is_paseo_tool_name(String) -> Bool
+
+pub fn parse_agent_phase(Json) -> Result[@posoco-kit-delegation.DelegationPhase, String]
+
+pub fn paseo_create_call(@posoco-kit-delegation.DelegationIntent) -> @posoco-kit-delegation.DelegationCall
+
+pub fn paseo_prompt_call(agent_id~ : String, prompt~ : String) -> @posoco-kit-delegation.DelegationCall
+
+pub fn paseo_tool_names() -> Array[String]
+
+pub fn prompt_section() -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

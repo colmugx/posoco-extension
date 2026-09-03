@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-compact-prune"
+
+import {
+  "colmugx/posoco/kernel",
+}
+
+// Values
+pub fn estimate_tokens(String) -> Int
+
+pub fn prune_tool_outputs(Array[@kernel.Message], protect_tokens? : Int, min_gain? : Int, placeholder? : String, protected_tools? : Array[String]) -> PruneResult
+
+// Errors
+
+// Types and methods
+pub(all) enum PruneAction {
+  Pruned
+  Noop
+} derive(Eq)
+
+pub(all) struct PruneResult {
+  messages : Array[@kernel.Message]
+  pruned_tokens : Int
+  pruned_count : Int
+  action : PruneAction
+} derive(Eq)
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-delegation"
+
+import {
+  "colmugx/posoco/kernel",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct DelegationCall {
+  tool : String
+  arguments : Json
+} derive(Eq, @debug.Debug)
+pub fn DelegationCall::to_tool_call(Self, call_id~ : String) -> Result[@kernel.ToolCall, String]
+
+pub(all) struct DelegationIntent {
+  task : String
+  cwd : String?
+  model : String?
+  prompt : String?
+} derive(Eq, @debug.Debug)
+
+pub(all) enum DelegationPhase {
+  Queued
+  Running
+  Succeeded
+  Failed
+  Lost
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

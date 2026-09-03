@@ -1,0 +1,6 @@
+import {
+  "colmugx/posoco",
+  "colmugx/lody",
+  "colmugx/posoco-kit-delegation" @delegation,
+  "moonbitlang/core/json",
+}

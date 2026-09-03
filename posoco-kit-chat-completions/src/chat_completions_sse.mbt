@@ -1,10 +1,10 @@
 ///|
 /// Shared SSE streaming parser for OpenAI Chat Completions–style providers.
 ///
-/// This is the single implementation behind the streaming ModelPorts of
-/// posoco-ext-openai-compatible, posoco-ext-deepseek, and posoco-ext-kimi;
-/// each extension delegates with its own `provider~` prefix so error messages
-/// stay provider-labeled. Fix tolerance bugs here once, not three times.
+/// This is the single implementation behind the streaming ModelPorts of the
+/// provider adaptors built on it; each extension delegates with its own
+/// `provider~` prefix so error messages stay provider-labeled. Fix tolerance
+/// bugs here once, not once per adaptor.
 ///
 /// OpenAI Chat Completions SSE event format:
 ///   data: {"choices":[{"delta":{"content":"..."},"finish_reason":null}]}
@@ -456,7 +456,7 @@ fn extract_stream_usage(
 /// are short charset-bounded labels (so no prompt/request text can ride
 /// along). Returns "" or e.g. ", error_type=CreditsError, error_code=402".
 fn extract_error_labels(err : Map[String, Json]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   match err.get("type") {
     Some(String(t)) =>
       match sanitize_error_label(t) {

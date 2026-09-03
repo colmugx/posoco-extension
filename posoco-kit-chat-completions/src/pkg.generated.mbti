@@ -3,6 +3,7 @@ package "colmugx/posoco-kit-chat-completions"
 
 import {
   "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
   "colmugx/posoco/types",
 }
 
@@ -10,6 +11,8 @@ import {
 pub fn cached_input_tokens_from_usage(Map[String, Json]) -> Int?
 
 pub fn classify_chat_completions_http_error(Int, String, default_tz_offset_minutes? : Int, retry_after_header? : String?, now_ms~ : Int64) -> @error.ModelError?
+
+pub fn encode_chat_message_content(Array[@kernel.Content], supports_images? : Bool) -> EncodedChatContent
 
 pub fn parse_reset_timestamp(String, default_tz_offset_minutes? : Int, now_ms~ : Int64) -> Int64?
 
@@ -20,6 +23,10 @@ pub fn uncached_input_tokens_from_usage(Map[String, Json]) -> Int?
 // Errors
 
 // Types and methods
+pub(all) enum EncodedChatContent {
+  TextContent(String)
+  PartsContent(Array[Json])
+}
 
 // Type aliases
 

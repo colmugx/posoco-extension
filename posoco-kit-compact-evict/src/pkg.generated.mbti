@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-compact-evict"
+
+import {
+  "colmugx/posoco/kernel",
+}
+
+// Values
+pub fn estimate_tokens(String) -> Int
+
+pub fn estimate_transcript_tokens(Array[@kernel.Message]) -> Int
+
+pub fn evict_old_tool_results(Array[@kernel.Message], protect_user_turns? : Int) -> EvictResult
+
+// Errors
+
+// Types and methods
+pub(all) struct EvictResult {
+  messages : Array[@kernel.Message]
+  evicted_tool_calls : Int
+  evicted_tokens : Int
+} derive(Eq)
+
+// Type aliases
+
+// Traits

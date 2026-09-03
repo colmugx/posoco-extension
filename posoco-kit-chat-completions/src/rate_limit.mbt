@@ -1,19 +1,23 @@
 ///|
-/// Shared HTTP-429 quota classification for OpenAI Chat Completions–style
+/// Shared quota-verdict classification for OpenAI Chat Completions–style
 /// providers.
 ///
-/// Coding-plan providers answer quota exhaustion with HTTP 429 plus a reset
-/// hint, but the hint's carrier differs per provider: OpenAI/Codex puts
-/// `resets_at` (epoch seconds) and `resets_in_seconds` in the error JSON;
-/// z.ai/bigmodel puts the flush time inside the human message text
-/// ("Your limit will reset at 2026-08-21 15:04:16"); generic gateways expose
-/// only a `retry_after`. This module unifies those shapes into the typed
-/// `@posoco.RateLimitInfo`, so a ModelPort raises
-/// `ModelError::RateLimited` instead of string-matching `Transport`.
+/// Coding-plan providers answer quota exhaustion with a throttling verdict,
+/// but both the HTTP status and the reset hint's carrier differ per provider:
+/// most use 429, Kimi's coding plan answers 403 ("You've reached your 5-hour
+/// usage limit"); OpenAI/Codex puts `resets_at` (epoch seconds) and
+/// `resets_in_seconds` in the error JSON; z.ai/bigmodel puts the flush time
+/// inside the human message text ("Your limit will reset at 2026-08-21
+/// 15:04:16"); generic gateways expose only a `retry_after`. This module
+/// unifies those shapes into the typed `@posoco.RateLimitInfo`, so a
+/// ModelPort raises `ModelError::RateLimited` instead of string-matching
+/// `Transport`.
 ///
-/// Transient 429s (z.ai 1302 concurrency, 1305 overload) carry no reset time;
-/// they still classify as RateLimited with `reset_at_ms = None` and the
-/// caller decides whether to back off briefly instead of scheduling.
+/// Status alone cannot gate the verdict (a 403 is usually an auth failure),
+/// so non-429 bodies classify only when their phrasing reads as a quota
+/// verdict. Transient 429s (z.ai 1302 concurrency, 1305 overload) carry no
+/// reset time; they still classify as RateLimited with `reset_at_ms = None`
+/// and the caller decides whether to back off briefly instead of scheduling.
 
 ///|
 /// Days from civil date (Howard Hinnant's algorithm); pure integer math so
@@ -522,6 +526,125 @@ pub fn parse_reset_timestamp(
 }
 
 ///|
+fn lower_code(code : UInt16) -> UInt16 {
+  if code >= 'A' && code <= 'Z' {
+    code - 'A' + 'a'
+  } else {
+    code
+  }
+}
+
+///|
+/// Case-insensitive ASCII keyword match at `i`.
+fn keyword_starts_at(text : String, i : Int, keyword : String) -> Bool {
+  if i < 0 || i + keyword.length() > text.length() {
+    return false
+  }
+  for k in 0..<keyword.length() {
+    if lower_code(text[i + k]) != keyword[k] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn case_insensitive_contains(text : String, keyword : String) -> Bool {
+  let n = text.length()
+  let mut i = 0
+  while i + keyword.length() <= n {
+    if keyword_starts_at(text, i, keyword) {
+      return true
+    }
+    i += 1
+  }
+  false
+}
+
+///|
+/// Whether a non-429 error body reads as a quota verdict. Kimi answers
+/// coding-plan quota exhaustion with 403, so status alone cannot gate: the
+/// provider's own phrasing ("usage limit", "quota will reset") is the
+/// discriminator; auth failures ("Invalid API key") never match.
+fn body_carries_quota_verdict(text : String) -> Bool {
+  let markers : Array[String] = [
+    "usage limit", "usage_limit", "rate limit", "rate_limit", "quota",
+  ]
+  for marker in markers {
+    if case_insensitive_contains(text, marker) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Quota-window length named by the message ("5-hour usage limit",
+/// "current 5-hour window ends", "3 day period"): `N` +
+/// `hour|hours|minute|minutes|day|days` with a window keyword nearby. The
+/// shape requires digits and a unit word, so token-count phrasing ("128k
+/// context window") never matches.
+fn window_length_ms(text : String) -> Int64? {
+  let n = text.length()
+  let mut i = 0
+  while i < n {
+    if !is_digit_code(text[i]) {
+      i += 1
+      continue
+    }
+    let mut value : Int64 = 0L
+    while i < n && is_digit_code(text[i]) {
+      value = value * 10L + digit_value(text[i]).to_int64()
+      i += 1
+    }
+    if i < n && (text[i] == '-' || text[i] == ' ') {
+      i += 1
+    }
+    let unit_start = i
+    while i < n && text[i] >= 'a' && text[i] <= 'z' {
+      i += 1
+    }
+    if i == unit_start {
+      continue
+    }
+    let unit = text.sub(start=unit_start, end=i).to_owned()
+    let unit_ms : Int64 = if unit == "hour" || unit == "hours" {
+      3600000L
+    } else if unit == "minute" || unit == "minutes" {
+      60000L
+    } else if unit == "day" || unit == "days" {
+      86400000L
+    } else {
+      0L
+    }
+    if unit_ms > 0L && value > 0L && value <= 366L {
+      let lookahead = if i + 24 < n { i + 24 } else { n }
+      let mut j = i
+      while j < lookahead {
+        if keyword_starts_at(text, j, "window") ||
+          keyword_starts_at(text, j, "usage limit") ||
+          keyword_starts_at(text, j, "period") {
+          return Some(value * unit_ms)
+        }
+        j += 1
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Window-length fallback for verdicts that name the window but no
+/// timestamp: the true reset is at or before `now + length`, so scheduling
+/// at that upper bound never resumes early.
+fn parse_window_reset(text : String, now_ms~ : Int64) -> Int64? {
+  match window_length_ms(text) {
+    Some(length) => Some(now_ms + length)
+    None => None
+  }
+}
+
+///|
 /// Epoch seconds, or milliseconds when the value is that large.
 fn json_number_as_epoch_ms(value : Double) -> Int64? {
   if value < 0 || value > 4102444800000.0 { // year 2100
@@ -557,7 +680,7 @@ fn json_string_value(json : Json) -> String? {
 fn provider_code_string(json : Json) -> String? {
   match json {
     Json::String(value) => Some(value)
-    Json::Number(value) => {
+    Json::Number(value, ..) => {
       let as_int = value.to_int()
       if as_int.to_double() == value {
         Some("\{as_int}")
@@ -606,11 +729,13 @@ fn first_present(containers : Array[Json], keys : Array[String]) -> Json? {
 
 ///|
 /// Classify an HTTP status + response body pair. Returns
-/// `Some(ModelError::RateLimited(info))` for 429 verdicts and `None`
-/// otherwise — the caller keeps its existing Transport formatting for every
-/// other non-2xx status. `reset_at_ms` inside the info is `None` when the
-/// provider stated no schedulable reset time (transient concurrency limits);
-/// such verdicts are not schedulable and the caller should back off or fail.
+/// `Some(ModelError::RateLimited(info))` for 429 verdicts and, like Kimi's
+/// coding plan, 403 verdicts whose body phrasing reads as a quota wall;
+/// `None` otherwise — the caller keeps its existing Transport formatting for
+/// every other non-2xx status. `reset_at_ms` inside the info is `None` when
+/// the provider stated no schedulable reset time (transient concurrency
+/// limits); such verdicts are not schedulable and the caller should back off
+/// or fail.
 ///
 /// Extraction order (first hit wins):
 /// 1. `resets_in_seconds` — relative seconds from now (OpenAI/Codex shape)
@@ -621,9 +746,11 @@ fn first_present(containers : Array[Json], keys : Array[String]) -> Json? {
 ///    carries no timestamp)
 /// 5. the provider message text (z.ai "{next_flush_time}", Codex English
 ///    dates, relative "in N hours")
+/// 6. the named quota-window length ("5-hour usage limit") — an upper bound
+///    on the true reset time
 ///
 /// Lookup covers both the nested `error` object and the top level. When the
-/// body is not JSON at all, only path 4 applies against the raw text.
+/// body is not JSON at all, only paths 4-6 apply against the raw text.
 pub fn classify_chat_completions_http_error(
   status : Int,
   body_text : String,
@@ -631,9 +758,6 @@ pub fn classify_chat_completions_http_error(
   retry_after_header? : String? = None,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {
-  if status != 429 {
-    return None
-  }
   let body : Json = @json.parse(body_text) catch { _ => Json::null() }
   let err : Json = match json_field(body, "error") {
     Some(inner) =>
@@ -660,9 +784,22 @@ pub fn classify_chat_completions_http_error(
       }
     None => bounded_body_excerpt(body_text)
   }
+  if status != 429 {
+    // Kimi's coding plan answers quota exhaustion with 403; every other
+    // non-429 (auth failures, provider bugs) keeps the caller's Transport
+    // path unless the body itself reads as a quota verdict.
+    let code_carries_quota = match provider_code {
+      Some(code) => body_carries_quota_verdict(code)
+      None => false
+    }
+    if status != 403 ||
+      !(body_carries_quota_verdict(message) || code_carries_quota) {
+      return None
+    }
+  }
   let mut reset_at_ms : Int64? = None
   match first_present(scopes, ["resets_in_seconds"]) {
-    Some(Json::Number(value)) => {
+    Some(Json::Number(value, ..)) => {
       let secs = value.to_int()
       if secs >= 0 && secs <= 86400 * 14 {
         reset_at_ms = Some(now_ms + secs.to_int64() * 1000L)
@@ -672,7 +809,8 @@ pub fn classify_chat_completions_http_error(
   }
   if reset_at_ms is None {
     match first_present(scopes, ["resets_at", "reset_at"]) {
-      Some(Json::Number(value)) => reset_at_ms = json_number_as_epoch_ms(value)
+      Some(Json::Number(value, ..)) =>
+        reset_at_ms = json_number_as_epoch_ms(value)
       Some(Json::String(value)) =>
         reset_at_ms = parse_reset_timestamp(
           value,
@@ -684,7 +822,7 @@ pub fn classify_chat_completions_http_error(
   }
   if reset_at_ms is None {
     match first_present(scopes, ["retry_after", "retry-after"]) {
-      Some(Json::Number(value)) => {
+      Some(Json::Number(value, ..)) => {
         let secs = value.to_int()
         if secs >= 0 && secs <= 86400 * 14 {
           reset_at_ms = Some(now_ms + secs.to_int64() * 1000L)
@@ -712,10 +850,14 @@ pub fn classify_chat_completions_http_error(
       default_tz_offset_minutes~,
       now_ms~,
     )
+    if reset_at_ms is None {
+      // Kimi names the window ("5-hour usage limit") but no timestamp: the
+      // window length is an upper bound on the true reset time.
+      reset_at_ms = parse_window_reset(message, now_ms~)
+    }
   }
   Some(
     @posoco.ModelError::RateLimited(@posoco.RateLimitInfo::{
-      status,
       message,
       reset_at_ms,
       provider_code,

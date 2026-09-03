@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-compact-trim"
+
+import {
+  "colmugx/posoco/kernel",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn estimate_tokens(Array[@kernel.Message]) -> Int
+
+pub fn trim_fallback(Array[@kernel.Message], Int) -> Result[@kernel.CompactResult, TrimError]
+
+// Errors
+
+// Types and methods
+pub(all) enum TrimError {
+  AlreadyWithinBudget
+  NoProgress
+  EmptyInput
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

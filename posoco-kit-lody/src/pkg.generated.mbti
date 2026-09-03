@@ -1,0 +1,52 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-lody"
+
+import {
+  "colmugx/lody",
+  "colmugx/posoco-kit-delegation",
+  "colmugx/posoco/kernel",
+}
+
+// Values
+pub const LODY_MCP_SESSION_CHAT : String = "lody_session_chat"
+
+pub const LODY_MCP_SESSION_CREATE : String = "lody_session_create"
+
+pub const LODY_TOOL_PREFIX : String = "lody_"
+
+pub fn is_lody_server(String) -> Bool
+
+pub fn is_lody_tool_call(@kernel.ToolCall) -> Bool
+
+pub fn is_lody_tool_name(String) -> Bool
+
+pub fn lody_chat_call(@posoco-kit-delegation.DelegationIntent, lody_session_id~ : String) -> @posoco-kit-delegation.DelegationCall
+
+pub fn lody_create_call(@posoco-kit-delegation.DelegationIntent, task_id~ : String) -> @posoco-kit-delegation.DelegationCall
+
+pub fn lody_server_names() -> Array[String]
+
+pub fn parse_subagent_phase(Json) -> Result[@posoco-kit-delegation.DelegationPhase, String]
+
+pub fn parse_task_phase(Json) -> Result[@posoco-kit-delegation.DelegationPhase?, String]
+
+pub fn phase_of_session_meta(@lody.LodySessionMeta) -> @posoco-kit-delegation.DelegationPhase?
+
+pub fn phase_of_subagent_status(@lody.LodySubagentStatus) -> @posoco-kit-delegation.DelegationPhase
+
+pub fn phase_of_task_status(@lody.LodyTaskStatus) -> @posoco-kit-delegation.DelegationPhase
+
+pub fn prompt_section() -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @posoco-kit-delegation {type DelegationCall}
+
+pub using @posoco-kit-delegation {type DelegationIntent}
+
+pub using @posoco-kit-delegation {type DelegationPhase}
+
+// Traits

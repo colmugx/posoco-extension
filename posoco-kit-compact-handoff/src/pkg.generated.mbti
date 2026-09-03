@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-compact-handoff"
+
+import {
+  "colmugx/posoco/kernel",
+}
+
+// Values
+pub const HANDOFF_PREFIX : String = "This session continues from a previous conversation that was compacted. Summary of the earlier work:"
+
+pub fn build_handoff_result(String, Array[@kernel.Message], String, retrieval_hint? : String, tail_turns? : Int) -> @kernel.CompactResult
+
+pub fn default_retrieval_hint() -> String
+
+pub fn handoff_session_path(String, String) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

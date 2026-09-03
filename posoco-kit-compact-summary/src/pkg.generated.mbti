@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-compact-summary"
+
+import {
+  "colmugx/posoco/kernel",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const SUMMARY_PREFIX : String = "Previous context has been compacted. Here is the summary of the earlier conversation:"
+
+pub fn build_replace_result(String, Array[@kernel.Message]) -> @kernel.CompactResult
+
+pub fn build_summary_prompt(SummaryTemplate, String, previous_summary? : String?, custom_instruction? : String?) -> Array[@kernel.Message]
+
+pub fn estimate_tokens(String) -> Int
+
+pub fn extract_file_ops(Array[@kernel.Message]) -> FileOps
+
+pub fn is_summary_message(@kernel.Message) -> Bool
+
+pub fn select_cut(Array[@kernel.Message], Int, protect_prefix? : Int) -> CutPoint
+
+pub fn serialize_for_summary(Array[@kernel.Message], tool_output_char_limit? : Int) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct CutPoint {
+  head_end : Int
+  kept_from : Int
+  is_split_turn : Bool
+  turn_start_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct FileOps {
+  read_files : Array[String]
+  modified_files : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub(all) enum SummaryTemplate {
+  StructuredMd
+  KimiXml
+  CodexHandoff
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits

@@ -84,8 +84,8 @@ test "parse_reset_timestamp: unparseable text yields None" {
 }
 
 ///|
-test "classify: non-429 status returns None" {
-  inspect(
+test "classify: non-429 without quota phrasing returns None" {
+  debug_inspect(
     classify_chat_completions_http_error(
       500,
       "{\"error\":{\"message\":\"boom\"}}",
@@ -93,6 +93,65 @@ test "classify: non-429 status returns None" {
     ),
     content="None",
   )
+  debug_inspect(
+    classify_chat_completions_http_error(
+      403,
+      "{\"error\":{\"message\":\"Invalid API key\",\"type\":\"auth_error\"}}",
+      now_ms=0L,
+    ),
+    content="None",
+  )
+}
+
+///|
+test "classify: kimi 403 quota verdict schedules at window upper bound" {
+  let body = "{\"error\":{\"message\":\"You've reached your 5-hour usage limit. Your quota will reset when the current 5-hour window ends. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota\",\"type\":\"auth_error\"}}"
+  let err = classify_chat_completions_http_error(403, body, now_ms=1000000L)
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  // The provider's own auth_error label is wrong; the phrasing wins.
+  debug_inspect(info.provider_code, content="Some(\"auth_error\")")
+  // No timestamp anywhere: reset at the window-length upper bound
+  // 1000000 + 5 * 3600000.
+  debug_inspect(info.reset_at_ms, content="Some(19000000)")
+}
+
+///|
+test "classify: 403 plain-text quota body classifies" {
+  let err = classify_chat_completions_http_error(
+    403,
+    "You've reached your 5-hour usage limit",
+    now_ms=0L,
+  )
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  inspect(info.message, content="You've reached your 5-hour usage limit")
+  debug_inspect(info.reset_at_ms, content="Some(18000000)")
+}
+
+///|
+test "parse_window_reset: named quota-window shapes" {
+  debug_inspect(
+    parse_window_reset("current 5-hour window ends", now_ms=0L),
+    content="Some(18000000)",
+  )
+  debug_inspect(
+    parse_window_reset("You've reached your 24-hour usage limit", now_ms=0L),
+    content="Some(86400000)",
+  )
+  debug_inspect(
+    parse_window_reset("quota resumes after 3 day period", now_ms=1000L),
+    content="Some(259201000)",
+  )
+  // Token-count phrasing has no N-unit shape.
+  debug_inspect(
+    parse_window_reset("maximum 128k context window", now_ms=0L),
+    content="None",
+  )
+  // Windows longer than a year are provider nonsense.
+  debug_inspect(parse_window_reset("999 day window", now_ms=0L), content="None")
 }
 
 ///|
@@ -102,7 +161,6 @@ test "classify: codex structured body" {
   guard err is Some(@posoco.ModelError::RateLimited(info)) else {
     fail("expected RateLimited")
   }
-  inspect(info.status, content="429")
   debug_inspect(info.provider_code, content="Some(\"usage_limit_reached\")")
   // resets_in_seconds wins over resets_at because it is checked first.
   debug_inspect(info.reset_at_ms, content="Some(757000)")
