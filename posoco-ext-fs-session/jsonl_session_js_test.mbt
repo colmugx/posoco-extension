@@ -15,7 +15,7 @@ extern "js" fn js_bun_available() -> Bool =
   #| () => typeof Bun !== "undefined"
 
 ///|
-/// `Date.now()` — unique-enough scratch-dir suffix (mirrors posoco-ext-write).
+/// `Date.now()` — unique-enough scratch-dir suffix.
 extern "js" fn js_now_ms() -> Int =
   #| () => Date.now()
 
