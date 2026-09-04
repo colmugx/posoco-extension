@@ -24,7 +24,7 @@ extend ScriptedQuotaSource with QuotaSource::{read}
 ///|
 test "quota reading carries only provider-stated facts" {
   let reading : QuotaReading = {
-    window: FiveHours,
+    window: "5h",
     used_percent: Some(91.5),
     amount: None,
     available: None,
@@ -35,7 +35,7 @@ test "quota reading carries only provider-stated facts" {
     reading,
     content=(
       #|{
-      #|  window: FiveHours,
+      #|  window: "5h",
       #|  used_percent: Some(91.5),
       #|  amount: None,
       #|  available: None,
@@ -53,7 +53,7 @@ async test "scripted source plays back in order and holds the last result" {
       Err("unreachable"),
       Ok([
         {
-          window: Balance,
+          window: "balance",
           used_percent: None,
           amount: Some(("110.00", "CNY")),
           available: Some(true),
@@ -77,6 +77,6 @@ async test "scripted source plays back in order and holds the last result" {
 
 ///|
 test "other window keeps the provider label verbatim" {
-  let window : QuotaWindow = Other("TIME_LIMIT")
-  assert_eq(window, Other("TIME_LIMIT"))
+  let window : String = "TIME_LIMIT"
+  assert_eq(window, "TIME_LIMIT")
 }

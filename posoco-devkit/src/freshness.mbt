@@ -27,8 +27,8 @@ pub(all) enum FreshnessVerdict {
 /// One guard instance per composed Agent: the host creates it and injects it
 /// into all three tools, so a `read` in one tool is visible to `write`/`edit`
 /// in the others. The guard itself touches no IO — callers stat files and
-/// pass stamps in. Its granularity is the Agent lifetime, matching the
-/// session cache of `posoco-ext-permission`.
+/// pass stamps in. Its granularity is the Agent lifetime, matching a
+/// permission gate's session cache.
 pub struct FreshnessGuard {
   records : Map[String, FileStamp]
 }
