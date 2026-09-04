@@ -12,7 +12,7 @@
 // reading), hidden entries skipped (rg default), -F literal matching.
 // Spawns are async and drained via Response(...).text(), bridged with
 // @js_async. The spawn result crosses the FFI as one JSON string envelope
-// (see posoco-ext-read's js adaptor and docs/questions.md 2026-08-19).
+// (see docs/questions.md 2026-08-19).
 
 ///|
 extern "js" fn bun_which(name : String) -> String =
@@ -21,7 +21,7 @@ extern "js" fn bun_which(name : String) -> String =
 ///|
 /// Spawn with piped streams and await exit + both drains concurrently.
 extern "js" fn js_spawn_envelope(
-  cmd : Array[String],
+  cmd : FixedArray[String],
 ) -> @js_async.Promise[String] =
   #| async (cmd) => {
   #|   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
@@ -45,7 +45,9 @@ priv struct JsSpawnResult {
 /// Await the spawn envelope. `noraise`: both the JSON parse and the promise
 /// rejection are caught here, so callers see a plain envelope value.
 async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
-  let json : Json = @json.parse(js_spawn_envelope(cmd).wait()) catch {
+  let json : Json = @json.parse(
+    js_spawn_envelope(FixedArray::from_array(cmd)).wait(),
+  ) catch {
     _ =>
       return {
         exit_code: 2,
