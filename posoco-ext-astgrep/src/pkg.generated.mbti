@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-astgrep"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+}
+
+// Values
+pub fn astgrep_extension() -> AstGrepTools
+
+// Errors
+
+// Types and methods
+pub(all) struct AstGrepTools {
+  anchor : @posoco-devkit.WorkspaceAnchor?
+}
+pub fn AstGrepTools::AstGrepTools(anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub async fn AstGrepTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn AstGrepTools::extension_id(Self) -> String
+pub fn AstGrepTools::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.Extension for AstGrepTools
+pub impl @port.ToolProvider for AstGrepTools
+
+// Type aliases
+
+// Traits
