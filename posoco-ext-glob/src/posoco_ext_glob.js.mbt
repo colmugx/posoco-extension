@@ -2,9 +2,8 @@
 // through Bun.Glob — the same engine the previous `glob.scan()` call used,
 // applied per path instead of as an async iterator. All synchronous; no
 // Promise bridging. Throwing node calls cross the FFI as JSON string
-// envelopes (see posoco-ext-read's js adaptor and docs/questions.md
-// 2026-08-19); Bun.Glob's `match` never throws for a valid pattern, so it
-// stays a plain pass-through extern.
+// envelopes (see docs/questions.md 2026-08-19); Bun.Glob's `match` never
+// throws for a valid pattern, so it stays a plain pass-through extern.
 
 ///|
 extern "js" fn js_readdir_envelope(path : String) -> String =
