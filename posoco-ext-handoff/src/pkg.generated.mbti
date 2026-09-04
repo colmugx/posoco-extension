@@ -18,6 +18,7 @@ pub fn render_handoff_document(WorkSnapshot, WorkspaceSnapshot) -> String
 pub struct DefaultHandoffStore {
 }
 pub fn DefaultHandoffStore::DefaultHandoffStore() -> Self
+pub impl HandoffStore for DefaultHandoffStore
 
 pub(all) struct Handoff {
   cwd : String

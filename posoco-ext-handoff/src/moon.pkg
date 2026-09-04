@@ -10,6 +10,12 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
+// The only HandoffStore impls live in the native/js gated files above, so the
+// package has no DefaultHandoffStore impl on wasm/wasm-gc. Declare the real
+// backend set so default-target checks skip instead of failing on the trait.
+
+supported_targets = "+native+js"
+
 options(
   targets: {
     "default_store.native.mbt": [ "native" ],
