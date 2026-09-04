@@ -99,6 +99,7 @@ pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn RouterModelPort::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::on_event(Self, @types.TurnEvent) -> Unit
 pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub fn RouterModelPort::replace_provider_slots(Self, String, Array[ModelSlot]) -> Unit raise @error.CompositionError
@@ -106,6 +107,7 @@ pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error
 pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
 pub impl @port.CommandPort for RouterModelPort
 pub impl @port.Extension for RouterModelPort
+pub impl @port.Lifecycle for RouterModelPort
 pub impl @port.ModelPort for RouterModelPort
 pub impl @port.Observer for RouterModelPort
 

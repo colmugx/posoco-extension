@@ -9,3 +9,6 @@ pub extend RouterModelPort with @posoco.CommandPort::{commands, invoke}
 
 ///|
 pub extend RouterModelPort with @posoco.ModelPort::{provider_config}
+
+///|
+pub extend RouterModelPort with @posoco.Lifecycle::{on_compose}

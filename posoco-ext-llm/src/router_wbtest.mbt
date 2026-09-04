@@ -373,6 +373,39 @@ test "model effort falls back to slot default then to default" {
 }
 
 ///|
+test "on_compose registers the model segment as initial state" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  let ui = @posoco.NoopUiPort()
+  router.on_compose(
+    @posoco.tk_view(
+      requires=[],
+      model=router as &@posoco.ModelPort,
+      ui=ui as &@posoco.UiPort,
+    ),
+  )
+  assert_eq(capture.events.length(), 1)
+  assert_eq(capture.events[0].source, "posoco_ext_llm")
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("slot-a:low"),
+        color=None,
+      ),
+    ),
+  )
+}
+
+///|
 test "tok accumulates across rounds and TurnStarted resets it" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()

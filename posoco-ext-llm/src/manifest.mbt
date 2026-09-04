@@ -24,12 +24,33 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
     observers: [self],
     hooks: [],
     memory: [],
-    lifecycle: [],
+    lifecycle: [self],
     commands: [self],
     ui: [],
     prompt_contributors: [],
     requires: [],
   }
+}
+
+///|
+/// The `model` segment is resident and its initial state — the active
+/// slot's id plus effort — is knowable at composition, so `on_compose`
+/// registers it right away instead of waiting for the first response.
+/// Register-only: nothing else in the composed view is touched (user
+/// ruling 2026-09-04, overturning r1's OQ8 empty-startup-bar).
+pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
+  self : RouterModelPort,
+  _ctx : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.publish_model_status()
+}
+
+///|
+/// Nothing to release: the router holds no resources beyond its slots.
+pub impl @posoco.Lifecycle for RouterModelPort with fn on_shutdown(
+  self : RouterModelPort,
+) -> Unit {
+  ignore(self)
 }
 
 ///|
