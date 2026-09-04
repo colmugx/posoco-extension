@@ -1,8 +1,7 @@
 // js (bun) target: file IO through node:fs sync APIs, all synchronous — no
 // Promise bridging. Throwing node calls cross the FFI as JSON string
-// envelopes decoded on the MoonBit side (see posoco-ext-read's js adaptor
-// and docs/questions.md 2026-08-19 for why plain/raising extern forms are
-// not usable for them).
+// envelopes decoded on the MoonBit side (see docs/questions.md 2026-08-19
+// for why plain/raising extern forms are not usable for them).
 
 ///|
 /// node:fs existsSync never throws; a plain pass-through extern is safe.
