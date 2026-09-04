@@ -59,7 +59,7 @@ pub fn parse_deepseek_balance(
           _ => continue
         }
         readings.push({
-          window: @devkit.QuotaWindow::Balance,
+          window: "balance",
           used_percent: None,
           amount: Some((total, currency)),
           available,
@@ -71,7 +71,7 @@ pub fn parse_deepseek_balance(
   }
   if readings.is_empty() {
     readings.push({
-      window: @devkit.QuotaWindow::Balance,
+      window: "balance",
       used_percent: None,
       amount: None,
       available,

@@ -21,7 +21,7 @@ test "parse maps each currency entry to a balance reading" {
     fail("expected readings")
   }
   assert_eq(readings.length(), 2)
-  assert_eq(readings[0].window, @devkit.QuotaWindow::Balance)
+  assert_eq(readings[0].window, "balance")
   assert_eq(readings[0].amount, Some(("110.00", "CNY")))
   assert_eq(readings[0].available, Some(true))
   assert_eq(readings[0].used_percent, None)

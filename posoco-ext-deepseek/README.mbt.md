@@ -91,7 +91,7 @@ account still serve requests" — never a used percentage or a reset time.
 the model catalog uses).
 
 Each `balance_infos[]` currency entry becomes one `devkit.QuotaReading`
-with `window: Balance`, `amount: (total_balance, currency)`, the envelope's
+with `window: "balance"`, `amount: (total_balance, currency)`, the envelope's
 `is_available` as `available`, and no `used_percent` / `reset_at_ms` —
 exhaustion recovery is a manual top-up, so nothing is schedulable. Entries
 missing `currency` or `total_balance` are skipped; with no usable entries
