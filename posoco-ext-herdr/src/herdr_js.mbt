@@ -1,5 +1,5 @@
 ///|
-// Bun is a global under bun (posoco-ext-bash precedent); Bun.env reads are
+// Bun is a global under bun; Bun.env reads are
 // synchronous, so detection needs no subprocess; Bun.spawn launches detached
 // and returns immediately, so reports are genuinely non-blocking. The target
 // runtime is bun — do not use node:child_process.
