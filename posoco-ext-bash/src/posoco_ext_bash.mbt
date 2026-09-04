@@ -28,8 +28,7 @@ pub fn ShellTools::ShellTools(
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   // OpenAI/DeepSeek tool schema requires `parameters` to be a JSON Schema with
   // `type: "object"`; strict servers otherwise reject with HTTP 400
-  // (`invalid_union_discriminator`). See posoco-ext-read/write/edit for the
-  // canonical pattern.
+  // (`invalid_union_discriminator`).
   let cmd_schema : Json = Json::object(
     Map::from_array([
       ("type", Json::string("object")),
