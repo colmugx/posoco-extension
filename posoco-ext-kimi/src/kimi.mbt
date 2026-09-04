@@ -26,6 +26,36 @@ fn chat_url(config : KimiConfig) -> String {
 }
 
 ///|
+/// The prompt_cache_key for this port's next chat request: derived from the
+/// invocation scope's session id via the shared kit helper, or `None` when
+/// the host opted out (`send_prompt_cache_key=false`) or the provider
+/// already rejected the parameter.
+fn KimiModelPort::prompt_cache_key_for(
+  self : KimiModelPort,
+  session_id : String,
+) -> String? {
+  if self.config.send_prompt_cache_key && !self.prompt_cache_key_rejected {
+    Some(@chatkit.derive_prompt_cache_key(session_id))
+  } else {
+    None
+  }
+}
+
+///|
+/// Per-process learning from a non-2xx error body: when the body explicitly
+/// rejects prompt_cache_key, stop sending it for the rest of this port's
+/// lifetime.
+fn KimiModelPort::learn_prompt_cache_key_rejection(
+  self : KimiModelPort,
+  body_text : String,
+) -> Unit {
+  if !self.prompt_cache_key_rejected &&
+    @chatkit.is_prompt_cache_key_rejection(body_text) {
+    self.prompt_cache_key_rejected = true
+  }
+}
+
+///|
 /// Resolve thinking config based on model name (K7).
 /// - kimi-k3: thinking permanently on, supports reasoning_effort (low/high/max).
 ///   Do NOT send thinking object; send top-level reasoning_effort only.
@@ -69,7 +99,7 @@ fn resolve_thinking_config(
 /// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for KimiModelPort with fn chat(
   self : KimiModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -90,6 +120,7 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
     options
   }
   let messages_owned = messages.to_owned()
+  let cache_key = self.prompt_cache_key_for(scope.session_id.to_string())
   match stream {
     NoStream => {
       let body = build_chat_request(
@@ -100,7 +131,7 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
         self.config.model,
         false,
         thinking_json,
-        None, // cache_key — host passes session_id via call_options
+        cache_key, // from scope.session_id via the shared kit helper
         reasoning_effort_str~,
         supports_images=self.config.supports_images,
       )
@@ -114,6 +145,7 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
       }
       if !is_kimi_http_success(response.code) {
         let body_text = body_data.text() catch { _ => "" }
+        self.learn_prompt_cache_key_rejection(body_text)
         match
           classify_kimi_http_status(
             "chat.http_status",
@@ -154,7 +186,7 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
         self.config.model,
         true,
         thinking_json,
-        None,
+        cache_key,
         reasoning_effort_str~,
         supports_images=self.config.supports_images,
       )
@@ -185,6 +217,10 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
       if !is_kimi_http_success(response.code) {
         let retry_after = retry_after_header(response)
         let err_body = read_error_body_text(client) catch { _ => None }
+        match err_body {
+          Some(text) => self.learn_prompt_cache_key_rejection(text)
+          None => ()
+        }
         client.close()
         match
           classify_kimi_http_status(

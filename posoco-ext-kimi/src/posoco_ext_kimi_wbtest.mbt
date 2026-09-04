@@ -891,6 +891,103 @@ test "build_chat_request_off_disables_thinking_no_warn" {
   assert_eq(logger.events.length(), 0)
 }
 
+///|
+/// Default config sends prompt_cache_key: the kit derivation of the session
+/// id ("posoco-<session-id>") rides the request body.
+test "prompt_cache_key_default_on_sends_derived_key" {
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
+  let config = KimiConfig("key")
+  assert_true(config.send_prompt_cache_key)
+  let port = KimiModelPort(config)
+  let cache_key = port.prompt_cache_key_for("session-42")
+  guard cache_key is Some(key) else {
+    fail("default config must derive a cache key")
+  }
+  assert_eq(key, "posoco-session-42")
+  let body = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "kimi-v4-flash",
+    false,
+    enabled_thinking_json(Some("high")),
+    cache_key,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  assert_json_field_string(root, "prompt_cache_key", "posoco-session-42")
+  assert_eq(logger.events.length(), 0)
+}
+
+///|
+/// Opt-out config: no key is derived and the wire body omits the field.
+test "prompt_cache_key_opt_out_omits_field" {
+  let logger = @devkit.MemoryLogger()
+  let ctx = @devkit.ExtContext(logger~)
+  let port = KimiModelPort(KimiConfig("key", send_prompt_cache_key=false))
+  let cache_key = port.prompt_cache_key_for("session-42")
+  guard cache_key is None else { fail("opt-out must not derive a cache key") }
+  let body = build_chat_request(
+    ctx,
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "kimi-v4-flash",
+    false,
+    enabled_thinking_json(Some("high")),
+    cache_key,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  match root.get("prompt_cache_key") {
+    None => ()
+    Some(_) => fail("opted-out request must omit prompt_cache_key")
+  }
+  assert_eq(logger.events.length(), 0)
+}
+
+///|
+/// Once the port records a provider rejection the key stays omitted even
+/// though the config still has the feature enabled.
+test "prompt_cache_key_rejection_flag_omits_key_even_when_enabled" {
+  let port = KimiModelPort(KimiConfig("key"))
+  port.prompt_cache_key_rejected = true
+  match port.prompt_cache_key_for("session-42") {
+    None => ()
+    Some(_) => fail("rejected cache key must be omitted even when enabled")
+  }
+}
+
+///|
+/// An error body naming both "unsupported parameter" and prompt_cache_key
+/// flips the port's rejection flag, suppressing the key afterwards.
+test "prompt_cache_key_rejection_body_sets_flag" {
+  let port = KimiModelPort(KimiConfig("key"))
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"Unsupported parameter: 'prompt_cache_key' is not supported with this model.\"}}",
+  )
+  assert_true(port.prompt_cache_key_rejected)
+  match port.prompt_cache_key_for("session-42") {
+    None => ()
+    Some(_) => fail("learned rejection must suppress the cache key")
+  }
+}
+
+///|
+/// A 400 about a different parameter names only one of the two required
+/// phrases and must not disable the cache key.
+test "prompt_cache_key_unrelated_400_body_does_not_set_flag" {
+  let port = KimiModelPort(KimiConfig("key"))
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"Unsupported parameter: 'temperature' is not supported with this model.\"}}",
+  )
+  assert_true(!port.prompt_cache_key_rejected)
+  match port.prompt_cache_key_for("session-42") {
+    Some(_) => ()
+    None => fail("unrelated 400 must not disable the cache key")
+  }
+}
+
 // Error-transparency fixtures (offline, no network).
 // These use non-async test blocks with try/catch since decode_chat_response
 // is synchronous but raises ModelError.

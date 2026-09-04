@@ -26,6 +26,10 @@ pub(all) struct KimiConfig {
   /// Image blocks then encode as typed content parts; otherwise they
   /// downgrade to explicit placeholders.
   supports_images : Bool
+  /// Send `prompt_cache_key` (derived from the session id) on chat requests.
+  /// Moonshot's API defines the parameter natively, so this defaults to true;
+  /// hosts opt out with false.
+  send_prompt_cache_key : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -40,6 +44,7 @@ pub fn KimiConfig::KimiConfig(
   identity_headers? : Map[String, String] = Map::from_array([]),
   context_window? : Int? = None,
   supports_images? : Bool = false,
+  send_prompt_cache_key? : Bool = true,
 ) -> KimiConfig {
   let declared_efforts = match thinking_efforts {
     Some(values) => values
@@ -67,6 +72,7 @@ pub fn KimiConfig::KimiConfig(
     identity_headers,
     context_window,
     supports_images,
+    send_prompt_cache_key,
   }
 }
 
@@ -133,6 +139,10 @@ pub fn KimiConfig::from_oauth_credential(
 pub(all) struct KimiModelPort {
   config : KimiConfig
   ctx : @devkit.ExtContext
+  /// Set when a provider error body explicitly rejected prompt_cache_key;
+  /// later chat requests then omit the key. Per-process only, never
+  /// persisted.
+  mut prompt_cache_key_rejected : Bool
 }
 
 ///|
@@ -140,5 +150,5 @@ pub fn KimiModelPort::KimiModelPort(
   config : KimiConfig,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> KimiModelPort {
-  { config, ctx, }
+  { config, ctx, prompt_cache_key_rejected: false, }
 }

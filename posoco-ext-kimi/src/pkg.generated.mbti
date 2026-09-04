@@ -38,8 +38,9 @@ pub(all) struct KimiConfig {
   identity_headers : Map[String, String]
   context_window : Int?
   supports_images : Bool
+  send_prompt_cache_key : Bool
 } derive(Eq, @debug.Debug)
-pub fn KimiConfig::KimiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String], context_window? : Int?, supports_images? : Bool) -> Self
+pub fn KimiConfig::KimiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String], context_window? : Int?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
 pub fn KimiConfig::from_oauth_credential(@posoco-ext-oauth.Credential, String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self
 pub fn KimiConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
@@ -55,6 +56,7 @@ pub(all) struct KimiModelInfo {
 pub(all) struct KimiModelPort {
   config : KimiConfig
   ctx : @posoco-devkit.ExtContext
+  mut prompt_cache_key_rejected : Bool
 }
 pub fn KimiModelPort::KimiModelPort(KimiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
 pub fn KimiModelPort::extension_id(Self) -> String
