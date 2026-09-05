@@ -1,0 +1,44 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-mbtx"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+}
+
+// Values
+pub fn mbtx_extension() -> MbtxTools
+
+// Errors
+
+// Types and methods
+pub struct MbtxTools {
+  anchor : @posoco-devkit.WorkspaceAnchor?
+  allowlist : Array[SpawnRule]
+  run_timeout_ms : Int
+  escalation : Bool
+  toolchain_bin : String?
+  bus : @posoco-devkit.EventBus?
+  mut resolved : String?
+  // private fields
+}
+pub fn MbtxTools::MbtxTools(anchor? : @posoco-devkit.WorkspaceAnchor?, allowlist_extra? : Array[SpawnRule], allowlist_without? : Array[String], run_timeout_ms? : Int, escalation? : Bool, toolchain_bin? : String?, bus? : @posoco-devkit.EventBus?) -> Self
+pub async fn MbtxTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn MbtxTools::extension_id(Self) -> String
+pub fn MbtxTools::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn MbtxTools::manifest(Self) -> @port.ExtensionManifest
+pub fn MbtxTools::system_prompt(Self) -> String
+pub impl @port.Extension for MbtxTools
+pub impl @port.SystemPromptContributor for MbtxTools
+pub impl @port.ToolProvider for MbtxTools
+
+pub(all) struct SpawnRule {
+  program : String
+  args_prefix : Array[String]
+}
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,27 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/js_async",
+  "moonbitlang/async/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: {
+    "posoco_ext_mbtx.native.mbt": [ "native", "wasm" ],
+    "posoco_ext_mbtx.js.mbt": [ "js" ],
+    "posoco_ext_mbtx_wbtest.mbt": [ "native", "wasm" ],
+    "policy_wbtest.mbt": [ "native", "wasm" ],
+    "toolchain_wbtest.mbt": [ "native", "wasm" ],
+    "execute_wbtest.mbt": [ "native", "wasm" ],
+    "execute_live_wbtest.mbt": [ "native", "wasm" ],
+    "js_runner_wbtest.mbt": [ "js" ],
+  },
+)
