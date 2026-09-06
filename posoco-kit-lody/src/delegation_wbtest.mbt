@@ -1,6 +1,3 @@
-// delegation_wbtest.mbt — intent-to-call mapping, the unified dual-track
-// status view, and posoco tool-call materialization.
-
 ///|
 test "intent maps onto lody create and chat calls" {
   let intent : DelegationIntent = {

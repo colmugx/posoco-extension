@@ -1,6 +1,3 @@
-// detect_wbtest.mbt — lody host detection: server names, tool prefix, and
-// the canonical-identity fallback.
-
 ///|
 test "lody server detection is exact" {
   inspect(lody_server_names().join(","), content="lody")

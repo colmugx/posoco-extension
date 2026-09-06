@@ -1,5 +1,5 @@
-// delegation.mbt — the thin `delegate_task` seam (cetas-lody plan Phase 5):
-// provider-neutral intent in, lody MCP tool calls out. The neutral intent /
+// delegation.mbt — the thin `delegate_task` seam: provider-neutral intent
+// in, lody MCP tool calls out. The neutral intent /
 // call / phase types live in colmugx/posoco-kit-delegation (shared with the
 // paseo kit) and are re-exported here; this file keeps the lody realization
 // (`lody_session_create` / `lody_session_chat`) and the mapping from the
@@ -75,8 +75,6 @@ pub fn lody_chat_call(
 }
 
 ///|
-/// Task-track mapping: pending → Queued, in_progress → Running,
-/// completed → Succeeded, failed → Failed.
 pub fn phase_of_task_status(status : @lody.LodyTaskStatus) -> DelegationPhase {
   match status {
     @lody.LodyTaskStatus::Pending => Queued

@@ -1,6 +1,3 @@
-// prompt_wbtest.mbt — the delegation prompt section is stable, non-empty
-// text that names the tool prefix and the status authority rules.
-
 ///|
 test "prompt section is stable and covers delegation semantics" {
   let section = prompt_section()
