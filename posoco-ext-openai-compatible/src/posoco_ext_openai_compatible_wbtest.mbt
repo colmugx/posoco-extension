@@ -40,8 +40,8 @@ test "OpenAICompatibleConfig records required and optional fields" {
   assert_eq(config.base_url, "https://example.com/v1")
   assert_eq(config.model, "qwen-plus")
   assert_eq(config.endpoint_prefix, "")
-  assert_false(config.thinking)
   assert_eq(config.reasoning_effort, None)
+  assert_true(config.thinking_efforts.is_empty())
 }
 
 ///|
@@ -51,11 +51,9 @@ test "OpenAICompatibleConfig carries optional fields" {
     base_url="https://example.com",
     model="qwen-plus",
     endpoint_prefix="/v1",
-    thinking=true,
     reasoning_effort=Some("medium"),
   )
   assert_eq(config.endpoint_prefix, "/v1")
-  assert_true(config.thinking)
   assert_eq(config.reasoning_effort, Some("medium"))
 }
 
@@ -171,8 +169,8 @@ test "ProviderFactory::build with api_key setting produces a Ready catalog" {
 }
 
 ///|
-/// api_key credential takes precedence over the api_key setting, mirroring
-/// DeepSeek. The credential store is the canonical source once /login ran.
+/// api_key credential takes precedence over the api_key setting.
+/// The credential store is the canonical source once /login ran.
 test "ProviderFactory::build prefers api_key credential over the setting" {
   let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
@@ -258,11 +256,9 @@ async test "ApiKeyFactory::login rejects an empty secret" {
 }
 
 ///|
-/// Build a request body and assert the reasoning wire contract: thinking off
-/// omits `thinking`/`reasoning_effort` entirely; thinking on sends the object
-/// form `thinking: {"type": "enabled"}` (never a bare boolean); a selected
-/// level additionally sends the top-level `reasoning_effort` verbatim.
-test "build_chat_request omits thinking when off and uses the object form when on" {
+/// A selected level sends `reasoning_effort` verbatim; no level omits it;
+/// `thinking` never appears.
+test "build_chat_request sends reasoning_effort verbatim and omits it when none" {
   let opts = chat_options()
   let with_effort = build_chat_request(
     [user_msg("hi")],
@@ -270,73 +266,35 @@ test "build_chat_request omits thinking when off and uses the object form when o
     opts,
     "qwen-plus",
     false,
-    true,
     Some("low"),
+    None,
     false,
   )
   guard with_effort is Object(with_fields) else {
     fail("expected request to be an object")
   }
-  match with_fields.get("thinking") {
-    Some(Json::Object(thinking)) =>
-      match thinking.get("type") {
-        Some(Json::String("enabled")) => ()
-        _ => fail("expected thinking object with type=enabled")
-      }
-    _ => fail("expected the thinking object when a level is selected")
-  }
   match with_fields.get("reasoning_effort") {
     Some(Json::String(value)) => assert_eq(value, "low")
-    _ => fail("expected reasoning_effort to be emitted when a level is set")
+    _ => fail("expected reasoning_effort to be emitted verbatim when set")
   }
+  // The vendor thinking surface is gone from the generic adapter entirely.
+  assert_false(with_fields.contains("thinking"))
 
-  let toggle_on = build_chat_request(
+  let without_effort = build_chat_request(
     [user_msg("hi")],
     [],
     opts,
     "qwen-plus",
     false,
-    true,
+    None,
     None,
     false,
   )
-  guard toggle_on is Object(on_fields) else {
+  guard without_effort is Object(no_fields) else {
     fail("expected request to be an object")
   }
-  match on_fields.get("thinking") {
-    Some(Json::Object(thinking)) =>
-      match thinking.get("type") {
-        Some(Json::String("enabled")) => ()
-        _ => fail("expected thinking object with type=enabled")
-      }
-    _ => fail("expected the thinking object in plain toggle mode")
-  }
-  match on_fields.get("reasoning_effort") {
-    None => ()
-    Some(_) => fail("reasoning_effort must be omitted without a level")
-  }
-
-  let toggle_off = build_chat_request(
-    [user_msg("hi")],
-    [],
-    opts,
-    "qwen-plus",
-    false,
-    false,
-    None,
-    false,
-  )
-  guard toggle_off is Object(off_fields) else {
-    fail("expected request to be an object")
-  }
-  match off_fields.get("thinking") {
-    None => ()
-    Some(_) => fail("thinking must be omitted entirely when off")
-  }
-  match off_fields.get("reasoning_effort") {
-    None => ()
-    Some(_) => fail("reasoning_effort must be omitted when off")
-  }
+  assert_false(no_fields.contains("reasoning_effort"))
+  assert_false(no_fields.contains("thinking"))
 }
 
 ///|
@@ -375,7 +333,7 @@ test "build_chat_request serializes model and messages" {
     opts,
     "qwen-plus",
     false,
-    false,
+    None,
     None,
     false,
   )
@@ -407,7 +365,7 @@ test "build_chat_request carries tools and stream options" {
     opts,
     "m",
     true,
-    false,
+    None,
     None,
     false,
   )
@@ -456,10 +414,9 @@ test "encode_message_tool_result_carries_tool_call_id" {
 }
 
 ///|
-/// Thinking-mode upstreams (DeepSeek behind opencode-zen) 400 unless the
-/// assistant message that carried tool_calls resends `reasoning_content`.
-test "encode_message_reasoning_resent_with_tool_calls" {
-  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+/// Outgoing messages never carry `reasoning_content`.
+test "encode_message never echoes reasoning_content" {
+  let with_calls : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[],
     tool_calls=[
       {
@@ -474,30 +431,21 @@ test "encode_message_reasoning_resent_with_tool_calls" {
     }),
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("reasoning_content") {
-    Some(String(r)) => assert_eq(r, "thinking about this...")
-    _ => fail("reasoning_content MUST be present when tool_calls exist")
+  guard encode_message(with_calls, false) is Object(calls_obj) else {
+    fail("expected object")
   }
-}
+  assert_false(calls_obj.contains("reasoning_content"))
 
-///|
-/// Without tool_calls, `reasoning_content` is optional and wasteful (pollutes
-/// prefix cache) — omit it even when present.
-test "encode_message_reasoning_preserved_without_tool_calls" {
-  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+  let plain : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("answer")],
     tool_calls=[],
     reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None, }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("reasoning_content") {
-    Some(String(r)) => assert_eq(r, "thinking...")
-    _ => fail("reasoning_content must be preserved on assistant messages")
+  guard encode_message(plain, false) is Object(plain_obj) else {
+    fail("expected object")
   }
+  assert_false(plain_obj.contains("reasoning_content"))
 }
 
 ///|
@@ -738,7 +686,6 @@ test "rebuild_on_effort off rebuilds the slot without a wire effort" {
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
-    thinking=true,
     reasoning_effort=Some("high"),
     thinking_efforts=["low", "high"],
   )
@@ -760,15 +707,12 @@ test "OpenAICompatibleConfig::with_reasoning_effort maps the selector vocabulary
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
-    thinking=true,
     reasoning_effort=Some("high"),
     thinking_efforts=["low", "high"],
   )
   let off = config.with_reasoning_effort("off")
-  assert_false(off.thinking)
   assert_eq(off.reasoning_effort, None)
   let low = config.with_reasoning_effort("low")
-  assert_true(low.thinking)
   assert_eq(low.reasoning_effort, Some("low"))
   let invalid = Ok(config.with_reasoning_effort("max")) catch {
     err => Err(err)
@@ -789,17 +733,17 @@ test "OpenAICompatibleConfig::with_reasoning_effort maps the selector vocabulary
 }
 
 ///|
-test "'on' selects plain thinking when no levels are declared" {
+test "'on' is a legacy alias for omission when no levels are declared" {
   let config = OpenAICompatibleConfig(
     "sk-test",
     base_url="https://example.com/v1",
     model="qwen-plus",
   )
+  // The standard surface has no "force thinking on" field, so the legacy
+  // stored word "on" maps to the same wire state as "off": nothing sent.
   let on = config.with_reasoning_effort("on")
-  assert_true(on.thinking)
   assert_eq(on.reasoning_effort, None)
-  let off = on.with_reasoning_effort("off")
-  assert_false(off.thinking)
+  let off = config.with_reasoning_effort("off")
   assert_eq(off.reasoning_effort, None)
 }
 
@@ -898,15 +842,16 @@ fn undeclared_effort_settings_source(
 }
 
 ///|
-test "ProviderFactory::build exposes the plain off/on toggle when settings declare no levels" {
+test "ProviderFactory::build exposes no reasoning selector when settings declare no levels" {
   let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   match factory.build(undeclared_effort_settings_source()) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
-      assert_eq(slot.thinking_efforts, ["off", "on"])
-      assert_eq(slot.default_effort, Some("off"))
-      assert_true(slot.rebuild_on_effort is Some(_))
+      assert_true(slot.thinking_efforts.is_empty())
+      assert_true(slot.default_effort is None)
+      // Nothing to rebuild: no selector means no rebuild hook.
+      assert_true(slot.rebuild_on_effort is None)
     }
     @llm.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog with full settings")
@@ -914,7 +859,7 @@ test "ProviderFactory::build exposes the plain off/on toggle when settings decla
 }
 
 ///|
-test "an explicit empty reasoning_efforts array still exposes the toggle" {
+test "an explicit empty reasoning_efforts array exposes no reasoning selector" {
   let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   match
@@ -923,8 +868,8 @@ test "an explicit empty reasoning_efforts array still exposes the toggle" {
     ) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
-      assert_eq(slot.thinking_efforts, ["off", "on"])
-      assert_eq(slot.default_effort, Some("off"))
+      assert_true(slot.thinking_efforts.is_empty())
+      assert_true(slot.default_effort is None)
     }
     @llm.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog with full settings")
@@ -956,7 +901,7 @@ test "an array reasoning_effort declares the selectable levels verbatim" {
       guard slot.rebuild_on_effort is Some(rebuild) else {
         fail("declared levels must expose a rebuild hook")
       }
-      // Selecting the level enables thinking and sends the value verbatim.
+      // Selecting the level sends the value verbatim as reasoning_effort.
       let rebuilt = rebuild("low")
       assert_eq(rebuilt.default_effort, Some("low"))
       let off = rebuild("off")
@@ -1019,15 +964,17 @@ test "a fixed singular reasoning_effort outside the convention stays selectable"
 }
 
 ///|
-test "a legacy toggle-word reasoning_effort sets the on/off default" {
+test "a legacy toggle-word reasoning_effort is accepted as omission" {
   let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider
   match
     factory.build(undeclared_effort_settings_source(reasoning_effort="on")) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
-      assert_eq(slot.thinking_efforts, ["off", "on"])
-      assert_eq(slot.default_effort, Some("on"))
+      // "on" maps to omission (same wire state as off): no selector, no
+      // default. Stored settings keep composing.
+      assert_true(slot.thinking_efforts.is_empty())
+      assert_true(slot.default_effort is None)
     }
     @llm.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog with full settings")
@@ -1281,7 +1228,9 @@ test "ProviderFactory::build with models produces per-model slots with metadata"
       // Undeclared threshold: the provider reports None and the core
       // default (0.88) applies downstream.
       assert_true(slots[1].port.provider_config().compact_threshold is None)
-      assert_eq(slots[1].thinking_efforts, ["off", "on"])
+      // Undeclared levels: no reasoning selector at all.
+      assert_true(slots[1].thinking_efforts.is_empty())
+      assert_true(slots[1].default_effort is None)
     }
     @llm.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog from models array")
@@ -1447,7 +1396,7 @@ test "build_chat_request encodes image content by model capability" {
     opts,
     "vision-model",
     false,
-    false,
+    None,
     None,
     true,
   )
@@ -1467,7 +1416,7 @@ test "build_chat_request encodes image content by model capability" {
     opts,
     "text-model",
     false,
-    false,
+    None,
     None,
     false,
   )
@@ -1489,7 +1438,7 @@ test "build_chat_request encodes image content by model capability" {
     opts,
     "vision-model",
     false,
-    false,
+    None,
     None,
     true,
   )
@@ -1501,5 +1450,127 @@ test "build_chat_request encodes image content by model capability" {
   inspect(
     tmf.get("content").unwrap_or(Json::null()).stringify(),
     content="\"hi\"",
+  )
+}
+
+///|
+/// Prompt cache key is strictly opt-in: the config defaults off and the
+/// default-off resolution never puts `prompt_cache_key` on the wire.
+test "prompt_cache_key defaults off and stays off the wire" {
+  let config = OpenAICompatibleConfig(
+    "sk-test",
+    base_url="https://example.com/v1",
+    model="qwen-plus",
+  )
+  assert_false(config.send_prompt_cache_key)
+  assert_true(
+    oai_compat_resolve_cache_key(config.send_prompt_cache_key, false, "s1")
+    is None,
+  )
+  let body = build_chat_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "qwen-plus",
+    false,
+    None,
+    oai_compat_resolve_cache_key(config.send_prompt_cache_key, false, "s1"),
+    false,
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  assert_false(fields.contains("prompt_cache_key"))
+}
+
+///|
+/// Opted in with a session scope, the derived key lands verbatim on the wire:
+/// the kit helper's "posoco-<session-id>" convention.
+test "prompt_cache_key opt-in derives posoco-<session-id> onto the wire" {
+  let key = oai_compat_resolve_cache_key(true, false, "session_9")
+  assert_eq(key, Some("posoco-session_9"))
+  let body = build_chat_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "qwen-plus",
+    false,
+    None,
+    key,
+    false,
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  match fields.get("prompt_cache_key") {
+    Some(Json::String(value)) => assert_eq(value, "posoco-session_9")
+    _ => fail("expected prompt_cache_key when opted in with a session scope")
+  }
+}
+
+///|
+/// Once the provider has rejected the parameter, the key is omitted even
+/// while the flag stays on.
+test "prompt_cache_key is omitted after a learned rejection" {
+  assert_true(oai_compat_resolve_cache_key(true, true, "session_9") is None)
+  let port = OpenAICompatibleModelPort(
+    "qwen",
+    OpenAICompatibleConfig(
+      "sk-test",
+      base_url="https://example.com/v1",
+      model="qwen-plus",
+      send_prompt_cache_key=true,
+    ),
+  )
+  assert_false(port.prompt_cache_key_rejected)
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"Unsupported parameter: 'prompt_cache_key' is not supported by this model.\"}}",
+  )
+  assert_true(port.prompt_cache_key_rejected)
+  let key = oai_compat_resolve_cache_key(
+    true,
+    port.prompt_cache_key_rejected,
+    "session_9",
+  )
+  assert_true(key is None)
+  let body = build_chat_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "qwen-plus",
+    false,
+    None,
+    key,
+    false,
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  assert_false(fields.contains("prompt_cache_key"))
+}
+
+///|
+/// The matcher is strict: unrelated 400 bodies never teach the port to stop
+/// sending the key, and partial matches (only one of the two phrases) do not
+/// count as an explicit rejection.
+test "non-rejection 400 bodies never set the learned flag" {
+  let port = OpenAICompatibleModelPort(
+    "qwen",
+    OpenAICompatibleConfig(
+      "sk-test",
+      base_url="https://example.com/v1",
+      model="qwen-plus",
+      send_prompt_cache_key=true,
+    ),
+  )
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"thinking must be an object\"}}",
+  )
+  assert_false(port.prompt_cache_key_rejected)
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"Unsupported parameter: 'temperature'\"}}",
+  )
+  assert_false(port.prompt_cache_key_rejected)
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"field prompt_cache_key must be a string\"}}",
+  )
+  assert_false(port.prompt_cache_key_rejected)
+  assert_true(
+    oai_compat_resolve_cache_key(true, port.prompt_cache_key_rejected, "s1")
+    is Some(_),
   )
 }

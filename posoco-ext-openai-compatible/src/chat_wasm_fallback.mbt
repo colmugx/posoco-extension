@@ -1,5 +1,5 @@
 ///|
-/// chat_wasm_fallback.mbt — ModelPort::chat impl for wasm/wasm-gc.
+/// ModelPort::chat impl for wasm/wasm-gc.
 ///
 /// `@http` is unavailable on wasm, so a real chat request is impossible. This
 /// fallback supplies a complete `ModelPort::chat` impl that raises immediately
@@ -9,7 +9,7 @@
 ///   - the package exports a real mbti on every backend, unblocking downstream
 ///     packages (posoco-ext-llm, provider extensions) from resolving the type.
 ///
-/// Pattern mirrors posoco-ext-read/src/fallback.mbt: a tool that needs a
+/// A tool that needs a
 /// platform capability supplies an inert impl on platforms that lack it.
 
 ///|

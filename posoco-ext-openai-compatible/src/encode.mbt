@@ -1,40 +1,25 @@
 ///|
-/// Wire encoder: convert kernel canonical types to standard OpenAI
-/// Chat Completions API JSON.
-///
-/// This is the plain OpenAI Chat Completions shape with the customary
-/// reasoning surface: a selected effort level sends the top-level
-/// `reasoning_effort` field verbatim, and enabling thinking without a level
-/// sends the object form `thinking: {"type": "enabled"}`. A bare boolean is
-/// never sent — strict gateways (OpenCode Zen's upstream) only accept the
-/// object form. When thinking is off, both fields are omitted entirely so
-/// the endpoint applies its own default. Tool call arguments are JSON
-/// strings (OpenAI convention). Message order is append-only.
+/// Wire encoder: kernel canonical types to standard OpenAI Chat Completions
+/// JSON. The only reasoning field is the top-level `reasoning_effort`, sent
+/// verbatim when a level is selected. Tool call arguments are JSON strings
+/// (OpenAI convention); message order is append-only.
 
 ///|
 /// Encode a kernel Message into an OpenAI chat message JSON object.
 fn encode_message(msg : @posoco.Message, supports_images : Bool) -> Json {
-  let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
-    msg {
-    SystemMessage(content~) => ("system", content, [], None, None)
-    UserMessage(content~) => ("user", content, [], None, None)
-    AssistantMessage(content~, tool_calls~, reasoning~, finish_reason~) => {
-      let _ = finish_reason
-      let reasoning_str = match reasoning {
-        Some(r) => Some(r.content)
-        None => None
-      }
-      ("assistant", content, tool_calls, None, reasoning_str)
-    }
-    ToolMessage(call_id~, tool_name~, outcome~) => {
+  let (role, content_blocks, tool_calls, tool_call_id) = match msg {
+    SystemMessage(content~) => ("system", content, [], None)
+    UserMessage(content~) => ("user", content, [], None)
+    AssistantMessage(content~, tool_calls~, ..) =>
+      ("assistant", content, tool_calls, None)
+    ToolMessage(call_id~, outcome~, ..) => {
       // The outcome content carries back to the model; `tool_call_id` is the
       // mandatory correlation key for the assistant tool_call it answers.
       let outcome_text = outcome_to_wire_text(outcome)
       let tool_blocks : Array[@posoco.Content] = [
         @posoco.Content::Text(outcome_text),
       ]
-      let _ = tool_name
-      ("tool", tool_blocks, [], Some(call_id.to_string()), None)
+      ("tool", tool_blocks, [], Some(call_id.to_string()))
     }
   }
   // Content encoding is shared across the chat-completions adapters: string
@@ -68,16 +53,6 @@ fn encode_message(msg : @posoco.Message, supports_images : Bool) -> Json {
       Json::object(tc_obj)
     })
     obj["tool_calls"] = Json::array(tc_arr)
-  }
-  // reasoning_content: fallback policy is keep-all (Kimi-style) — resend
-  // whenever present. DeepSeek-style upstreams REQUIRE it on tool-call turns
-  // and tolerate it elsewhere; plain endpoints never produce reasoning, so
-  // nothing is ever sent to them.
-  if role == "assistant" {
-    match reasoning_text {
-      Some(r) => obj["reasoning_content"] = Json::string(r)
-      None => ()
-    }
   }
   Json::object(obj)
 }
@@ -113,6 +88,22 @@ fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
 }
 
 ///|
+/// Resolve the request's `prompt_cache_key`: derived from the session id via
+/// the shared kit helper, only when the endpoint opted in and the provider has
+/// not already rejected the parameter.
+fn oai_compat_resolve_cache_key(
+  send_prompt_cache_key : Bool,
+  rejected : Bool,
+  session_id : String,
+) -> String? {
+  if send_prompt_cache_key && !rejected {
+    Some(@chatkit.derive_prompt_cache_key(session_id))
+  } else {
+    None
+  }
+}
+
+///|
 /// Build the full chat completions request body. Returns just the JSON payload;
 /// the caller prepends base_url.
 fn build_chat_request(
@@ -121,8 +112,8 @@ fn build_chat_request(
   options : @posoco.ChatOptions,
   model : String,
   stream : Bool,
-  thinking : Bool,
   reasoning_effort : String?,
+  cache_key : String?,
   supports_images : Bool,
 ) -> Json {
   let body : Map[String, Json] = {
@@ -142,17 +133,13 @@ fn build_chat_request(
     Some(n) => body["max_tokens"] = Json::number(n.to_double())
     None => ()
   }
-  // Thinking off omits the reasoning surface entirely — no `thinking`, no
-  // `reasoning_effort`; the endpoint applies its own default. Thinking on
-  // uses the object form (never a bare boolean, which strict gateways such
-  // as OpenCode Zen's upstream reject); a selected level additionally sends
-  // the top-level `reasoning_effort` verbatim.
-  if thinking {
-    body["thinking"] = Json::object({ "type": Json::string("enabled") })
-    match reasoning_effort {
-      Some(effort) => body["reasoning_effort"] = Json::string(effort)
-      None => ()
-    }
+  match reasoning_effort {
+    Some(effort) => body["reasoning_effort"] = Json::string(effort)
+    None => ()
+  }
+  match cache_key {
+    Some(key) => body["prompt_cache_key"] = Json::string(key)
+    None => ()
   }
   if stream {
     body["stream"] = Json::boolean(true)

@@ -1,18 +1,7 @@
 ///|
-/// chat_native_js.mbt — ModelPort::chat impl via moonbitlang/async/http.
-///
 /// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
-/// The `OpenAICompatibleModelPort` struct, `compact`, `provider_config`, and
-/// all pure helpers (build_headers, chat_url, SSE processing, error
-/// classification) live in the target-agnostic core files and compile on every
-/// backend. Only this chat method — which drives the
-/// actual HTTP request/response — is target-restricted, mirroring the
-/// posoco-ext-read / posoco-ext-oauth pattern.
 
 ///|
-/// Drain a non-2xx response, keeping the provider's error text for the
-/// failure message. Uses `@http.Client`, so it co-resides with the chat impl
-/// on native+js.
 async fn read_error_body(client : @http.Client) -> OaiCompatErrorBody {
   let data = client.read_all() catch { _ => return BodyReadFailed }
   let byte_length = data.binary().length()
@@ -21,16 +10,20 @@ async fn read_error_body(client : @http.Client) -> OaiCompatErrorBody {
 }
 
 ///|
-/// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
   self : OpenAICompatibleModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let messages_owned = messages.to_owned()
+  let cache_key = oai_compat_resolve_cache_key(
+    self.config.send_prompt_cache_key,
+    self.prompt_cache_key_rejected,
+    scope.session_id.to_string(),
+  )
   match stream {
     NoStream => {
       let body = build_chat_request(
@@ -39,8 +32,8 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         options,
         self.config.model,
         false,
-        self.config.thinking,
         self.config.reasoning_effort,
+        cache_key,
         self.config.supports_images,
       )
       let resp_json = self.oai_compat_post_chat_json(body, "chat")
@@ -57,8 +50,8 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         options,
         self.config.model,
         true,
-        self.config.thinking,
         self.config.reasoning_effort,
+        cache_key,
         self.config.supports_images,
       )
       let headers = build_headers(self.config, self.request_headers)
@@ -91,6 +84,10 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
       if !is_oai_compat_http_success(response.code) {
         let err_body = read_error_body(client) catch { _ => BodyUnavailable }
         client.close()
+        match err_body {
+          BodyText(text) => self.learn_prompt_cache_key_rejection(text)
+          _ => ()
+        }
         match
           classify_oai_compat_http_status(
             "chat_stream.http_status",

@@ -1,15 +1,13 @@
 ///|
-/// compact_native_js.mbt — ModelPort::compact via one summarize chat call.
-///
 /// Generic OpenAI-compatible servers expose no dedicated compact endpoint,
 /// so compaction is client-orchestrated: render the transcript, ask the
-/// model for a dense handoff summary in one non-streaming call (thinking
-/// off — the summary must be plain prose, not a reasoning exercise), and
-/// Replace the transcript with that summary. The URL/headers/encode/decode
-/// and error classification are exactly the ones `chat` uses.
+/// model for a dense handoff summary in one non-streaming call (no
+/// reasoning_effort — the summary must be plain prose, not a reasoning
+/// exercise), and Replace the transcript with that summary. The
+/// URL/headers/encode/decode and error classification are exactly the ones
+/// `chat` uses.
 ///
-/// Compiled on native and js only (`@http` is unavailable on wasm);
-/// compact_wasm_fallback.mbt satisfies the trait elsewhere.
+/// Compiled on native and js only (`@http` is unavailable on wasm).
 
 ///|
 /// POST one chat-completions request body and decode the JSON response,
@@ -40,6 +38,8 @@ async fn OpenAICompatibleModelPort::oai_compat_post_chat_json(
           ),
         )
     }
+    // Learn before classify: classify always raises on non-2xx.
+    self.learn_prompt_cache_key_rejection(text)
     match
       classify_oai_compat_http_status(
         "\{stage}.http_status",
@@ -127,24 +127,26 @@ fn oai_compat_compact_messages(
 }
 
 ///|
-/// ModelPort implementation — compact. One non-streaming summarize call,
-/// thinking off, tools empty; the summary text replaces the transcript
-/// (mode Replace) as a single user message.
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn compact(
   self : OpenAICompatibleModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
+  let cache_key = oai_compat_resolve_cache_key(
+    self.config.send_prompt_cache_key,
+    self.prompt_cache_key_rejected,
+    scope.session_id.to_string(),
+  )
   let body = build_chat_request(
     oai_compat_compact_messages(messages.to_owned()),
     [],
     options,
     self.config.model,
     false,
-    false,
     None,
+    cache_key,
     false,
   )
   let resp_json = self.oai_compat_post_chat_json(body, "compact")

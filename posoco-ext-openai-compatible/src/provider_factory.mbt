@@ -91,9 +91,9 @@ fn oai_compat_parse_image_input(
 
 ///|
 /// Validate declared effort entries: non-empty, unique, and never the reserved
-/// selector words "off"/"on" (those belong to the toggle vocabulary, never to a
-/// declared level). The values pass through verbatim — the server owns the
-/// valid level names, this adapter only owns their plumbing.
+/// selector words "off"/"on" (those belong to the selector vocabulary, never
+/// to a declared level). The values pass through verbatim — the server owns
+/// the valid level names, this adapter only owns their plumbing.
 fn oai_compat_effort_array_value(
   key : String,
   values : Array[Json],
@@ -115,7 +115,7 @@ fn oai_compat_effort_array_value(
       raise @posoco.CompositionError::ManifestSchemaError(
         manifest_id="posoco_ext_openai_compatible",
         detail=key +
-          " reserves 'off'/'on' for the thinking toggle; declare explicit levels instead",
+          " reserves 'off'/'on' for the reasoning selector; declare explicit levels instead",
       )
     }
     if seen.contains(effort) {
@@ -131,8 +131,8 @@ fn oai_compat_effort_array_value(
 
 ///|
 /// Parse one settings key as the declared effort array. `None` means the key
-/// is absent (the plain off/on toggle); a present but non-array value is a
-/// typed composition failure.
+/// is absent (no reasoning selector for this endpoint); a present but
+/// non-array value is a typed composition failure.
 fn oai_compat_setting_effort_array(
   source : @llm.ProviderConfigSource,
   key : String,
@@ -150,12 +150,13 @@ fn oai_compat_setting_effort_array(
 }
 
 ///|
-/// The picker-facing effort list: "off" plus every declared level, or just the
-/// on/off toggle when the settings declare no levels. Every custom endpoint
-/// gets at least the toggle — no conventional level set is ever fabricated.
+/// The picker-facing effort list: "off" plus every declared level. An
+/// endpoint that declares no levels exposes no reasoning selector at all —
+/// the standard surface has no "force thinking on" field, and conventional
+/// level sets are never fabricated.
 fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
   if config.thinking_efforts.is_empty() {
-    return ["off", "on"]
+    return []
   }
   let efforts : Array[String] = ["off"]
   efforts.append(config.thinking_efforts.copy())
@@ -163,15 +164,12 @@ fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
 }
 
 ///|
-/// The picker-facing label of the config's current state.
+/// The picker-facing label of the config's current state: the selected
+/// effort level, or "off" when nothing is sent.
 fn oai_compat_effort_label(config : OpenAICompatibleConfig) -> String {
-  if config.thinking == false {
-    "off"
-  } else {
-    match config.reasoning_effort {
-      Some(effort) => effort
-      None => "on"
-    }
+  match config.reasoning_effort {
+    Some(effort) => effort
+    None => "off"
   }
 }
 
@@ -187,22 +185,34 @@ fn oai_compat_catalog_slot(
   let slot_id = provider_id + "/" + config.model
   let label = provider_id + " / " + config.model
   let slot_efforts = oai_compat_slot_efforts(config)
-  let default_effort = Some(oai_compat_effort_label(config))
+  // An endpoint with no declared levels gets no reasoning selector, no
+  // default, and no rebuild hook — there is nothing to rebuild.
+  let (default_effort, rebuild_on_effort) : (
+    String?,
+    ((String) -> @llm.ModelSlot)?,
+  ) = if slot_efforts.is_empty() {
+    (None, None)
+  } else {
+    (
+      Some(oai_compat_effort_label(config)),
+      Some(fn(effort) {
+        let rebuilt_config = config.with_reasoning_effort(effort) catch {
+          err =>
+            abort(
+              "openai-compatible catalog effort rebuild failed: " +
+              err.to_string(),
+            )
+        }
+        oai_compat_catalog_slot(provider_id, rebuilt_config)
+      }),
+    )
+  }
   let capabilities : Array[String] = ["chat", "streaming", "api_key"]
   if config.supports_images {
     capabilities.push("image_in")
   }
   let port : &@posoco.ModelPort = OpenAICompatibleModelPort(provider_id, config)
   let api_key : &@llm.ApiKeyFactory = OpenAICompatibleProvider(provider_id)
-  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = Some(fn(effort) {
-    let rebuilt_config = config.with_reasoning_effort(effort) catch {
-      err =>
-        abort(
-          "openai-compatible catalog effort rebuild failed: " + err.to_string(),
-        )
-    }
-    oai_compat_catalog_slot(provider_id, rebuilt_config)
-  })
   @llm.ModelSlot::ModelSlot(
     id=slot_id,
     label~,
@@ -221,7 +231,6 @@ fn oai_compat_catalog_slot(
         base_url=config.base_url,
         model=config.model,
         endpoint_prefix=config.endpoint_prefix,
-        thinking=config.thinking,
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=config.thinking_efforts,
         context_window=config.context_window,
@@ -423,7 +432,9 @@ fn oai_compat_parse_models(
 /// Resolve the initial config selection from declared levels plus an optional
 /// legacy fixed string — the shared core of the flat single-model form and
 /// every `models[]` entry. An explicit legacy string wins; otherwise the
-/// first declared level; an undeclared provider starts at "off".
+/// first declared level; an endpoint that declares nothing starts with no
+/// reasoning surface at all (nothing sent, endpoint default applies). The
+/// legacy toggle words "off"/"on" both mean omission.
 fn oai_compat_config_from_selection(
   api_key : String,
   base_url~ : String,
@@ -451,7 +462,6 @@ fn oai_compat_config_from_selection(
           base_url~,
           model~,
           endpoint_prefix~,
-          thinking=fixed == "on",
           context_window~,
           compact_threshold~,
           supports_images~,
@@ -468,7 +478,6 @@ fn oai_compat_config_from_selection(
           base_url~,
           model~,
           endpoint_prefix~,
-          thinking=true,
           reasoning_effort=Some(fixed),
           thinking_efforts=if declared_efforts.is_empty() {
             [fixed]
@@ -488,7 +497,6 @@ fn oai_compat_config_from_selection(
             base_url~,
             model~,
             endpoint_prefix~,
-            thinking=false,
             context_window~,
             compact_threshold~,
             supports_images~,
@@ -499,7 +507,6 @@ fn oai_compat_config_from_selection(
             base_url~,
             model~,
             endpoint_prefix~,
-            thinking=true,
             reasoning_effort=Some(declared_efforts[0]),
             thinking_efforts=declared_efforts,
             context_window~,
@@ -594,9 +601,10 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
       }
       // Declared levels: `reasoning_effort` accepts an array of levels (the
       // canonical form) or a legacy single string; `reasoning_efforts` is the
-      // plural alias carrying the same array. No declaration means the plain
-      // off/on toggle — conventional level sets are never fabricated for an
-      // endpoint that did not declare them.
+      // plural alias carrying the same array. A legacy toggle word ("off"/
+      // "on") means omission. No declaration means the endpoint exposes no
+      // reasoning selector — conventional level sets are never fabricated for
+      // an endpoint that did not declare them.
       let (singular_array, singular_string) : (Array[String]?, String?) = match
         source.setting("reasoning_effort") {
         None => (None, None)

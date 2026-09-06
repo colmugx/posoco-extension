@@ -1,5 +1,5 @@
 ///|
-/// wire_log.js.mbt — JS (bun) wire log: raw SSE payload capture for
+/// JS (bun) wire log: raw SSE payload capture for
 /// diagnosing provider streams without disturbing the TUI.
 ///
 /// Activated by the `POSOCO_WIRE_LOG` env var holding the target file path;

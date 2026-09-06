@@ -23,7 +23,7 @@ options(
     // provider_config, and the factory all live in the unrestricted core
     // files and compile on every backend — so the package exports a complete
     // mbti. #cfg-guarded fallbacks (chat/compact_wasm_fallback.mbt) satisfy
-    // the trait on wasm. Mirrors posoco-ext-read / posoco-ext-oauth.
+    // the trait on wasm.
     "chat_native_js.mbt": [ "native", "js" ],
     "compact_native_js.mbt": [ "native", "js" ],
     "wire_log.js.mbt": [ "js" ],

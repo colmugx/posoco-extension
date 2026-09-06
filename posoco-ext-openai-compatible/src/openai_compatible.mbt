@@ -1,11 +1,4 @@
 ///|
-/// posoco_ext_openai-compatible — ModelPort implementation.
-///
-/// Implements @posoco.ModelPort for any standard OpenAI Chat Completions
-/// endpoint. Uses @http.post / @http.post_stream against
-/// base_url + endpoint_prefix + "/chat/completions".
-
-///|
 /// Build HTTP headers for OpenAI-compatible API requests. When
 /// `request_headers` is supplied it is evaluated per request and its entries
 /// override the defaults, so adapters can rotate identity headers.
@@ -28,7 +21,6 @@ fn build_headers(
 }
 
 ///|
-/// The full chat completions URL: base_url + endpoint_prefix + /chat/completions.
 fn chat_url(config : OpenAICompatibleConfig) -> String {
   config.base_url + config.endpoint_prefix + "/chat/completions"
 }
@@ -48,6 +40,10 @@ pub(all) struct OpenAICompatibleModelPort {
   /// generic OpenAI-compatible config while allowing adapters such as
   /// OpenCode Zen to provide fresh request metadata.
   request_headers : (() -> Map[String, String])?
+  /// Per-process learning: set once the provider explicitly rejects the
+  /// `prompt_cache_key` parameter in an error body; subsequent requests omit
+  /// the key. Never persisted.
+  mut prompt_cache_key_rejected : Bool
 }
 
 ///|
@@ -56,20 +52,27 @@ pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(
   config : OpenAICompatibleConfig,
   request_headers? : () -> Map[String, String],
 ) -> OpenAICompatibleModelPort {
-  { provider_id, config, request_headers, }
+  { provider_id, config, request_headers, prompt_cache_key_rejected: false, }
 }
 
 ///|
-/// ModelPort implementation — chat and compact live in chat_native_js.mbt /
-/// compact_native_js.mbt (they drive moonbitlang/async/http, which is
-/// native+js only). provider_config below is pure and compiles on every
-/// backend.
+/// 400-learning entry point: run the kit rejection matcher over one non-2xx
+/// error body and remember an explicit `prompt_cache_key` rejection for the
+/// rest of this process.
+fn OpenAICompatibleModelPort::learn_prompt_cache_key_rejection(
+  self : OpenAICompatibleModelPort,
+  error_body_text : String,
+) -> Unit {
+  if @chatkit.is_prompt_cache_key_rejection(error_body_text) {
+    self.prompt_cache_key_rejected = true
+  }
+}
 
 ///|
-/// ModelPort implementation — provider_config. Reasoning vocabulary stays
-/// undeclared (the router learns levels from the slot, not from here); the
-/// auto-compact metadata from `models[]` settings IS reported so the Agent
-/// can build its per-turn RunPolicy from the active model's own numbers.
+/// Reasoning vocabulary stays undeclared (the router learns levels from the
+/// slot, not from here); the auto-compact metadata from `models[]` settings
+/// IS reported so the Agent can build its per-turn RunPolicy from the active
+/// model's own numbers.
 pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn provider_config(
   self : OpenAICompatibleModelPort,
 ) -> @posoco.ProviderConfig {

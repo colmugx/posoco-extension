@@ -1,10 +1,4 @@
 ///|
-/// Shared HTTP utilities for the OpenAI-compatible adapter — error body
-/// capture, status classification, stream termination classification, and
-/// tool-call validation. All items are package-visible so they can be used
-/// across files in this package (openai_compatible.mbt, sse.mbt, tests).
-
-///|
 /// Non-2xx body capture. The provider's error body is the primary diagnostic
 /// for an HTTP failure — it names the rejected field and the expected shape —
 /// so UTF-8 text is carried into the error message (capped at
@@ -22,8 +16,8 @@ priv enum OaiCompatErrorBody {
 let oai_compat_error_body_cap : Int = 2048
 
 ///|
-/// Cap an error body for the message. Char-wise copy keeps the cut on a
-/// Unicode boundary (String slicing can raise on surrogate edges).
+/// Char-wise copy keeps the cut on a Unicode boundary (String slicing can
+/// raise on surrogate edges).
 fn cap_oai_compat_error_body(text : String) -> String {
   if text.length() <= oai_compat_error_body_cap {
     text
@@ -42,8 +36,6 @@ fn cap_oai_compat_error_body(text : String) -> String {
 }
 
 ///|
-/// Format an HTTP failure, embedding the provider's error body verbatim
-/// (capped) whenever it drained as UTF-8 text.
 fn format_oai_compat_http_error(
   stage : String,
   status : Int,
@@ -102,13 +94,8 @@ fn classify_oai_compat_http_status(
 }
 
 ///|
-/// `read_error_body` (the one function that takes an `@http.Client`)
-/// lives in chat_native_js.mbt, co-located with the chat impl. The
-/// classification helpers below are pure and stay here for every backend.
-
-///|
-/// Pure classification for stream termination; used by the HTTP loop and
-/// offline tests so EOF is never inferred from accumulated content.
+/// Used by the HTTP loop and offline tests so EOF is never inferred from
+/// accumulated content.
 priv enum OaiCompatStreamTermination {
   ExplicitTerminal
   CleanEof
@@ -143,42 +130,25 @@ fn classify_oai_compat_stream_termination(
 /// Cloudflare) occasionally close after the last delta but before
 /// finish_reason/[DONE]; what the model verifiably requested is then intact.
 /// Text-only truncations stay loud: a cut answer must not pass as complete.
-fn oai_compat_eof_tolerable(acc : @posoco.StreamAccumulator) -> Bool {
-  if acc.tool_calls.length() == 0 {
-    return false
+fn oai_compat_eof_tolerable(
+  acc : @posoco.StreamAccumulator,
+) -> Bool raise @posoco.ModelError {
+  let completion = acc.to_completion() catch {
+    @posoco.ModelError::ResponseParse(_) => return false
+    error => raise error
   }
-  let result = Ok(validate_oai_compat_stream_tool_calls(acc)) catch {
-    e => Err(e)
-  }
-  result is Ok(_)
+  completion.has_tool_calls()
 }
 
 ///|
-/// Reject incomplete tool-call builders before delegating JSON assembly.
 fn validate_oai_compat_stream_tool_calls(
   acc : @posoco.StreamAccumulator,
 ) -> Unit raise @posoco.ModelError {
-  for tc in acc.tool_calls {
-    if tc.id == "" {
+  let _ = acc.to_completion() catch {
+    @posoco.ModelError::ResponseParse(message) =>
       raise @posoco.ModelError::ResponseParse(
-        "openai-compatible SSE parse failure (stage=tool.id, category=missing)",
+        "openai-compatible SSE parse failure (stage=tool_calls): " + message,
       )
-    }
-    if tc.name == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "openai-compatible SSE parse failure (stage=tool.name, category=missing)",
-      )
-    }
-    if tc.arguments_json() == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "openai-compatible SSE parse failure (stage=tool.arguments, category=missing)",
-      )
-    }
-    let _ : Json = @json.parse(tc.arguments_json()) catch {
-      _ =>
-        raise @posoco.ModelError::ResponseParse(
-          "openai-compatible SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
-        )
-    }
+    error => raise error
   }
 }
