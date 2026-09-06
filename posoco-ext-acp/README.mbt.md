@@ -43,14 +43,10 @@ let policy = @permission.PermissionPolicy(
 let agent = @posoco.Agent(exts=[bridge, policy, ..other_extensions], config~)
 ```
 
-Interactive UI consumers (e.g. posoco-ext-askquestion) take the bridge's
+Interactive UI consumers take the bridge's
 `UiPort` view: `Input` / `Confirm` / `Select` become elicitation form fields;
 a client without the elicitation capability raises `Unsupported`, which such
 tools degrade to a model-visible tool error instead of failing the turn.
-
-```moonbit nocheck
-let ask = @askquestion.AskQuestionTools(bridge as &@posoco.UiPort)
-```
 
 ### Per-prompt turn loop
 

@@ -56,8 +56,8 @@ pub fn acp_tool_kind(name : String) -> @acp.ToolKind {
 
 ///|
 /// Longest-verb-prefix fallback for compound tool names (`search_issues`,
-/// `read_file`, `edit_document`). Longer prefixes are checked first so
-/// `apply_patch_*` wins over `patch_*`.
+/// `read_file`, `edit_document`): keeps the longest matching prefix,
+/// independent of list order.
 fn prefix_tool_kind(base : String) -> @acp.ToolKind {
   let prefixes : Array[(String, @acp.ToolKind)] = [
     ("apply_patch", Edit),
@@ -96,7 +96,6 @@ fn prefix_tool_kind(base : String) -> @acp.ToolKind {
     ("think", Think),
     ("reason", Think),
   ]
-  // Longest match wins: scan by descending prefix length.
   let mut best : @acp.ToolKind? = None
   let mut best_length = 0
   for pair in prefixes {

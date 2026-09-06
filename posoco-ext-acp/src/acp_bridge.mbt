@@ -515,7 +515,7 @@ fn AcpBridge::ingest_model_response(
               used: self.used_tokens.to_uint64(),
               size: match self.context_window {
                 Some(window) => window.to_uint64()
-                None => 0 // host 未提供 context_window~，size 维持 0
+                None => 0
               },
               cost: Omitted,
               meta: Omitted,
