@@ -3,9 +3,9 @@ name = "colmugx/posoco-ext-statusbar"
 version = "0.3.0"
 
 import {
-  "colmugx/posoco@0.14.3",
-  "colmugx/posoco-devkit@0.3.0",
-  "moonbitlang/async@0.21.0",
+  "colmugx/posoco@0.14.4",
+  "colmugx/posoco-devkit@0.4.0",
+  "moonbitlang/async@0.21.2",
 }
 
 readme = "README.mbt.md"

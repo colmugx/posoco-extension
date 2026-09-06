@@ -101,8 +101,8 @@ The bundled publishers and their priorities (see each package's README):
 
 | Segment | Provider | Priority |
 |---------|----------|----------|
-| `plan` | posoco-ext-plan | 10 |
-| `model` / `tok` / `cache` | posoco-ext-llm | 20 / 30 / 40 |
-| `ttft` / `tps` / `avg` | posoco-ext-stats | 50 / 60 / 70 |
-| `session` | posoco-ext-fs-session | 80 |
-| `resume` | posoco-ext-ratelimit | 90 |
+| `plan` | plan-mode extension | 10 |
+| `model` / `tok` / `cache` | llm adaptor extension | 20 / 30 / 40 |
+| `ttft` / `tps` / `avg` | stats extension | 50 / 60 / 70 |
+| `session` | file-session extension | 80 |
+| `resume` | rate-limit extension | 90 |

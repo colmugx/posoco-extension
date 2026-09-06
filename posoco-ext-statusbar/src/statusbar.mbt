@@ -283,6 +283,19 @@ pub fn StatusBar::segments(self : StatusBar) -> Array[SegmentInfo] {
 }
 
 ///|
+/// Whether any registry entry currently carries a value — the bar holds
+/// something worth projecting at UI arrival.
+fn StatusBar::has_valued_segment(self : StatusBar) -> Bool {
+  for pair in self.ordered() {
+    match pair.1.value {
+      Some(_) => return true
+      None => ()
+    }
+  }
+  false
+}
+
+///|
 /// Project the whole registry into one render intent. Only segments with
 /// a value are visible; an empty bar renders an empty Entries body, which
 /// the host treats as "clear the line". The body is always `Entries` —

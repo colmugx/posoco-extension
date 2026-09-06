@@ -24,13 +24,20 @@ pub impl @posoco.Extension for StatusBar with fn extension_id(_self : StatusBar)
 /// The composed UI is delivered once at compose time and stored for the
 /// render pushes. With `Ui` declared, the view is always populated (core
 /// composes NoopUiPort when no host UI exists), so the None arm keeps the
-/// silent pre-compose behavior.
+/// silent pre-compose behavior. Segments announced by earlier-composed peers
+/// while no UI existed are projected right here: resident segments must be
+/// visible from the start, not after their next change.
 pub impl @posoco.Lifecycle for StatusBar with fn on_compose(
   self : StatusBar,
   ctx : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
   match ctx.ui() {
-    Some(ui) => self.ui = Some(ui)
+    Some(ui) => {
+      self.ui = Some(ui)
+      if self.has_valued_segment() {
+        self.render()
+      }
+    }
     None => ()
   }
 }

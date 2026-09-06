@@ -109,6 +109,22 @@ test "register with a value renders the segment through the status slot" {
 }
 
 ///|
+test "compose with no announced segments stays silent" {
+  let ui = RecordingUi()
+  let bus = @devkit.EventBus()
+  let bar = StatusBar(bus=Some(bus))
+  let model = @posoco.ScriptedModel([])
+  bar.on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Ui],
+      model=model as &@posoco.ModelPort,
+      ui=ui as &@posoco.UiPort,
+    ),
+  )
+  assert_eq(ui.renders.length(), 0)
+}
+
+///|
 test "update on an unknown segment auto-registers it" {
   let (bar, ui, bus) = new_composed_bar()
   @devkit.publish_status_update(
@@ -434,7 +450,7 @@ test "malformed bus events render nothing" {
 }
 
 ///|
-test "renders start only after the composed UI arrives" {
+test "segments announced before the UI project at compose" {
   let ui = RecordingUi()
   let bus = @devkit.EventBus()
   let bar = StatusBar(bus=Some(bus))
@@ -456,9 +472,18 @@ test "renders start only after the composed UI arrives" {
       ui=ui as &@posoco.UiPort,
     ),
   )
-  @devkit.publish_status_update(bus, source="ext", segment="model", value="m2")
-  // The first render carries the full current registry, not just the delta.
+  // UI arrival projects the announced backlog immediately: resident
+  // segments are visible from the start, not after their next change.
   assert_eq(ui.renders.length(), 1)
+  debug_inspect(
+    bar_entries(ui.last()),
+    content=(
+      #|[{ key: "model", value: "m", color: None }]
+    ),
+  )
+  @devkit.publish_status_update(bus, source="ext", segment="model", value="m2")
+  // Later changes re-render the full current registry, not just the delta.
+  assert_eq(ui.renders.length(), 2)
   debug_inspect(
     bar_entries(ui.last()),
     content=(
