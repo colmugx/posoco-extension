@@ -369,7 +369,7 @@ async test "wf refuses private redirect target" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/a")))
   inspect(
     content,
-    content="webfetch: host '127.0.0.1' is not allowed (private, local, or blocked address)",
+    content="webfetch: host '127.0.0.1' is not allowed (loopback address 127.0.0.1; private, local, or blocked address)",
   )
   inspect(io.calls, content="1")
 }
@@ -443,7 +443,7 @@ async test "wf blocks private host before fetching" {
   let content = err_page(try_wf(tools, wf_call("http://127.0.0.1/x")))
   inspect(
     content,
-    content="webfetch: host '127.0.0.1' is not allowed (private, local, or blocked address)",
+    content="webfetch: host '127.0.0.1' is not allowed (loopback address 127.0.0.1; private, local, or blocked address)",
   )
   inspect(io.calls, content="0")
 }

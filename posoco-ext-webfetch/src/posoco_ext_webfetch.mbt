@@ -79,8 +79,8 @@ async fn follow_redirects(
   let mut hops = 0
   while true {
     match check_host(current) {
-      HostBlocked(_) =>
-        return Err(ErrKind::HostBlocked(host=current.host_display()))
+      HostBlocked(reason) =>
+        return Err(ErrKind::HostBlocked(host=current.host_display(), reason~))
       HostAllowed => ()
     }
     let reply = io.fetch(current.to_url_string(), byte_cap)
@@ -89,8 +89,10 @@ async fn follow_redirects(
         Some(loc) => {
           let target = current.join(loc)
           match check_host(target) {
-            HostBlocked(_) =>
-              return Err(ErrKind::HostBlocked(host=target.host_display()))
+            HostBlocked(reason) =>
+              return Err(
+                ErrKind::HostBlocked(host=target.host_display(), reason~),
+              )
             HostAllowed => ()
           }
           if same_origin(current, target) {

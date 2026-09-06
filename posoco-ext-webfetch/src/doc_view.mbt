@@ -79,7 +79,7 @@ priv enum ErrKind {
   TooLarge(bytes~ : Int, url~ : String)
   TimedOut(ms~ : Int, url~ : String)
   UnsupportedType(ct~ : String, url~ : String)
-  HostBlocked(host~ : String)
+  HostBlocked(host~ : String, reason~ : String)
   TooManyRedirects(hops~ : Int, url~ : String)
   Transport(msg~ : String, url~ : String)
   OffsetPastEnd(offset~ : Int, total~ : Int, url~ : String)
@@ -112,8 +112,8 @@ fn format_error(kind : ErrKind) -> String {
       "webfetch: request to '\{url}' timed out after \{ms}ms — the site may be slow or blocking automated clients; retrying or using a different source may help"
     UnsupportedType(ct~, url~) =>
       "webfetch: unsupported content-type '\{ct}' for '\{url}' — this tool returns text, markdown, and JSON only"
-    HostBlocked(host~) =>
-      "webfetch: host '\{host}' is not allowed (private, local, or blocked address)"
+    HostBlocked(host~, reason~) =>
+      "webfetch: host '\{host}' is not allowed (\{reason}; private, local, or blocked address)"
     TooManyRedirects(hops~, url~) =>
       "webfetch: too many redirects (\{hops}) following '\{url}'"
     Transport(msg~, url~) => "webfetch: request to '\{url}' failed: \{msg}"

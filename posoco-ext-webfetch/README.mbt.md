@@ -38,7 +38,7 @@ Both constructors take the same knobs (all optional): `timeout_ms` per fetch
 and hosts with custom transports).
 
 `webfetch` is read-only and rides the **read class** of
-`posoco-ext-permission`'s default policy.
+a permission gate's default policy.
 
 ## Tool arguments
 

@@ -7,8 +7,6 @@
 priv struct DefaultHttpIo {}
 
 ///|
-/// Canonical `@http` transport for `HttpIo`. Unused until the pipeline wires
-/// it (transient).
 pub fn default_http_io() -> &HttpIo {
   DefaultHttpIo::{ } as &HttpIo
 }

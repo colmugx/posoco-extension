@@ -265,9 +265,14 @@ test "doc_view format_error remaining kinds" {
     ),
   )
   inspect(
-    format_error(HostBlocked(host="169.254.169.254")),
+    format_error(
+      HostBlocked(
+        host="169.254.169.254",
+        reason="link-local address 169.254.169.254",
+      ),
+    ),
     content=(
-      #|webfetch: host '169.254.169.254' is not allowed (private, local, or blocked address)
+      #|webfetch: host '169.254.169.254' is not allowed (link-local address 169.254.169.254; private, local, or blocked address)
     ),
   )
   inspect(

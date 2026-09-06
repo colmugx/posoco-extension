@@ -2,8 +2,7 @@
 /// Minimal RFC 3986 URL subset for the webfetch pipeline: absolute http/https
 /// URLs only, no userinfo, optional explicit port, path + query, fragment
 /// dropped. Pure functions — this file is the shared seam between url_guard
-/// (host validation) and html_to_markdown (link absolutization). M2 owns
-/// hardening + tests; other files treat it as a read-only dependency.
+/// (host validation) and html_to_markdown (link absolutization).
 priv struct ParsedUrl {
   scheme : String // lowercase "http" | "https"
   host : String // lowercase; IPv6 literal without brackets
