@@ -3,7 +3,7 @@ name = "colmugx/posoco-kit-delegation"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.14.3",
+  "colmugx/posoco@0.14.4",
 }
 
 license = "Apache-2.0"

@@ -1,6 +1,3 @@
-// delegation_wbtest.mbt — the neutral intent shape and validated posoco
-// tool-call materialization.
-
 ///|
 test "intent carries the goal plus optional placement, model and prompt" {
   let bare : DelegationIntent = {
