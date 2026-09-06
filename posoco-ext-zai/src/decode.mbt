@@ -1,7 +1,4 @@
 ///|
-/// Wire decoder: z.ai chat-completions JSON into kernel Completion.
-
-///|
 fn zai_parse_error(stage : String, category : String) -> @posoco.ModelError {
   @posoco.ModelError::ResponseParse(
     "zai response parse failure (stage=\{stage}, category=\{category})",

@@ -147,9 +147,6 @@ pub impl @llm.ProviderFactory for ZaiProvider with fn build(
     Some(config) => {
       let api_key_impl = ZaiProvider(ctx=self.ctx)
       let api_key : &@llm.ApiKeyFactory = api_key_impl
-      // Host-cached ids from a previous refresh expand into the discovered
-      // catalog offline; without them the preset catalog stands until an
-      // explicit refresh. Bad records degrade, never fail.
       let catalog = match parse_cached_zai_models(source.cached_models) {
         Some(ids) =>
           zai_model_catalog_from_ids(

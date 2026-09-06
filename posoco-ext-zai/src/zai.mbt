@@ -147,7 +147,6 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
         }
       }
       let acc = @posoco.StreamAccumulator::StreamAccumulator()
-      // Forward typed StreamChunks directly to the host callback.
       let mut done = false
       let mut data_buffer = ""
       let mut last_yield = @async.now()
@@ -205,28 +204,12 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
 fn validate_zai_stream_tool_calls(
   acc : @posoco.StreamAccumulator,
 ) -> Unit raise @posoco.ModelError {
-  for tc in acc.tool_calls {
-    if tc.id == "" {
+  let _ = acc.to_completion() catch {
+    @posoco.ModelError::ResponseParse(message) =>
       raise @posoco.ModelError::ResponseParse(
-        "zai SSE parse failure (stage=tool.id, category=missing)",
+        "zai SSE parse failure (stage=tool_calls): " + message,
       )
-    }
-    if tc.name == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "zai SSE parse failure (stage=tool.name, category=missing)",
-      )
-    }
-    if tc.arguments_json() == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "zai SSE parse failure (stage=tool.arguments, category=missing)",
-      )
-    }
-    let _ : Json = @json.parse(tc.arguments_json()) catch {
-      _ =>
-        raise @posoco.ModelError::ResponseParse(
-          "zai SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
-        )
-    }
+    error => raise error
   }
 }
 

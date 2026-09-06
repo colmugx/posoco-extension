@@ -81,7 +81,6 @@ test "encode: thinking and reasoning_effort on the wire" {
 }
 
 ///|
-/// Encode a minimal request and expose its top-level fields.
 fn encode_request(model : String, stream : Bool) -> Map[String, Json] {
   let body = build_chat_request(
     [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],

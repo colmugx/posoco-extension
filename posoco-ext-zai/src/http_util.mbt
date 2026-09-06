@@ -1,6 +1,4 @@
 ///|
-/// HTTP error classification for z.ai.
-///
 /// 429 is a quota verdict and MUST keep the body: z.ai states the flush time
 /// in the message text (codes 1308/1310/1316–1321), and those verdicts are
 /// what makes auto-resume schedulable. Transient 429s (1302 concurrency,

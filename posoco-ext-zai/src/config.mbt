@@ -1,7 +1,7 @@
 ///|
 /// Z.ai / BigModel platform endpoint presets for direct API access
-/// (pay-as-you-go balance). The GLM Coding Plan endpoints live in
-/// posoco-ext-zai-coding-plan.
+/// (pay-as-you-go balance). The GLM Coding Plan endpoints live in the
+/// coding-plan adaptor.
 pub fn zai_platform_endpoint(platform : String) -> (String, String)? {
   match platform {
     "zai" => Some(("https://api.z.ai", "/api/paas/v4"))

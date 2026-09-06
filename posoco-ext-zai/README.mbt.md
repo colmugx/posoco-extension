@@ -9,7 +9,7 @@ platform APIs (`api.z.ai`, `open.bigmodel.cn`), pay-as-you-go balance, with
 the GLM wire specifics owned end to end — thinking effort, tool calls,
 streaming, and typed 429 quota verdicts. This is **not** a generic
 OpenAI-compatible pass-through, and it does not serve the GLM Coding Plan
-endpoints (`posoco-ext-zai-coding-plan` owns those).
+endpoints (the coding-plan adaptor owns those).
 
 ## Ports contributed
 
@@ -100,7 +100,7 @@ prefix unless the URL carries its own path.
 - 429 classification follows z.ai's documented error-code table: quota
   verdicts (1308/1310/1316–1321) parse `{next_flush_time}` out of the message
   (UTC+8 when no explicit offset) into the typed `ModelError::RateLimited` —
-  pair with posoco-ext-ratelimit for automatic resume. Transient verdicts
+  pair with a rate-limit extension for automatic resume. Transient verdicts
   (1302 concurrency, 1305 overload) classify as `RateLimited` with no reset
   time.
 - `Accept-Language: en-US,en` request header, per z.ai docs.

@@ -1,6 +1,3 @@
-///
-/// Z.ai / BigModel authenticated `/models` endpoint.
-///
 /// Both platforms follow the OpenAI list envelope (`{"object": "list",
 /// "data": [...]}`), but their model records carry platform-specific extra
 /// fields. Parsing is therefore tolerant: `data` with non-empty string `id`s

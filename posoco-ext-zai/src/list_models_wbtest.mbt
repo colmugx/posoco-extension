@@ -139,7 +139,6 @@ test "catalog from ids keeps the configured model first, preserves order" {
       #|["glm-5.3", "glm-5.2", "glm-4.6"]
     ),
   )
-  // A configured model missing from the discovered list is not invented.
   debug_inspect(
     zai_catalog_ids(["glm-5.2", "glm-4.6"], "glm-5.3"),
     content=(
@@ -225,8 +224,6 @@ test "factory build expands the catalog from cached model records" {
   guard result is @llm.ProviderBuildResult::Ready(catalog) else {
     fail("expected Ready")
   }
-  // The configured default model (glm-5.3) is ordered first even though the
-  // cache listed glm-5.2 first.
   let ids : Array[String] = []
   for slot in catalog.slots() {
     ids.push(slot.model_id)

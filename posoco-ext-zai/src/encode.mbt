@@ -1,6 +1,4 @@
 ///|
-/// Wire encoder: kernel canonical types to z.ai chat-completions JSON.
-///
 /// z.ai GLM specifics beyond plain OpenAI chat completions:
 /// - `thinking: {"type": "enabled"|"disabled"}` switches GLM thinking;
 /// - `reasoning_effort` rides along for GLM-5.2+ ("" disables thinking);
@@ -34,9 +32,6 @@ fn encode_message(msg : @posoco.Message) -> Json {
       ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
-  // Shared content encoding: string form (this endpoint does not accept
-  // content parts), with any Image block downgraded to an explicit
-  // placeholder instead of a silent drop.
   let content_json : Json = match
     @chatkit.encode_chat_message_content(content_blocks) {
     TextContent(s) => Json::string(s)

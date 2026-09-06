@@ -1,8 +1,3 @@
-// compact.mbt — Z.AI client-side compaction via the summary kit: cut the
-// transcript at a safe boundary (keep the most recent 20k tokens), ask the
-// model for a structured summary in one extra non-streaming call, and
-// Replace the transcript with (summary user message + verbatim tail).
-
 ///|
 /// One non-streaming chat call producing the summary: same transport,
 /// headers, thinking resolution and error classification as `chat`, with
@@ -60,8 +55,8 @@ async fn ZaiModelPort::zai_compact_completion(
 }
 
 ///|
-/// ModelPort implementation — compact. Keep the most recent 20k tokens
-/// verbatim, summarize the head with the structured Markdown template, and
+/// Keep the most recent 20k tokens verbatim, summarize the head with the
+/// structured Markdown template, and
 /// Replace. The window is a fixed parity default: zai reports no
 /// context_window yet, so auto-compact stays disabled until it does
 /// (unknown windows are never guessed) and this value only bounds manual
@@ -103,7 +98,6 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn compact(
 }
 
 ///|
-/// The summary text of a compact completion: Text blocks only.
 fn zai_summary_text(completion : @posoco.Completion) -> String {
   completion.message.content
   .filter_map(fn(block) {
