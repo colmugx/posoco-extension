@@ -1,8 +1,5 @@
 ///|
-/// posoco_ext_mcp.mbt — Posoco MCP Extension
-///
-/// Bridges colmugx/mcp client with posoco's unified ToolProvider trait.
-/// Enables posoco agents to discover and call tools from MCP servers.
+/// Bridges the colmugx/mcp client with posoco's unified ToolProvider trait.
 
 ///|
 /// Extract (cmd, args, extra_env) from a StdioClientTransport for
@@ -18,8 +15,8 @@ fn stdio_cmd(
 /// for connect_http dispatch. The token is empty when the server entry
 /// declared none. The extra headers keep their injected order — they are
 /// appended to every request the rebuilt transport issues (host-scoped
-/// context headers such as `x-lody-mcp-*` ride on this), so this must stay in
-/// the dispatch path of every connect.
+/// context headers ride on this), so this must stay in the dispatch path of
+/// every connect.
 fn http_connect_params(
   t : @transport.HttpClientTransport,
 ) -> (String, String, Array[(String, String)]) {
@@ -155,7 +152,7 @@ pub(all) struct MCPServerConfig {
 
 ///|
 /// Constructor with the documented defaults for the resilience knobs
-/// (matching the values mcp.json entries get before M4-style parsing).
+/// (the same values mcp.json parsing applies).
 pub fn MCPServerConfig::MCPServerConfig(
   name~ : String,
   transport~ : @transport.AnyTransport,
@@ -425,8 +422,6 @@ fn MCPToolBridge::commit_catalog(
   }
   self.tool_to_conn = plan.tool_to_conn
 }
-
-///| Bridge struct that implements the unified ToolProvider trait (list + execute).
 
 ///|
 /// Manages multiple MCP server connections with namespaced tool routing.

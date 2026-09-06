@@ -413,15 +413,15 @@ test "http_connect_params_extracts_url_token_and_headers" {
 
 ///|
 test "http_connect_params_preserves_injected_header_order" {
-  // lody-scoped context headers must reach connect_http in injection order:
+  // Host-scoped context headers must reach connect_http in injection order:
   // the transport array is passed through by reference, not re-sorted or
   // rebuilt.
   let headers = [
-    ("x-lody-mcp-session", "s-1"),
-    ("x-lody-mcp-workspace", "w-2"),
-    ("x-lody-mcp-agent", "a-3"),
-    ("x-lody-mcp-turn", "t-4"),
-    ("x-lody-mcp-trace", "r-5"),
+    ("host-mcp-session", "s-1"),
+    ("host-mcp-workspace", "w-2"),
+    ("host-mcp-agent", "a-3"),
+    ("host-mcp-turn", "t-4"),
+    ("host-mcp-trace", "r-5"),
   ]
   match http_params_test_transport(extra_headers=headers) {
     @transport.AnyTransport::HttpClient(t) => {
@@ -429,11 +429,11 @@ test "http_connect_params_preserves_injected_header_order" {
       assert_eq(url, "http://127.0.0.1:8001/mcp")
       assert_eq(token, "")
       assert_eq(extra_headers.length(), 5)
-      assert_eq(extra_headers[0], ("x-lody-mcp-session", "s-1"))
-      assert_eq(extra_headers[1], ("x-lody-mcp-workspace", "w-2"))
-      assert_eq(extra_headers[2], ("x-lody-mcp-agent", "a-3"))
-      assert_eq(extra_headers[3], ("x-lody-mcp-turn", "t-4"))
-      assert_eq(extra_headers[4], ("x-lody-mcp-trace", "r-5"))
+      assert_eq(extra_headers[0], ("host-mcp-session", "s-1"))
+      assert_eq(extra_headers[1], ("host-mcp-workspace", "w-2"))
+      assert_eq(extra_headers[2], ("host-mcp-agent", "a-3"))
+      assert_eq(extra_headers[3], ("host-mcp-turn", "t-4"))
+      assert_eq(extra_headers[4], ("host-mcp-trace", "r-5"))
     }
     _ => fail("expected http transport")
   }
