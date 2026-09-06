@@ -170,8 +170,6 @@ async test "grep_zero_matches_is_success" {
       "grep",
       grep_call("missing", dir),
     )
-    // ToolOutcome is now a variant: Success carries content; business
-    // errors are ToolReportedError. Zero matches is still Success.
     match result {
       Success(content~, structured~) => {
         assert_eq(content, "No matches found for: missing")

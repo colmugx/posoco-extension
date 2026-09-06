@@ -10,8 +10,8 @@
 /// in-process node:fs walker when no real rg is found. On wasm/wasm-gc the
 /// tool is not listed and execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct GrepTools {
-  // Resolves the search base against the workspace root; None keeps legacy
-  // behavior (the base lands on the process working directory).
+  // Resolves the search base against the workspace root; None leaves the
+  // base on the process working directory.
   anchor : @devkit.WorkspaceAnchor?
   // Directory/file names pruned during traversal; defaults to
   // @devkit.default_ignore_patterns(). Hidden entries are always skipped.
@@ -103,7 +103,6 @@ const GREP_LINE_CHAR_CAP = 2000
 const GREP_BYTE_CAP = 100_000
 
 ///|
-/// Shared tool definition for the `grep` tool.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
@@ -333,7 +332,6 @@ fn match_counts(matches : Array[GrepMatch]) -> Array[(String, Int)] {
 }
 
 ///|
-/// "1 file" / "N files".
 fn files_noun(n : Int) -> String {
   if n == 1 {
     "file"
@@ -343,7 +341,6 @@ fn files_noun(n : Int) -> String {
 }
 
 ///|
-/// "1 match" / "N matches".
 fn match_noun(n : Int) -> String {
   if n == 1 {
     "match"
@@ -353,7 +350,6 @@ fn match_noun(n : Int) -> String {
 }
 
 ///|
-/// One-line UI summary for the structured payload.
 fn grep_summary(count : Int, noun : String) -> String {
   if count == 0 {
     "no matches"

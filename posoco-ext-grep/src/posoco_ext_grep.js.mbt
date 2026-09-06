@@ -19,7 +19,6 @@ extern "js" fn bun_which(name : String) -> String =
   #| (name) => Bun.which(name) ?? ""
 
 ///|
-/// Spawn with piped streams and await exit + both drains concurrently.
 extern "js" fn js_spawn_envelope(
   cmd : FixedArray[String],
 ) -> @js_async.Promise[String] =
@@ -34,7 +33,6 @@ extern "js" fn js_spawn_envelope(
   #| }
 
 ///|
-/// Decoded spawn envelope.
 priv struct JsSpawnResult {
   exit_code : Int
   stdout : String
@@ -80,7 +78,6 @@ async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
 }
 
 ///|
-/// Candidate rg locations: PATH first, then the common Homebrew prefixes.
 fn rg_candidates() -> Array[String] {
   let candidates : Array[String] = []
   let on_path = bun_which("rg")
@@ -310,7 +307,6 @@ fn js_read_file_text(path : String) -> String? {
 }
 
 ///|
-/// Join a directory path and an entry name with "/".
 fn js_path_join(dir : String, entry : String) -> String {
   if dir == "" || dir == "." {
     entry
