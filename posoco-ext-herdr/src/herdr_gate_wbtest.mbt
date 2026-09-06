@@ -1,5 +1,5 @@
 ///|
-/// Native+js only, like `herdr_gate`.
+/// Native+js only.
 fn gate_summary(marker : String?, pane : String?, bin : String?) -> String {
   match herdr_gate(marker, pane, bin) {
     Some(cfg) => "open(\{cfg.pane}, \{cfg.bin})"
