@@ -118,7 +118,6 @@ fn arguments_object(
 }
 
 ///|
-/// Truncate to max_len characters, appending "…" if cut.
 fn truncate_oneline(s : String, max_len : Int) -> String {
   let flat = s.replace(old="\n", new=" ")
   if flat.length() > max_len {

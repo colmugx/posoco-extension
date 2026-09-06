@@ -12,8 +12,8 @@ const PROMPT_DESC_CAP = 120
 /// One bullet per extension group in first-seen declaration order: the
 /// display id (manifest id without packaging prefix) followed by its tools,
 /// names and truncated descriptions auto-concatenated. Extensions whose
-/// tools lack descriptions show bare names — from today on, tool
-/// descriptions are part of the deferred-extension contract.
+/// tools lack descriptions show bare names; tool descriptions are part of
+/// the deferred-extension contract.
 fn LazyTools::catalog_bullets(self : LazyTools) -> String {
   let lines : Array[String] = []
   for group in self.groups() {

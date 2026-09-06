@@ -4,8 +4,7 @@
 /// them on the next prompt as a replace-in-place user envelope. The hook —
 /// not the system prompt — carries this content because it changes as the
 /// conversation progresses, and a mutating system prompt would invalidate
-/// the whole prompt-cache prefix (same trade as permission's mode
-/// reminder).
+/// the whole prompt-cache prefix.
 
 ///|
 /// Bounded recency window for the hint.

@@ -56,8 +56,8 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
 }
 
 ///|
-/// Extract a required string argument, mirroring the read tool's error
-/// style (RuntimeError for model-side argument mistakes).
+/// Extract a required string argument; raises RuntimeError for model-side
+/// argument mistakes.
 fn required_string(
   tool : String,
   args : Map[String, Json],
