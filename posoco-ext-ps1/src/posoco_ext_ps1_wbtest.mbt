@@ -6,7 +6,6 @@
 /// CI without pwsh stay green.
 
 ///|
-/// Test: PowerShellTools.list_tools
 async test "list_tools_contains_powershell" {
   let tools = PowerShellTools(exe="pwsh")
   let tool_defs = tools.list_tools()
@@ -46,7 +45,6 @@ async test "list_tools_have_provenance" {
 }
 
 ///|
-/// Test: extract_command
 test "extract_command_from_cmd_key" {
   let args = Json::object(
     Map::from_array([
@@ -133,7 +131,6 @@ test "collect_output_failure_mapping_is_stage_only" {
 }
 
 ///|
-/// Test: windows_guidance (pure, runs on any platform)
 test "windows_guidance_pwsh_flavor" {
   let text = windows_guidance("pwsh", "win32 10.0.26244")
   assert_true(text.contains("Environment: Windows (win32 10.0.26244)"))
@@ -160,7 +157,6 @@ test "windows_guidance_ps51_flavor" {
 }
 
 ///|
-/// Test: SystemPromptContributor
 async test "system_prompt_stable_and_platform_appropriate" {
   let tools = PowerShellTools(exe="pwsh")
   let first = tools.system_prompt()
@@ -189,7 +185,6 @@ async fn probe_powershell(exe : String) -> Bool {
 }
 
 ///|
-/// Test: execute (runtime; requires a local pwsh)
 async test "write_output_succeeds" {
   let tools = PowerShellTools(exe="pwsh")
   if probe_powershell(tools.exe) {

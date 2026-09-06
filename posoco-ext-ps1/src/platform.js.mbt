@@ -1,7 +1,6 @@
 ///|
 // Bun is a global under bun, so `process` and `Bun` need no require/import.
-// `require("os")` is used only for the optional platform-detail probe (same
-// precedent as posoco-ext-kimi identity).
+// `require("os")` is used only for the optional platform-detail probe.
 
 ///|
 extern "js" fn ps1_platform_is_windows() -> Bool =
