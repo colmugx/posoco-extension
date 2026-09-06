@@ -40,10 +40,6 @@ extern "js" fn FsUnitResult::is_ok(self : Self) -> Bool =
   #| (res) => res.ok
 
 ///|
-extern "js" fn FsUnitResult::error_message(self : Self) -> String =
-  #| (res) => res.content
-
-///|
 #external
 priv type FsStringResult
 
@@ -56,10 +52,6 @@ extern "js" fn FsStringResult::content(self : Self) -> String =
   #| (res) => res.content
 
 ///|
-extern "js" fn FsStringResult::error_message(self : Self) -> String =
-  #| (res) => res.content
-
-///|
 #external
 priv type FsStringArrayResult
 
@@ -68,11 +60,7 @@ extern "js" fn FsStringArrayResult::is_ok(self : Self) -> Bool =
   #| (res) => res.ok
 
 ///|
-extern "js" fn FsStringArrayResult::content(self : Self) -> Array[String] =
-  #| (res) => res.content
-
-///|
-extern "js" fn FsStringArrayResult::error_message(self : Self) -> String =
+extern "js" fn FsStringArrayResult::content(self : Self) -> FixedArray[String] =
   #| (res) => res.content
 
 ///|
@@ -85,10 +73,6 @@ extern "js" fn FsStatsResult::is_ok(self : Self) -> Bool =
 
 ///|
 extern "js" fn FsStatsResult::stats(self : Self) -> FsStats =
-  #| (res) => res.content
-
-///|
-extern "js" fn FsStatsResult::error_message(self : Self) -> String =
   #| (res) => res.content
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -132,7 +116,7 @@ extern "js" fn realpath_sync(path : String) -> String = "realpathSync"
 
 ///|
 #module("node:fs")
-extern "js" fn readdir_sync(path : String) -> Array[String] = "readdirSync"
+extern "js" fn readdir_sync(path : String) -> FixedArray[String] = "readdirSync"
 
 ///|
 #module("node:fs")
@@ -207,7 +191,7 @@ extern "js" fn realpath_ffi(
 
 ///|
 extern "js" fn readdir_ffi(
-  readdir : (String) -> Array[String],
+  readdir : (String) -> FixedArray[String],
   path : String,
 ) -> FsStringArrayResult =
   #| function(readdir, path) {
@@ -257,7 +241,7 @@ pub struct JsWorkspaceFs {}
 
 ///|
 pub fn JsWorkspaceFs::JsWorkspaceFs() -> JsWorkspaceFs {
-  JsWorkspaceFs::{  }
+  JsWorkspaceFs::{ }
 }
 
 ///|
@@ -396,7 +380,7 @@ pub impl WorkspaceFs for JsWorkspaceFs with fn readdir(
   }
   let entries = res.content()
   if include_hidden {
-    entries
+    Array::from_fixed_array(entries)
   } else {
     let visible : Array[String] = []
     for entry in entries {
@@ -434,7 +418,7 @@ async fn walk_dir(
     raise fs_err("walk")
   }
   let entries = res.content()
-  callback(dir, entries)
+  callback(dir, Array::from_fixed_array(entries))
   for entry in entries {
     let child = if dir.has_suffix("/") {
       dir + entry

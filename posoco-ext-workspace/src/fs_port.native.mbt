@@ -15,7 +15,7 @@ pub struct NativeWorkspaceFs {}
 
 ///|
 pub fn NativeWorkspaceFs::NativeWorkspaceFs() -> NativeWorkspaceFs {
-  NativeWorkspaceFs::{  }
+  NativeWorkspaceFs::{ }
 }
 
 ///|
@@ -76,7 +76,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file(
 ///|
 /// In-process counter giving each atomic-write temp file a unique sibling
 /// name; credentials are low-concurrency, so a process-local suffix suffices.
-let atomic_write_counter : Ref[Int] = { val: 0 }
+let atomic_write_counter : Ref[Int] = { val: 0, }
 
 ///|
 pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file_atomic(

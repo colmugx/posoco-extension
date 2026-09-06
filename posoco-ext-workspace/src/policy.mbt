@@ -12,10 +12,6 @@
 /// - ignore patterns
 /// - resource limits (bytes, depth, entries, matches)
 
-// ──────────────────────────────────────────────────────────────────────────
-// Symlink policy
-// ──────────────────────────────────────────────────────────────────────────
-
 ///|
 /// How symlinks are treated during path resolution.
 pub(all) enum SymlinkPolicy {
@@ -26,10 +22,6 @@ pub(all) enum SymlinkPolicy {
   FollowIfInsideRoot
 } derive(Eq, Debug)
 
-// ──────────────────────────────────────────────────────────────────────────
-// Capability flags
-// ──────────────────────────────────────────────────────────────────────────
-
 ///|
 /// Read/write capability for the workspace.
 pub(all) struct Capability {
@@ -39,17 +31,13 @@ pub(all) struct Capability {
 
 ///|
 pub fn Capability::read_only() -> Capability {
-  { read: true, write: false }
+  { read: true, write: false, }
 }
 
 ///|
 pub fn Capability::read_write() -> Capability {
-  { read: true, write: true }
+  { read: true, write: true, }
 }
-
-// ──────────────────────────────────────────────────────────────────────────
-// Resource limits
-// ──────────────────────────────────────────────────────────────────────────
 
 ///|
 /// Bounded-work limits. Frozen defaults from the adapter reliability
@@ -64,7 +52,6 @@ pub(all) struct WorkspaceLimits {
 } derive(Debug)
 
 ///|
-/// Default limits.
 pub fn WorkspaceLimits::defaults() -> WorkspaceLimits {
   {
     max_read_bytes: 65536,
@@ -91,10 +78,6 @@ pub(all) suberror PathPolicyError {
   WriteDenied(rule~ : String, relative~ : String)
   ParentCreationDenied(rule~ : String, relative~ : String)
 } derive(Eq, Debug)
-
-// ──────────────────────────────────────────────────────────────────────────
-// The policy itself
-// ──────────────────────────────────────────────────────────────────────────
 
 ///|
 /// The unified workspace boundary. Constructed once per workspace;
