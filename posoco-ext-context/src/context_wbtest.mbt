@@ -1,8 +1,4 @@
 ///|
-
-// parent_dir (pure)
-
-///|
 test "parent_dir: root has no parent" {
   assert_eq(parent_dir("/"), None)
 }
@@ -21,8 +17,6 @@ test "parent_dir: nested path" {
 test "parent_dir: strips trailing slash" {
   assert_eq(parent_dir("/a/b/"), Some("/a"))
 }
-
-// ContextPromptContributor: namespace rendering (pure)
 
 ///|
 test "system_prompt: empty bundle renders nothing" {

@@ -1,6 +1,4 @@
 ///|
-
-///|
 async test "e2e: context contributor injects configured envelope into model request" {
   let bundle : ContextBundle = {
     global: None,
