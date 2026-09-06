@@ -1,12 +1,7 @@
 ///|
-/// models_native_js.mbt — live `/models` fetch via moonbitlang/async/http.
+/// Live `/models` fetch via moonbitlang/async/http.
 ///
 /// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
-/// The pure decoder (`parse_zen_models`) and `ZenModelInfo` type live in the
-/// target-agnostic `models.mbt` and remain visible on every backend. On wasm,
-/// `fetch_zen_models` is absent and `OpenCodeZenProvider::refresh` (which calls
-/// it) is `#cfg`-guarded to native+js — so a wasm consumer sees the type and
-/// the static catalog path but never reaches the HTTP fetch.
 
 ///|
 /// Fetch and decode the live OpenCode Zen model catalog.

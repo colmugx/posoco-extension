@@ -1,11 +1,6 @@
 ///|
-/// refresh_wasm_fallback.mbt — RefreshableProviderFactory::refresh for wasm.
-///
-/// `@http` is unavailable on wasm, so the live `/models` fetch is impossible.
-/// This fallback supplies a complete `refresh` impl that raises a typed
-/// `CompositionError`, so the trait is fully satisfied on every backend and
-/// the package exports a complete mbti. Pattern mirrors
-/// posoco-ext-openai-compatible/src/chat_wasm_fallback.mbt.
+/// wasm has no `@http`, so the live `/models` fetch is impossible; refresh
+/// raises a typed error instead.
 
 ///|
 #cfg(not(any(target="native", target="js")))

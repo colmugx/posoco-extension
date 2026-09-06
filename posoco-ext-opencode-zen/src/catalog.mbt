@@ -1,12 +1,6 @@
 ///|
-/// Catalog construction for OpenCode Zen.
-///
-/// Zen is a hosted gateway: one endpoint, many models behind it, all speaking
-/// the OpenAI Chat Completions protocol. Each model becomes one catalog slot
-/// whose `port` is a fresh `OpenAICompatibleModelPort` built over a config
-/// carrying that model's id — so the wire layer (request encoding, SSE,
-/// response decoding, error classification) is fully reused from
-/// `posoco-ext-openai-compatible` and never duplicated here.
+/// Catalog construction for OpenCode Zen: one gateway, many models, each
+/// model one slot over an OpenCodeZenModelPort.
 
 ///|
 /// The provider id this extension claims. Centralised so the factory, catalog,
@@ -19,28 +13,15 @@ let zen_provider_id : String = "opencode"
 let zen_default_base_url : String = "https://opencode.ai/zen/v1"
 
 ///|
-/// Build one catalog slot for a Zen model. The port is an
-/// `OpenAICompatibleModelPort` constructed with the Zen provider id, so chat
-/// requests carry `Authorization: Bearer <key>` and post to
-/// `base_url + endpoint_prefix + /chat/completions`. Zen-specific routing
-/// metadata is supplied through the optional request-header hook.
-///
-/// The picker's effort surface comes from the curated preset table in
-/// efforts.mbt: "off" only when the model allows disabling thinking, "on" for
-/// toggle-only models, otherwise exactly the declared levels. `api_key` is the
-/// factory reference stored on the slot so credential-driven rebuilds stay
-/// inside this extension.
+/// Build one catalog slot for a Zen model. The picker's effort surface comes
+/// from the curated preset table in efforts.mbt: "off" only when the model
+/// allows disabling thinking, "on" for toggle-only models, otherwise exactly
+/// the declared levels.
 fn zen_catalog_slot(
-  config : @openai_compatible.OpenAICompatibleConfig,
+  config : OpenCodeZenConfig,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
-  let port : &@posoco.ModelPort = zen_retry_port(
-    @openai_compatible.OpenAICompatibleModelPort(
-      zen_provider_id,
-      config,
-      request_headers=zen_request_headers,
-    ),
-  )
+  let port : &@posoco.ModelPort = zen_retry_port(OpenCodeZenModelPort(config))
   let slot_id = zen_provider_id + "/" + config.model
   let (slot_efforts, default_effort, rebuild_on_effort) : (
     Array[String],
@@ -90,7 +71,7 @@ fn zen_catalog_slot(
     default_effort~,
     display_group=Some("zen"),
     rebuild_on_api_key=Some(fn(credential) {
-      let rebuilt_config = @openai_compatible.OpenAICompatibleConfig(
+      let rebuilt_config = OpenCodeZenConfig(
         credential.secret,
         base_url=config.base_url,
         model=config.model,
@@ -107,9 +88,8 @@ fn zen_catalog_slot(
 
 ///|
 /// Keep the configured model first after a live refresh while preserving the
-/// gateway's server order for all remaining models. Mirrors the DeepSeek
-/// policy so a user who pinned a model keeps it at the top of the refreshed
-/// list.
+/// gateway's server order for all remaining models, so a user who pinned a
+/// model keeps it at the top of the refreshed list.
 fn zen_preferred_models(
   models : Array[ZenModelInfo],
   preferred_id : String,
@@ -141,13 +121,13 @@ fn zen_preferred_models(
 /// models stay plain chat (both omit the reasoning surface on the wire, so the
 /// gateway applies the model's own default).
 fn zen_config_for_model(
-  base : @openai_compatible.OpenAICompatibleConfig,
+  base : OpenCodeZenConfig,
   model_id : String,
-) -> @openai_compatible.OpenAICompatibleConfig {
+) -> OpenCodeZenConfig {
   match zen_effort_preset(model_id) {
     Some(preset) =>
       if preset.levels.is_empty() {
-        @openai_compatible.OpenAICompatibleConfig(
+        OpenCodeZenConfig(
           base.api_key,
           base_url=base.base_url,
           model=model_id,
@@ -155,7 +135,7 @@ fn zen_config_for_model(
           thinking=false,
         )
       } else {
-        @openai_compatible.OpenAICompatibleConfig(
+        OpenCodeZenConfig(
           base.api_key,
           base_url=base.base_url,
           model=model_id,
@@ -166,7 +146,7 @@ fn zen_config_for_model(
         )
       }
     None =>
-      @openai_compatible.OpenAICompatibleConfig(
+      OpenCodeZenConfig(
         base.api_key,
         base_url=base.base_url,
         model=model_id,
@@ -182,7 +162,7 @@ fn zen_config_for_model(
 /// table applies here too, so the configured model gets its reasoning surface
 /// before the first refresh lands.
 pub fn zen_static_catalog(
-  config : @openai_compatible.OpenAICompatibleConfig,
+  config : OpenCodeZenConfig,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   @llm.ProviderModelCatalog::ProviderModelCatalog(
@@ -199,7 +179,7 @@ pub fn zen_static_catalog(
 /// Raises on an empty list so a transient gateway glitch surfaces as a typed
 /// composition failure rather than a silently empty picker.
 pub fn zen_model_catalog(
-  base_config : @openai_compatible.OpenAICompatibleConfig,
+  base_config : OpenCodeZenConfig,
   models : Array[ZenModelInfo],
   preferred_id : String,
   api_key : &@llm.ApiKeyFactory,

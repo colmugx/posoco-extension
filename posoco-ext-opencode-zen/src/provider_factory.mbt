@@ -1,14 +1,6 @@
 ///|
 /// Provider-owned configuration source and catalog contribution for OpenCode
-/// Zen.
-///
-/// One `OpenCodeZenProvider` instance owns the Zen gateway contract: the
-/// conventional base URL, the `opencode` provider/credential id, and the
-/// OpenAI-compatible wire (reused, not reimplemented). The host (cetas-core)
-/// constructs this factory once and registers it alongside the other named
-/// providers; this adapter never reads the settings map directly and never
-/// decides which ids it serves — it owns only the Zen endpoint, the catalog
-/// decode, and the API-key login prompt.
+/// Zen: the endpoint, the catalog decode, and the API-key login prompt.
 
 ///|
 pub(all) struct OpenCodeZenProvider {
@@ -130,11 +122,7 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn build(
   }
   let base_url = zen_resolve_base_url(source)
   let model = zen_resolve_model(source)
-  let config = @openai_compatible.OpenAICompatibleConfig(
-    api_key,
-    base_url~,
-    model~,
-  )
+  let config = OpenCodeZenConfig(api_key, base_url~, model~)
   let api_key_factory : &@llm.ApiKeyFactory = self
   let catalog = match parse_cached_zen_models(source.cached_models) {
     Some(models) => zen_model_catalog(config, models, model, api_key_factory)
@@ -149,12 +137,6 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn provide
 ) -> String {
   zen_provider_id
 }
-
-///|
-/// Live catalog refresh lives in refresh_native_js.mbt (it calls
-/// `fetch_zen_models`, which drives `@http` — native+js only). On
-/// wasm/wasm-gc a fallback impl in refresh_wasm_fallback.mbt raises a clear
-/// `CompositionError` so the trait is fully satisfied on every backend.
 
 ///|
 /// Provider-owned API-key login. The host supplies a provider-neutral secret

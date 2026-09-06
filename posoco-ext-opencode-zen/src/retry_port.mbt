@@ -177,8 +177,8 @@ async fn ZenRetryModelPort::zen_compact_once(
 }
 
 ///|
-/// ModelPort implementation — compact. Zen compacts locally (OpenCode-style
-/// anchored summary) instead of forwarding to the inner openai-compatible
+/// Compact. Zen compacts locally (OpenCode-style
+/// anchored summary) instead of forwarding to the inner chat
 /// port; the retry wrapper stays so transient failures while summarizing
 /// retry like any other completion POST.
 pub impl @posoco.ModelPort for ZenRetryModelPort with fn compact(

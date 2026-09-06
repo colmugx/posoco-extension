@@ -197,8 +197,8 @@ test "parse_zen_models rejects an item with wrong object value" {
 
 ///|
 /// Build a base config used by the multi-slot catalog tests.
-fn zen_base_config() -> @openai_compatible.OpenAICompatibleConfig {
-  @openai_compatible.OpenAICompatibleConfig(
+fn zen_base_config() -> OpenCodeZenConfig {
+  OpenCodeZenConfig(
     "sk-test",
     base_url="https://opencode.ai/zen/v1",
     model="gpt-5.1-codex",
@@ -685,14 +685,14 @@ fn zen_flaky_options() -> @posoco.ChatOptions {
 ///|
 fn zen_truncated_error() -> @posoco.ModelError {
   @posoco.ModelError::ResponseParse(
-    "openai-compatible SSE truncated (stage=eof, terminal_marker=missing)",
+    "opencode-zen SSE truncated (stage=eof, terminal_marker=missing)",
   )
 }
 
 ///|
 fn zen_gateway_503_error() -> @posoco.ModelError {
   @posoco.ModelError::Transport(
-    "openai-compatible HTTP error (stage=chat_stream.http_status, status=503, body_bytes=175, body_category=utf8)",
+    "opencode-zen HTTP error (stage=chat_stream.http_status, status=503, body_bytes=175, body_category=utf8)",
   )
 }
 
@@ -885,7 +885,7 @@ async test "zen retry port retries mid-stream transport failures" {
   let inner = FlakyModelPort(
     1,
     @posoco.ModelError::Transport(
-      "openai-compatible transport failure (stage=read_stream)",
+      "opencode-zen transport failure (stage=read_stream)",
     ),
   )
   let port : &@posoco.ModelPort = zen_test_retry_port(inner)
@@ -904,9 +904,7 @@ async test "zen retry port retries mid-stream transport failures" {
 async test "zen retry port does not retry pre-stream transport failures" {
   let inner = FlakyModelPort(
     1,
-    @posoco.ModelError::Transport(
-      "openai-compatible transport failure (stage=post)",
-    ),
+    @posoco.ModelError::Transport("opencode-zen transport failure (stage=post)"),
   )
   let port : &@posoco.ModelPort = zen_test_retry_port(inner)
   let result = Ok(
@@ -947,7 +945,7 @@ async test "zen retry port does not retry other http statuses" {
   let inner = FlakyModelPort(
     1,
     @posoco.ModelError::Transport(
-      "openai-compatible HTTP error (stage=chat_stream.http_status, status=400, body=bad request)",
+      "opencode-zen HTTP error (stage=chat_stream.http_status, status=400, body=bad request)",
     ),
   )
   let port : &@posoco.ModelPort = zen_test_retry_port(inner)
@@ -1005,4 +1003,172 @@ test "zen_previous_summary extracts the latest anchored summary stripped" {
   assert_true(text.contains("second summary"))
   // No summary present → None.
   assert_true(zen_previous_summary([]) is None)
+}
+
+///|
+fn zen_user_msg(text : String) -> @posoco.Message {
+  @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
+}
+
+///|
+/// Build a request body and assert the GLM-flavored reasoning wire contract:
+/// thinking off omits `thinking`/`reasoning_effort` entirely; thinking on
+/// sends the object form `thinking: {"type": "enabled"}` (never a bare
+/// boolean — Zen's upstream rejects it); a selected level additionally sends
+/// the top-level `reasoning_effort` verbatim.
+test "zen wire sends the GLM thinking object and verbatim reasoning_effort" {
+  let opts = zen_flaky_options()
+  let with_effort = build_chat_request(
+    [zen_user_msg("hi")],
+    [],
+    opts,
+    "glm-5.2",
+    false,
+    true,
+    Some("low"),
+    false,
+  )
+  guard with_effort is Object(with_fields) else {
+    fail("expected request to be an object")
+  }
+  match with_fields.get("thinking") {
+    Some(Json::Object(thinking)) =>
+      match thinking.get("type") {
+        Some(Json::String("enabled")) => ()
+        _ => fail("expected thinking object with type=enabled")
+      }
+    _ => fail("expected the thinking object when a level is selected")
+  }
+  match with_fields.get("reasoning_effort") {
+    Some(Json::String(value)) => assert_eq(value, "low")
+    _ => fail("expected reasoning_effort to be emitted when a level is set")
+  }
+
+  let toggle_on = build_chat_request(
+    [zen_user_msg("hi")],
+    [],
+    opts,
+    "glm-5.2",
+    false,
+    true,
+    None,
+    false,
+  )
+  guard toggle_on is Object(on_fields) else {
+    fail("expected request to be an object")
+  }
+  match on_fields.get("thinking") {
+    Some(Json::Object(thinking)) =>
+      match thinking.get("type") {
+        Some(Json::String("enabled")) => ()
+        _ => fail("expected thinking object with type=enabled")
+      }
+    _ => fail("expected the thinking object in plain toggle mode")
+  }
+  match on_fields.get("reasoning_effort") {
+    None => ()
+    Some(_) => fail("reasoning_effort must be omitted without a level")
+  }
+
+  let toggle_off = build_chat_request(
+    [zen_user_msg("hi")],
+    [],
+    opts,
+    "glm-5.2",
+    false,
+    false,
+    None,
+    false,
+  )
+  guard toggle_off is Object(off_fields) else {
+    fail("expected request to be an object")
+  }
+  match off_fields.get("thinking") {
+    None => ()
+    Some(_) => fail("thinking must be omitted entirely when off")
+  }
+  match off_fields.get("reasoning_effort") {
+    None => ()
+    Some(_) => fail("reasoning_effort must be omitted when off")
+  }
+}
+
+///|
+/// Thinking-mode upstreams behind Zen (DeepSeek) 400 unless the assistant
+/// message resends `reasoning_content`; zen's policy is keep-all — resent
+/// whenever reasoning is present, with or without tool_calls.
+test "zen wire keeps reasoning_content on assistant messages (keep-all)" {
+  let with_calls : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[],
+    tool_calls=[
+      {
+        call_id: @posoco.CallId::unchecked("c1"),
+        name: @posoco.ToolName::unchecked("read"),
+        arguments: Json::object(Map::from_array([])),
+      },
+    ],
+    reasoning=Some(@posoco.Reasoning::{
+      content: "thinking about this...",
+      raw: None,
+    }),
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
+  guard encode_message(with_calls, false) is Object(with_obj) else {
+    fail("expected object")
+  }
+  match with_obj.get("reasoning_content") {
+    Some(String(r)) => assert_eq(r, "thinking about this...")
+    _ => fail("reasoning_content MUST be present when tool_calls exist")
+  }
+
+  let without_calls : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None, }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  guard encode_message(without_calls, false) is Object(plain_obj) else {
+    fail("expected object")
+  }
+  match plain_obj.get("reasoning_content") {
+    Some(String(r)) => assert_eq(r, "thinking...")
+    _ => fail("reasoning_content must be preserved on assistant messages")
+  }
+}
+
+///|
+/// Streaming requests always opt into usage accounting — without
+/// `stream_options.include_usage` the gateway omits the usage frame entirely.
+test "zen wire opts into stream usage accounting" {
+  let tool = @posoco.ToolDef::ToolDef(
+    name=@posoco.ToolName::unchecked("echo"),
+    description="echo back",
+    input_schema=Json::object(Map::from_array([])),
+    owner=@posoco.OwnerId::unchecked("test"),
+    policy=@posoco.ExecutionPolicy::Sequential,
+    provenance=None,
+  )
+  let body = build_chat_request(
+    [zen_user_msg("hi")],
+    [tool],
+    zen_flaky_options(),
+    "glm-5.2",
+    true,
+    false,
+    None,
+    false,
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  match fields.get("stream") {
+    Some(value) => assert_eq(value.stringify(), "true")
+    None => fail("expected stream field")
+  }
+  match fields.get("stream_options") {
+    Some(Json::Object(opts)) =>
+      match opts.get("include_usage") {
+        Some(value) => assert_eq(value.stringify(), "true")
+        None => fail("expected include_usage for usage accounting")
+      }
+    _ => fail("expected stream_options for usage accounting")
+  }
 }
