@@ -32,7 +32,6 @@ extern "js" fn js_read_text_envelope(path : String) -> String =
   #| }
 
 ///|
-/// Decoded stat envelope.
 priv struct JsStatInfo {
   ok : Bool
   size : Int
@@ -102,7 +101,7 @@ impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
 ///|
 /// One-shot read then slice. readFileSync(path, "utf8") reads + decodes
 /// together, so a failure is IO or decode with no way to tell them apart
-/// (stage `decode`, matching the previous behaviour).
+/// (stage `decode`).
 fn js_read_page(
   path : String,
 ) -> (Array[String], Int64) raise @posoco.RuntimeError {

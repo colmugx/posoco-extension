@@ -10,7 +10,7 @@
 /// `read_file` is the delegation seam and may return unsaved-buffer state —
 /// while the freshness `stat` stays on the target-local filesystem so
 /// recorded stamps remain comparable with the local write/edit tools.
-/// `None` (the default) keeps the legacy direct-IO path byte-for-byte.
+/// `None` (the default) is direct target-local IO.
 ///
 /// Output contract: lines are prefixed `L<line>: ` (1-indexed, no padding),
 /// long lines are truncated at 2000 characters with a marker, and reads cut
@@ -20,16 +20,15 @@
 pub(all) struct ReadTools {
   // Shared read-before-modify ledger; None disables recording (library use).
   freshness : @devkit.FreshnessGuard?
-  // Resolves relative paths against the workspace root; None keeps legacy
-  // behavior (relative paths land on the process working directory).
+  // Resolves relative paths against the workspace root; None keeps relative
+  // paths landing on the process working directory.
   anchor : @devkit.WorkspaceAnchor?
   // Content source for reads; None = target-local direct IO.
   fs : &@workspace.WorkspaceFs?
 }
 
 ///|
-/// Canonical constructor. Use this everywhere to avoid cross-target naming
-/// drift. `guard` is optional: without it the tool still reads, it just does
+/// `freshness` is optional: without it the tool still reads, it just does
 /// not participate in freshness tracking.
 pub fn ReadTools::ReadTools(
   freshness? : @devkit.FreshnessGuard,
@@ -40,7 +39,7 @@ pub fn ReadTools::ReadTools(
 }
 
 ///|
-/// Default max lines per read (kimi-code parity).
+/// Default max lines per read.
 const READ_DEFAULT_LIMIT = 1000
 
 ///|

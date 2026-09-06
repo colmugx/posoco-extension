@@ -100,7 +100,7 @@ test "read_sanitize_path_is_bounded_and_single_line" {
 }
 
 ///|
-/// ——— v2 paging/formatting tests ———
+/// ——— paging/formatting tests ———
 
 ///|
 #cfg(target="native")
