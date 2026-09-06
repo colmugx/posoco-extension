@@ -1,0 +1,56 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-responses"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/types",
+}
+
+// Values
+pub fn classify_stream_termination(provider~ : String, StreamTermination) -> @error.ModelError?
+
+pub fn extract_assistant_content(provider~ : String, Json) -> Array[@kernel.Content] raise @error.ModelError
+
+pub fn extract_reasoning_items(provider~ : String, Json) -> (Array[Json], String) raise @error.ModelError
+
+pub fn extract_tool_calls(provider~ : String, Json) -> (Array[@kernel.ToolCall], Bool) raise @error.ModelError
+
+pub fn extract_usage(provider~ : String, Json) -> @kernel.Usage? raise @error.ModelError
+
+pub fn message_item_text(provider~ : String, Map[String, Json]) -> String raise @error.ModelError
+
+pub fn message_to_responses_items(@kernel.Message) -> Array[Json]
+
+pub fn parse_function_call_item(provider~ : String, Map[String, Json]) -> @kernel.ToolCall raise @error.ModelError
+
+pub fn parse_responses_response(provider~ : String, Json) -> @kernel.Completion raise @error.ModelError
+
+pub fn process_responses_sse(provider~ : String, String, @types.StreamAccumulator, (@types.StreamChunk) -> Unit, state? : SseStreamState) -> Bool raise @error.ModelError
+
+pub fn responses_stream_completion(provider~ : String, @types.StreamAccumulator) -> @kernel.Completion raise @error.ModelError
+
+pub fn tool_to_responses_wire(@kernel.ToolDef) -> Json
+
+pub fn validate_stream_tool_calls(provider~ : String, @types.StreamAccumulator) -> Unit raise @error.ModelError
+
+pub fn validate_terminal_response(provider~ : String, Json, String) -> Unit raise @error.ModelError
+
+// Errors
+
+// Types and methods
+pub(all) struct SseStreamState {
+  items : Array[Json]
+  mut summary : String
+  tool_slots : Map[Int, Int]
+}
+pub fn SseStreamState::SseStreamState() -> Self
+
+pub(all) enum StreamTermination {
+  ExplicitTerminal
+  CleanEof
+}
+
+// Type aliases
+
+// Traits
