@@ -1,0 +1,26 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/io",
+  "moonbitlang/async/js_async",
+  "moonbitlang/async/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native +js"
+
+// @fs/@io/@process serve only task.native.mbt and @js_async only
+// task.js.mbt, so each target sees unused imports.
+
+warnings = "-unused_package"
+
+options(
+  targets: {
+    "task.native.mbt": [ "native" ],
+    "task.js.mbt": [ "js" ],
+    "live_wbtest.mbt": [ "native" ],
+  },
+)
