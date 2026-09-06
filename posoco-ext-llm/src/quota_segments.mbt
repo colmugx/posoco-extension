@@ -1,5 +1,5 @@
 ///|
-/// quota_segments.mbt — registry-driven quota segments on the status bar.
+/// Registry-driven quota segments on the status bar.
 ///
 /// The router pulls the active provider's registered `QuotaSource` from the
 /// devkit quota registry and publishes the readings as status segments:

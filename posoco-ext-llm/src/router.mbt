@@ -1,5 +1,5 @@
 ///|
-/// router.mbt — ModelPort aggregator with host-injected model slots.
+/// ModelPort aggregator with host-injected model slots.
 ///
 /// The router is deliberately unaware of provider adapters, endpoint
 /// configuration, model discovery, and credential transport. A host composes

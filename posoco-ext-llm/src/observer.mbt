@@ -1,5 +1,5 @@
 ///|
-/// observer.mbt — status publication through the devkit status protocol.
+/// Status publication through the devkit status protocol.
 ///
 /// The router owns three status-bar segments: `model` (priority 20, active
 /// model id and effort), `tok` (priority 30, per-turn token totals), and
