@@ -1,7 +1,3 @@
-// Whitebox tests run within the package scope.
-// Use them to validate internal helpers or invariants.
-// Keep them focused; public behavior belongs in `_test.mbt`.
-
 ///|
 /// Build an OpenAI Responses API output item (function_call) with given args.
 fn build_function_call_json(
@@ -20,7 +16,7 @@ fn build_function_call_json(
 }
 
 ///|
-/// T07-B: malformed tool-call arguments JSON must raise ResponseParse,
+/// Malformed tool-call arguments JSON must raise ResponseParse,
 /// not silently become {}.
 test "t07b_llm_malformed_tool_args_raises" {
   let bad_call = build_function_call_json("tc_1", "bad", "not-valid-json")
@@ -30,7 +26,11 @@ test "t07b_llm_malformed_tool_args_raises" {
       ("status", Json::string("completed")),
     ]),
   )
-  let result = Ok(parse_openai_response(resp_json)) catch { e => Err(e) }
+  let result = Ok(
+    @responses.parse_responses_response(provider="OpenAI", resp_json),
+  ) catch {
+    e => Err(e)
+  }
   match result {
     Err(@posoco.ModelError::ResponseParse(_)) => ()
     _ => fail("expected ResponseParse for malformed tool arguments")
@@ -38,7 +38,7 @@ test "t07b_llm_malformed_tool_args_raises" {
 }
 
 ///|
-/// T07-B: valid tool-call arguments still decode correctly (no false positive).
+/// Valid tool-call arguments still decode correctly (no false positive).
 test "t07b_llm_valid_tool_args_still_decode" {
   let ok_call = build_function_call_json("tc_1", "ok", "{}")
   let resp_json = Json::object(
@@ -47,7 +47,7 @@ test "t07b_llm_valid_tool_args_still_decode" {
       ("status", Json::string("completed")),
     ]),
   )
-  let resp = parse_openai_response(resp_json)
+  let resp = @responses.parse_responses_response(provider="OpenAI", resp_json)
   let tcs = resp.tool_calls()
   assert_eq(tcs.length(), 1)
   assert_eq(tcs[0].name.to_string(), "ok")
@@ -57,7 +57,11 @@ test "t07b_llm_valid_tool_args_still_decode" {
 test "t07b_llm_malformed_sse_is_loud_and_redacted" {
   let acc = @posoco.StreamAccumulator()
   let secret = "secret-sse-payload"
-  let result = Ok(process_sse_event(secret, acc, fn(_) { () })) catch {
+  let result = Ok(
+    @responses.process_responses_sse(provider="OpenAI", secret, acc, fn(_) {
+      ()
+    }),
+  ) catch {
     e => Err(e)
   }
   match result {
@@ -77,12 +81,27 @@ test "t07b_llm_valid_delta_and_completed_events" {
     #|{"type":"response.output_text.delta","delta":"hello"}
   let completed =
     #|{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}}
-  assert_false(process_sse_event(delta, acc, fn(c) { chunks.push(c) }))
-  assert_true(process_sse_event(completed, acc, fn(c) { chunks.push(c) }))
+  assert_false(
+    @responses.process_responses_sse(provider="OpenAI", delta, acc, fn(c) {
+      chunks.push(c)
+    }),
+  )
+  assert_true(
+    @responses.process_responses_sse(provider="OpenAI", completed, acc, fn(c) {
+      chunks.push(c)
+    }),
+  )
+  assert_eq(chunks.length(), 3) // one text delta, usage, and terminal finish
   assert_eq(acc.text(), "hello")
-  assert_true(acc.usage_input == Some(2))
-  assert_true(acc.usage_output == Some(1))
-  assert_true(acc.usage_total == Some(3))
+  let completion = acc.to_completion()
+  match completion.usage {
+    Some(usage) => {
+      assert_true(usage.input_tokens == Some(2))
+      assert_true(usage.output_tokens == Some(1))
+      assert_true(usage.total_tokens == Some(3))
+    }
+    None => fail("expected usage in completion")
+  }
   assert_true(chunks[chunks.length() - 1] is @posoco.StreamChunk::Finish(_))
 }
 
@@ -91,7 +110,11 @@ test "t07b_llm_incomplete_and_error_events_are_loud_and_redacted" {
   let acc = @posoco.StreamAccumulator()
   let incomplete =
     #|{"type":"response.incomplete","response":{"status":"incomplete","error":{"message":"secret-incomplete"}}}
-  let incomplete_result = Ok(process_sse_event(incomplete, acc, fn(_) { () })) catch {
+  let incomplete_result = Ok(
+    @responses.process_responses_sse(provider="OpenAI", incomplete, acc, fn(_) {
+      ()
+    }),
+  ) catch {
     e => Err(e)
   }
   match incomplete_result {
@@ -103,7 +126,13 @@ test "t07b_llm_incomplete_and_error_events_are_loud_and_redacted" {
   }
   let error_event =
     #|{"type":"error","code":"bad","message":"secret-error-body","param":null}
-  let error_result = Ok(process_sse_event(error_event, acc, fn(_) { () })) catch {
+  let error_result = Ok(
+    @responses.process_responses_sse(provider="OpenAI", error_event, acc, fn(
+      _,
+    ) {
+      ()
+    }),
+  ) catch {
     e => Err(e)
   }
   match error_result {
@@ -123,17 +152,36 @@ test "t07b_llm_completed_event_tolerates_missing_output_and_usage_fields" {
   let chunks : Array[@posoco.StreamChunk] = []
   let missing_output =
     #|{"type":"response.completed","response":{"status":"completed"}}
-  assert_true(process_sse_event(missing_output, acc, fn(c) { chunks.push(c) }))
+  assert_true(
+    @responses.process_responses_sse(provider="OpenAI", missing_output, acc, fn(
+      c,
+    ) {
+      chunks.push(c)
+    }),
+  )
   match chunks[chunks.length() - 1] {
-    @posoco.StreamChunk::Finish(reason~) => assert_eq(reason, "Stop")
+    // Wire spelling: the accumulator parses "stop" back into FinishReason::Stop.
+    @posoco.StreamChunk::Finish(reason~) => assert_eq(reason, "stop")
     _ => fail("expected a Finish chunk for completed without output")
   }
   let missing_total =
     #|{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1}}}
-  assert_true(process_sse_event(missing_total, acc, fn(c) { chunks.push(c) }))
+  assert_true(
+    @responses.process_responses_sse(provider="OpenAI", missing_total, acc, fn(
+      c,
+    ) {
+      chunks.push(c)
+    }),
+  )
   // Missing total_tokens maps to None in Usage, surfaced as 0 in the chunk.
-  assert_true(acc.usage_input == Some(1))
-  assert_true(acc.usage_total == Some(0))
+  let completion = acc.to_completion()
+  match completion.usage {
+    Some(usage) => {
+      assert_true(usage.input_tokens == Some(1))
+      assert_true(usage.total_tokens == Some(0))
+    }
+    None => fail("expected usage in completion")
+  }
 }
 
 ///|
@@ -141,7 +189,13 @@ test "t07b_llm_missing_sse_field_is_loud" {
   let acc = @posoco.StreamAccumulator()
   let missing_delta =
     #|{"type":"response.output_text.delta"}
-  let result = Ok(process_sse_event(missing_delta, acc, fn(_) { () })) catch {
+  let result = Ok(
+    @responses.process_responses_sse(provider="OpenAI", missing_delta, acc, fn(
+      _,
+    ) {
+      ()
+    }),
+  ) catch {
     e => Err(e)
   }
   match result {
@@ -156,7 +210,13 @@ test "t07b_llm_missing_tool_identity_is_loud" {
   let acc = @posoco.StreamAccumulator()
   let missing_name =
     #|{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":"call_1"}}
-  let result = Ok(process_sse_event(missing_name, acc, fn(_) { () })) catch {
+  let result = Ok(
+    @responses.process_responses_sse(provider="OpenAI", missing_name, acc, fn(
+      _,
+    ) {
+      ()
+    }),
+  ) catch {
     e => Err(e)
   }
   match result {
@@ -175,12 +235,22 @@ test "t07b_llm_explicit_null_fields_are_tolerated" {
   let acc = @posoco.StreamAccumulator()
   let null_delta =
     #|{"type":"response.output_text.delta","delta":null}
-  assert_false(process_sse_event(null_delta, acc, fn(_) { () }))
+  assert_false(
+    @responses.process_responses_sse(provider="OpenAI", null_delta, acc, fn(_) {
+      ()
+    }),
+  )
   assert_eq(acc.text(), "")
   let null_call_id =
     #|{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":null,"id":"fc_1","name":"read"}}
   let chunks : Array[@posoco.StreamChunk] = []
-  assert_false(process_sse_event(null_call_id, acc, fn(c) { chunks.push(c) }))
+  assert_false(
+    @responses.process_responses_sse(provider="OpenAI", null_call_id, acc, fn(
+      c,
+    ) {
+      chunks.push(c)
+    }),
+  )
   match chunks[0] {
     @posoco.StreamChunk::ToolCallDelta(index~, id~, name~, arguments_delta~) => {
       assert_eq(index, 0)
@@ -192,7 +262,11 @@ test "t07b_llm_explicit_null_fields_are_tolerated" {
   }
   let bare_error =
     #|{"error":{"message":"secret-stream-error","type":"server_error"}}
-  let error_result = Ok(process_sse_event(bare_error, acc, fn(_) { () })) catch {
+  let error_result = Ok(
+    @responses.process_responses_sse(provider="OpenAI", bare_error, acc, fn(_) {
+      ()
+    }),
+  ) catch {
     e => Err(e)
   }
   match error_result {
@@ -204,20 +278,33 @@ test "t07b_llm_explicit_null_fields_are_tolerated" {
   }
   let null_output : Json = { "output": null, "status": "completed" }
   assert_true(
-    parse_openai_response(null_output).finish_reason()
+    @responses.parse_responses_response(provider="OpenAI", null_output).finish_reason()
     is @posoco.FinishReason::Stop,
   )
   let null_content : Json = {
     "output": [{ "type": "message", "content": null }],
     "status": "completed",
   }
-  assert_eq(parse_openai_response(null_content).message.content.length(), 0)
+  assert_eq(
+    @responses.parse_responses_response(provider="OpenAI", null_content).message.content.length(),
+    0,
+  )
 }
 
 ///|
 test "t07b_llm_stream_termination_is_protocol_driven" {
-  assert_true(classify_stream_termination(ExplicitTerminal) is None)
-  match classify_stream_termination(CleanEof) {
+  assert_true(
+    @responses.classify_stream_termination(
+      provider="OpenAI",
+      @responses.StreamTermination::ExplicitTerminal,
+    )
+    is None,
+  )
+  match
+    @responses.classify_stream_termination(
+      provider="OpenAI",
+      @responses.StreamTermination::CleanEof,
+    ) {
     Some(@posoco.ModelError::ResponseParse(msg)) =>
       assert_true(msg.contains("terminal_marker=missing"))
     _ => fail("clean EOF before terminal marker must be ResponseParse")
@@ -234,7 +321,11 @@ test "t07b_llm_tool_argument_error_does_not_echo_payload" {
       ("status", Json::string("completed")),
     ]),
   )
-  let result = Ok(parse_openai_response(resp_json)) catch { e => Err(e) }
+  let result = Ok(
+    @responses.parse_responses_response(provider="OpenAI", resp_json),
+  ) catch {
+    e => Err(e)
+  }
   match result {
     Err(@posoco.ModelError::ResponseParse(msg)) => {
       assert_true(msg.contains("payload_chars="))
@@ -256,10 +347,13 @@ test "t07b_llm_stream_tool_argument_error_is_redacted" {
       arguments_delta=Some(secret),
     ),
   )
-  let result = Ok(validate_stream_tool_calls(acc)) catch { e => Err(e) }
+  let result = Ok(@responses.validate_stream_tool_calls(provider="OpenAI", acc)) catch {
+    e => Err(e)
+  }
   match result {
     Err(@posoco.ModelError::ResponseParse(msg)) => {
-      assert_true(msg.contains("payload_chars="))
+      assert_true(msg.contains("OpenAI SSE parse failure (stage=tool_calls)"))
+      assert_true(msg.contains("malformed tool-call arguments JSON"))
       assert_false(msg.contains(secret))
     }
     _ => fail("expected redacted stream argument error")
@@ -275,10 +369,20 @@ test "t07b_llm_valid_stream_tool_call_completes" {
     #|{"type":"response.function_call_arguments.delta","output_index":0,"delta":"{}"}
   let completed =
     #|{"type":"response.completed","response":{"status":"completed","output":[{"type":"function_call","call_id":"call_1","name":"read","arguments":"{}"}]}}
-  assert_false(process_sse_event(added, acc, fn(_) { () }))
-  assert_false(process_sse_event(arguments, acc, fn(_) { () }))
-  assert_true(process_sse_event(completed, acc, fn(_) { () }))
-  validate_stream_tool_calls(acc)
+  assert_false(
+    @responses.process_responses_sse(provider="OpenAI", added, acc, fn(_) { () }),
+  )
+  assert_false(
+    @responses.process_responses_sse(provider="OpenAI", arguments, acc, fn(_) {
+      ()
+    }),
+  )
+  assert_true(
+    @responses.process_responses_sse(provider="OpenAI", completed, acc, fn(_) {
+      ()
+    }),
+  )
+  @responses.validate_stream_tool_calls(provider="OpenAI", acc)
   let completion = acc.to_completion()
   let tcs = completion.tool_calls()
   assert_eq(tcs.length(), 1)
@@ -288,7 +392,9 @@ test "t07b_llm_valid_stream_tool_call_completes" {
 
 ///|
 fn assert_openai_response_parse(resp : Json, stage : String) -> Unit raise {
-  let result = Ok(parse_openai_response(resp)) catch { e => Err(e) }
+  let result = Ok(@responses.parse_responses_response(provider="OpenAI", resp)) catch {
+    e => Err(e)
+  }
   match result {
     Err(@posoco.ModelError::ResponseParse(message)) =>
       assert_true(message.contains("stage=" + stage))
@@ -338,7 +444,11 @@ test "t07b_llm_nonstream_status_is_required_and_typed" {
     "status": "failed",
     "error": { "message": "secret-provider-error" },
   }
-  let result = Ok(parse_openai_response(provider_error)) catch { e => Err(e) }
+  let result = Ok(
+    @responses.parse_responses_response(provider="OpenAI", provider_error),
+  ) catch {
+    e => Err(e)
+  }
   match result {
     Err(@posoco.ModelError::ResponseParse(message)) => {
       assert_true(message.contains("stage=error"))
@@ -368,7 +478,10 @@ test "t07b_llm_nonstream_usage_is_strict" {
     "status": "completed",
     "usage": { "input_tokens": 1 },
   }
-  let decoded = parse_openai_response(missing_fields)
+  let decoded = @responses.parse_responses_response(
+    provider="OpenAI",
+    missing_fields,
+  )
   match decoded.usage {
     Some(usage) => {
       assert_true(usage.input_tokens == Some(1))
@@ -379,7 +492,10 @@ test "t07b_llm_nonstream_usage_is_strict" {
   }
   // "usage": null is treated as absent.
   let null_usage : Json = { "output": [], "status": "completed", "usage": null }
-  assert_true(parse_openai_response(null_usage).usage is None)
+  assert_true(
+    @responses.parse_responses_response(provider="OpenAI", null_usage).usage
+    is None,
+  )
 }
 
 ///|
@@ -394,7 +510,7 @@ test "t07b_llm_valid_nonstream_response_still_decodes" {
     "status": "completed",
     "usage": { "input_tokens": 2, "output_tokens": 1, "total_tokens": 7 },
   }
-  let decoded = parse_openai_response(response)
+  let decoded = @responses.parse_responses_response(provider="OpenAI", response)
   assert_true(decoded.finish_reason() is @posoco.FinishReason::Stop)
   match decoded.message.content {
     [@posoco.Content::Text("hello")] => ()
@@ -449,118 +565,6 @@ test "t07b_llm_http_error_formatter_is_payload_free" {
 }
 
 ///|
-test "codex_oauth_poll_accepts_only_explicit_pending_states" {
-  match parse_codex_poll_body("{\"error\":\"authorization_pending\"}") {
-    CodexPollResponse::Pending => ()
-    _ => fail("authorization_pending must remain pending")
-  }
-  match parse_codex_poll_body("{\"error\":\"slow_down\"}") {
-    CodexPollResponse::SlowDown => ()
-    _ => fail("slow_down must remain a slow-down response")
-  }
-  match
-    parse_codex_poll_body(
-      "{\"authorization_code\":\"code\",\"code_verifier\":\"verifier\"}",
-    ) {
-    CodexPollResponse::Ready(code, verifier) => {
-      assert_eq(code, "code")
-      assert_eq(verifier, "verifier")
-    }
-    _ => fail("complete poll response must be ready")
-  }
-}
-
-///|
-test "codex_oauth_poll_rejects_malformed_or_unknown_responses" {
-  let malformed = Ok(parse_codex_poll_body("{not-json")) catch { e => Err(e) }
-  match malformed {
-    Err(@oauth.OAuthError::ParseError(message)) =>
-      assert_true(message.contains("not valid JSON"))
-    _ => fail("malformed poll JSON must raise ParseError")
-  }
-  let missing = Ok(parse_codex_poll_body("{}")) catch { e => Err(e) }
-  match missing {
-    Err(@oauth.OAuthError::ParseError(message)) =>
-      assert_true(message.contains("authorization_code"))
-    _ => fail("missing credentials must raise ParseError")
-  }
-  let unknown = Ok(parse_codex_poll_body("{\"error\":\"unexpected\"}")) catch {
-    e => Err(e)
-  }
-  match unknown {
-    Err(@oauth.OAuthError::ParseError(message)) =>
-      assert_true(message.contains("unknown error"))
-    _ => fail("unknown poll error must raise ParseError")
-  }
-  let denied = Ok(parse_codex_poll_body("{\"error\":\"access_denied\"}")) catch {
-    e => Err(e)
-  }
-  match denied {
-    Err(@oauth.OAuthError::AccessDenied) => ()
-    _ => fail("access_denied must raise AccessDenied")
-  }
-}
-
-///|
-/// Regression for the production failure:
-/// `Codex OAuth poll response error must be a string`. OpenAI's device-token
-/// endpoint also returns the RFC-style error as an object with a `code` field.
-test "codex_oauth_poll_accepts_object_pending_error" {
-  let result = Ok(
-    parse_codex_poll_body(
-      "{\"error\":{\"code\":\"deviceauth_authorization_pending\"}}",
-    ),
-  ) catch {
-    err => Err(err)
-  }
-  match result {
-    Ok(CodexPollResponse::Pending) => ()
-    _ => fail("object deviceauth_authorization_pending must remain pending")
-  }
-}
-
-///|
-test "codex_oauth_poll_matches_pi_status_and_payload_semantics" {
-  match parse_codex_poll_response(403, "not-json") {
-    CodexPollResponse::Pending => ()
-    _ => fail("HTTP 403 must remain pending even with a non-JSON body")
-  }
-  match parse_codex_poll_response(404, "{}") {
-    CodexPollResponse::Pending => ()
-    _ => fail("HTTP 404 must remain pending")
-  }
-  match
-    parse_codex_poll_response(
-      200, "{\"error\":{\"code\":\"deviceauth_authorization_pending\"}}",
-    ) {
-    CodexPollResponse::Pending => ()
-    _ => fail("object pending error must remain pending")
-  }
-  match parse_codex_poll_response(200, "{\"error\":\"slow_down\"}") {
-    CodexPollResponse::SlowDown => ()
-    _ => fail("slow_down must remain a slow-down response")
-  }
-  match
-    parse_codex_poll_response(
-      200, "{\"authorization_code\":\"code\",\"code_verifier\":\"verifier\"}",
-    ) {
-    CodexPollResponse::Ready(code, verifier) => {
-      assert_eq(code, "code")
-      assert_eq(verifier, "verifier")
-    }
-    _ => fail("successful poll response must be ready")
-  }
-  match parse_codex_interval_ms(Json::string("2.5")) {
-    Some(value) => assert_eq(value, 2500)
-    None => fail("numeric interval string must be accepted")
-  }
-  match parse_codex_interval_ms(Json::number(2.5)) {
-    Some(value) => assert_eq(value, 2500)
-    None => fail("numeric interval must be accepted")
-  }
-}
-
-///|
 test "codex requests include the JWT account header" {
   let credential = @oauth.Credential::Credential(
     access_token=codex_test_access_token(),
@@ -569,14 +573,14 @@ test "codex requests include the JWT account header" {
     metadata=Map([("account_id", "acct-123")]),
   )
   let config = OpenAIConfig::from_codex_credential(credential, "gpt-5")
-  let headers = build_headers(config)
+  let headers = build_headers(config, None, false, false)
   assert_eq(headers.get("chatgpt-account-id"), Some("acct-123"))
 }
 
 ///|
 fn codex_test_access_token() -> String {
-  // JWT payload: {"https://api.openai.com/auth.chatgpt_account_id":"acct-123"}
-  "eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGguY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC0xMjMifQ.sig"
+  // JWT payload: {"https://api.openai.com/auth":{"chatgpt_account_id":"acct-123"}}
+  "eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC0xMjMifX0.sig"
 }
 
 ///|
@@ -599,6 +603,22 @@ test "codex token parser requires JWT account metadata and strict expiry" {
       assert_true(detail.contains("finite positive integer"))
     _ => fail("fractional expires_in must be rejected")
   }
+  // Real OpenAI tokens nest the claim under "https://api.openai.com/auth"; a
+  // flat dotted key (or a missing claim) must be rejected, not silently read.
+  let flat_key_token = "eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGguY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC0xMjMifQ.sig"
+  let flat_key_response = @json.parse(
+    "{\"access_token\":\"" +
+    flat_key_token +
+    "\",\"refresh_token\":\"refresh\",\"expires_in\":3600}",
+  )
+  let flat_result = Ok(parse_token_response(flat_key_response)) catch {
+    err => Err(err)
+  }
+  match flat_result {
+    Err(@oauth.OAuthError::ParseError(detail)) =>
+      assert_true(detail.contains("missing chatgpt account id claim"))
+    _ => fail("flat-key claim must be rejected; real tokens nest it")
+  }
 }
 
 ///|
@@ -617,46 +637,203 @@ pub impl @oauth.OAuthHttpTransport for CodexRecordingTransport with fn post(
 }
 
 ///|
-async test "codex oauth fake transport covers device poll and exchange wire" {
+/// AuthInteraction fake that captures the authorize URL the flow notifies.
+struct CodexRecordingInteraction {
+  mut last_auth_url : String
+}
+
+///|
+pub impl @oauth.AuthInteraction for CodexRecordingInteraction with fn notify(
+  self : CodexRecordingInteraction,
+  message : @oauth.AuthMessage,
+) -> Unit {
+  match message {
+    @oauth.AuthMessage::AuthUrl(url) => self.last_auth_url = url
+    _ => ()
+  }
+}
+
+///|
+pub impl @oauth.AuthInteraction for CodexRecordingInteraction with fn is_cancelled(
+  _self : CodexRecordingInteraction,
+) -> Bool {
+  false
+}
+
+///|
+/// CallbackServer fake: echoes the state param of the captured authorize URL
+/// back to the flow (state is generated inside the flow). `forged_state`
+/// returns a mismatched state instead.
+struct CodexFakeCallbackServer {
+  interaction : CodexRecordingInteraction
+  delivered_code : String
+  forged_state : Bool
+  started_ports : Array[Int]
+  mut stop_count : Int
+}
+
+///|
+pub impl @oauth.CallbackServer for CodexFakeCallbackServer with fn start(
+  self : CodexFakeCallbackServer,
+  port : Int,
+) -> Unit raise @oauth.OAuthError {
+  self.started_ports.push(port)
+}
+
+///|
+pub impl @oauth.CallbackServer for CodexFakeCallbackServer with fn wait_callback(
+  self : CodexFakeCallbackServer,
+) -> (String, String) raise @oauth.OAuthError {
+  let state = match
+    codex_extract_query_param(self.interaction.last_auth_url, "state") {
+    Some(state) => state
+    None => ""
+  }
+  if self.forged_state {
+    (self.delivered_code, "forged-" + state)
+  } else {
+    (self.delivered_code, state)
+  }
+}
+
+///|
+pub impl @oauth.CallbackServer for CodexFakeCallbackServer with fn stop(
+  self : CodexFakeCallbackServer,
+) -> Unit {
+  self.stop_count += 1
+}
+
+///|
+/// Extract one key's value from a query string or form-encoded body.
+fn codex_extract_query_param(input : String, key : String) -> String? {
+  let prefix = key + "="
+  let start = if input.has_prefix(prefix) {
+    prefix.length()
+  } else {
+    match input.find("&" + prefix) {
+      Some(pos) => pos + 1 + prefix.length()
+      None => return None
+    }
+  }
+  let rest = input.sub(start~).to_owned()
+  match rest.find("&") {
+    Some(amp) => Some(rest.sub(end=amp).to_owned())
+    None => Some(rest)
+  }
+}
+
+///|
+fn codex_browser_token_response() -> String {
+  "{\"access_token\":\"" +
+  codex_test_access_token() +
+  "\",\"refresh_token\":\"refresh-next\",\"expires_in\":3600}"
+}
+
+///|
+async test "codex login drives the pkce browser flow wire" {
+  let interaction_impl = CodexRecordingInteraction::{ last_auth_url: "", }
+  let server_impl = CodexFakeCallbackServer::{
+    interaction: interaction_impl,
+    delivered_code: "the_code",
+    forged_state: false,
+    started_ports: [],
+    stop_count: 0,
+  }
   let transport_impl = CodexRecordingTransport::{
     requests: [],
     responses: [
       @oauth.OAuthHttpResponse::{
         status: 200,
-        body: "{\"device_auth_id\":\"device-id\",\"user_code\":\"ABCD\",\"interval\":0}",
-      },
-      @oauth.OAuthHttpResponse::{
-        status: 200,
-        body: "{\"authorization_code\":\"auth-code\",\"code_verifier\":\"verifier\"}",
-      },
-      @oauth.OAuthHttpResponse::{
-        status: 200,
-        body: "{\"access_token\":\"" +
-        codex_test_access_token() +
-        "\",\"refresh_token\":\"refresh-next\",\"expires_in\":3600}",
+        body: codex_browser_token_response(),
       },
     ],
   }
+  let interaction : &@oauth.AuthInteraction = interaction_impl
+  let server : &@oauth.CallbackServer = server_impl
   let transport : &@oauth.OAuthHttpTransport = transport_impl
   let oauth = CodexOAuth::CodexOAuth(transport=Some(transport))
-  let interaction_impl = @oauth.NoopAuthInteraction::NoopAuthInteraction()
-  let interaction : &@oauth.AuthInteraction = interaction_impl
-  let credential = oauth.login(interaction)
+  let credential = oauth.run_browser_login(interaction, server)
+  // The authorize URL carries the Codex params, PKCE, scope, and state.
+  let auth_url = interaction_impl.last_auth_url
+  assert_true(auth_url.has_prefix("https://auth.openai.com/oauth/authorize?"))
+  assert_true(auth_url.contains("client_id=app_EMoamEEZ73f0CkXaXp7hrann"))
+  assert_true(auth_url.contains("originator=posoco"))
+  assert_true(auth_url.contains("id_token_add_organizations=true"))
+  assert_true(auth_url.contains("codex_cli_simplified_flow=true"))
+  assert_true(auth_url.contains("code_challenge_method=S256"))
+  assert_true(
+    auth_url.contains(
+      "redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback",
+    ),
+  )
+  assert_true(
+    auth_url.contains("scope=openid%20profile%20email%20offline_access"),
+  )
+  match codex_extract_query_param(auth_url, "state") {
+    Some(state) => assert_eq(state.length(), 22)
+    None => fail("authorize URL must carry state")
+  }
+  // The exchange POST hits /oauth/token with the authorization-code grant.
+  assert_eq(transport_impl.requests.length(), 1)
+  let exchange = transport_impl.requests[0]
+  assert_eq(exchange.url, "https://auth.openai.com/oauth/token")
+  assert_eq(
+    codex_extract_query_param(exchange.body, "grant_type"),
+    Some("authorization_code"),
+  )
+  assert_eq(
+    codex_extract_query_param(exchange.body, "client_id"),
+    Some("app_EMoamEEZ73f0CkXaXp7hrann"),
+  )
+  assert_eq(codex_extract_query_param(exchange.body, "code"), Some("the_code"))
+  match codex_extract_query_param(exchange.body, "code_verifier") {
+    Some(verifier) => assert_true(verifier.length() > 0)
+    None => fail("exchange body must carry a code_verifier")
+  }
+  assert_eq(
+    codex_extract_query_param(exchange.body, "redirect_uri"),
+    Some("http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback"),
+  )
+  // The strict parser extracted the JWT account claim into metadata.
   assert_eq(credential.metadata.get("account_id"), Some("acct-123"))
-  assert_eq(transport_impl.requests.length(), 3)
-  assert_eq(
-    transport_impl.requests[0].url,
-    "https://auth.openai.com/api/accounts/deviceauth/usercode",
-  )
-  assert_true(transport_impl.requests[0].body.contains("client_id"))
-  assert_eq(
-    transport_impl.requests[1].url,
-    "https://auth.openai.com/api/accounts/deviceauth/token",
-  )
-  assert_eq(
-    transport_impl.requests[2].body,
-    "grant_type=authorization_code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&code=auth-code&code_verifier=verifier&redirect_uri=https%3A%2F%2Fauth.openai.com%2Fdeviceauth%2Fcallback",
-  )
+  assert_eq(credential.refresh_token, "refresh-next")
+  assert_eq(server_impl.started_ports, [1455])
+  assert_eq(server_impl.stop_count, 1)
+}
+
+///|
+async test "codex login rejects a forged callback state" {
+  let interaction_impl = CodexRecordingInteraction::{ last_auth_url: "", }
+  let server_impl = CodexFakeCallbackServer::{
+    interaction: interaction_impl,
+    delivered_code: "the_code",
+    forged_state: true,
+    started_ports: [],
+    stop_count: 0,
+  }
+  let transport_impl = CodexRecordingTransport::{
+    requests: [],
+    responses: [
+      @oauth.OAuthHttpResponse::{
+        status: 200,
+        body: codex_browser_token_response(),
+      },
+    ],
+  }
+  let interaction : &@oauth.AuthInteraction = interaction_impl
+  let server : &@oauth.CallbackServer = server_impl
+  let transport : &@oauth.OAuthHttpTransport = transport_impl
+  let oauth = CodexOAuth::CodexOAuth(transport=Some(transport))
+  let result = Ok(oauth.run_browser_login(interaction, server)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@oauth.OAuthError::ParseError(detail)) =>
+      assert_true(detail.contains("oauth state mismatch"))
+    _ => fail("a forged callback state must raise ParseError")
+  }
+  assert_eq(transport_impl.requests.length(), 0)
+  assert_eq(server_impl.stop_count, 1)
 }
 
 ///|
@@ -738,6 +915,11 @@ async test "codex refresh sends version and account headers and preserves effort
         "\"visibility\":\"list\",\"supported_in_api\":true,\"priority\":1," +
         "\"context_window\":272000}]}",
       },
+      // Second call: the best-effort usage probe rides the same transport.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: "{\"rate_limit\":{\"primary_window\":{\"used_percent\":10.0,\"limit_window_seconds\":18000,\"reset_at\":1777936568}}}",
+      },
     ],
   }
   let transport : &OpenAIModelsHttpTransport = transport_impl
@@ -783,6 +965,12 @@ async test "codex refresh sends version and account headers and preserves effort
   assert_eq(
     transport_impl.headers[0].get("chatgpt-account-id"),
     Some("acct-123"),
+  )
+  // The refresh also probes the usage endpoint on the same transport so the
+  // 5h/weekly snapshot starts populated without model traffic.
+  assert_eq(
+    transport_impl.urls[1],
+    "https://chatgpt.com/backend-api/wham/usage",
   )
 }
 
@@ -830,7 +1018,7 @@ test "openai_input_assistant_tool_calls_emit_function_call_items" {
     reasoning=None,
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let items = posoco_message_to_openai_items(msg)
+  let items = @responses.message_to_responses_items(msg)
   assert_eq(items.length(), 2)
   guard items[0] is Object(m0) else { fail("expected message item") }
   match m0.get("role") {
@@ -877,7 +1065,7 @@ test "openai_input_replays_reasoning_items_verbatim" {
     }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let items = posoco_message_to_openai_items(msg)
+  let items = @responses.message_to_responses_items(msg)
   assert_eq(items.length(), 2)
   assert_true(items[0] == raw_item)
   guard items[1] is Object(m1) else { fail("expected message item") }
@@ -931,7 +1119,7 @@ test "openai_parse_captures_reasoning_items" {
       ("status", Json::string("completed")),
     ]),
   )
-  let resp = parse_openai_response(resp_json)
+  let resp = @responses.parse_responses_response(provider="OpenAI", resp_json)
   match resp.message.reasoning {
     Some(r) => {
       assert_eq(r.content, "thought hard")
@@ -946,13 +1134,19 @@ test "openai_parse_captures_reasoning_items" {
 /// captured into the sink and attached to the accumulated completion.
 test "openai_stream_captures_reasoning_items_from_completed" {
   let acc = @posoco.StreamAccumulator()
-  let sink = ReasoningSink::{ items: [], summary: "", }
+  let sink = @responses.SseStreamState::SseStreamState()
   let completed =
     #|{"type":"response.completed","response":{"status":"completed","output":[{"id":"rs_1","type":"reasoning","summary":[{"type":"summary_text","text":"s"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}}
   assert_true(
-    process_sse_event(completed, acc, fn(_) { () }, reasoning_sink=sink),
+    @responses.process_responses_sse(
+      provider="OpenAI",
+      completed,
+      acc,
+      fn(_) { () },
+      state=sink,
+    ),
   )
-  let completion = attach_reasoning_items(acc.to_completion(), sink)
+  let completion = attach_reasoning_items_responses(acc.to_completion(), sink)
   match completion.message.reasoning {
     Some(r) => {
       assert_eq(r.content, "s")
@@ -1076,7 +1270,7 @@ test "openai_compact_roundtrip_replays_verbatim" {
   let messages = parse_compact_response(@json.parse(window))
   let re_encoded : Array[Json] = []
   for m in messages {
-    for item in posoco_message_to_openai_items(m) {
+    for item in @responses.message_to_responses_items(m) {
       re_encoded.push(item)
     }
   }
@@ -1146,7 +1340,7 @@ test "responses usage carries cached input tokens" {
       "input_tokens_details": { "cached_tokens": 1000 },
     },
   }
-  match extract_usage(resp) {
+  match @responses.extract_usage(provider="OpenAI", resp) {
     Some(u) => {
       assert_eq(u.input_tokens, Some(1200))
       assert_eq(u.cached_input_tokens, Some(1000))
@@ -1157,7 +1351,7 @@ test "responses usage carries cached input tokens" {
   let no_details : Json = {
     "usage": { "input_tokens": 10, "output_tokens": 5, "total_tokens": 15 },
   }
-  match extract_usage(no_details) {
+  match @responses.extract_usage(provider="OpenAI", no_details) {
     Some(u) => assert_true(u.cached_input_tokens is None)
     None => fail("expected usage")
   }
@@ -1169,7 +1363,9 @@ test "responses usage carries cached input tokens" {
       "input_tokens_details": { "cached_tokens": "many" },
     },
   }
-  let outcome : Result[@posoco.Usage?, Error] = Ok(extract_usage(bad_details)) catch {
+  let outcome : Result[@posoco.Usage?, Error] = Ok(
+    @responses.extract_usage(provider="OpenAI", bad_details),
+  ) catch {
     error => Err(error)
   }
   assert_true(outcome is Err(_))
@@ -1203,11 +1399,504 @@ test "codex discovery slot reports context_window through provider_config" {
 }
 
 ///|
-/// Decode one successful-status poll body. Kept as a small compatibility
-/// helper for package-local conformance tests and callers that have already
-/// checked the HTTP status.
-fn parse_codex_poll_body(
-  body : String,
-) -> CodexPollResponse raise @oauth.OAuthError {
-  parse_codex_poll_response(200, body)
+/// Codex subscription config for the identity header tests: the base URL
+/// equals the Codex OAuth endpoint so build_headers takes the protocol path.
+fn codex_identity_test_config() -> OpenAIConfig {
+  let config = OpenAIConfig::with_base_url(
+    codex_test_access_token(),
+    "gpt-5",
+    codex_oauth_api_base(),
+  )
+  { ..config, account_id: Some("acct-123"), }
+}
+
+///|
+test "codex subscription headers carry the posoco identity in official shape" {
+  let config = codex_identity_test_config()
+  let headers = build_headers(config, Some("sess-1"), true, false)
+  assert_eq(headers.get("originator"), Some("posoco"))
+  match headers.get("User-Agent") {
+    Some(ua) => assert_true(ua.has_prefix("posoco/ext-openai ("))
+    None => fail("expected a posoco User-Agent")
+  }
+  assert_eq(headers.get("session-id"), Some("sess-1"))
+  assert_eq(headers.get("x-codex-window-id"), Some("sess-1:0"))
+  assert_eq(headers.get("Accept"), Some("text/event-stream"))
+  assert_eq(headers.get("chatgpt-account-id"), Some("acct-123"))
+  match (headers.get("thread-id"), headers.get("x-client-request-id")) {
+    (Some(thread), Some(request)) => {
+      assert_true(thread.length() > 0)
+      assert_eq(thread, request)
+    }
+    _ => fail("thread-id and x-client-request-id must both be present")
+  }
+  let replayed = build_headers(config, Some("sess-1"), true, false)
+  assert_eq(replayed.get("session-id"), Some("sess-1"))
+  match (headers.get("thread-id"), replayed.get("thread-id")) {
+    (Some(first), Some(second)) => assert_true(first != second)
+    _ => fail("thread-id must be minted per call")
+  }
+}
+
+///|
+test "codex compact headers add a stable installation id" {
+  let config = codex_identity_test_config()
+  let first = build_headers(config, Some("sess-2"), false, true)
+  let second = build_headers(config, Some("sess-2"), false, true)
+  assert_eq(first.get("Accept"), Some("application/json"))
+  match
+    (
+      first.get("x-codex-installation-id"),
+      second.get("x-codex-installation-id"),
+    ) {
+    (Some(first_id), Some(second_id)) => {
+      assert_true(first_id.length() > 0)
+      assert_eq(first_id, second_id)
+    }
+    _ => fail("compact codex calls must carry a stable installation id")
+  }
+  let plain = build_headers(config, Some("sess-2"), false, false)
+  assert_true(plain.get("x-codex-installation-id") is None)
+}
+
+///|
+test "api key base url gets the user agent but no codex protocol headers" {
+  let config = OpenAIConfig::with_base_url(
+    "sk-test", "gpt-5", "https://api.openai.com/v1",
+  )
+  let headers = build_headers(config, Some("sess-3"), true, false)
+  match headers.get("User-Agent") {
+    Some(ua) => assert_true(ua.has_prefix("posoco/ext-openai ("))
+    None => fail("expected a posoco User-Agent")
+  }
+  assert_true(headers.get("originator") is None)
+  assert_true(headers.get("session-id") is None)
+  assert_true(headers.get("x-codex-window-id") is None)
+  assert_true(headers.get("thread-id") is None)
+}
+
+///|
+test "identity user agent formats the platform triple" {
+  assert_eq(
+    identity_user_agent(platform="darwin", release="24.5.0", arch="arm64"),
+    "posoco/ext-openai (darwin 24.5.0; arm64)",
+  )
+}
+
+///|
+async test "codex model fetch sends originator and user agent" {
+  let transport_impl = OpenAIModelsRecordingTransport::{
+    urls: [],
+    headers: [],
+    responses: [
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: "{\"models\":[{" +
+        "\"slug\":\"gpt-codex\",\"display_name\":\"GPT Codex\"," +
+        "\"default_reasoning_level\":\"medium\",\"supported_reasoning_levels\":[" +
+        "{\"effort\":\"low\",\"description\":\"fast\"}," +
+        "{\"effort\":\"medium\",\"description\":\"balanced\"}]," +
+        "\"visibility\":\"list\",\"supported_in_api\":true,\"priority\":1," +
+        "\"context_window\":272000}]}",
+      },
+    ],
+  }
+  let transport : &OpenAIModelsHttpTransport = transport_impl
+  let models = fetch_codex_models_with_transport(
+    transport,
+    codex_oauth_api_base(),
+    codex_test_access_token(),
+    "acct-123",
+    openai_codex_models_client_version(),
+  )
+  assert_eq(models.length(), 1)
+  assert_eq(transport_impl.headers[0].get("originator"), Some("posoco"))
+  match transport_impl.headers[0].get("User-Agent") {
+    Some(ua) => assert_true(ua.has_prefix("posoco/ext-openai ("))
+    None => fail("expected a posoco User-Agent on codex model fetch")
+  }
+}
+
+///|
+/// A path-bearing base_url must not fail URL resolution when the transport
+/// opens its client: `@http.Client::Client` rejects URIs with a path, so the
+/// adapter must connect to the origin and carry the path into request paths.
+/// Loopback discard port keeps this offline: URL resolution must succeed and
+/// only the TCP connect may fail — never stage=create_client InvalidFormat.
+async test "openai path-bearing base_url connects to the origin" {
+  let config = OpenAIConfig::with_base_url(
+    "k", "gpt-5", "https://127.0.0.1:9/v1",
+  )
+  let port = OpenAIModelPort::OpenAIModelPort(config)
+  let options : @posoco.ChatOptions = {
+    temperature: None,
+    max_output_tokens: None,
+  }
+  let nonstream = Ok(port.chat_nonstream("s1", [], [], options)) catch {
+    err => Err(err)
+  }
+  match nonstream {
+    Err(@posoco.ModelError::Transport(message)) =>
+      assert_true(!message.contains("InvalidFormat"))
+    Err(_) => fail("expected a transport error from non-stream chat")
+    Ok(_) => fail("loopback discard port must not accept a connection")
+  }
+  let streamed = Ok(port.chat_stream("s2", [], [], options, _ => ())) catch {
+    err => Err(err)
+  }
+  match streamed {
+    Err(@posoco.ModelError::Transport(message)) =>
+      assert_true(!message.contains("InvalidFormat"))
+    Err(_) => fail("expected a transport error from streaming chat")
+    Ok(_) => fail("loopback discard port must not accept a connection")
+  }
+}
+
+///|
+test "openai base_url splits into origin and endpoint path prefix" {
+  let cases : Array[(String, String, String)] = [
+    ("https://api.openai.com/v1", "https://api.openai.com", "/v1"),
+    (
+      "https://chatgpt.com/backend-api/codex", "https://chatgpt.com", "/backend-api/codex",
+    ),
+    ("https://api.openai.com", "https://api.openai.com", ""),
+    ("https://api.openai.com/", "https://api.openai.com", ""),
+    ("https://api.openai.com/v1/", "https://api.openai.com", "/v1"),
+    ("http://host.example:8080/prefix", "http://host.example:8080", "/prefix"),
+  ]
+  for entry in cases {
+    let (base_url, origin, prefix) = entry
+    let (got_origin, got_prefix) = split_openai_base_url(base_url)
+    assert_eq(got_origin, origin)
+    assert_eq(got_prefix, prefix)
+  }
+  let schemeless = Ok(split_openai_base_url("api.openai.com/v1")) catch {
+    err => Err(err)
+  }
+  match schemeless {
+    Err(@posoco.ModelError::Transport(_)) => ()
+    _ => fail("scheme-less base_url must be a typed transport error")
+  }
+}
+
+///|
+/// Reasoning-model requests must not carry temperature: the Codex backend
+/// rejects it with 400 `{"detail":"Unsupported parameter: temperature"}` for
+/// the gpt-5 family, and hosts tune temperature=0.0 by default. The strip is
+/// keyed on reasoning effort presence — the provider-owned signal that the
+/// selected model is a reasoning model. Plain models keep the passthrough.
+test "openai reasoning requests drop unsupported temperature" {
+  let tuned : @posoco.ChatOptions = {
+    temperature: Some(0.0),
+    max_output_tokens: None,
+  }
+  match build_request_body([], [], tuned, "gpt-5.6-luna", Some("max")) {
+    Json::Object(fields) => {
+      let absent : Json? = None
+      assert_eq(fields.get("temperature"), absent)
+    }
+    _ => fail("Responses request body must be an object")
+  }
+  match build_request_body([], [], tuned, "gpt-4o", None) {
+    Json::Object(fields) =>
+      assert_eq(fields.get("temperature"), Some(Json::number(0.0)))
+    _ => fail("Responses request body must be an object")
+  }
+}
+
+///|
+/// 429 quota verdict: the Codex usage-limit body raises the typed
+/// RateLimited with the provider code and the stated reset time, so the
+/// RateLimitGuard can schedule resume.
+test "openai 429 codex body raises rate limited with reset" {
+  let body =
+    #|{"error":{"type":"usage_limit_reached","message":"The usage limit has been reached","plan_type":"plus","resets_at":1788506102,"resets_in_seconds":4317,"eligible_promo":null}}
+  match openai_quota_verdict(429, Some(body), None, now_ms=1788501785000L) {
+    Some(@posoco.ModelError::RateLimited(info)) => {
+      assert_eq(info.provider_code, Some("usage_limit_reached"))
+      assert_eq(info.reset_at_ms, Some(1788501785000L + 4317000L))
+      assert_true(info.message.length() > 0)
+    }
+    _ => fail("a codex 429 body must raise RateLimited")
+  }
+}
+
+///|
+/// Without `resets_in_seconds`, the absolute `resets_at` epoch seconds
+/// still yields the wall-clock reset time.
+test "openai 429 resets_at-only body uses the absolute epoch" {
+  let body =
+    #|{"error":{"type":"usage_limit_reached","resets_at":1788506102}}
+  match openai_quota_verdict(429, Some(body), None, now_ms=1788501785000L) {
+    Some(@posoco.ModelError::RateLimited(info)) =>
+      assert_eq(info.reset_at_ms, Some(1788506102000L))
+    _ => fail("a resets_at-only 429 body must raise RateLimited")
+  }
+}
+
+///|
+/// Non-429 statuses never take the quota verdict, even when the body
+/// itself carries quota-shaped fields.
+test "openai non-429 statuses are not quota-classified" {
+  let body =
+    #|{"error":{"type":"usage_limit_reached","message":"The usage limit has been reached","plan_type":"plus","resets_at":1788506102,"resets_in_seconds":4317,"eligible_promo":null}}
+  assert_true(
+    openai_quota_verdict(500, Some(body), None, now_ms=1788501785000L) is None,
+  )
+  assert_true(
+    openai_quota_verdict(401, Some(body), None, now_ms=1788501785000L) is None,
+  )
+}
+
+///|
+/// Every 429 raises RateLimited even when the body never drained: the
+/// guard's probe backoff handles the missing reset time.
+test "openai 429 without a body still raises rate limited" {
+  match openai_quota_verdict(429, None, None, now_ms=1788501785000L) {
+    Some(@posoco.ModelError::RateLimited(info)) =>
+      assert_true(info.reset_at_ms is None)
+    _ => fail("an empty 429 must still raise RateLimited")
+  }
+}
+
+///|
+/// The transport sites forward the Retry-After header verbatim; a numeric
+/// seconds value becomes the wall-clock reset time.
+test "openai 429 retry-after header yields the reset time" {
+  match openai_quota_verdict(429, None, Some("120"), now_ms=1788501785000L) {
+    Some(@posoco.ModelError::RateLimited(info)) =>
+      assert_eq(info.reset_at_ms, Some(1788501785000L + 120000L))
+    _ => fail("a Retry-After 429 must raise RateLimited")
+  }
+}
+
+///|
+/// Real-wire corpus regression: two SSE streams captured verbatim from the
+/// Codex backend (chatgpt.com/backend-api/codex/responses), one low-effort
+/// with a single function_call at output_index 0, one effort=max where a
+/// reasoning item occupies output_index 0 and the function_call sits at
+/// output_index 1. Guards the wire-format contract end to end: compact
+/// tool-slot remapping, done-event identity/reasoning capture, terminal
+/// output[]=[] tolerance, and the wire-spelled finish reason.
+test "openai real codex sse corpus replays to tool calls" {
+  let low : Array[String] = [
+    "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_008857c78e9d01d9016a9aa0c0f46087d09cfa811241826e0b\",\"object\":\"response\",\"created_at\":1788518592,\"status\":\"in_progress\",\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":null,\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.6-luna\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"ca49177b-a23d-43a4-aa99-3545bced5593\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"all_turns\",\"effort\":\"low\",\"mode\":\"standard\",\"summary\":\"detailed\"},\"safety_identifier\":\"user-gATLXyx4Z9rsYLTJq8Vbp86K\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Read a file from disk\",\"name\":\"read\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"absolute path\"}},\"required\":[\"path\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":0}",
+    "{\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_008857c78e9d01d9016a9aa0c0f46087d09cfa811241826e0b\",\"object\":\"response\",\"created_at\":1788518592,\"status\":\"in_progress\",\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":null,\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.6-luna\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"ca49177b-a23d-43a4-aa99-3545bced5593\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"all_turns\",\"effort\":\"low\",\"mode\":\"standard\",\"summary\":\"detailed\"},\"safety_identifier\":\"user-gATLXyx4Z9rsYLTJq8Vbp86K\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Read a file from disk\",\"name\":\"read\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"absolute path\"}},\"required\":[\"path\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":1}",
+    "{\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_2SYz207Bokbi9hdogto3t7DC\",\"name\":\"read\"},\"output_index\":0,\"sequence_number\":2}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{\\\"\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"A5I1GSOwJqaOEO\",\"output_index\":0,\"sequence_number\":3}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"path\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"Uxug5HWNB4Hy\",\"output_index\":0,\"sequence_number\":4}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\":\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"iQog7NP1a1HmIW\",\"output_index\":0,\"sequence_number\":5}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\"/\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"d0wRTiiCxFPXos\",\"output_index\":0,\"sequence_number\":6}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"tmp\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"ThROfIyHkz8JT\",\"output_index\":0,\"sequence_number\":7}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"/\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"V7WkWaL53i5FqMA\",\"output_index\":0,\"sequence_number\":8}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"notes\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"dA5bVBlzVEO\",\"output_index\":0,\"sequence_number\":9}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\".txt\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"N9lHYrlKEDFc\",\"output_index\":0,\"sequence_number\":10}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\"}\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"obfuscation\":\"4jUypIEpSCiluw\",\"output_index\":0,\"sequence_number\":11}",
+    "{\"type\":\"response.function_call_arguments.done\",\"arguments\":\"{\\\"path\\\":\\\"/tmp/notes.txt\\\"}\",\"item_id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"output_index\":0,\"sequence_number\":12}",
+    "{\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"path\\\":\\\"/tmp/notes.txt\\\"}\",\"call_id\":\"call_2SYz207Bokbi9hdogto3t7DC\",\"name\":\"read\"},\"output_index\":0,\"sequence_number\":13}",
+    "{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_008857c78e9d01d9016a9aa0c0f46087d09cfa811241826e0b\",\"object\":\"response\",\"created_at\":1788518592,\"status\":\"completed\",\"background\":false,\"completed_at\":1788518593,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":null,\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.6-luna\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"ca49177b-a23d-43a4-aa99-3545bced5593\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"all_turns\",\"effort\":\"low\",\"mode\":\"standard\",\"summary\":\"detailed\"},\"safety_identifier\":\"user-gATLXyx4Z9rsYLTJq8Vbp86K\",\"service_tier\":\"default\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Read a file from disk\",\"name\":\"read\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"absolute path\"}},\"required\":[\"path\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":{\"attribution\":{\"items\":{\"msg_008857c78e9d01d9016a9aa0c0fd8887d0b796ebe792b7dde3\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"content\":[{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":30,\"output_tokens\":0}],\"input_tokens\":30,\"output_tokens\":0},\"fc_008857c78e9d01d9016a9aa0c1893887d0ba5cd82b1205db86\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":2,\"output_tokens\":21}},\"request_fields\":{\"tools\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":39,\"output_tokens\":0}}},\"input_tokens\":71,\"input_tokens_details\":{\"cache_write_tokens\":0,\"cached_tokens\":0},\"output_tokens\":21,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":92},\"user\":null,\"metadata\":{}},\"sequence_number\":14}",
+  ]
+  let max_effort : Array[String] = [
+    "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_0d81078b3c2499f2016a9aa0f7a52887d09725658467e92b66\",\"object\":\"response\",\"created_at\":1788518647,\"status\":\"in_progress\",\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":null,\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.6-luna\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"2ff3076c-3be0-48be-acb6-a4f41239777d\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"all_turns\",\"effort\":\"max\",\"mode\":\"standard\",\"summary\":\"detailed\"},\"safety_identifier\":\"user-gATLXyx4Z9rsYLTJq8Vbp86K\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Read a file from disk\",\"name\":\"read\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"absolute path\"}},\"required\":[\"path\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":0}",
+    "{\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_0d81078b3c2499f2016a9aa0f7a52887d09725658467e92b66\",\"object\":\"response\",\"created_at\":1788518647,\"status\":\"in_progress\",\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":null,\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.6-luna\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"2ff3076c-3be0-48be-acb6-a4f41239777d\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"all_turns\",\"effort\":\"max\",\"mode\":\"standard\",\"summary\":\"detailed\"},\"safety_identifier\":\"user-gATLXyx4Z9rsYLTJq8Vbp86K\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Read a file from disk\",\"name\":\"read\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"absolute path\"}},\"required\":[\"path\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":1}",
+    "{\"type\":\"response.output_item.added\",\"item\":{\"id\":\"rs_0d81078b3c2499f2016a9aa0f8235087d0893a6f9ff93ba895\",\"type\":\"reasoning\",\"content\":[],\"encrypted_content\":\"gAAAAABqmqD4a1UJJCt-iMxZjtqaXhuqB1-0EMAcKiC2_5qwyZgElE3K82_fmO1zFgrXl5VBx2P-CRlpYZYFXS6zZ5xNH6-8RILEcOcBwMzPLvqZtTRTbUgxbn1WIMlPz9Asz6cRvbchrlD-rAVVhAVwSTBriM8Wjw7L2OwVeSCs-g6KctRaxLhOW5vC6fscBGVOvau5UHBVBuRyIRu8cKNSBi-4_KttpFEVNNzp4W94YUMmfYuXCMVyCV7td9CbNBp0O2ASAHDJmy3Xw3dxcIw2tLBMjsuuRMk4C9e5AXDfG_kdQSGpzFGMQm3_6D-Nvk4FtBYK679ltQsr7Tx-SRlMCGVMyqilkJ_NwfheTpHl070_2stg7bUUel6KGbZrE3uxrZOj6lDxo2rPRHmc73xvPuFAuOQpbQNVr7eaDe3reJOvVvfNV3hzl7SlvUNve-PpvCh_yX10ZEOfiZO8e87Xui2XyuWpDpQSdyyjPi1Glg-L6BuG991vbZTum6YRx_SCFO_uA1llANdn63LaaiRQefS321NhIdhtThgCMhH87N4alx3baJ6U_ju41tMRodGpEk7fziTc5KhyWaHHd2XDktVptCZEiPoMNrtUPfM1eylQwX8SXUTif7jzHwo3bYkHt7jyvawJaFXnqbKHbwWm9isrlDJN9oLPSb7UwajdvYNP8oI6TtcAJTWrdv5lh4XS8Q6fAeNuUQZZoXzP83r7tJudcVktkDP-u79A-tZhTxwwexWw7e_62hLyiZ6U8sgVrkbaNeuWcjou6IqmCJKa6mE4pHKCaNPcCCFoIdGhTPVnvWswV8SI9BxZq7epw3FZ6zKu1y2QprdLMDKoX34wn1SZL2eKQK51bC67B3ifHPxRffp4oC0wvV2Wz4G73obntYFy1CEw29J-csD66ZVKrvbgDzunsUdO3wfegLICynWwd0ShDAxy-Zx2aHudTSq3PtvJsZDUC2drwZW4xVETV38s78RHsgtQ2TiJS7qPALW50GxwJ4CNgl9zbm26brW5AFNUv1fj0du9aIor2ygwJLws8LE57p_G0cxTx4gBoH3A1PP5wgR5WOmXSWKc-p3FbW8iN3EaPd9Q9ie-3Jo3vGH0RMk_aDBU0-2bwDGEDFHQM07jCKf1lhrVu00bF5QugIxsae9cw6JVAGcPW91Mi7rBIrim3kSOFa1Qc9ZoFXPCgujeJGC1aWeGKZ2-sTgfzXxlBpR6KKzcEDIDhIc8k_l6Fvc0Ir-ebMQDV0y_aM4hLVxTs95WpiwNMn4mp8nPTd1HHQDh\",\"summary\":[]},\"output_index\":0,\"sequence_number\":2}",
+    "{\"type\":\"response.output_item.done\",\"item\":{\"id\":\"rs_0d81078b3c2499f2016a9aa0f8235087d0893a6f9ff93ba895\",\"type\":\"reasoning\",\"content\":[],\"encrypted_content\":\"gAAAAABqmqD4dhs8phR8PwuvgVTT7qzeX2H44uR66sZE6-FfGp-R7LFFjmjdHyZ8KNy0VFRzHSoDj_QrKabuqVnI9qH8wgImd-P97ja-_bMz0Kml9HzSEnTvVtl4e87PF-YzodNim_5PQybMlPIWx2dlNFeY-XCzOQsAgmuYIAegqvvyIv5mZauc7qfm5jwkn30AL71OFD4u6IGCacpe3hKhnQCBGiYuPgXg3rFcETRMOwfCmwLGtCwjcJIeLKpx0tQ-qHbevK86tU9sanXHrQpOHUJHGtycbFs81icrFlXeSfluvmhRNrrXIgbceJHsZcX_OLp3NKHKLhNmtmXmDcOkkk3Q46xN6HkGqOv_tisWORjM812e-iwY8Iw4IuuRJjP1KzwLx-CqwRzJwFhgu-4aq3_SJbombzRkU1rq8AtY1qslbwDR4pKPwgGbhao9UJuNPd2-i15SbrDAeahrTr6FohiRp14_RVab9Tgej4BjBYI_GKhK0oj4UIGRFIx0DP5PRKpoZNIO6M2-s11OgBhLcEA7dFiLJ0h-1EacYAnAqMw2nan6Pa33X4Q3y_OX4GF26EmmtvA9BCdlkffUtr1COE2pS4H-RelqTEB9EMIXFRe4sfe2vpYMM2wGUyI1nwM90VchUg10DNh_N_uRUcB1gEOn6fdgQeAwCMgIJ9nXlV9oqRhhsbCT-JhZj1iehI_OAEDDVG-TOyHhZR3ZcZC7f7mbvkQ2lZ_5Kks10xq2D5mLp_KFPFI9rY5nXSYsjOYKT-cawe8FeyimEqFc_FN9Fq_78TuZIe1rVLJ1ZOGF1zJIA7wU7gN0M3QoevTWzCsfH6y2sTudNkpjq5hRaZr1QMBzR2dBjIgpHXh-z9mrbmacx0v7VXdIEBD5wOkdcK3gn60JqPQo6gqJoXWMgstm9Oo1MQvw97XEdus2aAnP2XbaxyTWV_tzt6LU-lSRCMgXUOHzWkOQ4YFS-5WDr3pKl8sugtv8uMnfLU2LV5Y8ucoRkeWIvliwgNKFtNOwF9Hfk2O7ugScb1i96iF93kwWPNTlhETevanG4zcbZ-z9bLbWE55BGrM-T_4Ki_gyNfnmJhySSDI84XmkwIGow69nvHSuDnJXGEgodN2ImweGToE1R6l-lC2dCnWSMPOfT0hNda9_t3ub-qASCnHWIZehfIkmf8w_c96UMONLLEieeopfx8_DliyqJURakmeF4c8kBvSJJni4mf0qDfJe1atBDJ5fvDVbPynTCxOvrD2ZO_HpFfQVgKcvUJEDzVT_ppXhEeiv7bxJbi5L2sauAtWBENBrCfV-KUb6jQ9UcuNqGFSVKs32RdZF5dsNGHlgGu3sHbOT4d2K\",\"summary\":[]},\"output_index\":0,\"sequence_number\":3}",
+    "{\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_30EJclkSchD7GM6QyNCQLEZx\",\"name\":\"read\"},\"output_index\":1,\"sequence_number\":4}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{\\\"\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"DwK61JDARO8tCS\",\"output_index\":1,\"sequence_number\":5}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"path\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"aFxfhDD462CJ\",\"output_index\":1,\"sequence_number\":6}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\":\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"LC1wWTY0xodjsF\",\"output_index\":1,\"sequence_number\":7}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\"/\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"aVD7Z3TbLjO30S\",\"output_index\":1,\"sequence_number\":8}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"tmp\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"KQkQkgkTcywKR\",\"output_index\":1,\"sequence_number\":9}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"/\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"lvn6mDSVRKJ8vah\",\"output_index\":1,\"sequence_number\":10}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"notes\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"B62jdGxIRYO\",\"output_index\":1,\"sequence_number\":11}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\".txt\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"yU3B2fQFzr1B\",\"output_index\":1,\"sequence_number\":12}",
+    "{\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\"}\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"obfuscation\":\"KUURc6qDo3HPqH\",\"output_index\":1,\"sequence_number\":13}",
+    "{\"type\":\"response.function_call_arguments.done\",\"arguments\":\"{\\\"path\\\":\\\"/tmp/notes.txt\\\"}\",\"item_id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"output_index\":1,\"sequence_number\":14}",
+    "{\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"path\\\":\\\"/tmp/notes.txt\\\"}\",\"call_id\":\"call_30EJclkSchD7GM6QyNCQLEZx\",\"name\":\"read\"},\"output_index\":1,\"sequence_number\":15}",
+    "{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_0d81078b3c2499f2016a9aa0f7a52887d09725658467e92b66\",\"object\":\"response\",\"created_at\":1788518647,\"status\":\"completed\",\"background\":false,\"completed_at\":1788518648,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":null,\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.6-luna\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"2ff3076c-3be0-48be-acb6-a4f41239777d\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"all_turns\",\"effort\":\"max\",\"mode\":\"standard\",\"summary\":\"detailed\"},\"safety_identifier\":\"user-gATLXyx4Z9rsYLTJq8Vbp86K\",\"service_tier\":\"default\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Read a file from disk\",\"name\":\"read\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"absolute path\"}},\"required\":[\"path\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":{\"attribution\":{\"items\":{\"msg_0d81078b3c2499f2016a9aa0f7ad4c87d09664973bc16381a9\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"content\":[{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":30,\"output_tokens\":0}],\"input_tokens\":30,\"output_tokens\":0},\"rs_0d81078b3c2499f2016a9aa0f8235087d0893a6f9ff93ba895\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":2,\"output_tokens\":11},\"fc_0d81078b3c2499f2016a9aa0f8a01c87d0b9afcbba25bfe9bc\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":0,\"output_tokens\":23}},\"request_fields\":{\"tools\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":39,\"output_tokens\":0}}},\"input_tokens\":71,\"input_tokens_details\":{\"cache_write_tokens\":0,\"cached_tokens\":0},\"output_tokens\":34,\"output_tokens_details\":{\"reasoning_tokens\":11},\"total_tokens\":105},\"user\":null,\"metadata\":{}},\"sequence_number\":16}",
+  ]
+  // Low effort: function_call is the only output item (output_index 0).
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let st = @responses.SseStreamState::SseStreamState()
+  let mut terminal = false
+  for ev in low {
+    if @responses.process_responses_sse(
+        provider="OpenAI",
+        ev,
+        acc,
+        _ => (),
+        state=st,
+      ) {
+      terminal = true
+    }
+  }
+  assert_true(terminal)
+  @responses.validate_stream_tool_calls(provider="OpenAI", acc)
+  let completion = attach_reasoning_items_responses(acc.to_completion(), st)
+  let tool_calls = completion.tool_calls()
+  assert_eq(tool_calls.length(), 1)
+  assert_eq(tool_calls[0].call_id.to_string(), "call_2SYz207Bokbi9hdogto3t7DC")
+  assert_eq(tool_calls[0].name.to_string(), "read")
+  assert_eq(
+    tool_calls[0].arguments.stringify(),
+    "{\"path\":\"/tmp/notes.txt\"}",
+  )
+  assert_true(
+    completion.message.finish_reason is @posoco.FinishReason::ToolCalls,
+  )
+  assert_eq(st.items.length(), 0)
+
+  // Effort max: reasoning item at output_index 0, function_call at 1.
+  // Guards the tool-slot remap: without it this stream shape raises
+  // (stage=tool.id, category=missing) on turn one.
+  let acc2 = @posoco.StreamAccumulator::StreamAccumulator()
+  let st2 = @responses.SseStreamState::SseStreamState()
+  let mut terminal2 = false
+  for ev in max_effort {
+    if @responses.process_responses_sse(
+        provider="OpenAI",
+        ev,
+        acc2,
+        _ => (),
+        state=st2,
+      ) {
+      terminal2 = true
+    }
+  }
+  assert_true(terminal2)
+  @responses.validate_stream_tool_calls(provider="OpenAI", acc2)
+  let completion2 = attach_reasoning_items_responses(acc2.to_completion(), st2)
+  let tool_calls2 = completion2.tool_calls()
+  assert_eq(tool_calls2.length(), 1)
+  assert_eq(tool_calls2[0].call_id.to_string(), "call_30EJclkSchD7GM6QyNCQLEZx")
+  assert_eq(tool_calls2[0].name.to_string(), "read")
+  assert_eq(
+    tool_calls2[0].arguments.stringify(),
+    "{\"path\":\"/tmp/notes.txt\"}",
+  )
+  assert_true(
+    completion2.message.finish_reason is @posoco.FinishReason::ToolCalls,
+  )
+  // The reasoning item (with encrypted_content) is captured exactly once from
+  // its done event, ready for verbatim replay on the next request.
+  assert_eq(st2.items.length(), 1)
+  match st2.items[0] {
+    Json::Object(item) => assert_true(item.contains("encrypted_content"))
+    _ => fail("captured reasoning item must be an object")
+  }
+  // The replayed reasoning rides the completion for the next turn's input.
+  assert_true(completion2.message.reasoning is Some(_))
+}
+
+///|
+test "openai sse reasoning summary deltas stream as reasoning" {
+  let events : Array[String] = [
+    "{\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[],\"content\":[]}}",
+    "{\"type\":\"response.reasoning_summary_part.added\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0}",
+    "{\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0,\"delta\":\"Think\"}",
+    "{\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0,\"delta\":\"ing\"}",
+    "{\"type\":\"response.reasoning_summary_part.done\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0}",
+    "{\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"Thinking\"}],\"content\":[],\"encrypted_content\":\"enc\"}}",
+    "{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":100,\"output_tokens\":5,\"total_tokens\":105,\"input_tokens_details\":{\"cached_tokens\":40,\"cache_write_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":2}}}}",
+  ]
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let st = @responses.SseStreamState::SseStreamState()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let mut terminal = false
+  for ev in events {
+    if @responses.process_responses_sse(
+        provider="OpenAI",
+        ev,
+        acc,
+        fn(c) { chunks.push(c) },
+        state=st,
+      ) {
+      terminal = true
+    }
+  }
+  assert_true(terminal)
+  // Summary deltas (plus the part separator) surface as reasoning chunks.
+  let reasoning_tokens = chunks.filter(fn(c) { c is ReasoningDelta(..) })
+  assert_eq(reasoning_tokens.length(), 3)
+  assert_true(reasoning_tokens[0] is ReasoningDelta(token="Think"))
+  assert_true(reasoning_tokens[1] is ReasoningDelta(token="ing"))
+  assert_true(reasoning_tokens[2] is ReasoningDelta(token="\n\n"))
+  let completion = attach_reasoning_items_responses(acc.to_completion(), st)
+  match completion.message.reasoning {
+    Some(reasoning) => {
+      assert_eq(reasoning.content, "Thinking\n\n")
+      match reasoning.raw {
+        Some(Json::Array(items)) => assert_eq(items.length(), 1)
+        _ => fail("reasoning raw must carry the captured item")
+      }
+    }
+    None => fail("reasoning must ride the completion")
+  }
+  // The completed usage reports the cached input share.
+  match completion.usage {
+    Some({ cached_input_tokens: Some(cached), input_tokens: Some(input), .. }) => {
+      assert_eq(cached, 40)
+      assert_eq(input, 100)
+    }
+    _ => fail("usage must ride the completion")
+  }
+}
+
+///|
+test "openai sse raw reasoning text streams and item content backfills" {
+  let events : Array[String] = [
+    "{\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"id\":\"rs_2\",\"type\":\"reasoning\",\"summary\":[],\"content\":[]}}",
+    "{\"type\":\"response.reasoning_text.delta\",\"item_id\":\"rs_2\",\"output_index\":0,\"content_index\":0,\"delta\":\"step one\"}",
+    "{\"type\":\"response.reasoning_text.done\",\"item_id\":\"rs_2\",\"output_index\":0,\"content_index\":0,\"text\":\"step one\"}",
+    "{\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"rs_2\",\"type\":\"reasoning\",\"summary\":[],\"content\":[{\"type\":\"reasoning_text\",\"text\":\"step one\"}],\"encrypted_content\":\"enc2\"}}",
+    "{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_2\",\"status\":\"completed\",\"output\":[]}}",
+  ]
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let st = @responses.SseStreamState::SseStreamState()
+  let mut terminal = false
+  for ev in events {
+    if @responses.process_responses_sse(
+        provider="OpenAI",
+        ev,
+        acc,
+        _ => (),
+        state=st,
+      ) {
+      terminal = true
+    }
+  }
+  assert_true(terminal)
+  let completion = attach_reasoning_items_responses(acc.to_completion(), st)
+  match completion.message.reasoning {
+    Some(reasoning) => assert_eq(reasoning.content, "step one")
+    None => fail("reasoning must ride the completion")
+  }
+}
+
+///|
+test "openai extract_reasoning_items falls back to content text" {
+  let item_without_summary : Json = {
+    "type": "reasoning",
+    "id": "rs_3",
+    "summary": [],
+    "content": [{ "type": "reasoning_text", "text": "visible raw thought" }],
+  }
+  let (raw, text) = @responses.extract_reasoning_items(
+    provider="OpenAI",
+    Json::array([item_without_summary]),
+  )
+  assert_eq(text, "visible raw thought")
+  assert_eq(raw.length(), 1)
+  // Summary text still wins when both are present.
+  let item_with_summary : Json = {
+    "type": "reasoning",
+    "id": "rs_4",
+    "summary": [{ "type": "summary_text", "text": "summary wins" }],
+    "content": [{ "type": "reasoning_text", "text": "raw loses" }],
+  }
+  let (_, mixed) = @responses.extract_reasoning_items(
+    provider="OpenAI",
+    Json::array([item_with_summary]),
+  )
+  assert_eq(mixed, "summary wins")
 }

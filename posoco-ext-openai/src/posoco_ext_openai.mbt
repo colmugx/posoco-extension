@@ -1,10 +1,4 @@
 ///|
-/// posoco_ext_llm.mbt — OpenAI Responses API adapter for posoco.
-///
-/// Implements ModelPort::chat() and chat_streaming() using the Responses API.
-/// chat_streaming uses SSE (Server-Sent Events) with StreamAccumulator.
-
-///|
 /// Configuration for the OpenAI Responses API adapter.
 pub(all) struct OpenAIConfig {
   api_key : String
@@ -129,14 +123,19 @@ fn classify_openai_error_body(
 }
 
 ///|
-/// T07-B: drain a non-2xx response without exposing provider payloads.
+/// Drain a non-2xx response without exposing provider payloads.
+/// Also returns the recovered UTF-8 text (in-process only) so the quota
+/// classifier can read a stated reset time; the text is `None` when the
+/// read failed or the body was not decodable.
 async fn read_error_body_summary(
   client : @http.Client,
-) -> OpenAIErrorBodySummary {
-  let data = client.read_all() catch { _ => return BodyReadFailed }
+) -> (OpenAIErrorBodySummary, String?) {
+  let data = client.read_all() catch { _ => return (BodyReadFailed, None) }
   let byte_length = data.binary().length()
-  let _ = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
-  BodyBytesUtf8(byte_length)
+  let text = data.text() catch {
+    _ => return (BodyBytesInvalidUtf8(byte_length), None)
+  }
+  (BodyBytesUtf8(byte_length), Some(text))
 }
 
 ///|
@@ -184,12 +183,46 @@ fn classify_openai_http_status(
 }
 
 ///|
-/// Build the HTTP headers for OpenAI API requests.
-fn build_headers(config : OpenAIConfig) -> @http.Headers {
+/// 429 is a quota verdict, not a plain transport failure: every 429 becomes
+/// the typed `RateLimited` — even with an empty or undecodable body (the
+/// RateLimitGuard's probe backoff is the designed handler) — so the guard
+/// can record the verdict and schedule resume. Any other status returns
+/// None and keeps the generic HTTP-status path.
+fn openai_quota_verdict(
+  status : Int,
+  body_text : String?,
+  retry_after : String?,
+  now_ms~ : Int64,
+) -> @posoco.ModelError? {
+  if status != 429 {
+    return None
+  }
+  @chatkit.classify_chat_completions_http_error(
+    status,
+    match body_text {
+      Some(text) => text
+      None => ""
+    },
+    retry_after_header=retry_after,
+    now_ms~,
+  )
+}
+
+///|
+/// Build the HTTP headers for OpenAI API requests. Every request carries a
+/// posoco User-Agent; the Codex subscription endpoint additionally receives
+/// the official protocol header shape (`compact` adds the installation id).
+fn build_headers(
+  config : OpenAIConfig,
+  session_id : String?,
+  stream : Bool,
+  compact : Bool,
+) -> @http.Headers {
   let headers : @http.Headers = {
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",
   }
+  headers.set("User-Agent", identity_user_agent_now())
   match config.organization {
     Some(org) => headers.set("OpenAI-Organization", org)
     None => ()
@@ -198,7 +231,52 @@ fn build_headers(config : OpenAIConfig) -> @http.Headers {
     Some(account_id) => headers.set("chatgpt-account-id", account_id)
     None => ()
   }
+  if config.base_url == codex_oauth_api_base() {
+    let sid = match session_id {
+      Some(id) => id
+      None => identity_fallback_session_id()
+    }
+    for key, value in codex_protocol_headers(sid, stream) {
+      headers[@http.CaseInsensitiveString(key)] = value
+    }
+    if compact {
+      headers.set("x-codex-installation-id", identity_installation_id())
+    }
+  }
   headers
+}
+
+///|
+/// Split a base URL into the client origin and the endpoint path prefix.
+/// `@http.Client::Client` only accepts `scheme://host[:port]` — any path makes
+/// it raise `InvalidFormat` at stage=create_client — while its request paths
+/// are host-relative. So `https://api.openai.com/v1` connects to
+/// `https://api.openai.com` and prefixes every endpoint path with `/v1`. A
+/// trailing slash is not part of the prefix; a bare host yields an empty one.
+fn split_openai_base_url(
+  base_url : String,
+) -> (String, String) raise @posoco.ModelError {
+  guard base_url.find("://") is Some(scheme_len) else {
+    raise @posoco.ModelError::Transport(
+      "OpenAI base_url must be scheme://host[:port][/prefix]",
+    )
+  }
+  let host_start = scheme_len + 3
+  let rest : StringView = base_url[host_start:]
+  match rest.find("/") {
+    Some(i) => {
+      let origin = base_url[:host_start + i].to_owned()
+      let prefix : StringView = rest[i:]
+      if prefix == "/" {
+        (origin, "")
+      } else if prefix.has_suffix("/") {
+        (origin, prefix[:prefix.length() - 1].to_owned())
+      } else {
+        (origin, prefix.to_owned())
+      }
+    }
+    None => (base_url, "")
+  }
 }
 
 ///|
@@ -231,7 +309,7 @@ fn build_request_body(
 ) -> Json {
   let input_items : Array[Json] = []
   for m in messages {
-    for item in posoco_message_to_openai_items(m) {
+    for item in @responses.message_to_responses_items(m) {
       input_items.push(item)
     }
   }
@@ -247,7 +325,7 @@ fn build_request_body(
     fields.push(("stream", Json::boolean(true)))
   }
   if !tools.is_empty() {
-    let tool_defs = tools.map(fn(t) { posoco_tool_to_openai(t) })
+    let tool_defs = tools.map(fn(t) { @responses.tool_to_responses_wire(t) })
     fields.push(("tools", Json::array(tool_defs)))
   }
   match reasoning_effort {
@@ -272,6 +350,13 @@ fn build_request_body(
       )
     }
     None => ()
+  }
+  let options : @posoco.ChatOptions = match reasoning_effort {
+    // Reasoning-model requests (Codex / gpt-5 family) reject temperature with
+    // 400 "Unsupported parameter"; hosts tune temperature=0.0 by default, so
+    // strip it instead of failing the turn.
+    Some(_) => { ..options, temperature: None, }
+    None => options
   }
   let final_fields = append_options(fields, options)
   Json::object(Map::from_array(final_fields))
@@ -301,23 +386,25 @@ fn append_options(
 ///|
 pub impl @posoco.ModelPort for OpenAIModelPort with fn chat(
   self : OpenAIModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let messages_owned = messages.to_owned()
+  let session_id = scope.session_id.to_string()
   match stream {
-    NoStream => self.chat_nonstream(messages_owned, tools, options)
+    NoStream => self.chat_nonstream(session_id, messages_owned, tools, options)
     Stream(on_chunk) =>
-      self.chat_stream(messages_owned, tools, options, on_chunk)
+      self.chat_stream(session_id, messages_owned, tools, options, on_chunk)
   }
 }
 
 ///|
 async fn OpenAIModelPort::chat_stream(
   self : OpenAIModelPort,
+  session_id : String,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -332,14 +419,15 @@ async fn OpenAIModelPort::chat_stream(
     self.config.reasoning_effort,
     stream=true,
   )
-  let headers = build_headers(self.config)
-  let client = @http.Client::Client(self.config.base_url, headers~) catch {
+  let headers = build_headers(self.config, Some(session_id), true, false)
+  let (origin, path_prefix) = split_openai_base_url(self.config.base_url)
+  let client = @http.Client::Client(origin, headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),
       )
   }
-  client.request(@http.RequestMethod::Post, "/responses") catch {
+  client.request(@http.RequestMethod::Post, path_prefix + "/responses") catch {
     err => {
       client.close()
       raise @posoco.ModelError::Transport(
@@ -378,10 +466,20 @@ async fn OpenAIModelPort::chat_stream(
     None => ()
   }
   if !is_openai_http_success(response.code) {
-    let err_summary = read_error_body_summary(client) catch {
-      _ => BodyUnavailable
+    let (err_summary, body_text) = read_error_body_summary(client) catch {
+      _ => (BodyUnavailable, None)
     }
     client.close()
+    match
+      openai_quota_verdict(
+        response.code,
+        body_text,
+        response.headers.get("Retry-After"),
+        now_ms=@async.now(),
+      ) {
+      Some(err) => raise err
+      None => ()
+    }
     match
       classify_openai_http_status("http_status", response.code, err_summary) {
       Some(err) => raise err
@@ -389,11 +487,7 @@ async fn OpenAIModelPort::chat_stream(
     }
   }
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let reasoning_sink = ReasoningSink::{ items: [], summary: "", }
-  let on_typed = fn(chunk : @posoco.StreamChunk) {
-    acc.push(chunk)
-    on_chunk(chunk)
-  }
+  let sse_state = @responses.SseStreamState::SseStreamState()
   let mut done = false
   let mut last_yield = @async.now()
   while !done {
@@ -414,18 +508,23 @@ async fn OpenAIModelPort::chat_stream(
           if pl == "[DONE]" {
             done = true
           } else if pl.length() > 0 {
-            done = process_sse_event(
+            done = @responses.process_responses_sse(
+              provider="OpenAI",
               pl.to_owned(),
               acc,
-              on_typed,
-              reasoning_sink~,
+              on_chunk,
+              state=sse_state,
             )
           }
         }
       }
       None => {
         client.close()
-        match classify_stream_termination(CleanEof) {
+        match
+          @responses.classify_stream_termination(
+            provider="OpenAI",
+            @responses.StreamTermination::CleanEof,
+          ) {
           Some(err) => raise err
           None => done = true
         }
@@ -448,34 +547,49 @@ async fn OpenAIModelPort::chat_stream(
     }
   }
   client.close()
-  match classify_stream_termination(ExplicitTerminal) {
+  match
+    @responses.classify_stream_termination(
+      provider="OpenAI",
+      @responses.StreamTermination::ExplicitTerminal,
+    ) {
     Some(err) => raise err
     None => ()
   }
-  validate_stream_tool_calls(acc)
-  let completion = attach_reasoning_items(acc.to_completion(), reasoning_sink)
+  let completion = attach_reasoning_items_responses(
+    openai_stream_completion(acc),
+    sse_state,
+  )
   @posoco.ModelCallResult::{ completion, processed_messages: messages, }
 }
 
 ///|
-/// Attach the reasoning items captured from the terminal `response.completed`
-/// event to the accumulated completion, so later requests replay them
-/// verbatim (official reasoning guide: pass back all reasoning items since
-/// the last user message when manually managing state).
-fn attach_reasoning_items(
+/// Use the canonical accumulator projection while retaining the provider
+/// boundary in parse diagnostics (shared implementation in the responses kit).
+fn openai_stream_completion(
+  acc : @posoco.StreamAccumulator,
+) -> @posoco.Completion raise @posoco.ModelError {
+  @responses.responses_stream_completion(provider="OpenAI", acc)
+}
+
+///|
+/// Attach the reasoning items captured from output_item events to the
+/// accumulated completion, so later requests replay them verbatim (official
+/// reasoning guide: pass back all reasoning items since the last user
+/// message when manually managing state).
+fn attach_reasoning_items_responses(
   completion : @posoco.Completion,
-  sink : ReasoningSink,
+  state : @responses.SseStreamState,
 ) -> @posoco.Completion {
-  if sink.items.is_empty() {
+  if state.items.is_empty() {
     return completion
   }
   let content = match completion.message.reasoning {
-    Some(r) => if r.content == "" { sink.summary } else { r.content }
-    None => sink.summary
+    Some(r) => if r.content == "" { state.summary } else { r.content }
+    None => state.summary
   }
   let reasoning = @posoco.Reasoning::{
     content,
-    raw: Some(Json::array(sink.items)),
+    raw: Some(Json::array(state.items)),
   }
   @posoco.Completion::Completion(
     content=completion.message.content,
@@ -494,16 +608,19 @@ async fn openai_post_json(
   config : OpenAIConfig,
   path : String,
   body : Json,
+  session_id : String?,
   quota_tracker? : CodexQuotaTracker? = None,
 ) -> Json raise @posoco.ModelError {
-  let headers = build_headers(config)
-  let client = @http.Client::Client(config.base_url, headers~) catch {
+  let compact = path == "/responses/compact"
+  let headers = build_headers(config, session_id, false, compact)
+  let (origin, path_prefix) = split_openai_base_url(config.base_url)
+  let client = @http.Client::Client(origin, headers~) catch {
     err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),
       )
   }
-  let response = client.post(path, body.stringify()) catch {
+  let response = client.post(path_prefix + path, body.stringify()) catch {
     err => {
       client.close()
       raise @posoco.ModelError::Transport(
@@ -518,6 +635,16 @@ async fn openai_post_json(
   let body_data = client.read_all() catch {
     _ => {
       client.close()
+      match
+        openai_quota_verdict(
+          response.code,
+          None,
+          response.headers.get("Retry-After"),
+          now_ms=@async.now(),
+        ) {
+        Some(err) => raise err
+        None => ()
+      }
       match
         classify_openai_http_status(
           "http_status",
@@ -534,8 +661,20 @@ async fn openai_post_json(
   }
   client.close()
   if !is_openai_http_success(response.code) {
-    let decoded_chars : Int? = Some(body_data.text().length()) catch {
-      _ => None
+    let body_text : String? = Some(body_data.text()) catch { _ => None }
+    let decoded_chars : Int? = match body_text {
+      Some(text) => Some(text.length())
+      None => None
+    }
+    match
+      openai_quota_verdict(
+        response.code,
+        body_text,
+        response.headers.get("Retry-After"),
+        now_ms=@async.now(),
+      ) {
+      Some(err) => raise err
+      None => ()
     }
     match
       classify_openai_http_status(
@@ -564,6 +703,7 @@ async fn openai_post_json(
 ///|
 async fn OpenAIModelPort::chat_nonstream(
   self : OpenAIModelPort,
+  session_id : String,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -580,9 +720,13 @@ async fn OpenAIModelPort::chat_nonstream(
     self.config,
     "/responses",
     body,
+    Some(session_id),
     quota_tracker=self.quota_tracker,
   )
-  let completion = parse_openai_response(resp_json)
+  let completion = @responses.parse_responses_response(
+    provider="OpenAI",
+    resp_json,
+  )
   @posoco.ModelCallResult::{ completion, processed_messages: messages, }
 }
 
@@ -594,7 +738,7 @@ fn build_compact_request_body(
 ) -> Json {
   let input_items : Array[Json] = []
   for m in messages {
-    for item in posoco_message_to_openai_items(m) {
+    for item in @responses.message_to_responses_items(m) {
       input_items.push(item)
     }
   }
@@ -639,7 +783,7 @@ fn parse_compact_response(
 }
 
 ///|
-/// ModelPort implementation — compact via the official standalone endpoint
+/// Compact via the official standalone endpoint
 /// (POST /responses/compact). Fully stateless and ZDR-friendly: we send the
 /// full current window and the endpoint returns the canonical next context
 /// window ("pass it into your next /responses call as-is — do not prune"),
@@ -647,7 +791,7 @@ fn parse_compact_response(
 /// Reasoning.raw and replays verbatim on subsequent chat calls.
 pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
   self : OpenAIModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
@@ -658,6 +802,7 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
     self.config,
     "/responses/compact",
     body,
+    Some(scope.session_id.to_string()),
     quota_tracker=self.quota_tracker,
   )
   let compacted = parse_compact_response(resp_json)

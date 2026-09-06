@@ -90,7 +90,10 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
       }
     }
   }
-  let port = OpenAIModelPort(config)
+  let port = OpenAIModelPort(
+    config,
+    quota_tracker=Some(codex_shared_quota_tracker()),
+  )
   @llm.ProviderBuildResult::Ready(port.model_catalog())
 }
 
@@ -147,7 +150,26 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
             detail="Codex model catalog refresh failed: " + err.to_string(),
           )
       }
-      let port = OpenAIModelPort(config)
+      // Best-effort usage probe: refresh is already a network round trip,
+      // so the 5h/weekly snapshot starts populated without waiting for the
+      // first chat response. Failure is silent — the header capture on chat
+      // responses remains the authoritative feed.
+      let usage : Result[Array[@devkit.QuotaReading], String] = fetch_codex_usage_with_transport(
+        transport_impl,
+        codex_oauth_api_base(),
+        config.api_key,
+        account_id,
+      ) catch {
+        err => Err("Codex usage refresh failed: " + err.to_string())
+      }
+      match usage {
+        Ok(readings) => codex_shared_quota_tracker().capture_readings(readings)
+        Err(_) => ()
+      }
+      let port = OpenAIModelPort(
+        config,
+        quota_tracker=Some(codex_shared_quota_tracker()),
+      )
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_codex_models(models),
       )
@@ -182,7 +204,10 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
             detail="OpenAI API model catalog refresh failed: " + err.to_string(),
           )
       }
-      let port = OpenAIModelPort(config)
+      let port = OpenAIModelPort(
+        config,
+        quota_tracker=Some(codex_shared_quota_tracker()),
+      )
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_api_models(models),
       )
@@ -217,7 +242,10 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
             detail="OpenAI API model catalog refresh failed: " + err.to_string(),
           )
       }
-      let port = OpenAIModelPort(config)
+      let port = OpenAIModelPort(
+        config,
+        quota_tracker=Some(codex_shared_quota_tracker()),
+      )
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_api_models(models),
       )

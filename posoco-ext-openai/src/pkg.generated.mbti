@@ -15,9 +15,15 @@ import {
 // Values
 pub fn codex_oauth_api_base() -> String
 
+pub fn codex_shared_quota_tracker() -> CodexQuotaTracker
+
+pub fn codex_usage_url(String) -> String
+
 pub async fn fetch_codex_models(String, String, String, client_version? : String) -> Array[CodexModelInfo] raise @error.ModelError
 
 pub async fn fetch_codex_models_with_transport(&OpenAIModelsHttpTransport, String, String, String, String) -> Array[CodexModelInfo] raise @error.ModelError
+
+pub async fn fetch_codex_usage_with_transport(&OpenAIModelsHttpTransport, String, String, String, now_ms? : () -> Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
 
 pub async fn fetch_models(String, String) -> Array[String] raise @error.ModelError
 
@@ -31,13 +37,9 @@ pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
 
 pub fn parse_codex_quota_headers(Map[@http.CaseInsensitiveString, String], fetched_at_ms~ : Int64) -> Array[@posoco-devkit.QuotaReading]
 
+pub fn parse_codex_usage(Json, fetched_at_ms~ : Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
+
 pub fn parse_openai_models(Json) -> Array[OpenAIModelInfo] raise @error.ModelError
-
-pub fn parse_openai_response(Json) -> @kernel.Completion raise @error.ModelError
-
-pub fn posoco_message_to_openai_items(@kernel.Message) -> Array[Json]
-
-pub fn posoco_tool_to_openai(@kernel.ToolDef) -> Json
 
 // Errors
 
@@ -61,12 +63,25 @@ pub fn CodexOAuth::CodexOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport
 pub async fn CodexOAuth::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
 pub impl @posoco-ext-oauth.OAuthProvider for CodexOAuth
 
+pub struct CodexQuotaStatus {
+  tracker : CodexQuotaTracker
+  bus : @posoco-devkit.EventBus?
+  mut last : Array[@posoco-devkit.QuotaReading]
+  // private fields
+}
+pub fn CodexQuotaStatus::CodexQuotaStatus(bus? : @posoco-devkit.EventBus?, tracker? : CodexQuotaTracker?) -> Self
+pub impl @posoco-devkit.BusSubscriber for CodexQuotaStatus
+pub impl @port.Extension for CodexQuotaStatus
+pub impl @port.Lifecycle for CodexQuotaStatus
+pub impl @port.Observer for CodexQuotaStatus
+
 pub(all) struct CodexQuotaTracker {
   mut latest : Array[@posoco-devkit.QuotaReading]?
   now_ms : () -> Int64
 }
 pub fn CodexQuotaTracker::CodexQuotaTracker(now_ms? : () -> Int64) -> Self
 pub fn CodexQuotaTracker::capture(Self, Map[@http.CaseInsensitiveString, String]) -> Unit
+pub fn CodexQuotaTracker::capture_readings(Self, Array[@posoco-devkit.QuotaReading]) -> Unit
 pub fn CodexQuotaTracker::snapshots(Self) -> Array[@posoco-devkit.QuotaReading]
 pub impl @posoco-devkit.QuotaSource for CodexQuotaTracker
 

@@ -37,8 +37,12 @@ fn openai_catalog_slot(
   context_window? : Int? = None,
   capabilities? : Array[String] = [],
   default_effort? : String? = None,
+  quota_tracker? : CodexQuotaTracker? = None,
 ) -> @llm.ModelSlot {
-  let port : &@posoco.ModelPort = OpenAIModelPort(config)
+  // Every slot port shares the factory port's quota tracker so switching
+  // models (or rebuilding a slot on credential/effort change) never drops
+  // the Codex header capture.
+  let port : &@posoco.ModelPort = OpenAIModelPort(config, quota_tracker~)
   let slot_id = "openai/" + config.model
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if thinking_efforts.is_empty() {
     None
@@ -54,6 +58,7 @@ fn openai_catalog_slot(
         context_window~,
         capabilities~,
         default_effort~,
+        quota_tracker~,
       )
     })
   }
@@ -85,6 +90,7 @@ fn openai_catalog_slot(
         context_window~,
         capabilities~,
         default_effort~,
+        quota_tracker~,
       )
     }),
     rebuild_on_api_key=Some(fn(credential) {
@@ -104,6 +110,7 @@ fn openai_catalog_slot(
         context_window~,
         capabilities~,
         default_effort~,
+        quota_tracker~,
       )
     }),
     rebuild_on_effort~,
@@ -131,9 +138,13 @@ pub fn OpenAIModelPort::model_catalog(
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="openai",
     slots=[
-      openai_catalog_slot(self.config, oauth, api_key, capabilities=[
-        "chat", "streaming", "image_in",
-      ]),
+      openai_catalog_slot(
+        self.config,
+        oauth,
+        api_key,
+        capabilities=["chat", "streaming", "image_in"],
+        quota_tracker=self.quota_tracker,
+      ),
     ],
     capabilities=["chat", "streaming", "api_key", "oauth"],
   )
@@ -190,6 +201,7 @@ pub fn OpenAIModelPort::model_catalog_from_api_models(
         api_key,
         label=Some(info.display_name),
         capabilities=["chat", "streaming", "api_key", "image_in"],
+        quota_tracker=self.quota_tracker,
       ),
     )
   }
@@ -243,6 +255,7 @@ fn codex_catalog_slot_from_info(
   info : CodexModelInfo,
   oauth : &@oauth.OAuthProvider,
   api_key : &@llm.ApiKeyFactory,
+  quota_tracker : CodexQuotaTracker?,
 ) -> @llm.ModelSlot {
   let efforts = codex_model_efforts(info)
   let selected_effort = match base_config.reasoning_effort {
@@ -273,6 +286,7 @@ fn codex_catalog_slot_from_info(
     context_window=info.context_window,
     capabilities~,
     default_effort=info.default_reasoning_level,
+    quota_tracker~,
   )
 }
 
@@ -296,7 +310,15 @@ pub fn OpenAIModelPort::model_catalog_from_codex_models(
     if !info.supported_reasoning_levels.is_empty() {
       has_reasoning = true
     }
-    slots.push(codex_catalog_slot_from_info(self.config, info, oauth, api_key))
+    slots.push(
+      codex_catalog_slot_from_info(
+        self.config,
+        info,
+        oauth,
+        api_key,
+        self.quota_tracker,
+      ),
+    )
   }
   let capabilities : Array[String] = ["chat", "streaming", "oauth"]
   if has_reasoning {

@@ -23,14 +23,14 @@ test "parse maps header families onto windows with seconds converted" {
     fetched_at_ms=500L,
   )
   assert_eq(readings.length(), 3)
-  assert_eq(readings[0].window, @devkit.QuotaWindow::FiveHours)
+  assert_eq(readings[0].window, "5h")
   assert_eq(readings[0].used_percent, Some(12.5))
   assert_eq(readings[0].reset_at_ms, Some(1704069000000L))
   assert_eq(readings[0].fetched_at_ms, 500L)
-  assert_eq(readings[1].window, @devkit.QuotaWindow::Weekly)
+  assert_eq(readings[1].window, "weekly")
   assert_eq(readings[1].used_percent, Some(80.0))
   assert_eq(readings[1].reset_at_ms, Some(1704074400000L))
-  assert_eq(readings[2].window, @devkit.QuotaWindow::Balance)
+  assert_eq(readings[2].window, "balance")
   assert_eq(readings[2].amount, Some(("10.00", "credits")))
   assert_eq(readings[2].available, Some(true))
   assert_eq(readings[2].used_percent, None)
@@ -58,7 +58,7 @@ test "parse tolerates malformed values by omitting them" {
   // secondary percentage survives; its reset does not. credits with an
   // unknown boolean vocabulary is skipped entirely.
   assert_eq(readings.length(), 1)
-  assert_eq(readings[0].window, @devkit.QuotaWindow::Weekly)
+  assert_eq(readings[0].window, "weekly")
   assert_eq(readings[0].used_percent, Some(41.0))
   assert_eq(readings[0].reset_at_ms, None)
 }
@@ -75,7 +75,7 @@ async test "tracker replays the latest snapshot and errors before capture" {
     fail("expected three readings")
   }
   assert_eq(primary.fetched_at_ms, 42L)
-  assert_eq(weekly.window, @devkit.QuotaWindow::Weekly)
+  assert_eq(weekly.window, "weekly")
   assert_eq(credits.available, Some(true))
   // A response without quota headers leaves the snapshot untouched.
   tracker.capture({ "content-type": "text/event-stream" })

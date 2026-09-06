@@ -1,12 +1,15 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-kit-chat-completions" @chatkit,
+  "colmugx/posoco-kit-responses" @responses,
   "colmugx/posoco-ext-llm" @llm,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/async/io",
   "moonbitlang/core/json",
+  "moonbitlang/core/random",
   "moonbitlang/core/strconv",
   "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
@@ -16,8 +19,13 @@ import {
 warnings = "-unused_package"
 
 options(
+  "native-stub": [ "identity_stub.c" ],
   targets: {
+    "identity.js.mbt": [ "js" ],
+    "identity.native.mbt": [ "native" ],
     "posoco_ext_openai_wbtest.mbt": [ "native" ],
     "codex_quota_wbtest.mbt": [ "native" ],
+    "codex_usage_wbtest.mbt": [ "native" ],
+    "quota_status_wbtest.mbt": [ "native" ],
   },
 )

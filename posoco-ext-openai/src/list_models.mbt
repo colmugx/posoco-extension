@@ -430,6 +430,7 @@ pub async fn fetch_openai_models_with_transport(
   let headers : Map[String, String] = Map::from_array([
     ("Authorization", "Bearer " + api_key),
     ("Accept", "application/json"),
+    ("User-Agent", identity_user_agent_now()),
   ])
   let payload = fetch_models_with_transport(
     transport,
@@ -458,6 +459,8 @@ pub async fn fetch_codex_models_with_transport(
     ("Authorization", "Bearer " + access_token),
     ("Accept", "application/json"),
     ("chatgpt-account-id", account_id),
+    ("originator", identity_originator),
+    ("User-Agent", identity_user_agent_now()),
   ])
   let payload = fetch_models_with_transport(
     transport,

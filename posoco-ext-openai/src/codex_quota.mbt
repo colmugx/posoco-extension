@@ -79,7 +79,7 @@ pub fn parse_codex_quota_headers(
   match codex_header_double(headers, "x-codex-primary-used-percent") {
     Some(used_percent) =>
       readings.push({
-        window: @devkit.QuotaWindow::FiveHours,
+        window: "5h",
         used_percent: Some(used_percent),
         amount: None,
         available: None,
@@ -91,7 +91,7 @@ pub fn parse_codex_quota_headers(
   match codex_header_double(headers, "x-codex-secondary-used-percent") {
     Some(used_percent) =>
       readings.push({
-        window: @devkit.QuotaWindow::Weekly,
+        window: "weekly",
         used_percent: Some(used_percent),
         amount: None,
         available: None,
@@ -115,7 +115,7 @@ pub fn parse_codex_quota_headers(
         None => None
       }
       readings.push({
-        window: @devkit.QuotaWindow::Balance,
+        window: "balance",
         used_percent: None,
         amount,
         available: Some(available),
@@ -155,6 +155,40 @@ pub fn CodexQuotaTracker::capture(
   let parsed = parse_codex_quota_headers(headers, fetched_at_ms=(self.now_ms)())
   if parsed.length() > 0 {
     self.latest = Some(parsed)
+  }
+}
+
+///|
+/// Record readings captured out-of-band (the usage endpoint probe). An empty
+/// array states nothing and leaves the previous snapshot untouched, matching
+/// `capture`.
+pub fn CodexQuotaTracker::capture_readings(
+  self : CodexQuotaTracker,
+  readings : Array[@devkit.QuotaReading],
+) -> Unit {
+  if readings.length() > 0 {
+    self.latest = Some(readings)
+  }
+}
+
+///|
+/// Process-wide tracker. One process serves one ChatGPT account, and the
+/// ports that capture headers (factory build, every catalog slot, every
+/// credential/effort rebuild) plus the status publisher live in different
+/// composition lifetimes — the shared cell is the one rendezvous point.
+/// Tests and hosts that prefer isolation construct their own tracker.
+let codex_shared_quota_cell : Ref[CodexQuotaTracker?] = Ref::{ val: None, }
+
+///|
+/// The process-shared Codex quota tracker; minted once, then replayed.
+pub fn codex_shared_quota_tracker() -> CodexQuotaTracker {
+  match codex_shared_quota_cell.val {
+    Some(tracker) => tracker
+    None => {
+      let tracker = CodexQuotaTracker::CodexQuotaTracker()
+      codex_shared_quota_cell.val = Some(tracker)
+      tracker
+    }
   }
 }
 
