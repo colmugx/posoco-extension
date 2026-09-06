@@ -109,7 +109,6 @@ async fn JsonlSessionStore::raw_dir_entries(
 }
 
 ///|
-/// SessionStore::load — read JSONL, parse, return Session.
 /// Missing file → empty session (not an error). Parse failure → SessionError::Load.
 pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
   self,
@@ -167,7 +166,6 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   self.ensure_root_dir()
   let exists = @xfs.path_exists(path)
   if !exists {
-    // First persistence for this id: write metadata + all messages.
     let session : @posoco.Session = {
       messages: messages.to_owned(),
       metadata: Map::from_array([]),
@@ -182,7 +180,6 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
     publish_session_status(self.bus, id)
     return
   }
-  // File exists: open in append mode and write each new message line.
   let file = @fs.open(
     path,
     mode=@fs.Mode::WriteOnly,

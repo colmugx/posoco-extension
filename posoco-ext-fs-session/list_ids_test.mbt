@@ -2,7 +2,6 @@
 /// list_ids_test.mbt — native tests for JsonlSessionStore::list_ids.
 
 ///|
-/// Seed one persisted session by saving an empty session under `id`.
 async fn seed_listed_session(store : JsonlSessionStore, id : String) -> Unit {
   store.save(id, @posoco.Session::{
     messages: [],

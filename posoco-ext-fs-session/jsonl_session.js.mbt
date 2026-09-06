@@ -122,10 +122,9 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
 }
 
 ///|
-/// SessionStore::append_messages — mirror of the native implementation: a
-/// missing file gets a full JSONL write (metadata + messages) so the first
+/// A missing file gets a full JSONL write (metadata + messages) so the first
 /// append behaves like a save; an existing file only receives the new message
-/// lines. `from_index` is unused, matching native.
+/// lines.
 pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   self,
   id : String,
@@ -141,7 +140,6 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
         )
     }
   if !exists {
-    // First persistence for this id: Bun.write creates parent directories.
     let session : @posoco.Session = {
       messages: messages.to_owned(),
       metadata: Map::from_array([]),
@@ -157,8 +155,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
     publish_session_status(self.bus, id)
     return
   }
-  // File exists: append only the new message lines, each prefixed with \n to
-  // terminate the previous line (same on-disk shape as the native writer).
+  // Each line is prefixed with \n to terminate the previous line.
   let buf = StringBuilder()
   for msg in messages {
     buf.write_char('\n')

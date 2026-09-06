@@ -1,14 +1,5 @@
 ///|
 /// jsonl_session_test.mbt — Whitebox tests for JsonlSessionStore.
-///
-/// Two layers:
-/// 1. Pure codec tests (session_to_jsonl / session_from_jsonl) — no IO, no async.
-/// 2. Native IO tests (JsonlSessionStore load/save round-trip) — async tests
-/// over the SessionStore implementation, using tmpdir.
-///
-/// Codec tests are the contract surface for both targets; the JS target's
-/// JS-side async adapter reuses the same codec, so target-specific filesystem
-/// behaviour is isolated from codec regressions.
 
 // Pure codec tests (no async, no IO)
 
@@ -55,7 +46,6 @@ test "serde: single user message round-trips" {
     metadata: Map::from_array([]),
   }
   let jsonl = session_to_jsonl(session)
-  // Sanity: contains the text body.
   assert_true(jsonl.contains("hello"))
   assert_true(jsonl.contains("\"role\":\"user\""))
   match session_from_jsonl(jsonl) {
@@ -332,7 +322,6 @@ test "serde: metadata preserved" {
 
 ///|
 test "serde: malformed metadata line errors loudly" {
-  // First non-empty line is not a JSON object.
   match session_from_jsonl("not json\n{}\n") {
     Err(@posoco.SessionError::Load(msg)) =>
       assert_true(msg.contains("metadata"))
@@ -342,7 +331,6 @@ test "serde: malformed metadata line errors loudly" {
 
 ///|
 test "serde: malformed message line errors loudly" {
-  // Valid metadata line, but second line is not valid JSON.
   match session_from_jsonl("{}\n{ not valid json }\n") {
     Err(@posoco.SessionError::Load(_)) => ()
     _ => fail("expected Load error for malformed message line")
@@ -352,8 +340,6 @@ test "serde: malformed message line errors loudly" {
 // Native IO tests (async, use @fs.tmpdir for unique scratch dirs)
 
 ///|
-/// Create a unique scratch directory with the given prefix, returning its path.
-/// Each call produces a fresh dir via `@fs.tmpdir`.
 async fn fresh_root(prefix : String) -> String {
   @fs.tmpdir(prefix="posoco-fs-session-" + prefix + "-")
 }

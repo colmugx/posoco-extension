@@ -1,9 +1,8 @@
 ///|
 /// list_ids.js.mbt — JS target (bun runtime) directory listing for
-/// `list_ids`, mirroring the native `raw_dir_entries` through node:fs
-/// promises (Bun implements the Node fs API). Entry names are joined with
-/// "\n" on the JS side and split back here, keeping the extern surface a
-/// plain string.
+/// `list_ids`, using node:fs promises (Bun implements the Node fs API).
+/// Entry names are joined with "\n" on the JS side and split back here,
+/// keeping the extern surface a plain string.
 
 ///|
 /// fs.promises.readdir, with ENOENT folded to the empty string (a missing

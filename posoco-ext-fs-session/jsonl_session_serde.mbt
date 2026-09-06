@@ -2,10 +2,6 @@
 /// Serialise a `Content` enum to JSON.
 /// - `Text(s)`  → `{"type": "text", "text": s}`
 /// - `Image(media_type, data)` → `{"type": "image", "media_type": mt, "data": d}`
-///
-/// Note: kernel `Content::Image` carries `(media_type, data)`. The legacy disk
-/// format used `(url, mime)`; we now write the kernel field names so the JSON
-/// self-documents the kernel ADT. Reading accepts both shapes for tolerance.
 fn content_to_json(content : @posoco.Content) -> Json {
   match content {
     @posoco.Content::Text(text) =>
@@ -41,7 +37,6 @@ fn content_from_json(json : Json) -> @posoco.Content? {
               _ => None
             }
           Json::String(s) if s == "image" =>
-            // New shape: media_type + data.
             match (map.get("media_type"), map.get("data")) {
               (Some(Json::String(mt)), Some(Json::String(d))) =>
                 Some(@posoco.Content::Image(media_type=mt, data=d))
@@ -84,7 +79,6 @@ fn tool_call_to_json(call : @posoco.ToolCall) -> Json {
 fn tool_call_from_json(json : Json) -> @posoco.ToolCall? {
   match json {
     Json::Object(map) => {
-      // Prefer the legacy `id` key if present, otherwise accept `call_id`.
       let id_str = match map.get("id") {
         Some(Json::String(s)) => Some(s)
         _ =>
@@ -113,9 +107,8 @@ fn tool_call_from_json(json : Json) -> @posoco.ToolCall? {
 }
 
 ///|
-/// Serialise a `Message` to JSON. All optional fields omitted when empty/None
-/// to keep output compact and stable. The on-disk `role` string is derived
-/// from the variant tag.
+/// Serialise a `Message` to JSON. Optional fields are omitted when empty/None
+/// to keep output compact and stable.
 fn message_to_json(msg : @posoco.Message) -> Json {
   match msg {
     @posoco.Message::SystemMessage(content~) => {
@@ -142,7 +135,6 @@ fn message_to_json(msg : @posoco.Message) -> Json {
         ("role", Json::string("assistant")),
         ("content", Json::array(content.map(content_to_json))),
       ])
-      // tool_calls: include only when non-empty (most messages don't carry them).
       if !tool_calls.is_empty() {
         base["tool_calls"] = Json::array(tool_calls.map(tool_call_to_json))
       }
@@ -212,7 +204,6 @@ fn outcome_content_text(outcome : @posoco.ToolOutcome) -> String {
 }
 
 ///|
-/// Parse an array of content JSONs. Returns `None` on any malformed item.
 fn parse_content_array(arr : Array[Json]) -> Array[@posoco.Content]? {
   let result : Array[@posoco.Content] = []
   for item in arr {
@@ -225,7 +216,6 @@ fn parse_content_array(arr : Array[Json]) -> Array[@posoco.Content]? {
 }
 
 ///|
-/// Parse an array of tool-call JSONs. Returns `None` on any malformed item.
 fn parse_tool_call_array(arr : Array[Json]) -> Array[@posoco.ToolCall]? {
   let result : Array[@posoco.ToolCall] = []
   for item in arr {
@@ -314,8 +304,6 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                 )
               }
               "tool" => {
-                // Map the legacy tool-message fields onto the new
-                // ToolMessage(call_id, tool_name, outcome).
                 let call_id_str = match map.get("tool_call_id") {
                   Some(Json::String(s)) => s
                   _ => return None

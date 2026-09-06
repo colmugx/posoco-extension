@@ -1,7 +1,5 @@
 ///|
-/// JS-target IO tests for JsonlSessionStore (bun runtime). Native coverage
-/// lives in jsonl_session_test.mbt; these mirror the append semantics that
-/// only exist on the js implementation path.
+/// JS-target IO tests for JsonlSessionStore (bun runtime).
 ///
 /// `moon test --target js` runs under Node, where the store's Bun-based
 /// externs (`Bun.file` / `Bun.write`) do not exist; the tests self-skip there
@@ -10,12 +8,10 @@
 /// '{"file_and_index":[["jsonl_session_js_test.mbt",[{"start":0,"end":2}]]]}'`.
 
 ///|
-/// `typeof Bun !== "undefined"` — true only on the bun runtime.
 extern "js" fn js_bun_available() -> Bool =
   #| () => typeof Bun !== "undefined"
 
 ///|
-/// `Date.now()` — unique-enough scratch-dir suffix.
 extern "js" fn js_now_ms() -> Int =
   #| () => Date.now()
 
