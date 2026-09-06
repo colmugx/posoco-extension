@@ -1,5 +1,5 @@
 ///|
-/// Tests for the v2 line-anchored turn scanner.
+/// Tests for the line-anchored turn scanner.
 
 ///|
 /// Assistant message whose whole content is one Text part.
@@ -13,7 +13,7 @@ fn asst(text : String) -> @posoco.Message {
 }
 
 ///|
-/// Scan with the default v2 markers.
+/// Scan with the default markers.
 fn scan(message : @posoco.Message) -> TurnVerdict {
   scan_final_message(
     message~,

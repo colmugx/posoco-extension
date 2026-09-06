@@ -5,7 +5,7 @@
 
 ///|
 /// Compose a real Agent from a ScriptedModel, an io extension, and the goal
-/// extension under test, mirroring the host composition pattern.
+/// extension under test.
 fn cw_compose_agent(
   model : @posoco.ScriptedModel,
   goal : GoalRunner,
@@ -66,7 +66,6 @@ async fn cw_run_turn(
 }
 
 ///|
-/// One plan-item JSON object: {"title": t, "status": s}.
 fn cw_plan_item(title : String, status : String) -> Json {
   Json::object(
     Map::from_array([

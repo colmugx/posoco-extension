@@ -3,7 +3,6 @@
 /// Compose it like any other extension — see `goal_extension`.
 
 ///|
-/// Truncate text to max_len characters, appending "…" if truncated.
 fn truncate_text(text : String, max_len : Int) -> String {
   if text.length() > max_len {
     text[0:max_len].to_owned() + "…"
@@ -51,7 +50,6 @@ pub(all) struct GoalUsage {
 } derive(Debug, Eq)
 
 ///|
-/// Configuration for a goal run.
 pub(all) struct GoalOptions {
   goal_condition : String
   budget : GoalBudget
@@ -415,7 +413,6 @@ fn GoalRunner::build_turn_prompt(self : GoalRunner) -> String {
 }
 
 ///|
-/// Get the current goal status.
 pub fn GoalRunner::status(self : GoalRunner) -> GoalStatus {
   self.status
 }

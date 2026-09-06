@@ -189,7 +189,6 @@ test "plan_normalize_demotes_extra_in_progress" {
   assert_eq(normalized.items[1].title, "second")
   assert_eq(normalized.items[1].status, Pending)
   assert_eq(normalized.items[2].status, Pending)
-  // Pure: the original plan is untouched.
   assert_eq(plan.items[1].status, InProgress)
 }
 
