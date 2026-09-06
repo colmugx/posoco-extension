@@ -1,5 +1,5 @@
 ///|
-/// Acknowledged sync cursor for one lane (upstream AcknowledgedCursor): the
+/// Acknowledged sync cursor for one lane: the
 /// prefix of a transcript the server has confirmed persisted.
 pub(all) struct AckedCursor {
   count : Int
@@ -9,7 +9,7 @@ pub(all) struct AckedCursor {
 } derive(Debug, Eq)
 
 ///|
-/// Incremental slice to append for one flush (upstream AcknowledgedDelta).
+/// Incremental slice to append for one flush.
 /// `stop` is the exclusive end index and always equals the current
 /// transcript length; `reset` marks a full resend after the acknowledged
 /// prefix diverged.
@@ -22,25 +22,25 @@ pub(all) struct AckedDelta {
 } derive(Debug)
 
 ///|
-/// Lowercase hex sha256 (upstream digest("hex")).
+/// Lowercase hex sha256.
 fn sha256_hex(input : Bytes) -> String {
   @crypto.bytes_to_hex_string(@crypto.sha256(input))
 }
 
 ///|
 /// Fingerprint text of one message: the compact JSON of its wire shape
-/// (upstream stableMessageFingerprint = JSON.stringify(message)).
+/// (JSON.stringify equivalent of the wire object).
 fn message_fingerprint(m : NmemThreadMessage) -> String {
   m.to_wire_json().stringify()
 }
 
 ///|
 /// sha256 over the first `upto` messages, each encoded as
-/// "{utf8 byte length}:{fingerprint text}" (upstream prefixFingerprint). The
+/// "{utf8 byte length}:{fingerprint text}". The
 /// length prefix keeps message boundaries unambiguous in the hash stream;
 /// the length is the utf8 byte count, not the UTF-16 char count. `upto` is
-/// clamped into [0, messages.length]; upstream callers never pass a
-/// negative bound, and this port hashes the empty prefix for one.
+/// clamped into [0, messages.length]; a negative bound hashes the empty
+/// prefix.
 fn prefix_fingerprint(
   messages : Array[NmemThreadMessage],
   upto : Int,
@@ -63,7 +63,8 @@ fn prefix_fingerprint(
 }
 
 ///|
-/// metadata["external_id"] as upstream reads it (`stringValue(...) || ""`):
+/// metadata["external_id"] as a string would be read on the wire
+/// (`stringValue(...) || ""`):
 /// a trimmed non-blank string, or "" when absent, non-string, or blank.
 fn message_external_id(m : NmemThreadMessage) -> String {
   if m.metadata.contains("external_id") {
@@ -84,8 +85,7 @@ fn message_external_id(m : NmemThreadMessage) -> String {
 }
 
 ///|
-/// Select the incremental slice to append (upstream
-/// selectAcknowledgedDelta). A cursor whose count is out of range, whose
+/// Select the incremental slice to append. A cursor whose count is out of range, whose
 /// last external id no longer matches, or whose prefix fingerprint diverged
 /// (transcript rewritten or forked) forces a full reset: start 0 with
 /// `reset=true`. `next` always describes the full transcript so it becomes
@@ -153,7 +153,7 @@ fn or_blank(value : String?) -> String {
 }
 
 ///|
-/// Lane isolation key (upstream sessionSyncLaneKey): sha256 over the five
+/// Lane isolation key: sha256 over the five
 /// destination components joined by NUL, then NUL + thread id. Sync state
 /// for different destinations or threads never mixes.
 pub fn sync_lane_key(thread_id : String, config : NmemConfig) -> String {

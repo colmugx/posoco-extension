@@ -3,7 +3,7 @@ const NMEM_DEFAULT_API_URL : String = "http://127.0.0.1:14242"
 
 ///|
 /// First trimmed non-empty value among `candidates`; `None` and blank entries
-/// are skipped. This is the chain primitive behind upstream `readConfigValue`.
+/// are skipped.
 fn first_present(candidates : Array[String?]) -> String? {
   let mut found : String? = None
   for candidate in candidates {
@@ -50,7 +50,7 @@ fn config_string(config : Map[String, Json], keys : Array[String]) -> String? {
 
 ///|
 /// Parse the ~/.nowledge-mem/config.json text. Malformed JSON or a non-object
-/// document yields an empty object (upstream `readSharedConfig` semantics).
+/// document yields an empty object.
 fn parse_config_object(text : String?) -> Map[String, Json] {
   match text {
     None => Map::from_array([])
@@ -65,7 +65,7 @@ fn parse_config_object(text : String?) -> Map[String, Json] {
 }
 
 ///|
-/// Drop the trailing run of "/" characters (upstream `.replace(/\/+$/, "")`).
+/// Drop the trailing run of "/" characters.
 /// Boundaries are ASCII-safe: '/' is never half of a surrogate pair.
 fn strip_trailing_slashes(url : String) -> String {
   let mut end = url.length()
@@ -76,10 +76,9 @@ fn strip_trailing_slashes(url : String) -> String {
 }
 
 ///|
-/// Derive the MCP endpoint from an api base (upstream `normalizeMcpPath` +
-/// `stripLegacyRemoteApiPrefix`): strip a legacy `/remote-api` prefix, then
-/// keep an exact `/mcp` path, turn the bare origin into `/mcp`, and append
-/// `/mcp` to any other path.
+/// Derive the MCP endpoint from an api base: strip a legacy `/remote-api`
+/// prefix, then keep an exact `/mcp` path, turn the bare origin into `/mcp`,
+/// and append `/mcp` to any other path.
 pub fn normalize_mcp_path(url : String) -> String {
   let scheme_len = if url.has_prefix("https://") {
     "https://".length()

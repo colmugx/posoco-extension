@@ -11,7 +11,7 @@ pub(all) struct NmemResponse {
 ///|
 /// Narrow HTTP seam for Nowledge Mem thread sync (plan D7): one JSON POST with
 /// a timeout, all failures normalized to `Err(String)`. Production sync uses
-/// `HttpNmemTransport`; tests and hosts inject a scripted fake (M4).
+/// `HttpNmemTransport`; tests and hosts inject a scripted fake.
 pub(open) trait NmemTransport {
   async fn post_json(
     Self,
@@ -159,8 +159,8 @@ fn authority_valid(authority : StringView) -> Bool {
 }
 
 ///|
-/// Shared implementation of `NmemTransport::post_json`. Follows the
-/// posoco-ext-openai client lifecycle (`Client::Client` → `request` →
+/// Shared implementation of `NmemTransport::post_json`. Follows the standard
+/// `@http.Client` request lifecycle (`Client::Client` → `request` →
 /// `write` → `flush` → `end_request` → `read_all`) with `close()` on every
 /// exit path. The URL is split because `Client::Client` only accepts a
 /// pathless origin; the request path is passed to `request`.

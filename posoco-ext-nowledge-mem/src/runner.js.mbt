@@ -1,6 +1,6 @@
 ///|
 // Bun is a global under bun: `extern "js" fn ... = #| () => Bun.xxx()` works
-// without require/import (posoco-ext-bash precedent). FFI stays on the two
+// without require/import. FFI stays on the two
 // proven stable boundaries (docs/questions.md 2026-08-19): pure value
 // pass-through (String/Bool) and Promise bridging via `@js_async.Promise::wait`.
 

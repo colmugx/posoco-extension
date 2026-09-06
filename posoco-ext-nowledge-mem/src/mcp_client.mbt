@@ -141,10 +141,9 @@ async fn LazyNmemMcp::drop_connection(self : LazyNmemMcp) -> Unit {
 }
 
 ///|
-/// Wire-level breaks a fresh connection can fix — the same classification
-/// posoco-ext-mcp applies (SDK send/receive breaks arrive as wrapped
-/// `TransportError` or `InternalError` with these prefixes; server
-/// JSON-RPC errors are remote answers, not connection problems).
+/// Wire-level breaks a fresh connection can fix (SDK send/receive breaks
+/// arrive as wrapped `TransportError` or `InternalError` with these prefixes;
+/// server JSON-RPC errors are remote answers, not connection problems).
 fn is_connection_level_error(e : @types.MCPError) -> Bool {
   match e {
     @types.TransportError(_) => true

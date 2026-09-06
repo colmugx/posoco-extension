@@ -1,6 +1,6 @@
 ///|
-/// Role a Nowledge Mem thread message carries on the wire. Mirrors the
-/// upstream plugin's `"user" | "assistant" | "system"` union. `System` exists
+/// Role a Nowledge Mem thread message carries on the wire:
+/// `"user" | "assistant" | "system"`. `System` exists
 /// for wire completeness but is never produced by `map_messages`: system
 /// transcript entries are excluded by design (§10-2).
 pub(all) enum NmemRole {

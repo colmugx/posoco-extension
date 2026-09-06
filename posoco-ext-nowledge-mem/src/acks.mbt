@@ -20,11 +20,11 @@ fn json_field(data : Json, key : String) -> Json? {
 }
 
 ///|
-/// Integral value of a Json number (MoonBit parses numbers as Double,
-/// upstream checks Number.isInteger on the wire value). Finiteness is
+/// Integral value of a Json number (MoonBit parses numbers as Double), with
+/// Number.isInteger wire semantics. Finiteness is
 /// implied: NaN fails floor == self and infinities exceed the bound.
-/// Counts beyond the 32-bit Int range are conservatively rejected (upstream
-/// would accept them as JS integers): an unrepresentable count reads as
+/// Counts beyond the 32-bit Int range are conservatively rejected: an
+/// unrepresentable count reads as
 /// "absent", so the sync engine retries or reconciles instead of trusting it.
 fn json_int_value(data : Json) -> Int? {
   match data {
@@ -46,7 +46,7 @@ fn json_is_safe_integer(data : Json) -> Bool {
 }
 
 ///|
-/// Append acknowledgement (upstream isThreadAppendAck): success === true
+/// Append acknowledgement: success === true
 /// plus integral messages_added and total_messages. Negative integers count
 /// as integers, mirroring Number.isInteger.
 pub fn is_thread_append_ack(data : Json) -> Bool {
@@ -63,7 +63,7 @@ pub fn is_thread_append_ack(data : Json) -> Bool {
 }
 
 ///|
-/// Checkpointed append acknowledgement (upstream isCheckpointedAppendAck):
+/// Checkpointed append acknowledgement:
 /// an append ack that also reports append_mode === "checkpointed".
 pub fn is_checkpointed_append_ack(data : Json) -> Bool {
   is_thread_append_ack(data) &&
@@ -71,15 +71,14 @@ pub fn is_checkpointed_append_ack(data : Json) -> Bool {
 }
 
 ///|
-/// Checkpoint conflict response (upstream isCheckpointConflictResponse):
-/// error_code === "checkpoint_conflict".
+/// Checkpoint conflict response: error_code === "checkpoint_conflict".
 pub fn is_checkpoint_conflict(data : Json) -> Bool {
   json_field(data, "error_code") is Some(Json::String("checkpoint_conflict"))
 }
 
 ///|
-/// Thread-already-exists response (upstream isThreadAlreadyExistsResponse):
-/// HTTP 409, or the serialized body mentions the phrase case-insensitively.
+/// Thread-already-exists response: HTTP 409, or the serialized body mentions
+/// the phrase case-insensitively.
 pub fn is_thread_already_exists(status : Int, data : Json) -> Bool {
   if status == 409 {
     true
@@ -91,7 +90,7 @@ pub fn is_thread_already_exists(status : Int, data : Json) -> Bool {
 }
 
 ///|
-/// Thread-not-found response (upstream isThreadNotFound): error_code ===
+/// Thread-not-found response: error_code ===
 /// "thread_not_found", HTTP 404, or the serialized body mentions the phrase
 /// case-insensitively.
 pub fn is_thread_not_found(status : Int, data : Json) -> Bool {
@@ -105,7 +104,7 @@ pub fn is_thread_not_found(status : Int, data : Json) -> Bool {
 }
 
 ///|
-/// Create acknowledgement (upstream isThreadCreateAck): body.thread is an
+/// Create acknowledgement: body.thread is an
 /// object whose thread_id equals the expected id.
 pub fn is_thread_create_ack(data : Json, expected_thread_id : String) -> Bool {
   match json_field(data, "thread") {
@@ -123,9 +122,9 @@ pub fn is_thread_create_ack(data : Json, expected_thread_id : String) -> Bool {
 }
 
 ///|
-/// Remote message count reported by a create response (upstream
-/// threadCreateRemoteCount minus its expected-id gate, which callers apply
-/// through is_thread_create_ack): thread.message_count when it is a
+/// Remote message count reported by a create response (the expected-id gate
+/// itself is applied by callers through is_thread_create_ack):
+/// thread.message_count when it is a
 /// non-negative integer, else the top-level messages array length, else
 /// `None`.
 pub fn thread_create_remote_count(data : Json) -> Int? {

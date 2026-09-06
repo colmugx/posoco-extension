@@ -507,7 +507,7 @@ suberror HostEof derive(Debug)
 /// Cancellation regression: when a host group tears down (cetas-acp stdin
 /// EOF), the aborting body fails the group and the flusher is cancelled
 /// mid-sleep; the loop must re-raise the cancellation so the teardown
-/// completes. Swallowing it used to leave the idle loop spinning — the
+/// completes. Swallowing it would leave the idle loop spinning — the
 /// sleep is its only suspension point. The with_timeout watchdog bounds
 /// the assertion, and `stopped` staying false proves the exit came from
 /// cancellation, not stop().

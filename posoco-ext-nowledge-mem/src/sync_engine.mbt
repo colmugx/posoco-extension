@@ -14,7 +14,7 @@ const NMEM_MAX_THREAD_SYNC_TIMEOUT_MS : Int = 1_800_000
 const NMEM_SAFE_INTEGER_MAX_AS_DOUBLE : Double = 9007199254740991.0
 
 ///|
-/// Resolve NMEM_SYNC_TIMEOUT_MS (upstream resolveThreadSyncTimeoutMs):
+/// Resolve NMEM_SYNC_TIMEOUT_MS:
 /// blank, non-numeric, non-integral, or non-positive input yields the
 /// default; everything else is clamped into [1s, 30min]. Parsing goes through
 /// Double so exponent forms like "1e3" behave like upstream's Number().
@@ -44,7 +44,7 @@ pub fn resolve_thread_sync_timeout_ms(raw : String?) -> Int {
 
 ///|
 /// One staged flush of a lane: the latest transcript snapshot plus everything
-/// needed to send it (upstream SyncPayload; `config` replaces the payload's
+/// needed to send it (`config` replaces the payload's
 /// destination reference). Assembled by build_sync_request.
 pub(all) struct SyncRequest {
   lane_key : String
@@ -57,9 +57,8 @@ pub(all) struct SyncRequest {
 } derive(Debug)
 
 ///|
-/// Per-lane sync state (upstream SyncState minus its timer/in-flight fields,
-/// which the SyncEngine loop replaces). `pending` holds the newest
-/// not-yet-flushed request — upstream coalesces the same way by keeping only
+/// Per-lane sync state. `pending` holds the newest
+/// not-yet-flushed request — coalescing keeps only
 /// the latest payload while a flush is in flight.
 pub(all) struct LaneState {
   created : Bool
@@ -69,8 +68,8 @@ pub(all) struct LaneState {
 } derive(Debug)
 
 ///|
-/// Map a captured transcript snapshot to the request for one flush (upstream
-/// buildSyncPayload): message mapping, shouldSync gate, thread id/title, the
+/// Map a captured transcript snapshot to the request for one flush:
+/// message mapping, shouldSync gate, thread id/title, the
 /// create body, and the lane key. Returns `None` when the transcript has no
 /// user/assistant pair yet — such snapshots never enter the queue.
 pub fn build_sync_request(
@@ -105,8 +104,7 @@ pub fn build_sync_request(
 ///|
 /// Resolved outcome of one logical POST: a decoded response or a
 /// transport-level failure (status 0, null body, `failure` holding the
-/// error message). Upstream folds this shape into postJson's
-/// {ok, status, data} triple.
+/// error message).
 priv struct NmemPostOutcome {
   ok : Bool
   status : Int
@@ -121,8 +119,8 @@ fn http_status_ok(status : Int) -> Bool {
 
 ///|
 /// POST `path` against the configured api url, trying each /remote-api
-/// fallback origin (upstream postJson). The next url is attempted when the
-/// current one answers 404/405 (upstream shouldTryRemoteApiFallback) or when
+/// fallback origin. The next url is attempted when the
+/// current one answers 404/405 or when
 /// the transport fails before a response arrives; any other answer is final.
 async fn nmem_post(
   transport : &NmemTransport,
@@ -181,7 +179,7 @@ fn thread_sync_failed_error(outcome : NmemPostOutcome) -> String {
 }
 
 ///|
-/// POST /threads/{id}/append body (upstream flushOnce): the delta messages,
+/// POST /threads/{id}/append body: the delta messages,
 /// deduplication, an idempotency key, and — in checkpoint mode — the expected
 /// remote count.
 fn append_body(
@@ -203,7 +201,7 @@ fn append_body(
 }
 
 ///|
-/// Run one flush attempt for `request` against `state` (upstream flushOnce)
+/// Run one flush attempt for `request` against `state`
 /// and return the resulting lane state:
 ///
 /// - empty delta (nothing new since the cursor) returns `state` unchanged;
@@ -391,7 +389,7 @@ pub fn SyncEngine::SyncEngine() -> SyncEngine {
 
 ///|
 /// Stage `request` as its lane's pending flush, replacing any earlier pending
-/// request (only the latest transcript syncs — upstream's timer coalescing).
+/// request (only the latest transcript syncs — coalescing by replacement).
 /// Existing created/acknowledged/error state is preserved.
 pub fn SyncEngine::mark_dirty(self : SyncEngine, request : SyncRequest) -> Unit {
   let staged : LaneState = if self.lanes.contains(request.lane_key) {
@@ -424,7 +422,7 @@ pub fn SyncEngine::lane_state(
 /// Flush every lane with a pending request once, sequentially. The pending
 /// request is removed before its flush so a mark_dirty landing while the
 /// flush awaits installs a newer request that survives the write-back
-/// (upstream's in-flight coalescing loop).
+/// (in-flight coalescing).
 pub async fn SyncEngine::drain_once(
   self : SyncEngine,
   transport : &NmemTransport,

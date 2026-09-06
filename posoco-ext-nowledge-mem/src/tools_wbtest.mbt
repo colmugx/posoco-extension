@@ -258,9 +258,9 @@ async test "execute: unknown tool raises RuntimeError::UnknownTool" {
 }
 
 ///|
-/// Retired names stay retired: the extension no longer dispatches the tools
-/// core now owns (memory_search / memory_add) or the WM read the inbound
-/// slot replaced.
+/// The extension dispatches neither the tools core now owns
+/// (memory_search / memory_add) nor the WM read (fronted by the inbound
+/// slot).
 async test "execute: retired tool names are unknown" {
   let ext = tool_ext()
   for name in ["memory_search", "memory_add", "read_working_memory"] {

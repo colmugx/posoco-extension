@@ -18,8 +18,8 @@ fn nmem_mode(api_url : String) -> String {
 }
 
 ///|
-/// `/nmem` status: the connection picture — the tool channel (always MCP
-/// since the CLI runner retired), the thread-sync channel, the host
+/// `/nmem` status: the connection picture — the tool channel (always MCP),
+/// the thread-sync channel, the host
 /// identity riding every call, and any env override that outranks the
 /// config file. Returns the text report and its structured twin.
 async fn NowledgeMem::nmem_status_report(self : NowledgeMem) -> (String, Json) {

@@ -236,7 +236,7 @@ async fn NowledgeMem::drain_silent(self : NowledgeMem) -> Unit noraise {
 }
 
 ///|
-/// Turn-end commit (plan D3, 2026-08-23 revision): core awaits this slot once
+/// Turn-end commit (plan D3): core awaits this slot once
 /// per `run_turn`, after the terminal observer projection and before the call
 /// returns — on both the completed and the failed path. Any path that stops a
 /// turn commits first, so a host that never calls `attach` and never shuts

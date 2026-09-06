@@ -23,9 +23,8 @@ warnings = "-unused_package"
 
 // The extension ships per-target platform runners (.native/.js) and pins its
 // wbtests to native; wasm is out of scope for v1 (plan D6), so the package
-// declares native+js as its whole target set — the same shape as
-// posoco-ext-plan. Restricted-target packages carry no pkg.generated.mbti
-// (moon info's canonical backend is Wasm); see plan/mcp/acp/goal precedents.
+// declares native+js as its whole target set. Restricted-target packages
+// carry no pkg.generated.mbti (moon info's canonical backend is Wasm).
 
 supported_targets = "+native +js"
 

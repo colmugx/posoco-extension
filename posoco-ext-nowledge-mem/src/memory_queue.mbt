@@ -174,8 +174,7 @@ async fn NowledgeMem::flush_memory_add(
 
 ///|
 /// Flush one queued `Delete` with the `memory_delete` tool (`memory_id` is
-/// the server's argument name — the CLI's positional id does not carry
-/// over).
+/// the server's argument name).
 async fn NowledgeMem::flush_memory_delete(
   self : NowledgeMem,
   id~ : String,

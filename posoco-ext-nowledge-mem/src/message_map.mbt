@@ -34,7 +34,7 @@ fn truncate_message(text : String, source_app : String) -> String {
 }
 
 ///|
-/// Normalize one content part (upstream partToText): text passes through,
+/// Normalize one content part: text passes through,
 /// images become a placeholder.
 fn part_to_text(part : @posoco.Content) -> String {
   match part {
@@ -44,8 +44,7 @@ fn part_to_text(part : @posoco.Content) -> String {
 }
 
 ///|
-/// Join content parts with "\n", dropping empty segments (upstream
-/// contentToText).
+/// Join content parts with "\n", dropping empty segments.
 fn parts_to_text(parts : Array[@posoco.Content]) -> String {
   parts
   .filter_map(fn(part) {
@@ -59,7 +58,7 @@ fn parts_to_text(parts : Array[@posoco.Content]) -> String {
 
 ///|
 /// Assistant message text: content parts plus one `[Tool: name]` line per
-/// requested tool call. Reasoning is never synced (upstream behavior).
+/// requested tool call. Reasoning is never synced.
 fn assistant_text(
   parts : Array[@posoco.Content],
   tool_calls : Array[@posoco.ToolCall],
@@ -78,9 +77,8 @@ fn assistant_text(
 }
 
 ///|
-/// Model-visible text of a tool outcome — the same surface the
-/// OpenAI-compatible adapter sends in the tool-role message
-/// (`outcome_to_wire_text` in posoco-ext-openai-compatible/encode.mbt).
+/// Model-visible text of a tool outcome — the same surface a model adaptor
+/// sends in the tool-role message.
 fn outcome_visible_text(outcome : @posoco.ToolOutcome) -> String {
   match outcome {
     @posoco.ToolOutcome::Success(content~, ..) => content
@@ -93,8 +91,7 @@ fn outcome_visible_text(outcome : @posoco.ToolOutcome) -> String {
 ///|
 /// Build one thread message, or `None` when the normalized content is empty.
 /// `external_id` embeds the ORIGINAL input index so ids stay stable when
-/// earlier entries are skipped (upstream falls back to the entry index the
-/// same way when an entry carries no id).
+/// earlier entries are skipped.
 fn build_thread_message(
   role : NmemRole,
   raw_content : String,
@@ -129,8 +126,7 @@ fn build_thread_message(
 /// - Core's injected session-opening memory message is filtered the same
 ///   way: injected context is not user speech — and dropping it keeps the
 ///   thread title the first real user message.
-/// - ToolMessage becomes Assistant carrying the outcome's model-visible text
-///   (upstream maps toolResult → assistant).
+/// - ToolMessage becomes Assistant carrying the outcome's model-visible text.
 /// - Messages whose normalized content is empty are dropped.
 pub fn map_messages(
   messages : Array[@posoco.Message],

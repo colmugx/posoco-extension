@@ -3,14 +3,12 @@
 const NMEM_TOOL_VERSION : String = "posoco-ext-nowledge-mem/0.1.0"
 
 ///|
-/// Title is capped at the first 120 characters of the first user message
-/// (upstream buildTitle).
+/// Title is capped at the first 120 characters of the first user message.
 const NMEM_TITLE_MAX_CHARS : Int = 120
 
 ///|
 /// Thread id for a session: "{source_app}-{session_id}", lowercased, with
-/// every run of characters outside [a-z0-9._-] replaced by a single "-"
-/// (upstream threadIdFor).
+/// every run of characters outside [a-z0-9._-] replaced by a single "-".
 pub fn thread_id(source_app : String, session_id : String) -> String {
   normalize_thread_id("\{source_app}-\{session_id}")
 }
@@ -72,7 +70,7 @@ pub fn thread_title(
 
 ///|
 /// A thread only syncs when it contains at least one user and one assistant
-/// message (upstream shouldSync).
+/// message.
 pub fn should_sync(messages : Array[NmemThreadMessage]) -> Bool {
   let mut has_user = false
   let mut has_assistant = false
@@ -88,9 +86,9 @@ pub fn should_sync(messages : Array[NmemThreadMessage]) -> Bool {
 }
 
 ///|
-/// Assemble the POST /threads request body (upstream buildSyncPayload).
+/// Assemble the POST /threads request body.
 /// `project` is still null: hosts do not pass a workspace root into this
-/// extension. Since the workspace-anchoring milestone, `HostContext.cwd` is
+/// extension. `HostContext.cwd` is
 /// the single cwd source (`WorkspaceAnchor`); threading it here is future
 /// work.
 pub fn build_thread_body(

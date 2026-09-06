@@ -23,8 +23,8 @@ fn host_label(source_app : String) -> String {
 }
 
 ///|
-/// Startup guidance appended to the system prompt on every turn start
-/// (upstream startupGuidance): when to search, when to save, how to route
+/// Startup guidance appended to the system prompt on every turn start:
+/// when to search, when to save, how to route
 /// between memories and threads, and the provenance this host's synced
 /// threads carry. `source_app` is the host product identity; the host label
 /// in the copy derives from it via `host_label`.

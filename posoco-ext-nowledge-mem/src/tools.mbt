@@ -58,8 +58,8 @@ fn schema_prop(type_ : String, description : String) -> Json {
 /// those names would fail composition with a ToolCollision). The destructive
 /// `memory_delete` is advertised only when the host constructed the
 /// extension with `expose_delete_tool=true`. Every tool dispatches through
-/// the extension's lazy MCP client; `thread_create` was dropped when the
-/// CLI runner retired — the server's MCP surface has no counterpart.
+/// the extension's lazy MCP client; there is no `thread_create` — the
+/// server's MCP surface has no counterpart.
 pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
   self : NowledgeMem,
 ) -> Array[@posoco.ToolDef] {
@@ -188,8 +188,8 @@ fn tool_error(tool : String, message : String) -> @posoco.ToolOutcome {
 
 ///|
 /// Tool-call arguments with the ambient scope injected. The SDK transport
-/// carries only the auth token, so scope rides the arguments (the upstream
-/// header-scoping equivalent): `identity=true` adds source_app and the
+/// carries only the auth token, so scope rides the arguments:
+/// `identity=true` adds source_app and the
 /// agent ids on the tools whose server schema accepts them; every tool gets
 /// space_id when a space is configured.
 fn mcp_args(
@@ -235,7 +235,7 @@ fn parsed_structured(text : String) -> Json? {
 ///|
 /// One MCP tool call mapped onto a ToolOutcome. A transport-level failure
 /// or the server's own error flag is a ToolReportedError the model can
-/// react to (the CLI's nonzero-exit mapping carries over); a clean reply
+/// react to; a clean reply
 /// returns the text content verbatim plus its parsed JSON in the structured
 /// channel when it is an object or array.
 async fn NowledgeMem::call_mcp_tool(
