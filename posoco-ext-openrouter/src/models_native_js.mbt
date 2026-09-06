@@ -1,13 +1,6 @@
 ///|
-/// models_native_js.mbt — live `GET /models` fetch via moonbitlang/async/http.
-///
-/// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
-/// The pure decoder (`parse_openrouter_models`) and the `OpenRouterModelInfo`
-/// type live in the target-agnostic models.mbt and remain visible on every
-/// backend. On wasm `fetch_openrouter_models` is absent and the refresh impl
-/// (refresh_native_js.mbt, which calls it) is file-pinned to native+js — a
-/// wasm consumer sees the types and the static build path but never reaches
-/// the HTTP fetch.
+/// Live `GET /models` fetch via moonbitlang/async/http. Compiled on native
+/// and js only: `@http` is unavailable on wasm/wasm-gc.
 
 ///|
 /// Fetch and decode the live OpenRouter model catalog. The listing is

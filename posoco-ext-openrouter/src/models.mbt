@@ -12,7 +12,6 @@
 /// `openrouter/<slug>`.
 
 ///|
-/// One model entry decoded from the OpenRouter models response.
 pub(all) struct OpenRouterModelInfo {
   id : String
   context_length : Int?
@@ -35,10 +34,8 @@ pub(all) struct OpenRouterModelInfo {
 } derive(Eq, Debug)
 
 ///|
-/// Parse an OpenRouter models response without performing I/O. Pure decoder
-/// shared by the live fetch path, the offline cache expansion, and the
-/// white-box tests. Fields outside `id` are optional and degrade tolerantly:
-/// a model without metadata is plain chat with no effort surface.
+/// Fields outside `id` are optional and degrade tolerantly: a model without
+/// metadata is plain chat with no effort surface.
 pub fn parse_openrouter_models(
   payload : Json,
 ) -> Array[OpenRouterModelInfo] raise @posoco.ModelError {
@@ -230,11 +227,6 @@ pub fn parse_cached_openrouter_models(
 }
 
 ///|
-/// Build the chat config for one discovered model from the resolved
-/// credential and endpoint. The reasoning surface comes from the model's own
-/// metadata: level-bearing models start on their declared default effort,
-/// toggle-only reasoning models start on the endpoint's default, and
-/// everything else stays plain chat.
 fn openrouter_config_for_info(
   api_key : String,
   base_url : String,
@@ -286,8 +278,7 @@ fn openrouter_config_for_info(
 ///|
 /// Keep the configured model first after a live refresh while preserving the
 /// endpoint's order for all remaining models (OpenRouter ranks by its own
-/// routing quality). Mirrors the DeepSeek/Zen policy so a pinned model stays
-/// at the top of the refreshed list.
+/// routing quality).
 fn openrouter_preferred_models(
   models : Array[OpenRouterModelInfo],
   preferred_id : String,

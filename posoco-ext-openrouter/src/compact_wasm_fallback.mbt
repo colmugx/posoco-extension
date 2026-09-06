@@ -1,10 +1,7 @@
 ///|
-/// compact_wasm_fallback.mbt — ModelPort::compact impl for wasm/wasm-gc.
-///
-/// `@http` is unavailable on wasm, so the summarize call is impossible. This
-/// fallback supplies a complete `ModelPort::compact` impl that raises
-/// immediately, keeping the trait fully satisfied on every backend so the
-/// package exports a real mbti.
+/// `@http` is unavailable on wasm, so the summarize call is impossible; this
+/// impl raises immediately, keeping the trait satisfied and the package's
+/// mbti real on every backend.
 
 ///|
 #cfg(not(any(target="native", target="js")))

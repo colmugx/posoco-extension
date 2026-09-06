@@ -1,16 +1,7 @@
 ///|
-/// compact_native_js.mbt — ModelPort::compact via the summary kit.
-///
-/// OpenRouter exposes no dedicated compact endpoint, so compaction is
-/// client-orchestrated: cut the transcript at a safe boundary (keep the
-/// most recent 20k tokens), serialize the head, ask the model for a
-/// structured summary in one non-streaming call (thinking off — the summary
-/// must be plain prose, not a reasoning exercise), and Replace the
-/// transcript with (summary user message + verbatim tail). The
-/// URL/headers/encode/decode and error classification are exactly the ones
-/// `chat` uses.
-///
-/// Compiled on native and js only (`@http` is unavailable on wasm);
+/// ModelPort::compact via the summary kit. OpenRouter exposes no dedicated
+/// compact endpoint, so compaction is client-orchestrated. Compiled on
+/// native and js only (`@http` is unavailable on wasm);
 /// compact_wasm_fallback.mbt satisfies the trait elsewhere.
 
 ///|
@@ -42,6 +33,9 @@ async fn OpenRouterModelPort::openrouter_post_chat_json(
           ),
         )
     }
+    // Per-process learning on the drained body (serves non-stream chat and
+    // compact alike): an explicit prompt_cache_key rejection stops the key.
+    self.learn_cache_key_rejection(BodyText(text))
     match
       classify_openrouter_http_status(
         "\{stage}.http_status",
@@ -70,10 +64,6 @@ async fn OpenRouterModelPort::openrouter_post_chat_json(
 }
 
 ///|
-/// ModelPort implementation — compact. One non-streaming summarize call via
-/// the summary kit, thinking off, tools empty; the summary text replaces
-/// the transcript head (mode Replace) as a single user message followed by
-/// the kept tail.
 pub impl @posoco.ModelPort for OpenRouterModelPort with fn compact(
   self : OpenRouterModelPort,
   _scope : @posoco.InvocationScope,
@@ -101,9 +91,11 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn compact(
     @compact_summary.serialize_for_summary(head),
   )
   // Thinking off for the summarize call: the summary must be plain prose,
-  // not a reasoning exercise, and must not burn reasoning tokens.
+  // not a reasoning exercise, and must not burn reasoning tokens. The key is
+  // None — this one-shot summary never replays, so it stays out of the
+  // session's cache-key namespace.
   let config = { ..self.config, thinking: false, reasoning_effort: None, }
-  let body = build_chat_request(config, prompt, [], options, false)
+  let body = build_chat_request(config, prompt, [], options, false, None)
   let resp_json = self.openrouter_post_chat_json(body, "compact")
   let completion = decode_chat_response(resp_json)
   let summary = completion.message.content

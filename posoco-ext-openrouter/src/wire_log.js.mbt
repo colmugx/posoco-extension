@@ -21,7 +21,6 @@ extern "js" fn js_append_line(path : String, line : String) -> Unit =
   #| }
 
 ///|
-/// The configured wire-log path, or None when disabled.
 fn wire_log_path() -> String? {
   match js_wire_log_path() {
     "" => None
@@ -30,8 +29,8 @@ fn wire_log_path() -> String? {
 }
 
 ///|
-/// Append one line to the wire log. IO failures are swallowed inside the
-/// FFI: logging must never break a turn.
+/// IO failures are swallowed inside the FFI: logging must never break a
+/// turn.
 fn wire_log_append(path : String, line : String) -> Unit {
   js_append_line(path, line)
 }

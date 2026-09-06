@@ -1,14 +1,4 @@
 ///|
-/// Blackbox tests for the OpenRouter SSE processor.
-///
-/// Fixtures are raw SSE text ("data: {...}\n\n" lines) split the same way the
-/// stage-5 chat driver will split them, then fed payload-by-payload to
-/// `process_openrouter_sse`. Coverage follows the design file's six required
-/// streams: normal text, pure reasoning (string + reasoning_details), tool
-/// calls stitched across deltas, a mid-stream error object, a usage-only
-/// trailing chunk followed by [DONE], and heartbeat comment payloads.
-
-///|
 fn feed_sse(
   raw : String,
 ) -> (Bool, OpenRouterStreamState, Array[@posoco.StreamChunk]) raise @posoco.ModelError {

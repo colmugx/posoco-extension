@@ -44,11 +44,16 @@ pub(all) struct OpenRouterConfig {
   /// `architecture.input_modalities`). Image blocks then encode as typed
   /// content parts; otherwise they downgrade to explicit placeholders.
   supports_images : Bool
+  /// Opt-in: send a stable session-derived `prompt_cache_key` on chat
+  /// requests (provider-side cache routing affinity, shared kit derivation).
+  /// Conservative OFF by default — OpenRouter fronts many upstream providers
+  /// and not all accept the parameter. Once a provider explicitly rejects it,
+  /// the port stops sending it for the rest of the process regardless of this
+  /// flag (`OpenRouterModelPort.prompt_cache_key_rejected`).
+  send_prompt_cache_key : Bool
 } derive(Eq, Debug)
 
 ///|
-/// Config builder. `api_key` and `model` are required; `base_url` defaults to
-/// the OpenRouter production endpoint.
 pub fn OpenRouterConfig::OpenRouterConfig(
   api_key : String,
   model~ : String,
@@ -61,6 +66,7 @@ pub fn OpenRouterConfig::OpenRouterConfig(
   http_referer? : String? = None,
   title? : String? = None,
   supports_images? : Bool = false,
+  send_prompt_cache_key? : Bool = false,
 ) -> OpenRouterConfig {
   {
     api_key,
@@ -74,6 +80,7 @@ pub fn OpenRouterConfig::OpenRouterConfig(
     http_referer,
     title,
     supports_images,
+    send_prompt_cache_key,
   }
 }
 

@@ -1,10 +1,4 @@
 ///|
-/// Self-reported port view: this extension contributes exactly one ModelPort
-/// (the OpenRouter chat completions adapter). ApiKey login and catalog
-/// construction live on `OpenRouterProvider`; the manifest advertises the
-/// port trait view the Agent composer consumes.
-
-///|
 pub impl @posoco.Extension for OpenRouterModelPort with fn extension_id(
   _self : OpenRouterModelPort,
 ) -> String {

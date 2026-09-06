@@ -1,19 +1,14 @@
 ///|
-/// refresh_native_js.mbt — RefreshableProviderFactory::refresh impl via @http.
-///
-/// Compiled on native and js only: `fetch_openrouter_models` drives
-/// moonbitlang/async/http, unavailable on wasm/wasm-gc. The trait's
-/// `provider_id` impl lives in provider_factory.mbt (all backends); this
-/// file owns only the live catalog refresh. On wasm, a fallback impl in
-/// refresh_wasm_fallback.mbt satisfies the trait so the package exports a
-/// complete mbti.
+/// RefreshableProviderFactory::refresh impl via @http. Compiled on native
+/// and js only: `fetch_openrouter_models` drives moonbitlang/async/http,
+/// unavailable on wasm/wasm-gc; refresh_wasm_fallback.mbt satisfies the
+/// trait elsewhere.
 
 ///|
 /// Live catalog refresh: one authenticated `GET /models` request, a multi-slot
 /// catalog from the response, the settings-pinned model first. Transport,
 /// schema, or HTTP failures abort as typed composition errors — this path
-/// never falls back to the static single-model catalog, matching the
-/// DeepSeek/Zen refresh contract.
+/// never falls back to the static single-model catalog.
 pub impl @llm.RefreshableProviderFactory for OpenRouterProvider with fn refresh(
   self : OpenRouterProvider,
   source : @llm.ProviderConfigSource,

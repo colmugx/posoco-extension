@@ -1,10 +1,4 @@
 ///|
-/// Blackbox tests for posoco-ext-openrouter.
-///
-/// These exercise the pure config/build/encode/decode logic without any
-/// network calls. Streaming and live HTTP behavior land in stage 5.
-
-///|
 fn user_msg(text : String) -> @posoco.Message {
   @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
 }
@@ -12,6 +6,16 @@ fn user_msg(text : String) -> @posoco.Message {
 ///|
 fn chat_options() -> @posoco.ChatOptions {
   { temperature: None, max_output_tokens: None, }
+}
+
+///|
+fn cache_scope(session : String) -> @posoco.InvocationScope {
+  @posoco.InvocationScope::{
+    session_id: @posoco.SessionId::unchecked(session),
+    run_id: @posoco.RunId::unchecked("run-1"),
+    effect_id: None,
+    pressure: None,
+  }
 }
 
 ///|
@@ -122,6 +126,7 @@ test "build_chat_request omits include_reasoning when off and sends it verbatim 
     [],
     opts,
     false,
+    None,
   )
   guard off_body is Object(off_fields) else {
     fail("expected request to be an object")
@@ -142,6 +147,7 @@ test "build_chat_request omits include_reasoning when off and sends it verbatim 
     [],
     opts,
     false,
+    None,
   )
   guard on_body is Object(on_fields) else {
     fail("expected request to be an object")
@@ -167,6 +173,7 @@ test "build_chat_request omits include_reasoning when off and sends it verbatim 
     [],
     opts,
     false,
+    None,
   )
   guard effort_body is Object(effort_fields) else {
     fail("expected request to be an object")
@@ -189,6 +196,7 @@ test "build_chat_request streams without stream_options" {
     [],
     chat_options(),
     true,
+    None,
   )
   guard body is Object(fields) else { fail("expected object body") }
   match fields.get("stream") {
@@ -201,6 +209,105 @@ test "build_chat_request streams without stream_options" {
     None => ()
     Some(_) => fail("stream_options must never be sent to OpenRouter")
   }
+}
+
+///|
+test "prompt_cache_key defaults off: helper yields None and the field is omitted" {
+  let port = OpenRouterModelPort(OpenRouterConfig("k", model="m"))
+  assert_eq(port.prompt_cache_key(cache_scope("sess-1")), None)
+  let body = build_chat_request(
+    OpenRouterConfig("k", model="m"),
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    false,
+    None,
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  match fields.get("prompt_cache_key") {
+    None => ()
+    Some(_) => fail("prompt_cache_key must be omitted when the feature is off")
+  }
+}
+
+///|
+test "opt-in derives the session cache key and sends prompt_cache_key" {
+  let port = OpenRouterModelPort(
+    OpenRouterConfig("k", model="m", send_prompt_cache_key=true),
+  )
+  let key = port.prompt_cache_key(cache_scope("sess-42"))
+  // Derived by the shared chat-completions kit helper, not inlined here.
+  assert_eq(key, Some(@chatkit.derive_prompt_cache_key("sess-42")))
+  assert_eq(key, Some("posoco-sess-42"))
+  let body = build_chat_request(
+    port.config,
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    false,
+    key,
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  match fields.get("prompt_cache_key") {
+    Some(String(k)) => assert_eq(k, "posoco-sess-42")
+    _ => fail("expected prompt_cache_key when opted in with a session")
+  }
+}
+
+///|
+test "a rejection flag suppresses prompt_cache_key even when opted in" {
+  let config = OpenRouterConfig("k", model="m", send_prompt_cache_key=true)
+  let port = OpenRouterModelPort(config)
+  assert_false(port.prompt_cache_key_rejected)
+  port.prompt_cache_key_rejected = true
+  assert_eq(port.prompt_cache_key(cache_scope("sess-1")), None)
+  let body = build_chat_request(
+    config,
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    false,
+    None,
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  match fields.get("prompt_cache_key") {
+    None => ()
+    Some(_) => fail("a rejected key must never be sent again")
+  }
+}
+
+///|
+test "a synthetic rejection body sets the per-process flag" {
+  let port = OpenRouterModelPort(
+    OpenRouterConfig("k", model="m", send_prompt_cache_key=true),
+  )
+  port.learn_cache_key_rejection(
+    BodyText(
+      "{\"error\":{\"message\":\"Unsupported parameter: prompt_cache_key\",\"code\":400}}",
+    ),
+  )
+  assert_true(port.prompt_cache_key_rejected)
+  assert_eq(port.prompt_cache_key(cache_scope("sess-1")), None)
+}
+
+///|
+test "unrelated 400 bodies never set the rejection flag" {
+  let port = OpenRouterModelPort(
+    OpenRouterConfig("k", model="m", send_prompt_cache_key=true),
+  )
+  port.learn_cache_key_rejection(
+    BodyText("{\"error\":{\"message\":\"Invalid model slug\",\"code\":400}}"),
+  )
+  // Names prompt_cache_key without "unsupported parameter" — not a verdict.
+  port.learn_cache_key_rejection(
+    BodyText(
+      "{\"error\":{\"message\":\"prompt_cache_key must be a string\",\"code\":400}}",
+    ),
+  )
+  // Non-text bodies never learn.
+  port.learn_cache_key_rejection(BodyUnavailable)
+  assert_false(port.prompt_cache_key_rejected)
+  assert_eq(port.prompt_cache_key(cache_scope("sess-1")), Some("posoco-sess-1"))
 }
 
 ///|
@@ -219,6 +326,7 @@ test "build_chat_request serializes model, messages, tools and chat options" {
     [tool],
     { temperature: Some(0.5), max_output_tokens: Some(256), },
     false,
+    None,
   )
   guard body is Object(fields) else { fail("expected object body") }
   match fields.get("model") {

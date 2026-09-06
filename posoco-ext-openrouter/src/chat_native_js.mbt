@@ -1,13 +1,6 @@
 ///|
-/// chat_native_js.mbt — ModelPort::chat impl via moonbitlang/async/http.
-///
-/// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
-/// The `OpenRouterModelPort` struct, `compact`, `provider_config`, and all
-/// pure helpers (build_headers, chat_url, encode, decode, SSE processing,
-/// error classification) live in the target-agnostic core files and compile
-/// on every backend. Only this chat method — which drives the actual HTTP
-/// request/response — is target-restricted, mirroring the
-/// posoco-ext-read / posoco-ext-oauth pattern.
+/// ModelPort::chat impl via moonbitlang/async/http. Compiled on native and
+/// js only: `@http` is unavailable on wasm/wasm-gc.
 
 ///|
 /// Drain a non-2xx response, keeping the provider's error text for the
@@ -35,16 +28,18 @@ fn rate_limit_reset_header(response : @http.Response) -> String? {
 }
 
 ///|
-/// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
   self : OpenRouterModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let messages_owned = messages.to_owned()
+  // Opt-in session cache routing: Some("posoco-<session-id>") only while the
+  // flag is on and the provider has not rejected the parameter this process.
+  let cache_key = self.prompt_cache_key(scope)
   match stream {
     NoStream => {
       let body = build_chat_request(
@@ -53,6 +48,7 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
         tools,
         options,
         false,
+        cache_key,
       )
       let resp_json = self.openrouter_post_chat_json(body, "chat")
       let completion = decode_chat_response(resp_json)
@@ -68,6 +64,7 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
         tools,
         options,
         true,
+        cache_key,
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
@@ -99,6 +96,9 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
       if !is_openrouter_http_success(response.code) {
         let err_body = read_error_body(client) catch { _ => BodyUnavailable }
         client.close()
+        // Per-process learning: an explicit unsupported-parameter rejection
+        // naming prompt_cache_key stops sending it on later requests.
+        self.learn_cache_key_rejection(err_body)
         match
           classify_openrouter_http_status(
             "chat_stream.http_status",

@@ -52,7 +52,6 @@ fn encode_message(msg : @posoco.Message, supports_images : Bool) -> Json {
     Some(id) => obj["tool_call_id"] = Json::string(id)
     None => ()
   }
-  // Tool calls (assistant messages requesting tool execution)
   if tool_calls.length() > 0 {
     let tc_arr = tool_calls.map(fn(tc) {
       let tc_obj : Map[String, Json] = {
@@ -119,13 +118,17 @@ fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
 ///|
 /// Build the full chat completions request body. Returns just the JSON payload;
 /// the caller prepends base_url. `config` supplies the model id and the
-/// reasoning surface (thinking / reasoning_effort).
+/// reasoning surface (thinking / reasoning_effort). `cache_key` is the
+/// session-derived `prompt_cache_key` routing hint — written only when Some
+/// (callers compute Some/None from the opt-in flag, per-process rejection
+/// state, and the invocation scope).
 fn build_chat_request(
   config : OpenRouterConfig,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : Bool,
+  cache_key : String?,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(config.model),
@@ -155,6 +158,10 @@ fn build_chat_request(
       Some(effort) => body["reasoning_effort"] = Json::string(effort)
       None => ()
     }
+  }
+  match cache_key {
+    Some(k) => body["prompt_cache_key"] = Json::string(k)
+    None => ()
   }
   if stream {
     // stream_options.include_usage is deprecated on OpenRouter: usage rides

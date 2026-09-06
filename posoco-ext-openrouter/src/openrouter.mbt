@@ -28,32 +28,61 @@ fn build_headers(config : OpenRouterConfig) -> @http.Headers {
 }
 
 ///|
-/// The full chat completions URL: base_url + /chat/completions.
 fn chat_url(config : OpenRouterConfig) -> String {
   config.base_url + "/chat/completions"
 }
 
 ///|
-/// The OpenRouter ModelPort implementation. Implements @posoco.ModelPort for
-/// chat/chat_streaming (chat_native_js.mbt) and a summarize-based compact
-/// (compact_native_js.mbt); wasm keeps raising fallbacks in the
-/// *_wasm_fallback.mbt files.
 pub(all) struct OpenRouterModelPort {
   config : OpenRouterConfig
+  /// Per-process 400 learning: set when the provider explicitly rejects the
+  /// `prompt_cache_key` parameter (an unsupported-parameter error naming the
+  /// field). Suppresses the key on every later request this process; never
+  /// persisted.
+  mut prompt_cache_key_rejected : Bool
 }
 
 ///|
 pub fn OpenRouterModelPort::OpenRouterModelPort(
   config : OpenRouterConfig,
 ) -> OpenRouterModelPort {
-  { config, }
+  { config, prompt_cache_key_rejected: false, }
 }
 
 ///|
-/// ModelPort implementation — provider_config. Reasoning vocabulary stays
-/// undeclared (the router learns levels from the slot, not from here); the
-/// auto-compact metadata from settings IS reported so the Agent can build its
-/// per-turn RunPolicy from the active model's own numbers.
+/// The session-scoped `prompt_cache_key` for an invocation, or None when the
+/// feature is opted out (`config.send_prompt_cache_key`) or the provider
+/// rejected the parameter earlier in this process. Derived through the shared
+/// chat-completions kit (`"posoco-" + session_id`, 64-char cap), so the same
+/// session always yields the same key.
+fn OpenRouterModelPort::prompt_cache_key(
+  self : OpenRouterModelPort,
+  scope : @posoco.InvocationScope,
+) -> String? {
+  if !self.config.send_prompt_cache_key || self.prompt_cache_key_rejected {
+    return None
+  }
+  Some(@chatkit.derive_prompt_cache_key(scope.session_id.to_string()))
+}
+
+///|
+/// Learn from a drained non-2xx body: an explicit "unsupported parameter"
+/// rejection naming `prompt_cache_key` stops sending the key for the rest of
+/// the process. Unreadable or unrelated bodies never set the flag.
+fn OpenRouterModelPort::learn_cache_key_rejection(
+  self : OpenRouterModelPort,
+  body : OpenRouterErrorBody,
+) -> Unit {
+  if openrouter_body_rejects_cache_key(body) {
+    self.prompt_cache_key_rejected = true
+  }
+}
+
+///|
+/// Reasoning vocabulary stays undeclared (the router learns levels from the
+/// slot, not from here); the auto-compact metadata from settings IS reported
+/// so the Agent can build its per-turn RunPolicy from the active model's own
+/// numbers.
 pub impl @posoco.ModelPort for OpenRouterModelPort with fn provider_config(
   self : OpenRouterModelPort,
 ) -> @posoco.ProviderConfig {

@@ -1,22 +1,10 @@
 ///|
-/// Provider-owned configuration source and catalog contribution for the
-/// OpenRouter `/api/v1/chat/completions` endpoint.
-///
-/// One `OpenRouterProvider` instance serves exactly one provider id
-/// ("openrouter", fixed — unlike the generic openai-compatible adapter this
-/// extension is purpose-built for OpenRouter's reasoning surface). It owns:
-/// settings interpretation, ApiKey-only credential resolution, and the
-/// single-model slot with its rebuild hooks. The host (cetas-core) calls
-/// `build` with an opaque settings object and receives a ready catalog.
-
-///|
 pub(all) struct OpenRouterProvider {
   ctx : @devkit.ExtContext
 }
 
 ///|
-/// Construct the provider factory. The optional `ctx` is carried for debug
-/// logging at composition seams.
+/// The optional `ctx` is carried for debug logging at composition seams.
 ///
 /// Example:
 /// ```moonbit nocheck
@@ -112,9 +100,8 @@ fn openrouter_effort_array_value(
 }
 
 ///|
-/// Parse one settings key as the declared effort array. `None` means the key
-/// is absent (the plain off/on toggle); a present but non-array value is a
-/// typed composition failure.
+/// `None` means the key is absent (the plain off/on toggle); a present but
+/// non-array value is a typed composition failure.
 fn openrouter_setting_effort_array(
   source : @llm.ProviderConfigSource,
   key : String,
@@ -145,7 +132,6 @@ fn openrouter_slot_efforts(config : OpenRouterConfig) -> Array[String] {
 }
 
 ///|
-/// The picker-facing label of the config's current state.
 fn openrouter_effort_label(config : OpenRouterConfig) -> String {
   if config.thinking == false {
     "off"
@@ -158,8 +144,8 @@ fn openrouter_effort_label(config : OpenRouterConfig) -> String {
 }
 
 ///|
-/// Build the provider's one model slot from a config. All rebuild hooks
-/// funnel back here so the rebuilt slot is identical in shape.
+/// All rebuild hooks funnel back here so the rebuilt slot is identical in
+/// shape.
 fn openrouter_catalog_slot(
   config : OpenRouterConfig,
   api_key : &@llm.ApiKeyFactory,
@@ -249,8 +235,6 @@ fn openrouter_resolve_api_key(
 }
 
 ///|
-/// Resolve the base URL, applying the conventional default when settings
-/// omit it. Shared by `build` and `refresh`.
 fn openrouter_resolve_base_url(
   source : @llm.ProviderConfigSource,
 ) -> String raise @posoco.CompositionError {
@@ -261,8 +245,6 @@ fn openrouter_resolve_base_url(
 }
 
 ///|
-/// Alias so `refresh` (refresh_native_js.mbt) reads settings through the
-/// same typed helper as `build` without re-deriving the error shape.
 fn openrouter_resolve_setting_string(
   source : @llm.ProviderConfigSource,
   key : String,
@@ -409,12 +391,6 @@ pub impl @llm.RefreshableProviderFactory for OpenRouterProvider with fn provider
 ) -> String {
   "openrouter"
 }
-
-///|
-/// Live catalog refresh lives in refresh_native_js.mbt (it calls
-/// `fetch_openrouter_models`, which drives `@http` — native+js only). On
-/// wasm/wasm-gc a fallback impl in refresh_wasm_fallback.mbt raises a clear
-/// `CompositionError` so the trait is fully satisfied on every backend.
 
 ///|
 /// Provider-owned API-key login. The host supplies a provider-neutral secret

@@ -234,7 +234,6 @@ fn decode_chat_response(
 }
 
 ///|
-/// Extract Usage from a JSON object containing a `usage` field. Both
 /// `prompt_tokens`/`completion_tokens`/`total_tokens` (OpenAI convention,
 /// which OpenRouter mirrors) are accepted; missing fields map to None.
 /// Cached/uncached input tokens reuse the kit helpers.

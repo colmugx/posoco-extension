@@ -1,11 +1,7 @@
 ///|
-/// refresh_wasm_fallback.mbt — RefreshableProviderFactory::refresh for wasm.
-///
-/// `@http` is unavailable on wasm, so the live `/models` fetch is impossible.
-/// This fallback supplies a complete `refresh` impl that raises a typed
-/// `CompositionError`, so the trait is fully satisfied on every backend and
-/// the package exports a complete mbti. Pattern mirrors
-/// posoco-ext-opencode-zen/src/refresh_wasm_fallback.mbt.
+/// `@http` is unavailable on wasm, so the live `/models` fetch is impossible;
+/// this impl raises a typed `CompositionError`, keeping the trait satisfied
+/// and the package's mbti real on every backend.
 
 ///|
 #cfg(not(any(target="native", target="js")))

@@ -1,11 +1,9 @@
 ///|
 /// Shared HTTP utilities for the OpenRouter adapter — error body capture,
 /// status classification (with the `error.metadata.error_type` vocabulary),
-/// stream termination classification, and tool-call validation. All items are
-/// package-visible so they can be used across files in this package
-/// (openrouter.mbt, chat_native_js.mbt, compact_native_js.mbt, tests). Pure
-/// functions only: nothing here touches `@http`, so the file compiles on every
-/// backend. The header readers live with the chat driver.
+/// stream termination classification, and tool-call validation. Pure
+/// functions only: nothing here touches `@http`, so the file compiles on
+/// every backend.
 
 ///|
 /// Non-2xx body capture. The provider's error body is the primary diagnostic
@@ -21,12 +19,11 @@ priv enum OpenRouterErrorBody {
 }
 
 ///|
-/// Upper bound for the provider error body embedded in an error message.
 let openrouter_error_body_cap : Int = 2048
 
 ///|
-/// Cap an error body for the message. Char-wise copy keeps the cut on a
-/// Unicode boundary (String slicing can raise on surrogate edges).
+/// Char-wise copy keeps the cut on a Unicode boundary (String slicing can
+/// raise on surrogate edges).
 fn cap_openrouter_error_body(text : String) -> String {
   if text.length() <= openrouter_error_body_cap {
     text
@@ -209,10 +206,16 @@ fn classify_openrouter_http_status(
 }
 
 ///|
-/// `read_error_body` and the header readers (the functions that take an
-/// `@http.Client` / `@http.Response`) live in chat_native_js.mbt, co-located
-/// with the chat impl. The classification helpers below are pure and stay
-/// here for every backend.
+/// Whether a captured non-2xx body is an explicit provider rejection of the
+/// `prompt_cache_key` parameter: the shared chat-completions kit matcher on
+/// the drained text (both "unsupported parameter" AND "prompt_cache_key",
+/// case-insensitively). Bodies that did not drain as text never match.
+fn openrouter_body_rejects_cache_key(body : OpenRouterErrorBody) -> Bool {
+  match body {
+    BodyText(text) => @chatkit.is_prompt_cache_key_rejection(text)
+    _ => false
+  }
+}
 
 ///|
 /// Pure classification for stream termination; used by the HTTP loop and
@@ -251,42 +254,25 @@ fn classify_openrouter_stream_termination(
 /// after the last delta but before finish_reason/[DONE]; what the model
 /// verifiably requested is then intact. Text-only truncations stay loud: a
 /// cut answer must not pass as complete.
-fn openrouter_eof_tolerable(acc : @posoco.StreamAccumulator) -> Bool {
-  if acc.tool_calls.length() == 0 {
-    return false
+fn openrouter_eof_tolerable(
+  acc : @posoco.StreamAccumulator,
+) -> Bool raise @posoco.ModelError {
+  let completion = acc.to_completion() catch {
+    @posoco.ModelError::ResponseParse(_) => return false
+    error => raise error
   }
-  let result = Ok(validate_openrouter_stream_tool_calls(acc)) catch {
-    e => Err(e)
-  }
-  result is Ok(_)
+  completion.has_tool_calls()
 }
 
 ///|
-/// Reject incomplete tool-call builders before delegating JSON assembly.
 fn validate_openrouter_stream_tool_calls(
   acc : @posoco.StreamAccumulator,
 ) -> Unit raise @posoco.ModelError {
-  for tc in acc.tool_calls {
-    if tc.id == "" {
+  let _ = acc.to_completion() catch {
+    @posoco.ModelError::ResponseParse(message) =>
       raise @posoco.ModelError::ResponseParse(
-        "openrouter SSE parse failure (stage=tool.id, category=missing)",
+        "openrouter SSE parse failure (stage=tool_calls): " + message,
       )
-    }
-    if tc.name == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "openrouter SSE parse failure (stage=tool.name, category=missing)",
-      )
-    }
-    if tc.arguments_json() == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "openrouter SSE parse failure (stage=tool.arguments, category=missing)",
-      )
-    }
-    let _ : Json = @json.parse(tc.arguments_json()) catch {
-      _ =>
-        raise @posoco.ModelError::ResponseParse(
-          "openrouter SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
-        )
-    }
+    error => raise error
   }
 }

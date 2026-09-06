@@ -1,13 +1,7 @@
 ///|
-/// chat_wasm_fallback.mbt — ModelPort::chat impl for wasm/wasm-gc.
-///
-/// `@http` is unavailable on wasm, so a real chat request is impossible. This
-/// fallback supplies a complete `ModelPort::chat` impl that raises immediately
-/// with a clear message, so:
-///   - the trait is fully satisfied (compact + provider_config from the core
-///     files + chat from here = all three methods), and
-///   - the package exports a real mbti on every backend, unblocking downstream
-///     packages (posoco-ext-llm, provider extensions) from resolving the type.
+/// `@http` is unavailable on wasm, so a real chat request is impossible; this
+/// impl raises immediately, keeping the trait satisfied and the package's
+/// mbti real on every backend.
 
 ///|
 #cfg(not(any(target="native", target="js")))
