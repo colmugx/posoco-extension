@@ -1,5 +1,5 @@
 ///|
-// Bun is a global under bun (posoco-ext-bash precedent) — do not use
+// Bun is a global under bun — do not use
 // node:child_process. Only a plain String crosses the FFI ("" = no
 // rewrite): an Option never crosses the js FFI (docs/questions.md
 // 2026-08-19 stable boundaries). The JS-side catch keeps spawn failures

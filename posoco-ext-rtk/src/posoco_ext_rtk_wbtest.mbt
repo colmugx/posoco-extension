@@ -1,5 +1,4 @@
 ///|
-/// Test: is_shell_tool
 test "is_shell_tool_recognizes_shells" {
   let tools = default_shell_tools()
   assert_true(is_shell_tool(@posoco.ToolName::unchecked("bash"), tools))
@@ -19,7 +18,6 @@ test "is_shell_tool_rejects_non_shells" {
 }
 
 ///|
-/// Test: extract_command
 test "extract_command_from_cmd_key" {
   let args = Json::object(
     Map::from_array([
@@ -84,7 +82,6 @@ test "extract_command_wrong_type_is_loud_without_raw_json" {
 }
 
 ///|
-/// Test: rewrite_tool_call
 test "rewrite_tool_call_updates_cmd_arg" {
   let original = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_1"),
@@ -131,7 +128,6 @@ test "rewrite_tool_call_preserves_id_and_name" {
 }
 
 ///|
-/// Test: RTKHook PipelineHook implementation
 async test "hook_passes_through_non_shell_tool" {
   let hook = RTKHook("rtk")
   let call = @posoco.ToolCall::{

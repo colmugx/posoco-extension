@@ -4,14 +4,11 @@ pub(all) struct ShellTools {
 }
 
 ///|
-/// Default shell tools — used when no custom list is provided.
 pub fn default_shell_tools() -> ShellTools {
   ShellTools::{ names: ["bash", "sh", "zsh", "shell", "cmd", "powershell"], }
 }
 
 ///|
-/// Check whether a tool name is a known shell tool. Accepts the typed
-/// `ToolName` wrapper.
 pub fn is_shell_tool(name : @posoco.ToolName, tools : ShellTools) -> Bool {
   tools.names.contains(name.to_string())
 }
