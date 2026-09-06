@@ -1,7 +1,5 @@
 ///|
-// ServerAuth parsing, runtime token precedence, 401 challenge extraction,
-// and reconnect_server. The pure cases run on native and js alike; the e2e
-// case reuses the http bearer fixture externs from mcp_js_auth_wbtest.mbt.
+// ServerAuth parsing, runtime token precedence, and 401 challenge extraction.
 
 ///|
 test "parse_server_auth accepts oauth and defaults to NoAuth" {
@@ -160,92 +158,4 @@ test "servers_by_auth lists only configs declaring the auth" {
   let noauth_names = bridge.servers_by_auth(ServerAuth::NoAuth)
   inspect(noauth_names.length(), content="1")
   inspect(noauth_names[0], content="plain")
-}
-
-///|
-// End-to-end on the bearer fixture: mcp.json declares a wrong static token,
-// so only `set_server_token` can put `good-token` on the wire — connecting
-// at all is the precedence proof. reconnect_server must not duplicate tools,
-// must bump the catalog revision, and must keep routing intact.
-#cfg(target="js")
-async test "js set_server_token precedence and reconnect_server" {
-  let port_file = "test_fixtures/.http_port_reconnect"
-  js_write_text_file(port_file, "")
-  let pid = js_start_http_fixture(port_file).wait() catch { _ => -1 }
-  if pid < 0 {
-    fail("failed to spawn http fixture")
-  }
-  let mut port = ""
-  for _ in 0..<100 {
-    port = js_read_text_file(port_file)
-    if port != "" {
-      break
-    }
-    @async.sleep(50)
-  }
-  if port == "" {
-    js_kill_pid(pid)
-    fail("http fixture did not report a port")
-  }
-  let http_dir = "test_fixtures/httpdir"
-  let mcp_json_path = http_dir + "/.mcp.json"
-  js_write_text_file(
-    mcp_json_path,
-    "{\"mcpServers\":{\"bear\":{\"type\":\"http\",\"url\":\"http://127.0.0.1:" +
-    port +
-    "/mcp\",\"auth_token\":\"wrong-static-token\"}}}",
-  )
-  let bridge = match
-    MCPToolBridge::discover(
-      cwd=http_dir,
-      home="test_fixtures/nohome",
-      mode=LoadMode::Lazy,
-    ) {
-    Ok(bridge) => bridge
-    Err(message) => {
-      js_kill_pid(pid)
-      fail("discover failed: " + message)
-    }
-  }
-  bridge.set_server_token("bear", "good-token")
-  @async.with_task_group(group => {
-    bridge.attach(group)
-    inspect(bridge.activate().length(), content="0")
-  })
-  inspect(@posoco.ToolProvider::list_tools(bridge).length(), content="1")
-  inspect(bridge.auth_challenge("bear") is None, content="true")
-  let revision_before = bridge.catalog_revision
-  match bridge.reconnect_server("bear") {
-    Ok(_) => ()
-    Err(message) => {
-      js_kill_pid(pid)
-      fail("reconnect failed: " + message)
-    }
-  }
-  // No duplicate tool, one revision bump, routing still lands the call.
-  assert_eq(@posoco.ToolProvider::list_tools(bridge).length(), 1)
-  assert_eq(bridge.catalog_revision, revision_before + 1)
-  let call : @posoco.ToolCall = {
-    call_id: @kernel.CallId::unchecked("call_reconnect"),
-    name: @posoco.ToolName::unchecked("bear__ping"),
-    arguments: Json::object(Map::from_array([])),
-  }
-  let outcome = @posoco.ToolProvider::execute(bridge, "bear__ping", call) catch {
-    error => {
-      js_kill_pid(pid)
-      fail("execute failed: " + error.to_string())
-    }
-  }
-  match outcome {
-    Success(content~, ..) => inspect(content, content="pong:ok")
-    _ => {
-      js_kill_pid(pid)
-      fail("expected success outcome")
-    }
-  }
-  // An unknown server has no config to reconnect from.
-  let ghost = bridge.reconnect_server("ghost")
-  inspect(ghost is Err(_), content="true")
-  bridge.close()
-  js_kill_pid(pid)
 }

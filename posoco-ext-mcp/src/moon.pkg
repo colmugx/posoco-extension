@@ -20,10 +20,6 @@ supported_targets = "+native+js"
 
 warnings = "-unused_package"
 
-import {
-  "colmugx/posoco-ext-oauth" @oauth,
-} for "wbtest"
-
 options(
   targets: {
     "config_wbtest.mbt": [ "native" ],
