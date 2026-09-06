@@ -9,8 +9,8 @@
 /// delegates to `Bun.Glob`. On wasm/wasm-gc, the tool is not listed and
 /// execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct GlobTools {
-  // Resolves the scan base against the workspace root; None keeps legacy
-  // behavior (the base lands on the process working directory).
+  // Resolves the scan base against the workspace root; None leaves the base
+  // on the process working directory.
   anchor : @devkit.WorkspaceAnchor?
   // Directory/file names pruned during traversal; defaults to
   // @devkit.default_ignore_patterns(). Hidden entries are always skipped.
@@ -44,7 +44,6 @@ priv trait GlobScanner {
 }
 
 ///|
-/// Shared tool definition for the `glob` tool.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
@@ -132,8 +131,6 @@ fn extract_glob_args(
 }
 
 ///|
-/// One-line UI summary for the structured payload: "N files", or "no files"
-/// when the scan found nothing.
 fn glob_summary(count : Int) -> String {
   if count == 0 {
     "no files"

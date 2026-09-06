@@ -1,9 +1,8 @@
 // js (bun) target: scanning through node:fs sync APIs, pattern matching
-// through Bun.Glob — the same engine the previous `glob.scan()` call used,
-// applied per path instead of as an async iterator. All synchronous; no
-// Promise bridging. Throwing node calls cross the FFI as JSON string
-// envelopes (see docs/questions.md 2026-08-19); Bun.Glob's `match` never
-// throws for a valid pattern, so it stays a plain pass-through extern.
+// through Bun.Glob. All synchronous; no Promise bridging. Throwing node
+// calls cross the FFI as JSON string envelopes (see docs/questions.md
+// 2026-08-19); Bun.Glob's `match` never throws for a valid pattern, so it
+// stays a plain pass-through extern.
 
 ///|
 extern "js" fn js_readdir_envelope(path : String) -> String =
@@ -63,7 +62,6 @@ fn js_readdir_entries(path : String) -> Array[String]? {
 }
 
 ///|
-/// Decoded stat envelope.
 priv struct JsStat {
   dir : Bool
   mtime_ms : Double
@@ -96,7 +94,6 @@ fn js_stat(path : String) -> JsStat? {
 }
 
 ///|
-/// Join a directory path and an entry name with "/".
 fn js_path_join(dir : String, entry : String) -> String {
   if dir == "" || dir == "." {
     entry
