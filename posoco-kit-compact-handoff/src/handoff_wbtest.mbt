@@ -1,5 +1,3 @@
-// handoff_wbtest.mbt — NewThread handoff contract tests.
-
 ///|
 fn handoff_body(result : @posoco.CompactResult) -> String raise {
   match result.compacted_messages[0] {

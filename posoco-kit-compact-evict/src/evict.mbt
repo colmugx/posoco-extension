@@ -168,7 +168,6 @@ fn estimate_message_tokens(message : @posoco.Message) -> Int {
 }
 
 ///|
-/// Estimated tokens of a whole transcript.
 pub fn estimate_transcript_tokens(messages : Array[@posoco.Message]) -> Int {
   let mut total = 0
   for message in messages {

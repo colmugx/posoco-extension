@@ -1,5 +1,4 @@
 ///|
-/// trim_wbtest.mbt — behavior coverage for trim_fallback / estimate_tokens.
 /// Token math in these tests is hand-computed with the additive
 /// per-message ceil(chars/4) estimator; text fixtures are n repetitions
 /// of "x" so char counts are exact.
