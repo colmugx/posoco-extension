@@ -2,7 +2,7 @@
 /// callback_server.js.mbt — CallbackServer via Bun.serve (js target).
 ///
 /// Bun.serve returns a server with .stop(). The fetch handler extracts
-/// the `code` query param from the redirect URL.
+/// the `code` and `state` query params from the redirect URL.
 
 ///|
 /// Bun's opaque server handle.
@@ -11,11 +11,8 @@ pub type BunServer
 
 ///|
 /// Start a Bun HTTP server on localhost:port. When a request arrives with
-/// a `code` query param, it is written into the server struct's `code`
-/// field via a MoonBit callback bridge.
-///
-/// The `on_code` parameter is a MoonBit closure wrapped in a JS function
-/// that receives the code string.
+/// a `code` query param, it is written into the server struct's `code`/
+/// `state` fields via a MoonBit callback bridge.
 extern "js" fn bun_serve(
   port : Int,
   server_obj : JsCallbackServer,
@@ -27,6 +24,7 @@ extern "js" fn bun_serve(
   #|     const code = url.searchParams.get("code");
   #|     if (code) {
   #|       serverObj.code = code;
+  #|       serverObj.state = url.searchParams.get("state") ?? "";
   #|       return new Response(
   #|         "<html><body><h2>Login successful</h2><p>You can close this tab.</p></body></html>",
   #|         { headers: { "Content-Type": "text/html" } }
@@ -45,10 +43,11 @@ extern "js" fn BunServer::stop(self : BunServer) -> Unit =
   #| (server) => server.stop()
 
 ///|
-/// JS-target callback server. The `code` field is written by the
+/// JS-target callback server. The `code`/`state` fields are written by the
 /// Bun.serve fetch handler (directly mutated from JS via extern).
 pub(all) struct JsCallbackServer {
   mut code : String
+  mut state : String
   mut bun_server : BunServer?
 }
 
@@ -57,7 +56,7 @@ pub(all) struct JsCallbackServer {
 /// `run_pkce_browser_flow`; only `&CallbackServer` dispatch exists in-workspace
 /// and the compiler flags `start`, so silence just that diagnostic here.
 #warnings("-unused_value")
-impl CallbackServer for JsCallbackServer with fn start(
+pub impl CallbackServer for JsCallbackServer with fn start(
   self : JsCallbackServer,
   port : Int,
 ) -> Unit raise OAuthError {
@@ -66,13 +65,13 @@ impl CallbackServer for JsCallbackServer with fn start(
 }
 
 ///|
-impl CallbackServer for JsCallbackServer with fn wait_code(
+pub impl CallbackServer for JsCallbackServer with fn wait_callback(
   self : JsCallbackServer,
-) -> String raise OAuthError {
+) -> (String, String) raise OAuthError {
   let deadline = (@async.now() / 1000L).to_int() + 300 // 5 min
   while true {
     if self.code.length() > 0 {
-      return self.code
+      return (self.code, self.state)
     }
     let now = (@async.now() / 1000L).to_int()
     if now >= deadline {
@@ -86,9 +85,14 @@ impl CallbackServer for JsCallbackServer with fn wait_code(
 }
 
 ///|
-impl CallbackServer for JsCallbackServer with fn stop(self : JsCallbackServer) -> Unit {
+pub impl CallbackServer for JsCallbackServer with fn stop(
+  self : JsCallbackServer,
+) -> Unit {
   match self.bun_server {
-    Some(s) => BunServer::stop(s)
+    Some(s) => {
+      BunServer::stop(s)
+      self.bun_server = None
+    }
     None => ()
   }
 }
@@ -96,5 +100,5 @@ impl CallbackServer for JsCallbackServer with fn stop(self : JsCallbackServer) -
 ///|
 /// Factory: create a js CallbackServer.
 pub fn create_callback_server() -> JsCallbackServer {
-  { code: "", bun_server: None, }
+  { code: "", state: "", bun_server: None, }
 }

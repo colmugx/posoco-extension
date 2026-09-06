@@ -15,19 +15,10 @@ pub(all) struct PkcePair {
 }
 
 ///|
-/// The set of unreserved characters for PKCE verifiers (RFC 7636 §4.1).
-let pkce_chars : Array[Char] = [
-  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-  'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
-  'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-  'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '.',
-  '_', '~',
-]
-
-///|
-/// Generate a PKCE pair with a random 64-character verifier.
+/// Generate a PKCE pair. The verifier is base64url of 48 random bytes
+/// (64 chars, RFC 7636 §4.1 allows 43-128 unreserved characters).
 pub fn generate_pkce() -> PkcePair {
-  let verifier = random_pkce_string(64)
+  let verifier = bytes_to_base64url(oauth_random_bytes(48))
   let challenge = sha256_base64url(verifier)
   {
     code_verifier: verifier,
@@ -37,29 +28,13 @@ pub fn generate_pkce() -> PkcePair {
 }
 
 ///|
-/// Generate a random string of the given length from the PKCE charset.
-fn random_pkce_string(length : Int) -> String {
-  let buf = StringBuilder()
-  let seed = @async.now()
-  let mut state = seed
-  for _ in 0..<length {
-    // Simple LCG.
-    state = state * 6364136223846793005L + 1442695040888963407L
-    let idx = ((state >> 33).to_int() & 0x7FFFFFFF) % pkce_chars.length()
-    buf.write_char(pkce_chars[idx])
-  }
-  buf.to_string()
-}
-
-///|
 /// Compute SHA-256 of a string and return base64url encoding (no padding).
 fn sha256_base64url(input : String) -> String {
   // @utf8.encode returns Bytes which implements ByteSource.
   let bytes : Bytes = @utf8.encode(input)
   let hash = @crypto.sha256(bytes)
-  // hash is FixedArray[Byte] (32 bytes). Manually base64url-encode since
-  // base64.encode requires BytesView and FixedArray doesn't convert cleanly.
-  fixed_array_to_base64url(hash)
+  // hash is FixedArray[Byte] (32 bytes); convert so one encoder serves both.
+  bytes_to_base64url(Bytes::makei(hash.length(), i => hash[i]))
 }
 
 ///|
@@ -72,8 +47,8 @@ let b64url_chars : Array[Char] = [
 ]
 
 ///|
-/// Encode a FixedArray[Byte] to base64url string (no padding).
-fn fixed_array_to_base64url(data : FixedArray[Byte]) -> String {
+/// Encode Bytes to a base64url string (no padding).
+fn bytes_to_base64url(data : Bytes) -> String {
   let buf = StringBuilder()
   let len = data.length()
   let mut i = 0

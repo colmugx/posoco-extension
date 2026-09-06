@@ -11,9 +11,13 @@ import {
 warnings = "-unused_package"
 
 options(
+  "native-stub": [ "entropy_stub.c" ],
   targets: {
     "callback_server.native.mbt": [ "native" ],
     "callback_server.js.mbt": [ "js" ],
     "device_flow_wbtest.mbt": [ "native" ],
+    "entropy.native.mbt": [ "native" ],
+    "entropy.js.mbt": [ "js" ],
+    "browser_flow_wbtest.mbt": [ "native" ],
   },
 )

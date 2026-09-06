@@ -18,7 +18,7 @@ pub fn NativeCallbackServer::NativeCallbackServer() -> NativeCallbackServer {
 /// compiler's unused-impl analysis only sees dispatch through `&CallbackServer`
 /// and flags `start`, so silence just that diagnostic here.
 #warnings("-unused_value")
-impl CallbackServer for NativeCallbackServer with fn start(
+pub impl CallbackServer for NativeCallbackServer with fn start(
   self : NativeCallbackServer,
   port : Int,
 ) -> Unit raise OAuthError {
@@ -29,14 +29,14 @@ impl CallbackServer for NativeCallbackServer with fn start(
     err => raise OAuthError::HttpError("server bind: " + err.to_string())
   }
   self.server = Some(srv)
-  // No background accept loop — wait_code polls accept directly for the
+  // No background accept loop — wait_callback polls accept directly for the
   // single callback.
 }
 
 ///|
-impl CallbackServer for NativeCallbackServer with fn wait_code(
+pub impl CallbackServer for NativeCallbackServer with fn wait_callback(
   self : NativeCallbackServer,
-) -> String raise OAuthError {
+) -> (String, String) raise OAuthError {
   let deadline = (@async.now() / 1000L).to_int() + 300 // 5 min
   match self.server {
     Some(srv) => {
@@ -59,10 +59,8 @@ impl CallbackServer for NativeCallbackServer with fn wait_code(
             continue
           }
         }
-        let path = request.path
-        let code = extract_code_from_path(path)
-        match code {
-          Some(_) => {
+        match extract_query_param(request.path, "code") {
+          Some(code) => {
             conn.send_response(200, "Login successful. You can close this tab.") catch {
               _ => ()
             }
@@ -70,10 +68,12 @@ impl CallbackServer for NativeCallbackServer with fn wait_code(
               _ => ()
             }
             conn.close()
-            return match code {
-              Some(c) => c
+            // A missing state surfaces later as "oauth state mismatch".
+            let state = match extract_query_param(request.path, "state") {
+              Some(s) => s
               None => ""
             }
+            return (code, state)
           }
           None => {
             conn.send_response(404, "Not Found") catch {
@@ -94,34 +94,15 @@ impl CallbackServer for NativeCallbackServer with fn wait_code(
 }
 
 ///|
-impl CallbackServer for NativeCallbackServer with fn stop(
+pub impl CallbackServer for NativeCallbackServer with fn stop(
   self : NativeCallbackServer,
 ) -> Unit {
   match self.server {
-    Some(s) => s.close()
-    None => ()
-  }
-}
-
-///|
-/// Extract `code` query param from path like `/auth/callback?code=XXX`.
-fn extract_code_from_path(path : String) -> String? {
-  match path.find("?") {
-    None => None
-    Some(qmark) => {
-      let query = path.sub(start=qmark + 1)
-      match query.find("code=") {
-        None => None
-        Some(code_pos) => {
-          let after_code = query.sub(start=code_pos + 5)
-          // Code ends at & or end of string.
-          match after_code.find("&") {
-            Some(amp) => Some(after_code.sub(end=amp).to_owned())
-            None => Some(after_code.to_owned())
-          }
-        }
-      }
+    Some(s) => {
+      s.close()
+      self.server = None
     }
+    None => ()
   }
 }
 
