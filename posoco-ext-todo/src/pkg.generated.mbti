@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-todo"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const MAX_TODOS : Int = 50
+
+pub fn render_todos(Array[TodoItem]) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct TodoItem {
+  content : String
+  status : TodoStatus
+} derive(Eq, @debug.Debug)
+
+pub struct TodoList {
+  // private fields
+}
+pub fn TodoList::TodoList() -> Self
+pub async fn TodoList::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn TodoList::extension_id(Self) -> String
+pub async fn TodoList::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn TodoList::items(Self) -> Array[TodoItem]
+pub fn TodoList::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn TodoList::manifest(Self) -> @port.ExtensionManifest
+pub fn TodoList::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn TodoList::revision(Self) -> Int
+pub fn TodoList::system_prompt(Self) -> String
+pub impl @port.CommandPort for TodoList
+pub impl @port.Extension for TodoList
+pub impl @port.Lifecycle for TodoList
+pub impl @port.SystemPromptContributor for TodoList
+pub impl @port.ToolProvider for TodoList
+
+pub(all) enum TodoStatus {
+  Pending
+  InProgress
+  Completed
+} derive(Eq, @debug.Debug)
+pub fn TodoStatus::to_string(Self) -> String
+pub impl Show for TodoStatus
+
+// Type aliases
+
+// Traits

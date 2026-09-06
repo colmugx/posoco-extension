@@ -1,0 +1,16 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+} for "test"
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+options(
+  targets: { "posoco_ext_todo_wbtest.mbt": [ "native" ] },
+)
