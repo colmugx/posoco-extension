@@ -149,7 +149,6 @@ fn edit_failure(stage : String, path : String) -> @posoco.RuntimeError {
 }
 
 ///|
-/// Replace the first occurrence of `old` with `new` in a string.
 fn replace_first(text : String, old : String, new : String) -> String {
   match text.find(old) {
     None => text

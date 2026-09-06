@@ -1,6 +1,4 @@
 ///|
-
-///|
 pub impl @posoco.Extension for EditTools with fn extension_id(_self) -> String {
   "posoco_ext_edit"
 }
