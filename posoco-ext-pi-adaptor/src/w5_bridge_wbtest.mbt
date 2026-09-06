@@ -21,6 +21,21 @@ extern "js" fn wbtest_call_send_message(
   #| }
 
 ///|
+extern "js" fn wbtest_call_send_message_catching(
+  host : JsPiHost,
+  message_json : String,
+  options_json : String,
+) -> String =
+  #| (host, messageJson, optionsJson) => {
+  #|   try {
+  #|     host.api.sendMessage(JSON.parse(messageJson), JSON.parse(optionsJson));
+  #|     return "ok";
+  #|   } catch (error) {
+  #|     return String(error?.message ?? error);
+  #|   }
+  #| }
+
+///|
 extern "js" fn wbtest_call_send_user_message(
   host : JsPiHost,
   content : String,
@@ -113,4 +128,46 @@ test "idle triggerTurn sends park for the next turn; sendUserMessage always trig
   inspect(user_sent.contains("user hello"), content="true")
   inspect(user_sent.contains("block"), content="true")
   inspect(user_sent.contains("image"), content="false")
+}
+
+///|
+test "queue failure is terminal and does not repark in the JS bridge" {
+  assert_true(
+    classify_followup_outcome(@runtime.Accepted(command_id="accepted"))
+    is FollowupAccepted,
+  )
+  assert_true(
+    classify_followup_outcome(@runtime.RejectedStale(reason="stale"))
+    is FollowupParked,
+  )
+  assert_true(
+    classify_followup_outcome(@runtime.RejectedQueueFull(depth=64))
+    is FollowupParked,
+  )
+  match
+    classify_followup_outcome(
+      @runtime.RejectedQueueFailure(reason="QueueAlreadyClosed"),
+    ) {
+    FollowupFailed(reason) => inspect(reason, content="QueueAlreadyClosed")
+    FollowupAccepted => fail("queue failure was accepted")
+    FollowupParked => fail("queue failure was parked")
+  }
+  let adaptor = pi_adaptor_new()
+  js_host_set_followup_callback(adaptor.host, fn(envelope_json) {
+    ignore(envelope_json)
+    followup_route_protocol(
+      classify_followup_outcome(
+        @runtime.RejectedQueueFailure(reason="QueueAlreadyClosed"),
+      ),
+    )
+  })
+  inspect(
+    wbtest_call_send_message_catching(
+      adaptor.host,
+      "{\"customType\":\"failed\",\"content\":\"later\"}",
+      "{\"triggerTurn\":true}",
+    ),
+    content="Pi follow-up enqueue failed: QueueAlreadyClosed",
+  )
+  inspect(js_take_followups_json(adaptor.host), content="[]")
 }

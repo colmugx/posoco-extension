@@ -235,17 +235,23 @@ extern "js" fn js_host_new() -> JsPiHost =
   #|     };
   #|   };
   #|
-  #|   // triggerTurn envelopes go to the RuntimeControl callback; when the
-  #|   // outcome is anything but "Accepted" (no active run, queue full, no
-  #|   // control yet) the envelope parks in state.followUps so the next
-  #|   // host-driven turn can drain it instead of being silently lost.
+  #|   // triggerTurn envelopes go to the AgentControl callback. Only the
+  #|   // explicit "Parked" outcome enters state.followUps; a terminal
+  #|   // "Failed:<reason>" outcome is thrown back to the Pi caller.
   #|   const sendMessage = (message, options = {}) => {
   #|     const envelope = { message, options };
   #|     state.messages.push(envelope);
   #|     if (options?.triggerTurn === true) {
   #|       if (typeof state.followUpCallback === "function") {
   #|         const outcome = state.followUpCallback(JSON.stringify(envelope));
-  #|         if (outcome !== "Accepted") state.followUps.push(envelope);
+  #|         if (outcome === "Parked") {
+  #|           state.followUps.push(envelope);
+  #|         } else if (outcome !== "Accepted") {
+  #|           if (typeof outcome === "string" && outcome.startsWith("Failed:")) {
+  #|             throw new Error(`Pi follow-up enqueue failed: ${outcome.slice(7)}`);
+  #|           }
+  #|           throw new Error(`Pi follow-up enqueue returned unknown outcome: ${String(outcome)}`);
+  #|         }
   #|       } else {
   #|         state.followUps.push(envelope);
   #|       }
@@ -741,9 +747,9 @@ extern "js" fn js_cancel_effect_code(
   #| }
 
 ///|
-/// Install a callback used to forward triggerTurn messages to RuntimeControl.
-/// The callback returns "Accepted" when the message entered the active run's
-/// follow-up queue; any other outcome parks the envelope in state.followUps.
+/// Install a callback used to forward triggerTurn messages to AgentControl.
+/// The callback returns "Accepted" when consumed, "Parked" when the envelope
+/// may be retried, or "Failed:<reason>" for a terminal error.
 extern "js" fn js_host_set_followup_callback(
   host : JsPiHost,
   callback : (String) -> String,

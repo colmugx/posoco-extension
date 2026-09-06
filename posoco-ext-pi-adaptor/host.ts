@@ -7,6 +7,12 @@ export interface PiAdaptorModule {
   pi_adaptor_new(): unknown;
   pi_adaptor_set_cwd(adaptor: unknown, cwd: string): void;
   pi_adaptor_set_project_trusted(adaptor: unknown, trusted: boolean): void;
+  pi_adaptor_set_ui_callbacks(
+    adaptor: unknown,
+    onRequest: (requestJson: string) => Promise<string>,
+    onRender: (renderJson: string) => void,
+  ): void;
+  pi_adaptor_set_hidden_tools_json(adaptor: unknown, namesJson: string): void;
   pi_adaptor_load(adaptor: unknown, specifier: string): Promise<number>;
   pi_adaptor_catalog_json(adaptor: unknown): string;
   pi_adaptor_catalog_snapshot_json(adaptor: unknown): string;
@@ -38,11 +44,28 @@ export interface PiAdaptorModule {
   pi_adaptor_inflight_count(adaptor: unknown): number;
   pi_adaptor_event_names_json(adaptor: unknown): string;
   pi_adaptor_shortcuts_json(adaptor: unknown): string;
+  pi_adaptor_commands_json(adaptor: unknown): string;
+  pi_adaptor_invoke_command_json_async(
+    adaptor: unknown,
+    id: string,
+    argsJson: string,
+  ): Promise<string>;
+  pi_adaptor_exec_json_async(
+    adaptor: unknown,
+    command: string,
+    argsJson: string,
+    optionsJson: string,
+  ): Promise<string>;
   pi_adaptor_entries_json(adaptor: unknown): string;
   pi_adaptor_messages_json(adaptor: unknown): string;
   pi_adaptor_updates_json(adaptor: unknown): string;
   pi_adaptor_take_updates_json(adaptor: unknown): string;
   pi_adaptor_take_followups_json(adaptor: unknown): string;
+  pi_adaptor_set_custom_entry_callback(
+    adaptor: unknown,
+    callback: (customType: string, dataJson: string) => void,
+  ): void;
+  pi_adaptor_take_custom_entries_json(adaptor: unknown): string;
 }
 
 export interface LoadedPiPackage {
@@ -53,6 +76,17 @@ export interface LoadedPiPackage {
   registeredTools: number;
 }
 
+/**
+ * Host UI bridge for ExtensionContext.ui: `request` receives a UiPort
+ * ui_request JSON string and resolves to the correlated ui_response JSON
+ * string; `render` receives a ui_render JSON string. Wire shapes match the
+ * cetas-js JsUiPort protocol. Absent callbacks keep the headless no-op ui.
+ */
+export interface PiUiCallbacks {
+  request: (requestJson: string) => Promise<string>;
+  render: (renderJson: string) => void;
+}
+
 export class PiPackageHost {
   readonly adaptor: unknown;
   readonly cwd: string;
@@ -60,13 +94,19 @@ export class PiPackageHost {
 
   constructor(
     module: PiAdaptorModule,
-    options: { cwd?: string; projectTrusted?: boolean } = {},
+    options: { cwd?: string; projectTrusted?: boolean; ui?: PiUiCallbacks } = {},
   ) {
     this.module = module;
     this.cwd = resolve(options.cwd ?? process.cwd());
     this.adaptor = module.pi_adaptor_new();
     module.pi_adaptor_set_cwd(this.adaptor, this.cwd);
     module.pi_adaptor_set_project_trusted(this.adaptor, options.projectTrusted ?? false);
+    if (options.ui) this.setUiCallbacks(options.ui);
+  }
+
+  /** Install (or, with undefined, keep absent) the ExtensionContext.ui bridge. */
+  setUiCallbacks(ui: PiUiCallbacks): void {
+    this.module.pi_adaptor_set_ui_callbacks(this.adaptor, ui.request, ui.render);
   }
 
   static async fromModuleUrl(
@@ -172,6 +212,31 @@ export class PiPackageHost {
     return JSON.parse(this.module.pi_adaptor_shortcuts_json(this.adaptor));
   }
 
+  commands(): Array<Record<string, unknown>> {
+    return JSON.parse(this.module.pi_adaptor_commands_json(this.adaptor));
+  }
+
+  async invokeCommand(id: string, args: unknown = {}): Promise<Record<string, unknown>> {
+    return JSON.parse(await this.module.pi_adaptor_invoke_command_json_async(
+      this.adaptor,
+      id,
+      JSON.stringify(args ?? {}),
+    ));
+  }
+
+  async exec(
+    command: string,
+    args: string[] = [],
+    options: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> {
+    return JSON.parse(await this.module.pi_adaptor_exec_json_async(
+      this.adaptor,
+      command,
+      JSON.stringify(args),
+      JSON.stringify(options),
+    ));
+  }
+
   entries(): Array<Record<string, unknown>> {
     return JSON.parse(this.module.pi_adaptor_entries_json(this.adaptor));
   }
@@ -190,6 +255,16 @@ export class PiPackageHost {
 
   takeFollowUps(): Array<Record<string, unknown>> {
     return JSON.parse(this.module.pi_adaptor_take_followups_json(this.adaptor));
+  }
+
+  /** Install the callback fired on every pi appendEntry: (customType, dataJson). */
+  onCustomEntry(callback: (customType: string, dataJson: string) => void): void {
+    this.module.pi_adaptor_set_custom_entry_callback(this.adaptor, callback);
+  }
+
+  /** Drain custom entries appended since the last drain (never seeded ones). */
+  takeCustomEntries(): Array<Record<string, unknown>> {
+    return JSON.parse(this.module.pi_adaptor_take_custom_entries_json(this.adaptor));
   }
 }
 

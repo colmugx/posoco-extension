@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-pi-adaptor"
 
 import {
+  "colmugx/posoco",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -154,11 +155,11 @@ pub impl @port.PipelineHook for PiHook
 pub(all) struct PiRuntime {
   adaptor : PiAdaptor
   fallback : &@runtime.Runtime
-  mut control : @runtime.RuntimeControl?
+  mut control : @posoco.AgentControl?
   mut parked_followups : Array[String]
 }
 pub fn PiRuntime::PiRuntime(adaptor~ : PiAdaptor, fallback~ : &@runtime.Runtime) -> Self
-pub fn PiRuntime::attach_control(Self, @runtime.RuntimeControl) -> Unit
+pub fn PiRuntime::attach_control(Self, @posoco.AgentControl) -> Unit
 pub async fn PiRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
 pub async fn PiRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
 pub async fn PiRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]

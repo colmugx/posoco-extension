@@ -7,8 +7,8 @@ preferred_target = "js"
 supported_targets = "js"
 
 import {
-  "colmugx/posoco@0.14.3",
-  "moonbitlang/async@0.21.0",
+  "colmugx/posoco@0.14.4",
+  "moonbitlang/async@0.21.2",
 }
 
 readme = "README.mbt.md"

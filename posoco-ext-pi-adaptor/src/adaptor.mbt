@@ -233,7 +233,7 @@ pub fn pi_adaptor_take_updates_json(adaptor : PiAdaptor) -> String {
 
 ///|
 /// Drain Pi sendMessage(..., { triggerTurn: true }) envelopes. PiRuntime
-/// forwards these through the public RuntimeControl handle.
+/// forwards these through the public AgentControl handle.
 pub fn pi_adaptor_take_followups_json(adaptor : PiAdaptor) -> String {
   js_take_followups_json(adaptor.host)
 }

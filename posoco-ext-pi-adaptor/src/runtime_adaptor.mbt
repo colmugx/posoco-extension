@@ -7,11 +7,43 @@ let pi_owner_id : String = "posoco_ext_pi_adaptor"
 pub(all) struct PiRuntime {
   adaptor : PiAdaptor
   fallback : &@runtime.Runtime
-  mut control : @runtime.RuntimeControl?
-  /// triggerTurn envelopes that could not enter the active run's queue (no
-  /// run active, queue full, or no control yet). Flushed into control at the
-  /// next in-window drain point; never silently dropped.
+  mut control : @posoco.AgentControl?
+  /// Retryable triggerTurn envelopes awaiting admission (no run active, queue
+  /// full, or no control yet). Flushed at the next in-window drain point;
+  /// terminal queue failures are returned to the caller, never parked.
   mut parked_followups : Array[String]
+}
+
+///|
+/// Only stale/full follow-ups are retryable. Queue failures are terminal so
+/// the host can surface the cause instead of replaying a closed queue forever.
+priv enum FollowupRoute {
+  FollowupAccepted
+  FollowupParked
+  FollowupFailed(String)
+}
+
+///|
+fn classify_followup_outcome(
+  outcome : @runtime.EnqueueOutcome,
+) -> FollowupRoute {
+  match outcome {
+    @runtime.Accepted(..) => FollowupAccepted
+    @runtime.RejectedStale(..) => FollowupParked
+    @runtime.RejectedQueueFull(..) => FollowupParked
+    @runtime.RejectedQueueFailure(reason~) => FollowupFailed(reason)
+    @runtime.AbortAlreadyRequested =>
+      FollowupFailed("follow_up enqueue returned AbortAlreadyRequested")
+  }
+}
+
+///|
+fn followup_route_protocol(route : FollowupRoute) -> String {
+  match route {
+    FollowupAccepted => "Accepted"
+    FollowupParked => "Parked"
+    FollowupFailed(reason) => "Failed:" + reason
+  }
 }
 
 ///|
@@ -30,7 +62,7 @@ pub fn PiRuntime::PiRuntime(
 /// messages during an active run forward immediately via the JS callback.
 pub fn PiRuntime::attach_control(
   self : PiRuntime,
-  control : @runtime.RuntimeControl,
+  control : @posoco.AgentControl,
 ) -> Unit {
   self.control = Some(control)
   for envelope in take_followup_envelopes(self.adaptor) {
@@ -71,25 +103,26 @@ fn followup_message_from_json(envelope_json : String) -> @kernel.Message? {
 
 ///|
 /// Route one triggerTurn envelope into the active run's follow-up queue,
-/// parking it when that is not possible. Returns the outcome string the JS
-/// side keys on: "Accepted" consumed the envelope; anything else means it was
-/// parked (or ignored for an unparsable/empty payload).
+/// parking only retryable stale/full outcomes. Returns the outcome string the
+/// JS side keys on: "Accepted" consumed the envelope, "Parked" requests a
+/// retry, and "Failed:<reason>" is terminal and must reach the caller.
 fn PiRuntime::enqueue_followup_envelope(
   self : PiRuntime,
   envelope_json : String,
 ) -> String {
   guard followup_message_from_json(envelope_json) is Some(message) else {
-    return "Ignored"
+    return "Failed:invalid follow-up envelope"
   }
   match self.control {
     Some(control) =>
-      match control.enqueue_follow_up(message) {
-        @runtime.Accepted(..) => "Accepted"
-        outcome => {
-          ignore(outcome)
+      match classify_followup_outcome(control.enqueue_follow_up(message)) {
+        FollowupAccepted => followup_route_protocol(FollowupAccepted)
+        FollowupParked => {
           self.parked_followups.push(envelope_json)
-          "Parked"
+          followup_route_protocol(FollowupParked)
         }
+        FollowupFailed(reason) =>
+          followup_route_protocol(FollowupFailed(reason))
       }
     None => {
       self.parked_followups.push(envelope_json)
@@ -103,26 +136,44 @@ fn PiRuntime::enqueue_followup_envelope(
 /// top of call_model — the earliest point where the control mailbox is bound,
 /// so enqueues are accepted and the Agent's post-turn drain loop then runs
 /// each parked message as its own follow-up turn on the same session.
-fn PiRuntime::flush_parked_followups(self : PiRuntime) -> Unit {
+fn PiRuntime::flush_parked_followups(
+  self : PiRuntime,
+) -> Result[Unit, @kernel.ModelFailure] {
   let control = match self.control {
     Some(control) => control
-    None => return
+    None => return Ok(())
   }
   if self.parked_followups.is_empty() {
-    return
+    return Ok(())
   }
   let parked = self.parked_followups
   self.parked_followups = []
   for envelope_json in parked {
     match followup_message_from_json(envelope_json) {
       Some(message) =>
-        match control.enqueue_follow_up(message) {
-          @runtime.Accepted(..) => ()
-          _ => self.parked_followups.push(envelope_json)
+        match classify_followup_outcome(control.enqueue_follow_up(message)) {
+          FollowupAccepted => ()
+          FollowupParked => self.parked_followups.push(envelope_json)
+          FollowupFailed(reason) => {
+            self.parked_followups = []
+            return Err(
+              @kernel.ModelFailure::Runtime(
+                reason="Pi follow-up queue failure: " + reason,
+              ),
+            )
+          }
         }
-      None => ()
+      None => {
+        self.parked_followups = []
+        return Err(
+          @kernel.ModelFailure::Runtime(
+            reason="Pi follow-up flush failed: invalid envelope",
+          ),
+        )
+      }
     }
   }
+  Ok(())
 }
 
 ///|
@@ -237,10 +288,13 @@ pub impl @runtime.Runtime for PiRuntime with fn call_model(
   call_options : Json,
   on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
-  self.flush_parked_followups()
-  self.fallback.call_model(
-    scope, messages, tool_definitions, call_options, on_chunk,
-  )
+  match self.flush_parked_followups() {
+    Ok(_) =>
+      self.fallback.call_model(
+        scope, messages, tool_definitions, call_options, on_chunk,
+      )
+    Err(error) => Err(error)
+  }
 }
 
 ///|
