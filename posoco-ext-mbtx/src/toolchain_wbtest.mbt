@@ -1,5 +1,5 @@
 ///|
-/// toolchain_wbtest.mbt — the pure path logic runs on injected inputs only;
+/// The pure path logic runs on injected inputs only;
 /// the probing tests build real (fake-binary) toolchain directories under
 /// the system temp dir and exercise the native edge + cache.
 

@@ -1,5 +1,5 @@
 ///|
-/// execute_wbtest.mbt — the two-stage pipeline against a scripted Runner:
+/// The two-stage pipeline against a scripted Runner:
 /// argv/cwd/policy assertions, BUILD failure path rewriting, timeout
 /// mapping, escalated argv, truncation and decode-failure handling. No
 /// process is ever spawned; the only real fs access is the pipeline's temp
@@ -22,6 +22,9 @@ priv struct MbtxFakeRunner {
   // when set, run() sleeps this long before replying to the moonrun call
   // (drives the pipeline's RUN wall-clock timeout without delaying BUILD)
   mut moonrun_sleep_ms : Int?
+  // when set, run() sleeps this long before replying to a cmd-tool call
+  // (drives the cmd path's wall-clock timeout)
+  mut cmd_sleep_ms : Int?
   // when true, the BUILD reply embeds the snippet path from that call's
   // argv (as a real compiler would), exercising the tmp-path rewrite
   mut echo_snippet_in_diagnostic : Bool
@@ -35,6 +38,7 @@ fn MbtxFakeRunner::new(replies : Array[(Int, String, Bool)]) -> MbtxFakeRunner {
     replies,
     calls: [],
     moonrun_sleep_ms: None,
+    cmd_sleep_ms: None,
     echo_snippet_in_diagnostic: false,
     policy_json: None,
   }
@@ -64,6 +68,12 @@ impl Runner for MbtxFakeRunner with fn run(
           },
         )
       }
+    }
+  } else if !cmd.has_suffix("/moon") {
+    // A cmd-tool invocation (the BUILD toolchain binary ends in "/moon").
+    match self.cmd_sleep_ms {
+      Some(ms) => @async.sleep(ms) catch { _ => () }
+      None => ()
     }
   }
   let index = self.calls.length() - 1
@@ -292,4 +302,217 @@ async test "undecodable run output is reported as invalid_utf8" {
   let content = mbtx_outcome_content(outcome)
   assert_true(content.contains("invalid_utf8"))
   assert_true(content.contains("exit_code=0"))
+}
+
+///|
+fn cmd_call(
+  id~ : String,
+  program~ : String,
+  args? : Array[Json] = [],
+) -> @posoco.ToolCall {
+  {
+    call_id: @posoco.CallId::unchecked(id),
+    name: @posoco.ToolName::unchecked("cmd"),
+    arguments: mbtx_args_obj([
+      ("program", Json::string(program)),
+      ("args", Json::array(args)),
+    ]),
+  }
+}
+
+///|
+async test "cmd runs an allowlisted program with literal argv and anchor cwd" {
+  let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor("/ws")
+  let runner = MbtxFakeRunner::new([(0, "git version 2.46\n", true)])
+  let tools = mbtx_fake_tools(runner~, anchor=Some(anchor))
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd1", program="git", args=[Json::string("--version")]),
+  )
+  assert_eq(mbtx_outcome_content(outcome), "git version 2.46\n")
+  assert_eq(runner.calls.length(), 1)
+  assert_eq(runner.calls[0].cmd, "git")
+  assert_eq(runner.calls[0].args, ["--version"])
+  assert_eq(runner.calls[0].cwd, Some("/ws"))
+}
+
+///|
+async test "cmd without anchor inherits cwd and defaults args to empty" {
+  let runner = MbtxFakeRunner::new([(0, "ok", true), (0, "ok", true)])
+  let tools = mbtx_fake_tools(runner~)
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd2", program="rg", args=[Json::string("pattern")]),
+  )
+  assert_eq(mbtx_outcome_content(outcome), "ok")
+  assert_eq(runner.calls[0].cwd, None)
+  let outcome = tools.execute("cmd", {
+    call_id: @posoco.CallId::unchecked("tc_cmd3"),
+    name: @posoco.ToolName::unchecked("cmd"),
+    arguments: mbtx_args_obj([("program", Json::string("rg"))]),
+  })
+  assert_eq(mbtx_outcome_content(outcome), "ok")
+  assert_eq(runner.calls[1].args, [])
+}
+
+///|
+async test "cmd rejects a non-allowlisted program before any spawn" {
+  let runner = MbtxFakeRunner::new([])
+  let tools = mbtx_fake_tools(runner~)
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd4", program="sh", args=[
+      Json::string("-c"),
+      Json::string("ls"),
+    ]),
+  )
+  let content = mbtx_outcome_content(outcome)
+  assert_true(content.contains("'sh' is not on the subprocess allowlist"))
+  assert_true(content.contains("- moon — any arguments"))
+  assert_true(content.contains("- git — any arguments"))
+  assert_true(content.contains("use the mbtx tool"))
+  assert_eq(runner.calls.length(), 0)
+}
+
+///|
+async test "cmd enforces the args_prefix rule extension-side" {
+  let runner = MbtxFakeRunner::new([(0, "pushed", true)])
+  let tools = MbtxTools::with_runner(runner~, allowlist_without=["git"], allowlist_extra=[
+    { program: "git", args_prefix: ["push"], },
+  ])
+  tools.cache_resolved("/fake-moon-bin")
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd5", program="git", args=[
+      Json::string("push"),
+      Json::string("origin"),
+    ]),
+  )
+  assert_eq(mbtx_outcome_content(outcome), "pushed")
+  assert_eq(runner.calls[0].args, ["push", "origin"])
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd6", program="git", args=[Json::string("log")]),
+  )
+  assert_true(
+    mbtx_outcome_content(outcome).contains(
+      "'git' is not on the subprocess allowlist",
+    ),
+  )
+  assert_eq(runner.calls.length(), 1)
+}
+
+///|
+async test "cmd non-zero exit is a reported error with raw output" {
+  let runner = MbtxFakeRunner::new([(3, "boom\n", true)])
+  let tools = mbtx_fake_tools(runner~)
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd7", program="diff", args=[
+      Json::string("a"),
+      Json::string("b"),
+    ]),
+  )
+  assert_eq(mbtx_outcome_content(outcome), "boom\n")
+}
+
+///|
+async test "cmd timeout maps to a reported error within the budget" {
+  let runner = MbtxFakeRunner::new([(0, "never arrives", true)])
+  runner.cmd_sleep_ms = Some(5000)
+  let tools = mbtx_fake_tools(runner~, run_timeout_ms=300)
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd8", program="moon", args=[Json::string("test")]),
+  )
+  assert_true(
+    mbtx_outcome_content(outcome).contains("cmd: 'moon' timed out after 300ms"),
+  )
+}
+
+///|
+async test "cmd oversized output is truncated keeping the tail" {
+  let big = "x".repeat(70_000) + "TAIL-MARKER"
+  let runner = MbtxFakeRunner::new([(0, big, true)])
+  let tools = mbtx_fake_tools(runner~)
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd9", program="rg", args=[Json::string("x")]),
+  )
+  let content = mbtx_outcome_content(outcome)
+  assert_true(content.contains("output truncated"))
+  assert_true(content.has_suffix("TAIL-MARKER"))
+}
+
+///|
+async test "cmd undecodable output is reported as invalid_utf8" {
+  let runner = MbtxFakeRunner::new([(0, "", false)])
+  let tools = mbtx_fake_tools(runner~)
+  let outcome = tools.execute("cmd", cmd_call(id="tc_cmd10", program="rg"))
+  let content = mbtx_outcome_content(outcome)
+  assert_true(content.contains("invalid_utf8"))
+  assert_true(content.contains("exit_code=0"))
+}
+
+///|
+async test "cmd decode errors are typed and surface before execution" {
+  let runner = MbtxFakeRunner::new([])
+  let tools = mbtx_fake_tools(runner~)
+  let result = Ok(tools.execute("cmd", cmd_call(id="tc_cmd11", program=""))) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.RuntimeError::UnknownTool(msg)) =>
+      assert_true(msg.contains("non-empty"))
+    _ => fail("expected empty program rejection")
+  }
+  let result = Ok(
+    tools.execute("cmd", {
+      call_id: @posoco.CallId::unchecked("tc_cmd12"),
+      name: @posoco.ToolName::unchecked("cmd"),
+      arguments: mbtx_args_obj([("args", Json::array([]))]),
+    }),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.RuntimeError::UnknownTool(msg)) =>
+      assert_true(msg.contains("missing 'program'"))
+    _ => fail("expected missing program rejection")
+  }
+  let result = Ok(
+    tools.execute("cmd", {
+      call_id: @posoco.CallId::unchecked("tc_cmd13"),
+      name: @posoco.ToolName::unchecked("cmd"),
+      arguments: mbtx_args_obj([
+        ("program", Json::string("git")),
+        ("args", Json::array([Json::number(1.0)])),
+      ]),
+    }),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.RuntimeError::UnknownTool(msg)) =>
+      assert_true(msg.contains("'args' must be an array of strings"))
+    _ => fail("expected non-string args item rejection")
+  }
+  let result = Ok(
+    tools.execute("cmd", {
+      call_id: @posoco.CallId::unchecked("tc_cmd14"),
+      name: @posoco.ToolName::unchecked("cmd"),
+      arguments: mbtx_args_obj([
+        ("program", Json::string("git")),
+        ("args", Json::string("--version")),
+      ]),
+    }),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.RuntimeError::UnknownTool(msg)) =>
+      assert_true(msg.contains("'args' must be an array of strings"))
+    _ => fail("expected non-array args rejection")
+  }
+  assert_eq(runner.calls.length(), 0)
 }

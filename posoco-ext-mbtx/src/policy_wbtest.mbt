@@ -1,5 +1,5 @@
 ///|
-/// policy_wbtest.mbt — snapshot of the moonrun policy for the default
+/// Snapshot of the moonrun policy for the default
 /// allowlist, the args_prefix omission rule, and the effective-allowlist
 /// computation (defaults minus `without`, plus `extra`).
 

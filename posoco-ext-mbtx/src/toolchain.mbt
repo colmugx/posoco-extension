@@ -2,8 +2,7 @@
 /// MoonBit toolchain resolution — the target-independent logic, shared by
 /// native, wasm and js. The existence probing and the per-extension cache
 /// live on the execution edges (`MbtxTools::ensure_toolchain` +
-/// `toolchain_dir_usable`: `posoco_ext_mbtx.native.mbt` for native/wasm,
-/// `posoco_ext_mbtx.js.mbt` for js, `fallback.mbt` for the rest).
+/// `toolchain_dir_usable`).
 
 ///|
 /// A located toolchain: `bin_dir` plus the two binaries the pipeline needs.

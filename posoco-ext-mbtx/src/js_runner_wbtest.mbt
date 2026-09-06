@@ -1,5 +1,5 @@
 ///|
-/// js_runner_wbtest.mbt — js (bun) face of the execution edge: the extern
+/// js (bun) face of the execution edge: the extern
 /// probe/env primitives, the Bun Runner (argv, merge, decode flag), the
 /// extern-side budget (kill verified via pgrep), and the full live pipeline
 /// (self-skipping without ~/.moon/bin, like the native live smokes).

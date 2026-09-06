@@ -13,7 +13,8 @@ pub extend MbtxTools with @posoco.ToolProvider::{execute, list_tools}
 pub extend MbtxTools with @posoco.SystemPromptContributor::{system_prompt}
 
 ///|
-/// Factory for hosts: one sandboxed MoonBit script tool, default config.
+/// Factory for hosts: the `mbtx` script tool and the `cmd` command tool,
+/// default config.
 pub fn mbtx_extension() -> MbtxTools {
   MbtxTools::MbtxTools()
 }

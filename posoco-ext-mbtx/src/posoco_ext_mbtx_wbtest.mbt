@@ -1,5 +1,5 @@
 ///|
-/// posoco_ext_mbtx_wbtest.mbt — white-box tests for the mbtx tool surface:
+/// White-box tests for the mbtx tool surface:
 /// tool listing/schema, argument decode (native target rejection, escalated
 /// gating), decode-before-execute ordering, the exemptions self-report, and
 /// the description/system-prompt contract.
@@ -51,16 +51,57 @@ fn mbtx_schema_required(schema : Json) -> Array[String] raise {
 }
 
 ///|
-async test "list_tools exposes the single mbtx tool" {
+async test "list_tools exposes the mbtx and cmd tools" {
   let defs = MbtxTools().list_tools()
-  assert_eq(defs.length(), 1)
+  assert_eq(defs.length(), 2)
   assert_eq(defs[0].name.to_string(), "mbtx")
+  assert_eq(defs[1].name.to_string(), "cmd")
   assert_true(defs[0].description.length() > 0)
+  assert_true(defs[1].description.length() > 0)
   match defs[0].provenance {
     Some(s) => assert_eq(s, "posoco_ext_mbtx")
     None => fail("expected provenance to be set")
   }
-  assert_true(defs[0].policy is @posoco.ExecutionPolicy::Parallel)
+  assert_eq(defs[1].provenance, Some("posoco_ext_mbtx"))
+  assert_true(defs[1].policy is @posoco.ExecutionPolicy::Parallel)
+}
+
+///|
+async test "cmd schema has literal-argv shape without escalated or target" {
+  let defs = MbtxTools(escalation=true).list_tools()
+  let props = mbtx_schema_properties(defs[1].input_schema)
+  assert_true(props.contains("program"))
+  assert_true(props.contains("args"))
+  assert_false(props.contains("escalated"))
+  assert_false(props.contains("target"))
+  assert_eq(mbtx_schema_required(defs[1].input_schema), ["program"])
+  match props["args"] {
+    Json::Object(args) =>
+      match args.get("items") {
+        Some(Json::Object(items)) =>
+          assert_eq(items.get("type"), Some(Json::string("string")))
+        _ => fail("args must declare string items")
+      }
+    _ => fail("args property must be an object")
+  }
+}
+
+///|
+async test "cmd description teaches literal argv allowlist and mbtx routing" {
+  let desc = MbtxTools().list_tools()[1].description
+  assert_true(desc.contains("not a shell"))
+  assert_true(desc.contains("|, >, &&, $() and * have no special meaning"))
+  assert_true(desc.contains("- moon — any arguments"))
+  assert_true(desc.contains("- diff — any arguments"))
+  assert_true(desc.contains("sh, bash, zsh, fish, python, node, deno"))
+  assert_true(desc.contains("use the mbtx tool"))
+}
+
+///|
+async test "cmd description allowlist follows constructor configuration" {
+  let desc = MbtxTools(allowlist_without=["git"]).list_tools()[1].description
+  assert_false(desc.contains("- git — any arguments"))
+  assert_true(desc.contains("- moon — any arguments"))
 }
 
 ///|
@@ -306,6 +347,8 @@ async test "constructor without bus is a no-op" {
 async test "description carries charter allowlist substitutions boundary and targets" {
   let desc = MbtxTools().list_tools()[0].description
   assert_true(desc.contains("no shell"))
+  assert_true(desc.contains("the cmd tool is faster"))
+  assert_true(desc.contains("one fix beats ten minutes of hesitation"))
   assert_true(desc.contains("- moon — any arguments"))
   assert_true(desc.contains("- git — any arguments"))
   assert_true(desc.contains("- gh — any arguments"))
@@ -339,6 +382,25 @@ async test "system prompt mirrors allowlist substitutions and offline note" {
   assert_true(text.contains("@shell.glob"))
   assert_true(text.contains("moon update"))
   assert_true(text.contains("write/edit"))
+}
+
+///|
+async test "system prompt carries positive capability statement snippets and anti-paralysis" {
+  let text = MbtxTools().system_prompt()
+  assert_true(text.contains("goes straight through the `cmd` tool"))
+  assert_true(text.contains("You can run moon, git, gh, rg, diff"))
+  assert_true(text.contains("one fix beats ten minutes of hesitation"))
+  assert_true(
+    text.contains(
+      "@shell.Cmd(\"git\", [\"log\", \"--oneline\", \"-5\"]).output()",
+    ),
+  )
+  assert_true(text.contains("@fs.readdir(\".\", sort=true)"))
+  assert_true(text.contains("@fs.FileKind::Directory"))
+  assert_true(text.contains("@shell.glob(\"src/**/*.mbtx\")"))
+  assert_true(text.contains("max_output_bytes=262144"))
+  // the interpolation syntax survives the raw template string literally
+  assert_true(text.contains("\\{name} \\{@fs.file_size(name)}"))
 }
 
 ///|

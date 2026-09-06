@@ -1,5 +1,5 @@
 ///|
-/// execute_live_wbtest.mbt — live smoke tests against the real MoonBit
+/// Live smoke tests against the real MoonBit
 /// toolchain. Every test skips itself (with a printed note) when
 /// `~/.moon/bin/moon` is absent, so environments without the toolchain stay
 /// green. The policy-deny test compiles a snippet importing
@@ -116,4 +116,43 @@ async test "live: run timeout reports error and terminates moonrun" {
   }
   let after = mbtx_live_moonrun_count()
   assert_true(after <= baseline)
+}
+
+///|
+async test "live cmd: git --version runs as literal argv" {
+  let probe = @process.collect_output_merged("git", ["--version"]) catch {
+    _ => {
+      println("cmd live: git not spawnable; skipping live smoke")
+      return
+    }
+  }
+  if probe.0 != 0 {
+    println("cmd live: git not usable; skipping live smoke")
+    return
+  }
+  let tools = MbtxTools()
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd_live1", program="git", args=[Json::string("--version")]),
+  )
+  let content = match outcome {
+    @posoco.ToolOutcome::Success(content~, structured=None) => content
+    other => fail("expected Success, got: \{other}")
+  }
+  assert_true(content.contains("git version"))
+}
+
+///|
+async test "live cmd: sh is rejected by the extension allowlist before spawn" {
+  let tools = MbtxTools()
+  let outcome = tools.execute(
+    "cmd",
+    cmd_call(id="tc_cmd_live2", program="sh", args=[
+      Json::string("-c"),
+      Json::string("echo pwned"),
+    ]),
+  )
+  let content = mbtx_live_expect_reported_error(outcome)
+  assert_true(content.contains("'sh' is not on the subprocess allowlist"))
+  assert_true(content.contains("use the mbtx tool"))
 }

@@ -19,13 +19,14 @@ priv trait Runner {
 }
 
 ///|
-/// MbtxTools — the MoonBit script tool provider (one tool: `mbtx`).
+/// MbtxTools — the MoonBit script tool provider (tools: `mbtx` and `cmd`).
 ///
-/// A call submits a single-file MoonBit (`.mbtx`) program; the extension
+/// `mbtx` submits a single-file MoonBit (`.mbtx`) program; the extension
 /// compiles it (`moon run --build-only`) and runs the artifact under
-/// `moonrun --policy`. There is no shell: subprocesses spawn as
-/// literal argv constrained by a program allowlist, and file writes are
-/// confined to the call's temp directory.
+/// `moonrun --policy`. `cmd` runs one allowlisted program as literal argv
+/// straight through the Runner (no compile, no policy). There is no shell:
+/// subprocesses spawn as literal argv constrained by a program allowlist,
+/// and `mbtx` file writes are confined to the call's temp directory.
 ///
 /// On native and wasm the pipeline runs through `@process`/`@fs`; on js it
 /// forwards to the Bun runtime (Bun.spawn argv + node:fs sync IO —
@@ -122,10 +123,15 @@ fn MbtxTools::with_runner(
   anchor? : @devkit.WorkspaceAnchor? = None,
   run_timeout_ms? : Int = 120_000,
   escalation? : Bool = false,
+  allowlist_extra? : Array[SpawnRule] = [],
+  allowlist_without? : Array[String] = [],
 ) -> MbtxTools {
   {
     anchor,
-    allowlist: effective_allowlist(without=[], extra=[]),
+    allowlist: effective_allowlist(
+      without=allowlist_without,
+      extra=allowlist_extra,
+    ),
     run_timeout_ms,
     escalation,
     toolchain_bin: None,
