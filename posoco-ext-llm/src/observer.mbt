@@ -33,6 +33,26 @@ fn RouterModelPort::publish_model_status(self : RouterModelPort) -> Unit {
 }
 
 ///|
+/// Publish the provider event. Consumers — provider-scoped status publishers
+/// such as the Codex quota segments — listen for it to show or hide their own
+/// segments when the active provider changes; republication is idempotent.
+fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
+  match self.bus {
+    Some(bus) =>
+      bus.publish({
+        source: "posoco_ext_llm",
+        topic: "provider",
+        data: Json::object(
+          Map::from_array([
+            ("provider_id", Json::string(self.current_provider_id())),
+          ]),
+        ),
+      })
+    None => ()
+  }
+}
+
+///|
 /// Publish the `tok` segment: the per-turn input/output totals.
 fn RouterModelPort::publish_tok_status(self : RouterModelPort) -> Unit {
   match self.bus {

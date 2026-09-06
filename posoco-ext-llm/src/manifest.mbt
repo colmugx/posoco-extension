@@ -43,6 +43,7 @@ pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
   _ctx : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
   self.publish_model_status()
+  self.publish_provider_event()
 }
 
 ///|

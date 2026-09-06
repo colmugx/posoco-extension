@@ -76,7 +76,7 @@ async test "model command reports an unknown slot" {
 async test "model command declares dynamic slot choices" {
   let router = command_test_router()
   let defs = router.commands()
-  assert_eq(defs.length(), 3)
+  assert_eq(defs.length(), 4)
   assert_eq(defs[0].id, "model")
   assert_true(defs[0].ctype is @posoco.CommandType::Select)
   match defs[0].params[0].choices {
@@ -343,7 +343,7 @@ async test "model switch republishes the model segment with the new slot" {
     Json::object(Map::from_array([("slot", Json::string("second"))])),
   )
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
-  assert_eq(capture.events.length(), 1)
+  assert_eq(capture.events.length(), 2)
   assert_eq(
     @devkit.decode_status_op(capture.events[0]),
     Some(
@@ -356,6 +356,15 @@ async test "model switch republishes the model segment with the new slot" {
       ),
     ),
   )
+  assert_eq(capture.events[1].topic, "provider")
+  match capture.events[1].data {
+    Json::Object(fields) =>
+      match fields.get("provider_id") {
+        Some(Json::String("provider-b")) => ()
+        _ => fail("expected provider_id of the newly active slot")
+      }
+    _ => fail("expected a provider event payload object")
+  }
 }
 
 ///|
@@ -372,7 +381,7 @@ async test "effort switch republishes the model segment" {
     Json::object(Map::from_array([("effort", Json::string("high"))])),
   )
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
-  assert_eq(capture.events.length(), 1)
+  assert_eq(capture.events.length(), 2)
   assert_eq(
     @devkit.decode_status_op(capture.events[0]),
     Some(
@@ -385,6 +394,15 @@ async test "effort switch republishes the model segment" {
       ),
     ),
   )
+  assert_eq(capture.events[1].topic, "provider")
+  match capture.events[1].data {
+    Json::Object(fields) =>
+      match fields.get("provider_id") {
+        Some(Json::String("one")) => ()
+        _ => fail("expected the active slot's provider id")
+      }
+    _ => fail("expected a provider event payload object")
+  }
 }
 
 ///|

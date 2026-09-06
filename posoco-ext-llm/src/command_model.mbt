@@ -270,6 +270,19 @@ pub impl @posoco.CommandPort for RouterModelPort with fn commands(
       visible: true,
       metadata: None,
     },
+    @posoco.CommandDef::{
+      id: "status",
+      label: "Status",
+      description: "Active provider status: model, context window, quota windows",
+      category: "model",
+      ctype: @posoco.CommandType::Action,
+      params: [],
+      aliases: [],
+      shortcut: None,
+      icon: None,
+      visible: true,
+      metadata: None,
+    },
   ]
 }
 
@@ -306,6 +319,10 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
             }
             self.active_id = slot_id
             self.publish_model_status()
+            self.publish_provider_event()
+            // Immediate probe so the bar reflects the new provider's quota
+            // as soon as the command returns.
+            self.refresh_quota_now()
             @posoco.CommandOutcome::Success(
               feedback="switched to model slot: " + slot_id,
               structured=Some(self.slot_catalog_json()),
@@ -349,6 +366,9 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
                 return @posoco.CommandOutcome::Failure(reason=err.to_string())
             }
             self.publish_model_status()
+            self.publish_provider_event()
+            // Immediate probe: the switch may land on a different provider.
+            self.refresh_quota_now()
             @posoco.CommandOutcome::Success(
               feedback="switched effort: " + level + " (" + self.active_id + ")",
               structured=Some(self.slot_catalog_json()),
@@ -357,6 +377,44 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
           }
         }
       }
+    "status" => {
+      expect_no_args(args)
+      // Command-triggered live pull from the active provider's registered
+      // quota source: the source applies its own timeout; Err states the
+      // reading is unavailable and is skipped, never estimated.
+      let now = @async.now()
+      let readings : Array[@devkit.QuotaReading] = match
+        @devkit.quota_registry_lookup(self.current_provider_id()) {
+        Some(source) => {
+          let result = source.read() catch { _ => Err("quota pull failed") }
+          match result {
+            Ok(list) => {
+              // The live pull doubles as the bar refresh: cache what
+              // /status fetched so the statusbar segments stay in sync
+              // with this report.
+              self.quota_readings = list
+              self.quota_fetched_at = now
+              self.publish_quota_segments()
+              list
+            }
+            Err(_) => {
+              // A failed pull backs off like the chat path and keeps the
+              // published segments: a failed /status never retracts bar
+              // data that was already there.
+              self.quota_failed_at = now
+              []
+            }
+          }
+        }
+        None => []
+      }
+      let (feedback, structured) = self.status_report(readings~)
+      @posoco.CommandOutcome::Success(
+        feedback~,
+        structured=Some(structured),
+        ui_hint=Some(@posoco.UiHint::None),
+      )
+    }
     "login" => self.invoke_login(args)
     other => raise @posoco.CommandError::NotFound(other)
   }

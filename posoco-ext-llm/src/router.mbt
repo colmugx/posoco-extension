@@ -27,6 +27,18 @@ pub(all) struct RouterModelPort {
   auth_prompt : &@oauth.AuthPromptInteraction?
   credentials : Map[String, @oauth.Credential]
   api_key_credentials : Map[String, @oauth.ApiKeyCredential]
+  /// Latest value per status segment observed on the shared bus; `/status`
+  /// surfaces the provider-published quota windows ("5h", "weekly") from it.
+  priv status_segments : Map[String, String]
+  /// Latest registry quota readings for the active provider, rendered onto
+  /// the status bar by `publish_quota_segments`.
+  priv mut quota_readings : Array[@devkit.QuotaReading]
+  /// Last successful registry pull (ms since epoch); throttles re-reads.
+  priv mut quota_fetched_at : Int64
+  /// Last failed registry pull (ms since epoch); backs re-reads off.
+  priv mut quota_failed_at : Int64
+  /// Quota segment names this router currently has published on the bar.
+  priv mut quota_shown : Array[String]
 }
 
 ///|
@@ -77,7 +89,7 @@ pub fn RouterModelPort::RouterModelPort(
     }
     default_slot_id
   }
-  {
+  let router : RouterModelPort = {
     slots: slot_map,
     slot_order,
     active_id,
@@ -92,7 +104,17 @@ pub fn RouterModelPort::RouterModelPort(
     auth_prompt,
     credentials: Map::from_array([]),
     api_key_credentials: Map::from_array([]),
+    status_segments: Map::from_array([]),
+    quota_readings: [],
+    quota_fetched_at: 0L,
+    quota_failed_at: 0L,
+    quota_shown: [],
   }
+  match bus {
+    Some(bus) => bus.subscribe(router as &@devkit.BusSubscriber)
+    None => ()
+  }
+  router
 }
 
 ///|
@@ -203,6 +225,11 @@ pub fn RouterModelPort::switch_slot(
   self.active_id = slot_id
   self.active_effort = None
   self.publish_model_status()
+  self.publish_provider_event()
+  // The new provider's readings are unknown until its first response (or an
+  // immediate /model probe): drop the previous provider's quota segments and
+  // reset the pull cache.
+  self.clear_quota_segments()
 }
 
 ///|
@@ -280,6 +307,7 @@ pub fn RouterModelPort::replace_provider_slots(
   if !self.slots.contains(old_active_id) {
     self.active_id = slots[0].id
     self.active_effort = None
+    self.publish_provider_event()
   }
 }
 
@@ -292,7 +320,13 @@ pub impl @posoco.ModelPort for RouterModelPort with fn chat(
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  self.active_slot().port.chat(scope, messages, tools, options, stream)
+  let result = self.active_slot().port.chat(
+    scope, messages, tools, options, stream,
+  )
+  // Refresh after the response: the registry pull never delays the first
+  // token, and every failure inside stays captured (this never raises).
+  self.refresh_quota_if_due()
+  result
 }
 
 ///|
@@ -311,4 +345,26 @@ pub impl @posoco.ModelPort for RouterModelPort with fn provider_config(
   self : RouterModelPort,
 ) -> @posoco.ProviderConfig {
   self.active_slot().port.provider_config()
+}
+
+///|
+/// Consume one bus event: keep the latest value of every status segment so
+/// `/status` can surface provider-published quota windows. A register
+/// without a value (or an unregister) clears the segment. The router only
+/// reads the bus here — model/tok/cache segments are published elsewhere —
+/// so this subscriber never feeds back into the bus.
+pub impl @devkit.BusSubscriber for RouterModelPort with fn on_bus_event(
+  self : RouterModelPort,
+  event : @devkit.BusEvent,
+) -> Unit {
+  match @devkit.decode_status_op(event) {
+    Some(Register(segment~, value~, ..)) =>
+      match value {
+        Some(v) => self.status_segments[segment] = v
+        None => ignore(self.status_segments.remove(segment))
+      }
+    Some(Update(segment~, value~)) => self.status_segments[segment] = value
+    Some(Unregister(segment~)) => ignore(self.status_segments.remove(segment))
+    None => ()
+  }
 }
