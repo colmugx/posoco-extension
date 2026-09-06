@@ -1,6 +1,3 @@
-///
-/// GLM Coding Plan quota probe — provider-stated usage percentages.
-///
 /// The coding-plan console exposes an account-level monitor endpoint next to
 /// the chat endpoint. It states the authoritative numbers for each window
 /// (5-hour, weekly, ...): nothing here is estimated from local token counts.
@@ -33,32 +30,31 @@ fn quota_json_number(fields : Map[String, Json], key : String) -> Double? {
 }
 
 ///|
-/// Map one `data.limits[]` entry onto the shared window vocabulary. The
+/// Map one `data.limits[]` entry onto a provider-owned window label. The
 /// provider distinguishes windows by `(type, unit, number)`: TOKENS_LIMIT
 /// with unit=3/number=5 is the 5-hour window and unit=6/number=1 the weekly
-/// one (as decoded by the community monitor tooling); TIME_LIMIT covers the
-/// monthly MCP-tool allowance and stays `Other` rather than being guessed
-/// into a typed slot.
+/// one (as decoded by the community monitor tooling); anything else carries
+/// its raw provider label verbatim rather than being guessed into a slot.
 fn zai_quota_window(
   limit_type : String?,
   unit : Double?,
   number : Double?,
-) -> @devkit.QuotaWindow {
+) -> String {
   match limit_type {
     Some("TOKENS_LIMIT") =>
       match (unit, number) {
         (Some(u), Some(n)) =>
           if u == 3.0 && n == 5.0 {
-            @devkit.QuotaWindow::FiveHours
+            "5h"
           } else if u == 6.0 && n == 1.0 {
-            @devkit.QuotaWindow::Weekly
+            "weekly"
           } else {
-            @devkit.QuotaWindow::Other("TOKENS_LIMIT(unit=\{u},number=\{n})")
+            "TOKENS_LIMIT(unit=\{u},number=\{n})"
           }
-        _ => @devkit.QuotaWindow::Other("TOKENS_LIMIT")
+        _ => "TOKENS_LIMIT"
       }
-    Some(other) => @devkit.QuotaWindow::Other(other)
-    None => @devkit.QuotaWindow::Other("unknown")
+    Some(other) => other
+    None => "unknown"
   }
 }
 

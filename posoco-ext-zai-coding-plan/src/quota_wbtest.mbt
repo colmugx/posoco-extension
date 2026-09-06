@@ -30,13 +30,13 @@ test "parse maps windows and skips entries that state nothing" {
   )
   guard readings is Ok(values) else { fail("expected readings") }
   assert_eq(values.length(), 3)
-  assert_eq(values[0].window, @devkit.QuotaWindow::FiveHours)
+  assert_eq(values[0].window, "5h")
   assert_eq(values[0].used_percent, Some(12.5))
   assert_eq(values[0].reset_at_ms, Some(1756900000000L))
   assert_eq(values[0].fetched_at_ms, 1000L)
-  assert_eq(values[1].window, @devkit.QuotaWindow::Weekly)
+  assert_eq(values[1].window, "weekly")
   assert_eq(values[1].reset_at_ms, None)
-  assert_eq(values[2].window, @devkit.QuotaWindow::Other("TIME_LIMIT"))
+  assert_eq(values[2].window, "TIME_LIMIT")
   assert_eq(values[2].used_percent, Some(40.0))
 }
 
@@ -58,7 +58,7 @@ test "parse rejects failure envelopes and malformed shapes" {
 }
 
 ///|
-test "parse keeps unmapped token windows as Other with the raw numbers" {
+test "parse keeps unmapped token windows with the raw numbers" {
   let payload : Json = {
     "success": true,
     "data": {
@@ -70,12 +70,7 @@ test "parse keeps unmapped token windows as Other with the raw numbers" {
   guard parse_zai_coding_plan_quota(payload, fetched_at_ms=1L) is Ok([reading]) else {
     fail("expected one reading")
   }
-  guard reading.window is @devkit.QuotaWindow::Other(label) else {
-    fail("expected an Other window")
-  }
-  assert_true(label.contains("TOKENS_LIMIT"))
-  assert_true(label.contains("unit=9"))
-  assert_true(label.contains("number=2"))
+  assert_eq(reading.window, "TOKENS_LIMIT(unit=9,number=2)")
 }
 
 ///|

@@ -100,6 +100,17 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn build(
       )
       let api_key_impl = ZaiCodingPlanProvider(ctx=self.ctx)
       let api_key : &@llm.ApiKeyFactory = api_key_impl
+      // Pull-style quota: publish the monitor probe under the provider id so
+      // the /status command reads it live at command time. Every configured
+      // build re-registers, so the registry holds the latest credential
+      // snapshot.
+      match self.quota_source(source) {
+        Some(src) => {
+          let borrowed : &@devkit.QuotaSource = src
+          @devkit.quota_registry_register("zai-coding-plan", borrowed)
+        }
+        None => ()
+      }
       @llm.ProviderBuildResult::Ready(
         @zai.zai_model_catalog(config, self.ctx, identity, api_key, capabilities=[
           "chat", "streaming", "api_key", "coding_plan",
