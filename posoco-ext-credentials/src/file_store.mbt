@@ -28,7 +28,6 @@ pub fn FileProviderCredentialStore::FileProviderCredentialStore(
 }
 
 ///|
-/// The record file for one provider below the store directory.
 fn FileProviderCredentialStore::credential_path(
   self : FileProviderCredentialStore,
   provider_id : String,
