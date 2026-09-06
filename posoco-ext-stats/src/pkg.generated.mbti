@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-stats"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct CacheBucket {
+  mut requests : Int
+  mut hit_requests : Int
+  mut sum_input : Int
+  mut sum_cached : Int
+}
+
+pub struct Stats {
+  bus : @posoco-devkit.EventBus?
+  clock : () -> Int64
+  mut round_started_ms : Int64?
+  mut first_token_ms : Int64?
+  mut sum_tps : Double
+  mut tps_rounds : Int
+  cache_buckets : Map[String, CacheBucket]
+}
+pub fn Stats::Stats(bus? : @posoco-devkit.EventBus?, clock? : () -> Int64) -> Self
+pub fn Stats::commands(Self) -> Array[@port.CommandDef]
+pub fn Stats::extension_id(Self) -> String
+pub async fn Stats::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn Stats::manifest(Self) -> @port.ExtensionManifest
+pub fn Stats::on_event(Self, @types.TurnEvent) -> Unit
+pub fn Stats::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub impl @port.CommandPort for Stats
+pub impl @port.Extension for Stats
+pub impl @port.Observer for Stats
+
+// Type aliases
+
+// Traits
