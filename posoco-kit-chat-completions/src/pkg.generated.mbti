@@ -12,7 +12,11 @@ pub fn cached_input_tokens_from_usage(Map[String, Json]) -> Int?
 
 pub fn classify_chat_completions_http_error(Int, String, default_tz_offset_minutes? : Int, retry_after_header? : String?, now_ms~ : Int64) -> @error.ModelError?
 
+pub fn derive_prompt_cache_key(String) -> String
+
 pub fn encode_chat_message_content(Array[@kernel.Content], supports_images? : Bool) -> EncodedChatContent
+
+pub fn is_prompt_cache_key_rejection(String) -> Bool
 
 pub fn parse_reset_timestamp(String, default_tz_offset_minutes? : Int, now_ms~ : Int64) -> Int64?
 

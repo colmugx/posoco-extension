@@ -4,7 +4,7 @@ test "parse_reset_timestamp: ISO with Z suffix" {
     "Your limit will reset at 2026-08-21T15:04:16Z",
     now_ms=0L,
   )
-  // 2026-08-21T15:04:16Z = 1787053456 seconds.
+  // 2026-08-21T15:04:16Z = 1787324656 seconds.
   debug_inspect(ms, content="Some(1787324656000)")
 }
 

@@ -265,7 +265,7 @@ test "explicit null usage is treated as absent on every branch" {
   )
   assert_true(done)
   assert_eq(chunks.length(), 1) // only Finish, no Usage
-  assert_true(acc.usage_total is None)
+  assert_true(acc.to_completion().usage is None)
   // Empty choices + null usage: content-free skip.
   let (done2, _, chunks2) = run_sse("{\"choices\":[],\"usage\":null}")
   assert_false(done2)
@@ -374,4 +374,65 @@ test "cached_input_tokens_from_usage accepts every known spelling" {
   assert_true(cached_input_tokens_from_usage(none_reported) is None)
   let malformed = usage_of([("cached_tokens", Json::string("n/a"))])
   assert_true(cached_input_tokens_from_usage(malformed) is None)
+}
+
+///|
+test "derive_prompt_cache_key prefixes the session id and is stable" {
+  assert_eq(derive_prompt_cache_key("session_1"), "posoco-session_1")
+  assert_eq(
+    derive_prompt_cache_key("session_1"),
+    derive_prompt_cache_key("session_1"),
+  )
+  // Long, realistic session ids pass through with the prefix intact.
+  assert_eq(
+    derive_prompt_cache_key("sess_2026-09-04T10:00:00Z_abc123"),
+    "posoco-sess_2026-09-04T10:00:00Z_abc123",
+  )
+  // No special-casing: even an empty id derives deterministically.
+  assert_eq(derive_prompt_cache_key(""), "posoco-")
+}
+
+///|
+test "derive_prompt_cache_key caps output at 64 chars" {
+  // 7-char prefix + 70-char id = 77 chars; output keeps the first 64.
+  let long = String::make(70, 'a')
+  let key = derive_prompt_cache_key(long)
+  assert_eq(key.length(), 64)
+  assert_eq(key, "posoco-" + String::make(57, 'a'))
+  assert_eq(key, derive_prompt_cache_key(long))
+  // Exactly 64 total chars passes through unchanged.
+  let edge = derive_prompt_cache_key(String::make(57, 'x'))
+  assert_eq(edge.length(), 64)
+  assert_eq(edge, "posoco-" + String::make(57, 'x'))
+}
+
+///|
+test "is_prompt_cache_key_rejection matches only when both phrases appear" {
+  // A real-shape rejection body names the parameter.
+  assert_true(
+    is_prompt_cache_key_rejection(
+      "{\"error\":{\"message\":\"Unsupported parameter: prompt_cache_key\",\"type\":\"invalid_request_error\"}}",
+    ),
+  )
+  // Case-insensitive across both phrases, any casing mix.
+  assert_true(
+    is_prompt_cache_key_rejection("UNSUPPORTED PARAMETER: PROMPT_CACHE_KEY"),
+  )
+  assert_true(
+    is_prompt_cache_key_rejection("unsupported Parameter: Prompt_Cache_Key"),
+  )
+}
+
+///|
+test "is_prompt_cache_key_rejection stays false without both phrases" {
+  let cases : Array[String] = [
+    "",
+    // Only one phrase each.
+     "Unsupported parameter: temperature", "\"prompt_cache_key\" is optional and ignored",
+    // Unrelated 400s.
+     "Invalid API key provided", "max_tokens must be at least 1", "Internal server error",
+  ]
+  for body in cases {
+    assert_false(is_prompt_cache_key_rejection(body))
+  }
 }

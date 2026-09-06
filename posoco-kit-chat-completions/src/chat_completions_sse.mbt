@@ -42,7 +42,6 @@ pub fn process_chat_completions_sse(
   acc : @posoco.StreamAccumulator,
   on_chunk : (@posoco.StreamChunk) -> Unit,
 ) -> Bool raise @posoco.ModelError {
-  // [DONE] marker — end of stream
   if data == "[DONE]" {
     let chunk = @posoco.StreamChunk::Finish(reason="stop")
     on_chunk(chunk)
@@ -187,7 +186,6 @@ pub fn process_chat_completions_sse(
   }
   match choice.get("delta") {
     Some(Object(delta)) => {
-      // Text content delta
       match delta.get("content") {
         Some(String(token)) => {
           let chunk = @posoco.StreamChunk::TextDelta(token~)
@@ -213,7 +211,6 @@ pub fn process_chat_completions_sse(
             "\{provider} SSE parse failure (stage=delta.reasoning_content, category=wrong_type)",
           )
       }
-      // Tool call deltas
       match delta.get("tool_calls") {
         Some(Array(tcs)) =>
           for tc in tcs {
