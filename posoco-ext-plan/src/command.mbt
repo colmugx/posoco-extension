@@ -1,11 +1,4 @@
 ///|
-/// Plan mode commands: `/plan on|off|status`, `/plan.approve`,
-/// `/plan.reject <feedback>` (reason required), `/plan.dismiss`. Slash and
-/// panel consumers use these to drive the state machine; approval stays an
-/// explicit user action on the product side.
-
-///|
-/// Machine-readable status for panel consumers.
 fn PlanMode::status_json(self : PlanMode) -> Json {
   let (status, plan) = match self.status {
     Off => ("off", Json::null())
@@ -20,7 +13,6 @@ fn PlanMode::status_json(self : PlanMode) -> Json {
 }
 
 ///|
-/// Parse an optional non-empty string argument.
 fn parse_optional_string(
   fields : Map[String, Json],
   key : String,
@@ -36,7 +28,6 @@ fn parse_optional_string(
 }
 
 ///|
-/// Extract an optional positional argument (string or {action} object).
 fn parse_action(args : Json) -> String? raise @posoco.CommandError {
   match args {
     Json::Null => None
@@ -158,7 +149,6 @@ pub impl @posoco.CommandPort for PlanMode with fn invoke(
     "plan" =>
       match parse_action(args) {
         None => {
-          // Bare /plan toggles, like Shift+Tab in kimi-code.
           self.toggle()
           let feedback = match self.status() {
             PlanStatus::Off => "plan mode off"

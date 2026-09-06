@@ -11,13 +11,11 @@
 /// result text just omits the saved-path line.
 
 ///|
-/// Directory convention under the workspace root.
 fn plan_dir() -> String {
   ".cetas/plan"
 }
 
 ///|
-/// Session label used in file names; "session" when the host never set one.
 fn PlanMode::session_label(self : PlanMode) -> String {
   if self.session_name.length() == 0 {
     "session"

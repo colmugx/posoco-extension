@@ -1,8 +1,4 @@
 ///|
-/// Plan mode hook implementations: tool gating + prompt injection.
-
-///|
-/// The `cmd` string field used by the bash-family tools.
 fn shell_command_of(call : @posoco.ToolCall) -> String? {
   match call.arguments {
     Object(fields) =>
@@ -15,7 +11,6 @@ fn shell_command_of(call : @posoco.ToolCall) -> String? {
 }
 
 ///|
-/// The `path`/`file_path` string field of write-class tools.
 fn write_target_of(call : @posoco.ToolCall) -> String? {
   match call.arguments {
     Object(fields) =>
@@ -55,7 +50,7 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
   }
   if self.config.shell_tools.contains(name) {
     let read_only = match shell_command_of(call) {
-      Some(cmd) => @devkit.shell_command_is_read_only(cmd)
+      Some(cmd) => shell_command_is_read_only(cmd)
       None => false
     }
     if read_only {
@@ -125,7 +120,6 @@ fn plan_envelope(kind~ : String, content~ : String) -> String {
 }
 
 ///|
-/// Prefix used to locate existing plan reminders in the message transcript.
 fn plan_context_prefix() -> String {
   "<plan-context"
 }
@@ -192,7 +186,6 @@ fn inject_or_replace_plan_reminder(
 }
 
 ///|
-/// Per-turn plan-mode reminder injection before the model.
 pub impl @posoco.PipelineHook for PlanMode with fn before_model(
   self,
   messages : Array[@kernel.Message],

@@ -1,7 +1,4 @@
 ///|
-/// Tests for posoco_ext_plan.
-
-///|
 fn plan_mode_with_reads() -> PlanMode {
   PlanMode(config=PlanModeConfig::{
     ..PlanModeConfig::default(),
@@ -198,10 +195,8 @@ test "state machine transitions" {
     plan.status(),
     PlanStatus::ReadyForApproval(plan="step 1: do the thing"),
   )
-  // reject → back to planning
   assert_true(plan.reject())
   assert_eq(plan.status(), PlanStatus::Planning)
-  // resubmit + approve → off, plan returned
   assert_true(plan.submit_plan("step 1: revised"))
   assert_eq(plan.approve(), Some("step 1: revised"))
   assert_eq(plan.status(), PlanStatus::Off)
@@ -405,7 +400,6 @@ async test "list_tools declares the configured tools" {
 ///|
 async test "bare /plan toggles plan mode" {
   let plan = plan_mode_with_reads()
-  // toggle on
   match plan.invoke("plan", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
       assert_true(feedback.contains("plan mode on"))
@@ -427,7 +421,6 @@ async test "bare /plan toggles plan mode" {
     _ => fail("expected Success")
   }
   assert_eq(plan.status(), PlanStatus::Planning)
-  // toggle off
   match plan.invoke("plan", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
       assert_true(feedback.contains("plan mode off"))
@@ -459,14 +452,12 @@ async test "plan command on/off/status" {
     _ => fail("expected Success")
   }
   assert_eq(plan.status(), PlanStatus::Off)
-  // on → planning
   match plan.invoke("plan", Json::string("on")) {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
       assert_true(feedback.contains("plan mode on"))
     _ => fail("expected Success")
   }
   assert_eq(plan.status(), PlanStatus::Planning)
-  // off → off
   match plan.invoke("plan", Json::object({ "action": Json::string("off") })) {
     @posoco.CommandOutcome::Success(..) => ()
     _ => fail("expected Success")
@@ -777,10 +768,10 @@ async test "constructor reports the enter/exit tools on the bus" {
   )
   assert_eq(gate.events.length(), 1)
   assert_eq(gate.events[0].source, "posoco_ext_plan")
-  assert_eq(gate.events[0].topic, @devkit.tool_exemptions_topic)
-  assert_eq(
-    @devkit.parse_tool_exemptions(gate.events[0].data),
-    Some(["exit_plan_mode", "enter_plan_mode"]),
+  assert_eq(gate.events[0].topic, "tool_exemptions")
+  inspect(
+    gate.events[0].data.stringify(),
+    content="{\"tools\":[\"exit_plan_mode\",\"enter_plan_mode\"]}",
   )
 }
 
@@ -791,9 +782,9 @@ async test "without model entry only the exit tool is reported" {
   bus.subscribe(gate as &@devkit.BusSubscriber)
   ignore(PlanMode(bus=Some(bus)))
   assert_eq(gate.events.length(), 1)
-  assert_eq(
-    @devkit.parse_tool_exemptions(gate.events[0].data),
-    Some(["exit_plan_mode"]),
+  inspect(
+    gate.events[0].data.stringify(),
+    content="{\"tools\":[\"exit_plan_mode\"]}",
   )
 }
 

@@ -41,7 +41,6 @@ pub impl Show for PlanStatus with fn to_string(self : PlanStatus) -> String {
 }
 
 ///|
-/// Plan mode configuration.
 pub(all) struct PlanModeConfig {
   /// Tools that remain executable while planning (read-only tools such as
   /// `read` / `glob` / `grep`). Entries may end with `*` to match a name
@@ -51,8 +50,8 @@ pub(all) struct PlanModeConfig {
   /// mode is active.
   allowed_tools : Array[String]
   /// Shell-like tool names gated per invocation: the call passes when its
-  /// `cmd` classifies read-only (`@devkit.shell_command_is_read_only`).
-  /// Empty disables per-invocation shell gating.
+  /// `cmd` classifies read-only per this package's read-only classifier
+  /// (shell_readonly.mbt). Empty disables per-invocation shell gating.
   shell_tools : Array[String]
   /// Write-class tool names gated by TARGET: the call passes only when its
   /// `path` ends with one of `writable_extensions`. Workspace confinement is
@@ -74,9 +73,6 @@ pub(all) struct PlanModeConfig {
 } derive(Eq, Debug)
 
 ///|
-/// Default: read-only shell gating on, writes allowed for `.md` anywhere in
-/// the workspace, `exit_plan_mode` / `enter_plan_mode` names, model entry
-/// disabled.
 pub fn PlanModeConfig::default() -> PlanModeConfig {
   {
     allowed_tools: [],
@@ -169,7 +165,7 @@ pub fn PlanMode::PlanMode(
       if config.allow_model_entry {
         tools.push(config.enter_tool_name)
       }
-      @devkit.publish_tool_exemptions(bus, source="posoco_ext_plan", tools~)
+      publish_tool_exemptions(bus, tools~)
     }
     None => ()
   }
@@ -226,7 +222,6 @@ fn PlanMode::publish_status(self : PlanMode) -> Unit {
 }
 
 ///|
-/// Current plan mode status.
 pub fn PlanMode::status(self : PlanMode) -> PlanStatus {
   self.status
 }

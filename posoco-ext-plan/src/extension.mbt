@@ -1,5 +1,4 @@
 ///|
-/// Self-report PlanMode's port contributions to the agent composer.
 pub impl @posoco.Extension for PlanMode with fn extension_id(_self) -> String {
   "posoco_ext_plan"
 }

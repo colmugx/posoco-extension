@@ -27,7 +27,6 @@ pub impl Show for PlanReviewRequest with fn to_string(self : PlanReviewRequest) 
 }
 
 ///|
-/// The reviewer's verdict.
 pub(all) enum PlanReviewDecision {
   Accept
   /// Back to planning; the feedback reaches the model. Rejection always
