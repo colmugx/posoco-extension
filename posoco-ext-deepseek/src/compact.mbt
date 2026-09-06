@@ -356,15 +356,15 @@ async fn DeepSeekModelPort::ds_compact_summarize(
 }
 
 ///|
-/// ModelPort implementation — compact. Manual replays the head verbatim
-/// with the instruction trailing as the final user message (full summary).
-/// Auto runs the cheaper tier first: evict tool pairs older than the three
-/// most recent user turns; summarize only when nothing is evictable or the
-/// kept transcript would still sit above the escalation line — and when the
-/// post-eviction transcript is too small to summarize, keep the eviction
-/// win instead of failing. The scope's pressure advisory (posoco's resolved
-/// window plus the latest verified occupancy) overrides the local config
-/// and the character estimate whenever present.
+/// Manual replays the head verbatim with the instruction trailing as the
+/// final user message (full summary). Auto runs the cheaper tier first: evict
+/// tool pairs older than the three most recent user turns; summarize only
+/// when nothing is evictable or the kept transcript would still sit above
+/// the escalation line — and when the post-eviction transcript is too small
+/// to summarize, keep the eviction win instead of failing. The scope's
+/// pressure advisory (posoco's resolved window plus the latest verified
+/// occupancy) overrides the local config and the character estimate whenever
+/// present.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
   self : DeepSeekModelPort,
   scope : @posoco.InvocationScope,

@@ -206,7 +206,6 @@ fn decode_chat_response(
 }
 
 ///|
-/// Extract Usage from a JSON object containing usage fields.
 fn extract_usage(
   root : Map[String, Json],
 ) -> @posoco.Usage raise @posoco.ModelError {

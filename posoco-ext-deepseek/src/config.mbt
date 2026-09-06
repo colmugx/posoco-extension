@@ -22,7 +22,6 @@ pub(all) struct DeepSeekConfig {
 } derive(Eq, Debug)
 
 ///|
-/// Default config builder. api_key is required; other fields use defaults.
 pub fn DeepSeekConfig::DeepSeekConfig(
   api_key : String,
   model? : String = "deepseek-v4-flash",
@@ -81,9 +80,6 @@ pub fn DeepSeekConfig::with_reasoning_effort(
 }
 
 ///|
-/// The DeepSeek ModelPort implementation. Implements @posoco.ModelPort for
-/// chat/chat_streaming (standard trait path) and exposes DeepSeek-native APIs
-/// (fim_completion, chat_prefix_completion) as extension methods.
 pub(all) struct DeepSeekModelPort {
   config : DeepSeekConfig
   ctx : @devkit.ExtContext

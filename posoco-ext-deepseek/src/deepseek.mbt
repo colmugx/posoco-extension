@@ -1,11 +1,4 @@
 ///|
-/// posoco_ext_deepseek — ModelPort implementation.
-///
-/// Implements @posoco.ModelPort for DeepSeek's /chat/completions endpoint.
-/// Uses @http.post / @http.post_stream with the full endpoint URL.
-
-///|
-/// Build HTTP headers for DeepSeek API requests.
 fn build_headers(config : DeepSeekConfig) -> @http.Headers {
   {
     "Authorization": "Bearer \{config.api_key}",
@@ -14,7 +7,6 @@ fn build_headers(config : DeepSeekConfig) -> @http.Headers {
 }
 
 ///|
-/// The full chat completions URL: base_url + endpoint_prefix + /chat/completions.
 fn chat_url(config : DeepSeekConfig) -> String {
   config.base_url + config.endpoint_prefix + "/chat/completions"
 }
@@ -57,7 +49,6 @@ fn DeepSeekModelPort::default_thinking_config(
 }
 
 ///|
-/// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   self : DeepSeekModelPort,
   _scope : @posoco.InvocationScope,
@@ -231,9 +222,6 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
 }
 
 ///|
-
-///|
-/// ModelPort implementation — provider_config.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn provider_config(
   self : DeepSeekModelPort,
 ) -> @posoco.ProviderConfig {

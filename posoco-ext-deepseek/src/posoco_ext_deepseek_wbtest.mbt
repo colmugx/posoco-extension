@@ -349,17 +349,8 @@ test "sse_tool_call_delta" {
 }
 
 ///|
-/// Regression guard for the double-push bug: when a caller drives
-/// process_deepseek_sse with a production-style callback (one that forwards
-/// to a host AND accumulates), each delta must land in the accumulator
-/// exactly once. The bridge in deepseek.mbt previously called acc.push inside
-/// on_typed while process_deepseek_sse also pushed, doubling every text and
-/// reasoning token (and corrupting tool-call argument JSON).
-///
-/// This test mirrors the real wiring: the callback forwards the chunk (as a
-/// would-be Json) and, to be safe against the same regression, does NOT push
-/// to acc itself — the parser owns accumulation. If either side regresses and
-/// pushes twice, acc.text / acc.reasoning will be doubled.
+/// Regression guard: the parser owns accumulation; if the bridge also
+/// pushed, every text and reasoning token would double.
 test "sse_no_double_push_with_forwarding_callback" {
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let forwarded : Array[@posoco.StreamChunk] = []

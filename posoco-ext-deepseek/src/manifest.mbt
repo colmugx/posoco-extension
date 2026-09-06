@@ -1,6 +1,4 @@
 ///|
-
-///|
 pub impl @posoco.Extension for DeepSeekModelPort with fn extension_id(_self) -> String {
   "posoco_ext_deepseek"
 }
