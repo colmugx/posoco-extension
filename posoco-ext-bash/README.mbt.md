@@ -1,1 +1,1 @@
-# colmugx/posoco-ext-bash
+# posoco-ext-bash

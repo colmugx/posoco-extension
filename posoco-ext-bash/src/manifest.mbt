@@ -1,6 +1,4 @@
 ///|
-
-///|
 pub impl @posoco.Extension for ShellTools with fn extension_id(_self) -> String {
   "posoco_ext_bash"
 }

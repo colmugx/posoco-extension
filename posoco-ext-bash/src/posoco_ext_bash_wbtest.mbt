@@ -1,11 +1,4 @@
 ///|
-/// shell_wbtest.mbt — Whitebox tests for ShellTools (unified ToolProvider)
-///
-/// Runtime fixtures use only the local `sh` required by the implementation;
-/// they are offline and do not depend on external services.
-
-///|
-/// Test: ShellTools.list_tools
 async test "list_tools_contains_bash" {
   let tools = ShellTools()
   let tool_defs = tools.list_tools()
@@ -45,7 +38,6 @@ async test "list_tools_have_provenance" {
 }
 
 ///|
-/// Test: extract_command
 test "extract_command_from_cmd_key" {
   let args = Json::object(
     Map::from_array([

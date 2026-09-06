@@ -1,6 +1,4 @@
 ///|
-
-///|
 pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
   _self : ShellTools,
 ) -> Array[@posoco.ToolDef] {
@@ -29,11 +27,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         _ => raise bash_collect_output_failure()
       }
   }
-  // Decode failure must not masquerade as success. If the process produced
-  // non-UTF-8 / undecodable output, surface it as a business-level error
-  // (ToolReportedError) with a message that includes the exit code, so the
-  // model can react instead of receiving a silent "(decoding error)" body on
-  // an exit-0 success.
+  // Decode failure must not masquerade as success.
   let mut decode_failed = false
   let content = output_data.text() catch {
     _ => {
@@ -56,7 +50,6 @@ fn bash_decode_failure(exit_code : Int) -> String {
 }
 
 ///|
-/// Native collect_output failure.
 fn bash_collect_output_failure() -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
     "bash: process failed (stage=collect_output)",
