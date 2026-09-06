@@ -1,5 +1,3 @@
-// detect_wbtest.mbt — truth tables for both detection signals.
-
 ///|
 test "server-name detection is exact" {
   assert_true(detect_from_server_names(["mcp", "paseo"]))

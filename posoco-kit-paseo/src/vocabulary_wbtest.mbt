@@ -1,6 +1,3 @@
-// vocabulary_wbtest.mbt — the Phase 3 tool list is exactly the eight names,
-// and detection is exact table membership (no prefix rule).
-
 ///|
 test "the vocabulary is the eight Phase 3 tool names" {
   inspect(

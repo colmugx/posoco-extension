@@ -1,6 +1,3 @@
-// delegation_wbtest.mbt — intent-to-call assembly, prompt call assembly,
-// and the get_agent_status → neutral phase decode.
-
 ///|
 test "create call carries the task and the present optional fields" {
   let full : @delegation.DelegationIntent = {

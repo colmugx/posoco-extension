@@ -1,6 +1,3 @@
-// prompt_wbtest.mbt — the orchestration prompt section is stable, non-empty
-// text that names the tool set and the status authority rule.
-
 ///|
 test "prompt section is stable and covers orchestration semantics" {
   let section = prompt_section()

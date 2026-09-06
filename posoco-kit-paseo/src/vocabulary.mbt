@@ -40,7 +40,6 @@ pub const PASEO_TOOL_KILL_AGENT : String = "kill_agent"
 pub const PASEO_TOOL_UPDATE_AGENT : String = "update_agent"
 
 ///|
-/// The Phase 3 tool list, in plan order.
 pub fn paseo_tool_names() -> Array[String] {
   [
     PASEO_TOOL_CREATE_AGENT,
