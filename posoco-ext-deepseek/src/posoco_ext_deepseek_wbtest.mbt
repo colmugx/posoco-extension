@@ -313,9 +313,11 @@ test "sse_finish_with_usage" {
   assert_true(done)
   // Should emit Usage + Finish
   assert_true(chunks.length() >= 2)
-  // Verify usage captured on the accumulator
-  assert_true(acc.usage_total == Some(15))
   let resp = acc.to_completion()
+  match resp.usage {
+    Some(usage) => assert_true(usage.total_tokens == Some(15))
+    None => fail("expected usage in completion")
+  }
   assert_true(resp.finish_reason() is @posoco.FinishReason::Stop)
 }
 
@@ -837,7 +839,8 @@ test "t07b_deepseek_stream_tool_argument_error_is_redacted" {
   }
   match result {
     Err(@posoco.ModelError::ResponseParse(msg)) => {
-      assert_true(msg.contains("payload_chars="))
+      assert_true(msg.contains("DeepSeek SSE parse failure (stage=tool_calls)"))
+      assert_true(msg.contains("malformed tool-call arguments JSON"))
       assert_false(msg.contains(secret))
     }
     _ => fail("expected redacted stream argument error")

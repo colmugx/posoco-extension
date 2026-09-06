@@ -107,6 +107,11 @@ match provider.balance_source(source) {
 }
 ```
 
+Both the factory `build` and the explicit `refresh` also register the balance
+source into the devkit process-wide quota registry under the provider id
+`deepseek` — every configured build re-registers, so the registry always holds
+the latest credential snapshot, and the `/status` command pulls from it live.
+
 ## Migration
 
 Old config fields `chat_model`, `reasoner_model`, `coder_model`, `thinking`,

@@ -159,6 +159,16 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
     Some(models) => port.model_catalog_from_models(models)
     None => port.model_catalog()
   }
+  // Pull-style quota: publish the balance probe under the provider id so the
+  // /status command reads it live at command time. Every configured build
+  // re-registers, so the registry holds the latest credential snapshot.
+  match self.balance_source(source) {
+    Some(src) => {
+      let borrowed : &@devkit.QuotaSource = src
+      @devkit.quota_registry_register("deepseek", borrowed)
+    }
+    None => ()
+  }
   @llm.ProviderBuildResult::Ready(catalog)
 }
 
@@ -226,6 +236,15 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
       )
   }
   let port = DeepSeekModelPort(config, ctx=self.ctx)
+  // Same registry publication as build: refresh carries the newest
+  // credentials, so the /status pull source follows it.
+  match self.balance_source(source) {
+    Some(src) => {
+      let borrowed : &@devkit.QuotaSource = src
+      @devkit.quota_registry_register("deepseek", borrowed)
+    }
+    None => ()
+  }
   @llm.ProviderBuildResult::Ready(port.model_catalog_from_models(models))
 }
 

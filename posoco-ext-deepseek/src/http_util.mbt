@@ -96,27 +96,11 @@ fn classify_deepseek_stream_termination(
 fn validate_deepseek_stream_tool_calls(
   acc : @posoco.StreamAccumulator,
 ) -> Unit raise @posoco.ModelError {
-  for tc in acc.tool_calls {
-    if tc.id == "" {
+  let _ = acc.to_completion() catch {
+    @posoco.ModelError::ResponseParse(message) =>
       raise @posoco.ModelError::ResponseParse(
-        "DeepSeek SSE parse failure (stage=tool.id, category=missing)",
+        "DeepSeek SSE parse failure (stage=tool_calls): " + message,
       )
-    }
-    if tc.name == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "DeepSeek SSE parse failure (stage=tool.name, category=missing)",
-      )
-    }
-    if tc.arguments_json() == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "DeepSeek SSE parse failure (stage=tool.arguments, category=missing)",
-      )
-    }
-    let _ : Json = @json.parse(tc.arguments_json()) catch {
-      _ =>
-        raise @posoco.ModelError::ResponseParse(
-          "DeepSeek SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
-        )
-    }
+    error => raise error
   }
 }
