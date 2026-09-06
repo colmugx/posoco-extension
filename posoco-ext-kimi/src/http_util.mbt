@@ -1,19 +1,13 @@
 ///|
-/// Shared HTTP utilities for kimi API — error body summary, status
-/// classification, stream termination classification, and tool-call
-/// validation. All items are package-visible so they can be used across
-/// files in this package (kimi.mbt and tests).
 
 ///|
-/// Redacted non-2xx body metadata. Keeping this as an ADT prevents the raw
-/// provider body from crossing the HTTP-error formatting boundary.
+/// Redacted non-2xx body metadata; the raw body never enters error text.
 priv enum KimiErrorBodySummary {
   BodyBytesUtf8(Int)
   BodyUnavailable
 }
 
 ///|
-/// Format an HTTP failure from redacted metadata.
 fn format_kimi_http_error(
   stage : String,
   status : Int,
@@ -32,15 +26,6 @@ fn is_kimi_http_success(status : Int) -> Bool {
 }
 
 ///|
-/// Pure HTTP-status classifier. Non-quota failures keep the redacted
-/// summary. A quota verdict keeps the body: 429 (Moonshot's plan throttles
-/// are the documented 5-hour/monthly messages, also phrased "The engine is
-/// currently overloaded" with `error.type: rate_limit_reached_error`) and
-/// 403 (the coding plan's "You've reached your 5-hour usage limit" quota
-/// wall — the kit gates non-429 bodies on quota phrasing so auth 403s stay
-/// Transport). The body distinguishes quota walls from real overload; the
-/// message text carries no timestamp, so the documented wait signal is the
-/// `Retry-After` header, passed here by the caller when one was present.
 fn classify_kimi_http_status(
   stage : String,
   status : Int,
@@ -64,6 +49,23 @@ fn classify_kimi_http_status(
       None => ()
     }
   }
+  if status == 401 {
+    return Some(
+      @posoco.ModelError::Transport(
+        format_kimi_http_error(stage, status, body_summary) +
+        ": platform (api.moonshot.ai) and coding (api.kimi.com) credentials are not interchangeable; check base_url against the credential kind",
+      ),
+    )
+  }
+  if status == 400 &&
+    (body_text.contains("total message size") || body_text.contains("2097152")) {
+    return Some(
+      @posoco.ModelError::Transport(
+        format_kimi_http_error(stage, status, body_summary) +
+        ": the coding host rejects message payloads over 2 MiB (limit 2097152 bytes)",
+      ),
+    )
+  }
   Some(
     @posoco.ModelError::Transport(
       format_kimi_http_error(stage, status, body_summary),
@@ -72,8 +74,7 @@ fn classify_kimi_http_status(
 }
 
 ///|
-/// Read the error body of a streamed non-2xx response, bounded. `None` when
-/// the body could not be read at all.
+/// Bounded read of a streamed non-2xx error body.
 async fn read_error_body_text(client : @http.Client) -> String? {
   let data = client.read_all() catch { _ => return None }
   let text = data.text() catch { _ => return None }
@@ -87,59 +88,4 @@ async fn read_error_body_text(client : @http.Client) -> String? {
 ///|
 fn retry_after_header(response : @http.Response) -> String? {
   response.headers.get(@http.CaseInsensitiveString("Retry-After"))
-}
-
-///|
-/// Pure classification for stream termination; used by the HTTP loop and
-/// offline tests so EOF is never inferred from accumulated content.
-/// (Transport failures raise `ModelError::Transport` directly at the read
-/// site so the underlying error detail is preserved.)
-priv enum KimiStreamTermination {
-  ExplicitTerminal
-  CleanEof
-}
-
-///|
-fn classify_kimi_stream_termination(
-  termination : KimiStreamTermination,
-) -> @posoco.ModelError? {
-  match termination {
-    ExplicitTerminal => None
-    CleanEof =>
-      Some(
-        @posoco.ModelError::ResponseParse(
-          "kimi SSE truncated (stage=eof, terminal_marker=missing)",
-        ),
-      )
-  }
-}
-
-///|
-/// Reject incomplete tool-call builders before delegating JSON assembly.
-fn validate_kimi_stream_tool_calls(
-  acc : @posoco.StreamAccumulator,
-) -> Unit raise @posoco.ModelError {
-  for tc in acc.tool_calls {
-    if tc.id == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "kimi SSE parse failure (stage=tool.id, category=missing)",
-      )
-    }
-    if tc.name == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "kimi SSE parse failure (stage=tool.name, category=missing)",
-      )
-    }
-    if tc.arguments_json() == "" {
-      raise @posoco.ModelError::ResponseParse(
-        "kimi SSE parse failure (stage=tool.arguments, category=missing)",
-      )
-    }
-    let _ : Json = @json.parse(tc.arguments_json()) catch {
-      _ =>
-        raise @posoco.ModelError::ResponseParse(
-          "kimi SSE parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{tc.arguments_json().length()})",
-        )
-    }
-  }
 }

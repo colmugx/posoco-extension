@@ -1,7 +1,4 @@
 ///|
-/// Rebuild one Kimi slot while preserving both credential and effort hooks.
-/// Keeping both hooks in one helper prevents an OAuth login from silently
-/// dropping the provider's effort capabilities.
 fn kimi_catalog_slot(
   config : KimiConfig,
   ctx : @devkit.ExtContext,
@@ -57,7 +54,6 @@ fn kimi_catalog_slot(
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=Some(config.thinking_efforts),
         context_window=config.context_window,
-        supports_images=config.supports_images,
       )
       kimi_catalog_slot(
         refreshed,
@@ -79,7 +75,6 @@ fn kimi_catalog_slot(
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=Some(config.thinking_efforts),
         context_window=config.context_window,
-        supports_images=config.supports_images,
       )
       kimi_catalog_slot(
         refreshed,
@@ -97,10 +92,6 @@ fn kimi_catalog_slot(
 }
 
 ///|
-/// Build one slot from a live provider model descriptor while retaining the
-/// configured model's requested effort whenever the server still advertises
-/// it.  A catalog refresh therefore cannot silently switch the active model
-/// to a hardcoded family default.
 fn kimi_catalog_slot_from_info(
   base_config : KimiConfig,
   info : KimiModelInfo,
@@ -126,7 +117,6 @@ fn kimi_catalog_slot_from_info(
     reasoning_effort=selected_effort,
     thinking_efforts=Some(info.thinking_efforts),
     context_window=Some(info.context_window),
-    supports_images=info.capabilities.contains("image_in"),
   )
   kimi_catalog_slot(
     config,
@@ -141,9 +131,8 @@ fn kimi_catalog_slot_from_info(
 }
 
 ///|
-/// Move the configured model to the front while retaining server order for
-/// all other entries.  Router selection is declaration-order based, so this
-/// keeps provider settings.model active after an explicit refresh.
+/// Router selection is declaration-order based; keep the configured model
+/// first.
 fn kimi_preferred_models(
   models : Array[KimiModelInfo],
   preferred_id : String,
@@ -168,11 +157,13 @@ fn kimi_preferred_models(
 }
 
 ///|
-/// Build a provider-owned Kimi model catalog.
+fn kimi_allowlisted_models(
+  models : Array[KimiModelInfo],
+) -> Array[KimiModelInfo] {
+  models.filter(fn(info) { kimi_model_supported(info.id) })
+}
 
 ///|
-/// Kimi exposes chat and streaming chat only. In particular, this catalog
-/// intentionally does not advertise FIM or prefix completion capabilities.
 pub fn KimiModelPort::model_catalog(
   self : KimiModelPort,
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
@@ -188,11 +179,11 @@ pub fn KimiModelPort::model_catalog(
 }
 
 ///|
-/// Build a catalog from the provider's authenticated `/models` response.
 pub fn KimiModelPort::model_catalog_from_models(
   self : KimiModelPort,
   models : Array[KimiModelInfo],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
+  let models = kimi_allowlisted_models(models)
   if models.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_kimi",

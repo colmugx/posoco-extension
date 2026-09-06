@@ -1,15 +1,11 @@
 ///|
-/// Blackbox tests for posoco-ext-kimi wire encoding/decoding.
-/// These test the pure encode/decode logic without any network calls.
-
-///|
-fn disabled_thinking_json() -> Json {
-  Json::object({ "type": Json::string("disabled") })
+fn user_msg(text : String) -> @posoco.Message {
+  @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
 }
 
 ///|
-fn user_msg(text : String) -> @posoco.Message {
-  @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
+fn system_msg(text : String) -> @posoco.Message {
+  @posoco.Message::SystemMessage(content=[@posoco.Content::Text(text)])
 }
 
 ///|
@@ -23,8 +19,53 @@ fn assistant_msg(text : String) -> @posoco.Message {
 }
 
 ///|
+fn tool_msg(text : String) -> @posoco.Message {
+  @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_1"),
+    tool_name=@posoco.ToolName::unchecked("read"),
+    outcome=@posoco.ToolOutcome::Success(content=text, structured=None),
+  )
+}
+
+///|
 fn chat_options() -> @posoco.ChatOptions {
   { temperature: None, max_output_tokens: None, }
+}
+
+///|
+fn tool_def(name : String) -> @posoco.ToolDef {
+  @posoco.ToolDef::ToolDef(
+    name=@posoco.ToolName::unchecked(name),
+    description="test tool " + name,
+    input_schema=Json::object({ "type": Json::string("object") }),
+    owner=@posoco.OwnerId::unchecked("test"),
+    policy=@posoco.ExecutionPolicy::Sequential,
+    provenance=None,
+  )
+}
+
+///|
+fn assert_json_field_string(
+  obj : Map[String, Json],
+  key : String,
+  expected : String,
+) -> Unit raise {
+  match obj.get(key) {
+    Some(String(s)) => assert_eq(s, expected)
+    _ => fail("expected string field: " + key)
+  }
+}
+
+///|
+fn assert_json_field_number(
+  obj : Map[String, Json],
+  key : String,
+  expected : Double,
+) -> Unit raise {
+  match obj.get(key) {
+    Some(Number(n, ..)) => assert_eq(n, expected)
+    _ => fail("expected number field: " + key)
+  }
 }
 
 ///|
@@ -214,380 +255,299 @@ async test "Kimi OAuth refresh rejects fractional expiry" {
 }
 
 ///|
-fn assert_json_field_string(
-  obj : Map[String, Json],
-  key : String,
-  expected : String,
-) -> Unit raise {
-  match obj.get(key) {
-    Some(String(s)) => assert_eq(s, expected)
-    _ => fail("expected string field: " + key)
+test "kimi_config_defaults_to_k3_platform_high_effort" {
+  let config = KimiConfig("key")
+  assert_eq(config.api_key, "key")
+  assert_eq(config.base_url, "https://api.moonshot.ai/v1")
+  assert_eq(config.model, "kimi-k3")
+  assert_eq(config.reasoning_effort, "high")
+  assert_eq(config.thinking_efforts, ["low", "high", "max"])
+  assert_true(config.send_prompt_cache_key)
+}
+
+///|
+test "kimi_effort_values_cover_the_k3_era_table" {
+  for
+    model in [
+      "kimi-k3", "k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed",
+    ] {
+    assert_eq(kimi_effort_values(model), ["low", "high", "max"])
   }
 }
 
 ///|
-test "encode_message_basic" {
-  let msg = user_msg("hello")
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("role") {
-    Some(String(r)) => assert_eq(r, "user")
-    _ => fail("expected role string")
-  }
-  match obj.get("content") {
-    Some(String(c)) => assert_eq(c, "hello")
-    _ => fail("expected content string")
-  }
-  // reasoning_content must NOT be present (kimi optimization)
-  match obj.get("reasoning_content") {
-    None => ()
-    _ => fail("reasoning_content should not be encoded")
-  }
-}
-
-///|
-test "encode_message_assistant_no_reasoning" {
-  // Even an assistant message from a reasoning model must not carry
-  // reasoning_content when re-serialized (prefix cache protection).
-  let msg = assistant_msg("answer")
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("role") {
-    Some(String(r)) => assert_eq(r, "assistant")
-    _ => fail("expected assistant role")
-  }
-  match obj.get("reasoning_content") {
-    None => ()
-    _ => fail("assistant history must not carry reasoning_content")
-  }
-}
-
-///|
-test "encode_message_with_tool_calls" {
-  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
-    content=[],
-    tool_calls=[
-      {
-        call_id: @posoco.CallId::unchecked("call_1"),
-        name: @posoco.ToolName::unchecked("read_file"),
-        arguments: Json::object({ "path": Json::string("/tmp/x") }),
-      },
-    ],
-    reasoning=None,
-    finish_reason=@posoco.FinishReason::ToolCalls,
-  )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("tool_calls") {
-    Some(Array(tcs)) => {
-      assert_eq(tcs.length(), 1)
-      guard tcs[0] is Object(tc0) else { fail("expected tool_call object") }
-      match tc0.get("id") {
-        Some(String(id)) => assert_eq(id, "call_1")
-        _ => fail("expected call id")
+test "model_policy_rejects_dropped_ids_with_migration_message" {
+  for
+    dropped in ["kimi-k2.7-code", "kimi-k2.6", "moonshot-v1-8k", "kimi-latest"] {
+    match kimi_model_policy_error(dropped) {
+      Some(message) => {
+        assert_true(message.contains(dropped))
+        assert_true(message.contains("removed with the k2 line"))
+        assert_true(message.contains("kimi-k3"))
+        assert_true(message.contains("k3-256k"))
+        assert_true(message.contains("kimi-for-coding"))
       }
-      match tc0.get("function") {
-        Some(Object(f)) =>
-          match f.get("name") {
-            Some(String(n)) => assert_eq(n, "read_file")
-            _ => fail("expected function name")
-          }
-        _ => fail("expected function object")
-      }
+      None => fail("dropped model must produce the migration error: " + dropped)
     }
-    _ => fail("expected tool_calls array")
+  }
+  for
+    supported in [
+      "kimi-k3", "k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed",
+    ] {
+    assert_true(kimi_model_policy_error(supported) is None)
   }
 }
 
 ///|
-test "decode_chat_response_basic" {
-  // Minimal valid kimi response
-  let resp_json : Json = {
-    "choices": [
-      {
-        "message": { "role": "assistant", "content": "hello world" },
-        "finish_reason": "stop",
-      },
-    ],
-    "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 },
-  }
-  let resp = decode_chat_response(resp_json)
-  // Verify content
-  assert_eq(resp.message.content.length(), 1)
-  match resp.message.content[0] {
-    Text(t) => assert_eq(t, "hello world")
-    _ => fail("expected Text content")
-  }
-  // Verify finish reason (method, not field)
-  assert_true(resp.finish_reason() is @posoco.FinishReason::Stop)
-  // Verify usage
-  match resp.usage {
-    Some(u) =>
-      match u.total_tokens {
-        Some(n) => assert_eq(n, 15)
-        None => fail("expected total_tokens")
-      }
-    None => fail("expected usage")
-  }
-  // Verify no reasoning (basic chat has none)
-  match resp.message.reasoning {
-    None => ()
-    _ => fail("basic chat should have no reasoning")
-  }
+test "responses_url_builds_responses_endpoint_on_both_hosts" {
+  // Platform default: base_url already carries /v1.
+  let platform = KimiConfig("key")
+  assert_eq(responses_url(platform), "https://api.moonshot.ai/v1/responses")
+  // Split spelling: origin + endpoint prefix.
+  let split = KimiConfig(
+    "key",
+    base_url="https://api.moonshot.ai",
+    endpoint_prefix="/v1",
+  )
+  assert_eq(responses_url(split), "https://api.moonshot.ai/v1/responses")
+  // Managed coding host via OAuth credential.
+  let credential = @oauth.Credential::Credential(
+    access_token="tok",
+    refresh_token="r",
+    expires_at=1,
+  )
+  let coding = KimiConfig::from_oauth_credential(credential, "k3-256k")
+  assert_eq(coding.base_url, "https://api.kimi.com/coding/v1")
+  assert_eq(responses_url(coding), "https://api.kimi.com/coding/v1/responses")
 }
 
 ///|
-test "decode_chat_response_with_reasoning" {
-  // kimi-reasoner response includes reasoning_content
-  let resp_json : Json = {
-    "choices": [
-      {
-        "message": {
-          "role": "assistant",
-          "content": "42",
-          "reasoning_content": "let me think...",
-        },
-        "finish_reason": "stop",
-      },
-    ],
-  }
-  let resp = decode_chat_response(resp_json)
-  match resp.message.reasoning {
-    Some(r) => assert_eq(r.content, "let me think...")
-    None => fail("expected reasoning")
-  }
-  match resp.message.content[0] {
-    Text(t) => assert_eq(t, "42")
-    _ => fail("expected Text content")
-  }
-}
-
-///|
-test "decode_chat_response_with_tool_calls" {
-  let resp_json : Json = {
-    "choices": [
-      {
-        "message": {
-          "role": "assistant",
-          "content": "",
-          "tool_calls": [
-            {
-              "id": "call_1",
-              "type": "function",
-              "function": {
-                "name": "read_file",
-                "arguments": "{\"path\":\"/tmp/x\"}",
-              },
-            },
-          ],
-        },
-        "finish_reason": "tool_calls",
-      },
-    ],
-  }
-  let resp = decode_chat_response(resp_json)
-  let tcs = resp.tool_calls()
-  assert_eq(tcs.length(), 1)
-  let tc = tcs[0]
-  assert_eq(tc.call_id.to_string(), "call_1")
-  assert_eq(tc.name.to_string(), "read_file")
-  // arguments should be parsed JSON
-  guard tc.arguments is Object(args) else { fail("expected arguments object") }
-  match args.get("path") {
-    Some(String(p)) => assert_eq(p, "/tmp/x")
-    _ => fail("expected path argument")
-  }
-  assert_true(resp.finish_reason() is @posoco.FinishReason::ToolCalls)
-}
-
-///|
-test "decode_chat_response_api_error" {
-  let resp_json : Json = {
-    "error": { "message": "Invalid API key", "type": "authentication_error" },
-  }
-  // Should raise ModelError::Transport
-  match (Ok(decode_chat_response(resp_json)) catch { e => Err(e) }) {
-    Err(@posoco.ModelError::Transport(msg)) => {
-      assert_true(msg.contains("stage=response.error"))
-      assert_false(msg.contains("Invalid API key"))
+test "factory_defaults_coding_model_from_oauth_and_platform_from_api_key" {
+  // OAuth credential without a model setting: kimi's own recommended
+  // coding default applies.
+  let oauth_credential = @oauth.Credential::Credential(
+    access_token="tok",
+    refresh_token="r",
+    expires_at=1,
+  )
+  let oauth_source = @llm.ProviderConfigSource::ProviderConfigSource(
+    provider_credential=Some(@oauth.ProviderCredential::OAuth(oauth_credential)),
+  )
+  let provider = KimiProvider()
+  match @llm.ProviderFactory::build(provider, oauth_source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slot = catalog.slots()[0]
+      assert_eq(slot.model_id, "k3-256k")
+      assert_eq(slot.thinking_efforts, ["low", "high", "max"])
+      assert_true(catalog.capabilities.contains("reasoning"))
     }
-    Err(_) => fail("expected Transport error")
-    Ok(_) => fail("expected error")
+    _ => fail("expected a ready OAuth catalog")
   }
-}
-
-///|
-/// SSE parser tests — process_kimi_sse is pure (no network).
-
-///|
-test "sse_text_delta" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let chunks : Array[@posoco.StreamChunk] = []
-  let data = "{\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}"
-  let done = process_kimi_sse(data, acc, fn(c) { chunks.push(c) })
-  assert_false(done)
-  assert_eq(chunks.length(), 1)
-  assert_true(chunks[0] is @posoco.StreamChunk::TextDelta(token="hello"))
-  assert_eq(acc.text(), "hello")
-}
-
-///|
-test "sse_reasoning_delta" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let chunks : Array[@posoco.StreamChunk] = []
-  let data = "{\"choices\":[{\"delta\":{\"reasoning_content\":\"thinking\"}}]}"
-  let _ = process_kimi_sse(data, acc, fn(c) { chunks.push(c) })
-  assert_eq(chunks.length(), 1)
-  assert_true(
-    chunks[0] is @posoco.StreamChunk::ReasoningDelta(token="thinking"),
+  // API-key credential without a model setting: platform default.
+  let api_source = @llm.ProviderConfigSource::ProviderConfigSource(
+    provider_credential=Some(
+      @oauth.ProviderCredential::ApiKey(
+        @oauth.ApiKeyCredential::ApiKeyCredential(secret="sk-x"),
+      ),
+    ),
   )
-  assert_eq(acc.reasoning(), "thinking")
-}
-
-///|
-test "sse_done_marker" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let chunks : Array[@posoco.StreamChunk] = []
-  let done = process_kimi_sse("[DONE]", acc, fn(c) { chunks.push(c) })
-  assert_true(done)
-  assert_true(chunks[0] is @posoco.StreamChunk::Finish(_))
-}
-
-///|
-test "sse_finish_with_usage" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let chunks : Array[@posoco.StreamChunk] = []
-  let data =
-    #|{"choices":[{"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
-  let done = process_kimi_sse(data, acc, fn(c) { chunks.push(c) })
-  assert_true(done)
-  // Should emit Usage + Finish
-  assert_true(chunks.length() >= 2)
-  // Verify usage captured on the accumulator
-  assert_true(acc.usage_total == Some(15))
-  let resp = acc.to_completion()
-  assert_true(resp.finish_reason() is @posoco.FinishReason::Stop)
-}
-
-///|
-test "sse_tool_call_delta" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let chunks : Array[@posoco.StreamChunk] = []
-  // First chunk: tool call id + name
-  let data1 =
-    #|{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read_file","arguments":""}}]}}]}
-  let _ = process_kimi_sse(data1, acc, fn(c) { chunks.push(c) })
-  // Second chunk: arguments delta
-  let data2 =
-    #|{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"/x\"}"}}]}}]}
-  let _ = process_kimi_sse(data2, acc, fn(c) { chunks.push(c) })
-  // Verify accumulator assembled tool call
-  let resp = acc.to_completion()
-  let tcs = resp.tool_calls()
-  assert_eq(tcs.length(), 1)
-  assert_eq(tcs[0].call_id.to_string(), "call_1")
-  assert_eq(tcs[0].name.to_string(), "read_file")
-  guard tcs[0].arguments is Object(args) else {
-    fail("expected arguments object")
-  }
-  match args.get("path") {
-    Some(String(p)) => assert_eq(p, "/x")
-    _ => fail("expected path argument")
+  match @llm.ProviderFactory::build(provider, api_source) {
+    @llm.ProviderBuildResult::Ready(catalog) =>
+      assert_eq(catalog.slots()[0].model_id, "kimi-k3")
+    _ => fail("expected a ready API-key catalog")
   }
 }
 
 ///|
-/// Regression guard for the double-push bug: when a caller drives
-/// process_kimi_sse with a production-style callback (one that forwards
-/// to a host AND accumulates), each delta must land in the accumulator
-/// exactly once. The bridge in kimi.mbt previously called acc.push inside
-/// on_typed while process_kimi_sse also pushed, doubling every text and
-/// reasoning token (and corrupting tool-call argument JSON).
-///
-/// This test mirrors the real wiring: the callback forwards the chunk (as a
-/// would-be Json) and, to be safe against the same regression, does NOT push
-/// to acc itself — the parser owns accumulation. If either side regresses and
-/// pushes twice, acc.text / acc.reasoning will be doubled.
-test "sse_no_double_push_with_forwarding_callback" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let forwarded : Array[@posoco.StreamChunk] = []
-  // Production-style callback: forward the chunk to the host ONLY.
-  // Accumulation is owned by process_kimi_sse (it calls acc.push); if the
-  // callback also pushed, every token would be doubled.
-  let on_typed = fn(c : @posoco.StreamChunk) { forwarded.push(c) }
-  let text_data =
-    #|{"choices":[{"delta":{"content":"早上好"}}]}
-  let reasoning_data =
-    #|{"choices":[{"delta":{"reasoning_content":"思考中"}}]}
-  let _ = process_kimi_sse(text_data, acc, on_typed)
-  let _ = process_kimi_sse(reasoning_data, acc, on_typed)
-  // Each token forwarded exactly once to the host.
-  assert_eq(forwarded.length(), 2)
-  // Each token accumulated exactly once — NOT doubled.
-  assert_eq(acc.text(), "早上好")
-  assert_eq(acc.reasoning(), "思考中")
+/// Request shape snapshots — the kimi Responses contract.
+
+///|
+test "responses_request_lifts_system_messages_into_instructions" {
+  let messages = [
+    system_msg("be terse"),
+    system_msg("answer in kind"),
+    user_msg("hi"),
+    assistant_msg("hello"),
+  ]
+  let body = build_responses_request(
+    messages,
+    [],
+    chat_options(),
+    "kimi-k3",
+    false,
+    None,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  assert_json_field_string(root, "instructions", "be terse\n\nanswer in kind")
+  guard root.get("input") is Some(Array(items)) else { fail("input array") }
+  assert_eq(items.length(), 2)
+  for item in items {
+    guard item is Object(obj) else { fail("input item object") }
+    match obj.get("role") {
+      Some(String("system")) => fail("system message leaked into input")
+      _ => ()
+    }
+  }
 }
 
 ///|
-/// kimi rule: assistant with tool_calls MUST resend reasoning_content.
-/// Verify the encoder emits it when tool_calls present + reasoning present.
-test "encode_message_reasoning_resent_with_tool_calls" {
-  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+test "responses_request_omits_instructions_when_no_system_message" {
+  let body = build_responses_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "kimi-k3",
+    false,
+    None,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  match root.get("instructions") {
+    None => ()
+    Some(_) => fail("instructions must be absent without a system message")
+  }
+}
+
+///|
+test "responses_request_tools_array_is_kernel_functions_only" {
+  let body = build_responses_request(
+    [user_msg("hi")],
+    [tool_def("read_file"), tool_def("write_file")],
+    chat_options(),
+    "kimi-k3",
+    false,
+    None,
+    reasoning_effort=Some("high"),
+  )
+  guard body is Object(root) else { fail("expected object") }
+  guard root.get("tools") is Some(Array(tools)) else { fail("tools array") }
+  // The tools array is exactly the kernel function definitions — nothing
+  // appended, no hosted-tool entries.
+  assert_eq(tools.length(), 2)
+  for tool in tools {
+    guard tool is Object(entry) else { fail("tool object") }
+    assert_json_field_string(entry, "type", "function")
+    match entry.get("function") {
+      None => ()
+      Some(_) => fail("chat-wire nested function object must not appear")
+    }
+  }
+  match tools[0] {
+    Object(fn0) => assert_json_field_string(fn0, "name", "read_file")
+    _ => fail("expected read_file first")
+  }
+  match root.get("include") {
+    None => ()
+    Some(_) => fail("include must never be emitted")
+  }
+  // reasoning.effort is the only reasoning knob.
+  guard root.get("reasoning") is Some(Object(reasoning)) else {
+    fail("expected reasoning object")
+  }
+  assert_json_field_string(reasoning, "effort", "high")
+  match reasoning.get("summary") {
+    None => ()
+    Some(_) => fail("kimi must not request reasoning summaries")
+  }
+}
+
+///|
+test "responses_request_omits_tools_when_empty" {
+  let body = build_responses_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "kimi-k3",
+    false,
+    None,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  match root.get("tools") {
+    None => ()
+    Some(_) => fail("no tools may be emitted without function tools")
+  }
+}
+
+///|
+test "responses_request_maps_effort_tokens_cache_key_and_stream" {
+  let body = build_responses_request(
+    [user_msg("hi")],
+    [],
+    { temperature: Some(0.5), max_output_tokens: Some(256), },
+    "kimi-k3",
+    true,
+    Some("posoco-session-42"),
+    reasoning_effort=Some("low"),
+  )
+  guard body is Object(root) else { fail("expected object") }
+  assert_json_field_string(root, "model", "kimi-k3")
+  assert_json_field_number(root, "max_output_tokens", 256.0)
+  assert_json_field_string(root, "prompt_cache_key", "posoco-session-42")
+  match root.get("stream") {
+    Some(Json::True) => ()
+    _ => fail("stream must be true on the streaming body")
+  }
+  guard root.get("reasoning") is Some(Object(reasoning)) else {
+    fail("expected reasoning object")
+  }
+  assert_json_field_string(reasoning, "effort", "low")
+  match root.get("temperature") {
+    None => ()
+    Some(_) => fail("temperature must never be serialized")
+  }
+}
+
+///|
+test "responses_request_empty_effort_suppresses_reasoning_field" {
+  // A refresh that has not resolved the catalog effort list yet passes ""
+  // through config; the wire must not carry an empty effort.
+  let body = build_responses_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "kimi-k3",
+    false,
+    None,
+    reasoning_effort=Some(""),
+  )
+  guard body is Object(root) else { fail("expected object") }
+  match root.get("reasoning") {
+    None => ()
+    Some(_) => fail("empty effort must suppress the reasoning field")
+  }
+}
+
+///|
+/// Forbidden-param guard: even when ChatOptions carries sampling knobs, the
+/// serialized body never names a parameter the Kimi Responses wire rejects.
+test "responses_request_never_serializes_forbidden_params" {
+  let body = build_responses_request(
+    [system_msg("be terse"), user_msg("hello")],
+    [tool_def("read_file")],
+    { temperature: Some(0.7), max_output_tokens: Some(256), },
+    "kimi-k3",
+    true,
+    Some("posoco-session-42"),
+    reasoning_effort=Some("high"),
+  )
+  let text = body.stringify()
+  for
+    forbidden in [
+      "temperature", "top_p", "tool_choice", "search_context_size", "blocked_domains",
+      "store", "previous_response_id", "max_completion_tokens", "thinking",
+    ] {
+    assert_false(text.contains(forbidden))
+  }
+}
+
+///|
+/// Tool-call-id sanitization keeps replay correlation inside the charset
+/// kimi accepts, on both function_call and function_call_output items.
+test "input_items_sanitize_call_ids_on_replay" {
+  let assistant : @posoco.Message = @posoco.Message::AssistantMessage(
     content=[],
     tool_calls=[
       {
-        call_id: @posoco.CallId::unchecked("c1"),
-        name: @posoco.ToolName::unchecked("read"),
-        arguments: Json::empty_object(),
-      },
-    ],
-    reasoning=Some(@posoco.Reasoning::{
-      content: "thinking about this...",
-      raw: None,
-    }),
-    finish_reason=@posoco.FinishReason::ToolCalls,
-  )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("reasoning_content") {
-    Some(String(r)) => assert_eq(r, "thinking about this...")
-    _ => fail("reasoning_content MUST be present when tool_calls exist")
-  }
-}
-
-///|
-/// kimi rule (verified against kimi-code/kosong): reasoning_content is
-/// UNCONDITIONALLY preserved on every assistant message, regardless of
-/// tool_calls. Removing it breaks prefix cache (byte-for-byte longest-prefix
-/// matching) and disrupts reasoning signature continuity. This is the
-/// thinking.keep="all" default policy.
-test "encode_message_reasoning_preserved_without_tool_calls" {
-  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
-    content=[@posoco.Content::Text("answer")],
-    tool_calls=[],
-    reasoning=Some(@posoco.Reasoning::{ content: "thinking...", raw: None, }),
-    finish_reason=@posoco.FinishReason::Stop,
-  )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("reasoning_content") {
-    Some(String(r)) => assert_eq(r, "thinking...")
-    _ =>
-      fail(
-        "reasoning_content must be preserved even without tool_calls (prefix cache)",
-      )
-  }
-}
-
-///|
-/// kimi rule: tool_calls present but reasoning is None — encoder
-/// should not add an empty reasoning_content field.
-test "encode_message_tool_calls_no_reasoning" {
-  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
-    content=[],
-    tool_calls=[
-      {
-        call_id: @posoco.CallId::unchecked("c1"),
+        call_id: @posoco.CallId::unchecked("call:42|/x"),
         name: @posoco.ToolName::unchecked("read"),
         arguments: Json::empty_object(),
       },
@@ -595,76 +555,540 @@ test "encode_message_tool_calls_no_reasoning" {
     reasoning=None,
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("reasoning_content") {
-    None => () // correct: None means don't emit
-    _ => fail("should not emit reasoning_content when it's None")
-  }
-}
-
-///|
-/// Tool-role messages MUST carry the sanitized `tool_call_id` of the assistant
-/// tool_call they answer — same charset/length rules as assistant-side ids so
-/// correlation matches byte-for-byte.
-test "encode_message_tool_result_carries_tool_call_id" {
-  let msg : @posoco.Message = @posoco.Message::ToolMessage(
-    call_id=@posoco.CallId::unchecked("call_42"),
-    tool_name=@posoco.ToolName::unchecked("read_file"),
+  let tool_result : @posoco.Message = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call:42|/x"),
+    tool_name=@posoco.ToolName::unchecked("read"),
     outcome=@posoco.ToolOutcome::Success(
       content="file contents",
       structured=None,
     ),
   )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("role") {
-    Some(String(r)) => assert_eq(r, "tool")
-    _ => fail("expected tool role")
+  let items = kimi_input_items([assistant, tool_result])
+  assert_eq(items.length(), 2)
+  guard items[0] is Object(call_item) else { fail("function_call item") }
+  match call_item.get("type") {
+    Some(String("function_call")) => ()
+    _ => fail("expected function_call item")
   }
-  match obj.get("tool_call_id") {
-    Some(String(id)) => assert_eq(id, "call_42")
-    _ => fail("tool message MUST carry tool_call_id")
+  assert_json_field_string(call_item, "call_id", "call_42__x")
+  guard items[1] is Object(output_item) else { fail("function_call_output") }
+  match output_item.get("type") {
+    Some(String("function_call_output")) => ()
+    _ => fail("expected function_call_output item")
+  }
+  assert_json_field_string(output_item, "call_id", "call_42__x")
+}
+
+///|
+/// Reasoning: the reasoning item rides Reasoning.raw for verbatim replay.
+fn reasoning_fixture() -> Json {
+  {
+    "status": "completed",
+    "output": [
+      {
+        "type": "reasoning",
+        "id": "rs_1",
+        "summary": [{ "type": "summary_text", "text": "weighing sources" }],
+      },
+      {
+        "type": "message",
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": "here is the answer" }],
+      },
+    ],
+    "usage": {
+      "input_tokens": 100,
+      "output_tokens": 20,
+      "total_tokens": 120,
+      "input_tokens_details": { "cached_tokens": 80 },
+      "cache_write_tokens": 7,
+    },
   }
 }
 
 ///|
-/// Kimi rejects ids outside [a-zA-Z0-9_-]; the tool-role message must sanitize
-/// exactly like the assistant-side tool_call id it answers.
-test "encode_message_tool_result_sanitizes_tool_call_id" {
-  let msg : @posoco.Message = @posoco.Message::ToolMessage(
-    call_id=@posoco.CallId::unchecked("call:42|/x"),
-    tool_name=@posoco.ToolName::unchecked("read_file"),
-    outcome=@posoco.ToolOutcome::Success(content="ok", structured=None),
+test "decode_preserves_reasoning_raw_items_for_replay" {
+  let completion = decode_responses_response(reasoning_fixture())
+  guard completion.message.reasoning is Some(reasoning) else {
+    fail("expected reasoning")
+  }
+  guard reasoning.raw is Some(Array(raw_items)) else {
+    fail("expected raw reasoning items")
+  }
+  assert_eq(raw_items.length(), 1)
+  guard raw_items[0] is Object(reasoning_item) else { fail("reasoning raw") }
+  match reasoning_item.get("type") {
+    Some(String("reasoning")) => ()
+    _ => fail("expected reasoning raw item")
+  }
+  assert_eq(reasoning.content, "weighing sources")
+  // Usage: kimi Responses field names; cache_write_tokens ignored for
+  // cached accounting.
+  match completion.usage {
+    Some(usage) => {
+      assert_eq(usage.input_tokens, Some(100))
+      assert_eq(usage.output_tokens, Some(20))
+      assert_eq(usage.total_tokens, Some(120))
+      assert_eq(usage.cached_input_tokens, Some(80))
+    }
+    None => fail("expected usage")
+  }
+}
+
+///|
+test "decode_without_search_keeps_plain_answer" {
+  let fixture : Json = {
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": "plain answer" }],
+      },
+    ],
+  }
+  let completion = decode_responses_response(fixture)
+  match completion.message.content[0] {
+    Text(t) => assert_eq(t, "plain answer")
+    _ => fail("expected text content")
+  }
+}
+
+///|
+/// Replay round-trip: a completion carrying reasoning raw items re-encodes
+/// verbatim into the next request's input.
+test "replay_round_trip_reemits_raw_items_verbatim" {
+  let completion = decode_responses_response(reasoning_fixture())
+  let assistant : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=completion.message.content,
+    tool_calls=completion.message.tool_calls,
+    reasoning=completion.message.reasoning,
+    finish_reason=completion.message.finish_reason,
   )
-  let json = encode_message(msg, false)
-  guard json is Object(obj) else { fail("expected object") }
-  match obj.get("tool_call_id") {
-    Some(String(id)) => assert_eq(id, "call_42__x")
-    _ => fail("tool message MUST carry tool_call_id")
+  let items = kimi_input_items([user_msg("think then answer"), assistant])
+  // items: user message, then the reasoning raw item (the kit collects
+  // reasoning items), then the assistant message item.
+  assert_eq(items.length(), 3)
+  guard items[1] is Object(reasoning_item) else { fail("reasoning replay") }
+  match reasoning_item.get("id") {
+    Some(String("rs_1")) => ()
+    _ => fail("expected verbatim reasoning replay")
+  }
+  match reasoning_item.get("type") {
+    Some(String("reasoning")) => ()
+    _ => fail("expected the reasoning item verbatim")
+  }
+  guard items[2] is Object(message_item) else { fail("message replay") }
+  assert_json_field_string(message_item, "role", "assistant")
+}
+
+///|
+/// Length truncation: incomplete + max_output_tokens is a Length finish,
+/// not a protocol failure; an unexplained incomplete stays loud.
+test "decode_maps_max_output_tokens_truncation_to_length" {
+  let fixture : Json = {
+    "status": "incomplete",
+    "status_details": { "reason": "max_output_tokens" },
+    "output": [
+      {
+        "type": "message",
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": "partial answer" }],
+      },
+    ],
+  }
+  let completion = decode_responses_response(fixture)
+  assert_true(completion.finish_reason() is @posoco.FinishReason::Length)
+  match completion.message.content[0] {
+    Text(t) => assert_eq(t, "partial answer")
+    _ => fail("partial content must survive")
   }
 }
 
 ///|
-test "kimi_config_defaults_to_single_model" {
-  let config = KimiConfig("key")
-  assert_eq(config.api_key, "key")
-  assert_eq(config.base_url, "https://api.moonshot.ai/v1")
-  assert_eq(config.model, "kimi-k2.7-code")
+test "decode_keeps_unexplained_incomplete_loud" {
+  let fixture : Json = { "status": "incomplete", "output": [] }
+  let result = Ok(decode_responses_response(fixture)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("not_completed"))
+    _ => fail("an unexplained incomplete must stay a parse failure")
+  }
 }
 
 ///|
-test "kimi_config_custom_model_passes_through" {
-  let config = KimiConfig("key", model="custom-model")
-  assert_eq(config.model, "custom-model")
+test "decode_malformed_tool_arguments_are_loud_and_redacted" {
+  let fixture : Json = {
+    "status": "completed",
+    "output": [
+      {
+        "type": "function_call",
+        "call_id": "call_1",
+        "name": "bad",
+        "arguments": "not-valid-json-secret",
+      },
+    ],
+  }
+  let result = Ok(decode_responses_response(fixture)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) => {
+      assert_true(message.contains("stage=tool.arguments_json"))
+      assert_true(message.contains("payload_chars="))
+      assert_false(message.contains("not-valid-json-secret"))
+    }
+    _ => fail("expected redacted ResponseParse for malformed arguments")
+  }
 }
+
+///|
+/// Streaming: fixtures from the documented event vocabulary, delegated to
+/// the shared kit exactly like the production loop does (kit owns
+/// accumulation and pushes every chunk exactly once).
+
+///|
+fn sse_run(
+  events : Array[String],
+) -> (
+  @posoco.StreamAccumulator,
+  Array[@posoco.StreamChunk],
+  @responses.SseStreamState,
+  Bool,
+) raise {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let forwarded : Array[@posoco.StreamChunk] = []
+  let state = @responses.SseStreamState::SseStreamState()
+  let mut done = false
+  for event in events {
+    done = @responses.process_responses_sse(
+      provider="kimi",
+      event,
+      acc,
+      fn(chunk) { forwarded.push(chunk) },
+      state~,
+    )
+  }
+  (acc, forwarded, state, done)
+}
+
+///|
+test "sse_happy_path_streams_text_reasoning_tools_and_usage" {
+  let ev_created =
+    #|{"type":"response.created","response":{"id":"resp_1"}}
+  let ev_fc_added =
+    #|{"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"read_file","arguments":""}}
+  let ev_args_delta_1 =
+    #|{"type":"response.function_call_arguments.delta","output_index":1,"delta":"{\"path\""}
+  let ev_args_delta_2 =
+    #|{"type":"response.function_call_arguments.delta","output_index":1,"delta":":\"/tmp/x\"}"}
+  let ev_reasoning_added =
+    #|{"type":"response.output_item.added","output_index":2,"item":{"type":"reasoning","id":"rs_1","summary":[]}}
+  let ev_reasoning_delta =
+    #|{"type":"response.reasoning_summary_text.delta","delta":"thinking"}
+  let ev_text_delta =
+    #|{"type":"response.output_text.delta","delta":"hello"}
+  let ev_reasoning_done =
+    #|{"type":"response.output_item.done","output_index":2,"item":{"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"thinking"}],"encrypted_content":"enc-payload"}}
+  let ev_completed =
+    #|{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15,"input_tokens_details":{"cached_tokens":4}}}}
+  let events = [
+    ev_created, ev_fc_added, ev_args_delta_1, ev_args_delta_2, ev_reasoning_added,
+    ev_reasoning_delta, ev_text_delta, ev_reasoning_done, ev_completed,
+  ]
+  let (acc, forwarded, state, done) = sse_run(events)
+  assert_true(done)
+  // Forwarded chunk order: call identity, argument deltas, reasoning,
+  // text, usage, finish. Each forwarded exactly once (no double push).
+  assert_eq(forwarded.length(), 7)
+  guard forwarded[0]
+    is @posoco.StreamChunk::ToolCallDelta(
+      index=0,
+      id=Some("call_1"),
+      name=Some("read_file"),
+      arguments_delta=None
+    ) else {
+    fail("expected tool call identity chunk (wire index 1 remapped to slot 0)")
+  }
+  guard forwarded[1]
+    is @posoco.StreamChunk::ToolCallDelta(arguments_delta=Some("{\"path\""), ..) else {
+    fail("expected first argument delta")
+  }
+  guard forwarded[2]
+    is @posoco.StreamChunk::ToolCallDelta(
+      arguments_delta=Some(":\"/tmp/x\"}"),
+      ..
+    ) else {
+    fail("expected second argument delta")
+  }
+  guard forwarded[3] is @posoco.StreamChunk::ReasoningDelta(token="thinking") else {
+    fail("expected reasoning delta")
+  }
+  guard forwarded[4] is @posoco.StreamChunk::TextDelta(token="hello") else {
+    fail("expected text delta")
+  }
+  guard forwarded[5]
+    is @posoco.StreamChunk::Usage(
+      input_tokens=10,
+      output_tokens=5,
+      total_tokens=15,
+      cached_input_tokens=Some(4),
+      ..
+    ) else {
+    fail("expected usage chunk")
+  }
+  guard forwarded[6] is @posoco.StreamChunk::Finish(reason="tool_calls") else {
+    fail("expected finish chunk")
+  }
+  assert_eq(acc.text(), "hello")
+  assert_eq(acc.reasoning(), "thinking")
+  // The assembled completion, mirroring the production attach order.
+  let completion = attach_kimi_stream_reasoning(
+    @responses.responses_stream_completion(provider="kimi", acc),
+    state,
+  )
+  let tcs = completion.tool_calls()
+  assert_eq(tcs.length(), 1)
+  assert_eq(tcs[0].call_id.to_string(), "call_1")
+  assert_eq(tcs[0].name.to_string(), "read_file")
+  guard tcs[0].arguments is Object(args) else { fail("arguments object") }
+  match args.get("path") {
+    Some(String(path)) => assert_eq(path, "/tmp/x")
+    _ => fail("expected assembled path argument")
+  }
+  // Reasoning raw: the full reasoning item.
+  guard completion.message.reasoning is Some(reasoning) else {
+    fail("expected reasoning")
+  }
+  guard reasoning.raw is Some(Array(raw_items)) else {
+    fail("expected raw items")
+  }
+  assert_eq(raw_items.length(), 1)
+  match completion.usage {
+    Some(usage) => {
+      assert_eq(usage.input_tokens, Some(10))
+      assert_eq(usage.cached_input_tokens, Some(4))
+    }
+    None => fail("expected usage on the completion")
+  }
+}
+
+///|
+test "sse_no_double_push_with_forwarding_callback" {
+  // Production-style callback: forward the chunk to the host ONLY. The kit
+  // parser owns accumulation; if either side pushed twice, the text would
+  // double.
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let forwarded : Array[@posoco.StreamChunk] = []
+  let on_chunk = fn(c : @posoco.StreamChunk) { forwarded.push(c) }
+  let text_event =
+    #|{"type":"response.output_text.delta","delta":"早上好"}
+  let reasoning_event =
+    #|{"type":"response.reasoning_summary_text.delta","delta":"思考中"}
+  let _ = @responses.process_responses_sse(
+    provider="kimi",
+    text_event,
+    acc,
+    on_chunk,
+  )
+  let _ = @responses.process_responses_sse(
+    provider="kimi",
+    reasoning_event,
+    acc,
+    on_chunk,
+  )
+  assert_eq(forwarded.length(), 2)
+  assert_eq(acc.text(), "早上好")
+  assert_eq(acc.reasoning(), "思考中")
+}
+
+///|
+test "sse_mid_stream_provider_error_is_transport_and_redacted" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let result = Ok(
+    @responses.process_responses_sse(
+      provider="kimi",
+      "{\"error\":{\"code\":\"server_error\",\"type\":\"server_error\"}}",
+      acc,
+      fn(_) { () },
+    ),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::Transport(message)) => {
+      assert_true(message.contains("stage=error, category=provider_error"))
+      assert_false(message.contains("secret"))
+    }
+    _ => fail("expected a mid-stream provider error to raise Transport")
+  }
+  let failed = Ok(
+    @responses.process_responses_sse(
+      provider="kimi",
+      "{\"type\":\"response.failed\"}",
+      acc,
+      fn(_) { () },
+    ),
+  ) catch {
+    e => Err(e)
+  }
+  match failed {
+    Err(@posoco.ModelError::Transport(message)) =>
+      assert_true(message.contains("stage=response.failed"))
+    _ => fail("expected response.failed to raise Transport")
+  }
+}
+
+///|
+test "sse_malformed_payload_is_loud_and_redacted" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let secret = "secret-sse-payload"
+  let result = Ok(
+    @responses.process_responses_sse(provider="kimi", secret, acc, fn(_) { () }),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) => {
+      assert_true(message.contains("stage=json"))
+      assert_false(message.contains(secret))
+    }
+    _ => fail("expected ResponseParse for malformed SSE JSON")
+  }
+}
+
+///|
+test "stream_tool_argument_error_is_redacted_via_kit" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let secret = "secret-stream-tool-arguments"
+  acc.push(
+    @posoco.StreamChunk::ToolCallDelta(
+      index=0,
+      id=Some("call_1"),
+      name=Some("bad"),
+      arguments_delta=Some(secret),
+    ),
+  )
+  let result = Ok(@responses.validate_stream_tool_calls(provider="kimi", acc)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) => {
+      assert_true(message.contains("kimi SSE parse failure (stage=tool_calls)"))
+      assert_false(message.contains(secret))
+    }
+    _ => fail("expected redacted stream argument error")
+  }
+}
+
+///|
+test "stream_termination_is_protocol_driven_via_kit" {
+  assert_true(
+    @responses.classify_stream_termination(
+      provider="kimi",
+      @responses.StreamTermination::ExplicitTerminal,
+    )
+    is None,
+  )
+  match
+    @responses.classify_stream_termination(
+      provider="kimi",
+      @responses.StreamTermination::CleanEof,
+    ) {
+    Some(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("terminal_marker=missing"))
+    _ => fail("clean EOF before the terminal marker must be ResponseParse")
+  }
+}
+
+///|
+/// prompt_cache_key: derived by default, opt-out, and rejection learning.
+
+///|
+test "prompt_cache_key_default_on_sends_derived_key" {
+  let port = KimiModelPort(KimiConfig("key"))
+  assert_true(port.config.send_prompt_cache_key)
+  let cache_key = port.prompt_cache_key_for("session-42")
+  guard cache_key is Some(key) else {
+    fail("default config must derive a cache key")
+  }
+  assert_eq(key, "posoco-session-42")
+  let body = build_responses_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "kimi-k3",
+    false,
+    cache_key,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  assert_json_field_string(root, "prompt_cache_key", "posoco-session-42")
+}
+
+///|
+test "prompt_cache_key_opt_out_omits_field" {
+  let port = KimiModelPort(KimiConfig("key", send_prompt_cache_key=false))
+  let cache_key = port.prompt_cache_key_for("session-42")
+  guard cache_key is None else { fail("opt-out must not derive a cache key") }
+  let body = build_responses_request(
+    [user_msg("hi")],
+    [],
+    chat_options(),
+    "kimi-k3",
+    false,
+    cache_key,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  match root.get("prompt_cache_key") {
+    None => ()
+    Some(_) => fail("opted-out request must omit prompt_cache_key")
+  }
+}
+
+///|
+test "prompt_cache_key_rejection_flag_omits_key_even_when_enabled" {
+  let port = KimiModelPort(KimiConfig("key"))
+  port.prompt_cache_key_rejected = true
+  match port.prompt_cache_key_for("session-42") {
+    None => ()
+    Some(_) => fail("rejected cache key must be omitted even when enabled")
+  }
+}
+
+///|
+test "prompt_cache_key_rejection_body_sets_flag" {
+  let port = KimiModelPort(KimiConfig("key"))
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"Unsupported parameter: 'prompt_cache_key' is not supported with this model.\"}}",
+  )
+  assert_true(port.prompt_cache_key_rejected)
+  match port.prompt_cache_key_for("session-42") {
+    None => ()
+    Some(_) => fail("learned rejection must suppress the cache key")
+  }
+}
+
+///|
+test "prompt_cache_key_unrelated_400_body_does_not_set_flag" {
+  let port = KimiModelPort(KimiConfig("key"))
+  port.learn_prompt_cache_key_rejection(
+    "{\"error\":{\"message\":\"Unsupported parameter: 'temperature' is not supported with this model.\"}}",
+  )
+  assert_true(!port.prompt_cache_key_rejected)
+  match port.prompt_cache_key_for("session-42") {
+    Some(_) => ()
+    None => fail("unrelated 400 must not disable the cache key")
+  }
+}
+
+///|
+/// Model discovery: parser unchanged, catalog filtered to the k3-era
+/// allowlist.
 
 ///|
 test "kimi_models_parser_prefers_nested_effort_declaration" {
   let payload : Json = {
     "data": [
       {
-        "id": "kimi-v4-flash",
+        "id": "kimi-k3",
         "context_length": 32768,
         "supports_thinking_type": "both",
         "supports_reasoning": true,
@@ -691,7 +1115,7 @@ test "kimi_models_parser_reads_legacy_flat_efforts_without_guessing" {
   let payload : Json = {
     "data": [
       {
-        "id": "legacy-kimi",
+        "id": "k3",
         "context_length": 16384,
         "support_efforts": ["fast", "deep"],
         "default_effort": "deep",
@@ -709,11 +1133,7 @@ test "kimi_models_parser_reads_legacy_flat_efforts_without_guessing" {
 test "kimi_models_parser_keeps_reasoning_capability_without_fabricated_efforts" {
   let payload : Json = {
     "data": [
-      {
-        "id": "boolean-only",
-        "context_length": 8192,
-        "supports_reasoning": true,
-      },
+      { "id": "k3-256k", "context_length": 8192, "supports_reasoning": true },
     ],
   }
   let models = parse_kimi_models(payload)
@@ -725,9 +1145,7 @@ test "kimi_models_parser_keeps_reasoning_capability_without_fabricated_efforts" 
 ///|
 test "kimi_models_parser_rejects_flat_default_without_declared_efforts" {
   let payload : Json = {
-    "data": [
-      { "id": "invalid-flat", "context_length": 8192, "default_effort": "high" },
-    ],
+    "data": [{ "id": "k3", "context_length": 8192, "default_effort": "high" }],
   }
   let result : Result[Array[KimiModelInfo], @posoco.ModelError] = Ok(
     parse_kimi_models(payload),
@@ -742,32 +1160,93 @@ test "kimi_models_parser_rejects_flat_default_without_declared_efforts" {
 }
 
 ///|
+test "catalog_filters_dropped_discovery_ids" {
+  let payload : Json = {
+    "data": [
+      {
+        "id": "kimi-k3",
+        "context_length": 1000000,
+        "think_efforts": {
+          "support": true,
+          "valid_efforts": ["low", "high", "max"],
+          "default_effort": "high",
+        },
+      },
+      {
+        "id": "kimi-k2.6",
+        "context_length": 262144,
+        "think_efforts": {
+          "support": true,
+          "valid_efforts": ["low", "high", "max"],
+          "default_effort": "high",
+        },
+      },
+      { "id": "moonshot-v1-8k", "context_length": 8192 },
+      {
+        "id": "k3-256k",
+        "context_length": 262144,
+        "think_efforts": {
+          "support": true,
+          "valid_efforts": ["low", "high", "max"],
+          "default_effort": "high",
+        },
+      },
+    ],
+  }
+  let models = parse_kimi_models(payload)
+  let port = KimiModelPort(KimiConfig("key"))
+  let catalog = port.model_catalog_from_models(models)
+  let slots = catalog.slots()
+  // k2.x and moonshot-v1 entries never become slots; the configured model
+  // stays first.
+  assert_eq(slots.length(), 2)
+  assert_eq(slots[0].model_id, "kimi-k3")
+  assert_eq(slots[1].model_id, "k3-256k")
+  assert_true(catalog.capabilities.contains("reasoning"))
+}
+
+///|
+test "catalog_filters_refuse_an_all_dropped_discovery" {
+  let payload : Json = {
+    "data": [{ "id": "kimi-k2.6", "context_length": 262144 }],
+  }
+  let models = parse_kimi_models(payload)
+  let port = KimiModelPort(KimiConfig("key"))
+  let result = Ok(port.model_catalog_from_models(models)) catch { e => Err(e) }
+  match result {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("empty catalog"))
+    _ => fail("expected an empty-catalog composition failure")
+  }
+}
+
+///|
 test "kimi_dynamic_slot_rebuild_preserves_catalog_metadata" {
   let config = KimiConfig(
     "key",
-    model="kimi-k2.6",
+    model="kimi-k3",
     thinking_efforts=Some(["low", "high"]),
   )
   let port = KimiModelPort(config)
   let info = KimiModelInfo::{
-    id: "kimi-k2.6",
-    display_name: "Kimi K2.6",
+    id: "kimi-k3",
+    display_name: "Kimi K3",
     context_window: 131072,
     thinking_efforts: ["low", "high"],
     default_effort: Some("high"),
     capabilities: ["chat", "streaming", "reasoning"],
   }
   let other = KimiModelInfo::{
-    id: "kimi-k2.5",
-    display_name: "Kimi K2.5",
-    context_window: 65536,
+    id: "k3-256k",
+    display_name: "Kimi K3 256k",
+    context_window: 262144,
     thinking_efforts: ["high"],
     default_effort: Some("high"),
     capabilities: ["chat", "streaming", "reasoning"],
   }
   let catalog = port.model_catalog_from_models([other, info])
   let slot = catalog.slots()[0]
-  assert_eq(slot.model_id, "kimi-k2.6")
+  assert_eq(slot.model_id, "kimi-k3")
   assert_eq(slot.context_window, Some(131072))
   assert_eq(slot.capabilities, ["chat", "streaming", "reasoning"])
   // The discovery window crosses the ModelPort seam: auto-compact sizing
@@ -789,14 +1268,14 @@ test "kimi_dynamic_slot_rebuild_preserves_catalog_metadata" {
 test "kimi capability-only slot does not expose effort rebuild" {
   let config = KimiConfig(
     "key",
-    model="boolean-only",
+    model="kimi-k3",
     reasoning_effort="",
     thinking_efforts=Some([]),
   )
   let port = KimiModelPort(config)
   let info = KimiModelInfo::{
-    id: "boolean-only",
-    display_name: "Boolean-only Kimi",
+    id: "kimi-k3",
+    display_name: "Kimi K3",
     context_window: 8192,
     thinking_efforts: [],
     default_effort: None,
@@ -811,571 +1290,24 @@ test "kimi capability-only slot does not expose effort rebuild" {
 }
 
 ///|
-test "endpoint_helper_builds_chat_url" {
-  let config = KimiConfig("key", base_url="https://api.kimi.com")
-  assert_eq(chat_url(config), "https://api.kimi.com/chat/completions")
-}
-
-///|
-/// build_chat_request takes thinking_json + effort_str directly now; the
-/// high-effort path passes them through without warning.
-test "build_chat_request_high_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger()
-  let ctx = @devkit.ExtContext(logger~)
-  let body = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(),
-    "kimi-v4-flash",
-    false,
-    enabled_thinking_json(Some("high")),
-    None,
-  )
-  guard body is Object(root) else { fail("expected object") }
-  assert_json_field_string(root, "model", "kimi-v4-flash")
-  guard root.get("thinking") is Some(Object(thinking)) else {
-    fail("expected thinking object")
+test "with_reasoning_effort_rejects_undeclared_effort_at_config_boundary" {
+  let config = KimiConfig("key", model="kimi-k3")
+  assert_eq(config.with_reasoning_effort("max").reasoning_effort, "max")
+  let invalid = Ok(config.with_reasoning_effort("ultra")) catch {
+    err => Err(err)
   }
-  assert_json_field_string(thinking, "type", "enabled")
-  assert_json_field_string(thinking, "effort", "high")
-  assert_eq(logger.events.length(), 0)
-}
-
-///|
-test "build_chat_request_maximum_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger()
-  let ctx = @devkit.ExtContext(logger~)
-  let body = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(),
-    "kimi-v4-flash",
-    false,
-    enabled_thinking_json(Some("max")),
-    None,
-  )
-  guard body is Object(root) else { fail("expected object") }
-  guard root.get("thinking") is Some(Object(thinking)) else {
-    fail("expected thinking object")
-  }
-  assert_json_field_string(thinking, "type", "enabled")
-  assert_json_field_string(thinking, "effort", "max")
-  assert_eq(logger.events.length(), 0)
-}
-
-///|
-test "build_chat_request_off_disables_thinking_no_warn" {
-  let logger = @devkit.MemoryLogger()
-  let ctx = @devkit.ExtContext(logger~)
-  let body = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(),
-    "kimi-v4-flash",
-    false,
-    disabled_thinking_json(),
-    None,
-  )
-  guard body is Object(root) else { fail("expected object") }
-  guard root.get("thinking") is Some(Object(thinking)) else {
-    fail("expected thinking object")
-  }
-  assert_json_field_string(thinking, "type", "disabled")
-  match root.get("reasoning_effort") {
-    None => ()
-    _ => fail("disabled thinking should omit reasoning_effort")
-  }
-  assert_eq(logger.events.length(), 0)
-}
-
-///|
-/// Default config sends prompt_cache_key: the kit derivation of the session
-/// id ("posoco-<session-id>") rides the request body.
-test "prompt_cache_key_default_on_sends_derived_key" {
-  let logger = @devkit.MemoryLogger()
-  let ctx = @devkit.ExtContext(logger~)
-  let config = KimiConfig("key")
-  assert_true(config.send_prompt_cache_key)
-  let port = KimiModelPort(config)
-  let cache_key = port.prompt_cache_key_for("session-42")
-  guard cache_key is Some(key) else {
-    fail("default config must derive a cache key")
-  }
-  assert_eq(key, "posoco-session-42")
-  let body = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(),
-    "kimi-v4-flash",
-    false,
-    enabled_thinking_json(Some("high")),
-    cache_key,
-  )
-  guard body is Object(root) else { fail("expected object") }
-  assert_json_field_string(root, "prompt_cache_key", "posoco-session-42")
-  assert_eq(logger.events.length(), 0)
-}
-
-///|
-/// Opt-out config: no key is derived and the wire body omits the field.
-test "prompt_cache_key_opt_out_omits_field" {
-  let logger = @devkit.MemoryLogger()
-  let ctx = @devkit.ExtContext(logger~)
-  let port = KimiModelPort(KimiConfig("key", send_prompt_cache_key=false))
-  let cache_key = port.prompt_cache_key_for("session-42")
-  guard cache_key is None else { fail("opt-out must not derive a cache key") }
-  let body = build_chat_request(
-    ctx,
-    [user_msg("hi")],
-    [],
-    chat_options(),
-    "kimi-v4-flash",
-    false,
-    enabled_thinking_json(Some("high")),
-    cache_key,
-  )
-  guard body is Object(root) else { fail("expected object") }
-  match root.get("prompt_cache_key") {
-    None => ()
-    Some(_) => fail("opted-out request must omit prompt_cache_key")
-  }
-  assert_eq(logger.events.length(), 0)
-}
-
-///|
-/// Once the port records a provider rejection the key stays omitted even
-/// though the config still has the feature enabled.
-test "prompt_cache_key_rejection_flag_omits_key_even_when_enabled" {
-  let port = KimiModelPort(KimiConfig("key"))
-  port.prompt_cache_key_rejected = true
-  match port.prompt_cache_key_for("session-42") {
-    None => ()
-    Some(_) => fail("rejected cache key must be omitted even when enabled")
+  match invalid {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("unsupported reasoning effort"))
+    _ => fail("an undeclared effort must fail at the config boundary")
   }
 }
 
 ///|
-/// An error body naming both "unsupported parameter" and prompt_cache_key
-/// flips the port's rejection flag, suppressing the key afterwards.
-test "prompt_cache_key_rejection_body_sets_flag" {
-  let port = KimiModelPort(KimiConfig("key"))
-  port.learn_prompt_cache_key_rejection(
-    "{\"error\":{\"message\":\"Unsupported parameter: 'prompt_cache_key' is not supported with this model.\"}}",
-  )
-  assert_true(port.prompt_cache_key_rejected)
-  match port.prompt_cache_key_for("session-42") {
-    None => ()
-    Some(_) => fail("learned rejection must suppress the cache key")
-  }
-}
+/// HTTP error classification for the Responses endpoints.
 
 ///|
-/// A 400 about a different parameter names only one of the two required
-/// phrases and must not disable the cache key.
-test "prompt_cache_key_unrelated_400_body_does_not_set_flag" {
-  let port = KimiModelPort(KimiConfig("key"))
-  port.learn_prompt_cache_key_rejection(
-    "{\"error\":{\"message\":\"Unsupported parameter: 'temperature' is not supported with this model.\"}}",
-  )
-  assert_true(!port.prompt_cache_key_rejected)
-  match port.prompt_cache_key_for("session-42") {
-    Some(_) => ()
-    None => fail("unrelated 400 must not disable the cache key")
-  }
-}
-
-// Error-transparency fixtures (offline, no network).
-// These use non-async test blocks with try/catch since decode_chat_response
-// is synchronous but raises ModelError.
-
-///|
-/// Build a tool-call entry JSON object with the given arguments string.
-fn build_tool_call_json(id : String, name : String, args_str : String) -> Json {
-  Json::object(
-    Map::from_array([
-      ("id", Json::string(id)),
-      ("type", Json::string("function")),
-      (
-        "function",
-        Json::object(
-          Map::from_array([
-            ("name", Json::string(name)),
-            ("arguments", Json::string(args_str)),
-          ]),
-        ),
-      ),
-    ]),
-  )
-}
-
-///|
-/// Malformed tool-call arguments JSON must raise ResponseParse,
-/// not silently become {}.
-test "t07b_kimi_malformed_tool_args_raises" {
-  let bad_call = build_tool_call_json("tc_1", "bad", "not-valid-json")
-  let resp_json = Json::object(
-    Map::from_array([
-      (
-        "choices",
-        Json::array([
-          Json::object(
-            Map::from_array([
-              (
-                "message",
-                Json::object(
-                  Map::from_array([
-                    ("role", Json::string("assistant")),
-                    ("content", Json::string("")),
-                    ("tool_calls", Json::array([bad_call])),
-                  ]),
-                ),
-              ),
-              ("finish_reason", Json::string("tool_calls")),
-            ]),
-          ),
-        ]),
-      ),
-    ]),
-  )
-  let result = Ok(decode_chat_response(resp_json)) catch { e => Err(e) }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(_)) => ()
-    _ => fail("expected ResponseParse for malformed tool arguments")
-  }
-}
-
-///|
-/// Valid tool-call arguments still decode correctly (no false positive).
-test "t07b_kimi_valid_tool_args_still_decode" {
-  let ok_call = build_tool_call_json("tc_1", "ok", "{}")
-  let resp_json = Json::object(
-    Map::from_array([
-      (
-        "choices",
-        Json::array([
-          Json::object(
-            Map::from_array([
-              (
-                "message",
-                Json::object(
-                  Map::from_array([
-                    ("role", Json::string("assistant")),
-                    ("content", Json::string("")),
-                    ("tool_calls", Json::array([ok_call])),
-                  ]),
-                ),
-              ),
-              ("finish_reason", Json::string("tool_calls")),
-            ]),
-          ),
-        ]),
-      ),
-    ]),
-  )
-  let resp = decode_chat_response(resp_json)
-  let tcs = resp.tool_calls()
-  assert_eq(tcs.length(), 1)
-  assert_eq(tcs[0].name.to_string(), "ok")
-}
-
-///|
-test "t07b_kimi_malformed_sse_is_loud_and_redacted" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let secret = "secret-sse-payload"
-  let result = Ok(process_kimi_sse(secret, acc, fn(_) { () })) catch {
-    e => Err(e)
-  }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(msg)) => {
-      assert_true(msg.contains("stage=json"))
-      assert_false(msg.contains(secret))
-    }
-    _ => fail("expected ResponseParse for malformed SSE JSON")
-  }
-}
-
-///|
-test "t07b_kimi_content_free_chunk_is_skipped" {
-  // No choices/usage/error keys: a preamble or keepalive chunk carries no
-  // content; skipping it must not fail the stream (policy moved to the
-  // shared posoco-kit-chat-completions parser).
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let content_free =
-    #|{"id":"response_without_choices"}
-  let done = process_kimi_sse(content_free, acc, fn(_) { () })
-  assert_false(done)
-}
-
-///|
-test "t07b_kimi_wrong_type_tool_field_is_loud" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let bad_name =
-    #|{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":7,"arguments":"{}"}}]}}]}
-  let result = Ok(process_kimi_sse(bad_name, acc, fn(_) { () })) catch {
-    e => Err(e)
-  }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(msg)) =>
-      assert_true(msg.contains("stage=tool.name"))
-    _ => fail("expected ResponseParse for wrong-type tool name")
-  }
-}
-
-///|
-test "t07b_kimi_stream_termination_is_protocol_driven" {
-  assert_true(classify_kimi_stream_termination(ExplicitTerminal) is None)
-  match classify_kimi_stream_termination(CleanEof) {
-    Some(@posoco.ModelError::ResponseParse(msg)) =>
-      assert_true(msg.contains("terminal_marker=missing"))
-    _ => fail("clean EOF before terminal marker must be ResponseParse")
-  }
-}
-
-///|
-test "t07b_kimi_tool_argument_error_does_not_echo_payload" {
-  let secret = "secret-tool-arguments"
-  let bad_call = build_tool_call_json("tc_1", "bad", secret)
-  let resp_json = Json::object(
-    Map::from_array([
-      (
-        "choices",
-        Json::array([
-          Json::object(
-            Map::from_array([
-              (
-                "message",
-                Json::object(
-                  Map::from_array([
-                    ("role", Json::string("assistant")),
-                    ("content", Json::string("")),
-                    ("tool_calls", Json::array([bad_call])),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-        ]),
-      ),
-    ]),
-  )
-  let result = Ok(decode_chat_response(resp_json)) catch { e => Err(e) }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(msg)) => {
-      assert_true(msg.contains("payload_chars="))
-      assert_false(msg.contains(secret))
-    }
-    _ => fail("expected redacted ResponseParse")
-  }
-}
-
-///|
-test "t07b_kimi_missing_nonstream_tool_arguments_is_loud" {
-  let bad_call : Json = {
-    "id": "tc_1",
-    "type": "function",
-    "function": { "name": "missing_args" },
-  }
-  let resp_json : Json = {
-    "choices": [
-      {
-        "message": {
-          "role": "assistant",
-          "content": "",
-          "tool_calls": [bad_call],
-        },
-      },
-    ],
-  }
-  let result = Ok(decode_chat_response(resp_json)) catch { e => Err(e) }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(msg)) =>
-      assert_true(msg.contains("stage=tool.arguments"))
-    _ => fail("expected ResponseParse for missing tool arguments")
-  }
-}
-
-///|
-test "t07b_kimi_stream_tool_argument_error_is_redacted" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let secret = "secret-stream-tool-arguments"
-  acc.push(
-    @posoco.StreamChunk::ToolCallDelta(
-      index=0,
-      id=Some("call_1"),
-      name=Some("bad"),
-      arguments_delta=Some(secret),
-    ),
-  )
-  let result = Ok(validate_kimi_stream_tool_calls(acc)) catch { e => Err(e) }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(msg)) => {
-      assert_true(msg.contains("payload_chars="))
-      assert_false(msg.contains(secret))
-    }
-    _ => fail("expected redacted stream argument error")
-  }
-}
-
-///|
-fn assert_kimi_response_parse(resp : Json, stage : String) -> Unit raise {
-  let result = Ok(decode_chat_response(resp)) catch { e => Err(e) }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(message)) =>
-      assert_true(message.contains("stage=" + stage))
-    _ => fail("expected kimi ResponseParse at " + stage)
-  }
-}
-
-///|
-test "t07b_kimi_nonobject_response_is_response_parse" {
-  assert_kimi_response_parse(Json::array([]), "response")
-}
-
-///|
-fn assert_kimi_response_parse_category(
-  response : Json,
-  stage : String,
-  category : String,
-) -> Unit raise {
-  let result = Ok(decode_chat_response(response)) catch { e => Err(e) }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(message)) => {
-      assert_true(message.contains("stage=" + stage))
-      assert_true(message.contains("category=" + category))
-      assert_false(message.contains("secret-provider-body"))
-    }
-    _ => fail("expected kimi ResponseParse at " + stage)
-  }
-}
-
-///|
-test "t07b_kimi_chat_response_shapes_are_structured_and_redacted" {
-  assert_kimi_response_parse_category(
-    Json::empty_object(),
-    "choices",
-    "missing",
-  )
-  assert_kimi_response_parse_category(
-    Json::object({ "choices": Json::string("secret-provider-body") }),
-    "choices",
-    "wrong_type",
-  )
-  assert_kimi_response_parse_category(
-    Json::object({ "choices": Json::array([]) }),
-    "choices",
-    "empty",
-  )
-  assert_kimi_response_parse_category(
-    Json::object({ "choices": Json::array([Json::string("invalid")]) }),
-    "choice",
-    "not_object",
-  )
-  assert_kimi_response_parse_category(
-    Json::object({ "choices": Json::array([Json::empty_object()]) }),
-    "message",
-    "missing",
-  )
-}
-
-///|
-test "t07b_kimi_reasoning_content_is_strict" {
-  let response : Json = {
-    "choices": [
-      {
-        "message": {
-          "role": "assistant",
-          "content": "ok",
-          "reasoning_content": 7,
-        },
-        "finish_reason": "stop",
-      },
-    ],
-  }
-  assert_kimi_response_parse(response, "message.reasoning_content")
-}
-
-///|
-test "t07b_kimi_finish_reason_is_required_and_typed" {
-  let missing : Json = {
-    "choices": [{ "message": { "role": "assistant", "content": "ok" } }],
-  }
-  assert_kimi_response_parse(missing, "finish_reason")
-  let wrong_type : Json = {
-    "choices": [
-      {
-        "message": { "role": "assistant", "content": "ok" },
-        "finish_reason": 7,
-      },
-    ],
-  }
-  assert_kimi_response_parse(wrong_type, "finish_reason")
-}
-
-///|
-test "t07b_kimi_nonstream_usage_is_strict" {
-  let wrong_type : Json = {
-    "choices": [
-      {
-        "message": { "role": "assistant", "content": "ok" },
-        "finish_reason": "stop",
-      },
-    ],
-    "usage": {
-      "prompt_tokens": "secret",
-      "completion_tokens": 1,
-      "total_tokens": 2,
-    },
-  }
-  assert_kimi_response_parse(wrong_type, "usage.prompt_tokens")
-  let missing_field : Json = {
-    "choices": [
-      {
-        "message": { "role": "assistant", "content": "ok" },
-        "finish_reason": "stop",
-      },
-    ],
-    "usage": { "prompt_tokens": 1, "completion_tokens": 1 },
-  }
-  assert_kimi_response_parse(missing_field, "usage.total_tokens")
-}
-
-///|
-test "t07b_kimi_valid_nonstream_response_still_decodes" {
-  let response : Json = {
-    "choices": [
-      {
-        "message": {
-          "role": "assistant",
-          "content": "ok",
-          "reasoning_content": "checked",
-        },
-        "finish_reason": "stop",
-      },
-    ],
-    "usage": { "prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3 },
-  }
-  let decoded = decode_chat_response(response)
-  assert_true(decoded.finish_reason() is @posoco.FinishReason::Stop)
-  assert_true(
-    decoded.message.reasoning ==
-    Some(@posoco.Reasoning::{ content: "checked", raw: None, }),
-  )
-  match decoded.usage {
-    Some(usage) => {
-      assert_true(usage.input_tokens == Some(2))
-      assert_true(usage.output_tokens == Some(1))
-      assert_true(usage.total_tokens == Some(3))
-    }
-    None => fail("expected decoded usage")
-  }
-}
-
-///|
-test "t07b_kimi_http_error_formatter_is_payload_free" {
+test "http_error_formatter_is_payload_free" {
   let message = format_kimi_http_error(
     "chat.http_status",
     429,
@@ -1385,80 +1317,6 @@ test "t07b_kimi_http_error_formatter_is_payload_free" {
     message, "kimi HTTP error (stage=chat.http_status, status=429, body_bytes=19, body_category=utf8)",
   )
   assert_false(message.contains("secret-response-body"))
-}
-
-///|
-fn assert_kimi_sse_response_parse(
-  data : String,
-  stage : String,
-  category : String,
-) -> Unit raise {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let result = Ok(process_kimi_sse(data, acc, fn(_) { () })) catch {
-    e => Err(e)
-  }
-  match result {
-    Err(@posoco.ModelError::ResponseParse(message)) => {
-      assert_true(message.contains("stage=" + stage))
-      assert_true(message.contains("category=" + category))
-    }
-    _ => fail("expected kimi SSE ResponseParse at " + stage)
-  }
-}
-
-///|
-test "t07b_kimi_stream_usage_fields_are_required" {
-  assert_kimi_sse_response_parse(
-    "{\"usage\":{\"completion_tokens\":2,\"total_tokens\":3}}", "usage.prompt_tokens",
-    "missing",
-  )
-  assert_kimi_sse_response_parse(
-    "{\"usage\":{\"prompt_tokens\":1,\"total_tokens\":3}}", "usage.completion_tokens",
-    "missing",
-  )
-  assert_kimi_sse_response_parse(
-    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2}}", "usage.total_tokens",
-    "missing",
-  )
-}
-
-///|
-test "t07b_kimi_stream_usage_fields_are_typed" {
-  assert_kimi_sse_response_parse(
-    "{\"usage\":{\"prompt_tokens\":\"secret\",\"completion_tokens\":2,\"total_tokens\":3}}",
-    "usage.prompt_tokens", "wrong_type",
-  )
-  assert_kimi_sse_response_parse(
-    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":false,\"total_tokens\":3}}",
-    "usage.completion_tokens", "wrong_type",
-  )
-  assert_kimi_sse_response_parse(
-    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":null}}",
-    "usage.total_tokens", "wrong_type",
-  )
-}
-
-///|
-test "t07b_kimi_valid_stream_usage_still_decodes" {
-  let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let chunks : Array[@posoco.StreamChunk] = []
-  let done = process_kimi_sse(
-    "{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",
-    acc,
-    fn(chunk) { chunks.push(chunk) },
-  )
-  assert_false(done)
-  assert_eq(chunks.length(), 1)
-  // StreamChunk::Usage carries positional token counts (not a Usage struct).
-  assert_true(
-    chunks[0]
-    is @posoco.StreamChunk::Usage(
-      input_tokens=1,
-      output_tokens=2,
-      total_tokens=3,
-      ..
-    ),
-  )
 }
 
 ///|
@@ -1477,7 +1335,7 @@ fn assert_kimi_http_error_summary(
 }
 
 ///|
-test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
+test "http_status_classifier_preserves_status_and_redacts_body" {
   assert_true(
     classify_kimi_http_status(
       "chat.http_status",
@@ -1503,72 +1361,51 @@ test "t07b_kimi_http_status_classifier_preserves_status_and_redacts_body" {
 }
 
 ///|
-/// Identity headers must mirror MoonshotAI/kimi-code's
-/// `createKimiDefaultHeaders`: a product User-Agent plus the six `X-Msh-*`
-/// device headers, all non-empty, with the device id echoing back when
-/// supplied. Without these the OAuth host records the session as "未知设备".
-test "kimi_default_headers mirrors kimi-code-cli identity set" {
-  let headers = kimi_default_headers(
-    device_id="11111111-1111-4111-8111-111111111111",
+test "401_classifies_as_cross_host_credential_mismatch" {
+  let err = classify_kimi_http_status(
+    "chat.http_status",
+    401,
+    BodyBytesUtf8(38),
+    body_text="{\"error\":{\"message\":\"Invalid API key\"}}",
+    now_ms=0L,
   )
-  let expected_keys = [
-    "User-Agent", "X-Msh-Platform", "X-Msh-Version", "X-Msh-Device-Name", "X-Msh-Device-Model",
-    "X-Msh-Os-Version", "X-Msh-Device-Id",
-  ]
-  for key in expected_keys {
-    assert_true(headers.contains(key))
-    match headers[key] {
-      value => assert_true(value.length() > 0)
-    }
+  guard err is Some(@posoco.ModelError::Transport(reason)) else {
+    fail("expected Transport for 401")
   }
-  // Product token shape mirrors kimi-code-cli: `kimi-code-cli/<version>`.
-  assert_eq(headers["User-Agent"], "kimi-code-cli/1.2.3")
-  assert_eq(headers["X-Msh-Platform"], "kimi_code_cli")
-  // The supplied device id is echoed back verbatim.
-  assert_eq(headers["X-Msh-Device-Id"], "11111111-1111-4111-8111-111111111111")
+  assert_true(reason.contains("status=401"))
+  assert_true(reason.contains("not interchangeable"))
+  // The provider body text never rides the message.
+  assert_false(reason.contains("Invalid API key"))
 }
 
 ///|
-/// Without an injected device id the headers still carry a freshly minted
-/// process-local UUID (so the OAuth request is never blank); two calls in the
-/// same process produce different ids (no hidden cross-call stability).
-test "kimi_default_headers mints a fallback device id when none supplied" {
-  let headers_a = kimi_default_headers()
-  let headers_b = kimi_default_headers()
-  let a = headers_a["X-Msh-Device-Id"]
-  let b = headers_b["X-Msh-Device-Id"]
-  assert_true(a.length() > 0)
-  assert_true(b.length() > 0)
-  assert_true(a != b)
-}
-
-///|
-test "cached_tokens lands in cached_input_tokens; input stays provider-reported" {
-  let response : Json = {
-    "choices": [
-      {
-        "message": { "role": "assistant", "content": "ok" },
-        "finish_reason": "stop",
-      },
-    ],
-    "usage": {
-      "prompt_tokens": 100,
-      "completion_tokens": 5,
-      "total_tokens": 105,
-      "cached_tokens": 80,
-    },
+test "400_coding_message_size_limit_is_named_loudly" {
+  let body = "{\"error\":{\"message\":\"total message size 3000000 exceeds limit 2097152\"}}"
+  let err = classify_kimi_http_status(
+    "chat.http_status",
+    400,
+    BodyBytesUtf8(body.length()),
+    body_text=body,
+    now_ms=0L,
+  )
+  guard err is Some(@posoco.ModelError::Transport(reason)) else {
+    fail("expected Transport for the 2 MiB rejection")
   }
-  let decoded = decode_chat_response(response)
-  match decoded.usage {
-    Some(u) => {
-      // input_tokens keeps the provider-reported total; the cached portion
-      // rides its own field (no more silent subtraction).
-      assert_eq(u.input_tokens, Some(100))
-      assert_eq(u.cached_input_tokens, Some(80))
-      assert_eq(u.total_tokens, Some(105))
-    }
-    None => fail("expected usage")
+  assert_true(reason.contains("2 MiB"))
+  assert_true(reason.contains("2097152"))
+  assert_false(reason.contains("3000000"))
+  // An unrelated 400 keeps the generic redacted classification.
+  let generic = classify_kimi_http_status(
+    "chat.http_status",
+    400,
+    BodyBytesUtf8(9),
+    body_text="{\"ok\":false}",
+    now_ms=0L,
+  )
+  guard generic is Some(@posoco.ModelError::Transport(reason)) else {
+    fail("expected Transport for generic 400")
   }
+  assert_false(reason.contains("2 MiB"))
 }
 
 ///|
@@ -1637,7 +1474,7 @@ test "kimi coding-plan 403 quota verdict schedules at window upper bound" {
   }
   // The provider labels the quota wall auth_error; the phrasing wins.
   assert_eq(info.provider_code, Some("auth_error"))
-  // No timestamp: the 5-hour window length is the upper bound.
+  // No Retry-After: the schedule falls back to the 5-hour window length.
   debug_inspect(info.reset_at_ms, content="Some(19000000)")
 }
 
@@ -1657,13 +1494,42 @@ test "kimi 403 auth failure stays Transport" {
 }
 
 ///|
-fn tool_msg(text : String) -> @posoco.Message {
-  @posoco.Message::ToolMessage(
-    call_id=@posoco.CallId::unchecked("call_1"),
-    tool_name=@posoco.ToolName::unchecked("read"),
-    outcome=@posoco.ToolOutcome::Success(content=text, structured=None),
+/// Identity headers (unchanged contract with the coding host).
+
+///|
+test "kimi_default_headers mirrors kimi-code-cli identity set" {
+  let headers = kimi_default_headers(
+    device_id="11111111-1111-4111-8111-111111111111",
   )
+  let expected_keys = [
+    "User-Agent", "X-Msh-Platform", "X-Msh-Version", "X-Msh-Device-Name", "X-Msh-Device-Model",
+    "X-Msh-Os-Version", "X-Msh-Device-Id",
+  ]
+  for key in expected_keys {
+    assert_true(headers.contains(key))
+    match headers[key] {
+      value => assert_true(value.length() > 0)
+    }
+  }
+  assert_eq(headers["User-Agent"], "kimi-code-cli/1.2.3")
+  assert_eq(headers["X-Msh-Platform"], "kimi_code_cli")
+  assert_eq(headers["X-Msh-Device-Id"], "11111111-1111-4111-8111-111111111111")
 }
+
+///|
+test "kimi_default_headers mints a fallback device id when none supplied" {
+  let headers_a = kimi_default_headers()
+  let headers_b = kimi_default_headers()
+  let a = headers_a["X-Msh-Device-Id"]
+  let b = headers_b["X-Msh-Device-Id"]
+  assert_true(a.length() > 0)
+  assert_true(b.length() > 0)
+  assert_true(a != b)
+}
+
+///|
+/// Compact: split/summary helpers (the network call reuses the chat
+/// transport and is exercised end-to-end by hosts).
 
 ///|
 test "kimi_tail_start keeps the last two user/assistant messages" {
@@ -1718,4 +1584,46 @@ test "kimi_summary_text takes text blocks and trims" {
     usage=None,
   )
   assert_eq(kimi_summary_text(completion), "summary text")
+}
+
+///|
+test "compact_request_is_instructions_plus_input_without_tools" {
+  // The summary prompt is [SystemMessage, UserMessage]; the Responses
+  // encode lifts the system part into instructions and carries no tools
+  // and no reasoning override.
+  let prompt = @compact_summary.build_summary_prompt(
+    @compact_summary.SummaryTemplate::KimiXml,
+    "the transcript",
+  )
+  assert_eq(prompt.length(), 2)
+  let body = build_responses_request(
+    prompt,
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "kimi-k3",
+    false,
+    None,
+    reasoning_effort=None,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  match root.get("instructions") {
+    Some(String(instructions)) =>
+      assert_true(instructions.contains("context compaction engine"))
+    _ => fail("expected the summary system prompt as instructions")
+  }
+  guard root.get("input") is Some(Array(items)) else {
+    fail("expected the input array")
+  }
+  assert_eq(items.length(), 1)
+  guard items[0] is Object(user_item) else { fail("user item object") }
+  match user_item.get("role") {
+    Some(String("user")) => ()
+    _ => fail("expected the conversation user item")
+  }
+  for absent in ["tools", "reasoning", "prompt_cache_key", "stream"] {
+    match root.get(absent) {
+      None => ()
+      Some(_) => fail("compact request must omit: " + absent)
+    }
+  }
 }

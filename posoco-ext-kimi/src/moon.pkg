@@ -3,6 +3,7 @@ import {
   "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-kit-chat-completions" @chatkit,
   "colmugx/posoco-kit-compact-summary" @compact_summary,
+  "colmugx/posoco-kit-responses" @responses,
   "colmugx/posoco-ext-llm" @llm,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",
@@ -24,5 +25,6 @@ options(
     "identity.js.mbt": [ "js" ],
     "identity.native.mbt": [ "native" ],
     "posoco_ext_kimi_wbtest.mbt": [ "native" ],
+    "usage_wbtest.mbt": [ "native" ],
   },
 )

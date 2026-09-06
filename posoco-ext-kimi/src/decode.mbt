@@ -1,298 +1,95 @@
 ///|
-/// Wire decoder: convert kimi API JSON response into kernel Completion.
+/// Wire decoder: convert a Kimi Responses API response into a kernel
+/// Completion. The shared kit parses items/tool calls/usage/reasoning
+/// (reasoning raw items ride `Reasoning.raw` for verbatim replay); this
+/// layer adds the kimi specifics: a `max_output_tokens` truncation maps to
+/// FinishReason::Length.
 
 ///|
-/// Decode a non-streaming chat completion response into a Completion.
-fn decode_chat_response(
-  json : Json,
-) -> @posoco.Completion raise @posoco.ModelError {
-  guard json is Object(root) else {
-    raise @posoco.ModelError::ResponseParse(
-      "kimi response parse failure (stage=response, category=not_object)",
-    )
-  }
-  match root.get("error") {
-    Some(Object(_)) =>
-      raise @posoco.ModelError::Transport(
-        "kimi API error (stage=response.error, category=structured)",
-      )
-    Some(_) =>
-      raise @posoco.ModelError::Transport(
-        "kimi API error (stage=response.error, category=wrong_type)",
-      )
-    None => ()
-  }
-  let choices = match root.get("choices") {
-    Some(Array(choices)) => choices
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=choices, category=wrong_type)",
-      )
-    None =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=choices, category=missing)",
-      )
-  }
-  if choices.length() == 0 {
-    raise @posoco.ModelError::ResponseParse(
-      "kimi response parse failure (stage=choices, category=empty)",
-    )
-  }
-  guard choices[0] is Object(choice) else {
-    raise @posoco.ModelError::ResponseParse(
-      "kimi response parse failure (stage=choice, category=not_object)",
-    )
-  }
-  let msg = match choice.get("message") {
-    Some(Object(msg)) => msg
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=message, category=wrong_type)",
-      )
-    None =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=message, category=missing)",
-      )
-  }
-  let text = match msg.get("content") {
-    Some(String(s)) => s
-    Some(Null) | None => ""
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=message.content, category=wrong_type)",
-      )
-  }
-  // Extract reasoning_content (kimi reasoner; independent field)
-  let reasoning : String? = match msg.get("reasoning_content") {
-    Some(String(s)) => if s == "" { None } else { Some(s) }
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=message.reasoning_content, category=wrong_type)",
-      )
-    None => None
-  }
-  let tool_calls : Array[@posoco.ToolCall] = match msg.get("tool_calls") {
-    Some(Array(tcs)) => {
-      let result : Array[@posoco.ToolCall] = []
-      for tc in tcs {
-        match tc {
-          Object(o) => {
-            let id = match o.get("id") {
-              Some(String(s)) if s != "" => s
-              Some(String(_)) =>
-                raise @posoco.ModelError::ResponseParse(
-                  "kimi response parse failure (stage=tool.id, category=empty)",
-                )
-              Some(_) =>
-                raise @posoco.ModelError::ResponseParse(
-                  "kimi response parse failure (stage=tool.id, category=wrong_type)",
-                )
-              None =>
-                raise @posoco.ModelError::ResponseParse(
-                  "kimi response parse failure (stage=tool.id, category=missing)",
-                )
-            }
-            let (name, args_str) = match o.get("function") {
-              Some(Object(f)) => {
-                let n = match f.get("name") {
-                  Some(String(s)) if s != "" => s
-                  Some(String(_)) =>
-                    raise @posoco.ModelError::ResponseParse(
-                      "kimi response parse failure (stage=tool.name, category=empty)",
-                    )
-                  Some(_) =>
-                    raise @posoco.ModelError::ResponseParse(
-                      "kimi response parse failure (stage=tool.name, category=wrong_type)",
-                    )
-                  None =>
-                    raise @posoco.ModelError::ResponseParse(
-                      "kimi response parse failure (stage=tool.name, category=missing)",
-                    )
-                }
-                let a = match f.get("arguments") {
-                  Some(String(s)) => s
-                  Some(_) =>
-                    raise @posoco.ModelError::ResponseParse(
-                      "kimi response parse failure (stage=tool.arguments, category=wrong_type)",
-                    )
-                  None =>
-                    raise @posoco.ModelError::ResponseParse(
-                      "kimi response parse failure (stage=tool.arguments, category=missing)",
-                    )
-                }
-                (n, a)
-              }
-              Some(_) =>
-                raise @posoco.ModelError::ResponseParse(
-                  "kimi response parse failure (stage=tool.function, category=wrong_type)",
-                )
-              None =>
-                raise @posoco.ModelError::ResponseParse(
-                  "kimi response parse failure (stage=tool.function, category=missing)",
-                )
-            }
-            let args : Json = @json.parse(args_str) catch {
-              _ =>
-                raise @posoco.ModelError::ResponseParse(
-                  "kimi response parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
-                )
-            }
-            result.push({
-              call_id: @posoco.CallId::unchecked(id),
-              name: @posoco.ToolName::unchecked(name),
-              arguments: args,
-            })
+/// `status: "incomplete"` with a `max_output_tokens` reason is a length
+/// truncation, not a protocol failure. The reason rides `status_details`
+/// (documented kimi shape); `incomplete_details` (OpenAI spelling) is
+/// accepted as a fallback.
+fn kimi_is_length_truncation(resp : Json) -> Bool {
+  match resp {
+    Json::Object(map) => {
+      let status_incomplete = match map.get("status") {
+        Some(Json::String("incomplete")) => true
+        _ => false
+      }
+      if !status_incomplete {
+        return false
+      }
+      let reason = match map.get("status_details") {
+        Some(Json::Object(details)) => details.get("reason")
+        Some(Json::Null) | None =>
+          match map.get("incomplete_details") {
+            Some(Json::Object(details)) => details.get("reason")
+            _ => None
           }
-          _ =>
-            raise @posoco.ModelError::ResponseParse(
-              "kimi response parse failure (stage=tool, category=not_object)",
-            )
+        Some(_) => None
+      }
+      match reason {
+        Some(Json::String("max_output_tokens")) => true
+        _ => false
+      }
+    }
+    _ => false
+  }
+}
+
+///|
+/// The shared kit accepts only `status: "completed"`. A length truncation
+/// is re-labelled before the kit parse so the stream stays on the success
+/// path; the caller overrides the finish reason afterwards.
+fn kimi_mark_completed(resp : Json) -> Json {
+  match resp {
+    Json::Object(map) => {
+      let fields : Array[(String, Json)] = []
+      for key, value in map {
+        if key != "status" {
+          fields.push((key, value))
         }
       }
-      result
+      fields.push(("status", Json::string("completed")))
+      Json::object(Map::from_array(fields))
     }
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=message.tool_calls, category=wrong_type)",
-      )
-    None => []
+    other => other
   }
-  let finish : @posoco.FinishReason = match choice.get("finish_reason") {
-    Some(String("")) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=finish_reason, category=empty)",
-      )
-    Some(String(s)) =>
-      match s {
-        "stop" => @posoco.FinishReason::Stop
-        "length" => @posoco.FinishReason::Length
-        "tool_calls" => @posoco.FinishReason::ToolCalls
-        _ => @posoco.FinishReason::Other(s)
-      }
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=finish_reason, category=wrong_type)",
-      )
-    None =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=finish_reason, category=missing)",
-      )
-  }
-  let usage : @posoco.Usage? = match root.get("usage") {
-    Some(Object(_)) => Some(extract_usage(root))
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage, category=wrong_type)",
-      )
-    None => None
-  }
+}
 
-  let content : Array[@posoco.Content] = if text == "" {
-    []
-  } else {
-    [@posoco.Content::Text(text)]
-  }
-  let reasoning_val : @posoco.Reasoning? = match reasoning {
-    Some(r) => Some(@posoco.Reasoning::{ content: r, raw: None, })
-    None => None
+///|
+/// Re-label a max_output_tokens truncation as Length; every other
+/// completion keeps the kit-parsed finish reason.
+fn apply_kimi_length_truncation(
+  completion : @posoco.Completion,
+  length_truncated : Bool,
+) -> @posoco.Completion {
+  if !length_truncated {
+    return completion
   }
   @posoco.Completion::Completion(
-    content~,
-    tool_calls~,
-    reasoning=reasoning_val,
-    finish_reason=finish,
-    usage~,
+    content=completion.message.content,
+    tool_calls=completion.message.tool_calls,
+    reasoning=completion.message.reasoning,
+    finish_reason=@posoco.FinishReason::Length,
+    usage=completion.usage,
   )
 }
 
 ///|
-/// Extract Usage from a JSON object containing usage fields.
-/// Moonshot may put usage at root level or inside choices[0].usage
-/// (proprietary position). cached_tokens is also at the usage top-level
-/// (not inside prompt_tokens_details like OpenAI).
-fn extract_usage(
-  root : Map[String, Json],
-) -> @posoco.Usage raise @posoco.ModelError {
-  // Try root.usage first, then fall back to choices[0].usage.
-  let usage_obj = match root.get("usage") {
-    Some(Object(u)) => u
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage, category=wrong_type)",
-      )
-    None =>
-      // Fallback: choices[0].usage (Moonshot proprietary position).
-      match root.get("choices") {
-        Some(Array(choices)) => {
-          if choices.length() == 0 {
-            raise @posoco.ModelError::ResponseParse(
-              "kimi response parse failure (stage=usage, category=missing)",
-            )
-          }
-          guard choices[0] is Object(choice) else {
-            raise @posoco.ModelError::ResponseParse(
-              "kimi response parse failure (stage=usage.choices[0], category=not_object)",
-            )
-          }
-          match choice.get("usage") {
-            Some(Object(u)) => u
-            _ =>
-              raise @posoco.ModelError::ResponseParse(
-                "kimi response parse failure (stage=usage, category=missing)",
-              )
-          }
-        }
-        _ =>
-          raise @posoco.ModelError::ResponseParse(
-            "kimi response parse failure (stage=usage, category=missing)",
-          )
-      }
-  }
-  let prompt = match usage_obj.get("prompt_tokens") {
-    Some(Number(n, ..)) => Some(n.to_int())
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage.prompt_tokens, category=wrong_type)",
-      )
-    None =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage.prompt_tokens, category=missing)",
-      )
-  }
-  let completion = match usage_obj.get("completion_tokens") {
-    Some(Number(n, ..)) => Some(n.to_int())
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage.completion_tokens, category=wrong_type)",
-      )
-    None =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage.completion_tokens, category=missing)",
-      )
-  }
-  let total = match usage_obj.get("total_tokens") {
-    Some(Number(n, ..)) => Some(n.to_int())
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage.total_tokens, category=wrong_type)",
-      )
-    None =>
-      raise @posoco.ModelError::ResponseParse(
-        "kimi response parse failure (stage=usage.total_tokens, category=missing)",
-      )
-  }
-  // cached_tokens: Moonshot puts it at the usage top-level (and mirrors it
-  // under prompt_tokens_details on newer firmware). Exposed as-is; Usage
-  // keeps the provider-reported prompt total.
-  let cached = match usage_obj.get("cached_tokens") {
-    Some(Number(n, ..)) => Some(n.to_int())
-    _ => None
-  }
-  {
-    input_tokens: prompt,
-    output_tokens: completion,
-    total_tokens: total,
-    cached_input_tokens: cached,
-    uncached_input_tokens: None,
-  }
+/// Decode a complete Responses response into a Completion.
+fn decode_responses_response(
+  resp_json : Json,
+) -> @posoco.Completion raise @posoco.ModelError {
+  let length_truncated = kimi_is_length_truncation(resp_json)
+  let completion = @responses.parse_responses_response(
+    provider="kimi",
+    if length_truncated {
+      kimi_mark_completed(resp_json)
+    } else {
+      resp_json
+    },
+  )
+  apply_kimi_length_truncation(completion, length_truncated)
 }

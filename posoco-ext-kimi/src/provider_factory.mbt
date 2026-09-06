@@ -21,10 +21,6 @@ pub fn KimiProvider::KimiProvider(
 }
 
 ///|
-/// Build the kimi-code-cli identity header set for this provider. Returns an
-/// empty map when `device_id` is unset AND the caller does not require it;
-/// callers that need identity headers always call this, since kimi_default_headers
-/// falls back to a process-local UUID internally when device_id is empty.
 fn KimiProvider::identity_headers(self : KimiProvider) -> Map[String, String] {
   if self.device_id.length() > 0 {
     kimi_default_headers(device_id=self.device_id)
@@ -82,16 +78,17 @@ fn kimi_endpoint_parts(url : String) -> (String, String) {
 
 ///|
 fn kimi_default_model() -> String {
-  KimiConfig("").model
+  "kimi-k3"
 }
 
 ///|
 fn kimi_model(
   source : @llm.ProviderConfigSource,
+  default : String,
 ) -> String raise @posoco.CompositionError {
   match kimi_setting_string(source, "model") {
     Some(value) => value
-    None => kimi_default_model()
+    None => default
   }
 }
 
@@ -124,18 +121,26 @@ pub impl @llm.ProviderFactory for KimiProvider with fn build(
   self : KimiProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
-  let model = kimi_model(source)
   let effort = kimi_effort(source)
   let credential = source.effective_credential("kimi")
   let config = match credential {
-    Some(@oauth.ProviderCredential::OAuth(credential)) =>
+    Some(@oauth.ProviderCredential::OAuth(credential)) => {
+      let quota_source = KimiUsageSource(
+        access_token=credential.access_token,
+        base_url=kimi_oauth_api_base(),
+      )
+      let borrowed : &@devkit.QuotaSource = quota_source
+      @devkit.quota_registry_register("kimi", borrowed)
       KimiConfig::from_oauth_credential(
         credential,
-        model,
+        kimi_model(source, "k3-256k"),
         reasoning_effort=effort,
         identity_headers=self.identity_headers(),
       )
+    }
     Some(@oauth.ProviderCredential::ApiKey(credential)) => {
+      // No quota registration here: the Open Platform (api.moonshot.ai) has
+      // no /usages endpoint.
       let base_setting = match kimi_setting_string(source, "base_url") {
         Some(value) => value
         None => "https://api.moonshot.ai/v1"
@@ -143,7 +148,7 @@ pub impl @llm.ProviderFactory for KimiProvider with fn build(
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
       KimiConfig(
         credential.secret,
-        model~,
+        model=kimi_model(source, kimi_default_model()),
         base_url~,
         endpoint_prefix~,
         reasoning_effort=effort,
@@ -161,7 +166,7 @@ pub impl @llm.ProviderFactory for KimiProvider with fn build(
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
       KimiConfig(
         api_key,
-        model~,
+        model=kimi_model(source, kimi_default_model()),
         base_url~,
         endpoint_prefix~,
         reasoning_effort=effort,
@@ -180,26 +185,32 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn provider_id(
 }
 
 ///|
-/// Explicit live model discovery.  The endpoint and response schema remain
-/// provider-owned; the host only decides when to invoke this seam.
 pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
   self : KimiProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
-  let model = kimi_model(source)
   let effort = kimi_effort(source)
   let credential = source.effective_credential("kimi")
   let config = match credential {
-    Some(@oauth.ProviderCredential::OAuth(credential)) =>
+    Some(@oauth.ProviderCredential::OAuth(credential)) => {
+      let quota_source = KimiUsageSource(
+        access_token=credential.access_token,
+        base_url=kimi_oauth_api_base(),
+      )
+      let borrowed : &@devkit.QuotaSource = quota_source
+      @devkit.quota_registry_register("kimi", borrowed)
       KimiConfig::from_oauth_credential(
         credential,
-        model,
+        kimi_model(source, "k3-256k"),
         reasoning_effort=effort,
         // Defer effort validation until the authenticated catalog is parsed.
         thinking_efforts=Some(if effort == "" { [] } else { [effort] }),
         identity_headers=self.identity_headers(),
       )
+    }
     Some(@oauth.ProviderCredential::ApiKey(credential)) => {
+      // No quota registration here: the Open Platform (api.moonshot.ai) has
+      // no /usages endpoint.
       let base_setting = match kimi_setting_string(source, "base_url") {
         Some(value) => value
         None => "https://api.moonshot.ai/v1"
@@ -207,7 +218,7 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
       KimiConfig(
         credential.secret,
-        model~,
+        model=kimi_model(source, kimi_default_model()),
         base_url~,
         endpoint_prefix~,
         reasoning_effort=effort,
@@ -226,7 +237,7 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
       let (base_url, endpoint_prefix) = kimi_endpoint_parts(base_setting)
       KimiConfig(
         api_key,
-        model~,
+        model=kimi_model(source, kimi_default_model()),
         base_url~,
         endpoint_prefix~,
         reasoning_effort=effort,
@@ -238,9 +249,8 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn refresh(
     config.base_url,
     config.api_key,
     endpoint_prefix=config.endpoint_prefix,
-    // OAuth-managed /coding/v1/models needs the kimi-code-cli identity set
-    // to be recognised as a coding agent; API-key mode passes an empty map
-    // (config.identity_headers is empty in that branch).
+    // The managed /coding/v1/models endpoint only recognises kimi-code-cli
+    // identity headers.
     identity_headers=config.identity_headers,
   ) catch {
     err =>
@@ -277,8 +287,6 @@ pub impl @llm.OAuthFactory for KimiProvider with fn login(
 }
 
 ///|
-/// Provider-owned API-key login. The host supplies only a generic secret
-/// prompt; Kimi validates and persists the resulting opaque credential.
 pub impl @llm.ApiKeyFactory for KimiProvider with fn provider_id(
   _self : KimiProvider,
 ) -> String {

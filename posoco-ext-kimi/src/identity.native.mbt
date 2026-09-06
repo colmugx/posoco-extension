@@ -1,10 +1,6 @@
 ///|
-/// Native-backend host identity probes, backed by identity_stub.c.
-///
-/// The C stubs return fresh `Bytes` (UTF-8); we decode lossily here so any
-/// non-UTF-8 byte from a hostile `uname` cannot break header construction.
-/// On failure the stub returns an empty buffer and `kimi_ascii_header` falls
-/// back to "unknown", so a header value is never silently blank.
+/// C stubs return UTF-8 Bytes, decoded lossily; empty on failure, so
+/// kimi_ascii_header falls back to "unknown".
 
 ///|
 extern "c" fn kimi_native_hostname() -> Bytes = "kimi_native_hostname"
@@ -32,10 +28,6 @@ fn kimi_os_version() -> String {
 }
 
 ///|
-/// Human-readable device model. On Darwin: `macOS <sw_vers -productVersion>
-/// <arch>` (falling back to the kernel release when sw_vers is unavailable),
-/// matching kimi-code's `deviceModel()`. On other platforms:
-/// `<sysname> <release> <arch>`.
 fn kimi_device_model() -> String {
   let sysname = @utf8.decode_lossy(kimi_native_sysname())
   let arch = @utf8.decode_lossy(kimi_native_arch())

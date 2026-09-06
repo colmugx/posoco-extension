@@ -1,14 +1,4 @@
 ///|
-/// posoco_ext_kimi — ModelPort implementation.
-///
-/// Implements @posoco.ModelPort for kimi's /chat/completions endpoint.
-/// Uses @http.post / @http.post_stream with the full endpoint URL.
-
-///|
-/// Build HTTP headers for kimi API requests. Identity headers (User-Agent +
-/// X-Msh-*) form the base layer when the provider impersonates kimi-code-cli;
-/// Authorization and Content-Type always override any same-named default so
-/// the chat wire contract stays authoritative.
 fn build_headers(config : KimiConfig) -> @http.Headers {
   let headers : @http.Headers = Map([])
   for k, v in config.identity_headers {
@@ -20,16 +10,11 @@ fn build_headers(config : KimiConfig) -> @http.Headers {
 }
 
 ///|
-/// The full chat completions URL: base_url + endpoint_prefix + /chat/completions.
-fn chat_url(config : KimiConfig) -> String {
-  config.base_url + config.endpoint_prefix + "/chat/completions"
+fn responses_url(config : KimiConfig) -> String {
+  config.base_url + config.endpoint_prefix + "/responses"
 }
 
 ///|
-/// The prompt_cache_key for this port's next chat request: derived from the
-/// invocation scope's session id via the shared kit helper, or `None` when
-/// the host opted out (`send_prompt_cache_key=false`) or the provider
-/// already rejected the parameter.
 fn KimiModelPort::prompt_cache_key_for(
   self : KimiModelPort,
   session_id : String,
@@ -42,9 +27,6 @@ fn KimiModelPort::prompt_cache_key_for(
 }
 
 ///|
-/// Per-process learning from a non-2xx error body: when the body explicitly
-/// rejects prompt_cache_key, stop sending it for the rest of this port's
-/// lifetime.
 fn KimiModelPort::learn_prompt_cache_key_rejection(
   self : KimiModelPort,
   body_text : String,
@@ -56,47 +38,30 @@ fn KimiModelPort::learn_prompt_cache_key_rejection(
 }
 
 ///|
-/// Resolve thinking config based on model name (K7).
-/// - kimi-k3: thinking permanently on, supports reasoning_effort (low/high/max).
-///   Do NOT send thinking object; send top-level reasoning_effort only.
-/// - kimi-k2.7-code: thinking permanently on, keep must be "all".
-///   Send thinking={type:"enabled",keep:"all"}.
-/// - kimi-k2.6: thinking toggleable, must NOT set temperature, keep optional.
-///   Default: enabled with keep="all".
-/// - kimi-k2.5: thinking toggleable, keep not supported.
-/// - default/fallback: enabled with keep="all", effort="high".
-///
-/// Returns (thinking_json, cache_key_placeholder). The cache_key is handled
-/// separately in build_chat_request.
-fn resolve_thinking_config(
-  model : String,
-  thinking_efforts : Array[String],
-  effort : String,
-) -> (Json, String?) {
-  // A live model catalog may explicitly advertise no thinking support.  Do
-  // not send a provider-family default in that case.
-  if thinking_efforts.is_empty() {
-    (Json::object({ "type": Json::string("disabled") }), None)
-  } else if model == "kimi-k3" {
-    // k3: thinking permanently enabled and effort is top-level.
-    (Json::null(), Some(effort))
-  } else if model == "kimi-k2.7-code" {
-    // k2.7-code: permanently on, keep must be "all", cannot disable.
-    (enabled_thinking_json(Some(effort)), None)
-  } else if model == "kimi-k2.6" {
-    // k2.6: enabled with keep="all". Caller must NOT set temperature.
-    (enabled_thinking_json(Some(effort)), None)
-  } else if model == "kimi-k2.5" {
-    // k2.5: enabled, keep not supported (omit keep).
-    (enabled_thinking_json(Some(effort)), None)
-  } else {
-    // Fallback: enabled with keep="all" and provider-selected effort.
-    (enabled_thinking_json(Some(effort)), None)
+fn attach_kimi_stream_reasoning(
+  completion : @posoco.Completion,
+  state : @responses.SseStreamState,
+) -> @posoco.Completion {
+  if state.items.is_empty() {
+    return completion
   }
+  let content = match completion.message.reasoning {
+    Some(r) => if r.content == "" { state.summary } else { r.content }
+    None => state.summary
+  }
+  @posoco.Completion::Completion(
+    content=completion.message.content,
+    tool_calls=completion.message.tool_calls,
+    reasoning=Some(@posoco.Reasoning::{
+      content,
+      raw: Some(Json::array(state.items)),
+    }),
+    finish_reason=completion.message.finish_reason,
+    usage=completion.usage,
+  )
 }
 
 ///|
-/// ModelPort implementation — chat with optional streaming.
 pub impl @posoco.ModelPort for KimiModelPort with fn chat(
   self : KimiModelPort,
   scope : @posoco.InvocationScope,
@@ -105,213 +70,214 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  let (thinking_json, reasoning_effort_str) = resolve_thinking_config(
-    self.config.model,
-    self.config.thinking_efforts,
-    self.config.reasoning_effort,
-  )
-  // k2.6 must not set temperature — strip it if present.
-  let safe_options : @posoco.ChatOptions = if self.config.model == "kimi-k2.6" {
-    @posoco.ChatOptions::{
-      temperature: None,
-      max_output_tokens: options.max_output_tokens,
-    }
-  } else {
-    options
-  }
   let messages_owned = messages.to_owned()
   let cache_key = self.prompt_cache_key_for(scope.session_id.to_string())
   match stream {
-    NoStream => {
-      let body = build_chat_request(
-        self.ctx,
-        messages_owned,
-        tools,
-        safe_options,
-        self.config.model,
-        false,
-        thinking_json,
-        cache_key, // from scope.session_id via the shared kit helper
-        reasoning_effort_str~,
-        supports_images=self.config.supports_images,
-      )
-      let headers = build_headers(self.config)
-      let url = chat_url(self.config)
-      let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=post): " + err.to_string(),
-          )
-      }
-      if !is_kimi_http_success(response.code) {
-        let body_text = body_data.text() catch { _ => "" }
-        self.learn_prompt_cache_key_rejection(body_text)
-        match
-          classify_kimi_http_status(
-            "chat.http_status",
-            response.code,
-            BodyBytesUtf8(body_data.binary().length()),
-            body_text~,
-            retry_after=retry_after_header(response),
-            now_ms=@async.now(),
-          ) {
-          Some(err) => raise err
-          None => ()
-        }
-      }
-      let body_text = body_data.text() catch {
-        _ =>
-          raise @posoco.ModelError::ResponseParse(
-            "kimi response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
-          )
-      }
-      let resp_json : Json = @json.parse(body_text) catch {
-        _ =>
-          raise @posoco.ModelError::ResponseParse(
-            "kimi response parse failure (stage=json, category=malformed, body_chars=\{body_text.length()})",
-          )
-      }
-      let completion = decode_chat_response(resp_json)
-      @posoco.ModelCallResult::{
-        completion,
-        processed_messages: messages_owned,
-      }
-    }
-    Stream(on_chunk) => {
-      let body = build_chat_request(
-        self.ctx,
-        messages_owned,
-        tools,
-        safe_options,
-        self.config.model,
-        true,
-        thinking_json,
-        cache_key,
-        reasoning_effort_str~,
-        supports_images=self.config.supports_images,
-      )
-      let headers = build_headers(self.config)
-      let url = chat_url(self.config)
-      let client = @http.post_stream(url, headers~) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=post_stream): " + err.to_string(),
-          )
-      }
-      client.write(body.stringify()) catch {
-        err => {
-          client.close()
-          raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=write_body): " + err.to_string(),
-          )
-        }
-      }
-      let response = client.end_request() catch {
-        err => {
-          client.close()
-          raise @posoco.ModelError::Transport(
-            "kimi transport failure (stage=end_request): " + err.to_string(),
-          )
-        }
-      }
-      if !is_kimi_http_success(response.code) {
-        let retry_after = retry_after_header(response)
-        let err_body = read_error_body_text(client) catch { _ => None }
-        match err_body {
-          Some(text) => self.learn_prompt_cache_key_rejection(text)
-          None => ()
-        }
-        client.close()
-        match
-          classify_kimi_http_status(
-            "chat_stream.http_status",
-            response.code,
-            match err_body {
-              Some(text) => BodyBytesUtf8(text.length())
-              None => BodyUnavailable
-            },
-            body_text=match err_body {
-              Some(text) => text
-              None => ""
-            },
-            retry_after~,
-            now_ms=@async.now(),
-          ) {
-          Some(err) => raise err
-          None => ()
-        }
-      }
-      let acc = @posoco.StreamAccumulator::StreamAccumulator()
-      // Forward typed StreamChunks directly to the host callback. The
-      // accumulator is owned by process_kimi_sse, which pushes every chunk
-      // exactly once; pushing here too would double every text/reasoning delta.
-      let mut done = false
-      let mut data_buffer = ""
-      let mut last_yield = @async.now()
-      while !done {
-        let line = client.read_until("\n") catch {
-          err => {
-            client.close()
-            raise @posoco.ModelError::Transport(
-              "Kimi transport failure (stage=read_stream): " + err.to_string(),
-            )
-          }
-        }
-        match line {
-          Some(data) => {
-            let trimmed = data.trim()
-            if trimmed.has_prefix("data:") {
-              let payload = trimmed[5:].trim().to_owned()
-              if payload.length() > 0 {
-                data_buffer = payload
-                done = process_kimi_sse(payload, acc, on_chunk)
-              }
-            } else if trimmed == "" && data_buffer.length() > 0 {
-              data_buffer = ""
-            }
-          }
-          None => {
-            client.close()
-            match classify_kimi_stream_termination(CleanEof) {
-              Some(err) => raise err
-              None => done = true
-            }
-          }
-        }
-        // Yield at most every 16ms so the event loop can breathe during a
-        // buffered SSE burst; the pause is also a cancellation point.
-        let now = @async.now()
-        if now - last_yield >= 16L {
-          @async.pause() catch {
-            _ => ()
-          }
-          last_yield = now
-        }
-      }
-      client.close()
-      match classify_kimi_stream_termination(ExplicitTerminal) {
-        Some(err) => raise err
-        None => ()
-      }
-      validate_kimi_stream_tool_calls(acc)
-      let completion = acc.to_completion()
-      @posoco.ModelCallResult::{
-        completion,
-        processed_messages: messages_owned,
-      }
-    }
+    NoStream => self.chat_nonstream(messages_owned, tools, options, cache_key)
+    Stream(on_chunk) =>
+      self.chat_stream(messages_owned, tools, options, cache_key, on_chunk)
   }
 }
 
 ///|
-/// ModelPort implementation — compact lives in compact.mbt (kit-based
-/// summary of everything older than the last two user/assistant messages).
+async fn KimiModelPort::chat_nonstream(
+  self : KimiModelPort,
+  messages : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+  cache_key : String?,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  let body = build_responses_request(
+    messages,
+    tools,
+    options,
+    self.config.model,
+    false,
+    cache_key,
+    reasoning_effort=Some(self.config.reasoning_effort),
+  )
+  let headers = build_headers(self.config)
+  let (response, body_data) = @http.post(
+    responses_url(self.config),
+    body.stringify(),
+    headers~,
+  ) catch {
+    err =>
+      raise @posoco.ModelError::Transport(
+        "kimi transport failure (stage=post): " + err.to_string(),
+      )
+  }
+  if !is_kimi_http_success(response.code) {
+    let body_text = body_data.text() catch { _ => "" }
+    self.learn_prompt_cache_key_rejection(body_text)
+    match
+      classify_kimi_http_status(
+        "chat.http_status",
+        response.code,
+        BodyBytesUtf8(body_data.binary().length()),
+        body_text~,
+        retry_after=retry_after_header(response),
+        now_ms=@async.now(),
+      ) {
+      Some(err) => raise err
+      None => ()
+    }
+  }
+  let body_text = body_data.text() catch {
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "kimi response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
+      )
+  }
+  let resp_json : Json = @json.parse(body_text) catch {
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "kimi response parse failure (stage=json, category=malformed, body_chars=\{body_text.length()})",
+      )
+  }
+  let completion = decode_responses_response(resp_json)
+  @posoco.ModelCallResult::{ completion, processed_messages: messages, }
+}
 
 ///|
-/// ModelPort implementation — provider_config. Reports the discovery
-/// endpoint's context capacity so the Agent can size auto-compact from the
-/// active model's own window, plus kimi-cli's trigger ratio (0.85) so the
-/// core auto-compact fires at the same point kimi-code would.
+async fn KimiModelPort::chat_stream(
+  self : KimiModelPort,
+  messages : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+  cache_key : String?,
+  on_chunk : (@posoco.StreamChunk) -> Unit,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  let body = build_responses_request(
+    messages,
+    tools,
+    options,
+    self.config.model,
+    true,
+    cache_key,
+    reasoning_effort=Some(self.config.reasoning_effort),
+  )
+  let headers = build_headers(self.config)
+  let client = @http.post_stream(responses_url(self.config), headers~) catch {
+    err =>
+      raise @posoco.ModelError::Transport(
+        "kimi transport failure (stage=post_stream): " + err.to_string(),
+      )
+  }
+  client.write(body.stringify()) catch {
+    err => {
+      client.close()
+      raise @posoco.ModelError::Transport(
+        "kimi transport failure (stage=write_body): " + err.to_string(),
+      )
+    }
+  }
+  let response = client.end_request() catch {
+    err => {
+      client.close()
+      raise @posoco.ModelError::Transport(
+        "kimi transport failure (stage=end_request): " + err.to_string(),
+      )
+    }
+  }
+  if !is_kimi_http_success(response.code) {
+    let retry_after = retry_after_header(response)
+    let err_body = read_error_body_text(client) catch { _ => None }
+    match err_body {
+      Some(text) => self.learn_prompt_cache_key_rejection(text)
+      None => ()
+    }
+    client.close()
+    match
+      classify_kimi_http_status(
+        "chat_stream.http_status",
+        response.code,
+        match err_body {
+          Some(text) => BodyBytesUtf8(text.length())
+          None => BodyUnavailable
+        },
+        body_text=match err_body {
+          Some(text) => text
+          None => ""
+        },
+        retry_after~,
+        now_ms=@async.now(),
+      ) {
+      Some(err) => raise err
+      None => ()
+    }
+  }
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let sse_state = @responses.SseStreamState::SseStreamState()
+  let mut done = false
+  let mut last_yield = @async.now()
+  while !done {
+    let line = client.read_until("\n") catch {
+      err => {
+        client.close()
+        raise @posoco.ModelError::Transport(
+          "Kimi transport failure (stage=read_stream): " + err.to_string(),
+        )
+      }
+    }
+    match line {
+      Some(data) => {
+        let trimmed = data.trim()
+        if trimmed.has_prefix("data:") {
+          let payload = trimmed["data:".length():].to_owned()
+          let pl = payload.trim()
+          if pl == "[DONE]" {
+            done = true
+          } else if pl.length() > 0 {
+            done = @responses.process_responses_sse(
+              provider="kimi",
+              pl.to_owned(),
+              acc,
+              on_chunk,
+              state=sse_state,
+            )
+          }
+        }
+      }
+      None => {
+        client.close()
+        match
+          @responses.classify_stream_termination(
+            provider="kimi",
+            @responses.StreamTermination::CleanEof,
+          ) {
+          Some(err) => raise err
+          None => done = true
+        }
+      }
+    }
+    // Throttled yield so the event loop can breathe; pause is a
+    // cancellation point.
+    let now = @async.now()
+    if now - last_yield >= 16L {
+      @async.pause() catch {
+        _ => ()
+      }
+      last_yield = now
+    }
+  }
+  client.close()
+  match
+    @responses.classify_stream_termination(
+      provider="kimi",
+      @responses.StreamTermination::ExplicitTerminal,
+    ) {
+    Some(err) => raise err
+    None => ()
+  }
+  let completion = attach_kimi_stream_reasoning(
+    @responses.responses_stream_completion(provider="kimi", acc),
+    sse_state,
+  )
+  @posoco.ModelCallResult::{ completion, processed_messages: messages, }
+}
+
+///|
 pub impl @posoco.ModelPort for KimiModelPort with fn provider_config(
   self : KimiModelPort,
 ) -> @posoco.ProviderConfig {

@@ -1,10 +1,3 @@
-///
-/// Kimi model discovery for both API-key and managed OAuth endpoints.
-///
-/// The two endpoints share the provider-owned response contract used by
-/// kimi-code: each model carries context length and thinking capability
-/// metadata, with effort values nested under think_efforts.
-
 ///|
 pub(all) struct KimiModelInfo {
   id : String
@@ -59,9 +52,6 @@ fn kimi_optional_bool(
 }
 
 ///|
-/// Parse the legacy flat effort declaration used by older Kimi model
-/// endpoints.  A server-provided list is the source of truth; no effort names
-/// are invented when the field is absent.
 fn kimi_parse_flat_efforts(
   fields : Map[String, Json],
 ) -> (Array[String], String?) raise @posoco.ModelError {
@@ -147,7 +137,6 @@ fn kimi_parse_efforts(
   fields : Map[String, Json],
 ) -> (Array[String], String?) raise @posoco.ModelError {
   match fields.get("think_efforts") {
-    // The nested declaration is authoritative when present.
     None => kimi_parse_flat_efforts(fields)
     Some(Json::Object(effort_fields)) => {
       let support = match effort_fields.get("support") {
@@ -227,16 +216,11 @@ fn kimi_parse_efforts(
 }
 
 ///|
-/// Determine whether the model advertises reasoning separately from the
-/// effort list.  `supports_thinking_type` is authoritative when present;
-/// otherwise preserve the provider's explicit boolean declaration.
 fn kimi_supports_reasoning(
   fields : Map[String, Json],
   thinking_efforts : Array[String],
 ) -> Bool raise @posoco.ModelError {
   match fields.get("think_efforts") {
-    // Nested provider metadata is authoritative over legacy booleans and
-    // flat fields when present.
     Some(Json::Object(effort_fields)) =>
       match effort_fields.get("support") {
         Some(Json::True) => true
@@ -267,7 +251,6 @@ fn kimi_supports_reasoning(
 }
 
 ///|
-/// Parse the provider-owned Kimi models envelope.
 pub fn parse_kimi_models(
   payload : Json,
 ) -> Array[KimiModelInfo] raise @posoco.ModelError {
@@ -328,7 +311,6 @@ pub fn parse_kimi_models(
     let supports_tool_use = kimi_optional_bool(fields, "supports_tool_use")
     let supports_reasoning = kimi_supports_reasoning(fields, thinking_efforts)
     let supports_image = kimi_optional_bool(fields, "supports_image_in")
-    let supports_video = kimi_optional_bool(fields, "supports_video_in")
     let capabilities : Array[String] = ["chat", "streaming"]
     if supports_tool_use {
       capabilities.push("tool_use")
@@ -338,9 +320,6 @@ pub fn parse_kimi_models(
     }
     if supports_image {
       capabilities.push("image_in")
-    }
-    if supports_video {
-      capabilities.push("video_in")
     }
     result.push(KimiModelInfo::{
       id,
@@ -374,12 +353,6 @@ fn kimi_models_url(base_url : String, endpoint_prefix : String) -> String {
 }
 
 ///|
-/// Fetch and decode a live Kimi catalog. OAuth and API-key callers pass their
-/// provider-selected base URL and opaque token; the host never builds this URL.
-/// `identity_headers` carries the product identity set (User-Agent + X-Msh-*)
-/// when the provider needs to impersonate kimi-code-cli for the managed
-/// `/coding/v1/models` endpoint; it is merged under the Authorization/Accept
-/// headers so the catalog wire contract stays authoritative.
 pub async fn fetch_kimi_models(
   base_url : String,
   access_token : String,

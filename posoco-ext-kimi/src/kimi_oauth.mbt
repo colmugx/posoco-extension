@@ -1,9 +1,4 @@
 ///|
-/// kimi_oauth.mbt — OAuth provider for Kimi (Moonshot) Code subscription.
-///
-/// Uses RFC 8628 device authorization grant (device code flow).
-/// Kimi also supports API key auth (Bearer token); this OAuth impl is for
-/// subscription reuse (Kimi Code Plan).
 
 ///|
 /// Kimi OAuth endpoints (from kimi-code/kosong source).
@@ -16,13 +11,10 @@ let kimi_oauth_host : String = "https://auth.kimi.com"
 let kimi_api_base : String = "https://api.kimi.com/coding/v1"
 
 ///|
-/// Kimi OAuth provider. Implements @oauth.OAuthProvider via device flow.
+/// RFC 8628 device-flow OAuth for the Kimi Code subscription.
 pub(all) struct KimiOAuth {
-  /// Optional injected HTTP transport used by deterministic tests/hosts.
   transport : &@oauth.OAuthHttpTransport?
-  /// Optional stable device id reported via `X-Msh-Device-Id`. Hosts that
-  /// persist a device id across runs pass it here; when absent a fresh
-  /// process-local UUID is minted per request set (see identity.mbt).
+  /// Sent as `X-Msh-Device-Id`; empty = fresh process-local UUID.
   device_id : String?
 }
 
@@ -76,8 +68,6 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn refresh(
   self : KimiOAuth,
   credential : @oauth.Credential,
 ) -> @oauth.Credential raise @oauth.OAuthError {
-  // Identity headers are the base layer; Content-Type/Accept override any
-  // same-named default so the RFC 8628 form/JSON wire contract is preserved.
   let identity_headers = match self.device_id {
     Some(id) => kimi_default_headers(device_id=id)
     None => kimi_default_headers()
@@ -97,9 +87,7 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn refresh(
     Some(value) => value
     None => default_transport
   }
-  // Kimi's OAuth service intermittently returns 429/5xx during refresh.  Pi
-  // retries those statuses at most three times with 1s/2s/4s backoff; all
-  // other statuses are terminal and remain observable to the caller.
+  // Kimi intermittently 429/5xxs during refresh; other statuses are terminal.
   let mut retry = 0
   while true {
     let response = transport.post(@oauth.OAuthHttpRequest::{
@@ -224,8 +212,8 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn refresh(
 }
 
 ///|
-/// Kimi token lifetimes must be finite, strictly positive integers.  A
-/// fractional value is never truncated into a silently shorter/longer token.
+/// Token lifetimes must be finite positive integers; fractional values are
+/// rejected.
 fn parse_kimi_positive_integer(value : Double) -> Int? {
   if value.is_nan() || value.is_inf() || value <= 0.0 {
     return None
@@ -247,9 +235,6 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn to_auth(
 }
 
 ///|
-/// The API base URL for Kimi OAuth (subscription) mode.
-/// When using OAuth, requests go to api.kimi.com/coding instead of
-/// api.moonshot.ai/v1.
 pub fn kimi_oauth_api_base() -> String {
   kimi_api_base
 }
