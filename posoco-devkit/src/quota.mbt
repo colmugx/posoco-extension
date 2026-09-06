@@ -32,3 +32,35 @@ pub(all) struct QuotaReading {
 pub(open) trait QuotaSource {
   async fn read(Self) -> Result[Array[QuotaReading], String]
 }
+
+///|
+/// Process-wide registry of named quota sources. Provider adapter extensions
+/// register their source under their provider id on every factory
+/// `build`/`refresh` that yields a configured provider, so each registration
+/// is the latest credential snapshot (last write wins). Pull-style consumers
+/// such as the `/status` command look the currently active provider id up at
+/// command time and read the source live. There is deliberately no
+/// unregistration on `Unconfigured` builds: a stale entry is never read
+/// because consumers only query the active provider id.
+let quota_registry_cell : Ref[Map[String, &QuotaSource]] = Ref::{
+  val: Map::from_array([]),
+}
+
+///|
+/// Register `source` under `id`, replacing any previous registration for
+/// that id (last write wins).
+pub fn quota_registry_register(id : String, source : &QuotaSource) -> Unit {
+  quota_registry_cell.val[id] = source
+}
+
+///|
+/// The source registered under `id`, or `None` when nothing is registered.
+pub fn quota_registry_lookup(id : String) -> &QuotaSource? {
+  quota_registry_cell.val.get(id)
+}
+
+///|
+/// Drop the registration under `id`; a no-op for unknown ids.
+pub fn quota_registry_unregister(id : String) -> Unit {
+  quota_registry_cell.val.remove(id)
+}

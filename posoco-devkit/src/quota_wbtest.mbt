@@ -80,3 +80,32 @@ test "other window keeps the provider label verbatim" {
   let window : String = "TIME_LIMIT"
   assert_eq(window, "TIME_LIMIT")
 }
+
+///|
+async test "quota registry registers, overwrites, and unregisters by id" {
+  let first : &QuotaSource = ScriptedQuotaSource::{
+    results: [Err("first")],
+    calls: 0,
+  }
+  let second : &QuotaSource = ScriptedQuotaSource::{
+    results: [Err("second")],
+    calls: 0,
+  }
+  let id = "quota-registry-wbtest"
+  quota_registry_unregister(id)
+  assert_true(quota_registry_lookup(id) is None)
+  quota_registry_register(id, first)
+  assert_true(quota_registry_lookup(id) is Some(_))
+  // Re-registering the same id overwrites: last write wins.
+  quota_registry_register(id, second)
+  guard quota_registry_lookup(id) is Some(stored) else {
+    fail("expected a registered source")
+  }
+  guard stored.read() is Err(reason) else {
+    fail("expected the overwritten source")
+  }
+  assert_eq(reason, "second")
+  quota_registry_unregister(id)
+  assert_true(quota_registry_lookup(id) is None)
+  assert_true(quota_registry_lookup("quota-registry-never-registered") is None)
+}

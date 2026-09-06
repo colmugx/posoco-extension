@@ -29,6 +29,12 @@ pub fn publish_status_unregister(EventBus, source~ : String, segment~ : String) 
 
 pub fn publish_status_update(EventBus, source~ : String, segment~ : String, value~ : String) -> Unit
 
+pub fn quota_registry_lookup(String) -> &QuotaSource?
+
+pub fn quota_registry_register(String, &QuotaSource) -> Unit
+
+pub fn quota_registry_unregister(String) -> Unit
+
 pub fn relative_to_base(String, String) -> String
 
 pub fn sanitize_label(String, limit? : Int) -> String
