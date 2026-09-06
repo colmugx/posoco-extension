@@ -28,6 +28,26 @@ fn test_call_cmd(name : String, cmd : String) -> @posoco.ToolCall {
 }
 
 ///|
+/// A call shaped like the mbtx tool: a `source` payload plus, by default,
+/// `"escalated": true`. `escalated=false` leaves the field out entirely.
+fn test_call_mbtx(
+  call_id? : String = "call-1",
+  escalated? : Bool = true,
+) -> @posoco.ToolCall {
+  let args : Array[(String, Json)] = [
+    ("source", Json::string("fn main { println(\"hi\") }")),
+  ]
+  if escalated {
+    args.push(("escalated", Json::boolean(true)))
+  }
+  @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked(call_id),
+    name: @posoco.ToolName::unchecked("mbtx"),
+    arguments: Json::object(Map::from_array(args)),
+  }
+}
+
+///|
 /// Build a user text message for `before_model` transcript tests.
 fn user_message(text : String) -> @kernel.Message {
   @kernel.Message::UserMessage(content=[@kernel.Content::Text(text)])
@@ -162,7 +182,7 @@ async test "rtk prefix is stripped: rtk moon and bare moon share one scope" {
   )
   // rtk is a transparent project-local wrapper: `rtk moon check` scopes to
   // the underlying `moon`, so one approval covers both spellings (models
-  // guided by AGENTS.md and hosts wiring posoco-ext-rtk both emit rtk).
+  // guided by AGENTS.md and hosts wiring an rtk wrapper both emit rtk).
   assert_true(
     policy.before_tool(test_call_cmd("bash", "rtk moon check --target native"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
@@ -700,9 +720,15 @@ async test "bus-reported tools bypass the gate in every mode" {
     policy.before_tool(test_call("enter_plan_mode"))
     is @posoco.ToolDecision::Reject(_),
   )
-  @devkit.publish_tool_exemptions(bus, source="posoco_ext_plan", tools=[
-    "enter_plan_mode", "exit_plan_mode",
-  ])
+  bus.publish({
+    source: "posoco_ext_plan",
+    topic: "tool_exemptions",
+    data: Json::object({
+      "tools": Json::array(
+        ["enter_plan_mode", "exit_plan_mode"].map(Json::string),
+      ),
+    }),
+  })
   // Reported: bypasses the gate even in ReadOnly...
   assert_true(
     policy.before_tool(test_call("enter_plan_mode"))
@@ -727,9 +753,13 @@ async test "exempted tools never consult the approval source" {
     approval=Some(source as &ApprovalSource),
     bus=Some(bus),
   )
-  @devkit.publish_tool_exemptions(bus, source="posoco_ext_plan", tools=[
-    "exit_plan_mode",
-  ])
+  bus.publish({
+    source: "posoco_ext_plan",
+    topic: "tool_exemptions",
+    data: Json::object({
+      "tools": Json::array(["exit_plan_mode"].map(Json::string)),
+    }),
+  })
   assert_true(
     policy.before_tool(test_call("exit_plan_mode"))
     is @posoco.ToolDecision::Approve(_),
@@ -760,7 +790,7 @@ async test "malformed exemption payloads are ignored" {
   let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
   @devkit.BusSubscriber::on_bus_event(policy, {
     source: "rogue_ext",
-    topic: @devkit.tool_exemptions_topic,
+    topic: "tool_exemptions",
     data: Json::object({ "tools": Json::string("not-an-array") }),
   })
   assert_true(
@@ -857,8 +887,7 @@ async test "gateway unknown tools are gated and scoped per inner tool name" {
 
 ///|
 async test "gateway meta tools skip the gate" {
-  // Catalog browsing is inspection: pre-approved even in read-only mode,
-  // where it used to be rejected as an unknown tool.
+  // Catalog browsing is inspection: pre-approved even in read-only mode.
   let ro = PermissionPolicy::PermissionPolicy(ReadOnly)
   assert_true(
     ro.before_tool(test_call_list()) is @posoco.ToolDecision::Approve(_),
@@ -881,4 +910,200 @@ async test "gateway meta tools skip the gate" {
   }
   assert_true(policy.before_tool(malformed) is @posoco.ToolDecision::Approve(_))
   assert_eq(source.asked, 0)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// mbtx escalated (intercepted before the exemption, never remembered)
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+async test "mbtx escalated requires per-call consent" {
+  let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  match policy.before_tool(test_call_mbtx()) {
+    @posoco.ToolDecision::ApproveAfterConsent(call~, consent_scope~) => {
+      assert_eq(call.name.to_string(), "mbtx")
+      assert_eq(consent_scope, "mbtx:escalated")
+    }
+    _ => fail("expected ApproveAfterConsent for escalated mbtx")
+  }
+  assert_eq(source.asked, 1)
+}
+
+///|
+async test "mbtx escalated approvals are never remembered" {
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  // Two identical escalated calls, different ids: the second asks again —
+  // AllowSession must not create session memory for an unsandboxed run.
+  assert_true(
+    policy.before_tool(test_call_mbtx(call_id="call-a"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+  assert_true(
+    policy.before_tool(test_call_mbtx(call_id="call-b"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 2)
+  assert_false(policy.session_approved.contains("mbtx"))
+}
+
+///|
+async test "allow-always for escalated mbtx stays per-call" {
+  let source = ScriptedApproval::{ decision: AllowAlways, asked: 0, }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  // Even AllowAlways is demoted to per-call: every escalated run asks.
+  for i in 0..<3 {
+    assert_true(
+      policy.before_tool(test_call_mbtx(call_id="call-\{i}"))
+      is @posoco.ToolDecision::ApproveAfterConsent(_),
+    )
+    assert_eq(source.asked, i + 1)
+  }
+  assert_false(policy.session_approved.contains("mbtx"))
+}
+
+///|
+async test "mbtx escalated deny surfaces the reason" {
+  let source = ScriptedApproval::{
+    decision: Deny(reason="not today"),
+    asked: 0,
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  match policy.before_tool(test_call_mbtx()) {
+    @posoco.ToolDecision::Reject(reason~) => {
+      assert_true(reason.contains("escalated"))
+      assert_true(reason.contains("not today"))
+    }
+    _ => fail("expected escalated mbtx to be rejected")
+  }
+  assert_eq(source.asked, 1)
+}
+
+///|
+async test "mbtx escalated without an approval channel is rejected" {
+  let policy = PermissionPolicy::PermissionPolicy(WorkspaceWrite)
+  match policy.before_tool(test_call_mbtx()) {
+    @posoco.ToolDecision::Reject(reason~) =>
+      assert_true(reason.contains("approval channel"))
+    _ => fail("expected escalated mbtx to be rejected without a channel")
+  }
+}
+
+///|
+async test "yolo pre-approves escalated mbtx without asking" {
+  let source = ScriptedApproval::{
+    decision: Deny(reason="should not be asked"),
+    asked: 0,
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Yolo,
+    approval=Some(source as &ApprovalSource),
+  )
+  assert_true(
+    policy.before_tool(test_call_mbtx()) is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(source.asked, 0)
+}
+
+///|
+async test "mbtx without the escalated flag rides the normal classify path" {
+  let source = ScriptedApproval::{
+    decision: Deny(reason="should not be asked"),
+    asked: 0,
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+    approval=Some(source as &ApprovalSource),
+  )
+  // No flag: the standard unknown-tool rejection — the approval channel is
+  // never consulted.
+  match policy.before_tool(test_call_mbtx(escalated=false)) {
+    @posoco.ToolDecision::Reject(reason~) =>
+      assert_true(reason.contains("read-only mode rejected tool 'mbtx'"))
+    _ => fail("expected the unchanged unknown-tool rejection")
+  }
+  assert_eq(source.asked, 0)
+  // An explicit `"escalated": false` takes the same path.
+  let explicit_false : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("call-1"),
+    name: @posoco.ToolName::unchecked("mbtx"),
+    arguments: Json::object(
+      Map::from_array([
+        ("source", Json::string("fn main { println(\"hi\") }")),
+        ("escalated", Json::boolean(false)),
+      ]),
+    ),
+  }
+  match policy.before_tool(explicit_false) {
+    @posoco.ToolDecision::Reject(reason~) =>
+      assert_true(reason.contains("read-only mode rejected tool 'mbtx'"))
+    _ => fail("expected the unchanged unknown-tool rejection")
+  }
+  assert_eq(source.asked, 0)
+}
+
+///|
+async test "escalated mbtx is intercepted before its exemption" {
+  let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
+  let bus = @devkit.EventBus::EventBus()
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+    bus=Some(bus),
+  )
+  // mbtx self-reports its sandboxed face as exempt at construction time.
+  bus.publish({
+    source: "posoco_ext_mbtx",
+    topic: "tool_exemptions",
+    data: Json::object({ "tools": Json::array(["mbtx"].map(Json::string)) }),
+  })
+  // Sandboxed face: the exemption approves without asking.
+  assert_true(
+    policy.before_tool(test_call_mbtx(escalated=false))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(source.asked, 0)
+  // Escalated face: the exemption must NOT swallow it — the gate asks.
+  match policy.before_tool(test_call_mbtx()) {
+    @posoco.ToolDecision::ApproveAfterConsent(call~, consent_scope~) => {
+      ignore(call)
+      assert_eq(consent_scope, "mbtx:escalated")
+    }
+    _ => fail("expected consent despite the exemption")
+  }
+  assert_eq(source.asked, 1)
+}
+
+///|
+async test "read-only mode asks for escalated mbtx instead of auto-rejecting" {
+  let source = ScriptedApproval::{
+    decision: Deny(reason="not in read-only"),
+    asked: 0,
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+    approval=Some(source as &ApprovalSource),
+  )
+  // Escalated is explicit user-consented sandbox removal: ReadOnly asks the
+  // user rather than refusing outright, unlike every other mutating tool.
+  match policy.before_tool(test_call_mbtx()) {
+    @posoco.ToolDecision::Reject(reason~) =>
+      assert_true(reason.contains("not in read-only"))
+    _ => fail("expected the deny to surface")
+  }
+  assert_eq(source.asked, 1)
 }

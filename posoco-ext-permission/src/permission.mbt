@@ -17,7 +17,8 @@ pub(all) struct ApprovalRequest {
   tool_name : String
   /// Stable call id, for correlation in the UI.
   call_id : String
-  /// Policy classification: "read" | "write" | "shell" | "unknown".
+  /// Policy classification: "read" | "write" | "shell" | "unknown" |
+  /// "escalated" (mbtx running with its sandbox removed).
   category : String
   /// Truncated argument preview, for the user to see what will run. The
   /// policy truncates to a bounded length so secrets/large payloads do not
@@ -30,8 +31,6 @@ pub(all) struct ApprovalRequest {
 }
 
 ///|
-/// The host's verdict.
-///
 /// Allow decisions surface to the agent as `ApproveAfterConsent` — explicit
 /// user consent — so in the pump's hook lattice they outrank another gate's
 /// `Reject` (plan mode cannot veto a call the user just allowed). Policy
@@ -154,8 +153,8 @@ pub impl @devkit.BusSubscriber for PermissionPolicy with fn on_bus_event(
   self,
   event : @devkit.BusEvent,
 ) -> Unit {
-  if event.topic == @devkit.tool_exemptions_topic {
-    match @devkit.parse_tool_exemptions(event.data) {
+  if event.topic == tool_exemptions_topic {
+    match parse_tool_exemptions(event.data) {
       Some(names) =>
         for name in names {
           self.exempted[name] = event.source
@@ -166,7 +165,6 @@ pub impl @devkit.BusSubscriber for PermissionPolicy with fn on_bus_event(
 }
 
 ///|
-/// Read-only accessor for the active mode.
 pub fn PermissionPolicy::mode(self : PermissionPolicy) -> PermissionMode {
   self.mode
 }
@@ -196,7 +194,6 @@ fn PermissionPolicy::mode_reminder_text(self : PermissionPolicy) -> String? {
 }
 
 ///|
-/// Classify a tool name into a category bucket.
 fn PermissionPolicy::classify(self : PermissionPolicy, name : String) -> String {
   if self.read_tools.contains(name) {
     "read"
@@ -237,7 +234,7 @@ let shell_shims : Array[String] = [
 /// the segment's approval scope. A leading `rtk` is stripped first: rtk is a
 /// transparent project-local wrapper, so `rtk moon check` shares the `moon`
 /// scope with a bare `moon check` (models guided by AGENTS.md and hosts
-/// wiring posoco-ext-rtk both produce rtk-prefixed commands; either spelling
+/// wiring an rtk wrapper both produce rtk-prefixed commands; either spelling
 /// should honor one approval). Other leading shims refine to shim + next
 /// word. v0 does not skip shim flags: `sudo -u root ls` scopes to `sudo -u`
 /// (coarse but safe-ish: different flag spellings simply ask again). An
@@ -407,13 +404,13 @@ async fn PermissionPolicy::gate(
 }
 
 ///|
-/// Provably read-only per `@devkit.shell_command_is_read_only` (conservative:
-/// unknown commands are NOT read-only).
+/// Provably read-only per this package's read-only classifier
+/// (shell_readonly.mbt; conservative: unknown commands are NOT read-only).
 fn shell_call_is_read_only(call : @posoco.ToolCall) -> Bool {
   match call.arguments {
     Object(fields) =>
       match fields.get("cmd") {
-        Some(String(cmd)) => @devkit.shell_command_is_read_only(cmd)
+        Some(String(cmd)) => shell_command_is_read_only(cmd)
         _ => false
       }
     _ => false
@@ -421,19 +418,16 @@ fn shell_call_is_read_only(call : @posoco.ToolCall) -> Bool {
 }
 
 ///|
-/// Prefix marking a mode-reminder user message in the transcript.
 fn mode_reminder_prefix() -> String {
   "<permission-context"
 }
 
 ///|
-/// The reminder as a user message.
 fn mode_reminder_message(text : String) -> @kernel.Message {
   @kernel.Message::UserMessage(content=[@kernel.Content::Text(text)])
 }
 
 ///|
-/// Index of an existing mode-reminder user message, if any.
 fn find_mode_reminder(messages : Array[@kernel.Message]) -> Int? {
   for i, msg in messages {
     match msg {
@@ -504,6 +498,74 @@ fn effective_tool(call : @posoco.ToolCall) -> (String, @posoco.ToolCall) {
 }
 
 ///|
+/// mbtx escalated interception. mbtx self-reports a tool exemption for its
+/// sandboxed face, and that exemption approves by bare tool name — without
+/// this rule an `escalated: true` call (run with the sandbox policy removed)
+/// would ride the exemption unasked. The gate must therefore check this
+/// BEFORE the exemption lookup: escalated consent is structural here, not a
+/// promise by the reporting extension. Deliberate deviation from `gate`:
+/// `AllowSession`/`AllowAlways` are demoted to per-call consent and never
+/// written to `session_approved` — the host's broader grant covers only the
+/// call in front of us, because an escalated run drops the sandbox and its
+/// approvals must not be remembered. `None` for anything but a mbtx call
+/// carrying `"escalated": true`, leaving the normal flow untouched.
+async fn PermissionPolicy::mbtx_escalated(
+  self : PermissionPolicy,
+  call : @posoco.ToolCall,
+  name : String,
+  effective : @posoco.ToolCall,
+) -> @posoco.ToolDecision? {
+  if name != "mbtx" {
+    return None
+  }
+  match effective.arguments {
+    Object(fields) =>
+      match fields.get("escalated") {
+        Some(True) => ()
+        _ => return None
+      }
+    _ => return None
+  }
+  // Yolo is the global pre-approval; escalated is no exception.
+  if self.mode is Yolo {
+    return Some(@posoco.ToolDecision::Approve(call~))
+  }
+  match self.approval {
+    None =>
+      Some(
+        @posoco.ToolDecision::Reject(
+          reason="mbtx escalated requires an approval channel; none is wired",
+        ),
+      )
+    Some(source) => {
+      let request : ApprovalRequest = {
+        tool_name: "mbtx",
+        call_id: call.call_id.to_string(),
+        category: "escalated",
+        arguments_preview: preview_arguments(effective.arguments),
+        arguments: effective.arguments,
+      }
+      match source.ask(request) {
+        // AllowSession/AllowAlways deliberately do not add session keys.
+        AllowOnce | AllowSession | AllowAlways =>
+          Some(
+            @posoco.ToolDecision::ApproveAfterConsent(
+              call~,
+              consent_scope="mbtx:escalated",
+            ),
+          )
+        Deny(reason~) =>
+          Some(
+            @posoco.ToolDecision::Reject(
+              reason="permission: denied 'mbtx' (escalated): " + reason,
+            ),
+          )
+      }
+    }
+  }
+}
+
+///|
 pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
   self : PermissionPolicy,
   call : @posoco.ToolCall,
@@ -517,6 +579,13 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
   // at the gateway with a precise argument error.
   if @lazytools.LazyTools::is_meta_tool(name) {
     return @posoco.ToolDecision::Approve(call~)
+  }
+  // Escalated mbtx is intercepted before the exemption lookup below: the
+  // exemption approves by bare tool name and would swallow the unsandboxed
+  // face of the tool.
+  match self.mbtx_escalated(call, name, effective) {
+    Some(decision) => return decision
+    None => ()
   }
   // Exemption reports from composed extensions: these tools carry their
   // own governance and skip this gate entirely (trust: code review).

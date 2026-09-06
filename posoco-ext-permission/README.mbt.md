@@ -101,10 +101,11 @@ unimplemented suspend semantics.
 ## Tool exemptions (bus-reported)
 
 `PermissionPolicy(bus=…)` subscribes the policy to the devkit
-cross-extension event bus. Peer extensions report tools that carry their own
-governance on the `tool_exemptions` topic (posoco-ext-plan reports its
-enter/exit pair — the plan decision happens at the plan-review seam, not at a
-tool-permission ask), and the reported names skip this gate entirely: no mode
+cross-extension event bus. The gate honors exemption reports on the
+`tool_exemptions` topic: extensions with their own tool governance — e.g. a
+plan-mode extension, whose enter/exit decision happens at the plan-review
+seam, not at a tool-permission ask — publish their tool names (payload shape
+`{"tools":[...]}`), and the reported names skip this gate entirely: no mode
 check, no approval ask, plain `Approve`. Exemptions self-identify:
 `/permission status` lists them as `source:name` (e.g.
 `posoco_ext_plan:exit_plan_mode`) so code review can see who vouched for
