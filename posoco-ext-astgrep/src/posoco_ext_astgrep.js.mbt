@@ -28,7 +28,6 @@ extern "js" fn js_spawn_envelope(
   #| }
 
 ///|
-/// Decoded spawn envelope.
 priv struct JsSpawnResult {
   exit_code : Int
   stdout : String

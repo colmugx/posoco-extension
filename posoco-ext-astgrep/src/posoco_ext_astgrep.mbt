@@ -42,7 +42,6 @@ priv trait AstGrepSpawn {
 }
 
 ///|
-/// Shared tool definition for the `astgrep` tool.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
