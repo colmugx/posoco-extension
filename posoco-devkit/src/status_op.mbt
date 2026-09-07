@@ -13,8 +13,7 @@
 /// here: the `source` of the first register/update for a segment owns it.
 
 ///|
-/// The bus topic every status-bridge event travels on. Supersedes the
-/// statusbar's former `STATUSBAR_TOPIC` convention.
+/// The bus topic every status-bridge event travels on.
 pub const STATUS_TOPIC : String = "status"
 
 ///|

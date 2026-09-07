@@ -156,7 +156,7 @@ fn parse_search_context_json(output : String) -> Array[SearchHit] {
 }
 
 ///|
-/// Rendering limits, mirroring posoco-ext-read's read tool contract.
+/// Rendering limits for paged tool output.
 const OBS_LINE_CHAR_CAP = 2000
 
 ///|
