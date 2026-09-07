@@ -3,8 +3,8 @@ name = "colmugx/posoco-ext-nowledge-mem"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.14.4",
-  "colmugx/mcp@0.17.4",
+  "colmugx/posoco@0.14.5",
+  "colmugx/mcp@0.17.5",
   "colmugx/posoco-devkit@0.4.0",
   "moonbitlang/async@0.21.2",
   "moonbitlang/x@0.4.50",
