@@ -9,6 +9,9 @@
 pub(all) struct JsonlSessionStore {
   root_dir : String
   bus : @devkit.EventBus?
+  /// Id of the session this store last persisted successfully; the /name
+  /// command targets it, so slash consumers need no explicit session id.
+  mut current_id : String?
 }
 
 ///|
@@ -16,7 +19,7 @@ pub fn JsonlSessionStore::JsonlSessionStore(
   root_dir : String,
   bus? : @devkit.EventBus? = None,
 ) -> JsonlSessionStore {
-  { root_dir, bus, }
+  { root_dir, bus, current_id: None, }
 }
 
 ///|
@@ -119,6 +122,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
       )
   }
   publish_session_status(self.bus, id)
+  self.current_id = Some(id)
 }
 
 ///|
@@ -153,6 +157,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
         )
     }
     publish_session_status(self.bus, id)
+    self.current_id = Some(id)
     return
   }
   // Each line is prefixed with \n to terminate the previous line.
@@ -170,4 +175,5 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
       )
   }
   publish_session_status(self.bus, id)
+  self.current_id = Some(id)
 }

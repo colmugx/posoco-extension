@@ -437,3 +437,17 @@ pub fn session_from_jsonl(
 pub fn jsonl_session_path(root_dir : String, id : String) -> String {
   "\{root_dir}/\{id}.jsonl"
 }
+
+///|
+/// Compute the path of a companion file living beside a session's JSONL
+/// history: same root, same id stem, caller-chosen extension. Hosts keep
+/// side state (e.g. `<id>.host.json`) through this so it tracks the store's
+/// file layout if that ever changes. Same rule as `jsonl_session_path`: the
+/// id must pass `validate_session_id` — gate before use.
+pub fn companion_path(
+  root_dir : String,
+  id : String,
+  ext? : String = "host.json",
+) -> String {
+  "\{root_dir}/\{id}.\{ext}"
+}
