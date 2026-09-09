@@ -6,7 +6,7 @@
 // never propagates failure.
 
 #borrow(cmd)
-extern "C" fn ffi_system(cmd : Bytes) -> Int = "system"
+extern "C" fn ffi_system(cmd : Bytes) -> Int = "herdr_ffi_system"
 
 ///|
 fn herdr_c_string(s : String) -> Bytes {

@@ -12,6 +12,7 @@ warnings = "-unused_package"
 supported_targets = "+native +js"
 
 options(
+  "native-stub": ["herdr_system_stub.c"],
   targets: {
     "herdr_native.mbt": [ "native" ],
     "herdr_js.mbt": [ "js" ],
