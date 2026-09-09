@@ -1331,6 +1331,129 @@ test "openai_compact_parse_rejects_bad_envelopes" {
 }
 
 ///|
+test "openai_compact_missing_output_fails" {
+  let envelope =
+    #|{"status":"completed"}
+  let result = Ok(parse_compact_response(@json.parse(envelope))) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) => {
+      assert_true(msg.contains("stage=output"))
+      assert_true(msg.contains("category=missing_output"))
+    }
+    _ => fail("missing output must raise ResponseParse")
+  }
+}
+
+///|
+test "openai_compact_null_output_fails" {
+  let envelope =
+    #|{"output":null,"status":"completed"}
+  let result = Ok(parse_compact_response(@json.parse(envelope))) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) => {
+      assert_true(msg.contains("stage=output"))
+      assert_true(msg.contains("category=missing_output"))
+    }
+    _ => fail("null output must raise ResponseParse")
+  }
+}
+
+///|
+test "openai_compact_empty_window_guard" {
+  let empty_output =
+    #|{"output":[]}
+  let parsed = parse_compact_response(@json.parse(empty_output))
+  assert_eq(parsed.length(), 0)
+  let request : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("q1")]),
+  ]
+  let result = Ok(validate_compact_window(request, parsed)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(msg)) =>
+      assert_true(msg.contains("category=empty_window"))
+    _ => fail("empty window for a non-empty session must raise ResponseParse")
+  }
+  let empty_request : Array[@posoco.Message] = []
+  validate_compact_window(empty_request, parsed)
+}
+
+///|
+test "openai_compact_mixed_window_roundtrips_in_order" {
+  let window =
+    #|{"output":[
+    #|  {"type":"compaction","id":"cmp_9","encrypted_content":"enc-state-v2"},
+    #|  {"role":"user","content":[{"type":"input_text","text":"plan the trip"}]},
+    #|  {"type":"reasoning","id":"rs_9","summary":[],"encrypted_content":"gAAAA-reasoning"},
+    #|  {"type":"function_call","call_id":"call_9","name":"get_weather","arguments":"{\"city\":\"oslo\"}"},
+    #|  {"type":"function_call_output","call_id":"call_9","output":"-3c"},
+    #|  {"role":"assistant","content":[{"type":"output_text","text":"-3c in oslo"}]}
+    #|]}
+  let messages = parse_compact_response(@json.parse(window))
+  assert_eq(messages.length(), 5)
+  let re_encoded : Array[Json] = []
+  for m in messages {
+    for item in @responses.message_to_responses_items(m) {
+      re_encoded.push(item)
+    }
+  }
+  let expected_window =
+    #|[{"type":"compaction","id":"cmp_9","encrypted_content":"enc-state-v2"},
+    #| {"role":"user","content":[{"type":"input_text","text":"plan the trip"}]},
+    #| {"type":"reasoning","id":"rs_9","summary":[],"encrypted_content":"gAAAA-reasoning"},
+    #| {"type":"function_call","call_id":"call_9","name":"get_weather","arguments":"{\"city\":\"oslo\"}"},
+    #| {"type":"function_call_output","call_id":"call_9","output":"-3c"},
+    #| {"role":"assistant","content":[{"type":"input_text","text":"-3c in oslo"}]}]
+  assert_true(Json::array(re_encoded) == @json.parse(expected_window))
+}
+
+///|
+test "openai_compact_unknown_legal_items_pass_through" {
+  let window =
+    #|{"output":[
+    #|  {"role":"user","content":[{"type":"input_text","text":"q"}]},
+    #|  {"type":"web_search_call","id":"ws_1","status":"completed"},
+    #|  {"role":"assistant","content":[{"type":"output_text","text":"a"}]}
+    #|]}
+  let messages = parse_compact_response(@json.parse(window))
+  let re_encoded : Array[Json] = []
+  for m in messages {
+    for item in @responses.message_to_responses_items(m) {
+      re_encoded.push(item)
+    }
+  }
+  let expected_window =
+    #|[{"role":"user","content":[{"type":"input_text","text":"q"}]},
+    #| {"type":"web_search_call","id":"ws_1","status":"completed"},
+    #| {"role":"assistant","content":[{"type":"input_text","text":"a"}]}]
+  assert_true(Json::array(re_encoded) == @json.parse(expected_window))
+  let search_item =
+    #|{"type":"web_search_call","id":"ws_1","status":"completed"}
+  assert_true(re_encoded[1] == @json.parse(search_item))
+  let trailing_window =
+    #|{"output":[
+    #|  {"role":"user","content":[{"type":"input_text","text":"q"}]},
+    #|  {"type":"web_search_call","id":"ws_2","status":"completed"}
+    #|]}
+  let trailing = parse_compact_response(@json.parse(trailing_window))
+  let trailing_re : Array[Json] = []
+  for m in trailing {
+    for item in @responses.message_to_responses_items(m) {
+      trailing_re.push(item)
+    }
+  }
+  let trailing_expected =
+    #|[{"role":"user","content":[{"type":"input_text","text":"q"}]},
+    #| {"type":"web_search_call","id":"ws_2","status":"completed"}]
+  assert_true(Json::array(trailing_re) == @json.parse(trailing_expected))
+}
+
+///|
 test "responses usage carries cached input tokens" {
   let resp : Json = {
     "usage": {

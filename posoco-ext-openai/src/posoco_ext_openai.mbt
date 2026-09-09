@@ -163,6 +163,17 @@ fn is_openai_http_success(status : Int) -> Bool {
 }
 
 ///|
+/// Transport error for a cancelled wait. The `category=cancelled` marker is
+/// the classification carrier: the ModelError raise type cannot carry the
+/// coroutine cancellation itself (checked raise types), so downstream
+/// consumers classify on this stable token instead of matching provider text.
+fn openai_cancelled_transport(stage : String) -> @posoco.ModelError {
+  @posoco.ModelError::Transport(
+    "OpenAI transport failure (stage=\{stage}, category=cancelled)",
+  )
+}
+
+///|
 /// Pure HTTP-status classification shared by streaming and non-streaming
 /// paths. All 2xx statuses continue through success-body parsing; every other
 /// status retains its code and only redacted body metadata.
@@ -494,6 +505,9 @@ async fn OpenAIModelPort::chat_stream(
     let line = client.read_until("\n") catch {
       err => {
         client.close()
+        if @async.is_cancellation_error(err) {
+          raise openai_cancelled_transport("read_stream")
+        }
         raise @posoco.ModelError::Transport(
           "OpenAI transport failure (stage=read_stream): " + err.to_string(),
         )
@@ -538,10 +552,13 @@ async fn OpenAIModelPort::chat_stream(
     let now = @async.now()
     if now - last_yield >= 16L {
       @async.pause() catch {
-        // Turn abort is mailbox-driven (the pump checks abort_requested
-        // between effects), so a cancelled pause is safe to ride over;
-        // the next read on a torn-down client errors out of the loop.
-        _ => ()
+        err =>
+          if @async.is_cancellation_error(err) {
+            client.close()
+            raise openai_cancelled_transport("read_stream")
+          }
+        // Non-cancellation pause failures ride over; the next read on a
+        // torn-down client errors out of the loop.
       }
       last_yield = now
     }
@@ -767,7 +784,12 @@ fn parse_compact_response(
       }
       match map.get("output") {
         Some(Json::Array(_) as out) => out
-        Some(Json::Null) | None => Json::array([])
+        // Missing/null output is a protocol failure, not an empty window:
+        // decoding it as [] would wipe the session and report success.
+        Some(Json::Null) | None =>
+          raise @posoco.ModelError::ResponseParse(
+            "OpenAI compact parse failure (stage=output, category=missing_output)",
+          )
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
             "OpenAI compact parse failure (stage=output, category=wrong_type)",
@@ -780,6 +802,18 @@ fn parse_compact_response(
       )
   }
   openai_items_to_posoco_messages(output)
+}
+
+///|
+fn validate_compact_window(
+  request_messages : Array[@posoco.Message],
+  compacted : Array[@posoco.Message],
+) -> Unit raise @posoco.ModelError {
+  if request_messages.length() > 0 && compacted.length() == 0 {
+    raise @posoco.ModelError::ResponseParse(
+      "OpenAI compact parse failure (stage=output, category=empty_window)",
+    )
+  }
 }
 
 ///|
@@ -797,7 +831,8 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   validate_openai_config(self.config)
-  let body = build_compact_request_body(messages.to_owned(), self.config.model)
+  let request_messages = messages.to_owned()
+  let body = build_compact_request_body(request_messages, self.config.model)
   let resp_json = openai_post_json(
     self.config,
     "/responses/compact",
@@ -806,6 +841,7 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
     quota_tracker=self.quota_tracker,
   )
   let compacted = parse_compact_response(resp_json)
+  validate_compact_window(request_messages, compacted)
   @posoco.CompactResult::{
     compacted_messages: compacted,
     mode: @posoco.CompactMode::Replace,

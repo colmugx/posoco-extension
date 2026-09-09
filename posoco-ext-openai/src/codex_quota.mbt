@@ -22,7 +22,7 @@ fn codex_header(headers : @http.Headers, name : String) -> String? {
 fn codex_header_double(headers : @http.Headers, name : String) -> Double? {
   match codex_header(headers, name) {
     Some(raw) => {
-      let value : Double = @strconv.from_str(raw.trim()) catch {
+      let value : Double = @string.from_str(raw.trim()) catch {
         _ => return None
       }
       Some(value)
@@ -56,7 +56,7 @@ fn codex_header_bool(headers : @http.Headers, name : String) -> Bool? {
 fn codex_reset_at_ms(headers : @http.Headers, family : String) -> Int64? {
   match codex_header(headers, family + "-reset-at") {
     Some(raw) => {
-      let seconds : Int64 = @strconv.from_str(raw.trim()) catch {
+      let seconds : Int64 = @string.from_str(raw.trim()) catch {
         _ => return None
       }
       Some(seconds * 1000L)
