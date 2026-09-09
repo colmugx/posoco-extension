@@ -2,14 +2,12 @@
 /// Status publication through the devkit status protocol.
 ///
 /// The router owns three status-bar segments: `model` (priority 20, active
-/// model id and effort), `tok` (priority 30, per-turn token totals), and
-/// `cache` (priority 40, last round's cache hit percentage). With
-/// `bus = None` every publication is a silent no-op.
+/// model id and effort), `ctx` (priority 30, the core-projected context
+/// state of the active session), and `cache` (priority 40, last round's
+/// cache hit percentage). With `bus = None` every publication is a silent
+/// no-op.
 
 ///|
-/// Publish the `model` segment: the active slot's model id plus the selected
-/// effort, falling back to the slot's declared default effort and then
-/// `"default"`.
 fn RouterModelPort::publish_model_status(self : RouterModelPort) -> Unit {
   let effort = match self.active_effort {
     Some(value) => value
@@ -33,9 +31,8 @@ fn RouterModelPort::publish_model_status(self : RouterModelPort) -> Unit {
 }
 
 ///|
-/// Publish the provider event. Consumers — provider-scoped status publishers
-/// such as the Codex quota segments — listen for it to show or hide their own
-/// segments when the active provider changes; republication is idempotent.
+/// Provider-scoped status publishers (the Codex quota segments) show or
+/// hide their own segments on this event; republication is idempotent.
 fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
   match self.bus {
     Some(bus) =>
@@ -53,25 +50,94 @@ fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
 }
 
 ///|
-/// Publish the `tok` segment: the per-turn input/output totals.
-fn RouterModelPort::publish_tok_status(self : RouterModelPort) -> Unit {
+/// Compact token count: raw below 1K, one-decimal K/M above.
+fn fmt_ctx_tokens(n : Int) -> String {
+  if n >= 1000000 {
+    "\{fmt_ctx_one_decimal(n.to_double() / 1000000.0)}M"
+  } else if n >= 1000 {
+    "\{fmt_ctx_one_decimal(n.to_double() / 1000.0)}K"
+  } else {
+    "\{n}"
+  }
+}
+
+///|
+fn fmt_ctx_one_decimal(value : Double) -> String {
+  let scaled = (value * 10.0 + 0.5).to_int()
+  "\{scaled / 10}.\{scaled % 10}"
+}
+
+///|
+/// Render the `ctx` value from a core-projected context state. Occupancy is
+/// the last measured reading plus the core-reported estimate; any estimated
+/// component marks the figure with a leading `~` so it is never presented
+/// as measured. An absent or untrusted reading renders `?` — never zero.
+fn ctx_segment_value(
+  source : @types.ContextReadingSource,
+  measured : Int?,
+  estimated_added : Int,
+  window : Int?,
+) -> String {
+  let total : Int? = match measured {
+    Some(m) =>
+      if source is @types.Unknown {
+        None
+      } else {
+        Some(m + estimated_added)
+      }
+    None => None
+  }
+  let marked = source is @types.Estimated || estimated_added > 0
+  let occupancy : String? = match total {
+    Some(t) => Some((if marked { "~" } else { "" }) + fmt_ctx_tokens(t))
+    None => None
+  }
+  let percent : String? = match (total, window) {
+    (Some(t), Some(w)) if w > 0 => Some("\{t * 100 / w}%")
+    _ => None
+  }
+  let window_text = match window {
+    Some(w) => fmt_ctx_tokens(w)
+    None => "?"
+  }
+  match (occupancy, window_text, percent) {
+    (None, "?", _) => "ctx: ?"
+    (None, w, _) => "ctx: ?/\{w}"
+    (Some(o), "?", _) => "ctx: \{o}"
+    (Some(o), w, Some(p)) => "ctx: \{o}/\{w} · \{p}"
+    (Some(o), w, None) => "ctx: \{o}/\{w}"
+  }
+}
+
+///|
+fn RouterModelPort::publish_ctx_status(
+  self : RouterModelPort,
+  state : @types.ContextState?,
+) -> Unit {
+  let value = match state {
+    Some(s) =>
+      ctx_segment_value(
+        s.source,
+        s.last_measured_tokens,
+        s.estimated_added_tokens,
+        s.window_tokens,
+      )
+    None => "ctx: ?"
+  }
   match self.bus {
     Some(bus) =>
       @devkit.publish_status_register(
         bus,
         source="posoco_ext_llm",
-        segment="tok",
+        segment="ctx",
         priority=30,
-        value="\{self.tokens_in}↑ \{self.tokens_out}↓",
+        value~,
       )
     None => ()
   }
 }
 
 ///|
-/// Publish or hide the `cache` segment for the round that just committed:
-/// register the cached/input percentage when both are reported with a
-/// positive input, otherwise unregister so a stale percentage never lingers.
 fn RouterModelPort::publish_cache_status(
   self : RouterModelPort,
   usage : @posoco.Usage?,
@@ -106,31 +172,30 @@ fn RouterModelPort::publish_cache_status(
 }
 
 ///|
-pub impl @posoco.Observer for RouterModelPort with fn on_event(
+/// The `ctx` projection follows core's `ContextStateUpdated` events only:
+/// compact and operation-lifecycle events carry no reading, and core
+/// projects the state around them (post-compact it is explicitly awaiting
+/// measurement). `TurnStarted` re-publishes the scoped session's own state;
+/// it never resets occupancy.
+pub impl @posoco.Observer for RouterModelPort with fn on_event_at(
   self : RouterModelPort,
+  scope : @posoco.EventScope?,
   event : @posoco.TurnEvent,
 ) -> Unit {
   match event {
-    TurnStarted => {
-      self.tokens_in = 0
-      self.tokens_out = 0
-      self.publish_tok_status()
-    }
-    ModelResponseReceived(usage~, ..) => {
-      match usage {
-        Some(u) => {
-          match u.input_tokens {
-            Some(count) => self.tokens_in += count
-            None => ()
-          }
-          match u.output_tokens {
-            Some(count) => self.tokens_out += count
-            None => ()
-          }
-        }
+    TurnStarted =>
+      match scope {
+        Some(s) =>
+          self.publish_ctx_status(
+            self.context_states.get(s.session_id.to_string()),
+          )
         None => ()
       }
-      self.publish_tok_status()
+    ContextStateUpdated(state~) => {
+      self.context_states[state.session_id] = state
+      self.publish_ctx_status(Some(state))
+    }
+    ModelResponseReceived(usage~, ..) => {
       self.publish_cache_status(usage)
       self.publish_model_status()
     }
@@ -139,4 +204,4 @@ pub impl @posoco.Observer for RouterModelPort with fn on_event(
 }
 
 ///|
-pub extend RouterModelPort with @posoco.Observer::{on_event}
+pub extend RouterModelPort with @posoco.Observer::{on_event_at}

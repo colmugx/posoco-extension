@@ -11,13 +11,12 @@ pub(all) struct RouterModelPort {
   slot_order : Array[String]
   mut active_id : String
   mut active_effort : String?
-  /// Devkit status bus for the model/tok/cache status segments; `None`
+  /// Devkit status bus for the model/ctx/cache status segments; `None`
   /// disables publication entirely.
   bus : @devkit.EventBus?
-  /// Per-turn token totals accumulated from reported usage and reset on
-  /// `TurnStarted`.
-  mut tokens_in : Int
-  mut tokens_out : Int
+  /// Latest core-projected context state per session id; the `ctx` status
+  /// segment renders the entry of the session an event is scoped to.
+  context_states : Map[String, @types.ContextState]
   /// Canonical one-record store. When present, login writes a tagged
   /// ProviderCredential and replaces the previous method atomically.
   provider_credential_store : &@oauth.ProviderCredentialStore?
@@ -95,8 +94,7 @@ pub fn RouterModelPort::RouterModelPort(
     active_id,
     active_effort: None,
     bus,
-    tokens_in: 0,
-    tokens_out: 0,
+    context_states: Map::from_array([]),
     provider_credential_store,
     cred_store,
     auth_interaction,
@@ -187,25 +185,21 @@ pub fn RouterModelPort::list_slot_ids(self : RouterModelPort) -> Array[String] {
 }
 
 ///|
-/// Return the active slot id.
 pub fn RouterModelPort::active_slot_id(self : RouterModelPort) -> String {
   self.active_id
 }
 
 ///|
-/// Return the provider id of the active slot.
 pub fn RouterModelPort::current_provider_id(self : RouterModelPort) -> String {
   self.active_slot().provider_id
 }
 
 ///|
-/// Return the provider-local model id of the active slot.
 pub fn RouterModelPort::current_model_id(self : RouterModelPort) -> String {
   self.active_slot().model_id
 }
 
 ///|
-/// The selected effort for the active slot, if `/model` has selected one.
 pub fn RouterModelPort::active_effort(self : RouterModelPort) -> String? {
   self.active_effort
 }
@@ -351,7 +345,7 @@ pub impl @posoco.ModelPort for RouterModelPort with fn provider_config(
 /// Consume one bus event: keep the latest value of every status segment so
 /// `/status` can surface provider-published quota windows. A register
 /// without a value (or an unregister) clears the segment. The router only
-/// reads the bus here — model/tok/cache segments are published elsewhere —
+/// reads the bus here — model/ctx/cache segments are published elsewhere —
 /// so this subscriber never feeds back into the bus.
 pub impl @devkit.BusSubscriber for RouterModelPort with fn on_bus_event(
   self : RouterModelPort,

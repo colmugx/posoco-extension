@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco/types",
   "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",

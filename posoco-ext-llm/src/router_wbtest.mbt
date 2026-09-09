@@ -270,7 +270,53 @@ fn router_test_message() -> @posoco.Message {
 }
 
 ///|
-test "model response publishes model tok and cache segments" {
+fn router_test_scope(session : String) -> @posoco.EventScope {
+  @posoco.EventScope::{
+    session_id: @posoco.SessionId::{ value: session, },
+    run_id: @posoco.RunId::{ value: "run_1", },
+    turn_id: @posoco.TurnId::{ value: "turn_1", },
+  }
+}
+
+///|
+fn router_test_ctx_state(
+  session~ : String,
+  measured~ : Int?,
+  estimated~ : Int,
+  window~ : Int?,
+  source~ : @types.ContextReadingSource,
+) -> @types.ContextState {
+  {
+    session_id: session,
+    model_id: "model-a",
+    context_version: 1,
+    last_measured_tokens: measured,
+    estimated_added_tokens: estimated,
+    window_tokens: window,
+    compact_threshold: 0.88,
+    source,
+    reading_message_count: 0,
+  }
+}
+
+///|
+fn router_ctx_values(capture : StatusCapture) -> Array[String] {
+  let values : Array[String] = []
+  for event in capture.events {
+    match @devkit.decode_status_op(event) {
+      Some(@devkit.StatusOp::Register(segment="ctx", value~, ..)) =>
+        match value {
+          Some(v) => values.push(v)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  values
+}
+
+///|
+test "model response publishes cache and model segments" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
@@ -281,7 +327,8 @@ test "model response publishes model tok and cache segments" {
   router.select_effort("slot-a", "high") catch {
     _ => fail("unexpected effort selection failure")
   }
-  router.on_event(
+  router.on_event_at(
+    Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),
       usage=Some(
@@ -289,23 +336,11 @@ test "model response publishes model tok and cache segments" {
       ),
     ),
   )
-  assert_eq(capture.events.length(), 3)
+  assert_eq(capture.events.length(), 2)
   assert_eq(capture.events[0].source, "posoco_ext_llm")
   assert_eq(capture.events[0].topic, "status")
   assert_eq(
     @devkit.decode_status_op(capture.events[0]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="tok",
-        label=None,
-        priority=30,
-        value=Some("1200↑ 80↓"),
-        color=None,
-      ),
-    ),
-  )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
     Some(
       @devkit.StatusOp::Register(
         segment="cache",
@@ -317,7 +352,7 @@ test "model response publishes model tok and cache segments" {
     ),
   )
   assert_eq(
-    @devkit.decode_status_op(capture.events[2]),
+    @devkit.decode_status_op(capture.events[1]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -373,7 +408,7 @@ test "model effort falls back to slot default then to default" {
 }
 
 ///|
-test "on_compose registers the model segment as initial state" {
+test "on_compose registers the model and ctx segments as initial state" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
@@ -389,7 +424,7 @@ test "on_compose registers the model segment as initial state" {
       ui=ui as &@posoco.UiPort,
     ),
   )
-  assert_eq(capture.events.length(), 2)
+  assert_eq(capture.events.length(), 3)
   assert_eq(capture.events[0].source, "posoco_ext_llm")
   assert_eq(
     @devkit.decode_status_op(capture.events[0]),
@@ -405,10 +440,22 @@ test "on_compose registers the model segment as initial state" {
   )
   assert_eq(capture.events[1].topic, "provider")
   assert_eq(capture.events[1].source, "posoco_ext_llm")
+  assert_eq(
+    @devkit.decode_status_op(capture.events[2]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="ctx",
+        label=None,
+        priority=30,
+        value=Some("ctx: ?"),
+        color=None,
+      ),
+    ),
+  )
 }
 
 ///|
-test "tok accumulates across rounds and TurnStarted resets it" {
+test "turn start republishes the session context instead of resetting it" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
@@ -416,35 +463,202 @@ test "tok accumulates across rounds and TurnStarted resets it" {
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
     bus=Some(bus),
   )
-  router.on_event(@posoco.TurnEvent::TurnStarted)
-  router.on_event(
-    @posoco.TurnEvent::ModelResponseReceived(
-      message=router_test_message(),
-      usage=Some(
-        router_test_usage(input=Some(1200), output=Some(80), cached=Some(600)),
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s1",
+        measured=Some(200000),
+        estimated=0,
+        window=Some(1000000),
+        source=@types.Measured,
       ),
     ),
   )
-  router.on_event(
-    @posoco.TurnEvent::ModelResponseReceived(
-      message=router_test_message(),
-      usage=Some(
-        router_test_usage(input=Some(300), output=Some(40), cached=None),
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::TurnStarted,
+  )
+  router.on_event_at(
+    Some(router_test_scope("s2")),
+    @posoco.TurnEvent::TurnStarted,
+  )
+  assert_eq(router_ctx_values(capture), [
+    "ctx: 200.0K/1.0M · 20%", "ctx: 200.0K/1.0M · 20%", "ctx: ?",
+  ])
+}
+
+///|
+test "unscoped turn start leaves the ctx segment untouched" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s1",
+        measured=Some(200000),
+        estimated=0,
+        window=Some(1000000),
+        source=@types.Measured,
       ),
     ),
   )
-  router.on_event(@posoco.TurnEvent::TurnStarted)
-  assert_eq(capture.events.length(), 8)
-  let tok_value = fn(event : @devkit.BusEvent) -> String? {
-    match @devkit.decode_status_op(event) {
-      Some(@devkit.StatusOp::Register(segment="tok", value~, ..)) => value
-      _ => None
-    }
-  }
-  assert_eq(tok_value(capture.events[0]), Some("0↑ 0↓"))
-  assert_eq(tok_value(capture.events[1]), Some("1200↑ 80↓"))
-  assert_eq(tok_value(capture.events[4]), Some("1500↑ 120↓"))
-  assert_eq(tok_value(capture.events[7]), Some("0↑ 0↓"))
+  router.on_event_at(None, @posoco.TurnEvent::TurnStarted)
+  assert_eq(router_ctx_values(capture), ["ctx: 200.0K/1.0M · 20%"])
+}
+
+///|
+test "awaiting measurement and missing windows render unknown" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  // Post-compact shape from core: window known, reading pending.
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s1",
+        measured=None,
+        estimated=0,
+        window=Some(1000000),
+        source=@types.Unknown,
+      ),
+    ),
+  )
+  // Occupancy known but window unknown: no percent is invented.
+  router.on_event_at(
+    Some(router_test_scope("s2")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s2",
+        measured=Some(500),
+        estimated=0,
+        window=None,
+        source=@types.Measured,
+      ),
+    ),
+  )
+  // Nothing known at all.
+  router.on_event_at(
+    Some(router_test_scope("s3")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s3",
+        measured=None,
+        estimated=0,
+        window=None,
+        source=@types.Unknown,
+      ),
+    ),
+  )
+  assert_eq(router_ctx_values(capture), ["ctx: ?/1.0M", "ctx: 500", "ctx: ?"])
+}
+
+///|
+test "estimated context readings are marked and never shown as measured" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s1",
+        measured=Some(200000),
+        estimated=0,
+        window=Some(1000000),
+        source=@types.Estimated,
+      ),
+    ),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s1",
+        measured=Some(200000),
+        estimated=8000,
+        window=Some(1000000),
+        source=@types.Measured,
+      ),
+    ),
+  )
+  assert_eq(router_ctx_values(capture), [
+    "ctx: ~200.0K/1.0M · 20%", "ctx: ~208.0K/1.0M · 20%",
+  ])
+}
+
+///|
+test "compact lifecycle events never change the ctx segment" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_effort_slot("slot-a", "one", "slot-a")],
+    bus=Some(bus),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s1",
+        measured=Some(900000),
+        estimated=0,
+        window=Some(1000000),
+        source=@types.Measured,
+      ),
+    ),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::CompactStarted(trigger="manual"),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::CompactFinished(
+      trigger="manual",
+      mode="Replace",
+      final_session_id="s1",
+      messages_after=3,
+    ),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::OperationFinalized(
+      operation="compact",
+      outcome="completed",
+      detail="",
+    ),
+  )
+  router.on_event_at(
+    Some(router_test_scope("s1")),
+    @posoco.TurnEvent::ContextStateUpdated(
+      state=router_test_ctx_state(
+        session="s1",
+        measured=None,
+        estimated=0,
+        window=Some(1000000),
+        source=@types.Unknown,
+      ),
+    ),
+  )
+  assert_eq(router_ctx_values(capture), [
+    "ctx: 900.0K/1.0M · 90%", "ctx: ?/1.0M",
+  ])
 }
 
 ///|
@@ -456,9 +670,9 @@ test "missing cached or absent usage unregisters the cache segment" {
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
     bus=Some(bus),
   )
-  // No cache segment exists before the first response.
   assert_eq(capture.events.length(), 0)
-  router.on_event(
+  router.on_event_at(
+    Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),
       usage=Some(
@@ -466,20 +680,21 @@ test "missing cached or absent usage unregisters the cache segment" {
       ),
     ),
   )
-  assert_eq(capture.events.length(), 3)
+  assert_eq(capture.events.length(), 2)
   assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
+    @devkit.decode_status_op(capture.events[0]),
     Some(@devkit.StatusOp::Unregister(segment="cache")),
   )
-  router.on_event(
+  router.on_event_at(
+    Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),
       usage=None,
     ),
   )
-  assert_eq(capture.events.length(), 6)
+  assert_eq(capture.events.length(), 4)
   assert_eq(
-    @devkit.decode_status_op(capture.events[4]),
+    @devkit.decode_status_op(capture.events[2]),
     Some(@devkit.StatusOp::Unregister(segment="cache")),
   )
 }
@@ -562,8 +777,12 @@ test "router without a bus keeps observing and mutating silently" {
   let router = RouterModelPort(slots=[
     router_effort_slot("slot-a", "one", "slot-a"),
   ])
-  router.on_event(@posoco.TurnEvent::TurnStarted)
-  router.on_event(
+  router.on_event_at(
+    Some(router_test_scope("s")),
+    @posoco.TurnEvent::TurnStarted,
+  )
+  router.on_event_at(
+    Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
       message=router_test_message(),
       usage=Some(
@@ -575,8 +794,6 @@ test "router without a bus keeps observing and mutating silently" {
     _ => fail("unexpected effort selection failure")
   }
   assert_eq(router.active_effort(), Some("low"))
-  assert_eq(router.tokens_in, 1200)
-  assert_eq(router.tokens_out, 80)
 }
 
 ///|

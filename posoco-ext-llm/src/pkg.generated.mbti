@@ -75,8 +75,7 @@ pub(all) struct RouterModelPort {
   mut active_id : String
   mut active_effort : String?
   bus : @posoco-devkit.EventBus?
-  mut tokens_in : Int
-  mut tokens_out : Int
+  context_states : Map[String, @types.ContextState]
   provider_credential_store : &@posoco-ext-oauth.ProviderCredentialStore?
   cred_store : &@posoco-ext-oauth.CredentialStore?
   auth_interaction : &@posoco-ext-oauth.AuthInteraction?
@@ -101,7 +100,7 @@ pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn RouterModelPort::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub fn RouterModelPort::on_event(Self, @types.TurnEvent) -> Unit
+pub fn RouterModelPort::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub fn RouterModelPort::replace_provider_slots(Self, String, Array[ModelSlot]) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError
