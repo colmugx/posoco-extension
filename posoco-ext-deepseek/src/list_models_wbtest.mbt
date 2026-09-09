@@ -13,8 +13,45 @@ test "DeepSeek models parser preserves order and provider effort policy" {
   let models = parse_deepseek_models(payload)
   assert_eq(models.length(), 2)
   assert_eq(models[0].id, "deepseek-v4-pro")
-  assert_eq(models[0].thinking_efforts, ["high", "max"])
+  assert_eq(models[0].thinking_efforts, ["low", "high", "max"])
+  assert_eq(models[0].default_effort, Some("low"))
   assert_eq(models[1].thinking_efforts, [])
+  assert_eq(models[1].default_effort, None)
+}
+
+///|
+test "DeepSeek models parser prefers a declared reasoning_effort descriptor" {
+  let payload : Json = {
+    "object": "list",
+    "data": [
+      {
+        "id": "deepseek-v4-pro",
+        "object": "model",
+        "owned_by": "deepseek",
+        "reasoning_effort": ["medium", "ultra"],
+      },
+      {
+        "id": "deepseek-v4-flash",
+        "object": "model",
+        "owned_by": "deepseek",
+        "reasoning_effort": [],
+      },
+      {
+        "id": "deepseek-v4-pro-dup",
+        "object": "model",
+        "owned_by": "deepseek",
+        "reasoning_effort": "low",
+      },
+    ],
+  }
+  let models = parse_deepseek_models(payload)
+  // A well-formed array wins over the provider policy, even off-policy.
+  assert_eq(models[0].thinking_efforts, ["medium", "ultra"])
+  assert_eq(models[0].default_effort, Some("medium"))
+  // An explicitly empty array declares a non-reasoning model.
+  assert_eq(models[1].thinking_efforts, [])
+  // A wrong-shaped descriptor degrades to the provider policy, not a failure.
+  assert_eq(models[2].thinking_efforts, ["low", "high", "max"])
 }
 
 ///|
@@ -81,8 +118,13 @@ test "DeepSeek refreshed catalog keeps configured model first" {
   ]
   let catalog = port.model_catalog_from_models(models)
   let slots = catalog.slots()
+  // The beta-channel model is supplemented behind the fetched entries.
+  assert_eq(slots.length(), 3)
   assert_eq(slots[0].model_id, "deepseek-chat")
   assert_eq(slots[1].model_id, "deepseek-v4-pro")
+  assert_eq(slots[2].model_id, "deepseek-v4.1-flash-expires-on-0910")
+  assert_eq(slots[2].thinking_efforts, ["off", "low", "high", "max"])
+  assert_eq(slots[2].default_effort, Some("high"))
   match slots[0].rebuild_on_effort {
     None => ()
     Some(_) =>
@@ -98,4 +140,33 @@ test "DeepSeek refreshed catalog keeps configured model first" {
     }
     None => fail("expected DeepSeek effort rebuild hook")
   }
+}
+
+///|
+test "DeepSeek beta model supplement skips lists that already carry a beta" {
+  let stable : Array[DeepSeekModelInfo] = [
+    DeepSeekModelInfo::{
+      id: "deepseek-v4-flash",
+      owned_by: "deepseek",
+      thinking_efforts: ["low", "high", "max"],
+      default_effort: Some("low"),
+    },
+  ]
+  let supplemented = with_deepseek_beta_model(stable)
+  assert_eq(supplemented.length(), 2)
+  assert_eq(supplemented[1].id, "deepseek-v4.1-flash-expires-on-0910")
+  assert_eq(supplemented[1].thinking_efforts, ["low", "high", "max"])
+  // An exact listing of the beta id must not duplicate the slot.
+  let listed = with_deepseek_beta_model(supplemented)
+  assert_eq(listed.length(), 2)
+  // Any other beta-marketed id also suppresses the supplement.
+  let other_beta : Array[DeepSeekModelInfo] = [
+    DeepSeekModelInfo::{
+      id: "deepseek-v4.2-lab-beta",
+      owned_by: "deepseek",
+      thinking_efforts: [],
+      default_effort: None,
+    },
+  ]
+  assert_eq(with_deepseek_beta_model(other_beta).length(), 1)
 }

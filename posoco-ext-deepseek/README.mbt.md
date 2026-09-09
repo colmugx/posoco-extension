@@ -63,7 +63,7 @@ let result = port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
 | **Context cache** | append-only message ordering keeps the prefix byte-stable |
 | **reasoning_content replay rule** | resent when the assistant message carries tool_calls; omitted otherwise |
 | **reasoning streaming** | `StreamChunk::ReasoningDelta` is pushed to Observers, then discarded |
-| **thinking effort** | plain strings `high` / `max`; empty string disables thinking (no `reasoning_effort` on the wire). Unknown efforts abort in the config constructor and are rejected as a typed `CompositionError` at the refresh entry — no implicit fallback |
+| **thinking effort** | plain strings `low` / `high` / `max`; empty string disables thinking (no `reasoning_effort` on the wire). Unknown efforts abort in the config constructor and are rejected as a typed `CompositionError` at the refresh entry — no implicit fallback |
 | **FIM** | `/beta/completions` + `prompt`/`suffix` parameters |
 | **Prefix continuation** | `/beta/chat/completions` + `messages[-1]` carrying `prefix:True` |
 | **compaction** | two tiers by trigger — Manual = full KV-replay summary; Auto = evict tool-call/result pairs older than the three most recent user turns first, escalate to the same summary only when nothing is evictable or the kept transcript would still sit at ≥ 75% of the window |
@@ -72,9 +72,14 @@ let result = port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
 Hosts may call provider-owned `RefreshableProviderFactory::refresh` during
 explicit startup or login to update model order and reasoning-effort
 capabilities from the authenticated `/models` response. DeepSeek's `/models`
-schema declares no effort field, so the extension advertises `high/max` only
+schema declares no effort field, so the extension advertises `low/high/max`
 for the documented v4/reasoner families and never guesses that an unknown
-model is a reasoning model. Request timeouts, non-2xx statuses, invalid
+model is a reasoning model; a well-formed per-model `reasoning_effort` array
+in the response takes precedence over that policy when present. The
+beta-channel flash model `deepseek-v4.1-flash-expires-on-0910` is served on
+the chat endpoint but not listed by `/models`, so the catalog supplements it
+whenever the fetched list carries no beta model of its own. Request
+timeouts, non-2xx statuses, invalid
 UTF-8/JSON, and empty catalogs are all typed failures with no implicit
 fallback to a static model; the standard OpenAI envelope must also carry
 `object: "list"`, and the configured model id keeps priority in the refreshed

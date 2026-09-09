@@ -4,8 +4,19 @@
 /// DeepSeek follows the OpenAI list envelope, but its model records are
 /// intentionally small: id, object, and owned_by are the complete documented
 /// schema. Reasoning levels are therefore a provider policy (the current
-/// v4/reasoner families accept high and max), not a fabricated field read from
-/// an unrelated response.
+/// v4/reasoner families accept low, high and max). When a record does carry a
+/// well-formed `reasoning_effort` array, that descriptor wins over the policy.
+
+///|
+/// The provider-wide selectable reasoning efforts (2026-09 API revision).
+fn deepseek_reasoning_efforts() -> Array[String] {
+  ["low", "high", "max"]
+}
+
+///|
+/// DeepSeek's expiring beta-channel flash model: served on the chat endpoint
+/// but not listed by `/models`.
+const DEEPSEEK_BETA_MODEL_ID : String = "deepseek-v4.1-flash-expires-on-0910"
 
 ///|
 pub(all) struct DeepSeekModelInfo {
@@ -19,12 +30,57 @@ pub(all) struct DeepSeekModelInfo {
 fn deepseek_model_efforts(model_id : String) -> Array[String] {
   // The public DeepSeek /models schema does not carry capability fields.
   // Keep this mapping provider-owned and conservative: only model families
-  // documented as reasoning models expose a selectable effort.
-  if model_id.contains("reasoner") || model_id.has_prefix("deepseek-v4-") {
-    ["high", "max"]
+  // documented as reasoning models expose a selectable effort. The v4 prefix
+  // also covers dot releases (e.g. the v4.1 beta channel).
+  if model_id.contains("reasoner") || model_id.has_prefix("deepseek-v4") {
+    deepseek_reasoning_efforts()
   } else {
     []
   }
+}
+
+///|
+/// Read a model record's optional reasoning-effort descriptor. A well-formed
+/// `reasoning_effort` array is authoritative (an empty array declares a
+/// non-reasoning model); an absent or malformed field falls back to the
+/// provider policy instead of failing the whole catalog refresh.
+fn deepseek_declared_efforts(fields : Map[String, Json]) -> Array[String]? {
+  let items = match fields.get("reasoning_effort") {
+    Some(Json::Array(items)) => items
+    _ => return None
+  }
+  let efforts : Array[String] = []
+  for item in items {
+    match item {
+      Json::String(value) if value.length() > 0 => efforts.push(value)
+      _ => return None
+    }
+  }
+  Some(efforts)
+}
+
+///|
+/// Supplement the fetched catalog with the beta-channel flash model whenever
+/// the list carries no beta model of its own. Deduplicates by exact id and by
+/// any beta-marketed id so a later listing never yields a double slot.
+fn with_deepseek_beta_model(
+  models : Array[DeepSeekModelInfo],
+) -> Array[DeepSeekModelInfo] {
+  for model in models {
+    if model.id == DEEPSEEK_BETA_MODEL_ID || model.id.contains("beta") {
+      return models
+    }
+  }
+  let efforts = deepseek_model_efforts(DEEPSEEK_BETA_MODEL_ID)
+  let default_effort = if efforts.is_empty() { None } else { Some(efforts[0]) }
+  let supplemented = models.copy()
+  supplemented.push(DeepSeekModelInfo::{
+    id: DEEPSEEK_BETA_MODEL_ID,
+    owned_by: "deepseek",
+    thinking_efforts: efforts,
+    default_effort,
+  })
+  supplemented
 }
 
 ///|
@@ -107,7 +163,10 @@ pub fn parse_deepseek_models(
           "DeepSeek models item is missing string owned_by",
         )
     }
-    let efforts = deepseek_model_efforts(id)
+    let efforts = match deepseek_declared_efforts(fields) {
+      Some(declared) => declared
+      None => deepseek_model_efforts(id)
+    }
     let default_effort = if efforts.is_empty() {
       None
     } else {

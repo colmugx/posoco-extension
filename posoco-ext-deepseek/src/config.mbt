@@ -11,7 +11,7 @@ pub(all) struct DeepSeekConfig {
   model : String
   /// Endpoint path prefix, e.g. "/v1" when base_url is "http://host:port".
   endpoint_prefix : String
-  /// Provider-owned reasoning effort. DeepSeek accepts `high` and `max`.
+  /// Provider-owned reasoning effort. DeepSeek accepts `low`, `high`, and `max`.
   reasoning_effort : String
   /// Effort values declared by the provider catalog for this model.
   thinking_efforts : Array[String]
@@ -28,7 +28,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   base_url? : String = "https://api.deepseek.com",
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
-  thinking_efforts? : Array[String] = ["high", "max"],
+  thinking_efforts? : Array[String] = ["low", "high", "max"],
   context_window? : Int? = None,
 ) -> DeepSeekConfig {
   if (thinking_efforts.is_empty() && reasoning_effort != "") ||

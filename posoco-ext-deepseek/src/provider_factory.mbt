@@ -116,6 +116,13 @@ pub fn DeepSeekProvider::balance_source(
 }
 
 ///|
+/// Settings-level effort gate shared by build and refresh: the empty string
+/// (thinking disabled) plus every provider-wide selectable effort.
+fn deepseek_setting_effort_supported(effort : String) -> Bool {
+  effort == "" || deepseek_reasoning_efforts().contains(effort)
+}
+
+///|
 pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
   self : DeepSeekProvider,
   source : @llm.ProviderConfigSource,
@@ -138,7 +145,7 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
     Some(value) => value
     None => "high"
   }
-  if effort != "" && effort != "high" && effort != "max" {
+  if !deepseek_setting_effort_supported(effort) {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_deepseek",
       detail="unsupported reasoning_effort: " + effort,
@@ -209,9 +216,7 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
   // Keep live refresh validation identical to the static build path.  In
   // particular, an unknown configured effort is a typed composition failure,
   // not the abort emitted by DeepSeekConfig for an invalid value.
-  if requested_effort != "" &&
-    requested_effort != "high" &&
-    requested_effort != "max" {
+  if !deepseek_setting_effort_supported(requested_effort) {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_deepseek",
       detail="unsupported reasoning_effort: " + requested_effort,
