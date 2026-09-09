@@ -36,7 +36,7 @@ fn json_arr(j : Json?) -> Array[Json]? {
 
 ///|
 fn parse_i64(s : String) -> Int64? {
-  let v : Int64 = @strconv.from_str(s) catch { _ => return None }
+  let v : Int64 = @string.from_str(s) catch { _ => return None }
   Some(v)
 }
 
