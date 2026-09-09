@@ -14,4 +14,5 @@ source = "src"
 
 import {
   "moonbitlang/async@0.21.2",
+  "moonbitlang/x@0.4.50",
 }

@@ -19,6 +19,10 @@ pub fn glob_match(String, String) -> Bool
 
 pub fn has_hidden_segment(String) -> Bool
 
+pub fn home_dir() -> String?
+
+pub fn home_dir_from_env(windows~ : Bool, home~ : String?, userprofile~ : String?, homedrive~ : String?, homepath~ : String?) -> String?
+
 pub fn is_status_color_role(String) -> Bool
 
 pub fn matches_ignore(String, Array[String]) -> Bool
