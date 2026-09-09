@@ -15,8 +15,9 @@
 /// dispatched `EventScope` session id, falling back to a `"(no scope)"`
 /// process bucket); absent usage fields contribute nothing — unknown is not
 /// zero. The clock is injectable for deterministic tests; the default is
-/// wall-clock milliseconds. The read-only `cache_doctor` command renders the
-/// buckets and diagnoses channels that never report cache hits.
+/// wall-clock milliseconds. The read-only commands render the buckets:
+/// `cache_doctor` diagnoses channels that never report cache hits, `usage`
+/// reports the cumulative labeled token accounting.
 pub struct Stats {
   bus : @devkit.EventBus?
   clock : () -> Int64
@@ -38,6 +39,8 @@ pub struct CacheBucket {
   mut hit_requests : Int
   /// Sum of reported `input_tokens`.
   mut sum_input : Int
+  /// Sum of reported `output_tokens`.
+  mut sum_output : Int
   /// Sum of reported `cached_input_tokens`.
   mut sum_cached : Int
 }
@@ -122,6 +125,10 @@ fn Stats::note_cache_usage(
     Some(n) => bucket.sum_input += n
     None => ()
   }
+  match usage.output_tokens {
+    Some(n) => bucket.sum_output += n
+    None => ()
+  }
 }
 
 ///|
@@ -133,6 +140,7 @@ fn Stats::cache_bucket(self : Stats, key : String) -> CacheBucket {
         requests: 0,
         hit_requests: 0,
         sum_input: 0,
+        sum_output: 0,
         sum_cached: 0,
       }
       self.cache_buckets[key] = bucket
@@ -146,6 +154,7 @@ priv struct CacheTotals {
   requests : Int
   hit_requests : Int
   sum_input : Int
+  sum_output : Int
   sum_cached : Int
 }
 
@@ -154,19 +163,20 @@ fn Stats::cache_totals(self : Stats) -> CacheTotals {
   let mut requests = 0
   let mut hit_requests = 0
   let mut sum_input = 0
+  let mut sum_output = 0
   let mut sum_cached = 0
   for _key, bucket in self.cache_buckets {
     requests += bucket.requests
     hit_requests += bucket.hit_requests
     sum_input += bucket.sum_input
+    sum_output += bucket.sum_output
     sum_cached += bucket.sum_cached
   }
-  { requests, hit_requests, sum_input, sum_cached, }
+  { requests, hit_requests, sum_input, sum_output, sum_cached, }
 }
 
 ///|
-/// Token hit rate in percent: reported cached tokens over reported input
-/// tokens. Callers must ensure `sum_input > 0`.
+/// Callers must ensure `sum_input > 0`.
 fn hit_rate_percent(sum_cached : Int, sum_input : Int) -> Double {
   sum_cached.to_double() * 100.0 / sum_input.to_double()
 }
@@ -179,10 +189,6 @@ fn Stats::note_first_token(self : Stats) -> Unit {
 }
 
 ///|
-/// Close the round that just committed: compute ttft / span / tps from the
-/// anchors, accumulate the running mean, re-anchor for the next round of a
-/// tool loop, then publish whatever was computed (plus the process cache
-/// aggregate once any input tokens have been reported).
 fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
   let now = (self.clock)()
   let ttft_ms : Int64? = match (self.round_started_ms, self.first_token_ms) {
@@ -266,7 +272,6 @@ fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
 }
 
 ///|
-/// One decimal place, half up: `(value * 10 + 0.5)` truncated to "x.y".
 fn fmt_one_decimal(value : Double) -> String {
   let scaled = (value * 10.0 + 0.5).to_int()
   "\{scaled / 10}.\{scaled % 10}"
@@ -325,6 +330,19 @@ pub impl @posoco.CommandPort for Stats with fn commands(_self : Stats) -> Array[
       visible: true,
       metadata: None,
     },
+    @posoco.CommandDef::{
+      id: "usage",
+      label: "Token usage",
+      description: "Cumulative token accounting: input, output, requests, cache hits",
+      category: "stats",
+      ctype: @posoco.CommandType::Action,
+      params: [],
+      aliases: [],
+      shortcut: None,
+      icon: None,
+      visible: true,
+      metadata: None,
+    },
   ]
 }
 
@@ -355,6 +373,7 @@ fn bucket_json(key : String, bucket : CacheBucket) -> Json {
       ("requests", Json::number(bucket.requests.to_double())),
       ("hit_requests", Json::number(bucket.hit_requests.to_double())),
       ("sum_input_tokens", Json::number(bucket.sum_input.to_double())),
+      ("sum_output_tokens", Json::number(bucket.sum_output.to_double())),
       ("sum_cached_tokens", Json::number(bucket.sum_cached.to_double())),
     ]),
   )
@@ -375,18 +394,31 @@ pub impl @posoco.CommandPort for Stats with fn invoke(
   id : String,
   _args : Json,
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
-  if id != "cache_doctor" {
-    raise @posoco.CommandError::NotFound(id)
+  match id {
+    "cache_doctor" => self.cache_doctor_report()
+    "usage" => self.usage_report()
+    _ => raise @posoco.CommandError::NotFound(id)
   }
-  let totals = self.cache_totals()
+}
+
+///|
+fn Stats::sorted_bucket_keys(self : Stats) -> Array[String] {
   let keys : Array[String] = []
   for key, _bucket in self.cache_buckets {
     keys.push(key)
   }
   keys.sort()
+  keys
+}
+
+///|
+fn Stats::cache_doctor_report(
+  self : Stats,
+) -> @posoco.CommandOutcome raise @posoco.CommandError {
+  let totals = self.cache_totals()
   let lines : Array[String] = []
   let sessions : Array[Json] = []
-  for key in keys {
+  for key in self.sorted_bucket_keys() {
     match self.cache_buckets.get(key) {
       Some(bucket) => {
         sessions.push(bucket_json(key, bucket))
@@ -445,6 +477,85 @@ pub impl @posoco.CommandPort for Stats with fn invoke(
     Some(warning) => structured.push(("diagnosis", Json::string(warning)))
     None => ()
   }
+  @posoco.CommandOutcome::Success(
+    feedback=lines.join("\n"),
+    structured=Some(Json::object(Map::from_array(structured))),
+    ui_hint=Some(@posoco.UiHint::None),
+  )
+}
+
+///|
+/// One usage report line: cumulative accounting with explicit labels —
+/// "<label>: <requests> requests · in <input> · out <output> · cache hits
+/// <hits>/<requests> (<rate>%)". The rate is omitted while no input tokens
+/// are reported.
+fn usage_line(
+  label : String,
+  requests : Int,
+  sum_input : Int,
+  sum_output : Int,
+  hit_requests : Int,
+  sum_cached : Int,
+) -> String {
+  let head = "\{label}: \{requests} requests · in \{fmt_tokens(sum_input)} · out \{fmt_tokens(sum_output)} · cache hits \{hit_requests}/\{requests}"
+  if sum_input > 0 {
+    "\{head} (\{fmt_one_decimal(hit_rate_percent(sum_cached, sum_input))}%)"
+  } else {
+    head
+  }
+}
+
+///|
+fn Stats::usage_report(
+  self : Stats,
+) -> @posoco.CommandOutcome raise @posoco.CommandError {
+  let totals = self.cache_totals()
+  let lines : Array[String] = []
+  let sessions : Array[Json] = []
+  for key in self.sorted_bucket_keys() {
+    match self.cache_buckets.get(key) {
+      Some(bucket) => {
+        sessions.push(bucket_json(key, bucket))
+        lines.push(
+          usage_line(
+            "session \{key}",
+            bucket.requests,
+            bucket.sum_input,
+            bucket.sum_output,
+            bucket.hit_requests,
+            bucket.sum_cached,
+          ),
+        )
+      }
+      None => ()
+    }
+  }
+  lines.push(
+    usage_line(
+      "aggregate",
+      totals.requests,
+      totals.sum_input,
+      totals.sum_output,
+      totals.hit_requests,
+      totals.sum_cached,
+    ),
+  )
+  let structured : Array[(String, Json)] = [
+    ("kind", Json::string("stats_usage")),
+    ("sessions", Json::array(sessions)),
+    (
+      "aggregate",
+      Json::object(
+        Map::from_array([
+          ("requests", Json::number(totals.requests.to_double())),
+          ("sum_input_tokens", Json::number(totals.sum_input.to_double())),
+          ("sum_output_tokens", Json::number(totals.sum_output.to_double())),
+          ("hit_requests", Json::number(totals.hit_requests.to_double())),
+          ("sum_cached_tokens", Json::number(totals.sum_cached.to_double())),
+        ]),
+      ),
+    ),
+  ]
   @posoco.CommandOutcome::Success(
     feedback=lines.join("\n"),
     structured=Some(Json::object(Map::from_array(structured))),

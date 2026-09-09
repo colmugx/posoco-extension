@@ -17,6 +17,7 @@ pub struct CacheBucket {
   mut requests : Int
   mut hit_requests : Int
   mut sum_input : Int
+  mut sum_output : Int
   mut sum_cached : Int
 }
 

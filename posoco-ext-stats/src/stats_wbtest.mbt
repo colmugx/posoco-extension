@@ -629,13 +629,19 @@ test "manifest contributes the stats observer and the cache doctor command" {
   assert_eq(manifest.prompt_contributors.length(), 0)
   assert_eq(manifest.requires.length(), 0)
   let defs = stats.commands()
-  assert_eq(defs.length(), 1)
+  assert_eq(defs.length(), 2)
   assert_eq(defs[0].id, "cache_doctor")
   assert_eq(defs[0].label, "Cache doctor")
   assert_eq(defs[0].category, "stats")
   assert_eq(defs[0].ctype, @posoco.CommandType::Action)
   assert_eq(defs[0].params.length(), 0)
   assert_true(defs[0].visible)
+  assert_eq(defs[1].id, "usage")
+  assert_eq(defs[1].label, "Token usage")
+  assert_eq(defs[1].category, "stats")
+  assert_eq(defs[1].ctype, @posoco.CommandType::Action)
+  assert_eq(defs[1].params.length(), 0)
+  assert_true(defs[1].visible)
 }
 
 ///|
@@ -762,5 +768,77 @@ async test "cache_doctor unknown id raises NotFound" {
     other => fail("expected NotFound, got: \{other}")
   } noraise {
     _ => fail("expected NotFound to raise")
+  }
+}
+
+///|
+fn tk_usage_full(input : Int?, cached : Int?, output : Int?) -> @posoco.Usage {
+  {
+    input_tokens: input,
+    output_tokens: output,
+    total_tokens: None,
+    cached_input_tokens: cached,
+    uncached_input_tokens: None,
+  }
+}
+
+///|
+async test "usage reports cumulative labeled accounting per session and aggregate" {
+  let stats = Stats()
+  stats.on_event_at(
+    Some(tk_scope("s1")),
+    tk_response(Some(tk_usage_full(Some(1000), Some(100), Some(24)))),
+  )
+  stats.on_event_at(
+    Some(tk_scope("s1")),
+    tk_response(Some(tk_usage_full(Some(500), None, Some(12)))),
+  )
+  stats.on_event_at(
+    Some(tk_scope("s2")),
+    tk_response(Some(tk_usage_full(Some(2000), Some(0), Some(10)))),
+  )
+  // Usage with every field absent still counts its request, contributing
+  // nothing to the sums; a response without usage counts nothing at all.
+  stats.on_event_at(
+    Some(tk_scope("s3")),
+    tk_response(Some(tk_usage_full(None, None, None))),
+  )
+  stats.on_event_at(Some(tk_scope("s1")), tk_response(None))
+  match stats.invoke("usage", Json::null()) {
+    @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
+      assert_eq(
+        feedback, "session s1: 2 requests · in 1.5K · out 36 · cache hits 1/2 (6.7%)\nsession s2: 1 requests · in 2.0K · out 10 · cache hits 0/1 (0.0%)\nsession s3: 1 requests · in 0 · out 0 · cache hits 0/1\naggregate: 4 requests · in 3.5K · out 46 · cache hits 1/4 (2.9%)",
+      )
+      match structured {
+        Some(Json::Object(fields)) => {
+          match fields.get("kind") {
+            Some(Json::String("stats_usage")) => ()
+            _ => fail("expected kind stats_usage")
+          }
+          match fields.get("aggregate") {
+            Some(Json::Object(aggregate)) =>
+              match aggregate.get("sum_output_tokens") {
+                Some(Json::Number(n, ..)) => assert_eq(n, 46.0)
+                _ => fail("expected sum_output_tokens number")
+              }
+            _ => fail("expected aggregate object")
+          }
+        }
+        _ => fail("expected structured object")
+      }
+    }
+    _ => fail("expected success outcome")
+  }
+}
+
+///|
+async test "usage on a fresh stats renders an empty aggregate without a rate" {
+  let stats = Stats()
+  match stats.invoke("usage", Json::null()) {
+    @posoco.CommandOutcome::Success(feedback~, ..) =>
+      assert_eq(
+        feedback, "aggregate: 0 requests · in 0 · out 0 · cache hits 0/0",
+      )
+    _ => fail("expected success outcome")
   }
 }
