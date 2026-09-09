@@ -312,8 +312,6 @@ test "merge_project_overrides_user" {
 test "mcp_json_paths_normalize_trailing_slash" {
   assert_eq(project_mcp_json_path("/w"), "/w/.mcp.json")
   assert_eq(project_mcp_json_path("/w/"), "/w/.mcp.json")
-  assert_eq(user_mcp_json_path("/home/u"), "/home/u/.cetas/mcp.json")
-  assert_eq(user_mcp_json_path("/home/u/"), "/home/u/.cetas/mcp.json")
 }
 
 ///|
@@ -347,7 +345,7 @@ async test "discover_reads_and_merges_both_levels" {
     cwd + "/.mcp.json",
     "{\"mcpServers\":{\"shared\":{\"command\":\"proj\"}}}",
   )
-  match discover_mcp_servers(cwd, home) {
+  match discover_mcp_servers(cwd, home + "/.cetas/mcp.json") {
     Ok(configs) => {
       assert_eq(configs.length(), 2)
       assert_eq(configs[0].name, "shared")
@@ -367,7 +365,7 @@ async test "discover_reads_and_merges_both_levels" {
 ///|
 async test "discover_missing_files_yield_empty" {
   let root = @fs.tmpdir(prefix="posoco-mcp-test")
-  match discover_mcp_servers(root + "/nope", root + "/nohome") {
+  match discover_mcp_servers(root + "/nope", root + "/nohome/.cetas/mcp.json") {
     Ok(configs) => assert_true(configs.is_empty())
     Err(message) => fail("missing files must not error: " + message)
   }
@@ -380,7 +378,7 @@ async test "discover_malformed_project_file_fails_loud" {
     _ => fail("mkdir")
   }
   write_config_file(root + "/p/.mcp.json", "{not json")
-  match discover_mcp_servers(root + "/p", root + "/h") {
+  match discover_mcp_servers(root + "/p", root + "/h/.cetas/mcp.json") {
     Ok(_) => fail("expected malformed mcp.json failure")
     Err(message) => {
       assert_true(message.contains("not valid JSON"))
@@ -396,7 +394,7 @@ async test "bridge_defaults_and_lazy_activate_without_group" {
   assert_eq(fresh.catalog_revision, 0)
   let bridge = MCPToolBridge::discover(
     cwd="/nonexistent",
-    home="/nonexistent",
+    user_mcp_json="/nonexistent/.cetas/mcp.json",
     mode=LoadMode::Lazy,
   )
   match bridge {

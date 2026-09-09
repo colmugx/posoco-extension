@@ -44,19 +44,6 @@ fn project_mcp_json_path(cwd : String) -> String {
 }
 
 ///|
-/// User-level mcp.json path: `<home>/.cetas/mcp.json`.
-fn user_mcp_json_path(home : String) -> String {
-  let base = if home == "" {
-    "."
-  } else if home.has_suffix("/") {
-    home[:home.length() - 1].to_owned()
-  } else {
-    home
-  }
-  base + "/.cetas/mcp.json"
-}
-
-///|
 /// Read one mcp.json. `Ok(None)` = the file does not exist (not an error);
 /// `Err` = it exists but cannot be read or is not valid JSON. Errors carry
 /// the path label only — file contents never leak into messages.
@@ -498,14 +485,17 @@ fn merge_server_configs(
 }
 
 ///|
-/// Discover and parse both mcp.json levels. A missing file contributes
-/// nothing; malformed content fails loud with a sanitized message.
+/// Discover and parse both mcp.json levels: the project file at
+/// `<cwd>/.mcp.json` and the user file at the injected `user_mcp_json`
+/// path (the host owns where user-level config lives). A missing file
+/// contributes nothing; malformed content fails loud with a sanitized
+/// message.
 async fn discover_mcp_servers(
   cwd : String,
-  home : String,
+  user_mcp_json : String,
 ) -> Result[Array[MCPServerConfig], String] noraise {
   let project_path = project_mcp_json_path(cwd)
-  let user_path = user_mcp_json_path(home)
+  let user_path = user_mcp_json
   let user_doc = read_mcp_json(user_path, "user")
   let project_doc = read_mcp_json(project_path, "project")
   match (user_doc, project_doc) {

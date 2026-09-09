@@ -474,16 +474,17 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
 }
 
 ///|
-/// Discover servers from mcp.json (`<cwd>/.mcp.json` overriding
-/// `<home>/.cetas/mcp.json`) and return a bridge ready to `attach` +
-/// `activate`. A malformed file fails loud here — before any connection is
-/// attempted — with a sanitized message.
+/// Discover servers from mcp.json (`<cwd>/.mcp.json` overriding the
+/// user-level file at `user_mcp_json~` — the host owns that location) and
+/// return a bridge ready to `attach` + `activate`. A malformed file fails
+/// loud here — before any connection is attempted — with a sanitized
+/// message.
 pub async fn MCPToolBridge::discover(
   cwd~ : String,
-  home~ : String,
+  user_mcp_json~ : String,
   mode? : LoadMode = LoadMode::Eager,
 ) -> Result[MCPToolBridge, String] noraise {
-  match discover_mcp_servers(cwd, home) {
+  match discover_mcp_servers(cwd, user_mcp_json) {
     Ok(pending) => {
       // Pending configs are registered now so `reconnect_server` can retry a
       // server whose first activation failed (e.g. before an OAuth login).

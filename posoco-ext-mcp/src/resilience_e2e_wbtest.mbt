@@ -81,7 +81,8 @@ async fn e2e_activate_bridge(
   fixture_env : Array[(String, String)],
 ) -> MCPToolBridge {
   let cwd = e2e_fixture_cwd(node, extra_entry, fixture_env)
-  let bridge = match MCPToolBridge::discover(cwd~, home=cwd + "/nohome") {
+  let bridge = match
+    MCPToolBridge::discover(cwd~, user_mcp_json=cwd + "/nohome/.cetas/mcp.json") {
     Ok(bridge) => bridge
     Err(message) => fail("discover failed: " + message)
   }
