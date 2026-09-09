@@ -412,9 +412,7 @@ fn Stats::sorted_bucket_keys(self : Stats) -> Array[String] {
 }
 
 ///|
-fn Stats::cache_doctor_report(
-  self : Stats,
-) -> @posoco.CommandOutcome raise @posoco.CommandError {
+fn Stats::cache_doctor_report(self : Stats) -> @posoco.CommandOutcome {
   let totals = self.cache_totals()
   let lines : Array[String] = []
   let sessions : Array[Json] = []
@@ -506,9 +504,7 @@ fn usage_line(
 }
 
 ///|
-fn Stats::usage_report(
-  self : Stats,
-) -> @posoco.CommandOutcome raise @posoco.CommandError {
+fn Stats::usage_report(self : Stats) -> @posoco.CommandOutcome {
   let totals = self.cache_totals()
   let lines : Array[String] = []
   let sessions : Array[Json] = []

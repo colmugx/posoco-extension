@@ -9,7 +9,6 @@ import {
   "moonbitlang/async/http",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
-  "moonbitlang/core/strconv",
   "moonbitlang/core/string",
 }
 
