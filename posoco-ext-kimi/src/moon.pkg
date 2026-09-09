@@ -11,7 +11,6 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
-  "moonbitlang/core/strconv",
   "moonbitlang/core/string",
 }
 

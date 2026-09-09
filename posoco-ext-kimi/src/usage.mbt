@@ -26,7 +26,7 @@ fn kimi_usage_number(fields : Map[String, Json], key : String) -> Double? {
   match fields.get(key) {
     Some(Json::Number(value, ..)) => Some(value)
     Some(Json::String(raw)) => {
-      let value : Double = @strconv.from_str(raw.trim()) catch {
+      let value : Double = @string.from_str(raw.trim()) catch {
         _ => return None
       }
       Some(value)
