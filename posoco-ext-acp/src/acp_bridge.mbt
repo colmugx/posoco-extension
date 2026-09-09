@@ -265,6 +265,36 @@ pub fn[G] AcpBridge::spawn_pump(
 }
 
 ///|
+/// Push one `session_info_update` straight through the attached context —
+/// outside the turn queue, so hosts relabel a session between turns (after a
+/// rename, or when load/resume must hand the client a title). Best-effort:
+/// a detached bridge or a failed send drops the update, and a session id
+/// that does not match the binding is never mislabeled onto the wire.
+pub async fn AcpBridge::push_session_info_update(
+  self : AcpBridge,
+  session_id~ : String,
+  title~ : String,
+) -> Unit noraise {
+  match (self.context, self.session_id) {
+    (Some(context), Some(bound)) =>
+      if bound == session_id {
+        context.session_update({
+          session_id,
+          update: SessionInfoUpdate({
+            title: Value(title),
+            updated_at: Omitted,
+            meta: Omitted,
+          }),
+          meta: Omitted,
+        }) catch {
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+}
+
+///|
 /// ACP stop reason for the turn that just ran, derived from the last
 /// assistant finish reason the bridge observed.
 pub fn AcpBridge::stop_reason(self : AcpBridge) -> @acp.StopReason {
@@ -405,7 +435,11 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | ConfigWarning(..)
     | ConfigChanged(..)
     | StreamChunksDropped(..)
-    | Custom(..) => ()
+    | Custom(..)
+    | CompactStarted(..)
+    | CompactFinished(..)
+    | ContextStateUpdated(..)
+    | OperationFinalized(..) => ()
   }
 }
 

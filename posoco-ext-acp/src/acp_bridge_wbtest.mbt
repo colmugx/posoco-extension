@@ -742,6 +742,26 @@ async test "detach stops delivery" {
   assert_eq(client.sent.length(), 0)
 }
 
+///|
+async test "session info push rides the attached context once" {
+  let bridge = AcpBridge()
+  let client = FakeAcpClient::FakeAcpClient()
+  // Detached: the push is silently dropped.
+  bridge.push_session_info_update(session_id="s1", title="ignored")
+  assert_eq(client.sent.length(), 0)
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  bridge.push_session_info_update(session_id="s1", title="My session")
+  assert_eq(client.sent.length(), 1)
+  match client.sent[0].update {
+    SessionInfoUpdate(info) => assert_true(info.title is Value("My session"))
+    _ => fail("expected a session_info_update")
+  }
+  assert_eq(client.sent[0].session_id, "s1")
+  // A different session id is never mislabeled onto the binding.
+  bridge.push_session_info_update(session_id="other", title="nope")
+  assert_eq(client.sent.length(), 1)
+}
+
 // ------------------------------------------------------ _meta decorator seam
 
 ///|
