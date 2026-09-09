@@ -13,6 +13,8 @@ import {
   "moonbitlang/async/fs",
 } for "wbtest"
 
+supported_targets = "+native +js"
+
 options(
   targets: { "fs_port.native.mbt": [ "native" ], "fs_port.js.mbt": [ "js" ] },
 )

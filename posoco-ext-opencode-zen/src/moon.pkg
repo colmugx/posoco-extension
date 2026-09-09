@@ -17,6 +17,8 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
+warnings = "-unused_value-unused_constructor"
+
 options(
   targets: {
     // HTTP-backed adaptors: native+js only (moonbitlang/async/http is

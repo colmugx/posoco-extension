@@ -14,6 +14,8 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
+warnings = "-unused_package-unused_value-unused_constructor"
+
 options(
   targets: {
     // HTTP-backed chat and compact impls: native+js only

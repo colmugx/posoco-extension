@@ -1,7 +1,7 @@
 // WebFetchTools' ToolProvider: the `webfetch` tool pipeline. Pinned to
 // [native, js] because it touches `default_http_io` (moonbitlang/async/http
-// has no network stack on wasm) and `@async.now`; wasm gets the inert impl
-// in wasm_fallback.mbt.
+// has no network stack on wasm) and `@async.now`; the package declares
+// native+js as its whole target set, so wasm has no ToolProvider impl.
 
 ///|
 /// Extract and validate `(url, offset?)` from ToolCall arguments. Typed

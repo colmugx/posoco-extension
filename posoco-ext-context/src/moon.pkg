@@ -9,3 +9,5 @@ import {
   "colmugx/posoco-devkit" @devkit,
   "moonbitlang/async",
 } for "wbtest"
+
+supported_targets = "+native +js"

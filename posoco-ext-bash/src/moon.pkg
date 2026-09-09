@@ -10,6 +10,8 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
+supported_targets = "+native +js"
+
 options(
   targets: {
     "posoco_ext_bash.js.mbt": [ "js" ],

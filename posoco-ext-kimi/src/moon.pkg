@@ -18,6 +18,11 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
+// @utf8 is used by identity.native.mbt only but must stay imported
+// package-wide; other targets legitimately see it as unused.
+
+warnings = "-unused_package"
+
 options(
   "native-stub": [ "identity_stub.c" ],
   targets: {

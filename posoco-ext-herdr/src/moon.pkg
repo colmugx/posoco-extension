@@ -4,6 +4,13 @@ import {
   "moonbitlang/core/encoding/utf8",
 }
 
+// @env and @utf8 are used by herdr_native.mbt only but must stay imported
+// package-wide; js and wasm legitimately see them as unused.
+
+warnings = "-unused_package"
+
+supported_targets = "+native +js"
+
 options(
   targets: {
     "herdr_native.mbt": [ "native" ],
