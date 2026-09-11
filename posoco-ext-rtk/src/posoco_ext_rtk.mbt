@@ -114,7 +114,20 @@ pub extend RTKHook with @posoco.Extension::{extension_id, manifest}
 /// the inner `cmd`, and hand the kernel back the shape it dispatched —
 /// gateway calls are rewrapped, direct calls rewritten in place. Deferred
 /// bash keeps rtk routing and per-scope approvals.
-pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
+
+///|
+/// Rewrite seam: resolve `rtk rewrite <cmd>` to its rewritten shell command
+/// (`None` = no rewrite). Backends implement only this; classification and
+/// ToolCall rewriting stay in the shared impl, so tests script the seam
+/// instead of spawning the real rtk binary.
+priv trait RTKRewrite {
+  async fn rewrite(self : Self, rtk_path : String, cmd : String) -> String?
+}
+
+///|
+/// Shared decision body. `rewriter` is the backend seam (tests script it).
+async fn before_tool_impl(
+  rewriter : &RTKRewrite,
   self : RTKHook,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
@@ -126,7 +139,7 @@ pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
   let cmd = extract_command(effective.arguments) catch {
     error => return Reject(reason=error.to_string())
   }
-  match rtk_rewrite(self.rtk_path, cmd) {
+  match rewriter.rewrite(self.rtk_path, cmd) {
     Some(rewritten) if rewritten != cmd => {
       let inner = rewrite_tool_call(effective, rewritten)
       Approve(
@@ -139,4 +152,13 @@ pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
     }
     _ => Approve(call~)
   }
+}
+
+///|
+/// Production dispatch: the backend's real spawn-backed rewriter.
+pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
+  self : RTKHook,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolDecision {
+  before_tool_impl(rtk_default_rewriter(), self, call)
 }

@@ -28,3 +28,20 @@ async fn rtk_rewrite(rtk_path : String, cmd : String) -> String? noraise {
     Some(text)
   }
 }
+
+///|
+priv struct JsRtkRewrite {}
+
+///|
+impl RTKRewrite for JsRtkRewrite with fn rewrite(
+  _self : JsRtkRewrite,
+  rtk_path : String,
+  cmd : String,
+) -> String? {
+  rtk_rewrite(rtk_path, cmd)
+}
+
+///|
+fn rtk_default_rewriter() -> &RTKRewrite {
+  JsRtkRewrite::{ }
+}

@@ -16,3 +16,20 @@ async fn rtk_rewrite(rtk_path : String, cmd : String) -> String? noraise {
     Some(trimmed)
   }
 }
+
+///|
+priv struct NativeRtkRewrite {}
+
+///|
+impl RTKRewrite for NativeRtkRewrite with fn rewrite(
+  _self : NativeRtkRewrite,
+  rtk_path : String,
+  cmd : String,
+) -> String? {
+  rtk_rewrite(rtk_path, cmd)
+}
+
+///|
+fn rtk_default_rewriter() -> &RTKRewrite {
+  NativeRtkRewrite::{ }
+}

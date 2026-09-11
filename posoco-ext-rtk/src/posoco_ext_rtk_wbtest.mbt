@@ -142,39 +142,54 @@ async test "hook_passes_through_non_shell_tool" {
 }
 
 ///|
+/// Scripted rewrite seam: maps exact commands to canned rewrites; any other
+/// command yields None (the no-equivalent/no-rtk outcome). No process spawns.
+priv struct FakeRtkRewrite {
+  rewrites : Map[String, String]
+}
+
+///|
+impl RTKRewrite for FakeRtkRewrite with fn rewrite(
+  self : FakeRtkRewrite,
+  _rtk_path : String,
+  cmd : String,
+) -> String? {
+  self.rewrites.get(cmd)
+}
+
+///|
 async test "hook_rewrites_shell_tool_call" {
-  match rtk_rewrite("rtk", "git status") {
-    None => () // rtk absent/inert (wasm, not installed): soft-skip
-    Some(expected) => {
-      let hook = RTKHook("rtk")
-      let call = @posoco.ToolCall::{
-        call_id: @posoco.CallId::unchecked("call_1"),
-        name: @posoco.ToolName::unchecked("bash"),
-        arguments: Json::object(
-          Map::from_array([("cmd", Json::string("git status"))]),
-        ),
-      }
-      match hook.before_tool(call) {
-        Approve(call~) =>
-          match call.arguments {
-            Object(map) =>
-              match map.get("cmd") {
-                Some(String(s)) => assert_eq(s, expected)
-                _ => fail("expected cmd field")
-              }
-            _ => fail("expected Object")
+  let fake : FakeRtkRewrite = {
+    rewrites: Map::from_array([("git status", "rtk git status")]),
+  }
+  let hook = RTKHook("rtk")
+  let call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("call_1"),
+    name: @posoco.ToolName::unchecked("bash"),
+    arguments: Json::object(
+      Map::from_array([("cmd", Json::string("git status"))]),
+    ),
+  }
+  match before_tool_impl(fake, hook, call) {
+    Approve(call~) =>
+      match call.arguments {
+        Object(map) =>
+          match map.get("cmd") {
+            Some(String(s)) => assert_eq(s, "rtk git status")
+            _ => fail("expected cmd field")
           }
-        other =>
-          fail("expected Approve with rewritten call, got " + other.to_string())
+        _ => fail("expected Object")
       }
-    }
+    other =>
+      fail("expected Approve with rewritten call, got " + other.to_string())
   }
 }
 
 ///|
-/// Holds with rtk installed (no equivalent → empty stdout → pass-through)
-/// and without it (spawn failure → pass-through).
+/// With a rewriter that has no entry for the command (the no-equivalent and
+/// no-rtk-binary outcomes), the call passes through unchanged.
 async test "hook_passes_through_when_no_rtk_equivalent" {
+  let fake : FakeRtkRewrite = { rewrites: Map::from_array([]), }
   let hook = RTKHook("rtk")
   let call = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("call_1"),
@@ -183,7 +198,7 @@ async test "hook_passes_through_when_no_rtk_equivalent" {
       Map::from_array([("cmd", Json::string("echo rtk_no_equivalent_probe"))]),
     ),
   }
-  match hook.before_tool(call) {
+  match before_tool_impl(fake, hook, call) {
     Approve(call~) =>
       match call.arguments {
         Object(map) =>
