@@ -1237,13 +1237,17 @@ test "model_catalog slot advertises an implicit off and derives the default effo
   let port = DeepSeekModelPort(config)
   let catalog = port.model_catalog()
   let slot = catalog.slots()[0]
-  assert_eq(slot.thinking_efforts, ["off", "low", "high", "max"])
+  assert_eq(slot.thinking_efforts, [
+    "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+  ])
   assert_eq(slot.default_effort, Some("high"))
   guard slot.rebuild_on_effort is Some(rebuild) else {
     fail("a reasoning model must expose an effort rebuild hook")
   }
   let rebuilt = rebuild("off")
-  assert_eq(rebuilt.thinking_efforts, ["off", "low", "high", "max"])
+  assert_eq(rebuilt.thinking_efforts, [
+    "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+  ])
   assert_eq(rebuilt.default_effort, Some("off"))
   let low = rebuild("low")
   assert_eq(low.default_effort, Some("low"))
@@ -1266,7 +1270,9 @@ test "ProviderFactory::build accepts reasoning_effort off and produces a disable
   match factory.build(source) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
-      assert_eq(slot.thinking_efforts, ["off", "low", "high", "max"])
+      assert_eq(slot.thinking_efforts, [
+        "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+      ])
       assert_eq(slot.default_effort, Some("off"))
     }
     @llm.ProviderBuildResult::Unconfigured =>
@@ -1291,7 +1297,9 @@ test "ProviderFactory::build accepts reasoning_effort low" {
   match factory.build(source) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
-      assert_eq(slot.thinking_efforts, ["off", "low", "high", "max"])
+      assert_eq(slot.thinking_efforts, [
+        "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+      ])
       assert_eq(slot.default_effort, Some("low"))
     }
     @llm.ProviderBuildResult::Unconfigured =>
@@ -1340,16 +1348,15 @@ test "ProviderFactory::build expands host-cached records into a multi-slot catal
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slots = catalog.slots()
       // The configured model is pinned first; reasoning profiles are
-      // re-derived from ids exactly as the live refresh would. The beta
-      // channel model rides along at the end.
-      assert_eq(slots.length(), 3)
+      // re-derived from ids exactly as the live refresh would.
+      assert_eq(slots.length(), 2)
       assert_eq(slots[0].id, "deepseek/deepseek-chat")
       assert_eq(slots[1].id, "deepseek/deepseek-reasoner")
-      assert_eq(slots[1].thinking_efforts, ["off", "low", "high", "max"])
+      assert_eq(slots[1].thinking_efforts, [
+        "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+      ])
       assert_eq(slots[1].default_effort, Some("high"))
       assert_eq(slots[0].thinking_efforts, [])
-      assert_eq(slots[2].id, "deepseek/deepseek-v4.1-flash-expires-on-0910")
-      assert_eq(slots[2].thinking_efforts, ["off", "low", "high", "max"])
     }
     @llm.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog from cached records")

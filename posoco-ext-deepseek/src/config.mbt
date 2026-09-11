@@ -11,9 +11,14 @@ pub(all) struct DeepSeekConfig {
   model : String
   /// Endpoint path prefix, e.g. "/v1" when base_url is "http://host:port".
   endpoint_prefix : String
-  /// Provider-owned reasoning effort. DeepSeek accepts `low`, `high`, and `max`.
+  /// Provider-owned reasoning effort. Passed through verbatim; DeepSeek's
+  /// server maps the requested effort level itself.
   reasoning_effort : String
-  /// Effort values declared by the provider catalog for this model.
+  /// Effort values declared by the provider catalog for this model. The
+  /// constructor default is the full policy ladder from
+  /// `deepseek_reasoning_efforts` (server-side mapping table in
+  /// src/list_models.mbt), so statically composed slots advertise the same
+  /// levels as discovery-derived slots.
   thinking_efforts : Array[String]
   /// Token budget ceiling reported to the host so auto-compact can size
   /// itself. None leaves auto-compact disabled — an unknown window is never
@@ -28,7 +33,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   base_url? : String = "https://api.deepseek.com",
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
-  thinking_efforts? : Array[String] = ["low", "high", "max"],
+  thinking_efforts? : Array[String] = deepseek_reasoning_efforts(),
   context_window? : Int? = None,
 ) -> DeepSeekConfig {
   if (thinking_efforts.is_empty() && reasoning_effort != "") ||

@@ -176,6 +176,12 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
     }
     None => ()
   }
+  // Pull-style pricing: publish the vendor peak/off-peak rule next to the
+  // quota source so the /model catalog reads it live at command time. The
+  // rule is static clock fact, so every configured build re-registers it
+  // without needing a credential snapshot.
+  let pricing_borrowed : &@devkit.PricingSource = DeepSeekPricingSource::{ }
+  @devkit.pricing_registry_register("deepseek", pricing_borrowed)
   @llm.ProviderBuildResult::Ready(catalog)
 }
 
@@ -250,6 +256,10 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
     }
     None => ()
   }
+  // Same registry publication as build: the static pricing rule follows the
+  // newest refresh so the /model catalog pull stays live.
+  let pricing_borrowed : &@devkit.PricingSource = DeepSeekPricingSource::{ }
+  @devkit.pricing_registry_register("deepseek", pricing_borrowed)
   @llm.ProviderBuildResult::Ready(port.model_catalog_from_models(models))
 }
 

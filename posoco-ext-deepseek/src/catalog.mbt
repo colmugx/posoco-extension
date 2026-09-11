@@ -150,16 +150,12 @@ pub fn DeepSeekModelPort::model_catalog(
 }
 
 ///|
-/// Build a catalog from the provider's live `/models` response. The
-/// beta-channel flash model is supplemented whenever the response carries no
-/// beta model of its own, so both the live refresh and the host-cache
-/// expansion offer it.
+/// Build a catalog from the provider's live `/models` response.
 pub fn DeepSeekModelPort::model_catalog_from_models(
   self : DeepSeekModelPort,
   models : Array[DeepSeekModelInfo],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
-  let supplemented = with_deepseek_beta_model(models)
-  if supplemented.is_empty() {
+  if models.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_deepseek",
       detail="models endpoint returned an empty catalog",
@@ -168,7 +164,7 @@ pub fn DeepSeekModelPort::model_catalog_from_models(
   let api_key_impl = DeepSeekProvider(ctx=self.ctx)
   let api_key : &@llm.ApiKeyFactory = api_key_impl
   let slots : Array[@llm.ModelSlot] = []
-  for info in deepseek_preferred_models(supplemented, self.config.model) {
+  for info in deepseek_preferred_models(models, self.config.model) {
     slots.push(
       deepseek_catalog_slot_from_info(self.config, info, self.ctx, api_key),
     )
