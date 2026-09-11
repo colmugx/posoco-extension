@@ -1,4 +1,4 @@
-# colmugx/posoco-ext-nowledge-mem
+# posoco-ext-nowledge-mem
 
 [Nowledge Mem](https://mem.nowledge.co) as Posoco's memory backend: a passive
 startup working-memory briefing and transcript sync through the `MemoryPort`,

@@ -322,70 +322,77 @@ async test "/memory status: connectivity, lanes, queue, and the session inbound"
     Some(scope),
     @posoco.TurnEvent::TurnStarted,
   )
-  guard @posoco.MemoryPort::inbound(ext, session_id="s1", request="hi")
-    is Some(body) else {
-    fail("expected an inbound body")
-  }
-  let injected : @posoco.Message = @posoco.Message::UserMessage(content=[
-    @posoco.Content::Text(@posoco.MEMORY_INBOUND_LEAD + "\n\n" + body),
-  ])
-  ignore(
-    @posoco.PipelineHook::before_model(ext, [
-      injected,
-      @posoco.tk_user_msg("hi"),
-      assistant_msg("hello"),
-    ]),
-  )
-  @posoco.Observer::on_event_at(
-    ext,
-    Some(scope),
-    @posoco.TurnEvent::TurnCompleted,
-  )
-  ignore(
-    @posoco.MemoryPort::store(
+  // The inbound read slot is attach-gated, so the test hands the extension
+  // the host's task group (engine.stop() retires the flusher at the end).
+  @async.with_task_group(group => {
+    ext.attach(group)
+    guard @posoco.MemoryPort::inbound(ext, session_id="s1", request="hi")
+      is Some(body) else {
+      fail("expected an inbound body")
+    }
+    let injected : @posoco.Message = @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text(@posoco.MEMORY_INBOUND_LEAD + "\n\n" + body),
+    ])
+    ignore(
+      @posoco.PipelineHook::before_model(ext, [
+        injected,
+        @posoco.tk_user_msg("hi"),
+        assistant_msg("hello"),
+      ]),
+    )
+    @posoco.Observer::on_event_at(
       ext,
-      content="queued note",
-      metadata=Map::from_array([]),
-    ),
-  )
-  let outcome = @posoco.CommandPort::invoke(
-    ext,
-    "memory",
-    Json::string("status"),
-  )
-  guard outcome is @posoco.CommandOutcome::Success(feedback~, structured~, ..) else {
-    fail("expected success")
-  }
-  assert_true(feedback.contains("nowledge-mem: connected"))
-  assert_true(feedback.contains("posoco-s1"))
-  assert_true(feedback.contains("acknowledged=0"))
-  assert_true(feedback.contains("pending=true"))
-  assert_true(feedback.contains("last_error=none"))
-  assert_true(feedback.contains("memory queue: 1 pending write"))
-  assert_true(feedback.contains("inbound: injected"))
-  guard structured is Some(payload) else { fail("expected structured") }
-  inspect(
-    json_field(payload, "nmem_connected") is Some(Json::True),
-    content="true",
-  )
-  guard json_field(payload, "lanes") is Some(Json::Array(lanes)) else {
-    fail("expected a lanes array")
-  }
-  inspect(lanes.length(), content="1")
-  inspect(
-    json_field(lanes[0], "thread_id") is Some(Json::String("posoco-s1")),
-    content="true",
-  )
-  inspect(json_field(lanes[0], "pending") is Some(Json::True), content="true")
-  guard json_field(payload, "queue_depth")
-    is Some(Json::Number(queue_depth, ..)) else {
-    fail("expected queue_depth")
-  }
-  inspect(queue_depth == 1.0, content="true")
-  inspect(
-    json_field(payload, "inbound_injected") is Some(Json::True),
-    content="true",
-  )
+      Some(scope),
+      @posoco.TurnEvent::TurnCompleted,
+    )
+    ignore(
+      @posoco.MemoryPort::store(
+        ext,
+        content="queued note",
+        metadata=Map::from_array([]),
+      ),
+    )
+    let outcome = @posoco.CommandPort::invoke(
+      ext,
+      "memory",
+      Json::string("status"),
+    )
+    guard outcome is @posoco.CommandOutcome::Success(feedback~, structured~, ..) else {
+      fail("expected success")
+    }
+    assert_true(feedback.contains("nowledge-mem: connected"))
+    assert_true(feedback.contains("posoco-s1"))
+    assert_true(feedback.contains("acknowledged=0"))
+    assert_true(feedback.contains("pending=true"))
+    assert_true(feedback.contains("last_error=none"))
+    assert_true(feedback.contains("memory queue: 1 pending write"))
+    assert_true(feedback.contains("inbound: injected"))
+    guard structured is Some(payload) else { fail("expected structured") }
+    inspect(
+      json_field(payload, "nmem_connected") is Some(Json::True),
+      content="true",
+    )
+    guard json_field(payload, "lanes") is Some(Json::Array(lanes)) else {
+      fail("expected a lanes array")
+    }
+    inspect(lanes.length(), content="1")
+    inspect(
+      json_field(lanes[0], "thread_id") is Some(Json::String("posoco-s1")),
+      content="true",
+    )
+    inspect(json_field(lanes[0], "pending") is Some(Json::True), content="true")
+    guard json_field(payload, "queue_depth")
+      is Some(Json::Number(queue_depth, ..)) else {
+      fail("expected queue_depth")
+    }
+    inspect(queue_depth == 1.0, content="true")
+    inspect(
+      json_field(payload, "inbound_injected") is Some(Json::True),
+      content="true",
+    )
+    // Retire the flusher before scope close; the group waits for it.
+    ext.engine.stop()
+  })
 }
 
 ///|

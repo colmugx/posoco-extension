@@ -46,6 +46,14 @@ const NMEM_BEFORE_TOOL_DRAIN_INTERVAL_MS : Int64 = 750L
 /// serves hosts and tests that prefer explicit draining.
 pub struct NowledgeMem {
   mut config : NmemConfig?
+  /// True once the host handed the extension its long-lived task group
+  /// (`attach`). Boot config resolution, the MemoryPort read slots
+  /// (`inbound` / `search`), and every network drain — boot, turn end,
+  /// `before_tool`, shutdown — are gated on it, so compositions that never
+  /// attach (tests) are fully network- and config-inert. The write slots
+  /// (`store` / `delete`) stay un-gated: they are pure in-memory queue
+  /// appends whose ops replay on the first attached drain (D8).
+  mut attached : Bool
   /// Latest model-visible transcript snapshot (before_model) completed with
   /// the committed assistant replies; the unit the sync engine flushes.
   mut transcript : Array[@posoco.Message]
@@ -106,6 +114,7 @@ pub fn NowledgeMem::NowledgeMem(
 ) -> NowledgeMem {
   {
     config: None,
+    attached: false,
     transcript: [],
     current_session: None,
     engine: SyncEngine(),
@@ -121,30 +130,35 @@ pub fn NowledgeMem::NowledgeMem(
 }
 
 ///|
-/// Agent boot (inside the first `run_turn`): resolve config and sync
-/// timeout, hand the resolved MCP endpoint to the lazy client (it connects
-/// on first use — nothing pays for a connection until a tool, probe, or
-/// passive read actually needs one), then drain once — a host that staged
-/// state before boot loses nothing, and one that never calls `attach`
-/// still gets every boundary committed at turn end. The session inbound
-/// read stays gated: a session's first model call performs it (not boot).
-/// The system-prompt contribution is static guidance and needs no IO here.
+/// Agent boot (inside the first `run_turn`), gated on the host lifecycle
+/// group: only an attached composition resolves config and sync timeout
+/// (env + home config file through the platform seam), hands the resolved
+/// MCP endpoint to the lazy client (it connects on first use — nothing pays
+/// for a connection until a tool, probe, or passive read actually needs
+/// one), and drains once. Compositions that never attach — tests — never
+/// touch the env or the home config file and stay fully network- and
+/// config-inert (`config` stays None, which also disarms the downstream
+/// `config is None` gates). The session inbound read is gated the same way:
+/// a session's first model call performs it (not boot). The system-prompt
+/// contribution is static guidance and needs no IO here.
 pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) -> Unit {
-  let config = NmemConfig::resolve(
-    runner_get_env,
-    NmemPlatform::read_home_file(self.platform, ".nowledge-mem/config.json"),
-    source_app=self.source_app,
-  )
-  self.config = Some(config)
-  self.timeout_ms = resolve_thread_sync_timeout_ms(
-    runner_get_env("NMEM_SYNC_TIMEOUT_MS"),
-  )
-  self.mcp.configure(
-    url=config.mcp_url,
-    auth_token=config.api_key,
-    name=config.source_app,
-  )
-  self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
+  if self.attached {
+    let config = NmemConfig::resolve(
+      runner_get_env,
+      NmemPlatform::read_home_file(self.platform, ".nowledge-mem/config.json"),
+      source_app=self.source_app,
+    )
+    self.config = Some(config)
+    self.timeout_ms = resolve_thread_sync_timeout_ms(
+      runner_get_env("NMEM_SYNC_TIMEOUT_MS"),
+    )
+    self.mcp.configure(
+      url=config.mcp_url,
+      auth_token=config.api_key,
+      name=config.source_app,
+    )
+    self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
+  }
   self.last_drain_ms = @async.now()
 }
 
@@ -157,8 +171,10 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_shutdown(
   self : NowledgeMem,
 ) -> Unit {
   self.engine.stop()
-  self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
-  self.drain_memory_ops()
+  if self.attached {
+    self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
+    self.drain_memory_ops()
+  }
   self.mcp.shutdown()
 }
 
@@ -171,6 +187,7 @@ pub fn[G] NowledgeMem::attach(
   self : NowledgeMem,
   group : @async.TaskGroup[G],
 ) -> Unit {
+  self.attached = true
   group.spawn_bg(() => self.run_flusher())
 }
 
@@ -208,7 +225,7 @@ pub async fn NowledgeMem::flush_pending(self : NowledgeMem) -> Unit {
 /// and the throttled `before_tool` drain share this path. Lanes carry full
 /// snapshots, so a dropped in-flight request just waits for the next staging.
 async fn NowledgeMem::drain_silent(self : NowledgeMem) -> Unit noraise {
-  if self.config is None {
+  if !self.attached || self.config is None {
     return
   }
   self.last_drain_ms = @async.now()

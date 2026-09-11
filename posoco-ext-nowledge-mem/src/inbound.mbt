@@ -92,7 +92,8 @@ fn is_injected_memory_message(message : @posoco.Message) -> Bool {
 /// (empty read) or a raise (failed read — reason recorded on
 /// `mem.last_error`) spends core's once-per-session attempt for this
 /// process; core turns the raise into a secondary-failure event and the turn
-/// continues without this provider's content.
+/// continues without this provider's content. Attach gate: an unattached
+/// composition is network- and config-inert, so the read is a clean miss.
 pub impl @posoco.MemoryPort for NowledgeMem with fn inbound(
   self : NowledgeMem,
   session_id~ : String,
@@ -100,6 +101,9 @@ pub impl @posoco.MemoryPort for NowledgeMem with fn inbound(
 ) -> String? raise @posoco.MemoryError {
   ignore(session_id)
   ignore(request)
+  if !self.attached || self.config is None {
+    return None
+  }
   match self.read_working_memory_snapshot() {
     Ok(None) => None
     Ok(Some(content)) => {

@@ -52,12 +52,17 @@ fn search_reply_text(text : String) -> String? {
 /// `memory_search` surface. `top_k` maps to the server's `limit` (omitting
 /// it leaves the hit count to the server); core renders whatever text the
 /// provider returns. Failures raise `MemoryError::Search` (recorded on
-/// `mem.last_error`, visible via `/memory status`).
+/// `mem.last_error`, visible via `/memory status`). Attach gate: an
+/// unattached composition is network- and config-inert, so retrieval is an
+/// empty result.
 pub impl @posoco.MemoryPort for NowledgeMem with fn search(
   self : NowledgeMem,
   query~ : String,
   top_k? : Int,
 ) -> String? raise @posoco.MemoryError {
+  if !self.attached || self.config is None {
+    return None
+  }
   let fields : Map[String, Json] = { "query": Json::string(query) }
   match top_k {
     Some(k) => fields["limit"] = Json::number(k.to_double())

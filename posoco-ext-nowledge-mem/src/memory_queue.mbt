@@ -7,7 +7,10 @@
 /// calls after the thread lanes. The server is the single source of truth —
 /// there is no local replica. The inbound side (`inbound`) lives in
 /// `inbound.mbt`, on-demand retrieval (`search`) in `memory_search.mbt`;
-/// writes and reads meet only at the server.
+/// writes and reads meet only at the server. Unlike the read slots, the
+/// storage slots stay un-gated on `attach`: they are pure in-memory queue
+/// appends (no IO), so ops composed before attach simply replay on the
+/// first attached drain — the D8 write-after semantics stay coherent.
 
 ///|
 /// Timeout for one queued write-back (`memory_add` / `memory_delete`) during

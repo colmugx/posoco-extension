@@ -287,7 +287,8 @@ fn nmem_agent(
 ///|
 /// The system-prompt contribution is instructions only: guidance lands,
 /// recalled data never does (it travels the core-injected memory message —
-/// see inbound_e2e_wbtest).
+/// see inbound_e2e_wbtest). The composition attaches so the session's
+/// inbound read fires (the read slot is attach-gated).
 async test "e2e: the system prompt carries guidance only, never data" {
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
@@ -299,21 +300,28 @@ async test "e2e: the system prompt carries guidance only, never data" {
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ok")),
   ])
   let agent = nmem_agent(ext, model)
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
-  assert_true(model.received_messages.length() > 0)
-  let messages = model.received_messages[0]
-  let prompt = first_system_text(messages)
-  assert_true(prompt.contains("## Nowledge Mem Guidance"))
-  assert_true(prompt.contains("search"))
-  assert_false(prompt.contains("## Nowledge Mem Context Bundle"))
-  assert_false(prompt.contains("# Owner Rules"))
-  // The one MCP call is the session's inbound working-memory read, and with
-  // empty working memory no memory message reaches the payload.
-  inspect(mcp.calls.length(), content="1")
-  inspect(injected_memory_count(messages), content="0")
+  @async.with_task_group(group => {
+    ext.attach(group)
+    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    assert_true(model.received_messages.length() > 0)
+    let messages = model.received_messages[0]
+    let prompt = first_system_text(messages)
+    assert_true(prompt.contains("## Nowledge Mem Guidance"))
+    assert_true(prompt.contains("search"))
+    assert_false(prompt.contains("## Nowledge Mem Context Bundle"))
+    assert_false(prompt.contains("# Owner Rules"))
+    // The one MCP call is the session's inbound working-memory read, and with
+    // empty working memory no memory message reaches the payload.
+    inspect(mcp.calls.length(), content="1")
+    inspect(injected_memory_count(messages), content="0")
+    // Retire the flusher before scope close; the group waits for it.
+    ext.engine.stop()
+  })
 }
 
 ///|
+/// Config resolution is attach-gated too: on_start only reads the env and
+/// the home config file on an attached composition.
 async test "on_start configures the mcp client with the resolved endpoint" {
   let platform = FakePlatform::FakePlatform(
     home_files=Map::from_array([
@@ -324,15 +332,20 @@ async test "on_start configures the mcp client with the resolved endpoint" {
   )
   let mcp = FakeNmemMcp::FakeNmemMcp()
   let ext = nmem_ext(mcp~, platform~)
-  @posoco.Lifecycle::on_start(ext)
-  guard mcp.configured is Some((url, auth_token, name)) else {
-    fail("expected the client to be configured")
-  }
-  inspect(url, content="http://mem.test/mcp")
-  debug_inspect(auth_token, content="Some(\"file-key\")")
-  inspect(name, content="posoco")
-  guard ext.config is Some(config) else { fail("config was not resolved") }
-  inspect(config.mcp_url, content="http://mem.test/mcp")
+  @async.with_task_group(group => {
+    ext.attach(group)
+    @posoco.Lifecycle::on_start(ext)
+    guard mcp.configured is Some((url, auth_token, name)) else {
+      fail("expected the client to be configured")
+    }
+    inspect(url, content="http://mem.test/mcp")
+    debug_inspect(auth_token, content="Some(\"file-key\")")
+    inspect(name, content="posoco")
+    guard ext.config is Some(config) else { fail("config was not resolved") }
+    inspect(config.mcp_url, content="http://mem.test/mcp")
+    // Retire the flusher before scope close; the group waits for it.
+    ext.engine.stop()
+  })
 }
 
 ///|
@@ -344,31 +357,38 @@ async test "e2e: completed turns sync create then incremental append" {
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
   ])
   let agent = nmem_agent(ext, model)
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
-  ext.flush_pending()
-  inspect(transport.requests.length(), content="1")
-  guard ext.config is Some(config) else { fail("config was not resolved") }
-  let expected_thread = thread_id(config.source_app, "session_1")
-  let (create_url, create_body) = transport.requests[0]
-  assert_true(create_url.has_suffix("/threads"))
-  assert_false(create_url.contains("append"))
-  inspect(body_thread_id(create_body) == expected_thread, content="true")
-  inspect(body_messages(create_body).length(), content="2")
-  match json_field(create_body, "source") {
-    Some(Json::String(source)) =>
-      inspect(source == config.source_app, content="true")
-    _ => fail("create body should carry a string source")
-  }
-  ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_1"))
-  ext.flush_pending()
-  inspect(transport.requests.length(), content="2")
-  let (append_url, append_body) = transport.requests[1]
-  assert_true(append_url.has_suffix("/threads/" + expected_thread + "/append"))
-  inspect(body_messages(append_body).length(), content="2")
-  inspect(
-    json_field(append_body, "deduplicate") is Some(Json::True),
-    content="true",
-  )
+  @async.with_task_group(group => {
+    ext.attach(group)
+    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    // The attached turn-end drain commits the create before run_turn
+    // returns.
+    inspect(transport.requests.length(), content="1")
+    guard ext.config is Some(config) else { fail("config was not resolved") }
+    let expected_thread = thread_id(config.source_app, "session_1")
+    let (create_url, create_body) = transport.requests[0]
+    assert_true(create_url.has_suffix("/threads"))
+    assert_false(create_url.contains("append"))
+    inspect(body_thread_id(create_body) == expected_thread, content="true")
+    inspect(body_messages(create_body).length(), content="2")
+    match json_field(create_body, "source") {
+      Some(Json::String(source)) =>
+        inspect(source == config.source_app, content="true")
+      _ => fail("create body should carry a string source")
+    }
+    ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_1"))
+    inspect(transport.requests.length(), content="2")
+    let (append_url, append_body) = transport.requests[1]
+    assert_true(
+      append_url.has_suffix("/threads/" + expected_thread + "/append"),
+    )
+    inspect(body_messages(append_body).length(), content="2")
+    inspect(
+      json_field(append_body, "deduplicate") is Some(Json::True),
+      content="true",
+    )
+    // Retire the flusher before scope close; the group waits for it.
+    ext.engine.stop()
+  })
 }
 
 ///|
@@ -379,11 +399,12 @@ async test "attach runs the flusher loop inside a host task group" {
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
   @async.with_task_group(group => {
     ext.attach(group)
-    // One flusher interval: the loop drains the staged create on its own,
-    // with no explicit flush_pending call.
+    // The turn stages its create and the attached turn-end drain commits
+    // it; the flusher's ticks then find the lane clean — no explicit
+    // flush_pending call anywhere.
+    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
     @async.sleep(1100)
     ext.engine.stop()
   })
@@ -429,11 +450,17 @@ async test "on_shutdown stops the flusher, drains pending lanes, closes mcp" {
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("hi")),
   ])
   let agent = nmem_agent(ext, model)
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
-  @posoco.Lifecycle::on_shutdown(ext)
-  inspect(transport.requests.length(), content="1")
-  inspect(ext.engine.stopped, content="true")
-  inspect(mcp.shutdowns, content="1")
+  @async.with_task_group(group => {
+    ext.attach(group)
+    // The attached turn-end drain commits the create before run_turn
+    // returns; on_shutdown's final drain then finds nothing pending.
+    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    inspect(transport.requests.length(), content="1")
+    @posoco.Lifecycle::on_shutdown(ext)
+    inspect(transport.requests.length(), content="1")
+    inspect(ext.engine.stopped, content="true")
+    inspect(mcp.shutdowns, content="1")
+  })
 }
 
 ///|
@@ -508,46 +535,54 @@ async test "on_event_at: SessionRedirect stages the old lane and switches the se
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("done")),
   ])
   let agent = nmem_agent(ext, model)
-  ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
-  guard ext.config is Some(config) else { fail("config was not resolved") }
-  // A manual redirect: the snapshot is staged under the OLD session id with
-  // the redirect reason (best effort — the observer slot cannot flush), and
-  // current_session follows the target.
-  @posoco.Observer::on_event_at(
-    ext,
-    None,
-    @posoco.TurnEvent::SessionRedirect(
-      from="session_1",
-      to="session_2",
-      messages_before=2,
-      messages_after=2,
-    ),
-  )
-  inspect(ext.current_session is Some("session_2"), content="true")
-  let old_lane_key = sync_lane_key(
-    thread_id(config.source_app, "session_1"),
-    config,
-  )
-  guard ext.engine.lane_state(old_lane_key) is Some(lane) else {
-    fail("expected the old session's lane")
-  }
-  guard lane.pending is Some(request) else {
-    fail("expected a pending session_redirect sync")
-  }
-  inspect(request.sync_reason, content="session_redirect")
-  inspect(request.session_id, content="session_1")
-  // The next turn syncs into the NEW session's lane.
-  ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_2"))
-  ext.flush_pending()
-  inspect(transport.requests.length(), content="2")
-  inspect(
-    body_thread_id(transport.requests[0].1),
-    content=thread_id(config.source_app, "session_1"),
-  )
-  inspect(
-    body_thread_id(transport.requests[1].1),
-    content=thread_id(config.source_app, "session_2"),
-  )
+  @async.with_task_group(group => {
+    ext.attach(group)
+    ignore(agent.run_turn(@posoco.tk_user_msg("hello"), "session_1"))
+    guard ext.config is Some(config) else { fail("config was not resolved") }
+    // A manual redirect: the snapshot is staged under the OLD session id with
+    // the redirect reason (best effort — the observer slot cannot flush), and
+    // current_session follows the target.
+    @posoco.Observer::on_event_at(
+      ext,
+      None,
+      @posoco.TurnEvent::SessionRedirect(
+        from="session_1",
+        to="session_2",
+        messages_before=2,
+        messages_after=2,
+      ),
+    )
+    inspect(ext.current_session is Some("session_2"), content="true")
+    let old_lane_key = sync_lane_key(
+      thread_id(config.source_app, "session_1"),
+      config,
+    )
+    guard ext.engine.lane_state(old_lane_key) is Some(lane) else {
+      fail("expected the old session's lane")
+    }
+    guard lane.pending is Some(request) else {
+      fail("expected a pending session_redirect sync")
+    }
+    inspect(request.sync_reason, content="session_redirect")
+    inspect(request.session_id, content="session_1")
+    // The next turn syncs into the NEW session's lane. Turn 1's create is
+    // already on the wire (request 0); turn 2's turn-end drain delivers only
+    // the new session's create (request 1): the redirected old-lane snapshot
+    // carried no messages beyond turn 1's acknowledged ones, so it coalesces
+    // to no POST.
+    ignore(agent.run_turn(@posoco.tk_user_msg("more"), "session_2"))
+    inspect(transport.requests.length(), content="2")
+    inspect(
+      body_thread_id(transport.requests[0].1),
+      content=thread_id(config.source_app, "session_1"),
+    )
+    inspect(
+      body_thread_id(transport.requests[1].1),
+      content=thread_id(config.source_app, "session_2"),
+    )
+    // Retire the flusher before scope close; the group waits for it.
+    ext.engine.stop()
+  })
 }
 
 ///|
