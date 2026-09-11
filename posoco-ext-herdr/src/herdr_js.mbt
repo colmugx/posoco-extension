@@ -36,14 +36,25 @@ extern "js" fn bun_spawn_detached(
   #| }
 
 ///|
-pub fn HerdrReporter::detect() -> HerdrReporter? {
-  let reporter = match
+/// Construct from the herdr environment without reporting anything. Used by
+/// exit paths that never own an Agent (composition failure) yet must drop
+/// the authority detect() will have registered.
+pub fn HerdrReporter::from_env() -> HerdrReporter? {
+  match
     herdr_gate(
       herdr_env("HERDR_ENV"),
       herdr_env("HERDR_PANE_ID"),
       herdr_env("HERDR_BIN_PATH"),
     ) {
-    Some(cfg) => HerdrReporter::from_config(cfg)
+    Some(cfg) => Some(HerdrReporter::from_config(cfg))
+    None => None
+  }
+}
+
+///|
+pub fn HerdrReporter::detect() -> HerdrReporter? {
+  let reporter = match HerdrReporter::from_env() {
+    Some(reporter) => reporter
     None => return None
   }
   reporter.emit(Idle)

@@ -1,22 +1,36 @@
 import {
   "colmugx/posoco",
+  "moonbitlang/async/process",
+  "moonbitlang/async/js_async",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
 }
 
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
 // @env and @utf8 are used by herdr_native.mbt only but must stay imported
-// package-wide; js and wasm legitimately see them as unused.
+// package-wide; js and wasm legitimately see them as unused. @process and
+// @js_async are likewise backend-only (native / js respectively).
 
 warnings = "-unused_package"
 
 supported_targets = "+native +js"
 
 options(
-  "native-stub": ["herdr_system_stub.c"],
+  "native-stub": [ "herdr_system_stub.c" ],
   targets: {
     "herdr_native.mbt": [ "native" ],
     "herdr_js.mbt": [ "js" ],
     "herdr_gate_wbtest.mbt": [ "native", "js" ],
     "herdr_shell_quote_wbtest.mbt": [ "native" ],
+    "herdr_channel_native.mbt": [ "native" ],
+    "herdr_channel_js.mbt": [ "js" ],
+    "herdr_delegate_native.mbt": [ "native" ],
+    "herdr_delegate_js.mbt": [ "js" ],
+    "herdr_channel_wbtest.mbt": [ "native", "js" ],
+    "herdr_delegate_wbtest.mbt": [ "native", "js" ],
   },
 )

@@ -10,6 +10,11 @@
 // terminals report `idle` ("agent available again"). A rejected report is
 // swallowed by design (presence must never fail a turn) — verify reports
 // manually by running the CLI from README when debugging.
+//
+// While a `cetas` source holds the pane's lifecycle authority, herdr skips
+// its own process probes, so the entry survives the process exiting. The
+// Lifecycle impl releases that authority on Agent shutdown — the documented
+// exit side of the custom-integration contract (`pane release-agent`).
 
 ///|
 priv enum HerdrAgentState {
@@ -78,6 +83,23 @@ fn HerdrReporter::emit(self : HerdrReporter, state : HerdrAgentState) -> Unit {
 }
 
 ///|
+/// Drop this source's lifecycle authority for the pane. herdr keeps showing
+/// the agent after the process exits while an authority is registered, so
+/// every exit path that can reach Agent shutdown must fire this. Public for
+/// host-side fatal-exit fallbacks that never own an Agent.
+pub fn HerdrReporter::release(self : HerdrReporter) -> Unit {
+  (self.spawn)(self.bin, [
+    "pane",
+    "release-agent",
+    self.pane,
+    "--source",
+    "cetas",
+    "--agent",
+    "cetas",
+  ])
+}
+
+///|
 pub impl @posoco.Observer for HerdrReporter with fn on_event(
   self,
   event : @posoco.TurnEvent,
@@ -88,4 +110,11 @@ pub impl @posoco.Observer for HerdrReporter with fn on_event(
     @posoco.TurnEvent::TurnFailed(_) => self.emit(Idle)
     _ => ()
   }
+}
+
+///|
+/// The spawn seam never raises, so shutdown stays failure-free for the
+/// Agent's lifecycle walk.
+pub impl @posoco.Lifecycle for HerdrReporter with fn on_shutdown(self) -> Unit {
+  self.release()
 }

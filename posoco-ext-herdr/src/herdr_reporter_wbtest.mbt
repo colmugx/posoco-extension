@@ -40,13 +40,40 @@ test "emit builds the report-agent argv from pane and bin" {
 }
 
 ///|
-test "extension manifest contributes exactly one observer" {
+test "release builds the release-agent argv from pane and bin" {
+  let (calls, record) = recorder()
+  let reporter : HerdrReporter = {
+    pane: "w1:p1",
+    bin: "/usr/local/bin/herdr",
+    spawn: record,
+  }
+  reporter.release()
+  inspect(
+    calls[0],
+    content="/usr/local/bin/herdr pane release-agent w1:p1 --source cetas --agent cetas",
+  )
+}
+
+///|
+async test "lifecycle shutdown releases the pane authority" {
+  let (calls, record) = recorder()
+  let reporter : HerdrReporter = { pane: "1-2", bin: "herdr", spawn: record, }
+  reporter.on_shutdown()
+  inspect(
+    calls.join("\n"),
+    content="herdr pane release-agent 1-2 --source cetas --agent cetas",
+  )
+}
+
+///|
+test "extension manifest contributes one observer and one lifecycle" {
   let (_, record) = recorder()
   let reporter : HerdrReporter = { pane: "1-1", bin: "herdr", spawn: record, }
   inspect(reporter.extension_id(), content="posoco_ext_herdr")
   let m = reporter.manifest()
   inspect(m.id, content="posoco_ext_herdr")
   inspect(m.observers.length(), content="1")
+  inspect(m.lifecycle.length(), content="1")
   inspect(m.tools.length(), content="0")
   inspect(m.prompt_contributors.length(), content="0")
 }

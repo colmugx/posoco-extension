@@ -14,3 +14,10 @@ pub fn HerdrReporter::detect() -> HerdrReporter? {
 fn herdr_spawn_report(_bin : String, _args : Array[String]) -> Unit {
   ()
 }
+
+///|
+#cfg(not(any(target="native", target="js")))
+pub fn HerdrDelegate::detect(cwd~ : String) -> HerdrDelegate? {
+  ignore(cwd)
+  None
+}
