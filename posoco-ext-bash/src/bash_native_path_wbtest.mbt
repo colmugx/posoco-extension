@@ -3,6 +3,10 @@
 /// (and `bash_collect_output_failure`, which lives in
 /// `posoco_ext_bash.native.mbt`), so the js target — where the execute path
 /// is the bun runner — excludes this file.
+///
+/// The runtime tests spawn the user's real `/bin/sh`, so they run only when
+/// BASH_LIVE=1 is set; CI and default runs skip. The anchored variants use a
+/// tmpdir root (never `/` and the host's real `/etc`).
 test "collect_output_failure_mapping_is_stage_only" {
   match bash_collect_output_failure() {
     @posoco.RuntimeError::InvocationFailed(message) =>
@@ -12,9 +16,31 @@ test "collect_output_failure_mapping_is_stage_only" {
 }
 
 ///|
+/// BASH_LIVE=1 opts in to the real-shell runtime tests; unset skips them.
+fn bash_live_enabled() -> Bool {
+  match @env.get_env_var("BASH_LIVE") {
+    Some("1") => true
+    _ => false
+  }
+}
+
+///|
+/// Fresh anchored root: a tmpdir with an `etc/` subdir, so anchored-shell
+/// tests never depend on the host's real root layout.
+async fn bash_anchor_root() -> String {
+  let root = @fs.tmpdir(prefix="bash-path-test")
+  @fs.mkdir("\{root}/etc", permission=0o755)
+  root
+}
+
+///|
 /// Invalid UTF-8 from an exit-0 process is an explicit business error, not a
 /// successful result with silently replaced output.
 async test "non_utf8_output_is_explicit_tool_error" {
+  // BASH_LIVE=1 gate: spawns the real /bin/sh.
+  if !bash_live_enabled() {
+    return
+  }
   let tools = ShellTools()
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("tc_binary"),
@@ -42,11 +68,17 @@ async test "non_utf8_output_is_explicit_tool_error" {
 
 ///|
 /// An anchored shell always starts in the anchor root — `pwd` must report it
-/// regardless of the host process working directory. `/` is used as the root
-/// because its printed form is stable (no symlink resolution surprises).
+/// regardless of the host process working directory. A tmpdir root keeps the
+/// assertion off the host's real filesystem; the comparison uses the
+/// resolved path because `pwd` prints the physical location.
 async test "anchored_shell_starts_in_anchor_root" {
+  // BASH_LIVE=1 gate: spawns the real /bin/sh.
+  if !bash_live_enabled() {
+    return
+  }
+  let root = bash_anchor_root()
   let tools = ShellTools(
-    anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor("/")),
+    anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor(root)),
   )
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("tc_pwd"),
@@ -54,18 +86,23 @@ async test "anchored_shell_starts_in_anchor_root" {
     arguments: Json::object(Map::from_array([("cmd", Json::string("pwd"))])),
   }
   match tools.execute("bash", call) {
-    Success(content~, ..) => assert_eq(content.trim(), "/")
+    Success(content~, ..) => assert_eq(content.trim(), @fs.realpath(root))
     _ => fail("expected Success for pwd")
   }
 }
 
 ///|
 /// Each call is a fresh shell in the anchor root: `cd` inside one call works,
-/// and relative paths resolve against the root (`/etc` exists on the native
-/// test hosts).
+/// and relative paths resolve against the fixture `etc/` subdir — never the
+/// host's real `/etc`.
 async test "anchored_shell_resolves_relative_paths_from_root" {
+  // BASH_LIVE=1 gate: spawns the real /bin/sh.
+  if !bash_live_enabled() {
+    return
+  }
+  let root = bash_anchor_root()
   let tools = ShellTools(
-    anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor("/")),
+    anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor(root)),
   )
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("tc_cd_pwd"),
@@ -75,7 +112,8 @@ async test "anchored_shell_resolves_relative_paths_from_root" {
     ),
   }
   match tools.execute("bash", call) {
-    Success(content~, ..) => assert_eq(content.trim(), "/etc")
+    Success(content~, ..) =>
+      assert_eq(content.trim(), @fs.realpath("\{root}/etc"))
     _ => fail("expected Success for cd etc and pwd")
   }
 }
