@@ -15,7 +15,7 @@ import {
 // Values
 pub async fn fetch_kimi_models(String, String, endpoint_prefix? : String, identity_headers? : Map[String, String]) -> Array[KimiModelInfo] raise @error.ModelError
 
-pub fn kimi_default_headers(device_id? : String) -> Map[String, String]
+pub fn kimi_default_headers(device_id? : String, identity? : KimiIdentity?) -> Map[String, String]
 
 pub fn kimi_effort_values(String) -> Array[String]
 
@@ -47,6 +47,12 @@ pub fn KimiConfig::KimiConfig(String, model? : String, base_url? : String, endpo
 pub fn KimiConfig::from_oauth_credential(@posoco-ext-oauth.Credential, String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self
 pub fn KimiConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
+pub(all) struct KimiIdentity {
+  hostname : String
+  device_model : String
+  os_version : String
+}
+
 pub(all) struct KimiModelInfo {
   id : String
   display_name : String
@@ -72,8 +78,9 @@ pub impl @port.ModelPort for KimiModelPort
 pub(all) struct KimiOAuth {
   transport : &@posoco-ext-oauth.OAuthHttpTransport?
   device_id : String?
+  identity : KimiIdentity?
 }
-pub fn KimiOAuth::KimiOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?, device_id? : String) -> Self
+pub fn KimiOAuth::KimiOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?, device_id? : String, identity? : KimiIdentity?) -> Self
 pub async fn KimiOAuth::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
 pub impl @posoco-ext-oauth.OAuthProvider for KimiOAuth
 

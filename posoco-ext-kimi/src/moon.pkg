@@ -16,6 +16,7 @@ import {
 
 import {
   "moonbitlang/async",
+  "moonbitlang/core/env",
 } for "wbtest"
 
 // @utf8 is used by identity.native.mbt only but must stay imported

@@ -16,18 +16,41 @@ let kimi_identity_version : String = "1.2.3"
 let kimi_identity_platform : String = "kimi_code_cli"
 
 ///|
-pub fn kimi_default_headers(device_id? : String) -> Map[String, String] {
+/// Canned host identity for tests. The native/js faces probe the real
+/// machine for these values (native: uname + `sw_vers` via popen — a real
+/// subprocess; js: `os.*` + `sw_vers`); tests inject this struct so no probe
+/// runs and headers are deterministic.
+pub(all) struct KimiIdentity {
+  hostname : String
+  device_model : String
+  os_version : String
+}
+
+///|
+pub fn kimi_default_headers(
+  device_id? : String,
+  identity? : KimiIdentity? = None,
+) -> Map[String, String] {
   let id = match device_id {
     Some(value) => value
     None => kimi_random_uuid_v4()
+  }
+  let host = match identity {
+    Some(identity) => identity
+    None =>
+      KimiIdentity::{
+        hostname: kimi_hostname(),
+        device_model: kimi_device_model(),
+        os_version: kimi_os_version(),
+      }
   }
   Map::from_array([
     ("User-Agent", kimi_identity_product + "/" + kimi_identity_version),
     ("X-Msh-Platform", kimi_identity_platform),
     ("X-Msh-Version", kimi_identity_version),
-    ("X-Msh-Device-Name", kimi_ascii_header(kimi_hostname())),
-    ("X-Msh-Device-Model", kimi_ascii_header(kimi_device_model())),
-    ("X-Msh-Os-Version", kimi_ascii_header(kimi_os_version())),
+    ("X-Msh-Device-Name", kimi_ascii_header(host.hostname)),
+    ("X-Msh-Device-Model", kimi_ascii_header(host.device_model)),
+    ("X-Msh-Os-Version", kimi_ascii_header(host.os_version)),
     ("X-Msh-Device-Id", kimi_ascii_header(id)),
   ])
 }

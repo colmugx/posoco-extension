@@ -16,12 +16,15 @@ pub(all) struct KimiOAuth {
   transport : &@oauth.OAuthHttpTransport?
   /// Sent as `X-Msh-Device-Id`; empty = fresh process-local UUID.
   device_id : String?
+  /// Canned host identity (tests); None probes the real machine.
+  identity : KimiIdentity?
 }
 
 ///|
 pub fn KimiOAuth::KimiOAuth(
   transport? : &@oauth.OAuthHttpTransport? = None,
   device_id? : String = "",
+  identity? : KimiIdentity? = None,
 ) -> KimiOAuth {
   {
     transport,
@@ -30,6 +33,7 @@ pub fn KimiOAuth::KimiOAuth(
     } else {
       None
     },
+    identity,
   }
 }
 
@@ -46,8 +50,8 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn login(
   interaction : &@oauth.AuthInteraction,
 ) -> @oauth.Credential raise @oauth.OAuthError {
   let identity_headers = match self.device_id {
-    Some(id) => kimi_default_headers(device_id=id)
-    None => kimi_default_headers()
+    Some(id) => kimi_default_headers(device_id=id, identity=self.identity)
+    None => kimi_default_headers(identity=self.identity)
   }
   let config : @oauth.DeviceFlowConfig = {
     client_id: kimi_client_id,
@@ -69,8 +73,8 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn refresh(
   credential : @oauth.Credential,
 ) -> @oauth.Credential raise @oauth.OAuthError {
   let identity_headers = match self.device_id {
-    Some(id) => kimi_default_headers(device_id=id)
-    None => kimi_default_headers()
+    Some(id) => kimi_default_headers(device_id=id, identity=self.identity)
+    None => kimi_default_headers(identity=self.identity)
   }
   let headers : Map[String, String] = Map::from_array([])
   for k, v in identity_headers {

@@ -130,7 +130,10 @@ async test "Kimi OAuth refresh matches form wire and preserves token fields" {
     response: @oauth.OAuthHttpResponse::{ status: 200, body: token_body, },
   }
   let transport : &@oauth.OAuthHttpTransport = transport_impl
-  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth_impl = KimiOAuth::KimiOAuth(
+    transport=Some(transport),
+    identity=Some(kimi_test_identity()),
+  )
   let oauth : &@oauth.OAuthProvider = oauth_impl
   let credential = @oauth.Credential::Credential(
     access_token="old-access",
@@ -175,7 +178,10 @@ async test "Kimi OAuth refresh maps invalid_grant to typed error" {
     response: @oauth.OAuthHttpResponse::{ status: 400, body: invalid_body, },
   }
   let transport : &@oauth.OAuthHttpTransport = transport_impl
-  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth_impl = KimiOAuth::KimiOAuth(
+    transport=Some(transport),
+    identity=Some(kimi_test_identity()),
+  )
   let oauth : &@oauth.OAuthProvider = oauth_impl
   let credential = @oauth.Credential::Credential(
     access_token="old-access",
@@ -217,7 +223,10 @@ async test "Kimi OAuth refresh retries transient 5xx once then succeeds" {
     ],
   }
   let transport : &@oauth.OAuthHttpTransport = transport_impl
-  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth_impl = KimiOAuth::KimiOAuth(
+    transport=Some(transport),
+    identity=Some(kimi_test_identity()),
+  )
   let oauth : &@oauth.OAuthProvider = oauth_impl
   let credential = @oauth.Credential::Credential(
     access_token="old-access",
@@ -239,7 +248,10 @@ async test "Kimi OAuth refresh rejects fractional expiry" {
     },
   }
   let transport : &@oauth.OAuthHttpTransport = transport_impl
-  let oauth_impl = KimiOAuth::KimiOAuth(transport=Some(transport))
+  let oauth_impl = KimiOAuth::KimiOAuth(
+    transport=Some(transport),
+    identity=Some(kimi_test_identity()),
+  )
   let oauth : &@oauth.OAuthProvider = oauth_impl
   let credential = @oauth.Credential::Credential(
     access_token="old-access",
@@ -1497,9 +1509,21 @@ test "kimi 403 auth failure stays Transport" {
 /// Identity headers (unchanged contract with the coding host).
 
 ///|
+/// Canned identity so header tests never probe the real host (the native
+/// face runs uname + `sw_vers` via popen; see KimiIdentity).
+fn kimi_test_identity() -> KimiIdentity {
+  KimiIdentity::{
+    hostname: "test-host",
+    device_model: "test-model",
+    os_version: "test-os",
+  }
+}
+
+///|
 test "kimi_default_headers mirrors kimi-code-cli identity set" {
   let headers = kimi_default_headers(
     device_id="11111111-1111-4111-8111-111111111111",
+    identity=Some(kimi_test_identity()),
   )
   let expected_keys = [
     "User-Agent", "X-Msh-Platform", "X-Msh-Version", "X-Msh-Device-Name", "X-Msh-Device-Model",
@@ -1514,17 +1538,32 @@ test "kimi_default_headers mirrors kimi-code-cli identity set" {
   assert_eq(headers["User-Agent"], "kimi-code-cli/1.2.3")
   assert_eq(headers["X-Msh-Platform"], "kimi_code_cli")
   assert_eq(headers["X-Msh-Device-Id"], "11111111-1111-4111-8111-111111111111")
+  assert_eq(headers["X-Msh-Device-Name"], "test-host")
 }
 
 ///|
 test "kimi_default_headers mints a fallback device id when none supplied" {
-  let headers_a = kimi_default_headers()
-  let headers_b = kimi_default_headers()
+  let headers_a = kimi_default_headers(identity=Some(kimi_test_identity()))
+  let headers_b = kimi_default_headers(identity=Some(kimi_test_identity()))
   let a = headers_a["X-Msh-Device-Id"]
   let b = headers_b["X-Msh-Device-Id"]
   assert_true(a.length() > 0)
   assert_true(b.length() > 0)
   assert_true(a != b)
+}
+
+///|
+/// KIMI_LIVE=1 opts into probing the real host identity externs (native:
+/// uname + sw_vers via popen); default runs skip.
+test "kimi_live_default_headers_probe_the_real_host" {
+  if @env.get_env_var("KIMI_LIVE") != Some("1") {
+    return
+  }
+  let headers = kimi_default_headers()
+  assert_eq(headers["User-Agent"], "kimi-code-cli/1.2.3")
+  assert_true(headers["X-Msh-Device-Name"].length() > 0)
+  assert_true(headers["X-Msh-Device-Model"].length() > 0)
+  assert_true(headers["X-Msh-Os-Version"].length() > 0)
 }
 
 ///|
