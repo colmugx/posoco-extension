@@ -8,3 +8,7 @@ import {
 import {
   "moonbitlang/async",
 } for "wbtest"
+
+options(
+  targets: { "metrics_wbtest.mbt": [ "native" ] },
+)
