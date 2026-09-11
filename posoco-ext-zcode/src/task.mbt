@@ -17,35 +17,6 @@ pub(all) struct ZcodeTaskResult {
 /// registry building, result assembly, ToolProvider — stays in shared files.
 
 ///|
-/// The candidate paths an exists pre-probe must answer for, mirroring
-/// config.mbt's discovery branches (PATH entries + the three platform
-/// bundles); config.bin and ZCODE_BIN never consult exists. Backends probe
-/// these up front and answer the synchronous `exists` seam from that cache.
-fn zcode_probe_candidates(env~ : (String) -> String?) -> Array[String] {
-  let candidates : Array[String] = []
-  match env("PATH") {
-    Some(path) =>
-      for dir in path.split(":") {
-        candidates.push(dir.to_owned() + "/zcode")
-      }
-    None => ()
-  }
-  candidates.push("/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs")
-  match env("LOCALAPPDATA") {
-    Some(local_app_data) =>
-      candidates.push(
-        local_app_data + "\\Programs\\ZCode\\resources\\glm\\zcode.cjs",
-      )
-    None => ()
-  }
-  match env("ZCODE_INSTALL_DIR") {
-    Some(dir) => candidates.push(dir + "/resources/glm/zcode.cjs")
-    None => ()
-  }
-  candidates
-}
-
-///|
 /// The task-group/timeout primitives raise the top `Error` type, while this
 /// API is typed `raise ZcodeError`. Every error that actually flows through
 /// a delegation is a ZcodeError value, so a plain variant match recovers it.

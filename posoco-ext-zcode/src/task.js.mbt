@@ -297,17 +297,77 @@ fn zcode_cwd_default() -> String {
 }
 
 ///|
+/// `fs.readdirSync(path)` as a JSON array string; "" sentinel on failure
+/// (docs/questions.md 2026-08-23: pure-value boundary, no Option across FFI).
+extern "js" fn zcode_js_readdir_raw(path : String) -> String =
+  #| (path) => { try { return JSON.stringify(require("node:fs").readdirSync(path)); } catch (e) { return ""; } }
+
+///|
+/// IO injections for the discovery tiers: a failed read, list or realpath
+/// degrades to None, never aborts composition.
+async fn zcode_js_read_file_opt(path : String) -> String? {
+  Some(zcode_js_file_text(path).wait()) catch {
+    _ => None
+  }
+}
+
+///|
+fn zcode_js_list_dir_opt(path : String) -> Array[String]? {
+  let raw = zcode_js_readdir_raw(path)
+  if raw == "" {
+    None
+  } else {
+    try {
+      match @json.parse(raw) {
+        Json::Array(items) => {
+          let names : Array[String] = []
+          for item in items {
+            if item is Json::String(name) {
+              names.push(name)
+            }
+          }
+          Some(names)
+        }
+        _ => None
+      }
+    } catch {
+      _ => None
+    }
+  }
+}
+
+///|
+fn zcode_js_realpath_opt(path : String) -> String? {
+  let real = zcode_js_realpath(path)
+  if real == "" {
+    None
+  } else {
+    Some(real)
+  }
+}
+
+///|
 /// js `zcode_resolve_command_io`: same candidate list and cache shape as the
-/// native pre-probe, with Bun.file.exists as the async probe.
+/// native pre-probe — static, .desktop and symlink tiers from
+/// zcode_probe_paths — with Bun.file.exists as the async probe and node:fs
+/// read/list/realpath behind the tier injections.
 async fn zcode_resolve_command_io(
   config~ : ZcodeConfig,
 ) -> (String, Array[String]) raise ZcodeError {
+  let candidates = zcode_probe_paths(
+    config~,
+    env=zcode_js_env_opt,
+    read_file=zcode_js_read_file_opt,
+    // Sync fns pass the async injection slots through closure coercion.
+    list_dir=fn(p : String) { zcode_js_list_dir_opt(p) },
+    realpath=fn(p : String) { zcode_js_realpath_opt(p) },
+  )
   let probed : Map[String, Bool] = Map::from_array([])
-  for candidate in zcode_probe_candidates(env=zcode_js_env_opt) {
+  for candidate in candidates {
     probed[candidate] = zcode_js_exists(candidate).wait() catch { _ => false }
   }
   match
-    zcode_resolve_command(config~, env=zcode_js_env_opt, exists=path => {
+    zcode_resolve_command_from(config~, env=zcode_js_env_opt, candidates~, exists=path => {
       probed.get(path).unwrap_or(false)
     }) {
     Ok(pair) => pair

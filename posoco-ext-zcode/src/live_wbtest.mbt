@@ -55,16 +55,23 @@ async test "merge_event_params_unwraps_nested_payload" {
 
 ///|
 async test "live_pong_delegation" {
+  // ZCODE_EXT_LIVE=1 gate FIRST: nothing below — no env reads, no ~/.zcode
+  // stat, no creds access — runs unless the live probe is opted in.
   let enabled = match @env.get_env_var("ZCODE_EXT_LIVE") {
     Some("1") => true
     _ => false
+  }
+  if !enabled {
+    // skip: ZCODE_EXT_LIVE=1 not set
+    assert_true(true)
+    return
   }
   let creds = zcode_creds_path(config=zcode_config(), env=key => {
     @env.get_env_var(key)
   })
   let creds_ready = @fs.exists(creds) catch { _ => false }
-  if !enabled || !creds_ready {
-    // skip: gate closed or no local v2 credentials
+  if !creds_ready {
+    // skip: no local v2 credentials
     assert_true(true)
     return
   }

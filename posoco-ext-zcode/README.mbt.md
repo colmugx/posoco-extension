@@ -58,10 +58,34 @@ let agent = Agent(
 
 - `ZcodeTools`/`ZcodeExt` constructors accept `ZcodeConfig` (bin / node /
   creds_path overrides, `default_mode`, `timeout_ms`).
-- Binary discovery: `ZCODE_BIN` → `zcode` on `PATH` → the ZCode desktop-app
-  bundle (`/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs` on
-  macOS; `.cjs` entries run through `node`, overridable via `ZCODE_NODE`).
-- Credentials path override: `ZCODE_CREDS`.
+- Binary discovery (order below; the first existing candidate wins; `.cjs` /
+  `.mjs` / `.js` entries run through `node`, overridable via `ZCODE_NODE`).
+  `ZCODE_BIN` (and `config.bin`) is trusted without any probe. There is no
+  compile-time platform switch — env is injected, so a host simply misses the
+  candidates that do not apply:
+
+  | # | Tier | Candidates |
+  |---|---|---|
+  | 1 | `config.bin` | trusted as-is, no probe |
+  | 2 | `ZCODE_BIN` | trusted as-is, no probe |
+  | 3 | `PATH` | unix: `<entry>/zcode` per `:`-separated entry; Windows (env `OS=Windows_NT` or `ProgramFiles` set): `<entry>\zcode`, `<entry>\zcode.exe`, `<entry>\zcode.cmd` per `;`-separated entry |
+  | 4 | Linux `.desktop` (skipped on Windows-shaped env) | scan `$HOME/.local/share/applications` first, then each `XDG_DATA_DIRS` entry (default `/usr/local/share:/usr/share`); read `*zcode*.desktop` / `*ZCode*.desktop` files, take their `Exec=` token and probe its siblings: `<dir>/zcode.cjs`, `<dir>/../resources/glm/zcode.cjs`, `<dir>/resources/glm/zcode.cjs` |
+  | 5 | Symlink (unix, skipped on Windows-shaped env) | for each PATH entry, the readlink-resolved `zcode`'s siblings (same sibling set as tier 4) |
+  | 6 | darwin bundles | `/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs`, `<HOME|USERPROFILE>/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs` |
+  | 7 | Windows bundles | `<LOCALAPPDATA ?? <home>\AppData\Local>\Programs\ZCode\resources\glm\zcode.cjs`, `<ProgramFiles>\ZCode\resources\glm\zcode.cjs`, `<ProgramFiles(x86)>\ZCode\resources\glm\zcode.cjs` (each only when its env root is set) |
+  | 8 | Linux bundles | `/opt/ZCode/resources/glm/zcode.cjs`, `/usr/share/zcode/resources/glm/zcode.cjs`, `<ZCODE_INSTALL_DIR>/resources/glm/zcode.cjs` |
+
+  A PATH-entry hit (`…/zcode`, or a Windows `zcode`/`zcode.exe`/`zcode.cmd`
+  shim) spawns as its bare/probed command; only the desktop-tiers' `.cjs`
+  siblings and the fixed `.cjs` bundles get the node interpreter prefix.
+  The enumeration is IO-free and public (`zcode_candidate_paths` for the
+  static tiers, `zcode_probe_paths` with injected read/list/realpath for the
+  full list), so hosts can probe the paths through their own filesystem port.
+  Known limits: Windows `reg query` uninstall-string lookup is a possible
+  future tier (the Program Files candidates above cover standard installs);
+  AppImage installs cannot be discovered statically — set `ZCODE_BIN`.
+- Credentials path override: `ZCODE_CREDS`; the default is
+  `<HOME|USERPROFILE>/.zcode/v2/config.json`.
 - Live wire test (makes one real GLM call, ~30k input tokens):
   `ZCODE_EXT_LIVE=1 moon test src --target native`.
 

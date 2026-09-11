@@ -272,19 +272,54 @@ fn zcode_permission_deny(params : Json?) -> (Json, String)? {
 }
 
 ///|
+/// IO injections for the discovery tiers over @fs: a failed read, list or
+/// realpath degrades to None, never aborts composition.
+async fn zcode_native_read_file_opt(path : String) -> String? {
+  try {
+    let raw = @fs.read_file(path)
+    Some(raw.text())
+  } catch {
+    _ => None
+  }
+}
+
+///|
+async fn zcode_native_list_dir_opt(path : String) -> Array[String]? {
+  Some(@fs.readdir(path)) catch {
+    _ => None
+  }
+}
+
+///|
+async fn zcode_native_realpath_opt(path : String) -> String? {
+  Some(@fs.realpath(path)) catch {
+    _ => None
+  }
+}
+
+///|
 /// Native `zcode_resolve_command_io`. The resolve seam takes a synchronous
 /// exists probe while @fs.exists is async, so every candidate path resolve
-/// could ask about is probed up front and the closure answers from this
-/// cache (candidates from the shared zcode_probe_candidates).
+/// could ask about — the static, .desktop and symlink tiers from
+/// zcode_probe_paths — is probed up front and the closure answers from this
+/// cache.
 async fn zcode_resolve_command_io(
   config~ : ZcodeConfig,
 ) -> (String, Array[String]) raise ZcodeError {
+  let env = fn(key : String) -> String? { @env.get_env_var(key) }
+  let candidates = zcode_probe_paths(
+    config~,
+    env~,
+    read_file=zcode_native_read_file_opt,
+    list_dir=zcode_native_list_dir_opt,
+    realpath=zcode_native_realpath_opt,
+  )
   let probed : Map[String, Bool] = Map::from_array([])
-  for candidate in zcode_probe_candidates(env=key => @env.get_env_var(key)) {
+  for candidate in candidates {
     probed[candidate] = @fs.exists(candidate) catch { _ => false }
   }
   match
-    zcode_resolve_command(config~, env=key => @env.get_env_var(key), exists=path => {
+    zcode_resolve_command_from(config~, env~, candidates~, exists=path => {
       probed.get(path).unwrap_or(false)
     }) {
     Ok(pair) => pair
