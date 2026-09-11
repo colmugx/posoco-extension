@@ -1,8 +1,14 @@
 ///|
 /// Native end-to-end resilience tests: real node subprocesses running
-/// test_fixtures/echo_server.mjs (MCP_FIXTURE_RESILIENCE=1 gate) behind a
-/// tmpdir mcp.json, driven through the same public path a host uses —
-/// discover → attach → activate → &@posoco.ToolProvider list/execute.
+/// test_fixtures/echo_server.mjs behind a tmpdir mcp.json, driven through the
+/// same public path a host uses — discover → attach → activate →
+/// &@posoco.ToolProvider list/execute.
+///
+/// These spawn real processes, so the whole suite is opt-in: every test skips
+/// unless POSOCO_MCP_E2E=1 is set (node path overridable via
+/// POSOCO_MCP_E2E_NODE). MCP_FIXTURE_RESILIENCE=1 is not an execution gate —
+/// it is a variable handed to the fixture server's env to enable its
+/// resilience behaviors.
 ///
 /// The surrounding task group must outlive every connection: stdio children
 /// are spawned on it and get terminated when it closes, so no test can leave
@@ -20,8 +26,14 @@ priv struct CancelProbe {
 
 ///|
 /// Resolve the node executable (PATH scan, overridable via
-/// POSOCO_MCP_E2E_NODE). None → callers skip their scenario.
+/// POSOCO_MCP_E2E_NODE). None → callers skip their scenario. POSOCO_MCP_E2E=1
+/// gates the whole suite: spawning real node subprocesses is opt-in.
 async fn e2e_find_node() -> String? {
+  // POSOCO_MCP_E2E=1 opts in to spawning real node subprocesses; unset skips.
+  match @env.get_env_var("POSOCO_MCP_E2E") {
+    Some("1") => ()
+    _ => return None
+  }
   match @env.get_env_var("POSOCO_MCP_E2E_NODE") {
     Some(path) => return Some(path)
     None => ()
