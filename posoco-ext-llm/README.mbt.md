@@ -18,8 +18,41 @@ provider request fields.
 
 The router also declares these commands:
 
-- `/model [slot]` lists the slot catalog or switches the active slot.
+- `/model [slot]` lists the slot catalog or switches the active slot. The
+  no-argument catalog enriches each slot-contributing provider's entries with
+  its devkit-registered pricing phase (`pricing: {tier, multiplier, window}`
+  facts stated by the provider extension; omitted when none is registered —
+  `src/command_model_pricing.mbt:13-41`); the quick-pick, slot-switch, and
+  effort payloads carry no pricing.
 - `/model {slot, effort}` additionally selects a provider-advertised effort.
+- `/model quick-pick` returns the slot catalog enriched with each
+  slot-contributing provider's quota readings (host-injected sources first,
+  then the devkit registry; sources are read concurrently, each under a
+  2500 ms cap; a failed or slow provider is omitted, never estimated —
+  `src/command_model_quick.mbt:23-73`), and refreshes the active provider's
+  status bar when its pull succeeds (`src/command_model.mbt:349-359`). The
+  keyword is reserved and wins over a real slot of the same name; an `effort`
+  argument is rejected (`src/command_model.mbt:342-346`).
+- `/model <provider> pick` auto-picks a cost-efficient model+effort from
+  the provider's devkit-registered metrics source: points whose model
+  names one of the provider's slots and whose effort that slot advertises,
+  guarded by a minimum benchmark sample (`total >= 30`) and required to
+  state every scored dimension (token total, duration, positive pass
+  count; token efficiency is amortized tokens per solved problem —
+  `tokens * total / passed` — because failed attempts burn tokens too).
+  Points dominated on all four dimensions (IQ, token efficiency, cost,
+  duration) drop out before ranking, then the survivors rank by
+  `iq - 1.0 * (tokens_per_pass / 1M) - 2.0 * cost_usd - 0.5 *
+  (minutes / 10)` — the priority gradient 分数 > tokens > 金钱 > 时间,
+  calibrated so the expensive-efficient pick beats a cheap-but-verbose
+  one (107.81 IQ @ $2.26 / 1.53M tokens-per-pass / 9 min wins over
+  102.23 IQ @ $0.54 / 26.34M / 37 min). The winner
+  switches exactly like a manual `/model {slot, effort}`; ranks 2-3 ride
+  along in the structured payload as `{slot_id, model, effort, iq,
+  cost_usd}` candidates for host-side notices. A failed read, an unknown
+  provider, or an empty eligible pool fails the command — never a fallback
+  pick (`src/command_model_pick.mbt`, intercept at
+  `src/command_model.mbt:367-390`).
 - `/login [provider]` lists provider authentication capabilities or runs the
   selected injected provider login flow. Use
   `/login {provider: "kimi", method: "oauth"}` or

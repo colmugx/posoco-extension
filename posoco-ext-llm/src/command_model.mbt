@@ -6,7 +6,17 @@
 /// provider-advertised reasoning effort through the slot's rebuild hook.
 
 ///|
-fn RouterModelPort::slot_catalog_json(self : RouterModelPort) -> Json {
+/// Machine-readable slot catalog. `quota` enriches each entry of a provider
+/// that has readings under its id with a `quota_readings` array; the key is
+/// omitted entirely when no quota map is given or the provider has none.
+/// `pricing` enriches each entry of a provider whose registered source states
+/// a phase with a `pricing` object; the key is omitted entirely when no
+/// pricing map is given or the provider has none.
+fn RouterModelPort::slot_catalog_json(
+  self : RouterModelPort,
+  quota? : Map[String, Array[@devkit.QuotaReading]]? = None,
+  pricing? : Map[String, @devkit.PricingPhase]? = None,
+) -> Json {
   let entries : Array[Json] = []
   for slot in self.list_slots() {
     let effort_values : Array[Json] = []
@@ -17,47 +27,66 @@ fn RouterModelPort::slot_catalog_json(self : RouterModelPort) -> Json {
     for capability in slot.capabilities {
       capability_values.push(Json::string(capability))
     }
-    entries.push(
-      Json::object(
-        Map::from_array([
-          ("id", Json::string(slot.id)),
-          ("label", Json::string(slot.label)),
-          ("provider", Json::string(slot.provider_id)),
-          ("model", Json::string(slot.model_id)),
-          ("active", Json::boolean(slot.id == self.active_id)),
-          (
-            "active_effort",
-            match self.active_effort {
-              Some(effort) => Json::string(effort)
-              None => Json::null()
-            },
-          ),
-          ("thinking_efforts", Json::array(effort_values)),
-          (
-            "context_window",
-            match slot.context_window {
-              Some(value) => Json::number(value.to_double())
-              None => Json::null()
-            },
-          ),
-          ("capabilities", Json::array(capability_values)),
-          (
-            "default_effort",
-            match slot.default_effort {
-              Some(value) => Json::string(value)
-              None => Json::null()
-            },
-          ),
-          (
-            "group",
-            match slot.display_group {
-              Some(value) => Json::string(value)
-              None => Json::null()
-            },
-          ),
-        ]),
+    let pairs : Array[(String, Json)] = [
+      ("id", Json::string(slot.id)),
+      ("label", Json::string(slot.label)),
+      ("provider", Json::string(slot.provider_id)),
+      ("model", Json::string(slot.model_id)),
+      ("active", Json::boolean(slot.id == self.active_id)),
+      (
+        "active_effort",
+        match self.active_effort {
+          Some(effort) => Json::string(effort)
+          None => Json::null()
+        },
       ),
-    )
+      ("thinking_efforts", Json::array(effort_values)),
+      (
+        "context_window",
+        match slot.context_window {
+          Some(value) => Json::number(value.to_double())
+          None => Json::null()
+        },
+      ),
+      ("capabilities", Json::array(capability_values)),
+      (
+        "default_effort",
+        match slot.default_effort {
+          Some(value) => Json::string(value)
+          None => Json::null()
+        },
+      ),
+      (
+        "group",
+        match slot.display_group {
+          Some(value) => Json::string(value)
+          None => Json::null()
+        },
+      ),
+    ]
+    match quota {
+      Some(map) =>
+        match map.get(slot.provider_id) {
+          Some(readings) => {
+            let reading_values : Array[Json] = []
+            for reading in readings {
+              reading_values.push(quota_reading_json(reading))
+            }
+            pairs.push(("quota_readings", Json::array(reading_values)))
+          }
+          None => ()
+        }
+      None => ()
+    }
+    match pricing {
+      Some(map) =>
+        match map.get(slot.provider_id) {
+          Some(phase) => pairs.push(("pricing", pricing_phase_json(phase)))
+          None => ()
+        }
+      None => ()
+    }
+    entries.push(Json::object(Map::from_array(pairs)))
   }
   Json::array(entries)
 }
@@ -171,6 +200,10 @@ pub fn RouterModelPort::select_effort(
 pub impl @posoco.CommandPort for RouterModelPort with fn commands(
   self : RouterModelPort,
 ) -> Array[@posoco.CommandDef] {
+  let slot_choices : Array[String] = [quick_pick_keyword]
+  for id in self.list_slot_ids() {
+    slot_choices.push(id)
+  }
   [
     @posoco.CommandDef::{
       id: "model",
@@ -182,11 +215,11 @@ pub impl @posoco.CommandPort for RouterModelPort with fn commands(
         @posoco.CommandParam::{
           name: "slot",
           label: "Model",
-          description: "Target slot id; omit to list available models",
+          description: "Target slot id; `quick-pick` ranks models by remaining quota; `<provider> pick` auto-picks by intelligence-per-dollar metrics; omit to list available models",
           ptype: @posoco.ParamType::Str,
           required: false,
           default: None,
-          choices: Some(self.list_slot_ids()),
+          choices: Some(slot_choices),
           positional: true,
         },
         @posoco.CommandParam::{
@@ -298,11 +331,60 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
         { slot_id: None, effort: None, } =>
           @posoco.CommandOutcome::Success(
             feedback="Available model slots",
-            structured=Some(self.slot_catalog_json()),
+            structured=Some(
+              self.slot_catalog_json(
+                pricing=Some(self.collect_provider_pricing()),
+              ),
+            ),
             ui_hint=Some(@posoco.UiHint::RefreshModelList),
           )
         { slot_id: Some(slot_id), effort, } =>
-          if !self.slots.contains(slot_id) {
+          if slot_id == quick_pick_keyword {
+            match effort {
+              Some(_) =>
+                @posoco.CommandOutcome::Failure(
+                  reason="/model quick-pick takes no effort",
+                )
+              None => {
+                let readings = self.collect_provider_quota()
+                // Mirror /status: a successful pull for the active provider
+                // doubles as the bar refresh.
+                match readings.get(self.current_provider_id()) {
+                  Some(list) => {
+                    self.quota_readings = list
+                    self.quota_fetched_at = @async.now()
+                    self.publish_quota_segments()
+                  }
+                  None => ()
+                }
+                @posoco.CommandOutcome::Success(
+                  feedback="Quick-pick model slots",
+                  structured=Some(self.slot_catalog_json(quota=Some(readings))),
+                  ui_hint=Some(@posoco.UiHint::RefreshModelList),
+                )
+              }
+            }
+          } else if !self.slots.contains(slot_id) &&
+            effort == Some(pick_keyword) {
+            // `/model <provider> pick`: the id is not a slot but names a
+            // provider with a registered metrics source. Real slots always
+            // win over this intercept.
+            match @devkit.metrics_registry_lookup(slot_id) {
+              Some(source) =>
+                self.run_provider_pick(slot_id, source) catch {
+                  err =>
+                    return @posoco.CommandOutcome::Failure(
+                      reason=err.to_string(),
+                    )
+                }
+              None =>
+                @posoco.CommandOutcome::Failure(
+                  reason="no metrics source registered for provider '" +
+                    slot_id +
+                    "'",
+                )
+            }
+          } else if !self.slots.contains(slot_id) {
             @posoco.CommandOutcome::Failure(
               reason="unknown model slot: " + slot_id,
             )

@@ -83,16 +83,17 @@ pub(all) struct RouterModelPort {
   auth_prompt : &@posoco-ext-oauth.AuthPromptInteraction?
   credentials : Map[String, @posoco-ext-oauth.Credential]
   api_key_credentials : Map[String, @posoco-ext-oauth.ApiKeyCredential]
+  extra_quota_sources : Map[String, &@posoco-devkit.QuotaSource]
   // private fields
 }
-pub fn RouterModelPort::RouterModelPort(slots~ : Array[ModelSlot], default_slot_id? : String, bus? : @posoco-devkit.EventBus?, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::RouterModelPort(slots~ : Array[ModelSlot], default_slot_id? : String, bus? : @posoco-devkit.EventBus?, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@posoco-devkit.QuotaSource]) -> Self raise @error.CompositionError
 pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_slot_id(Self) -> String
 pub fn RouterModelPort::commands(Self) -> Array[@port.CommandDef]
 pub fn RouterModelPort::current_model_id(Self) -> String
 pub fn RouterModelPort::current_provider_id(Self) -> String
 pub fn RouterModelPort::extension_id(Self) -> String
-pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, bus? : @posoco-devkit.EventBus?, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, bus? : @posoco-devkit.EventBus?, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@posoco-devkit.QuotaSource]) -> Self raise @error.CompositionError
 pub async fn RouterModelPort::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn RouterModelPort::list_auth_capabilities(Self) -> Json
 pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]

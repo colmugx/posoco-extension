@@ -21,6 +21,8 @@ options(
     // native-only (they exercise async login/refresh paths).
     "router_wbtest.mbt": [ "native" ],
     "command_model_wbtest.mbt": [ "native" ],
+    "command_model_pick_wbtest.mbt": [ "native" ],
+    "command_model_quick_wbtest.mbt": [ "native" ],
     "command_login_wbtest.mbt": [ "native" ],
   },
 )

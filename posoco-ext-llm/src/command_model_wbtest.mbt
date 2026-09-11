@@ -80,7 +80,7 @@ async test "model command declares dynamic slot choices" {
   assert_eq(defs[0].id, "model")
   assert_true(defs[0].ctype is @posoco.CommandType::Select)
   match defs[0].params[0].choices {
-    Some(choices) => assert_eq(choices, ["first", "second"])
+    Some(choices) => assert_eq(choices, ["quick-pick", "first", "second"])
     None => fail("expected slot choices")
   }
   assert_eq(defs[1].id, "login")
@@ -416,4 +416,89 @@ async test "commands with no bus stay silent and succeed" {
   assert_eq(router.active_slot_id(), "second")
   let listed = router.invoke("model", Json::null())
   assert_true(listed is @posoco.CommandOutcome::Success(..))
+}
+
+///|
+/// Fixed-phase pricing source for catalog tests.
+struct CatalogPricingSource {
+  answer : @devkit.PricingPhase?
+}
+
+///|
+impl @devkit.PricingSource for CatalogPricingSource with fn phase(
+  self : CatalogPricingSource,
+) -> @devkit.PricingPhase? {
+  self.answer
+}
+
+///|
+async test "model catalog carries the registered provider's pricing verbatim" {
+  let router = command_test_router()
+  let id = "provider-a"
+  @devkit.pricing_registry_register(id, CatalogPricingSource::{
+    answer: Some({
+      tier: "peak",
+      multiplier: "2x",
+      window: "9:00 ~ 12:00, 14:00 ~ 18:00",
+    }),
+  })
+  let outcome = router.invoke("model", Json::null())
+  @devkit.pricing_registry_unregister(id)
+  match outcome {
+    @posoco.CommandOutcome::Success(structured~, ..) =>
+      match structured {
+        Some(Json::Array(entries)) => {
+          assert_eq(entries.length(), 2)
+          guard entries[0] is Json::Object(first) else {
+            fail("expected slot catalog object")
+          }
+          match first.get("pricing") {
+            Some(Json::Object(pricing)) => {
+              match pricing.get("tier") {
+                Some(Json::String("peak")) => ()
+                _ => fail("expected the stated tier verbatim")
+              }
+              match pricing.get("multiplier") {
+                Some(Json::String("2x")) => ()
+                _ => fail("expected the stated multiplier verbatim")
+              }
+              match pricing.get("window") {
+                Some(Json::String("9:00 ~ 12:00, 14:00 ~ 18:00")) => ()
+                _ => fail("expected the stated window verbatim")
+              }
+            }
+            _ => fail("expected pricing on the registered provider's entry")
+          }
+          guard entries[1] is Json::Object(second) else {
+            fail("expected slot catalog object")
+          }
+          // Other providers carry no pricing key at all.
+          assert_true(second.get("pricing") is None)
+        }
+        _ => fail("expected structured slot catalog")
+      }
+    _ => fail("expected successful model listing")
+  }
+}
+
+///|
+async test "model catalog omits pricing without a registered source" {
+  let router = command_test_router()
+  @devkit.pricing_registry_unregister("provider-a")
+  @devkit.pricing_registry_unregister("provider-b")
+  let outcome = router.invoke("model", Json::null())
+  match outcome {
+    @posoco.CommandOutcome::Success(structured~, ..) =>
+      match structured {
+        Some(Json::Array(entries)) =>
+          for entry in entries {
+            guard entry is Json::Object(fields) else {
+              fail("expected slot catalog object")
+            }
+            assert_true(fields.get("pricing") is None)
+          }
+        _ => fail("expected structured slot catalog")
+      }
+    _ => fail("expected successful model listing")
+  }
 }

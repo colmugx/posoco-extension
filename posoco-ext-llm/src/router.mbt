@@ -26,6 +26,13 @@ pub(all) struct RouterModelPort {
   auth_prompt : &@oauth.AuthPromptInteraction?
   credentials : Map[String, @oauth.Credential]
   api_key_credentials : Map[String, @oauth.ApiKeyCredential]
+  /// Host-injected quota sources keyed by provider id, consulted before the
+  /// devkit registry. Codex is push-shaped (readings ride on chat responses
+  /// into a shared tracker with no polling endpoint), so its host injects the
+  /// tracker here; registering it in the registry would make the active-
+  /// provider path double-publish "5h"/"weekly" segments against the codex
+  /// status publisher.
+  extra_quota_sources : Map[String, &@devkit.QuotaSource]
   /// Latest value per status segment observed on the shared bus; `/status`
   /// surfaces the provider-published quota windows ("5h", "weekly") from it.
   priv status_segments : Map[String, String]
@@ -55,6 +62,7 @@ pub fn RouterModelPort::RouterModelPort(
   auth_interaction? : &@oauth.AuthInteraction? = None,
   api_key_store? : &@oauth.ApiKeyStore? = None,
   auth_prompt? : &@oauth.AuthPromptInteraction? = None,
+  extra_quota_sources? : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
 ) -> RouterModelPort raise @posoco.CompositionError {
   if slots.is_empty() {
     raise @posoco.CompositionError::EmptyPort("posoco_ext_llm.slots")
@@ -102,6 +110,7 @@ pub fn RouterModelPort::RouterModelPort(
     auth_prompt,
     credentials: Map::from_array([]),
     api_key_credentials: Map::from_array([]),
+    extra_quota_sources,
     status_segments: Map::from_array([]),
     quota_readings: [],
     quota_fetched_at: 0L,
@@ -128,6 +137,7 @@ pub fn RouterModelPort::from_catalogs(
   auth_interaction? : &@oauth.AuthInteraction? = None,
   api_key_store? : &@oauth.ApiKeyStore? = None,
   auth_prompt? : &@oauth.AuthPromptInteraction? = None,
+  extra_quota_sources? : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
 ) -> RouterModelPort raise @posoco.CompositionError {
   let slots : Array[ModelSlot] = []
   for catalog in catalogs {
@@ -144,6 +154,7 @@ pub fn RouterModelPort::from_catalogs(
     auth_interaction~,
     api_key_store~,
     auth_prompt~,
+    extra_quota_sources~,
   )
 }
 
@@ -238,6 +249,10 @@ pub fn RouterModelPort::switch_slot(
 /// exists afterwards (the slot object is swapped, selection and effort stay);
 /// when the active slot disappears, selection falls back to the provider's
 /// first new slot and the effort selection is cleared.
+///
+/// Every success path ends with a model-status republication, so the status
+/// bar reflects the swapped catalog; the provider event rides only the
+/// fallback path, where the active slot context changed.
 pub fn RouterModelPort::replace_provider_slots(
   self : RouterModelPort,
   provider_id : String,
@@ -303,6 +318,9 @@ pub fn RouterModelPort::replace_provider_slots(
     self.active_effort = None
     self.publish_provider_event()
   }
+  // Last, and only once the active id is guaranteed valid again: the model
+  // segment render reads the active slot.
+  self.publish_model_status()
 }
 
 ///|

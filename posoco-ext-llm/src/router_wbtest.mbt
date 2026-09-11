@@ -148,11 +148,18 @@ test "provider config rejects ambiguous legacy and tagged credentials" {
 
 ///|
 test "replace_provider_slots expands a provider in place and keeps order" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
   let outer = router_test_slot("outer", "other", "model-o", [])
   let single = router_test_slot("one/a", "one", "model-a", [])
-  let router = RouterModelPort(slots=[outer, single], default_slot_id="one/a")
+  let router = RouterModelPort(
+    slots=[outer, single],
+    default_slot_id="one/a",
+    bus=Some(bus),
+  )
   let replacements = [
-    router_test_slot("one/a", "one", "model-a", []),
+    router_test_slot("one/a", "one", "model-a2", []),
     router_test_slot("one/b", "one", "model-b", []),
     router_test_slot("one/c", "one", "model-c", []),
   ]
@@ -162,13 +169,31 @@ test "replace_provider_slots expands a provider in place and keeps order" {
   assert_eq(router.list_slot_ids(), ["outer", "one/a", "one/b", "one/c"])
   // The active slot id survived the object swap, so selection is preserved.
   assert_eq(router.active_slot_id(), "one/a")
+  // The preserved-active path republishes the model segment from the
+  // swapped catalog and nothing else: no provider event rides this path.
+  assert_eq(capture.events.length(), 1)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("model-a2:default"),
+        color=None,
+      ),
+    ),
+  )
 }
 
 ///|
 test "replace_provider_slots falls back when the active slot disappears" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
   let first = router_effort_slot("one/a", "one", "model-a")
   let second = router_test_slot("two/z", "two", "model-z", [])
-  let router = RouterModelPort(slots=[first, second])
+  let router = RouterModelPort(slots=[first, second], bus=Some(bus))
   router.select_effort("one/a", "high") catch {
     _ => fail("unexpected effort selection failure")
   }
@@ -183,6 +208,30 @@ test "replace_provider_slots falls back when the active slot disappears" {
   // replacement slot and the effort selection is cleared.
   assert_eq(router.active_slot_id(), "one/x")
   assert_eq(router.active_effort(), None)
+  // The fallback path publishes the provider event first, then the model
+  // segment rendered from the swapped catalog with the cleared effort.
+  assert_eq(capture.events.length(), 2)
+  assert_eq(capture.events[0].topic, "provider")
+  match capture.events[0].data {
+    Json::Object(fields) =>
+      match fields.get("provider_id") {
+        Some(Json::String("one")) => ()
+        _ => fail("expected provider_id of the replacement provider")
+      }
+    _ => fail("expected a provider event payload object")
+  }
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("model-x:default"),
+        color=None,
+      ),
+    ),
+  )
 }
 
 ///|
