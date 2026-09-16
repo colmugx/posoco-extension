@@ -4,26 +4,23 @@
 ///
 /// One `OpenAICompatibleProvider` instance is scoped to exactly one provider
 /// id (set at construction). The host (cetas-core) constructs one instance per
-/// custom settings id; this adapter never reads the settings map itself and
-/// never decides which ids it serves. It owns only: Chat Completions request
-/// shape, response decoding, optional top-level reasoning_effort, and API-key
-/// login for its one id.
+/// custom settings id.
 
 ///|
 pub(all) struct OpenAICompatibleProvider {
   provider_id : String
   ctx : @devkit.ExtContext
+  /// Process-local compatibility knowledge for this one custom endpoint.
+  /// Every slot built or rebuilt by this provider shares the same state.
+  prompt_cache_key_rejection_state : Ref[Bool]
 }
 
 ///|
-/// Construct a provider scoped to `provider_id`. The id is opaque to this
-/// adapter — it is used only for catalog labeling and the credential store
-/// key. The host decides which ids route here.
 pub fn OpenAICompatibleProvider::OpenAICompatibleProvider(
   provider_id : String,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenAICompatibleProvider {
-  { provider_id, ctx, }
+  { provider_id, ctx, prompt_cache_key_rejection_state: Ref(false), }
 }
 
 ///|
@@ -51,8 +48,8 @@ fn oai_compat_setting_string(
 }
 
 ///|
-/// Optional boolean setting. `None` = absent; anything but a boolean is a
-/// typed composition failure, matching the strictness of the sibling parsers.
+/// Optional boolean setting. `None` = false; anything but a boolean is a
+/// typed composition failure.
 fn oai_compat_setting_bool(
   source : @llm.ProviderConfigSource,
   key : String,
@@ -70,9 +67,6 @@ fn oai_compat_setting_bool(
 }
 
 ///|
-/// `image_input` on one `models[]` entry: absent or `false` means the model
-/// does not accept image parts (attachments downgrade to placeholders);
-/// `true` opts the model into typed content parts.
 fn oai_compat_parse_image_input(
   fields : Map[String, Json],
   model : String,
@@ -90,10 +84,6 @@ fn oai_compat_parse_image_input(
 }
 
 ///|
-/// Validate declared effort entries: non-empty, unique, and never the reserved
-/// selector words "off"/"on" (those belong to the selector vocabulary, never
-/// to a declared level). The values pass through verbatim — the server owns
-/// the valid level names, this adapter only owns their plumbing.
 fn oai_compat_effort_array_value(
   key : String,
   values : Array[Json],
@@ -130,9 +120,6 @@ fn oai_compat_effort_array_value(
 }
 
 ///|
-/// Parse one settings key as the declared effort array. `None` means the key
-/// is absent (no reasoning selector for this endpoint); a present but
-/// non-array value is a typed composition failure.
 fn oai_compat_setting_effort_array(
   source : @llm.ProviderConfigSource,
   key : String,
@@ -150,10 +137,6 @@ fn oai_compat_setting_effort_array(
 }
 
 ///|
-/// The picker-facing effort list: "off" plus every declared level. An
-/// endpoint that declares no levels exposes no reasoning selector at all —
-/// the standard surface has no "force thinking on" field, and conventional
-/// level sets are never fabricated.
 fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
   if config.thinking_efforts.is_empty() {
     return []
@@ -164,8 +147,6 @@ fn oai_compat_slot_efforts(config : OpenAICompatibleConfig) -> Array[String] {
 }
 
 ///|
-/// The picker-facing label of the config's current state: the selected
-/// effort level, or "off" when nothing is sent.
 fn oai_compat_effort_label(config : OpenAICompatibleConfig) -> String {
   match config.reasoning_effort {
     Some(effort) => effort
@@ -174,19 +155,16 @@ fn oai_compat_effort_label(config : OpenAICompatibleConfig) -> String {
 }
 
 ///|
-/// Build the provider's one model slot from a config. Custom endpoints share
-/// the "custom" display group so the picker tabs them together while the slot
-/// keeps its real provider_id for credentials and routing. All rebuild hooks
-/// funnel back here so the rebuilt slot is identical in shape.
+/// Build one model slot. Cache policy lives in `config`; compatibility
+/// learning lives in the shared Ref and survives every rebuild closure.
 fn oai_compat_catalog_slot(
   provider_id : String,
   config : OpenAICompatibleConfig,
+  prompt_cache_key_rejection_state : Ref[Bool],
 ) -> @llm.ModelSlot {
   let slot_id = provider_id + "/" + config.model
   let label = provider_id + " / " + config.model
   let slot_efforts = oai_compat_slot_efforts(config)
-  // An endpoint with no declared levels gets no reasoning selector, no
-  // default, and no rebuild hook — there is nothing to rebuild.
   let (default_effort, rebuild_on_effort) : (
     String?,
     ((String) -> @llm.ModelSlot)?,
@@ -203,7 +181,11 @@ fn oai_compat_catalog_slot(
               err.to_string(),
             )
         }
-        oai_compat_catalog_slot(provider_id, rebuilt_config)
+        oai_compat_catalog_slot(
+          provider_id,
+          rebuilt_config,
+          prompt_cache_key_rejection_state,
+        )
       }),
     )
   }
@@ -211,7 +193,11 @@ fn oai_compat_catalog_slot(
   if config.supports_images {
     capabilities.push("image_in")
   }
-  let port : &@posoco.ModelPort = OpenAICompatibleModelPort(provider_id, config)
+  let port : &@posoco.ModelPort = oai_compat_model_port_with_prompt_cache_rejection_state(
+    provider_id,
+    config,
+    prompt_cache_key_rejection_state,
+  )
   let api_key : &@llm.ApiKeyFactory = OpenAICompatibleProvider(provider_id)
   @llm.ModelSlot::ModelSlot(
     id=slot_id,
@@ -236,8 +222,13 @@ fn oai_compat_catalog_slot(
         context_window=config.context_window,
         compact_threshold=config.compact_threshold,
         supports_images=config.supports_images,
+        send_prompt_cache_key=config.send_prompt_cache_key,
       )
-      oai_compat_catalog_slot(provider_id, rebuilt_config)
+      oai_compat_catalog_slot(
+        provider_id,
+        rebuilt_config,
+        prompt_cache_key_rejection_state,
+      )
     }),
     rebuild_on_effort~,
   )
@@ -258,8 +249,6 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn credential_id
 }
 
 ///|
-/// One resolved `models[]` entry: per-model identity plus the auto-compact
-/// metadata that travels into the slot and the port's provider_config.
 priv struct OaiCompatModelEntry {
   model : String
   context_window : Int?
@@ -270,12 +259,6 @@ priv struct OaiCompatModelEntry {
 }
 
 ///|
-/// Parse the `models` array. Entries are
-/// `{id, context_window?, compact_threshold?, reasoning_effort?}` with the
-/// same effort semantics as the flat provider-level keys (array = declared
-/// levels, string = fixed selection, `reasoning_efforts` plural alias,
-/// conflicting declarations fail). `compact_threshold` is a fraction in
-/// (0, 1] and requires `context_window`.
 fn oai_compat_parse_models(
   values : Array[Json],
 ) -> Array[OaiCompatModelEntry] raise @posoco.CompositionError {
@@ -429,12 +412,6 @@ fn oai_compat_parse_models(
 }
 
 ///|
-/// Resolve the initial config selection from declared levels plus an optional
-/// legacy fixed string — the shared core of the flat single-model form and
-/// every `models[]` entry. An explicit legacy string wins; otherwise the
-/// first declared level; an endpoint that declares nothing starts with no
-/// reasoning surface at all (nothing sent, endpoint default applies). The
-/// legacy toggle words "off"/"on" both mean omission.
 fn oai_compat_config_from_selection(
   api_key : String,
   base_url~ : String,
@@ -445,6 +422,7 @@ fn oai_compat_config_from_selection(
   context_window? : Int? = None,
   compact_threshold? : Double? = None,
   supports_images? : Bool = false,
+  send_prompt_cache_key? : Bool = false,
 ) -> OpenAICompatibleConfig raise @posoco.CompositionError {
   match fixed_effort {
     Some(fixed) =>
@@ -465,6 +443,7 @@ fn oai_compat_config_from_selection(
           context_window~,
           compact_threshold~,
           supports_images~,
+          send_prompt_cache_key~,
         )
       } else {
         if !declared_efforts.is_empty() && !declared_efforts.contains(fixed) {
@@ -487,6 +466,7 @@ fn oai_compat_config_from_selection(
           context_window~,
           compact_threshold~,
           supports_images~,
+          send_prompt_cache_key~,
         )
       }
     None =>
@@ -500,6 +480,7 @@ fn oai_compat_config_from_selection(
             context_window~,
             compact_threshold~,
             supports_images~,
+            send_prompt_cache_key~,
           )
         _ =>
           OpenAICompatibleConfig(
@@ -512,18 +493,13 @@ fn oai_compat_config_from_selection(
             context_window~,
             compact_threshold~,
             supports_images~,
+            send_prompt_cache_key~,
           )
       }
   }
 }
 
 ///|
-/// Build a catalog snapshot for this provider. Missing api_key or base_url
-/// is a normal Unconfigured state (the host shows no slot); malformed
-/// configured values are typed composition failures. Two settings styles:
-/// the flat single-model keys, or a `models` array whose entries carry
-/// per-model `context_window` / `compact_threshold` / `reasoning_effort`
-/// declarations (one slot per entry).
 pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
   self : OpenAICompatibleProvider,
   source : @llm.ProviderConfigSource,
@@ -552,8 +528,10 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
     Some(value) => value
     None => ""
   }
-  // `models` (multi-model form) and the flat single-model keys are mutually
-  // exclusive; combining them hides which declaration wins, so it fails.
+  let send_prompt_cache_key = oai_compat_setting_bool(
+    source,
+    "send_prompt_cache_key",
+  )
   match source.setting("models") {
     Some(Json::Array(values)) => {
       for flat_key in ["model", "reasoning_effort", "reasoning_efforts"] {
@@ -578,8 +556,15 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
           context_window=entry.context_window,
           compact_threshold=entry.compact_threshold,
           supports_images=entry.supports_images,
+          send_prompt_cache_key~,
         )
-        slots.push(oai_compat_catalog_slot(self.provider_id, config))
+        slots.push(
+          oai_compat_catalog_slot(
+            self.provider_id,
+            config,
+            self.prompt_cache_key_rejection_state,
+          ),
+        )
       }
       @llm.ProviderBuildResult::Ready(
         @llm.ProviderModelCatalog::ProviderModelCatalog(
@@ -599,12 +584,6 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
         Some(value) => value
         None => return @llm.ProviderBuildResult::Unconfigured
       }
-      // Declared levels: `reasoning_effort` accepts an array of levels (the
-      // canonical form) or a legacy single string; `reasoning_efforts` is the
-      // plural alias carrying the same array. A legacy toggle word ("off"/
-      // "on") means omission. No declaration means the endpoint exposes no
-      // reasoning selector — conventional level sets are never fabricated for
-      // an endpoint that did not declare them.
       let (singular_array, singular_string) : (Array[String]?, String?) = match
         source.setting("reasoning_effort") {
         None => (None, None)
@@ -654,30 +633,44 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
         declared_efforts~,
         fixed_effort=singular_string,
         supports_images=oai_compat_setting_bool(source, "image_input"),
+        send_prompt_cache_key~,
       )
-      let port = OpenAICompatibleModelPort(self.provider_id, config)
-      @llm.ProviderBuildResult::Ready(port.model_catalog())
+      @llm.ProviderBuildResult::Ready(
+        @llm.ProviderModelCatalog::ProviderModelCatalog(
+          provider_id=self.provider_id,
+          slots=[
+            oai_compat_catalog_slot(
+              self.provider_id,
+              config,
+              self.prompt_cache_key_rejection_state,
+            ),
+          ],
+          capabilities=["chat", "streaming", "api_key"],
+        ),
+      )
     }
   }
 }
 
 ///|
-/// Build a provider catalog from an already-resolved config. The slot exposes
-/// an api-key rebuild hook so `/login <provider_id>` can swap the secret and
-/// the router rebuilds the slot without recomposing the agent.
 pub fn OpenAICompatibleModelPort::model_catalog(
   self : OpenAICompatibleModelPort,
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
+  ignore(self.prompt_cache_key_rejected_now())
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=self.provider_id,
-    slots=[oai_compat_catalog_slot(self.provider_id, self.config)],
+    slots=[
+      oai_compat_catalog_slot(
+        self.provider_id,
+        self.config,
+        self.prompt_cache_key_rejection_state,
+      ),
+    ],
     capabilities=["chat", "streaming", "api_key"],
   )
 }
 
 ///|
-/// Provider-owned API-key login. The host supplies a provider-neutral secret
-/// prompt; validation and credential shape stay in this extension.
 pub impl @llm.ApiKeyFactory for OpenAICompatibleProvider with fn provider_id(
   self : OpenAICompatibleProvider,
 ) -> String {
