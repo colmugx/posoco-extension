@@ -38,7 +38,6 @@ async fn OpenAICompatibleModelPort::oai_compat_post_chat_json(
           ),
         )
     }
-    // Learn before classify: classify always raises on non-2xx.
     self.learn_prompt_cache_key_rejection(text)
     match
       classify_oai_compat_http_status(
@@ -66,7 +65,6 @@ async fn OpenAICompatibleModelPort::oai_compat_post_chat_json(
 }
 
 ///|
-/// Render one content block array: text verbatim, images as placeholders.
 fn oai_compat_render_content(content : Array[@posoco.Content]) -> String {
   content
   .map(fn(block) {
@@ -79,7 +77,6 @@ fn oai_compat_render_content(content : Array[@posoco.Content]) -> String {
 }
 
 ///|
-/// Render one transcript message as a labeled block for the summarize call.
 fn oai_compat_render_message(message : @posoco.Message) -> String {
   match message {
     SystemMessage(content~) => "system: \{oai_compat_render_content(content)}"
@@ -108,9 +105,6 @@ fn oai_compat_render_message(message : @posoco.Message) -> String {
 }
 
 ///|
-/// Build the summarize request: a fixed instruction plus the rendered
-/// transcript. The summary only needs substance, not fidelity — tool calls
-/// and outcomes are summarized inline, and images count as placeholders.
 fn oai_compat_compact_messages(
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
@@ -136,7 +130,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn compact(
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   let cache_key = oai_compat_resolve_cache_key(
     self.config.send_prompt_cache_key,
-    self.prompt_cache_key_rejected,
+    self.prompt_cache_key_rejected_now(),
     scope.session_id.to_string(),
   )
   let body = build_chat_request(
