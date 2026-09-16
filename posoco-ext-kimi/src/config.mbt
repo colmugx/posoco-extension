@@ -135,7 +135,11 @@ pub fn KimiConfig::from_oauth_credential(
 pub(all) struct KimiModelPort {
   config : KimiConfig
   ctx : @devkit.ExtContext
+  /// Compatibility mirror retained for callers/tests that inspect the port.
+  /// Runtime decisions also consult `prompt_cache_key_rejection_state`, which
+  /// is shared by every slot rebuilt from the same catalog.
   mut prompt_cache_key_rejected : Bool
+  prompt_cache_key_rejection_state : Ref[Bool]
 }
 
 ///|
@@ -143,5 +147,40 @@ pub fn KimiModelPort::KimiModelPort(
   config : KimiConfig,
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> KimiModelPort {
-  { config, ctx, prompt_cache_key_rejected: false, }
+  {
+    config,
+    ctx,
+    prompt_cache_key_rejected: false,
+    prompt_cache_key_rejection_state: Ref(false),
+  }
+}
+
+///|
+/// Internal constructor used by catalog/rebuild paths. The shared Ref makes
+/// an explicit provider rejection survive credential, effort, and discovery
+/// rebuilds without persisting anything outside this process.
+fn kimi_model_port_with_prompt_cache_rejection_state(
+  config : KimiConfig,
+  ctx : @devkit.ExtContext,
+  state : Ref[Bool],
+) -> KimiModelPort {
+  {
+    config,
+    ctx,
+    prompt_cache_key_rejected: state.val,
+    prompt_cache_key_rejection_state: state,
+  }
+}
+
+///|
+/// Fold the legacy/local mirror into the shared state before handing it to a
+/// catalog. This keeps direct callers that set the public compatibility field
+/// behaving as before while rebuild paths use one authoritative shared Ref.
+fn KimiModelPort::shared_prompt_cache_rejection_state(
+  self : KimiModelPort,
+) -> Ref[Bool] {
+  if self.prompt_cache_key_rejected {
+    self.prompt_cache_key_rejection_state.val = true
+  }
+  self.prompt_cache_key_rejection_state
 }
