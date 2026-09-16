@@ -4,12 +4,17 @@ fn kimi_catalog_slot(
   ctx : @devkit.ExtContext,
   oauth : &@oauth.OAuthProvider,
   api_key : &@llm.ApiKeyFactory,
+  prompt_cache_key_rejection_state : Ref[Bool],
   label? : String? = None,
   context_window? : Int? = None,
   capabilities? : Array[String] = [],
   default_effort? : String? = None,
 ) -> @llm.ModelSlot {
-  let port : &@posoco.ModelPort = KimiModelPort(config, ctx~)
+  let port : &@posoco.ModelPort = kimi_model_port_with_prompt_cache_rejection_state(
+    config,
+    ctx,
+    prompt_cache_key_rejection_state,
+  )
   let slot_id = "kimi/" + config.model
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if config.thinking_efforts.is_empty() {
     None
@@ -23,6 +28,7 @@ fn kimi_catalog_slot(
         ctx,
         oauth,
         api_key,
+        prompt_cache_key_rejection_state,
         label~,
         context_window~,
         capabilities~,
@@ -61,6 +67,7 @@ fn kimi_catalog_slot(
         ctx,
         oauth,
         api_key,
+        prompt_cache_key_rejection_state,
         label~,
         context_window~,
         capabilities~,
@@ -83,6 +90,7 @@ fn kimi_catalog_slot(
         ctx,
         oauth,
         api_key,
+        prompt_cache_key_rejection_state,
         label~,
         context_window~,
         capabilities~,
@@ -100,6 +108,7 @@ fn kimi_catalog_slot_from_info(
   ctx : @devkit.ExtContext,
   oauth : &@oauth.OAuthProvider,
   api_key : &@llm.ApiKeyFactory,
+  prompt_cache_key_rejection_state : Ref[Bool],
 ) -> @llm.ModelSlot {
   let selected_effort = if info.thinking_efforts.is_empty() {
     ""
@@ -126,6 +135,7 @@ fn kimi_catalog_slot_from_info(
     ctx,
     oauth,
     api_key,
+    prompt_cache_key_rejection_state,
     label=Some(info.display_name),
     context_window=Some(info.context_window),
     capabilities=info.capabilities,
@@ -174,9 +184,10 @@ pub fn KimiModelPort::model_catalog(
   let oauth : &@oauth.OAuthProvider = oauth_impl
   let api_key_impl = KimiProvider(ctx=self.ctx)
   let api_key : &@llm.ApiKeyFactory = api_key_impl
+  let rejection_state = self.shared_prompt_cache_rejection_state()
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="kimi",
-    slots=[kimi_catalog_slot(self.config, self.ctx, oauth, api_key)],
+    slots=[kimi_catalog_slot(self.config, self.ctx, oauth, api_key, rejection_state)],
     capabilities=["chat", "streaming", "reasoning", "api_key", "oauth"],
   )
 }
@@ -197,10 +208,18 @@ pub fn KimiModelPort::model_catalog_from_models(
   let oauth : &@oauth.OAuthProvider = oauth_impl
   let api_key_impl = KimiProvider(ctx=self.ctx)
   let api_key : &@llm.ApiKeyFactory = api_key_impl
+  let rejection_state = self.shared_prompt_cache_rejection_state()
   let slots : Array[@llm.ModelSlot] = []
   for info in kimi_preferred_models(models, self.config.model) {
     slots.push(
-      kimi_catalog_slot_from_info(self.config, info, self.ctx, oauth, api_key),
+      kimi_catalog_slot_from_info(
+        self.config,
+        info,
+        self.ctx,
+        oauth,
+        api_key,
+        rejection_state,
+      ),
     )
   }
   @llm.ProviderModelCatalog::ProviderModelCatalog(provider_id="kimi", slots~, capabilities=[
