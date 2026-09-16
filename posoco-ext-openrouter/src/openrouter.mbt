@@ -35,31 +35,48 @@ fn chat_url(config : OpenRouterConfig) -> String {
 ///|
 pub(all) struct OpenRouterModelPort {
   config : OpenRouterConfig
-  /// Per-process 400 learning: set when the provider explicitly rejects the
-  /// `prompt_cache_key` parameter (an unsupported-parameter error naming the
-  /// field). Suppresses the key on every later request this process; never
-  /// persisted.
+  /// Compatibility mirror retained for callers/tests that inspect the port.
   mut prompt_cache_key_rejected : Bool
+  /// Shared process-local compatibility state threaded through catalog,
+  /// credential, effort, and discovery rebuilds.
+  prompt_cache_key_rejection_state : Ref[Bool]
 }
 
 ///|
 pub fn OpenRouterModelPort::OpenRouterModelPort(
   config : OpenRouterConfig,
 ) -> OpenRouterModelPort {
-  { config, prompt_cache_key_rejected: false, }
+  {
+    config,
+    prompt_cache_key_rejected: false,
+    prompt_cache_key_rejection_state: Ref(false),
+  }
+}
+
+///|
+fn openrouter_model_port_with_prompt_cache_rejection_state(
+  config : OpenRouterConfig,
+  state : Ref[Bool],
+) -> OpenRouterModelPort {
+  {
+    config,
+    prompt_cache_key_rejected: state.val,
+    prompt_cache_key_rejection_state: state,
+  }
 }
 
 ///|
 /// The session-scoped `prompt_cache_key` for an invocation, or None when the
 /// feature is opted out (`config.send_prompt_cache_key`) or the provider
-/// rejected the parameter earlier in this process. Derived through the shared
-/// chat-completions kit (`"posoco-" + session_id`, 64-char cap), so the same
-/// session always yields the same key.
+/// rejected the parameter earlier in this process.
 fn OpenRouterModelPort::prompt_cache_key(
   self : OpenRouterModelPort,
   scope : @posoco.InvocationScope,
 ) -> String? {
-  if !self.config.send_prompt_cache_key || self.prompt_cache_key_rejected {
+  if self.prompt_cache_key_rejected {
+    self.prompt_cache_key_rejection_state.val = true
+  }
+  if !self.config.send_prompt_cache_key || self.prompt_cache_key_rejection_state.val {
     return None
   }
   Some(@chatkit.derive_prompt_cache_key(scope.session_id.to_string()))
@@ -67,14 +84,16 @@ fn OpenRouterModelPort::prompt_cache_key(
 
 ///|
 /// Learn from a drained non-2xx body: an explicit "unsupported parameter"
-/// rejection naming `prompt_cache_key` stops sending the key for the rest of
-/// the process. Unreadable or unrelated bodies never set the flag.
+/// rejection naming `prompt_cache_key` stops sending the key for every later
+/// port that shares this provider lifecycle state. Unreadable or unrelated
+/// bodies never set the flag.
 fn OpenRouterModelPort::learn_cache_key_rejection(
   self : OpenRouterModelPort,
   body : OpenRouterErrorBody,
 ) -> Unit {
   if openrouter_body_rejects_cache_key(body) {
     self.prompt_cache_key_rejected = true
+    self.prompt_cache_key_rejection_state.val = true
   }
 }
 
