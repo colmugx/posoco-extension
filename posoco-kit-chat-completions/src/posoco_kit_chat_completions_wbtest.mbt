@@ -393,14 +393,20 @@ test "derive_prompt_cache_key prefixes the session id and is stable" {
 }
 
 ///|
-test "derive_prompt_cache_key caps output at 64 chars" {
-  // 7-char prefix + 70-char id = 77 chars; output keeps the first 64.
+test "derive_prompt_cache_key hashes oversized ids without prefix collisions" {
   let long = String::make(70, 'a')
   let key = derive_prompt_cache_key(long)
-  assert_eq(key.length(), 64)
-  assert_eq(key, "posoco-" + String::make(57, 'a'))
+  assert_eq(key.length(), 58)
+  assert_eq(
+    key,
+    "posoco-v1-6bd5e5034855a11241f0dee8fc72850ffd9955b28347a864",
+  )
   assert_eq(key, derive_prompt_cache_key(long))
-  // Exactly 64 total chars passes through unchanged.
+  // These ids shared the first 69 chars, so the old 64-char truncation made
+  // them collide. The versioned hash fallback must keep them distinct.
+  let sibling = String::make(69, 'a') + "b"
+  assert_true(derive_prompt_cache_key(sibling) != key)
+  // Exactly 64 total chars keeps the historical shape unchanged.
   let edge = derive_prompt_cache_key(String::make(57, 'x'))
   assert_eq(edge.length(), 64)
   assert_eq(edge, "posoco-" + String::make(57, 'x'))
