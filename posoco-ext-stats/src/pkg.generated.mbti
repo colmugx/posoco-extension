@@ -15,8 +15,10 @@ import {
 // Types and methods
 pub struct CacheBucket {
   mut requests : Int
+  mut cache_reported_requests : Int
   mut hit_requests : Int
   mut sum_input : Int
+  mut sum_cache_input : Int
   mut sum_output : Int
   mut sum_cached : Int
 }
