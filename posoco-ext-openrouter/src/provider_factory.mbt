@@ -1,38 +1,17 @@
 ///|
 pub(all) struct OpenRouterProvider {
   ctx : @devkit.ExtContext
+  /// Provider-scoped process-local compatibility knowledge. Every catalog and
+  /// port rebuilt by this factory shares the same rejection state.
+  prompt_cache_key_rejection_state : Ref[Bool]
 }
 
 ///|
 /// The optional `ctx` is carried for debug logging at composition seams.
-///
-/// Example:
-/// ```moonbit nocheck
-/// let provider = OpenRouterProvider()
-/// let factory : &@llm.ProviderFactory = provider
-/// let source = @llm.ProviderConfigSource::ProviderConfigSource(
-///   settings=Some(
-///     Json::object(
-///       Map::from_array([
-///         ("model", Json::string("anthropic/claude-3.7-sonnet")),
-///         ("api_key", Json::string("sk-or-v1-test")),
-///       ]),
-///     ),
-///   ),
-/// )
-/// match factory.build(source) {
-///   @llm.ProviderBuildResult::Ready(catalog) =>
-///     inspect(
-///       catalog.slots()[0].id,
-///       content="openrouter/anthropic/claude-3.7-sonnet",
-///     )
-///   @llm.ProviderBuildResult::Unconfigured => fail("expected a ready catalog")
-/// }
-/// ```
 pub fn OpenRouterProvider::OpenRouterProvider(
   ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenRouterProvider {
-  { ctx, }
+  { ctx, prompt_cache_key_rejection_state: Ref(false), }
 }
 
 ///|
@@ -60,10 +39,23 @@ fn openrouter_setting_string(
 }
 
 ///|
-/// Validate declared effort entries: non-empty, unique, and never the reserved
-/// selector words "off"/"on" (those belong to the toggle vocabulary, never to a
-/// declared level). The values pass through verbatim — the server owns the
-/// valid level names, this adapter only owns their plumbing.
+fn openrouter_setting_bool(
+  source : @llm.ProviderConfigSource,
+  key : String,
+) -> Bool raise @posoco.CompositionError {
+  match source.setting(key) {
+    None => false
+    Some(Json::True) => true
+    Some(Json::False) => false
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_openrouter",
+        detail="setting must be a boolean: " + key,
+      )
+  }
+}
+
+///|
 fn openrouter_effort_array_value(
   key : String,
   values : Array[Json],
@@ -100,8 +92,6 @@ fn openrouter_effort_array_value(
 }
 
 ///|
-/// `None` means the key is absent (the plain off/on toggle); a present but
-/// non-array value is a typed composition failure.
 fn openrouter_setting_effort_array(
   source : @llm.ProviderConfigSource,
   key : String,
@@ -119,9 +109,6 @@ fn openrouter_setting_effort_array(
 }
 
 ///|
-/// The picker-facing effort list: "off" plus every declared level, or just the
-/// on/off toggle when the settings declare no levels. Every OpenRouter model
-/// gets at least the toggle — no conventional level set is ever fabricated.
 fn openrouter_slot_efforts(config : OpenRouterConfig) -> Array[String] {
   if config.thinking_efforts.is_empty() {
     return ["off", "on"]
@@ -144,23 +131,31 @@ fn openrouter_effort_label(config : OpenRouterConfig) -> String {
 }
 
 ///|
-/// All rebuild hooks funnel back here so the rebuilt slot is identical in
-/// shape.
+/// All rebuild hooks funnel back here and retain both the explicit cache-key
+/// policy and the provider-scoped rejection state.
 fn openrouter_catalog_slot(
   config : OpenRouterConfig,
   api_key : &@llm.ApiKeyFactory,
+  prompt_cache_key_rejection_state : Ref[Bool],
 ) -> @llm.ModelSlot {
   let slot_id = "openrouter/" + config.model
   let label = "openrouter / " + config.model
   let slot_efforts = openrouter_slot_efforts(config)
   let default_effort = Some(openrouter_effort_label(config))
-  let port : &@posoco.ModelPort = OpenRouterModelPort(config)
+  let port : &@posoco.ModelPort = openrouter_model_port_with_prompt_cache_rejection_state(
+    config,
+    prompt_cache_key_rejection_state,
+  )
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = Some(fn(effort) {
     let rebuilt_config = config.with_reasoning_effort(effort) catch {
       err =>
         abort("openrouter catalog effort rebuild failed: " + err.to_string())
     }
-    openrouter_catalog_slot(rebuilt_config, api_key)
+    openrouter_catalog_slot(
+      rebuilt_config,
+      api_key,
+      prompt_cache_key_rejection_state,
+    )
   })
   let capabilities : Array[String] = ["chat", "streaming", "api_key"]
   if !slot_efforts.is_empty() || config.thinking {
@@ -193,8 +188,13 @@ fn openrouter_catalog_slot(
         supports_images=config.supports_images,
         http_referer=config.http_referer,
         title=config.title,
+        send_prompt_cache_key=config.send_prompt_cache_key,
       )
-      openrouter_catalog_slot(rebuilt_config, api_key)
+      openrouter_catalog_slot(
+        rebuilt_config,
+        api_key,
+        prompt_cache_key_rejection_state,
+      )
     }),
     rebuild_on_effort~,
   )
@@ -215,9 +215,6 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn credential_id(
 }
 
 ///|
-/// Resolve the API key from the credential store or settings, or report that
-/// the provider is unconfigured. Shared by `build` and `refresh` so the two
-/// paths apply identical credential rules.
 fn openrouter_resolve_api_key(
   source : @llm.ProviderConfigSource,
 ) -> String? raise @posoco.CompositionError {
@@ -253,18 +250,6 @@ fn openrouter_resolve_setting_string(
 }
 
 ///|
-/// Build a catalog snapshot for this provider without any network request.
-///
-/// Priority order: host-cached discovery records (a previous refresh's
-/// projection) expand to the full multi-slot catalog offline, so restarts
-/// announce the complete list immediately after a login+refresh even with no
-/// settings at all; otherwise an explicit settings `model` builds the single
-/// static slot (its declared `thinking_efforts`/`context_window` govern only
-/// this pre-discovery slot — after discovery the models' own metadata owns
-/// the surface); otherwise Unconfigured — the login-first flow writes a
-/// credential before any settings exist, and there is no OpenRouter default
-/// model to fabricate. Malformed configured values (wrong types, out-of-range
-/// numbers) remain typed composition failures.
 pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
   self : OpenRouterProvider,
   source : @llm.ProviderConfigSource,
@@ -276,6 +261,10 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
   let base_url = openrouter_resolve_base_url(source)
   let http_referer = openrouter_setting_string(source, "http_referer")
   let title = openrouter_setting_string(source, "title")
+  let send_prompt_cache_key = openrouter_setting_bool(
+    source,
+    "send_prompt_cache_key",
+  )
   let api_key_factory : &@llm.ApiKeyFactory = OpenRouterApiKeyFactory(
     ctx=self.ctx,
   )
@@ -285,12 +274,14 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
         Some(value) => value
         None => ""
       }
-      let catalog = openrouter_model_catalog(
+      let catalog = openrouter_model_catalog_with_cache_policy(
         api_key,
         base_url,
         models,
         preferred,
         api_key_factory,
+        self.prompt_cache_key_rejection_state,
+        send_prompt_cache_key,
         http_referer~,
         title~,
       )
@@ -348,9 +339,6 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
         detail="compact_threshold must be a number in (0, 1]",
       )
   }
-  // Declared levels select the initial config state: the first level is the
-  // default effort. No declaration means the plain off/on toggle, and the
-  // config starts with thinking off — the endpoint applies its own default.
   let config = match declared_efforts.length() {
     0 =>
       OpenRouterConfig(
@@ -361,6 +349,7 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
         compact_threshold~,
         http_referer~,
         title~,
+        send_prompt_cache_key~,
       )
     _ =>
       OpenRouterConfig(
@@ -374,12 +363,19 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
         compact_threshold~,
         http_referer~,
         title~,
+        send_prompt_cache_key~,
       )
   }
   @llm.ProviderBuildResult::Ready(
     @llm.ProviderModelCatalog::ProviderModelCatalog(
       provider_id="openrouter",
-      slots=[openrouter_catalog_slot(config, api_key_factory)],
+      slots=[
+        openrouter_catalog_slot(
+          config,
+          api_key_factory,
+          self.prompt_cache_key_rejection_state,
+        ),
+      ],
       capabilities=["chat", "streaming", "reasoning", "api_key"],
     ),
   )
@@ -393,8 +389,6 @@ pub impl @llm.RefreshableProviderFactory for OpenRouterProvider with fn provider
 }
 
 ///|
-/// Provider-owned API-key login. The host supplies a provider-neutral secret
-/// prompt; validation and credential shape stay in this extension.
 pub(all) struct OpenRouterApiKeyFactory {
   ctx : @devkit.ExtContext
 }
