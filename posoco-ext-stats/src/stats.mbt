@@ -213,6 +213,17 @@ fn Stats::note_first_token(self : Stats) -> Unit {
 }
 
 ///|
+fn cache_status_value(totals : CacheTotals) -> String {
+  if totals.cache_reported_requests == 0 {
+    return "n/a"
+  }
+  if totals.sum_cache_input > 0 {
+    return "\{totals.hit_requests}/\{totals.cache_reported_requests}·\{fmt_one_decimal(hit_rate_percent(totals.sum_cached, totals.sum_cache_input))}%"
+  }
+  "\{totals.hit_requests}/\{totals.cache_reported_requests}·n/a"
+}
+
+///|
 fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
   let now = (self.clock)()
   let ttft_ms : Int64? = match (self.round_started_ms, self.first_token_ms) {
@@ -280,17 +291,21 @@ fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
           value="\{fmt_one_decimal(self.sum_tps / self.tps_rounds.to_double())}/s",
         )
       }
-      // Keep the compact status-bar contract stable in this change; the
-      // doctor/structured surfaces below carry the honest reporting split.
-      let totals = self.cache_totals()
-      if totals.sum_input > 0 {
-        @devkit.publish_status_register(
-          bus,
-          source="posoco_ext_stats",
-          segment="cache",
-          priority=80,
-          value="\{totals.hit_requests}/\{totals.requests}·\{fmt_one_decimal(hit_rate_percent(totals.sum_cached, totals.sum_input))}%",
-        )
+      // Update the cache segment only when this response carried usage. The
+      // compact value uses cache-reporting rounds exclusively; a provider
+      // that omits `cached_input_tokens` is displayed as n/a, not as a miss.
+      match usage {
+        Some(_) => {
+          let totals = self.cache_totals()
+          @devkit.publish_status_register(
+            bus,
+            source="posoco_ext_stats",
+            segment="cache",
+            priority=80,
+            value=cache_status_value(totals),
+          )
+        }
+        None => ()
       }
     }
     None => ()
@@ -359,7 +374,7 @@ pub impl @posoco.CommandPort for Stats with fn commands(_self : Stats) -> Array[
     @posoco.CommandDef::{
       id: "usage",
       label: "Token usage",
-      description: "Cumulative token accounting: input, output, requests, cache hits",
+      description: "Cumulative token accounting: input, output, requests, reported cache hits",
       category: "stats",
       ctype: @posoco.CommandType::Action,
       params: [],
@@ -531,22 +546,28 @@ fn Stats::cache_doctor_report(self : Stats) -> @posoco.CommandOutcome {
 }
 
 ///|
-/// One usage report line: cumulative accounting with explicit labels. This
-/// surface intentionally keeps its historical display contract; the doctor
-/// structured payload exposes the cache-reporting split added above.
+/// One usage report line: cumulative accounting with explicit labels. Generic
+/// request/input/output totals cover every usage-bearing round; cache hit and
+/// token rates cover only rounds that explicitly reported cache telemetry.
 fn usage_line(
   label : String,
   requests : Int,
   sum_input : Int,
   sum_output : Int,
+  cache_reported_requests : Int,
   hit_requests : Int,
   sum_cached : Int,
+  sum_cache_input : Int,
 ) -> String {
-  let head = "\{label}: \{requests} requests · in \{fmt_tokens(sum_input)} · out \{fmt_tokens(sum_output)} · cache hits \{hit_requests}/\{requests}"
-  if sum_input > 0 {
-    "\{head} (\{fmt_one_decimal(hit_rate_percent(sum_cached, sum_input))}%)"
+  let head = "\{label}: \{requests} requests · in \{fmt_tokens(sum_input)} · out \{fmt_tokens(sum_output)}"
+  if cache_reported_requests == 0 {
+    return "\{head} · cache n/a"
+  }
+  let cache = "\{head} · cache hits \{hit_requests}/\{cache_reported_requests}"
+  if sum_cache_input > 0 {
+    "\{cache} (\{fmt_one_decimal(hit_rate_percent(sum_cached, sum_cache_input))}%)"
   } else {
-    head
+    cache
   }
 }
 
@@ -565,8 +586,10 @@ fn Stats::usage_report(self : Stats) -> @posoco.CommandOutcome {
             bucket.requests,
             bucket.sum_input,
             bucket.sum_output,
+            bucket.cache_reported_requests,
             bucket.hit_requests,
             bucket.sum_cached,
+            bucket.sum_cache_input,
           ),
         )
       }
@@ -579,8 +602,10 @@ fn Stats::usage_report(self : Stats) -> @posoco.CommandOutcome {
       totals.requests,
       totals.sum_input,
       totals.sum_output,
+      totals.cache_reported_requests,
       totals.hit_requests,
       totals.sum_cached,
+      totals.sum_cache_input,
     ),
   )
   let structured : Array[(String, Json)] = [
