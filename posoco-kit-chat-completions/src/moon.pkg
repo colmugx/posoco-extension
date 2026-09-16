@@ -1,4 +1,6 @@
 import {
   "colmugx/posoco",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
 }
