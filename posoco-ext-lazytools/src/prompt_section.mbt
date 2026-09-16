@@ -1,8 +1,9 @@
 ///|
 /// The resident discoverability surface: a system-prompt section listing
 /// every folded extension group with its tools (names + descriptions), so
-/// the model knows what the fold hides without loading any schema. Schemas
-/// stay on demand via `tool_list`.
+/// the model knows what the fold hides without loading every schema. Schemas
+/// are fetched on demand via `tool_list` and then remain reusable from the
+/// conversation history.
 
 ///|
 /// Max description characters shown per tool in the resident section.
@@ -30,16 +31,16 @@ fn LazyTools::catalog_bullets(self : LazyTools) -> String {
 }
 
 ///|
-/// Resident deferral section. English is the product prompt language; the
-/// MUST directive tells the model to look up the fold before concluding a
-/// task needs more tools.
+/// Resident deferral section. English is the product prompt language. Keep
+/// all reuse guidance here because Posoco freezes SystemPromptContributors
+/// after the first model call, preserving the provider's prompt prefix.
 pub impl @posoco.SystemPromptContributor for LazyTools with fn system_prompt(
   self : LazyTools,
 ) -> String {
   (
     $|## Deferred tools
     $|
-    $|The following tool groups are folded to keep this conversation's context small: the tools exist, but their schemas are not loaded. When your task may need one of them, you MUST look them up with `tool_list` (optionally with a keyword) and then call the tool with `tool_execute`. Folded groups:
+    $|The following tool groups are folded to keep this conversation's context small: the tools exist, but their schemas are not loaded up front. Before calling a folded tool, use a schema that is already present in this conversation from an earlier `tool_list` result when one is available. Otherwise, you MUST look it up with `tool_list` (optionally with a keyword). Then call it with `tool_execute`. Do not repeat `tool_list` only to rediscover a schema already visible in the conversation history. Folded groups:
     $|\{self.catalog_bullets()}
   )
 }
