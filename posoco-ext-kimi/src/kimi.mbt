@@ -19,7 +19,10 @@ fn KimiModelPort::prompt_cache_key_for(
   self : KimiModelPort,
   session_id : String,
 ) -> String? {
-  if self.config.send_prompt_cache_key && !self.prompt_cache_key_rejected {
+  if self.prompt_cache_key_rejected {
+    self.prompt_cache_key_rejection_state.val = true
+  }
+  if self.config.send_prompt_cache_key && !self.prompt_cache_key_rejection_state.val {
     Some(@chatkit.derive_prompt_cache_key(session_id))
   } else {
     None
@@ -31,8 +34,9 @@ fn KimiModelPort::learn_prompt_cache_key_rejection(
   self : KimiModelPort,
   body_text : String,
 ) -> Unit {
-  if !self.prompt_cache_key_rejected &&
+  if !self.prompt_cache_key_rejection_state.val &&
     @chatkit.is_prompt_cache_key_rejection(body_text) {
+    self.prompt_cache_key_rejection_state.val = true
     self.prompt_cache_key_rejected = true
   }
 }
