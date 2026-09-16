@@ -9,15 +9,14 @@ pub impl @posoco.Extension for LazyTools with fn extension_id(_self) -> String {
 
 ///|
 /// Declare the stable LazyTools surfaces: one ToolProvider exposing the two
-/// meta tools and one system-prompt section listing the folded groups.
+/// meta tools, one system-prompt section listing the folded groups, and inert
+/// Observer/PipelineHook views that preserve the historical manifest shape
+/// without writing usage-driven recent-tool envelopes into durable history.
 ///
-/// The legacy Observer/PipelineHook impls remain available to explicit
-/// callers, but are intentionally not auto-registered here. Their
-/// recent-tools envelope is usage-driven and therefore rewrites durable
-/// transcript history as tool usage changes, which moves the provider prompt
-/// prefix boundary backwards and defeats prefix-cache reuse. The stable
-/// system prompt instead tells the model to reuse schemas already present in
-/// conversation history and call `tool_list` only when it still needs one.
+/// The public LazyTools Observer/PipelineHook impls remain available to
+/// explicit callers that intentionally opt into the legacy hint behavior.
+/// Normal Agent composition receives the stable views below so provider
+/// prompt-prefix reuse is not invalidated as recent tool usage changes.
 ///
 /// Deferred providers stay inside the LazyTools value — the host must NOT
 /// also register them as extensions, or their tools would appear in the
@@ -28,8 +27,8 @@ pub impl @posoco.Extension for LazyTools with fn manifest(self) -> @posoco.Exten
     models: [],
     tools: [self],
     sessions: [],
-    observers: [],
-    hooks: [],
+    observers: [self.stable_observer],
+    hooks: [self.stable_hook],
     memory: [],
     lifecycle: [],
     commands: [],
