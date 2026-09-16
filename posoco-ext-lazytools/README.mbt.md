@@ -1,10 +1,10 @@
 # posoco-ext-lazytools
 
 [Tool lazy-loading gateway for Posoco agents](https://mooncakes.io/docs/colmugx/posoco-ext-lazytools) —
-collapses any number of `ToolProvider`s into three model-visible meta tools
-(`search`, `list`, `execute`), so an agent with 70+ tools
+collapses any number of `ToolProvider`s into two model-visible meta tools
+(`tool_list`, `tool_execute`), so an agent with 70+ tools
 stops paying for every definition on every request. Deferred tool schemas
-never enter the model context; discovery and invocation both go through the
+stay out of the resident tool catalog; discovery and invocation both go through the
 gateway.
 
 > **Targets: all backends** — pure catalog logic, no IO of its own.
@@ -14,26 +14,17 @@ gateway.
 | Port | Contribution |
 |---|---|
 | `ToolProvider` | the `tool_list` / `tool_execute` meta tools |
-| `SystemPromptContributor` | the `## Deferred tools` section: a MUST directive to `tool_list` before giving up, plus one bullet per deferred extension group with its tools (names + descriptions) |
-| `Observer` | records deferred executions (bounded to the 5 most recent) |
-| `PipelineHook` | `before_model`: injects/refreshes a `<lazytools-context>` user envelope with the recent-tools hint |
+| `SystemPromptContributor` | the stable `## Deferred tools` section: lists deferred groups and tells the model to reuse schemas already present in history before calling `tool_list` again |
+| `Observer` | inert compatibility view in normal manifest composition; the public `LazyTools` Observer impl remains available to explicit callers |
+| `PipelineHook` | inert compatibility view in normal manifest composition; the public `LazyTools` hook impl remains available to explicit callers |
 
-## Discoverability: how the model knows what is deferred
+## Discoverability and prompt-cache behavior
 
-Two resident surfaces, split by mutability:
+The default composition deliberately keeps deferred-tool guidance stable. The `## Deferred tools` system-prompt section is assembled once per Agent and contains one bullet per deferred extension group: the manifest id (packaging prefix stripped, so `posoco_ext_webfetch` shows as `webfetch`) followed by its tool names and descriptions. Full input schemas are fetched only through `tool_list`.
 
-- **System prompt (`## Deferred tools`, static per composition)** — one
-  bullet per deferred extension group: the manifest id (packaging prefix
-  stripped, `posoco_ext_webfetch` shows as `webfetch`) followed by its
-  tools, names and descriptions auto-concatenated. Descriptions come from
-  the deferred tools themselves — from today on, tool descriptions are part
-  of the deferred-extension contract.
-- **`before_model` recent-tools envelope (dynamic)** — the Observer records
-  every deferred execution (most recent first, capped at 5); the hook
-  injects a `<lazytools-context>` user message telling the model it can
-  skip `tool_list` and call those with `tool_execute` directly. The message
-  is replaced in place as usage changes — the hook, not the system prompt,
-  carries it so the prompt-cache prefix stays intact.
+When a schema has already appeared in an earlier `tool_list` result, the prompt tells the model to reuse that schema from conversation history and call `tool_execute` directly. It should not repeat `tool_list` merely to rediscover the same schema.
+
+Older LazyTools behavior recorded the five most recently executed deferred tools and rewrote a `<lazytools-context>` user envelope during `before_model`. Because Posoco persists hook rewrites into the transcript, changing that envelope could invalidate provider prefix-cache reuse from an old history position onward. Normal manifest composition therefore uses inert Observer/Hook compatibility views instead. The public `LazyTools` Observer and PipelineHook implementations remain available to callers that explicitly want the legacy behavior.
 
 ## Meta tools
 
@@ -44,35 +35,16 @@ Two resident surfaces, split by mutability:
 
 ## Output contract
 
-- `search` renders hits as a JSON array (`name`, `description`,
-  `input_schema`) after a one-line header; when truncated the header says
-  `showing M of N`. An empty result is a **Success** that steers the model
-  to `list`.
-- `execute` passes the child's `ToolOutcome` through unchanged —
-  `Success`/`ToolReportedError` reach the model as the gateway's outcome;
-  a raised `RuntimeError` propagates so the kernel maps it exactly as if
-  the child had been called directly.
-- Argument mistakes (missing `query`/`tool`, non-object `arguments`, empty
-  keyword query) raise `RuntimeError::UnknownTool`, matching the read
-  tool's error style. An unknown deferred tool name is a
-  `ToolReportedError` with steering text, not a hard failure.
+- `tool_list` returns grouped deferred-tool metadata including full input schemas. An empty keyword match is a **Success** with steering text to browse without arguments.
+- `tool_execute` passes the child's `ToolOutcome` through unchanged — `Success`/`ToolReportedError` reach the model as the gateway's outcome; a raised `RuntimeError` propagates so the kernel maps it exactly as if the child had been called directly.
+- Argument mistakes (missing `tool`, non-object `arguments`, blank keyword) raise `RuntimeError::UnknownTool`. An unknown deferred tool name is a `ToolReportedError` with steering text, not a hard failure.
 
 ## Behavior notes
 
-- **Flat, stable catalog** — the agent sees exactly three tools for the
-  whole conversation. There is no mid-turn table expansion, which keeps the
-  tool prefix prompt-cache friendly; the cost is that every deferred call
-  carries a `tool` + `arguments` indirection instead of a native tool call.
-- **Ranking** — every keyword must match (AND) the tool's name or
-  description; name hits score 100 per keyword, description hits 1, and
-  declaration order breaks ties.
-- **Policies** — `search`/`list` are `Parallel`; `execute`
-  is `Sequential` so deferred side effects never share a wave (child
-  policies are hidden behind the gateway).
-- **Error split** — the gateway never converts child business failures
-  (`ToolReportedError`) into exceptions or vice versa; only its own
-  argument validation raises.
+- **Flat, stable catalog** — the agent sees exactly two LazyTools meta tools for the whole conversation. Deferred schemas do not expand the resident tool catalog, which keeps the tool-definition prefix small and stable.
+- **Stable prompt prefix** — usage-driven recent-tool state is not auto-injected into durable transcript history. Reuse guidance lives in the frozen system prompt instead.
+- **Grouping/search** — keyword lookup operates over extension ids and tool names/descriptions and returns matching groups whole so related schemas arrive together.
+- **Policies** — `tool_list` is `Parallel`; `tool_execute` is `Sequential` so deferred side effects never share a wave (child policies are hidden behind the gateway).
+- **Error split** — the gateway never converts child business failures (`ToolReportedError`) into exceptions or vice versa; only its own argument validation raises.
 
-Background: `docs/tools-lazyload-research.md` (mechanism (a) — meta-tool
-search + deferred loading — implemented as a pure extension, no kernel
-support needed because deferred definitions never enter the context).
+Background: `docs/tools-lazyload-research.md` (mechanism (a) — meta-tool search + deferred loading — implemented as a pure extension, no kernel support needed because deferred definitions never enter the resident tool catalog).
