@@ -54,6 +54,7 @@ fn kimi_catalog_slot(
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=Some(config.thinking_efforts),
         context_window=config.context_window,
+        send_prompt_cache_key=config.send_prompt_cache_key,
       )
       kimi_catalog_slot(
         refreshed,
@@ -75,6 +76,7 @@ fn kimi_catalog_slot(
         reasoning_effort=config.reasoning_effort,
         thinking_efforts=Some(config.thinking_efforts),
         context_window=config.context_window,
+        send_prompt_cache_key=config.send_prompt_cache_key,
       )
       kimi_catalog_slot(
         refreshed,
@@ -117,6 +119,7 @@ fn kimi_catalog_slot_from_info(
     reasoning_effort=selected_effort,
     thinking_efforts=Some(info.thinking_efforts),
     context_window=Some(info.context_window),
+    send_prompt_cache_key=base_config.send_prompt_cache_key,
   )
   kimi_catalog_slot(
     config,
