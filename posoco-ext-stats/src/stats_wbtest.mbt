@@ -146,7 +146,7 @@ test "full round publishes ttft tps avg and cache with the pinned segments" {
         segment="cache",
         label=None,
         priority=80,
-        value=Some("0/1·0.0%"),
+        value=Some("n/a"),
         color=None,
       ),
     ),
@@ -196,7 +196,7 @@ test "second round re-anchors and avg becomes the per-round mean" {
         segment="cache",
         label=None,
         priority=80,
-        value=Some("0/1·0.0%"),
+        value=Some("n/a"),
         color=None,
       ),
     ),
@@ -244,7 +244,7 @@ test "second round re-anchors and avg becomes the per-round mean" {
         segment="cache",
         label=None,
         priority=80,
-        value=Some("0/2·0.0%"),
+        value=Some("n/a"),
         color=None,
       ),
     ),
@@ -352,7 +352,7 @@ test "missing usage publishes ttft only but the round still re-anchors" {
         segment="cache",
         label=None,
         priority=80,
-        value=Some("0/1·0.0%"),
+        value=Some("n/a"),
         color=None,
       ),
     ),
@@ -410,7 +410,7 @@ test "zero span produces no tps but the round still re-anchors" {
         segment="cache",
         label=None,
         priority=80,
-        value=Some("0/1·0.0%"),
+        value=Some("n/a"),
         color=None,
       ),
     ),
@@ -446,7 +446,7 @@ test "zero span produces no tps but the round still re-anchors" {
         segment="cache",
         label=None,
         priority=80,
-        value=Some("0/2·0.0%"),
+        value=Some("n/a"),
         color=None,
       ),
     ),
@@ -521,9 +521,9 @@ test "cache buckets split by session scope and the segment aggregates them" {
   stats.on_event_at(None, tk_response(Some(tk_usage_cache(Some(50), Some(40)))))
   assert_eq(capture.events.length(), 4)
   let expected = [
-    "1/1·50.0%", "1/2·25.0%", "1/3·12.5%",
-    // Aggregate over both sessions plus the no-scope bucket: 90/450.
-     "2/4·20.0%",
+    "1/1·50.0%", "1/1·50.0%", "1/2·16.7%",
+    // Reported cache telemetry covers 90 cached tokens of 350 input tokens.
+     "2/3·25.7%",
   ]
   for i, value in expected {
     assert_eq(
@@ -586,16 +586,13 @@ test "cache accounting never coerces absent fields to zero" {
 }
 
 ///|
-test "cache segment is withheld until input tokens are reported" {
+test "cache segment marks unreported metrics as n/a" {
   let bus = @devkit.EventBus()
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
   let stats = Stats(bus=Some(bus), clock=stepped_clock([1000, 2000, 3000]))
   stats.on_event(tk_response(Some(tk_usage_cache(None, None))))
   stats.on_event(tk_response(None))
-  assert_eq(capture.events.length(), 0)
-  stats.on_event(tk_response(Some(tk_usage_cache(Some(100), Some(10)))))
-  // The first publish already folds in the earlier usage-only round.
   assert_eq(capture.events.length(), 1)
   assert_eq(
     @devkit.decode_status_op(capture.events[0]),
@@ -604,7 +601,21 @@ test "cache segment is withheld until input tokens are reported" {
         segment="cache",
         label=None,
         priority=80,
-        value=Some("1/2·10.0%"),
+        value=Some("n/a"),
+        color=None,
+      ),
+    ),
+  )
+  stats.on_event(tk_response(Some(tk_usage_cache(Some(100), Some(10)))))
+  assert_eq(capture.events.length(), 2)
+  assert_eq(
+    @devkit.decode_status_op(capture.events[1]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="cache",
+        label=None,
+        priority=80,
+        value=Some("1/1·10.0%"),
         color=None,
       ),
     ),
@@ -807,7 +818,7 @@ async test "usage reports cumulative labeled accounting per session and aggregat
   match stats.invoke("usage", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
       assert_eq(
-        feedback, "session s1: 2 requests · in 1.5K · out 36 · cache hits 1/2 (6.7%)\nsession s2: 1 requests · in 2.0K · out 10 · cache hits 0/1 (0.0%)\nsession s3: 1 requests · in 0 · out 0 · cache hits 0/1\naggregate: 4 requests · in 3.5K · out 46 · cache hits 1/4 (2.9%)",
+        feedback, "session s1: 2 requests · in 1.5K · out 36 · cache hits 1/1 (10.0%)\nsession s2: 1 requests · in 2.0K · out 10 · cache hits 0/1 (0.0%)\nsession s3: 1 requests · in 0 · out 0 · cache n/a\naggregate: 4 requests · in 3.5K · out 46 · cache hits 1/2 (3.3%)",
       )
       match structured {
         Some(Json::Object(fields)) => {
@@ -837,7 +848,7 @@ async test "usage on a fresh stats renders an empty aggregate without a rate" {
   match stats.invoke("usage", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
       assert_eq(
-        feedback, "aggregate: 0 requests · in 0 · out 0 · cache hits 0/0",
+        feedback, "aggregate: 0 requests · in 0 · out 0 · cache n/a",
       )
     _ => fail("expected success outcome")
   }
