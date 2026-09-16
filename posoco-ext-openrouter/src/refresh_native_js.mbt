@@ -24,6 +24,10 @@ pub impl @llm.RefreshableProviderFactory for OpenRouterProvider with fn refresh(
   }
   let http_referer = openrouter_resolve_setting_string(source, "http_referer")
   let title = openrouter_resolve_setting_string(source, "title")
+  let send_prompt_cache_key = openrouter_setting_bool(
+    source,
+    "send_prompt_cache_key",
+  )
   let models = fetch_openrouter_models(base_url, api_key) catch {
     err =>
       raise @posoco.CompositionError::ManifestSchemaError(
@@ -34,12 +38,14 @@ pub impl @llm.RefreshableProviderFactory for OpenRouterProvider with fn refresh(
   let api_key_factory : &@llm.ApiKeyFactory = OpenRouterApiKeyFactory(
     ctx=self.ctx,
   )
-  let catalog = openrouter_model_catalog(
+  let catalog = openrouter_model_catalog_with_cache_policy(
     api_key,
     base_url,
     models,
     preferred,
     api_key_factory,
+    self.prompt_cache_key_rejection_state,
+    send_prompt_cache_key,
     http_referer~,
     title~,
   )
