@@ -20,9 +20,10 @@ priv struct LazyEntry {
 /// Stable manifest views. LazyTools historically auto-registered its own
 /// usage Observer + before_model hook to inject a changing recent-tools
 /// envelope into the transcript. Keep the manifest shape compatible while
-/// making the default composition cache-friendly: these views are inert, and
-/// the public LazyTools Observer/PipelineHook impls remain available to
-/// explicit callers that intentionally opt into the legacy hint behavior.
+/// making the default composition cache-friendly: the Observer is inert and
+/// the hook only removes legacy envelopes left by older sessions. The public
+/// LazyTools Observer/PipelineHook impls remain available to explicit callers
+/// that intentionally opt into the legacy hint behavior.
 priv struct StableLazyToolsObserver {}
 
 ///|
@@ -37,11 +38,38 @@ impl @posoco.Observer for StableLazyToolsObserver with fn on_event(
 priv struct StableLazyToolsHook {}
 
 ///|
+fn is_legacy_lazytools_context(message : @posoco.Message) -> Bool {
+  match message {
+    @posoco.Message::UserMessage(content~) =>
+      content.iter().any(fn(block) {
+        match block {
+          @posoco.Content::Text(text) => text.has_prefix("<lazytools-context")
+          _ => false
+        }
+      })
+    _ => false
+  }
+}
+
+///|
+/// Migration-only rewrite: old releases persisted a usage-driven
+/// `<lazytools-context>` message. Remove it once so stale guidance does not
+/// remain in long-lived sessions. When no legacy envelope exists, return the
+/// exact input array and generate no TranscriptRewrite.
 impl @posoco.PipelineHook for StableLazyToolsHook with fn before_model(
   _self,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] {
-  messages
+  let kept : Array[@posoco.Message] = []
+  let mut changed = false
+  for message in messages {
+    if is_legacy_lazytools_context(message) {
+      changed = true
+    } else {
+      kept.push(message)
+    }
+  }
+  if changed { kept } else { messages }
 }
 
 ///|
@@ -53,7 +81,7 @@ pub struct LazyTools {
   /// Recently executed deferred tools, most recent last, deduplicated,
   /// bounded by RECENT_TOOLS_CAP. This state is used only by the explicit
   /// legacy Observer/PipelineHook views; normal manifest composition uses the
-  /// inert stable views below so prompt history is not rewritten per usage.
+  /// stable views above so prompt history is not rewritten per usage.
   priv recent : Array[String]
   priv stable_observer : StableLazyToolsObserver
   priv stable_hook : StableLazyToolsHook
