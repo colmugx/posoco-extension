@@ -16,7 +16,7 @@ gateway.
 | `ToolProvider` | the `tool_list` / `tool_execute` meta tools |
 | `SystemPromptContributor` | the stable `## Deferred tools` section: lists deferred groups and tells the model to reuse schemas already present in history before calling `tool_list` again |
 | `Observer` | inert compatibility view in normal manifest composition; the public `LazyTools` Observer impl remains available to explicit callers |
-| `PipelineHook` | inert compatibility view in normal manifest composition; the public `LazyTools` hook impl remains available to explicit callers |
+| `PipelineHook` | cache-stable compatibility view: removes legacy `<lazytools-context>` messages from older sessions once, then passes messages through unchanged; the public `LazyTools` hook impl remains available to explicit callers |
 
 ## Discoverability and prompt-cache behavior
 
@@ -24,7 +24,7 @@ The default composition deliberately keeps deferred-tool guidance stable. The `#
 
 When a schema has already appeared in an earlier `tool_list` result, the prompt tells the model to reuse that schema from conversation history and call `tool_execute` directly. It should not repeat `tool_list` merely to rediscover the same schema.
 
-Older LazyTools behavior recorded the five most recently executed deferred tools and rewrote a `<lazytools-context>` user envelope during `before_model`. Because Posoco persists hook rewrites into the transcript, changing that envelope could invalidate provider prefix-cache reuse from an old history position onward. Normal manifest composition therefore uses inert Observer/Hook compatibility views instead. The public `LazyTools` Observer and PipelineHook implementations remain available to callers that explicitly want the legacy behavior.
+Older LazyTools behavior recorded the five most recently executed deferred tools and rewrote a `<lazytools-context>` user envelope during `before_model`. Because Posoco persists hook rewrites into the transcript, changing that envelope could invalidate provider prefix-cache reuse from an old history position onward. Normal manifest composition therefore stops recording or refreshing that hint. Its stable migration hook removes an envelope persisted by an older release the first time it sees one; after that one rewrite, subsequent turns pass through unchanged. The public `LazyTools` Observer and PipelineHook implementations remain available to callers that explicitly want the legacy behavior.
 
 ## Meta tools
 
@@ -42,7 +42,7 @@ Older LazyTools behavior recorded the five most recently executed deferred tools
 ## Behavior notes
 
 - **Flat, stable catalog** — the agent sees exactly two LazyTools meta tools for the whole conversation. Deferred schemas do not expand the resident tool catalog, which keeps the tool-definition prefix small and stable.
-- **Stable prompt prefix** — usage-driven recent-tool state is not auto-injected into durable transcript history. Reuse guidance lives in the frozen system prompt instead.
+- **Stable prompt prefix** — usage-driven recent-tool state is not auto-injected into durable transcript history. Reuse guidance lives in the frozen system prompt instead; legacy dynamic envelopes are removed once on upgrade.
 - **Grouping/search** — keyword lookup operates over extension ids and tool names/descriptions and returns matching groups whole so related schemas arrive together.
 - **Policies** — `tool_list` is `Parallel`; `tool_execute` is `Sequential` so deferred side effects never share a wave (child policies are hidden behind the gateway).
 - **Error split** — the gateway never converts child business failures (`ToolReportedError`) into exceptions or vice versa; only its own argument validation raises.
