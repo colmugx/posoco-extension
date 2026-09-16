@@ -40,10 +40,11 @@ pub(all) struct OpenAICompatibleModelPort {
   /// generic OpenAI-compatible config while allowing adapters such as
   /// OpenCode Zen to provide fresh request metadata.
   request_headers : (() -> Map[String, String])?
-  /// Per-process learning: set once the provider explicitly rejects the
-  /// `prompt_cache_key` parameter in an error body; subsequent requests omit
-  /// the key. Never persisted.
+  /// Compatibility mirror retained for callers/tests that inspect the port.
   mut prompt_cache_key_rejected : Bool
+  /// Shared process-local compatibility state threaded through this custom
+  /// provider's catalog and every slot rebuild.
+  prompt_cache_key_rejection_state : Ref[Bool]
 }
 
 ///|
@@ -52,19 +53,52 @@ pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(
   config : OpenAICompatibleConfig,
   request_headers? : () -> Map[String, String],
 ) -> OpenAICompatibleModelPort {
-  { provider_id, config, request_headers, prompt_cache_key_rejected: false, }
+  {
+    provider_id,
+    config,
+    request_headers,
+    prompt_cache_key_rejected: false,
+    prompt_cache_key_rejection_state: Ref(false),
+  }
+}
+
+///|
+fn oai_compat_model_port_with_prompt_cache_rejection_state(
+  provider_id : String,
+  config : OpenAICompatibleConfig,
+  state : Ref[Bool],
+  request_headers? : () -> Map[String, String],
+) -> OpenAICompatibleModelPort {
+  {
+    provider_id,
+    config,
+    request_headers,
+    prompt_cache_key_rejected: state.val,
+    prompt_cache_key_rejection_state: state,
+  }
+}
+
+///|
+fn OpenAICompatibleModelPort::prompt_cache_key_rejected_now(
+  self : OpenAICompatibleModelPort,
+) -> Bool {
+  if self.prompt_cache_key_rejected {
+    self.prompt_cache_key_rejection_state.val = true
+  }
+  self.prompt_cache_key_rejection_state.val
 }
 
 ///|
 /// 400-learning entry point: run the kit rejection matcher over one non-2xx
-/// error body and remember an explicit `prompt_cache_key` rejection for the
-/// rest of this process.
+/// error body and remember an explicit `prompt_cache_key` rejection for every
+/// later port rebuilt from the same custom provider instance.
 fn OpenAICompatibleModelPort::learn_prompt_cache_key_rejection(
   self : OpenAICompatibleModelPort,
   error_body_text : String,
 ) -> Unit {
   if @chatkit.is_prompt_cache_key_rejection(error_body_text) {
     self.prompt_cache_key_rejected = true
+    self.prompt_cache_key_rejection_state.val = true
   }
 }
 
