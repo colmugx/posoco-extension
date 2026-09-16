@@ -15,27 +15,14 @@
 pub(all) struct OpenRouterModelInfo {
   id : String
   context_length : Int?
-  /// The model exposes a reasoning surface (toggle or declared effort
-  /// levels). Derived from the presence of the `reasoning` metadata or a
-  /// `reasoning` entry in `supported_parameters`.
   reasoning_supported : Bool
-  /// Declared effort levels from `reasoning.supported_efforts`, verbatim.
-  /// Empty on a toggle-only reasoning model.
   supported_efforts : Array[String]
-  /// The model's own default effort level, when it declares levels.
   default_effort : String?
-  /// Whether reasoning is on by default (toggle models). Effort models are
-  /// always effectively on; this field is ignored for them.
   default_enabled : Bool
-  /// The model accepts image input (`architecture.input_modalities`
-  /// contains "image"). Slots advertise the `image_in` capability and the
-  /// encoder sends typed content parts instead of placeholders.
   supports_images : Bool
 } derive(Eq, Debug)
 
 ///|
-/// Fields outside `id` are optional and degrade tolerantly: a model without
-/// metadata is plain chat with no effort surface.
 pub fn parse_openrouter_models(
   payload : Json,
 ) -> Array[OpenRouterModelInfo] raise @posoco.ModelError {
@@ -103,9 +90,6 @@ pub fn parse_openrouter_models(
         }
       }
       _ =>
-        // No reasoning object: some entries still advertise reasoning
-        // through supported_parameters alone — that model is the plain
-        // off/on toggle with the endpoint's own default (treated as on).
         match fields.get("supported_parameters") {
           Some(Json::Array(values)) =>
             for value in values {
@@ -117,8 +101,6 @@ pub fn parse_openrouter_models(
           _ => ()
         }
     }
-    // `architecture.input_modalities` carries the modality vector; an
-    // absent object or list degrades to no image support.
     let mut supports_images = false
     match fields.get("architecture") {
       Some(Json::Object(architecture)) =>
@@ -147,15 +129,6 @@ pub fn parse_openrouter_models(
 }
 
 ///|
-/// Tolerantly decode host-cached model records for offline catalog
-/// expansion. The cache is derived data — a previous `refresh` projected to
-/// slot records by the host — so any malformed shape degrades to `None` (the
-/// static single-slot build) instead of failing composition.
-///
-/// The record carries the picker-facing `thinking_efforts` (which includes
-/// the reserved "off"/"on" toggle words) plus `default_effort` and
-/// `context_window`; this decoder inverts that projection back into
-/// `OpenRouterModelInfo`.
 pub fn parse_cached_openrouter_models(
   records : Json?,
 ) -> Array[OpenRouterModelInfo]? {
@@ -177,8 +150,6 @@ pub fn parse_cached_openrouter_models(
       Some(Json::Number(value, ..)) => Some(value.to_int())
       _ => None
     }
-    // Cached picker list: strip the toggle words to recover the declared
-    // levels; a non-empty list without levels marks a toggle-only model.
     let cached_efforts : Array[String] = []
     match fields.get("thinking_efforts") {
       Some(Json::Array(values)) =>
@@ -206,9 +177,6 @@ pub fn parse_cached_openrouter_models(
       }
       _ => ()
     }
-    // The cache record's capability projection (`image_in`); an old cache
-    // without the field degrades to no image support until the next
-    // refresh rewrites it.
     let supports_images = match fields.get("image_in") {
       Some(Json::True) => true
       _ => false
@@ -276,9 +244,6 @@ fn openrouter_config_for_info(
 }
 
 ///|
-/// Keep the configured model first after a live refresh while preserving the
-/// endpoint's order for all remaining models (OpenRouter ranks by its own
-/// routing quality).
 fn openrouter_preferred_models(
   models : Array[OpenRouterModelInfo],
   preferred_id : String,
@@ -303,11 +268,6 @@ fn openrouter_preferred_models(
 }
 
 ///|
-/// Build a multi-slot catalog from the models list. Raises on an empty list
-/// so a transient endpoint glitch surfaces as a typed composition failure
-/// rather than a silently empty picker. Once discovery has run, the models'
-/// own metadata owns the effort surface and context windows; the
-/// settings-declared values only govern the pre-discovery static slot.
 pub fn openrouter_model_catalog(
   api_key : String,
   base_url : String,
@@ -323,12 +283,19 @@ pub fn openrouter_model_catalog(
       detail="OpenRouter models endpoint returned an empty catalog",
     )
   }
+  let prompt_cache_key_rejection_state : Ref[Bool] = Ref(false)
   let slots : Array[@llm.ModelSlot] = []
   for info in openrouter_preferred_models(models, preferred_id) {
     let config = openrouter_config_for_info(
       api_key, base_url, info, http_referer, title,
     )
-    slots.push(openrouter_catalog_slot(config, api_key_factory))
+    slots.push(
+      openrouter_catalog_slot(
+        config,
+        api_key_factory,
+        prompt_cache_key_rejection_state,
+      ),
+    )
   }
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="openrouter",
