@@ -58,6 +58,7 @@ pub(all) struct OpenRouterModelInfo {
 pub(all) struct OpenRouterModelPort {
   config : OpenRouterConfig
   mut prompt_cache_key_rejected : Bool
+  prompt_cache_key_rejection_state : Ref[Bool]
 }
 pub fn OpenRouterModelPort::OpenRouterModelPort(OpenRouterConfig) -> Self
 pub fn OpenRouterModelPort::extension_id(Self) -> String
@@ -67,6 +68,7 @@ pub impl @port.ModelPort for OpenRouterModelPort
 
 pub(all) struct OpenRouterProvider {
   ctx : @posoco-devkit.ExtContext
+  prompt_cache_key_rejection_state : Ref[Bool]
 }
 pub fn OpenRouterProvider::OpenRouterProvider(ctx? : @posoco-devkit.ExtContext) -> Self
 pub impl @posoco-ext-llm.ProviderFactory for OpenRouterProvider
