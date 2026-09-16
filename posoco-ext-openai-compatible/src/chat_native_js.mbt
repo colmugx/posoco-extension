@@ -21,7 +21,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
   let messages_owned = messages.to_owned()
   let cache_key = oai_compat_resolve_cache_key(
     self.config.send_prompt_cache_key,
-    self.prompt_cache_key_rejected,
+    self.prompt_cache_key_rejected_now(),
     scope.session_id.to_string(),
   )
   match stream {
@@ -100,8 +100,6 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         }
       }
       let acc = @posoco.StreamAccumulator::StreamAccumulator()
-      // Optional wire log (POSOCO_WIRE_LOG): verbatim raw SSE data payloads,
-      // one per line, for diagnosing provider streams. js/bun only today.
       let wire_path = wire_log_path()
       let mut done = false
       let mut data_buffer = ""
@@ -148,19 +146,9 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
             }
           }
         }
-        // A buffered SSE burst makes read_until complete without suspending,
-        // so this loop can spin through the whole stream in one coroutine
-        // chain and the host never dispatches stdin (ESC/interrupt). Yield at
-        // most every 16ms so the event loop can breathe; the pause is also a
-        // cancellation point, which is what makes abort responsive.
         let now = @async.now()
         if now - last_yield >= 16L {
-          @async.pause() catch {
-            // Turn abort is mailbox-driven (the pump checks abort_requested
-            // between effects), so a cancelled pause is safe to ride over;
-            // the next read on a torn-down client errors out of the loop.
-            _ => ()
-          }
+          @async.pause() catch { _ => () }
           last_yield = now
         }
       }
