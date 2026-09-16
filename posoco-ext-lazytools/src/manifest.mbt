@@ -9,7 +9,7 @@ pub impl @posoco.Extension for LazyTools with fn extension_id(_self) -> String {
 
 ///|
 /// Declare the stable LazyTools surfaces: one ToolProvider exposing the two
-/// meta tools, one system-prompt section listing the folded groups, and inert
+/// meta tools, one system-prompt section listing the folded groups, and stable
 /// Observer/PipelineHook views that preserve the historical manifest shape
 /// without writing usage-driven recent-tool envelopes into durable history.
 ///
@@ -27,8 +27,8 @@ pub impl @posoco.Extension for LazyTools with fn manifest(self) -> @posoco.Exten
     models: [],
     tools: [self],
     sessions: [],
-    observers: [self.stable_observer],
-    hooks: [self.stable_hook],
+    observers: [self.stable_observer as &@posoco.Observer],
+    hooks: [self.stable_hook as &@posoco.PipelineHook],
     memory: [],
     lifecycle: [],
     commands: [],
