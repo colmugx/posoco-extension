@@ -5,8 +5,7 @@
 /// request. LazyTools collapses N wrapped `ToolProvider`s into exactly two
 /// model-visible meta tools — `tool_list` (browse or keyword-search the
 /// folded catalog) and `tool_execute` (route a deferred call to its owning
-/// provider) — and records usage so a recent-tools hint can ride the next
-/// prompt. Providers that should stay fully loaded are registered directly
+/// provider). Providers that should stay fully loaded are registered directly
 /// on the Agent, not wrapped here.
 
 ///|
@@ -18,14 +17,46 @@ priv struct LazyEntry {
 }
 
 ///|
+/// Stable manifest views. LazyTools historically auto-registered its own
+/// usage Observer + before_model hook to inject a changing recent-tools
+/// envelope into the transcript. Keep the manifest shape compatible while
+/// making the default composition cache-friendly: these views are inert, and
+/// the public LazyTools Observer/PipelineHook impls remain available to
+/// explicit callers that intentionally opt into the legacy hint behavior.
+priv struct StableLazyToolsObserver {}
+
+///|
+impl @posoco.Observer for StableLazyToolsObserver with fn on_event(
+  _self,
+  _event : @posoco.TurnEvent,
+) -> Unit {
+  ()
+}
+
+///|
+priv struct StableLazyToolsHook {}
+
+///|
+impl @posoco.PipelineHook for StableLazyToolsHook with fn before_model(
+  _self,
+  messages : Array[@posoco.Message],
+) -> Array[@posoco.Message] {
+  messages
+}
+
+///|
 /// The lazy-loading gateway. Opaque: compose via `LazyTools::build`.
 pub struct LazyTools {
   priv providers : Array[&@posoco.ToolProvider]
   priv entries : Array[LazyEntry]
   priv by_name : Map[String, Int]
   /// Recently executed deferred tools, most recent last, deduplicated,
-  /// bounded by RECENT_TOOLS_CAP. Drives the before_model hint.
+  /// bounded by RECENT_TOOLS_CAP. This state is used only by the explicit
+  /// legacy Observer/PipelineHook views; normal manifest composition uses the
+  /// inert stable views below so prompt history is not rewritten per usage.
   priv recent : Array[String]
+  priv stable_observer : StableLazyToolsObserver
+  priv stable_hook : StableLazyToolsHook
 }
 
 ///|
@@ -92,7 +123,14 @@ pub fn LazyTools::build(
       }
     }
   }
-  Ok({ providers, entries, by_name, recent: [], })
+  Ok({
+    providers,
+    entries,
+    by_name,
+    recent: [],
+    stable_observer: StableLazyToolsObserver::{},
+    stable_hook: StableLazyToolsHook::{},
+  })
 }
 
 ///|
