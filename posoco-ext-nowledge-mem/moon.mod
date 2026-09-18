@@ -3,11 +3,11 @@ name = "colmugx/posoco-ext-nowledge-mem"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.15.0",
+  "colmugx/posoco@0.17.0",
   "colmugx/mcp@0.17.5",
   "colmugx/posoco-devkit@0.4.0",
   "moonbitlang/async@0.21.2",
-  "moonbitlang/x@0.4.50",
+  "moonbitlang/x@0.5.5",
 }
 
 readme = "README.mbt.md"
