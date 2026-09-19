@@ -13,20 +13,11 @@ pub impl @posoco.Extension for GoalRunner with fn extension_id(_self) -> String 
 /// views share one state machine; goal-run turn inputs are driven by
 /// `execute`, not by a pipeline hook.
 pub impl @posoco.Extension for GoalRunner with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_goal",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [self],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_goal",
+    tools=[self],
+    observers=[self],
+  )
 }
 
 ///|

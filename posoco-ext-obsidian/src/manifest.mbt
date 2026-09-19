@@ -12,20 +12,15 @@ pub impl @posoco.Extension for ObsidianTools with fn extension_id(
 pub impl @posoco.Extension for ObsidianTools with fn manifest(
   self : ObsidianTools,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: OBSIDIAN_OWNER,
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [self],
-    memory: [],
-    lifecycle: [self],
-    commands: [self],
-    ui: [],
-    prompt_contributors: [self],
-    requires: [@posoco.Capability::Ui],
-  }
+  @posoco.ExtensionManifest(
+    id=OBSIDIAN_OWNER,
+    tools=[self],
+    hooks=[self],
+    lifecycle=[self],
+    commands=[self],
+    prompt_contributors=[self],
+    requires=[@posoco.Capability::Ui],
+  )
 }
 
 ///|

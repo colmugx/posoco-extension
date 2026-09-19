@@ -100,8 +100,7 @@ pub impl @posoco.Extension for RTKHook with fn extension_id(_self : RTKHook) -> 
 
 ///|
 pub impl @posoco.Extension for RTKHook with fn manifest(self : RTKHook) -> @posoco.ExtensionManifest {
-  let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_rtk")
-  { ..manifest, hooks: [self], }
+  @posoco.ExtensionManifest(id="posoco_ext_rtk", hooks=[self])
 }
 
 ///|

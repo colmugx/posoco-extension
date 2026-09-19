@@ -10,8 +10,11 @@ pub impl @posoco.Extension for JsonlSessionStore with fn extension_id(
 pub impl @posoco.Extension for JsonlSessionStore with fn manifest(
   self : JsonlSessionStore,
 ) -> @posoco.ExtensionManifest {
-  let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_fs_session")
-  { ..manifest, sessions: [self], commands: [self], }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_fs_session",
+    sessions=[self],
+    commands=[self],
+  )
 }
 
 ///|

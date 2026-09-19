@@ -6,13 +6,12 @@
 /// the bridge is a UI consumer (it pushes render intents), not a UI
 /// provider. There is no Observer: the bridge has zero data knowledge.
 pub impl @posoco.Extension for StatusBar with fn manifest(self : StatusBar) -> @posoco.ExtensionManifest {
-  let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_statusbar")
-  {
-    ..manifest,
-    lifecycle: [self],
-    commands: [self],
-    requires: [@posoco.Capability::Ui],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_statusbar",
+    lifecycle=[self],
+    commands=[self],
+    requires=[@posoco.Capability::Ui],
+  )
 }
 
 ///|

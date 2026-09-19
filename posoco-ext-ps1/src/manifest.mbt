@@ -5,20 +5,11 @@ pub impl @posoco.Extension for PowerShellTools with fn extension_id(_self) -> St
 
 ///|
 pub impl @posoco.Extension for PowerShellTools with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_ps1",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [self],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_ps1",
+    tools=[self],
+    prompt_contributors=[self],
+  )
 }
 
 ///|

@@ -5,20 +5,7 @@ pub impl @posoco.Extension for AstGrepTools with fn extension_id(_self) -> Strin
 
 ///|
 pub impl @posoco.Extension for AstGrepTools with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_astgrep",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_astgrep", tools=[self])
 }
 
 ///|

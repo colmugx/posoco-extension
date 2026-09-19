@@ -26,20 +26,12 @@ pub impl @posoco.Extension for Skills with fn manifest(self) -> @posoco.Extensio
       }
     }
   }
-  {
-    id: "posoco_ext_skills",
-    models: [],
-    tools,
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [self],
-    ui: [],
-    prompt_contributors: prompts,
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_skills",
+    tools=tools,
+    commands=[self],
+    prompt_contributors=prompts,
+  )
 }
 
 ///|

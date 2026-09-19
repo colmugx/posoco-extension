@@ -57,20 +57,7 @@ pub impl @posoco.Extension for ZaiCodingPlanModelPort with fn extension_id(
 pub impl @posoco.Extension for ZaiCodingPlanModelPort with fn manifest(
   self : ZaiCodingPlanModelPort,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_zai_coding_plan",
-    models: [self],
-    tools: [],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_zai_coding_plan", models=[self])
 }
 
 ///|

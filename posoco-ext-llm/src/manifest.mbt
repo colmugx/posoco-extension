@@ -15,20 +15,13 @@ pub impl @posoco.Extension for RouterModelPort with fn extension_id(
 pub impl @posoco.Extension for RouterModelPort with fn manifest(
   self : RouterModelPort,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_llm",
-    models: [self],
-    tools: [],
-    sessions: [],
-    observers: [self],
-    hooks: [],
-    memory: [],
-    lifecycle: [self],
-    commands: [self],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_llm",
+    models=[self],
+    observers=[self],
+    lifecycle=[self],
+    commands=[self],
+  )
 }
 
 ///|

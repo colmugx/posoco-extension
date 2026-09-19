@@ -419,20 +419,16 @@ pub impl @posoco.Extension for NowledgeMem with fn extension_id(
 /// own tool set), and CommandPort (`/memory` diagnostics: status / flush) —
 /// all views of one state.
 pub impl @posoco.Extension for NowledgeMem with fn manifest(self : NowledgeMem) -> @posoco.ExtensionManifest {
-  {
-    id: NMEM_EXTENSION_ID,
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [self],
-    hooks: [self],
-    memory: [self],
-    lifecycle: [self],
-    commands: [self],
-    ui: [],
-    prompt_contributors: [self],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id=NMEM_EXTENSION_ID,
+    tools=[self],
+    observers=[self],
+    hooks=[self],
+    memory=[self],
+    lifecycle=[self],
+    commands=[self],
+    prompt_contributors=[self],
+  )
 }
 
 ///|

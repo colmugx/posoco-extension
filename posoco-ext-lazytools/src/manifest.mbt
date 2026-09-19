@@ -22,20 +22,13 @@ pub impl @posoco.Extension for LazyTools with fn extension_id(_self) -> String {
 /// also register them as extensions, or their tools would appear in the
 /// catalog anyway.
 pub impl @posoco.Extension for LazyTools with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_lazytools",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [self.stable_observer as &@posoco.Observer],
-    hooks: [self.stable_hook as &@posoco.PipelineHook],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [self],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_lazytools",
+    tools=[self],
+    observers=[self.stable_observer as &@posoco.Observer],
+    hooks=[self.stable_hook as &@posoco.PipelineHook],
+    prompt_contributors=[self],
+  )
 }
 
 ///|

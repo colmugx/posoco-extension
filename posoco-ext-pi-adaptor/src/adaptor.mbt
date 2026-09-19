@@ -436,20 +436,13 @@ pub impl @posoco.Extension for PiAdaptor with fn extension_id(
 
 ///|
 pub impl @posoco.Extension for PiAdaptor with fn manifest(adaptor : PiAdaptor) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_pi_adaptor",
-    models: [],
-    tools: [adaptor],
-    sessions: [],
-    observers: [adaptor.events as &@posoco.Observer],
-    hooks: [adaptor.hook as &@posoco.PipelineHook],
-    memory: [],
-    lifecycle: [],
-    commands: [adaptor.commands as &@posoco.CommandPort],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_pi_adaptor",
+    tools=[adaptor],
+    observers=[adaptor.events as &@posoco.Observer],
+    hooks=[adaptor.hook as &@posoco.PipelineHook],
+    commands=[adaptor.commands as &@posoco.CommandPort],
+  )
 }
 
 ///|

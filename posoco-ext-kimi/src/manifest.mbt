@@ -5,20 +5,7 @@ pub impl @posoco.Extension for KimiModelPort with fn extension_id(_self) -> Stri
 
 ///|
 pub impl @posoco.Extension for KimiModelPort with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_kimi",
-    models: [self],
-    tools: [],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_kimi", models=[self])
 }
 
 ///|

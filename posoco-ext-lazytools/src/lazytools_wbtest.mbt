@@ -523,20 +523,7 @@ impl @posoco.Extension for FakeToolExt with fn extension_id(self : FakeToolExt) 
 
 ///|
 impl @posoco.Extension for FakeToolExt with fn manifest(self : FakeToolExt) -> @posoco.ExtensionManifest {
-  {
-    id: self.id,
-    models: [],
-    tools: self.tools,
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id=self.id, tools=self.tools)
 }
 
 ///|

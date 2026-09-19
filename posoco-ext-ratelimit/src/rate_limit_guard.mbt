@@ -492,20 +492,12 @@ pub impl @posoco.Extension for RateLimitGuard with fn extension_id(
 pub impl @posoco.Extension for RateLimitGuard with fn manifest(
   self : RateLimitGuard,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_ratelimit",
-    models: [],
-    tools: [],
-    sessions: [],
-    observers: [self],
-    hooks: [self],
-    memory: [],
-    lifecycle: [self],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_ratelimit",
+    observers=[self],
+    hooks=[self],
+    lifecycle=[self],
+  )
 }
 
 ///|

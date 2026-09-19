@@ -5,20 +5,7 @@ pub impl @posoco.Extension for Handoff with fn extension_id(_self : Handoff) -> 
 
 ///|
 pub impl @posoco.Extension for Handoff with fn manifest(self : Handoff) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_handoff",
-    models: [],
-    tools: [],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [self],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_handoff", commands=[self])
 }
 
 ///|

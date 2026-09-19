@@ -9,20 +9,12 @@ pub impl @posoco.Extension for PlanMode with fn extension_id(_self) -> String {
 /// enter_plan_mode), CommandPort (plan / plan.approve / plan.reject). The same
 /// `self` reference appears under every field so all views share one status.
 pub impl @posoco.Extension for PlanMode with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_plan",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [self],
-    memory: [],
-    lifecycle: [],
-    commands: [self],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_plan",
+    tools=[self],
+    hooks=[self],
+    commands=[self],
+  )
 }
 
 ///|

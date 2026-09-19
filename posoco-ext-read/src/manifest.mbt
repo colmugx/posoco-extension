@@ -13,20 +13,7 @@ pub impl @posoco.Extension for ReadTools with fn extension_id(_self) -> String {
 /// The same `self` reference appears under both fields because ReadTools
 /// implements both port traits on the same struct.
 pub impl @posoco.Extension for ReadTools with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_read",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_read", tools=[self])
 }
 
 ///|

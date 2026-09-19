@@ -7,15 +7,14 @@
 /// would fold it into CompositeUiPort as a render TARGET, inverting the
 /// semantics.
 pub impl @posoco.Extension for TodoList with fn manifest(self : TodoList) -> @posoco.ExtensionManifest {
-  let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_todo")
-  {
-    ..manifest,
-    tools: [self],
-    lifecycle: [self],
-    commands: [self],
-    prompt_contributors: [self],
-    requires: [@posoco.Capability::Ui],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_todo",
+    tools=[self],
+    lifecycle=[self],
+    commands=[self],
+    prompt_contributors=[self],
+    requires=[@posoco.Capability::Ui],
+  )
 }
 
 ///|

@@ -71,20 +71,12 @@ pub impl @posoco.Extension for AcpBridge with fn extension_id(_self) -> String {
 /// interactive requests). The same `self` reference appears under every
 /// field because AcpBridge implements all port traits on the same struct.
 pub impl @posoco.Extension for AcpBridge with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_acp",
-    models: [],
-    tools: [],
-    sessions: [],
-    observers: [self],
-    hooks: [],
-    memory: [],
-    lifecycle: [self],
-    commands: [],
-    ui: [self],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_acp",
+    observers=[self],
+    lifecycle=[self],
+    ui=[self],
+  )
 }
 
 ///|

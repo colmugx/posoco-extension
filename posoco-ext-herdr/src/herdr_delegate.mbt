@@ -435,18 +435,9 @@ pub impl @posoco.Extension for HerdrDelegate with fn extension_id(
 pub impl @posoco.Extension for HerdrDelegate with fn manifest(
   self : HerdrDelegate,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_herdr_delegate",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [self],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_herdr_delegate",
+    tools=[self],
+    prompt_contributors=[self],
+  )
 }

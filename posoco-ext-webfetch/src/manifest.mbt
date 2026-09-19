@@ -17,20 +17,11 @@ pub impl @posoco.Extension for WebFetchTools with fn extension_id(
 pub impl @posoco.Extension for WebFetchTools with fn manifest(
   self : WebFetchTools,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_webfetch",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [self],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_webfetch",
+    tools=[self],
+    prompt_contributors=[self],
+  )
 }
 
 ///|

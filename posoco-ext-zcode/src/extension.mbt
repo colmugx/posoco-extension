@@ -17,6 +17,5 @@ pub impl @posoco.Extension for ZcodeExt with fn extension_id(_self : ZcodeExt) -
 /// Manifest contribution: just the tool provider. R1 keeps no resident
 /// resources, so the lifecycle stays at its defaults.
 pub impl @posoco.Extension for ZcodeExt with fn manifest(self : ZcodeExt) -> @posoco.ExtensionManifest {
-  let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_zcode")
-  { ..manifest, tools: [self.tools], }
+  @posoco.ExtensionManifest(id="posoco_ext_zcode", tools=[self.tools])
 }

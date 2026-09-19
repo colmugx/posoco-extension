@@ -9,20 +9,7 @@ pub impl @posoco.Extension for OpenRouterModelPort with fn extension_id(
 pub impl @posoco.Extension for OpenRouterModelPort with fn manifest(
   self : OpenRouterModelPort,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_openrouter",
-    models: [self],
-    tools: [],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_openrouter", models=[self])
 }
 
 ///|

@@ -5,20 +5,7 @@ pub impl @posoco.Extension for DeepSeekModelPort with fn extension_id(_self) -> 
 
 ///|
 pub impl @posoco.Extension for DeepSeekModelPort with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_deepseek",
-    models: [self],
-    tools: [],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_deepseek", models=[self])
 }
 
 ///|

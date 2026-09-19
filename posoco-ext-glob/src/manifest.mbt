@@ -5,20 +5,7 @@ pub impl @posoco.Extension for GlobTools with fn extension_id(_self) -> String {
 
 ///|
 pub impl @posoco.Extension for GlobTools with fn manifest(self) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_glob",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [],
-    commands: [],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(id="posoco_ext_glob", tools=[self])
 }
 
 ///|

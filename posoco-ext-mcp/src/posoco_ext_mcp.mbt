@@ -1122,20 +1122,12 @@ pub impl @posoco.Extension for MCPToolBridge with fn extension_id(
 pub impl @posoco.Extension for MCPToolBridge with fn manifest(
   self : MCPToolBridge,
 ) -> @posoco.ExtensionManifest {
-  {
-    id: "posoco_ext_mcp",
-    models: [],
-    tools: [self],
-    sessions: [],
-    observers: [],
-    hooks: [],
-    memory: [],
-    lifecycle: [self],
-    commands: [self],
-    ui: [],
-    prompt_contributors: [],
-    requires: [],
-  }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_mcp",
+    tools=[self],
+    lifecycle=[self],
+    commands=[self],
+  )
 }
 
 ///|

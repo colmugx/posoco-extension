@@ -805,8 +805,11 @@ pub impl @posoco.Extension for PermissionPolicy with fn extension_id(
 pub impl @posoco.Extension for PermissionPolicy with fn manifest(
   self : PermissionPolicy,
 ) -> @posoco.ExtensionManifest {
-  let manifest = @posoco.ExtensionManifest::empty(id="posoco_ext_permission")
-  { ..manifest, hooks: [self], commands: [self], }
+  @posoco.ExtensionManifest(
+    id="posoco_ext_permission",
+    hooks=[self],
+    commands=[self],
+  )
 }
 
 ///|
