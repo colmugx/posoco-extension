@@ -34,7 +34,7 @@ jobs:
           export PATH="$HOME/.moon/bin:$PATH"
           moon version --all
           for mod in posoco-extension/posoco-ext-lazytools posoco-extension/posoco-ext-llm posoco-extension/posoco-ext-skills posoco-extension/posoco-ext-permission; do
-            (cd "$mod" && moon update)
+            (cd "$mod" && moon update && moon check --target native)
           done
 
       - name: Bundle lab inputs
