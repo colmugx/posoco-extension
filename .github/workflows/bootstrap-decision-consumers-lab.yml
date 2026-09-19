@@ -33,9 +33,20 @@ jobs:
         run: |
           export PATH="$HOME/.moon/bin:$PATH"
           moon version --all
-          for mod in posoco-extension/posoco-ext-lazytools posoco-extension/posoco-ext-llm posoco-extension/posoco-ext-skills posoco-extension/posoco-ext-permission; do
-            (cd "$mod" && moon update && moon check --target native)
-          done
+          cat > moon.work <<'EOF'
+          members = [
+            "./posoco",
+            "./posoco-extension/posoco-devkit",
+            "./posoco-extension/posoco-ext-oauth",
+            "./posoco-extension/posoco-ext-workspace",
+            "./posoco-extension/posoco-ext-lazytools",
+            "./posoco-extension/posoco-ext-llm",
+            "./posoco-extension/posoco-ext-skills",
+            "./posoco-extension/posoco-ext-permission",
+          ]
+          EOF
+          moon update
+          moon check --target native
 
       - name: Bundle lab inputs
         shell: bash
