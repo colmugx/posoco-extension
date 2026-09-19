@@ -1,0 +1,54 @@
+name: bootstrap-decision-consumers-lab
+
+on:
+  push:
+    branches:
+      - bootstrap/decision-consumers-lab-20260919
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ccde97eaea1cef79b6d6863cceed110db68b1e90
+          path: posoco-extension
+
+      - uses: actions/checkout@v4
+        with:
+          repository: colmugx/posoco
+          ref: main
+          path: posoco
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Populate dependency cache
+        shell: bash
+        run: |
+          export PATH="$HOME/.moon/bin:$PATH"
+          moon version --all
+          for mod in posoco-extension/posoco-ext-lazytools posoco-extension/posoco-ext-llm posoco-extension/posoco-ext-skills posoco-extension/posoco-ext-permission; do
+            (cd "$mod" && moon update)
+          done
+
+      - name: Bundle lab inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lab"
+          tar -C "$HOME" -czf "$RUNNER_TEMP/lab/moon-home.tar.gz" .moon
+          tar -czf "$RUNNER_TEMP/lab/posoco-extension.tar.gz" posoco-extension
+          tar -czf "$RUNNER_TEMP/lab/posoco.tar.gz" posoco
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: decision-consumers-lab
+          path: ${{ runner.temp }}/lab
+          retention-days: 1
+          compression-level: 0
