@@ -66,6 +66,61 @@ test "factory: cn_coding profile selects bigmodel" {
 }
 
 ///|
+test "factory: context_window setting reaches the config" {
+  let config = zai_coding_plan_build_config(
+    zcp_settings([
+      ("api_key", Json::string("k")),
+      ("context_window", Json::number(204800.0)),
+    ]),
+  )
+  guard config is Some(value) else { fail("expected config") }
+  assert_true(value.context_window == Some(204800))
+  let bare = zai_coding_plan_build_config(
+    zcp_settings([("api_key", Json::string("k"))]),
+  )
+  guard bare is Some(value) else { fail("expected config") }
+  assert_true(value.context_window is None)
+}
+
+///|
+test "factory: context_window failure names the coding-plan manifest" {
+  try
+    zai_coding_plan_build_config(
+      zcp_settings([
+        ("api_key", Json::string("k")),
+        ("context_window", Json::number(-1.0)),
+      ]),
+    )
+  catch {
+    @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
+      inspect(manifest_id, content="posoco_ext_zai_coding_plan")
+      inspect(detail, content="setting must be positive: context_window")
+    }
+    _ => fail("expected ManifestSchemaError")
+  } noraise {
+    _ => fail("expected failure")
+  }
+}
+
+///|
+test "factory: catalog slot carries the declared window" {
+  let provider = ZaiCodingPlanProvider()
+  let result = @llm.ProviderFactory::build(
+    provider,
+    zcp_settings([
+      ("api_key", Json::string("k")),
+      ("context_window", Json::number(204800.0)),
+    ]),
+  )
+  guard result is @llm.ProviderBuildResult::Ready(catalog) else {
+    fail("expected Ready")
+  }
+  assert_true(catalog.slots[0].context_window == Some(204800))
+  let config = @posoco.ModelPort::provider_config(catalog.slots[0].port)
+  assert_true(config.context_window == Some(204800))
+}
+
+///|
 test "factory: OAuth credential is a typed failure" {
   let provider = ZaiCodingPlanProvider()
   let source = @llm.ProviderConfigSource::ProviderConfigSource(

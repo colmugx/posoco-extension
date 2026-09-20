@@ -166,6 +166,40 @@ pub impl @llm.ProviderFactory for ZaiProvider with fn build(
 }
 
 ///|
+/// The host-declared model context window in tokens. Z.ai serves no
+/// machine-readable window, so the value only exists when the host states it
+/// explicitly through settings; anything else is a typed composition failure.
+pub fn zai_setting_context_window(
+  source : @llm.ProviderConfigSource,
+  manifest_id~ : String,
+) -> Int? raise @posoco.CompositionError {
+  match source.setting("context_window") {
+    None => None
+    Some(Json::Number(value, ..)) => {
+      if value != value.floor() {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id~,
+          detail="setting must be a whole number: context_window",
+        )
+      }
+      let window = value.to_int()
+      if window <= 0 {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id~,
+          detail="setting must be positive: context_window",
+        )
+      }
+      Some(window)
+    }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id~,
+        detail="setting must be a number: context_window",
+      )
+  }
+}
+
+///|
 /// Effective direct-API config from settings + credential; `None` when no
 /// API key is present anywhere. The credential's recorded platform wins over
 /// the `platform` setting, which wins over the Z.ai default.
@@ -203,7 +237,17 @@ fn zai_build_config(
     None => "glm-5.3"
   }
   let (base_url, endpoint_prefix) = zai_resolve_endpoint(source, platform)
-  let config = ZaiConfig::for_model(api_key, model, base_url~, endpoint_prefix~)
+  let context_window = zai_setting_context_window(
+    source,
+    manifest_id="posoco_ext_zai",
+  )
+  let config = ZaiConfig::for_model(
+    api_key,
+    model,
+    base_url~,
+    endpoint_prefix~,
+    context_window~,
+  )
   let requested_effort = zai_setting_string(source, "reasoning_effort")
   match requested_effort {
     None => Some(config)

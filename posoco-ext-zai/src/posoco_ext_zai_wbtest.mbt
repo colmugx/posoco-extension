@@ -146,6 +146,118 @@ test "factory: credential endpoint honors the platform marker" {
 }
 
 ///|
+test "factory: context_window setting reaches the config" {
+  let config = zai_build_config(
+    zai_settings([
+      ("api_key", Json::string("k")),
+      ("context_window", Json::number(131072.0)),
+    ]),
+  )
+  guard config is Some(value) else { fail("expected config") }
+  assert_true(value.context_window == Some(131072))
+  let effort = value.with_reasoning_effort("low")
+  assert_true(effort.context_window == Some(131072))
+}
+
+///|
+test "factory: absent context_window stays unknown" {
+  let config = zai_build_config(zai_settings([("api_key", Json::string("k"))]))
+  guard config is Some(value) else { fail("expected config") }
+  assert_true(value.context_window is None)
+}
+
+///|
+test "factory: fractional context_window is a typed failure" {
+  try
+    zai_build_config(
+      zai_settings([
+        ("api_key", Json::string("k")),
+        ("context_window", Json::number(1.5)),
+      ]),
+    )
+  catch {
+    @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+      inspect(detail, content="setting must be a whole number: context_window")
+    _ => fail("expected ManifestSchemaError")
+  } noraise {
+    _ => fail("expected failure")
+  }
+}
+
+///|
+test "factory: non-positive context_window is a typed failure" {
+  try
+    zai_build_config(
+      zai_settings([
+        ("api_key", Json::string("k")),
+        ("context_window", Json::number(0.0)),
+      ]),
+    )
+  catch {
+    @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+      inspect(detail, content="setting must be positive: context_window")
+    _ => fail("expected ManifestSchemaError")
+  } noraise {
+    _ => fail("expected failure")
+  }
+}
+
+///|
+test "factory: non-numeric context_window is a typed failure" {
+  try
+    zai_build_config(
+      zai_settings([
+        ("api_key", Json::string("k")),
+        ("context_window", Json::string("128k")),
+      ]),
+    )
+  catch {
+    @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+      inspect(detail, content="setting must be a number: context_window")
+    _ => fail("expected ManifestSchemaError")
+  } noraise {
+    _ => fail("expected failure")
+  }
+}
+
+///|
+test "provider_config reports the declared window" {
+  let port = ZaiModelPort(ZaiConfig("k", context_window=Some(131072)))
+  let config = @posoco.ModelPort::provider_config(port)
+  assert_true(config.context_window == Some(131072))
+  assert_true(config.reasoning_effort_values.length() == 0)
+  assert_true(config.compact_threshold is None)
+  let bare = @posoco.ModelPort::provider_config(ZaiModelPort(ZaiConfig("k")))
+  assert_true(bare.context_window is None)
+}
+
+///|
+test "panic zai config rejects a non-positive context window" {
+  ignore(ZaiConfig("k", context_window=Some(0)))
+}
+
+///|
+test "factory: only the configured slot carries the declared window" {
+  let provider = ZaiProvider()
+  let result = @llm.ProviderFactory::build(
+    provider,
+    zai_settings([
+      ("api_key", Json::string("k")),
+      ("model", Json::string("glm-5.3")),
+      ("context_window", Json::number(131072.0)),
+    ]),
+  )
+  guard result is @llm.ProviderBuildResult::Ready(catalog) else {
+    fail("expected Ready")
+  }
+  assert_true(catalog.slots[0].model_id == "glm-5.3")
+  assert_true(catalog.slots[0].context_window == Some(131072))
+  // Other catalog ids get no window: the declaration describes one model,
+  // never the whole GLM family.
+  assert_true(catalog.slots[1].context_window is None)
+}
+
+///|
 /// Scripted prompts for the two-step login: a platform choice, then the key.
 /// Each request kind is logged so tests can assert the prompt order.
 struct ScriptedPrompts {

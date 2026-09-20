@@ -27,6 +27,8 @@ pub fn zai_model_catalog_from_ids(Array[String], ZaiConfig, @posoco-devkit.ExtCo
 
 pub fn zai_platform_endpoint(String) -> (String, String)?
 
+pub fn zai_setting_context_window(@posoco-ext-llm.ProviderConfigSource, manifest_id~ : String) -> Int? raise @error.CompositionError
+
 // Errors
 
 // Types and methods
@@ -45,9 +47,10 @@ pub(all) struct ZaiConfig {
   endpoint_prefix : String
   reasoning_effort : String
   thinking_efforts : Array[String]
+  context_window : Int?
 } derive(Eq, @debug.Debug)
-pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]) -> Self
-pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String) -> Self
+pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String], context_window? : Int?) -> Self
+pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String, context_window? : Int?) -> Self
 pub fn ZaiConfig::with_reasoning_effort(Self, String, manifest_id? : String) -> Self raise @error.CompositionError
 
 pub(all) struct ZaiModelPort {

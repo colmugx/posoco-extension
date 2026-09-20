@@ -58,9 +58,9 @@ async fn ZaiModelPort::zai_compact_completion(
 /// Keep the most recent 20k tokens verbatim, summarize the head with the
 /// structured Markdown template, and
 /// Replace. The window is a fixed parity default: zai reports no
-/// context_window yet, so auto-compact stays disabled until it does
-/// (unknown windows are never guessed) and this value only bounds manual
-/// compaction.
+/// context_window unless the host declares one through the `context_window`
+/// setting (unknown windows are never guessed), so auto-compact only arms
+/// itself on a declared window; this value only bounds manual compaction.
 pub impl @posoco.ModelPort for ZaiModelPort with fn compact(
   self : ZaiModelPort,
   _scope : @posoco.InvocationScope,

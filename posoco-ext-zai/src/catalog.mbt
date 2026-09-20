@@ -53,6 +53,7 @@ fn zai_catalog_slot(
     api_key=Some(api_key),
     thinking_efforts=slot_efforts,
     default_effort~,
+    context_window=config.context_window,
     rebuild_on_api_key=Some(fn(credential) {
       // The credential is authoritative for the endpoint only when it names a
       // known platform (the /login flow records it); otherwise the slot keeps
@@ -66,6 +67,7 @@ fn zai_catalog_slot(
                 config.model,
                 base_url~,
                 endpoint_prefix~,
+                context_window=config.context_window,
               )
             None =>
               ZaiConfig::for_model(
@@ -73,6 +75,7 @@ fn zai_catalog_slot(
                 config.model,
                 base_url=config.base_url,
                 endpoint_prefix=config.endpoint_prefix,
+                context_window=config.context_window,
               )
           }
         None =>
@@ -81,6 +84,7 @@ fn zai_catalog_slot(
             config.model,
             base_url=config.base_url,
             endpoint_prefix=config.endpoint_prefix,
+            context_window=config.context_window,
           )
       }
       let with_effort = if config.reasoning_effort == "" {

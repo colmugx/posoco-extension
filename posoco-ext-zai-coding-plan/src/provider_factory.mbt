@@ -142,11 +142,16 @@ fn zai_coding_plan_build_config(
   let (base_url, endpoint_prefix) = zai_coding_plan_resolve_endpoint(
     source, profile,
   )
+  let context_window = @zai.zai_setting_context_window(
+    source,
+    manifest_id="posoco_ext_zai_coding_plan",
+  )
   let config = @zai.ZaiConfig::for_model(
     api_key,
     model,
     base_url~,
     endpoint_prefix~,
+    context_window~,
   )
   let requested_effort = zai_coding_plan_setting_string(
     source, "reasoning_effort",

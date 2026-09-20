@@ -82,7 +82,9 @@ fn zai_model_info(model : String) -> ZaiModelInfo? {
 
 ///|
 /// `reasoning_effort == ""` disables thinking on the wire
-/// (`thinking: {"type": "disabled"}`).
+/// (`thinking: {"type": "disabled"}`). `context_window` is the host-declared
+/// model capacity in tokens; `None` keeps every context figure unknown
+/// (unknown windows are never guessed).
 pub(all) struct ZaiConfig {
   api_key : String
   base_url : String
@@ -90,6 +92,7 @@ pub(all) struct ZaiConfig {
   endpoint_prefix : String
   reasoning_effort : String
   thinking_efforts : Array[String]
+  context_window : Int?
 } derive(Eq, Debug)
 
 ///|
@@ -100,11 +103,15 @@ pub fn ZaiConfig::ZaiConfig(
   endpoint_prefix? : String = "/api/paas/v4",
   reasoning_effort? : String = "",
   thinking_efforts? : Array[String] = ["low", "high", "max"],
+  context_window? : Int? = None,
 ) -> ZaiConfig {
   if !thinking_efforts.is_empty() &&
     reasoning_effort != "" &&
     !thinking_efforts.contains(reasoning_effort) {
     abort("posoco-ext-zai: unsupported reasoning effort: " + reasoning_effort)
+  }
+  if context_window is Some(window) && window <= 0 {
+    abort("posoco-ext-zai: context_window must be positive")
   }
   {
     api_key,
@@ -113,6 +120,7 @@ pub fn ZaiConfig::ZaiConfig(
     endpoint_prefix,
     reasoning_effort,
     thinking_efforts,
+    context_window,
   }
 }
 
@@ -123,6 +131,7 @@ pub fn ZaiConfig::for_model(
   model : String,
   base_url~ : String,
   endpoint_prefix~ : String,
+  context_window? : Int? = None,
 ) -> ZaiConfig {
   match zai_model_info(model) {
     Some(info) => {
@@ -138,6 +147,7 @@ pub fn ZaiConfig::for_model(
         endpoint_prefix~,
         reasoning_effort=effort,
         thinking_efforts=info.efforts.copy(),
+        context_window~,
       )
     }
     None =>
@@ -148,6 +158,7 @@ pub fn ZaiConfig::for_model(
         endpoint_prefix~,
         reasoning_effort="",
         thinking_efforts=[],
+        context_window~,
       )
   }
 }

@@ -238,7 +238,11 @@ fn validate_zai_stream_tool_calls(
 
 ///|
 pub impl @posoco.ModelPort for ZaiModelPort with fn provider_config(
-  _self : ZaiModelPort,
+  self : ZaiModelPort,
 ) -> @posoco.ProviderConfig {
-  @posoco.ProviderConfig::empty()
+  @posoco.ProviderConfig::ProviderConfig(
+    reasoning_effort_values=[],
+    context_window=self.config.context_window,
+    compact_threshold=None,
+  )
 }
