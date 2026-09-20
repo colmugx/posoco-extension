@@ -33,6 +33,8 @@ pub(all) struct RouterModelPort {
   /// provider path double-publish "5h"/"weekly" segments against the codex
   /// status publisher.
   extra_quota_sources : Map[String, &@devkit.QuotaSource]
+  /// Optional semantic judgement capability used for per-call effort selection.
+  priv mut decision : &@posoco.DecisionPort?
   /// Latest value per status segment observed on the shared bus; `/status`
   /// surfaces the provider-published quota windows ("5h", "weekly") from it.
   priv status_segments : Map[String, String]
@@ -111,6 +113,7 @@ pub fn RouterModelPort::RouterModelPort(
     credentials: Map::from_array([]),
     api_key_credentials: Map::from_array([]),
     extra_quota_sources,
+    decision: None,
     status_segments: Map::from_array([]),
     quota_readings: [],
     quota_fetched_at: 0L,
@@ -324,6 +327,127 @@ pub fn RouterModelPort::replace_provider_slots(
 }
 
 ///|
+/// User-authored text only when the current model input ends in a user message.
+/// Tool-followup model rounds therefore reuse the already selected/default effort
+/// instead of paying for a repeated semantic classification.
+fn current_user_text(messages : ArrayView[@posoco.Message]) -> String? {
+  let message = match messages.last() {
+    Some(message) => message
+    None => return None
+  }
+  match message {
+    @posoco.Message::UserMessage(content~) => {
+      let builder = StringBuilder()
+      let mut wrote = false
+      for part in content {
+        match part {
+          @posoco.Content::Text(text) => {
+            if wrote {
+              builder.write_string("\n")
+            }
+            builder.write_string(text)
+            wrote = true
+          }
+          _ => ()
+        }
+      }
+      let text = builder.to_string()
+      if text.trim().length() > 0 {
+        Some(text)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+fn highest_probability_index(probabilities : Array[Double]) -> Int? {
+  if probabilities.is_empty() {
+    return None
+  }
+  let mut best = 0
+  for i = 1; i < probabilities.length(); i = i + 1 {
+    if probabilities[i] > probabilities[best] {
+      best = i
+    }
+  }
+  Some(best)
+}
+
+///|
+/// Return a temporary slot rebuilt at a DecisionPort-selected reasoning
+/// effort. This never mutates the router's active slot or sticky effort. Any
+/// DecisionPort failure falls back to the current deterministic selection.
+async fn RouterModelPort::decision_slot_for_chat(
+  self : RouterModelPort,
+  messages : ArrayView[@posoco.Message],
+  tool_count : Int,
+) -> ModelSlot? noraise {
+  if self.active_effort is Some(_) {
+    return None
+  }
+  let decision = match self.decision {
+    Some(decision) => decision
+    None => return None
+  }
+  let slot = self.active_slot()
+  if slot.thinking_efforts.length() < 2 || slot.rebuild_on_effort is None {
+    return None
+  }
+  let user_text = match current_user_text(messages) {
+    Some(text) => text
+    None => return None
+  }
+  let levels = slot.thinking_efforts.map(fn(effort) {
+    Json::object({ "effort": Json::string(effort) })
+  })
+  let request : @posoco.DecisionRequest = {
+    state: Json::object({
+      "user_request": Json::string(user_text),
+      "provider_id": Json::string(slot.provider_id),
+      "model_id": Json::string(slot.model_id),
+      "tool_count": Json::number(tool_count.to_double()),
+    }),
+    questions: [
+      @posoco.DecisionQuestion::Score(
+        id="llm.reasoning_effort",
+        instructions=Json::string(
+          "Estimate how much reasoning effort this user turn needs. Levels are ordered from least to most effort. Judge task complexity only; do not choose a provider or model.",
+        ),
+        levels~,
+      ),
+    ],
+  }
+  let result = decision.evaluate(request) catch { _ => return None }
+  result.validate_for(request) catch {
+    _ => return None
+  }
+  for answer in result.answers {
+    match answer {
+      @posoco.DecisionAnswer::ScoreAnswer(
+        id="llm.reasoning_effort",
+        probabilities~,
+        ..
+      ) =>
+        match highest_probability_index(probabilities) {
+          Some(index) if index < slot.thinking_efforts.length() &&
+            probabilities[index] >= 0.6 =>
+            match slot.rebuild_on_effort {
+              Some(rebuild) =>
+                return Some(rebuild(slot.thinking_efforts[index]))
+              None => return None
+            }
+          _ => return None
+        }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
 pub impl @posoco.ModelPort for RouterModelPort with fn chat(
   self : RouterModelPort,
   scope : @posoco.InvocationScope,
@@ -332,9 +456,11 @@ pub impl @posoco.ModelPort for RouterModelPort with fn chat(
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  let result = self.active_slot().port.chat(
-    scope, messages, tools, options, stream,
-  )
+  let slot = match self.decision_slot_for_chat(messages, tools.length()) {
+    Some(slot) => slot
+    None => self.active_slot()
+  }
+  let result = slot.port.chat(scope, messages, tools, options, stream)
   // Refresh after the response: the registry pull never delays the first
   // token, and every failure inside stays captured (this never raises).
   self.refresh_quota_if_due()
