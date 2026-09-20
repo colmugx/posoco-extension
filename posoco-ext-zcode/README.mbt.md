@@ -5,7 +5,8 @@ Ports contributed (via `ZcodeExt`):
 | Port | Face |
 |---|---|
 | `ToolProvider` | one `zcode` tool — delegate a task to the local [ZCode](https://zcode.z.ai) CLI |
-| `Extension` | manifest id `posoco_ext_zcode` |
+| `Lifecycle` / `Observer` | capture the composed `Tasks` capability and track the parent session (background support) |
+| `Extension` | manifest id `posoco_ext_zcode`, requires `Capability::Tasks` |
 
 ## What it does
 
@@ -36,7 +37,35 @@ Wire behavior (live-verified against zcode 0.16.5; see the posoco repo's
 
 Tool arguments: `task` (required), `cwd` (default: current dir),
 `session_id` (continue a previous delegation), `mode`
-(`build|edit|plan|yolo`, default `edit`).
+(`build|edit|plan|yolo`, default `edit`), `background` (default `false`).
+
+### Background delegations
+
+`background: true` returns a receipt immediately and runs the delegation
+on the Agent-owned task capability (core `Tasks`):
+
+```
+background zcode accepted
+delegation_id: agent_task_…
+a fresh zcode session will start; the result arrives as a follow-up turn
+```
+
+Host contract: compose `ZcodeExt` (its manifest declares
+`requires: [Capability::Tasks]` and contributes the tools value as
+Lifecycle + Observer) and run the agent under `Agent::run_scoped`.
+`on_compose` captures the composed `Tasks`; `on_event_at` tracks the
+parent session from scoped events, and the background `TaskSpec` is
+addressed to that session. The receipt's `delegation_id` is the opaque
+core task id; core delivers the delegation's terminal summary to the same
+session as a follow-up turn on its next ordinary `run_turn` (no automatic
+wakeup, and results are not lost when a save fails — core retries). There
+is no extension-side queue, flush hook, or parent binding. Constraints:
+background always starts a **fresh session** (resume is foreground-only —
+one in-flight prompt per session, upstream error 1308); the wall-clock
+ceiling is the same `ZcodeConfig.timeout_ms`. Submitting outside
+`run_scoped` (or before composition) is a model-visible tool error, not a
+crash. Tests: `src/background_wbtest.mbt` (injected runner, scripted
+parent agent — no process).
 
 ## Usage
 

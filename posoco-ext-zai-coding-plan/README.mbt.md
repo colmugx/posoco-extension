@@ -72,8 +72,8 @@ All wire behavior is inherited from the shared GLM protocol in
 `posoco-ext-zai`: `thinking` / `reasoning_effort` handling,
 `reasoning_content` resends with `tool_calls`, `tool_stream` gating for
 glm-4.6+, and the typed 429 quota-verdict classification (codes
-1308/1310/1316–1321 with flush-time parsing) — pair with posoco-ext-ratelimit
-for automatic resume.
+1308/1310/1316–1321 with flush-time parsing) — pair with a rate-limit
+extension for automatic resume.
 
 ## Quota readings
 
@@ -87,12 +87,12 @@ key as a bare `Authorization` value (no `Bearer` prefix).
 
 Readings are provider-stated, never estimated: each `data.limits[]` entry
 maps onto a `devkit.QuotaReading` with its official `percentage` and
-`nextResetTime` (unix milliseconds). `TOKENS_LIMIT` windows are identified
-by `(unit, number)` — `3/5` is the 5-hour window, `6/1` the weekly one;
-anything else (including `TIME_LIMIT`, the monthly MCP-tool allowance)
-stays `Other(label)` verbatim. Entries stating neither a percentage nor a
-reset time are skipped, and a `success: false` envelope is an `Err`, not a
-zero reading.
+`nextResetTime` (unix milliseconds). `window` carries provider-owned label
+strings: `TOKENS_LIMIT` windows are identified by `(unit, number)` — `3/5`
+becomes `"5h"`, `6/1` `"weekly"`; anything else (including `TIME_LIMIT`,
+the monthly MCP-tool allowance) keeps its raw provider label verbatim.
+Entries stating neither a percentage nor a reset time are skipped, and a
+`success: false` envelope is an `Err`, not a zero reading.
 
 ```moonbit nocheck
 let probe = provider.quota_source(source) // : ZaiCodingPlanQuotaSource?
@@ -104,6 +104,12 @@ match probe {
   None => // provider not configured
 }
 ```
+
+The factory `build` also registers the quota source into the devkit
+process-wide quota registry under the provider id `zai-coding-plan` — every
+configured build re-registers, so the registry always holds the latest
+credential snapshot, and the `/status` command pulls the `5h`/`weekly`
+windows from it live.
 
 ## Settings
 
