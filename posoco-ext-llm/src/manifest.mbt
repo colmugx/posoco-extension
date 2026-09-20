@@ -21,6 +21,7 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
     observers=[self],
     lifecycle=[self],
     commands=[self],
+    requires=[@posoco.Capability::Decision],
   )
 }
 
@@ -31,8 +32,9 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
 /// Register-only: nothing else in the composed view is touched.
 pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
   self : RouterModelPort,
-  _ctx : @posoco.CompositionView,
+  ctx : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
+  self.decision = ctx.decision()
   self.publish_model_status()
   self.publish_provider_event()
   self.publish_ctx_status(None)
@@ -43,7 +45,7 @@ pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
 pub impl @posoco.Lifecycle for RouterModelPort with fn on_shutdown(
   self : RouterModelPort,
 ) -> Unit {
-  ignore(self)
+  self.decision = None
 }
 
 ///|

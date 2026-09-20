@@ -16,6 +16,13 @@ catalogs advertise effort choices and provide a rebuild hook, so
 `/model {slot, effort}` validates and applies effort without the host knowing
 provider request fields.
 
+When a composed `DecisionPort` is available and the active slot advertises
+multiple reasoning efforts, the router may classify the current user request
+and choose a **temporary per-call effort**. This semantic judgement does not
+choose a provider or model and does not mutate the router's active selection.
+An explicit user-selected effort always wins; missing/failed/invalid decision
+results fall back to the existing active slot unchanged.
+
 The router also declares these commands:
 
 - `/model [slot]` lists the slot catalog or switches the active slot. The

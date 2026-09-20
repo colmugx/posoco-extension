@@ -1136,3 +1136,182 @@ async test "status invoke failure backs off without clearing old segments" {
   // the failing source was read only by /status itself.
   assert_eq(failed_source.calls, 1)
 }
+
+///|
+async test "decision port selects per-call reasoning effort without mutating selection" {
+  let low_port : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: ["low", "high"],
+  }
+  let high_port : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: ["low", "high"],
+  }
+  let low_slot = ModelSlot::ModelSlot(
+    id="auto",
+    label="Auto",
+    provider_id="test",
+    model_id="low-model",
+    port=low_port,
+    thinking_efforts=["low", "high"],
+    default_effort=Some("low"),
+    rebuild_on_effort=Some(fn(effort) {
+      if effort == "high" {
+        ModelSlot::ModelSlot(
+          id="auto",
+          label="Auto",
+          provider_id="test",
+          model_id="high-model",
+          port=high_port,
+          thinking_efforts=["low", "high"],
+          default_effort=Some("low"),
+        )
+      } else {
+        ModelSlot::ModelSlot(
+          id="auto",
+          label="Auto",
+          provider_id="test",
+          model_id="low-model",
+          port=low_port,
+          thinking_efforts=["low", "high"],
+          default_effort=Some("low"),
+        )
+      }
+    }),
+  )
+  let router = RouterModelPort(slots=[low_slot])
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::ScoreAnswer(
+          id="llm.reasoning_effort",
+          score=0.9,
+          probabilities=[0.1, 0.9],
+          confidence=Some(0.9),
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let ui = @posoco.NoopUiPort()
+  (router as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model=low_port,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let messages = [
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text("prove this race condition"),
+    ]),
+  ]
+  match router.decision_slot_for_chat(messages[:], 0) {
+    Some(selected) => assert_eq(selected.model_id, "high-model")
+    None => fail("expected decision-selected effort slot")
+  }
+  assert_true(router.active_effort() is None)
+  assert_eq(router.current_model_id(), "low-model")
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "explicit reasoning effort suppresses decision port auto selection" {
+  let base = router_effort_slot("slot", "test", "model")
+  let router = RouterModelPort(slots=[base])
+  router.select_effort("slot", "high") catch {
+    _ => fail("unexpected explicit effort selection failure")
+  }
+  let decision = @posoco.ScriptedDecisionPort([])
+  let model : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: [],
+  }
+  let ui = @posoco.NoopUiPort()
+  (router as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let messages = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("complex task")]),
+  ]
+  assert_true(router.decision_slot_for_chat(messages[:], 0) is None)
+  assert_eq(decision.call_count(), 0)
+  assert_eq(router.active_effort(), Some("high"))
+}
+
+///|
+test "router manifest declares optional decision capability" {
+  let slot = router_test_slot("slot", "test", "model", [])
+  let router = RouterModelPort(slots=[slot])
+  let manifest = router.manifest()
+  assert_true(manifest.requires.contains(@posoco.Capability::Decision))
+  assert_eq(manifest.lifecycle.length(), 1)
+}
+
+///|
+async test "decision effort is not recomputed after the user-ended model round" {
+  let slot = router_effort_slot("slot", "test", "model")
+  let router = RouterModelPort(slots=[slot])
+  let decision = @posoco.ScriptedDecisionPort([])
+  let model : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: [],
+  }
+  let ui = @posoco.NoopUiPort()
+  (router as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let messages = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("complex task")]),
+    router_test_message(),
+  ]
+  assert_true(router.decision_slot_for_chat(messages[:], 0) is None)
+  assert_eq(decision.call_count(), 0)
+}
+
+///|
+async test "low-confidence decision effort falls back to the active slot" {
+  let slot = router_effort_slot("slot", "test", "model")
+  let router = RouterModelPort(slots=[slot])
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::ScoreAnswer(
+          id="llm.reasoning_effort",
+          score=0.49,
+          probabilities=[0.51, 0.49],
+          confidence=None,
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let model : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: [],
+  }
+  let ui = @posoco.NoopUiPort()
+  (router as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let messages = [
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text("ambiguous task"),
+    ]),
+  ]
+  assert_true(router.decision_slot_for_chat(messages[:], 0) is None)
+  assert_eq(decision.call_count(), 1)
+}
