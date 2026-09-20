@@ -11,11 +11,18 @@
 // - MCP_FIXTURE_NOTIFICATION_LOG=<path> appends every received notification
 //   (message without an id) to that file as one JSON line per message;
 //   append failures are silently ignored.
-import { appendFileSync } from "node:fs";
+// - MCP_FIXTURE_FLAKY=N with MCP_FIXTURE_FLAKY_STATE=<path>: the first N
+//   initialize attempts (counted across process restarts in the state file)
+//   are rejected by exiting without a reply — the client observes stream EOF
+//   and the connect fails — and later attempts serve normally. Without the
+//   pair the surface is untouched.
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import readline from "node:readline";
 
 const RESILIENCE = process.env.MCP_FIXTURE_RESILIENCE === "1";
 const NOTIFICATION_LOG = process.env.MCP_FIXTURE_NOTIFICATION_LOG;
+const FLAKY = Number(process.env.MCP_FIXTURE_FLAKY || "0");
+const FLAKY_STATE = process.env.MCP_FIXTURE_FLAKY_STATE;
 
 const rl = readline.createInterface({ input: process.stdin });
 
@@ -28,6 +35,21 @@ function logNotification(msg) {
   try {
     appendFileSync(NOTIFICATION_LOG, JSON.stringify(msg) + "\n");
   } catch {}
+}
+
+// Cross-process attempt counter for the flaky gate; returns the attempt
+// number of this initialize (1-based). Read/write failures degrade to
+// "always attempt 1".
+function bumpFlakyAttempt() {
+  let count = 0;
+  try {
+    count = Number(readFileSync(FLAKY_STATE, "utf8").trim() || "0");
+  } catch {}
+  count += 1;
+  try {
+    writeFileSync(FLAKY_STATE, String(count));
+  } catch {}
+  return count;
 }
 
 rl.on("line", (line) => {
@@ -44,6 +66,11 @@ rl.on("line", (line) => {
   }
   switch (method) {
     case "server/discover":
+      if (FLAKY > 0 && FLAKY_STATE && bumpFlakyAttempt() <= FLAKY) {
+        // Reject this initialize attempt by dying without a reply: the
+        // client observes stream EOF and the connect fails.
+        process.exit(1);
+      }
       send({
         jsonrpc: "2.0",
         id,

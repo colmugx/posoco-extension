@@ -6,6 +6,7 @@ import {
   "colmugx/mcp/client",
   "colmugx/mcp/transport",
   "colmugx/mcp/protocol/types",
+  "colmugx/fuwaroid",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/js_async",

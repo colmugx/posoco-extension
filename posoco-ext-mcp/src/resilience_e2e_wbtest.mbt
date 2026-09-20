@@ -8,7 +8,8 @@
 /// unless POSOCO_MCP_E2E=1 is set (node path overridable via
 /// POSOCO_MCP_E2E_NODE). MCP_FIXTURE_RESILIENCE=1 is not an execution gate —
 /// it is a variable handed to the fixture server's env to enable its
-/// resilience behaviors.
+/// resilience behaviors (MCP_FIXTURE_FLAKY + MCP_FIXTURE_FLAKY_STATE gate the
+/// flaky-initialize mode used by the probe-retry recovery test).
 ///
 /// The surrounding task group must outlive every connection: stdio children
 /// are spawned on it and get terminated when it closes, so no test can leave
@@ -391,6 +392,688 @@ async test "e2e cancellation now delivers a cancelled notification" {
       let root = @fs.tmpdir(prefix="posoco-mcp-e2e-notify")
       e2e_cancel_scenario(node, root + "/notifications.log")
     }
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Write a tmpdir mcp.json with the echo fixture plus a dead http server
+/// (closed localhost port) to prove one probe's failure isolates the other.
+async fn e2e_probe_fixture_cwd(node : String) -> String {
+  let root = @fs.tmpdir(prefix="posoco-mcp-e2e-probe")
+  let script = @fs.realpath("test_fixtures/echo_server.mjs") catch {
+    _ => "test_fixtures/echo_server.mjs"
+  }
+  let content = "{\"mcpServers\":{\"echo\":{\"command\":\"\{node}\",\"args\":[\"\{script}\"],\"env\":{}},\"dead\":{\"type\":\"http\",\"url\":\"http://127.0.0.1:1/mcp\",\"timeout_ms\":2000}}}"
+  @fs.write_file(
+    root + "/.mcp.json",
+    content,
+    create_mode=@fs.CreateMode::CreateOrTruncate,
+    permission=0o644,
+  ) catch {
+    _ => fail("e2e setup: could not write mcp.json")
+  }
+  root
+}
+
+///|
+/// Probe success path: start_probes without activate connects the fixture
+/// server in the background; the live connection is executable afterwards.
+async fn e2e_probe_success_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let cwd = e2e_fixture_cwd(node, "", [])
+    let bridge = match
+      MCPToolBridge::discover(
+        cwd~,
+        user_mcp_json=cwd + "/nohome/.cetas/mcp.json",
+      ) {
+      Ok(bridge) => bridge
+      Err(message) => fail("discover failed: " + message)
+    }
+    bridge.attach(group)
+    bridge.start_probes()
+    assert_true(bridge.pending.is_empty())
+    let mut waited = 0
+    while bridge.catalog_revision < 1 && waited < 5_000 {
+      @async.sleep(25)
+      waited += 25
+    }
+    assert_true(bridge.catalog_revision >= 1)
+    assert_false(@posoco.ToolProvider::list_tools(bridge).is_empty())
+    match e2e_execute(bridge, "echo__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) => fail("probe-connected echo failed: " + message)
+    }
+    bridge.close()
+  })
+}
+
+///|
+async test "e2e start_probes connects in background and stays executable" {
+  match e2e_find_node() {
+    Some(node) => e2e_probe_success_scenario(node)
+    // skip: node is unavailable in this environment
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Probe failure isolation: a dead server's failed probe is recorded while
+/// the parallel echo probe connects and executes unaffected. A short
+/// injected retry schedule keeps the dead server's bounded retries inside
+/// the settle window; the stability wait skips past its intermediate
+/// failure entries before asserting the single final one.
+async fn e2e_probe_failure_isolation_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let cwd = e2e_probe_fixture_cwd(node)
+    let bridge = match
+      MCPToolBridge::discover(
+        cwd~,
+        user_mcp_json=cwd + "/nohome/.cetas/mcp.json",
+      ) {
+      Ok(bridge) => bridge
+      Err(message) => fail("discover failed: " + message)
+    }
+    bridge.attach(group)
+    bridge.start_probes(backoff_ms=[100, 100, 100])
+    let mut waited = 0
+    while (bridge.catalog_revision < 1 || bridge.failures().length() < 1) &&
+          waited < 5_000 {
+      @async.sleep(25)
+      waited += 25
+    }
+    let mut last_len = bridge.failures().length()
+    let mut stable = 0
+    while stable < 400 && waited < 10_000 {
+      @async.sleep(25)
+      waited += 25
+      let len = bridge.failures().length()
+      if len == last_len {
+        stable += 25
+      } else {
+        last_len = len
+        stable = 0
+      }
+    }
+    // Echo's probe succeeded; the dead server exhausted its retries into
+    // exactly one final failure entry.
+    assert_true(bridge.catalog_revision >= 1)
+    assert_eq(bridge.failures().length(), 1)
+    assert_eq(bridge.failures()[0].0, "dead")
+    assert_false(@posoco.ToolProvider::list_tools(bridge).is_empty())
+    match e2e_execute(bridge, "echo__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) =>
+        fail("echo must survive the dead server's probe failure: " + message)
+    }
+    bridge.close()
+  })
+}
+
+///|
+async test "e2e probe failure isolates the healthy server" {
+  match e2e_find_node() {
+    Some(node) => e2e_probe_failure_isolation_scenario(node)
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Probe retry recovery: the fixture rejects its first initialize attempt
+/// (dies without a reply, counted across restarts in a state file), so the
+/// first probe fails — the background retry then connects the recovered
+/// server, scrubs the failure entry, and the live connection executes.
+async fn e2e_probe_flaky_recovery_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let state_root = @fs.tmpdir(prefix="posoco-mcp-e2e-flaky")
+    let state_path = state_root + "/flaky_state"
+    let cwd = e2e_fixture_cwd(node, "", [
+      ("MCP_FIXTURE_FLAKY", "1"),
+      ("MCP_FIXTURE_FLAKY_STATE", state_path),
+    ])
+    let bridge = match
+      MCPToolBridge::discover(
+        cwd~,
+        user_mcp_json=cwd + "/nohome/.cetas/mcp.json",
+      ) {
+      Ok(bridge) => bridge
+      Err(message) => fail("discover failed: " + message)
+    }
+    bridge.attach(group)
+    // First backoff stays well above the flaky process's time-to-EOF so the
+    // retry cannot race the dying first attempt.
+    bridge.start_probes(backoff_ms=[400, 250, 250])
+    let mut waited = 0
+    while bridge.catalog_revision < 1 && waited < 10_000 {
+      @async.sleep(25)
+      waited += 25
+    }
+    // The retry bumped the revision and scrubbed the first failure in the
+    // same synchronous step, so /mcp reflects a fully recovered server.
+    assert_true(bridge.catalog_revision >= 1)
+    assert_true(bridge.failures().is_empty())
+    assert_false(@posoco.ToolProvider::list_tools(bridge).is_empty())
+    match e2e_execute(bridge, "echo__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) => fail("flaky-recovered echo failed: " + message)
+    }
+    bridge.close()
+  })
+}
+
+///|
+/// Explicit-connect fixture config: the caller picks the name, env knobs,
+/// and deadline, so registry slot order is exactly the connect call order
+/// (deterministic, unlike mcp.json map iteration order).
+fn e2e_fixture_config(
+  node : String,
+  script : String,
+  name~ : String,
+  resilience~ : Bool,
+  timeout_ms~ : Int,
+) -> MCPServerConfig {
+  let env : Map[String, String] = if resilience {
+    Map::from_array([("MCP_FIXTURE_RESILIENCE", "1")])
+  } else {
+    Map::from_array([])
+  }
+  MCPServerConfig::MCPServerConfig(
+    name~,
+    transport=@transport.AnyTransport::StdioClient(
+      @transport.StdioClientTransport::StdioClientTransport(
+        cmd=node,
+        args=[script],
+        extra_env=env,
+      ),
+    ),
+    auth=ServerAuth::NoAuth,
+    timeout_ms~,
+  )
+}
+
+///|
+/// Slot-registry contract: an in-flight execute on one server while a
+/// NEIGHBOR is `reconnect_server`d must never land on the wrong server or a
+/// shifted index. The neighbor sits at slot 0 and the victim (a slow call
+/// under a tight deadline) at slot 1, so a remove()-and-shift registry would
+/// move the victim's index under the in-flight call; the neighbor carries no
+/// `sleep` tool, so a misrouted retry would surface as its "echo:{}" success
+/// instead of the victim's own timeout.
+async fn e2e_neighbor_reconnect_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let script = @fs.realpath("test_fixtures/echo_server.mjs") catch {
+      _ => "test_fixtures/echo_server.mjs"
+    }
+    let bridge = MCPToolBridge()
+    bridge.attach(group)
+    match
+      bridge.connect(
+        e2e_fixture_config(
+          node,
+          script,
+          name="echo",
+          resilience=false,
+          timeout_ms=10_000,
+        ),
+        group,
+      ) {
+      Ok(_) => ()
+      Err(message) => fail("connect echo failed: " + message)
+    }
+    match
+      bridge.connect(
+        e2e_fixture_config(
+          node,
+          script,
+          name="slow",
+          resilience=true,
+          timeout_ms=300,
+        ),
+        group,
+      ) {
+      Ok(_) => ()
+      Err(message) => fail("connect slow failed: " + message)
+    }
+    assert_eq(bridge.connections.length(), 2)
+    let names : Array[String] = []
+    for tool in @posoco.ToolProvider::list_tools(bridge) {
+      names.push(tool.name.to_string())
+    }
+    assert_true(names.contains("echo__echo"))
+    assert_false(names.contains("echo__sleep"))
+    assert_true(names.contains("slow__sleep"))
+    let settled : Array[Result[String, String]] = []
+    let _ = group.spawn(() => {
+      settled.push(
+        e2e_execute(bridge, "slow__sleep", [("ms", Json::number(5000))]),
+      )
+    })
+    @async.sleep(100)
+    match bridge.reconnect_server("echo") {
+      Ok(_) => ()
+      Err(message) => fail("neighbor reconnect failed: " + message)
+    }
+    let mut waited = 0
+    while settled.is_empty() && waited < 8_000 {
+      @async.sleep(25)
+      waited += 25
+    }
+    assert_eq(settled.length(), 1)
+    match settled[0] {
+      Err(message) =>
+        assert_true(
+          message.contains("stage=timeout") &&
+          message.contains("timeout_ms=300"),
+        )
+      Ok(content) => fail("sleep must surface its own timeout, got: " + content)
+    }
+    // Slot identities never drifted: the neighbor refilled its own slot, the
+    // victim kept its index through its reactive reconnect, and routing maps
+    // each server's tools back to its original slot.
+    assert_eq(bridge.connections.length(), 2)
+    assert_eq(bridge.connections[0].name, "echo")
+    assert_eq(bridge.connections[1].name, "slow")
+    assert_true(bridge.connections[0].client is Some(_))
+    assert_true(bridge.connections[1].client is Some(_))
+    assert_true(bridge.tool_to_conn.get("echo__echo") is Some(0))
+    assert_true(bridge.tool_to_conn.get("slow__echo") is Some(1))
+    match e2e_execute(bridge, "echo__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) => fail("neighbor echo failed after refill: " + message)
+    }
+    match e2e_execute(bridge, "slow__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) => fail("victim echo failed after scenario: " + message)
+    }
+    bridge.close()
+  })
+}
+
+///|
+async test "e2e neighbor reconnect during in-flight call stays slot-honest" {
+  match e2e_find_node() {
+    Some(node) => e2e_neighbor_reconnect_scenario(node)
+    // skip: node is unavailable in this environment
+    None => assert_true(true)
+  }
+}
+
+///|
+async test "e2e probe retry recovers a flaky server" {
+  match e2e_find_node() {
+    Some(node) => e2e_probe_flaky_recovery_scenario(node)
+    None => assert_true(true)
+  }
+}
+
+///|
+/// The folded view of slot 0's actor: the deterministic observation seam for
+/// the wiring-level actor tests (health/generation/in_flight).
+async fn e2e_conn_view(bridge : MCPToolBridge) -> ConnView {
+  let actor = match bridge.connections[0].actor {
+    Some(actor) => actor
+    None => fail("expected slot 0 to hold a live actor")
+  }
+  match actor.inspect(timeout_ms=10_000) {
+    Ok(View(view)) => view
+    _ => fail("conn actor inspect did not answer a view")
+  }
+}
+
+///|
+/// True once slot 0's actor folded to Reconnecting (bounded poll).
+async fn e2e_wait_reconnecting(bridge : MCPToolBridge) -> Bool {
+  let mut waited = 0
+  while waited < 5_000 {
+    if e2e_conn_view(bridge).health is Reconnecting {
+      return true
+    }
+    @async.sleep(10)
+    waited += 10
+  }
+  false
+}
+
+///|
+/// Wiring-level arbitration: two concurrent reconnect runners on the same
+/// live slot — the actor's BeginReconnect grants exactly one winner; the
+/// loser is refused with Busy immediately (the legacy "already in progress"
+/// text) and never opens a second connection. The winner settles the slot
+/// back to Fresh with the paired admission counts, and the connection keeps
+/// serving calls.
+async fn e2e_dual_reconnect_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let bridge = e2e_activate_bridge(group, node, "", [
+      ("MCP_FIXTURE_RESILIENCE", "1"),
+    ])
+    let results : Array[Result[Unit, String]] = []
+    let _ = group.spawn(() => results.push(bridge.reconnect_one(0)))
+    assert_true(e2e_wait_reconnecting(bridge))
+    // The loser: refused by the actor fold, not by a check-then-act flag.
+    match bridge.reconnect_one(0) {
+      Err(message) => assert_true(message.contains("already in progress"))
+      Ok(_) => fail("expected the second reconnect to lose with Busy")
+    }
+    let mut waited = 0
+    while results.is_empty() && waited < 8_000 {
+      @async.sleep(25)
+      waited += 25
+    }
+    assert_eq(results.length(), 1)
+    match results[0] {
+      Ok(_) => ()
+      Err(message) => fail("winner reconnect failed: " + message)
+    }
+    let view = e2e_conn_view(bridge)
+    assert_true(view.health is Fresh)
+    assert_eq(view.in_flight, 0)
+    assert_eq(bridge.connections.length(), 1)
+    match e2e_execute(bridge, "echo__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) => fail("post-reconnect echo failed: " + message)
+    }
+    bridge.close()
+  })
+}
+
+///|
+async test "e2e concurrent reconnects on one slot have a single winner" {
+  match e2e_find_node() {
+    Some(node) => e2e_dual_reconnect_scenario(node)
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Wiring-level stigma scoping (distinct from the A2 pure-fold tests): with
+/// the retry budget at 0, a timed-out call stigmatizes exactly its own
+/// generation (NeedsReconnect, admission paired back to zero) and the NEXT
+/// call's forced reconnect mints the successor generation as Fresh — a
+/// stigma that smeared onto the successor would resurface as another forced
+/// reconnect.
+async fn e2e_stigma_generation_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let bridge = e2e_activate_bridge(
+      group,
+      node,
+      ",\"timeout_ms\":300,\"max_reconnects\":0",
+      [("MCP_FIXTURE_RESILIENCE", "1")],
+    )
+    match e2e_execute(bridge, "echo__sleep", [("ms", Json::number(5000))]) {
+      Err(message) => assert_true(message.contains("stage=timeout"))
+      Ok(content) => fail("sleep should have timed out, got: " + content)
+    }
+    let stained = e2e_conn_view(bridge)
+    assert_true(stained.health is NeedsReconnect)
+    assert_eq(stained.in_flight, 0)
+    // The forced reconnect of the next call recovers into a Fresh successor
+    // generation; the dead generation's stigma is structurally inert.
+    match e2e_execute(bridge, "echo__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) =>
+        fail("expected forced reconnect to recover, got: " + message)
+    }
+    let recovered = e2e_conn_view(bridge)
+    assert_true(recovered.health is Fresh)
+    assert_eq(recovered.generation, stained.generation + 1)
+    assert_eq(recovered.in_flight, 0)
+    bridge.close()
+  })
+}
+
+///|
+async test "e2e timeout stigma lands on its generation and clears with it" {
+  match e2e_find_node() {
+    Some(node) => e2e_stigma_generation_scenario(node)
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Wiring-level cancel pairing: a cancelled in-flight call returns its
+/// admission through the deferred EndCall (in_flight back to 0, no stigma —
+/// an unobservable outcome reports TransportFail, never TimedOut), so the
+/// very next call runs on the SAME generation without a forced reconnect.
+async fn e2e_cancel_pairing_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let bridge = e2e_activate_bridge(group, node, "", [
+      ("MCP_FIXTURE_RESILIENCE", "1"),
+    ])
+    let probe = CancelProbe::{
+      settled: false,
+      raised: false,
+      message: "",
+      cancelled_flag: false,
+    }
+    let task = group.spawn(() => {
+      match e2e_execute(bridge, "echo__sleep", [("ms", Json::number(8000))]) {
+        Ok(content) => {
+          probe.settled = true
+          probe.message = "unexpected success: \{content}"
+        }
+        Err(message) => {
+          probe.settled = true
+          probe.raised = true
+          probe.message = message
+          probe.cancelled_flag = @async.is_being_cancelled()
+        }
+      }
+    })
+    @async.sleep(300)
+    task.cancel()
+    let mut waited = 0
+    while !probe.settled && waited < 5_000 {
+      @async.sleep(25)
+      waited += 25
+    }
+    assert_true(probe.settled)
+    assert_true(probe.raised)
+    let after_cancel = e2e_conn_view(bridge)
+    assert_eq(after_cancel.in_flight, 0)
+    assert_true(after_cancel.health is Fresh)
+    match e2e_execute(bridge, "echo__echo", []) {
+      Ok(content) => assert_true(content.has_prefix("echo:"))
+      Err(message) =>
+        fail("expected usable connection after cancel, got: " + message)
+    }
+    // No forced reconnect happened: the cancel path returned its admission
+    // without stigmatizing the generation.
+    let after_reuse = e2e_conn_view(bridge)
+    assert_true(after_reuse.health is Fresh)
+    assert_eq(after_reuse.generation, after_cancel.generation)
+    assert_eq(after_reuse.in_flight, 0)
+    bridge.close()
+  })
+}
+
+///|
+async test "e2e cancelled call returns its admission without stigmatizing" {
+  match e2e_find_node() {
+    Some(node) => e2e_cancel_pairing_scenario(node)
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Wiring-level actor-close honesty: with ONLY the slot's actor closed (the
+/// state a retire leaves behind mid-flight), routing and the client mirror
+/// still resolve, so the failure must surface through the ask mapping —
+/// MailboxClosed becomes an honest stage=transport failure for calls and an
+/// honest error for refresh — never a swallowed success or a hang.
+async fn e2e_actor_close_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let bridge = e2e_activate_bridge(group, node, "", [
+      ("MCP_FIXTURE_RESILIENCE", "1"),
+    ])
+    match bridge.connections[0].actor {
+      Some(actor) => actor.close()
+      None => fail("expected slot 0 to hold a live actor")
+    }
+    match e2e_execute(bridge, "echo__echo", []) {
+      Err(message) => assert_true(message.contains("stage=transport"))
+      Ok(content) =>
+        fail("expected honest failure after actor close, got: " + content)
+    }
+    match bridge.refresh_tools() {
+      Err(message) => assert_true(message.contains("refresh list_tools failed"))
+      Ok(_) => fail("expected refresh to fail honestly after actor close")
+    }
+    bridge.close()
+  })
+}
+
+///|
+async test "e2e closed actor makes calls and refresh fail honestly" {
+  match e2e_find_node() {
+    Some(node) => e2e_actor_close_scenario(node)
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Slot 0's actor handle, saved before a close the test wants to observe
+/// through the detached handle (late tells, second join, snapshot).
+fn e2e_slot0_actor(
+  bridge : MCPToolBridge,
+) -> ConnActor[@client.MCPClient] raise {
+  match bridge.connections[0].actor {
+    Some(actor) => actor
+    None => fail("expected slot 0 to hold a live actor")
+  }
+}
+
+///|
+/// Wave 4 close discipline, wiring level. A queued-before-close EndCall
+/// folds during the drain; `close(); join()` returning IS the drain
+/// confirmation, a second join returns the recorded Graceful immediately
+/// (multi-waiter safe), late tells are refused with MailboxClosed, and the
+/// snapshot closes the conservation law (accepted == processed, abandoned
+/// == 0 — a graceful drain serves everything it accepted). The /mcp status
+/// read before the close pins the Inspect data source end to end.
+async fn e2e_close_drain_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let bridge = e2e_activate_bridge(group, node, "", [
+      ("MCP_FIXTURE_RESILIENCE", "1"),
+    ])
+    let outcome = @posoco.CommandPort::invoke(bridge, "mcp", Json::null()) catch {
+      error => fail("mcp status failed: " + error.to_string())
+    }
+    match outcome {
+      Success(feedback~, ..) => {
+        assert_true(feedback.contains("- echo: connected"))
+        assert_true(feedback.contains("health=fresh"))
+        assert_true(feedback.contains("generation=0"))
+      }
+      _ => fail("expected a successful status outcome")
+    }
+    let actor = e2e_slot0_actor(bridge)
+    // One admitted call, its report queued before the close: exactly what
+    // an in-flight execute holds when a shutdown races it.
+    match actor.acquire(timeout_ms=10_000) {
+      Ok(Permit(permit)) => {
+        assert_eq(permit.generation, 0)
+        match actor.inspect(timeout_ms=10_000) {
+          Ok(View(view)) => assert_eq(view.in_flight, 1)
+          _ => fail("inspect did not answer a view")
+        }
+        let _ = actor.end_call(generation=0, outcome=CallOk)
+      }
+      _ => fail("acquire did not answer a permit")
+    }
+    bridge.close()
+    assert_true(bridge.connections.is_empty())
+    // The late report is refused — never re-delivered to the dead mailbox.
+    assert_eq(
+      actor.end_call(generation=0, outcome=CallOk),
+      Err(@fuwaroid.SendRefusal::MailboxClosed),
+    )
+    // Second join: the loop already terminated, so it returns the recorded
+    // reason immediately.
+    let reason = actor.join()
+    guard reason is Graceful else { fail("close drain expected Graceful") }
+    let snap = actor.snapshot()
+    guard snap.lifecycle is Stopped(Graceful) else {
+      fail("expected Stopped(Graceful) lifecycle")
+    }
+    assert_eq(snap.abandoned, 0L)
+    assert_eq(snap.outstanding, 0L)
+    assert_eq(snap.accepted, snap.processed)
+  })
+}
+
+///|
+async test "e2e close drains the actor folds queued reports and refuses late tells" {
+  match e2e_find_node() {
+    Some(node) => e2e_close_drain_scenario(node)
+    None => assert_true(true)
+  }
+}
+
+///|
+/// Wave 4 close discipline against a REAL in-flight call: an execute
+/// admitted and parked on echo__sleep when close lands must settle with an
+/// honest failure of its own — never a false success, never a hang — while
+/// close still returns through a Graceful drain. The exact stage depends
+/// on whether the request had reached the wire before the transport
+/// closed: a sent request parks until its own deadline (`stage=timeout`;
+/// the SDK's close does not fail parked response waiters — the client
+/// event loop breaks on EOF without failing pending queues), an unsent
+/// one fails the send (`stage=transport`). The racing EndCall either
+/// queued before the mailbox closed and folded, or was refused after it —
+/// neither disturbs the loop.
+async fn e2e_close_inflight_scenario(node : String) -> Unit {
+  @async.with_task_group(group => {
+    let bridge = e2e_activate_bridge(group, node, ",\"timeout_ms\":2000", [
+      ("MCP_FIXTURE_RESILIENCE", "1"),
+    ])
+    let actor = e2e_slot0_actor(bridge)
+    let settled : Array[Result[String, String]] = []
+    let _ = group.spawn(() => {
+      settled.push(
+        e2e_execute(bridge, "echo__sleep", [("ms", Json::number(60_000))]),
+      )
+    })
+    let mut admitted = false
+    let mut waited = 0
+    while waited < 1_000 {
+      match actor.inspect(timeout_ms=10_000) {
+        Ok(View(view)) =>
+          if view.in_flight >= 1 {
+            admitted = true
+            break
+          }
+        _ => fail("inspect did not answer a view")
+      }
+      @async.sleep(5)
+      waited += 5
+    }
+    assert_true(admitted)
+    bridge.close()
+    let reason = actor.join()
+    guard reason is Graceful else { fail("close drain expected Graceful") }
+    assert_true(bridge.connections.is_empty())
+    let mut settled_wait = 0
+    while settled.is_empty() && settled_wait < 6_000 {
+      @async.sleep(25)
+      settled_wait += 25
+    }
+    assert_eq(settled.length(), 1)
+    match settled[0] {
+      Err(message) =>
+        assert_true(
+          message.contains("stage=timeout") ||
+          message.contains("stage=transport"),
+        )
+      Ok(content) =>
+        fail("the in-flight call must fail honestly on close, got: " + content)
+    }
+  })
+}
+
+///|
+async test "e2e close with an in-flight call settles it as an honest transport failure" {
+  match e2e_find_node() {
+    Some(node) => e2e_close_inflight_scenario(node)
     None => assert_true(true)
   }
 }

@@ -2,6 +2,44 @@
 /// Whitebox tests for internal helpers and type conversions.
 
 ///|
+/// Test-build equality for the ConnActor fold types. None of them derives
+/// Eq in production: the only production instantiation is
+/// `ConnReply[@client.MCPClient]`, and `@client.MCPClient` has no `Eq`, so
+/// a derived instance could never exist there — the derives were dead
+/// weight and the fold tables (conn_actor_wbtest) compare the Int-token
+/// instantiation instead. Structural field comparison, no shared derives.
+impl Eq for ConnHealth with fn equal(self, other) {
+  match (self, other) {
+    (Fresh, Fresh) => true
+    (NeedsReconnect, NeedsReconnect) => true
+    (Reconnecting, Reconnecting) => true
+    _ => false
+  }
+}
+
+///|
+/// See `Eq for ConnHealth` above: same rationale, Int-token instantiation.
+impl Eq for ConnReply[Int] with fn equal(self, other) {
+  match (self, other) {
+    (Permit(a), Permit(b)) =>
+      a.client == b.client && a.generation == b.generation
+    (Denied(a), Denied(b)) =>
+      match (a, b) {
+        (ReconnectFirst, ReconnectFirst) => true
+        (ReconnectInProgress, ReconnectInProgress) => true
+        _ => false
+      }
+    (Granted(generation=g1), Granted(generation=g2)) => g1 == g2
+    (Busy, Busy) => true
+    (View(a), View(b)) =>
+      a.health == b.health &&
+      a.generation == b.generation &&
+      a.in_flight == b.in_flight
+    _ => false
+  }
+}
+
+///|
 test "namespaced_tool_name_double_underscore" {
   let name = namespaced_tool_name("github", "create_issue")
   assert_eq(name, "github__create_issue")
@@ -229,6 +267,39 @@ async test "close_clears_state" {
 }
 
 ///|
+/// The no-actor close path (retired slots only): close clears the registry
+/// and routing without touching an actor join — the join discipline lives
+/// on the slots that hold actors, pinned end-to-end by the e2e close tests.
+async test "close_clears_registry_of_retired_slots" {
+  let bridge = registry_test_bridge(
+    [
+      registry_test_conn("gone", [catalog_test_tool("gone__tool")]),
+      registry_test_conn("shell", []),
+    ],
+    [],
+  )
+  bridge.close()
+  assert_true(bridge.connections.is_empty())
+  assert_true(bridge.tool_to_conn.is_empty())
+}
+
+///|
+/// The shutdown hook drives the same drain as `close`: the async slot
+/// accepts the inferred async body (the drain runs inside the call's
+/// cancellation-protected region), and the registry is gone when it
+/// returns. A cleanup failure would propagate loudly per the Lifecycle
+/// contract instead of being swallowed here.
+async test "on_shutdown_drains_and_clears_the_registry" {
+  let bridge = registry_test_bridge(
+    [registry_test_conn("gone", [catalog_test_tool("gone__tool")])],
+    [],
+  )
+  @posoco.Lifecycle::on_shutdown(bridge)
+  assert_true(bridge.connections.is_empty())
+  assert_true(bridge.tool_to_conn.is_empty())
+}
+
+///|
 fn tuning_test_transport() -> @transport.AnyTransport {
   @transport.AnyTransport::StdioClient(
     @transport.StdioClientTransport::StdioClientTransport(
@@ -409,6 +480,223 @@ test "http_connect_params_extracts_url_token_and_headers" {
     }
     _ => fail("expected http transport")
   }
+}
+
+///|
+fn registry_test_call(name : String) -> @posoco.ToolCall {
+  {
+    call_id: @kernel.CallId::unchecked("call_registry"),
+    name: @posoco.ToolName::unchecked(name),
+    arguments: Json::null(),
+  }
+}
+
+///|
+/// Wave 1 regression (red before the slot registry): a routing entry may
+/// point at a slot that no longer holds a live connection — retired by a
+/// concurrent `reconnect_server`, or left behind when `close()` cleared the
+/// registry. `execute` must fail honestly instead of indexing a shifted or
+/// cleared array.
+async test "execute_route_to_vanished_slot_fails_honestly" {
+  let bridge = MCPToolBridge()
+  bridge.tool_to_conn["gone__tool"] = 0
+  let outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError] = Ok(
+    @posoco.ToolProvider::execute(
+      bridge,
+      "gone__tool",
+      registry_test_call("gone__tool"),
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match outcome {
+    Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+      assert_true(message.contains("no longer present"))
+    _ =>
+      fail("expected honest no-longer-present failure, got a different outcome")
+  }
+}
+
+///|
+/// A retired-slot conn: no client and no actor (the server is absent), with
+/// the name and config a real retire leaves behind.
+fn registry_test_conn(
+  name : String,
+  tools : Array[@posoco.ToolDef],
+) -> MCPServerConn {
+  {
+    name,
+    client: None,
+    actor: None,
+    cached_tools: tools,
+    config: MCPServerConfig::MCPServerConfig(
+      name~,
+      transport=tuning_test_transport(),
+      auth=ServerAuth::NoAuth,
+    ),
+    epoch: 0,
+    _server_info: None,
+  }
+}
+
+///|
+fn registry_test_bridge(
+  conns : Array[MCPServerConn],
+  routes : Array[(String, Int)],
+) -> MCPToolBridge {
+  {
+    connections: conns,
+    tool_to_conn: Map::from_array(routes),
+    mode: LoadMode::Eager,
+    pending: [],
+    group: None,
+    activated: true,
+    catalog_revision: 0,
+    startup_failures: [],
+    server_tokens: Map::from_array([]),
+    auth_challenges: Map::from_array([]),
+    configs: Map::from_array([]),
+  }
+}
+
+///|
+test "list_tools_skips_retired_slot" {
+  let bridge = registry_test_bridge(
+    [registry_test_conn("gone", [catalog_test_tool("gone__tool")])],
+    [],
+  )
+  let tools = @posoco.ToolProvider::list_tools(bridge)
+  assert_true(tools.is_empty())
+}
+
+///|
+async test "execute_route_to_retired_slot_fails_honestly" {
+  let bridge = registry_test_bridge([registry_test_conn("gone", [])], [
+    ("gone__tool", 0),
+  ])
+  let outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError] = Ok(
+    @posoco.ToolProvider::execute(
+      bridge,
+      "gone__tool",
+      registry_test_call("gone__tool"),
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match outcome {
+    Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+      assert_true(message.contains("no longer present"))
+    _ => fail("expected honest no-longer-present failure for retired slot")
+  }
+}
+
+///|
+async test "refresh_tools_keeps_retired_slot_position_with_empty_entry" {
+  let bridge = registry_test_bridge([registry_test_conn("gone", [])], [
+    ("gone__tool", 0),
+  ])
+  match bridge.refresh_tools() {
+    Ok(_) => {
+      assert_eq(bridge.catalog_revision, 1)
+      // The retired slot contributes no routes and keeps its position.
+      assert_true(bridge.tool_to_conn.get("gone__tool") is None)
+      assert_eq(bridge.connections.length(), 1)
+      assert_eq(bridge.connections[0].name, "gone")
+      assert_true(bridge.connections[0].client is None)
+    }
+    Err(message) => fail("unexpected refresh error on retired slot: " + message)
+  }
+}
+
+///|
+test "retire_slot_clears_routes_and_keeps_slot_identity" {
+  let bridge = registry_test_bridge(
+    [registry_test_conn("gone", [catalog_test_tool("gone__tool")])],
+    [("gone__tool", 0)],
+  )
+  bridge.retire_slot(0)
+  assert_eq(bridge.connections.length(), 1)
+  assert_eq(bridge.connections[0].name, "gone")
+  assert_true(bridge.connections[0].client is None)
+  assert_true(bridge.connections[0].cached_tools.is_empty())
+  assert_true(bridge.tool_to_conn.get("gone__tool") is None)
+  // Out-of-bounds retire is a no-op, never an index shift.
+  bridge.retire_slot(7)
+  assert_eq(bridge.connections.length(), 1)
+}
+
+///|
+/// Observation cell for the defer unwinding probe.
+priv struct DeferProbe {
+  mut deferred_ran : Bool
+  mut value_at_defer : Int
+  mut mut_capture_saw_latest : Bool
+}
+
+///|
+/// Registers a defer, then mutates the observed state, then suspends: a
+/// caller cancellation raised at the suspension must still run the defer,
+/// and the defer body must observe the latest cell value.
+async fn defer_probe_body(probe : DeferProbe) -> Unit {
+  probe.deferred_ran = false
+  defer {
+    probe.deferred_ran = true
+    probe.value_at_defer = probe // placeholder, set below
+      .value_at_defer
+  }
+  probe.value_at_defer = 42
+  @async.sleep(60_000)
+}
+
+///|
+/// Same shape with a `mut` local captured by the defer closure: compiles
+/// only if MoonBit allows mut capture, and proves whether the closure sees
+/// the post-registration mutation.
+async fn defer_mut_capture_body(probe : DeferProbe) -> Unit {
+  let mut v = 0
+  defer {
+    probe.mut_capture_saw_latest = v == 42
+  }
+  v = 42
+  @async.sleep(60_000)
+}
+
+///|
+/// Empirical pin for the defer discipline `invoke_mcp_tool` relies on
+/// (round-1 Wave B2): a caller cancellation raised at an await inside the
+/// callee still runs the callee's registered defer during unwinding, and the
+/// defer body observes the latest state of captured cells. This is what
+/// guarantees the EndCall pairing never leaks in_flight on the cancel path.
+async test "defer runs on cancellation unwinding and sees latest cell state" {
+  @async.with_task_group(group => {
+    let probe = DeferProbe::{
+      deferred_ran: false,
+      value_at_defer: 0,
+      mut_capture_saw_latest: false,
+    }
+    let observed : Array[Bool] = [false]
+    let task = group.spawn(() => {
+      let _ : Result[Unit, Error] = Ok(defer_probe_body(probe)) catch {
+        error => Err(error)
+      }
+      let _ : Result[Unit, Error] = Ok(defer_mut_capture_body(probe)) catch {
+        error => Err(error)
+      }
+      observed[0] = true
+    })
+    @async.sleep(100)
+    // The task is parked at its sleeps with both defers registered.
+    task.cancel()
+    let mut waited = 0
+    while !observed[0] && waited < 5_000 {
+      @async.sleep(25)
+      waited += 25
+    }
+    assert_true(observed[0])
+    assert_true(probe.deferred_ran)
+    assert_eq(probe.value_at_defer, 42)
+    assert_true(probe.mut_capture_saw_latest)
+  })
 }
 
 ///|

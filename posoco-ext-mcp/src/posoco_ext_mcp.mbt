@@ -165,20 +165,25 @@ pub fn MCPServerConfig::MCPServerConfig(
 }
 
 ///|
-/// Internal: a connected MCP server with cached tool list.
+/// Internal: one slot in the connection registry. `client` is the published
+/// mirror of the connection actor's current-generation client — written only
+/// inside the synchronous commit/retire seams (single-writer discipline) —
+/// and is `None` on a retired slot (the server is absent) while the slot
+/// itself, its name, and its config keep their position so routing indexes
+/// never drift onto a neighbor. `actor` is present exactly when `client` is:
+/// spawned when a commit installs a connection, closed and detached when the
+/// slot retires. `epoch` is bumped by every retire; an in-place refill
+/// carries the epoch it observed, so a refill racing another retire+refill
+/// of the same slot loses honestly instead of clobbering the winner.
 struct MCPServerConn {
   name : String
-  client : @client.MCPClient
+  mut client : @client.MCPClient?
+  mut actor : ConnActor[@client.MCPClient]?
   mut cached_tools : Array[@posoco.ToolDef]
   /// The config this connection was built from; the handshake target for
   /// `reconnect_one`.
   config : MCPServerConfig
-  /// A timed-out call may leave a stale response in flight (the SDK's direct
-  /// receive path has no response-id matching), so the next use of this
-  /// connection must reconnect first.
-  mut needs_reconnect : Bool
-  /// One in-flight reconnect per connection.
-  mut reconnecting : Bool
+  mut epoch : Int
   _server_info : @types.ServerInfo?
 }
 
@@ -311,20 +316,21 @@ async fn MCPToolBridge::fetch_tools(
 }
 
 ///|
-/// One `tools/call` attempt under the connection's `timeout_ms` (0 disables
-/// the deadline). Cancellation is re-raised untouched: a cancellation
-/// injected at a suspension point must not be re-labeled into an
-/// InvocationFailed and lose the identity the run loop's abort depends on
+/// One `tools/call` attempt on an explicitly held client under `timeout_ms`
+/// (0 disables the deadline). Cancellation is re-raised untouched: a
+/// cancellation injected at a suspension point must not be re-labeled into
+/// an InvocationFailed and lose the identity the run loop's abort depends on
 /// (same rule as the colmugx/mcp transport catches). A fired deadline
 /// classifies as `TimedOut`, a server JSON-RPC error as `RemoteFailure`, and
 /// every wire-level break as `TransportFailure`.
 async fn call_tool_attempt(
-  conn : MCPServerConn,
+  client : @client.MCPClient,
+  timeout_ms : Int,
   tool_name : String,
   args_str : String,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
   let attempt = async fn() {
-    match conn.client.call_tool(tool_name, arguments=args_str) {
+    match client.call_tool(tool_name, arguments=args_str) {
       Ok(result) => Ok(result)
       Err(e) =>
         if is_connection_level_error(e) {
@@ -334,13 +340,13 @@ async fn call_tool_attempt(
         }
     }
   }
-  if conn.config.timeout_ms > 0 {
-    @async.with_timeout(conn.config.timeout_ms, attempt) catch {
+  if timeout_ms > 0 {
+    @async.with_timeout(timeout_ms, attempt) catch {
       error => {
         if @async.is_being_cancelled() {
           raise error
         }
-        Err(MCPCallFailure::TimedOut(conn.config.timeout_ms))
+        Err(MCPCallFailure::TimedOut(timeout_ms))
       }
     }
   } else {
@@ -411,6 +417,14 @@ fn list_tools_failure_message(
 }
 
 ///|
+/// Honest message for a connect path that finds no task group: the group
+/// contract requires one for every connection creation — an explicit
+/// parameter or an `attach`ed bridge group.
+fn missing_task_group_message(name : String) -> String {
+  "MCP connect needs a task group (call attach first) for '\{@devkit.sanitize_label(name)}'"
+}
+
+///|
 /// Commit a previously validated complete plan. This function performs no
 /// fallible work, which makes refresh an all-or-nothing state transition.
 fn MCPToolBridge::commit_catalog(
@@ -424,11 +438,80 @@ fn MCPToolBridge::commit_catalog(
 }
 
 ///|
+/// Live-slot read: `Some` only when `idx` is in bounds and the slot holds a
+/// connection (not retired). Every read that happens after an await goes
+/// through this — plus the name check in `live_slot_for` — so a stale index
+/// can never reach a neighbor slot.
+fn MCPToolBridge::live_slot(self : MCPToolBridge, idx : Int) -> MCPServerConn? {
+  if idx >= self.connections.length() {
+    return None
+  }
+  match self.connections[idx].client {
+    Some(_) => Some(self.connections[idx])
+    None => None
+  }
+}
+
+///|
+/// Post-await routing guard: the slot must still be in bounds, hold a live
+/// client, and still belong to the server this call started against.
+/// Anything else is an honest failure — the caller never retries against a
+/// slot whose content changed under it.
+fn MCPToolBridge::live_slot_for(
+  self : MCPToolBridge,
+  idx : Int,
+  server : String,
+) -> MCPServerConn? {
+  match self.live_slot(idx) {
+    Some(conn) => if conn.name == server { Some(conn) } else { None }
+    None => None
+  }
+}
+
+///|
+/// Retire one slot in place: close the connection actor (its mailbox then
+/// refuses reports — a still-running reconnect runner on that actor loses
+/// structurally instead of clobbering the refill), detach the client mirror,
+/// drop the cached tool list, bump the slot's epoch, and replay routing from
+/// the live slots. The caller closes the detached client first (close
+/// performs I/O and needs an async context). Slot positions never change, so
+/// in-flight readers re-validating an index can never land on a neighbor,
+/// and a slot that is never refilled degrades to "that server's tools are
+/// absent".
+fn MCPToolBridge::retire_slot(self : MCPToolBridge, slot : Int) -> Unit {
+  if slot >= self.connections.length() {
+    return
+  }
+  let conn = self.connections[slot]
+  conn.client = None
+  match conn.actor {
+    Some(actor) => actor.close()
+    None => ()
+  }
+  conn.actor = None
+  conn.cached_tools = []
+  conn.epoch = conn.epoch + 1
+  let routes : Map[String, Int] = Map::from_array([])
+  for i, live in self.connections {
+    if live.client is None {
+      continue
+    }
+    for tool in live.cached_tools {
+      routes[tool.name.to_string()] = i
+    }
+  }
+  self.tool_to_conn = routes
+}
+
+///|
 /// Manages multiple MCP server connections with namespaced tool routing.
 ///
 /// Servers come either from explicit `connect` calls or from self-governed
 /// mcp.json discovery (`discover`); discovered servers activate through
-/// `attach` + `activate` in the mode chosen at discovery time.
+/// `attach` + `activate` in the mode chosen at discovery time. Hosts that
+/// must not block composition call `attach` + `start_probes` instead: every
+/// pending server connects in a parallel background probe, and the Lazy
+/// `on_start` activation remains the fallback for hosts that never call it.
 pub(all) struct MCPToolBridge {
   mut connections : Array[MCPServerConn]
   mut tool_to_conn : Map[String, Int]
@@ -436,8 +519,9 @@ pub(all) struct MCPToolBridge {
   mode : LoadMode
   /// Discovered-but-not-yet-connected server configs (mcp.json path).
   pending : Array[MCPServerConfig]
-  /// Host-provided long-lived task group; stdio servers need it to spawn
-  /// their child process. `None` until `attach`.
+  /// Host-provided long-lived task group. Every connection creation —
+  /// connect, reconnect, or probe — must hold one (stdio spawns its child
+  /// process on it). `None` until `attach`.
   mut group : @async.TaskGroup[Unit]?
   /// Flips on the first `activate`; guards the Lazy on_start hook.
   mut activated : Bool
@@ -522,19 +606,138 @@ pub fn MCPToolBridge::attach(
 }
 
 ///|
-/// Connect every discovered server. Per-server failures are returned (and
-/// recorded) instead of raised: a down server degrades to "its tools are
-/// absent from the catalog", it never aborts the host. Eager hosts call
-/// this right after `attach`; in Lazy mode the bridge activates itself in
-/// `Lifecycle::on_start` (before the first turn's catalog read).
+/// Startup-probe retry schedule: after the first failure a probe retries up
+/// to 3 times, sleeping between attempts (tests may inject a shorter
+/// schedule through `start_probes`' optional parameter).
+let probe_retry_backoff_ms : Array[Int] = [3_000, 15_000, 60_000]
+
+///|
+/// Composition-time probe entry: claim every discovered server and connect
+/// each one in a parallel background probe on the attached task group,
+/// returning before any handshake settles. A success bumps the catalog
+/// revision and the live connection stays up (keep-alive) for later
+/// executes. A failed probe is transient: it retries in the background on
+/// the same task, and a retry success scrubs that server's entries from
+/// `failures()` so `/mcp` reflects the recovery; exhausting the schedule
+/// leaves exactly one final failure entry. A probe's retries never affect
+/// the other servers. Flipping `activated` neutralizes the Lazy `on_start`
+/// hook, which stays the activation path for hosts that never call this.
+pub fn MCPToolBridge::start_probes(
+  self : MCPToolBridge,
+  backoff_ms? : Array[Int] = probe_retry_backoff_ms,
+) -> Unit {
+  let claimed : Array[MCPServerConfig] = []
+  for config in self.pending {
+    claimed.push(config)
+  }
+  self.pending.clear()
+  self.activated = true
+  match self.group {
+    Some(group) =>
+      for config in claimed {
+        group.spawn_bg(() => {
+          // The duplicate-name guard in connect_with_group keeps a probe
+          // from double-connecting against any concurrent explicit connect.
+          match self.connect_with_group(config, group) {
+            Ok(_) => self.catalog_revision = self.catalog_revision + 1
+            Err(message) =>
+              self.retry_startup_probe(config, message, backoff_ms)
+          }
+        })
+      }
+    None =>
+      for config in claimed {
+        let reason = "MCP probe skipped for '\{@devkit.sanitize_label(config.name)}': bridge not attached to a task group"
+        self.startup_failures.push((config.name, reason))
+      }
+  }
+}
+
+///|
+/// Bounded background retry for one failed startup probe (`start_probes`
+/// only; `activate` is unchanged). Every failed attempt records its entry;
+/// a retry success bumps the catalog revision and scrubs this server's
+/// entries; exhausting the schedule leaves exactly one final entry.
+/// Cancellation re-raises so task-group teardown terminates the retries;
+/// other sleep errors are swallowed.
+async fn MCPToolBridge::retry_startup_probe(
+  self : MCPToolBridge,
+  config : MCPServerConfig,
+  first_message : String,
+  backoff_ms : Array[Int],
+) -> Unit {
+  let mut last_message = first_message
+  self.startup_failures.push((config.name, last_message))
+  for backoff in backoff_ms {
+    @async.sleep(backoff) catch {
+      err if @async.is_cancellation_error(err) => raise err
+      _ => ()
+    }
+    match self.group {
+      Some(group) =>
+        match self.connect_with_group(config, group) {
+          Ok(_) => {
+            self.catalog_revision = self.catalog_revision + 1
+            self.scrub_startup_failures(config.name)
+            return
+          }
+          Err(message) => {
+            last_message = message
+            self.startup_failures.push((config.name, message))
+          }
+        }
+      None => {
+        last_message = missing_task_group_message(config.name)
+        self.startup_failures.push((config.name, last_message))
+      }
+    }
+  }
+  self.scrub_startup_failures(config.name)
+  self.startup_failures.push((config.name, last_message))
+}
+
+///|
+/// Drop every failure entry recorded for one server name (recovery scrub).
+fn MCPToolBridge::scrub_startup_failures(
+  self : MCPToolBridge,
+  name : String,
+) -> Unit {
+  let kept : Array[(String, String)] = []
+  for pair in self.startup_failures {
+    if pair.0 != name {
+      kept.push(pair)
+    }
+  }
+  self.startup_failures.clear()
+  for pair in kept {
+    self.startup_failures.push(pair)
+  }
+}
+
+///|
+/// Connect every discovered server, blocking until each connect settles.
+/// Per-server failures are returned (and recorded) instead of raised: a down
+/// server degrades to "its tools are absent from the catalog", it never
+/// aborts the host. Eager hosts call this right after `attach`; hosts that
+/// must not block composition call `start_probes` instead. In Lazy mode the
+/// bridge activates itself in `Lifecycle::on_start` (before the first turn's
+/// catalog read) — that fallback stays armed unless `start_probes` already
+/// claimed the pending servers.
 pub async fn MCPToolBridge::activate(
   self : MCPToolBridge,
 ) -> Array[(String, String)] {
   self.activated = true
   for config in self.pending {
-    match self.connect_with_group(config, self.group) {
-      Ok(_) => ()
-      Err(message) => self.startup_failures.push((config.name, message))
+    match self.group {
+      Some(group) =>
+        match self.connect_with_group(config, group) {
+          Ok(_) => ()
+          Err(message) => self.startup_failures.push((config.name, message))
+        }
+      None =>
+        self.startup_failures.push(
+          (config.name, missing_task_group_message(config.name)),
+        )
     }
   }
   // One bump per activation attempt: the catalog source re-reads at the
@@ -560,7 +763,7 @@ pub async fn MCPToolBridge::connect(
   config : MCPServerConfig,
   group : @async.TaskGroup[Unit],
 ) -> Result[Unit, String] {
-  match self.connect_with_group(config, Some(group)) {
+  match self.connect_with_group(config, group) {
     Ok(_) => {
       self.catalog_revision = self.catalog_revision + 1
       Ok(())
@@ -574,39 +777,34 @@ pub async fn MCPToolBridge::connect(
 /// handshake, with the http connect (era probe and legacy fallback) bounded
 /// by `timeout_ms` (0 disables it; stdio keeps the SDK's internal 3000ms era
 /// probe and is not double-wrapped). Auth challenges are captured from the
-/// raw connect error before it is discarded.
+/// raw connect error before it is discarded. The group contract requires a
+/// task group for every connection creation — the no-group guard lives with
+/// the callers.
 async fn MCPToolBridge::open_client(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit]?,
+  group : @async.TaskGroup[Unit],
 ) -> Result[@client.MCPClient, String] {
   match config.transport {
     @transport.AnyTransport::StdioClient(t) => {
       let (cmd, args, extra_env) = stdio_cmd(t)
-      match group {
-        Some(group) =>
-          match
-            @client.MCPClient::connect_stdio(
-              cmd~,
-              args~,
-              name=config.name,
-              version="0.1.0",
-              extra_env~,
-              group~,
-              era=config.era,
-            ) {
-            Ok(client) => Ok(client)
-            Err(e) => {
-              self.record_auth_challenge(config.name, e.message())
-              Err(
-                "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=handshake, error=\{e.message()})",
-              )
-            }
-          }
-        None =>
+      match
+        @client.MCPClient::connect_stdio(
+          cmd~,
+          args~,
+          name=config.name,
+          version="0.1.0",
+          extra_env~,
+          group~,
+          era=config.era,
+        ) {
+        Ok(client) => Ok(client)
+        Err(e) => {
+          self.record_auth_challenge(config.name, e.message())
           Err(
-            "MCP connect needs a task group (call attach first) for '\{@devkit.sanitize_label(config.name)}'",
+            "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=handshake, error=\{e.message()})",
           )
+        }
       }
     }
     @transport.AnyTransport::HttpClient(t) => {
@@ -656,18 +854,28 @@ async fn MCPToolBridge::open_client(
 }
 
 ///|
-/// Core connect: `group` may be `None` only for http servers (stdio spawns a
-/// child process on the group and cannot proceed without one).
+/// Core connect: the caller must hold a task group — stdio spawns its child
+/// process on it, and under the group contract no connection creation
+/// proceeds without one. A retired slot for the same server name is refilled
+/// in place instead of appending a second slot, so slot indexes stay stable
+/// for the lifetime of the bridge.
 async fn MCPToolBridge::connect_with_group(
   self : MCPToolBridge,
   config : MCPServerConfig,
-  group : @async.TaskGroup[Unit]?,
+  group : @async.TaskGroup[Unit],
 ) -> Result[Unit, String] {
-  for conn in self.connections {
+  let mut refill_slot = -1
+  let mut refill_epoch = 0
+  for i, conn in self.connections {
     if conn.name == config.name {
-      return Err(
-        "MCP connection name already exists: '\{@devkit.sanitize_label(config.name)}'",
-      )
+      if conn.client is Some(_) {
+        return Err(
+          "MCP connection name already exists: '\{@devkit.sanitize_label(config.name)}'",
+        )
+      }
+      refill_slot = i
+      refill_epoch = conn.epoch
+      break
     }
   }
   let client = match self.open_client(config, group) {
@@ -691,8 +899,20 @@ async fn MCPToolBridge::connect_with_group(
       )
     }
   }
+  let idx = if refill_slot >= 0 {
+    refill_slot
+  } else {
+    self.connections.length()
+  }
   match
-    self.commit_connection(config, client, tools, self.connections.length()) {
+    self.commit_connection(
+      config,
+      client,
+      tools,
+      idx,
+      group~,
+      expect_epoch=refill_epoch,
+    ) {
     Ok(_) => Ok(())
     Err(message) => {
       client.close()
@@ -702,21 +922,35 @@ async fn MCPToolBridge::connect_with_group(
 }
 
 ///|
-/// Shared "validate + commit" tail of every connect path (fresh connect and
-/// in-place reconnect). Validates the candidate catalog for slot `idx`
-/// against the other live connections; only after validation stores the
-/// client, writes the connection in place (appending when `idx` is one past
-/// the end), swaps the routing map, and registers the config. The caller
-/// closes `client` when this returns Err — no live state is touched on a
-/// failed validation.
+/// Shared "validate + commit" tail of every fresh-connect path (explicit
+/// connect, probe, and the retire-then-refill of `reconnect_server`).
+/// Validates the candidate catalog for slot `idx` against the other slots
+/// (retired slots contribute their empty tool lists); only after validation
+/// stores the client, spawns the connection actor on `group`, writes the
+/// connection in place (appending when `idx` is one past the end), swaps the
+/// routing map, and registers the config. An in-place refill must land on
+/// the slot incarnation the caller observed (`expect_epoch`): a concurrent
+/// retire+refill of the same slot changed the epoch, and this candidate
+/// loses — the caller closes `client` — instead of clobbering the winner's
+/// connection and actor. No live state is touched on a failed validation.
 fn MCPToolBridge::commit_connection(
   self : MCPToolBridge,
   config : MCPServerConfig,
   client : @client.MCPClient,
   tools : Array[@posoco.ToolDef],
   idx : Int,
+  group~ : @async.TaskGroup[Unit],
+  expect_epoch~ : Int,
 ) -> Result[Unit, String] {
+  // The slot may have vanished while the caller was suspended (e.g. close()
+  // cleared the registry): fail honestly instead of writing a shifted index.
+  if idx > self.connections.length() {
+    return Err("MCP connection is no longer present")
+  }
   let appending = idx == self.connections.length()
+  if !appending && self.connections[idx].epoch != expect_epoch {
+    return Err("MCP connection is no longer present")
+  }
   let catalog_entries : Array[CatalogEntry] = []
   for existing_index, existing in self.connections {
     catalog_entries.push(CatalogEntry::{
@@ -739,11 +973,11 @@ fn MCPToolBridge::commit_connection(
   // No fallible operation remains after this point.
   let conn : MCPServerConn = {
     name: config.name,
-    client,
+    client: Some(client),
+    actor: Some(ConnActor::start(group~, client~)),
     cached_tools: tools,
     config,
-    needs_reconnect: false,
-    reconnecting: false,
+    epoch: expect_epoch,
     _server_info: None, // connect_* already did handshake; server_info not returned by 0.14 API
   }
   if appending {
@@ -759,40 +993,178 @@ fn MCPToolBridge::commit_connection(
 }
 
 ///|
+/// Commit an in-place refill for a reconnect runner that already owns the
+/// slot's actor: validates the candidate catalog against the other slots,
+/// then — only on the slot incarnation the runner observed — installs the
+/// fresh client mirror and the tool list. The actor itself is not replaced
+/// (its fold receives the client through EndReconnect), so a matching epoch
+/// implies the slot still holds exactly the actor that granted the
+/// reconnect. A concurrent retire+refill changed the epoch; this candidate
+/// loses and the caller closes `client`. The slot's config is untouched —
+/// the runner reconnects from it, and `configs[name]` is only ever written
+/// together with the slot it belongs to.
+fn MCPToolBridge::commit_reconnect_fill(
+  self : MCPToolBridge,
+  client : @client.MCPClient,
+  tools : Array[@posoco.ToolDef],
+  idx : Int,
+  expect_epoch~ : Int,
+) -> Result[Unit, String] {
+  if idx >= self.connections.length() {
+    return Err("MCP connection is no longer present")
+  }
+  let conn = self.connections[idx]
+  if conn.epoch != expect_epoch {
+    return Err("MCP connection is no longer present")
+  }
+  let catalog_entries : Array[CatalogEntry] = []
+  for existing_index, existing in self.connections {
+    catalog_entries.push(CatalogEntry::{
+      connection_index: existing_index,
+      tools: if existing_index == idx {
+        tools
+      } else {
+        existing.cached_tools
+      },
+    })
+  }
+  let plan = match plan_catalog(catalog_entries, self.connections.length()) {
+    Ok(plan) => plan
+    Err(message) => return Err(message)
+  }
+  conn.client = Some(client)
+  conn.cached_tools = tools
+  self.commit_catalog(plan)
+  Ok(())
+}
+
+///|
+/// One `tools/list` fetch under an already-granted admission. The EndCall
+/// pairing is deferred across every exit (cancellation included — an
+/// unobservable outcome returns its admission as TransportFail); a TimedOut
+/// fetch additionally stigmatizes exactly its own generation, so a stale
+/// tools/list reply cannot be re-delivered to the next refresh either.
+async fn MCPToolBridge::fetch_admitted(
+  self : MCPToolBridge,
+  actor : ConnActor[@client.MCPClient],
+  permit : ConnPermit[@client.MCPClient],
+  server : String,
+  timeout_ms : Int,
+) -> Result[Array[@posoco.ToolDef], String] {
+  let mut outcome : CallOutcome = CallOutcome::TransportFail
+  defer {
+    let _ = actor.end_call(generation=permit.generation, outcome~)
+  }
+  match
+    self.fetch_tools(server, permit.client, timeout_ms, record_challenges=false) {
+    Ok(tools) => {
+      outcome = CallOutcome::CallOk
+      Ok(tools)
+    }
+    Err(failure) => {
+      outcome = match failure {
+        ListToolsFailure::TimedOut(_) => CallOutcome::TimedOut
+        ListToolsFailure::Failed => CallOutcome::TransportFail
+      }
+      Err(
+        list_tools_failure_message(
+          "MCP refresh list_tools failed", server, failure,
+        ),
+      )
+    }
+  }
+}
+
+///|
+/// Refresh-side fetch for one live slot: acquire → fetch under the deferred
+/// EndCall pairing; a NeedsReconnect generation (Denied(ReconnectFirst))
+/// forces one reconnect through the runner and one re-acquire — the
+/// stale-response safety of the call path, applied to tools/list. Every
+/// other denial or fetch failure is this slot's error; refresh never
+/// reactively retries a failed fetch (unchanged).
+async fn MCPToolBridge::refresh_fetch_one(
+  self : MCPToolBridge,
+  conn_idx : Int,
+  actor : ConnActor[@client.MCPClient],
+  server : String,
+  timeout_ms : Int,
+) -> Result[Array[@posoco.ToolDef], String] {
+  let admission_failed = list_tools_failure_message(
+    "MCP refresh list_tools failed",
+    server,
+    ListToolsFailure::Failed,
+  )
+  // (permit, deadline it was admitted under): a forced reconnect re-reads
+  // the deadline from the slot after the await — the config may have been
+  // replaced by a concurrent refill.
+  let admitted : (ConnPermit[@client.MCPClient], Int) = match
+    conn_actor_acquire(actor, conn_ask_timeout(timeout_ms)) {
+    Err(_) => return Err(admission_failed)
+    Ok(Permit(permit)) => (permit, timeout_ms)
+    Ok(Denied(ReconnectFirst)) =>
+      match self.reconnect_one(conn_idx) {
+        Err(_) => return Err(admission_failed)
+        Ok(_) =>
+          match self.live_slot_for(conn_idx, server) {
+            Some(current) =>
+              match
+                conn_actor_acquire(
+                  actor,
+                  conn_ask_timeout(current.config.timeout_ms),
+                ) {
+                Err(_) => return Err(admission_failed)
+                Ok(Permit(permit)) => (permit, current.config.timeout_ms)
+                Ok(_) => return Err(admission_failed)
+              }
+            None => return Err(admission_failed)
+          }
+      }
+    Ok(_) => return Err(admission_failed)
+  }
+  let (permit, admitted_timeout) = admitted
+  self.fetch_admitted(actor, permit, server, admitted_timeout)
+}
+
+///|
 /// Refresh cached tools from all connected MCP servers.
 pub async fn MCPToolBridge::refresh_tools(
   self : MCPToolBridge,
 ) -> Result[Unit, String] {
   let fetches : Array[Result[CatalogEntry, String]] = []
-  for i, _conn in self.connections {
-    // A connection whose last call timed out may deliver a stale response to
-    // the next read (no response-id matching in the SDK's direct receive
-    // path); reconnect first so the refreshed list cannot be built from a
-    // misattributed reply.
-    if self.connections[i].needs_reconnect && !self.connections[i].reconnecting {
-      let _ = self.reconnect_one(i)
+  for i, conn in self.connections {
+    // A retired slot is an absent server: contribute an empty entry (the
+    // catalog plan requires one entry per slot) and never touch the wire.
+    if conn.client is None {
+      fetches.push(Ok(CatalogEntry::{ connection_index: i, tools: [], }))
+      continue
     }
-    let conn = self.connections[i]
-    match
-      self.fetch_tools(
-        conn.name,
-        conn.client,
-        conn.config.timeout_ms,
-        record_challenges=false,
-      ) {
+    let actor = match conn.actor {
+      Some(actor) => actor
+      None => {
+        fetches.push(Ok(CatalogEntry::{ connection_index: i, tools: [], }))
+        continue
+      }
+    }
+    match self.refresh_fetch_one(i, actor, conn.name, conn.config.timeout_ms) {
       Ok(tools) =>
         fetches.push(Ok(CatalogEntry::{ connection_index: i, tools, }))
-      Err(failure) => {
-        fetches.push(
-          Err(
-            list_tools_failure_message(
-              "MCP refresh list_tools failed",
-              conn.name,
-              failure,
-            ),
-          ),
-        )
-        break
+      Err(message) => {
+        // The slot may have been retired while this task was suspended (a
+        // concurrent reconnect_server): an absent server contributes an
+        // empty entry exactly like a slot that was already retired at loop
+        // entry. Any other failure ends the refresh with the error.
+        let vanished = if i >= self.connections.length() {
+          true
+        } else {
+          let current = self.connections[i]
+          current.client is None || current.name != conn.name
+        }
+        if vanished {
+          fetches.push(Ok(CatalogEntry::{ connection_index: i, tools: [], }))
+        } else {
+          fetches.push(Err(message))
+          break
+        }
       }
     }
   }
@@ -813,11 +1185,38 @@ pub async fn MCPToolBridge::refresh_tools(
 }
 
 ///|
-/// Close all MCP connections and clear state. Async since mcp 0.15: the
+/// Close all MCP connections and clear state. Each slot's client closes
+/// inline, its actor mailbox closes with it, and the loop is JOINED before
+/// this returns — the graceful-drain confirmation (fuwaroid: `close`
+/// requests the stop, `join` watches the loop task terminate, so
+/// `close(); join()` completed means every EndCall/EndReconnect already
+/// queued folded in FIFO order). Tells issued after the drain are refused
+/// with `MailboxClosed`, which the call path already maps to an honest
+/// transport failure. `join` raises exactly when THIS caller is being
+/// cancelled — host cancellation outranks draining, so that identity
+/// propagates untouched instead of being swallowed into a normal return
+/// (`on_shutdown` shields the drain from that with `protect_from_cancel`).
+/// A `Stopped(reason)` value means the loop ended abnormally on its own:
+/// its original error was already re-raised into the host group's
+/// fail-fast when the loop task terminated, so teardown proceeds with
+/// nothing retried and nothing masked. Async since mcp 0.15: the
 /// underlying client close performs I/O and cannot block the caller.
 pub async fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
   for conn in self.connections {
-    conn.client.close()
+    match conn.client {
+      Some(client) => client.close()
+      None => ()
+    }
+    match conn.actor {
+      Some(actor) => {
+        actor.close()
+        match actor.join() {
+          Graceful => ()
+          Stopped(_cause) => ()
+        }
+      }
+      None => ()
+    }
   }
   self.connections = []
   self.tool_to_conn = Map::from_array([])
@@ -883,9 +1282,13 @@ pub fn MCPToolBridge::servers_by_auth(
 
 ///|
 /// Reconnect one server (e.g. after the host injected a fresh token). The
-/// old connection is removed first, so a failed re-connect degrades to "this
-/// server's tools are absent" instead of a stale client; routing is replayed
-/// from the surviving connections so no route ever points at a stale index.
+/// old connection is retired in place — client closed fire-and-forget,
+/// actor closed, cached tools dropped, routing replayed from the live
+/// slots — so no index ever shifts under an in-flight call. A failed
+/// re-connect leaves the slot retired, which degrades to "this server's
+/// tools are absent from the catalog" instead of a stale client; a
+/// successful one refills the same slot through `commit_connection` with a
+/// fresh actor.
 pub async fn MCPToolBridge::reconnect_server(
   self : MCPToolBridge,
   server : String,
@@ -897,25 +1300,34 @@ pub async fn MCPToolBridge::reconnect_server(
         "MCP server not configured: '\{@devkit.sanitize_label(server)}'",
       )
   }
-  let mut old_index = -1
+  // Precondition before any destructive work: the refill cannot even be
+  // attempted without a group, so the live connection is left untouched.
+  let group = match self.group {
+    Some(group) => group
+    None => return Err(missing_task_group_message(server))
+  }
+  let mut slot = -1
   for i, conn in self.connections {
     if conn.name == server {
-      old_index = i
+      slot = i
       break
     }
   }
-  if old_index >= 0 {
-    self.connections[old_index].client.close()
-    let _ = self.connections.remove(old_index)
-  }
-  let routes : Map[String, Int] = Map::from_array([])
-  for i, conn in self.connections {
-    for tool in conn.cached_tools {
-      routes[tool.name.to_string()] = i
+  if slot >= 0 {
+    // Retire first: the old client closes fire-and-forget on the group and
+    // the slot's actor closes with it, so a reconnect runner that still
+    // holds that actor loses structurally (its BeginReconnect/EndReconnect
+    // hit a closed mailbox) and cannot clobber this refill.
+    match self.connections[slot].client {
+      Some(client) =>
+        group.spawn_bg(() => {
+          let _ = client.close() catch { _ => () }
+        })
+      None => ()
     }
+    self.retire_slot(slot)
   }
-  self.tool_to_conn = routes
-  match self.connect_with_group(config, self.group) {
+  match self.connect_with_group(config, group) {
     Ok(_) => {
       self.catalog_revision = self.catalog_revision + 1
       Ok(())
@@ -925,14 +1337,21 @@ pub async fn MCPToolBridge::reconnect_server(
 }
 
 ///|
-/// Reconnect exactly one connection in place: close the old client, redo the
-/// connect handshake from the stored config, re-fetch the tool list, and —
-/// only after the candidate catalog validates — replace the connection at
-/// `conn_idx` and bump the catalog revision. Connection indices and routing
-/// survive unchanged (`tool_to_conn` still maps to `conn_idx`). A failed
-/// reconnect leaves the old (closed) connection in place, so later calls fail
-/// fast instead of hanging. Guarded by `reconnecting`: at most one in-flight
-/// reconnect per connection, and callers consume at most one per failure.
+/// One reconnect as an IO runner over the connection actor. BeginReconnect
+/// grants exactly one winner per connection — a Busy loser fails with the
+/// old "already in progress" text, and a slot retired meanwhile (its actor
+/// closed) fails the ask honestly, so the double-connection race between
+/// concurrent reconnects on one slot is decided by the actor, not by
+/// check-then-act flags. The winner closes the previous-generation client
+/// (only while the slot still holds the incarnation it observed — a racing
+/// retire+refill replaced the lineage, and its fresh client must not be
+/// closed by this loser), redoes the connect handshake and tool fetch in
+/// this caller's task, and commits the refill in place before handing the
+/// fresh client to the actor's fold. A failed or cancelled attempt folds
+/// back to Fresh on the old (closed) client, so later calls fail fast
+/// instead of hanging — the deferred EndReconnect guarantees the
+/// Reconnecting fold is always exited, cancellation unwinding included, and
+/// its duplicate after a normal completion is a structural no-op.
 async fn MCPToolBridge::reconnect_one(
   self : MCPToolBridge,
   conn_idx : Int,
@@ -940,22 +1359,64 @@ async fn MCPToolBridge::reconnect_one(
   if conn_idx >= self.connections.length() {
     return Err("MCP connection is no longer present")
   }
-  if self.connections[conn_idx].reconnecting {
-    return Err(
-      "MCP reconnect already in progress for '\{@devkit.sanitize_label(self.connections[conn_idx].name)}'",
-    )
+  let conn = self.connections[conn_idx]
+  let server = conn.name
+  // Precondition before any destructive work: without a group the reconnect
+  // cannot proceed, so the slot (and its live client) is left untouched.
+  let group = match self.group {
+    Some(group) => group
+    None => return Err(missing_task_group_message(server))
   }
-  let config = self.connections[conn_idx].config
-  self.connections[conn_idx].reconnecting = true
-  // The connection is either replaced by a fresh one or left closed after
-  // this attempt; neither state can misattribute a stale response, so the
-  // flag is consumed regardless of the outcome.
-  self.connections[conn_idx].needs_reconnect = false
-  defer (if conn_idx < self.connections.length() {
-    self.connections[conn_idx].reconnecting = false
-  })
-  self.connections[conn_idx].client.close()
-  let client = match self.open_client(config, self.group) {
+  let actor = match conn.actor {
+    Some(actor) => actor
+    // A retired slot has no actor to arbitrate the refill; its refill
+    // belongs to the path that retired it (e.g. reconnect_server's connect).
+    None => return Err("MCP connection is no longer present")
+  }
+  let config = conn.config
+  let epoch = conn.epoch
+  let reply : Result[ConnReply[@client.MCPClient], @fuwaroid.AskFailure] = actor.begin_reconnect(
+    timeout_ms=conn_ask_timeout(config.timeout_ms),
+  ) catch {
+    error => {
+      // Host cancellation propagates untouched; anything else (closed or
+      // stalled loop) is an honest admission failure of this reconnect.
+      if @async.is_being_cancelled() {
+        raise error
+      }
+      return Err(
+        "MCP reconnect failed for '\{@devkit.sanitize_label(server)}' (stage=admission)",
+      )
+    }
+  }
+  let generation = match reply {
+    Ok(Granted(generation=g)) => g
+    Ok(Busy) =>
+      return Err(
+        "MCP reconnect already in progress for '\{@devkit.sanitize_label(server)}'",
+      )
+    _ =>
+      return Err(
+        "MCP reconnect failed for '\{@devkit.sanitize_label(server)}' (stage=admission)",
+      )
+  }
+  // Compensating report on every non-normal exit (failed IO, validation
+  // loss, cancellation): ok=false folds back to Fresh on the old client.
+  defer {
+    let _ = actor.end_reconnect(generation~, ok=false, client=None)
+  }
+  // The slot's lineage may have moved on while the grant was processed (a
+  // racing retire bumped the epoch): lose fast — no client is opened for a
+  // doomed refill, and a successor's fresh client is never closed here.
+  if conn_idx >= self.connections.length() ||
+    self.connections[conn_idx].epoch != epoch {
+    return Err("MCP connection is no longer present")
+  }
+  match self.connections[conn_idx].client {
+    Some(old) => old.close()
+    None => ()
+  }
+  let client = match self.open_client(config, group) {
     Ok(client) => client
     Err(message) => return Err(message)
   }
@@ -972,8 +1433,12 @@ async fn MCPToolBridge::reconnect_one(
       )
     }
   }
-  match self.commit_connection(config, client, tools, conn_idx) {
-    Ok(_) => Ok(())
+  match
+    self.commit_reconnect_fill(client, tools, conn_idx, expect_epoch=epoch) {
+    Ok(_) => {
+      let _ = actor.end_reconnect(generation~, ok=true, client=Some(client))
+      Ok(())
+    }
     Err(message) => {
       client.close()
       Err(message)
@@ -983,12 +1448,16 @@ async fn MCPToolBridge::reconnect_one(
 
 ///|
 /// ToolProvider: return cached tools from all connected servers.
-/// Tools are fetched during connect() and refresh_tools().
+/// Tools are fetched during connect() and refresh_tools(). A retired slot
+/// is an absent server: it advertises nothing.
 pub impl @posoco.ToolProvider for MCPToolBridge with fn list_tools(self) -> Array[
   @posoco.ToolDef,
 ] {
   let all : Array[@posoco.ToolDef] = []
   for conn in self.connections {
+    if conn.client is None {
+      continue
+    }
     for t in conn.cached_tools {
       all.push(t)
     }
@@ -1011,8 +1480,19 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
         "Unknown MCP tool: \{@devkit.sanitize_label(call_name)}",
       )
   }
-  let conn = self.connections[conn_idx]
-  let original_name = strip_namespace(call_name, conn.name)
+  // Honest routing read: the route may point at a retired slot (the server
+  // is absent after `reconnect_server` failed its refill) or at a registry
+  // cleared by `close()`. Both fail here instead of indexing a shifted
+  // array.
+  let conn = match self.live_slot(conn_idx) {
+    Some(conn) => conn
+    None =>
+      raise @posoco.RuntimeError::InvocationFailed(
+        "MCP connection is no longer present (tool='\{@devkit.sanitize_label(call_name)}')",
+      )
+  }
+  let invoked_server = conn.name
+  let original_name = strip_namespace(call_name, invoked_server)
   let args_str = call.arguments.stringify()
   let attempted = self.invoke_mcp_tool(conn_idx, original_name, args_str) catch {
     _ =>
@@ -1031,15 +1511,12 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   }
   let result = match attempted {
     Ok(result) => result
-    Err(failure) => {
-      if failure is MCPCallFailure::TimedOut(_) {
-        // The abandoned request may still deliver a stale response on this
-        // connection (no response-id matching in the SDK's direct receive
-        // path), so the next use must reconnect first.
-        self.connections[conn_idx].needs_reconnect = true
-      }
+    Err(failure) =>
+      // The timeout stigma is already folded inside the actor by the failed
+      // attempt's deferred EndCall — stamped on its own generation, so a
+      // successor connection is never marked NeedsReconnect by a stale
+      // report. Only the typed failure surfaces here.
       raise mcp_call_failure(failure, original_name)
-    }
   }
   let content = convert_content_to_string(result.content)
   if result.is_error {
@@ -1050,42 +1527,165 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
 }
 
 ///|
-/// One logical MCP tool invocation: a timeout-bounded `tools/call` attempt,
-/// plus at most one reactive reconnect-and-retry. Connection-level failures
-/// and timeouts are reconnect-eligible (when `max_reconnects > 0` and no
-/// reconnect is already in flight for the connection); server JSON-RPC
-/// errors never are. Reconnect and retry failures surface the original
-/// failure.
+/// The ask deadline for actor arbitration: the connection's own `timeout_ms`
+/// when one is configured, else a large constant (0 means "no deadline", so
+/// the admission ask must not use it literally).
+fn conn_ask_timeout(timeout_ms : Int) -> Int {
+  if timeout_ms > 0 {
+    timeout_ms
+  } else {
+    60_000
+  }
+}
+
+///|
+/// Acquire one call admission through the connection actor, mapping ask
+/// failures the way the call path demands: host cancellation of the caller
+/// is re-raised untouched (never swallowed into a failure value), while a
+/// closed, stopped, or stalled loop is an honest transport-level failure of
+/// THIS call — the actor mailbox refuses after retire/close, and the caller
+/// already maps that to `stage=transport`.
+async fn conn_actor_acquire(
+  actor : ConnActor[@client.MCPClient],
+  timeout_ms : Int,
+) -> Result[ConnReply[@client.MCPClient], MCPCallFailure] {
+  let reply : Result[ConnReply[@client.MCPClient], @fuwaroid.AskFailure] = actor.acquire(
+    timeout_ms~,
+  ) catch {
+    error => {
+      if @async.is_being_cancelled() {
+        raise error
+      }
+      return Err(MCPCallFailure::TransportFailure)
+    }
+  }
+  match reply {
+    Err(_) => Err(MCPCallFailure::TransportFailure)
+    Ok(answer) => Ok(answer)
+  }
+}
+
+///|
+/// One `tools/call` attempt under an actor admission. The EndCall pairing
+/// is deferred so it fires on every exit — normal, failure, and
+/// cancellation unwinding: an outcome that cannot be observed (the
+/// cancellation raced the attempt) returns its admission as TransportFail,
+/// so in_flight never leaks. The defer closure captures the outcome cell by
+/// reference, so the report always carries the latest fold; a TimedOut
+/// outcome additionally stigmatizes exactly its own generation inside the
+/// actor (stale-response safety), never a successor's.
+async fn call_under_permit(
+  actor : ConnActor[@client.MCPClient],
+  permit : ConnPermit[@client.MCPClient],
+  timeout_ms : Int,
+  tool_name : String,
+  args_str : String,
+) -> Result[@client.CallToolResult, MCPCallFailure] {
+  let mut outcome : CallOutcome = CallOutcome::TransportFail
+  defer {
+    let _ = actor.end_call(generation=permit.generation, outcome~)
+  }
+  match call_tool_attempt(permit.client, timeout_ms, tool_name, args_str) {
+    Ok(result) => {
+      outcome = CallOutcome::CallOk
+      Ok(result)
+    }
+    Err(failure) => {
+      outcome = match failure {
+        MCPCallFailure::TransportFailure => CallOutcome::TransportFail
+        MCPCallFailure::RemoteFailure => CallOutcome::RemoteFail
+        MCPCallFailure::TimedOut(_) => CallOutcome::TimedOut
+      }
+      Err(failure)
+    }
+  }
+}
+
+///|
+/// One logical MCP tool invocation: an actor-admitted `tools/call` attempt,
+/// plus at most one reactive reconnect-and-retry. A generation marked
+/// NeedsReconnect (Denied(ReconnectFirst)) is force-reconnected before
+/// reuse, whatever `max_reconnects` says — reusing it could hand a stale
+/// response to this call; a Busy or failed forced reconnect surfaces this
+/// call as a transport failure, the same outcome the old flag discipline
+/// produced by calling on the closed client. Connection-level failures and
+/// timeouts are reconnect-eligible when `max_reconnects > 0` (a Busy or
+/// failed reconnect surfaces the original failure); server JSON-RPC errors
+/// never are. Every slot read after an await is re-validated against the
+/// server this call started on.
 async fn MCPToolBridge::invoke_mcp_tool(
   self : MCPToolBridge,
   conn_idx : Int,
   tool_name : String,
   args_str : String,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
-  // A connection marked unhealthy by an earlier timeout is force-reconnected
-  // before reuse, whatever `max_reconnects` says: reusing it could hand a
-  // stale response to this call.
-  if self.connections[conn_idx].needs_reconnect &&
-    !self.connections[conn_idx].reconnecting {
-    let _ = self.reconnect_one(conn_idx)
+  // Capture the slot identity this call belongs to before any await: the
+  // registry may retire, refill, or clear the slot while this task is
+  // suspended. A live slot always holds its actor alongside the client
+  // mirror (both are written only in the commit/retire seams).
+  let conn = match self.live_slot(conn_idx) {
+    Some(conn) => conn
+    None => return Err(MCPCallFailure::TransportFailure)
   }
-  match call_tool_attempt(self.connections[conn_idx], tool_name, args_str) {
+  let invoked_server = conn.name
+  let actor = match conn.actor {
+    Some(actor) => actor
+    None => return Err(MCPCallFailure::TransportFailure)
+  }
+  let timeout_ms = conn.config.timeout_ms
+  let ask_ms = conn_ask_timeout(timeout_ms)
+  let first : Result[@client.CallToolResult, MCPCallFailure] = match
+    conn_actor_acquire(actor, ask_ms) {
+    Err(failure) => return Err(failure)
+    Ok(Permit(permit)) =>
+      call_under_permit(actor, permit, timeout_ms, tool_name, args_str)
+    Ok(Denied(ReconnectFirst)) =>
+      match self.reconnect_one(conn_idx) {
+        Err(_) => return Err(MCPCallFailure::TransportFailure)
+        Ok(_) =>
+          match conn_actor_acquire(actor, ask_ms) {
+            Err(failure) => return Err(failure)
+            Ok(Permit(permit)) =>
+              call_under_permit(actor, permit, timeout_ms, tool_name, args_str)
+            Ok(_) => return Err(MCPCallFailure::TransportFailure)
+          }
+      }
+    Ok(Denied(ReconnectInProgress)) =>
+      return Err(MCPCallFailure::TransportFailure)
+    Ok(_) => return Err(MCPCallFailure::TransportFailure)
+  }
+  match first {
     Ok(result) => Ok(result)
     Err(failure) => {
       let eligible = match failure {
         MCPCallFailure::RemoteFailure => false
         MCPCallFailure::TransportFailure | MCPCallFailure::TimedOut(_) => true
       }
-      if eligible &&
-        self.connections[conn_idx].config.max_reconnects > 0 &&
-        !self.connections[conn_idx].reconnecting {
-        match self.reconnect_one(conn_idx) {
-          Err(_) => Err(failure)
-          Ok(_) =>
-            call_tool_attempt(self.connections[conn_idx], tool_name, args_str)
-        }
-      } else {
-        Err(failure)
+      if !eligible {
+        return Err(failure)
+      }
+      // The retry budget is read post-await from the slot this call started
+      // on — the config may have been replaced by a concurrent refill.
+      let retryable = match self.live_slot_for(conn_idx, invoked_server) {
+        Some(current) => current.config.max_reconnects > 0
+        None => false
+      }
+      if !retryable {
+        return Err(failure)
+      }
+      // At most one reactive reconnect-and-retry. The TimedOut stigma of
+      // the failed attempt is already folded by its deferred EndCall; the
+      // runner closes the slot's current-generation client and hands the
+      // fresh one to the actor's fold before this re-acquire.
+      match self.reconnect_one(conn_idx) {
+        Err(_) => Err(failure)
+        Ok(_) =>
+          match conn_actor_acquire(actor, ask_ms) {
+            Err(_) => Err(failure)
+            Ok(Permit(permit)) =>
+              call_under_permit(actor, permit, timeout_ms, tool_name, args_str)
+            Ok(_) => Err(failure)
+          }
       }
     }
   }
@@ -1104,8 +1704,14 @@ pub impl @posoco.Lifecycle for MCPToolBridge with fn on_start(self) -> Unit {
 
 ///|
 /// The async slot accepts this impl: the body's async close call is inferred.
+/// The drain runs inside a cancellation-protected region — a host
+/// cancellation landing mid-shutdown must not truncate the actor joins
+/// (core keeps its own shutdown under the same protection), and the
+/// Lifecycle contract propagates a cleanup failure loudly. The task stays
+/// in the cancelled state afterwards, so the host's teardown continues
+/// unimpeded once close returns.
 pub impl @posoco.Lifecycle for MCPToolBridge with fn on_shutdown(self) -> Unit {
-  self.close()
+  let _ = @async.protect_from_cancel(() => self.close())
 }
 
 ///|
