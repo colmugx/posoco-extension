@@ -12,13 +12,22 @@ test "channel argv builders produce the herdr verb shapes" {
     "herdr", "pane", "run", "1-2", "cetas-headless -- 'do it'",
   ])
   assert_eq(herdr_wait_argv("herdr", "1-2", 5000), [
-    "herdr", "pane", "wait-output", "--match", "[cetas-headless] turn 1 done", "--timeout",
-    "5000", "1-2",
+    "herdr", "pane", "wait-output", "--regex", herdr_wait_regex, "--source", "recent-unwrapped",
+    "--timeout", "5000", "1-2",
   ])
   assert_eq(herdr_read_argv("herdr", "1-2"), [
     "herdr", "pane", "read", "1-2", "--source", "recent-unwrapped",
   ])
   assert_eq(herdr_close_argv("herdr", "1-3"), ["herdr", "pane", "close", "1-3"])
+}
+
+///|
+test "wait regex covers marker, failure line, and idle sentinel, and nothing echoed" {
+  // Pinned character-for-character: the herdr CLI takes a Rust regex with
+  // substring (unanchored) semantics.
+  assert_eq(
+    herdr_wait_regex, "\\[cetas-headless\\] (turn [0-9]+ done|turn failed:|pane-idle)",
+  )
 }
 
 ///|
@@ -42,7 +51,7 @@ test "split pane id parses from result.pane.pane_id; errors and garbage yield No
 }
 
 ///|
-test "headless command line maps permission and forwards optional flags" {
+test "headless command line maps permission, forwards optional flags, ends with the idle sentinel" {
   inspect(
     headless_command_line(
       "cetas-headless",
@@ -52,7 +61,7 @@ test "headless command line maps permission and forwards optional flags" {
       None,
       "the task",
     ),
-    content="cetas-headless --permission readonly -- 'the task'",
+    content="cetas-headless --permission readonly -- 'the task' ; echo '[cetas-headless] pane-id'le",
   )
   inspect(
     headless_command_line(
@@ -63,7 +72,7 @@ test "headless command line maps permission and forwards optional flags" {
       Some("sess-9"),
       "the task",
     ),
-    content="cetas-headless --yolo --model kimi-k2 --effort high --session sess-9 -- 'the task'",
+    content="cetas-headless --yolo --model kimi-k2 --effort high --session sess-9 -- 'the task' ; echo '[cetas-headless] pane-id'le",
   )
   inspect(
     headless_command_line(
@@ -74,7 +83,33 @@ test "headless command line maps permission and forwards optional flags" {
       None,
       "it's",
     ),
-    content="cetas-headless --permission readonly -- 'it'\\''s'",
+    content="cetas-headless --permission readonly -- 'it'\\''s' ; echo '[cetas-headless] pane-id'le",
+  )
+}
+
+///|
+test "headless command line skips empty model/effort/session values" {
+  inspect(
+    headless_command_line(
+      "cetas-headless",
+      "readonly",
+      Some(""),
+      Some(""),
+      Some(""),
+      "the task",
+    ),
+    content="cetas-headless --permission readonly -- 'the task' ; echo '[cetas-headless] pane-id'le",
+  )
+  inspect(
+    headless_command_line(
+      "cetas-headless",
+      "readonly",
+      Some(""),
+      None,
+      Some("sess-1"),
+      "the task",
+    ),
+    content="cetas-headless --permission readonly --session sess-1 -- 'the task' ; echo '[cetas-headless] pane-id'le",
   )
 }
 
@@ -86,6 +121,29 @@ test "parse_pane_text: session line bounds the answer, marker is stripped" {
   assert_eq(pane.answer, "headless answer body")
   assert_eq(pane.child_session, Some("sess-7"))
   assert_eq(pane.failure, None)
+  assert_eq(pane.done, true)
+}
+
+///|
+test "parse_pane_text: idle-sentinel line is terminal, truncates the prompt junk, and leaves done false" {
+  let pane = parse_pane_text(
+    "cetas-headless: unrecognized argument '--mdoel'\nUsage: cetas-headless [OPTIONS] --task <TASK>\n[cetas-headless] pane-idle\n❯ \n",
+  )
+  assert_eq(
+    pane.answer,
+    "cetas-headless: unrecognized argument '--mdoel'\nUsage: cetas-headless [OPTIONS] --task <TASK>",
+  )
+  assert_eq(pane.child_session, None)
+  assert_eq(pane.failure, None)
+  assert_eq(pane.done, false)
+}
+
+///|
+test "parse_pane_text: session line before an idle sentinel still yields child_session" {
+  let pane = parse_pane_text("session: s2\n[cetas-headless] pane-idle\n❯ \n")
+  assert_eq(pane.answer, "")
+  assert_eq(pane.child_session, Some("s2"))
+  assert_eq(pane.done, false)
 }
 
 ///|
@@ -124,6 +182,7 @@ test "parse_pane_text: empty screen parses to empty result" {
   assert_eq(pane.answer, "")
   assert_eq(pane.child_session, None)
   assert_eq(pane.failure, None)
+  assert_eq(pane.done, false)
 }
 
 ///|

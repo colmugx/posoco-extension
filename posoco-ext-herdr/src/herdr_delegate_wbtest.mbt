@@ -58,12 +58,15 @@ fn delegate_task_call(task : String) -> @posoco.ToolCall {
 }
 
 ///|
-fn test_delegate() -> HerdrDelegate {
+fn test_delegate(
+  background_run? : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
+) -> HerdrDelegate {
   HerdrDelegate::HerdrDelegate(
     pane="1-1",
     bin="herdr",
     headless_bin="cetas-headless",
     cwd="/tmp/ws",
+    background_run~,
   )
 }
 
@@ -114,6 +117,7 @@ test "delegate tooldef shape" {
   assert_true(def.description.contains("readonly"))
   assert_true(def.description.contains("MUST reuse"))
   assert_true(def.description.contains("even on failure and timeout"))
+  assert_true(def.description.contains("never pass an empty string"))
 }
 
 ///|
@@ -125,18 +129,22 @@ test "delegate system prompt carries herdr context and is byte-stable" {
   assert_true(first.contains("depth-1"))
   assert_true(first.contains("herdr_delegate"))
   assert_true(first.contains("MUST reuse"))
+  assert_true(first.contains("never pass an empty string"))
   assert_eq(first, delegate.system_prompt())
 }
 
 ///|
-test "manifest lock: delegate contributes only itself, reporter stays tool-free" {
+test "manifest lock: delegate contributes tool+prompt+lifecycle+observer, reporter stays tool-free" {
   let delegate = test_delegate()
   assert_eq(delegate.extension_id(), "posoco_ext_herdr_delegate")
   let m = delegate.manifest()
   assert_eq(m.id, "posoco_ext_herdr_delegate")
   assert_eq(m.tools.length(), 1)
   assert_eq(m.tools[0].list_tools()[0].name.value, "herdr_delegate")
-  assert_eq(m.observers.length(), 0)
+  assert_eq(m.observers.length(), 1)
+  assert_eq(m.lifecycle.length(), 1)
+  assert_eq(m.requires.length(), 1)
+  assert_eq(m.requires[0], @posoco.Capability::Tasks)
   assert_eq(m.sessions.length(), 0)
   assert_eq(m.commands.length(), 0)
   assert_eq(m.memory.length(), 0)
@@ -178,11 +186,11 @@ async test "delegate happy path returns the answer with peer_pane and child_sess
     "--no-focus",
   ])
   assert_eq(fake.received[1], [
-    "herdr", "pane", "run", "1-3", "cetas-headless --permission readonly -- 'fix the bug'",
+    "herdr", "pane", "run", "1-3", "cetas-headless --permission readonly -- 'fix the bug' ; echo '[cetas-headless] pane-id'le",
   ])
   assert_eq(fake.received[2], [
-    "herdr", "pane", "wait-output", "--match", "[cetas-headless] turn 1 done", "--timeout",
-    "1800000", "1-3",
+    "herdr", "pane", "wait-output", "--regex", herdr_wait_regex, "--source", "recent-unwrapped",
+    "--timeout", "1800000", "1-3",
   ])
   assert_eq(fake.received[3], [
     "herdr", "pane", "read", "1-3", "--source", "recent-unwrapped",
@@ -212,6 +220,67 @@ async test "delegate surfaces the headless failure line as ToolReportedError wit
       assert_true(content.contains("turn failed: model exploded"))
       assert_true(content.contains("peer_pane: 1-3"))
       assert_true(content.contains("child_session: s1"))
+    }
+    other => fail("expected ToolReportedError, got " + other.to_string())
+  }
+  assert_eq(fake.received.length(), 4)
+}
+
+///|
+async test "empty session/model/effort arguments are normalized away before the command line" {
+  let delegate = test_delegate()
+  let fake : FakeHerdrCli = {
+    results: happy_script("sess-7"),
+    index: 0,
+    received: [],
+  }
+  let outcome = delegate.execute_delegate_impl(
+    fake,
+    delegate_call([
+      ("task", Json::string("x")),
+      ("session", Json::string("")),
+      ("model", Json::string("")),
+      ("effort", Json::string("")),
+    ]),
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(..) => ()
+    other => fail("expected Success, got " + other.to_string())
+  }
+  let command_line = fake.received[1][4]
+  assert_false(command_line.contains("--session"))
+  assert_false(command_line.contains("--model"))
+  assert_false(command_line.contains("--effort"))
+  assert_true(command_line.contains("; echo '[cetas-headless] pane-id'le"))
+}
+
+///|
+async test "child exit with no protocol line surfaces the pane excerpt as ToolReportedError" {
+  let delegate = test_delegate()
+  let fake : FakeHerdrCli = {
+    results: [
+      split_ok(),
+      (0, "", ""),
+      (0, "", ""),
+      (
+        0, "cetas-headless: unrecognized argument '--mdoel'\nUsage: cetas-headless [OPTIONS] --task <TASK>\n\n[cetas-headless] pane-idle\n❯ \n",
+        "",
+      ),
+    ],
+    index: 0,
+    received: [],
+  }
+  match delegate.execute_delegate_impl(fake, delegate_task_call("x")) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+      assert_true(
+        content.contains("child exited before printing a completion marker"),
+      )
+      assert_true(content.contains("peer_pane: 1-3"))
+      assert_true(
+        content.contains("Usage: cetas-headless [OPTIONS] --task <TASK>"),
+      )
+      // Prompt junk after the idle sentinel must not leak into the excerpt.
+      assert_false(content.contains("❯"))
     }
     other => fail("expected ToolReportedError, got " + other.to_string())
   }
@@ -279,7 +348,8 @@ async test "delegate wait timeout best-effort reads child_session into the error
       fail("expected timeout ToolReportedError, got " + other.to_string())
   }
   assert_eq(fake.received.length(), 4)
-  assert_eq(fake.received[2][6], "5000")
+  assert_eq(fake.received[2][6], "recent-unwrapped")
+  assert_eq(fake.received[2][8], "5000")
   assert_eq(fake.received[3], [
     "herdr", "pane", "read", "1-3", "--source", "recent-unwrapped",
   ])

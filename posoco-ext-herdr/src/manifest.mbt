@@ -11,9 +11,7 @@ pub impl @posoco.Extension for HerdrReporter with fn extension_id(
 /// stays empty: presence reporting is read-only telemetry and must not
 /// widen the composition surface.
 pub impl @posoco.Extension for HerdrReporter with fn manifest(self) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(
-    id="posoco_ext_herdr",
-    observers=[self],
-    lifecycle=[self],
-  )
+  @posoco.ExtensionManifest(id="posoco_ext_herdr", observers=[self], lifecycle=[
+    self,
+  ])
 }

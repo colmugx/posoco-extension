@@ -15,7 +15,19 @@ pub struct HerdrDelegate {
   cwd : String
   // In-flight delegate count; the single-threaded event loop makes the plain
   // counter safe under parallel tool waves (subagent ledger precedent).
+  // Background delegations hold a slot for their whole async run.
   mut active : Int
+  /// The Agent-owned task capability, captured at on_compose from the
+  /// Capability::Tasks the manifest requires; None before composition.
+  mut tasks : @posoco.Tasks?
+  /// Parent session of the operation currently executing, tracked from
+  /// scoped observer events — background results are addressed to it.
+  mut session : String?
+  /// Test seam: overrides the background runner's channel execution (the
+  /// default runs the shared run_channel flow over the execute-time CLI).
+  /// Slot management, the core timeout margin, and outcome projection stay
+  /// in background_execute. Production leaves it None.
+  priv background_run : (async (HerdrDelegate) -> @posoco.ToolOutcome)?
 }
 
 ///|
@@ -24,8 +36,18 @@ pub fn HerdrDelegate::HerdrDelegate(
   bin~ : String,
   headless_bin~ : String,
   cwd~ : String,
+  background_run? : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
 ) -> HerdrDelegate {
-  { pane, bin, headless_bin, cwd, active: 0, }
+  {
+    pane,
+    bin,
+    headless_bin,
+    cwd,
+    active: 0,
+    tasks: None,
+    session: None,
+    background_run,
+  }
 }
 
 ///|
@@ -70,7 +92,7 @@ fn herdr_delegate_gate(
 fn herdr_delegate_tooldef() -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked("herdr_delegate"),
-    description: "Delegate one task to a fresh cetas-headless agent in a visible herdr pane: splits a new pane beside this one, launches cetas-headless there with the task, blocks until its completion marker or the timeout, then reads the pane back and returns the headless agent's answer as the tool result. 'task' is the user-position slot — untrusted content may flow there, and it must be a single line. Delegated agents are depth-1 leaves: they never receive delegation tools, so they cannot delegate further. The result footer carries 'peer_pane:' (the child's herdr pane id) and, when captured, 'child_session:' (returned on success, failure, and best-effort timeout; pass it back via 'session' to continue that child). 'permission' controls the child: readonly (default) runs cetas-headless --permission readonly (it cannot write); write runs it with --yolo (unattended full permission). 'model'/'effort'/'session' forward to cetas-headless; 'timeout_ms' bounds the wait (default 1800000 = 30 minutes). 'direction' is the split direction (default right, or down); 'close_pane' (default true) closes the child pane after a successful run — it never closes on failure or timeout, since a timed-out child may still be running. Strategy: batch independent subtasks as multiple herdr_delegate calls in one response — they run as parallel panes (concurrency cap 4); send a readonly scout first and reserve write for tasks that must modify the workspace; tell children to write long artifacts to workspace files, since pane readback can truncate, and iterate on a child by passing its child_session back via 'session' — related tasks MUST reuse the same child session (one work-stream = one child session, never a fresh session per step; child_session is returned even on failure and timeout).",
+    description: "Delegate one task to a fresh cetas-headless agent in a visible herdr pane: splits a new pane beside this one, launches cetas-headless there with the task, blocks until its completion marker or the timeout, then reads the pane back and returns the headless agent's answer as the tool result. 'task' is the user-position slot — untrusted content may flow there, and it must be a single line. Delegated agents are depth-1 leaves: they never receive delegation tools, so they cannot delegate further. The result footer carries 'peer_pane:' (the child's herdr pane id) and, when captured, 'child_session:' (returned on success, failure, and best-effort timeout; pass it back via 'session' to continue that child). 'permission' controls the child: readonly (default) runs cetas-headless --permission readonly (it cannot write); write runs it with --yolo (unattended full permission). 'model'/'effort'/'session' forward to cetas-headless; 'timeout_ms' bounds the wait (default 1800000 = 30 minutes). 'direction' is the split direction (default right, or down); 'close_pane' (default true) closes the child pane after a successful run — it never closes on failure or timeout, since a timed-out child may still be running. Long-running: pass background: true to get an immediate receipt (delegation_id) and receive the child's result as a follow-up turn — background always starts a fresh child and refuses 'session', since a timed-out child may still be running in its pane and resume stays foreground-only. Strategy: batch independent subtasks as multiple herdr_delegate calls in one response — they run as parallel panes (concurrency cap 4); send a readonly scout first and reserve write for tasks that must modify the workspace; tell children to write long artifacts to workspace files, since pane readback can truncate, and iterate on a child by passing its child_session back via 'session' — related tasks MUST reuse the same child session (one work-stream = one child session, never a fresh session per step; child_session is returned even on failure and timeout). Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
@@ -103,7 +125,7 @@ fn herdr_delegate_tooldef() -> @posoco.ToolDef {
         "session": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Child session id from a previous result or error footer (returned on success, failure, and best-effort timeout); re-launches headless with --session to continue that child. Related or follow-up tasks MUST reuse the same child session instead of spawning a new one",
+            "Child session id from a previous result or error footer (returned on success, failure, and best-effort timeout); re-launches headless with --session to continue that child. Related or follow-up tasks MUST reuse the same child session instead of spawning a new one. Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child (child_session from a prior result/error footer)",
           ),
         }),
         "timeout_ms": Json::object({
@@ -124,6 +146,13 @@ fn herdr_delegate_tooldef() -> @posoco.ToolDef {
           "default": Json::boolean(true),
           "description": Json::string(
             "Close the child pane after a successful run (default true); failures and timeouts leave the pane open",
+          ),
+        }),
+        "background": Json::object({
+          "type": Json::string("boolean"),
+          "default": Json::boolean(false),
+          "description": Json::string(
+            "Return a receipt immediately and run the delegation in the background; the result arrives later as a follow-up turn. Background always starts a fresh child and cannot take 'session'.",
           ),
         }),
       }),
@@ -172,6 +201,7 @@ priv struct HerdrDelegateArgs {
   timeout_ms : Int
   direction : String
   close_pane : Bool
+  background : Bool
 }
 
 ///|
@@ -203,17 +233,22 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
     None | Some(Null) => "readonly"
     Some(_) => return Err("herdr_delegate: 'permission' must be a string")
   }
+  // Empty strings normalize to None: an omitted flag means a new conversation
+  // / default, and forwarding an empty value would break the command line.
   let model = match obj.get("model") {
+    Some(String("")) => None
     Some(String(s)) => Some(s)
     None | Some(Null) => None
     Some(_) => return Err("herdr_delegate: optional 'model' must be a string")
   }
   let effort = match obj.get("effort") {
+    Some(String("")) => None
     Some(String(s)) => Some(s)
     None | Some(Null) => None
     Some(_) => return Err("herdr_delegate: optional 'effort' must be a string")
   }
   let session = match obj.get("session") {
+    Some(String("")) => None
     Some(String(s)) => Some(s)
     None | Some(Null) => None
     Some(_) =>
@@ -247,6 +282,16 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
     None | Some(Null) => true
     Some(_) => return Err("herdr_delegate: 'close_pane' must be a boolean")
   }
+  let background = match obj.get("background") {
+    Some(True) => true
+    Some(False) | None | Some(Null) => false
+    Some(_) => return Err("herdr_delegate: 'background' must be a boolean")
+  }
+  if background && session is Some(_) {
+    return Err(
+      "herdr_delegate: background mode always starts a fresh child and cannot resume — a timed-out child may still be running in its pane and the delegate cannot distinguish it from a finished one; resume via a foreground call with 'session'",
+    )
+  }
   Ok({
     task,
     permission,
@@ -256,6 +301,7 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
     timeout_ms,
     direction,
     close_pane,
+    background,
   })
 }
 
@@ -277,8 +323,9 @@ fn herdr_child_session_line(child_session : String?) -> String {
 
 ///|
 /// Shared execute logic (target-agnostic): single-line task check first,
-/// then the concurrency guard, then arg validation, then the channel flow.
-/// The in-flight counter is decremented on every exit path.
+/// then the concurrency guard, then arg validation, then either the
+/// background submit or the blocking channel flow. The in-flight counter is
+/// decremented on every exit path (background: by the runner itself).
 async fn HerdrDelegate::execute_delegate_impl(
   self : HerdrDelegate,
   cli : &HerdrCli,
@@ -301,6 +348,9 @@ async fn HerdrDelegate::execute_delegate_impl(
   let args = match extract_delegate_args(call.arguments) {
     Ok(args) => args
     Err(message) => return herdr_delegate_error(message)
+  }
+  if args.background {
+    return self.background_execute(cli, args)
   }
   self.active += 1
   errdefer {
@@ -391,6 +441,14 @@ async fn HerdrDelegate::run_channel(
       )
     None => ()
   }
+  // The child exited (the idle sentinel proved the pane is back at a prompt)
+  // without printing any protocol line: pane.answer here is screen junk
+  // holding the real death cause (usage text, env errors, ...).
+  if !pane.done {
+    return herdr_delegate_error(
+      "herdr_delegate: child exited before printing a completion marker (peer_pane: \{new_pane}); pane excerpt: \{herdr_excerpt(pane.answer)}",
+    )
+  }
   // Close fires only here: after a successful read with no failure line.
   // A failed close is not fatal — the pane is still usable and inspectable.
   let mut footer = "peer_pane: \{new_pane}"
@@ -410,6 +468,136 @@ async fn HerdrDelegate::run_channel(
 }
 
 ///|
+/// Background path: submit the delegation to the Agent-owned task capability
+/// (captured at on_compose) and return the receipt immediately. The runner
+/// executes the same channel flow inside the host agent's run_scoped scope;
+/// core delivers its terminal outcome to the parent session as a follow-up
+/// turn on the next ordinary run_turn. There is deliberately no extension-
+/// side queue: an uncommitted outcome is retained and retried by core.
+///
+/// Concurrency: the shared guard in execute_delegate_impl already capped
+/// admission; the in-flight slot is reserved here at accept and released by
+/// the runner on every exit path — or immediately when the submit is refused.
+fn HerdrDelegate::background_execute(
+  self : HerdrDelegate,
+  cli : &HerdrCli,
+  args : HerdrDelegateArgs,
+) -> @posoco.ToolOutcome {
+  let tasks = match self.tasks {
+    Some(tasks) => tasks
+    None =>
+      return herdr_delegate_error(
+        "herdr_delegate: background mode requires the composed task capability — compose the manifest (requires Tasks) and run the host agent under Agent::run_scoped",
+      )
+  }
+  let parent_session = match self.session {
+    Some(session) => session
+    None =>
+      return herdr_delegate_error(
+        "herdr_delegate: no parent session observed yet — background results are addressed to the session whose run invoked this tool",
+      )
+  }
+  let channel_run : async (HerdrDelegate) -> @posoco.ToolOutcome = match
+    self.background_run {
+    Some(override_run) => override_run
+    None => async fn(d : HerdrDelegate) { d.run_channel(cli, args) }
+  }
+  self.active += 1
+  // Core's task timeout is a last-resort cancellation net only: the channel
+  // flow enforces its own graceful protocol timeout first (`pane wait-output`
+  // bounded by args.timeout_ms leaves the pane open and best-effort captures
+  // child_session — a delivered result the model must read), so the +5000 ms
+  // margin lets the graceful path always win the race.
+  let accepted = tasks.submit({
+    session_id: parent_session,
+    mode: @posoco.TaskMode::Background,
+    label: "herdr_delegate",
+    timeout_ms: Some(args.timeout_ms + 5000),
+    run: self.background_task_run(channel_run),
+  })
+  match accepted {
+    Ok(handle) => {
+      let receipt = handle.receipt()
+      @posoco.ToolOutcome::Success(
+        content="background herdr_delegate accepted\ndelegation_id: \{receipt.id}\na fresh pane and child session will start; the result arrives as a follow-up turn",
+        structured=Some(
+          Json::object(
+            Map::from_array([
+              ("background", Json::boolean(true)),
+              ("delegation_id", Json::string(receipt.id)),
+            ]),
+          ),
+        ),
+      )
+    }
+    Err(error) => {
+      self.active -= 1
+      match error {
+        @posoco.TaskSubmitError::Unavailable =>
+          herdr_delegate_error(
+            "herdr_delegate: background submit unavailable — the host agent is not running under Agent::run_scoped",
+          )
+        @posoco.TaskSubmitError::Closed =>
+          herdr_delegate_error(
+            "herdr_delegate: background submit refused — the agent is shut down",
+          )
+        @posoco.TaskSubmitError::QueueFull =>
+          herdr_delegate_error(
+            "herdr_delegate: background queue full — retry shortly",
+          )
+        @posoco.TaskSubmitError::InvalidSession(reason~) =>
+          herdr_delegate_error(
+            "herdr_delegate: background submit refused (invalid session): \{reason}",
+          )
+      }
+    }
+  }
+}
+
+///|
+/// The TaskSpec.run closure: execute the channel flow, guard cancellation on
+/// both exit paths, release the in-flight slot, and project the outcome to
+/// the message core delivers to the parent session. A failed or timed-out
+/// delegation is still a RESULT the model must read (the child_session
+/// footer matters for follow-up), so both content-carrying outcomes project
+/// to text; only transport breakage re-raises, which core maps to
+/// Failed(reason).
+///
+/// Cancellation guard (both paths): a cancelled coroutine stays cancelled —
+/// pause() re-raises the genuine cancellation (a suberror that flows through
+/// any typed error channel) so the task group records cancelled rather than
+/// failed/completed, and the timer's TimeoutError wins over adapter error
+/// masking. Without a pending cancellation the pause is a no-op yield.
+#warnings("-fragile_catch_all")
+fn HerdrDelegate::background_task_run(
+  self : HerdrDelegate,
+  channel_run : async (HerdrDelegate) -> @posoco.ToolOutcome,
+) -> async () -> @posoco.Message {
+  async fn() {
+    // The slot is released exactly once on EVERY exit: errdefer owns every
+    // raise-exit (including the cancellation guards below), the explicit
+    // decrement owns the normal return.
+    errdefer {
+      self.active -= 1
+    }
+    let outcome = channel_run(self) catch {
+      error => {
+        @async.pause()
+        raise error
+      }
+    }
+    @async.pause()
+    self.active -= 1
+    let text = match outcome {
+      @posoco.ToolOutcome::Success(content~, ..) => content
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) => content
+      other => other.summary()
+    }
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
+  }
+}
+
+///|
 /// Herdr-context section for the assembled system prompt. Static text built
 /// only from construction-time fields (pane is fixed), honoring the
 /// byte-stability contract of SystemPromptContributor.
@@ -417,7 +605,7 @@ pub impl @posoco.SystemPromptContributor for HerdrDelegate with fn system_prompt
   self : HerdrDelegate,
 ) -> String {
   "You are running inside a herdr terminal-multiplexer pane (pane \{self.pane}). You can delegate work to depth-1 cetas-headless child agents in visible panes with the herdr_delegate tool; children never receive delegation tools.\n" +
-  "Use herdr_delegate for independent parallelizable subtasks (multiple calls in one response run as parallel panes, concurrency cap 4), for read-only reconnaissance first (permission=readonly), and for tasks that need process isolation or long runtime. Results are read back from the pane screen and long answers may truncate: tell children to write important artifacts to workspace files instead of long replies. Related or follow-up tasks MUST reuse the same child session — pass a result's child_session (also present on failure/timeout errors) back via the session argument. One work-stream = one child session; never open a fresh session for each step of the same logical task — reuse keeps context coherent and makes restarts after failure or timeout cheap.\n" +
+  "Use herdr_delegate for independent parallelizable subtasks (multiple calls in one response run as parallel panes, concurrency cap 4), for read-only reconnaissance first (permission=readonly), and for tasks that need process isolation or long runtime. Results are read back from the pane screen and long answers may truncate: tell children to write important artifacts to workspace files instead of long replies. Related or follow-up tasks MUST reuse the same child session — pass a result's child_session (also present on failure/timeout errors) back via the session argument. One work-stream = one child session; never open a fresh session for each step of the same logical task — reuse keeps context coherent and makes restarts after failure or timeout cheap. Omit session for a new conversation — never pass an empty string; pass session only to continue an existing child (child_session from a prior result/error footer).\n" +
   "write permission (--yolo) is powerful: prefer readonly unless the task must modify the workspace."
 }
 
@@ -430,14 +618,62 @@ pub impl @posoco.Extension for HerdrDelegate with fn extension_id(
 
 ///|
 /// A HerdrDelegate contributes itself as a tool plus its herdr-context
-/// system-prompt section. Everything else stays empty — the reporter's
-/// presence manifest is untouched.
+/// system-prompt section, and declares the Agent-owned task capability it
+/// consumes for background delegations: the same value is a Lifecycle
+/// contributor (captures the composed Tasks at on_compose) and an Observer
+/// (tracks the parent session from scoped events). No hooks: core's session
+/// inbox owns background-result delivery.
 pub impl @posoco.Extension for HerdrDelegate with fn manifest(
   self : HerdrDelegate,
 ) -> @posoco.ExtensionManifest {
   @posoco.ExtensionManifest(
     id="posoco_ext_herdr_delegate",
     tools=[self],
+    observers=[self as &@posoco.Observer],
+    lifecycle=[self as &@posoco.Lifecycle],
     prompt_contributors=[self],
+    requires=[@posoco.Capability::Tasks],
   )
+}
+
+///|
+/// Composition: capture the Agent-owned task capability delivered because the
+/// manifest requires Capability::Tasks. Submitting before run_scoped is
+/// refused at the tool layer with an explicit model-visible error.
+pub impl @posoco.Lifecycle for HerdrDelegate with fn on_compose(
+  self : HerdrDelegate,
+  view : @posoco.CompositionView,
+) {
+  self.tasks = view.tasks()
+}
+
+///|
+/// The delegate owns no lifecycle resources: child panes belong to the child,
+/// and core owns background-task cleanup — shutdown stays a no-op.
+pub impl @posoco.Lifecycle for HerdrDelegate with fn on_shutdown(
+  _self : HerdrDelegate,
+) -> Unit {
+  ()
+}
+
+///|
+pub impl @posoco.Observer for HerdrDelegate with fn on_event(
+  _self : HerdrDelegate,
+  _event : @posoco.TurnEvent,
+) -> Unit {
+  ()
+}
+
+///|
+/// Track the parent session from scoped events; a background delegation
+/// addresses its TaskSpec to this session so core delivers the outcome there.
+pub impl @posoco.Observer for HerdrDelegate with fn on_event_at(
+  self : HerdrDelegate,
+  scope : @posoco.EventScope?,
+  _event : @posoco.TurnEvent,
+) -> Unit {
+  match scope {
+    Some(s) => self.session = Some(s.session_id.to_string())
+    None => ()
+  }
 }
