@@ -27,7 +27,9 @@ pub impl @posoco.Extension for LazyTools with fn manifest(self) -> @posoco.Exten
     tools=[self],
     observers=[self.stable_observer as &@posoco.Observer],
     hooks=[self.stable_hook as &@posoco.PipelineHook],
+    lifecycle=[self],
     prompt_contributors=[self],
+    requires=[@posoco.Capability::Decision],
   )
 }
 
@@ -36,3 +38,19 @@ pub impl @posoco.Extension for LazyTools with fn manifest(self) -> @posoco.Exten
 /// `&LazyTools` coerces to `&@posoco.Extension` when placed in an
 /// `Array[&@posoco.Extension]`.
 pub extend LazyTools with @posoco.Extension::{extension_id, manifest}
+
+///|
+/// Capture the optional composed DecisionPort. Absence is normal: semantic
+/// fallback is an enhancement over the existing lexical catalog search.
+pub impl @posoco.Lifecycle for LazyTools with fn on_compose(
+  self : LazyTools,
+  ctx : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.decision = ctx.decision()
+}
+
+///|
+/// No owned resources; drop the borrowed capability reference at shutdown.
+pub impl @posoco.Lifecycle for LazyTools with fn on_shutdown(self : LazyTools) -> Unit {
+  self.decision = None
+}

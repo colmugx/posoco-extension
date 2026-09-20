@@ -41,7 +41,9 @@ priv struct StableLazyToolsHook {}
 fn is_legacy_lazytools_context(message : @posoco.Message) -> Bool {
   match message {
     @posoco.Message::UserMessage(content~) =>
-      content.iter().any(fn(block) {
+      content
+      .iter()
+      .any(fn(block) {
         match block {
           @posoco.Content::Text(text) => text.has_prefix("<lazytools-context")
           _ => false
@@ -69,7 +71,11 @@ impl @posoco.PipelineHook for StableLazyToolsHook with fn before_model(
       kept.push(message)
     }
   }
-  if changed { kept } else { messages }
+  if changed {
+    kept
+  } else {
+    messages
+  }
 }
 
 ///|
@@ -85,6 +91,8 @@ pub struct LazyTools {
   priv recent : Array[String]
   priv stable_observer : StableLazyToolsObserver
   priv stable_hook : StableLazyToolsHook
+  /// Optional semantic judgement capability used only after lexical discovery misses.
+  priv mut decision : &@posoco.DecisionPort?
 }
 
 ///|
@@ -156,8 +164,9 @@ pub fn LazyTools::build(
     entries,
     by_name,
     recent: [],
-    stable_observer: StableLazyToolsObserver::{},
-    stable_hook: StableLazyToolsHook::{},
+    stable_observer: StableLazyToolsObserver::{ },
+    stable_hook: StableLazyToolsHook::{ },
+    decision: None,
   })
 }
 

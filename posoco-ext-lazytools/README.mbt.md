@@ -17,6 +17,7 @@ gateway.
 | `SystemPromptContributor` | the stable `## Deferred tools` section: lists deferred groups and tells the model to reuse schemas already present in history before calling `tool_list` again |
 | `Observer` | inert compatibility view in normal manifest composition; the public `LazyTools` Observer impl remains available to explicit callers |
 | `PipelineHook` | cache-stable compatibility view: removes legacy `<lazytools-context>` messages from older sessions once, then passes messages through unchanged; the public `LazyTools` hook impl remains available to explicit callers |
+| `Lifecycle` | captures an optional composed `DecisionPort` used only as a semantic discovery fallback |
 
 ## Discoverability and prompt-cache behavior
 
@@ -32,6 +33,15 @@ Older LazyTools behavior recorded the five most recently executed deferred tools
 |---|---|---|
 | `tool_list` | `keyword` string, optional | Browse the folded catalog: no keyword lists every group; a keyword (space-separated, AND-matched against extension ids and tool names/descriptions) returns the matching groups **whole** — every tool with name, description and full JSON input schema |
 | `tool_execute` | `tool` string, required; `arguments` object, optional | Routes the call to the owning provider and returns its outcome verbatim; missing `arguments` are passed as an empty object |
+
+## Semantic discovery fallback
+
+When a keyword query produces no lexical group match, LazyTools may ask the
+optional composed `DecisionPort` to choose the most relevant deferred group.
+Existing lexical matches always win. A missing provider, DecisionPort error,
+invalid answer, or selected probability below `0.6` preserves the historical
+no-match result. DecisionPort only judges group relevance; `tool_execute` and
+all execution/permission policy remain unchanged.
 
 ## Output contract
 
