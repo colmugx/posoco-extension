@@ -81,8 +81,10 @@ pub fn acp_permission_request(
 /// then remembers the approval for the rest of the agent lifetime per its
 /// call-shape cache (write-class keyed by (tool, path); shell and unknown
 /// tools never cache). Both reject options and a cancelled request deny
-/// the call — denial is terminal for the turn, so the model does not retry
-/// within it.
+/// the call — denial is non-terminal steering: the pump folds the rejection
+/// into a `NotExecuted(RejectedByHook)` tool result and the turn continues,
+/// so the model sees the deny reason and can choose a different action
+/// rather than the turn ending in an error.
 pub fn acp_decision_from_approval(
   response : @acp.RequestPermissionResponse,
   request : @permission.ApprovalRequest,
