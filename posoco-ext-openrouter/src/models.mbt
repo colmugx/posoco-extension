@@ -291,9 +291,7 @@ pub fn openrouter_model_catalog(
     )
     slots.push(
       openrouter_catalog_slot(
-        config,
-        api_key_factory,
-        prompt_cache_key_rejection_state,
+        config, api_key_factory, prompt_cache_key_rejection_state,
       ),
     )
   }

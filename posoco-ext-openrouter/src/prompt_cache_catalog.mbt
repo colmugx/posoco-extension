@@ -23,18 +23,12 @@ fn openrouter_model_catalog_with_cache_policy(
   let slots : Array[@llm.ModelSlot] = []
   for info in openrouter_preferred_models(models, preferred_id) {
     let discovered = openrouter_config_for_info(
-      api_key,
-      base_url,
-      info,
-      http_referer,
-      title,
+      api_key, base_url, info, http_referer, title,
     )
     let config = { ..discovered, send_prompt_cache_key, }
     slots.push(
       openrouter_catalog_slot(
-        config,
-        api_key_factory,
-        prompt_cache_key_rejection_state,
+        config, api_key_factory, prompt_cache_key_rejection_state,
       ),
     )
   }

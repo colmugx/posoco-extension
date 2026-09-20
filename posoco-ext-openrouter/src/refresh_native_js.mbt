@@ -25,8 +25,7 @@ pub impl @llm.RefreshableProviderFactory for OpenRouterProvider with fn refresh(
   let http_referer = openrouter_resolve_setting_string(source, "http_referer")
   let title = openrouter_resolve_setting_string(source, "title")
   let send_prompt_cache_key = openrouter_setting_bool(
-    source,
-    "send_prompt_cache_key",
+    source, "send_prompt_cache_key",
   )
   let models = fetch_openrouter_models(base_url, api_key) catch {
     err =>

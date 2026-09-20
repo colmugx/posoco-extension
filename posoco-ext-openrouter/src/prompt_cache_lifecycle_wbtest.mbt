@@ -2,7 +2,9 @@
 test "OpenRouter rebuilt ports share learned prompt-cache rejection" {
   let state : Ref[Bool] = Ref(false)
   let config = OpenRouterConfig("key", model="m", send_prompt_cache_key=true)
-  let first = openrouter_model_port_with_prompt_cache_rejection_state(config, state)
+  let first = openrouter_model_port_with_prompt_cache_rejection_state(
+    config, state,
+  )
   assert_eq(
     first.prompt_cache_key(cache_scope("session-1")),
     Some("posoco-session-1"),
@@ -38,9 +40,7 @@ test "OpenRouter prompt-cache setting is strict boolean and defaults off" {
 
   let enabled = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
-      Json::object(
-        Map::from_array([("send_prompt_cache_key", Json::True)]),
-      ),
+      Json::object(Map::from_array([("send_prompt_cache_key", Json::True)])),
     ),
   )
   assert_true(openrouter_setting_bool(enabled, "send_prompt_cache_key"))

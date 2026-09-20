@@ -76,7 +76,8 @@ fn OpenRouterModelPort::prompt_cache_key(
   if self.prompt_cache_key_rejected {
     self.prompt_cache_key_rejection_state.val = true
   }
-  if !self.config.send_prompt_cache_key || self.prompt_cache_key_rejection_state.val {
+  if !self.config.send_prompt_cache_key ||
+    self.prompt_cache_key_rejection_state.val {
     return None
   }
   Some(@chatkit.derive_prompt_cache_key(scope.session_id.to_string()))

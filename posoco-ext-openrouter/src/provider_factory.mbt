@@ -143,8 +143,7 @@ fn openrouter_catalog_slot(
   let slot_efforts = openrouter_slot_efforts(config)
   let default_effort = Some(openrouter_effort_label(config))
   let port : &@posoco.ModelPort = openrouter_model_port_with_prompt_cache_rejection_state(
-    config,
-    prompt_cache_key_rejection_state,
+    config, prompt_cache_key_rejection_state,
   )
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = Some(fn(effort) {
     let rebuilt_config = config.with_reasoning_effort(effort) catch {
@@ -152,9 +151,7 @@ fn openrouter_catalog_slot(
         abort("openrouter catalog effort rebuild failed: " + err.to_string())
     }
     openrouter_catalog_slot(
-      rebuilt_config,
-      api_key,
-      prompt_cache_key_rejection_state,
+      rebuilt_config, api_key, prompt_cache_key_rejection_state,
     )
   })
   let capabilities : Array[String] = ["chat", "streaming", "api_key"]
@@ -191,9 +188,7 @@ fn openrouter_catalog_slot(
         send_prompt_cache_key=config.send_prompt_cache_key,
       )
       openrouter_catalog_slot(
-        rebuilt_config,
-        api_key,
-        prompt_cache_key_rejection_state,
+        rebuilt_config, api_key, prompt_cache_key_rejection_state,
       )
     }),
     rebuild_on_effort~,
@@ -262,8 +257,7 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
   let http_referer = openrouter_setting_string(source, "http_referer")
   let title = openrouter_setting_string(source, "title")
   let send_prompt_cache_key = openrouter_setting_bool(
-    source,
-    "send_prompt_cache_key",
+    source, "send_prompt_cache_key",
   )
   let api_key_factory : &@llm.ApiKeyFactory = OpenRouterApiKeyFactory(
     ctx=self.ctx,

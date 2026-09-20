@@ -28,6 +28,18 @@ fn rate_limit_reset_header(response : @http.Response) -> String? {
 }
 
 ///|
+/// Transport error for a cancelled wait. The `category=cancelled` marker is
+/// the classification carrier: the ModelError raise type cannot carry the
+/// coroutine cancellation itself (checked raise types), so cancellation is
+/// surfaced as this stable token. Nobody string-matches the token today —
+/// classification rides on coroutine cancellation semantics.
+fn openrouter_cancelled_transport(stage : String) -> @posoco.ModelError {
+  @posoco.ModelError::Transport(
+    "openrouter transport failure (stage=\{stage}, category=cancelled)",
+  )
+}
+
+///|
 pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
   self : OpenRouterModelPort,
   scope : @posoco.InvocationScope,
@@ -121,8 +133,11 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
       let mut last_yield = @async.now()
       while !done {
         let line = client.read_until("\n") catch {
-          _ => {
+          err => {
             client.close()
+            if @async.is_cancellation_error(err) {
+              raise openrouter_cancelled_transport("read_stream")
+            }
             match classify_openrouter_stream_termination(TransportFailure) {
               Some(err) => raise err
               None => None
@@ -182,10 +197,14 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn chat(
         let now = @async.now()
         if now - last_yield >= 16L {
           @async.pause() catch {
-            // Turn abort is mailbox-driven (the pump checks abort_requested
-            // between effects), so a cancelled pause is safe to ride over;
-            // the next read on a torn-down client errors out of the loop.
-            _ => ()
+            err =>
+              if @async.is_cancellation_error(err) {
+                client.close()
+                raise openrouter_cancelled_transport("read_stream")
+              }
+            // A cancelled pause is classified above instead of riding over;
+            // non-cancellation pause failures still ride over — the next
+            // read on a torn-down client errors out of the loop.
           }
           last_yield = now
         }
