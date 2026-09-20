@@ -1,0 +1,65 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-profiles"
+
+import {
+  "colmugx/posoco-devkit",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn activation_header(String) -> String
+
+pub fn deep_defer_extensions(exts~ : Array[&@port.Extension]) -> (Map[String, String], Array[&@port.Extension])
+
+pub fn find_pending_activations(Array[@kernel.Message]) -> Array[String]
+
+pub fn parse_profile_manifest(Json) -> Result[ProfileManifest, String]
+
+pub fn scan_activated_profiles(Array[@kernel.Message]) -> Array[String]
+
+// Errors
+
+// Types and methods
+pub(all) struct ProfileManifest {
+  id : String
+  name : String
+  description : String
+  exts : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn ProfileManifest::to_json(Self) -> Json
+
+pub struct Profiles {
+  // private fields
+}
+pub async fn Profiles::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub fn Profiles::build(manifests~ : Array[ProfileManifest], defer_set~ : Array[String], captured_prompts~ : Map[String, String], attribution~ : Map[String, String], bus? : @posoco-devkit.EventBus?, store? : &ProfileStore?, session_store? : &@port.SessionStore?, summarizer? : ((Array[(String, Int)]) -> (String, String))?) -> Self
+pub fn Profiles::commands(Self) -> Array[@port.CommandDef]
+pub async fn Profiles::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn Profiles::extension_id(Self) -> String
+pub async fn Profiles::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn Profiles::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn Profiles::manifest(Self) -> @port.ExtensionManifest
+pub fn Profiles::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn Profiles::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub fn Profiles::session_usage(Self, String) -> Array[(String, Int)]
+pub fn Profiles::system_prompt(Self) -> String
+pub fn Profiles::warnings(Self) -> Array[String]
+pub impl @port.CommandPort for Profiles
+pub impl @port.Extension for Profiles
+pub impl @port.Lifecycle for Profiles
+pub impl @port.Observer for Profiles
+pub impl @port.PipelineHook for Profiles
+pub impl @port.SystemPromptContributor for Profiles
+pub impl @port.ToolProvider for Profiles
+
+// Type aliases
+
+// Traits
+pub(open) trait ProfileStore {
+  fn read_all(Self) -> Result[Array[(String, String)], String]
+  fn write(Self, String, ProfileManifest) -> Result[Unit, String]
+}
