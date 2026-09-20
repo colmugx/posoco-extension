@@ -1,9 +1,9 @@
 ///|
 /// posoco_ext_ps1_wbtest.mbt — Whitebox tests for PowerShellTools.
 ///
-/// Pure tests run everywhere. Runtime fixtures probe the local PowerShell
-/// first and skip silently when it is absent, so macOS/Linux dev machines and
-/// CI without pwsh stay green.
+/// Pure tests run everywhere. Runtime tests spawn the user's real pwsh, so
+/// they are opt-in: they run only when PS1_LIVE=1 is set (CI and default
+/// runs skip, and no probe process is started either).
 
 ///|
 async test "list_tools_contains_powershell" {
@@ -169,54 +169,50 @@ async test "system_prompt_stable_and_platform_appropriate" {
 }
 
 ///|
-/// Probe the local PowerShell (native target). False → skip runtime tests.
-async fn probe_powershell(exe : String) -> Bool {
-  let outcome = Ok(
-    @process.collect_output_merged(exe, [
-      "-NoProfile", "-NonInteractive", "-Command", "exit 0",
-    ]),
-  ) catch {
-    _ => Err("probe_failed")
-  }
-  match outcome {
-    Ok(_) => true
-    Err(_) => false
+/// PS1_LIVE=1 opts in to the runtime tests (they spawn the real pwsh
+/// binary); unset skips them without any probe process.
+fn ps1_live_enabled() -> Bool {
+  match @env.get_env_var("PS1_LIVE") {
+    Some("1") => true
+    _ => false
   }
 }
 
 ///|
 async test "write_output_succeeds" {
+  // PS1_LIVE=1 gate: spawns the real pwsh.
+  if !ps1_live_enabled() {
+    return
+  }
   let tools = PowerShellTools(exe="pwsh")
-  if probe_powershell(tools.exe) {
-    let call : @posoco.ToolCall = {
-      call_id: @posoco.CallId::unchecked("tc_echo"),
-      name: @posoco.ToolName::unchecked("powershell"),
-      arguments: Json::object(
-        Map::from_array([("cmd", Json::string("Write-Output 'ps1_ok'"))]),
-      ),
-    }
-    match tools.execute("powershell", call) {
-      Success(content~, ..) => assert_eq(content.trim(), "ps1_ok")
-      _ => fail("expected Success for Write-Output")
-    }
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_echo"),
+    name: @posoco.ToolName::unchecked("powershell"),
+    arguments: Json::object(
+      Map::from_array([("cmd", Json::string("Write-Output 'ps1_ok'"))]),
+    ),
+  }
+  match tools.execute("powershell", call) {
+    Success(content~, ..) => assert_eq(content.trim(), "ps1_ok")
+    _ => fail("expected Success for Write-Output")
   }
 }
 
 ///|
 async test "nonzero_exit_is_reported_error" {
+  // PS1_LIVE=1 gate: spawns the real pwsh.
+  if !ps1_live_enabled() {
+    return
+  }
   let tools = PowerShellTools(exe="pwsh")
-  if probe_powershell(tools.exe) {
-    let call : @posoco.ToolCall = {
-      call_id: @posoco.CallId::unchecked("tc_exit3"),
-      name: @posoco.ToolName::unchecked("powershell"),
-      arguments: Json::object(
-        Map::from_array([("cmd", Json::string("exit 3"))]),
-      ),
-    }
-    match tools.execute("powershell", call) {
-      ToolReportedError(..) => ()
-      _ => fail("expected ToolReportedError for exit 3")
-    }
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_exit3"),
+    name: @posoco.ToolName::unchecked("powershell"),
+    arguments: Json::object(Map::from_array([("cmd", Json::string("exit 3"))])),
+  }
+  match tools.execute("powershell", call) {
+    ToolReportedError(..) => ()
+    _ => fail("expected ToolReportedError for exit 3")
   }
 }
 
@@ -224,46 +220,50 @@ async test "nonzero_exit_is_reported_error" {
 /// An anchored session always starts in the anchor root. `/` is used as the
 /// root because its printed form is stable.
 async test "anchored_session_starts_in_anchor_root" {
+  // PS1_LIVE=1 gate: spawns the real pwsh.
+  if !ps1_live_enabled() {
+    return
+  }
   let tools = PowerShellTools(
     exe="pwsh",
     anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor("/")),
   )
-  if probe_powershell(tools.exe) {
-    let call : @posoco.ToolCall = {
-      call_id: @posoco.CallId::unchecked("tc_loc"),
-      name: @posoco.ToolName::unchecked("powershell"),
-      arguments: Json::object(
-        Map::from_array([("cmd", Json::string("(Get-Location).Path"))]),
-      ),
-    }
-    match tools.execute("powershell", call) {
-      Success(content~, ..) => assert_eq(content.trim(), "/")
-      _ => fail("expected Success for (Get-Location).Path")
-    }
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_loc"),
+    name: @posoco.ToolName::unchecked("powershell"),
+    arguments: Json::object(
+      Map::from_array([("cmd", Json::string("(Get-Location).Path"))]),
+    ),
+  }
+  match tools.execute("powershell", call) {
+    Success(content~, ..) => assert_eq(content.trim(), "/")
+    _ => fail("expected Success for (Get-Location).Path")
   }
 }
 
 ///|
 async test "env_var_roundtrip_via_env_provider" {
+  // PS1_LIVE=1 gate: spawns the real pwsh.
+  if !ps1_live_enabled() {
+    return
+  }
   let tools = PowerShellTools(exe="pwsh")
-  if probe_powershell(tools.exe) {
-    let call : @posoco.ToolCall = {
-      call_id: @posoco.CallId::unchecked("tc_env"),
-      name: @posoco.ToolName::unchecked("powershell"),
-      arguments: Json::object(
-        Map::from_array([
-          (
-            "cmd",
-            Json::string(
-              "$env:CETAS_PS1_TEST = 'v1'; Write-Output $env:CETAS_PS1_TEST",
-            ),
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_env"),
+    name: @posoco.ToolName::unchecked("powershell"),
+    arguments: Json::object(
+      Map::from_array([
+        (
+          "cmd",
+          Json::string(
+            "$env:CETAS_PS1_TEST = 'v1'; Write-Output $env:CETAS_PS1_TEST",
           ),
-        ]),
-      ),
-    }
-    match tools.execute("powershell", call) {
-      Success(content~, ..) => assert_eq(content.trim(), "v1")
-      _ => fail("expected Success for env var roundtrip")
-    }
+        ),
+      ]),
+    ),
+  }
+  match tools.execute("powershell", call) {
+    Success(content~, ..) => assert_eq(content.trim(), "v1")
+    _ => fail("expected Success for env var roundtrip")
   }
 }

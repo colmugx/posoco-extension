@@ -5,11 +5,9 @@ pub impl @posoco.Extension for PowerShellTools with fn extension_id(_self) -> St
 
 ///|
 pub impl @posoco.Extension for PowerShellTools with fn manifest(self) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(
-    id="posoco_ext_ps1",
-    tools=[self],
-    prompt_contributors=[self],
-  )
+  @posoco.ExtensionManifest(id="posoco_ext_ps1", tools=[self], prompt_contributors=[
+    self,
+  ])
 }
 
 ///|
