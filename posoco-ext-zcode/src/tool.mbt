@@ -5,16 +5,66 @@ pub(all) struct ZcodeTaskArgs {
   cwd : String?
   session_id : String?
   mode : String?
+  background : Bool
 } derive(Eq, Debug)
 
 ///|
 pub(all) struct ZcodeTools {
   config : ZcodeConfig
+  /// The Agent-owned task capability, captured at on_compose from the
+  /// Capability::Tasks the manifest requires; None before composition.
+  mut tasks : @posoco.Tasks?
+  /// Parent session of the operation currently executing, tracked from
+  /// scoped observer events — background results are addressed to it.
+  mut session : String?
+  /// Background delegation runner (one CLI run → summary text); injectable
+  /// for tests, default runs zcode_run_task + zcode_background_summary.
+  background_run : async (ZcodeTaskArgs) -> String
 }
 
 ///|
-pub fn zcode_tools(config? : ZcodeConfig = zcode_config()) -> ZcodeTools {
-  { config, }
+pub fn zcode_tools(
+  config? : ZcodeConfig = zcode_config(),
+  run? : (async (ZcodeTaskArgs) -> String)? = None,
+) -> ZcodeTools {
+  let runner : async (ZcodeTaskArgs) -> String = match run {
+    Some(f) => f
+    None =>
+      async fn(args : ZcodeTaskArgs) {
+        let cwd = match args.cwd {
+          Some(c) => c
+          None => zcode_cwd_default()
+        }
+        let mode = match args.mode {
+          Some(m) => m
+          None => config.default_mode
+        }
+        let result = zcode_run_task(
+          config~,
+          task=args.task,
+          cwd~,
+          session_id=args.session_id,
+          mode~,
+        )
+        zcode_background_summary(result)
+      }
+  }
+  { config, tasks: None, session: None, background_run: runner, }
+}
+
+///|
+/// Summary text for one finished delegation (the follow-up message body):
+/// the response, the session id line (so the model can resume), and the
+/// usage line when known — same shape as the foreground result footer.
+pub fn zcode_background_summary(result : ZcodeTaskResult) -> String {
+  let mut content = result.final_text + "\n\nsession_id: " + result.session_id
+  match result.usage {
+    Some(usage) =>
+      content = content +
+        "\ntokens: input=\{usage.input_tokens} output=\{usage.output_tokens} total=\{usage.total_tokens}"
+    None => ()
+  }
+  content
 }
 
 ///|
@@ -50,11 +100,23 @@ pub fn zcode_parse_args(
           }
         None => Some(default_mode)
       }
+      let background = match map.get("background") {
+        None => false
+        Some(Json::True) => true
+        Some(Json::False) => false
+        Some(_) => return Err("zcode: 'background' must be a boolean")
+      }
+      if background && map.get("session_id") is Some(_) {
+        return Err(
+          "zcode: background mode starts a fresh session — resume via session_id is foreground-only (one in-flight prompt per session, upstream error 1308)",
+        )
+      }
       Ok({
         task,
         cwd: zcode_arg_string(map, "cwd"),
         session_id: zcode_arg_string(map, "session_id"),
         mode,
+        background,
       })
     }
     _ => Err("zcode: arguments must be a JSON object")
@@ -155,6 +217,20 @@ fn zcode_tool_schema() -> Json {
                 ]),
               ),
             ),
+            (
+              "background",
+              Json::object(
+                Map::from_array([
+                  ("type", Json::string("boolean")),
+                  (
+                    "description",
+                    Json::string(
+                      "Return a receipt immediately and run the delegation in the background; the result arrives later as a follow-up turn. Background always starts a fresh session.",
+                    ),
+                  ),
+                ]),
+              ),
+            ),
           ]),
         ),
       ),
@@ -170,7 +246,7 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn list_tools(
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("zcode"),
-      description: "Delegate a task to the local zcode CLI — the GLM coding-plan official harness with its own plugins and skills. zcode plans, edits files and runs commands inside its own session in the given working directory, then returns its final answer. Pass session_id (from a previous result) to continue that session instead of starting a new one. Long-running: a delegation may take many minutes. Default mode is edit; dangerous operations are denied by the bridge and reported back in the result text.",
+      description: "Delegate a task to the local zcode CLI — the GLM coding-plan official harness with its own plugins and skills. zcode plans, edits files and runs commands inside its own session in the given working directory, then returns its final answer. Pass session_id (from a previous result) to continue that session instead of starting a new one. Long-running: a delegation may take many minutes — pass background: true to get an immediate receipt and receive the result as a follow-up turn. Default mode is edit; dangerous operations are denied by the bridge and reported back in the result text.",
       input_schema: zcode_tool_schema(),
       owner: @posoco.OwnerId::unchecked("placeholder"),
       policy: @posoco.ExecutionPolicy::Sequential,
@@ -228,6 +304,9 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn execute(
         structured=None,
       )
   }
+  if args.background {
+    return self.background_execute(args)
+  }
   let mode = match args.mode {
     Some(m) => m
     None => self.config.default_mode
@@ -250,5 +329,97 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn execute(
   match outcome {
     Ok(result) => zcode_format_outcome(result)
     Err(error) => raise zcode_runtime_error(error, self.config.timeout_ms)
+  }
+}
+
+///|
+/// Background path: submit the delegation to the Agent-owned task capability
+/// (captured at on_compose) and return the receipt text. The delegation runs
+/// inside the host agent's run_scoped scope under the config timeout; core
+/// delivers its terminal summary to the parent session as a follow-up turn.
+/// There is deliberately no extension-side queue: an uncommitted outcome is
+/// retained and retried by core on the next same-session ordinary turn.
+#warnings("-fragile_catch_all")
+fn ZcodeTools::background_execute(
+  self : ZcodeTools,
+  args : ZcodeTaskArgs,
+) -> @posoco.ToolOutcome {
+  let tasks = match self.tasks {
+    Some(tasks) => tasks
+    None =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="zcode: background mode requires the composed task capability — compose ZcodeExt's manifest (requires Tasks) and run the host agent under Agent::run_scoped",
+        structured=None,
+      )
+  }
+  let parent_session = match self.session {
+    Some(session) => session
+    None =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="zcode: no parent session observed yet — background results are addressed to the session whose run invoked this tool",
+        structured=None,
+      )
+  }
+  let run = self.background_run
+  let accepted = tasks.submit({
+    session_id: parent_session,
+    mode: @posoco.TaskMode::Background,
+    label: "zcode",
+    timeout_ms: Some(self.config.timeout_ms),
+    run: async fn() {
+      let text = run(args) catch {
+        error => {
+          // A cancelled coroutine stays cancelled: pause() re-raises the
+          // genuine cancellation (a suberror that flows through any typed
+          // error channel) so the task group records this task as cancelled
+          // rather than failed, and core's timeout classification survives
+          // the delegation runner's error masking. Without a cancellation
+          // the pause is a no-op yield and the original error propagates.
+          @async.pause()
+          raise error
+        }
+      }
+      // Same guard on the return path: a cancellation the runner swallowed
+      // into a returned value is converted back into a real cancellation;
+      // without a pending cancellation the pause is a no-op yield.
+      @async.pause()
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)])
+    },
+  })
+  match accepted {
+    Ok(handle) => {
+      let receipt = handle.receipt()
+      @posoco.ToolOutcome::Success(
+        content="background zcode accepted\ndelegation_id: \{receipt.id}\na fresh zcode session will start; the result arrives as a follow-up turn",
+        structured=Some(
+          Json::object(
+            Map::from_array([
+              ("background", Json::boolean(true)),
+              ("delegation_id", Json::string(receipt.id)),
+            ]),
+          ),
+        ),
+      )
+    }
+    Err(@posoco.TaskSubmitError::Unavailable) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="zcode: background submit unavailable — the host agent is not running under Agent::run_scoped",
+        structured=None,
+      )
+    Err(@posoco.TaskSubmitError::Closed) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="zcode: background submit refused — the agent is shut down",
+        structured=None,
+      )
+    Err(@posoco.TaskSubmitError::QueueFull) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="zcode: background queue full — retry shortly",
+        structured=None,
+      )
+    Err(@posoco.TaskSubmitError::InvalidSession(reason~)) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="zcode: background submit refused (invalid session): \{reason}",
+        structured=None,
+      )
   }
 }
