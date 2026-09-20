@@ -412,6 +412,8 @@ test "permission policy contributes hook and command, no system prompt contribut
   assert_eq(manifest.hooks.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 0)
   assert_eq(manifest.commands.length(), 1)
+  assert_eq(manifest.lifecycle.length(), 1)
+  assert_true(manifest.requires.contains(@posoco.Capability::Decision))
 }
 
 ///|
@@ -1106,4 +1108,164 @@ async test "read-only mode asks for escalated mbtx instead of auto-rejecting" {
     _ => fail("expected the deny to surface")
   }
   assert_eq(source.asked, 1)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Optional DecisionPort semantic risk tightening
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+struct RecordingApproval {
+  decision : ApprovalDecision
+  mut asked : Int
+  categories : Array[String]
+}
+
+///|
+impl ApprovalSource for RecordingApproval with fn ask(self, request) {
+  self.asked = self.asked + 1
+  self.categories.push(request.category)
+  self.decision
+}
+
+///|
+fn semantic_risk_result(
+  mutates : Double,
+  external : Double,
+  destructive : Double,
+) -> @posoco.DecisionResult {
+  {
+    answers: [
+      @posoco.DecisionAnswer::BooleanAnswer(
+        id="permission.mutates_state",
+        probability_true=mutates,
+      ),
+      @posoco.DecisionAnswer::BooleanAnswer(
+        id="permission.sends_data_external",
+        probability_true=external,
+      ),
+      @posoco.DecisionAnswer::BooleanAnswer(
+        id="permission.destructive",
+        probability_true=destructive,
+      ),
+    ],
+    model: None,
+    usage: None,
+  }
+}
+
+///|
+fn compose_permission_decision(
+  policy : PermissionPolicy,
+  decision : @posoco.ScriptedDecisionPort,
+) -> Unit raise @posoco.CompositionError {
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  (policy as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+}
+
+///|
+async test "semantic risk can tighten an interactive read into per-call consent" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+  )
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.9, 0.1, 0.1)),
+  ])
+  compose_permission_decision(policy, decision)
+  match policy.before_tool(test_call("read")) {
+    @posoco.ToolDecision::ApproveAfterConsent(consent_scope~, ..) =>
+      assert_true(consent_scope.contains("read:"))
+    other => fail("expected semantic risk to require consent, got \{other}")
+  }
+  assert_eq(source.asked, 1)
+  assert_eq(source.categories, ["semantic-risk"])
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "semantic risk rejects a read in readonly mode" {
+  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.8, 0.1)),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("read")) is @posoco.ToolDecision::Reject(_),
+  )
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "low semantic risk preserves deterministic preapproval" {
+  let policy = PermissionPolicy::PermissionPolicy(Interactive)
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.2, 0.1)),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("grep")) is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "decision failure preserves deterministic preapproval" {
+  let policy = PermissionPolicy::PermissionPolicy(Interactive)
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Fail(
+      @posoco.DecisionError::Transport("semantic backend unavailable"),
+    ),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("read")) is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "decision port never relaxes an existing gated write" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+  )
+  let decision = @posoco.ScriptedDecisionPort([])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("write"))
+    is @posoco.ToolDecision::ApproveAfterConsent(..),
+  )
+  assert_eq(source.asked, 1)
+  assert_eq(source.categories, ["write"])
+  assert_eq(decision.call_count(), 0)
+}
+
+///|
+async test "yolo preapproval does not consult decision port" {
+  let policy = PermissionPolicy::PermissionPolicy(Yolo)
+  let decision = @posoco.ScriptedDecisionPort([])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("read")) is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(decision.call_count(), 0)
 }

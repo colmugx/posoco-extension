@@ -18,7 +18,8 @@ pub(all) struct ApprovalRequest {
   /// Stable call id, for correlation in the UI.
   call_id : String
   /// Policy classification: "read" | "write" | "shell" | "unknown" |
-  /// "escalated" (mbtx running with its sandbox removed).
+  /// "escalated" (mbtx running with its sandbox removed) | "semantic-risk"
+  /// (DecisionPort tightened an otherwise deterministic pre-approval).
   category : String
   /// Truncated argument preview, for the user to see what will run. The
   /// policy truncates to a bounded length so secrets/large payloads do not
@@ -106,6 +107,9 @@ pub(all) struct PermissionPolicy {
   read_tools : Array[String]
   write_tools : Array[String]
   shell_tools : Array[String]
+  /// Optional semantic judgement capability. It may only tighten an existing
+  /// deterministic pre-approval; it never grants authority.
+  priv mut decision : &@posoco.DecisionPort?
 }
 
 ///|
@@ -133,9 +137,11 @@ pub fn PermissionPolicy::PermissionPolicy(
     // names; a host that renames them must classify its own names).
     read_tools: [
       "read", "webfetch", "grep", "glob", "ask_question", "activate_skill", "read_skill_resource",
+      "skill_search",
     ],
     write_tools: ["write", "edit", "apply_patch"],
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
+    decision: None,
   }
   match bus {
     Some(bus) => bus.subscribe(policy as &@devkit.BusSubscriber)
@@ -315,7 +321,11 @@ fn PermissionPolicy::cache_keys(
   category : String,
 ) -> Array[String] {
   let name = call.name.to_string()
-  if category == "shell" {
+  if category == "semantic-risk" {
+    // Semantic escalation is intentionally per-call. A probabilistic risk
+    // assessment must never create a broad remembered grant.
+    []
+  } else if category == "shell" {
     match call.arguments {
       Object(obj) =>
         match obj.get("cmd") {
@@ -498,6 +508,102 @@ fn effective_tool(call : @posoco.ToolCall) -> (String, @posoco.ToolCall) {
 }
 
 ///|
+/// Minimum probability at which a semantic risk signal tightens a
+/// deterministic pre-approval. DecisionPort is advisory only: absence,
+/// errors, malformed responses, and lower probabilities preserve the
+/// existing deterministic policy.
+const SEMANTIC_RISK_THRESHOLD = 0.6
+
+///|
+/// Ask the optional DecisionPort whether a statically pre-approved operation
+/// carries side-effect risk that the coarse tool-name classifier cannot see.
+/// The questions are factual risk dimensions, never an authorization request.
+async fn PermissionPolicy::semantic_risk(
+  self : PermissionPolicy,
+  effective : @posoco.ToolCall,
+  category : String,
+) -> Bool noraise {
+  let decision = match self.decision {
+    Some(decision) => decision
+    None => return false
+  }
+  let request : @posoco.DecisionRequest = {
+    state: Json::object({
+      "tool_name": Json::string(effective.name.to_string()),
+      "static_category": Json::string(category),
+      "arguments": effective.arguments,
+    }),
+    questions: [
+      @posoco.DecisionQuestion::Boolean(
+        id="permission.mutates_state",
+        instructions=Json::string(
+          "Could executing this operation mutate local or external state? Judge effects only; do not decide whether it should be authorized.",
+        ),
+        true_criteria=None,
+        false_criteria=None,
+      ),
+      @posoco.DecisionQuestion::Boolean(
+        id="permission.sends_data_external",
+        instructions=Json::string(
+          "Could executing this operation send user, workspace, credential, or other local data to an external destination? Judge data flow only; do not authorize.",
+        ),
+        true_criteria=None,
+        false_criteria=None,
+      ),
+      @posoco.DecisionQuestion::Boolean(
+        id="permission.destructive",
+        instructions=Json::string(
+          "Could executing this operation delete, overwrite, irreversibly change, or otherwise destructively affect state? Judge risk only; do not authorize.",
+        ),
+        true_criteria=None,
+        false_criteria=None,
+      ),
+    ],
+  }
+  let result = decision.evaluate(request) catch { _ => return false }
+  result.validate_for(request) catch {
+    _ => return false
+  }
+  for answer in result.answers {
+    match answer {
+      @posoco.DecisionAnswer::BooleanAnswer(probability_true~, ..) if probability_true >=
+        SEMANTIC_RISK_THRESHOLD => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Tighten an operation that the deterministic classifier would otherwise
+/// pre-approve. `None` means preserve the historical approval. Semantic risk
+/// can only escalate to consent/rejection; it can never turn an existing gate
+/// into an approval.
+async fn PermissionPolicy::semantic_preapproval(
+  self : PermissionPolicy,
+  call : @posoco.ToolCall,
+  effective : @posoco.ToolCall,
+  category : String,
+) -> @posoco.ToolDecision? {
+  if self.mode is Yolo || !self.semantic_risk(effective, category) {
+    return None
+  }
+  match self.mode {
+    ReadOnly =>
+      Some(
+        @posoco.ToolDecision::Reject(
+          reason="permission: semantic risk assessment requires approval for '" +
+            effective.name.to_string() +
+            "' in read-only mode",
+        ),
+      )
+    WorkspaceWrite | Interactive =>
+      Some(self.gate(call, effective, "semantic-risk"))
+    Yolo => None
+  }
+}
+
+///|
 /// mbtx escalated interception. mbtx self-reports a tool exemption for its
 /// sandboxed face, and that exemption approves by bare tool name — without
 /// this rule an `escalated: true` call (run with the sandbox policy removed)
@@ -593,34 +699,25 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
     return @posoco.ToolDecision::Approve(call~)
   }
   let category = self.classify(name)
-  // Provably read-only shell is inspection: pre-approved in every mode
-  // without asking; anything unprovable falls through to the gate.
-  if category == "shell" && shell_call_is_read_only(effective) {
-    return @posoco.ToolDecision::Approve(call~)
+  // DecisionPort may inspect only paths that deterministic policy already
+  // pre-approves. This makes semantic judgement monotonic: it can tighten an
+  // approval, never relax a gate or rejection.
+  let statically_preapproved = category == "read" ||
+    (category == "shell" && shell_call_is_read_only(effective))
+  if statically_preapproved {
+    match self.semantic_preapproval(call, effective, category) {
+      Some(decision) => return decision
+      None => return @posoco.ToolDecision::Approve(call~)
+    }
   }
   match self.mode {
     ReadOnly =>
-      if category == "read" {
-        @posoco.ToolDecision::Approve(call~)
-      } else {
-        @posoco.ToolDecision::Reject(
-          reason="permission: read-only mode rejected tool '" + name + "'",
-        )
-      }
-    WorkspaceWrite =>
-      if category == "read" {
-        @posoco.ToolDecision::Approve(call~)
-      } else {
-        // writes/shell/unknown go through the approval gate.
-        self.gate(call, effective, category)
-      }
-    Interactive =>
-      if category == "read" {
-        @posoco.ToolDecision::Approve(call~)
-      } else {
-        // every side-effecting tool goes through the approval gate.
-        self.gate(call, effective, category)
-      }
+      @posoco.ToolDecision::Reject(
+        reason="permission: read-only mode rejected tool '" + name + "'",
+      )
+    WorkspaceWrite | Interactive =>
+      // writes/mutating-or-unknown shell/unknown keep the historical gate.
+      self.gate(call, effective, category)
     Yolo => @posoco.ToolDecision::Approve(call~)
   }
 }
@@ -809,7 +906,26 @@ pub impl @posoco.Extension for PermissionPolicy with fn manifest(
     id="posoco_ext_permission",
     hooks=[self],
     commands=[self],
+    lifecycle=[self],
+    requires=[@posoco.Capability::Decision],
   )
+}
+
+///|
+/// Capture the optional semantic judgement capability. Absence is expected and
+/// preserves the historical deterministic permission policy.
+pub impl @posoco.Lifecycle for PermissionPolicy with fn on_compose(
+  self : PermissionPolicy,
+  ctx : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.decision = ctx.decision()
+}
+
+///|
+pub impl @posoco.Lifecycle for PermissionPolicy with fn on_shutdown(
+  self : PermissionPolicy,
+) -> Unit {
+  self.decision = None
 }
 
 ///|

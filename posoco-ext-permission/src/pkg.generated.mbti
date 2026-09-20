@@ -45,6 +45,7 @@ pub(all) struct PermissionPolicy {
   read_tools : Array[String]
   write_tools : Array[String]
   shell_tools : Array[String]
+  // private fields
 }
 pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, bus? : @posoco-devkit.EventBus?) -> Self
 pub fn PermissionPolicy::extension_id(Self) -> String
@@ -53,6 +54,7 @@ pub fn PermissionPolicy::mode(Self) -> PermissionMode
 pub impl @posoco-devkit.BusSubscriber for PermissionPolicy
 pub impl @port.CommandPort for PermissionPolicy
 pub impl @port.Extension for PermissionPolicy
+pub impl @port.Lifecycle for PermissionPolicy
 pub impl @port.PipelineHook for PermissionPolicy
 
 // Type aliases

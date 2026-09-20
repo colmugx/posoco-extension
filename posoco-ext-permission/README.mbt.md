@@ -62,8 +62,23 @@ the agent's lifetime (no on-disk persistence); the cache granularity is:
   asks; a compound call is remembered only when *every* segment scope was
   already approved.
 
-Skill activation (`activate_skill`, `read_skill_resource`) rides the read
-class and never prompts.
+Skill discovery/activation (`skill_search`, `activate_skill`, `read_skill_resource`) rides the read
+class and never prompts under the deterministic classifier.
+
+## Optional semantic risk tightening
+
+When a composed `DecisionPort` is present, the policy evaluates only operations
+that its deterministic classifier would otherwise pre-approve (known read tools
+and provably read-only shell commands). It asks factual risk questions about
+state mutation, external data transfer, and destructive effects. A risk
+probability of `0.6` or higher can only make the result stricter: `ReadOnly`
+rejects it, while `WorkspaceWrite`/`Interactive` require per-call approval.
+Semantic escalation is never session-cached.
+
+DecisionPort is **not** an authority source: it is never consulted to relax an
+existing write/shell/unknown gate, and `Yolo` remains the explicit global
+pre-approval mode. Missing providers, DecisionPort errors, malformed results,
+and low-risk results preserve the existing deterministic behavior.
 
 ## `/permission` command
 
