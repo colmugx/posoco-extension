@@ -28,11 +28,28 @@ pub impl @posoco.Extension for Skills with fn manifest(self) -> @posoco.Extensio
   }
   @posoco.ExtensionManifest(
     id="posoco_ext_skills",
-    tools=tools,
+    tools~,
     commands=[self],
+    lifecycle=[self],
     prompt_contributors=prompts,
+    requires=[@posoco.Capability::Decision],
   )
 }
 
 ///|
 pub extend Skills with @posoco.Extension::{extension_id, manifest}
+
+///|
+/// Capture the optional semantic-judgement capability. Skills remains fully
+/// functional without it and consults it only after lexical skill_search misses.
+pub impl @posoco.Lifecycle for Skills with fn on_compose(
+  self : Skills,
+  ctx : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.decision = ctx.decision()
+}
+
+///|
+pub impl @posoco.Lifecycle for Skills with fn on_shutdown(self : Skills) -> Unit {
+  self.decision = None
+}
