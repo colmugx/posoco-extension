@@ -541,9 +541,10 @@ test "tools: populated catalog constrains names with enum" {
     ]),
   )
   let tools = skills.list_tools()
-  assert_eq(tools.length(), 2)
+  assert_eq(tools.length(), 3)
   assert_eq(tools[0].name.to_string(), "activate_skill")
   assert_eq(tools[1].name.to_string(), "read_skill_resource")
+  assert_eq(tools[2].name.to_string(), "skill_search")
   match tools[0].input_schema {
     Object(root) =>
       match root.get("properties") {
@@ -575,6 +576,8 @@ test "manifest: populated extension composes tools and optional prompt" {
   assert_eq(manifest.id, "posoco_ext_skills")
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 1)
+  assert_eq(manifest.lifecycle.length(), 1)
+  assert_true(manifest.requires.contains(@posoco.Capability::Decision))
   let tools_only = must_skills(fs, catalog, config=SkillsConfig::{
     ..SkillsConfig::default(),
     contribute_prompt: false,
@@ -2158,4 +2161,142 @@ async test "registration constructor: empty environment still registers with dia
     None =>
       fail("empty environment must register with an empty catalog, not None")
   }
+}
+
+///|
+async test "skill_search keeps lexical matches deterministic before decision fallback" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor("pdf", "Create and inspect PDF documents", "/skills/pdf"),
+      descriptor("slides", "Create presentation slides", "/skills/slides"),
+    ]),
+  )
+  let decision = @posoco.ScriptedDecisionPort([])
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  (skills as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("search-1"),
+    name: @posoco.ToolName::unchecked("skill_search"),
+    arguments: Json::object({ "query": Json::string("pdf documents") }),
+  }
+  match skills.execute("skill_search", call) {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.contains("pdf"))
+      assert_false(content.contains("slides"))
+    }
+    _ => fail("expected skill search success")
+  }
+  assert_eq(decision.call_count(), 0)
+}
+
+///|
+async test "skill_search uses decision port only after lexical miss" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor("pdf", "Create and inspect PDF documents", "/skills/pdf"),
+      descriptor("slides", "Create presentation slides", "/skills/slides"),
+    ]),
+  )
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::ChoiceAnswer(
+          id="skills.relevance",
+          selected="slides",
+          probabilities=[
+            { id: "pdf", probability: 0.1, },
+            { id: "slides", probability: 0.9, },
+          ],
+          confidence=Some(0.9),
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  (skills as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("search-2"),
+    name: @posoco.ToolName::unchecked("skill_search"),
+    arguments: Json::object({ "query": Json::string("pitch deck") }),
+  }
+  match skills.execute("skill_search", call) {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.contains("slides"))
+      assert_false(content.contains("pdf"))
+    }
+    _ => fail("expected semantic skill search success")
+  }
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "skill_search never auto-activates and fails closed on low relevance" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor("pdf", "Create PDF documents", "/skills/pdf"),
+      descriptor("slides", "Create slides", "/skills/slides"),
+    ]),
+  )
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::ChoiceAnswer(
+          id="skills.relevance",
+          selected="pdf",
+          probabilities=[
+            { id: "pdf", probability: 0.55, },
+            { id: "slides", probability: 0.45, },
+          ],
+          confidence=None,
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  (skills as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let call = @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked("search-3"),
+    name: @posoco.ToolName::unchecked("skill_search"),
+    arguments: Json::object({ "query": Json::string("unrelated capability") }),
+  }
+  match skills.execute("skill_search", call) {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("No discovered skill matches"))
+    _ => fail("expected conservative no-match result")
+  }
+  assert_eq(decision.call_count(), 1)
 }
