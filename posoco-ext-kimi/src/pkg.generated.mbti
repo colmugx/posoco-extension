@@ -10,6 +10,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -66,7 +67,7 @@ pub(all) struct KimiModelPort {
   config : KimiConfig
   ctx : @posoco-devkit.ExtContext
   mut prompt_cache_key_rejected : Bool
-  prompt_cache_key_rejection_state : Ref[Bool]
+  prompt_cache_key_rejection_state : @ref.Ref[Bool]
 }
 pub fn KimiModelPort::KimiModelPort(KimiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
 pub fn KimiModelPort::extension_id(Self) -> String

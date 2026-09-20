@@ -11,9 +11,7 @@ fn kimi_catalog_slot(
   default_effort? : String? = None,
 ) -> @llm.ModelSlot {
   let port : &@posoco.ModelPort = kimi_model_port_with_prompt_cache_rejection_state(
-    config,
-    ctx,
-    prompt_cache_key_rejection_state,
+    config, ctx, prompt_cache_key_rejection_state,
   )
   let slot_id = "kimi/" + config.model
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if config.thinking_efforts.is_empty() {
@@ -187,7 +185,9 @@ pub fn KimiModelPort::model_catalog(
   let rejection_state = self.shared_prompt_cache_rejection_state()
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="kimi",
-    slots=[kimi_catalog_slot(self.config, self.ctx, oauth, api_key, rejection_state)],
+    slots=[
+      kimi_catalog_slot(self.config, self.ctx, oauth, api_key, rejection_state),
+    ],
     capabilities=["chat", "streaming", "reasoning", "api_key", "oauth"],
   )
 }
