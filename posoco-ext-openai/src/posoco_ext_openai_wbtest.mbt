@@ -527,16 +527,77 @@ test "t07b_llm_valid_nonstream_response_still_decodes" {
 }
 
 ///|
-test "t07b_llm_http_error_formatter_is_payload_free" {
-  let message = format_openai_http_error(
-    "http_status",
-    429,
-    classify_openai_error_body(19, Some(19)),
+/// Build an oversize synthetic error body: diagnostic head, 300 chars of
+/// filler, and a tail marker that must never survive the excerpt cap.
+fn long_error_body() -> String {
+  let buf = StringBuilder()
+  buf.write_string("OFFENDING-ITEM head ")
+  for _i in 0..<300 {
+    buf.write_char('x')
+  }
+  buf.write_string(" TAIL-MARKER-never-expected")
+  buf.to_string()
+}
+
+///|
+/// Direct contract for the pure excerpt helper: trim, collapse whitespace
+/// runs (including newlines) to single spaces, hard-cap at the limit,
+/// `None` for empty input.
+test "t07b_llm_bounded_error_excerpt_collapses_trims_and_caps" {
+  assert_eq(
+    bounded_error_excerpt("  Unsupported \n\t parameter:  'tools[2]'  "),
+    Some("Unsupported parameter: 'tools[2]'"),
   )
   assert_eq(
-    message, "OpenAI HTTP error (stage=http_status, status=429, body_chars=19, body_category=utf8)",
+    bounded_error_excerpt("line1\r\nline2\tline3"),
+    Some("line1 line2 line3"),
   )
-  assert_false(message.contains("secret-response-body"))
+  assert_true(bounded_error_excerpt("") is None)
+  assert_true(bounded_error_excerpt("   \n\t  ") is None)
+  match bounded_error_excerpt(long_error_body()) {
+    Some(text) => {
+      assert_eq(text.length(), 240)
+      assert_true(text.has_prefix("OFFENDING-ITEM head"))
+      assert_false(text.contains("TAIL-MARKER"))
+    }
+    None => fail("a long decodable body must yield a capped excerpt")
+  }
+  assert_eq(bounded_error_excerpt("abcdefghij", limit=3), Some("abc"))
+}
+
+///|
+/// Non-2xx Transport messages carry a bounded, whitespace-collapsed body
+/// excerpt so provider validation errors name the offending request item;
+/// oversize bodies are truncated and undecodable/unreadable bodies carry
+/// no excerpt at all.
+test "t07b_llm_http_error_formatter_carries_bounded_body_excerpt" {
+  let body_text = "  Unsupported parameter:\n  'tools[2].strict'  "
+  let message = format_openai_http_error(
+    "http_status",
+    400,
+    classify_openai_error_body(46, Some(46)),
+    excerpt=bounded_error_excerpt(body_text),
+  )
+  assert_eq(
+    message, "OpenAI HTTP error (stage=http_status, status=400, body_chars=46, body_category=utf8, body_excerpt=\"Unsupported parameter: 'tools[2].strict'\")",
+  )
+  let long_body = long_error_body()
+  let long_excerpt = bounded_error_excerpt(long_body)
+  let truncated = format_openai_http_error(
+    "http_status",
+    400,
+    classify_openai_error_body(long_body.length(), Some(long_body.length())),
+    excerpt=long_excerpt,
+  )
+  match long_excerpt {
+    Some(text) => {
+      assert_eq(text.length(), 240)
+      assert_false(text.contains("TAIL-MARKER"))
+    }
+    None => fail("a long decodable body must yield a capped excerpt")
+  }
+  assert_true(truncated.contains("body_excerpt=\"OFFENDING-ITEM head"))
+  assert_false(truncated.contains("TAIL-MARKER"))
   let invalid_utf8 = format_openai_http_error(
     "http_status",
     502,
@@ -545,9 +606,11 @@ test "t07b_llm_http_error_formatter_is_payload_free" {
   assert_eq(
     invalid_utf8, "OpenAI HTTP error (stage=http_status, status=502, body_bytes=23, body_category=invalid_utf8)",
   )
+  assert_false(invalid_utf8.contains("body_excerpt="))
   let read_failed = format_openai_http_error("http_status", 503, BodyReadFailed)
   assert_true(read_failed.contains("status=503"))
   assert_true(read_failed.contains("body_category=read_failed"))
+  assert_false(read_failed.contains("body_excerpt="))
   assert_true(
     classify_openai_http_status("http_status", 200, BodyBytesUtf8(0)) is None,
   )
@@ -559,8 +622,9 @@ test "t07b_llm_http_error_formatter_is_payload_free" {
     Some(@posoco.ModelError::Transport(error)) => {
       assert_true(error.contains("status=429"))
       assert_true(error.contains("body_category=invalid_utf8"))
+      assert_false(error.contains("body_excerpt="))
     }
-    _ => fail("4xx status must remain a typed HTTP transport error")
+    _ => fail("non-2xx statuses must remain typed HTTP transport errors")
   }
 }
 
@@ -956,7 +1020,7 @@ async test "codex refresh sends version and account headers and preserves effort
   }
   assert_eq(
     transport_impl.urls[0],
-    "https://chatgpt.com/backend-api/codex/models?client_version=0.146.0",
+    "https://chatgpt.com/backend-api/codex/models?client_version=0.153.4",
   )
   assert_eq(
     transport_impl.headers[0].get("Authorization"),
@@ -1522,6 +1586,86 @@ test "codex discovery slot reports context_window through provider_config" {
 }
 
 ///|
+/// Minimal /models record for visibility-filter tests: only the auth-relevant
+/// fields vary.
+fn codex_visibility_fixture(
+  slug : String,
+  visibility : String,
+  supported_in_api : Bool,
+) -> CodexModelInfo {
+  CodexModelInfo::{
+    slug,
+    display_name: slug,
+    description: None,
+    default_reasoning_level: None,
+    supported_reasoning_levels: [],
+    visibility,
+    supported_in_api,
+    priority: 0,
+    context_window: None,
+  }
+}
+
+///|
+test "codex visibility filter mirrors codex filter_by_auth semantics" {
+  let subscription = codex_visibility_fixture("gpt-6-codex", "list", false)
+  let api_model = codex_visibility_fixture("gpt-4o", "list", true)
+  let hidden = codex_visibility_fixture("gpt-internal", "hide", true)
+  let models = [subscription, api_model, hidden]
+  // ChatGPT auth: visibility "list" alone selects; supported_in_api does not
+  // gate subscription models.
+  assert_eq(
+    preferred_codex_models(models, "gpt-6-codex", chatgpt_mode=true).map(fn(
+      model,
+    ) {
+      model.slug
+    }),
+    ["gpt-6-codex", "gpt-4o"],
+  )
+  // API-key auth: supported_in_api is additionally required.
+  assert_eq(
+    preferred_codex_models(models, "gpt-4o", chatgpt_mode=false).map(fn(model) {
+      model.slug
+    }),
+    ["gpt-4o"],
+  )
+}
+
+///|
+test "codex visibility filter keeps the preferred model first in both modes" {
+  let subscription = codex_visibility_fixture("gpt-6-codex", "list", false)
+  let api_model = codex_visibility_fixture("gpt-4o", "list", true)
+  assert_eq(
+    preferred_codex_models(
+      [api_model, subscription],
+      "gpt-6-codex",
+      chatgpt_mode=true,
+    ).map(fn(model) { model.slug }),
+    ["gpt-6-codex", "gpt-4o"],
+  )
+  assert_eq(
+    preferred_codex_models(
+      [subscription, api_model],
+      "gpt-4o",
+      chatgpt_mode=false,
+    ).map(fn(model) { model.slug }),
+    ["gpt-4o"],
+  )
+}
+
+///|
+test "codex catalog keeps ChatGPT subscription models that are not API-usable" {
+  let config = OpenAIConfig::with_base_url(
+    "sk-test", "gpt-6-codex", "https://example.com/v1",
+  )
+  let port = OpenAIModelPort(config)
+  let info = codex_visibility_fixture("gpt-6-codex", "list", false)
+  let slots = port.model_catalog_from_codex_models([info]).slots()
+  assert_eq(slots.length(), 1)
+  assert_eq(slots[0].model_id, "gpt-6-codex")
+}
+
+///|
 /// Codex subscription config for the identity header tests: the base URL
 /// equals the Codex OAuth endpoint so build_headers takes the protocol path.
 fn codex_identity_test_config() -> OpenAIConfig {
@@ -1644,11 +1788,22 @@ async test "codex model fetch sends originator and user agent" {
 /// A path-bearing base_url must not fail URL resolution when the transport
 /// opens its client: `@http.Client::Client` rejects URIs with a path, so the
 /// adapter must connect to the origin and carry the path into request paths.
-/// Loopback discard port keeps this offline: URL resolution must succeed and
-/// only the TCP connect may fail — never stage=create_client InvalidFormat.
+/// The port comes from a transient listener bound to 0 (kernel picks a free
+/// one) that is closed before dialing, so no fixed discard port is needed:
+/// URL resolution must succeed and only the TCP connect may fail — never
+/// stage=create_client InvalidFormat.
 async test "openai path-bearing base_url connects to the origin" {
+  let probe_server = @socket.TcpServer(
+    @socket.Addr::resolve("127.0.0.1", port=0),
+  ) catch {
+    _ => fail("could not bind a loopback probe listener")
+  }
+  let port = probe_server.addr.port()
+  probe_server.close()
   let config = OpenAIConfig::with_base_url(
-    "k", "gpt-5", "https://127.0.0.1:9/v1",
+    "k",
+    "gpt-5",
+    "https://127.0.0.1:\{port}/v1",
   )
   let port = OpenAIModelPort::OpenAIModelPort(config)
   let options : @posoco.ChatOptions = {

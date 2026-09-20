@@ -6,8 +6,10 @@ import {
   "colmugx/posoco-ext-llm" @llm,
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/http",
   "moonbitlang/async/io",
+  "moonbitlang/async/socket",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
   "moonbitlang/core/string",
@@ -26,5 +28,6 @@ options(
     "codex_quota_wbtest.mbt": [ "native" ],
     "codex_usage_wbtest.mbt": [ "native" ],
     "quota_status_wbtest.mbt": [ "native" ],
+    "intelligence_metrics_wbtest.mbt": [ "native" ],
   },
 )

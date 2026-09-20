@@ -45,6 +45,16 @@ fn openai_default_model() -> String {
 }
 
 ///|
+/// Publish the external intelligence-metrics source under the provider id so
+/// the /model pick flow reads it live at command time. The radar feed is
+/// credential-free, so every configured build/refresh re-registers the same
+/// source (last write wins).
+fn openai_register_intelligence_metrics() -> Unit {
+  let borrowed : &@devkit.ModelMetricsSource = intelligence_metrics_source()
+  @devkit.metrics_registry_register("openai", borrowed)
+}
+
+///|
 pub impl @llm.ProviderFactory for OpenAIProvider with fn provider_id(
   _self : OpenAIProvider,
 ) -> String {
@@ -94,6 +104,7 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
     config,
     quota_tracker=Some(codex_shared_quota_tracker()),
   )
+  openai_register_intelligence_metrics()
   @llm.ProviderBuildResult::Ready(port.model_catalog())
 }
 
@@ -170,6 +181,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
         config,
         quota_tracker=Some(codex_shared_quota_tracker()),
       )
+      openai_register_intelligence_metrics()
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_codex_models(models),
       )
@@ -208,6 +220,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
         config,
         quota_tracker=Some(codex_shared_quota_tracker()),
       )
+      openai_register_intelligence_metrics()
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_api_models(models),
       )
@@ -246,6 +259,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
         config,
         quota_tracker=Some(codex_shared_quota_tracker()),
       )
+      openai_register_intelligence_metrics()
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_api_models(models),
       )

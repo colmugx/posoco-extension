@@ -99,8 +99,10 @@ pub fn OpenAIModelPort::OpenAIModelPort(
 }
 
 ///|
-/// Redacted non-2xx body metadata. Keeping this as an ADT prevents the raw
-/// provider body from crossing the HTTP-error formatting boundary.
+/// Redacted non-2xx body metadata. Keeping this as an ADT keeps the
+/// HTTP-error formatting boundary explicit: size/category metadata plus a
+/// bounded, whitespace-collapsed excerpt may cross it — the full provider
+/// payload never does.
 priv enum OpenAIErrorBodySummary {
   BodyChars(Int)
   BodyBytesUtf8(Int)
@@ -139,12 +141,44 @@ async fn read_error_body_summary(
 }
 
 ///|
-/// Format an HTTP failure from already-redacted metadata. The response body is
-/// deliberately not accepted by this function.
+/// Pure bounded error-body excerpt: trim, collapse every whitespace run
+/// (including newlines) to single spaces, and hard-cap at `limit` chars.
+/// Returns `None` when nothing usable remains.
+fn bounded_error_excerpt(text : String, limit? : Int = 240) -> String? {
+  let buf = StringBuilder()
+  let mut written = 0
+  let mut pending_space = false
+  for ch in text {
+    if written >= limit {
+      break
+    }
+    if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+      pending_space = true
+    } else {
+      if pending_space && written > 0 {
+        buf.write_char(' ')
+        written += 1
+      }
+      pending_space = false
+      buf.write_char(ch)
+      written += 1
+    }
+  }
+  if written == 0 {
+    return None
+  }
+  Some(buf.to_string())
+}
+
+///|
+/// Format an HTTP failure from redacted metadata plus an optional bounded
+/// body excerpt. The full response body is never accepted by this function
+/// — only the size/category summary and a whitespace-collapsed excerpt pass.
 fn format_openai_http_error(
   stage : String,
   status : Int,
   body_summary : OpenAIErrorBodySummary,
+  excerpt? : String? = None,
 ) -> String {
   let summary = match body_summary {
     BodyChars(length) => "body_chars=\{length}, body_category=utf8"
@@ -154,7 +188,11 @@ fn format_openai_http_error(
     BodyReadFailed => "body_category=read_failed"
     BodyUnavailable => "body_category=unavailable"
   }
-  "OpenAI HTTP error (stage=\{stage}, status=\{status}, \{summary})"
+  let excerpt_field = match excerpt {
+    Some(text) => ", body_excerpt=\"\{text}\""
+    None => ""
+  }
+  "OpenAI HTTP error (stage=\{stage}, status=\{status}, \{summary}\{excerpt_field})"
 }
 
 ///|
@@ -175,19 +213,21 @@ fn openai_cancelled_transport(stage : String) -> @posoco.ModelError {
 
 ///|
 /// Pure HTTP-status classification shared by streaming and non-streaming
-/// paths. All 2xx statuses continue through success-body parsing; every other
-/// status retains its code and only redacted body metadata.
+/// paths. All 2xx statuses continue through success-body parsing; every
+/// other status retains its code, redacted body metadata, and — when the
+/// body was decodable — a bounded body excerpt.
 fn classify_openai_http_status(
   stage : String,
   status : Int,
   body_summary : OpenAIErrorBodySummary,
+  excerpt? : String? = None,
 ) -> @posoco.ModelError? {
   if is_openai_http_success(status) {
     None
   } else {
     Some(
       @posoco.ModelError::Transport(
-        format_openai_http_error(stage, status, body_summary),
+        format_openai_http_error(stage, status, body_summary, excerpt~),
       ),
     )
   }
@@ -491,8 +531,17 @@ async fn OpenAIModelPort::chat_stream(
       Some(err) => raise err
       None => ()
     }
+    let excerpt = match body_text {
+      Some(text) => bounded_error_excerpt(text)
+      None => None
+    }
     match
-      classify_openai_http_status("http_status", response.code, err_summary) {
+      classify_openai_http_status(
+        "http_status",
+        response.code,
+        err_summary,
+        excerpt~,
+      ) {
       Some(err) => raise err
       None => ()
     }
@@ -693,11 +742,16 @@ async fn openai_post_json(
       Some(err) => raise err
       None => ()
     }
+    let excerpt = match body_text {
+      Some(text) => bounded_error_excerpt(text)
+      None => None
+    }
     match
       classify_openai_http_status(
         "http_status",
         response.code,
         classify_openai_error_body(body_data.binary().length(), decoded_chars),
+        excerpt~,
       ) {
       Some(err) => raise err
       None => ()

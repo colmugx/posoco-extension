@@ -52,13 +52,39 @@ pub fn DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport() -> D
 ///|
 /// Codex uses the client version as a request query parameter.  Keep this
 /// provider-owned value aligned with the Codex CLI release shipped by the
-/// extension; the current upstream release is 0.146.0.
+/// extension; the current upstream release is 0.153.4.
 pub fn openai_codex_models_client_version() -> String {
-  "0.146.0"
+  "0.153.4"
 }
 
 ///|
 let openai_models_timeout_ms : Int = 5000
+
+///|
+/// Deliberate /tmp diagnostic (no home plumbing): every Codex `/models` body
+/// read overwrites this file with the raw response so filter regressions
+/// (e.g. a wiped model list) stay inspectable offline.  The write is
+/// best-effort — failure is swallowed and never breaks the fetch.
+let codex_models_dump_path : String = "/tmp/cetas-codex-models.json"
+
+///|
+/// async/fs has no JavaScript backend, so the diagnostic dump degrades to a
+/// no-op there; native and wasm write through @fs.
+#cfg(any(target="native", target="wasm"))
+async fn dump_models_response(path : String, body : String) -> Unit {
+  @fs.write_file(path, body) catch {
+    _ => ()
+  }
+}
+
+///|
+/// The js backend has no async/fs, so this stub keeps the shared signature;
+/// the async annotation stays for call-site symmetry but does nothing here.
+#warnings("-unused_async")
+#cfg(target="js")
+async fn dump_models_response(_path : String, _body : String) -> Unit {
+  ()
+}
 
 ///|
 pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn get(
@@ -402,8 +428,16 @@ async fn fetch_models_with_transport(
   transport : &OpenAIModelsHttpTransport,
   url : String,
   headers : Map[String, String],
+  dump_path? : String? = None,
 ) -> Json raise @posoco.ModelError {
   let response = transport.get(url, headers)
+  // Best-effort raw-body dump.  It runs even for non-2xx responses (error
+  // bodies diagnose auth/endpoint breakage too) and a failed write must
+  // never break the fetch, so every write error is swallowed.
+  match dump_path {
+    Some(path) => dump_models_response(path, response.body) catch { _ => () }
+    None => ()
+  }
   if response.status < 200 || response.status >= 300 {
     raise @posoco.ModelError::Transport(
       "OpenAI models HTTP status: " +
@@ -466,6 +500,7 @@ pub async fn fetch_codex_models_with_transport(
     transport,
     codex_models_url(base_url, client_version),
     headers,
+    dump_path=Some(codex_models_dump_path),
   )
   parse_codex_models(payload)
 }

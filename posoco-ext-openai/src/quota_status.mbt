@@ -245,9 +245,7 @@ pub impl @posoco.Extension for CodexQuotaStatus with fn extension_id(
 pub impl @posoco.Extension for CodexQuotaStatus with fn manifest(
   self : CodexQuotaStatus,
 ) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(
-    id="posoco_ext_openai_quota",
-    observers=[self],
-    lifecycle=[self],
-  )
+  @posoco.ExtensionManifest(id="posoco_ext_openai_quota", observers=[self], lifecycle=[
+    self,
+  ])
 }

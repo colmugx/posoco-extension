@@ -31,6 +31,8 @@ pub async fn fetch_openai_models(String, String) -> Array[OpenAIModelInfo] raise
 
 pub async fn fetch_openai_models_with_transport(&OpenAIModelsHttpTransport, String, String) -> Array[OpenAIModelInfo] raise @error.ModelError
 
+pub fn intelligence_metrics_source() -> &@posoco-devkit.ModelMetricsSource
+
 pub fn openai_codex_models_client_version() -> String
 
 pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
@@ -38,6 +40,8 @@ pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
 pub fn parse_codex_quota_headers(Map[@http.CaseInsensitiveString, String], fetched_at_ms~ : Int64) -> Array[@posoco-devkit.QuotaReading]
 
 pub fn parse_codex_usage(Json, fetched_at_ms~ : Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
+
+pub fn parse_intelligence_metrics(String) -> Result[Array[@posoco-devkit.MetricsPoint], String]
 
 pub fn parse_openai_models(Json) -> Array[OpenAIModelInfo] raise @error.ModelError
 

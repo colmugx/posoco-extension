@@ -213,15 +213,27 @@ pub fn OpenAIModelPort::model_catalog_from_api_models(
 }
 
 ///|
+/// Visibility filter mirroring the Codex CLI's `ModelPreset::filter_by_auth`:
+/// in ChatGPT mode all models with `visibility == "list"` are shown
+/// (`supported_in_api` is ignored — subscription models are usable through the
+/// Codex endpoint even when the plain API does not support them); API-key mode
+/// additionally requires `supported_in_api`.
 fn preferred_codex_models(
   models : Array[CodexModelInfo],
   preferred_id : String,
+  chatgpt_mode~ : Bool,
 ) -> Array[CodexModelInfo] {
   let visible : Array[CodexModelInfo] = []
   for model in models {
-    // The endpoint includes records that are hidden or not usable through the
-    // Responses API.  They are metadata, not selectable model slots.
-    if model.visibility == "list" && model.supported_in_api {
+    // The endpoint includes records that are hidden or, in API-key mode, not
+    // usable through the plain Responses API.  They are metadata, not
+    // selectable model slots.
+    let selectable = if chatgpt_mode {
+      model.visibility == "list"
+    } else {
+      model.visibility == "list" && model.supported_in_api
+    }
+    if selectable {
       visible.push(model)
     }
   }
@@ -291,11 +303,19 @@ fn codex_catalog_slot_from_info(
 }
 
 ///|
+/// Build the catalog from a live Codex `/models` response.  Only the ChatGPT
+/// OAuth refresh path reaches here (the endpoint requires the account header),
+/// so the ChatGPT-auth visibility rule applies: `supported_in_api` does not
+/// gate subscription models.
 pub fn OpenAIModelPort::model_catalog_from_codex_models(
   self : OpenAIModelPort,
   models : Array[CodexModelInfo],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
-  let visible = preferred_codex_models(models, self.config.model)
+  let visible = preferred_codex_models(
+    models,
+    self.config.model,
+    chatgpt_mode=true,
+  )
   if visible.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_openai",
