@@ -12,7 +12,9 @@ pub fn derive_prompt_cache_key(session_id : String) -> String {
   if full.length() <= 64 {
     return full
   }
-  let digest = @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(session_id)))
+  let digest = @crypto.bytes_to_hex_string(
+    @crypto.sha256(@utf8.encode(session_id)),
+  )
   let chars : Array[Char] = []
   for ch in digest {
     if chars.length() >= 48 {

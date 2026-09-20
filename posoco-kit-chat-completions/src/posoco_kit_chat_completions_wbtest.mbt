@@ -397,10 +397,7 @@ test "derive_prompt_cache_key hashes oversized ids without prefix collisions" {
   let long = String::make(70, 'a')
   let key = derive_prompt_cache_key(long)
   assert_eq(key.length(), 58)
-  assert_eq(
-    key,
-    "posoco-v1-6bd5e5034855a11241f0dee8fc72850ffd9955b28347a864",
-  )
+  assert_eq(key, "posoco-v1-6bd5e5034855a11241f0dee8fc72850ffd9955b28347a864")
   assert_eq(key, derive_prompt_cache_key(long))
   // These ids shared the first 69 chars, so the old 64-char truncation made
   // them collide. The versioned hash fallback must keep them distinct.
