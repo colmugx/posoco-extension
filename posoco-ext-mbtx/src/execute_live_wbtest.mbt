@@ -1,10 +1,20 @@
 ///|
-/// Live smoke tests against the real MoonBit
-/// toolchain. Every test skips itself (with a printed note) when
-/// `~/.moon/bin/moon` is absent, so environments without the toolchain stay
-/// green. The policy-deny test compiles a snippet importing
-/// `moonbitlang/async`, which needs a one-time registry fetch (`moon
-/// update`) on machines that never fetched it (design §8.4).
+/// Live smoke tests against the real MoonBit toolchain, opt-in only: they
+/// run when MBTX_LIVE=1 is set. Besides spawning the toolchain, the
+/// policy-deny test compiles a snippet importing `moonbitlang/async`, which
+/// needs a one-time registry fetch (`moon update`) over the network on
+/// machines that never fetched it (design §8.4) — with the gate closed that
+/// fetch no longer fires by default. Environments with the toolchain but no
+/// opt-in skip cleanly.
+
+///|
+/// MBTX_LIVE=1 opts in to the real-toolchain live smokes; unset skips them.
+fn mbtx_live_enabled() -> Bool {
+  match @env.get_env_var("MBTX_LIVE") {
+    Some("1") => true
+    _ => false
+  }
+}
 
 ///|
 async fn mbtx_live_toolchain_present() -> Bool {
@@ -55,6 +65,11 @@ async fn mbtx_live_moonrun_count() -> Int {
 
 ///|
 async test "live: hello snippet walks both stages to Success" {
+  // MBTX_LIVE=1 gate: runs the real toolchain.
+  if !mbtx_live_enabled() {
+    println("mbtx live: set MBTX_LIVE=1 to run; skipping live smoke")
+    return
+  }
   if !mbtx_live_toolchain_present() {
     println("mbtx live: no ~/.moon/bin/moon found; skipping live smoke")
     return
@@ -73,6 +88,12 @@ async test "live: hello snippet walks both stages to Success" {
 
 ///|
 async test "live: write outside the tmpdir is denied by the policy" {
+  // MBTX_LIVE=1 gate: compiles a snippet importing moonbitlang/async, whose
+  // first-time registry resolution can fetch over the network (moon update).
+  if !mbtx_live_enabled() {
+    println("mbtx live: set MBTX_LIVE=1 to run; skipping live smoke")
+    return
+  }
   if !mbtx_live_toolchain_present() {
     println("mbtx live: no ~/.moon/bin/moon found; skipping live smoke")
     return
@@ -96,6 +117,11 @@ async test "live: write outside the tmpdir is denied by the policy" {
 /// process behind (with_timeout cancels the collection task, whose
 /// cancel_handler SIGTERMs the child; moonrun dies on SIGTERM promptly).
 async test "live: run timeout reports error and terminates moonrun" {
+  // MBTX_LIVE=1 gate: runs the real toolchain and counts real processes.
+  if !mbtx_live_enabled() {
+    println("mbtx live: set MBTX_LIVE=1 to run; skipping live smoke")
+    return
+  }
   if !mbtx_live_toolchain_present() {
     println("mbtx live: no ~/.moon/bin/moon found; skipping live smoke")
     return
@@ -119,30 +145,9 @@ async test "live: run timeout reports error and terminates moonrun" {
 }
 
 ///|
-async test "live cmd: git --version runs as literal argv" {
-  let probe = @process.collect_output_merged("git", ["--version"]) catch {
-    _ => {
-      println("cmd live: git not spawnable; skipping live smoke")
-      return
-    }
-  }
-  if probe.0 != 0 {
-    println("cmd live: git not usable; skipping live smoke")
-    return
-  }
-  let tools = MbtxTools()
-  let outcome = tools.execute(
-    "cmd",
-    cmd_call(id="tc_cmd_live1", program="git", args=[Json::string("--version")]),
-  )
-  let content = match outcome {
-    @posoco.ToolOutcome::Success(content~, structured=None) => content
-    other => fail("expected Success, got: \{other}")
-  }
-  assert_true(content.contains("git version"))
-}
-
-///|
+/// The real-shell `cmd` face is covered by the scripted-Runner twins in
+/// execute_wbtest.mbt (literal argv, allowlist); the live `git --version`
+/// twin that spawned the user's real git was dropped as redundant.
 async test "live cmd: sh is rejected by the extension allowlist before spawn" {
   let tools = MbtxTools()
   let outcome = tools.execute(

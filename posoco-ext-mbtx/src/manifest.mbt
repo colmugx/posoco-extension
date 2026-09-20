@@ -5,9 +5,7 @@ pub impl @posoco.Extension for MbtxTools with fn extension_id(_self) -> String {
 
 ///|
 pub impl @posoco.Extension for MbtxTools with fn manifest(self : MbtxTools) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(
-    id="posoco_ext_mbtx",
-    tools=[self],
-    prompt_contributors=[self],
-  )
+  @posoco.ExtensionManifest(id="posoco_ext_mbtx", tools=[self], prompt_contributors=[
+    self,
+  ])
 }
