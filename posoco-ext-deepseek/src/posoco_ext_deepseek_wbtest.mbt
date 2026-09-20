@@ -1687,3 +1687,14 @@ async test "auto compact sizes from the scope pressure over local config" {
   assert_true(result.mode == @posoco.CompactMode::Replace)
   inspect(result.compacted_messages.length(), content="5")
 }
+
+///|
+test "deepseek_cancelled_transport_marks_cancellation" {
+  let err = deepseek_cancelled_transport("read_stream")
+  guard err is @posoco.ModelError::Transport(message) else {
+    fail("expected a Transport error")
+  }
+  assert_eq(
+    message, "DeepSeek transport failure (stage=read_stream, category=cancelled)",
+  )
+}

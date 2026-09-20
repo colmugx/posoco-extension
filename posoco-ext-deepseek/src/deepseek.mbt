@@ -12,6 +12,18 @@ fn chat_url(config : DeepSeekConfig) -> String {
 }
 
 ///|
+/// Transport error for a cancelled wait. The `category=cancelled` marker is
+/// the classification carrier: the ModelError raise type cannot carry the
+/// coroutine cancellation itself (checked raise types), so cancellation is
+/// surfaced as this stable token. Nobody string-matches the token today —
+/// classification rides on coroutine cancellation semantics.
+fn deepseek_cancelled_transport(stage : String) -> @posoco.ModelError {
+  @posoco.ModelError::Transport(
+    "DeepSeek transport failure (stage=\{stage}, category=cancelled)",
+  )
+}
+
+///|
 /// The full FIM completions URL (beta variant): base_url + /beta + endpoint_prefix + /completions.
 fn fim_url(config : DeepSeekConfig) -> String {
   let base = if config.base_url.has_suffix("/beta") {
@@ -169,6 +181,9 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
         let line = client.read_until("\n") catch {
           err => {
             client.close()
+            if @async.is_cancellation_error(err) {
+              raise deepseek_cancelled_transport("read_stream")
+            }
             raise @posoco.ModelError::Transport(
               "DeepSeek transport failure (stage=read_stream): " +
               err.to_string(),
@@ -197,11 +212,19 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
           }
         }
         // Yield at most every 16ms so the event loop can breathe during a
-        // buffered SSE burst; the pause is also a cancellation point.
+        // buffered SSE burst; the pause is also a cancellation point, so a
+        // cancelled pause closes the client and raises the cancelled
+        // transport error.
         let now = @async.now()
         if now - last_yield >= 16L {
           @async.pause() catch {
-            _ => ()
+            err =>
+              if @async.is_cancellation_error(err) {
+                client.close()
+                raise deepseek_cancelled_transport("read_stream")
+              }
+            // Non-cancellation pause failures ride over; the next read on a
+            // torn-down client errors out of the loop.
           }
           last_yield = now
         }
