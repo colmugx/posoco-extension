@@ -847,9 +847,7 @@ async test "usage on a fresh stats renders an empty aggregate without a rate" {
   let stats = Stats()
   match stats.invoke("usage", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
-      assert_eq(
-        feedback, "aggregate: 0 requests · in 0 · out 0 · cache n/a",
-      )
+      assert_eq(feedback, "aggregate: 0 requests · in 0 · out 0 · cache n/a")
     _ => fail("expected success outcome")
   }
 }

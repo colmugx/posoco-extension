@@ -337,11 +337,9 @@ pub impl @posoco.Extension for Stats with fn extension_id(_self : Stats) -> Stri
 
 ///|
 pub impl @posoco.Extension for Stats with fn manifest(self : Stats) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(
-    id="posoco_ext_stats",
-    observers=[self],
-    commands=[self],
-  )
+  @posoco.ExtensionManifest(id="posoco_ext_stats", observers=[self], commands=[
+    self,
+  ])
 }
 
 ///|

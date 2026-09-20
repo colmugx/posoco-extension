@@ -56,7 +56,8 @@ async test "cache doctor never diagnoses unreported telemetry as misses" {
             _ => fail("expected aggregate object")
           }
           match fields.get("diagnosis") {
-            Some(_) => fail("unreported cache telemetry must not diagnose misses")
+            Some(_) =>
+              fail("unreported cache telemetry must not diagnose misses")
             None => ()
           }
         }
@@ -82,8 +83,12 @@ async test "cache doctor token ratio uses only cache-reporting input" {
   )
   match stats.invoke("cache_doctor", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, ..) => {
-      assert_true(feedback.contains("session s: 1/1 requests·50/100 tok·50.0%"))
-      assert_true(feedback.contains("aggregate: 1/1 requests·50/100 tok·50.0%"))
+      assert_true(
+        feedback.contains("session s: 1/1 requests·50/100 tok·50.0%"),
+      )
+      assert_true(
+        feedback.contains("aggregate: 1/1 requests·50/100 tok·50.0%"),
+      )
     }
     _ => fail("expected success outcome")
   }
