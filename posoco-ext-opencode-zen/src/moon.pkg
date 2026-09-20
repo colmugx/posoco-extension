@@ -22,7 +22,8 @@ warnings = "-unused_value-unused_constructor"
 options(
   targets: {
     // HTTP-backed adaptors: native+js only (moonbitlang/async/http is
-    // unavailable on wasm). The pure decoder (parse_zen_models), ZenModelInfo,
+    // unavailable on wasm). The pure decoders (parse_zen_models,
+    // parse_models_dev_surfaces), ZenModelInfo,
     // the catalog builders, the factory (build/login/provider_id), the static
     // catalog path, and the whole zen-owned wire layer (config, encode,
     // decode, SSE wrapper, error classification, provider_config) live in

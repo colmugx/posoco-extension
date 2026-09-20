@@ -11,14 +11,19 @@
 ///
 /// Zen does not publish per-model capability fields on this endpoint, so the
 /// reasoning surface (selectable effort levels, whether thinking can be
-/// disabled) is curated per model in efforts.mbt, sourced from models.dev —
-/// the same catalog OpenCode itself reads.
+/// disabled) is fetched from models.dev — the OpenCode mirror — during
+/// refresh and degrades to the off/on toggle when that lookup fails. The
+/// host cache carries the previous refresh's picker for offline rebuilds.
 
 ///|
 /// One model entry decoded from Zen's `/models` response.
 pub(all) struct ZenModelInfo {
   id : String
   owned_by : String
+  /// Effort picker reconstructed from the host cache on the static build
+  /// path (the previous refresh's full picker, "off" included); empty on the
+  /// live parse path.
+  cached_efforts : Array[String]
 } derive(Eq, Debug)
 
 ///|
@@ -102,7 +107,7 @@ pub fn parse_zen_models(
           "OpenCode Zen models item is missing string owned_by",
         )
     }
-    result.push(ZenModelInfo::{ id, owned_by, })
+    result.push(ZenModelInfo::{ id, owned_by, cached_efforts: [], })
   }
   result
 }
@@ -120,9 +125,10 @@ fn zen_models_url(base_url : String, endpoint_prefix : String) -> String {
 /// Tolerantly decode host-cached model records for offline catalog expansion.
 /// The cache is derived data — a previous `refresh` projected to slot records
 /// by the host — so any malformed shape degrades to `None` (the static
-/// single-slot build) instead of failing composition. Only the model id
-/// matters to Zen: every slot shares the endpoint and key, and Zen exposes no
-/// per-model capability fields.
+/// single-slot build) instead of failing composition. The id identifies the
+/// slot and `thinking_efforts` (the cached picker, "off"/"on" included) is
+/// all the reasoning knowledge that survives offline; every slot shares the
+/// endpoint and key.
 fn parse_cached_zen_models(records : Json?) -> Array[ZenModelInfo]? {
   let items = match records {
     Some(Json::Array(items)) if items.length() > 0 => items
@@ -130,15 +136,26 @@ fn parse_cached_zen_models(records : Json?) -> Array[ZenModelInfo]? {
   }
   let models : Array[ZenModelInfo] = []
   for item in items {
-    let id = match item {
-      Json::Object(fields) =>
-        match fields.get("model_id") {
-          Some(Json::String(value)) if value.length() > 0 => value
-          _ => return None
-        }
+    let fields = match item {
+      Json::Object(fields) => fields
       _ => return None
     }
-    models.push(ZenModelInfo::{ id, owned_by: "", })
+    let id = match fields.get("model_id") {
+      Some(Json::String(value)) if value.length() > 0 => value
+      _ => return None
+    }
+    let cached_efforts : Array[String] = []
+    match fields.get("thinking_efforts") {
+      Some(Json::Array(values)) =>
+        for value in values {
+          match value {
+            Json::String(effort) => cached_efforts.push(effort)
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+    models.push(ZenModelInfo::{ id, owned_by: "", cached_efforts, })
   }
   Some(models)
 }

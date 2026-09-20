@@ -2,8 +2,10 @@
 /// White-box tests for posoco-ext-opencode-zen.
 ///
 /// These exercise the pure parse/catalog/build/login logic without network.
-/// The live `/models` fetch is covered indirectly through `parse_zen_models`
-/// (its decoder) plus the cetas-core integration paths; no HTTP is issued here.
+/// The live `/models` fetch and the models.dev surfaces fetch are covered
+/// indirectly through their decoders (`parse_zen_models`,
+/// `parse_models_dev_surfaces`) plus the cetas-core integration paths; no
+/// HTTP is issued here.
 
 ///|
 /// Provider-neutral prompt fake used to exercise the API-key seam.
@@ -196,6 +198,297 @@ test "parse_zen_models rejects an item with wrong object value" {
 }
 
 ///|
+/// One reasoning_options entry of a models.dev model object.
+fn zen_reasoning_option(kind~ : String, values? : Array[Json]) -> Json {
+  let fields = Map::from_array([("type", Json::string(kind))])
+  match values {
+    Some(values) => fields["values"] = Json::array(values)
+    None => ()
+  }
+  Json::object(fields)
+}
+
+///|
+/// A representative slice of the models.dev opencode provider entry (shapes
+/// verified against https://models.opencode.ai/api.json).
+fn models_dev_sample_payload() -> Json {
+  Json::object(
+    Map::from_array([
+      (
+        "opencode",
+        Json::object(
+          Map::from_array([
+            (
+              "models",
+              Json::object(
+                Map::from_array([
+                  // Real sample: effort levels including "none", no toggle.
+                  (
+                    "gpt-5.1",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        (
+                          "reasoning_options",
+                          Json::array([
+                            zen_reasoning_option(kind="effort", values=[
+                              Json::string("none"),
+                              Json::string("low"),
+                              Json::string("medium"),
+                              Json::string("high"),
+                            ]),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  // Real sample: bare toggle.
+                  (
+                    "kimi-k2.5",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        (
+                          "reasoning_options",
+                          Json::array([zen_reasoning_option(kind="toggle")]),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  // Real sample: toggle and effort levels side by side.
+                  (
+                    "deepseek-v4-flash",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        (
+                          "reasoning_options",
+                          Json::array([
+                            zen_reasoning_option(kind="toggle"),
+                            zen_reasoning_option(kind="effort", values=[
+                              Json::string("low"),
+                              Json::string("high"),
+                              Json::string("max"),
+                            ]),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  // Real sample: plain chat model.
+                  (
+                    "claude-3-5-haiku",
+                    Json::object(
+                      Map::from_array([("reasoning", Json::boolean(false))]),
+                    ),
+                  ),
+                  // Real sample: budget tokens, no declared levels.
+                  (
+                    "claude-haiku-4-5",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        (
+                          "reasoning_options",
+                          Json::array([
+                            zen_reasoning_option(kind="budget_tokens"),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  // Real sample: reasons but declares no options.
+                  (
+                    "union-alpha",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        ("reasoning_options", Json::array([])),
+                      ]),
+                    ),
+                  ),
+                  // Missing reasoning_options entirely.
+                  (
+                    "no-options-model",
+                    Json::object(
+                      Map::from_array([("reasoning", Json::boolean(true))]),
+                    ),
+                  ),
+                  // The generic schema may emit null levels; opencode reads
+                  // them back as "none".
+                  (
+                    "null-level-model",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        (
+                          "reasoning_options",
+                          Json::array([
+                            zen_reasoning_option(kind="effort", values=[
+                              Json::null(),
+                              Json::string("high"),
+                            ]),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  // Unknown option shapes are ignored.
+                  (
+                    "mystery-option-model",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        (
+                          "reasoning_options",
+                          Json::array([zen_reasoning_option(kind="quantum")]),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  // Malformed entry: reasoning_options is not an array.
+                  (
+                    "junk-options-model",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        ("reasoning_options", Json::string("oops")),
+                      ]),
+                    ),
+                  ),
+                  // Malformed entry: not an object at all — skipped.
+                  ("broken-entry", Json::number(42.0)),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    ]),
+  )
+}
+
+///|
+test "parse_models_dev_surfaces decodes levels, toggles, and degraded shapes" {
+  let surfaces = parse_models_dev_surfaces(models_dev_sample_payload())
+  inspect(surfaces.length(), content="10")
+  // gpt-5.1: levels pass through verbatim, "none" included; "none" in the
+  // levels makes the model disableable even without a toggle option.
+  guard surfaces.get("gpt-5.1") is Some(gpt) else {
+    fail("expected a surface for gpt-5.1")
+  }
+  assert_true(gpt.reasoning)
+  debug_inspect(
+    gpt.levels,
+    content=(
+      #|["none", "low", "medium", "high"]
+    ),
+  )
+  assert_true(gpt.can_disable)
+  // kimi-k2.5: toggle only — disableable, no levels.
+  guard surfaces.get("kimi-k2.5") is Some(kimi) else {
+    fail("expected a surface for kimi-k2.5")
+  }
+  assert_true(kimi.reasoning)
+  assert_true(kimi.levels.is_empty())
+  assert_true(kimi.can_disable)
+  // deepseek-v4-flash: toggle plus effort levels.
+  guard surfaces.get("deepseek-v4-flash") is Some(deepseek) else {
+    fail("expected a surface for deepseek-v4-flash")
+  }
+  debug_inspect(
+    deepseek.levels,
+    content=(
+      #|["low", "high", "max"]
+    ),
+  )
+  assert_true(deepseek.can_disable)
+  // claude-3-5-haiku: plain chat.
+  guard surfaces.get("claude-3-5-haiku") is Some(haiku) else {
+    fail("expected a surface for claude-3-5-haiku")
+  }
+  assert_true(haiku.reasoning == false)
+  assert_true(haiku.levels.is_empty())
+  assert_true(haiku.can_disable == false)
+  // claude-haiku-4-5: budget tokens carry no selectable levels.
+  guard surfaces.get("claude-haiku-4-5") is Some(budget) else {
+    fail("expected a surface for claude-haiku-4-5")
+  }
+  assert_true(budget.reasoning)
+  assert_true(budget.levels.is_empty())
+  assert_true(budget.can_disable == false)
+  // union-alpha and the missing-options model: reasoning without levels.
+  guard surfaces.get("union-alpha") is Some(union) else {
+    fail("expected a surface for union-alpha")
+  }
+  assert_true(union.reasoning)
+  assert_true(union.levels.is_empty())
+  assert_true(union.can_disable == false)
+  guard surfaces.get("no-options-model") is Some(no_options) else {
+    fail("expected a surface for no-options-model")
+  }
+  assert_true(no_options.reasoning)
+  assert_true(no_options.levels.is_empty())
+  // Null effort values map to the "none" level name.
+  guard surfaces.get("null-level-model") is Some(null_level) else {
+    fail("expected a surface for null-level-model")
+  }
+  debug_inspect(
+    null_level.levels,
+    content=(
+      #|["none", "high"]
+    ),
+  )
+  assert_true(null_level.can_disable)
+  // Unknown option types and non-array options degrade to no levels.
+  guard surfaces.get("mystery-option-model") is Some(mystery) else {
+    fail("expected a surface for mystery-option-model")
+  }
+  assert_true(mystery.levels.is_empty())
+  assert_true(mystery.can_disable == false)
+  guard surfaces.get("junk-options-model") is Some(junk) else {
+    fail("expected a surface for junk-options-model")
+  }
+  assert_true(junk.reasoning)
+  assert_true(junk.levels.is_empty())
+  // The malformed model entry is skipped, not fatal.
+  assert_true(surfaces.get("broken-entry") is None)
+}
+
+///|
+test "parse_models_dev_surfaces rejects payloads without the opencode models" {
+  let bad_roots : Array[Json] = [
+    Json::array([]),
+    Json::string("not-an-object"),
+    Json::object(
+      Map::from_array([("other", Json::object(Map::from_array([])))]),
+    ),
+    Json::object(
+      Map::from_array([("opencode", Json::object(Map::from_array([])))]),
+    ),
+    Json::object(
+      Map::from_array([
+        (
+          "opencode",
+          Json::object(Map::from_array([("models", Json::string("oops"))])),
+        ),
+      ]),
+    ),
+  ]
+  for payload in bad_roots {
+    let result = Ok(parse_models_dev_surfaces(payload)) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(@posoco.ModelError::ResponseParse(msg)) =>
+        assert_true(msg.contains("models.dev"))
+      _ =>
+        fail("expected ResponseParse naming models.dev for a bad payload root")
+    }
+  }
+}
+
+///|
 /// Build a base config used by the multi-slot catalog tests.
 fn zen_base_config() -> OpenCodeZenConfig {
   OpenCodeZenConfig(
@@ -214,6 +507,7 @@ test "zen_model_catalog builds one slot per discovered model" {
     zen_base_config(),
     models,
     "gpt-5.1-codex",
+    Map::from_array([]),
     api_key_factory,
   )
   assert_eq(catalog.provider_id, "opencode")
@@ -242,7 +536,13 @@ test "zen_model_catalog raises on an empty model list" {
   let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let result = Ok(
-    zen_model_catalog(zen_base_config(), [], "any", api_key_factory),
+    zen_model_catalog(
+      zen_base_config(),
+      [],
+      "any",
+      Map::from_array([]),
+      api_key_factory,
+    ),
   ) catch {
     error => Err(error)
   }
@@ -263,6 +563,7 @@ test "zen_model_catalog falls back to server order when preferred is absent" {
     zen_base_config(),
     models,
     "nonexistent",
+    Map::from_array([]),
     api_key_factory,
   )
   let slots = catalog.slots()
@@ -373,7 +674,8 @@ test "ProviderFactory::build prefers api_key credential over the setting" {
 
 ///|
 /// The host-cached record shape: a previous refresh projected to slot
-/// records. Zen only consumes `model_id`; extra fields ride along untouched.
+/// records. Zen consumes `model_id` and the cached `thinking_efforts` picker;
+/// extra fields ride along untouched.
 fn cached_records(ids : Array[String]) -> Json {
   let items : Array[Json] = []
   for id in ids {
@@ -500,7 +802,176 @@ async test "ApiKeyFactory::login rejects an empty secret" {
 }
 
 ///|
-test "zen_model_catalog presets per-model effort surfaces from the table" {
+/// Build a reasoning surface for mapping probes.
+fn zen_surface(
+  reasoning~ : Bool,
+  levels~ : Array[String],
+  can_disable~ : Bool,
+) -> ZenReasoningSurface {
+  { reasoning, levels, can_disable, }
+}
+
+///|
+/// Build one slot over a probe surface, pairing config and slot exactly as
+/// the catalog builders do.
+fn zen_surface_slot(
+  surface : ZenReasoningSurface?,
+  provider : OpenCodeZenProvider,
+) -> @llm.ModelSlot {
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let config = zen_config_for_model(zen_base_config(), "probe-model", surface)
+  zen_catalog_slot(config, surface, api_key_factory)
+}
+
+///|
+test "zen slot mapping covers all reasoning surface shapes" {
+  let provider = OpenCodeZenProvider()
+  // Unknown surface (metadata missing or the models.dev fetch degraded):
+  // safe off/on toggle with thinking off, default off, rebuildable.
+  let unknown = zen_surface_slot(None, provider)
+  debug_inspect(
+    unknown.thinking_efforts,
+    content=(
+      #|["off", "on"]
+    ),
+  )
+  assert_eq(unknown.default_effort, Some("off"))
+  guard unknown.rebuild_on_effort is Some(unknown_rebuild) else {
+    fail("expected a rebuild hook for the off/on fallback")
+  }
+  assert_eq(unknown_rebuild("on").default_effort, Some("on"))
+  // Plain chat model: no selector at all.
+  let chat = zen_surface_slot(
+    Some(zen_surface(reasoning=false, levels=[], can_disable=false)),
+    provider,
+  )
+  debug_inspect(
+    chat.thinking_efforts,
+    content=(
+      #|[]
+    ),
+  )
+  assert_eq(chat.default_effort, None)
+  assert_true(chat.rebuild_on_effort is None)
+  // Reasoning model without declared levels: bare off/on toggle.
+  let toggle = zen_surface_slot(
+    Some(zen_surface(reasoning=true, levels=[], can_disable=true)),
+    provider,
+  )
+  debug_inspect(
+    toggle.thinking_efforts,
+    content=(
+      #|["off", "on"]
+    ),
+  )
+  assert_eq(toggle.default_effort, Some("off"))
+  // Level-bearing model that cannot be disabled: levels only, "high" wins
+  // the default.
+  let levels = zen_surface_slot(
+    Some(zen_surface(reasoning=true, levels=["low", "high"], can_disable=false)),
+    provider,
+  )
+  debug_inspect(
+    levels.thinking_efforts,
+    content=(
+      #|["low", "high"]
+    ),
+  )
+  assert_eq(levels.default_effort, Some("high"))
+  // Level-bearing model without "high": the first declared level starts.
+  let maxed = zen_surface_slot(
+    Some(zen_surface(reasoning=true, levels=["max"], can_disable=false)),
+    provider,
+  )
+  debug_inspect(
+    maxed.thinking_efforts,
+    content=(
+      #|["max"]
+    ),
+  )
+  assert_eq(maxed.default_effort, Some("max"))
+  // Disableable level-bearing model: "off" prefixes the levels.
+  let disableable = zen_surface_slot(
+    Some(zen_surface(reasoning=true, levels=["low", "high"], can_disable=true)),
+    provider,
+  )
+  debug_inspect(
+    disableable.thinking_efforts,
+    content=(
+      #|["off", "low", "high"]
+    ),
+  )
+  assert_eq(disableable.default_effort, Some("high"))
+}
+
+///|
+test "zen_model_catalog applies models.dev surfaces end to end" {
+  let provider = OpenCodeZenProvider()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let surfaces = parse_models_dev_surfaces(models_dev_sample_payload())
+  // Real gpt-5.1 sample: effort values ["none","low","medium","high"] with
+  // no toggle — "none" in the levels contributes the "off" entry.
+  let gpt_models = [
+    ZenModelInfo::{ id: "gpt-5.1", owned_by: "opencode", cached_efforts: [], },
+  ]
+  let gpt_catalog = zen_model_catalog(
+    zen_base_config(),
+    gpt_models,
+    "gpt-5.1",
+    surfaces,
+    api_key_factory,
+  )
+  let gpt_slot = gpt_catalog.slots()[0]
+  debug_inspect(
+    gpt_slot.thinking_efforts,
+    content=(
+      #|["off", "none", "low", "medium", "high"]
+    ),
+  )
+  assert_eq(gpt_slot.default_effort, Some("high"))
+  // Deepseek sample: toggle plus levels.
+  let deepseek_models = [
+    ZenModelInfo::{
+      id: "deepseek-v4-flash",
+      owned_by: "opencode",
+      cached_efforts: [],
+    },
+  ]
+  let deepseek_catalog = zen_model_catalog(
+    zen_base_config(),
+    deepseek_models,
+    "deepseek-v4-flash",
+    surfaces,
+    api_key_factory,
+  )
+  let deepseek_slot = deepseek_catalog.slots()[0]
+  debug_inspect(
+    deepseek_slot.thinking_efforts,
+    content=(
+      #|["off", "low", "high", "max"]
+    ),
+  )
+  assert_eq(deepseek_slot.default_effort, Some("high"))
+  // Plain chat model: no selector at all.
+  let chat_models = [
+    ZenModelInfo::{
+      id: "claude-3-5-haiku",
+      owned_by: "opencode",
+      cached_efforts: [],
+    },
+  ]
+  let chat_catalog = zen_model_catalog(
+    zen_base_config(),
+    chat_models,
+    "claude-3-5-haiku",
+    surfaces,
+    api_key_factory,
+  )
+  assert_true(chat_catalog.slots()[0].thinking_efforts.is_empty())
+}
+
+///|
+test "zen_model_catalog degrades to the off/on picker with an empty surface map" {
   let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
   let models = parse_zen_models(zen_sample_models_payload())
@@ -508,90 +979,183 @@ test "zen_model_catalog presets per-model effort surfaces from the table" {
     zen_base_config(),
     models,
     "gpt-5.1-codex",
+    Map::from_array([]),
     api_key_factory,
   )
-  let slots = catalog.slots()
-  // gpt-5.1-codex: declared levels, cannot disable → no "off" entry.
-  debug_inspect(
-    slots[0].thinking_efforts,
-    content=(
-      #|["low", "medium", "high"]
-    ),
-  )
-  assert_eq(slots[0].default_effort, Some("high"))
-  // claude-opus-5: levels include xhigh/max, no "off" either.
-  debug_inspect(
-    slots[1].thinking_efforts,
-    content=(
-      #|["low", "medium", "high", "xhigh", "max"]
-    ),
-  )
-  // glm-5.2: high/max only.
-  debug_inspect(
-    slots[2].thinking_efforts,
-    content=(
-      #|["high", "max"]
-    ),
-  )
+  for slot in catalog.slots() {
+    debug_inspect(
+      slot.thinking_efforts,
+      content=(
+        #|["off", "on"]
+      ),
+    )
+    assert_eq(slot.default_effort, Some("off"))
+  }
 }
 
 ///|
-test "zen slot rebuild_on_effort reselects the level" {
+test "zen slot rebuild_on_effort reselects levels and toggles off" {
   let provider = OpenCodeZenProvider()
-  let api_key_factory : &@llm.ApiKeyFactory = provider
-  let catalog = zen_static_catalog(zen_base_config(), api_key_factory)
-  let slot = catalog.slots()[0]
-  assert_eq(slot.id, "opencode/gpt-5.1-codex")
+  let surface = zen_surface(
+    reasoning=true,
+    levels=["low", "medium", "high"],
+    can_disable=true,
+  )
+  let slot = zen_surface_slot(Some(surface), provider)
+  assert_eq(slot.default_effort, Some("high"))
   guard slot.rebuild_on_effort is Some(rebuild) else {
-    fail("expected a rebuild_on_effort hook for a level-bearing model")
+    fail("expected a rebuild hook for a level-bearing model")
   }
   let lowered = rebuild("medium")
   assert_eq(lowered.default_effort, Some("medium"))
   debug_inspect(
     lowered.thinking_efforts,
     content=(
-      #|["low", "medium", "high"]
+      #|["off", "low", "medium", "high"]
     ),
   )
+  let offed = rebuild("off")
+  assert_eq(offed.default_effort, Some("off"))
 }
 
 ///|
-test "zen effort presets cover toggle-only and unknown models" {
-  // Toggle-only: kimi-k2.6 exposes the off/on toggle with no levels and
-  // starts off (the wire omits the reasoning surface).
-  guard zen_effort_preset("kimi-k2.6") is Some(preset) else {
-    fail("expected a preset for kimi-k2.6")
-  }
-  assert_true(preset.levels.is_empty())
-  assert_true(preset.can_disable)
-  // Unknown models stay plain chat: no selector at all.
-  assert_true(zen_effort_preset("some-future-model") is None)
-
+test "zen cached surface rebuilds levels from the cached picker" {
   let provider = OpenCodeZenProvider()
-  let api_key_factory : &@llm.ApiKeyFactory = provider
-  let toggle_slot = zen_catalog_slot(
-    zen_config_for_model(zen_base_config(), "kimi-k2.6"),
-    api_key_factory,
+  // The host cache stores the previous refresh's full picker: "off" marks a
+  // disableable model, "on" is toggle residue, everything else is a level.
+  let level_surface = zen_cached_surface(ZenModelInfo::{
+    id: "x",
+    owned_by: "",
+    cached_efforts: ["off", "low", "high"],
+  })
+  guard level_surface is Some(level) else {
+    fail("expected a surface from a level-bearing picker")
+  }
+  debug_inspect(
+    level.levels,
+    content=(
+      #|["low", "high"]
+    ),
   )
+  assert_true(level.can_disable)
+  let level_slot = zen_surface_slot(level_surface, provider)
+  debug_inspect(
+    level_slot.thinking_efforts,
+    content=(
+      #|["off", "low", "high"]
+    ),
+  )
+  assert_eq(level_slot.default_effort, Some("high"))
+  // A bare off/on cache entry carries no levels.
+  let toggle_surface = zen_cached_surface(ZenModelInfo::{
+    id: "x",
+    owned_by: "",
+    cached_efforts: ["off", "on"],
+  })
+  guard toggle_surface is Some(toggle) else {
+    fail("expected a surface from an off/on picker")
+  }
+  assert_true(toggle.levels.is_empty())
+  let toggle_slot = zen_surface_slot(toggle_surface, provider)
   debug_inspect(
     toggle_slot.thinking_efforts,
     content=(
       #|["off", "on"]
     ),
   )
-  assert_eq(toggle_slot.default_effort, Some("off"))
-  let plain_slot = zen_catalog_slot(
-    zen_config_for_model(zen_base_config(), "some-future-model"),
-    api_key_factory,
+  // No cached efforts at all: no surface, the off/on fallback applies.
+  assert_true(
+    zen_cached_surface(ZenModelInfo::{
+      id: "x",
+      owned_by: "",
+      cached_efforts: [],
+    })
+    is None,
   )
+}
+
+///|
+test "zen cached records parse with their thinking_efforts picker" {
+  let records = Json::array([
+    Json::object(
+      Map::from_array([
+        ("model_id", Json::string("x")),
+        (
+          "thinking_efforts",
+          Json::array([Json::string("off"), Json::string("high")]),
+        ),
+      ]),
+    ),
+    // No thinking_efforts field: tolerated as an empty picker.
+    Json::object(Map::from_array([("model_id", Json::string("y"))])),
+  ])
+  guard parse_cached_zen_models(Some(records)) is Some(models) else {
+    fail("expected cached models")
+  }
+  assert_eq(models.length(), 2)
   debug_inspect(
-    plain_slot.thinking_efforts,
+    models[0].cached_efforts,
     content=(
-      #|[]
+      #|["off", "high"]
     ),
   )
-  assert_eq(plain_slot.default_effort, None)
-  assert_true(plain_slot.rebuild_on_effort is None)
+  assert_true(models[1].cached_efforts.is_empty())
+}
+
+///|
+test "ProviderFactory::build rebuilds level pickers from cached thinking_efforts" {
+  let provider = OpenCodeZenProvider()
+  let factory : &@llm.ProviderFactory = provider
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      zen_settings([("api_key", "sk-zen-test"), ("model", "gpt-5.1-codex")]),
+    ),
+    cached_models=Some(
+      Json::array([
+        Json::object(
+          Map::from_array([
+            ("model_id", Json::string("gpt-5.1-codex")),
+            (
+              "thinking_efforts",
+              Json::array([
+                Json::string("off"),
+                Json::string("low"),
+                Json::string("high"),
+              ]),
+            ),
+          ]),
+        ),
+        Json::object(
+          Map::from_array([("model_id", Json::string("claude-plain"))]),
+        ),
+      ]),
+    ),
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 2)
+      // The cached picker minus off/on becomes the declared levels; "off"
+      // re-joins because the cached picker contained it.
+      debug_inspect(
+        slots[0].thinking_efforts,
+        content=(
+          #|["off", "low", "high"]
+        ),
+      )
+      assert_eq(slots[0].default_effort, Some("high"))
+      // No cached efforts: the off/on fallback with thinking off.
+      debug_inspect(
+        slots[1].thinking_efforts,
+        content=(
+          #|["off", "on"]
+        ),
+      )
+      assert_eq(slots[1].default_effort, Some("off"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog from cached records")
+  }
 }
 
 ///|
@@ -1171,4 +1735,15 @@ test "zen wire opts into stream usage accounting" {
       }
     _ => fail("expected stream_options for usage accounting")
   }
+}
+
+///|
+test "zen_cancelled_transport_marks_cancellation" {
+  let err = zen_cancelled_transport("read_stream")
+  guard err is @posoco.ModelError::Transport(message) else {
+    fail("expected a Transport error")
+  }
+  assert_eq(
+    message, "opencode-zen transport failure (stage=read_stream, category=cancelled)",
+  )
 }

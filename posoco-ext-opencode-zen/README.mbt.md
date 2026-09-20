@@ -80,23 +80,29 @@ are shared with the other chat-completions providers (via
 `posoco-kit-chat-completions`); every spelling where Zen's upstream differs
 from standard OpenAI lives in this package.
 
-## Reasoning presets
+## Reasoning surfaces
 
 Zen's `/models` publishes no capability fields, so the per-model reasoning
-surface is a curated preset table (`src/efforts.mbt`) keyed by bare model id.
-Its source is the `opencode` provider's `reasoning_options` in
-[models.dev](https://models.dev/api.json) — the same catalog OpenCode itself
-reads.
+surface is fetched at refresh time from
+[models.dev](https://models.opencode.ai/api.json) (the OpenCode mirror — the
+same catalog OpenCode itself reads), decoded by
+`parse_models_dev_surfaces` (`src/efforts.mbt`):
 
-- Level-bearing models expose exactly their declared levels plus `off` when
-  thinking can be disabled; the default level is `high` when offered, else
-  the first declared level.
-- Toggle-only models expose `off` / `on`.
-- Models absent from the table are plain chat: no selector, and the request
-  omits the reasoning surface entirely.
+- Level-bearing models expose exactly their models.dev-declared levels
+  (verbatim, `none` included) plus `off` when thinking can be disabled (a
+  toggle option, or `none` among the levels); the default level is `high`
+  when offered, else the first declared level.
+- Reasoning models without declared levels (toggle-only, budget tokens,
+  empty options) expose `off` / `on`.
+- Plain chat models (`reasoning: false`) expose no selector.
+- A model missing from the decoded map — or a failed fetch, which degrades
+  to an empty map by design — presents the safe `off` / `on` fallback with
+  thinking off, so a stale or missing surface never produces a selector the
+  gateway would reject.
 
-A stale entry degrades to a legible upstream 400 naming the rejected level —
-levels pass through verbatim, and the server owns the valid names.
+Offline (static build with host-cached records), each slot rebuilds its
+picker from the cached `thinking_efforts` of the previous refresh. Levels
+pass through verbatim, and the server owns the valid names.
 
 ## Settings contract
 
@@ -150,10 +156,13 @@ provider and fail composition with a typed error.
 - **Refresh** (`/model refresh` or capability discovery): one authenticated
   `GET /models` (30s timeout). The `/models` listing is publicly readable
   today, but the request still carries `Authorization: Bearer` so it keeps
-  working if Zen later gates discovery. The configured model is pinned first;
-  the rest keep server order. Transport, schema, or HTTP failures — including
-  an empty list — are typed composition failures; this path never falls back
-  to the static catalog.
+  working if Zen later gates discovery. After it succeeds, the per-model
+  reasoning surfaces are fetched anonymously from the models.dev mirror —
+  best-effort: any failure there degrades to the `off` / `on` fallback per
+  model and never fails the refresh. The configured model is pinned first;
+  the rest keep server order. `/models` transport, schema, or HTTP failures
+  — including an empty list — are typed composition failures; this path
+  never falls back to the static catalog.
 - Slot ids are `opencode/<bare-model-id>` (e.g. `opencode/claude-opus-5`) —
   Zen's ids are bare, without the `opencode/` prefix — and
   `display_group="zen"` tabs them together in the picker.

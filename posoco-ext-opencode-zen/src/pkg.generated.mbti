@@ -13,9 +13,11 @@ import {
 }
 
 // Values
+pub fn parse_models_dev_surfaces(Json) -> Map[String, ZenReasoningSurface] raise @error.ModelError
+
 pub fn parse_zen_models(Json) -> Array[ZenModelInfo] raise @error.ModelError
 
-pub fn zen_model_catalog(OpenCodeZenConfig, Array[ZenModelInfo], String, &@posoco-ext-llm.ApiKeyFactory) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn zen_model_catalog(OpenCodeZenConfig, Array[ZenModelInfo], String, Map[String, ZenReasoningSurface], &@posoco-ext-llm.ApiKeyFactory) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 
 pub fn zen_static_catalog(OpenCodeZenConfig, &@posoco-ext-llm.ApiKeyFactory) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 
@@ -54,6 +56,13 @@ pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
 pub(all) struct ZenModelInfo {
   id : String
   owned_by : String
+  cached_efforts : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ZenReasoningSurface {
+  reasoning : Bool
+  levels : Array[String]
+  can_disable : Bool
 } derive(Eq, @debug.Debug)
 
 type ZenRetryModelPort

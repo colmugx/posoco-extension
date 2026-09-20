@@ -1,5 +1,6 @@
 ///|
-/// Live `/models` fetch via moonbitlang/async/http.
+/// Live model discovery via moonbitlang/async/http: the Zen `/models`
+/// listing plus the models.dev reasoning surfaces that enrich it.
 ///
 /// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
 
@@ -57,4 +58,50 @@ pub async fn fetch_zen_models(
       )
   }
   parse_zen_models(payload)
+}
+
+///|
+/// Fetch and decode the per-model reasoning surfaces from models.dev's
+/// OpenCode mirror. Anonymous: the mirror is publicly readable, so no
+/// credential is sent. Callers own the degradation policy — refresh swallows
+/// every failure here into an empty map rather than aborting composition.
+async fn fetch_models_dev_surfaces() -> Map[String, ZenReasoningSurface] raise @posoco.ModelError {
+  let headers : @http.Headers = { "Accept": "application/json" }
+  let (response, body_data) = @async.with_timeout(30000, () => {
+    @http.get(zen_models_dev_url, headers~)
+  }) catch {
+    @async.TimeoutError =>
+      raise @posoco.ModelError::Transport(
+        "models.dev surfaces request timed out (timeout_ms=30000)",
+      )
+    err =>
+      raise @posoco.ModelError::Transport(
+        "models.dev surfaces request failed: " + err.to_string(),
+      )
+  }
+  if response.code < 200 || response.code >= 300 {
+    let byte_length = body_data.binary().length()
+    let text = body_data.text() catch {
+      _ =>
+        raise @posoco.ModelError::Transport(
+          "models.dev surfaces HTTP status: \{response.code}, body_bytes=\{byte_length}, body_category=invalid_utf8",
+        )
+    }
+    raise @posoco.ModelError::Transport(
+      "models.dev surfaces HTTP status: \{response.code}, body=\{text}",
+    )
+  }
+  let body_text = body_data.text() catch {
+    err =>
+      raise @posoco.ModelError::Transport(
+        "models.dev surfaces body read failed: " + err.to_string(),
+      )
+  }
+  let payload = @json.parse(body_text) catch {
+    err =>
+      raise @posoco.ModelError::ResponseParse(
+        "models.dev surfaces JSON parse failed: " + err.to_string(),
+      )
+  }
+  parse_models_dev_surfaces(payload)
 }

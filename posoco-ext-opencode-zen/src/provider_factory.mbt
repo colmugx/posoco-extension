@@ -124,8 +124,17 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn build(
   let model = zen_resolve_model(source)
   let config = OpenCodeZenConfig(api_key, base_url~, model~)
   let api_key_factory : &@llm.ApiKeyFactory = self
+  // No live surfaces exist on the static path: each cached record rebuilds
+  // its picker from the cached thinking_efforts (empty → off/on).
   let catalog = match parse_cached_zen_models(source.cached_models) {
-    Some(models) => zen_model_catalog(config, models, model, api_key_factory)
+    Some(models) =>
+      zen_model_catalog(
+        config,
+        models,
+        model,
+        Map::from_array([]),
+        api_key_factory,
+      )
     None => zen_static_catalog(config, api_key_factory)
   }
   @llm.ProviderBuildResult::Ready(catalog)

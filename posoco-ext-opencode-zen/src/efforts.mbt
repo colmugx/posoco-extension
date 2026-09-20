@@ -1,184 +1,122 @@
 ///|
-/// Curated per-model reasoning presets for the OpenCode Zen gateway.
+/// Per-model reasoning surfaces for the OpenCode Zen gateway, decoded from
+/// models.dev — the `opencode` provider entry of the OpenCode mirror at
+/// <https://models.opencode.ai/api.json>, the same catalog OpenCode itself
+/// reads.
 ///
 /// Zen's own `/models` listing publishes no capability fields (only
-/// `{id, object, created, owned_by}`), and neither does the host cache. The
-/// selectable effort levels are therefore provider knowledge curated here,
-/// mirroring the canonical source OpenCode itself uses: the `opencode`
-/// provider's `reasoning_options` in <https://models.dev/api.json> (a
-/// `{type:"toggle"}` entry means thinking can be switched off; a
-/// `{type:"effort", values:[...]}` entry lists the selectable levels).
+/// `{id, object, created, owned_by}`), so this mirror is the only source of
+/// the picker's effort vocabulary. Three shapes occur per model:
 ///
-/// A model absent from the table is a plain chat model: no effort selector,
-/// and the request omits the reasoning surface entirely (the gateway applies
-/// the model's own default). When Zen ships a new model, add its entry here
-/// after checking models.dev; a stale entry degrades to a now-legible 400
-/// naming the rejected level.
+/// - `reasoning: false` — a plain chat model: no selector at all.
+/// - `reasoning: true` with declared effort levels — the levels pass through
+///   verbatim (`none` included when models.dev lists it); `off` joins the
+///   picker when thinking can be disabled (a `{type:"toggle"}` option, or
+///   `none` among the levels).
+/// - `reasoning: true` without levels (toggle-only, budget tokens, empty or
+///   missing `reasoning_options`) — a bare `off` / `on` toggle.
+///
+/// A model absent from the decoded map — metadata unavailable, or the refresh
+/// fetch degraded to an empty map — presents the safe fallback picker
+/// (`off` / `on`, thinking off), so a stale or failed lookup never produces a
+/// selector the gateway would reject a level from.
 
 ///|
-/// One model's reasoning surface: the selectable effort levels (empty for a
-/// plain on/off toggle) and whether thinking can be switched off ("off" in
-/// the picker).
-priv struct ZenEffortPreset {
+/// One model's reasoning surface as models.dev describes it: whether the
+/// model reasons at all, the selectable effort levels (empty for a bare
+/// toggle), and whether thinking can be switched off ("off" in the picker).
+pub(all) struct ZenReasoningSurface {
+  reasoning : Bool
   levels : Array[String]
   can_disable : Bool
-}
+} derive(Eq, Debug)
 
 ///|
-/// The preset table, keyed by Zen's bare model id.
-let zen_effort_presets : Array[(String, ZenEffortPreset)] = [
-  // deepseek
-  ("deepseek-v4-flash", { levels: ["low", "high", "max"], can_disable: true, }),
-  ("deepseek-v4-pro", { levels: ["high", "max"], can_disable: true, }),
-  // zen free preview
-  ("x-preview-f-free", { levels: ["low", "high", "max"], can_disable: false, }),
-  // claude
-  (
-    "claude-fable-5",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: false, },
-  ),
-  (
-    "claude-opus-4-5",
-    { levels: ["low", "medium", "high"], can_disable: false, },
-  ),
-  (
-    "claude-opus-4-6",
-    { levels: ["low", "medium", "high", "max"], can_disable: false, },
-  ),
-  (
-    "claude-opus-4-7",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: false, },
-  ),
-  (
-    "claude-opus-4-8",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: false, },
-  ),
-  (
-    "claude-opus-5",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: false, },
-  ),
-  (
-    "claude-sonnet-4-6",
-    { levels: ["low", "medium", "high", "max"], can_disable: false, },
-  ),
-  (
-    "claude-sonnet-5",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: false, },
-  ),
-  // gpt
-  (
-    "gpt-5",
-    { levels: ["minimal", "low", "medium", "high"], can_disable: false, },
-  ),
-  (
-    "gpt-5-nano",
-    { levels: ["minimal", "low", "medium", "high"], can_disable: false, },
-  ),
-  ("gpt-5-codex", { levels: ["low", "medium", "high"], can_disable: false, }),
-  ("gpt-5.1", { levels: ["low", "medium", "high"], can_disable: true, }),
-  ("gpt-5.1-codex", { levels: ["low", "medium", "high"], can_disable: false, }),
-  (
-    "gpt-5.1-codex-max",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: false, },
-  ),
-  (
-    "gpt-5.1-codex-mini",
-    { levels: ["low", "medium", "high"], can_disable: false, },
-  ),
-  (
-    "gpt-5.2",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: true, },
-  ),
-  (
-    "gpt-5.2-codex",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: false, },
-  ),
-  (
-    "gpt-5.3-codex",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: true, },
-  ),
-  (
-    "gpt-5.3-codex-spark",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: false, },
-  ),
-  (
-    "gpt-5.4",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: true, },
-  ),
-  (
-    "gpt-5.4-mini",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: true, },
-  ),
-  (
-    "gpt-5.4-nano",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: true, },
-  ),
-  ("gpt-5.4-pro", { levels: ["medium", "high", "xhigh"], can_disable: false, }),
-  (
-    "gpt-5.5",
-    { levels: ["low", "medium", "high", "xhigh"], can_disable: true, },
-  ),
-  ("gpt-5.5-pro", { levels: ["medium", "high", "xhigh"], can_disable: false, }),
-  (
-    "gpt-5.6-luna",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: true, },
-  ),
-  (
-    "gpt-5.6-sol",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: true, },
-  ),
-  (
-    "gpt-5.6-terra",
-    { levels: ["low", "medium", "high", "xhigh", "max"], can_disable: true, },
-  ),
-  // gemini
-  (
-    "gemini-3-flash",
-    { levels: ["minimal", "low", "medium", "high"], can_disable: false, },
-  ),
-  ("gemini-3.1-pro", { levels: ["low", "medium", "high"], can_disable: false, }),
-  (
-    "gemini-3.5-flash",
-    { levels: ["minimal", "low", "medium", "high"], can_disable: false, },
-  ),
-  (
-    "gemini-3.5-flash-lite",
-    { levels: ["minimal", "low", "medium", "high"], can_disable: false, },
-  ),
-  (
-    "gemini-3.6-flash",
-    { levels: ["minimal", "low", "medium", "high"], can_disable: false, },
-  ),
-  (
-    "gemini-3.7-flash",
-    { levels: ["low", "medium", "high"], can_disable: false, },
-  ),
-  // kimi
-  ("kimi-k2.5", { levels: [], can_disable: true, }),
-  ("kimi-k2.6", { levels: [], can_disable: true, }),
-  ("kimi-k3", { levels: ["max"], can_disable: false, }),
-  // qwen
-  ("qwen3.5-plus", { levels: [], can_disable: true, }),
-  ("qwen3.6-plus", { levels: [], can_disable: true, }),
-  // glm
-  ("glm-5", { levels: [], can_disable: true, }),
-  ("glm-5.1", { levels: [], can_disable: true, }),
-  ("glm-5.2", { levels: ["high", "max"], can_disable: false, }),
-]
-
-///|
-/// Look up the reasoning preset for one bare Zen model id.
-fn zen_effort_preset(model_id : String) -> ZenEffortPreset? {
-  for entry in zen_effort_presets {
-    if entry.0 == model_id {
-      return Some(entry.1)
-    }
+/// Decode the models.dev provider catalog into per-model reasoning surfaces,
+/// keyed by bare model id. The payload must be an object holding the
+/// `opencode` provider with a `models` object — anything else is a typed
+/// parse failure. A single malformed model entry is skipped, never fatal: the
+/// surface is picker enrichment, not a wire contract.
+pub fn parse_models_dev_surfaces(
+  payload : Json,
+) -> Map[String, ZenReasoningSurface] raise @posoco.ModelError {
+  let root = match payload {
+    Json::Object(fields) => fields
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "models.dev response must be an object",
+      )
   }
-  None
+  let provider = match root.get("opencode") {
+    Some(Json::Object(fields)) => fields
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "models.dev response is missing the opencode provider object",
+      )
+  }
+  let models = match provider.get("models") {
+    Some(Json::Object(fields)) => fields
+    _ =>
+      raise @posoco.ModelError::ResponseParse(
+        "models.dev opencode provider must carry a models object",
+      )
+  }
+  let surfaces : Map[String, ZenReasoningSurface] = Map::from_array([])
+  for id, entry in models {
+    let fields = match entry {
+      Json::Object(fields) => fields
+      _ => continue
+    }
+    let reasoning = match fields.get("reasoning") {
+      Some(Json::True) => true
+      _ => false
+    }
+    let levels : Array[String] = []
+    let mut can_disable = false
+    let mut effort_seen = false
+    match fields.get("reasoning_options") {
+      Some(Json::Array(options)) =>
+        for option in options {
+          let option_fields = match option {
+            Json::Object(option_fields) => option_fields
+            _ => continue
+          }
+          match option_fields.get("type") {
+            Some(Json::String("toggle")) => can_disable = true
+            Some(Json::String("effort")) =>
+              // Only the first effort option counts, mirroring opencode's
+              // own reasoningVariants precedence.
+              if !effort_seen {
+                effort_seen = true
+                match option_fields.get("values") {
+                  Some(Json::Array(values)) =>
+                    for value in values {
+                      match value {
+                        Json::String(level) => levels.push(level)
+                        // The generic models.dev schema may emit a null
+                        // level; opencode reads it back as "none".
+                        Json::Null => levels.push("none")
+                        _ => ()
+                      }
+                    }
+                  _ => ()
+                }
+              }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+    if levels.contains("none") {
+      can_disable = true
+    }
+    surfaces[id] = { reasoning, levels, can_disable, }
+  }
+  surfaces
 }
 
 ///|
-/// The effort a level-bearing preset starts on: "high" when the model offers
+/// The effort a level-bearing surface starts on: "high" when the model offers
 /// it, otherwise the first declared level (e.g. "max" for kimi-k3).
 fn zen_preset_default_level(levels : Array[String]) -> String {
   if levels.contains("high") {

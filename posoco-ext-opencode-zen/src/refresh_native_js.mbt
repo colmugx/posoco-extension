@@ -7,9 +7,12 @@
 ///|
 /// Live catalog refresh. Performs one authenticated `/models` request against
 /// the Zen gateway and builds a multi-slot catalog from the response, pinning
-/// the configured model first. Transport, schema, or HTTP failures abort
-/// composition — this path never falls back to the static single-model
-/// catalog, matching the DeepSeek refresh contract.
+/// the configured model first. Transport, schema, or HTTP failures on the Zen
+/// listing abort composition — this path never falls back to the static
+/// single-model catalog, matching the DeepSeek refresh contract. The
+/// models.dev surfaces request is the one deliberate exception: it only
+/// enriches the effort picker, so any failure degrades to an empty map (every
+/// model then presents the off/on fallback) and never aborts composition.
 #cfg(any(target="native", target="js"))
 pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh(
   self : OpenCodeZenProvider,
@@ -29,7 +32,14 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh
         detail="OpenCode Zen model catalog refresh failed: " + err.to_string(),
       )
   }
+  // Deliberate degradation: a missing models.dev mirror must not fail the
+  // whole refresh — the picker falls back to off/on per model.
+  let surfaces : Map[String, ZenReasoningSurface] = fetch_models_dev_surfaces() catch {
+    _ => Map::from_array([])
+  }
   let api_key_factory : &@llm.ApiKeyFactory = self
-  let catalog = zen_model_catalog(config, models, preferred, api_key_factory)
+  let catalog = zen_model_catalog(
+    config, models, preferred, surfaces, api_key_factory,
+  )
   @llm.ProviderBuildResult::Ready(catalog)
 }
