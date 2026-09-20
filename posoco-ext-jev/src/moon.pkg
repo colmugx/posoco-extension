@@ -1,0 +1,16 @@
+import {
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+}
+
+warnings = "-unused_package-unused_value-unused_constructor"
+
+options(
+  targets: {
+    "decision_native_js.mbt": [ "native", "js" ],
+    "decision_wasm_fallback.mbt": [ "wasm", "wasm-gc" ],
+    "jev_wbtest.mbt": [ "native" ],
+  },
+)

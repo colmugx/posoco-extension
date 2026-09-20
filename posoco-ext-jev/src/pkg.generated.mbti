@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-jev"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct JevConfig {
+  api_key : String
+  model : String
+  base_url : String
+  timeout_ms : Int
+} derive(Eq, @debug.Debug)
+pub fn JevConfig::JevConfig(String, model? : String, base_url? : String, timeout_ms? : Int) -> Self
+
+pub(all) struct JevDecisionPort {
+  config : JevConfig
+}
+pub fn JevDecisionPort::JevDecisionPort(JevConfig) -> Self
+pub fn JevDecisionPort::extension_id(Self) -> String
+pub fn JevDecisionPort::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.DecisionPort for JevDecisionPort
+pub impl @port.Extension for JevDecisionPort
+
+// Type aliases
+
+// Traits
