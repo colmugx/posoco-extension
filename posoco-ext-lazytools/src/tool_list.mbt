@@ -24,6 +24,9 @@ fn display_id(provenance : String) -> String {
 /// One extension group: display id and its deferred entries in declaration
 /// order.
 priv struct ToolGroup {
+  /// Raw provenance key used for provider-neutral DecisionPort choices.
+  key : String
+  /// Human-readable display id.
   id : String
   entries : Array[LazyEntry]
 }
@@ -42,7 +45,11 @@ fn LazyTools::groups(self : LazyTools) -> Array[ToolGroup] {
       Some(group) => group.entries.push(entry)
       None => {
         order.push(source)
-        by_source[source] = { id: display_id(source), entries: [entry], }
+        by_source[source] = {
+          key: source,
+          id: display_id(source),
+          entries: [entry],
+        }
       }
     }
   }
@@ -128,9 +135,131 @@ fn truncate_oneline(s : String, max_len : Int) -> String {
 }
 
 ///|
+const SEMANTIC_GROUP_MIN_PROBABILITY = 0.6
+
+///|
+fn semantic_group_description(group : ToolGroup) -> Json {
+  let tools : Array[Json] = []
+  for entry in group.entries {
+    tools.push(
+      Json::object({
+        "name": Json::string(entry.def.name.to_string()),
+        "description": Json::string(entry.def.description),
+      }),
+    )
+  }
+  Json::object({ "group": Json::string(group.id), "tools": Json::array(tools) })
+}
+
+///|
+fn selected_probability(
+  probabilities : Array[@posoco.DecisionNamedProbability],
+  selected : String,
+) -> Double? {
+  for entry in probabilities {
+    if entry.id == selected {
+      return Some(entry.probability)
+    }
+  }
+  None
+}
+
+///|
+/// Semantic discovery is a fallback only. Existing exact/keyword matches stay
+/// deterministic; provider absence, malformed answers, low probability, or
+/// DecisionPort errors all preserve the historical "no match" result.
+async fn LazyTools::semantic_group_match(
+  self : LazyTools,
+  query : String,
+  groups : Array[ToolGroup],
+) -> ToolGroup? noraise {
+  let decision = match self.decision {
+    Some(decision) => decision
+    None => return None
+  }
+  if groups.is_empty() {
+    return None
+  }
+  if groups.length() == 1 {
+    let group = groups[0]
+    let request : @posoco.DecisionRequest = {
+      state: Json::object({
+        "query": Json::string(query),
+        "group": semantic_group_description(group),
+      }),
+      questions: [
+        @posoco.DecisionQuestion::Boolean(
+          id="lazytools.group_relevance",
+          instructions=Json::string(
+            "Is this folded tool group semantically relevant to the user's search query? Judge relevance only; do not decide whether any tool should be executed.",
+          ),
+          true_criteria=None,
+          false_criteria=None,
+        ),
+      ],
+    }
+    let result = decision.evaluate(request) catch { _ => return None }
+    result.validate_for(request) catch {
+      _ => return None
+    }
+    for answer in result.answers {
+      match answer {
+        @posoco.DecisionAnswer::BooleanAnswer(
+          id="lazytools.group_relevance",
+          probability_true~
+        ) if probability_true >= SEMANTIC_GROUP_MIN_PROBABILITY =>
+          return Some(group)
+        _ => ()
+      }
+    }
+    return None
+  }
+  let options : Array[@posoco.DecisionOption] = groups.map(fn(group) {
+    { id: group.key, description: Some(semantic_group_description(group)), }
+  })
+  let request : @posoco.DecisionRequest = {
+    state: Json::object({ "query": Json::string(query) }),
+    questions: [
+      @posoco.DecisionQuestion::Choice(
+        id="lazytools.group",
+        instructions=Json::string(
+          "Choose the single folded tool group most semantically relevant to the user's search query. Judge relevance only; do not decide whether the tool should be executed.",
+        ),
+        options~,
+      ),
+    ],
+  }
+  let result = decision.evaluate(request) catch { _ => return None }
+  result.validate_for(request) catch {
+    _ => return None
+  }
+  for answer in result.answers {
+    match answer {
+      @posoco.DecisionAnswer::ChoiceAnswer(
+        id="lazytools.group",
+        selected~,
+        probabilities~,
+        ..
+      ) =>
+        match selected_probability(probabilities, selected) {
+          Some(probability) if probability >= SEMANTIC_GROUP_MIN_PROBABILITY =>
+            for group in groups {
+              if group.key == selected {
+                return Some(group)
+              }
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
 /// `tool_list`: without `keyword`, every group; with `keyword`, only the
 /// groups whose id or tools match — each rendered whole, with full schemas.
-fn LazyTools::execute_list(
+async fn LazyTools::execute_list(
   self : LazyTools,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
@@ -159,12 +288,17 @@ fn LazyTools::execute_list(
       }
       let hit = groups.filter(fn(group) { group_matches(group, tokens) })
       if hit.is_empty() {
-        return @posoco.ToolOutcome::Success(
-          content="No folded tool group matches '\{k}'. Try different keywords, or call tool_list without arguments to browse every folded group.",
-          structured=None,
-        )
+        match self.semantic_group_match(k, groups) {
+          Some(group) => [group]
+          None =>
+            return @posoco.ToolOutcome::Success(
+              content="No folded tool group matches '\{k}'. Try different keywords, or call tool_list without arguments to browse every folded group.",
+              structured=None,
+            )
+        }
+      } else {
+        hit
       }
-      hit
     }
   }
   if matched.is_empty() {

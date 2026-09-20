@@ -237,6 +237,131 @@ async test "tool_list_no_match_steers_to_full_browse" {
 }
 
 ///|
+async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
+  fn prov(
+    name : String,
+    description : String,
+    source : String,
+  ) -> @posoco.ToolDef {
+    @posoco.ToolDef::{
+      name: @posoco.ToolName::unchecked(name),
+      description,
+      input_schema: Json::object({ "type": Json::string("object") }),
+      owner: @posoco.OwnerId::unchecked(source),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some(source),
+    }
+  }
+  let memory = recording(
+    [
+      prov(
+        "memory_search", "Search durable memories", "posoco_ext_nowledge_mem",
+      ),
+    ],
+    Map::from_array([]),
+  )
+  let obsidian = recording(
+    [prov("obsidian_search", "Search markdown notes", "posoco_ext_obsidian")],
+    Map::from_array([]),
+  )
+  let ext = build_ok([memory, obsidian])
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::ChoiceAnswer(
+          id="lazytools.group",
+          selected="posoco_ext_nowledge_mem",
+          probabilities=[
+            { id: "posoco_ext_nowledge_mem", probability: 0.9, },
+            { id: "posoco_ext_obsidian", probability: 0.1, },
+          ],
+          confidence=Some(0.9),
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  (ext as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let content = expect_success(
+    ext.execute(
+      "tool_list",
+      meta_call(
+        "tool_list",
+        Map::from_array([("keyword", Json::string("remember previous context"))]),
+      ),
+    ),
+  )
+  assert_true(content.contains("memory_search"))
+  assert_false(content.contains("obsidian_search"))
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "tool_list_semantic_fallback_is_conservative_on_low_probability" {
+  fn prov(name : String, source : String) -> @posoco.ToolDef {
+    @posoco.ToolDef::{
+      name: @posoco.ToolName::unchecked(name),
+      description: name + " operation",
+      input_schema: Json::object({ "type": Json::string("object") }),
+      owner: @posoco.OwnerId::unchecked(source),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some(source),
+    }
+  }
+  let a = recording([prov("alpha_tool", "alpha")], Map::from_array([]))
+  let b = recording([prov("beta_tool", "beta")], Map::from_array([]))
+  let ext = build_ok([a, b])
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::ChoiceAnswer(
+          id="lazytools.group",
+          selected="alpha",
+          probabilities=[
+            { id: "alpha", probability: 0.55, },
+            { id: "beta", probability: 0.45, },
+          ],
+          confidence=None,
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  (ext as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let content = expect_success(
+    ext.execute(
+      "tool_list",
+      meta_call(
+        "tool_list",
+        Map::from_array([("keyword", Json::string("unrelated semantic phrase"))]),
+      ),
+    ),
+  )
+  assert_true(content.contains("No folded tool group matches"))
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
 /// ——— tool_execute: routing and error mapping ———
 
 ///|
@@ -703,7 +828,7 @@ async test "before_model_is_silent_until_the_first_deferred_execution" {
 /// ——— manifest port contributions ———
 
 ///|
-test "manifest_reports_all_four_port_views" {
+test "manifest_reports_ports_and_declares_optional_decision_capability" {
   let child = recording(
     [deferred_def("read", "Read a file")],
     Map::from_array([]),
@@ -714,4 +839,48 @@ test "manifest_reports_all_four_port_views" {
   assert_eq(manifest.observers.length(), 1)
   assert_eq(manifest.hooks.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 1)
+  assert_eq(manifest.lifecycle.length(), 1)
+  assert_true(manifest.requires.contains(@posoco.Capability::Decision))
+}
+
+///|
+async test "tool_list_semantic_fallback_supports_a_single_folded_group" {
+  let child = recording(
+    [deferred_def("memory_search", "Search durable memories")],
+    Map::from_array([]),
+  )
+  let ext = build_ok([child])
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::BooleanAnswer(
+          id="lazytools.group_relevance",
+          probability_true=0.9,
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  (ext as &@posoco.Lifecycle).on_compose(
+    @posoco.tk_view(
+      requires=[@posoco.Capability::Decision],
+      model~,
+      decision=Some(decision),
+      ui~,
+    ),
+  )
+  let content = expect_success(
+    ext.execute(
+      "tool_list",
+      meta_call(
+        "tool_list",
+        Map::from_array([("keyword", Json::string("remember context"))]),
+      ),
+    ),
+  )
+  assert_true(content.contains("memory_search"))
+  assert_eq(decision.call_count(), 1)
 }

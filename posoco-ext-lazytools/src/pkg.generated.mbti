@@ -28,6 +28,7 @@ pub fn LazyTools::manifest(Self) -> @port.ExtensionManifest
 pub fn LazyTools::rewrap_call(@kernel.ToolCall, @kernel.ToolCall) -> @kernel.ToolCall
 pub fn LazyTools::unwrap_call(@kernel.ToolCall) -> (String, @kernel.ToolCall)
 pub impl @port.Extension for LazyTools
+pub impl @port.Lifecycle for LazyTools
 pub impl @port.Observer for LazyTools
 pub impl @port.PipelineHook for LazyTools
 pub impl @port.SystemPromptContributor for LazyTools
