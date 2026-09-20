@@ -148,7 +148,9 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         }
         let now = @async.now()
         if now - last_yield >= 16L {
-          @async.pause() catch { _ => () }
+          @async.pause() catch {
+            _ => ()
+          }
           last_yield = now
         }
       }

@@ -8,9 +8,7 @@ test "OpenAI-compatible rebuilt ports share learned prompt-cache rejection" {
     send_prompt_cache_key=true,
   )
   let first = oai_compat_model_port_with_prompt_cache_rejection_state(
-    "custom-a",
-    config,
-    state,
+    "custom-a", config, state,
   )
   assert_false(first.prompt_cache_key_rejected_now())
 
@@ -45,9 +43,7 @@ test "OpenAI-compatible prompt-cache setting is strict boolean and defaults off"
 
   let enabled = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
-      Json::object(
-        Map::from_array([("send_prompt_cache_key", Json::True)]),
-      ),
+      Json::object(Map::from_array([("send_prompt_cache_key", Json::True)])),
     ),
   )
   assert_true(oai_compat_setting_bool(enabled, "send_prompt_cache_key"))

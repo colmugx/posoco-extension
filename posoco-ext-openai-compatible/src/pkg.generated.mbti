@@ -10,6 +10,7 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -37,7 +38,7 @@ pub(all) struct OpenAICompatibleModelPort {
   provider_id : String
   request_headers : (() -> Map[String, String])?
   mut prompt_cache_key_rejected : Bool
-  prompt_cache_key_rejection_state : Ref[Bool]
+  prompt_cache_key_rejection_state : @ref.Ref[Bool]
 }
 pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(String, OpenAICompatibleConfig, request_headers? : () -> Map[String, String]) -> Self
 pub fn OpenAICompatibleModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
@@ -46,7 +47,7 @@ pub impl @port.ModelPort for OpenAICompatibleModelPort
 pub(all) struct OpenAICompatibleProvider {
   provider_id : String
   ctx : @posoco-devkit.ExtContext
-  prompt_cache_key_rejection_state : Ref[Bool]
+  prompt_cache_key_rejection_state : @ref.Ref[Bool]
 }
 pub fn OpenAICompatibleProvider::OpenAICompatibleProvider(String, ctx? : @posoco-devkit.ExtContext) -> Self
 pub impl @posoco-ext-llm.ApiKeyFactory for OpenAICompatibleProvider

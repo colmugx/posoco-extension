@@ -182,9 +182,7 @@ fn oai_compat_catalog_slot(
             )
         }
         oai_compat_catalog_slot(
-          provider_id,
-          rebuilt_config,
-          prompt_cache_key_rejection_state,
+          provider_id, rebuilt_config, prompt_cache_key_rejection_state,
         )
       }),
     )
@@ -194,9 +192,7 @@ fn oai_compat_catalog_slot(
     capabilities.push("image_in")
   }
   let port : &@posoco.ModelPort = oai_compat_model_port_with_prompt_cache_rejection_state(
-    provider_id,
-    config,
-    prompt_cache_key_rejection_state,
+    provider_id, config, prompt_cache_key_rejection_state,
   )
   let api_key : &@llm.ApiKeyFactory = OpenAICompatibleProvider(provider_id)
   @llm.ModelSlot::ModelSlot(
@@ -225,9 +221,7 @@ fn oai_compat_catalog_slot(
         send_prompt_cache_key=config.send_prompt_cache_key,
       )
       oai_compat_catalog_slot(
-        provider_id,
-        rebuilt_config,
-        prompt_cache_key_rejection_state,
+        provider_id, rebuilt_config, prompt_cache_key_rejection_state,
       )
     }),
     rebuild_on_effort~,
@@ -529,8 +523,7 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn build(
     None => ""
   }
   let send_prompt_cache_key = oai_compat_setting_bool(
-    source,
-    "send_prompt_cache_key",
+    source, "send_prompt_cache_key",
   )
   match source.setting("models") {
     Some(Json::Array(values)) => {
