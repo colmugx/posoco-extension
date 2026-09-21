@@ -2,12 +2,14 @@
 package "colmugx/posoco-ext-jev"
 
 import {
+  "colmugx/posoco-ext-oauth",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub fn jev_credential_id() -> String
 
 // Errors
 
@@ -19,11 +21,14 @@ pub(all) struct JevConfig {
   timeout_ms : Int
 } derive(Eq, @debug.Debug)
 pub fn JevConfig::JevConfig(String, model? : String, base_url? : String, timeout_ms? : Int) -> Self
+pub fn JevConfig::stored(model? : String, base_url? : String, timeout_ms? : Int) -> Self
 
 pub(all) struct JevDecisionPort {
   config : JevConfig
+  credential_store : &@posoco-ext-oauth.ProviderCredentialStore?
+  credential_id : String
 }
-pub fn JevDecisionPort::JevDecisionPort(JevConfig) -> Self
+pub fn JevDecisionPort::JevDecisionPort(JevConfig, credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, credential_id? : String) -> Self
 pub fn JevDecisionPort::extension_id(Self) -> String
 pub fn JevDecisionPort::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.DecisionPort for JevDecisionPort

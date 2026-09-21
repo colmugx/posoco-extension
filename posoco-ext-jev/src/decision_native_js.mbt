@@ -11,9 +11,9 @@ fn jev_url(config : JevConfig) -> String {
 }
 
 ///|
-fn jev_headers(config : JevConfig) -> @http.Headers {
+fn jev_headers(api_key : String) -> @http.Headers {
   {
-    "Authorization": "Bearer " + config.api_key,
+    "Authorization": "Bearer " + api_key,
     "Accept": "application/json",
     "Content-Type": "application/json",
   }
@@ -51,9 +51,10 @@ pub impl @posoco.DecisionPort for JevDecisionPort with fn evaluate(
   self : JevDecisionPort,
   request : @posoco.DecisionRequest,
 ) -> @posoco.DecisionResult raise @posoco.DecisionError {
+  let api_key = self.resolve_api_key()
   let body = build_jev_request(request, self.config.model)
   let (response, body_data) = @async.with_timeout(self.config.timeout_ms, () => {
-    @http.post(jev_url(self.config), body.stringify(), headers=jev_headers(self.config))
+    @http.post(jev_url(self.config), body.stringify(), headers=jev_headers(api_key))
   }) catch {
     @async.TimeoutError =>
       raise @posoco.DecisionError::Transport(
