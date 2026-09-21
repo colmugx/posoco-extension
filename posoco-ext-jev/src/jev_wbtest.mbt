@@ -192,3 +192,99 @@ test "jev HTTP status normalization distinguishes bad request rate limit and tra
   assert_true(jev_http_error(429, 10) is @posoco.DecisionError::RateLimited(_))
   assert_true(jev_http_error(503, 10) is @posoco.DecisionError::Transport(_))
 }
+
+///|
+priv struct JevTestCredentialStore {
+  value : @oauth.ProviderCredential?
+}
+
+///|
+impl @oauth.ProviderCredentialStore for JevTestCredentialStore with fn read(
+  self : JevTestCredentialStore,
+  _provider_id : String,
+) -> @oauth.ProviderCredential? {
+  self.value
+}
+
+///|
+impl @oauth.ProviderCredentialStore for JevTestCredentialStore with fn write(
+  _self : JevTestCredentialStore,
+  _provider_id : String,
+  _credential : @oauth.ProviderCredential,
+) -> Unit {
+  ()
+}
+
+///|
+impl @oauth.ProviderCredentialStore for JevTestCredentialStore with fn delete(
+  _self : JevTestCredentialStore,
+  _provider_id : String,
+) -> Unit {
+  ()
+}
+
+///|
+async test "jev credential store API key overrides config fallback" {
+  let store = JevTestCredentialStore::{
+    value: Some(
+      @oauth.ProviderCredential::ApiKey(
+        @oauth.ApiKeyCredential::ApiKeyCredential(secret="stored-key"),
+      ),
+    ),
+  }
+  let port = JevDecisionPort(
+    JevConfig("fallback-key"),
+    credential_store=Some(store as &@oauth.ProviderCredentialStore),
+  )
+  assert_eq(port.resolve_api_key(), "stored-key")
+}
+
+///|
+async test "jev credential store miss falls back to config API key" {
+  let store = JevTestCredentialStore::{ value: None, }
+  let port = JevDecisionPort(
+    JevConfig("fallback-key"),
+    credential_store=Some(store as &@oauth.ProviderCredentialStore),
+  )
+  assert_eq(port.resolve_api_key(), "fallback-key")
+}
+
+///|
+async test "jev stored OAuth credential never falls back to config API key" {
+  let store = JevTestCredentialStore::{
+    value: Some(
+      @oauth.ProviderCredential::OAuth(
+        @oauth.Credential::Credential(
+          access_token="oauth-token",
+          refresh_token="refresh",
+          expires_at=0,
+        ),
+      ),
+    ),
+  }
+  let port = JevDecisionPort(
+    JevConfig("fallback-key"),
+    credential_store=Some(store as &@oauth.ProviderCredentialStore),
+  )
+  let mut rejected = false
+  ignore(port.resolve_api_key()) catch {
+    @posoco.DecisionError::RequestBuild(_) => rejected = true
+    _ => fail("expected RequestBuild for OAuth credential")
+  }
+  assert_true(rejected)
+}
+
+///|
+async test "jev missing store credential and fallback reports RequestBuild" {
+  let store = JevTestCredentialStore::{ value: None, }
+  let port = JevDecisionPort(
+    JevConfig::stored(),
+    credential_store=Some(store as &@oauth.ProviderCredentialStore),
+  )
+  let mut rejected = false
+  ignore(port.resolve_api_key()) catch {
+    @posoco.DecisionError::RequestBuild(_) => rejected = true
+    _ => fail("expected RequestBuild for missing credential")
+  }
+  assert_true(rejected)
+}
