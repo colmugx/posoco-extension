@@ -1,0 +1,66 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-subagent"
+
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-kind",
+  "colmugx/posoco-ext-permission",
+  "colmugx/posoco-kit-subagent",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+}
+
+// Values
+
+// Errors
+pub(all) suberror ComposerError {
+  Failed(String)
+}
+
+// Types and methods
+pub(all) struct ChildSpec {
+  task : String
+  kind_name : String
+  session_id : String
+  resuming : Bool
+  tools : Array[String]
+  skills : Array[String]?
+  mode : @posoco-ext-permission.PermissionMode
+  system_prompt : String
+  slot : String
+  effort : String?
+  context_files : Bool
+  observers : Array[&@port.Observer]
+}
+
+pub(all) struct SubagentTools {
+  catalog : @posoco-ext-kind.KindCatalog
+  config : @posoco-kit-subagent.SubagentConfig
+  composer : &ChildComposer
+  parent_slot : String
+  parent_effort : String?
+  observers : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit]
+  ledger : @posoco-kit-subagent.SpawnLedger
+  mut counter : Int
+  mut tasks : @port.Tasks?
+  mut session : String?
+  // private fields
+}
+pub fn SubagentTools::SubagentTools(catalog~ : @posoco-ext-kind.KindCatalog, config~ : @posoco-kit-subagent.SubagentConfig, composer~ : &ChildComposer, parent_slot~ : String, parent_effort? : String?, observers? : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit]) -> Self
+pub fn SubagentTools::background_children(Self) -> Array[(String, String)]
+pub async fn SubagentTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub async fn SubagentTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn SubagentTools::extension_id(Self) -> String
+pub fn SubagentTools::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn SubagentTools::manifest(Self) -> @port.ExtensionManifest
+pub fn SubagentTools::subscribe(Self, (@posoco-kit-subagent.SubagentEvent) -> Unit) -> Unit
+pub impl @port.Extension for SubagentTools
+pub impl @port.ToolProvider for SubagentTools
+
+// Type aliases
+
+// Traits
+pub(open) trait ChildComposer {
+  async fn compose(Self, ChildSpec) -> @posoco.Agent raise ComposerError
+}

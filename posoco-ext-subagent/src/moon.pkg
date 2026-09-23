@@ -1,0 +1,16 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-kit-subagent" @kit,
+  "colmugx/posoco-ext-kind" @kind,
+  "colmugx/posoco-ext-permission" @permission,
+  "moonbitlang/async",
+}
+
+// @runtime (PortRuntime harness) and @error (CompositionError) serve only
+// the whitebox async tests.
+import {
+  "colmugx/posoco/runtime",
+  "colmugx/posoco/error",
+} for "wbtest"
+
+warnings = "-unused_package"
