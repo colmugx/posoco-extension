@@ -1,7 +1,7 @@
 # posoco-ext-read
 
 [read tool for Posoco agents](https://mooncakes.io/docs/colmugx/posoco) — reads
-a file as `L<line>: ` numbered lines with paged output, so a model can cite
+a file as compact `<line>|<text>` numbered lines with paged output, so a model can cite
 lines and re-read exactly where a result was cut.
 
 > **Targets: native + js** — native reads through `@fs` with line streaming
@@ -60,23 +60,20 @@ let exts : Array[&@posoco.Extension] = [
 |---|---|---|
 | `path` | string, required | file to read |
 | `offset` | integer, optional | 1-indexed line to start from; negative counts back from the end of the file |
-| `limit` | integer, optional | max lines returned (default 1000) |
+| `limit` | integer, optional | max lines returned (default 400) |
 
 ## Output contract
 
-- Lines are prefixed `L<line>: ` (1-indexed, no padding); long lines are cut
-  at 2000 characters with a `… (line truncated)` marker.
-- A page is bounded by `limit` (default 1000 lines) and a 100 KB output cap.
-  When a cap cuts the page, the result ends with
-  `… N more lines; call read with offset=M` — the model continues by calling
-  back with that offset.
-- `offset` past the end of the file is a `ToolReportedError` naming the total
-  line count; an empty file reads as `(file exists but is empty)`.
+- Lines are prefixed `<line>|` (1-indexed, no padding); long lines are cut
+  at 1200 characters with a short `…[cut]` marker.
+- A page is bounded by `limit` (default 400 lines) and a 40 KB output cap.
+  When a cap cuts the page, the result ends with `… +N lines; next=M`.
+- `offset` past the end of the file is a compact `ToolReportedError`;
+  an empty file reads as `(empty)`.
 - A file that is not valid UTF-8 is reported as a binary file (the message
   contains `is not valid UTF-8 (binary file)`) instead of decoding garbage.
-- An explicit `offset`/`limit` range whose rendered output would exceed the
-  byte cap is a loud `RuntimeError` telling the model to narrow the range —
-  silent cutting is reserved for the implicit first page.
+- Explicit ranges obey the same byte cap as implicit reads: the tool returns
+  the usable partial page plus `next=M` instead of forcing an extra retry.
 - CRLF line endings are normalized (`\r` stripped).
 
 ## Behavior notes
@@ -87,9 +84,9 @@ let exts : Array[&@posoco.Extension] = [
 - **Anchor** — relative `path` arguments resolve against the `WorkspaceAnchor`
   root; the absolute anchor root never leaks into model-visible output
   (results and messages echo the path as written).
-- **Error split** — a missing file is `ToolReportedError` (recoverable; the
-  model can correct course); a raised `RuntimeError` means the tool could not
-  do its job (IO failure, overly large explicit range, invalid arguments).
+- **Error split** — a missing file is `ToolReportedError` (recoverable); a
+  raised `RuntimeError` means the tool could not do its job (IO failure or
+  invalid arguments).
 - **Delegated reads** — with `fs=Some(...)`, content (and the existence
   check) ride the injected `WorkspaceFs`; the freshness stamp still comes
   from the process filesystem so write/edit comparisons are unaffected. The
@@ -99,3 +96,10 @@ let exts : Array[&@posoco.Extension] = [
 `read` is **not** a search tool — use grep for content search and glob for
 filename patterns; reading a whole large file page by page is the wrong shape
 compared to grepping for the region first.
+
+
+## Edit compatibility
+
+`posoco-ext-edit` accepts both the compact `<line>|` prefix and the legacy
+`L<line>: ` prefix when stripping copied `read` output from `old_text`, so
+existing transcripts remain valid across this output-format change.
