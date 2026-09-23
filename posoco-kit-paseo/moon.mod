@@ -3,7 +3,7 @@ name = "colmugx/posoco-kit-paseo"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.17.2",
+  "colmugx/posoco@0.18.3",
   "colmugx/posoco-kit-delegation@0.1.0",
 }
 

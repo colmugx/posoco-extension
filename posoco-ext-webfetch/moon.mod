@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-webfetch"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.17.2",
+  "colmugx/posoco@0.18.3",
   "moonbitlang/async@0.21.2",
   "moonbit-community/html@0.2.1",
 }
