@@ -172,7 +172,7 @@ async test "grep_zero_matches_is_success" {
     )
     match result {
       Success(content~, structured~) => {
-        assert_eq(content, "No matches found for: missing")
+        assert_eq(content, "(no matches)")
         match structured {
           Some(Object(meta)) => {
             assert_true(meta.get("summary") is Some(String("no matches")))
@@ -208,7 +208,7 @@ async test "grep_multi_match_groups_by_file" {
       Success(content~, structured~) => {
         assert_eq(
           content,
-          "Found 3 matches in 1 file:\n\{dir}/hits.txt\n  L1: needle alpha\n  L3: needle beta\n  L4: needle gamma\n",
+          "\{dir}/hits.txt\n1|needle alpha\n3|needle beta\n4|needle gamma",
         )
         match structured {
           Some(Object(meta)) => {
@@ -245,10 +245,10 @@ async test "grep_max_matches_caps_output_with_footer" {
       Success(content~, structured~) => {
         assert_true(
           content.contains(
-            "Found 3 matches in 1 file:\n\{dir}/hits.txt\n  L1: n1\n  L2: n2\n",
+            "\{dir}/hits.txt\n1|n1\n2|n2",
           ),
         )
-        assert_true(content.contains("… 1 more matches"))
+        assert_true(content.has_suffix("… +1 matches"))
         match structured {
           Some(Object(meta)) => {
             assert_true(meta.get("count") is Some(Number(3.0, ..)))
@@ -283,11 +283,11 @@ async test "grep_files_with_matches_mode_lists_paths_only" {
     )
     match result {
       Success(content~, structured~) => {
-        assert_true(content.has_prefix("Found 2 files:\n"))
+        assert_false(content.has_prefix("Found "))
         assert_true(content.contains("\{dir}/a.txt"))
         assert_true(content.contains("\{dir}/b.txt"))
         assert_false(content.contains("c.txt"))
-        assert_false(content.contains("L1:"))
+        assert_false(content.contains("|needle"))
         match structured {
           Some(Object(meta)) => {
             assert_true(meta.get("summary") is Some(String("2 files")))
@@ -320,9 +320,10 @@ async test "grep_count_mode_reports_matches_per_file" {
     )
     match result {
       Success(content~, structured~) => {
-        assert_true(content.has_prefix("Found 2 files:\n"))
+        assert_false(content.has_prefix("Found "))
         assert_true(content.contains("\{dir}/a.txt:2"))
         assert_true(content.contains("\{dir}/b.txt:1"))
+        assert_false(content.has_prefix("Found "))
         match structured {
           Some(Object(meta)) =>
             assert_true(meta.get("count") is Some(Number(2.0, ..)))
@@ -344,7 +345,7 @@ async test "grep_case_insensitive_flag_broadens_matching" {
     @fs.write_file("\{dir}/mixed.txt", "NEEDLE here\n", create_mode=CreateNew)
     let plain = GrepTools::GrepTools().execute("grep", grep_call("needle", dir))
     match plain {
-      Success(content~, ..) => assert_true(content.contains("No matches found"))
+      Success(content~, ..) => assert_eq(content, "(no matches)")
       other => fail("expected case-sensitive miss, got " + other.to_string())
     }
     let insensitive = GrepTools::GrepTools().execute(
@@ -356,7 +357,7 @@ async test "grep_case_insensitive_flag_broadens_matching" {
       ]),
     )
     match insensitive {
-      Success(content~, ..) => assert_true(content.contains("L1: NEEDLE here"))
+      Success(content~, ..) => assert_true(content.contains("1|NEEDLE here"))
       other => fail("expected case-insensitive hit, got " + other.to_string())
     }
   }
@@ -403,7 +404,7 @@ async test "grep_skips_binary_and_unreadable_files_without_failing" {
     match result {
       Success(content~, structured~) => {
         assert_true(content.contains("\{dir}/hit.txt"))
-        assert_true(content.contains("L1: needle"))
+        assert_true(content.contains("1|needle"))
         assert_false(content.contains("invalid.bin"))
         assert_false(content.contains("image.png"))
         assert_false(content.contains("unreadable.txt"))
@@ -509,7 +510,7 @@ async test "grep_long_line_is_truncated_with_marker" {
     )
     match result {
       Success(content~, ..) => {
-        assert_true(content.contains("… (line truncated)"))
+        assert_true(content.contains("…[cut]"))
         assert_true(content.length() < 4000)
       }
       other => fail("expected Success for long line, got " + other.to_string())
@@ -542,10 +543,54 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
     match tools.execute("grep", call) {
       @posoco.ToolOutcome::Success(content~, ..) => {
         assert_true(content.contains("a.txt"))
-        assert_true(content.contains("L1: needle here"))
+        assert_true(content.contains("1|needle here"))
         assert_false(content.contains(dir))
       }
       _ => fail("expected anchored grep to succeed")
     }
   }
+}
+
+
+///|
+test "grep_render_match_line_matches_compact_read_style" {
+  assert_eq(
+    render_match_line({ path: "a.txt", line: 42, content: "needle" }),
+    "42|needle",
+  )
+}
+
+///|
+test "grep_render_match_line_uses_short_cut_marker" {
+  let rendered = render_match_line({
+    path: "a.txt",
+    line: 1,
+    content: "x".repeat(GREP_LINE_CHAR_CAP + 100),
+  })
+  assert_true(rendered.has_prefix("1|"))
+  assert_true(rendered.has_suffix("…[cut]"))
+  assert_true(rendered.length() < GREP_LINE_CHAR_CAP + 20)
+}
+
+///|
+test "grep_result_text_does_not_echo_pattern_on_miss" {
+  let (text, count, truncated) = grep_result_text(Content, [], "secret-pattern", 100)
+  assert_eq(text, "(no matches)")
+  assert_eq(count, 0)
+  assert_false(truncated)
+  assert_false(text.contains("secret-pattern"))
+}
+
+///|
+test "grep_files_footer_is_compact" {
+  let matches = [
+    GrepMatch::{ path: "a", line: 1, content: "x" },
+    GrepMatch::{ path: "b", line: 1, content: "x" },
+    GrepMatch::{ path: "c", line: 1, content: "x" },
+  ]
+  let (text, count, truncated) = grep_result_text(FilesWithMatches, matches, "x", 2)
+  assert_eq(count, 3)
+  assert_true(truncated)
+  assert_true(text.has_suffix("… +1 files"))
+  assert_false(text.contains("Found"))
 }
