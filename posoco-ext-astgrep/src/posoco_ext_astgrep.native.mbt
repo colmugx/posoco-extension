@@ -46,14 +46,14 @@ impl AstGrepSpawn for NativeAstGrepSpawn with fn spawn(
       @process.collect_output(bin, argv, cwd~) catch {
         _ =>
           raise @posoco.RuntimeError::InvocationFailed(
-            "astgrep: failed to spawn '\{bin}'",
+            "astgrep: spawn failed: \{bin}",
           )
       }
     None =>
       @process.collect_output(bin, argv) catch {
         _ =>
           raise @posoco.RuntimeError::InvocationFailed(
-            "astgrep: failed to spawn '\{bin}'",
+            "astgrep: spawn failed: \{bin}",
           )
       }
   }
@@ -62,7 +62,7 @@ impl AstGrepSpawn for NativeAstGrepSpawn with fn spawn(
   let stdout = out.text() catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
-        "astgrep: '\{bin}' produced non-UTF-8 output",
+        "astgrep: invalid UTF-8: \{bin}",
       )
   }
   let stderr = err.text() catch { _ => "" }
