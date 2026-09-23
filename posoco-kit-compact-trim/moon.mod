@@ -3,7 +3,7 @@ name = "colmugx/posoco-kit-compact-trim"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.18.3",
+  "colmugx/posoco@0.18.4",
 }
 
 license = "Apache-2.0"
