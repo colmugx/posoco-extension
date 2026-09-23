@@ -21,7 +21,7 @@ gateway.
 
 ## Discoverability and prompt-cache behavior
 
-The default composition deliberately keeps deferred-tool guidance stable. The `## Deferred tools` system-prompt section is assembled once per Agent and contains one bullet per deferred extension group: the manifest id (packaging prefix stripped, so `posoco_ext_webfetch` shows as `webfetch`) followed by its tool names and descriptions. Full input schemas are fetched only through `tool_list`.
+The default composition deliberately keeps deferred-tool guidance stable and small. The `## Deferred tools` system-prompt section is assembled once per Agent and contains one bullet per deferred extension group: the manifest id (packaging prefix stripped, so `posoco_ext_webfetch` shows as `webfetch`) followed by tool names and short capability hints. Full input schemas are fetched only through `tool_list`.
 
 When a schema has already appeared in an earlier `tool_list` result, the prompt tells the model to reuse that schema from conversation history and call `tool_execute` directly. It should not repeat `tool_list` merely to rediscover the same schema.
 
@@ -31,7 +31,7 @@ Older LazyTools behavior recorded the five most recently executed deferred tools
 
 | Tool | Arguments | Meaning |
 |---|---|---|
-| `tool_list` | `keyword` string, optional | Browse the folded catalog: no keyword lists every group; a keyword (space-separated, AND-matched against extension ids and tool names/descriptions) returns the matching groups **whole** — every tool with name, description and full JSON input schema |
+| `tool_list` | `keyword` string, optional | Browse the folded catalog: no keyword lists every group; a keyword (space-separated, AND-matched against extension ids and tool names/descriptions) returns matching groups **whole** — every tool with name and full JSON input schema |
 | `tool_execute` | `tool` string, required; `arguments` object, optional | Routes the call to the owning provider and returns its outcome verbatim; missing `arguments` are passed as an empty object |
 
 ## Semantic discovery fallback
@@ -45,7 +45,7 @@ all execution/permission policy remain unchanged.
 
 ## Output contract
 
-- `tool_list` returns grouped deferred-tool metadata including full input schemas. An empty keyword match is a **Success** with steering text to browse without arguments.
+- `tool_list` returns compact grouped JSON with tool names and full input schemas; descriptions are omitted because capability hints already live in the resident prompt. An empty keyword match is a **Success** with steering text to browse without arguments.
 - `tool_execute` passes the child's `ToolOutcome` through unchanged — `Success`/`ToolReportedError` reach the model as the gateway's outcome; a raised `RuntimeError` propagates so the kernel maps it exactly as if the child had been called directly.
 - Argument mistakes (missing `tool`, non-object `arguments`, blank keyword) raise `RuntimeError::UnknownTool`. An unknown deferred tool name is a `ToolReportedError` with steering text, not a hard failure.
 
@@ -53,7 +53,7 @@ all execution/permission policy remain unchanged.
 
 - **Flat, stable catalog** — the agent sees exactly two LazyTools meta tools for the whole conversation. Deferred schemas do not expand the resident tool catalog, which keeps the tool-definition prefix small and stable.
 - **Stable prompt prefix** — usage-driven recent-tool state is not auto-injected into durable transcript history. Reuse guidance lives in the frozen system prompt instead; legacy dynamic envelopes are removed once on upgrade.
-- **Grouping/search** — keyword lookup operates over extension ids and tool names/descriptions and returns matching groups whole so related schemas arrive together.
+- **Grouping/search** — keyword lookup still operates over extension ids and full tool descriptions internally, but model-visible results omit those descriptions and return compact JSON so related schemas arrive with less context.
 - **Policies** — `tool_list` is `Parallel`; `tool_execute` is `Sequential` so deferred side effects never share a wave (child policies are hidden behind the gateway).
 - **Error split** — the gateway never converts child business failures (`ToolReportedError`) into exceptions or vice versa; only its own argument validation raises.
 
