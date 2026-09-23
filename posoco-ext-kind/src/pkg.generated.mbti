@@ -1,0 +1,44 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-kind"
+
+import {
+  "colmugx/posoco-ext-permission",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn parse_kind_file(String) -> KindSpec raise KindError
+
+pub fn render_kind_body(String, Array[(String, String)]) -> String
+
+// Errors
+pub(all) suberror KindError {
+  InvalidKindFile(String)
+  DuplicateKind(String)
+}
+
+// Types and methods
+pub struct KindCatalog {
+  entries : Map[String, KindSpec]
+  diags : Array[String]
+}
+pub fn KindCatalog::builtin() -> Self
+pub fn KindCatalog::diagnostics(Self) -> Array[String]
+pub fn KindCatalog::get(Self, String) -> KindSpec?
+pub async fn KindCatalog::load(home~ : String, cwd~ : String) -> Self
+pub fn KindCatalog::names(Self) -> Array[String]
+pub fn KindCatalog::with_entries(Array[KindSpec]) -> Self raise KindError
+
+pub(all) struct KindSpec {
+  name : String
+  description : String
+  tools : Array[String]
+  model : String?
+  skills : Array[String]?
+  mode : @posoco-ext-permission.PermissionMode
+  body : String
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

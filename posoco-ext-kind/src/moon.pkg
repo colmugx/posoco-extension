@@ -1,0 +1,21 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-permission" @permission,
+  "colmugx/posoco-devkit" @devkit,
+  "moonbit-community/yaml",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+warnings = "-unused_package"
+
+options(
+  targets: {
+    "kind_fs.js.mbt": [ "js" ],
+    "kind_fs.native.mbt": [ "native", "wasm" ],
+  },
+)
