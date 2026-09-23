@@ -190,20 +190,20 @@ test "state machine transitions" {
   assert_eq(plan.status(), PlanStatus::Off)
   plan.start()
   assert_eq(plan.status(), PlanStatus::Planning)
-  assert_true(plan.submit_plan("step 1: do the thing"))
+  assert_true(plan.submit_plan("test plan", "step 1: do the thing"))
   assert_eq(
     plan.status(),
-    PlanStatus::ReadyForApproval(plan="step 1: do the thing"),
+    PlanStatus::ReadyForApproval(name="test plan", plan="step 1: do the thing"),
   )
   assert_true(plan.reject())
   assert_eq(plan.status(), PlanStatus::Planning)
-  assert_true(plan.submit_plan("step 1: revised"))
-  assert_eq(plan.approve(), Some("step 1: revised"))
+  assert_true(plan.submit_plan("test plan", "step 1: revised"))
+  assert_eq(plan.approve(), Some(("test plan", "step 1: revised")))
   assert_eq(plan.status(), PlanStatus::Off)
   // nothing pending: approve/reject/submit are no-ops
   assert_eq(plan.approve(), None)
   assert_false(plan.reject())
-  assert_false(plan.submit_plan("ignored"))
+  assert_false(plan.submit_plan("test plan", "ignored"))
   // stop is unconditional
   plan.start()
   plan.stop()
@@ -233,7 +233,7 @@ async test "before_tool gates non-allowed tools while planning" {
     other => fail("expected Reject for 'write', got \{other}")
   }
   // ReadyForApproval still gates until the user approves.
-  assert_true(plan.submit_plan("plan"))
+  assert_true(plan.submit_plan("test plan", "plan"))
   match plan.before_tool(tk_call("write")) {
     @posoco.ToolDecision::Reject(..) => ()
     other => fail("expected Reject while ReadyForApproval, got \{other}")
@@ -277,7 +277,7 @@ async test "before_model replaces the reminder in place on mode switch" {
   let plan = plan_mode_with_reads()
   plan.start()
   let messages = plan.before_model([user_msg("hello")])
-  assert_true(plan.submit_plan("the plan"))
+  assert_true(plan.submit_plan("test plan", "the plan"))
   let switched = plan.before_model(messages)
   assert_eq(switched.length(), 2)
   assert_eq(plan_reminder_count(switched), 1)
@@ -334,8 +334,22 @@ async test "exit_plan_mode tool records the plan" {
   }
   assert_eq(
     plan.status(),
-    PlanStatus::ReadyForApproval(plan="1. read foo\n2. edit bar"),
+    PlanStatus::ReadyForApproval(
+      name="read then edit",
+      plan="1. read foo\n2. edit bar",
+    ),
   )
+  // The command status surfaces the pending plan's name.
+  match plan.invoke("plan", Json::string("status")) {
+    @posoco.CommandOutcome::Success(structured~, ..) => {
+      let fields : Map[String, Json] = match structured {
+        Some(Json::Object(fields)) => fields
+        _ => fail("expected a status object")
+      }
+      assert_eq(fields.get("name"), Some(Json::string("read then edit")))
+    }
+    _ => fail("expected Success")
+  }
 }
 
 ///|
@@ -408,6 +422,7 @@ async test "bare /plan toggles plan mode" {
         Some(
           Json::object({
             "status": Json::string("planning"),
+            "name": Json::null(),
             "plan": Json::null(),
             "allowed_tools": Json::array([
               Json::string("read"),
@@ -440,6 +455,7 @@ async test "plan command on/off/status" {
         Some(
           Json::object({
             "status": Json::string("off"),
+            "name": Json::null(),
             "plan": Json::null(),
             "allowed_tools": Json::array([
               Json::string("read"),
@@ -501,7 +517,7 @@ async test "enter_plan_mode tool enters without approval" {
     other => fail("expected Success, got \{other}")
   }
   // Blocked once a plan is awaiting approval.
-  assert_true(plan.submit_plan("plan"))
+  assert_true(plan.submit_plan("test plan", "plan"))
   match plan.execute("enter_plan_mode", tk_call("enter_plan_mode")) {
     @posoco.ToolOutcome::ToolReportedError(..) => ()
     other => fail("expected ToolReportedError, got \{other}")
@@ -531,7 +547,7 @@ async test "plan.approve and plan.reject drive the approval flow" {
     _ => fail("expected Failure")
   }
   plan.start()
-  assert_true(plan.submit_plan("the plan"))
+  assert_true(plan.submit_plan("test plan", "the plan"))
   // reject → back to planning, feedback echoed
   match
     plan.invoke(
@@ -544,7 +560,7 @@ async test "plan.approve and plan.reject drive the approval flow" {
   }
   assert_eq(plan.status(), PlanStatus::Planning)
   // approve → off
-  assert_true(plan.submit_plan("the plan v2"))
+  assert_true(plan.submit_plan("test plan", "the plan v2"))
   match plan.invoke("plan.approve", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
       assert_true(feedback.contains("approved"))
@@ -591,6 +607,26 @@ impl PlanReviewSource for ScriptedReview with fn review(
 ) -> PlanReviewDecision {
   self.asked = self.asked + 1
   self.decision
+}
+
+///|
+/// RecordingReview — captures the request so tests can assert what the exit
+/// tool actually hands to the review surface.
+struct RecordingReview {
+  mut seen_name : String
+  mut seen_plan : String
+  mut asked : Int
+}
+
+///|
+impl PlanReviewSource for RecordingReview with fn review(
+  self,
+  request : PlanReviewRequest,
+) -> PlanReviewDecision {
+  self.seen_name = request.name
+  self.seen_plan = request.plan
+  self.asked = self.asked + 1
+  Accept
 }
 
 ///|
@@ -654,6 +690,21 @@ async test "review source accepts the plan in one action" {
 }
 
 ///|
+async test "review request carries the plan name and full text" {
+  let review = RecordingReview::{ seen_name: "", seen_plan: "", asked: 0, }
+  let plan = PlanMode(review=Some(review as &PlanReviewSource))
+  plan.start()
+  let call = exit_call("1. do it\n2. verify it")
+  match plan.execute("exit_plan_mode", call) {
+    @posoco.ToolOutcome::Success(..) => ()
+    other => fail("expected Success, got \{other}")
+  }
+  assert_eq(review.asked, 1)
+  assert_eq(review.seen_name, "test plan")
+  assert_eq(review.seen_plan, "1. do it\n2. verify it")
+}
+
+///|
 async test "review revise keeps planning and feeds the reason back" {
   let review = ScriptedReview::{
     decision: Revise(feedback="add tests"),
@@ -700,8 +751,12 @@ async test "review is only consulted while planning" {
 }
 
 ///|
-async test "AutoAcceptReview is the unattended (yolo) posture" {
-  let plan = PlanMode(review=Some(AutoAcceptReview::{ } as &PlanReviewSource))
+/// Product rule pin: the package itself never decides implementation — also
+/// not for an unattended (Yolo) host. There is no auto-accepting review
+/// source; with none wired, the exit call waits for the user as
+/// ReadyForApproval (the approve command alone implements).
+async test "without a review source the exit tool waits for the user" {
+  let plan = plan_mode_with_reads()
   plan.start()
   let call = exit_call("1. unattended")
   match plan.before_tool(call) {
@@ -709,10 +764,14 @@ async test "AutoAcceptReview is the unattended (yolo) posture" {
     other => fail("expected Approve, got \{other}")
   }
   match plan.execute("exit_plan_mode", call) {
-    @posoco.ToolOutcome::Success(..) => ()
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("submitted for user approval"))
     other => fail("expected Success, got \{other}")
   }
-  assert_eq(plan.status(), PlanStatus::Off)
+  assert_eq(
+    plan.status(),
+    PlanStatus::ReadyForApproval(name="test plan", plan="1. unattended"),
+  )
 }
 
 ///|
@@ -792,7 +851,7 @@ async test "without model entry only the exit tool is reported" {
 async test "plan.reject without a reason fails" {
   let plan = plan_mode_with_reads()
   plan.start()
-  assert_true(plan.submit_plan("the plan"))
+  assert_true(plan.submit_plan("test plan", "the plan"))
   for
     args in [Json::null(), Json::string(""), Json::object(Map::from_array([]))] {
     match plan.invoke("plan.reject", args) {
@@ -802,7 +861,10 @@ async test "plan.reject without a reason fails" {
     }
   }
   // State untouched: still awaiting approval.
-  assert_eq(plan.status(), PlanStatus::ReadyForApproval(plan="the plan"))
+  assert_eq(
+    plan.status(),
+    PlanStatus::ReadyForApproval(name="test plan", plan="the plan"),
+  )
 }
 
 ///|
@@ -814,7 +876,7 @@ async test "plan.dismiss discards the pending plan and exits" {
     _ => fail("expected Failure with nothing pending")
   }
   plan.start()
-  assert_true(plan.submit_plan("the plan"))
+  assert_true(plan.submit_plan("test plan", "the plan"))
   match plan.invoke("plan.dismiss", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, ..) =>
       assert_true(feedback.contains("dismissed"))
@@ -870,14 +932,15 @@ async test "plan transitions publish status facts on the bus" {
   )
   // The exemption report is the first event; status ops follow the devkit
   // protocol on the status topic: segment "plan" (priority 10, value
-  // "Plan") while active, unregister once off.
+  // "Plan", or "Plan: <name>" once a plan waits) while active, unregister
+  // once off.
   plan.start()
-  assert_true(plan.submit_plan("p"))
+  assert_true(plan.submit_plan("test plan", "p"))
   ignore(plan.approve())
   plan.start()
   plan.stop()
   plan.start()
-  assert_true(plan.submit_plan("p2"))
+  assert_true(plan.submit_plan("test plan", "p2"))
   match plan.invoke("plan.dismiss", Json::null()) {
     @posoco.CommandOutcome::Success(..) => ()
     _ => fail("expected Success")
@@ -893,14 +956,21 @@ async test "plan transitions publish status facts on the bus" {
     value=Some("Plan"),
     color=Some("accent"),
   )
+  let registered_named = @devkit.Register(
+    segment="plan",
+    label=None,
+    priority=10,
+    value=Some("Plan: test plan"),
+    color=Some("accent"),
+  )
   assert_eq(ops.length(), 8)
   assert_eq(ops[0], registered)
-  assert_eq(ops[1], registered)
+  assert_eq(ops[1], registered_named)
   assert_eq(ops[2], @devkit.Unregister(segment="plan"))
   assert_eq(ops[3], registered)
   assert_eq(ops[4], @devkit.Unregister(segment="plan"))
   assert_eq(ops[5], registered)
-  assert_eq(ops[6], registered)
+  assert_eq(ops[6], registered_named)
   assert_eq(ops[7], @devkit.Unregister(segment="plan"))
 }
 

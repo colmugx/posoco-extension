@@ -87,8 +87,10 @@ ecosystem uses): `Accept` approves and leaves plan mode together,
 (the type has no reasonless revise), and `Dismiss` cancels the plan and
 stops the turn (best-effort — see the state machine). A review that raises
 surfaces as a tool-reported error and the turn stays in planning.
-`AutoAcceptReview` is the unattended (Yolo) posture: the plan auto-accepts
-while every plan rule stays enforced. Without a source the flow stays
+Nothing in this package decides for the user whether a plan is implemented —
+an unattended (Yolo) permission posture included; there is no auto-accepting
+review source, and `PlanReviewSource` implementations speak for the user.
+Hosts that run unattended simply wire no source and the flow stays
 command-driven (`ReadyForApproval` + `plan.approve` / `plan.reject` /
 `plan.dismiss`).
 

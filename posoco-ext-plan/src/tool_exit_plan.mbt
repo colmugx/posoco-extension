@@ -155,7 +155,10 @@ async fn PlanMode::execute_exit(
   if self.status is Planning {
     match self.review {
       Some(source) => {
-        let decision = source.review(PlanReviewRequest::{ plan, }) catch {
+        let decision = source.review(PlanReviewRequest::{
+          name: plan_name,
+          plan,
+        }) catch {
           err =>
             return @posoco.ToolOutcome::ToolReportedError(
               content="\{name}: plan review failed (\{err.to_string()}). Still in plan mode — call '\{name}' again once the review is available.",
@@ -194,7 +197,7 @@ async fn PlanMode::execute_exit(
       None => ()
     }
   }
-  ignore(self.submit_plan(plan))
+  ignore(self.submit_plan(plan_name, plan))
   let saved = self.save_final_plan(plan_name, plan)
   let saved_line = match saved {
     Some(path) => "\n\nSaved to \{path}."

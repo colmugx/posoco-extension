@@ -1,12 +1,14 @@
 ///|
 fn PlanMode::status_json(self : PlanMode) -> Json {
-  let (status, plan) = match self.status {
-    Off => ("off", Json::null())
-    Planning => ("planning", Json::null())
-    ReadyForApproval(plan~) => ("ready_for_approval", Json::string(plan))
+  let (status, name, plan) = match self.status {
+    Off => ("off", Json::null(), Json::null())
+    Planning => ("planning", Json::null(), Json::null())
+    ReadyForApproval(name~, plan~) =>
+      ("ready_for_approval", Json::string(name), Json::string(plan))
   }
   Json::object({
     "status": Json::string(status),
+    "name": name,
     "plan": plan,
     "allowed_tools": Json::array(self.config.allowed_tools.map(Json::string)),
   })
@@ -190,9 +192,9 @@ pub impl @posoco.CommandPort for PlanMode with fn invoke(
       }
     "plan.approve" =>
       match self.approve() {
-        Some(_) =>
+        Some((name, _plan)) =>
           @posoco.CommandOutcome::Success(
-            feedback="plan approved — plan mode off, execution may proceed",
+            feedback="plan approved '\{name}' — plan mode off, execution may proceed",
             structured=Some(self.status_json()),
             ui_hint=Some(@posoco.UiHint::Toast),
           )

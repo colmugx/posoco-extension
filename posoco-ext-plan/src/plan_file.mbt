@@ -50,7 +50,7 @@ fn sanitize_plan_name(name : String) -> String {
   // previous_dash == true at the end also means no trailing dash was
   // written; the only leftover case is an all-dash slug like "-" itself.
   let bounded = if slug.length() > 80 {
-    slug.sub(end=80).to_owned()
+    slug.exact_view(end=80).to_owned()
   } else {
     slug
   }

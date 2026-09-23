@@ -17,13 +17,18 @@ pub(open) trait PlanReviewSource {
 
 ///|
 pub(all) struct PlanReviewRequest {
-  /// The full submitted plan text.
+  /// Model-chosen plan name (validated non-empty; also the saved file name
+  /// stem). Host UIs should surface it — it identifies the plan better than
+  /// a content preview.
+  name : String
+  /// The full submitted plan text. Never truncated by core; previewing,
+  /// collapsing, and markdown rendering are host-UI concerns.
   plan : String
 }
 
 ///|
 pub impl Show for PlanReviewRequest with fn to_string(self : PlanReviewRequest) -> String {
-  "PlanReviewRequest(\{self.plan.length()} chars)"
+  "PlanReviewRequest(name=\{self.name}, \{self.plan.length()} chars)"
 }
 
 ///|
@@ -50,14 +55,7 @@ pub impl Show for PlanReviewDecision with fn to_string(
 }
 
 ///|
-/// Always accepts — the unattended (Yolo) posture. Plan rules still apply
-/// while planning; only the approval is automatic.
-pub(all) struct AutoAcceptReview {}
-
-///|
-pub impl PlanReviewSource for AutoAcceptReview with fn review(
-  _self : AutoAcceptReview,
-  _request : PlanReviewRequest,
-) -> PlanReviewDecision {
-  Accept
-}
+/// Product rule: an implementation of this trait speaks for the user, so
+/// nothing here may auto-derive a verdict — also in an unattended (Yolo)
+/// permission posture. Without a source, `exit_plan_mode` records
+/// `ReadyForApproval` and only an explicit `plan.approve` implements.

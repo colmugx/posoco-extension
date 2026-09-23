@@ -28,7 +28,7 @@
 pub(all) enum PlanStatus {
   Off
   Planning
-  ReadyForApproval(plan~ : String)
+  ReadyForApproval(name~ : String, plan~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -36,7 +36,10 @@ pub impl Show for PlanStatus with fn to_string(self : PlanStatus) -> String {
   match self {
     Off => "Off"
     Planning => "Planning"
-    ReadyForApproval(plan~) => "ReadyForApproval(plan=\{plan})"
+    // The plan text stays out of the rendering — a status line identifies
+    // the pending plan by name, not by dumping its body.
+    ReadyForApproval(name~, plan~) =>
+      "ReadyForApproval(name=\{name}, plan=\{plan.length()} chars)"
   }
 }
 
@@ -207,13 +210,24 @@ fn PlanMode::publish_status(self : PlanMode) -> Unit {
             source="posoco_ext_plan",
             segment="plan",
           )
-        _ =>
+        Planning =>
           @devkit.publish_status_register(
             bus,
             source="posoco_ext_plan",
             segment="plan",
             priority=10,
             value="Plan",
+            color="accent",
+          )
+        // While a plan waits, the status bar names it — the wait can span
+        // turns, and a bare "Plan" stops telling the user what is pending.
+        ReadyForApproval(name~, ..) =>
+          @devkit.publish_status_register(
+            bus,
+            source="posoco_ext_plan",
+            segment="plan",
+            priority=10,
+            value="Plan: \{name}",
             color="accent",
           )
       }
@@ -259,11 +273,11 @@ fn PlanMode::toggle(self : PlanMode) -> Unit {
 ///|
 /// Record a plan submitted through the exit tool. Only meaningful while
 /// planning; returns false when plan mode is Off.
-fn PlanMode::submit_plan(self : PlanMode, plan : String) -> Bool {
+fn PlanMode::submit_plan(self : PlanMode, name : String, plan : String) -> Bool {
   match self.status {
     Off => false
     _ => {
-      self.status = ReadyForApproval(plan~)
+      self.status = ReadyForApproval(name~, plan~)
       self.publish_status()
       true
     }
@@ -272,13 +286,13 @@ fn PlanMode::submit_plan(self : PlanMode, plan : String) -> Bool {
 
 ///|
 /// Approve the pending plan: ReadyForApproval → Off. Returns the approved
-/// plan, or None when there is nothing to approve.
-fn PlanMode::approve(self : PlanMode) -> String? {
+/// plan's (name, text), or None when there is nothing to approve.
+fn PlanMode::approve(self : PlanMode) -> (String, String)? {
   match self.status {
-    ReadyForApproval(plan~) => {
+    ReadyForApproval(name~, plan~) => {
       self.status = Off
       self.publish_status()
-      Some(plan)
+      Some((name, plan))
     }
     _ => None
   }
@@ -329,7 +343,7 @@ fn PlanMode::is_tool_allowed(self : PlanMode, name : String) -> Bool {
 ///|
 fn tool_pattern_matches(pattern : String, name : String) -> Bool {
   if pattern.has_suffix("*") {
-    let prefix = pattern.sub(end=pattern.length() - 1)
+    let prefix = pattern.exact_view(end=pattern.length() - 1)
     prefix.length() > 0 && name.has_prefix(prefix)
   } else {
     pattern == name

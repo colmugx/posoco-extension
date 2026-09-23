@@ -220,8 +220,8 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_model(
         plan_envelope(kind="planning", content=build_plan_prompt(self.config)),
       )
     }
-    ReadyForApproval(plan~) => {
-      self.prev_status = ReadyForApproval(plan~)
+    ReadyForApproval(name~, plan~) => {
+      self.prev_status = ReadyForApproval(name~, plan~)
       inject_or_replace_plan_reminder(
         messages,
         plan_envelope(
