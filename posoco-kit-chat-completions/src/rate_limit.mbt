@@ -404,7 +404,7 @@ fn scan_relative_group(text : String, j : Int) -> (Int64, Int)? {
   if k == unit_start {
     return None
   }
-  let unit = text.sub(start=unit_start, end=k).to_owned()
+  let unit = text.exact_view(start=unit_start, end=k).to_owned()
   let unit_ms : Int64 = if unit == "hour" || unit == "hours" || unit == "h" {
     3600000L
   } else if unit == "minute" ||
@@ -607,7 +607,7 @@ fn window_length_ms(text : String) -> Int64? {
     if i == unit_start {
       continue
     }
-    let unit = text.sub(start=unit_start, end=i).to_owned()
+    let unit = text.exact_view(start=unit_start, end=i).to_owned()
     let unit_ms : Int64 = if unit == "hour" || unit == "hours" {
       3600000L
     } else if unit == "minute" || unit == "minutes" {
