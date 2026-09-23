@@ -347,7 +347,7 @@ fn render_astgrep_result(
       Some((body, shown, total)) => {
         let footer = if shown < total { "… +\{total - shown} matches" } else { "" }
         let content = if footer == "" {
-          body.trim_end().to_owned()
+          body.trim_end(chars="\n").to_owned()
         } else if body == "" {
           footer
         } else {
