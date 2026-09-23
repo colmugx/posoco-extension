@@ -162,7 +162,7 @@ async test "read_pages_with_line_numbers_and_footer" {
       Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
         inspect(
           content,
-          content="L1: line-1\nL2: line-2\nL3: line-3\n… 7 more lines; call read with offset=4",
+          content="1|line-1\n2|line-2\n3|line-3\n… +7 lines; next=4",
         )
         assert_true(structured is Some(_))
       }
@@ -188,7 +188,7 @@ async test "read_offset_starts_at_requested_line" {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
         inspect(
           content,
-          content="L4: line-4\nL5: line-5\n… 5 more lines; call read with offset=6",
+          content="4|line-4\n5|line-5\n… +5 lines; next=6",
         )
       _ => fail("expected offset read to succeed")
     }
@@ -210,7 +210,7 @@ async test "read_negative_offset_returns_tail_without_footer" {
     )
     match outcome {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        inspect(content, content="L8: line-8\nL9: line-9\nL10: line-10")
+        inspect(content, content="8|line-8\n9|line-9\n10|line-10")
       _ => fail("expected tail read to succeed")
     }
   }
@@ -252,7 +252,7 @@ async test "read_empty_file_is_a_notice" {
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        inspect(content, content="(file exists but is empty)")
+        inspect(content, content="(empty)")
       _ => fail("expected empty read to succeed with a notice")
     }
   }
@@ -271,8 +271,8 @@ async test "read_truncates_long_lines_with_marker" {
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
-        assert_true(content.contains("… (line truncated)"))
-        assert_true(content.has_prefix("L1: "))
+        assert_true(content.contains("…[cut]"))
+        assert_true(content.has_prefix("1|"))
         assert_false(content.contains("a".repeat(2500)))
       }
       _ => fail("expected long-line read to succeed with truncation")
@@ -294,9 +294,9 @@ async test "read_byte_cap_cuts_implicit_page_with_footer" {
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
-        assert_true(content.has_prefix("L1: "))
-        assert_true(content.contains("more lines; call read with offset="))
-        assert_false(content.contains("L60: "))
+        assert_true(content.has_prefix("1|"))
+        assert_true(content.contains("lines; next="))
+        assert_false(content.contains("60|"))
         // structured metadata must reflect the cut
         match structured {
           Some(Object(meta)) => assert_true(meta.get("truncated") is Some(True))
@@ -310,9 +310,9 @@ async test "read_byte_cap_cuts_implicit_page_with_footer" {
 
 ///|
 #cfg(target="native")
-async test "read_explicit_range_over_byte_cap_is_loud" {
+async test "read_explicit_range_over_byte_cap_returns_partial_page" {
   @async.with_task_group() <| group => {
-    let dir = @fs.tmpdir(prefix="posoco-read-explode")
+    let dir = @fs.tmpdir(prefix="posoco-read-explicit-cap")
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
@@ -324,9 +324,15 @@ async test "read_explicit_range_over_byte_cap_is_loud" {
       read_call_args(path, limit=60),
     )
     match outcome {
-      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
-        assert_true(message.contains("exceeds"))
-      _ => fail("expected explicit oversized range to raise")
+      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+        assert_true(content.has_prefix("1|"))
+        assert_true(content.contains("lines; next="))
+        match structured {
+          Some(Object(meta)) => assert_true(meta.get("truncated") is Some(True))
+          _ => fail("expected truncated structured metadata")
+        }
+      }
+      _ => fail("expected oversized explicit range to return a partial page")
     }
   }
 }
@@ -342,12 +348,12 @@ async test "read_rejects_zero_offset_and_nonpositive_limit" {
     let path = write_ten_lines(dir)
     match run_read(ReadTools::ReadTools(), read_call_args(path, offset=0)) {
       Err(@posoco.RuntimeError::UnknownTool(message)) =>
-        assert_true(message.contains("'offset' must be a nonzero"))
+        assert_true(message.contains("'offset' must be nonzero"))
       _ => fail("expected zero offset to be rejected")
     }
     match run_read(ReadTools::ReadTools(), read_call_args(path, limit=0)) {
       Err(@posoco.RuntimeError::UnknownTool(message)) =>
-        assert_true(message.contains("'limit' must be greater than zero"))
+        assert_true(message.contains("'limit' must be > 0"))
       _ => fail("expected zero limit to be rejected")
     }
   }
@@ -366,7 +372,7 @@ async test "read_normalizes_crlf" {
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        inspect(content, content="L1: alpha\nL2: beta")
+        inspect(content, content="1|alpha\n2|beta")
       _ => fail("expected crlf read to succeed")
     }
   }
@@ -590,13 +596,13 @@ async test "read_delegated_fs_serves_buffer_and_records_reads" {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
         inspect(
           content,
-          content="L1: buf-1\nL2: buf-2\nL3: buf-3\n… 7 more lines; call read with offset=4",
+          content="1|buf-1\n2|buf-2\n3|buf-3\n… +7 lines; next=4",
         )
       _ => fail("expected delegated paged read to succeed")
     }
     match run_read(tools, read_call_args(path, offset=-2)) {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        inspect(content, content="L9: buf-9\nL10: buf-10")
+        inspect(content, content="9|buf-9\n10|buf-10")
       _ => fail("expected delegated tail read to succeed")
     }
     assert_eq(fake.reads.length(), 2)
@@ -643,4 +649,19 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
       _ => fail("expected missing delegated file to be a reported error")
     }
   }
+}
+
+
+///|
+test "read_format_page_uses_compact_prefix_and_marker" {
+  let (body, returned, cut) = format_read_page(
+    ["alpha", "b".repeat(READ_LINE_CHAR_CAP + 100)],
+    9,
+    READ_BYTE_CAP,
+  )
+  assert_eq(returned, 2)
+  assert_false(cut)
+  assert_true(body.has_prefix("9|alpha\n10|"))
+  assert_true(body.has_suffix("…[cut]"))
+  assert_false(body.contains("L9: "))
 }
