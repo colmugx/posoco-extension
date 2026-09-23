@@ -1,0 +1,14 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-kind" @kind,
+  "colmugx/posoco-ext-permission" @permission,
+  "colmugx/posoco-devkit" @devkit,
+  "moonbitlang/core/json",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+warnings = "-unused_package"

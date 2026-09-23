@@ -1,0 +1,140 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-subagent"
+
+import {
+  "colmugx/posoco-ext-kind",
+  "colmugx/posoco-ext-permission",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn assemble_system_prompt(@posoco-ext-kind.KindSpec, instructions? : String) -> String raise PromptAssemblyError
+
+pub fn parse_subagent_config(String) -> SubagentConfig raise SubagentConfigError
+
+pub fn render_swarm_task(String, String) -> String
+
+pub fn task_status_to_terminal(status~ : @port.TaskStatus) -> TerminalState
+
+pub fn terminal_outcome(state~ : TerminalState, kind~ : String, child_session~ : String, result_text~ : String, turns~ : Int, input_tokens~ : Int, output_tokens~ : Int) -> @kernel.ToolOutcome
+
+pub fn terminal_state_word(TerminalState) -> String
+
+// Errors
+pub(all) suberror BatchPlanError {
+  ItemsEmpty
+  TooManyItems(limit~ : Int)
+  DuplicateKey(key~ : String)
+  InvalidTimeout(key~ : String)
+} derive(Eq, @debug.Debug)
+
+pub(all) suberror PromptAssemblyError {
+  InstructionsTooLong(String)
+}
+
+pub(all) suberror SubagentConfigError {
+  Malformed(String)
+  Invalid(String)
+}
+
+// Types and methods
+pub struct AutoApprove {
+}
+pub fn AutoApprove::AutoApprove() -> Self
+pub async fn AutoApprove::ask(Self, @posoco-ext-permission.ApprovalRequest) -> @posoco-ext-permission.ApprovalDecision
+pub impl @posoco-ext-permission.ApprovalSource for AutoApprove
+
+pub(all) struct BatchItem {
+  key : String
+  child_session_id : String
+  task : String
+  kind_name : String
+  selection : ResolvedSelection
+  tools : Array[String]
+  permission : @posoco-ext-permission.PermissionMode
+  mode : @port.TaskMode
+  timeout_ms : Int
+  resuming : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) struct BatchPlan {
+  items : Array[BatchItem]
+  wave_cap : Int
+} derive(@debug.Debug)
+pub fn BatchPlan::build(config~ : SubagentConfig, items~ : Array[BatchItem]) -> Self raise BatchPlanError
+
+pub(all) struct BatchResult {
+  terminals : Map[String, TerminalState]
+  completed : Int
+  failed : Int
+  timed_out : Int
+  cancelled : Int
+} derive(@debug.Debug)
+pub fn BatchResult::summary(Self) -> String
+
+pub(all) struct BatchState {
+  mut pending : Array[String]
+  mut receipts : Map[String, String]
+  mut terminals : Map[String, TerminalState]
+} derive(@debug.Debug)
+pub fn BatchState::BatchState(plan~ : BatchPlan) -> Self
+pub fn BatchState::is_settled(Self) -> Bool
+pub fn BatchState::on_accepted(Self, key~ : String, receipt~ : @port.TaskReceipt) -> Unit
+pub fn BatchState::on_outcome(Self, outcome~ : @port.TaskOutcome) -> Unit
+pub fn BatchState::result(Self) -> BatchResult
+
+pub(all) struct ConfigModel {
+  slot : String
+  efforts : Array[String]
+  default_effort : String?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ResolvedSelection {
+  slot : String
+  effort : String?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpawnLedger {
+  limit : Int
+  labels : Array[String]
+} derive(@debug.Debug)
+pub fn SpawnLedger::SpawnLedger(limit? : Int) -> Self
+pub fn SpawnLedger::acquired(Self) -> Array[String]
+pub fn SpawnLedger::remaining(Self) -> Int
+pub fn SpawnLedger::try_acquire(Self, String) -> Bool
+
+pub(all) struct SubagentConfig {
+  models : Array[ConfigModel]
+  default_slot : String?
+  limits : SubagentLimits
+} derive(Eq, @debug.Debug)
+pub fn SubagentConfig::defaults() -> Self
+pub fn SubagentConfig::resolve(Self, model? : String?, effort? : String?, parent_slot~ : String, parent_effort? : String?) -> ResolvedSelection raise SubagentConfigError
+
+pub(all) struct SubagentEvent {
+  child_session : String
+  kind : String
+  event : @types.TurnEvent
+} derive(@debug.Debug)
+
+pub(all) struct SubagentLimits {
+  swarm_items : Int
+  concurrency : Int
+  global_concurrency : Int
+  timeout_ms : Int
+  spawn_budget : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum TerminalState {
+  Completed
+  Failed(reason~ : String)
+  TimedOut
+  Cancelled
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
