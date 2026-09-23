@@ -125,11 +125,7 @@ test "meta_tool_descriptions_stay_compact" {
   let defs = meta_tool_defs()
   assert_true(defs[0].description.length() < 140)
   assert_true(defs[1].description.length() < 100)
-  match defs[0].input_schema {
-    Json::Object(schema) =>
-      assert_true(schema.stringify().length() < 300)
-    _ => fail("expected tool_list object schema")
-  }
+  assert_true(defs[0].input_schema.stringify().length() < 300)
 }
 
 ///|
