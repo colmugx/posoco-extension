@@ -1,8 +1,9 @@
 ///|
 /// The two model-visible meta tools and their argument parsing.
 ///
-/// Descriptions are load-bearing: they teach the discovery workflow
-/// (tool_list → schema → tool_execute) without any other prompt surface.
+/// Keep descriptions terse: resident discovery guidance lives in the stable
+/// system-prompt section, while these definitions only need to identify the
+/// action and its arguments.
 
 ///|
 fn meta_tool_defs() -> Array[@posoco.ToolDef] {
@@ -11,14 +12,14 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("tool_list"),
-      description: "Browse or search the deferred (folded) tool catalog. Deferred tools are NOT loaded into this conversation; this is how you discover them. Without arguments, lists every folded group. With `keyword`, only the groups whose id or tools match — and each match returns that group's tools with name, description and full JSON input schema, everything needed to call one. Call results via tool_execute.",
+      description: "Discover deferred tools and their schemas. Omit `keyword` to list all groups; otherwise search groups.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "keyword": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "Space-separated keywords matched against extension ids and tool names/descriptions; omit to list every folded group",
+              "Space-separated search terms; omit to list all groups",
             ),
           }),
         }),
@@ -29,20 +30,20 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
     },
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("tool_execute"),
-      description: "Execute a deferred (folded) tool by name. `tool` must be a name returned by tool_list; `arguments` must match that tool's JSON schema as returned by tool_list. The gateway routes the call to the tool's provider and returns the outcome verbatim.",
+      description: "Execute a deferred tool using a schema returned by `tool_list`.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "tool": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "Exact deferred tool name as returned by tool_list",
+              "Deferred tool name from tool_list",
             ),
           }),
           "arguments": Json::object({
             "type": Json::string("object"),
             "description": Json::string(
-              "Arguments object matching the deferred tool's input_schema from tool_list; omit or pass {} when the tool takes no arguments",
+              "Arguments matching the tool schema; omit for no arguments",
             ),
           }),
         }),
