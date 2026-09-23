@@ -1,10 +1,3 @@
-# posoco-extension PR CI.
-#
-# Check extension commits inside the real integration workspace:
-# posoco@main -> external/cetas -> extension. This mirrors cetas CI, so
-# MoonBit workspace resolution and nested gitlinks match the environment
-# where these extensions are consumed.
-
 name: posoco-extension ci
 
 on:
@@ -14,26 +7,10 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      EXTENSION_SHA: ${{ github.event.pull_request.head.sha }}
-      EXTENSION_BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
     steps:
-      - name: Checkout posoco parent (recursively)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          repository: colmugx/posoco
-          ref: main
-          path: posoco
-          submodules: recursive
-
-      - name: Switch extension submodule to event commit
-        shell: bash
-        working-directory: posoco/external/cetas/extension
-        run: |
-          git fetch --depth=1 origin "${EXTENSION_BASE_SHA}" "${EXTENSION_SHA}"
-          git checkout "${EXTENSION_SHA}"
-          git submodule update --init --recursive
 
       - name: Install moon (Unix)
         run: |
@@ -43,35 +20,11 @@ jobs:
       - name: moon version
         run: moon version --all
 
-      - name: Check changed MoonBit modules
-        shell: bash
-        working-directory: posoco/external/cetas/extension
-        run: |
-          set -euo pipefail
+      - name: moon update
+        run: moon update
 
-          mapfile -t modules < <(
-            git diff --name-only "${EXTENSION_BASE_SHA}" "${EXTENSION_SHA}" |
-              awk -F/ 'NF > 1 { print $1 }' |
-              sort -u
-          )
+      - name: moon check (native)
+        run: moon check --target native --output-json
 
-          checked=0
-          for module in "${modules[@]}"; do
-            if [[ ! -f "$module/moon.mod" ]]; then
-              continue
-            fi
-
-            checked=1
-            echo "::group::$module"
-            (
-              cd "$module"
-              moon update
-              moon check --target native --output-json
-              moon check --target js --output-json
-            )
-            echo "::endgroup::"
-          done
-
-          if [[ "$checked" -eq 0 ]]; then
-            echo "No changed MoonBit modules."
-          fi
+      - name: moon check (js)
+        run: moon check --target js --output-json
