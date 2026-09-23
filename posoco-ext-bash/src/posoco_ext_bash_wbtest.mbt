@@ -128,7 +128,7 @@ test "bash_model_output_reports_nonzero_exit_once" {
 test "bash_model_output_caps_long_output_and_keeps_head_and_tail" {
   let raw = "HEAD-" + "x".repeat(40_000) + "-TAIL"
   let out = bash_model_output(raw, 0)
-  assert_eq(out.length(), BASH_OUTPUT_CHAR_CAP)
+  assert_eq(bash_char_count(out), BASH_OUTPUT_CHAR_CAP)
   assert_true(out.has_prefix("HEAD-"))
   assert_true(out.contains("…[cut]…"))
   assert_true(out.has_suffix("-TAIL"))
@@ -138,7 +138,7 @@ test "bash_model_output_caps_long_output_and_keeps_head_and_tail" {
 test "bash_model_output_counts_unicode_as_characters" {
   let raw = "头" + "界".repeat(40_000) + "尾"
   let out = bash_model_output(raw, 0)
-  assert_eq(out.length(), BASH_OUTPUT_CHAR_CAP)
+  assert_eq(bash_char_count(out), BASH_OUTPUT_CHAR_CAP)
   assert_true(out.has_prefix("头"))
   assert_true(out.has_suffix("尾"))
 }
