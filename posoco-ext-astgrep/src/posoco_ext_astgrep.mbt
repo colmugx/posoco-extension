@@ -70,7 +70,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           "pattern": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "AST pattern; supports $NAME and $$BODY meta-variables",
+              "AST pattern; supports $NAME and $$$BODY meta-variables",
             ),
           }),
           "lang": Json::object({
