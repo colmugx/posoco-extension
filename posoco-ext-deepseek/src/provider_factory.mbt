@@ -45,13 +45,13 @@ fn deepseek_endpoint_parts(url : String) -> (String, String) {
     None => (url, "")
     Some(protocol_end) => {
       let after_start = protocol_end + 3
-      let after = url.sub(start=after_start)
+      let after = url.exact_view(start=after_start)
       match after.find("/") {
         None => (url, "")
         Some(slash) => {
           let host_end = after_start + slash
-          let clean = url.sub(end=host_end).to_owned()
-          let prefix = after.sub(start=slash).to_owned()
+          let clean = url.exact_view(end=host_end).to_owned()
+          let prefix = after.exact_view(start=slash).to_owned()
           match prefix.strip_suffix("/") {
             Some(value) => (clean, value.to_owned())
             None => (clean, prefix)
