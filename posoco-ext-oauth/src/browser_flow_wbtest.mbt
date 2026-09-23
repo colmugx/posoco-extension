@@ -134,7 +134,7 @@ pub impl AuthPromptInteraction for ScriptedPromptInteraction with fn prompt(
       AuthPromptRequest::Select(message~, ..) => message
     }
     let url = match message.find("https://") {
-      Some(pos) => message.sub(start=pos).to_owned()
+      Some(pos) => message.exact_view(start=pos).to_owned()
       None => message
     }
     return url + "&code=" + self.echo_url_code

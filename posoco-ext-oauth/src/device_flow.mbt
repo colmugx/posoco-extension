@@ -147,9 +147,9 @@ fn parse_positive_integer(value : Double) -> Int? {
 /// particular, never hand a javascript:/file: or empty-host URI to a host UI.
 fn is_trusted_http_uri(value : String) -> Bool {
   let host = if value.has_prefix("https://") {
-    value.sub(start=8)
+    value.exact_view(start=8)
   } else if value.has_prefix("http://") {
-    value.sub(start=7)
+    value.exact_view(start=7)
   } else {
     return false
   }

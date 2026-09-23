@@ -144,10 +144,10 @@ fn rewrite_redirect_port(
   let needle = ":" + from_port.to_string()
   match redirect_uri.find(needle) {
     Some(pos) =>
-      redirect_uri.sub(end=pos).to_owned() +
+      redirect_uri.exact_view(end=pos).to_owned() +
       ":" +
       to_port.to_string() +
-      redirect_uri.sub(start=pos + needle.length()).to_owned()
+      redirect_uri.exact_view(start=pos + needle.length()).to_owned()
     None => redirect_uri
   }
 }
@@ -226,7 +226,7 @@ async fn receive_callback(
 fn parse_pasted_authorization(input : String) -> (String, String)? {
   let text = input.trim().to_owned()
   let query = match text.find("?") {
-    Some(qmark) => text.sub(start=qmark + 1).to_owned()
+    Some(qmark) => text.exact_view(start=qmark + 1).to_owned()
     None => text
   }
   let code = extract_query_param(query, "code")
@@ -247,7 +247,7 @@ fn parse_pasted_authorization(input : String) -> (String, String)? {
 /// native callback impl and the paste parser share this.
 fn extract_query_param(path : String, key : String) -> String? {
   let query = match path.find("?") {
-    Some(qmark) => path.sub(start=qmark + 1).to_owned()
+    Some(qmark) => path.exact_view(start=qmark + 1).to_owned()
     None => path
   }
   let prefix = key + "="
@@ -259,9 +259,9 @@ fn extract_query_param(path : String, key : String) -> String? {
       None => return None
     }
   }
-  let rest = query.sub(start~).to_owned()
+  let rest = query.exact_view(start~).to_owned()
   match rest.find("&") {
-    Some(amp) => Some(rest.sub(end=amp).to_owned())
+    Some(amp) => Some(rest.exact_view(end=amp).to_owned())
     None => Some(rest)
   }
 }
