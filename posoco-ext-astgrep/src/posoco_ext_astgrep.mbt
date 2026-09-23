@@ -81,15 +81,11 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           }),
           "path": Json::object({
             "type": Json::string("string"),
-            "description": Json::string(
-              "File or directory; default '.'",
-            ),
+            "description": Json::string("File or directory; default '.'"),
           }),
           "glob": Json::object({
             "type": Json::string("string"),
-            "description": Json::string(
-              "File glob, e.g. '*.ts'",
-            ),
+            "description": Json::string("File glob, e.g. '*.ts'"),
           }),
           "max_matches": Json::object({
             "type": Json::string("integer"),
@@ -112,36 +108,22 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
 fn extract_astgrep_args(args : Json) -> Result[AstGrepQuery, String] {
   let obj = match args {
     Object(obj) => obj
-    _ =>
-      return Err(
-        "astgrep: arguments must be an object",
-      )
+    _ => return Err("astgrep: arguments must be an object")
   }
   let pattern = match obj.get("pattern") {
     Some(String(s)) =>
       if s == "" {
-        return Err(
-          "astgrep: 'pattern' must be non-empty",
-        )
+        return Err("astgrep: 'pattern' must be non-empty")
       } else {
         s
       }
-    Some(_) =>
-      return Err(
-        "astgrep: 'pattern' must be a string",
-      )
-    None =>
-      return Err(
-        "astgrep: missing 'pattern'",
-      )
+    Some(_) => return Err("astgrep: 'pattern' must be a string")
+    None => return Err("astgrep: missing 'pattern'")
   }
   let lang = match obj.get("lang") {
     Some(String(s)) => Some(s)
     None | Some(Null) => None
-    Some(_) =>
-      return Err(
-        "astgrep: 'lang' must be a string",
-      )
+    Some(_) => return Err("astgrep: 'lang' must be a string")
   }
   let path = match obj.get("path") {
     Some(String(s)) => Some(s)
@@ -301,7 +283,11 @@ fn astgrep_render_stream(
     }
     let file = @devkit.sanitize_path(item.file)
     let prefix = if file == last_file { "" } else { file + "\n" }
-    let record = prefix + item.line.to_string() + "|" + astgrep_excerpt(item.text) + "\n"
+    let record = prefix +
+      item.line.to_string() +
+      "|" +
+      astgrep_excerpt(item.text) +
+      "\n"
     let record_bytes = @utf8.encode(record).length()
     if shown > 0 && bytes + record_bytes > ASTGREP_OUTPUT_BYTE_CAP {
       break
@@ -345,7 +331,11 @@ fn render_astgrep_result(
     }
     match astgrep_render_stream(stdout, max_matches) {
       Some((body, shown, total)) => {
-        let footer = if shown < total { "… +\{total - shown} matches" } else { "" }
+        let footer = if shown < total {
+          "… +\{total - shown} matches"
+        } else {
+          ""
+        }
         let content = if footer == "" {
           body.trim_end(chars="\n").to_owned()
         } else if body == "" {

@@ -69,9 +69,8 @@ async test "astgrep_missing_pattern_is_tool_reported_error" {
     e => Err(e)
   }
   match result {
-    Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
+    Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
       assert_eq(content, "astgrep: missing 'pattern'")
-    }
     _ => fail("missing pattern must be a model-visible ToolReportedError")
   }
 }
@@ -104,8 +103,8 @@ test "astgrep_build_args_full" {
     Some("*.ts"),
   )
   assert_eq(args, [
-    "run", "-p", "fn $NAME($$$ARGS) { $$$BODY }", "--json=stream", "-l", "ts",
-    "--globs", "*.ts", "src",
+    "run", "-p", "fn $NAME($$$ARGS) { $$$BODY }", "--json=stream", "-l", "ts", "--globs",
+    "*.ts", "src",
   ])
 }
 
@@ -192,8 +191,7 @@ async test "astgrep_nonzero_exit_reports_stderr_with_sanitized_base" {
 
 ///|
 async test "astgrep_json_stream_renders_compact_file_line_excerpts" {
-  let stdout =
-    "{\"text\":\"foo(1)\",\"range\":{\"start\":{\"line\":2,\"column\":1}},\"file\":\"src/a.ts\"}\n" +
+  let stdout = "{\"text\":\"foo(1)\",\"range\":{\"start\":{\"line\":2,\"column\":1}},\"file\":\"src/a.ts\"}\n" +
     "{\"text\":\"foo(2)\\n  .bar()\",\"range\":{\"start\":{\"line\":6,\"column\":0}},\"file\":\"src/b.ts\"}\n"
   let fake : FakeAstGrepSpawn = {
     results: [(0, stdout, "")],
@@ -223,8 +221,7 @@ async test "astgrep_json_stream_renders_compact_file_line_excerpts" {
 
 ///|
 async test "astgrep_max_matches_caps_results_with_short_footer" {
-  let stdout =
-    "{\"text\":\"a()\",\"range\":{\"start\":{\"line\":0}},\"file\":\"a.ts\"}\n" +
+  let stdout = "{\"text\":\"a()\",\"range\":{\"start\":{\"line\":0}},\"file\":\"a.ts\"}\n" +
     "{\"text\":\"b()\",\"range\":{\"start\":{\"line\":1}},\"file\":\"b.ts\"}\n" +
     "{\"text\":\"c()\",\"range\":{\"start\":{\"line\":2}},\"file\":\"c.ts\"}\n"
   let fake : FakeAstGrepSpawn = {
@@ -290,11 +287,12 @@ test "astgrep_error_detail_is_bounded" {
 async test "astgrep_anchored_base_resolves_into_positional_path" {
   let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor("/tmp/ws")
   let fake : FakeAstGrepSpawn = {
-    results: [(
-      0,
-      "{\"text\":\"hit\",\"range\":{\"start\":{\"line\":0}},\"file\":\"src/a.ts\"}\n",
-      "",
-    )],
+    results: [
+      (
+        0, "{\"text\":\"hit\",\"range\":{\"start\":{\"line\":0}},\"file\":\"src/a.ts\"}\n",
+        "",
+      ),
+    ],
     index: 0,
     received: [],
   }
@@ -317,18 +315,18 @@ async test "astgrep_anchored_base_resolves_into_positional_path" {
   ])
 }
 
-
 ///|
 test "astgrep_max_matches_must_be_positive_integer" {
   for value in [Json::number(0.0), Json::number(-1.0), Json::string("10")] {
-    match extract_astgrep_args(
-      Json::object(
-        Map::from_array([
-          ("pattern", Json::string("$A")),
-          ("max_matches", value),
-        ]),
-      ),
-    ) {
+    match
+      extract_astgrep_args(
+        Json::object(
+          Map::from_array([
+            ("pattern", Json::string("$A")),
+            ("max_matches", value),
+          ]),
+        ),
+      ) {
       Err(message) => assert_true(message.contains("max_matches"))
       Ok(_) => fail("invalid max_matches must be rejected")
     }
