@@ -22,7 +22,7 @@ async fn read_error_body_text(client : @http.Client) -> String? {
   let data = client.read_all() catch { _ => return None }
   let text = data.text() catch { _ => return None }
   if text.length() > 2048 {
-    Some(text.sub(start=0, end=2048).to_owned())
+    Some(text.exact_view(start=0, end=2048).to_owned())
   } else {
     Some(text)
   }
