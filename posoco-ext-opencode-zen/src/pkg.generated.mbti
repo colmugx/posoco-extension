@@ -13,6 +13,8 @@ import {
 }
 
 // Values
+pub async fn fetch_zen_models(String, String, endpoint_prefix? : String) -> Array[ZenModelInfo] raise @error.ModelError
+
 pub fn parse_models_dev_surfaces(Json) -> Map[String, ZenReasoningSurface] raise @error.ModelError
 
 pub fn parse_zen_models(Json) -> Array[ZenModelInfo] raise @error.ModelError
