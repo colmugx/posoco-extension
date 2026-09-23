@@ -23,11 +23,20 @@ pub(all) enum SymlinkPolicy {
 } derive(Eq, Debug)
 
 ///|
+pub extend SymlinkPolicy with Eq::{not_equal, equal}
+
+///|
+pub extend SymlinkPolicy with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Read/write capability for the workspace.
 pub(all) struct Capability {
   read : Bool
   write : Bool
 } derive(Debug)
+
+///|
+pub extend Capability with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn Capability::read_only() -> Capability {
@@ -50,6 +59,9 @@ pub(all) struct WorkspaceLimits {
   max_matches_per_file : Int // grep
   max_line_width : Int // grep line truncation
 } derive(Debug)
+
+///|
+pub extend WorkspaceLimits with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn WorkspaceLimits::defaults() -> WorkspaceLimits {
@@ -80,6 +92,12 @@ pub(all) suberror PathPolicyError {
 } derive(Eq, Debug)
 
 ///|
+pub extend PathPolicyError with Eq::{not_equal, equal}
+
+///|
+pub extend PathPolicyError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// The unified workspace boundary. Constructed once per workspace;
 /// shared by all consumers.
 pub(all) struct WorkspacePolicy {
@@ -100,6 +118,9 @@ pub(all) struct WorkspacePolicy {
   /// Default false — must be explicitly allowed.
   allow_create_parent : Bool
 } derive(Debug)
+
+///|
+pub extend WorkspacePolicy with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Build a workspace policy with root + cwd, using safe defaults.

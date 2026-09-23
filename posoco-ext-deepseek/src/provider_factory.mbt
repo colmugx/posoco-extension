@@ -70,6 +70,13 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn provider_id(
 }
 
 ///|
+pub extend DeepSeekProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 pub impl @llm.ProviderFactory for DeepSeekProvider with fn credential_id(
   _self : DeepSeekProvider,
 ) -> String {
@@ -193,6 +200,8 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn provider_i
 }
 
 ///|
+
+///|
 /// Explicit live model discovery. Unlike `build`, this path performs exactly
 /// one authenticated `/models` request and fails composition on transport or
 /// schema errors; it never falls back to the configured static model.
@@ -271,6 +280,9 @@ pub impl @llm.ApiKeyFactory for DeepSeekProvider with fn provider_id(
 ) -> String {
   "deepseek"
 }
+
+///|
+pub extend DeepSeekProvider with @colmugx/posoco-ext-llm.ApiKeyFactory::{login}
 
 ///|
 pub impl @llm.ApiKeyFactory for DeepSeekProvider with fn credential_id(

@@ -110,6 +110,13 @@ pub impl @llm.ProviderFactory for KimiProvider with fn provider_id(
 }
 
 ///|
+pub extend KimiProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 pub impl @llm.ProviderFactory for KimiProvider with fn credential_id(
   _self : KimiProvider,
 ) -> String {
@@ -182,6 +189,11 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn provider_id(
   _self : KimiProvider,
 ) -> String {
   "kimi"
+}
+
+///|
+pub extend KimiProvider with @colmugx/posoco-ext-llm.RefreshableProviderFactory::{
+  refresh,
 }
 
 ///|
@@ -271,6 +283,9 @@ pub impl @llm.OAuthFactory for KimiProvider with fn provider_id(
 }
 
 ///|
+pub extend KimiProvider with @colmugx/posoco-ext-llm.OAuthFactory::{login}
+
+///|
 pub impl @llm.OAuthFactory for KimiProvider with fn credential_id(
   _self : KimiProvider,
 ) -> String {
@@ -292,6 +307,8 @@ pub impl @llm.ApiKeyFactory for KimiProvider with fn provider_id(
 ) -> String {
   "kimi"
 }
+
+///|
 
 ///|
 pub impl @llm.ApiKeyFactory for KimiProvider with fn credential_id(

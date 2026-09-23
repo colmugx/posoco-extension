@@ -96,3 +96,6 @@ pub impl @posoco.MemoryPort for NowledgeMem with fn search(
     Some(Ok({ text, .. })) => search_reply_text(text)
   }
 }
+
+///|
+pub extend NowledgeMem with @posoco.MemoryPort::{search, delete, store}

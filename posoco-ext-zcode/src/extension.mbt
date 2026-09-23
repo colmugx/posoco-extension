@@ -45,6 +45,13 @@ pub impl @posoco.Lifecycle for ZcodeTools with fn on_compose(
 }
 
 ///|
+pub extend ZcodeTools with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
+}
+
+///|
 pub impl @posoco.Lifecycle for ZcodeTools with fn on_shutdown(
   _self : ZcodeTools,
 ) -> Unit {
@@ -58,6 +65,9 @@ pub impl @posoco.Observer for ZcodeTools with fn on_event(
 ) -> Unit {
   ()
 }
+
+///|
+pub extend ZcodeTools with @posoco.Observer::{on_event, on_event_at}
 
 ///|
 /// Track the parent session from scoped events; a background call addresses

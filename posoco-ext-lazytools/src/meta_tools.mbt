@@ -36,9 +36,7 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
         "properties": Json::object({
           "tool": Json::object({
             "type": Json::string("string"),
-            "description": Json::string(
-              "Deferred tool name from tool_list",
-            ),
+            "description": Json::string("Deferred tool name from tool_list"),
           }),
           "arguments": Json::object({
             "type": Json::string("object"),

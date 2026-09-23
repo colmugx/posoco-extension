@@ -23,6 +23,12 @@ pub(all) enum GoalStatus {
 } derive(Eq, Debug)
 
 ///|
+pub extend GoalStatus with Eq::{not_equal, equal}
+
+///|
+pub extend GoalStatus with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub impl Show for GoalStatus with fn to_string(self) -> String {
   match self {
     Idle => "Idle"
@@ -36,6 +42,9 @@ pub impl Show for GoalStatus with fn to_string(self) -> String {
 }
 
 ///|
+pub extend GoalStatus with Show::{to_string, output}
+
+///|
 /// Budget limits. All fields default to 0 (unlimited).
 pub(all) struct GoalBudget {
   mut max_turns : Int
@@ -43,11 +52,20 @@ pub(all) struct GoalBudget {
 } derive(Debug)
 
 ///|
+pub extend GoalBudget with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Accumulated usage counters, updated by the Observer impl.
 pub(all) struct GoalUsage {
   mut turns : Int
   mut total_tokens : Int
 } derive(Debug, Eq)
+
+///|
+pub extend GoalUsage with Eq::{not_equal, equal}
+
+///|
+pub extend GoalUsage with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub(all) struct GoalOptions {
@@ -65,12 +83,21 @@ pub(all) struct GoalOptions {
 } derive(Debug)
 
 ///|
+pub extend GoalOptions with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// One entry per completed turn in the execute loop.
 pub(all) struct GoalHistoryEntry {
   turn : Int
   usage : GoalUsage
   summary : String
 } derive(Eq, Debug)
+
+///|
+pub extend GoalHistoryEntry with Eq::{not_equal, equal}
+
+///|
+pub extend GoalHistoryEntry with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Final result returned by GoalRunner.execute().
@@ -82,6 +109,9 @@ pub(all) struct GoalResult {
   final_plan : GoalPlan
   stall_reason : String?
 } derive(Debug)
+
+///|
+pub extend GoalResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Central struct: ToolProvider + Observer + the execute() loop.
@@ -119,6 +149,9 @@ pub struct GoalRunner {
 } derive(Debug)
 
 ///|
+pub extend GoalRunner with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Default options for a goal condition: unlimited budget, standard
 /// `<goal-complete/>` / `<goal-blocked/>` markers, wrap-up at 90% of the
 /// budget, stall flagging after 3 turns below 50 tokens / 3 identical tool
@@ -145,7 +178,9 @@ pub fn GoalOptions::default(goal_condition~ : String) -> GoalOptions {
 /// # Example
 /// ```mbt check
 /// test "goal extension self-reports its port views" {
-///   let goal = goal_extension(goal_condition="make the build green")
+///   let goal = @posoco-ext-goal.goal_extension(
+///     goal_condition="make the build green",
+///   )
 ///   let manifest = goal.manifest()
 ///   assert_eq(manifest.id, "posoco_ext_goal")
 ///   assert_eq(manifest.hooks.length(), 0)
@@ -338,6 +373,9 @@ pub impl @posoco.Observer for GoalRunner with fn on_event(
     _ => ()
   }
 }
+
+///|
+pub extend GoalRunner with @posoco.Observer::{on_event_at}
 
 ///|
 fn GoalRunner::is_budget_exhausted(self : GoalRunner) -> Bool {

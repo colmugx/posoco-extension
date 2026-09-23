@@ -205,11 +205,9 @@ async test "background timeout survives cancellation masked as a return" {
     config={ ..zcode_config(), timeout_ms: 150, },
     run=Some(async fn(_args : ZcodeTaskArgs) {
       runs.val = runs.val + 1
-      // Core's timeout cancellation aborts the sleep; swallowing it and
-      // returning garbage must not read as a completed delegation.
-      @async.sleep(60000) catch {
-        _error => ()
-      }
+      // The cancellation no longer aborts the sleep as an error; the guard
+      // is that returning garbage must not read as a completed delegation.
+      @async.sleep(60000)
       summary
     }),
   )

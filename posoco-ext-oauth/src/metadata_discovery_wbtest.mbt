@@ -19,6 +19,9 @@ pub impl OAuthHttpTransport for MetadataGetTransport with fn post(
 }
 
 ///|
+pub extend MetadataGetTransport with OAuthHttpTransport::{post, get}
+
+///|
 pub impl OAuthHttpTransport for MetadataGetTransport with fn get(
   self : MetadataGetTransport,
   url : String,
@@ -41,6 +44,9 @@ pub impl OAuthHttpTransport for PostOnlyTransport with fn post(
 ) -> OAuthHttpResponse {
   self.response
 }
+
+///|
+pub extend PostOnlyTransport with OAuthHttpTransport::{post, get}
 
 ///|
 fn wire_header(headers : Map[String, String], key : String) -> String raise {

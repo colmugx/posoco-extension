@@ -38,6 +38,9 @@ pub impl @posoco.Lifecycle for TodoList with fn on_compose(
 }
 
 ///|
+pub extend TodoList with @posoco.Lifecycle::{on_shutdown, on_start}
+
+///|
 /// Nothing to release: the list is in-process state with no file
 /// persistence and no retained resources beyond the composed UI reference.
 pub impl @posoco.Lifecycle for TodoList with fn on_shutdown(self : TodoList) -> Unit {

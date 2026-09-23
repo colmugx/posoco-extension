@@ -56,7 +56,7 @@ fn user_message(text : String) -> @kernel.Message {
 ///|
 /// Scripted approval source: returns a fixed decision, records every ask.
 struct ScriptedApproval {
-  decision : ApprovalDecision
+  decision : @posoco-ext-permission.ApprovalDecision
   mut asked : Int
 }
 
@@ -72,7 +72,9 @@ impl ApprovalSource for ScriptedApproval with fn ask(self, _request) {
 
 ///|
 async test "read-only mode approves inspection and rejects mutation" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   assert_true(
     policy.before_tool(test_call("read")) is @posoco.ToolDecision::Approve(_),
   )
@@ -90,7 +92,9 @@ async test "read-only mode approves inspection and rejects mutation" {
 
 ///|
 async test "workspace-write without source denies shell and unknown" {
-  let policy = PermissionPolicy::PermissionPolicy(WorkspaceWrite)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+  )
   // write is not auto-approved in WorkspaceWrite (goes through gate); with no
   // source it is denied.
   assert_true(
@@ -108,7 +112,7 @@ async test "workspace-write without source denies shell and unknown" {
 ///|
 async test "workspace-write with source approves writes via gate, caches per tool" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -136,7 +140,7 @@ async test "workspace-write with source approves writes via gate, caches per too
 ///|
 async test "shell approvals are remembered per segment scope" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -176,7 +180,7 @@ async test "shell approvals are remembered per segment scope" {
 ///|
 async test "rtk prefix is stripped: moon and bare moon share one scope" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -210,7 +214,7 @@ async test "rtk prefix is stripped: moon and bare moon share one scope" {
 ///|
 async test "non-transparent shims keep shim + subcommand scope" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -237,7 +241,7 @@ async test "non-transparent shims keep shim + subcommand scope" {
 ///|
 async test "compound commands require every segment scope" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -266,7 +270,7 @@ async test "compound commands require every segment scope" {
 ///|
 async test "write approval without a path is still cached per tool" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -287,7 +291,7 @@ async test "write approval without a path is still cached per tool" {
 ///|
 async test "unknown tools are cached per tool name" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -316,7 +320,7 @@ async test "workspace-write deny surfaces the reason" {
     decision: Deny(reason="user said no"),
     asked: 0,
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -334,7 +338,7 @@ async test "workspace-write deny surfaces the reason" {
 ///|
 async test "interactive mode approves reads and gates side effects" {
   let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -364,7 +368,7 @@ async test "read-only shell commands are pre-approved in every mode" {
     asked: 0,
   }
   // Interactive: provably read-only commands never reach the source.
-  let interactive = PermissionPolicy::PermissionPolicy(
+  let interactive = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -378,7 +382,7 @@ async test "read-only shell commands are pre-approved in every mode" {
   )
   assert_eq(source.asked, 0)
   // ReadOnly mode too: read-only shell IS inspection.
-  let ro = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let ro = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(ReadOnly)
   assert_true(
     ro.before_tool(test_call_cmd("bash", "grep -rn x src"))
     is @posoco.ToolDecision::Approve(_),
@@ -390,7 +394,7 @@ async test "read-only shell commands are pre-approved in every mode" {
   // Opaque commands still go through the approval gate — the fast path
   // never widens what arbitrary scripts may do.
   let allow_source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
-  let ww = PermissionPolicy::PermissionPolicy(
+  let ww = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(allow_source as &ApprovalSource),
   )
@@ -407,7 +411,9 @@ async test "read-only shell commands are pre-approved in every mode" {
 
 ///|
 test "permission policy contributes hook and command, no system prompt contributor" {
-  let policy = PermissionPolicy::PermissionPolicy(Interactive)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    Interactive,
+  )
   let manifest = policy.manifest()
   assert_eq(manifest.hooks.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 0)
@@ -423,7 +429,7 @@ async test "ask_question is pre-approved in every mode: asking to ask is noise" 
     decision: Deny(reason="should not be asked"),
     asked: 0,
   }
-  let interactive = PermissionPolicy::PermissionPolicy(
+  let interactive = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -442,7 +448,9 @@ async test "ask_question is pre-approved in every mode: asking to ask is noise" 
   )
   assert_eq(source.asked, 0)
   // ReadOnly allows it too: talking to the user is not a side effect.
-  let ro_policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let ro_policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   assert_true(
     ro_policy.before_tool(question) is @posoco.ToolDecision::Approve(_),
   )
@@ -458,7 +466,7 @@ async test "skill activation tools are pre-approved like reads" {
     decision: Deny(reason="should not be asked"),
     asked: 0,
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -472,7 +480,9 @@ async test "skill activation tools are pre-approved like reads" {
   )
   assert_eq(source.asked, 0)
   // ReadOnly allows them too: loading instructions mutates nothing.
-  let ro_policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let ro_policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   assert_true(
     ro_policy.before_tool(test_call("activate_skill"))
     is @posoco.ToolDecision::Approve(_),
@@ -485,7 +495,7 @@ async test "skill activation tools are pre-approved like reads" {
 
 ///|
 async test "yolo mode pre-approves every tool without a source" {
-  let policy = PermissionPolicy::PermissionPolicy(Yolo)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Yolo)
   for name in ["read", "write", "bash", "mcp__deploy"] {
     assert_true(
       policy.before_tool(test_call(name)) is @posoco.ToolDecision::Approve(_),
@@ -512,7 +522,9 @@ fn user_text(msg : @kernel.Message) -> String? {
 
 ///|
 async test "before_model injects the read-only reminder as one user message, idempotently" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   let messages = [user_message("hello")]
   let r1 = policy.before_model(messages)
   assert_eq(r1.length(), 2)
@@ -535,7 +547,9 @@ async test "before_model injects the read-only reminder as one user message, ide
 
 ///|
 async test "switching away from ReadOnly removes the reminder" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   let r1 = policy.before_model([user_message("hello")])
   assert_eq(r1.length(), 2)
   policy.mode = WorkspaceWrite
@@ -554,9 +568,13 @@ async test "switching away from ReadOnly removes the reminder" {
 
 ///|
 async test "approval-routing modes inject no reminder from a clean transcript" {
-  let modes : Array[PermissionMode] = [WorkspaceWrite, Interactive, Yolo]
+  let modes : Array[@posoco-ext-permission.PermissionMode] = [
+    WorkspaceWrite,
+    Interactive,
+    Yolo,
+  ]
   for mode in modes {
-    let policy = PermissionPolicy::PermissionPolicy(mode)
+    let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(mode)
     let messages = [user_message("hello")]
     let result = policy.before_model(messages)
     assert_eq(result.length(), 1)
@@ -566,7 +584,9 @@ async test "approval-routing modes inject no reminder from a clean transcript" {
 
 ///|
 async test "second turn with unchanged mode leaves the transcript untouched" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   let turn1 = policy.before_model([user_message("hello")])
   // Simulate the next turn: persisted history carrying the turn-1 reminder,
   // plus a fresh user input at the end.
@@ -585,7 +605,9 @@ async test "second turn with unchanged mode leaves the transcript untouched" {
 
 ///|
 async test "before_model replaces a stale reminder in place" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   // An envelope from an earlier wording: located by prefix, refreshed in
   // place because its text differs from the current reminder.
   let stale = @kernel.Message::UserMessage(content=[
@@ -612,7 +634,7 @@ async test "before_model replaces a stale reminder in place" {
 ///|
 async test "/permission reports status, switches mode, resets approvals" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -716,7 +738,10 @@ async test "bus-reported tools bypass the gate in every mode" {
   let bus = @devkit.EventBus::EventBus()
   // Subscribe the gate BEFORE the reporting extension publishes — the bus
   // is fire-and-forget, a report with no subscriber is dropped.
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly, bus=Some(bus))
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+    bus=Some(bus),
+  )
   // Unknown tool, not yet reported: rejected in ReadOnly.
   assert_true(
     policy.before_tool(test_call("enter_plan_mode"))
@@ -750,7 +775,7 @@ async test "bus-reported tools bypass the gate in every mode" {
 async test "exempted tools never consult the approval source" {
   let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
   let bus = @devkit.EventBus::EventBus()
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
     bus=Some(bus),
@@ -789,7 +814,9 @@ async test "exempted tools never consult the approval source" {
 
 ///|
 async test "malformed exemption payloads are ignored" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   @devkit.BusSubscriber::on_bus_event(policy, {
     source: "rogue_ext",
     topic: "tool_exemptions",
@@ -831,7 +858,9 @@ fn test_call_list() -> @posoco.ToolCall {
 
 ///|
 async test "read-only mode classifies deferred tools by inner name" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   // webfetch rides the read class even behind the gateway.
   assert_true(
     policy.before_tool(
@@ -854,7 +883,7 @@ async test "read-only mode classifies deferred tools by inner name" {
 ///|
 async test "gateway unknown tools are gated and scoped per inner tool name" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -890,13 +919,13 @@ async test "gateway unknown tools are gated and scoped per inner tool name" {
 ///|
 async test "gateway meta tools skip the gate" {
   // Catalog browsing is inspection: pre-approved even in read-only mode.
-  let ro = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let ro = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(ReadOnly)
   assert_true(
     ro.before_tool(test_call_list()) is @posoco.ToolDecision::Approve(_),
   )
   // Interactive never asks for the meta surface either.
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -921,7 +950,7 @@ async test "gateway meta tools skip the gate" {
 ///|
 async test "mbtx escalated requires per-call consent" {
   let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -938,7 +967,7 @@ async test "mbtx escalated requires per-call consent" {
 ///|
 async test "mbtx escalated approvals are never remembered" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -960,7 +989,7 @@ async test "mbtx escalated approvals are never remembered" {
 ///|
 async test "allow-always for escalated mbtx stays per-call" {
   let source = ScriptedApproval::{ decision: AllowAlways, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -981,7 +1010,7 @@ async test "mbtx escalated deny surfaces the reason" {
     decision: Deny(reason="not today"),
     asked: 0,
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -997,7 +1026,9 @@ async test "mbtx escalated deny surfaces the reason" {
 
 ///|
 async test "mbtx escalated without an approval channel is rejected" {
-  let policy = PermissionPolicy::PermissionPolicy(WorkspaceWrite)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+  )
   match policy.before_tool(test_call_mbtx()) {
     @posoco.ToolDecision::Reject(reason~) =>
       assert_true(reason.contains("approval channel"))
@@ -1011,7 +1042,7 @@ async test "yolo pre-approves escalated mbtx without asking" {
     decision: Deny(reason="should not be asked"),
     asked: 0,
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Yolo,
     approval=Some(source as &ApprovalSource),
   )
@@ -1027,7 +1058,7 @@ async test "mbtx without the escalated flag rides the normal classify path" {
     decision: Deny(reason="should not be asked"),
     asked: 0,
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     ReadOnly,
     approval=Some(source as &ApprovalSource),
   )
@@ -1062,7 +1093,7 @@ async test "mbtx without the escalated flag rides the normal classify path" {
 async test "escalated mbtx is intercepted before its exemption" {
   let source = ScriptedApproval::{ decision: AllowOnce, asked: 0, }
   let bus = @devkit.EventBus::EventBus()
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
     bus=Some(bus),
@@ -1096,7 +1127,7 @@ async test "read-only mode asks for escalated mbtx instead of auto-rejecting" {
     decision: Deny(reason="not in read-only"),
     asked: 0,
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     ReadOnly,
     approval=Some(source as &ApprovalSource),
   )
@@ -1116,7 +1147,7 @@ async test "read-only mode asks for escalated mbtx instead of auto-rejecting" {
 
 ///|
 struct RecordingApproval {
-  decision : ApprovalDecision
+  decision : @posoco-ext-permission.ApprovalDecision
   mut asked : Int
   categories : Array[String]
 }
@@ -1156,7 +1187,7 @@ fn semantic_risk_result(
 
 ///|
 fn compose_permission_decision(
-  policy : PermissionPolicy,
+  policy : @posoco-ext-permission.PermissionPolicy,
   decision : @posoco.ScriptedDecisionPort,
 ) -> Unit raise @posoco.CompositionError {
   let model = @posoco.ScriptedModel([])
@@ -1178,7 +1209,7 @@ async test "semantic risk can tighten an interactive read into per-call consent"
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -1198,7 +1229,9 @@ async test "semantic risk can tighten an interactive read into per-call consent"
 
 ///|
 async test "semantic risk rejects a read in readonly mode" {
-  let policy = PermissionPolicy::PermissionPolicy(ReadOnly)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    ReadOnly,
+  )
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.8, 0.1)),
   ])
@@ -1211,7 +1244,9 @@ async test "semantic risk rejects a read in readonly mode" {
 
 ///|
 async test "low semantic risk preserves deterministic preapproval" {
-  let policy = PermissionPolicy::PermissionPolicy(Interactive)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    Interactive,
+  )
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.1, 0.2, 0.1)),
   ])
@@ -1224,7 +1259,9 @@ async test "low semantic risk preserves deterministic preapproval" {
 
 ///|
 async test "decision failure preserves deterministic preapproval" {
-  let policy = PermissionPolicy::PermissionPolicy(Interactive)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    Interactive,
+  )
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Fail(
       @posoco.DecisionError::Transport("semantic backend unavailable"),
@@ -1244,7 +1281,7 @@ async test "decision port never relaxes an existing gated write" {
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -1261,7 +1298,7 @@ async test "decision port never relaxes an existing gated write" {
 
 ///|
 async test "yolo preapproval does not consult decision port" {
-  let policy = PermissionPolicy::PermissionPolicy(Yolo)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Yolo)
   let decision = @posoco.ScriptedDecisionPort([])
   compose_permission_decision(policy, decision)
   assert_true(
@@ -1314,7 +1351,7 @@ async test "auto mode approves on a high grant probability without asking the so
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Auto,
     approval=Some(source as &ApprovalSource),
   )
@@ -1335,7 +1372,7 @@ async test "auto mode approves on a high grant probability without asking the so
 
 ///|
 async test "auto mode rejects a low grant probability, citing it" {
-  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.2, 0.1, 0.1, 0.1)),
   ])
@@ -1348,7 +1385,7 @@ async test "auto mode rejects a low grant probability, citing it" {
 
 ///|
 async test "auto mode risk veto overrides a high grant probability" {
-  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.95, 0.1, 0.1, 0.9)),
   ])
@@ -1361,7 +1398,7 @@ async test "auto mode risk veto overrides a high grant probability" {
 
 ///|
 async test "auto mode fails closed when the judge errors" {
-  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Fail(
       @posoco.DecisionError::Transport("semantic backend unavailable"),
@@ -1380,7 +1417,7 @@ async test "auto mode fails closed without a composed DecisionPort" {
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Auto,
     approval=Some(source as &ApprovalSource),
   )
@@ -1398,7 +1435,7 @@ async test "auto mode judges escalated mbtx instead of asking the source" {
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Auto,
     approval=Some(source as &ApprovalSource),
   )
@@ -1424,7 +1461,7 @@ async test "auto mode judges escalated mbtx instead of asking the source" {
 
 ///|
 async test "auto mode judges a risky read through the grant question" {
-  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
   let decision = @posoco.ScriptedDecisionPort([
     // Risk probe on the statically pre-approved read...
     @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.9, 0.1, 0.1)),
@@ -1441,7 +1478,7 @@ async test "auto mode judges a risky read through the grant question" {
 ///|
 async test "explicit session approval outranks the auto judge" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -1468,7 +1505,7 @@ async test "explicit session approval outranks the auto judge" {
 ///|
 async test "/permission auto without a DecisionPort fails and keeps the mode" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     Interactive,
     approval=Some(source as &ApprovalSource),
   )
@@ -1483,7 +1520,7 @@ async test "/permission auto without a DecisionPort fails and keeps the mode" {
 
 ///|
 async test "auto policy without a decision port fails composition" {
-  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
   let model = @posoco.ScriptedModel([])
   let ui = @posoco.NoopUiPort()
   try
@@ -1503,7 +1540,7 @@ async test "auto policy without a decision port fails composition" {
 
 ///|
 async test "auto mode injects a standing reminder; leaving auto removes it" {
-  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(Auto)
   let r1 = policy.before_model([user_message("hello")])
   assert_eq(r1.length(), 2)
   assert_true(
@@ -1530,7 +1567,7 @@ async test "workspace write mode approves in-workspace writes without asking" {
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
     workspace=Some(@devkit.WorkspaceAnchor("/tmp/proj")),
@@ -1555,7 +1592,7 @@ async test "workspace write mode still gates writes outside the workspace" {
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
     workspace=Some(@devkit.WorkspaceAnchor("/tmp/proj")),
@@ -1586,7 +1623,7 @@ async test "workspace write mode gates writes when no anchor is wired" {
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
@@ -1604,7 +1641,7 @@ async test "workspace write mode gates write calls without a usable path" {
     asked: 0,
     categories: [],
   }
-  let policy = PermissionPolicy::PermissionPolicy(
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
     workspace=Some(@devkit.WorkspaceAnchor("/tmp/proj")),

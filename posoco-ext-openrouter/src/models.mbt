@@ -23,6 +23,12 @@ pub(all) struct OpenRouterModelInfo {
 } derive(Eq, Debug)
 
 ///|
+pub extend OpenRouterModelInfo with Eq::{not_equal, equal}
+
+///|
+pub extend OpenRouterModelInfo with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn parse_openrouter_models(
   payload : Json,
 ) -> Array[OpenRouterModelInfo] raise @posoco.ModelError {

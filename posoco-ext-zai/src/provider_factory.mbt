@@ -115,6 +115,13 @@ pub impl @llm.ProviderFactory for ZaiProvider with fn provider_id(
 }
 
 ///|
+pub extend ZaiProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 pub impl @llm.ProviderFactory for ZaiProvider with fn credential_id(
   _self : ZaiProvider,
 ) -> String {
@@ -263,6 +270,9 @@ pub impl @llm.ApiKeyFactory for ZaiProvider with fn provider_id(
 }
 
 ///|
+pub extend ZaiProvider with @colmugx/posoco-ext-llm.ApiKeyFactory::{login}
+
+///|
 pub impl @llm.ApiKeyFactory for ZaiProvider with fn credential_id(
   _self : ZaiProvider,
 ) -> String {
@@ -313,6 +323,8 @@ pub impl @llm.RefreshableProviderFactory for ZaiProvider with fn provider_id(
 ) -> String {
   "zai"
 }
+
+///|
 
 ///|
 /// Explicit live model discovery: exactly one authenticated `/models` request

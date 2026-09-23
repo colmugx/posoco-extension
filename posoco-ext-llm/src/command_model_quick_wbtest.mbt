@@ -15,6 +15,9 @@ pub impl @devkit.QuotaSource for QuickPickQuotaSource with fn read(
 }
 
 ///|
+pub extend QuickPickQuotaSource with @colmugx/posoco-devkit.QuotaSource::{read}
+
+///|
 fn quick_pick_slot(id : String, provider_id : String) -> ModelSlot {
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: [],

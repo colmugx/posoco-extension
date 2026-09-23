@@ -50,6 +50,9 @@ pub impl @posoco.Lifecycle for LazyTools with fn on_compose(
 }
 
 ///|
+pub extend LazyTools with @posoco.Lifecycle::{on_compose, on_shutdown, on_start}
+
+///|
 /// No owned resources; drop the borrowed capability reference at shutdown.
 pub impl @posoco.Lifecycle for LazyTools with fn on_shutdown(self : LazyTools) -> Unit {
   self.decision = None

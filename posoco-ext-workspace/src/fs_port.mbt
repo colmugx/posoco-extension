@@ -18,9 +18,18 @@ pub(all) enum WorkspaceFileKind {
 } derive(Debug)
 
 ///|
+pub extend WorkspaceFileKind with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub(all) suberror WorkspaceFsError {
   WorkspaceFsError(String)
 } derive(Eq, Debug)
+
+///|
+pub extend WorkspaceFsError with Eq::{not_equal, equal}
+
+///|
+pub extend WorkspaceFsError with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Manual Show impl so error messages surface in test/harness output. The
@@ -30,6 +39,9 @@ pub impl Show for WorkspaceFsError with fn to_string(self : WorkspaceFsError) ->
     WorkspaceFsError(message) => "WorkspaceFsError(" + message + ")"
   }
 }
+
+///|
+pub extend WorkspaceFsError with Show::{to_string, output}
 
 ///|
 pub(open) trait WorkspaceFs {
@@ -68,6 +80,9 @@ pub(all) enum FileReadResult {
   Content(String)
   Failed(String)
 } derive(Debug)
+
+///|
+pub extend FileReadResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Read `path` through the WorkspaceFs boundary with an explicit

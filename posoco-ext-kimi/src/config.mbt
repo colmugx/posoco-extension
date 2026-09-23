@@ -40,6 +40,12 @@ pub(all) struct KimiConfig {
 } derive(Eq, Debug)
 
 ///|
+pub extend KimiConfig with Eq::{not_equal, equal}
+
+///|
+pub extend KimiConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn KimiConfig::KimiConfig(
   api_key : String,
   model? : String = "kimi-k3",

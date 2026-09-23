@@ -468,6 +468,9 @@ pub impl @posoco.ModelPort for RouterModelPort with fn chat(
 }
 
 ///|
+pub extend RouterModelPort with @posoco.ModelPort::{chat, compact}
+
+///|
 pub impl @posoco.ModelPort for RouterModelPort with fn compact(
   self : RouterModelPort,
   scope : @posoco.InvocationScope,
@@ -505,4 +508,9 @@ pub impl @devkit.BusSubscriber for RouterModelPort with fn on_bus_event(
     Some(Unregister(segment~)) => ignore(self.status_segments.remove(segment))
     None => ()
   }
+}
+
+///|
+pub extend RouterModelPort with @colmugx/posoco-devkit.BusSubscriber::{
+  on_bus_event,
 }

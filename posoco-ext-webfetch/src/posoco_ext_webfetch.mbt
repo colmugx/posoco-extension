@@ -286,6 +286,9 @@ pub impl @posoco.ToolProvider for WebFetchTools with fn list_tools(
 }
 
 ///|
+pub extend WebFetchTools with @posoco.ToolProvider::{list_tools}
+
+///|
 pub impl @posoco.ToolProvider for WebFetchTools with fn execute(
   self : WebFetchTools,
   _name : String,

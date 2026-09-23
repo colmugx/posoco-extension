@@ -34,9 +34,7 @@ impl HerdrCli for SlowHerdrCli with fn run(
   self : SlowHerdrCli,
   argv : Array[String],
 ) -> (Int, String, String) raise @posoco.RuntimeError {
-  @async.sleep(self.delay_ms) catch {
-    _ => ()
-  }
+  @async.sleep(self.delay_ms)
   self.received.push(argv)
   let result = self.results[self.index]
   self.index = (self.index + 1) % self.results.length()

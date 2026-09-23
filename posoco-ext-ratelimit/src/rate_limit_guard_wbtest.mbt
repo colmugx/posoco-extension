@@ -254,9 +254,7 @@ fn VClock::advance(self : VClock, ms : Int64) -> Unit {
 async fn VClock::sleep_ms(self : VClock, ms : Int) -> Unit {
   let deadline = self.now_ms + ms.to_int64()
   while self.now_ms < deadline && !self.stop_requested {
-    self.cv.wait() catch {
-      _ => return
-    }
+    self.cv.wait()
   }
 }
 
@@ -346,12 +344,13 @@ pub impl @posoco.ModelPort for DelayedModel with fn chat(
   _stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   self.started = self.started + 1
-  @async.sleep(self.delay_ms) catch {
-    _ => ()
-  }
+  @async.sleep(self.delay_ms)
   self.finished = self.finished + 1
   @posoco.tk_stop_response("done")
 }
+
+///|
+pub extend DelayedModel with @posoco.ModelPort::{provider_config, chat, compact}
 
 ///|
 pub impl @posoco.ModelPort for DelayedModel with fn compact(
@@ -492,6 +491,9 @@ async test "non-rate resume failure is observable and is not retried" {
 /// abort (cetas-acp stdin EOF), which puts the group into failure and
 /// cancels every remaining child mid-flight.
 suberror HostEof derive(Debug)
+
+///|
+pub extend HostEof with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Cancellation regression: when a host group tears down (cetas-acp stdin

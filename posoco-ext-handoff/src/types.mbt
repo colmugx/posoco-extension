@@ -8,6 +8,12 @@ pub(all) struct WorkspaceChange {
 } derive(Eq, Debug)
 
 ///|
+pub extend WorkspaceChange with Eq::{not_equal, equal}
+
+///|
+pub extend WorkspaceChange with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Deterministic project facts captured by the host. The handoff extension
 /// deliberately does not know how Git, a VCS, or another workspace backend
 /// obtains these values.
@@ -17,6 +23,12 @@ pub(all) struct WorkspaceSnapshot {
   head : String?
   changes : Array[WorkspaceChange]
 } derive(Eq, Debug)
+
+///|
+pub extend WorkspaceSnapshot with Eq::{not_equal, equal}
+
+///|
+pub extend WorkspaceSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Semantic work state that is already known by the caller or another
@@ -40,6 +52,12 @@ pub(all) struct WorkSnapshot {
   validation_failed : Array[String]
   validation_not_run : Array[String]
 } derive(Eq, Debug)
+
+///|
+pub extend WorkSnapshot with Eq::{not_equal, equal}
+
+///|
+pub extend WorkSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn WorkSnapshot::empty() -> WorkSnapshot {

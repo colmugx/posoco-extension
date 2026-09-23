@@ -71,6 +71,7 @@ pub(all) struct BusEvent {
   topic : String
   data : Json
 } derive(@debug.Debug)
+pub fn BusEvent::to_repr(Self) -> @debug.Repr
 
 pub struct EventBus {
   subscribers : Array[&BusSubscriber]
@@ -98,6 +99,9 @@ pub(all) struct FileStamp {
   mtime_ns : Int
   size : Int64
 } derive(Eq, @debug.Debug)
+pub fn FileStamp::equal(Self, Self) -> Bool
+pub fn FileStamp::not_equal(Self, Self) -> Bool
+pub fn FileStamp::to_repr(Self) -> @debug.Repr
 
 pub struct FreshnessGuard {
   records : Map[String, FileStamp]
@@ -112,8 +116,11 @@ pub(all) enum FreshnessVerdict {
   NeverRead
   Modified
 } derive(Eq, @debug.Debug)
+pub fn FreshnessVerdict::equal(Self, Self) -> Bool
 #as_free_fn(freshness_hint, deprecated)
 pub fn FreshnessVerdict::hint(Self) -> String
+pub fn FreshnessVerdict::not_equal(Self, Self) -> Bool
+pub fn FreshnessVerdict::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LogEvent {
   level : LogLevel
@@ -122,6 +129,7 @@ pub(all) struct LogEvent {
   message : String
   data : Json?
 } derive(@debug.Debug)
+pub fn LogEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) enum LogLevel {
   Debug
@@ -129,6 +137,9 @@ pub(all) enum LogLevel {
   Warn
   Error
 } derive(Eq, @debug.Debug)
+pub fn LogLevel::equal(Self, Self) -> Bool
+pub fn LogLevel::not_equal(Self, Self) -> Bool
+pub fn LogLevel::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MemoryLogger {
   events : Array[LogEvent]
@@ -147,9 +158,13 @@ pub(all) struct MetricsPoint {
   tokens : Double?
   minutes : Double?
 } derive(Eq, @debug.Debug)
+pub fn MetricsPoint::equal(Self, Self) -> Bool
+pub fn MetricsPoint::not_equal(Self, Self) -> Bool
+pub fn MetricsPoint::to_repr(Self) -> @debug.Repr
 
 pub(all) struct NoopLogger {
 }
+pub fn NoopLogger::log(Self, LogEvent) -> Unit
 pub impl Logger for NoopLogger
 
 pub(all) struct PricingPhase {
@@ -157,6 +172,9 @@ pub(all) struct PricingPhase {
   multiplier : String
   window : String
 } derive(Eq, @debug.Debug)
+pub fn PricingPhase::equal(Self, Self) -> Bool
+pub fn PricingPhase::not_equal(Self, Self) -> Bool
+pub fn PricingPhase::to_repr(Self) -> @debug.Repr
 
 pub(all) struct QuotaReading {
   window : String
@@ -166,18 +184,25 @@ pub(all) struct QuotaReading {
   reset_at_ms : Int64?
   fetched_at_ms : Int64
 } derive(Eq, @debug.Debug)
+pub fn QuotaReading::equal(Self, Self) -> Bool
+pub fn QuotaReading::not_equal(Self, Self) -> Bool
+pub fn QuotaReading::to_repr(Self) -> @debug.Repr
 
 pub(all) enum StatusOp {
   Register(segment~ : String, label~ : String?, priority~ : Int, value~ : String?, color~ : String?)
   Update(segment~ : String, value~ : String)
   Unregister(segment~ : String)
 } derive(Eq, @debug.Debug)
+pub fn StatusOp::equal(Self, Self) -> Bool
+pub fn StatusOp::not_equal(Self, Self) -> Bool
+pub fn StatusOp::to_repr(Self) -> @debug.Repr
 
 pub struct WorkspaceAnchor {
   root : String
 } derive(@debug.Debug)
 pub fn WorkspaceAnchor::WorkspaceAnchor(String) -> Self
 pub fn WorkspaceAnchor::resolve(Self, String) -> String
+pub fn WorkspaceAnchor::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

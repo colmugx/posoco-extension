@@ -9,6 +9,9 @@ pub(all) struct McpCallOutcome {
 } derive(Debug)
 
 ///|
+pub extend McpCallOutcome with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Narrow seam for the Nowledge Mem MCP connection.
 pub(open) trait NmemMcp {
   /// Install the resolved endpoint. Called once from `on_start`; calls

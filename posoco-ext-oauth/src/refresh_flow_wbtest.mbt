@@ -17,6 +17,9 @@ pub impl OAuthHttpTransport for RefreshPostTransport with fn post(
 }
 
 ///|
+pub extend RefreshPostTransport with OAuthHttpTransport::{post, get}
+
+///|
 pub impl OAuthHttpTransport for RefreshPostTransport with fn get(
   _self : RefreshPostTransport,
   _url : String,

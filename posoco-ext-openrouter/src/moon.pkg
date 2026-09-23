@@ -7,6 +7,7 @@ import {
   "colmugx/posoco-ext-oauth" @oauth,
   "moonbitlang/async",
   "moonbitlang/async/http",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 

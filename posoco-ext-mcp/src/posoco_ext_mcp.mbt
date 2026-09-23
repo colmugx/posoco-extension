@@ -130,6 +130,9 @@ pub(all) enum ServerAuth {
 } derive(Eq)
 
 ///|
+pub extend ServerAuth with Eq::{not_equal, equal}
+
+///|
 /// Configuration for a single MCP server connection.
 pub(all) struct MCPServerConfig {
   name : String
@@ -1466,6 +1469,9 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn list_tools(self) -> Arra
 }
 
 ///|
+pub extend MCPToolBridge with @posoco.ToolProvider::{execute, list_tools}
+
+///|
 /// ToolProvider (execute): route tool calls to the correct MCP server.
 pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   self,
@@ -1701,6 +1707,9 @@ pub impl @posoco.Lifecycle for MCPToolBridge with fn on_start(self) -> Unit {
     let _ = self.activate()
   }
 }
+
+///|
+pub extend MCPToolBridge with @posoco.Lifecycle::{on_compose}
 
 ///|
 /// The async slot accepts this impl: the body's async close call is inferred.

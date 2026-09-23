@@ -204,4 +204,7 @@ pub impl @posoco.Observer for RouterModelPort with fn on_event_at(
 }
 
 ///|
+pub extend RouterModelPort with @posoco.Observer::{on_event}
+
+///|
 pub extend RouterModelPort with @posoco.Observer::{on_event_at}

@@ -24,9 +24,7 @@ impl HttpIo for FakeHttpIo with fn fetch(
   self.calls = self.calls + 1
   self.urls.push(url)
   if self.delay_ms > 0 {
-    @async.sleep(self.delay_ms) catch {
-      _ => ()
-    }
+    @async.sleep(self.delay_ms)
   }
   match self.replies.get(self.calls - 1) {
     Some(reply) => reply

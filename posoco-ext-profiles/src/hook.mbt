@@ -29,6 +29,15 @@ pub impl @posoco.PipelineHook for Profiles with fn before_model(
 }
 
 ///|
+pub extend Profiles with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_tool,
+  on_turn_end,
+}
+
+///|
 /// The one activation message both the meta-tool path and the manual
 /// `/profiles` path converge on (Q18: one template, one invariant —
 /// "activated" means this message exists in the transcript). First line is

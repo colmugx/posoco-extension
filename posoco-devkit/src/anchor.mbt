@@ -9,10 +9,13 @@ pub struct WorkspaceAnchor {
 } derive(Debug)
 
 ///|
+pub extend WorkspaceAnchor with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Build an anchor. `""` normalizes to `"."`; a trailing `/` is dropped
 /// (except on `/` itself) so joined paths never contain `//` at the seam.
 ///
-/// ```mbt check
+///     @posoco-devkit.WorkspaceAnchor::WorkspaceAnchor("/tmp/proj/").root,
 /// test {
 ///   inspect(
 ///     WorkspaceAnchor::WorkspaceAnchor("/tmp/proj/").root,
@@ -32,10 +35,10 @@ pub fn WorkspaceAnchor::WorkspaceAnchor(root : String) -> WorkspaceAnchor {
 /// normalized (`.` and `..` collapse, `//` deduplicates). `..` may rise
 /// above the root — containment is a permission concern, not an anchoring
 /// one.
-///
+///   let anchor = @posoco-devkit.WorkspaceAnchor::WorkspaceAnchor("/tmp/proj")
 /// ```mbt check
 /// test {
-///   let anchor = WorkspaceAnchor::WorkspaceAnchor("/tmp/proj")
+///   let anchor = @posoco-devkit.WorkspaceAnchor::WorkspaceAnchor("/tmp/proj")
 ///   inspect(anchor.resolve("src/a/../b"), content="/tmp/proj/src/b")
 ///   inspect(anchor.resolve("../sibling"), content="/tmp/sibling")
 /// }

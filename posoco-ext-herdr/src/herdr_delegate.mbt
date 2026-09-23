@@ -648,6 +648,13 @@ pub impl @posoco.Lifecycle for HerdrDelegate with fn on_compose(
 }
 
 ///|
+pub extend HerdrDelegate with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
+}
+
+///|
 /// The delegate owns no lifecycle resources: child panes belong to the child,
 /// and core owns background-task cleanup — shutdown stays a no-op.
 pub impl @posoco.Lifecycle for HerdrDelegate with fn on_shutdown(
@@ -663,6 +670,9 @@ pub impl @posoco.Observer for HerdrDelegate with fn on_event(
 ) -> Unit {
   ()
 }
+
+///|
+pub extend HerdrDelegate with @posoco.Observer::{on_event, on_event_at}
 
 ///|
 /// Track the parent session from scoped events; a background delegation

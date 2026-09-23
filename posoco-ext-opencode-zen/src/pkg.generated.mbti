@@ -39,18 +39,29 @@ pub(all) struct OpenCodeZenConfig {
   supports_images : Bool
 } derive(Eq, @debug.Debug)
 pub fn OpenCodeZenConfig::OpenCodeZenConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, supports_images? : Bool) -> Self
+pub fn OpenCodeZenConfig::equal(Self, Self) -> Bool
+pub fn OpenCodeZenConfig::not_equal(Self, Self) -> Bool
+pub fn OpenCodeZenConfig::to_repr(Self) -> @debug.Repr
 pub fn OpenCodeZenConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct OpenCodeZenModelPort {
   config : OpenCodeZenConfig
 }
 pub fn OpenCodeZenModelPort::OpenCodeZenModelPort(OpenCodeZenConfig) -> Self
+pub async fn OpenCodeZenModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn OpenCodeZenModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn OpenCodeZenModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenCodeZenModelPort
 
 pub(all) struct OpenCodeZenProvider {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn OpenCodeZenProvider::OpenCodeZenProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn OpenCodeZenProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn OpenCodeZenProvider::credential_id(Self) -> String
+pub async fn OpenCodeZenProvider::login(Self, &@posoco-ext-oauth.AuthPromptInteraction) -> @posoco-ext-oauth.ApiKeyCredential raise @posoco-ext-oauth.OAuthError
+pub fn OpenCodeZenProvider::provider_id(Self) -> String
+pub async fn OpenCodeZenProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for OpenCodeZenProvider
 pub impl @posoco-ext-llm.ProviderFactory for OpenCodeZenProvider
 pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
@@ -60,14 +71,23 @@ pub(all) struct ZenModelInfo {
   owned_by : String
   cached_efforts : Array[String]
 } derive(Eq, @debug.Debug)
+pub fn ZenModelInfo::equal(Self, Self) -> Bool
+pub fn ZenModelInfo::not_equal(Self, Self) -> Bool
+pub fn ZenModelInfo::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ZenReasoningSurface {
   reasoning : Bool
   levels : Array[String]
   can_disable : Bool
 } derive(Eq, @debug.Debug)
+pub fn ZenReasoningSurface::equal(Self, Self) -> Bool
+pub fn ZenReasoningSurface::not_equal(Self, Self) -> Bool
+pub fn ZenReasoningSurface::to_repr(Self) -> @debug.Repr
 
 type ZenRetryModelPort
+pub async fn ZenRetryModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn ZenRetryModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn ZenRetryModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for ZenRetryModelPort
 
 // Type aliases

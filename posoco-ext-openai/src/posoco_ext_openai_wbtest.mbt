@@ -701,6 +701,12 @@ pub impl @oauth.OAuthHttpTransport for CodexRecordingTransport with fn post(
 }
 
 ///|
+pub extend CodexRecordingTransport with @colmugx/posoco-ext-oauth.OAuthHttpTransport::{
+  post,
+  get,
+}
+
+///|
 /// AuthInteraction fake that captures the authorize URL the flow notifies.
 struct CodexRecordingInteraction {
   mut last_auth_url : String
@@ -715,6 +721,12 @@ pub impl @oauth.AuthInteraction for CodexRecordingInteraction with fn notify(
     @oauth.AuthMessage::AuthUrl(url) => self.last_auth_url = url
     _ => ()
   }
+}
+
+///|
+pub extend CodexRecordingInteraction with @colmugx/posoco-ext-oauth.AuthInteraction::{
+  notify,
+  is_cancelled,
 }
 
 ///|
@@ -742,6 +754,13 @@ pub impl @oauth.CallbackServer for CodexFakeCallbackServer with fn start(
   port : Int,
 ) -> Unit raise @oauth.OAuthError {
   self.started_ports.push(port)
+}
+
+///|
+pub extend CodexFakeCallbackServer with @colmugx/posoco-ext-oauth.CallbackServer::{
+  start,
+  stop,
+  wait_callback,
 }
 
 ///|
@@ -961,6 +980,9 @@ pub impl OpenAIModelsHttpTransport for OpenAIModelsRecordingTransport with fn ge
   self.headers.push(headers)
   self.responses[self.urls.length() - 1]
 }
+
+///|
+pub extend OpenAIModelsRecordingTransport with OpenAIModelsHttpTransport::{get}
 
 ///|
 async test "codex refresh sends version and account headers and preserves efforts" {

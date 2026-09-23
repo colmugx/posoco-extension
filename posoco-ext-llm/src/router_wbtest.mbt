@@ -20,6 +20,13 @@ pub impl @posoco.ModelPort for RouterTestPort with fn chat(
 }
 
 ///|
+pub extend RouterTestPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}
+
+///|
 pub impl @posoco.ModelPort for RouterTestPort with fn compact(
   _self : RouterTestPort,
   _scope : @posoco.InvocationScope,
@@ -855,6 +862,13 @@ pub impl @posoco.ModelPort for RouterChatTestPort with fn chat(
 }
 
 ///|
+pub extend RouterChatTestPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}
+
+///|
 pub impl @posoco.ModelPort for RouterChatTestPort with fn compact(
   _self : RouterChatTestPort,
   _scope : @posoco.InvocationScope,
@@ -889,6 +903,9 @@ pub impl @devkit.QuotaSource for RouterQuotaSource with fn read(
   self.calls = self.calls + 1
   self.result
 }
+
+///|
+pub extend RouterQuotaSource with @colmugx/posoco-devkit.QuotaSource::{read}
 
 ///|
 fn router_quota_slot(id : String, provider_id : String) -> ModelSlot {

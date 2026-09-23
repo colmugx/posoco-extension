@@ -50,7 +50,10 @@ pub(all) struct ZaiConfig {
   context_window : Int?
 } derive(Eq, @debug.Debug)
 pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String], context_window? : Int?) -> Self
+pub fn ZaiConfig::equal(Self, Self) -> Bool
 pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String, context_window? : Int?) -> Self
+pub fn ZaiConfig::not_equal(Self, Self) -> Bool
+pub fn ZaiConfig::to_repr(Self) -> @debug.Repr
 pub fn ZaiConfig::with_reasoning_effort(Self, String, manifest_id? : String) -> Self raise @error.CompositionError
 
 pub(all) struct ZaiModelPort {
@@ -58,9 +61,12 @@ pub(all) struct ZaiModelPort {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn ZaiModelPort::ZaiModelPort(ZaiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
+pub async fn ZaiModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn ZaiModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn ZaiModelPort::extension_id(Self) -> String
 pub fn ZaiModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn ZaiModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn ZaiModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.Extension for ZaiModelPort
 pub impl @port.ModelPort for ZaiModelPort
 
@@ -68,6 +74,10 @@ pub(all) struct ZaiProvider {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn ZaiProvider::ZaiProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn ZaiProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn ZaiProvider::credential_id(Self) -> String
+pub async fn ZaiProvider::login(Self, &@posoco-ext-oauth.AuthPromptInteraction) -> @posoco-ext-oauth.ApiKeyCredential raise @posoco-ext-oauth.OAuthError
+pub fn ZaiProvider::provider_id(Self) -> String
 pub async fn ZaiProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for ZaiProvider
 pub impl @posoco-ext-llm.ProviderFactory for ZaiProvider

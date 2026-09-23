@@ -64,6 +64,9 @@ pub impl @posoco.Observer for LazyTools with fn on_event(
 }
 
 ///|
+pub extend LazyTools with @posoco.Observer::{on_event, on_event_at}
+
+///|
 /// Inject (or refresh in place) the recent-tools hint as a user envelope.
 pub impl @posoco.PipelineHook for LazyTools with fn before_model(
   self : LazyTools,
@@ -106,4 +109,14 @@ pub impl @posoco.PipelineHook for LazyTools with fn before_model(
     ])
   }
   messages
+}
+
+///|
+pub extend LazyTools with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_model,
+  before_tool,
+  on_turn_end,
 }

@@ -25,6 +25,12 @@ pub(all) struct MetricsPoint {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend MetricsPoint with Eq::{not_equal, equal}
+
+///|
+pub extend MetricsPoint with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// A source of authoritative external model metrics. Implementations live
 /// in provider adapter extensions, where the vendor/community knowledge
 /// resides; consumers depend only on this trait. `read` returning `Err`

@@ -135,6 +135,14 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
 }
 
 ///|
+pub extend JsonlSessionStore with @posoco.SessionStore::{
+  save,
+  append_messages,
+  load,
+  truncate,
+}
+
+///|
 /// SessionStore::save — serialise session and replace the file contents.
 /// Directory is created lazily.
 pub impl @posoco.SessionStore for JsonlSessionStore with fn save(

@@ -41,6 +41,12 @@ pub(all) struct OpenAICompatibleConfig {
 } derive(Eq, Debug)
 
 ///|
+pub extend OpenAICompatibleConfig with Eq::{not_equal, equal}
+
+///|
+pub extend OpenAICompatibleConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Config builder. `api_key`, `base_url`, and `model` are required.
 pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(
   api_key : String,

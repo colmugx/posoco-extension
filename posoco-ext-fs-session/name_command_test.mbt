@@ -4,7 +4,7 @@
 ///|
 async test "io[native]: set_session_name persists metadata name" {
   let root = fresh_root("name-set")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   store.save("sess_n", @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -27,7 +27,7 @@ async test "io[native]: set_session_name persists metadata name" {
 ///|
 async test "io[native]: append_messages preserves a stored name" {
   let root = fresh_root("name-append")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   store.save("sess_a", @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -57,7 +57,7 @@ async test "io[native]: append_messages preserves a stored name" {
 ///|
 async test "io[native]: /name invoke renames the current session" {
   let root = fresh_root("name-invoke")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   // Nothing persisted yet: current_id is unset, so /name fails closed.
   match store.invoke("name", Json::string("too early")) {
     @posoco.CommandOutcome::Failure(reason~) =>
@@ -88,7 +88,7 @@ async test "io[native]: /name invoke renames the current session" {
 ///|
 async test "io[native]: /name accepts the object value field and rejects junk" {
   let root = fresh_root("name-args")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   store.save("sess_o", @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -134,7 +134,9 @@ async test "io[native]: /name accepts the object value field and rejects junk" {
 
 ///|
 test "fs-session manifest contributes one commands port" {
-  let store = JsonlSessionStore::JsonlSessionStore("sessions")
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
+    "sessions",
+  )
   let manifest = store.manifest()
   assert_eq(manifest.commands.length(), 1)
   let defs = manifest.commands[0].commands()

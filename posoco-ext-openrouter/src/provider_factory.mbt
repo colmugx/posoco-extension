@@ -203,6 +203,13 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn provider_id(
 }
 
 ///|
+pub extend OpenRouterProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 pub impl @llm.ProviderFactory for OpenRouterProvider with fn credential_id(
   _self : OpenRouterProvider,
 ) -> String {
@@ -399,6 +406,13 @@ pub impl @llm.ApiKeyFactory for OpenRouterApiKeyFactory with fn provider_id(
   _self : OpenRouterApiKeyFactory,
 ) -> String {
   "openrouter"
+}
+
+///|
+pub extend OpenRouterApiKeyFactory with @colmugx/posoco-ext-llm.ApiKeyFactory::{
+  credential_id,
+  provider_id,
+  login,
 }
 
 ///|

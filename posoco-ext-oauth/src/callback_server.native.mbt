@@ -34,6 +34,13 @@ pub impl CallbackServer for NativeCallbackServer with fn start(
 }
 
 ///|
+pub extend NativeCallbackServer with CallbackServer::{
+  start,
+  stop,
+  wait_callback,
+}
+
+///|
 pub impl CallbackServer for NativeCallbackServer with fn wait_callback(
   self : NativeCallbackServer,
 ) -> (String, String) raise OAuthError {
@@ -47,9 +54,7 @@ pub impl CallbackServer for NativeCallbackServer with fn wait_callback(
         }
         let (conn, _) = srv.accept() catch {
           _ => {
-            @async.sleep(1) catch {
-              _ => ()
-            }
+            @async.sleep(1)
             continue
           }
         }

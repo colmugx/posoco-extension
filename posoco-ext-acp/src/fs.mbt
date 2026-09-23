@@ -21,6 +21,12 @@ pub(all) suberror AcpHostFsError {
 } derive(Eq, Debug)
 
 ///|
+pub extend AcpHostFsError with Eq::{not_equal, equal}
+
+///|
+pub extend AcpHostFsError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub struct AcpHostFs {
   context : @acp.AgentContext
   session_id : String

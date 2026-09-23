@@ -15,6 +15,9 @@ pub(all) struct DelegationCall {
   tool : String
   arguments : Json
 } derive(Eq, @debug.Debug)
+pub fn DelegationCall::equal(Self, Self) -> Bool
+pub fn DelegationCall::not_equal(Self, Self) -> Bool
+pub fn DelegationCall::to_repr(Self) -> @debug.Repr
 pub fn DelegationCall::to_tool_call(Self, call_id~ : String) -> Result[@kernel.ToolCall, String]
 
 pub(all) struct DelegationIntent {
@@ -23,6 +26,9 @@ pub(all) struct DelegationIntent {
   model : String?
   prompt : String?
 } derive(Eq, @debug.Debug)
+pub fn DelegationIntent::equal(Self, Self) -> Bool
+pub fn DelegationIntent::not_equal(Self, Self) -> Bool
+pub fn DelegationIntent::to_repr(Self) -> @debug.Repr
 
 pub(all) enum DelegationPhase {
   Queued
@@ -31,6 +37,9 @@ pub(all) enum DelegationPhase {
   Failed
   Lost
 } derive(Eq, @debug.Debug)
+pub fn DelegationPhase::equal(Self, Self) -> Bool
+pub fn DelegationPhase::not_equal(Self, Self) -> Bool
+pub fn DelegationPhase::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

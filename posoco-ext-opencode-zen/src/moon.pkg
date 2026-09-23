@@ -7,9 +7,9 @@ import {
   "colmugx/posoco-kit-compact-summary" @compact_summary,
   "moonbitlang/async",
   "moonbitlang/async/http",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/random",
-  "moonbitlang/core/string",
 }
 
 import {

@@ -105,13 +105,11 @@ async test "empty_command_is_compact_typed_failure" {
     error => Err(error)
   }
   match result {
-    Err(@posoco.RuntimeError::InvocationFailed(message)) => {
+    Err(@posoco.RuntimeError::InvocationFailed(message)) =>
       assert_eq(message, "bash: empty cmd")
-    }
     _ => fail("expected empty command to fail before process execution")
   }
 }
-
 
 ///|
 test "bash_model_output_leaves_short_success_unchanged" {

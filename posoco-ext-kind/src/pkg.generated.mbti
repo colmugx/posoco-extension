@@ -38,6 +38,9 @@ pub(all) struct KindSpec {
   mode : @posoco-ext-permission.PermissionMode
   body : String
 } derive(Eq, @debug.Debug)
+pub fn KindSpec::equal(Self, Self) -> Bool
+pub fn KindSpec::not_equal(Self, Self) -> Bool
+pub fn KindSpec::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

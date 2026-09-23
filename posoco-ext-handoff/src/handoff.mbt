@@ -459,6 +459,9 @@ pub impl @posoco.CommandPort for Handoff with fn commands(_self : Handoff) -> Ar
 }
 
 ///|
+pub extend Handoff with @posoco.CommandPort::{invoke, commands}
+
+///|
 pub impl @posoco.CommandPort for Handoff with fn invoke(
   self : Handoff,
   id : String,

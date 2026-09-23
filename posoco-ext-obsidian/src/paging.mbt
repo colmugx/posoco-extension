@@ -79,6 +79,12 @@ pub(all) struct OutlineEntry {
 } derive(Debug, Eq)
 
 ///|
+pub extend OutlineEntry with Eq::{not_equal, equal}
+
+///|
+pub extend OutlineEntry with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Parse `outline format=json`: `[{"level":1,"heading":"Top","line":1}]`.
 fn parse_outline_json(output : String) -> Array[OutlineEntry] {
   let entries : Array[OutlineEntry] = []
@@ -112,6 +118,9 @@ pub(all) struct SearchHit {
   line : Int
   text : String
 } derive(Debug)
+
+///|
+pub extend SearchHit with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Parse `search:context format=json`:

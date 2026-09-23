@@ -20,6 +20,12 @@ pub(all) struct KindSpec {
 } derive(Eq, Debug)
 
 ///|
+pub extend KindSpec with Eq::{not_equal, equal}
+
+///|
+pub extend KindSpec with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Kind file and catalog failures.
 pub(all) suberror KindError {
   /// Frontmatter is missing, malformed, or semantically invalid.

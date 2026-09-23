@@ -34,6 +34,12 @@ pub(all) struct OpenCodeZenConfig {
 } derive(Eq, Debug)
 
 ///|
+pub extend OpenCodeZenConfig with Eq::{not_equal, equal}
+
+///|
+pub extend OpenCodeZenConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Config builder. `api_key`, `base_url`, and `model` are required.
 pub fn OpenCodeZenConfig::OpenCodeZenConfig(
   api_key : String,
@@ -136,4 +142,11 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn provider_config(
     context_window=self.config.context_window,
     compact_threshold=self.config.compact_threshold,
   )
+}
+
+///|
+pub extend OpenCodeZenModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
 }

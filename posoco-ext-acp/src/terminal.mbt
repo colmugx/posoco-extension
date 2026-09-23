@@ -34,12 +34,24 @@ pub(all) suberror AcpTerminalError {
 } derive(Eq, Debug)
 
 ///|
+pub extend AcpTerminalError with Eq::{not_equal, equal}
+
+///|
+pub extend AcpTerminalError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Outcome of a completed run: the process exit code (absent when the
 /// command died by signal) and the output captured when it exited.
 pub(all) struct AcpTerminalResult {
   exit_code : Int?
   output : String
 } derive(Eq, Debug)
+
+///|
+pub extend AcpTerminalResult with Eq::{not_equal, equal}
+
+///|
+pub extend AcpTerminalResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub struct AcpTerminal {
@@ -82,22 +94,6 @@ fn acp_error_method(error : @acp.AgentContextError) -> String {
     AgentContextCancelled(method_name~) => method_name
     AgentContextBrokerFailure(method_name~) => method_name
     AgentContextReplyMismatch(method_name~) => method_name
-  }
-}
-
-///|
-/// Classify a raw error crossing a `terminal/*` call: a cancellation error
-/// keeps its identity, anything else is recorded as a broker failure on the
-/// named method (same convention as the SDK's `agent_context_exception`).
-fn terminal_transport_failure(
-  error : Error,
-  method_name : String,
-  partial_output : String,
-) -> TerminalRunFailure {
-  if @async.is_cancellation_error(error) {
-    CancelledRun(partial_output)
-  } else {
-    HostFailure(AgentContextBrokerFailure(method_name~))
   }
 }
 
@@ -178,11 +174,8 @@ async fn terminal_poll_once(
 /// its identity.
 async fn terminal_sleep(
   pause_ms : Int,
-  seen : Ref[String],
 ) -> Result[Unit, TerminalRunFailure] noraise {
-  Ok(@async.sleep(pause_ms)) catch {
-    error => Err(terminal_transport_failure(error, "terminal/output", seen.val))
-  }
+  Ok(@async.sleep(pause_ms))
 }
 
 ///|
@@ -193,16 +186,16 @@ async fn terminal_park(
   seen : Ref[String],
 ) -> Result[Unit, TerminalRunFailure] noraise {
   match timeout_ms {
-    None => terminal_sleep(TERMINAL_POLL_INTERVAL_MS, seen)
+    None => terminal_sleep(TERMINAL_POLL_INTERVAL_MS)
     Some(limit) => {
       let elapsed = (@async.now() - started).to_int()
       let remaining = limit - elapsed
       if remaining <= 0 {
         Err(TimedOut(limit, seen.val))
       } else if remaining < TERMINAL_POLL_INTERVAL_MS {
-        terminal_sleep(remaining, seen)
+        terminal_sleep(remaining)
       } else {
-        terminal_sleep(TERMINAL_POLL_INTERVAL_MS, seen)
+        terminal_sleep(TERMINAL_POLL_INTERVAL_MS)
       }
     }
   }
@@ -401,7 +394,10 @@ async fn terminal_release_call(
 ///     },
 ///     notification_broker=_ => Ok(()),
 ///   )
-///   let terminal = AcpTerminal::AcpTerminal(context~, session_id="s1")
+///   let terminal = @posoco-ext-acp.AcpTerminal::AcpTerminal(
+///     context~,
+///     session_id="s1",
+///   )
 ///   let chunks : Array[String] = []
 ///   let emit = (chunk : String) => chunks.push(chunk)
 ///   let result = terminal.run("make check", cwd="/repo", on_output=emit)

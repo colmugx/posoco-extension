@@ -16,6 +16,9 @@ pub impl @posoco.Lifecycle for Profiles with fn on_compose(
 }
 
 ///|
+pub extend Profiles with @posoco.Lifecycle::{on_shutdown, on_start}
+
+///|
 pub impl @posoco.Lifecycle for Profiles with fn on_shutdown(_self : Profiles) -> Unit {
   ()
 }

@@ -10,6 +10,12 @@ pub(all) enum NmemRole {
 } derive(Debug, Eq)
 
 ///|
+pub extend NmemRole with Eq::{not_equal, equal}
+
+///|
+pub extend NmemRole with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Resolved Nowledge Mem client configuration. Produced by
 /// `NmemConfig::resolve`; values are pre-trimmed and blanks have already been
 /// treated as missing, so `api_key`/`space`/`agent_id`/`host_agent_id` being
@@ -27,6 +33,12 @@ pub(all) struct NmemConfig {
 } derive(Debug, Eq)
 
 ///|
+pub extend NmemConfig with Eq::{not_equal, equal}
+
+///|
+pub extend NmemConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// One message of a Nowledge Mem thread sync payload. `metadata` always
 /// carries `external_id` (stable for a given source position) and
 /// `source_app`. Upstream also carries a timestamp; Posoco transcripts have
@@ -36,3 +48,6 @@ pub(all) struct NmemThreadMessage {
   content : String
   metadata : Map[String, Json]
 } derive(Debug)
+
+///|
+pub extend NmemThreadMessage with @moonbitlang/core/debug.Debug::{to_repr}

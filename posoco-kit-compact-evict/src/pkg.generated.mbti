@@ -20,6 +20,8 @@ pub(all) struct EvictResult {
   evicted_tool_calls : Int
   evicted_tokens : Int
 } derive(Eq)
+pub fn EvictResult::equal(Self, Self) -> Bool
+pub fn EvictResult::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

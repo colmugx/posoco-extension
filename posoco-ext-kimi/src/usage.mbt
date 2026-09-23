@@ -230,3 +230,6 @@ pub impl @devkit.QuotaSource for KimiUsageSource with fn read(
 ) -> Result[Array[@devkit.QuotaReading], String] {
   fetch_kimi_usage(self.base_url, self.access_token, now_ms=self.now_ms)
 }
+
+///|
+pub extend KimiUsageSource with @colmugx/posoco-devkit.QuotaSource::{read}

@@ -9,6 +9,12 @@ pub(all) struct FileOps {
 } derive(Eq, Debug)
 
 ///|
+pub extend FileOps with Eq::{not_equal, equal}
+
+///|
+pub extend FileOps with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Extract the file manifest from AssistantMessage tool calls. A tool whose
 /// name contains "read" contributes to `read_files`; "write" or "edit" to
 /// `modified_files` ("read" wins if a name matches both). Paths are taken

@@ -166,6 +166,12 @@ pub(all) enum AuthMethod {
 } derive(Eq, Debug)
 
 ///|
+pub extend AuthMethod with Eq::{not_equal, equal}
+
+///|
+pub extend AuthMethod with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn AuthMethod::to_id(self : AuthMethod) -> String {
   match self {
     ApiKey => "api_key"

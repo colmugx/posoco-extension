@@ -19,11 +19,23 @@ pub(all) struct DelegationIntent {
 } derive(Eq, Debug)
 
 ///|
+pub extend DelegationIntent with Eq::{not_equal, equal}
+
+///|
+pub extend DelegationIntent with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// One concrete MCP tool invocation against the delegated-work host.
 pub(all) struct DelegationCall {
   tool : String
   arguments : Json
 } derive(Eq, Debug)
+
+///|
+pub extend DelegationCall with Eq::{not_equal, equal}
+
+///|
+pub extend DelegationCall with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Unified delegation phase for dispatchers: every host kit decodes its own
@@ -35,6 +47,12 @@ pub(all) enum DelegationPhase {
   Failed
   Lost
 } derive(Eq, Debug)
+
+///|
+pub extend DelegationPhase with Eq::{not_equal, equal}
+
+///|
+pub extend DelegationPhase with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Materialize the call as a posoco tool call; the caller owns the call id.

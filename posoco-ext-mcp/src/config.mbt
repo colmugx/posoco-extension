@@ -32,6 +32,9 @@ pub(all) enum LoadMode {
 } derive(Eq)
 
 ///|
+pub extend LoadMode with Eq::{not_equal, equal}
+
+///|
 /// Project-level mcp.json path: `<cwd>/.mcp.json`.
 fn project_mcp_json_path(cwd : String) -> String {
   if cwd == "" {

@@ -12,6 +12,12 @@ pub(all) enum TerminalState {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend TerminalState with Eq::{not_equal, equal}
+
+///|
+pub extend TerminalState with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Map a child run's terminal state to the `agent` tool result (design §2.1):
 /// `Completed` yields `Success`; every other state yields
 /// `ToolReportedError` whose text opens with a model-readable terminal

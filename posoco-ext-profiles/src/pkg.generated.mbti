@@ -30,12 +30,16 @@ pub(all) struct ProfileManifest {
   description : String
   exts : Array[String]
 } derive(Eq, @debug.Debug)
+pub fn ProfileManifest::equal(Self, Self) -> Bool
+pub fn ProfileManifest::not_equal(Self, Self) -> Bool
 pub fn ProfileManifest::to_json(Self) -> Json
+pub fn ProfileManifest::to_repr(Self) -> @debug.Repr
 
 pub struct Profiles {
   // private fields
 }
 pub async fn Profiles::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub async fn Profiles::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn Profiles::build(manifests~ : Array[ProfileManifest], defer_set~ : Array[String], captured_prompts~ : Map[String, String], attribution~ : Map[String, String], bus? : @posoco-devkit.EventBus?, store? : &ProfileStore?, session_store? : &@port.SessionStore?, summarizer? : ((Array[(String, Int)]) -> (String, String))?) -> Self
 pub fn Profiles::commands(Self) -> Array[@port.CommandDef]
 pub async fn Profiles::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
@@ -44,7 +48,14 @@ pub async fn Profiles::invoke(Self, String, Json) -> @port.CommandOutcome raise 
 pub fn Profiles::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn Profiles::manifest(Self) -> @port.ExtensionManifest
 pub fn Profiles::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn Profiles::on_event(Self, @types.TurnEvent) -> Unit
 pub fn Profiles::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn Profiles::on_post_event(Self, @port.HookStage) -> Unit noraise
+pub async fn Profiles::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub async fn Profiles::on_shutdown(Self) -> Unit
+pub async fn Profiles::on_start(Self) -> Unit
+pub async fn Profiles::on_turn_begin(Self) -> Unit
+pub async fn Profiles::on_turn_end(Self) -> Unit
 pub fn Profiles::session_usage(Self, String) -> Array[(String, Int)]
 pub fn Profiles::system_prompt(Self) -> String
 pub fn Profiles::warnings(Self) -> Array[String]

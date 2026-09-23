@@ -32,17 +32,24 @@ pub(all) struct CutPoint {
   is_split_turn : Bool
   turn_start_index : Int
 } derive(Eq, @debug.Debug)
+pub fn CutPoint::equal(Self, Self) -> Bool
+pub fn CutPoint::not_equal(Self, Self) -> Bool
+pub fn CutPoint::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FileOps {
   read_files : Array[String]
   modified_files : Array[String]
 } derive(Eq, @debug.Debug)
+pub fn FileOps::equal(Self, Self) -> Bool
+pub fn FileOps::not_equal(Self, Self) -> Bool
+pub fn FileOps::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SummaryTemplate {
   StructuredMd
   KimiXml
   CodexHandoff
 } derive(@debug.Debug)
+pub fn SummaryTemplate::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

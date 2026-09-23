@@ -163,9 +163,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
             )
         }
       } else {
-        raise @posoco.RuntimeError::UnknownTool(
-          "bash: missing 'cmd'",
-        )
+        raise @posoco.RuntimeError::UnknownTool("bash: missing 'cmd'")
       }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
@@ -177,9 +175,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
 ///|
 /// Shared empty-command error (used by both native + js execute paths).
 fn bash_empty_command_failure() -> @posoco.RuntimeError {
-  @posoco.RuntimeError::InvocationFailed(
-    "bash: empty cmd",
-  )
+  @posoco.RuntimeError::InvocationFailed("bash: empty cmd")
 }
 
 ///|

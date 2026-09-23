@@ -28,8 +28,11 @@ pub(all) struct ZaiCodingPlanModelPort {
   inner : @posoco-ext-zai.ZaiModelPort
 }
 pub fn ZaiCodingPlanModelPort::ZaiCodingPlanModelPort(@posoco-ext-zai.ZaiConfig, ctx? : @posoco-devkit.ExtContext) -> Self
+pub async fn ZaiCodingPlanModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn ZaiCodingPlanModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn ZaiCodingPlanModelPort::extension_id(Self) -> String
 pub fn ZaiCodingPlanModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn ZaiCodingPlanModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.Extension for ZaiCodingPlanModelPort
 pub impl @port.ModelPort for ZaiCodingPlanModelPort
 
@@ -37,6 +40,10 @@ pub(all) struct ZaiCodingPlanProvider {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn ZaiCodingPlanProvider::ZaiCodingPlanProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn ZaiCodingPlanProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn ZaiCodingPlanProvider::credential_id(Self) -> String
+pub async fn ZaiCodingPlanProvider::login(Self, &@posoco-ext-oauth.AuthPromptInteraction) -> @posoco-ext-oauth.ApiKeyCredential raise @posoco-ext-oauth.OAuthError
+pub fn ZaiCodingPlanProvider::provider_id(Self) -> String
 pub fn ZaiCodingPlanProvider::quota_source(Self, @posoco-ext-llm.ProviderConfigSource) -> ZaiCodingPlanQuotaSource? raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for ZaiCodingPlanProvider
 pub impl @posoco-ext-llm.ProviderFactory for ZaiCodingPlanProvider
@@ -47,6 +54,7 @@ pub(all) struct ZaiCodingPlanQuotaSource {
   now_ms : () -> Int64
 }
 pub fn ZaiCodingPlanQuotaSource::ZaiCodingPlanQuotaSource(base_url? : String, api_key~ : String, now_ms? : () -> Int64) -> Self
+pub async fn ZaiCodingPlanQuotaSource::read(Self) -> Result[Array[@posoco-devkit.QuotaReading], String]
 pub impl @posoco-devkit.QuotaSource for ZaiCodingPlanQuotaSource
 
 // Type aliases

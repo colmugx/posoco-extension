@@ -119,6 +119,9 @@ pub impl @posoco.ToolProvider for ReadTools with fn list_tools(
 }
 
 ///|
+pub extend ReadTools with @posoco.ToolProvider::{list_tools}
+
+///|
 /// Execute the `read` tool on native. Business logic lives in the shared
 /// `execute_read_impl`; this method only supplies the IO adaptor: the
 /// @fs-backed one by default, or the injected-WorkspaceFs adaptor (with

@@ -35,6 +35,9 @@ pub(all) suberror OAuthError {
   ParseError(String)
   Cancelled
 } derive(Eq, @debug.Debug)
+pub fn OAuthError::equal(Self, Self) -> Bool
+pub fn OAuthError::not_equal(Self, Self) -> Bool
+pub fn OAuthError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub(all) struct ApiKeyCredential {
@@ -49,6 +52,9 @@ pub(all) enum AuthHeader {
   Bearer(String)
   Header(Map[String, String])
 } derive(Eq, @debug.Debug)
+pub fn AuthHeader::equal(Self, Self) -> Bool
+pub fn AuthHeader::not_equal(Self, Self) -> Bool
+pub fn AuthHeader::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AuthMessage {
   AuthUrl(String)
@@ -85,6 +91,8 @@ pub fn Credential::to_json(Self) -> Json
 pub(all) struct DefaultOAuthHttpTransport {
 }
 pub fn DefaultOAuthHttpTransport::DefaultOAuthHttpTransport() -> Self
+pub async fn DefaultOAuthHttpTransport::get(Self, String, Map[String, String]) -> OAuthHttpResponse raise OAuthError
+pub async fn DefaultOAuthHttpTransport::post(Self, OAuthHttpRequest) -> OAuthHttpResponse raise OAuthError
 pub impl OAuthHttpTransport for DefaultOAuthHttpTransport
 
 pub(all) struct DeviceAuthResponse {
@@ -110,28 +118,40 @@ pub(all) struct InMemoryApiKeyStore {
   credentials : Map[String, ApiKeyCredential]
 }
 pub fn InMemoryApiKeyStore::InMemoryApiKeyStore() -> Self
+pub async fn InMemoryApiKeyStore::delete(Self, String) -> Unit raise OAuthError
+pub async fn InMemoryApiKeyStore::read(Self, String) -> ApiKeyCredential? raise OAuthError
+pub async fn InMemoryApiKeyStore::write(Self, String, ApiKeyCredential) -> Unit raise OAuthError
 pub impl ApiKeyStore for InMemoryApiKeyStore
 
 pub(all) struct InMemoryCredentialStore {
   credentials : Map[String, Credential]
 }
 pub fn InMemoryCredentialStore::InMemoryCredentialStore() -> Self
+pub async fn InMemoryCredentialStore::delete(Self, String) -> Unit raise OAuthError
+pub async fn InMemoryCredentialStore::read(Self, String) -> Credential? raise OAuthError
+pub async fn InMemoryCredentialStore::write(Self, String, Credential) -> Unit raise OAuthError
 pub impl CredentialStore for InMemoryCredentialStore
 
 pub(all) struct InMemoryProviderCredentialStore {
   credentials : Map[String, ProviderCredential]
 }
 pub fn InMemoryProviderCredentialStore::InMemoryProviderCredentialStore() -> Self
+pub async fn InMemoryProviderCredentialStore::delete(Self, String) -> Unit raise OAuthError
+pub async fn InMemoryProviderCredentialStore::read(Self, String) -> ProviderCredential? raise OAuthError
+pub async fn InMemoryProviderCredentialStore::write(Self, String, ProviderCredential) -> Unit raise OAuthError
 pub impl ProviderCredentialStore for InMemoryProviderCredentialStore
 
 pub(all) struct NoopAuthInteraction {
 }
 pub fn NoopAuthInteraction::NoopAuthInteraction() -> Self
+pub fn NoopAuthInteraction::is_cancelled(Self) -> Bool
+pub fn NoopAuthInteraction::notify(Self, AuthMessage) -> Unit
 pub impl AuthInteraction for NoopAuthInteraction
 
 pub(all) struct NoopAuthPromptInteraction {
 }
 pub fn NoopAuthPromptInteraction::NoopAuthPromptInteraction() -> Self
+pub async fn NoopAuthPromptInteraction::prompt(Self, AuthPromptRequest) -> String raise OAuthError
 pub impl AuthPromptInteraction for NoopAuthPromptInteraction
 
 pub(all) struct OAuthHttpRequest {

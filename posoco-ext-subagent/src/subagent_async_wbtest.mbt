@@ -530,9 +530,7 @@ impl @posoco.ModelPort for BgParentModel with fn chat(
     )
   }
   if self.calls == 2 && self.mid_sleep_ms > 0 {
-    @async.sleep(self.mid_sleep_ms) catch {
-      error => raise @posoco.ModelError::Transport("parent sleep: \{error}")
-    }
+    @async.sleep(self.mid_sleep_ms)
   }
   @posoco.tk_stop_response("parent step \{self.calls}")
 }
@@ -604,9 +602,7 @@ async test "background_completed_delivers_on_next_turn_and_records_terminal" {
     let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
     // turn1 = tool-request call + post-tool stop; no same-turn delivery.
     assert_eq(model.calls, 2)
-    @async.sleep(500) catch {
-      error => fail("sleep failed: \{error}")
-    }
+    @async.sleep(500)
     // The child's outcome is already enqueued but not yet observed: the
     // terminal is only recorded at the delivery point (turn 2's before_model).
     assert_eq(tools.background_children(), [("subagent-1", "running")])
@@ -681,9 +677,7 @@ async test "background_timeout_maps_to_timed_out_via_delivery" {
   let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("start slow"), "parent_bg")
-    @async.sleep(500) catch {
-      error => fail("sleep failed: \{error}")
-    }
+    @async.sleep(500)
     let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
   })
   // Core timed the task out at 100ms and delivered the terminal on turn 2.
@@ -721,9 +715,7 @@ async test "subscribe_receives_spawned_and_terminal_events" {
   )
   let _ = parent.run_scoped(async fn(agent) {
     let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
-    @async.sleep(400) catch {
-      error => fail("sleep failed: \{error}")
-    }
+    @async.sleep(400)
     let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
   })
   let mut spawned = 0

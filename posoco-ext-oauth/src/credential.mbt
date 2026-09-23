@@ -105,6 +105,12 @@ pub(all) enum AuthHeader {
 } derive(Eq, Debug)
 
 ///|
+pub extend AuthHeader with Eq::{not_equal, equal}
+
+///|
+pub extend AuthHeader with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Build a Bearer auth header from a credential.
 pub fn Credential::to_auth_header(self : Credential) -> AuthHeader {
   Bearer(self.access_token)

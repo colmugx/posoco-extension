@@ -849,6 +849,11 @@ pub impl @oauth.AuthPromptInteraction for OpenRouterApiKeyPrompt with fn prompt(
 }
 
 ///|
+pub extend OpenRouterApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+  prompt,
+}
+
+///|
 test "OpenRouterProvider reports the fixed provider and credential ids" {
   let provider = OpenRouterProvider()
   let factory : &@llm.ProviderFactory = provider

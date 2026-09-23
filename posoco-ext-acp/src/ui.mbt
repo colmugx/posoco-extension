@@ -184,6 +184,9 @@ pub impl @posoco.UiPort for AcpBridge with fn ui_descriptor(_self : AcpBridge) -
 }
 
 ///|
+pub extend AcpBridge with @posoco.UiPort::{ui_descriptor, render}
+
+///|
 /// No-op by design: ACP v1 has no render-intent channel. The client owns
 /// its own chrome; hosts that need status/toast rendering run a UI-capable
 /// host (cetas-js), not an ACP stdio process.

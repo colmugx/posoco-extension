@@ -27,6 +27,12 @@ pub(all) struct DeepSeekConfig {
 } derive(Eq, Debug)
 
 ///|
+pub extend DeepSeekConfig with Eq::{not_equal, equal}
+
+///|
+pub extend DeepSeekConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn DeepSeekConfig::DeepSeekConfig(
   api_key : String,
   model? : String = "deepseek-v4-flash",

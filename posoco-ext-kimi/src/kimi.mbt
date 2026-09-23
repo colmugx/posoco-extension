@@ -97,6 +97,13 @@ pub impl @posoco.ModelPort for KimiModelPort with fn chat(
 }
 
 ///|
+pub extend KimiModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}
+
+///|
 async fn KimiModelPort::chat_nonstream(
   self : KimiModelPort,
   messages : Array[@posoco.Message],

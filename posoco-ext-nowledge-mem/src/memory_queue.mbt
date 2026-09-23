@@ -33,6 +33,9 @@ pub(all) enum MemoryOp {
 } derive(Debug)
 
 ///|
+pub extend MemoryOp with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Write-after queue state (D8): `queue` holds the writes the drain replays
 /// against the MCP tools. Only the drain coroutine and `MemoryPort`'s
 /// synchronous storage slots touch this state; the storage slots only

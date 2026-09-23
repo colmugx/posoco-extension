@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "moonbitlang/async/fs",
+  "moonbitlang/core/debug",
 }
 
 // @fs backs fs_port.native.mbt on native+wasm. On js it is unused (the js

@@ -15,6 +15,9 @@ pub(all) enum SummaryTemplate {
 } derive(Debug)
 
 ///|
+pub extend SummaryTemplate with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 fn template_system_instruction(template : SummaryTemplate) -> String {
   match template {
     StructuredMd =>

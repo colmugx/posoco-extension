@@ -21,16 +21,23 @@ pub(all) struct SegmentInfo {
   value : String?
   color : String?
 } derive(Eq, @debug.Debug)
+pub fn SegmentInfo::equal(Self, Self) -> Bool
+pub fn SegmentInfo::not_equal(Self, Self) -> Bool
+pub fn SegmentInfo::to_repr(Self) -> @debug.Repr
 
 pub struct StatusBar {
   // private fields
 }
 pub fn StatusBar::StatusBar(bus? : @posoco-devkit.EventBus?) -> Self
 pub fn StatusBar::clear_segment(Self, source~ : String, segment~ : String) -> Unit
+pub fn StatusBar::commands(Self) -> Array[@port.CommandDef]
 pub fn StatusBar::extension_id(Self) -> String
 pub async fn StatusBar::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn StatusBar::manifest(Self) -> @port.ExtensionManifest
+pub fn StatusBar::on_bus_event(Self, @posoco-devkit.BusEvent) -> Unit
 pub fn StatusBar::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn StatusBar::on_shutdown(Self) -> Unit
+pub async fn StatusBar::on_start(Self) -> Unit
 pub fn StatusBar::segments(Self) -> Array[SegmentInfo]
 pub fn StatusBar::set_segment(Self, source~ : String, segment~ : String, value~ : String) -> Unit
 pub impl @posoco-devkit.BusSubscriber for StatusBar

@@ -1,4 +1,7 @@
 import {
   "colmugx/posoco-kit-delegation" @delegation,
-  "moonbitlang/core/json",
 }
+
+import {
+  "moonbitlang/core/json",
+} for "wbtest"

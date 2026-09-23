@@ -29,6 +29,12 @@ pub(all) struct BatchItem {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend BatchItem with Eq::{not_equal, equal}
+
+///|
+pub extend BatchItem with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Batch planning failures; messages are model-facing.
 pub(all) suberror BatchPlanError {
   ItemsEmpty
@@ -38,6 +44,12 @@ pub(all) suberror BatchPlanError {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend BatchPlanError with Eq::{not_equal, equal}
+
+///|
+pub extend BatchPlanError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// A batch as pure plan: ordered items plus the wave cap derived from
 /// `SubagentLimits.concurrency`. Building a plan validates; it never submits.
 pub(all) struct BatchPlan {
@@ -45,6 +57,9 @@ pub(all) struct BatchPlan {
   /// Maximum concurrently admitted items (>= 1).
   wave_cap : Int
 } derive(@debug.Debug)
+
+///|
+pub extend BatchPlan with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Build a plan from resolved items under the config's limits. Refuses
@@ -90,6 +105,9 @@ pub(all) struct BatchState {
   /// Item key → terminal classification once observed.
   mut terminals : Map[String, TerminalState]
 } derive(@debug.Debug)
+
+///|
+pub extend BatchState with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Fresh state for a plan: every key pending, nothing accepted.
@@ -157,6 +175,9 @@ pub(all) struct BatchResult {
   timed_out : Int
   cancelled : Int
 } derive(@debug.Debug)
+
+///|
+pub extend BatchResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Snapshot the current state as a result.

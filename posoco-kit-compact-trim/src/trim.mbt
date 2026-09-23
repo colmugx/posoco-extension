@@ -17,6 +17,12 @@ pub(all) enum TrimError {
 } derive(Eq, Debug)
 
 ///|
+pub extend TrimError with Eq::{not_equal, equal}
+
+///|
+pub extend TrimError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// ceil(chars / 4) without floating point.
 fn ceil_div4(chars : Int) -> Int {
   (chars + 3) / 4

@@ -96,6 +96,9 @@ pub impl @posoco.ToolProvider for AstGrepTools with fn list_tools(
 }
 
 ///|
+pub extend AstGrepTools with @posoco.ToolProvider::{list_tools}
+
+///|
 /// Execute the `astgrep` tool on native. Business logic lives in the shared
 /// `execute_astgrep_impl`; this method only supplies the spawn backend. The
 /// binary probe is lazy (first spawn), so argument errors surface without

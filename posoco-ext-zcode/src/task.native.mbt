@@ -29,9 +29,7 @@ async fn ZcodeConn::write_line(
   self : ZcodeConn,
   line : String,
 ) -> Unit raise ZcodeError {
-  self.write_lock.acquire() catch {
-    _ => ()
-  }
+  self.write_lock.acquire()
   try {
     self.writer.write(line)
     self.writer.write("\n")
@@ -442,9 +440,7 @@ async fn zcode_delegated(
         }
         None => open = false
       }
-      @async.pause() catch {
-        _ => ()
-      }
+      @async.pause()
     }
     for _, queue in conn.pending {
       queue.put(Err(ZcodeProcessDied(detail="zcode app-server closed stdout"))) catch {

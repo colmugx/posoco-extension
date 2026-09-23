@@ -12,3 +12,6 @@ pub(all) struct SubagentEvent {
   /// The unmodified kernel event from the child run.
   event : @posoco.TurnEvent
 } derive(@debug.Debug)
+
+///|
+pub extend SubagentEvent with @moonbitlang/core/debug.Debug::{to_repr}

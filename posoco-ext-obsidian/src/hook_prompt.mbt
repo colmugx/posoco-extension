@@ -47,6 +47,16 @@ pub impl @posoco.PipelineHook for ObsidianTools with fn before_tool(
 }
 
 ///|
+pub extend ObsidianTools with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_model,
+  before_tool,
+  on_turn_end,
+}
+
+///|
 fn consent_prompt(call : @posoco.ToolCall) -> String {
   let path = match arg_string(call.arguments, "path") {
     Some(p) => p

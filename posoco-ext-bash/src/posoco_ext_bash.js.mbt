@@ -59,10 +59,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   }
   let proc = bun_spawn_shell(cmd, cwd)
   let exit_code = proc.exit_code().wait() catch {
-      _ =>
-        raise @posoco.RuntimeError::InvocationFailed(
-          "bash: process failed",
-        )
+      _ => raise @posoco.RuntimeError::InvocationFailed("bash: process failed")
     }
   let stdout = proc.stdout_text().wait() catch { _ => "" }
   let stderr = proc.stderr_text().wait() catch { _ => "" }

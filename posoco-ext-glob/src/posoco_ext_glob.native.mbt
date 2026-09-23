@@ -102,6 +102,9 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
 }
 
 ///|
+pub extend GlobTools with @posoco.ToolProvider::{list_tools}
+
+///|
 pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
   _self : GlobTools,
 ) -> Array[@posoco.ToolDef] {

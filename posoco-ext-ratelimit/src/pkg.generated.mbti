@@ -4,6 +4,8 @@ package "colmugx/posoco-ext-ratelimit"
 import {
   "colmugx/posoco",
   "colmugx/posoco-devkit",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async",
@@ -38,11 +40,22 @@ pub struct RateLimitGuard {
   // private fields
 }
 pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, now_ms? : () -> Int64, sleep_ms? : async (Int) -> Unit, trace? : (String) -> Unit, bus? : @posoco-devkit.EventBus?) -> Self
+pub async fn RateLimitGuard::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub async fn RateLimitGuard::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn RateLimitGuard::bind(Self, @posoco.Agent) -> Unit
 pub fn RateLimitGuard::cancel_pending(Self) -> Unit
 pub fn RateLimitGuard::extension_id(Self) -> String
 pub fn RateLimitGuard::manifest(Self) -> @port.ExtensionManifest
 pub async fn RateLimitGuard::monitor(Self) -> Unit
+pub fn RateLimitGuard::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn RateLimitGuard::on_event(Self, @types.TurnEvent) -> Unit
+pub fn RateLimitGuard::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn RateLimitGuard::on_post_event(Self, @port.HookStage) -> Unit noraise
+pub async fn RateLimitGuard::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub async fn RateLimitGuard::on_shutdown(Self) -> Unit
+pub async fn RateLimitGuard::on_start(Self) -> Unit
+pub async fn RateLimitGuard::on_turn_begin(Self) -> Unit
+pub async fn RateLimitGuard::on_turn_end(Self) -> Unit
 pub fn RateLimitGuard::pending_snapshots(Self) -> Array[RateLimitPending]
 pub async fn RateLimitGuard::poll(Self) -> Unit
 pub fn[G] RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[G]) -> Unit
@@ -60,6 +73,9 @@ pub(all) struct RateLimitPending {
   attempts : Int
   provider_code : String?
 } derive(Eq, @debug.Debug)
+pub fn RateLimitPending::equal(Self, Self) -> Bool
+pub fn RateLimitPending::not_equal(Self, Self) -> Bool
+pub fn RateLimitPending::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -222,3 +222,6 @@ pub impl HandoffWorkSource for HandoffWorkState with fn handoff_work(
 ) -> WorkSnapshot {
   self.snapshot()
 }
+
+///|
+pub extend HandoffWorkState with HandoffWorkSource::{handoff_work}

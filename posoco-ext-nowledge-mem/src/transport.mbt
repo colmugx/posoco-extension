@@ -9,6 +9,9 @@ pub(all) struct NmemResponse {
 } derive(Debug)
 
 ///|
+pub extend NmemResponse with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Narrow HTTP seam for Nowledge Mem thread sync (plan D7): one JSON POST with
 /// a timeout, all failures normalized to `Err(String)`. Production sync uses
 /// `HttpNmemTransport`; tests and hosts inject a scripted fake.
@@ -241,3 +244,6 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
   }
   outcome
 }
+
+///|
+pub extend HttpNmemTransport with NmemTransport::{post_json}

@@ -116,3 +116,10 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn provider_config
     compact_threshold=self.config.compact_threshold,
   )
 }
+
+///|
+pub extend OpenAICompatibleModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}

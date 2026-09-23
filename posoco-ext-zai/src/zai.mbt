@@ -224,6 +224,9 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
 }
 
 ///|
+pub extend ZaiModelPort with @posoco.ModelPort::{provider_config, chat, compact}
+
+///|
 fn validate_zai_stream_tool_calls(
   acc : @posoco.StreamAccumulator,
 ) -> Unit raise @posoco.ModelError {

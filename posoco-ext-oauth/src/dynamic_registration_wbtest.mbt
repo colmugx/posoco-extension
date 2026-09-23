@@ -17,6 +17,9 @@ pub impl OAuthHttpTransport for RegistrationPostTransport with fn post(
 }
 
 ///|
+pub extend RegistrationPostTransport with OAuthHttpTransport::{post, get}
+
+///|
 pub impl OAuthHttpTransport for RegistrationPostTransport with fn get(
   _self : RegistrationPostTransport,
   _url : String,

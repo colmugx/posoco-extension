@@ -5,6 +5,7 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "colmugx/posoco/types",
 }
 
 // Values
@@ -24,9 +25,14 @@ pub(all) struct RTKHook {
   shell_tools : ShellTools
 }
 pub fn RTKHook::RTKHook(String) -> Self
+pub async fn RTKHook::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn RTKHook::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn RTKHook::extension_id(Self) -> String
 pub fn RTKHook::manifest(Self) -> @port.ExtensionManifest
+pub async fn RTKHook::on_post_event(Self, @port.HookStage) -> Unit noraise
+pub async fn RTKHook::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub async fn RTKHook::on_turn_begin(Self) -> Unit
+pub async fn RTKHook::on_turn_end(Self) -> Unit
 pub fn RTKHook::with_shell_tools(String, ShellTools) -> Self
 pub impl @port.Extension for RTKHook
 pub impl @port.PipelineHook for RTKHook

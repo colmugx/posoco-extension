@@ -70,6 +70,21 @@ pub impl @workspace.WorkspaceFs for FakeFs with fn exists(
 }
 
 ///|
+pub extend FakeFs with @colmugx/posoco-ext-workspace.WorkspaceFs::{
+  write_file_atomic,
+  walk,
+  realpath,
+  mkdir,
+  write_file,
+  kind,
+  remove,
+  rename,
+  exists,
+  read_file,
+  readdir,
+}
+
+///|
 pub impl @workspace.WorkspaceFs for FakeFs with fn kind(
   self : FakeFs,
   path : String,

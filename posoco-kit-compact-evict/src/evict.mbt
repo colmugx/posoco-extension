@@ -30,6 +30,9 @@ pub(all) struct EvictResult {
 } derive(Eq)
 
 ///|
+pub extend EvictResult with Eq::{not_equal, equal}
+
+///|
 /// Start of the protected window: the index of the `turns`-th most recent
 /// UserMessage counted from the end. With fewer user turns everything is
 /// protected, so the function returns 0.

@@ -49,6 +49,9 @@ pub impl @posoco.CommandPort for JsonlSessionStore with fn commands(
 }
 
 ///|
+pub extend JsonlSessionStore with @posoco.CommandPort::{invoke, commands}
+
+///|
 pub impl @posoco.CommandPort for JsonlSessionStore with fn invoke(
   self : JsonlSessionStore,
   id : String,

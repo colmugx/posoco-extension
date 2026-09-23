@@ -26,7 +26,7 @@
 /// # Example
 /// ```mbt check
 /// test "publish with no subscribers completes silently" {
-///   let bus = EventBus::EventBus()
+///   let bus = @posoco-devkit.EventBus::EventBus()
 ///   bus.publish({
 ///     source: "posoco_ext_scrum",
 ///     topic: "status",
@@ -50,6 +50,9 @@ pub(all) struct BusEvent {
   topic : String
   data : Json
 } derive(Debug)
+
+///|
+pub extend BusEvent with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Subscriber contract: receive every event, ignore what you do not

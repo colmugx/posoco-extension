@@ -14,6 +14,9 @@ pub(all) enum PruneAction {
 } derive(Eq)
 
 ///|
+pub extend PruneAction with Eq::{not_equal, equal}
+
+///|
 /// Outcome of `prune_tool_outputs`: the rewritten transcript (always a new
 /// array), the estimated tokens freed, and how many tool outputs were
 /// cleared. On `Noop` both counts are zero.
@@ -23,6 +26,9 @@ pub(all) struct PruneResult {
   pruned_count : Int
   action : PruneAction
 } derive(Eq)
+
+///|
+pub extend PruneResult with Eq::{not_equal, equal}
 
 ///|
 /// Shallow copy of a message array (elements are immutable and shared).

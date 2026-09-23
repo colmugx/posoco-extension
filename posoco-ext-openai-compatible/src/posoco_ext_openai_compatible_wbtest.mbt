@@ -30,6 +30,11 @@ pub impl @oauth.AuthPromptInteraction for OaiCompatApiKeyPrompt with fn prompt(
 }
 
 ///|
+pub extend OaiCompatApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+  prompt,
+}
+
+///|
 test "OpenAICompatibleConfig records required and optional fields" {
   let config = OpenAICompatibleConfig(
     "sk-test",

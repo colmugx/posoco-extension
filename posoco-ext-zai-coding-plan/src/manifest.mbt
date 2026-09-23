@@ -27,6 +27,13 @@ pub impl @posoco.ModelPort for ZaiCodingPlanModelPort with fn chat(
 }
 
 ///|
+pub extend ZaiCodingPlanModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}
+
+///|
 pub impl @posoco.ModelPort for ZaiCodingPlanModelPort with fn compact(
   self : ZaiCodingPlanModelPort,
   scope : @posoco.InvocationScope,

@@ -168,8 +168,14 @@ pub impl @posoco.Observer for HerdrReporter with fn on_event(
 }
 
 ///|
+pub extend HerdrReporter with @posoco.Observer::{on_event_at}
+
+///|
 /// The spawn seam never raises, so shutdown stays failure-free for the
 /// Agent's lifecycle walk.
 pub impl @posoco.Lifecycle for HerdrReporter with fn on_shutdown(self) -> Unit {
   self.release()
 }
+
+///|
+pub extend HerdrReporter with @posoco.Lifecycle::{on_compose, on_start}

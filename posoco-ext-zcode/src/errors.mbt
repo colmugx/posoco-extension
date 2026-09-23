@@ -25,6 +25,9 @@ pub(all) suberror ZcodeError {
 } derive(Debug)
 
 ///|
+pub extend ZcodeError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub impl Show for ZcodeError with fn to_string(self) -> String {
   match self {
     ZcodeBinNotFound => "ZcodeError::ZcodeBinNotFound"
@@ -39,3 +42,6 @@ pub impl Show for ZcodeError with fn to_string(self) -> String {
     ZcodeProcessDied(detail~) => "ZcodeError::ZcodeProcessDied(\{detail})"
   }
 }
+
+///|
+pub extend ZcodeError with Show::{to_string, output}

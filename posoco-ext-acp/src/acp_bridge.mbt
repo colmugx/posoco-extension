@@ -67,7 +67,7 @@ fn acp_wire_meta(meta : Json?) -> @acp.ProtocolNullable[Json] {
 /// # Example
 /// ```mbt check
 /// async test "detached bridge stays inert" {
-///   let bridge = AcpBridge()
+///   let bridge = @posoco-ext-acp.AcpBridge()
 ///   inspect(bridge.flush(), content="0")
 ///   assert_true(bridge.stop_reason() is @acp.StopReason::EndTurn)
 ///   assert_true(bridge.take_failure() is None)

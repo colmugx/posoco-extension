@@ -245,6 +245,13 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
 }
 
 ///|
+pub extend DeepSeekModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}
+
+///|
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn provider_config(
   self : DeepSeekModelPort,
 ) -> @posoco.ProviderConfig {

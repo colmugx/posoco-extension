@@ -22,6 +22,12 @@ pub(all) struct QuotaReading {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend QuotaReading with Eq::{not_equal, equal}
+
+///|
+pub extend QuotaReading with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// A source of authoritative provider quota readings. Implementations live
 /// in provider adapter extensions, where the credentials and base URLs the
 /// probe needs already reside; consumers (rate-limit guards, status bars)

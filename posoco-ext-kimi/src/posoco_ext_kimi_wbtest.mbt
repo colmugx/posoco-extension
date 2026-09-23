@@ -90,11 +90,22 @@ pub impl @oauth.OAuthHttpTransport for KimiOAuthTransport with fn post(
 }
 
 ///|
+pub extend KimiOAuthTransport with @colmugx/posoco-ext-oauth.OAuthHttpTransport::{
+  post,
+  get,
+}
+
+///|
 pub impl @oauth.AuthPromptInteraction for KimiApiKeyPrompt with fn prompt(
   self : KimiApiKeyPrompt,
   _request : @oauth.AuthPromptRequest,
 ) -> String raise @oauth.OAuthError {
   self.value
+}
+
+///|
+pub extend KimiApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+  prompt,
 }
 
 ///|
@@ -208,6 +219,12 @@ pub impl @oauth.OAuthHttpTransport for KimiRetryOAuthTransport with fn post(
 ) -> @oauth.OAuthHttpResponse {
   self.requests.push(request)
   self.responses[self.requests.length() - 1]
+}
+
+///|
+pub extend KimiRetryOAuthTransport with @colmugx/posoco-ext-oauth.OAuthHttpTransport::{
+  post,
+  get,
 }
 
 ///|

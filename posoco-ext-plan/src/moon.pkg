@@ -3,7 +3,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-ext-workspace" @workspace,
-  "moonbitlang/core/json",
+  "moonbitlang/core/debug",
 }
 
 import {

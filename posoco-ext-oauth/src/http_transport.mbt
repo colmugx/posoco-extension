@@ -120,6 +120,9 @@ pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn post(
 }
 
 ///|
+pub extend DefaultOAuthHttpTransport with OAuthHttpTransport::{post, get}
+
+///|
 pub impl OAuthHttpTransport for DefaultOAuthHttpTransport with fn get(
   _self : DefaultOAuthHttpTransport,
   url : String,

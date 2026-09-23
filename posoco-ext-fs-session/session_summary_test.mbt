@@ -9,7 +9,7 @@ fn sixty_char_text() -> String {
 ///|
 async test "io[native]: summary picks the metadata name for the title" {
   let root = fresh_root("summary-named")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   store.save("sess_named", @posoco.Session::{
     messages: [
       @posoco.Message::UserMessage(content=[
@@ -25,7 +25,7 @@ async test "io[native]: summary picks the metadata name for the title" {
   }
   assert_eq(s.id, "sess_named")
   assert_eq(s.name, Some("Weekly Review"))
-  assert_eq(display_title(s), "Weekly Review")
+  assert_eq(@posoco-ext-fs-session.display_title(s), "Weekly Review")
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
@@ -34,7 +34,7 @@ async test "io[native]: summary picks the metadata name for the title" {
 ///|
 async test "io[native]: display_title truncates first user text at 50 chars" {
   let root = fresh_root("summary-unnamed")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   store.save("sess_unnamed", @posoco.Session::{
     messages: [
       // System messages and assistant replies never become the title.
@@ -55,7 +55,7 @@ async test "io[native]: display_title truncates first user text at 50 chars" {
   assert_eq(s.name, None)
   assert_eq(s.first_user_text, sixty_char_text())
   assert_eq(
-    display_title(s),
+    @posoco-ext-fs-session.display_title(s),
     "01234567890123456789012345678901234567890123456789",
   )
   @fs.rmdir(root, recursive=true) catch {
@@ -66,7 +66,7 @@ async test "io[native]: display_title truncates first user text at 50 chars" {
 ///|
 async test "io[native]: display_title falls back to the session id" {
   let root = fresh_root("summary-empty")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   store.save("sess_silent", @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -76,7 +76,7 @@ async test "io[native]: display_title falls back to the session id" {
   let s = store.summary("sess_silent") catch {
     e => fail("summary failed: \{e}")
   }
-  assert_eq(display_title(s), "sess_silent")
+  assert_eq(@posoco-ext-fs-session.display_title(s), "sess_silent")
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
@@ -85,13 +85,13 @@ async test "io[native]: display_title falls back to the session id" {
 ///|
 async test "io[native]: summary of a missing file is empty" {
   let root = fresh_root("summary-missing")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let s = store.summary("ghost") catch {
     e => fail("summary of missing session failed: \{e}")
   }
   assert_eq(s.name, None)
   assert_eq(s.first_user_text, "")
-  assert_eq(display_title(s), "ghost")
+  assert_eq(@posoco-ext-fs-session.display_title(s), "ghost")
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
@@ -99,12 +99,15 @@ async test "io[native]: summary of a missing file is empty" {
 
 ///|
 test "display_title collapses whitespace before truncating" {
-  let s : SessionSummary = {
+  let s : @posoco-ext-fs-session.SessionSummary = {
     id: "sess_ws",
     name: None,
     first_user_text: "  fix the \n\t parser  crash   reported downstream  ",
   }
-  assert_eq(display_title(s), "fix the parser crash reported downstream")
+  assert_eq(
+    @posoco-ext-fs-session.display_title(s),
+    "fix the parser crash reported downstream",
+  )
 }
 
 ///|
@@ -121,10 +124,10 @@ fn repeat_decade(times : Int) -> String {
 
 ///|
 test "display_title cuts at char boundaries, not bytes" {
-  let s : SessionSummary = {
+  let s : @posoco-ext-fs-session.SessionSummary = {
     id: "sess_cjk",
     name: None,
     first_user_text: repeat_decade(6),
   }
-  assert_eq(display_title(s), repeat_decade(5))
+  assert_eq(@posoco-ext-fs-session.display_title(s), repeat_decade(5))
 }

@@ -504,6 +504,9 @@ async test "SyncEngine: flusher_loop drains pending lanes until stop" {
 suberror HostEof derive(Debug)
 
 ///|
+pub extend HostEof with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Cancellation regression: when a host group tears down (cetas-acp stdin
 /// EOF), the aborting body fails the group and the flusher is cancelled
 /// mid-sleep; the loop must re-raise the cancellation so the teardown

@@ -18,6 +18,12 @@ pub(all) enum PermissionMode {
 } derive(Eq, Debug)
 
 ///|
+pub extend PermissionMode with Eq::{not_equal, equal}
+
+///|
+pub extend PermissionMode with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// What the policy wants the host to approve. The host renders this however
 /// it likes (modal, inline prompt, protocol reverse-request) and returns a
 /// decision.
@@ -191,6 +197,11 @@ pub impl @devkit.BusSubscriber for PermissionPolicy with fn on_bus_event(
       None => ()
     }
   }
+}
+
+///|
+pub extend PermissionPolicy with @colmugx/posoco-devkit.BusSubscriber::{
+  on_bus_event,
 }
 
 ///|
@@ -525,6 +536,16 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_model(
       }
   }
   messages
+}
+
+///|
+pub extend PermissionPolicy with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_model,
+  before_tool,
+  on_turn_end,
 }
 
 ///|
@@ -1004,6 +1025,9 @@ pub impl @posoco.CommandPort for PermissionPolicy with fn commands(_self) -> Arr
 }
 
 ///|
+pub extend PermissionPolicy with @posoco.CommandPort::{invoke, commands}
+
+///|
 pub impl @posoco.CommandPort for PermissionPolicy with fn invoke(
   self,
   id : String,
@@ -1119,6 +1143,13 @@ pub impl @posoco.Lifecycle for PermissionPolicy with fn on_compose(
       detail="PermissionMode::Auto requires a composed DecisionPort; none is present",
     )
   }
+}
+
+///|
+pub extend PermissionPolicy with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
 }
 
 ///|

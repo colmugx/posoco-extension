@@ -51,6 +51,13 @@ pub impl ProviderCredentialStore for InMemoryProviderCredentialStore with fn rea
 }
 
 ///|
+pub extend InMemoryProviderCredentialStore with ProviderCredentialStore::{
+  read,
+  delete,
+  write,
+}
+
+///|
 pub impl ProviderCredentialStore for InMemoryProviderCredentialStore with fn write(
   self : InMemoryProviderCredentialStore,
   provider_id : String,
@@ -88,6 +95,9 @@ pub impl CredentialStore for InMemoryCredentialStore with fn read(
     None => None
   }
 }
+
+///|
+pub extend InMemoryCredentialStore with CredentialStore::{read, delete, write}
 
 ///|
 pub impl CredentialStore for InMemoryCredentialStore with fn write(
@@ -134,6 +144,9 @@ pub impl ApiKeyStore for InMemoryApiKeyStore with fn read(
 ) -> ApiKeyCredential? {
   self.credentials.get(provider_id)
 }
+
+///|
+pub extend InMemoryApiKeyStore with ApiKeyStore::{read, delete, write}
 
 ///|
 pub impl ApiKeyStore for InMemoryApiKeyStore with fn write(

@@ -32,6 +32,12 @@ pub(all) enum PlanStatus {
 } derive(Eq, Debug)
 
 ///|
+pub extend PlanStatus with Eq::{not_equal, equal}
+
+///|
+pub extend PlanStatus with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub impl Show for PlanStatus with fn to_string(self : PlanStatus) -> String {
   match self {
     Off => "Off"
@@ -42,6 +48,9 @@ pub impl Show for PlanStatus with fn to_string(self : PlanStatus) -> String {
       "ReadyForApproval(name=\{name}, plan=\{plan.length()} chars)"
   }
 }
+
+///|
+pub extend PlanStatus with Show::{to_string, output}
 
 ///|
 pub(all) struct PlanModeConfig {
@@ -74,6 +83,12 @@ pub(all) struct PlanModeConfig {
   /// when `allow_model_entry` is true.
   enter_tool_name : String
 } derive(Eq, Debug)
+
+///|
+pub extend PlanModeConfig with Eq::{not_equal, equal}
+
+///|
+pub extend PlanModeConfig with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn PlanModeConfig::default() -> PlanModeConfig {
@@ -124,8 +139,8 @@ pub(all) struct PlanMode {
 /// # Example
 /// ```mbt check
 /// async test "plan mode gates write tools until the plan is approved" {
-///   let plan = PlanMode::PlanMode(config=PlanModeConfig::{
-///     ..PlanModeConfig::default(),
+///   let plan = @posoco-ext-plan.PlanMode::PlanMode(config=@posoco-ext-plan.PlanModeConfig::{
+///     ..@posoco-ext-plan.PlanModeConfig::default(),
 ///     allowed_tools: ["read", "glob", "grep"],
 ///   })
 ///   ignore(plan.invoke("plan", Json::string("on")))

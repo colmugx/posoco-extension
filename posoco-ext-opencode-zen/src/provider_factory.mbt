@@ -99,6 +99,13 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn provider_id(
 }
 
 ///|
+pub extend OpenCodeZenProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn credential_id(
   _self : OpenCodeZenProvider,
 ) -> String {
@@ -154,6 +161,11 @@ pub impl @llm.ApiKeyFactory for OpenCodeZenProvider with fn provider_id(
   _self : OpenCodeZenProvider,
 ) -> String {
   zen_provider_id
+}
+
+///|
+pub extend OpenCodeZenProvider with @colmugx/posoco-ext-llm.ApiKeyFactory::{
+  login,
 }
 
 ///|

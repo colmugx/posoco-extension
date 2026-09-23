@@ -32,12 +32,16 @@ pub(all) struct GoalBudget {
   mut max_turns : Int
   mut max_total_tokens : Int
 } derive(@debug.Debug)
+pub fn GoalBudget::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalHistoryEntry {
   turn : Int
   usage : GoalUsage
   summary : String
 } derive(Eq, @debug.Debug)
+pub fn GoalHistoryEntry::equal(Self, Self) -> Bool
+pub fn GoalHistoryEntry::not_equal(Self, Self) -> Bool
+pub fn GoalHistoryEntry::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalOptions {
   goal_condition : String
@@ -53,28 +57,40 @@ pub(all) struct GoalOptions {
   mut plan_tool_name : String
 } derive(@debug.Debug)
 pub fn GoalOptions::default(goal_condition~ : String) -> Self
+pub fn GoalOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalPlan {
   items : Array[GoalPlanItem]
 } derive(Eq, @debug.Debug)
 pub fn GoalPlan::empty() -> Self
+pub fn GoalPlan::equal(Self, Self) -> Bool
 pub fn GoalPlan::fingerprint(Self) -> String
 pub fn GoalPlan::from_tool_args(Json) -> Result[Self, String]
 pub fn GoalPlan::next_step(Self) -> String?
 pub fn GoalPlan::normalize(Self) -> Self
+pub fn GoalPlan::not_equal(Self, Self) -> Bool
 pub fn GoalPlan::progress_line(Self) -> String
 pub fn GoalPlan::render(Self) -> String
+pub fn GoalPlan::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalPlanItem {
   title : String
   status : GoalPlanStatus
 } derive(Eq, @debug.Debug)
+pub fn GoalPlanItem::equal(Self, Self) -> Bool
+pub fn GoalPlanItem::not_equal(Self, Self) -> Bool
+pub fn GoalPlanItem::to_repr(Self) -> @debug.Repr
 
 pub(all) enum GoalPlanStatus {
   Pending
   InProgress
   Done
 } derive(Eq, @debug.Debug)
+pub fn GoalPlanStatus::equal(Self, Self) -> Bool
+pub fn GoalPlanStatus::not_equal(Self, Self) -> Bool
+pub fn GoalPlanStatus::output(Self, &Logger) -> Unit
+pub fn GoalPlanStatus::to_repr(Self) -> @debug.Repr
+pub fn GoalPlanStatus::to_string(Self) -> String
 pub impl Show for GoalPlanStatus
 
 pub(all) struct GoalResult {
@@ -85,6 +101,7 @@ pub(all) struct GoalResult {
   final_plan : GoalPlan
   stall_reason : String?
 } derive(@debug.Debug)
+pub fn GoalResult::to_repr(Self) -> @debug.Repr
 
 pub struct GoalRunner {
   options : GoalOptions
@@ -116,10 +133,12 @@ pub fn GoalRunner::extension_id(Self) -> String
 pub fn GoalRunner::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn GoalRunner::manifest(Self) -> @port.ExtensionManifest
 pub fn GoalRunner::on_event(Self, @types.TurnEvent) -> Unit
+pub fn GoalRunner::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub fn GoalRunner::pause(Self) -> Unit
 pub fn GoalRunner::plan(Self) -> GoalPlan
 pub fn GoalRunner::resume_goal(Self) -> Unit
 pub fn GoalRunner::status(Self) -> GoalStatus
+pub fn GoalRunner::to_repr(Self) -> @debug.Repr
 pub impl @port.Extension for GoalRunner
 pub impl @port.Observer for GoalRunner
 pub impl @port.ToolProvider for GoalRunner
@@ -133,18 +152,29 @@ pub(all) enum GoalStatus {
   BudgetExhausted
   Failed(String)
 } derive(Eq, @debug.Debug)
+pub fn GoalStatus::equal(Self, Self) -> Bool
+pub fn GoalStatus::not_equal(Self, Self) -> Bool
+pub fn GoalStatus::output(Self, &Logger) -> Unit
+pub fn GoalStatus::to_repr(Self) -> @debug.Repr
+pub fn GoalStatus::to_string(Self) -> String
 pub impl Show for GoalStatus
 
 pub(all) struct GoalUsage {
   mut turns : Int
   mut total_tokens : Int
 } derive(Eq, @debug.Debug)
+pub fn GoalUsage::equal(Self, Self) -> Bool
+pub fn GoalUsage::not_equal(Self, Self) -> Bool
+pub fn GoalUsage::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TurnVerdict {
   NoSignal
   CompletionClaimed
   BlockedClaimed(reason~ : String)
 } derive(Eq, @debug.Debug)
+pub fn TurnVerdict::equal(Self, Self) -> Bool
+pub fn TurnVerdict::not_equal(Self, Self) -> Bool
+pub fn TurnVerdict::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -6,6 +6,7 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "colmugx/posoco/types",
   "moonbitlang/core/debug",
   "moonbitlang/core/set",
 }
@@ -37,6 +38,9 @@ pub(all) enum PermissionMode {
   Auto
   Yolo
 } derive(Eq, @debug.Debug)
+pub fn PermissionMode::equal(Self, Self) -> Bool
+pub fn PermissionMode::not_equal(Self, Self) -> Bool
+pub fn PermissionMode::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PermissionPolicy {
   mut mode : PermissionMode
@@ -50,9 +54,21 @@ pub(all) struct PermissionPolicy {
   // private fields
 }
 pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, bus? : @posoco-devkit.EventBus?, workspace? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub async fn PermissionPolicy::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub async fn PermissionPolicy::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
+pub fn PermissionPolicy::commands(Self) -> Array[@port.CommandDef]
 pub fn PermissionPolicy::extension_id(Self) -> String
+pub async fn PermissionPolicy::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn PermissionPolicy::manifest(Self) -> @port.ExtensionManifest
 pub fn PermissionPolicy::mode(Self) -> PermissionMode
+pub fn PermissionPolicy::on_bus_event(Self, @posoco-devkit.BusEvent) -> Unit
+pub fn PermissionPolicy::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn PermissionPolicy::on_post_event(Self, @port.HookStage) -> Unit noraise
+pub async fn PermissionPolicy::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub async fn PermissionPolicy::on_shutdown(Self) -> Unit
+pub async fn PermissionPolicy::on_start(Self) -> Unit
+pub async fn PermissionPolicy::on_turn_begin(Self) -> Unit
+pub async fn PermissionPolicy::on_turn_end(Self) -> Unit
 pub impl @posoco-devkit.BusSubscriber for PermissionPolicy
 pub impl @port.CommandPort for PermissionPolicy
 pub impl @port.Extension for PermissionPolicy

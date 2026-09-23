@@ -4,6 +4,7 @@ import {
   "colmugx/posoco-devkit" @devkit,
   "moonbit-community/yaml",
   "moonbitlang/async/fs",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 

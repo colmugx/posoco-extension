@@ -9,6 +9,12 @@ pub(all) struct ZcodeTaskArgs {
 } derive(Eq, Debug)
 
 ///|
+pub extend ZcodeTaskArgs with Eq::{not_equal, equal}
+
+///|
+pub extend ZcodeTaskArgs with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub(all) struct ZcodeTools {
   config : ZcodeConfig
   /// The Agent-owned task capability, captured at on_compose from the

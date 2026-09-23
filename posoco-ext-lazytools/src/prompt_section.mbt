@@ -48,3 +48,6 @@ pub impl @posoco.SystemPromptContributor for LazyTools with fn system_prompt(
     $|\{self.catalog_bullets()}
   )
 }
+
+///|
+pub extend LazyTools with @posoco.SystemPromptContributor::{system_prompt}

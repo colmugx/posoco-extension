@@ -96,6 +96,12 @@ pub(all) struct ZaiConfig {
 } derive(Eq, Debug)
 
 ///|
+pub extend ZaiConfig with Eq::{not_equal, equal}
+
+///|
+pub extend ZaiConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn ZaiConfig::ZaiConfig(
   api_key : String,
   model? : String = "glm-5.3",

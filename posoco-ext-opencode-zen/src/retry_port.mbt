@@ -64,9 +64,7 @@ pub impl @posoco.ModelPort for ZenRetryModelPort with fn chat(
       Ok(value) => return value
       Err(error) =>
         if retries_left > 0 && zen_retryable_error(error) {
-          @async.sleep(delay_ms) catch {
-            _ => ()
-          }
+          @async.sleep(delay_ms)
           retries_left -= 1
           delay_ms *= 2
         } else {
@@ -75,6 +73,13 @@ pub impl @posoco.ModelPort for ZenRetryModelPort with fn chat(
     }
   }
   abort("zen retry loop exits via return or raise")
+}
+
+///|
+pub extend ZenRetryModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
 }
 
 ///|
@@ -198,9 +203,7 @@ pub impl @posoco.ModelPort for ZenRetryModelPort with fn compact(
       Ok(value) => return value
       Err(error) =>
         if retries_left > 0 && zen_retryable_error(error) {
-          @async.sleep(delay_ms) catch {
-            _ => ()
-          }
+          @async.sleep(delay_ms)
           retries_left -= 1
           delay_ms *= 2
         } else {

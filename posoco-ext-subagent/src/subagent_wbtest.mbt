@@ -95,9 +95,7 @@ impl @posoco.ModelPort for SlowModel with fn chat(
   _options : @posoco.ChatOptions,
   _stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  @async.sleep(self.delay_ms) catch {
-    error => raise @posoco.ModelError::Transport("slow model sleep: \{error}")
-  }
+  @async.sleep(self.delay_ms)
   @posoco.tk_stop_response("too late")
 }
 

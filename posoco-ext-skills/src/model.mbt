@@ -8,10 +8,16 @@ pub(all) enum SkillScope {
 } derive(Eq)
 
 ///|
+pub extend SkillScope with Eq::{not_equal, equal}
+
+///|
 pub(all) enum SkillDiagnosticSeverity {
   Warning
   Error
 } derive(Eq)
+
+///|
+pub extend SkillDiagnosticSeverity with Eq::{not_equal, equal}
 
 ///|
 pub(all) enum SkillDiagnosticCode {
@@ -40,6 +46,9 @@ pub(all) enum SkillDiagnosticCode {
 // Agent Skills recommendations. Portable violations stay lenient warnings,
 // while these absolute ceilings prevent one discovered file or manually
 // constructed catalog from amplifying startup tool schemas / retained state.
+
+///|
+pub extend SkillDiagnosticCode with Eq::{not_equal, equal}
 
 ///|
 let hard_max_frontmatter_chars = 131072

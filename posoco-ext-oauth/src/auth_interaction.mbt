@@ -42,6 +42,9 @@ pub impl AuthInteraction for NoopAuthInteraction with fn notify(
 }
 
 ///|
+pub extend NoopAuthInteraction with AuthInteraction::{notify, is_cancelled}
+
+///|
 pub impl AuthInteraction for NoopAuthInteraction with fn is_cancelled(
   _self : NoopAuthInteraction,
 ) -> Bool {
@@ -101,3 +104,6 @@ pub impl AuthPromptInteraction for NoopAuthPromptInteraction with fn prompt(
 ) -> String raise OAuthError {
   raise OAuthError::Cancelled
 }
+
+///|
+pub extend NoopAuthPromptInteraction with AuthPromptInteraction::{prompt}

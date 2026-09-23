@@ -43,3 +43,8 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh
   )
   @llm.ProviderBuildResult::Ready(catalog)
 }
+
+///|
+pub extend OpenCodeZenProvider with @colmugx/posoco-ext-llm.RefreshableProviderFactory::{
+  refresh,
+}

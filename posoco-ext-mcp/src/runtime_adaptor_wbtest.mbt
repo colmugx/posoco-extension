@@ -22,6 +22,14 @@ pub impl @runtime.Runtime for RecordingRuntime with fn call_model(
 }
 
 ///|
+pub extend RecordingRuntime with @colmugx/posoco/runtime.Runtime::{
+  cancel_effects,
+  execute_tool,
+  call_model,
+  compact,
+}
+
+///|
 pub impl @runtime.Runtime for RecordingRuntime with fn execute_tool(
   self,
   context : @runtime.EffectContext,
@@ -141,9 +149,7 @@ async test "mcp_runtime_execute_tool_delegates_under_ambient_cancellation" {
     @async.with_task_group(group => {
       group.spawn_bg(no_wait=true) <| () => { raise HarnessTrigger }
       // Suspension gate: only the group's cancellation wakes this early.
-      @async.sleep(5_000) catch {
-        _ => ()
-      }
+      @async.sleep(5_000)
       cancelled_before.val = @async.is_being_cancelled()
       outcome.val = Some(runtime.execute_tool(effect_for("read")))
       cancelled_after.val = @async.is_being_cancelled()

@@ -53,6 +53,13 @@ pub impl @posoco.Lifecycle for ObsidianTools with fn on_start(
 }
 
 ///|
+pub extend ObsidianTools with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
+}
+
+///|
 pub impl @posoco.Lifecycle for ObsidianTools with fn on_shutdown(
   _self : ObsidianTools,
 ) -> Unit {
@@ -65,6 +72,9 @@ pub impl @posoco.CommandPort for ObsidianTools with fn commands(
 ) -> Array[@posoco.CommandDef] {
   command_defs()
 }
+
+///|
+pub extend ObsidianTools with @posoco.CommandPort::{invoke, commands}
 
 ///|
 pub impl @posoco.CommandPort for ObsidianTools with fn invoke(

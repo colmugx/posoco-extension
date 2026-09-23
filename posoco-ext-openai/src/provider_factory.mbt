@@ -62,6 +62,13 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn provider_id(
 }
 
 ///|
+pub extend OpenAIProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 /// Codex OAuth stores under the OAuth implementation's canonical id, not the
 /// user-facing router alias `openai`.
 pub impl @llm.ProviderFactory for OpenAIProvider with fn credential_id(
@@ -116,6 +123,8 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn provider_id(
 ) -> String {
   "openai"
 }
+
+///|
 
 ///|
 pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
@@ -275,6 +284,9 @@ pub impl @llm.OAuthFactory for OpenAIProvider with fn provider_id(
 }
 
 ///|
+pub extend OpenAIProvider with @colmugx/posoco-ext-llm.OAuthFactory::{login}
+
+///|
 pub impl @llm.OAuthFactory for OpenAIProvider with fn credential_id(
   _self : OpenAIProvider,
 ) -> String {
@@ -299,6 +311,8 @@ pub impl @llm.ApiKeyFactory for OpenAIProvider with fn provider_id(
 ) -> String {
   "openai"
 }
+
+///|
 
 ///|
 pub impl @llm.ApiKeyFactory for OpenAIProvider with fn credential_id(

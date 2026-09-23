@@ -24,6 +24,9 @@ pub impl @posoco.CommandPort for TodoList with fn commands(_self : TodoList) -> 
 }
 
 ///|
+pub extend TodoList with @posoco.CommandPort::{commands}
+
+///|
 pub impl @posoco.CommandPort for TodoList with fn invoke(
   self : TodoList,
   id : String,

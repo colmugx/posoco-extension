@@ -22,6 +22,11 @@ pub impl @oauth.AuthPromptInteraction for ZenApiKeyPrompt with fn prompt(
 }
 
 ///|
+pub extend ZenApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+  prompt,
+}
+
+///|
 /// Build a settings JSON object from key/value pairs.
 fn zen_settings(pairs : Array[(String, String)]) -> Json {
   Json::object(

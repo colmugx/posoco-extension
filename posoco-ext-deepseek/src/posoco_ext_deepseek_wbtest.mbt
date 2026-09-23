@@ -42,6 +42,11 @@ pub impl @oauth.AuthPromptInteraction for DeepSeekApiKeyPrompt with fn prompt(
 }
 
 ///|
+pub extend DeepSeekApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+  prompt,
+}
+
+///|
 async test "DeepSeek API-key factory validates and returns an opaque credential" {
   let provider = DeepSeekProvider()
   let api : &@llm.ApiKeyFactory = provider

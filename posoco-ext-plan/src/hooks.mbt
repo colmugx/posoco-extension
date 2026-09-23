@@ -78,6 +78,14 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
 }
 
 ///|
+pub extend PlanMode with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  on_turn_end,
+}
+
+///|
 /// Plan-mode reminder body: the research contract carried on every planning
 /// turn. Plan mode IS the research posture — investigate as deeply as
 /// needed, and every conclusion the plan rests on must be accurate and

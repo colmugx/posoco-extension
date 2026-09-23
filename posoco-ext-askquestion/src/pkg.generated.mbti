@@ -20,6 +20,9 @@ pub async fn AskQuestionTools::execute(Self, String, @kernel.ToolCall) -> @kerne
 pub fn AskQuestionTools::extension_id(Self) -> String
 pub fn AskQuestionTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn AskQuestionTools::manifest(Self) -> @port.ExtensionManifest
+pub fn AskQuestionTools::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn AskQuestionTools::on_shutdown(Self) -> Unit
+pub async fn AskQuestionTools::on_start(Self) -> Unit
 pub fn AskQuestionTools::system_prompt(Self) -> String
 pub impl @port.Extension for AskQuestionTools
 pub impl @port.Lifecycle for AskQuestionTools

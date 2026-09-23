@@ -32,6 +32,9 @@ pub impl Show for PlanReviewRequest with fn to_string(self : PlanReviewRequest) 
 }
 
 ///|
+pub extend PlanReviewRequest with Show::{to_string, output}
+
+///|
 pub(all) enum PlanReviewDecision {
   Accept
   /// Back to planning; the feedback reaches the model. Rejection always
@@ -53,6 +56,9 @@ pub impl Show for PlanReviewDecision with fn to_string(
     Dismiss => "Dismiss"
   }
 }
+
+///|
+pub extend PlanReviewDecision with Show::{to_string, output}
 
 ///|
 /// Product rule: an implementation of this trait speaks for the user, so

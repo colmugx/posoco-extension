@@ -27,6 +27,12 @@ pub(all) struct SegmentInfo {
 } derive(Debug, Eq)
 
 ///|
+pub extend SegmentInfo with Eq::{not_equal, equal}
+
+///|
+pub extend SegmentInfo with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Internal registry entry. `first_seen` (from a monotonic counter) breaks
 /// priority ties so equal-priority segments keep registration order.
 priv struct SegmentEntry {
@@ -216,6 +222,9 @@ pub impl @devkit.BusSubscriber for StatusBar with fn on_bus_event(
     None => ()
   }
 }
+
+///|
+pub extend StatusBar with @colmugx/posoco-devkit.BusSubscriber::{on_bus_event}
 
 ///|
 /// Direct path, same semantics as a bus `update` op: set `segment` on

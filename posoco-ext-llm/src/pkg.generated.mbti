@@ -20,7 +20,10 @@ pub(all) enum AuthMethod {
   ApiKey
   OAuth
 } derive(Eq, @debug.Debug)
+pub fn AuthMethod::equal(Self, Self) -> Bool
+pub fn AuthMethod::not_equal(Self, Self) -> Bool
 pub fn AuthMethod::to_id(Self) -> String
+pub fn AuthMethod::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelSlot {
   id : String
@@ -89,7 +92,9 @@ pub(all) struct RouterModelPort {
 pub fn RouterModelPort::RouterModelPort(slots~ : Array[ModelSlot], default_slot_id? : String, bus? : @posoco-devkit.EventBus?, provider_credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?, cred_store? : &@posoco-ext-oauth.CredentialStore?, auth_interaction? : &@posoco-ext-oauth.AuthInteraction?, api_key_store? : &@posoco-ext-oauth.ApiKeyStore?, auth_prompt? : &@posoco-ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@posoco-devkit.QuotaSource]) -> Self raise @error.CompositionError
 pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_slot_id(Self) -> String
+pub async fn RouterModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub fn RouterModelPort::commands(Self) -> Array[@port.CommandDef]
+pub async fn RouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn RouterModelPort::current_model_id(Self) -> String
 pub fn RouterModelPort::current_provider_id(Self) -> String
 pub fn RouterModelPort::extension_id(Self) -> String
@@ -100,8 +105,12 @@ pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn RouterModelPort::on_bus_event(Self, @posoco-devkit.BusEvent) -> Unit
 pub fn RouterModelPort::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn RouterModelPort::on_event(Self, @types.TurnEvent) -> Unit
 pub fn RouterModelPort::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn RouterModelPort::on_shutdown(Self) -> Unit
+pub async fn RouterModelPort::on_start(Self) -> Unit
 pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub fn RouterModelPort::replace_provider_slots(Self, String, Array[ModelSlot]) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError

@@ -212,3 +212,6 @@ pub impl @devkit.QuotaSource for CodexQuotaTracker with fn read(
     None => Err("no Codex quota snapshot captured yet")
   }
 }
+
+///|
+pub extend CodexQuotaTracker with @colmugx/posoco-devkit.QuotaSource::{read}

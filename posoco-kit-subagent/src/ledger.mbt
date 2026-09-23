@@ -14,6 +14,9 @@ pub(all) struct SpawnLedger {
 } derive(@debug.Debug)
 
 ///|
+pub extend SpawnLedger with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Fresh ledger with the given spawn budget (default: the §9.2 value 64).
 pub fn SpawnLedger::SpawnLedger(limit? : Int = 64) -> SpawnLedger {
   { limit, labels: [], }

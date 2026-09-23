@@ -16,6 +16,14 @@ pub impl @oauth.OAuthProvider for LoginTestOAuth with fn provider_id(
 }
 
 ///|
+pub extend LoginTestOAuth with @colmugx/posoco-ext-oauth.OAuthProvider::{
+  provider_id,
+  refresh,
+  login,
+  to_auth,
+}
+
+///|
 pub impl @oauth.OAuthProvider for LoginTestOAuth with fn login(
   self : LoginTestOAuth,
   interaction : &@oauth.AuthInteraction,
@@ -63,10 +71,24 @@ pub impl ApiKeyFactory for LoginTestApiKeyProvider with fn provider_id(
 }
 
 ///|
+pub extend LoginTestApiKeyProvider with ApiKeyFactory::{
+  credential_id,
+  provider_id,
+  login,
+}
+
+///|
 pub impl ApiKeyFactory for LoginTestBothApiKeyProvider with fn provider_id(
   _self : LoginTestBothApiKeyProvider,
 ) -> String {
   "test-oauth"
+}
+
+///|
+pub extend LoginTestBothApiKeyProvider with ApiKeyFactory::{
+  credential_id,
+  provider_id,
+  login,
 }
 
 ///|
@@ -119,11 +141,23 @@ pub impl @oauth.AuthPromptInteraction for LoginTestPrompt with fn prompt(
 }
 
 ///|
+pub extend LoginTestPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+  prompt,
+}
+
+///|
 pub impl @oauth.CredentialStore for LoginTestStore with fn read(
   self : LoginTestStore,
   provider_id : String,
 ) -> @oauth.Credential? raise @oauth.OAuthError {
   self.credentials.get(provider_id)
+}
+
+///|
+pub extend LoginTestStore with @colmugx/posoco-ext-oauth.CredentialStore::{
+  read,
+  delete,
+  write,
 }
 
 ///|

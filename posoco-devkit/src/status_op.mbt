@@ -50,6 +50,12 @@ pub(all) enum StatusOp {
 } derive(Eq, Debug)
 
 ///|
+pub extend StatusOp with Eq::{not_equal, equal}
+
+///|
+pub extend StatusOp with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Publish a register op: claim `segment` with display metadata. `priority`
 /// orders segments on the bar (ascending, left to right). `label`, `value`
 /// and `color` keys are emitted only when present; `priority` is always

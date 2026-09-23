@@ -16,6 +16,8 @@ import {
 pub struct LazyTools {
   // private fields
 }
+pub async fn LazyTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub async fn LazyTools::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn LazyTools::build(providers~ : Array[&@port.ToolProvider]) -> Result[Self, String]
 pub fn LazyTools::defer_extensions(exts~ : Array[&@port.Extension]) -> Result[(Self, Array[&@port.Extension]), String]
 pub fn LazyTools::deferred_count(Self) -> Int
@@ -25,7 +27,17 @@ pub fn LazyTools::extension_id(Self) -> String
 pub fn LazyTools::is_meta_tool(String) -> Bool
 pub fn LazyTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn LazyTools::manifest(Self) -> @port.ExtensionManifest
+pub fn LazyTools::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn LazyTools::on_event(Self, @types.TurnEvent) -> Unit
+pub fn LazyTools::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn LazyTools::on_post_event(Self, @port.HookStage) -> Unit noraise
+pub async fn LazyTools::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub async fn LazyTools::on_shutdown(Self) -> Unit
+pub async fn LazyTools::on_start(Self) -> Unit
+pub async fn LazyTools::on_turn_begin(Self) -> Unit
+pub async fn LazyTools::on_turn_end(Self) -> Unit
 pub fn LazyTools::rewrap_call(@kernel.ToolCall, @kernel.ToolCall) -> @kernel.ToolCall
+pub fn LazyTools::system_prompt(Self) -> String
 pub fn LazyTools::unwrap_call(@kernel.ToolCall) -> (String, @kernel.ToolCall)
 pub impl @port.Extension for LazyTools
 pub impl @port.Lifecycle for LazyTools

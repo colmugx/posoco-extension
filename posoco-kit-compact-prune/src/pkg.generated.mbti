@@ -17,6 +17,8 @@ pub(all) enum PruneAction {
   Pruned
   Noop
 } derive(Eq)
+pub fn PruneAction::equal(Self, Self) -> Bool
+pub fn PruneAction::not_equal(Self, Self) -> Bool
 
 pub(all) struct PruneResult {
   messages : Array[@kernel.Message]
@@ -24,6 +26,8 @@ pub(all) struct PruneResult {
   pruned_count : Int
   action : PruneAction
 } derive(Eq)
+pub fn PruneResult::equal(Self, Self) -> Bool
+pub fn PruneResult::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

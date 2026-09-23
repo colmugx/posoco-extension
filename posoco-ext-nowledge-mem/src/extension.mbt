@@ -94,11 +94,12 @@ pub struct NowledgeMem {
 /// # Example
 /// ```mbt check
 /// test "nowledge mem exposes guidance before on_start" {
-///   let ext = NowledgeMem::NowledgeMem(
+///   let ext = @posoco-ext-nowledge-mem.NowledgeMem::NowledgeMem(
 ///     source_app="cetas",
-///     transport=HttpNmemTransport::HttpNmemTransport() as &NmemTransport,
-///     mcp=LazyNmemMcp::LazyNmemMcp() as &NmemMcp,
-///     platform=PlatformFs::PlatformFs() as &NmemPlatform,
+///     transport=@posoco-ext-nowledge-mem.HttpNmemTransport::HttpNmemTransport()
+///       as &NmemTransport,
+///     mcp=@posoco-ext-nowledge-mem.LazyNmemMcp::LazyNmemMcp() as &NmemMcp,
+///     platform=@posoco-ext-nowledge-mem.PlatformFs::PlatformFs() as &NmemPlatform,
 ///   )
 ///   assert_true(ext.system_prompt().contains("## Nowledge Mem Guidance"))
 ///   assert_true(ext.system_prompt().contains("Cetas"))
@@ -160,6 +161,13 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) 
     self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
   }
   self.last_drain_ms = @async.now()
+}
+
+///|
+pub extend NowledgeMem with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
 }
 
 ///|
@@ -265,6 +273,16 @@ pub impl @posoco.PipelineHook for NowledgeMem with fn on_turn_end(
   self : NowledgeMem,
 ) -> Unit {
   self.drain_silent()
+}
+
+///|
+pub extend NowledgeMem with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_model,
+  before_tool,
+  on_turn_end,
 }
 
 ///|
@@ -383,6 +401,9 @@ pub impl @posoco.Observer for NowledgeMem with fn on_event_at(
     _ => ()
   }
 }
+
+///|
+pub extend NowledgeMem with @posoco.Observer::{on_event, on_event_at}
 
 ///|
 /// The plugin's instructions, and nothing else: what Nowledge Mem is, when

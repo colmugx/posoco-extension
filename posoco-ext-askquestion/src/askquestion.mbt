@@ -346,6 +346,13 @@ pub impl @posoco.Lifecycle for AskQuestionTools with fn on_compose(
 }
 
 ///|
+pub extend AskQuestionTools with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
+}
+
+///|
 pub impl @posoco.Lifecycle for AskQuestionTools with fn on_shutdown(
   _self : AskQuestionTools,
 ) -> Unit {

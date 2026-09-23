@@ -3,6 +3,7 @@ import {
   "colmugx/posoco-devkit" @devkit,
   "moonbitlang/async/process",
   "moonbitlang/async/js_async",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
 }

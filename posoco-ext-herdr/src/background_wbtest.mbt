@@ -227,9 +227,7 @@ impl HerdrCli for MaskingHerdrCli with fn run(
   argv : Array[String],
 ) -> (Int, String, String) raise @posoco.RuntimeError {
   self.received.push(argv)
-  let swallowed : Result[Unit, Error] = Ok(@async.sleep(10000)) catch {
-    error => Err(error)
-  }
+  let swallowed : Result[Unit, Error] = Ok(@async.sleep(10000))
   ignore(swallowed)
   (0, "masked", "")
 }

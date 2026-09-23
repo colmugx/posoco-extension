@@ -6,6 +6,12 @@ pub(all) struct ZcodeUsage {
 } derive(Eq, Debug)
 
 ///|
+pub extend ZcodeUsage with Eq::{not_equal, equal}
+
+///|
+pub extend ZcodeUsage with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// The session/event subset we care about; everything else reduces to None
 /// (noise: state.updated, v4/telemetry/event, process/mcpTelemetry,
 /// computer-use/operation-event, and every unknown params.type).

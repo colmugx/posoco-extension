@@ -6,6 +6,7 @@ import {
   "moonbitlang/async/io",
   "moonbitlang/async/js_async",
   "moonbitlang/async/process",
+  "moonbitlang/core/debug",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }

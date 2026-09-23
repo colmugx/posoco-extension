@@ -49,12 +49,18 @@ pub fn acp_tool_title(@kernel.ToolCall) -> String
 pub(all) suberror AcpHostFsError {
   HostFsCallFailed(method_name~ : String, cause~ : @agent.AgentContextError)
 } derive(Eq, @debug.Debug)
+pub fn AcpHostFsError::equal(Self, Self) -> Bool
+pub fn AcpHostFsError::not_equal(Self, Self) -> Bool
+pub fn AcpHostFsError::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror AcpTerminalError {
   HostCallFailed(method_name~ : String, cause~ : @agent.AgentContextError)
   TerminalTimedOut(timeout_ms~ : Int, partial_output~ : String)
   TerminalCancelled(partial_output~ : String)
 } derive(Eq, @debug.Debug)
+pub fn AcpTerminalError::equal(Self, Self) -> Bool
+pub fn AcpTerminalError::not_equal(Self, Self) -> Bool
+pub fn AcpTerminalError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub struct AcpBridge {
@@ -80,13 +86,20 @@ pub fn AcpBridge::detach(Self) -> Unit
 pub fn AcpBridge::extension_id(Self) -> String
 pub async fn AcpBridge::flush(Self) -> Int noraise
 pub fn AcpBridge::manifest(Self) -> @port.ExtensionManifest
+pub fn AcpBridge::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn AcpBridge::on_event(Self, @types.TurnEvent) -> Unit
+pub fn AcpBridge::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn AcpBridge::on_shutdown(Self) -> Unit
+pub async fn AcpBridge::on_start(Self) -> Unit
 pub async fn AcpBridge::push_agent_thought_chunk(Self, session_id~ : String, text~ : String) -> Unit noraise
 pub async fn AcpBridge::push_session_info_update(Self, session_id~ : String, title~ : String) -> Unit noraise
+pub fn AcpBridge::render(Self, @port.UiRender) -> Unit
 pub async fn AcpBridge::request(Self, @port.UiRequest) -> @port.UiResponse raise @error.UiError
 pub fn AcpBridge::session_id(Self) -> String?
 pub fn[G] AcpBridge::spawn_pump(Self, @async.TaskGroup[G]) -> Unit
 pub fn AcpBridge::stop_reason(Self) -> @session.StopReason
 pub fn AcpBridge::take_failure(Self) -> String?
+pub fn AcpBridge::ui_descriptor(Self) -> @port.UiDescriptor
 pub impl @posoco-ext-permission.ApprovalSource for AcpBridge
 pub impl @port.Extension for AcpBridge
 pub impl @port.Lifecycle for AcpBridge
@@ -112,6 +125,9 @@ pub(all) struct AcpTerminalResult {
   exit_code : Int?
   output : String
 } derive(Eq, @debug.Debug)
+pub fn AcpTerminalResult::equal(Self, Self) -> Bool
+pub fn AcpTerminalResult::not_equal(Self, Self) -> Bool
+pub fn AcpTerminalResult::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

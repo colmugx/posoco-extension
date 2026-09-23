@@ -32,6 +32,12 @@ pub(all) struct ZenReasoningSurface {
 } derive(Eq, Debug)
 
 ///|
+pub extend ZenReasoningSurface with Eq::{not_equal, equal}
+
+///|
+pub extend ZenReasoningSurface with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Decode the models.dev provider catalog into per-model reasoning surfaces,
 /// keyed by bare model id. The payload must be an object holding the
 /// `opencode` provider with a `models` object — anything else is a typed

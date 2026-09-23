@@ -12,6 +12,12 @@ pub(all) struct SessionSummary {
 } derive(Eq, Debug)
 
 ///|
+pub extend SessionSummary with Eq::{not_equal, equal}
+
+///|
+pub extend SessionSummary with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Read one session and project it to a summary. The store's own load rules
 /// apply, so a missing file yields an empty summary (no name, no first user
 /// text) and `display_title` falls back to the id — the same

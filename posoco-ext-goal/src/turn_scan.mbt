@@ -31,6 +31,12 @@ pub(all) enum TurnVerdict {
 } derive(Eq, Debug)
 
 ///|
+pub extend TurnVerdict with Eq::{not_equal, equal}
+
+///|
+pub extend TurnVerdict with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Truncate a reason to 200 UTF-16 code units, appending "…" when truncated.
 /// Character iteration keeps surrogate pairs intact where slicing could not.
 fn truncate_reason(reason : String) -> String {

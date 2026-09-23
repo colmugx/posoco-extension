@@ -65,6 +65,9 @@ pub impl @posoco.Observer for Profiles with fn on_event_at(
 }
 
 ///|
+pub extend Profiles with @posoco.Observer::{on_event}
+
+///|
 /// Aggregated ext usage for one session — the summarizer input for
 /// `/profile save`. Counts are folded from tool names to ext ids through
 /// the attribution table (tools with no owner are dropped), sorted by

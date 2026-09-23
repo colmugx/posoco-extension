@@ -52,7 +52,5 @@ fn bash_decode_failure(_exit_code : Int) -> String {
 
 ///|
 fn bash_collect_output_failure() -> @posoco.RuntimeError {
-  @posoco.RuntimeError::InvocationFailed(
-    "bash: process failed",
-  )
+  @posoco.RuntimeError::InvocationFailed("bash: process failed")
 }

@@ -21,6 +21,13 @@ pub impl @posoco.ModelPort for StatusTestPort with fn chat(
 }
 
 ///|
+pub extend StatusTestPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}
+
+///|
 pub impl @posoco.ModelPort for StatusTestPort with fn compact(
   _self : StatusTestPort,
   _scope : @posoco.InvocationScope,
@@ -361,6 +368,9 @@ pub impl @devkit.QuotaSource for StatusQuotaSource with fn read(
   self.calls = self.calls + 1
   self.result
 }
+
+///|
+pub extend StatusQuotaSource with @colmugx/posoco-devkit.QuotaSource::{read}
 
 ///|
 /// Bus capture for the status invoke test.

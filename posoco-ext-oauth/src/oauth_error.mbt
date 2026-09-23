@@ -14,6 +14,12 @@ pub(all) suberror OAuthError {
 } derive(Eq, Debug)
 
 ///|
+pub extend OAuthError with Eq::{not_equal, equal}
+
+///|
+pub extend OAuthError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 impl Show for OAuthError with fn to_string(self) {
   match self {
     AuthPending => "OAuthError::AuthPending"

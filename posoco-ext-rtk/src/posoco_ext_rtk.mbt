@@ -161,3 +161,12 @@ pub impl @posoco.PipelineHook for RTKHook with fn before_tool(
 ) -> @posoco.ToolDecision {
   before_tool_impl(rtk_default_rewriter(), self, call)
 }
+
+///|
+pub extend RTKHook with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_model,
+  on_turn_end,
+}

@@ -57,6 +57,9 @@ pub(all) struct SyncRequest {
 } derive(Debug)
 
 ///|
+pub extend SyncRequest with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Per-lane sync state. `pending` holds the newest
 /// not-yet-flushed request — coalescing keeps only
 /// the latest payload while a flush is in flight.
@@ -66,6 +69,9 @@ pub(all) struct LaneState {
   last_error : String?
   pending : SyncRequest?
 } derive(Debug)
+
+///|
+pub extend LaneState with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Map a captured transcript snapshot to the request for one flush:

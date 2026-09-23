@@ -27,6 +27,12 @@ pub(all) struct ZenModelInfo {
 } derive(Eq, Debug)
 
 ///|
+pub extend ZenModelInfo with Eq::{not_equal, equal}
+
+///|
+pub extend ZenModelInfo with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Parse a Zen list response without performing I/O. Pure decoder shared by
 /// the live fetch path and the white-box tests.
 pub fn parse_zen_models(

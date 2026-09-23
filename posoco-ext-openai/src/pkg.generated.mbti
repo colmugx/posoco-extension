@@ -65,6 +65,9 @@ pub(all) struct CodexOAuth {
 }
 pub fn CodexOAuth::CodexOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?) -> Self
 pub async fn CodexOAuth::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
+pub fn CodexOAuth::provider_id(Self) -> String
+pub async fn CodexOAuth::refresh(Self, @posoco-ext-oauth.Credential) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
+pub fn CodexOAuth::to_auth(Self, @posoco-ext-oauth.Credential) -> @posoco-ext-oauth.AuthHeader
 pub impl @posoco-ext-oauth.OAuthProvider for CodexOAuth
 
 pub struct CodexQuotaStatus {
@@ -74,6 +77,14 @@ pub struct CodexQuotaStatus {
   // private fields
 }
 pub fn CodexQuotaStatus::CodexQuotaStatus(bus? : @posoco-devkit.EventBus?, tracker? : CodexQuotaTracker?) -> Self
+pub fn CodexQuotaStatus::extension_id(Self) -> String
+pub fn CodexQuotaStatus::manifest(Self) -> @port.ExtensionManifest
+pub fn CodexQuotaStatus::on_bus_event(Self, @posoco-devkit.BusEvent) -> Unit
+pub fn CodexQuotaStatus::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn CodexQuotaStatus::on_event(Self, @types.TurnEvent) -> Unit
+pub fn CodexQuotaStatus::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn CodexQuotaStatus::on_shutdown(Self) -> Unit
+pub async fn CodexQuotaStatus::on_start(Self) -> Unit
 pub impl @posoco-devkit.BusSubscriber for CodexQuotaStatus
 pub impl @port.Extension for CodexQuotaStatus
 pub impl @port.Lifecycle for CodexQuotaStatus
@@ -86,6 +97,7 @@ pub(all) struct CodexQuotaTracker {
 pub fn CodexQuotaTracker::CodexQuotaTracker(now_ms? : () -> Int64) -> Self
 pub fn CodexQuotaTracker::capture(Self, Map[@http.CaseInsensitiveString, String]) -> Unit
 pub fn CodexQuotaTracker::capture_readings(Self, Array[@posoco-devkit.QuotaReading]) -> Unit
+pub async fn CodexQuotaTracker::read(Self) -> Result[Array[@posoco-devkit.QuotaReading], String]
 pub fn CodexQuotaTracker::snapshots(Self) -> Array[@posoco-devkit.QuotaReading]
 pub impl @posoco-devkit.QuotaSource for CodexQuotaTracker
 
@@ -97,6 +109,7 @@ pub(all) struct CodexReasoningLevel {
 pub(all) struct DefaultOpenAIModelsHttpTransport {
 }
 pub fn DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport() -> Self
+pub async fn DefaultOpenAIModelsHttpTransport::get(Self, String, Map[String, String]) -> OpenAIModelsHttpResponse raise @error.ModelError
 pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport
 
 pub(all) struct OpenAIConfig {
@@ -123,9 +136,12 @@ pub(all) struct OpenAIModelPort {
   quota_tracker : CodexQuotaTracker?
 }
 pub fn OpenAIModelPort::OpenAIModelPort(OpenAIConfig, quota_tracker? : CodexQuotaTracker?) -> Self
+pub async fn OpenAIModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn OpenAIModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn OpenAIModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_codex_models(Self, Array[CodexModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenAIModelPort
 
 pub(all) struct OpenAIModelsHttpResponse {
@@ -137,6 +153,10 @@ pub(all) struct OpenAIProvider {
   models_transport : &OpenAIModelsHttpTransport?
 }
 pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?) -> Self
+pub fn OpenAIProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn OpenAIProvider::credential_id(Self) -> String
+pub async fn OpenAIProvider::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
+pub fn OpenAIProvider::provider_id(Self) -> String
 pub async fn OpenAIProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ApiKeyFactory for OpenAIProvider
 pub impl @posoco-ext-llm.OAuthFactory for OpenAIProvider

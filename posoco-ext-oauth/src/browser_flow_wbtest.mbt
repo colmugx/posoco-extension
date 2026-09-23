@@ -25,6 +25,9 @@ pub impl AuthInteraction for RecordingAuthInteraction with fn notify(
 }
 
 ///|
+pub extend RecordingAuthInteraction with AuthInteraction::{notify, is_cancelled}
+
+///|
 pub impl AuthInteraction for RecordingAuthInteraction with fn is_cancelled(
   _self : RecordingAuthInteraction,
 ) -> Bool {
@@ -32,13 +35,11 @@ pub impl AuthInteraction for RecordingAuthInteraction with fn is_cancelled(
 }
 
 ///|
-/// Sleep that surfaces race cancellation as a typed Cancelled. Swallowing the
-/// cancellation error itself would let a cancelled loser task run to
-/// completion and overwrite the winner recorded by @async.any.
-async fn sleep_ms(ms : Int) -> Unit raise OAuthError {
-  @async.sleep(ms) catch {
-    _ => if @async.is_being_cancelled() { raise OAuthError::Cancelled }
-  }
+/// Bounded pause between poll attempts. Cancellation no longer surfaces as
+/// an error from `@async.sleep`; the race above re-checks
+/// `is_cancelled`/`is_being_cancelled` instead of relying on this helper.
+async fn sleep_ms(ms : Int) -> Unit noraise {
+  @async.sleep(ms)
 }
 
 ///|
@@ -69,6 +70,9 @@ pub impl CallbackServer for FakeCallbackServer with fn start(
     }
   }
 }
+
+///|
+pub extend FakeCallbackServer with CallbackServer::{start, stop, wait_callback}
 
 ///|
 pub impl CallbackServer for FakeCallbackServer with fn wait_callback(
@@ -149,6 +153,9 @@ pub impl AuthPromptInteraction for ScriptedPromptInteraction with fn prompt(
 }
 
 ///|
+pub extend ScriptedPromptInteraction with AuthPromptInteraction::{prompt}
+
+///|
 struct BrowserFlowTransport {
   requests : Array[OAuthHttpRequest]
   response : OAuthHttpResponse
@@ -166,6 +173,9 @@ pub impl OAuthHttpTransport for BrowserFlowTransport with fn post(
   }
   self.response
 }
+
+///|
+pub extend BrowserFlowTransport with OAuthHttpTransport::{post, get}
 
 ///|
 fn flow_config(

@@ -7,6 +7,12 @@ pub(all) enum GoalPlanStatus {
 } derive(Eq, Debug)
 
 ///|
+pub extend GoalPlanStatus with Eq::{not_equal, equal}
+
+///|
+pub extend GoalPlanStatus with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub impl Show for GoalPlanStatus with fn to_string(self : GoalPlanStatus) -> String {
   match self {
     Pending => "pending"
@@ -16,15 +22,30 @@ pub impl Show for GoalPlanStatus with fn to_string(self : GoalPlanStatus) -> Str
 }
 
 ///|
+pub extend GoalPlanStatus with Show::{to_string, output}
+
+///|
 pub(all) struct GoalPlanItem {
   title : String
   status : GoalPlanStatus
 } derive(Eq, Debug)
 
 ///|
+pub extend GoalPlanItem with Eq::{not_equal, equal}
+
+///|
+pub extend GoalPlanItem with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub(all) struct GoalPlan {
   items : Array[GoalPlanItem]
 } derive(Eq, Debug)
+
+///|
+pub extend GoalPlan with Eq::{not_equal, equal}
+
+///|
+pub extend GoalPlan with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn GoalPlan::empty() -> GoalPlan {

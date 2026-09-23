@@ -3,9 +3,9 @@ import {
   "colmugx/acp",
   "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-ext-permission" @permission,
-  "moonbitlang/core/json",
   "moonbitlang/async",
   "moonbitlang/async/aqueue",
+  "moonbitlang/core/debug",
 }
 
 import {

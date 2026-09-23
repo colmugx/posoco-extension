@@ -10,6 +10,12 @@ pub(all) struct ConfigModel {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend ConfigModel with Eq::{not_equal, equal}
+
+///|
+pub extend ConfigModel with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Numeric bundle of subagent-config.json (design §6.4, §9.2). Defaults live
 /// in `SubagentConfig::defaults`.
 pub(all) struct SubagentLimits {
@@ -21,6 +27,12 @@ pub(all) struct SubagentLimits {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend SubagentLimits with Eq::{not_equal, equal}
+
+///|
+pub extend SubagentLimits with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Parsed subagent-config.json. `models` empty = inheritance mode: the
 /// caller's explicit model/effort pass through unvalidated, and absent values
 /// fall back to the parent's active selection.
@@ -29,6 +41,12 @@ pub(all) struct SubagentConfig {
   default_slot : String?
   limits : SubagentLimits
 } derive(Eq, @debug.Debug)
+
+///|
+pub extend SubagentConfig with Eq::{not_equal, equal}
+
+///|
+pub extend SubagentConfig with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Config failures. The message text is model-facing: `Invalid` messages list
@@ -237,6 +255,12 @@ pub(all) struct ResolvedSelection {
   slot : String
   effort : String?
 } derive(Eq, @debug.Debug)
+
+///|
+pub extend ResolvedSelection with Eq::{not_equal, equal}
+
+///|
+pub extend ResolvedSelection with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Resolve the spawn-time `model`/`effort` overrides against the configured

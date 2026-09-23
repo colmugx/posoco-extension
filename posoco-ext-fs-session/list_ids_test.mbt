@@ -2,7 +2,10 @@
 /// list_ids_test.mbt — native tests for JsonlSessionStore::list_ids.
 
 ///|
-async fn seed_listed_session(store : JsonlSessionStore, id : String) -> Unit {
+async fn seed_listed_session(
+  store : @posoco-ext-fs-session.JsonlSessionStore,
+  id : String,
+) -> Unit {
   store.save(id, @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -14,7 +17,7 @@ async fn seed_listed_session(store : JsonlSessionStore, id : String) -> Unit {
 ///|
 async test "io[native]: list_ids returns sorted stems of jsonl files only" {
   let root = fresh_root("list-mixed")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   seed_listed_session(store, "cetas-100")
   seed_listed_session(store, "cetas-300")
   seed_listed_session(store, "cetas-20")
@@ -33,7 +36,7 @@ async test "io[native]: list_ids returns sorted stems of jsonl files only" {
 ///|
 async test "io[native]: list_ids on an empty root is empty" {
   let root = fresh_root("list-empty")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let ids = store.list_ids() catch {
     e => fail("list_ids on empty root failed: \{e}")
   }
@@ -49,7 +52,7 @@ async test "io[native]: list_ids on a missing root is empty" {
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let ids = store.list_ids() catch {
     e => fail("list_ids on missing root failed: \{e}")
   }

@@ -40,6 +40,12 @@ pub(all) struct RateLimitPending {
 } derive(Eq, Debug)
 
 ///|
+pub extend RateLimitPending with Eq::{not_equal, equal}
+
+///|
+pub extend RateLimitPending with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Records provider quota verdicts (HTTP 429 with a stated reset time) per
 /// session and re-runs the interrupted turn once the reset time passes.
 ///
@@ -443,6 +449,16 @@ pub impl @posoco.PipelineHook for RateLimitGuard with fn on_post_event_at(
 }
 
 ///|
+pub extend RateLimitGuard with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_model,
+  before_tool,
+  on_turn_end,
+}
+
+///|
 pub impl @posoco.Observer for RateLimitGuard with fn on_event_at(
   self : RateLimitGuard,
   scope : @posoco.EventScope?,
@@ -474,11 +490,21 @@ pub impl @posoco.Observer for RateLimitGuard with fn on_event_at(
 }
 
 ///|
+pub extend RateLimitGuard with @posoco.Observer::{on_event, on_event_at}
+
+///|
 pub impl @posoco.Lifecycle for RateLimitGuard with fn on_shutdown(
   self : RateLimitGuard,
 ) -> Unit {
   self.stopped = true
   self.cancel_pending()
+}
+
+///|
+pub extend RateLimitGuard with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
 }
 
 ///|

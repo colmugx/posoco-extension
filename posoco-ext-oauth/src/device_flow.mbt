@@ -425,10 +425,7 @@ pub async fn run_device_flow_with_transport(
     }
     // RFC 8628 interval is seconds; @async.sleep takes milliseconds. This is
     // the single sleep point, so slow_down-derived intervals convert here too.
-    @async.sleep(interval * 1000) catch {
-      err =>
-        raise OAuthError::HttpError("sleep interrupted: " + err.to_string())
-    }
+    @async.sleep(interval * 1000)
     let result = poll_token(config, dar.device_code, transport)
     match result {
       Pending => ()

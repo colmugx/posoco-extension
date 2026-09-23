@@ -82,6 +82,9 @@ pub impl @posoco.CommandPort for StatusBar with fn commands(_self : StatusBar) -
 }
 
 ///|
+pub extend StatusBar with @posoco.CommandPort::{commands}
+
+///|
 pub impl @posoco.CommandPort for StatusBar with fn invoke(
   self : StatusBar,
   id : String,

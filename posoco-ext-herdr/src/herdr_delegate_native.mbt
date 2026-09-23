@@ -21,6 +21,9 @@ pub impl @posoco.ToolProvider for HerdrDelegate with fn list_tools(
 }
 
 ///|
+pub extend HerdrDelegate with @posoco.ToolProvider::{list_tools}
+
+///|
 /// Execute the `herdr_delegate` tool on native. Business logic lives in the
 /// shared `execute_delegate_impl`; this method only supplies the CLI backend.
 pub impl @posoco.ToolProvider for HerdrDelegate with fn execute(

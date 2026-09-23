@@ -22,6 +22,12 @@ pub(all) struct CutPoint {
 } derive(Eq, Debug)
 
 ///|
+pub extend CutPoint with Eq::{not_equal, equal}
+
+///|
+pub extend CutPoint with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Choose the cut point for a summary-Replace compaction.
 ///
 /// Walks backwards accumulating `estimate_tokens` until the keep-recent

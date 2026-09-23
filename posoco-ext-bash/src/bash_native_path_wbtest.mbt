@@ -53,9 +53,7 @@ async test "non_utf8_output_is_explicit_tool_error" {
   // Invalid UTF-8 from an exit-0 process is a business-level error, surfaced
   // as ToolReportedError (not Success).
   match result {
-    ToolReportedError(content~, ..) => {
-      assert_eq(content, "bash: invalid UTF-8")
-    }
+    ToolReportedError(content~, ..) => assert_eq(content, "bash: invalid UTF-8")
     other =>
       fail(
         "expected ToolReportedError for invalid UTF-8, got " + other.to_string(),

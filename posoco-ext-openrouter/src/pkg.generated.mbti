@@ -29,6 +29,9 @@ pub(all) struct OpenRouterApiKeyFactory {
   ctx : @posoco-devkit.ExtContext
 }
 pub fn OpenRouterApiKeyFactory::OpenRouterApiKeyFactory(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn OpenRouterApiKeyFactory::credential_id(Self) -> String
+pub async fn OpenRouterApiKeyFactory::login(Self, &@posoco-ext-oauth.AuthPromptInteraction) -> @posoco-ext-oauth.ApiKeyCredential raise @posoco-ext-oauth.OAuthError
+pub fn OpenRouterApiKeyFactory::provider_id(Self) -> String
 pub impl @posoco-ext-llm.ApiKeyFactory for OpenRouterApiKeyFactory
 
 pub(all) struct OpenRouterConfig {
@@ -46,6 +49,9 @@ pub(all) struct OpenRouterConfig {
   send_prompt_cache_key : Bool
 } derive(Eq, @debug.Debug)
 pub fn OpenRouterConfig::OpenRouterConfig(String, model~ : String, base_url? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, http_referer? : String?, title? : String?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
+pub fn OpenRouterConfig::equal(Self, Self) -> Bool
+pub fn OpenRouterConfig::not_equal(Self, Self) -> Bool
+pub fn OpenRouterConfig::to_repr(Self) -> @debug.Repr
 pub fn OpenRouterConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
 
 pub(all) struct OpenRouterModelInfo {
@@ -57,6 +63,9 @@ pub(all) struct OpenRouterModelInfo {
   default_enabled : Bool
   supports_images : Bool
 } derive(Eq, @debug.Debug)
+pub fn OpenRouterModelInfo::equal(Self, Self) -> Bool
+pub fn OpenRouterModelInfo::not_equal(Self, Self) -> Bool
+pub fn OpenRouterModelInfo::to_repr(Self) -> @debug.Repr
 
 pub(all) struct OpenRouterModelPort {
   config : OpenRouterConfig
@@ -64,8 +73,11 @@ pub(all) struct OpenRouterModelPort {
   prompt_cache_key_rejection_state : @ref.Ref[Bool]
 }
 pub fn OpenRouterModelPort::OpenRouterModelPort(OpenRouterConfig) -> Self
+pub async fn OpenRouterModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn OpenRouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn OpenRouterModelPort::extension_id(Self) -> String
 pub fn OpenRouterModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn OpenRouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.Extension for OpenRouterModelPort
 pub impl @port.ModelPort for OpenRouterModelPort
 
@@ -74,6 +86,10 @@ pub(all) struct OpenRouterProvider {
   prompt_cache_key_rejection_state : @ref.Ref[Bool]
 }
 pub fn OpenRouterProvider::OpenRouterProvider(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn OpenRouterProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn OpenRouterProvider::credential_id(Self) -> String
+pub fn OpenRouterProvider::provider_id(Self) -> String
+pub async fn OpenRouterProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-ext-llm.ProviderFactory for OpenRouterProvider
 pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenRouterProvider
 

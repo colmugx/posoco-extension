@@ -7,6 +7,9 @@ pub impl Logger for NoopLogger with fn log(_self, _event : LogEvent) -> Unit {
 }
 
 ///|
+pub extend NoopLogger with Logger::{log}
+
+///|
 pub(all) struct MemoryLogger {
   events : Array[LogEvent]
 }

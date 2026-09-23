@@ -26,6 +26,9 @@ pub impl OAuthHttpTransport for TimedPollTransport with fn post(
 }
 
 ///|
+pub extend TimedPollTransport with OAuthHttpTransport::{post, get}
+
+///|
 async test "device flow sleeps interval seconds between polls" {
   let device_auth_body =
     #|{"device_code":"device","user_code":"user","verification_uri":"https://auth.example.com/device","verification_uri_complete":"https://auth.example.com/device?code=user","expires_in":900,"interval":1}

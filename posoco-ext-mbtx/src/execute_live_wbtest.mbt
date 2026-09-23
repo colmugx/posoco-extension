@@ -137,9 +137,7 @@ async test "live: run timeout reports error and terminates moonrun" {
   let content = mbtx_live_expect_reported_error(outcome)
   assert_true(content.contains("timed out"))
   // Give the SIGTERM a moment to land, then verify nothing lingers.
-  @async.sleep(300) catch {
-    _ => ()
-  }
+  @async.sleep(300)
   let after = mbtx_live_moonrun_count()
   assert_true(after <= baseline)
 }

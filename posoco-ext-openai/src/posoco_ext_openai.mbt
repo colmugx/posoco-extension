@@ -453,6 +453,13 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn chat(
 }
 
 ///|
+pub extend OpenAIModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}
+
+///|
 async fn OpenAIModelPort::chat_stream(
   self : OpenAIModelPort,
   session_id : String,

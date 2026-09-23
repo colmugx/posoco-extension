@@ -12,6 +12,12 @@ pub(all) struct PricingPhase {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub extend PricingPhase with Eq::{not_equal, equal}
+
+///|
+pub extend PricingPhase with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// A source of authoritative provider pricing phases. Implementations live
 /// in provider adapter extensions, where the vendor rule resides; consumers
 /// (model catalogs) depend only on this trait. `phase` returning `None`

@@ -7,6 +7,12 @@ pub(all) struct ZcodeRpcError {
 } derive(Eq, Debug)
 
 ///|
+pub extend ZcodeRpcError with Eq::{not_equal, equal}
+
+///|
+pub extend ZcodeRpcError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// One line of the ZCode Protocol's line-delimited JSON (no `jsonrpc`
 /// field). Client request ids are numbers, server request ids are strings
 /// like "server-1" — both stay as raw `Json`.
@@ -17,6 +23,12 @@ pub(all) enum ZcodeWire {
   Response(id~ : Json, result~ : Json?, error~ : ZcodeRpcError?)
   Notification(method_name~ : String, params~ : Json?)
 } derive(Eq, Debug)
+
+///|
+pub extend ZcodeWire with Eq::{not_equal, equal}
+
+///|
+pub extend ZcodeWire with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Decode one wire line. Classification (probed against zcode 0.16.5):

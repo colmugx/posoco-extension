@@ -177,3 +177,8 @@ pub impl @devkit.QuotaSource for ZaiCodingPlanQuotaSource with fn read(
 ) -> Result[Array[@devkit.QuotaReading], String] {
   fetch_zai_coding_plan_quota(self.base_url, self.api_key, now_ms=self.now_ms)
 }
+
+///|
+pub extend ZaiCodingPlanQuotaSource with @colmugx/posoco-devkit.QuotaSource::{
+  read,
+}

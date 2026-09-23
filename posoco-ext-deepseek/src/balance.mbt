@@ -141,3 +141,6 @@ pub impl @devkit.QuotaSource for DeepSeekBalanceSource with fn read(
 ) -> Result[Array[@devkit.QuotaReading], String] {
   fetch_deepseek_balance(self.base_url, self.api_key, now_ms=self.now_ms)
 }
+
+///|
+pub extend DeepSeekBalanceSource with @colmugx/posoco-devkit.QuotaSource::{read}

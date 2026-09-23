@@ -40,12 +40,18 @@ pub(all) struct JsonlSessionStore {
   mut current_id : String?
 }
 pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @posoco-devkit.EventBus?) -> Self
+pub async fn JsonlSessionStore::append_messages(Self, String, Int, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
+pub fn JsonlSessionStore::commands(Self) -> Array[@port.CommandDef]
 pub fn JsonlSessionStore::extension_id(Self) -> String
+pub async fn JsonlSessionStore::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub async fn JsonlSessionStore::list_ids(Self) -> Array[String] raise @error.SessionError
+pub async fn JsonlSessionStore::load(Self, String) -> @types.Session raise @error.SessionError
 pub fn JsonlSessionStore::manifest(Self) -> @port.ExtensionManifest
 pub fn JsonlSessionStore::of_project(home~ : String, cwd~ : String) -> Self
+pub async fn JsonlSessionStore::save(Self, String, @types.Session) -> Unit raise @error.SessionError
 pub async fn JsonlSessionStore::set_session_name(Self, String, String) -> Unit raise @error.SessionError
 pub async fn JsonlSessionStore::summary(Self, String) -> SessionSummary raise @error.SessionError
+pub async fn JsonlSessionStore::truncate(Self, String, Int) -> Unit raise @error.SessionError
 pub impl @port.CommandPort for JsonlSessionStore
 pub impl @port.Extension for JsonlSessionStore
 pub impl @port.SessionStore for JsonlSessionStore
@@ -55,6 +61,9 @@ pub(all) struct SessionSummary {
   name : String?
   first_user_text : String
 } derive(Eq, @debug.Debug)
+pub fn SessionSummary::equal(Self, Self) -> Bool
+pub fn SessionSummary::not_equal(Self, Self) -> Bool
+pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -18,6 +18,9 @@ pub impl OAuthHttpTransport for RecordingOAuthTransport with fn post(
 }
 
 ///|
+pub extend RecordingOAuthTransport with OAuthHttpTransport::{post, get}
+
+///|
 fn header_value(headers : Map[String, String], key : String) -> String raise {
   match headers.get(key) {
     Some(value) => value

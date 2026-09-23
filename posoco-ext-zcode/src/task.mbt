@@ -10,6 +10,12 @@ pub(all) struct ZcodeTaskResult {
 } derive(Eq, Debug)
 
 ///|
+pub extend ZcodeTaskResult with Eq::{not_equal, equal}
+
+///|
+pub extend ZcodeTaskResult with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// The target seam. Each backend file (task.native.mbt over
 /// moonbitlang/async process/fs, task.js.mbt over Bun) implements
 /// `zcode_resolve_command_io`, `zcode_registry_io`, `zcode_cwd_default` and

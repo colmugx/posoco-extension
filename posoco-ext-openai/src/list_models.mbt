@@ -127,6 +127,11 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
 }
 
 ///|
+pub extend DefaultOpenAIModelsHttpTransport with OpenAIModelsHttpTransport::{
+  get,
+}
+
+///|
 fn openai_models_url(base_url : String) -> String {
   let mut clean = base_url
   while clean.has_suffix("/") {

@@ -166,6 +166,9 @@ pub impl @posoco.Observer for CodexQuotaStatus with fn on_event(
 }
 
 ///|
+pub extend CodexQuotaStatus with @posoco.Observer::{on_event, on_event_at}
+
+///|
 /// Provider visibility over the bus: the router announces the active
 /// provider on the "provider" topic (`data.provider_id`), at compose and on
 /// every switch, idempotently. Codex windows belong on the bar only while
@@ -215,6 +218,11 @@ pub impl @devkit.BusSubscriber for CodexQuotaStatus with fn on_bus_event(
 }
 
 ///|
+pub extend CodexQuotaStatus with @colmugx/posoco-devkit.BusSubscriber::{
+  on_bus_event,
+}
+
+///|
 /// Refresh probes or history replay may already have filled the tracker
 /// when the agent composes, so compose publishes immediately instead of
 /// waiting for the first model response. The composed view is unused:
@@ -224,6 +232,13 @@ pub impl @posoco.Lifecycle for CodexQuotaStatus with fn on_compose(
   _ctx : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
   self.publish_if_changed()
+}
+
+///|
+pub extend CodexQuotaStatus with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
 }
 
 ///|
@@ -240,6 +255,9 @@ pub impl @posoco.Extension for CodexQuotaStatus with fn extension_id(
 ) -> String {
   "posoco_ext_openai_quota"
 }
+
+///|
+pub extend CodexQuotaStatus with @posoco.Extension::{manifest, extension_id}
 
 ///|
 pub impl @posoco.Extension for CodexQuotaStatus with fn manifest(

@@ -42,6 +42,9 @@ pub impl @posoco.Lifecycle for StatusBar with fn on_compose(
 }
 
 ///|
+pub extend StatusBar with @posoco.Lifecycle::{on_shutdown, on_start}
+
+///|
 /// Nothing to release: the registry is in-process state with no retained
 /// resources beyond the composed UI reference.
 pub impl @posoco.Lifecycle for StatusBar with fn on_shutdown(self : StatusBar) -> Unit {

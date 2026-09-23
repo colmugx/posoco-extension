@@ -14,12 +14,24 @@ pub(all) struct FileStamp {
 } derive(Eq, Debug)
 
 ///|
+pub extend FileStamp with Eq::{not_equal, equal}
+
+///|
+pub extend FileStamp with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Outcome of checking a modification target against a `FreshnessGuard`.
 pub(all) enum FreshnessVerdict {
   Fresh
   NeverRead
   Modified
 } derive(Eq, Debug)
+
+///|
+pub extend FreshnessVerdict with Eq::{not_equal, equal}
+
+///|
+pub extend FreshnessVerdict with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Read-before-modify ledger shared by the read/write/edit tool extensions.

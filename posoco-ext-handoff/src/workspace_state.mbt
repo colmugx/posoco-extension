@@ -80,3 +80,6 @@ pub impl HandoffWorkspaceProbe for HandoffWorkspaceState with fn snapshot(
     Ok(workspace)
   }
 }
+
+///|
+pub extend HandoffWorkspaceState with HandoffWorkspaceProbe::{snapshot}

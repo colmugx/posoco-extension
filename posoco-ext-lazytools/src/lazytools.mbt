@@ -115,7 +115,7 @@ pub struct LazyTools {
 ///     provenance: Some("test_child"),
 ///   }
 ///   let child = @posoco.RecordingToolProvider([child_def], Map::from_array([]))
-///   let ext = match LazyTools::build(providers=[child]) {
+///   let ext = match @posoco-ext-lazytools.LazyTools::build(providers=[child]) {
 ///     Ok(ext) => ext
 ///     Err(msg) => fail("unexpected build error: \{msg}")
 ///   }

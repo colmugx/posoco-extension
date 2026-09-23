@@ -124,6 +124,9 @@ pub impl @posoco.ToolProvider for GrepTools with fn list_tools(
 }
 
 ///|
+pub extend GrepTools with @posoco.ToolProvider::{list_tools}
+
+///|
 /// Execute the `grep` tool on native. Business logic lives in the shared
 /// `execute_grep_impl`; this method only supplies the walk-based searcher.
 pub impl @posoco.ToolProvider for GrepTools with fn execute(

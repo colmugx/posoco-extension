@@ -54,6 +54,12 @@ pub(all) struct OpenRouterConfig {
 } derive(Eq, Debug)
 
 ///|
+pub extend OpenRouterConfig with Eq::{not_equal, equal}
+
+///|
+pub extend OpenRouterConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn OpenRouterConfig::OpenRouterConfig(
   api_key : String,
   model~ : String,

@@ -142,6 +142,9 @@ pub impl @posoco.CommandPort for PlanMode with fn commands(_self) -> Array[
 }
 
 ///|
+pub extend PlanMode with @posoco.CommandPort::{commands}
+
+///|
 pub impl @posoco.CommandPort for PlanMode with fn invoke(
   self,
   id : String,

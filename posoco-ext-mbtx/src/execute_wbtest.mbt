@@ -55,7 +55,7 @@ impl Runner for MbtxFakeRunner with fn run(
   self.calls.push({ cmd, args, cwd, })
   if cmd.has_suffix("moonrun") {
     match self.moonrun_sleep_ms {
-      Some(ms) => @async.sleep(ms) catch { _ => () }
+      Some(ms) => @async.sleep(ms)
       None => ()
     }
     // The policy file only exists while the call is in flight (the
@@ -72,7 +72,7 @@ impl Runner for MbtxFakeRunner with fn run(
   } else if !cmd.has_suffix("/moon") {
     // A cmd-tool invocation (the BUILD toolchain binary ends in "/moon").
     match self.cmd_sleep_ms {
-      Some(ms) => @async.sleep(ms) catch { _ => () }
+      Some(ms) => @async.sleep(ms)
       None => ()
     }
   }

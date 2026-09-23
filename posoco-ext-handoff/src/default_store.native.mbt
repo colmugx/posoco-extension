@@ -10,6 +10,14 @@ pub impl HandoffStore for DefaultHandoffStore with fn exists(_self, path) {
 }
 
 ///|
+pub extend DefaultHandoffStore with HandoffStore::{
+  read,
+  write_atomic,
+  ensure_dir,
+  exists,
+}
+
+///|
 pub impl HandoffStore for DefaultHandoffStore with fn read(_self, path) {
   let data = @fs.read_file(path) catch {
     _ => return Err("handoff store read failed: " + path)

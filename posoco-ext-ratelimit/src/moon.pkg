@@ -3,6 +3,7 @@ import {
   "colmugx/posoco-devkit" @devkit,
   "moonbitlang/async",
   "moonbitlang/async/semaphore",
+  "moonbitlang/core/debug",
 }
 
 import {

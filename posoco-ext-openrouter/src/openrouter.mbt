@@ -112,3 +112,10 @@ pub impl @posoco.ModelPort for OpenRouterModelPort with fn provider_config(
     compact_threshold=self.config.compact_threshold,
   )
 }
+
+///|
+pub extend OpenRouterModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}

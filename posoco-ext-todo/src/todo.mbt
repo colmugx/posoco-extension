@@ -25,6 +25,12 @@ pub(all) enum TodoStatus {
 } derive(Eq, Debug)
 
 ///|
+pub extend TodoStatus with Eq::{not_equal, equal}
+
+///|
+pub extend TodoStatus with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Wire/display spelling of the status — also the `todo_write` enum values.
 pub impl Show for TodoStatus with fn to_string(self) -> String {
   match self {
@@ -33,6 +39,9 @@ pub impl Show for TodoStatus with fn to_string(self) -> String {
     Completed => "completed"
   }
 }
+
+///|
+pub extend TodoStatus with Show::{output}
 
 ///|
 fn TodoStatus::parse(text : String) -> TodoStatus? {
@@ -50,6 +59,12 @@ pub(all) struct TodoItem {
   content : String
   status : TodoStatus
 } derive(Eq, Debug)
+
+///|
+pub extend TodoItem with Eq::{not_equal, equal}
+
+///|
+pub extend TodoItem with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Upper bound on list length accepted by `todo_write`.
@@ -140,7 +155,7 @@ fn structured_state(items : Array[TodoItem], revision : Int) -> Json {
 /// The todo list extension: one struct, several port views — `ToolProvider`
 /// (todo_write / todo_read), `CommandPort` (/todo), `SystemPromptContributor`
 /// (usage guidance), `Lifecycle` (receives the composed UI), and `Extension`
-/// (self-reporting manifest).
+///   let todos = @posoco-ext-todo.TodoList::TodoList()
 pub struct TodoList {
   /// The composed UI, delivered at `Lifecycle::on_compose`. Defaults to
   /// NoopUiPort so pre-compose writes and headless hosts are silent no-ops.
@@ -155,7 +170,7 @@ pub struct TodoList {
 /// # Example
 /// ```mbt check
 /// async test "todo_write round-trips through todo_read" {
-///   let todos = TodoList::TodoList()
+///   let todos = @posoco-ext-todo.TodoList::TodoList()
 ///   let write : @posoco.ToolCall = @posoco.ToolCall::{
 ///     call_id: @posoco.CallId::unchecked("c1"),
 ///     name: @posoco.ToolName::unchecked("todo_write"),

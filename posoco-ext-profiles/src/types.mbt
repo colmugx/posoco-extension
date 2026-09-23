@@ -24,6 +24,12 @@ pub(all) struct ProfileManifest {
 } derive(Eq, Debug)
 
 ///|
+pub extend ProfileManifest with Eq::{not_equal, equal}
+
+///|
+pub extend ProfileManifest with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Parse a profile manifest from JSON. The value must be an object with
 /// string fields `id` / `name` / `description` and a string array `exts`;
 /// `id` additionally passes the non-empty, path-separator, and reserved-id

@@ -20,11 +20,15 @@ pub(all) struct TodoItem {
   content : String
   status : TodoStatus
 } derive(Eq, @debug.Debug)
+pub fn TodoItem::equal(Self, Self) -> Bool
+pub fn TodoItem::not_equal(Self, Self) -> Bool
+pub fn TodoItem::to_repr(Self) -> @debug.Repr
 
 pub struct TodoList {
   // private fields
 }
 pub fn TodoList::TodoList() -> Self
+pub fn TodoList::commands(Self) -> Array[@port.CommandDef]
 pub async fn TodoList::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn TodoList::extension_id(Self) -> String
 pub async fn TodoList::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
@@ -32,6 +36,8 @@ pub fn TodoList::items(Self) -> Array[TodoItem]
 pub fn TodoList::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn TodoList::manifest(Self) -> @port.ExtensionManifest
 pub fn TodoList::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn TodoList::on_shutdown(Self) -> Unit
+pub async fn TodoList::on_start(Self) -> Unit
 pub fn TodoList::revision(Self) -> Int
 pub fn TodoList::system_prompt(Self) -> String
 pub impl @port.CommandPort for TodoList
@@ -45,6 +51,10 @@ pub(all) enum TodoStatus {
   InProgress
   Completed
 } derive(Eq, @debug.Debug)
+pub fn TodoStatus::equal(Self, Self) -> Bool
+pub fn TodoStatus::not_equal(Self, Self) -> Bool
+pub fn TodoStatus::output(Self, &Logger) -> Unit
+pub fn TodoStatus::to_repr(Self) -> @debug.Repr
 pub fn TodoStatus::to_string(Self) -> String
 pub impl Show for TodoStatus
 

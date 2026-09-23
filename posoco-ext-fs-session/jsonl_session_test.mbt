@@ -9,10 +9,10 @@ test "serde: empty session round-trips" {
     messages: [],
     metadata: Map::from_array([]),
   }
-  let jsonl = session_to_jsonl(session)
+  let jsonl = @posoco-ext-fs-session.session_to_jsonl(session)
   // Empty session = just the metadata line + newline.
   assert_eq(jsonl, "{}\n")
-  match session_from_jsonl(jsonl) {
+  match @posoco-ext-fs-session.session_from_jsonl(jsonl) {
     Ok(s) => {
       assert_eq(s.messages.length(), 0)
       assert_eq(s.metadata.keys().to_array().length(), 0)
@@ -23,14 +23,14 @@ test "serde: empty session round-trips" {
 
 ///|
 test "serde: empty input returns empty session" {
-  match session_from_jsonl("") {
+  match @posoco-ext-fs-session.session_from_jsonl("") {
     Ok(s) => {
       assert_eq(s.messages.length(), 0)
       assert_eq(s.metadata.keys().to_array().length(), 0)
     }
     Err(_) => fail("empty input should parse to empty session")
   }
-  match session_from_jsonl("   \n  \n") {
+  match @posoco-ext-fs-session.session_from_jsonl("   \n  \n") {
     Ok(s) => assert_eq(s.messages.length(), 0)
     Err(_) => fail("whitespace-only input should parse to empty session")
   }
@@ -45,10 +45,10 @@ test "serde: single user message round-trips" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  let jsonl = session_to_jsonl(session)
+  let jsonl = @posoco-ext-fs-session.session_to_jsonl(session)
   assert_true(jsonl.contains("hello"))
   assert_true(jsonl.contains("\"role\":\"user\""))
-  match session_from_jsonl(jsonl) {
+  match @posoco-ext-fs-session.session_from_jsonl(jsonl) {
     Ok(s) => {
       assert_eq(s.messages.length(), 1)
       match s.messages[0] {
@@ -86,7 +86,10 @@ test "serde: assistant message with tool_calls round-trips" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  match session_from_jsonl(session_to_jsonl(session)) {
+  match
+    @posoco-ext-fs-session.session_from_jsonl(
+      @posoco-ext-fs-session.session_to_jsonl(session),
+    ) {
     Ok(s) => {
       assert_eq(s.messages.length(), 1)
       match s.messages[0] {
@@ -134,7 +137,10 @@ test "serde: reasoning raw payload round-trips" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  match session_from_jsonl(session_to_jsonl(session)) {
+  match
+    @posoco-ext-fs-session.session_from_jsonl(
+      @posoco-ext-fs-session.session_to_jsonl(session),
+    ) {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::AssistantMessage(reasoning~, ..) =>
@@ -162,7 +168,10 @@ test "serde: tool message with tool_call_id round-trips" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  match session_from_jsonl(session_to_jsonl(session)) {
+  match
+    @posoco-ext-fs-session.session_from_jsonl(
+      @posoco-ext-fs-session.session_to_jsonl(session),
+    ) {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::ToolMessage(call_id~, ..) =>
@@ -187,9 +196,9 @@ test "serde: tool error outcome persists is_error and round-trips as failure" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  let jsonl = session_to_jsonl(session)
+  let jsonl = @posoco-ext-fs-session.session_to_jsonl(session)
   assert_true(jsonl.contains("\"is_error\":true"))
-  match session_from_jsonl(jsonl) {
+  match @posoco-ext-fs-session.session_from_jsonl(jsonl) {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::ToolMessage(outcome~, ..) =>
@@ -215,14 +224,14 @@ test "serde: tool success outcome writes no is_error field" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  let jsonl = session_to_jsonl(session)
+  let jsonl = @posoco-ext-fs-session.session_to_jsonl(session)
   assert_true(!jsonl.contains("is_error"))
 }
 
 ///|
 test "serde: legacy tool line without is_error loads as success" {
   let legacy = "{}\n{\"role\":\"tool\",\"content\":[{\"type\":\"text\",\"text\":\"old result\"}],\"tool_call_id\":\"call_old\",\"name\":\"read\"}\n"
-  match session_from_jsonl(legacy) {
+  match @posoco-ext-fs-session.session_from_jsonl(legacy) {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::ToolMessage(outcome~, ..) =>
@@ -251,9 +260,9 @@ test "serde: runtime failure outcome also persists is_error" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  let jsonl = session_to_jsonl(session)
+  let jsonl = @posoco-ext-fs-session.session_to_jsonl(session)
   assert_true(jsonl.contains("\"is_error\":true"))
-  match session_from_jsonl(jsonl) {
+  match @posoco-ext-fs-session.session_from_jsonl(jsonl) {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::ToolMessage(outcome~, ..) =>
@@ -279,7 +288,10 @@ test "serde: image content round-trips" {
     messages: [msg],
     metadata: Map::from_array([]),
   }
-  match session_from_jsonl(session_to_jsonl(session)) {
+  match
+    @posoco-ext-fs-session.session_from_jsonl(
+      @posoco-ext-fs-session.session_to_jsonl(session),
+    ) {
     Ok(s) =>
       match s.messages[0] {
         @posoco.Message::UserMessage(content~) =>
@@ -303,7 +315,10 @@ test "serde: metadata preserved" {
     ("turn_count", Json::number(3.0)),
   ])
   let session = @posoco.Session::{ messages: [], metadata, }
-  match session_from_jsonl(session_to_jsonl(session)) {
+  match
+    @posoco-ext-fs-session.session_from_jsonl(
+      @posoco-ext-fs-session.session_to_jsonl(session),
+    ) {
     Ok(s) => {
       assert_true(s.metadata.contains("parent_session_id"))
       match s.metadata["parent_session_id"] {
@@ -322,7 +337,7 @@ test "serde: metadata preserved" {
 
 ///|
 test "serde: malformed metadata line errors loudly" {
-  match session_from_jsonl("not json\n{}\n") {
+  match @posoco-ext-fs-session.session_from_jsonl("not json\n{}\n") {
     Err(@posoco.SessionError::Load(msg)) =>
       assert_true(msg.contains("metadata"))
     _ => fail("expected Load error for malformed metadata")
@@ -331,7 +346,7 @@ test "serde: malformed metadata line errors loudly" {
 
 ///|
 test "serde: malformed message line errors loudly" {
-  match session_from_jsonl("{}\n{ not valid json }\n") {
+  match @posoco-ext-fs-session.session_from_jsonl("{}\n{ not valid json }\n") {
     Err(@posoco.SessionError::Load(_)) => ()
     _ => fail("expected Load error for malformed message line")
   }
@@ -347,7 +362,7 @@ async fn fresh_root(prefix : String) -> String {
 ///|
 async test "io[native]: load non-existent session returns empty" {
   let root = fresh_root("load-missing")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let s = store.load("does_not_exist") catch {
     e => fail("missing session should Ok empty: \{e}")
   }
@@ -361,7 +376,7 @@ async test "io[native]: load non-existent session returns empty" {
 ///|
 async test "io[native]: save then load round-trips a full session" {
   let root = fresh_root("roundtrip")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let session = @posoco.Session::{
     messages: [
       @posoco.Message::SystemMessage(content=[
@@ -398,7 +413,7 @@ async test "io[native]: save creates parent directory lazily" {
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let session = @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -418,7 +433,7 @@ async test "io[native]: save into nested non-existent root creates all levels" {
   // chain below the tmpdir base must be created on first save.
   let base = fresh_root("nested-root")
   let root = base + "/.cetas/sessions/--Users-foo-bar--"
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let session = @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -439,7 +454,7 @@ async test "io[native]: save into nested non-existent root creates all levels" {
 ///|
 async test "io[native]: overwrite existing session truncates correctly" {
   let root = fresh_root("overwrite")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let big = @posoco.Session::{
     messages: [
       @posoco.Message::UserMessage(content=[
@@ -490,7 +505,10 @@ async test "io[native]: save and append publish the session status register" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
-  let store = JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
+    root,
+    bus=Some(bus),
+  )
   let session = @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -561,7 +579,7 @@ async test "io[native]: save and append publish the session status register" {
 ///|
 async test "io[native]: bus=None store behaves exactly as before" {
   let root = fresh_root("status-silent")
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let session = @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),
@@ -590,7 +608,10 @@ async test "io[native]: failed persist publishes nothing" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
-  let store = JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
+    root,
+    bus=Some(bus),
+  )
   let session = @posoco.Session::{
     messages: [],
     metadata: Map::from_array([]),

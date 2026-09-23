@@ -45,6 +45,13 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn provider_id(
 }
 
 ///|
+pub extend KimiOAuth with @colmugx/posoco-ext-oauth.OAuthProvider::{
+  provider_id,
+  refresh,
+  to_auth,
+}
+
+///|
 pub impl @oauth.OAuthProvider for KimiOAuth with fn login(
   self : KimiOAuth,
   interaction : &@oauth.AuthInteraction,
@@ -106,12 +113,7 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn refresh(
           1 => 2000
           _ => 4000
         }
-        @async.sleep(delay_ms) catch {
-          err =>
-            raise @oauth.OAuthError::HttpError(
-              "refresh retry sleep failed: " + err.to_string(),
-            )
-        }
+        @async.sleep(delay_ms)
         retry += 1
         continue
       }

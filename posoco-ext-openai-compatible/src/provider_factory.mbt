@@ -236,6 +236,13 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn provider_id(
 }
 
 ///|
+pub extend OpenAICompatibleProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn credential_id(
   self : OpenAICompatibleProvider,
 ) -> String {
@@ -668,6 +675,11 @@ pub impl @llm.ApiKeyFactory for OpenAICompatibleProvider with fn provider_id(
   self : OpenAICompatibleProvider,
 ) -> String {
   self.provider_id
+}
+
+///|
+pub extend OpenAICompatibleProvider with @colmugx/posoco-ext-llm.ApiKeyFactory::{
+  login,
 }
 
 ///|
