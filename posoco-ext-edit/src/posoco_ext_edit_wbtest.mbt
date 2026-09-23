@@ -369,3 +369,25 @@ async test "edit_anchored_relative_path_resolves" {
     }
   }
 }
+
+
+///|
+test "edit_strip_line_number_prefix_accepts_compact_read_format" {
+  assert_eq(strip_line_number_prefix("1|alpha"), Some("alpha"))
+  assert_eq(strip_line_number_prefix("42|  beta"), Some("  beta"))
+  assert_eq(strip_line_number_prefix("7|"), Some(""))
+}
+
+///|
+test "edit_strip_line_number_prefix_keeps_legacy_read_format" {
+  assert_eq(strip_line_number_prefix("L1: alpha"), Some("alpha"))
+  assert_eq(strip_line_number_prefix("L42:   beta"), Some("  beta"))
+}
+
+///|
+test "edit_strip_line_numbers_block_accepts_compact_read_block" {
+  assert_eq(
+    strip_line_numbers_block("10|one\n11|two\n12|three"),
+    Some("one\ntwo\nthree"),
+  )
+}
