@@ -330,24 +330,6 @@ fn match_counts(matches : Array[GrepMatch]) -> Array[(String, Int)] {
 }
 
 ///|
-fn files_noun(n : Int) -> String {
-  if n == 1 {
-    "file"
-  } else {
-    "files"
-  }
-}
-
-///|
-fn match_noun(n : Int) -> String {
-  if n == 1 {
-    "match"
-  } else {
-    "matches"
-  }
-}
-
-///|
 fn grep_summary(count : Int, noun : String) -> String {
   if count == 0 {
     "no matches"
@@ -376,7 +358,7 @@ fn grep_structured(count : Int, noun : String, truncated : Bool) -> Json {
 fn grep_result_text(
   mode : GrepOutputMode,
   matches : Array[GrepMatch],
-  pattern : String,
+  _pattern : String,
   max_matches : Int,
 ) -> (String, Int, Bool) {
   if matches.length() == 0 {
