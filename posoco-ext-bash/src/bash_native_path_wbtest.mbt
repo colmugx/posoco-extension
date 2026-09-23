@@ -7,10 +7,10 @@
 /// The runtime tests spawn the user's real `/bin/sh`, so they run only when
 /// BASH_LIVE=1 is set; CI and default runs skip. The anchored variants use a
 /// tmpdir root (never `/` and the host's real `/etc`).
-test "collect_output_failure_mapping_is_stage_only" {
+test "collect_output_failure_mapping_is_compact" {
   match bash_collect_output_failure() {
     @posoco.RuntimeError::InvocationFailed(message) =>
-      assert_eq(message, "bash: process failed (stage=collect_output)")
+      assert_eq(message, "bash: process failed")
     _ => fail("expected collect_output mapping to be InvocationFailed")
   }
 }
@@ -54,10 +54,7 @@ async test "non_utf8_output_is_explicit_tool_error" {
   // as ToolReportedError (not Success).
   match result {
     ToolReportedError(content~, ..) => {
-      assert_true(content.contains("bash"))
-      assert_true(content.contains("stage=decode_output"))
-      assert_true(content.contains("invalid_utf8"))
-      assert_true(content.contains("exit_code=0"))
+      assert_eq(content, "bash: invalid UTF-8")
     }
     other =>
       fail(
