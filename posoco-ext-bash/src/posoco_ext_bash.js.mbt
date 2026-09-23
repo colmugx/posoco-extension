@@ -61,7 +61,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   let exit_code = proc.exit_code().wait() catch {
       _ =>
         raise @posoco.RuntimeError::InvocationFailed(
-          "bash: process failed (stage=wait_exit)",
+          "bash: process failed",
         )
     }
   let stdout = proc.stdout_text().wait() catch { _ => "" }
@@ -75,6 +75,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   } else {
     stdout
   }
+  let content = bash_model_output(content, exit_code)
   if exit_code != 0 {
     @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
   } else {
