@@ -174,17 +174,17 @@ async test "shell approvals are remembered per segment scope" {
 }
 
 ///|
-async test "rtk prefix is stripped: rtk moon and bare moon share one scope" {
+async test "rtk prefix is stripped: moon and bare moon share one scope" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = PermissionPolicy::PermissionPolicy(
     WorkspaceWrite,
     approval=Some(source as &ApprovalSource),
   )
-  // rtk is a transparent project-local wrapper: `rtk moon check` scopes to
+  // rtk is a transparent project-local wrapper: `moon check` scopes to
   // the underlying `moon`, so one approval covers both spellings (models
   // guided by AGENTS.md and hosts wiring an rtk wrapper both emit rtk).
   assert_true(
-    policy.before_tool(test_call_cmd("bash", "rtk moon check --target native"))
+    policy.before_tool(test_call_cmd("bash", "moon check --target native"))
     is @posoco.ToolDecision::ApproveAfterConsent(_),
   )
   assert_eq(source.asked, 1)
@@ -1268,4 +1268,365 @@ async test "yolo preapproval does not consult decision port" {
     policy.before_tool(test_call("read")) is @posoco.ToolDecision::Approve(_),
   )
   assert_eq(decision.call_count(), 0)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Auto mode (DecisionPort as the sole authority)
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+/// Four-question judge result: the grant answer plus the three risk
+/// dimensions, in the ids `auto_gate` requests.
+fn auto_judge_result(
+  grant : Double,
+  mutates : Double,
+  external : Double,
+  destructive : Double,
+) -> @posoco.DecisionResult {
+  {
+    answers: [
+      @posoco.DecisionAnswer::BooleanAnswer(
+        id="permission.auto_approve",
+        probability_true=grant,
+      ),
+      @posoco.DecisionAnswer::BooleanAnswer(
+        id="permission.mutates_state",
+        probability_true=mutates,
+      ),
+      @posoco.DecisionAnswer::BooleanAnswer(
+        id="permission.sends_data_external",
+        probability_true=external,
+      ),
+      @posoco.DecisionAnswer::BooleanAnswer(
+        id="permission.destructive",
+        probability_true=destructive,
+      ),
+    ],
+    model: None,
+    usage: None,
+  }
+}
+
+///|
+async test "auto mode approves on a high grant probability without asking the source" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Auto,
+    approval=Some(source as &ApprovalSource),
+  )
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("write")) is @posoco.ToolDecision::Approve(_),
+  )
+  // The judge, not the approval source, decided.
+  assert_eq(source.asked, 0)
+  assert_eq(decision.call_count(), 1)
+  // One request carries the grant question plus the three risk dimensions.
+  let requests = decision.received_requests()
+  assert_eq(requests[0].questions.length(), 4)
+}
+
+///|
+async test "auto mode rejects a low grant probability, citing it" {
+  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.2, 0.1, 0.1, 0.1)),
+  ])
+  compose_permission_decision(policy, decision)
+  match policy.before_tool(test_call_cmd("bash", "npm run build")) {
+    @posoco.ToolDecision::Reject(reason~) => assert_true(reason.contains("0.2"))
+    other => fail("expected a judge decline, got \{other}")
+  }
+}
+
+///|
+async test "auto mode risk veto overrides a high grant probability" {
+  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.95, 0.1, 0.1, 0.9)),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "rm -rf x"))
+    is @posoco.ToolDecision::Reject(_),
+  )
+}
+
+///|
+async test "auto mode fails closed when the judge errors" {
+  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Fail(
+      @posoco.DecisionError::Transport("semantic backend unavailable"),
+    ),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("write")) is @posoco.ToolDecision::Reject(_),
+  )
+}
+
+///|
+async test "auto mode fails closed without a composed DecisionPort" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Auto,
+    approval=Some(source as &ApprovalSource),
+  )
+  assert_true(
+    policy.before_tool(test_call("write")) is @posoco.ToolDecision::Reject(_),
+  )
+  // No source fallback: the approval source is never consulted.
+  assert_eq(source.asked, 0)
+}
+
+///|
+async test "auto mode judges escalated mbtx instead of asking the source" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Auto,
+    approval=Some(source as &ApprovalSource),
+  )
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call_mbtx()) is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(source.asked, 0)
+  // The judged state carries the escalation flag for the judge to see.
+  let requests = decision.received_requests()
+  match requests[0].state {
+    Object(fields) =>
+      assert_true(
+        fields.get("arguments") is Some(Object(args)) &&
+        args.get("escalated") is Some(True),
+      )
+    _ => fail("expected object state")
+  }
+}
+
+///|
+async test "auto mode judges a risky read through the grant question" {
+  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let decision = @posoco.ScriptedDecisionPort([
+    // Risk probe on the statically pre-approved read...
+    @posoco.ScriptedDecisionStep::Return(semantic_risk_result(0.9, 0.1, 0.1)),
+    // ...then the judge decides the grant.
+    @posoco.ScriptedDecisionStep::Return(auto_judge_result(0.9, 0.1, 0.1, 0.1)),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call("read")) is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(decision.call_count(), 2)
+}
+
+///|
+async test "explicit session approval outranks the auto judge" {
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+  )
+  let decision = @posoco.ScriptedDecisionPort([])
+  compose_permission_decision(policy, decision)
+  // Interactive records an explicit user approval for `write`.
+  assert_true(
+    policy.before_tool(test_call("write"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  match
+    @posoco.CommandPort::invoke(policy, "permission", Json::string("auto")) {
+    @posoco.CommandOutcome::Success(..) => ()
+    _ => fail("expected /permission auto to succeed")
+  }
+  // The recorded consent short-circuits before the judge is consulted.
+  assert_true(
+    policy.before_tool(test_call("write"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(decision.call_count(), 0)
+}
+
+///|
+async test "/permission auto without a DecisionPort fails and keeps the mode" {
+  let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
+  let policy = PermissionPolicy::PermissionPolicy(
+    Interactive,
+    approval=Some(source as &ApprovalSource),
+  )
+  match
+    @posoco.CommandPort::invoke(policy, "permission", Json::string("auto")) {
+    @posoco.CommandOutcome::Failure(reason~) =>
+      assert_true(reason.contains("DecisionPort"))
+    _ => fail("expected /permission auto to fail without a DecisionPort")
+  }
+  assert_true(policy.mode is Interactive)
+}
+
+///|
+async test "auto policy without a decision port fails composition" {
+  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let model = @posoco.ScriptedModel([])
+  let ui = @posoco.NoopUiPort()
+  try
+    (policy as &@posoco.Lifecycle).on_compose(
+      @posoco.tk_view(requires=[], model~, ui~),
+    )
+  catch {
+    @posoco.CompositionError::ExtensionComposeFailed(manifest_id~, detail~) => {
+      assert_eq(manifest_id, "posoco_ext_permission")
+      assert_true(detail.contains("DecisionPort"))
+    }
+    other => fail("expected ExtensionComposeFailed, got \{other}")
+  } noraise {
+    _ => fail("expected composition to fail for Auto without a DecisionPort")
+  }
+}
+
+///|
+async test "auto mode injects a standing reminder; leaving auto removes it" {
+  let policy = PermissionPolicy::PermissionPolicy(Auto)
+  let r1 = policy.before_model([user_message("hello")])
+  assert_eq(r1.length(), 2)
+  assert_true(
+    user_text(r1[1]) is Some(text) &&
+    text.has_prefix("<permission-context") &&
+    text.contains("auto"),
+  )
+  policy.mode = Yolo
+  let r2 = policy.before_model(r1)
+  assert_eq(r2.length(), 1)
+  policy.mode = Auto
+  let r3 = policy.before_model(r2)
+  assert_eq(r3.length(), 2)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// WorkspaceWrite with a workspace anchor
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+async test "workspace write mode approves in-workspace writes without asking" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+    workspace=Some(@devkit.WorkspaceAnchor("/tmp/proj")),
+  )
+  // Absolute path inside the root.
+  assert_true(
+    policy.before_tool(test_call_path("write", "/tmp/proj/src/a.txt"))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  // Relative path resolves inside the root.
+  assert_true(
+    policy.before_tool(test_call_path("edit", "src/b.txt"))
+    is @posoco.ToolDecision::Approve(_),
+  )
+  assert_eq(source.asked, 0)
+}
+
+///|
+async test "workspace write mode still gates writes outside the workspace" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+    workspace=Some(@devkit.WorkspaceAnchor("/tmp/proj")),
+  )
+  // Absolute path outside the root.
+  assert_true(
+    policy.before_tool(test_call_path("write", "/etc/passwd"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  // `..` traversal escaping the root.
+  assert_true(
+    policy.before_tool(test_call_path("write", "../escape.txt"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  // Shell and unknown tools keep the historical gate.
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 3)
+  assert_eq(source.categories, ["write", "write", "shell"])
+}
+
+///|
+async test "workspace write mode gates writes when no anchor is wired" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  assert_true(
+    policy.before_tool(test_call_path("write", "src/a.txt"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+}
+
+///|
+async test "workspace write mode gates write calls without a usable path" {
+  let source = RecordingApproval::{
+    decision: AllowOnce,
+    asked: 0,
+    categories: [],
+  }
+  let policy = PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+    workspace=Some(@devkit.WorkspaceAnchor("/tmp/proj")),
+  )
+  // apply_patch arguments carry no "path" the policy can resolve.
+  assert_true(
+    policy.before_tool(test_call("apply_patch"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  // A non-string path is equally unprovable.
+  let numeric : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("call-1"),
+    name: @posoco.ToolName::unchecked("write"),
+    arguments: Json::object(Map::from_array([("path", Json::number(1.0))])),
+  }
+  assert_true(
+    policy.before_tool(numeric) is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  // A `..` escape from an interior directory lands outside the root.
+  assert_true(
+    policy.before_tool(test_call_path("write", "src/../../out.txt"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 3)
 }

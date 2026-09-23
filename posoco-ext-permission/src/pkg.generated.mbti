@@ -34,12 +34,14 @@ pub(all) enum PermissionMode {
   ReadOnly
   WorkspaceWrite
   Interactive
+  Auto
   Yolo
 } derive(Eq, @debug.Debug)
 
 pub(all) struct PermissionPolicy {
   mut mode : PermissionMode
   approval : &ApprovalSource?
+  workspace : @posoco-devkit.WorkspaceAnchor?
   mut session_approved : @set.Set[String]
   mut exempted : Map[String, String]
   read_tools : Array[String]
@@ -47,7 +49,7 @@ pub(all) struct PermissionPolicy {
   shell_tools : Array[String]
   // private fields
 }
-pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, bus? : @posoco-devkit.EventBus?) -> Self
+pub fn PermissionPolicy::PermissionPolicy(PermissionMode, approval? : &ApprovalSource?, bus? : @posoco-devkit.EventBus?, workspace? : @posoco-devkit.WorkspaceAnchor?) -> Self
 pub fn PermissionPolicy::extension_id(Self) -> String
 pub fn PermissionPolicy::manifest(Self) -> @port.ExtensionManifest
 pub fn PermissionPolicy::mode(Self) -> PermissionMode

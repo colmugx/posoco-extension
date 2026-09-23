@@ -1,10 +1,19 @@
 ///|
 /// Default permission posture for coding-agent tools. `Yolo` pre-approves
-/// everything — the approval source is never consulted.
+/// everything — the approval source is never consulted. `Auto` delegates the
+/// decision to the composed `DecisionPort` — the approval source is never
+/// consulted either, but a missing DecisionPort is a hard error, not a
+/// fallback.
 pub(all) enum PermissionMode {
   ReadOnly
   WorkspaceWrite
   Interactive
+  /// Every non-preapproved call is judged by the composed `DecisionPort`:
+  /// a grant probability above threshold approves, a probable risk dimension
+  /// or a low grant probability rejects. There is no deterministic fallback:
+  /// an Auto policy without a DecisionPort fails composition, and
+  /// `/permission auto` without one refuses the switch.
+  Auto
   Yolo
 } derive(Eq, Debug)
 
@@ -89,8 +98,14 @@ pub(all) struct PermissionPolicy {
   mut mode : PermissionMode
   /// None ⇒ behave as pure-mode (no approval prompt; ReadOnly rejects,
   /// WorkspaceWrite/Interactive would need a source). A None source on a
-  /// non-ReadOnly mode treats every non-read tool as denied.
+  /// non-ReadOnly mode treats every non-read tool as denied. Auto never
+  /// consults the source; it needs a DecisionPort instead.
   approval : &ApprovalSource?
+  /// Workspace anchor for the `WorkspaceWrite` contract: write-class calls
+  /// whose lexically-resolved `path` stays inside the anchor root run
+  /// without a prompt. None keeps every write behind the gate (hosts that
+  /// do not wire a workspace keep the historical behavior).
+  workspace : @devkit.WorkspaceAnchor?
   /// Approvals remembered this agent lifetime, keyed by approval scope: the
   /// bare tool name for write/unknown tools, `"<tool>:<segment-scope>"` per
   /// shell command segment (e.g. `bash:ls`, `bash:moon` — a leading `rtk`
@@ -107,15 +122,21 @@ pub(all) struct PermissionPolicy {
   read_tools : Array[String]
   write_tools : Array[String]
   shell_tools : Array[String]
-  /// Optional semantic judgement capability. It may only tighten an existing
-  /// deterministic pre-approval; it never grants authority.
+  /// Optional semantic judgement capability. Outside Auto mode it may only
+  /// tighten an existing deterministic pre-approval; it never grants
+  /// authority. In Auto mode it is the sole approval authority for
+  /// non-preapproved calls — its absence there is a hard error, never a
+  /// fallback.
   priv mut decision : &@posoco.DecisionPort?
 }
 
 ///|
 /// Construct a policy. `approval` is optional so a host can run ReadOnly
 /// without wiring up a UI; non-ReadOnly modes without a source deny every
-/// non-read tool. `bus`, when given, subscribes the policy to the
+/// non-read tool (Auto needs a DecisionPort instead and errors at
+/// composition without one). `workspace` opts into the `WorkspaceWrite`
+/// contract: write-class calls anchored inside the root are pre-approved.
+/// `bus`, when given, subscribes the policy to the
 /// cross-extension event bus so peer extensions can report tools that
 /// bypass this gate (topic `tool_exemptions`); construct subscribing gates
 /// before the extensions that report to them — the bus is fire-and-forget.
@@ -123,10 +144,12 @@ pub fn PermissionPolicy::PermissionPolicy(
   mode : PermissionMode,
   approval? : &ApprovalSource? = None,
   bus? : @devkit.EventBus? = None,
+  workspace? : @devkit.WorkspaceAnchor? = None,
 ) -> PermissionPolicy {
   let policy : PermissionPolicy = {
     mode,
     approval,
+    workspace,
     session_approved: Set([]),
     exempted: Map::from_array([]),
     // ask_question rides the read class: it talks to the user and touches
@@ -176,10 +199,11 @@ pub fn PermissionPolicy::mode(self : PermissionPolicy) -> PermissionMode {
 }
 
 ///|
-/// Standing reminder for the active mode: `Some` only for ReadOnly. It is
-/// the sole behavior-changing mode — mutation is refused, not merely asked —
-/// so the model needs the contract restated each turn; the approval-routing
-/// modes (WorkspaceWrite/Interactive/Yolo) change only who approves and stay
+/// Standing reminder for behavior-changing modes: `Some` for ReadOnly and
+/// Auto. ReadOnly refuses mutation outright; Auto routes each non-read call
+/// through the DecisionPort judge, so the model must know an operation may
+/// be declined without a human in the loop. The approval-routing modes
+/// (WorkspaceWrite/Interactive/Yolo) change only who approves and stay
 /// silent, with deny feedback as the steering signal (rationale:
 /// docs/permission-injection-research.md). The text is wrapped in a
 /// `<permission-context>` envelope so `before_model` can locate, replace, or
@@ -193,6 +217,15 @@ fn PermissionPolicy::mode_reminder_text(self : PermissionPolicy) -> String? {
           kind="mode",
           trust=true,
           content="Permission mode is read-only. Read-only inspection — including provably read-only shell commands — is pre-approved; file mutation, other shell execution, and unknown tools are rejected. Do not attempt them.",
+        ),
+      )
+    Auto =>
+      Some(
+        @devkit.context_envelope(
+          ns="permission",
+          kind="mode",
+          trust=true,
+          content="Permission mode is auto. Reads are pre-approved; every other operation is judged per call by a semantic gate that may approve or decline it without asking you. Prefer provably safe, task-scoped operations; a declined call is steering, not an error to retry blind.",
         ),
       )
     WorkspaceWrite | Interactive | Yolo => None
@@ -220,7 +253,7 @@ fn preview_arguments(args : Json) -> String {
   if raw.length() <= 80 {
     raw
   } else {
-    raw.sub(end=77).to_owned() + "..."
+    raw.exact_view(end=77).to_owned() + "..."
   }
 }
 
@@ -238,7 +271,7 @@ let shell_shims : Array[String] = [
 ///|
 /// First one or two whitespace-delimited words of a single command segment —
 /// the segment's approval scope. A leading `rtk` is stripped first: rtk is a
-/// transparent project-local wrapper, so `rtk moon check` shares the `moon`
+/// transparent project-local wrapper, so `moon check` shares the `moon`
 /// scope with a bare `moon check` (models guided by AGENTS.md and hosts
 /// wiring an rtk wrapper both produce rtk-prefixed commands; either spelling
 /// should honor one approval). Other leading shims refine to shim + next
@@ -456,13 +489,13 @@ fn find_mode_reminder(messages : Array[@kernel.Message]) -> Int? {
 }
 
 ///|
-/// Standing reminder only while ReadOnly is active (the behavior-changing
-/// mode); other modes are silent enforcement + deny feedback, and an
-/// existing reminder left over from a ReadOnly turn is removed (rationale:
-/// docs/permission-injection-research.md). Inject when the transcript has
-/// none (first turn, or compaction dropped it), replace in place when the
-/// text is stale, remove when the mode is no longer ReadOnly; steady-state
-/// turns touch nothing, so the hook is idempotent.
+/// Standing reminder only while a behavior-changing mode is active
+/// (ReadOnly, Auto); approval-routing modes are silent enforcement + deny
+/// feedback, and an existing reminder left over from such a turn is removed
+/// (rationale: docs/permission-injection-research.md). Inject when the
+/// transcript has none (first turn, or compaction dropped it), replace in
+/// place when the text is stale, remove when the mode no longer carries a
+/// reminder; steady-state turns touch nothing, so the hook is idempotent.
 pub impl @posoco.PipelineHook for PermissionPolicy with fn before_model(
   self : PermissionPolicy,
   messages : Array[@kernel.Message],
@@ -509,10 +542,49 @@ fn effective_tool(call : @posoco.ToolCall) -> (String, @posoco.ToolCall) {
 
 ///|
 /// Minimum probability at which a semantic risk signal tightens a
-/// deterministic pre-approval. DecisionPort is advisory only: absence,
-/// errors, malformed responses, and lower probabilities preserve the
-/// existing deterministic policy.
+/// deterministic pre-approval — and, in Auto mode, at which a risk
+/// dimension vetoes the grant outright. DecisionPort is advisory outside
+/// Auto: absence, errors, malformed responses, and lower probabilities
+/// preserve the existing deterministic policy.
 const SEMANTIC_RISK_THRESHOLD = 0.6
+
+///|
+/// Minimum grant probability at which the Auto judge approves a call.
+/// Granting authority must clear a higher bar than tightening one.
+const AUTO_APPROVE_THRESHOLD = 0.8
+
+///|
+/// The three factual risk-dimension questions. They ask about effects only,
+/// never authorization, so the same questions serve the advisory tightening
+/// probe (`semantic_risk`) and the Auto grant request.
+fn semantic_risk_questions() -> Array[@posoco.DecisionQuestion] {
+  [
+    @posoco.DecisionQuestion::Boolean(
+      id="permission.mutates_state",
+      instructions=Json::string(
+        "Could executing this operation mutate local or external state? Judge effects only; do not decide whether it should be authorized.",
+      ),
+      true_criteria=None,
+      false_criteria=None,
+    ),
+    @posoco.DecisionQuestion::Boolean(
+      id="permission.sends_data_external",
+      instructions=Json::string(
+        "Could executing this operation send user, workspace, credential, or other local data to an external destination? Judge data flow only; do not authorize.",
+      ),
+      true_criteria=None,
+      false_criteria=None,
+    ),
+    @posoco.DecisionQuestion::Boolean(
+      id="permission.destructive",
+      instructions=Json::string(
+        "Could executing this operation delete, overwrite, irreversibly change, or otherwise destructively affect state? Judge risk only; do not authorize.",
+      ),
+      true_criteria=None,
+      false_criteria=None,
+    ),
+  ]
+}
 
 ///|
 /// Ask the optional DecisionPort whether a statically pre-approved operation
@@ -533,32 +605,7 @@ async fn PermissionPolicy::semantic_risk(
       "static_category": Json::string(category),
       "arguments": effective.arguments,
     }),
-    questions: [
-      @posoco.DecisionQuestion::Boolean(
-        id="permission.mutates_state",
-        instructions=Json::string(
-          "Could executing this operation mutate local or external state? Judge effects only; do not decide whether it should be authorized.",
-        ),
-        true_criteria=None,
-        false_criteria=None,
-      ),
-      @posoco.DecisionQuestion::Boolean(
-        id="permission.sends_data_external",
-        instructions=Json::string(
-          "Could executing this operation send user, workspace, credential, or other local data to an external destination? Judge data flow only; do not authorize.",
-        ),
-        true_criteria=None,
-        false_criteria=None,
-      ),
-      @posoco.DecisionQuestion::Boolean(
-        id="permission.destructive",
-        instructions=Json::string(
-          "Could executing this operation delete, overwrite, irreversibly change, or otherwise destructively affect state? Judge risk only; do not authorize.",
-        ),
-        true_criteria=None,
-        false_criteria=None,
-      ),
-    ],
+    questions: semantic_risk_questions(),
   }
   let result = decision.evaluate(request) catch { _ => return false }
   result.validate_for(request) catch {
@@ -578,7 +625,8 @@ async fn PermissionPolicy::semantic_risk(
 /// Tighten an operation that the deterministic classifier would otherwise
 /// pre-approve. `None` means preserve the historical approval. Semantic risk
 /// can only escalate to consent/rejection; it can never turn an existing gate
-/// into an approval.
+/// into an approval. In Auto mode the risk probe only decides *whether* to
+/// bother the judge; the grant itself is `auto_gate`'s call.
 async fn PermissionPolicy::semantic_preapproval(
   self : PermissionPolicy,
   call : @posoco.ToolCall,
@@ -599,7 +647,121 @@ async fn PermissionPolicy::semantic_preapproval(
       )
     WorkspaceWrite | Interactive =>
       Some(self.gate(call, effective, "semantic-risk"))
+    Auto => Some(self.auto_gate(call, effective, category))
     Yolo => None
+  }
+}
+
+///|
+/// Auto mode's judge. Every non-preapproved call gets ONE DecisionRequest
+/// carrying the grant question plus the factual risk dimensions; the
+/// deterministic mapping stays in charge of authority:
+///
+/// - any risk dimension at/above `SEMANTIC_RISK_THRESHOLD` vetoes the grant
+///   (monotonic: the judge can tighten, its grant answer cannot override a
+///   probable side effect);
+/// - a grant probability at/above `AUTO_APPROVE_THRESHOLD` approves;
+/// - anything else — low grant probability, judge error, malformed result,
+///   judge missing — rejects, failing closed.
+///
+/// Decisions are per-call: nothing is written to the session cache, so the
+/// same tool is re-judged every time. Explicit user approvals recorded in
+/// earlier interactive turns still outrank a fresh judgement.
+async fn PermissionPolicy::auto_gate(
+  self : PermissionPolicy,
+  call : @posoco.ToolCall,
+  effective : @posoco.ToolCall,
+  category : String,
+) -> @posoco.ToolDecision {
+  let keys = self.cache_keys(effective, category)
+  let mut all_approved = keys.length() > 0
+  for k in keys {
+    if !self.session_approved.contains(k) {
+      all_approved = false
+      break
+    }
+  }
+  if all_approved {
+    return @posoco.ToolDecision::ApproveAfterConsent(
+      call~,
+      consent_scope=keys.join("&"),
+    )
+  }
+  let decision = match self.decision {
+    Some(decision) => decision
+    None =>
+      return @posoco.ToolDecision::Reject(
+        reason="permission: auto mode requires a DecisionPort; none is composed",
+      )
+  }
+  let name = effective.name.to_string()
+  let questions = [
+    @posoco.DecisionQuestion::Boolean(
+      id="permission.auto_approve",
+      instructions=Json::string(
+        "Should this operation be approved and executed right now, without asking the user? You are the authorization decision: judge safety, reversibility, and fit with the surrounding task; the user will not be consulted.",
+      ),
+      true_criteria=Some(
+        Json::string(
+          "Routine, reversible, or clearly task-serving — safe to run unattended.",
+        ),
+      ),
+      false_criteria=Some(
+        Json::string(
+          "Destructive, irreversible, reaching beyond the task's resources, or otherwise unfit to run without explicit user consent.",
+        ),
+      ),
+    ),
+    ..semantic_risk_questions(),
+  ]
+  let request : @posoco.DecisionRequest = {
+    state: Json::object({
+      "tool_name": Json::string(name),
+      "category": Json::string(category),
+      "arguments": effective.arguments,
+    }),
+    questions,
+  }
+  let result = decision.evaluate(request) catch {
+    _ =>
+      return @posoco.ToolDecision::Reject(
+        reason="permission: auto judge failed for '" + name + "'; denied",
+      )
+  }
+  result.validate_for(request) catch {
+    _ =>
+      return @posoco.ToolDecision::Reject(
+        reason="permission: auto judge returned an invalid answer for '" +
+          name +
+          "'; denied",
+      )
+  }
+  let mut grant = -1.0
+  for answer in result.answers {
+    match answer {
+      @posoco.DecisionAnswer::BooleanAnswer(id~, probability_true~) =>
+        if id == "permission.auto_approve" {
+          grant = probability_true
+        } else if probability_true >= SEMANTIC_RISK_THRESHOLD {
+          return @posoco.ToolDecision::Reject(
+            reason="permission: auto judge flagged risk on '" +
+              name +
+              "' (question '" +
+              id +
+              "', probability \{probability_true}); denied without user consent",
+          )
+        }
+      _ => ()
+    }
+  }
+  if grant >= AUTO_APPROVE_THRESHOLD {
+    @posoco.ToolDecision::Approve(call~)
+  } else {
+    @posoco.ToolDecision::Reject(
+      reason="permission: auto judge declined '" +
+        name +
+        "' (approval probability \{grant}); pick a safer approach or ask the user",
+    )
   }
 }
 
@@ -635,6 +797,12 @@ async fn PermissionPolicy::mbtx_escalated(
   // Yolo is the global pre-approval; escalated is no exception.
   if self.mode is Yolo {
     return Some(@posoco.ToolDecision::Approve(call~))
+  }
+  // Auto routes the unsandboxed face to the judge — the escalation flag is
+  // visible in the judged arguments. It must not fall through to the
+  // exemption lookup below.
+  if self.mode is Auto {
+    return Some(self.auto_gate(call, effective, "escalated"))
   }
   match self.approval {
     None =>
@@ -710,6 +878,16 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
       None => return @posoco.ToolDecision::Approve(call~)
     }
   }
+  // WorkspaceWrite's contract: file writes that resolve inside the
+  // workspace run without a prompt. No semantic tightening here — a write
+  // always "mutates state", so the risk probe would collapse the mode back
+  // into interactive. Anything unprovable (no anchor wired, no parseable
+  // path, `..` escape) falls through to the gate.
+  if self.mode is WorkspaceWrite &&
+    category == "write" &&
+    self.workspace_write_covers(effective) {
+    return @posoco.ToolDecision::Approve(call~)
+  }
   match self.mode {
     ReadOnly =>
       @posoco.ToolDecision::Reject(
@@ -718,6 +896,7 @@ pub impl @posoco.PipelineHook for PermissionPolicy with fn before_tool(
     WorkspaceWrite | Interactive =>
       // writes/mutating-or-unknown shell/unknown keep the historical gate.
       self.gate(call, effective, category)
+    Auto => self.auto_gate(call, effective, category)
     Yolo => @posoco.ToolDecision::Approve(call~)
   }
 }
@@ -732,6 +911,7 @@ fn PermissionPolicy::mode_name(self : PermissionPolicy) -> String {
     ReadOnly => "readonly"
     WorkspaceWrite => "workspace_write"
     Interactive => "interactive"
+    Auto => "auto"
     Yolo => "yolo"
   }
 }
@@ -742,6 +922,7 @@ fn parse_mode_name(raw : String) -> PermissionMode? {
     "readonly" => Some(ReadOnly)
     "workspace_write" => Some(WorkspaceWrite)
     "interactive" => Some(Interactive)
+    "auto" => Some(Auto)
     "yolo" => Some(Yolo)
     _ => None
   }
@@ -807,7 +988,8 @@ pub impl @posoco.CommandPort for PermissionPolicy with fn commands(_self) -> Arr
           required: false,
           default: None,
           choices: Some([
-            "status", "readonly", "workspace_write", "interactive", "yolo", "reset",
+            "status", "readonly", "workspace_write", "interactive", "auto", "yolo",
+            "reset",
           ]),
           positional: true,
         },
@@ -870,20 +1052,29 @@ pub impl @posoco.CommandPort for PermissionPolicy with fn invoke(
         }
         Some(action) =>
           match parse_mode_name(action) {
-            Some(mode) => {
-              let previous = self.mode_name()
-              self.mode = mode
-              @posoco.CommandOutcome::Success(
-                feedback="permission mode: " + previous + " → " + action,
-                structured=None,
-                ui_hint=Some(@posoco.UiHint::Toast),
-              )
-            }
+            Some(mode) =>
+              // Auto has no deterministic fallback: switching into it
+              // without a composed DecisionPort is refused and the active
+              // mode is left untouched.
+              if mode is Auto && self.decision is None {
+                @posoco.CommandOutcome::Failure(
+                  reason="permission: auto mode requires a DecisionPort; none is composed — staying in " +
+                    self.mode_name(),
+                )
+              } else {
+                let previous = self.mode_name()
+                self.mode = mode
+                @posoco.CommandOutcome::Success(
+                  feedback="permission mode: " + previous + " → " + action,
+                  structured=None,
+                  ui_hint=Some(@posoco.UiHint::Toast),
+                )
+              }
             None =>
               @posoco.CommandOutcome::Failure(
                 reason="unknown permission action '" +
                   action +
-                  "' (expected status/readonly/workspace_write/interactive/yolo/reset)",
+                  "' (expected status/readonly/workspace_write/interactive/auto/yolo/reset)",
               )
           }
       }
@@ -912,13 +1103,22 @@ pub impl @posoco.Extension for PermissionPolicy with fn manifest(
 }
 
 ///|
-/// Capture the optional semantic judgement capability. Absence is expected and
-/// preserves the historical deterministic permission policy.
+/// Capture the optional semantic judgement capability. Absence is expected
+/// and preserves the historical deterministic permission policy — except in
+/// Auto mode, where the DecisionPort is the approval authority: a policy
+/// constructed in Auto without one fails composition loudly instead of
+/// running every non-read call into a fail-closed dead end.
 pub impl @posoco.Lifecycle for PermissionPolicy with fn on_compose(
   self : PermissionPolicy,
   ctx : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
   self.decision = ctx.decision()
+  if self.mode is Auto && self.decision is None {
+    raise @posoco.CompositionError::ExtensionComposeFailed(
+      manifest_id=self.extension_id(),
+      detail="PermissionMode::Auto requires a composed DecisionPort; none is present",
+    )
+  }
 }
 
 ///|

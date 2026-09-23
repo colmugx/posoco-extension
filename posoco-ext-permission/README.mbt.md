@@ -12,6 +12,8 @@ host-injected `ApprovalSource` for kimi-code-style interactive approval.
 - `Interactive`: approves inspection; gates every side-effecting or unknown
   tool through the approval source.
 - `Yolo`: pre-approves every tool; the approval source is never consulted.
+  Yolo covers tool execution only — it never decides a submitted plan: the
+  plan verdict stays with the review/approval flow (see posoco-ext-plan).
 
 ## ApprovalSource — the host UI seam
 
@@ -53,12 +55,12 @@ the agent's lifetime (no on-disk persistence); the cache granularity is:
   approves every later `edit`.
 - **shell tools** — per command-segment scope: the command is split on `&`,
   `|`, `;` and newlines, a leading `rtk` is stripped (transparent project
-  wrapper, so `rtk moon check` and a bare `moon check` share one scope), and
+  wrapper, so `moon check` and a bare `moon check` share one scope), and
   each remaining segment scopes to its first word — except a non-transparent
   leading shim (`sudo`, `doas`, `env`, `time`, `nice`, `nohup`, `xargs`,
   `watch`), which refines to shim + next word so `sudo rm` never merges with
-  a bare `rm` approval. Approving `rtk moon check` remembers the `moon`
-  scope, so a later `rtk moon test` is pre-approved while `git push` still
+  a bare `rm` approval. Approving `moon check` remembers the `moon`
+  scope, so a later `moon test` is pre-approved while `git push` still
   asks; a compound call is remembered only when *every* segment scope was
   already approved.
 
