@@ -100,6 +100,6 @@ test "stable prompt tells the model to reuse schemas already in history" {
     Err(message) => fail(message)
   }
   let prompt = ext.manifest().prompt_contributors[0].system_prompt()
-  assert_true(prompt.contains("schema that is already present"))
-  assert_true(prompt.contains("Do not repeat `tool_list`"))
+  assert_true(prompt.contains("Reuse a schema already shown by `tool_list`"))
+  assert_true(prompt.contains("Do not rediscover schemas already in history"))
 }
