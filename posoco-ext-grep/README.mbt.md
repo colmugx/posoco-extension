@@ -64,15 +64,15 @@ applied.
 ## Behavior
 
 - **Parallel execution** — read-only search, safe to run alongside other tools.
-- **Uniform output across engines** — both engines return flat matches
-  feeding one shared formatter. Content mode groups by file
-  (`Found N matches in M files:` + one file header with `  L<n>: <line>`
-  entries); `files_with_matches` lists paths; `count` lists `path:count`
-  lines; zero results stay `No matches found for: <pattern>`. Structured
-  payload (`summary`, `count`, `truncated`) for observers/UIs.
-- **Bounded output** — 2000-character per-line truncation (matching read),
-  a 100 KB body cap, and the `max_matches` entry cap; anything cut ends with
-  a `… N more …` footer reporting the remainder.
+- **Uniform compact output** — both engines feed one shared formatter.
+  Content mode groups by file and renders matches as `line|text`;
+  `files_with_matches` emits paths directly; `count` emits `path:count`.
+  Zero results are `(no matches)`. Structured `summary`, `count`, and
+  `truncated` metadata remain available to observers/UIs.
+- **Bounded output** — match lines are capped at 1200 characters with
+  `…[cut]`, the content body at 40 KB, and entries by `max_matches`
+  (default 100). Truncation uses compact `… +N matches` / `… +N files`
+  footers.
 - Search failures surface as model-visible errors with the sanitized base path
   (only the base itself failing is loud; unreadable or binary files are
   skipped silently, matching rg).
