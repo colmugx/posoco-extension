@@ -25,6 +25,37 @@ test "observer maps turn lifecycle onto herdr states" {
 }
 
 ///|
+test "observer maps user requests onto blocked and back to working" {
+  let (calls, record) = recorder()
+  let reporter : HerdrReporter = { pane: "1-2", bin: "herdr", spawn: record, }
+  reporter.on_event(
+    @posoco.TurnEvent::UserRequestStarted(
+      kind="confirm",
+      prompt="Allow tool 'write'?",
+    ),
+  )
+  reporter.on_event(
+    @posoco.TurnEvent::UserRequestFinished(kind="confirm", outcome="answered"),
+  )
+  inspect(
+    calls.join("\n"),
+    content=(
+      #|herdr pane report-agent 1-2 --source cetas --agent cetas --state blocked --message Allow tool 'write'?
+      #|herdr pane report-agent 1-2 --source cetas --agent cetas --state working
+    ),
+  )
+}
+
+///|
+test "report message collapses newlines and bounds length" {
+  inspect(report_message("line one\nline two"), content="line one line two")
+  let long = "x".repeat(200)
+  let reported = report_message(long)
+  assert_true(reported.length() == 121)
+  assert_true(reported.has_suffix("…"))
+}
+
+///|
 test "emit builds the report-agent argv from pane and bin" {
   let (calls, record) = recorder()
   let reporter : HerdrReporter = {
