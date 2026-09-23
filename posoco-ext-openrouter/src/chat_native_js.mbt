@@ -1,6 +1,6 @@
 ///|
-/// ModelPort::chat impl via moonbitlang/async/http. Compiled on native and
-/// js only: `@http` is unavailable on wasm/wasm-gc.
+/// ModelPort::chat impl via moonbitlang/async/http. Compiled on native,
+/// wasm, and js: `@http` is unavailable on wasm-gc.
 
 ///|
 /// Drain a non-2xx response, keeping the provider's error text for the

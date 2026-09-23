@@ -6,7 +6,7 @@
 /// first). Supports `*` (any chars in one segment) and `**` (recursive).
 /// Hidden entries and `ignores` directories are pruned. On native, scanning
 /// uses `@fs.walk` + a MoonBit glob-matching engine; on js (bun), scanning
-/// delegates to `Bun.Glob`. On wasm/wasm-gc, the tool is not listed and
+/// delegates to `Bun.Glob`. On wasm-gc, the tool is not listed and
 /// execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct GlobTools {
   // Resolves the scan base against the workspace root; None leaves the base

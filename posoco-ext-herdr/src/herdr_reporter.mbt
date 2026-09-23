@@ -19,6 +19,7 @@
 ///|
 priv enum HerdrAgentState {
   Working
+  Blocked
   Idle
 }
 
@@ -26,6 +27,7 @@ priv enum HerdrAgentState {
 fn HerdrAgentState::cli_value(self : HerdrAgentState) -> String {
   match self {
     Working => "working"
+    Blocked => "blocked"
     Idle => "idle"
   }
 }
@@ -53,7 +55,7 @@ fn HerdrReporter::from_config(cfg : HerdrConfig) -> HerdrReporter {
 /// and HERDR_PANE_ID must be present and non-empty; HERDR_BIN_PATH defaults
 /// to "herdr" when absent or blank. Pure, so native and js share one
 /// detection decision.
-#cfg(any(target="native", target="js"))
+#cfg(any(target="native", target="wasm", target="js"))
 fn herdr_gate(marker : String?, pane : String?, bin : String?) -> HerdrConfig? {
   match (marker, pane) {
     (Some(marker), Some(pane)) if marker != "" && pane != "" => {
@@ -83,6 +85,51 @@ fn HerdrReporter::emit(self : HerdrReporter, state : HerdrAgentState) -> Unit {
 }
 
 ///|
+/// Bounded single-line report message: herdr renders it next to the agent
+/// state in the rollup, so long multi-line prompts collapse to a hint.
+fn report_message(text : String) -> String {
+  let chars : Array[Char] = []
+  let mut truncated = false
+  for char in text {
+    if chars.length() >= 120 {
+      truncated = true
+      break
+    }
+    match char {
+      '\n' | '\r' => chars.push(' ')
+      other => chars.push(other)
+    }
+  }
+  let line = String::from_array(chars)
+  if truncated {
+    line + "…"
+  } else {
+    line
+  }
+}
+
+///|
+fn HerdrReporter::emit_message(
+  self : HerdrReporter,
+  state : HerdrAgentState,
+  message : String,
+) -> Unit {
+  (self.spawn)(self.bin, [
+    "pane",
+    "report-agent",
+    self.pane,
+    "--source",
+    "cetas",
+    "--agent",
+    "cetas",
+    "--state",
+    state.cli_value(),
+    "--message",
+    report_message(message),
+  ])
+}
+
+///|
 /// Drop this source's lifecycle authority for the pane. herdr keeps showing
 /// the agent after the process exits while an authority is registered, so
 /// every exit path that can reach Agent shutdown must fire this. Public for
@@ -106,6 +153,14 @@ pub impl @posoco.Observer for HerdrReporter with fn on_event(
 ) -> Unit {
   match event {
     @posoco.TurnEvent::TurnStarted => self.emit(Working)
+    // A permission confirm, plan review, or ask_question entered the
+    // composed UiPort: the agent is blocked waiting for the user, which is
+    // the state herdr's rollup surfaces (and pings) for "needs you".
+    @posoco.TurnEvent::UserRequestStarted(prompt~, ..) =>
+      self.emit_message(Blocked, prompt)
+    // The request left the port; the turn keeps running until a terminal
+    // event reports idle.
+    @posoco.TurnEvent::UserRequestFinished(..) => self.emit(Working)
     @posoco.TurnEvent::TurnCompleted => self.emit(Idle)
     @posoco.TurnEvent::TurnFailed(_) => self.emit(Idle)
     _ => ()

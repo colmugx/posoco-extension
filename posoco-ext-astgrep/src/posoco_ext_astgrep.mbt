@@ -8,7 +8,7 @@
 /// Both backends probe `ast-grep` / `sg` candidates with a `--version`
 /// banner check; when no real binary is found, execute raises
 /// `RuntimeError::InvocationFailed` with an install hint (there is no
-/// in-process fallback). On wasm/wasm-gc the tool is not listed and execute
+/// in-process fallback). On wasm-gc the tool is not listed and execute
 /// raises the same error.
 pub(all) struct AstGrepTools {
   // Resolves the search base against the workspace root; None keeps legacy

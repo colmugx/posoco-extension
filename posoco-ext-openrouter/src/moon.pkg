@@ -18,20 +18,21 @@ warnings = "-unused_package-unused_value-unused_constructor"
 
 options(
   targets: {
-    // HTTP-backed chat and compact impls: native+js only
-    // (moonbitlang/async/http is unavailable on wasm). The struct
+    // HTTP-backed chat and compact impls: native+wasm+js
+    // (moonbitlang/async/http is unavailable on wasm-gc). The struct
     // definition, config, encode/decode, SSE parsing, error classification,
     // provider_config, factory, and manifest all live in the unrestricted
     // core files and compile on every backend — so the package exports a
     // complete mbti. #cfg-guarded fallbacks (chat/compact/refresh
-    // _wasm_fallback.mbt) satisfy the trait on wasm.
-    "chat_native_js.mbt": [ "native", "js" ],
-    "compact_native_js.mbt": [ "native", "js" ],
-    "models_native_js.mbt": [ "native", "js" ],
-    "refresh_native_js.mbt": [ "native", "js" ],
+    // _wasm_fallback.mbt) satisfy the trait on wasm-gc.
+    "chat_native_js.mbt": [ "native", "wasm", "js" ],
+    "compact_native_js.mbt": [ "native", "wasm", "js" ],
+    "models_native_js.mbt": [ "native", "wasm", "js" ],
+    "refresh_native_js.mbt": [ "native", "wasm", "js" ],
     "wire_log.js.mbt": [ "js" ],
-    "wire_log_native.mbt": [ "native" ],
+    "wire_log_native.mbt": [ "native", "wasm" ],
     "posoco_ext_openrouter_wbtest.mbt": [ "native" ],
+    "prompt_cache_lifecycle_wbtest.mbt": [ "native" ],
     "sse_wbtest.mbt": [ "native" ],
   },
 )

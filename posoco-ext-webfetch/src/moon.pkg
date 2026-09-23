@@ -18,7 +18,7 @@ supported_targets = "+native +js"
 options(
   targets: {
     "posoco_ext_webfetch_wbtest.mbt": [ "native" ],
-    "http_io.mbt": [ "native", "js" ],
-    "posoco_ext_webfetch.mbt": [ "native", "js" ],
+    "http_io.mbt": [ "native", "wasm", "js" ],
+    "posoco_ext_webfetch.mbt": [ "native", "wasm", "js" ],
   },
 )

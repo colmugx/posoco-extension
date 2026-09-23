@@ -1,5 +1,5 @@
 ///|
-// Native backend: one herdr CLI child per `run`. Streams stay separate
+// Native+wasm backend: one herdr CLI child per `run`. Streams stay separate
 // (`collect_output`, never the merged variant) because herdr's result JSON
 // and error JSON ride different streams.
 

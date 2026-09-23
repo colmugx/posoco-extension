@@ -7,7 +7,7 @@
 /// URL/headers/encode/decode and error classification are exactly the ones
 /// `chat` uses.
 ///
-/// Compiled on native and js only (`@http` is unavailable on wasm).
+/// Compiled on native, wasm, and js (`@http` is unavailable on wasm-gc).
 
 ///|
 /// POST one chat-completions request body and decode the JSON response,

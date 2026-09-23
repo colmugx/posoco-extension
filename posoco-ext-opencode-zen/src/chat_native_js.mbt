@@ -1,5 +1,5 @@
 ///|
-/// Native+js only: moonbitlang/async/http (`@http`) is unavailable on wasm.
+/// Native+wasm+js: moonbitlang/async/http (`@http`) is unavailable on wasm-gc.
 
 ///|
 async fn read_zen_error_body(client : @http.Client) -> ZenErrorBody {

@@ -5,8 +5,8 @@
 /// working directory pinned to the anchor root; when unset, the child
 /// inherits the host process working directory (legacy behavior).
 ///
-/// On native, executes via `@process.collect_output_merged("sh", ...)`.
-/// On js (bun), executes via `Bun.spawn`. On wasm/wasm-gc, the tool is not
+/// On native and wasm, executes via `@process.collect_output_merged("sh", ...)`.
+/// On js (bun), executes via `Bun.spawn`. On wasm-gc, the tool is not
 /// listed and execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct ShellTools {
   anchor : @devkit.WorkspaceAnchor?
@@ -20,7 +20,7 @@ pub fn ShellTools::ShellTools(
   ShellTools::{ anchor, }
 }
 
-// ToolProvider is split into two complete #cfg partitions (native/js real, others inert); shared_list_tools avoids duplicating the ToolDef construction.
+// ToolProvider is split into two complete #cfg partitions (native/wasm/js real, wasm-gc inert); shared_list_tools avoids duplicating the ToolDef construction.
 
 ///|
 /// Shared tool list (bash only). Both native and js ShellTools expose the

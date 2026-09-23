@@ -1,7 +1,7 @@
 ///|
 /// ModelPort::compact via the summary kit. OpenRouter exposes no dedicated
 /// compact endpoint, so compaction is client-orchestrated. Compiled on
-/// native and js only (`@http` is unavailable on wasm);
+/// native, wasm, and js (`@http` is unavailable on wasm-gc);
 /// compact_wasm_fallback.mbt satisfies the trait elsewhere.
 
 ///|

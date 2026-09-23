@@ -1,6 +1,6 @@
 // Default HttpIo transport backed by moonbitlang/async/http.
-// Target-gated to [native, js] via moon.pkg: moonbitlang/async has no network
-// stack on wasm targets, so hosts there inject their own `HttpIo`.
+// Target-gated to [native, wasm, js] via moon.pkg; moonbitlang/async has no
+// network stack on wasm-gc, so hosts there inject their own `HttpIo`.
 
 ///|
 /// Marker struct for the `@http`-backed transport; compiled only on native+js.
@@ -42,7 +42,7 @@ async fn read_response_body(
   }
   client.close()
   let raw = Bytes::makei(total, i => buf[i])
-  let body = @utf8.decode(raw.view()) catch {
+  let body = @utf8.decode(raw.exact_view()) catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
         "webfetch: response body is not valid UTF-8",

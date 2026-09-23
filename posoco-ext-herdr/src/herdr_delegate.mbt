@@ -61,7 +61,7 @@ let herdr_default_timeout_ms : Int = 1800000
 /// reporter's HERDR_ENV + HERDR_PANE_ID gate decides presence; the headless
 /// binary defaults to "cetas-headless" when CETAS_HEADLESS_BIN is missing or
 /// blank.
-#cfg(any(target="native", target="js"))
+#cfg(any(target="native", target="wasm", target="js"))
 fn herdr_delegate_gate(
   marker : String?,
   pane : String?,

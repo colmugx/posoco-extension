@@ -3,8 +3,8 @@
 ///
 /// The CLI is the only supported transport: it requires the Obsidian desktop
 /// app to be running (the first command launches it) and needs no plugin,
-/// API key, or certificate setup. Tools are only listed on native and js;
-/// wasm/wasm-gc gets an inert provider.
+/// API key, or certificate setup. Tools are only listed on native, wasm, and js;
+/// wasm-gc gets an inert provider.
 ///
 /// Write safety has no server-side concurrency primitive on this transport
 /// (no `ifMatch`), so read-modify-write protection rests entirely on the

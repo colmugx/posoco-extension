@@ -18,7 +18,7 @@ supported_targets = "+native+js"
 
 options(
   targets: {
-    "default_store.native.mbt": [ "native" ],
+    "default_store.native.mbt": [ "native", "wasm" ],
     "default_store.js.mbt": [ "js" ],
   },
 )

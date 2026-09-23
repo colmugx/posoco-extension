@@ -8,8 +8,8 @@
 /// session with its working directory pinned to the anchor root; when unset,
 /// the child inherits the host process working directory.
 ///
-/// On native, executes via `@process.collect_output_merged`. On js (bun),
-/// executes via `Bun.spawn`. On wasm/wasm-gc, the tool is not listed and
+/// On native and wasm, executes via `@process.collect_output_merged`.
+/// On js (bun), executes via `Bun.spawn`. On wasm-gc, the tool is not listed and
 /// execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct PowerShellTools {
   exe : String

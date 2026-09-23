@@ -10,8 +10,8 @@ warnings = "-unused_package-unused_value-unused_constructor"
 
 options(
   targets: {
-    "decision_native_js.mbt": [ "native", "js" ],
-    "decision_wasm_fallback.mbt": [ "wasm", "wasm-gc" ],
+    "decision_native_js.mbt": [ "native", "wasm", "js" ],
+    "decision_wasm_fallback.mbt": [ "wasm-gc" ],
     "jev_wbtest.mbt": [ "native" ],
   },
 )

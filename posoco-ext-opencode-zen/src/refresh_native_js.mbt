@@ -1,8 +1,8 @@
 ///|
 /// RefreshableProviderFactory::refresh impl via @http.
 ///
-/// Compiled on native and js only: `fetch_zen_models` drives
-/// moonbitlang/async/http, which is unavailable on wasm/wasm-gc.
+/// Compiled on native, wasm, and js: `fetch_zen_models` drives
+/// moonbitlang/async/http, which is unavailable on wasm-gc.
 
 ///|
 /// Live catalog refresh. Performs one authenticated `/models` request against
@@ -13,7 +13,7 @@
 /// models.dev surfaces request is the one deliberate exception: it only
 /// enriches the effort picker, so any failure degrades to an empty map (every
 /// model then presents the off/on fallback) and never aborts composition.
-#cfg(any(target="native", target="js"))
+#cfg(any(target="native", target="wasm", target="js"))
 pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh(
   self : OpenCodeZenProvider,
   source : @llm.ProviderConfigSource,

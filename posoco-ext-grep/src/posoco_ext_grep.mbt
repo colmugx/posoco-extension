@@ -7,7 +7,7 @@
 /// the engine is an in-process walker (`@fs.walk` + per-line `contains`).
 /// On js (bun) the engine ladder is ripgrep first (validated via
 /// `rg --version`, so a grep shim on PATH is rejected), falling back to an
-/// in-process node:fs walker when no real rg is found. On wasm/wasm-gc the
+/// in-process node:fs walker when no real rg is found. On wasm-gc the
 /// tool is not listed and execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct GrepTools {
   // Resolves the search base against the workspace root; None leaves the

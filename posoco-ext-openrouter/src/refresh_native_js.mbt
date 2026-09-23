@@ -1,7 +1,7 @@
 ///|
-/// RefreshableProviderFactory::refresh impl via @http. Compiled on native
-/// and js only: `fetch_openrouter_models` drives moonbitlang/async/http,
-/// unavailable on wasm/wasm-gc; refresh_wasm_fallback.mbt satisfies the
+/// RefreshableProviderFactory::refresh impl via @http. Compiled on native,
+/// wasm, and js: `fetch_openrouter_models` drives moonbitlang/async/http,
+/// unavailable on wasm-gc; refresh_wasm_fallback.mbt satisfies the
 /// trait elsewhere.
 
 ///|

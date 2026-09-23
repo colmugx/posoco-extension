@@ -9,5 +9,8 @@ import {
 } for "wbtest"
 
 options(
-  targets: { "stats_wbtest.mbt": [ "native" ] },
+  targets: {
+    "stats_wbtest.mbt": [ "native" ],
+    "cache_reporting_wbtest.mbt": [ "native" ],
+  },
 )

@@ -2,7 +2,7 @@
 /// ReadTools — file reading tool provider.
 ///
 /// On native, reads via `@fs` with line streaming (lines before `offset` are
-/// never materialized). On js (bun), reads via node:fs. On wasm/wasm-gc,
+/// never materialized). On js (bun), reads via node:fs. On wasm-gc,
 /// the tool is not listed and execute raises `RuntimeError::InvocationFailed`.
 ///
 /// `fs` injects a `WorkspaceFs` as the content source: when `Some`, file

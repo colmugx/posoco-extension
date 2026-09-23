@@ -1,5 +1,5 @@
 ///|
-/// Hosted TypeSafe Jev DecisionPort implementation for native and JS.
+/// Hosted TypeSafe Jev DecisionPort implementation for native, wasm, and js.
 
 ///|
 fn jev_url(config : JevConfig) -> String {

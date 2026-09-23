@@ -2,7 +2,7 @@
 /// Live model discovery via moonbitlang/async/http: the Zen `/models`
 /// listing plus the models.dev reasoning surfaces that enrich it.
 ///
-/// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
+/// Compiled on native, wasm, and js (`@http` is unavailable on wasm-gc).
 
 ///|
 /// Fetch and decode the live OpenCode Zen model catalog.

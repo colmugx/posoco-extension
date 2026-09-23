@@ -1,19 +1,18 @@
 ///|
-/// Native twin of wire_log.js.mbt.
+/// Native+wasm twin of wire_log.js.mbt.
 ///
-/// The wire log is currently js/bun-only: a native implementation needs
-/// file/env APIs (moonbitlang/async/fs, moonbitlang/async/process) that
-/// cannot join this package's imports without breaking the js build. On
-/// native the wire log is disabled and both functions are no-ops.
+/// The wire log is currently js/bun-only; wiring it for native+wasm needs
+/// @fs/@env plumbing that has not been built yet. On native and wasm the
+/// wire log is disabled and both functions are no-ops.
 
 ///|
-/// Always None on native: the wire log is unavailable (see file header).
+/// Always None on native+wasm: the wire log is unavailable (see file header).
 fn wire_log_path() -> String? {
   None
 }
 
 ///|
-/// No-op on native (see file header).
+/// No-op on native+wasm (see file header).
 fn wire_log_append(_path : String, _line : String) -> Unit {
   ()
 }

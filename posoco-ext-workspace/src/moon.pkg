@@ -3,8 +3,8 @@ import {
   "moonbitlang/async/fs",
 }
 
-// @fs is native-only (used by fs_port.native.mbt). On js it is unused but
-// must remain imported so native compiles; silence the target-specific noise.
+// @fs backs fs_port.native.mbt on native+wasm. On js it is unused (the js
+// twin uses node:fs FFI) but must stay imported; silence the noise.
 
 warnings = "-unused_package"
 
@@ -16,5 +16,8 @@ import {
 supported_targets = "+native +js"
 
 options(
-  targets: { "fs_port.native.mbt": [ "native" ], "fs_port.js.mbt": [ "js" ] },
+  targets: {
+    "fs_port.native.mbt": [ "native", "wasm" ],
+    "fs_port.js.mbt": [ "js" ],
+  },
 )

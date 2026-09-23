@@ -1,5 +1,5 @@
 ///|
-/// Compiled on native and js only: `@http` is unavailable on wasm/wasm-gc.
+/// Compiled on native, wasm, and js (`@http` is unavailable on wasm-gc).
 
 ///|
 async fn read_error_body(client : @http.Client) -> OaiCompatErrorBody {
@@ -7,6 +7,18 @@ async fn read_error_body(client : @http.Client) -> OaiCompatErrorBody {
   let byte_length = data.binary().length()
   let text = data.text() catch { _ => return BodyBytesInvalidUtf8(byte_length) }
   BodyText(text)
+}
+
+///|
+/// Transport error for a cancelled wait. The `category=cancelled` marker is
+/// the classification carrier: the ModelError raise type cannot carry the
+/// coroutine cancellation itself (checked raise types), so cancellation is
+/// surfaced as this stable token. Nobody string-matches the token today —
+/// classification rides on coroutine cancellation semantics.
+fn oai_compat_cancelled_transport(stage : String) -> @posoco.ModelError {
+  @posoco.ModelError::Transport(
+    "openai-compatible transport failure (stage=\{stage}, category=cancelled)",
+  )
 }
 
 ///|
@@ -106,8 +118,11 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
       let mut last_yield = @async.now()
       while !done {
         let line = client.read_until("\n") catch {
-          _ => {
+          err => {
             client.close()
+            if @async.is_cancellation_error(err) {
+              raise oai_compat_cancelled_transport("read_stream")
+            }
             match classify_oai_compat_stream_termination(TransportFailure) {
               Some(err) => raise err
               None => None
@@ -149,7 +164,13 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn chat(
         let now = @async.now()
         if now - last_yield >= 16L {
           @async.pause() catch {
-            _ => ()
+            err =>
+              if @async.is_cancellation_error(err) {
+                client.close()
+                raise oai_compat_cancelled_transport("read_stream")
+              }
+            // Non-cancellation pause failures ride over; the next read on a
+            // torn-down client errors out of the loop.
           }
           last_yield = now
         }

@@ -1,6 +1,6 @@
 ///|
-/// Live `GET /models` fetch via moonbitlang/async/http. Compiled on native
-/// and js only: `@http` is unavailable on wasm/wasm-gc.
+/// Live `GET /models` fetch via moonbitlang/async/http. Compiled on native,
+/// wasm, and js: `@http` is unavailable on wasm-gc.
 
 ///|
 /// Fetch and decode the live OpenRouter model catalog. The listing is

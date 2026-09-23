@@ -28,7 +28,7 @@ fn chat_url(config : OpenAICompatibleConfig) -> String {
 ///|
 /// The OpenAI-compatible ModelPort implementation. Implements @posoco.ModelPort
 /// for chat/chat_streaming (chat_native_js.mbt) and a summarize-based compact
-/// (compact_native_js.mbt); wasm keeps raising fallbacks in the
+/// (compact_native_js.mbt); wasm-gc keeps raising fallbacks in the
 /// *_wasm_fallback.mbt files.
 pub(all) struct OpenAICompatibleModelPort {
   config : OpenAICompatibleConfig

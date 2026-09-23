@@ -1,5 +1,5 @@
 ///|
-// Native backend wiring: detection reads the herdr-injected environment via
+// Native+wasm backend wiring: detection reads the herdr-injected environment via
 // @env; execution spawns the herdr CLI through @process.
 
 ///|

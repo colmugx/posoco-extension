@@ -1,7 +1,6 @@
 ///|
-/// The wire log is js/bun-only: a native implementation needs file/env APIs
-/// (moonbitlang/async/fs, moonbitlang/async/process) that cannot join this
-/// package's imports without breaking the js build.
+/// The wire log is js/bun-only; wiring it for native+wasm needs @fs/@env
+/// plumbing that has not been built yet, so it stays a no-op here.
 
 ///|
 fn wire_log_path() -> String? {

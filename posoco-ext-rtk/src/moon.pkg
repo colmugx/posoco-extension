@@ -10,7 +10,7 @@ warnings = "-unused_package"
 
 options(
   targets: {
-    "posoco_ext_rtk.native.mbt": [ "native" ],
+    "posoco_ext_rtk.native.mbt": [ "native", "wasm" ],
     "posoco_ext_rtk.js.mbt": [ "js" ],
   },
 )

@@ -1,7 +1,7 @@
 ///|
 /// No dedicated compact endpoint exists, so the transcript is replaced by a
-/// dense summary from one non-streaming call with thinking off. Native+js
-/// only: `@http` is unavailable on wasm.
+/// dense summary from one non-streaming call with thinking off. Native+wasm+js
+/// only: `@http` is unavailable on wasm-gc.
 
 ///|
 /// POST one chat-completions request body and decode the JSON response,

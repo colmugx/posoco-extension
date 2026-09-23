@@ -3,7 +3,7 @@
 ///
 /// On native, writes via `@fs` (atomic temp+rename, parent dirs created).
 /// On js (bun), writes via `Bun.write` + `Bun.file().move()` rename. On
-/// wasm/wasm-gc, the tool is not listed and execute raises
+/// wasm-gc, the tool is not listed and execute raises
 /// `RuntimeError::InvocationFailed`.
 ///
 /// Modification contract: writing an existing file requires that the file

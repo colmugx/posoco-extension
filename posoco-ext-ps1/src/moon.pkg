@@ -18,9 +18,9 @@ supported_targets = "+native +js"
 options(
   targets: {
     "posoco_ext_ps1.js.mbt": [ "js" ],
-    "posoco_ext_ps1.native.mbt": [ "native" ],
+    "posoco_ext_ps1.native.mbt": [ "native", "wasm" ],
     "platform.js.mbt": [ "js" ],
-    "platform.native.mbt": [ "native" ],
+    "platform.native.mbt": [ "native", "wasm" ],
     "posoco_ext_ps1_wbtest.mbt": [ "native" ],
   },
 )

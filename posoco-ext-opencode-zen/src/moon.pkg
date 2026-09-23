@@ -21,23 +21,23 @@ warnings = "-unused_value-unused_constructor"
 
 options(
   targets: {
-    // HTTP-backed adaptors: native+js only (moonbitlang/async/http is
-    // unavailable on wasm). The pure decoders (parse_zen_models,
+    // HTTP-backed adaptors: native+wasm+js (moonbitlang/async/http is
+    // unavailable on wasm-gc). The pure decoders (parse_zen_models,
     // parse_models_dev_surfaces), ZenModelInfo,
     // the catalog builders, the factory (build/login/provider_id), the static
     // catalog path, and the whole zen-owned wire layer (config, encode,
     // decode, SSE wrapper, error classification, provider_config) live in
-    // unrestricted core files and compile on every backend. On wasm,
+    // unrestricted core files and compile on every backend. On wasm-gc,
     // #cfg-guarded fallbacks in chat/compact_wasm_fallback.mbt and
     // refresh_wasm_fallback.mbt satisfy the traits, so the package exports a
     // complete mbti on every backend — unblocking downstream packages from
     // resolving @llm types.
-    "chat_native_js.mbt": [ "native", "js" ],
-    "compact_native_js.mbt": [ "native", "js" ],
-    "models_native_js.mbt": [ "native", "js" ],
-    "refresh_native_js.mbt": [ "native", "js" ],
+    "chat_native_js.mbt": [ "native", "wasm", "js" ],
+    "compact_native_js.mbt": [ "native", "wasm", "js" ],
+    "models_native_js.mbt": [ "native", "wasm", "js" ],
+    "refresh_native_js.mbt": [ "native", "wasm", "js" ],
     "wire_log.js.mbt": [ "js" ],
-    "wire_log_native.mbt": [ "native" ],
+    "wire_log_native.mbt": [ "native", "wasm" ],
     "opencode_zen_wbtest.mbt": [ "native" ],
   },
 )
