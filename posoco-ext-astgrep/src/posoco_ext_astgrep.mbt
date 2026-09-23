@@ -25,12 +25,29 @@ pub fn AstGrepTools::AstGrepTools(
 }
 
 ///|
+/// Default number of matches returned to the model.
+const ASTGREP_DEFAULT_MAX_MATCHES = 100
+
+///|
+/// Keep each structural hit as a locator/excerpt, not a full matched subtree.
+const ASTGREP_MATCH_CHAR_CAP = 500
+
+///|
+/// Hard body budget. The short truncation footer rides above this cap.
+const ASTGREP_OUTPUT_BYTE_CAP = 32_000
+
+///|
+/// Error diagnostics need much less context than successful search results.
+const ASTGREP_ERROR_CHAR_CAP = 4_000
+
+///|
 /// One parsed tool-call query: the ast-grep pattern plus optional filters.
 priv struct AstGrepQuery {
   pattern : String
   lang : String?
   path : String?
   glob : String?
+  max_matches : Int
 }
 
 ///|
@@ -46,33 +63,37 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("astgrep"),
-      description: "Structural code search with ast-grep: match code by its AST shape using a pattern with meta-variables (e.g. 'fn $NAME($$$ARGS) { $$$BODY }'), not by literal text or regex. Works on every language ast-grep supports (JavaScript, TypeScript, Python, Rust, Go, Java, ...). Optional arguments: 'lang' forces the tree-sitter language (otherwise inferred per file); 'path' is the directory or file to search (default: '.'); 'glob' filters searched files (e.g. '*.ts').",
+      description: "Structural code search with ast-grep patterns and meta-variables. Returns compact file/line excerpts.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "ast-grep pattern with meta-variables like $NAME or $$$BODY (required)",
+              "AST pattern; supports $NAME and $$BODY meta-variables",
             ),
           }),
           "lang": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "Tree-sitter language id (e.g. 'ts', 'py'); inferred per file when omitted",
+              "Language id (e.g. ts, py); inferred when omitted",
             ),
           }),
           "path": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "Directory or file to search (default: '.')",
+              "File or directory; default '.'",
             ),
           }),
           "glob": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "File filter, e.g. '*.ts' or a glob list like '*.ts,*.js'",
+              "File glob, e.g. '*.ts'",
             ),
+          }),
+          "max_matches": Json::object({
+            "type": Json::string("integer"),
+            "description": Json::string("Returned match cap; default 100"),
           }),
         }),
         "required": Json::array([Json::string("pattern")]),
@@ -93,25 +114,25 @@ fn extract_astgrep_args(args : Json) -> Result[AstGrepQuery, String] {
     Object(obj) => obj
     _ =>
       return Err(
-        "astgrep: invalid arguments; pass a JSON object with a 'pattern' string holding an ast-grep pattern",
+        "astgrep: arguments must be an object",
       )
   }
   let pattern = match obj.get("pattern") {
     Some(String(s)) =>
       if s == "" {
         return Err(
-          "astgrep: 'pattern' must be a non-empty ast-grep pattern (e.g. 'foo($$$ARGS)')",
+          "astgrep: 'pattern' must be non-empty",
         )
       } else {
         s
       }
     Some(_) =>
       return Err(
-        "astgrep: 'pattern' must be a string holding an ast-grep pattern with meta-variables like $NAME or $$$BODY",
+        "astgrep: 'pattern' must be a string",
       )
     None =>
       return Err(
-        "astgrep: missing 'pattern'; pass an ast-grep pattern such as 'fn $NAME($$$ARGS) { $$$BODY }'",
+        "astgrep: missing 'pattern'",
       )
   }
   let lang = match obj.get("lang") {
@@ -119,20 +140,31 @@ fn extract_astgrep_args(args : Json) -> Result[AstGrepQuery, String] {
     None | Some(Null) => None
     Some(_) =>
       return Err(
-        "astgrep: optional 'lang' must be a string tree-sitter language id",
+        "astgrep: 'lang' must be a string",
       )
   }
   let path = match obj.get("path") {
     Some(String(s)) => Some(s)
     None | Some(Null) => None
-    Some(_) => return Err("astgrep: optional 'path' must be a string")
+    Some(_) => return Err("astgrep: 'path' must be a string")
   }
   let glob = match obj.get("glob") {
     Some(String(s)) => Some(s)
     None | Some(Null) => None
-    Some(_) => return Err("astgrep: optional 'glob' must be a string")
+    Some(_) => return Err("astgrep: 'glob' must be a string")
   }
-  Ok(AstGrepQuery::{ pattern, lang, path, glob, })
+  let max_matches = match obj.get("max_matches") {
+    None | Some(Null) => ASTGREP_DEFAULT_MAX_MATCHES
+    Some(Number(n, ..)) => {
+      let value = n.to_int()
+      if value <= 0 {
+        return Err("astgrep: 'max_matches' must be > 0")
+      }
+      value
+    }
+    Some(_) => return Err("astgrep: 'max_matches' must be an integer")
+  }
+  Ok(AstGrepQuery::{ pattern, lang, path, glob, max_matches, })
 }
 
 ///|
@@ -145,7 +177,7 @@ fn build_astgrep_args(
   path : String?,
   glob : String?,
 ) -> Array[String] {
-  let args : Array[String] = ["run", "-p", pattern]
+  let args : Array[String] = ["run", "-p", pattern, "--json=stream"]
   match lang {
     Some(lang) => {
       args.push("-l")
@@ -175,57 +207,169 @@ fn missing_binary_error(candidates : Array[String]) -> String {
 }
 
 ///|
-/// Structured payload for observers/UIs on a passthrough result; never sent
-/// to the model. Plain ast-grep text output is passed through uncounted, so
-/// the summary stays honest (`matches: "raw"`) and only the zero-match case
-/// reports `count`.
-fn astgrep_structured_raw() -> Json {
+/// One parsed ast-grep JSON-stream match. ast-grep reports zero-based lines;
+/// the model-facing contract uses one-based lines like the read/grep tools.
+priv struct AstGrepMatch {
+  file : String
+  line : Int
+  text : String
+}
+
+///|
+fn astgrep_structured(count : Int, returned : Int) -> Json {
   Json::object(
     Map::from_array([
-      ("summary", Json::string("raw ast-grep output")),
-      ("matches", Json::string("raw")),
+      ("summary", Json::string("\{count} matches")),
+      ("count", Json::number(count.to_double())),
+      ("returned", Json::number(returned.to_double())),
+      ("truncated", Json::boolean(returned < count)),
     ]),
   )
 }
 
 ///|
-/// Structured payload for the zero-match case (grep parity).
-fn astgrep_structured_zero() -> Json {
-  Json::object(
-    Map::from_array([
-      ("summary", Json::string("no matches")),
-      ("count", Json::number(0.0)),
-    ]),
-  )
+fn astgrep_parse_match(line : String) -> AstGrepMatch? {
+  let parsed = @json.parse(line) catch { _ => return None }
+  let fields = match parsed {
+    Object(fields) => fields
+    _ => return None
+  }
+  let file = match fields.get("file") {
+    Some(String(value)) => value
+    _ => return None
+  }
+  let text = match fields.get("text") {
+    Some(String(value)) => value
+    _ => return None
+  }
+  let line = match fields.get("range") {
+    Some(Object(range)) =>
+      match range.get("start") {
+        Some(Object(start)) =>
+          match start.get("line") {
+            Some(Number(value, ..)) => value.to_int() + 1
+            _ => return None
+          }
+        _ => return None
+      }
+    _ => return None
+  }
+  Some({ file, line, text, })
 }
 
 ///|
-/// Turn one spawn result into the tool outcome. Exit 0 passes ast-grep's
-/// text through unchanged; empty stdout means zero matches; any other exit
-/// surfaces stderr as a model-visible error with the sanitized base.
+/// One-line locator excerpt. Search should locate code; callers can use read
+/// for full context. Flatten multi-line subtrees and cap each excerpt.
+fn astgrep_excerpt(text : String) -> String {
+  let flat = text.replace_all(old="\r", new=" ").replace_all(old="\n", new=" ")
+  let clipped = @devkit.truncate_chars(flat, ASTGREP_MATCH_CHAR_CAP)
+  if clipped == flat {
+    clipped
+  } else {
+    clipped + "…"
+  }
+}
+
+///|
+/// Render grouped file/line excerpts under both an entry cap and a body byte
+/// cap. Returns body, shown count, and total parsed match count.
+fn astgrep_render_stream(
+  stdout : String,
+  max_matches : Int,
+) -> (String, Int, Int)? {
+  let matches : Array[AstGrepMatch] = []
+  for view in stdout.split("\n") {
+    if view == "" {
+      continue
+    }
+    let line = view.to_owned()
+    match astgrep_parse_match(line) {
+      Some(item) => matches.push(item)
+      None => return None
+    }
+  }
+  if matches.is_empty() {
+    return Some(("", 0, 0))
+  }
+  let out = StringBuilder()
+  let mut shown = 0
+  let mut bytes = 0
+  let mut last_file = ""
+  for item in matches {
+    if shown >= max_matches {
+      break
+    }
+    let file = @devkit.sanitize_path(item.file)
+    let prefix = if file == last_file { "" } else { file + "\n" }
+    let record = prefix + item.line.to_string() + "|" + astgrep_excerpt(item.text) + "\n"
+    let record_bytes = @utf8.encode(record).length()
+    if shown > 0 && bytes + record_bytes > ASTGREP_OUTPUT_BYTE_CAP {
+      break
+    }
+    out.write_string(record)
+    bytes += record_bytes
+    shown += 1
+    last_file = file
+  }
+  Some((out.to_string(), shown, matches.length()))
+}
+
+///|
+fn astgrep_bounded_raw(text : String, limit : Int) -> String {
+  let clipped = @devkit.truncate_chars(text, limit)
+  if clipped == text {
+    clipped
+  } else {
+    clipped + "\n…[cut]"
+  }
+}
+
+///|
+/// Turn one spawn result into the tool outcome. Successful searches consume
+/// ast-grep's documented JSON-stream output and expose only compact locators
+/// and excerpts. Unexpected JSON falls back to bounded raw output rather than
+/// failing a valid search. Errors are independently capped.
 fn render_astgrep_result(
   exit_code : Int,
   stdout : String,
   stderr : String,
-  pattern : String,
   base : String,
+  max_matches : Int,
 ) -> @posoco.ToolOutcome {
   if exit_code == 0 {
     if stdout == "" {
-      @posoco.ToolOutcome::Success(
-        content="No matches found for: \{pattern}",
-        structured=Some(astgrep_structured_zero()),
+      return @posoco.ToolOutcome::Success(
+        content="(no matches)",
+        structured=Some(astgrep_structured(0, 0)),
       )
-    } else {
-      @posoco.ToolOutcome::Success(
-        content=stdout,
-        structured=Some(astgrep_structured_raw()),
-      )
+    }
+    match astgrep_render_stream(stdout, max_matches) {
+      Some((body, shown, total)) => {
+        let footer = if shown < total { "… +\{total - shown} matches" } else { "" }
+        let content = if footer == "" {
+          body.trim_end().to_owned()
+        } else if body == "" {
+          footer
+        } else {
+          body + footer
+        }
+        @posoco.ToolOutcome::Success(
+          content~,
+          structured=Some(astgrep_structured(total, shown)),
+        )
+      }
+      None =>
+        @posoco.ToolOutcome::Success(
+          content=astgrep_bounded_raw(stdout, ASTGREP_OUTPUT_BYTE_CAP),
+          structured=None,
+        )
     }
   } else {
     let detail = if stderr != "" { stderr } else { stdout }
+    let detail = astgrep_bounded_raw(detail, ASTGREP_ERROR_CHAR_CAP)
+    let path = @devkit.sanitize_path(base)
     @posoco.ToolOutcome::ToolReportedError(
-      content="astgrep: ast-grep failed for '\{@devkit.sanitize_path(base)}' (exit \{exit_code}): \{detail}",
+      content="astgrep exit=\{exit_code} path=\{path}\n\{detail}",
       structured=None,
     )
   }
@@ -264,5 +408,5 @@ async fn execute_astgrep_impl(
     query.glob,
   )
   let (exit_code, stdout, stderr) = spawner.spawn(argv)
-  render_astgrep_result(exit_code, stdout, stderr, query.pattern, base)
+  render_astgrep_result(exit_code, stdout, stderr, base, query.max_matches)
 }
