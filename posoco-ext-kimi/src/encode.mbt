@@ -16,7 +16,7 @@ fn sanitize_tool_call_id(id : String) -> String {
   }
   let sanitized = buf.to_string()
   if sanitized.length() > 64 {
-    sanitized.sub(end=64).to_owned()
+    sanitized.exact_view(end=64).to_owned()
   } else {
     sanitized
   }

@@ -337,11 +337,11 @@ pub fn parse_kimi_models(
 fn kimi_models_url(base_url : String, endpoint_prefix : String) -> String {
   let mut clean = base_url
   while clean.has_suffix("/") {
-    clean = clean.sub(end=clean.length() - 1).to_owned()
+    clean = clean.exact_view(end=clean.length() - 1).to_owned()
   }
   let mut prefix = endpoint_prefix
   while prefix.has_suffix("/") {
-    prefix = prefix.sub(end=prefix.length() - 1).to_owned()
+    prefix = prefix.exact_view(end=prefix.length() - 1).to_owned()
   }
   if prefix == "/" {
     prefix = ""

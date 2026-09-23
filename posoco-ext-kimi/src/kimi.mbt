@@ -1,4 +1,16 @@
 ///|
+/// Transport error for a cancelled wait. The `category=cancelled` marker is
+/// the classification carrier: the ModelError raise type cannot carry the
+/// coroutine cancellation itself (checked raise types), so cancellation is
+/// surfaced as this stable token. Nobody string-matches the token today —
+/// classification rides on coroutine cancellation semantics.
+fn kimi_cancelled_transport(stage : String) -> @posoco.ModelError {
+  @posoco.ModelError::Transport(
+    "Kimi transport failure (stage=\{stage}, category=cancelled)",
+  )
+}
+
+///|
 fn build_headers(config : KimiConfig) -> @http.Headers {
   let headers : @http.Headers = Map([])
   for k, v in config.identity_headers {
@@ -220,6 +232,9 @@ async fn KimiModelPort::chat_stream(
     let line = client.read_until("\n") catch {
       err => {
         client.close()
+        if @async.is_cancellation_error(err) {
+          raise kimi_cancelled_transport("read_stream")
+        }
         raise @posoco.ModelError::Transport(
           "Kimi transport failure (stage=read_stream): " + err.to_string(),
         )
@@ -257,11 +272,18 @@ async fn KimiModelPort::chat_stream(
       }
     }
     // Throttled yield so the event loop can breathe; pause is a
-    // cancellation point.
+    // cancellation point, so a cancelled pause closes the client and raises
+    // the cancelled transport error.
     let now = @async.now()
     if now - last_yield >= 16L {
       @async.pause() catch {
-        _ => ()
+        err =>
+          if @async.is_cancellation_error(err) {
+            client.close()
+            raise kimi_cancelled_transport("read_stream")
+          }
+        // Non-cancellation pause failures ride over; the next read on a
+        // torn-down client errors out of the loop.
       }
       last_yield = now
     }
