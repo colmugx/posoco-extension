@@ -31,6 +31,15 @@ const BASH_OUTPUT_CHAR_CAP = 32_768
 const BASH_OUTPUT_HEAD_CHARS = 4_096
 
 ///|
+fn bash_char_count(text : String) -> Int {
+  let mut count = 0
+  for _ in text {
+    count += 1
+  }
+  count
+}
+
+///|
 fn bash_take_chars(text : String, limit : Int) -> String {
   let chars : Array[Char] = []
   let mut taken = 0
@@ -45,11 +54,11 @@ fn bash_take_chars(text : String, limit : Int) -> String {
 }
 
 ///|
-fn bash_tail_chars(text : String, limit : Int) -> String {
+fn bash_tail_chars(text : String, total_chars : Int, limit : Int) -> String {
   if limit <= 0 {
     return ""
   }
-  let skip = text.length() - limit
+  let skip = total_chars - limit
   let chars : Array[Char] = []
   let mut index = 0
   for ch in text {
@@ -74,16 +83,17 @@ fn bash_model_output(content : String, exit_code : Int) -> String {
   } else {
     "exit=\{exit_code}\n\{content}"
   }
-  if raw.length() <= BASH_OUTPUT_CHAR_CAP {
+  let raw_chars = bash_char_count(raw)
+  if raw_chars <= BASH_OUTPUT_CHAR_CAP {
     return raw
   }
   let marker = "\n…[cut]…\n"
   let tail_chars = BASH_OUTPUT_CHAR_CAP -
     BASH_OUTPUT_HEAD_CHARS -
-    marker.length()
+    bash_char_count(marker)
   bash_take_chars(raw, BASH_OUTPUT_HEAD_CHARS) +
   marker +
-  bash_tail_chars(raw, tail_chars)
+  bash_tail_chars(raw, raw_chars, tail_chars)
 }
 
 // ToolProvider is split into two complete #cfg partitions (native/wasm/js real, wasm-gc inert); shared_list_tools avoids duplicating the ToolDef construction.
