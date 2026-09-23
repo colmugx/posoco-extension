@@ -46,8 +46,8 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
 
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
-fn bash_decode_failure(exit_code : Int) -> String {
-  "bash: invalid UTF-8 (exit=\{exit_code})"
+fn bash_decode_failure(_exit_code : Int) -> String {
+  "bash: invalid UTF-8"
 }
 
 ///|
