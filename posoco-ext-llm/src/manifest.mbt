@@ -26,10 +26,10 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
 }
 
 ///|
-/// The `model` and `ctx` segments are resident. `model`'s initial state is
-/// knowable at composition; `ctx` has no reading before core's first
-/// projection, so it registers as unknown instead of waiting for a turn.
-/// Register-only: nothing else in the composed view is touched.
+/// The `model` segment is resident: its initial state is knowable at
+/// composition. `ctx` has no reading before core's first projection, so any
+/// stale registration is unregistered instead of publishing a placeholder —
+/// the segment first appears when a real reading arrives.
 pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
   self : RouterModelPort,
   ctx : @posoco.CompositionView,
@@ -37,7 +37,15 @@ pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
   self.decision = ctx.decision()
   self.publish_model_status()
   self.publish_provider_event()
-  self.publish_ctx_status(None)
+  match self.bus {
+    Some(bus) =>
+      @devkit.publish_status_unregister(
+        bus,
+        source="posoco_ext_llm",
+        segment="ctx",
+      )
+    None => ()
+  }
 }
 
 ///|

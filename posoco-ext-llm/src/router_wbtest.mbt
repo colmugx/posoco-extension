@@ -457,7 +457,7 @@ test "model effort falls back to slot default then to default" {
 }
 
 ///|
-test "on_compose registers the model and ctx segments as initial state" {
+test "on_compose registers the model segment and leaves ctx unregistered" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
@@ -491,15 +491,7 @@ test "on_compose registers the model and ctx segments as initial state" {
   assert_eq(capture.events[1].source, "posoco_ext_llm")
   assert_eq(
     @devkit.decode_status_op(capture.events[2]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="ctx",
-        label=None,
-        priority=30,
-        value=Some("ctx: ?"),
-        color=None,
-      ),
-    ),
+    Some(@devkit.StatusOp::Unregister(segment="ctx")),
   )
 }
 

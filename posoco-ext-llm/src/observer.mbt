@@ -172,9 +172,9 @@ fn RouterModelPort::publish_cache_status(
 }
 
 ///|
-/// The `ctx` projection follows core's `ContextStateUpdated` events only:
-/// compact and operation-lifecycle events carry no reading, and core
-/// projects the state around them (post-compact it is explicitly awaiting
+/// The `ctx` projection follows core's `ContextStateUpdated` events: core
+/// projects at turn boundaries and after every model step's usage lands
+/// (post-compact it carries a char-based estimate until the next real
 /// measurement). `TurnStarted` re-publishes the scoped session's own state;
 /// it never resets occupancy.
 pub impl @posoco.Observer for RouterModelPort with fn on_event_at(
