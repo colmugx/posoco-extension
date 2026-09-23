@@ -1,0 +1,61 @@
+name: PR Moon Check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-moon-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Check changed MoonBit modules
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t modules < <(
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" |
+              awk -F/ 'NF > 1 { print $1 }' |
+              sort -u
+          )
+
+          checked=0
+          for module in "${modules[@]}"; do
+            if [[ ! -f "$module/moon.mod" ]]; then
+              continue
+            fi
+
+            checked=1
+            echo "::group::$module"
+            (
+              cd "$module"
+              moon update
+              moon check --target native --output-json
+              moon check --target js --output-json
+            )
+            echo "::endgroup::"
+          done
+
+          if [[ "$checked" -eq 0 ]]; then
+            echo "No changed MoonBit modules."
+          fi
