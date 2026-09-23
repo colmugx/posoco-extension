@@ -191,8 +191,19 @@ fn find_occurrences(content : String, needle : String) -> Array[(Int, Int)] {
 }
 
 ///|
-/// Strip one `L<digits>: ` prefix from a line, if present.
+/// Strip one read-tool line-number prefix. Accept the compact `<digits>|`
+/// format and the legacy `L<digits>: ` format so old transcripts remain
+/// usable after the read output migration.
 fn strip_line_number_prefix(line : String) -> String? {
+  if line.length() >= 2 && line[0] >= '0' && line[0] <= '9' {
+    let mut i = 0
+    while i < line.length() && line[i] >= '0' && line[i] <= '9' {
+      i += 1
+    }
+    if i > 0 && i < line.length() && line[i] == '|' {
+      return Some(line[i + 1:].to_owned())
+    }
+  }
   if line.length() < 4 || line[0] != 'L' {
     return None
   }
@@ -210,7 +221,7 @@ fn strip_line_number_prefix(line : String) -> String? {
 }
 
 ///|
-/// Strip `L<n>: ` prefixes from every non-empty line of a block. Returns
+/// Strip current or legacy read prefixes from every non-empty line. Returns
 /// None unless every non-empty line carries the prefix — the stripped text
 /// is only trusted as a whole-block rewrite of our own read format.
 fn strip_line_numbers_block(text : String) -> String? {
