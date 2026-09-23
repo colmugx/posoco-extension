@@ -53,15 +53,14 @@ probe).
 | `lang` | string | Tree-sitter language id (e.g. `ts`, `py`); inferred per file when omitted |
 | `path` | string | Directory or file to search (default `.`) |
 | `glob` | string | File filter, e.g. `*.ts` or a glob list like `*.ts,*.js` |
+| `max_matches` | integer | Maximum returned matches; default 100 |
 
 ## Behavior
 
 - **Parallel execution** — read-only search, safe to run alongside other tools.
-- **Output contract** — exit 0 passes ast-grep's text through unchanged
-  (structured payload `matches: "raw"` for observers/UIs); empty stdout is
-  zero matches (`No matches found for: <pattern>`, structured `count: 0`);
-  any other exit surfaces stderr as a model-visible `ToolReportedError` with
-  the sanitized base path.
+- **Output contract** — search runs with ast-grep's documented `--json=stream` mode. Each match is rendered as a compact file header plus `line|excerpt`; line numbers are 1-based, multi-line matches are flattened, and each excerpt is capped at 500 characters.
+- **Bounded results** — at most `max_matches` entries are shown (default 100) and the rendered body is capped at 32 KB. Truncation uses a short `… +N matches` footer. Unexpected JSON falls back to bounded raw output instead of becoming an unbounded result.
+- **Bounded errors** — non-zero exits return `astgrep exit=N path=...` plus at most 4,000 characters of stderr/stdout. Empty successful output is simply `(no matches)`.
 - **Validation before spawn** — a missing or wrong-typed `pattern` returns a
   `ToolReportedError` with a fix hint naming the expected shape; no process
   is spawned.
