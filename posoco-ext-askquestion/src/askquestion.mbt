@@ -1,15 +1,18 @@
 ///|
-/// Interactive ask_question tool backed by Posoco's UiPort.
+/// Interactive ask_question tool backed by Posoco's composed UiPort. The
+/// port is captured from the CompositionView at composition time (manifest
+/// declares `requires: [Capability::Ui]`), so requests ride the aggregated
+/// port — never a host-provided raw contributor reference.
 pub(all) struct AskQuestionTools {
-  ui : &@posoco.UiPort
+  mut ui : &@posoco.UiPort?
 }
 
 ///|
-/// Construct an ask-question extension over a host-provided UI port.
-pub fn AskQuestionTools::AskQuestionTools(
-  ui : &@posoco.UiPort,
-) -> AskQuestionTools {
-  { ui, }
+/// Construct an ask-question extension. The composed UI is wired during
+/// composition; constructing without a host that contributes a UiPort makes
+/// every ask_question report "Interactive UI is unavailable".
+pub fn AskQuestionTools::AskQuestionTools() -> AskQuestionTools {
+  { ui: None, }
 }
 
 ///|
@@ -272,7 +275,15 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
     )
   }
   let spec = parse_ask_spec(call.arguments)
-  let response = self.ui.request(spec.request()) catch {
+  let ui = match self.ui {
+    Some(ui) => ui
+    None =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="Interactive UI is unavailable: the composition contributes no UiPort",
+        structured=None,
+      )
+  }
+  let response = ui.request(spec.request()) catch {
     @posoco.UiError::Unsupported(detail~) =>
       return @posoco.ToolOutcome::ToolReportedError(
         content="Interactive UI is unavailable: " + detail,
@@ -317,9 +328,28 @@ pub impl @posoco.Extension for AskQuestionTools with fn extension_id(
 pub impl @posoco.Extension for AskQuestionTools with fn manifest(
   self : AskQuestionTools,
 ) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(id="posoco_ext_askquestion", tools=[self], prompt_contributors=[
-    self,
-  ])
+  @posoco.ExtensionManifest(
+    id="posoco_ext_askquestion",
+    requires=[@posoco.Capability::Ui],
+    lifecycle=[self],
+    tools=[self],
+    prompt_contributors=[self],
+  )
+}
+
+///|
+pub impl @posoco.Lifecycle for AskQuestionTools with fn on_compose(
+  self : AskQuestionTools,
+  view : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  self.ui = view.ui()
+}
+
+///|
+pub impl @posoco.Lifecycle for AskQuestionTools with fn on_shutdown(
+  _self : AskQuestionTools,
+) -> Unit {
+  ()
 }
 
 ///|
