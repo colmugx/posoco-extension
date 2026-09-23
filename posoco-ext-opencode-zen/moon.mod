@@ -9,7 +9,7 @@ import {
   "colmugx/posoco-ext-oauth@0.1.0",
   "colmugx/posoco-kit-chat-completions@0.1.0",
   "colmugx/posoco-kit-compact-summary@0.1.0",
-  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.22.2",
 }
 
 readme = "README.mbt.md"
