@@ -12,9 +12,9 @@
 /// recorded stamps remain comparable with the local write/edit tools.
 /// `None` (the default) is direct target-local IO.
 ///
-/// Output contract: lines are prefixed `L<line>: ` (1-indexed, no padding),
-/// long lines are truncated at 2000 characters with a marker, and reads cut
-/// by the line/byte caps end with a footer naming the next offset. Successful
+/// Output contract: lines are prefixed `<line>|` (1-indexed, no padding),
+/// long lines are truncated with a short marker, and reads cut by the
+/// line/byte caps end with a compact continuation footer. Successful
 /// reads record a `FileStamp` in the injected `FreshnessGuard` (if any) so
 /// the write/edit tools can refuse stale modifications.
 pub(all) struct ReadTools {
@@ -40,15 +40,15 @@ pub fn ReadTools::ReadTools(
 
 ///|
 /// Default max lines per read.
-const READ_DEFAULT_LIMIT = 1000
+const READ_DEFAULT_LIMIT = 400
 
 ///|
 /// Max characters per output line before truncation (char-boundary safe).
-const READ_LINE_CHAR_CAP = 2000
+const READ_LINE_CHAR_CAP = 1200
 
 ///|
 /// Max formatted bytes per read result before the page is cut.
-const READ_BYTE_CAP = 100_000
+const READ_BYTE_CAP = 40_000
 
 ///|
 /// A window of lines plus file totals. `lines` carries normalized text
@@ -162,24 +162,24 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("read"),
-      description: "Read a file's contents with `L<line>: ` line-numbered lines. Optional `offset` is the 1-indexed line to start from; a negative offset reads the last |offset| lines of the file. Optional `limit` caps the lines returned (default 1000). Lines longer than 2000 characters are truncated with a marker; when the result is cut short a footer reports how many lines remain and the offset to continue from. Reads record file state so write/edit can detect external changes.",
+      description: "Read numbered file lines as `line|text`. `offset` is 1-based (negative reads tail); `limit` defaults to 400. Truncated pages report `next=N`. Records freshness for write/edit.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "path": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Path to the file to read"),
+            "description": Json::string("File path"),
           }),
           "offset": Json::object({
             "type": Json::string("integer"),
             "description": Json::string(
-              "1-indexed line number to start from; negative counts back from the end of the file",
+              "1-based start line; negative reads from file end",
             ),
           }),
           "limit": Json::object({
             "type": Json::string("integer"),
             "description": Json::string(
-              "Maximum number of lines to return (default 1000)",
+              "Max lines; default 400",
             ),
           }),
         }),
@@ -205,7 +205,7 @@ fn extract_read_args(
         Some(String(p)) => p
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "read: 'path' argument must be a string",
+            "read: 'path' must be a string",
           )
         None => raise @posoco.RuntimeError::UnknownTool("read: missing 'path'")
       }
@@ -214,7 +214,7 @@ fn extract_read_args(
         Some(Null) | None => None
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "read: optional 'offset' must be an integer",
+            "read: 'offset' must be an integer",
           )
       }
       let limit = match obj.get("limit") {
@@ -222,14 +222,14 @@ fn extract_read_args(
         Some(Null) | None => None
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "read: optional 'limit' must be an integer",
+            "read: 'limit' must be an integer",
           )
       }
       (path, offset, limit)
     }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "read: arguments must be a JSON object",
+        "read: arguments must be an object",
       )
   }
 }
@@ -292,11 +292,11 @@ fn truncate_chars(s : String, cap : Int) -> String {
 }
 
 ///|
-/// Render up to `cap_bytes` of `L<n>: ` formatted lines.
+/// Render up to `cap_bytes` of compact `n|text` lines.
 ///
 /// Returns the body, the number of lines actually returned, and whether the
-/// byte cap cut the page short. Line truncation markers and the `L<n>: `
-/// prefix count toward the byte budget so the result is bounded by
+/// byte cap cut the page short. Prefixes and truncation markers count
+/// toward the byte budget so the result is bounded by
 /// `cap_bytes` plus one final line.
 fn format_read_page(
   lines : Array[String],
@@ -309,9 +309,9 @@ fn format_read_page(
   let mut byte_cut = false
   for i, raw in lines {
     let rendered = if raw.length() > READ_LINE_CHAR_CAP {
-      "L\{start_line + i}: \{truncate_chars(raw, READ_LINE_CHAR_CAP)} … (line truncated)"
+      "\{start_line + i}|\{truncate_chars(raw, READ_LINE_CHAR_CAP)}…[cut]"
     } else {
-      "L\{start_line + i}: \{raw}"
+      "\{start_line + i}|\{raw}"
     }
     let line_bytes = @utf8.encode(rendered).length()
     if returned > 0 && bytes + line_bytes > cap_bytes {
@@ -347,14 +347,14 @@ async fn execute_read_impl(
   match offset_opt {
     Some(0) =>
       raise @posoco.RuntimeError::UnknownTool(
-        "read: 'offset' must be a nonzero 1-indexed line number; negative counts back from the end",
+        "read: 'offset' must be nonzero",
       )
     _ => ()
   }
   match limit_opt {
     Some(l) if l <= 0 =>
       raise @posoco.RuntimeError::UnknownTool(
-        "read: 'limit' must be greater than zero",
+        "read: 'limit' must be > 0",
       )
     _ => ()
   }
@@ -362,7 +362,7 @@ async fn execute_read_impl(
   // it raises RuntimeError only on a genuine IO error (permission, etc).
   if !io.exists(path) {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="File not found: \{@devkit.sanitize_path(raw_path)}",
+      content="read: not found: \{@devkit.sanitize_path(raw_path)}",
       structured=None,
     )
   }
@@ -371,7 +371,6 @@ async fn execute_read_impl(
     Some(l) => l
     None => READ_DEFAULT_LIMIT
   }
-  let explicit_range = offset_opt is Some(_) || limit_opt is Some(_)
   let (page, start_line) = match offset_opt {
     None | Some(1) => {
       let p = io.read_lines(path, 0, limit)
@@ -390,7 +389,7 @@ async fn execute_read_impl(
     }
   }
   if page.total_lines == 0 {
-    let content = "(file exists but is empty)"
+    let content = "(empty)"
     match freshness {
       Some(g) => g.note_read(path, stamp)
       None => ()
@@ -399,7 +398,7 @@ async fn execute_read_impl(
   }
   if offset_opt is Some(n) && n > 1 && n > page.total_lines {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="offset \{n} is past the end of the file; the file has \{page.total_lines} lines",
+      content="read: offset \{n} > \{page.total_lines} lines",
       structured=None,
     )
   }
@@ -408,16 +407,11 @@ async fn execute_read_impl(
     start_line,
     READ_BYTE_CAP,
   )
-  if byte_cut && explicit_range {
-    raise @posoco.RuntimeError::InvocationFailed(
-      "read: requested range for '\{@devkit.sanitize_path(raw_path)}' exceeds the \{READ_BYTE_CAP} byte output cap; use a smaller limit or grep for the specific content",
-    )
-  }
   let end_line = start_line + returned - 1
   let more = page.total_lines - end_line
   let mut content = body
   if byte_cut || more > 0 {
-    content = "\{content}\n… \{more} more lines; call read with offset=\{end_line + 1}"
+    content = "\{content}\n… +\{more} lines; next=\{end_line + 1}"
   }
   match freshness {
     Some(g) => g.note_read(path, stamp)
