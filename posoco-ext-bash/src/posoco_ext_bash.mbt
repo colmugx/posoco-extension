@@ -20,6 +20,72 @@ pub fn ShellTools::ShellTools(
   ShellTools::{ anchor, }
 }
 
+///|
+/// Hard cap for model-visible shell output. This bounds transcript growth even
+/// when a build/test command emits an unbounded log.
+const BASH_OUTPUT_CHAR_CAP = 32_768
+
+///|
+/// Preserve a small prefix so command headers/context survive truncation;
+/// spend the remaining budget on the tail where diagnostics usually land.
+const BASH_OUTPUT_HEAD_CHARS = 4_096
+
+///|
+fn bash_take_chars(text : String, limit : Int) -> String {
+  let chars : Array[Char] = []
+  let mut taken = 0
+  for ch in text {
+    if taken >= limit {
+      break
+    }
+    chars.push(ch)
+    taken += 1
+  }
+  String::from_array(chars)
+}
+
+///|
+fn bash_tail_chars(text : String, limit : Int) -> String {
+  if limit <= 0 {
+    return ""
+  }
+  let skip = text.length() - limit
+  let chars : Array[Char] = []
+  let mut index = 0
+  for ch in text {
+    if index >= skip {
+      chars.push(ch)
+    }
+    index += 1
+  }
+  String::from_array(chars)
+}
+
+///|
+/// Normalize shell output for the model:
+/// - successful short output is unchanged;
+/// - non-zero exits expose the exit code once;
+/// - long output is bounded to BASH_OUTPUT_CHAR_CAP with head+tail context.
+fn bash_model_output(content : String, exit_code : Int) -> String {
+  let raw = if exit_code == 0 {
+    content
+  } else if content == "" {
+    "exit=\{exit_code}"
+  } else {
+    "exit=\{exit_code}\n\{content}"
+  }
+  if raw.length() <= BASH_OUTPUT_CHAR_CAP {
+    return raw
+  }
+  let marker = "\n…[cut]…\n"
+  let tail_chars = BASH_OUTPUT_CHAR_CAP -
+    BASH_OUTPUT_HEAD_CHARS -
+    marker.length()
+  bash_take_chars(raw, BASH_OUTPUT_HEAD_CHARS) +
+  marker +
+  bash_tail_chars(raw, tail_chars)
+}
+
 // ToolProvider is split into two complete #cfg partitions (native/wasm/js real, wasm-gc inert); shared_list_tools avoids duplicating the ToolDef construction.
 
 ///|
@@ -41,7 +107,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("string")),
-                  ("description", Json::string("The shell command to execute")),
+                  ("description", Json::string("Shell command")),
                 ]),
               ),
             ),
@@ -54,7 +120,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash"),
-      description: "Run a shell command. Use only when the other tools cannot do the job — e.g. builds, tests, git, or multi-step pipelines. Each call runs in a fresh shell in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root. Read-only commands (ls, cat, grep, git status, find) are pre-approved by the permission policy and run without approval; all other commands may require user approval.",
+      description: "Run a shell command for builds, tests, git, or pipelines. Fresh shell at workspace root; `cd` does not persist.",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
@@ -75,7 +141,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
           Json::String(s) => s
           _ =>
             raise @posoco.RuntimeError::UnknownTool(
-              "bash: 'cmd' argument must be a string",
+              "bash: 'cmd' must be a string",
             )
         }
       } else if map.contains("command") {
@@ -83,17 +149,17 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
           Json::String(s) => s
           _ =>
             raise @posoco.RuntimeError::UnknownTool(
-              "bash: 'command' argument must be a string",
+              "bash: 'command' must be a string",
             )
         }
       } else {
         raise @posoco.RuntimeError::UnknownTool(
-          "bash: missing 'cmd' or 'command' argument",
+          "bash: missing 'cmd'",
         )
       }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "bash: arguments must be a JSON object with a 'cmd' field",
+        "bash: arguments must be an object",
       )
   }
 }
@@ -102,7 +168,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
 /// Shared empty-command error (used by both native + js execute paths).
 fn bash_empty_command_failure() -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "bash: invocation failed (stage=arguments, category=empty_command)",
+    "bash: empty cmd",
   )
 }
 
