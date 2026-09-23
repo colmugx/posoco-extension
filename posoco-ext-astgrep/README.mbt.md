@@ -61,9 +61,7 @@ probe).
 - **Output contract** — search runs with ast-grep's documented `--json=stream` mode. Each match is rendered as a compact file header plus `line|excerpt`; line numbers are 1-based, multi-line matches are flattened, and each excerpt is capped at 500 characters.
 - **Bounded results** — at most `max_matches` entries are shown (default 100) and the rendered body is capped at 32 KB. Truncation uses a short `… +N matches` footer. Unexpected JSON falls back to bounded raw output instead of becoming an unbounded result.
 - **Bounded errors** — non-zero exits return `astgrep exit=N path=...` plus at most 4,000 characters of stderr/stdout. Empty successful output is simply `(no matches)`.
-- **Validation before spawn** — a missing or wrong-typed `pattern` returns a
-  `ToolReportedError` with a fix hint naming the expected shape; no process
-  is spawned.
+- **Validation before spawn** — missing, empty, or wrong-typed arguments return compact `ToolReportedError` messages; no process is spawned.
 - **Differences from posoco-ext-grep** — matches AST structure via ast-grep
   patterns instead of literal text; requires the external ast-grep binary on
   both native and js (the grep extension's in-process walkers have no
