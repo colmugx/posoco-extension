@@ -14,6 +14,8 @@ import {
 }
 
 // Values
+pub async fn fetch_openrouter_models(String, String) -> Array[OpenRouterModelInfo] raise @error.ModelError
+
 pub fn openrouter_model_catalog(String, String, Array[OpenRouterModelInfo], String, &@posoco-ext-llm.ApiKeyFactory, http_referer? : String?, title? : String?) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
 
 pub fn parse_cached_openrouter_models(Json?) -> Array[OpenRouterModelInfo]?

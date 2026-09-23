@@ -40,7 +40,9 @@ test "OpenRouter prompt-cache setting is strict boolean and defaults off" {
 
   let enabled = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
-      Json::object(Map::from_array([("send_prompt_cache_key", Json::True)])),
+      Json::object(
+        Map::from_array([("send_prompt_cache_key", Json::boolean(true))]),
+      ),
     ),
   )
   assert_true(openrouter_setting_bool(enabled, "send_prompt_cache_key"))
