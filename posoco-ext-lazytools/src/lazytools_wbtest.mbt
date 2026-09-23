@@ -121,6 +121,18 @@ test "list_tools_exposes_only_two_meta_tools_with_policies" {
 }
 
 ///|
+test "meta_tool_descriptions_stay_compact" {
+  let defs = meta_tool_defs()
+  assert_true(defs[0].description.length() < 140)
+  assert_true(defs[1].description.length() < 100)
+  match defs[0].input_schema {
+    Json::Object(schema) =>
+      assert_true(schema.stringify().length() < 300)
+    _ => fail("expected tool_list object schema")
+  }
+}
+
+///|
 /// ——— tool_list: browse and keyword-search ———
 
 ///|
@@ -152,14 +164,16 @@ async test "tool_list_without_keyword_lists_every_group_with_schemas" {
     ext.execute("tool_list", meta_call("tool_list", Map::from_array([]))),
   )
   assert_true(content.has_prefix("all 2 folded groups:"))
+  assert_false(content.contains("\n  {"))
   // Grouped by provenance; display ids strip the packaging prefix.
-  assert_true(content.contains("\"ext\": \"webfetch\""))
-  assert_true(content.contains("\"ext\": \"nowledge_mem\""))
+  assert_true(content.contains("\"ext\":\"webfetch\""))
+  assert_true(content.contains("\"ext\":\"nowledge_mem\""))
   // Every tool of a group comes back, with schema for direct execution.
   assert_true(content.contains("\"webfetch\""))
   assert_true(content.contains("\"memory_search\""))
   assert_true(content.contains("\"memory_add\""))
   assert_true(content.contains("input_schema"))
+  assert_false(content.contains("A deferred tool"))
 }
 
 ///|
@@ -694,7 +708,7 @@ test "defer_extensions_fails_on_cross_extension_tool_collision" {
 /// ——— discoverability: the resident deferred-tools prompt ———
 
 ///|
-test "system_prompt_lists_folded_groups_with_names_and_descriptions" {
+test "system_prompt_lists_folded_groups_with_compact_hints" {
   let web = recording(
     [deferred_def("webfetch", "Fetch a URL page")],
     Map::from_array([]),
@@ -711,9 +725,8 @@ test "system_prompt_lists_folded_groups_with_names_and_descriptions" {
   assert_eq(manifest.prompt_contributors.length(), 1)
   let prompt = manifest.prompt_contributors[0].system_prompt()
   assert_true(prompt.has_prefix("## Deferred tools"))
-  assert_true(prompt.contains("you MUST look them up with `tool_list`"))
-  assert_true(prompt.contains("then call the tool with `tool_execute`"))
-  // Auto-concatenated tool names and descriptions per group.
+  assert_true(prompt.contains("Reuse a schema already shown by `tool_list`"))
+  assert_true(prompt.contains("then `tool_execute`"))
   assert_true(
     prompt.contains(
       "- test_child: webfetch — Fetch a URL page; memory_search — Search past memories; memory_add — Add a new memory",
