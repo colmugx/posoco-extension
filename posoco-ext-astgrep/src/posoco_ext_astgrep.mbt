@@ -203,7 +203,7 @@ fn build_astgrep_args(
 /// Install hint for a machine without ast-grep, listing every candidate the
 /// probe tried so the operator can see what was searched.
 fn missing_binary_error(candidates : Array[String]) -> String {
-  "astgrep: no ast-grep binary found (tried: \{candidates.join(", ")}); install it with `brew install ast-grep` — both the 'ast-grep' and 'sg' binary names are accepted"
+  "astgrep: binary not found; install ast-grep (tried: \{candidates.join(", ")})"
 }
 
 ///|
