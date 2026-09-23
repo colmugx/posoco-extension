@@ -1,12 +1,9 @@
 ///|
 /// The `tool_list` handler: browse or keyword-search the folded catalog.
 /// Results are grouped by extension — one match returns the whole group —
-/// and each tool carries name, description, and full JSON input schema, so
-/// the model can go straight to `tool_execute`.
-
-///|
-/// Max description characters shown per tool in listings.
-const LIST_DESC_CAP = 200
+/// and each tool carries only its name and full JSON input schema. Capability
+/// descriptions already live in the resident catalog and semantic discovery
+/// path, so repeating them here only spends context.
 
 ///|
 /// Strip the packaging prefix from a provenance id for display: extensions
@@ -94,15 +91,15 @@ fn group_matches(group : ToolGroup, tokens : Array[String]) -> Bool {
 }
 
 ///|
-/// Render one group as JSON: display id plus every tool with name,
-/// description, and input schema.
+/// Render one group as compact JSON: display id plus every tool with name
+/// and input schema. Descriptions are intentionally omitted from model-visible
+/// list results because the resident prompt already carries capability hints.
 fn group_json(group : ToolGroup) -> Json {
   let tools : Array[Json] = []
   for entry in group.entries {
     tools.push(
       Json::object({
         "name": Json::string(entry.def.name.to_string()),
-        "description": Json::string(entry.def.description),
         "input_schema": entry.def.input_schema,
       }),
     )
@@ -313,16 +310,6 @@ async fn LazyTools::execute_list(
     (n, total) => "\{n} of \{total} folded groups matched '\{keyword_text}':"
   }
   let payload = matched.map(fn(group) { group_json(group) })
-  let mut content = "\{scope}\n\{Json::array(payload).stringify(indent=2)}"
-  // Schema-less fallback: when a group's tools carry long descriptions the
-  // JSON above already has everything; the plain-text roster is only a
-  // readability aid for the single-group case.
-  if matched.length() == 1 {
-    let group = matched[0]
-    let lines = group.entries.map(fn(entry) {
-      "- \{entry.def.name.to_string()}: \{truncate_oneline(entry.def.description, LIST_DESC_CAP)}"
-    })
-    content = "\{content}\n(\{group.id}: \{lines.join("; ")})"
-  }
+  let content = "\{scope}\n\{Json::array(payload).stringify()}"
   @posoco.ToolOutcome::Success(content~, structured=None)
 }
