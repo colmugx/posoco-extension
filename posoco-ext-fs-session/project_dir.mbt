@@ -60,7 +60,7 @@ pub fn project_slug(basename : String) -> String {
   let slug = builder.to_string()
   // The map above keeps only ASCII, so code-unit length is char length.
   if slug.length() > 40 {
-    return slug.sub(start=0, end=40).to_owned()
+    return slug.exact_view(start=0, end=40).to_owned()
   }
   slug
 }
@@ -72,7 +72,7 @@ fn cwd_fingerprint(normalized : String) -> String {
   let hex = @crypto.bytes_to_hex_string(
     @crypto.sha256(@utf8.encode(normalized)),
   )
-  hex.sub(start=0, end=12).to_owned()
+  hex.exact_view(start=0, end=12).to_owned()
 }
 
 ///|

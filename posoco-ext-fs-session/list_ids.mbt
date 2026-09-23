@@ -23,7 +23,7 @@ fn session_ids_from_dir_entries(entries : Array[String]) -> Array[String] {
   let ids : Array[String] = []
   for entry in entries {
     if entry.has_suffix(".jsonl") {
-      let stem = entry.sub(start=0, end=entry.length() - 6).to_owned()
+      let stem = entry.exact_view(start=0, end=entry.length() - 6).to_owned()
       if validate_session_id(stem) is Ok(_) && !ids.contains(stem) {
         ids.push(stem)
       }
