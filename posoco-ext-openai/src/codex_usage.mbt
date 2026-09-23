@@ -15,7 +15,7 @@
 pub fn codex_usage_url(codex_api_base : String) -> String {
   let mut clean = codex_api_base
   while clean.has_suffix("/") {
-    clean = clean.sub(end=clean.length() - 1).to_owned()
+    clean = clean.exact_view(end=clean.length() - 1).to_owned()
   }
   let base = match clean.strip_suffix("/codex") {
     Some(value) => value.to_owned()

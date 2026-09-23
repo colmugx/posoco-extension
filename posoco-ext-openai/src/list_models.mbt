@@ -130,7 +130,7 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
 fn openai_models_url(base_url : String) -> String {
   let mut clean = base_url
   while clean.has_suffix("/") {
-    clean = clean.sub(end=clean.length() - 1).to_owned()
+    clean = clean.exact_view(end=clean.length() - 1).to_owned()
   }
   clean + "/models"
 }

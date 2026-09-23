@@ -779,9 +779,9 @@ fn codex_extract_query_param(input : String, key : String) -> String? {
       None => return None
     }
   }
-  let rest = input.sub(start~).to_owned()
+  let rest = input.exact_view(start~).to_owned()
   match rest.find("&") {
-    Some(amp) => Some(rest.sub(end=amp).to_owned())
+    Some(amp) => Some(rest.exact_view(end=amp).to_owned())
     None => Some(rest)
   }
 }
