@@ -35,6 +35,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       bash_decode_failure(exit_code)
     }
   }
+  let content = bash_model_output(content, exit_code)
   let is_error = exit_code != 0 || decode_failed
   if is_error {
     @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
@@ -46,12 +47,12 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
 fn bash_decode_failure(exit_code : Int) -> String {
-  "bash: decode failed (stage=decode_output, category=invalid_utf8, exit_code=\{exit_code})"
+  "bash: invalid UTF-8 (exit=\{exit_code})"
 }
 
 ///|
 fn bash_collect_output_failure() -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "bash: process failed (stage=collect_output)",
+    "bash: process failed",
   )
 }
