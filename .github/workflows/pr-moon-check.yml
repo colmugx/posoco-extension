@@ -1,40 +1,56 @@
-name: PR Moon Check
+# posoco-extension PR CI.
+#
+# Check extension commits inside the real integration workspace:
+# posoco@main -> external/cetas -> extension. This mirrors cetas CI, so
+# MoonBit workspace resolution and nested gitlinks match the environment
+# where these extensions are consumed.
+
+name: posoco-extension ci
 
 on:
   pull_request:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: pr-moon-check-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
-  check:
+  checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXTENSION_SHA: ${{ github.event.pull_request.head.sha }}
+      EXTENSION_BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Checkout posoco parent (recursively)
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: colmugx/posoco
+          ref: main
+          path: posoco
+          submodules: recursive
 
-      - name: Set up MoonBit
+      - name: Switch extension submodule to event commit
+        shell: bash
+        working-directory: posoco/external/cetas/extension
+        run: |
+          git fetch --depth=1 origin "${EXTENSION_BASE_SHA}" "${EXTENSION_SHA}"
+          git checkout "${EXTENSION_SHA}"
+          git submodule update --init --recursive
+
+      - name: Install moon (Unix)
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: moon version
+        run: moon version --all
 
       - name: Check changed MoonBit modules
         shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        working-directory: posoco/external/cetas/extension
         run: |
           set -euo pipefail
 
           mapfile -t modules < <(
-            git diff --name-only "$BASE_SHA" "$HEAD_SHA" |
+            git diff --name-only "${EXTENSION_BASE_SHA}" "${EXTENSION_SHA}" |
               awk -F/ 'NF > 1 { print $1 }' |
               sort -u
           )
