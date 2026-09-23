@@ -622,7 +622,7 @@ priv struct ZcodeTurn {
   /// The reader closed the event stream before a terminal event.
   mut stream_closed : Bool
   /// The loop was cancelled (wall clock or host) before a terminal event.
-  mut cancelled : Bool
+  cancelled : Bool
 }
 
 ///|
@@ -633,12 +633,7 @@ async fn zcode_collect_turn(turn : ZcodeTurn, conn : ZcodeConn) -> Unit {
     }
     let next : ZcodeEvent? = match pulled {
       Ok(event) => Some(event)
-      Err(err) => {
-        if @async.is_cancellation_error(err) {
-          turn.cancelled = true
-        }
-        None
-      }
+      Err(_) => None
     }
     match next {
       Some(event) =>
@@ -662,9 +657,7 @@ async fn zcode_collect_turn(turn : ZcodeTurn, conn : ZcodeConn) -> Unit {
         break
       }
     }
-    @async.pause() catch {
-      err => if @async.is_cancellation_error(err) { turn.cancelled = true }
-    }
+    @async.pause()
   }
 }
 

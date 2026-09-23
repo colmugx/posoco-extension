@@ -202,16 +202,12 @@ pub fn[G] NowledgeMem::attach(
 ///|
 /// The flusher loop body; also directly runnable for hosts that own their
 /// own scheduling loop. Each tick drains the thread lanes first, then the
-/// memory write-after queue (D8: one loop, two channels). Cancellation
-/// re-raises so a host task group teardown terminates the loop.
+/// memory write-after queue (D8: one loop, two channels).
 pub async fn NowledgeMem::run_flusher(self : NowledgeMem) -> Unit {
   while !self.engine.stopped {
     self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
     self.drain_memory_ops()
-    @async.sleep(NMEM_FLUSHER_INTERVAL_MS) catch {
-      err if @async.is_cancellation_error(err) => raise err
-      _ => ()
-    }
+    @async.sleep(NMEM_FLUSHER_INTERVAL_MS)
   }
 }
 

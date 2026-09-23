@@ -211,13 +211,10 @@ async fn MbtxTools::timed_stage(
   match settled {
     Ok(triple) => Ok(triple)
     Err(err) =>
-      // Budget expiry surfaces either as the injected TimeoutError or as
-      // the Cancelled of the collection task being torn down — or, on js,
-      // as the runner's extern-side budget marker (the js layer cannot
+      // Budget expiry surfaces either as the injected TimeoutError or, on
+      // js, as the runner's extern-side budget marker (the js layer cannot
       // construct the library's TimeoutError; see `MbtxBudgetExpired`).
-      if err is @async.TimeoutError ||
-        @async.is_cancellation_error(err) ||
-        err is MbtxBudgetExpired::Expired {
+      if err is @async.TimeoutError || err is MbtxBudgetExpired::Expired {
         Err(timeout_content)
       } else {
         raise @posoco.RuntimeError::InvocationFailed(

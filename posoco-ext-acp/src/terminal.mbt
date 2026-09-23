@@ -151,14 +151,7 @@ async fn terminal_poll_once(
   }
   let polled = Ok(context.terminal_output(params)) catch {
     AgentContextCancelled(_) => Err(CancelledRun(seen.val))
-    error =>
-      Err(
-        if @async.is_cancellation_error(error) {
-          CancelledRun(seen.val)
-        } else {
-          HostFailure(error)
-        },
-      )
+    error => Err(HostFailure(error))
   }
   match polled {
     Err(failure) => Err(failure)
@@ -245,14 +238,7 @@ async fn terminal_drive(
       }
       let waited = Ok(context.terminal_wait_for_exit(wait_params)) catch {
         AgentContextCancelled(_) => Err(CancelledRun(seen.val))
-        error =>
-          Err(
-            if @async.is_cancellation_error(error) {
-              CancelledRun(seen.val)
-            } else {
-              HostFailure(error)
-            },
-          )
+        error => Err(HostFailure(error))
       }
       match waited {
         Err(wait_failure) => Err(wait_failure)
@@ -318,14 +304,7 @@ async fn terminal_create_call(
 ) -> Result[@acp.TerminalCreateResult, TerminalRunFailure] noraise {
   Ok(context.terminal_create(params)) catch {
     AgentContextCancelled(_) => Err(CancelledRun(""))
-    error =>
-      Err(
-        if @async.is_cancellation_error(error) {
-          CancelledRun("")
-        } else {
-          HostFailure(error)
-        },
-      )
+    error => Err(HostFailure(error))
   }
 }
 
@@ -338,14 +317,7 @@ async fn terminal_release_call(
 ) -> Result[@acp.TerminalReleaseResult, TerminalRunFailure] noraise {
   Ok(context.terminal_release(params)) catch {
     AgentContextCancelled(_) => Err(CancelledRun(partial))
-    error =>
-      Err(
-        if @async.is_cancellation_error(error) {
-          CancelledRun(partial)
-        } else {
-          HostFailure(error)
-        },
-      )
+    error => Err(HostFailure(error))
   }
 }
 

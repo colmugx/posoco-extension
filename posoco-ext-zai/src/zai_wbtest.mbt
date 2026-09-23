@@ -268,14 +268,3 @@ test "classify: quota 429 keeps typed reset, others redact" {
     content="None",
   )
 }
-
-///|
-test "zai_cancelled_transport_marks_cancellation" {
-  let err = zai_cancelled_transport("read_stream")
-  guard err is @posoco.ModelError::Transport(message) else {
-    fail("expected a Transport error")
-  }
-  assert_eq(
-    message, "zai transport failure (stage=read_stream, category=cancelled)",
-  )
-}

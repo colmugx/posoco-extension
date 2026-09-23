@@ -1385,14 +1385,3 @@ test "vision capability flows from discovery to slot to encoder" {
   assert_true(downgraded.contains("look"))
   assert_true(downgraded.contains("[Attached image/png"))
 }
-
-///|
-test "openrouter_cancelled_transport_marks_cancellation" {
-  let err = openrouter_cancelled_transport("read_stream")
-  guard err is @posoco.ModelError::Transport(message) else {
-    fail("expected a Transport error")
-  }
-  assert_eq(
-    message, "openrouter transport failure (stage=read_stream, category=cancelled)",
-  )
-}

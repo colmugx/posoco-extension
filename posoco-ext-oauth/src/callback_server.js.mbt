@@ -77,9 +77,7 @@ pub impl CallbackServer for JsCallbackServer with fn wait_callback(
     if now >= deadline {
       raise OAuthError::ExpiredToken
     }
-    @async.sleep(1) catch {
-      _ => ()
-    }
+    @async.sleep(1)
   }
   abort("unreachable")
 }

@@ -661,8 +661,6 @@ pub fn MCPToolBridge::start_probes(
 /// only; `activate` is unchanged). Every failed attempt records its entry;
 /// a retry success bumps the catalog revision and scrubs this server's
 /// entries; exhausting the schedule leaves exactly one final entry.
-/// Cancellation re-raises so task-group teardown terminates the retries;
-/// other sleep errors are swallowed.
 async fn MCPToolBridge::retry_startup_probe(
   self : MCPToolBridge,
   config : MCPServerConfig,
@@ -672,10 +670,7 @@ async fn MCPToolBridge::retry_startup_probe(
   let mut last_message = first_message
   self.startup_failures.push((config.name, last_message))
   for backoff in backoff_ms {
-    @async.sleep(backoff) catch {
-      err if @async.is_cancellation_error(err) => raise err
-      _ => ()
-    }
+    @async.sleep(backoff)
     match self.group {
       Some(group) =>
         match self.connect_with_group(config, group) {

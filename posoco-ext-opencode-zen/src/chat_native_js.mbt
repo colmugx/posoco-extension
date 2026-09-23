@@ -10,18 +10,6 @@ async fn read_zen_error_body(client : @http.Client) -> ZenErrorBody {
 }
 
 ///|
-/// Transport error for a cancelled wait. The `category=cancelled` marker is
-/// the classification carrier: the ModelError raise type cannot carry the
-/// coroutine cancellation itself (checked raise types), so cancellation is
-/// surfaced as this stable token. Nobody string-matches the token today —
-/// classification rides on coroutine cancellation semantics.
-fn zen_cancelled_transport(stage : String) -> @posoco.ModelError {
-  @posoco.ModelError::Transport(
-    "opencode-zen transport failure (stage=\{stage}, category=cancelled)",
-  )
-}
-
-///|
 pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
   self : OpenCodeZenModelPort,
   _scope : @posoco.InvocationScope,
@@ -115,9 +103,6 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
         let line = client.read_until("\n") catch {
           err => {
             client.close()
-            if @async.is_cancellation_error(err) {
-              raise zen_cancelled_transport("read_stream")
-            }
             match classify_zen_stream_termination(TransportFailure) {
               Some(err) => raise err
               None => None
@@ -163,16 +148,7 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
         // cancellation point, which is what makes abort responsive.
         let now = @async.now()
         if now - last_yield >= 16L {
-          @async.pause() catch {
-            err =>
-              if @async.is_cancellation_error(err) {
-                client.close()
-                raise zen_cancelled_transport("read_stream")
-              }
-            // A cancelled pause is classified above instead of riding over;
-            // non-cancellation pause failures still ride over — the next
-            // read on a torn-down client errors out of the loop.
-          }
+          @async.pause()
           last_yield = now
         }
       }

@@ -1683,14 +1683,3 @@ test "compact_request_is_instructions_plus_input_without_tools" {
     }
   }
 }
-
-///|
-test "kimi_cancelled_transport_marks_cancellation" {
-  let err = kimi_cancelled_transport("read_stream")
-  guard err is @posoco.ModelError::Transport(message) else {
-    fail("expected a Transport error")
-  }
-  assert_eq(
-    message, "Kimi transport failure (stage=read_stream, category=cancelled)",
-  )
-}

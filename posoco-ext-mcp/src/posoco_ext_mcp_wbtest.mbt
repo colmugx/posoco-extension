@@ -396,21 +396,21 @@ test "list_tools_failure_message_distinguishes_timeout" {
 async test "timeout_aborts_inner_but_outer_sees_sentinel_not_cancel" {
   let inner_flags : Array[Bool] = []
   let outer_flags : Array[Bool] = []
-  let escaped_is_cancel = @async.with_timeout(30, async fn() {
+  let escaped_is_sentinel = @async.with_timeout(30, async fn() {
     errdefer inner_flags.push(@async.is_being_cancelled())
     @async.sleep(60_000)
     true
   }) catch {
     error => {
       outer_flags.push(@async.is_being_cancelled())
-      @async.is_cancellation_error(error)
+      error is @async.TimeoutError
     }
   }
   assert_eq(inner_flags.length(), 1)
   assert_true(inner_flags[0])
   assert_eq(outer_flags.length(), 1)
   assert_false(outer_flags[0])
-  assert_false(escaped_is_cancel)
+  assert_true(escaped_is_sentinel)
 }
 
 ///|

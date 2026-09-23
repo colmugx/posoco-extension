@@ -460,9 +460,7 @@ pub async fn SyncEngine::drain_once(
 
 ///|
 /// Long-lived flusher loop (plan D3): drain pending lanes, sleep, repeat
-/// until stop() flips `stopped`. Cancellation re-raises so a host task group
-/// teardown terminates the loop (a swallowed cancellation here spins the
-/// idle loop forever); other sleep errors are swallowed.
+/// until stop() flips `stopped`.
 pub async fn SyncEngine::flusher_loop(
   self : SyncEngine,
   transport : &NmemTransport,
@@ -471,10 +469,7 @@ pub async fn SyncEngine::flusher_loop(
 ) -> Unit {
   while !self.stopped {
     self.drain_once(transport, timeout_ms~)
-    @async.sleep(interval_ms) catch {
-      err if @async.is_cancellation_error(err) => raise err
-      _ => ()
-    }
+    @async.sleep(interval_ms)
   }
 }
 

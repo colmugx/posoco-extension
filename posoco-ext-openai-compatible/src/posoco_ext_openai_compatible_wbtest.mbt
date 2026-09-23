@@ -1579,14 +1579,3 @@ test "non-rejection 400 bodies never set the learned flag" {
     is Some(_),
   )
 }
-
-///|
-test "oai_compat_cancelled_transport_marks_cancellation" {
-  let err = oai_compat_cancelled_transport("read_stream")
-  guard err is @posoco.ModelError::Transport(message) else {
-    fail("expected a Transport error")
-  }
-  assert_eq(
-    message, "openai-compatible transport failure (stage=read_stream, category=cancelled)",
-  )
-}

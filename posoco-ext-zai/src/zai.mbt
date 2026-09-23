@@ -13,18 +13,6 @@ fn chat_url(config : ZaiConfig) -> String {
 }
 
 ///|
-/// Transport error for a cancelled wait. The `category=cancelled` marker is
-/// the classification carrier: the ModelError raise type cannot carry the
-/// coroutine cancellation itself (checked raise types), so cancellation is
-/// surfaced as this stable token. Nobody string-matches the token today —
-/// classification rides on coroutine cancellation semantics.
-fn zai_cancelled_transport(stage : String) -> @posoco.ModelError {
-  @posoco.ModelError::Transport(
-    "zai transport failure (stage=\{stage}, category=cancelled)",
-  )
-}
-
-///|
 /// Thinking wire state derived from config: enabled when an effort is set or
 /// the model is an always-on GLM-4.x thinker; `reasoning_effort` is sent only
 /// for models that declare efforts.
@@ -166,9 +154,6 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
         let line = client.read_until("\n") catch {
           err => {
             client.close()
-            if @async.is_cancellation_error(err) {
-              raise zai_cancelled_transport("read_stream")
-            }
             raise @posoco.ModelError::Transport(
               "zai transport failure (stage=read_stream): " + err.to_string(),
             )
@@ -195,20 +180,10 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
           }
         }
         // Yield at most every 16ms so the event loop can breathe during a
-        // buffered SSE burst; the pause is also a cancellation point, so a
-        // cancelled pause closes the client and raises the cancelled
-        // transport error.
+        // buffered SSE burst; task cancellation also lands on this pause.
         let now = @async.now()
         if now - last_yield >= 16L {
-          @async.pause() catch {
-            err =>
-              if @async.is_cancellation_error(err) {
-                client.close()
-                raise zai_cancelled_transport("read_stream")
-              }
-            // Non-cancellation pause failures ride over; the next read on a
-            // torn-down client errors out of the loop.
-          }
+          @async.pause()
           last_yield = now
         }
       }

@@ -1,7 +1,9 @@
 ///|
+#warnings("-struct_never_constructed")
 priv struct NoopUi {}
 
 ///|
+#warnings("-unused_value")
 impl @posoco.UiPort for NoopUi with fn ui_descriptor(_self : NoopUi) -> @posoco.UiDescriptor {
   @posoco.UiDescriptor::empty()
 }

@@ -201,17 +201,6 @@ fn is_openai_http_success(status : Int) -> Bool {
 }
 
 ///|
-/// Transport error for a cancelled wait. The `category=cancelled` marker is
-/// the classification carrier: the ModelError raise type cannot carry the
-/// coroutine cancellation itself (checked raise types), so downstream
-/// consumers classify on this stable token instead of matching provider text.
-fn openai_cancelled_transport(stage : String) -> @posoco.ModelError {
-  @posoco.ModelError::Transport(
-    "OpenAI transport failure (stage=\{stage}, category=cancelled)",
-  )
-}
-
-///|
 /// Pure HTTP-status classification shared by streaming and non-streaming
 /// paths. All 2xx statuses continue through success-body parsing; every
 /// other status retains its code, redacted body metadata, and — when the
@@ -561,9 +550,6 @@ async fn OpenAIModelPort::chat_stream(
     let line = client.read_until("\n") catch {
       err => {
         client.close()
-        if @async.is_cancellation_error(err) {
-          raise openai_cancelled_transport("read_stream")
-        }
         raise @posoco.ModelError::Transport(
           "OpenAI transport failure (stage=read_stream): " + err.to_string(),
         )
@@ -607,15 +593,7 @@ async fn OpenAIModelPort::chat_stream(
     // cancellation point, which is what makes abort responsive.
     let now = @async.now()
     if now - last_yield >= 16L {
-      @async.pause() catch {
-        err =>
-          if @async.is_cancellation_error(err) {
-            client.close()
-            raise openai_cancelled_transport("read_stream")
-          }
-        // Non-cancellation pause failures ride over; the next read on a
-        // torn-down client errors out of the loop.
-      }
+      @async.pause()
       last_yield = now
     }
   }

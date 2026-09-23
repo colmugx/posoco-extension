@@ -587,10 +587,6 @@ async fn RateLimitGuard::resume_entry(
   }
   self.active_resume_generation = None
   self.turn_lock.release()
-  match outcome {
-    Err(error) if @async.is_cancellation_error(error) => raise error
-    _ => ()
-  }
   if entry.generation != self.generation || self.stopped {
     return
   }
@@ -656,12 +652,15 @@ pub async fn RateLimitGuard::monitor(self : RateLimitGuard) -> Unit {
     if delay < 1 {
       delay = 1
     }
-    (self.sleep_ms)(delay) catch {
-      err if @async.is_cancellation_error(err) => raise err
-      err => {
+    let slept : Result[Unit, Error] = Ok((self.sleep_ms)(delay)) catch {
+      err => Err(err)
+    }
+    match slept {
+      Err(err) => {
         (self.trace)("rate-limit monitor sleep failed: \{err}")
         raise err
       }
+      Ok(_) => ()
     }
   }
 }

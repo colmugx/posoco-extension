@@ -565,12 +565,7 @@ async fn SubagentTools::spawn(
         match error {
           @posoco.AgentError::PipelineAborted(_) =>
             @kit.TerminalState::Cancelled
-          other =>
-            if @async.is_cancellation_error(other) {
-              @kit.TerminalState::Cancelled
-            } else {
-              @kit.TerminalState::Failed(reason=other.to_string())
-            }
+          other => @kit.TerminalState::Failed(reason=other.to_string())
         }
       None => @kit.TerminalState::Cancelled
     }

@@ -1741,14 +1741,3 @@ test "zen wire opts into stream usage accounting" {
     _ => fail("expected stream_options for usage accounting")
   }
 }
-
-///|
-test "zen_cancelled_transport_marks_cancellation" {
-  let err = zen_cancelled_transport("read_stream")
-  guard err is @posoco.ModelError::Transport(message) else {
-    fail("expected a Transport error")
-  }
-  assert_eq(
-    message, "opencode-zen transport failure (stage=read_stream, category=cancelled)",
-  )
-}
