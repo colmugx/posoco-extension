@@ -95,52 +95,52 @@ fn looks_binary(content : String) -> Bool {
 ///|
 /// Max characters per rendered match line before truncation (char-boundary
 /// safe), matching the read tool.
-const GREP_LINE_CHAR_CAP = 2000
+const GREP_LINE_CHAR_CAP = 1200
 
 ///|
 /// Max formatted bytes of the match body before the page is cut, matching
 /// the read tool.
-const GREP_BYTE_CAP = 100_000
+const GREP_BYTE_CAP = 40_000
 
 ///|
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("grep"),
-      description: "Search file contents for a literal string (not a regex) under a path. Returns matching lines grouped by file with line numbers. Hidden files and common ignore directories (.git, node_modules, _build, ...) are skipped, as are binary files. Optional arguments: 'path' is the directory to search (default '.'); 'glob' filters files (e.g. '*.mbt', matched against the basename); 'output_mode' is 'content' (default), 'files_with_matches' (list matching file paths), or 'count' (matches per file); 'case_insensitive' broadens matching; 'max_matches' caps returned entries (default 100). Truncated results end with a footer reporting the remainder.",
+      description: "Literal file search. Content mode returns file headers plus `line|text`; other modes return matching paths or counts. Skips hidden/ignored/binary files.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "Literal text to search for (not a regex)",
+              "Literal search text",
             ),
           }),
           "path": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Directory to search in (default: '.')"),
+            "description": Json::string("Search path; default '.'"),
           }),
           "glob": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "File filter; a name pattern like '*.mbt' matches any depth, a pattern with '/' matches the base-relative path",
+              "File glob, e.g. '*.mbt'",
             ),
           }),
           "output_mode": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "'content' (default), 'files_with_matches', or 'count'",
+              "content (default), files_with_matches, or count",
             ),
           }),
           "case_insensitive": Json::object({
             "type": Json::string("boolean"),
-            "description": Json::string("Match ignoring case (default false)"),
+            "description": Json::string("Ignore case; default false"),
           }),
           "max_matches": Json::object({
             "type": Json::string("integer"),
             "description": Json::string(
-              "Cap on returned entries: match lines (content mode) or files (other modes); default 100",
+              "Returned entry cap; default 100",
             ),
           }),
         }),
@@ -166,14 +166,14 @@ fn extract_grep_args(
         Some(String(s)) =>
           if s == "" {
             raise @posoco.RuntimeError::UnknownTool(
-              "grep: 'pattern' must be a non-empty string (an empty pattern would match every line)",
+              "grep: 'pattern' must be non-empty",
             )
           } else {
             s
           }
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "grep: 'pattern' argument must be a string",
+            "grep: 'pattern' must be a string",
           )
         None =>
           raise @posoco.RuntimeError::UnknownTool("grep: missing 'pattern'")
@@ -183,7 +183,7 @@ fn extract_grep_args(
         None => "."
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "grep: optional 'path' must be a string",
+            "grep: 'path' must be a string",
           )
       }
       let g = match obj.get("glob") {
@@ -191,7 +191,7 @@ fn extract_grep_args(
         None => ""
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "grep: optional 'glob' must be a string",
+            "grep: 'glob' must be a string",
           )
       }
       let mode = match obj.get("output_mode") {
@@ -203,12 +203,12 @@ fn extract_grep_args(
             "count" => Count
             other =>
               raise @posoco.RuntimeError::UnknownTool(
-                "grep: 'output_mode' must be one of 'content', 'files_with_matches', 'count' (got '\{other}')",
+                "grep: invalid output_mode '\{other}'",
               )
           }
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "grep: optional 'output_mode' must be a string",
+            "grep: 'output_mode' must be a string",
           )
       }
       let ci = match obj.get("case_insensitive") {
@@ -217,7 +217,7 @@ fn extract_grep_args(
         Some(False) => false
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "grep: optional 'case_insensitive' must be a boolean",
+            "grep: 'case_insensitive' must be boolean",
           )
       }
       let max = match obj.get("max_matches") {
@@ -226,14 +226,14 @@ fn extract_grep_args(
           let v = n.to_int()
           if v <= 0 {
             raise @posoco.RuntimeError::UnknownTool(
-              "grep: 'max_matches' must be greater than zero",
+              "grep: 'max_matches' must be > 0",
             )
           }
           v
         }
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "grep: optional 'max_matches' must be an integer",
+            "grep: 'max_matches' must be an integer",
           )
       }
       (p, b, g, mode, ci, max)
@@ -243,16 +243,14 @@ fn extract_grep_args(
 }
 
 ///|
-/// Render one grouped match line: two-space indent, `L<n>: ` prefix, long
-/// content truncated at the char cap with a marker (matching read).
+/// Render one compact grouped match line as `line|text`.
 fn render_match_line(m : GrepMatch) -> String {
   let content = if m.content.length() > GREP_LINE_CHAR_CAP {
-    @devkit.truncate_chars(m.content, GREP_LINE_CHAR_CAP) +
-    " … (line truncated)"
+    @devkit.truncate_chars(m.content, GREP_LINE_CHAR_CAP) + "…[cut]"
   } else {
     m.content
   }
-  "  L\{m.line}: \{content}"
+  "\{m.line}|\{content}"
 }
 
 ///|
@@ -382,17 +380,16 @@ fn grep_result_text(
   max_matches : Int,
 ) -> (String, Int, Bool) {
   if matches.length() == 0 {
-    return ("No matches found for: " + pattern, 0, false)
+    return ("(no matches)", 0, false)
   }
   match mode {
     Content => {
       let (body, shown, byte_cut) = render_content_body(matches, max_matches)
       let total = matches.length()
-      let files = distinct_paths(matches).length()
       let truncated = byte_cut || shown < total
-      let mut text = "Found \{total} \{match_noun(total)} in \{files} \{files_noun(files)}:\n\{body}"
+      let mut text = body.trim_end(chars="\n").to_owned()
       if truncated {
-        text = "\{text}… \{total - shown} more matches; narrow the search or raise max_matches\n"
+        text = "\{text}\n… +\{total - shown} matches"
       }
       (text, total, truncated)
     }
@@ -405,9 +402,9 @@ fn grep_result_text(
         builder.write_string(paths[i])
         builder.write_char('\n')
       }
-      let mut text = "Found \{total} \{files_noun(total)}:\n\{builder.to_string()}"
+      let mut text = builder.to_string().trim_end(chars="\n").to_owned()
       if shown < total {
-        text = "\{text}… \{total - shown} more files; narrow the search or raise max_matches\n"
+        text = "\{text}\n… +\{total - shown} files"
       }
       (text, total, shown < total)
     }
@@ -421,9 +418,9 @@ fn grep_result_text(
         builder.write_string("\{path}:\{n}")
         builder.write_char('\n')
       }
-      let mut text = "Found \{total} \{files_noun(total)}:\n\{builder.to_string()}"
+      let mut text = builder.to_string().trim_end(chars="\n").to_owned()
       if shown < total {
-        text = "\{text}… \{total - shown} more files; narrow the search or raise max_matches\n"
+        text = "\{text}\n… +\{total - shown} files"
       }
       (text, total, shown < total)
     }
