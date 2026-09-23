@@ -104,7 +104,7 @@ test "astgrep_build_args_full" {
     Some("*.ts"),
   )
   assert_eq(args, [
-    "run", "-p", "fn $NAME($$ARGS) { $$BODY }", "--json=stream", "-l", "ts",
+    "run", "-p", "fn $NAME($$$ARGS) { $$$BODY }", "--json=stream", "-l", "ts",
     "--globs", "*.ts", "src",
   ])
 }
@@ -112,7 +112,7 @@ test "astgrep_build_args_full" {
 ///|
 test "astgrep_build_args_minimal" {
   assert_eq(build_astgrep_args("foo($$$A)", None, None, None), [
-    "run", "-p", "foo($$A)", "--json=stream",
+    "run", "-p", "foo($$$A)", "--json=stream",
   ])
 }
 
@@ -159,7 +159,7 @@ async test "astgrep_zero_match_exit_zero_is_success" {
     other => fail("expected Success for zero matches, got " + other.to_string())
   }
   // Default base "." is ast-grep's own default, so no positional path.
-  assert_eq(fake.received[0], ["run", "-p", "foo($$A)", "--json=stream"])
+  assert_eq(fake.received[0], ["run", "-p", "foo($$$A)", "--json=stream"])
 }
 
 ///|
@@ -313,7 +313,7 @@ async test "astgrep_anchored_base_resolves_into_positional_path" {
       fail("expected anchored astgrep to succeed, got " + other.to_string())
   }
   assert_eq(fake.received[0], [
-    "run", "-p", "foo($$A)", "--json=stream", "/tmp/ws/src",
+    "run", "-p", "foo($$$A)", "--json=stream", "/tmp/ws/src",
   ])
 }
 
