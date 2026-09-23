@@ -95,7 +95,7 @@ async test "extract_command_wrong_type_raises_precise_error" {
 }
 
 ///|
-async test "empty_command_has_arguments_stage" {
+async test "empty_command_is_compact_typed_failure" {
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("tc_empty"),
     name: @posoco.ToolName::unchecked("bash"),
@@ -106,10 +106,39 @@ async test "empty_command_has_arguments_stage" {
   }
   match result {
     Err(@posoco.RuntimeError::InvocationFailed(message)) => {
-      assert_true(message.contains("bash"))
-      assert_true(message.contains("stage=arguments"))
-      assert_true(message.contains("empty_command"))
+      assert_eq(message, "bash: empty cmd")
     }
     _ => fail("expected empty command to fail before process execution")
   }
+}
+
+
+///|
+test "bash_model_output_leaves_short_success_unchanged" {
+  assert_eq(bash_model_output("ok\n", 0), "ok\n")
+}
+
+///|
+test "bash_model_output_reports_nonzero_exit_once" {
+  assert_eq(bash_model_output("failed", 7), "exit=7\nfailed")
+  assert_eq(bash_model_output("", 2), "exit=2")
+}
+
+///|
+test "bash_model_output_caps_long_output_and_keeps_head_and_tail" {
+  let raw = "HEAD-" + "x".repeat(40_000) + "-TAIL"
+  let out = bash_model_output(raw, 0)
+  assert_eq(out.length(), BASH_OUTPUT_CHAR_CAP)
+  assert_true(out.has_prefix("HEAD-"))
+  assert_true(out.contains("…[cut]…"))
+  assert_true(out.has_suffix("-TAIL"))
+}
+
+///|
+test "bash_model_output_counts_unicode_as_characters" {
+  let raw = "头" + "界".repeat(40_000) + "尾"
+  let out = bash_model_output(raw, 0)
+  assert_eq(out.length(), BASH_OUTPUT_CHAR_CAP)
+  assert_true(out.has_prefix("头"))
+  assert_true(out.has_suffix("尾"))
 }
