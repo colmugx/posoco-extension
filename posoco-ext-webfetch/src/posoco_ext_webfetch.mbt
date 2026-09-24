@@ -16,7 +16,7 @@ fn extract_fetch_args(
         Some(String(u)) => u
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "webfetch: 'url' argument must be a string",
+            "webfetch: 'url' must be a string",
           )
         None =>
           raise @posoco.RuntimeError::UnknownTool("webfetch: missing 'url'")
@@ -26,7 +26,7 @@ fn extract_fetch_args(
           let v = n.to_int()
           if v < 0 {
             raise @posoco.RuntimeError::UnknownTool(
-              "webfetch: 'offset' must be a non-negative integer",
+              "webfetch: 'offset' must be >= 0",
             )
           }
           Some(v)
@@ -34,12 +34,12 @@ fn extract_fetch_args(
         Some(Null) | None => None
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "webfetch: optional 'offset' must be an integer",
+            "webfetch: 'offset' must be an integer",
           )
       }
       if !url_length_ok(url) {
         raise @posoco.RuntimeError::UnknownTool(
-          "webfetch: 'url' exceeds the 2000 character limit",
+          "webfetch: 'url' too long",
         )
       }
       guard parse_url(url) is Some(parsed) else {
@@ -51,7 +51,7 @@ fn extract_fetch_args(
     }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "webfetch: arguments must be a JSON object",
+        "webfetch: arguments must be an object",
       )
   }
 }
@@ -234,7 +234,7 @@ fn serve_cached(
       )
     Some(slice) =>
       @posoco.ToolOutcome::Success(
-        content=format_page(doc.title, doc.url_final, doc.content_type, slice),
+        content=format_page(doc.title, doc.url_final, slice),
         structured=Some(
           structured_json(
             url_requested=req_url,
@@ -261,18 +261,18 @@ pub impl @posoco.ToolProvider for WebFetchTools with fn list_tools(
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("webfetch"),
-      description: "Fetch content from an http/https URL and return it as LLM-optimized markdown with a Title/URL/Content-Type header block. HTML pages are converted to markdown (links absolutized, boilerplate dropped); text, markdown, and JSON responses pass through unchanged. Optional `offset` continues a truncated result at the given character offset (see the footer of a truncated response). Cross-host redirects are not followed: the result names the redirect target to re-fetch. Private and local addresses are blocked. Caps: 5 MB fetch, 50000 characters per call.",
+      description: "Fetch http/https content as compact markdown. HTML is converted; text/markdown/JSON pass through. Use `offset` from a truncated result's `next=` footer. Cross-host redirects require an explicit follow-up fetch.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "url": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Absolute http/https URL to fetch"),
+            "description": Json::string("Absolute http/https URL"),
           }),
           "offset": Json::object({
             "type": Json::string("integer"),
             "description": Json::string(
-              "Character offset to continue a truncated result from (see the footer of a truncated response)",
+              "Continuation offset from next= footer",
             ),
           }),
         }),
@@ -374,7 +374,7 @@ pub impl @posoco.ToolProvider for WebFetchTools with fn execute(
               )
             Some(slice) =>
               return @posoco.ToolOutcome::Success(
-                content=format_page(title, final_url, reply.content_type, slice),
+                content=format_page(title, final_url, slice),
                 structured=Some(
                   structured_json(
                     url_requested=req_url,
