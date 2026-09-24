@@ -391,3 +391,11 @@ test "edit_strip_line_numbers_block_accepts_compact_read_block" {
     Some("one\ntwo\nthree"),
   )
 }
+
+
+///|
+test "edit_strip_line_number_prefix_rejects_non_prefix_matches" {
+  assert_eq(strip_line_number_prefix("x1|alpha"), None)
+  assert_eq(strip_line_number_prefix("L1:alpha"), None)
+  assert_eq(strip_line_number_prefix("|alpha"), None)
+}
