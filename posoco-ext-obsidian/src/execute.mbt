@@ -33,16 +33,35 @@ fn arg_int(args : Json, key : String) -> Int? {
 }
 
 ///|
+const OBS_MODEL_OUTPUT_CHARS = 40_000
+
+///|
+const OBS_MODEL_ERROR_CHARS = 4_000
+
+///|
+fn obs_model_text(text : String, limit : Int) -> String {
+  let clipped = @devkit.truncate_chars(text, limit)
+  if clipped == text {
+    clipped
+  } else {
+    clipped + "\n…[cut]"
+  }
+}
+
+///|
 fn ok(content~ : String, summary~ : String) -> @posoco.ToolOutcome {
   @posoco.ToolOutcome::Success(
-    content~,
+    content=obs_model_text(content, OBS_MODEL_OUTPUT_CHARS),
     structured=Some(Json::object({ "summary": Json::string(summary) })),
   )
 }
 
 ///|
 fn tool_error(content : String) -> @posoco.ToolOutcome {
-  @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
+  @posoco.ToolOutcome::ToolReportedError(
+    content=obs_model_text(content, OBS_MODEL_ERROR_CHARS),
+    structured=None,
+  )
 }
 
 ///|
@@ -100,11 +119,11 @@ async fn ObsidianTools::exec_search(
   }
   let hits = parse_search_context_json(result.output)
   if hits.is_empty() {
-    return ok(content="No matches.", summary="0 matches")
+    return ok(content="(no matches)", summary="0 matches")
   }
   let sb = StringBuilder()
   for hit in hits {
-    sb.write_string("\{hit.file}:\{hit.line}: \{hit.text}\n")
+    sb.write_string("\{hit.file}:\{hit.line}|\{hit.text}\n")
   }
   ok(content=sb.to_string(), summary="\{hits.length()} matches")
 }
@@ -141,11 +160,11 @@ async fn ObsidianTools::exec_read(
   }
   let limit = match arg_int(call.arguments, "limit") {
     Some(l) if l > 0 => l
-    _ => 1000
+    _ => 400
   }
   if offset > lines.length() {
     return ok(
-      content="No lines at offset \{offset} (note has \{lines.length()} lines).",
+      content="offset \{offset} > \{lines.length()} lines",
       summary="empty page",
     )
   }
@@ -671,7 +690,7 @@ async fn ObsidianTools::exec_patch_section(
         None => "?"
       }
       let summary = "\{operation} section \"\{target}\" in \{path}"
-      ok(content="\{write.output}previous size: \{prev_bytes} bytes", summary~)
+      ok(content=write.output, summary~)
     }
   }
 }
