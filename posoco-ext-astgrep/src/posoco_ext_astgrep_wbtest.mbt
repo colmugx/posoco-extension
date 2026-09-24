@@ -337,12 +337,15 @@ test "astgrep_max_matches_must_be_positive_integer" {
 ///|
 test "astgrep_parse_match_uses_json_shape_matching" {
   let line = "{\"file\":\"src/a.ts\",\"text\":\"foo()\",\"range\":{\"start\":{\"line\":4,\"column\":2},\"end\":{\"line\":4,\"column\":7}},\"extra\":true}"
-  assert_eq(
-    astgrep_parse_match(line),
-    Some({ file: "src/a.ts", line: 5, text: "foo()" }),
-  )
-  assert_eq(
-    astgrep_parse_match("{\"file\":\"src/a.ts\",\"text\":\"foo()\"}"),
-    None,
+  match astgrep_parse_match(line) {
+    Some({ file, line, text }) => {
+      assert_eq(file, "src/a.ts")
+      assert_eq(line, 5)
+      assert_eq(text, "foo()")
+    }
+    None => fail("expected JSON shape to parse")
+  }
+  assert_true(
+    astgrep_parse_match("{\"file\":\"src/a.ts\",\"text\":\"foo()\"}") is None,
   )
 }
