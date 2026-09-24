@@ -22,26 +22,30 @@ fn ask_question_schema() -> Json {
     "properties": Json::object({
       "question": Json::object({
         "type": Json::string("string"),
-        "description": Json::string("Focused question to present to the user"),
+        "description": Json::string("Question for the user"),
       }),
       "type": Json::object({
         "type": Json::string("string"),
-        "description": Json::string("Prompt type: input, confirm, or select"),
+        "enum": Json::array([
+          Json::string("input"),
+          Json::string("confirm"),
+          Json::string("select"),
+        ]),
       }),
       "options": Json::object({
         "type": Json::string("array"),
         "items": Json::object({ "type": Json::string("string") }),
-        "description": Json::string("Choices for a select prompt"),
+        "description": Json::string("Select choices"),
       }),
       "default": Json::object({
         "type": Json::string("string"),
         "description": Json::string(
-          "Optional pre-filled value for input prompts",
+          "Pre-filled input value",
         ),
       }),
       "default_index": Json::object({
         "type": Json::string("integer"),
-        "description": Json::string("Optional zero-based default choice index"),
+        "description": Json::string("Zero-based default choice"),
       }),
     }),
     "required": Json::array([Json::string("question")]),
@@ -76,7 +80,7 @@ fn options_field(
           Json::String(option) => options.push(option)
           _ =>
             raise @posoco.RuntimeError::UnknownTool(
-              "ask_question: every option must be a string",
+              "ask_question: option must be a string",
             )
         }
       }
@@ -84,7 +88,7 @@ fn options_field(
     }
     Some(_) =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: 'options' must be an array of strings",
+        "ask_question: 'options' must be string[]",
       )
   }
 }
@@ -118,18 +122,18 @@ fn parse_ask_spec(arguments : Json) -> AskSpec raise @posoco.RuntimeError {
     Json::Object(fields) => fields
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: arguments must be a JSON object",
+        "ask_question: arguments must be an object",
       )
   }
   let question = match string_field(fields, "question") {
     Some(value) if value.trim() != "" => value
     Some(_) =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: 'question' must not be empty",
+        "ask_question: empty 'question'",
       )
     None =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: missing 'question' argument",
+        "ask_question: missing 'question'",
       )
   }
   let options = options_field(fields)
@@ -142,20 +146,20 @@ fn parse_ask_spec(arguments : Json) -> AskSpec raise @posoco.RuntimeError {
     prompt_type != "confirm" &&
     prompt_type != "select" {
     raise @posoco.RuntimeError::UnknownTool(
-      "ask_question: 'type' must be input, confirm, or select",
+      "ask_question: invalid 'type'",
     )
   }
   let default_index = default_index_field(fields)
   if prompt_type == "select" {
     if options.is_empty() {
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: select prompts require at least one option",
+        "ask_question: select requires options",
       )
     }
     match default_index {
       Some(index) if index < 0 || index >= options.length() =>
         raise @posoco.RuntimeError::UnknownTool(
-          "ask_question: 'default_index' is out of bounds",
+          "ask_question: default_index out of bounds",
         )
       _ => ()
     }
@@ -224,7 +228,7 @@ fn response_outcome(
     @posoco.UiResponse::Selected(index) => {
       if index < 0 || index >= spec.options.length() {
         raise @posoco.RuntimeError::InvocationFailed(
-          "ask_question: UI returned an out-of-bounds selection",
+          "ask_question: UI selection out of bounds",
         )
       }
       let value = spec.options[index]
@@ -241,7 +245,7 @@ fn response_outcome(
     }
     @posoco.UiResponse::Cancelled =>
       @posoco.ToolOutcome::ToolReportedError(
-        content="User cancelled the question",
+        content="cancelled",
         structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
       )
   }
@@ -254,7 +258,7 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("ask_question"),
-      description: "Ask the user one focused question and wait for their response. Supports free text, confirmation, and single-choice prompts.",
+      description: "Ask one user question only when a decision or missing fact blocks progress; do not ask what tools can discover. Supports input, confirm, and select.",
       input_schema: ask_question_schema(),
       owner: @posoco.OwnerId::unchecked("posoco_ext_askquestion"),
       policy: @posoco.ExecutionPolicy::Exclusive,
@@ -279,28 +283,28 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
     Some(ui) => ui
     None =>
       return @posoco.ToolOutcome::ToolReportedError(
-        content="Interactive UI is unavailable: the composition contributes no UiPort",
+        content="ui unavailable",
         structured=None,
       )
   }
   let response = ui.request(spec.request()) catch {
     @posoco.UiError::Unsupported(detail~) =>
       return @posoco.ToolOutcome::ToolReportedError(
-        content="Interactive UI is unavailable: " + detail,
+        content="ui unavailable: " + detail,
         structured=None,
       )
     @posoco.UiError::Cancelled =>
       return @posoco.ToolOutcome::ToolReportedError(
-        content="User cancelled the question",
+        content="cancelled",
         structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
       )
     @posoco.UiError::InvalidRequest(detail~) =>
       raise @posoco.RuntimeError::InvocationFailed(
-        "ask_question: invalid UI request: " + detail,
+        "ask_question: invalid UI: " + detail,
       )
     @posoco.UiError::IoFailure(detail~) =>
       raise @posoco.RuntimeError::InvocationFailed(
-        "ask_question: UI failure: " + detail,
+        "ask_question: UI: " + detail,
       )
   }
   response_outcome(spec, response)
@@ -310,11 +314,7 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
 pub impl @posoco.SystemPromptContributor for AskQuestionTools with fn system_prompt(
   _self : AskQuestionTools,
 ) -> String {
-  let prompt =
-    #| ## Ask Question to User
-    #| "Use ask_question only when a user decision or missing fact is required to proceed. Ask one focused question at a time. Prefer select with concise options when the available choices are known; otherwise use input. Do not ask for information that can be discovered with available tools."
-
-  prompt
+  "Use ask_question only when a user decision or missing fact blocks progress; do not ask for discoverable information."
 }
 
 ///|
@@ -333,7 +333,6 @@ pub impl @posoco.Extension for AskQuestionTools with fn manifest(
     requires=[@posoco.Capability::Ui],
     lifecycle=[self],
     tools=[self],
-    prompt_contributors=[self],
   )
 }
 
