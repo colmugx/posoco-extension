@@ -134,7 +134,7 @@ async test "read_happy_path_records_freshness" {
   ])
   let (is_err, content, summary) = outcome_parts(outcome)
   assert_false(is_err)
-  inspect(content, content="L1: # Top\nL2: \nL3: body line\n")
+  inspect(content, content="1|# Top\n2|\n3|body line\n")
   debug_inspect(
     summary,
     content=(
@@ -163,7 +163,7 @@ async test "read_pagination_footer" {
   assert_false(is_err)
   inspect(
     content,
-    content="L2: b\nL3: c\n…[2 more lines; re-read with offset=4]",
+    content="2|b\n3|c\n… +2 lines; next=4",
   )
 }
 
@@ -226,7 +226,7 @@ async test "search_case_flag_and_no_matches" {
   ])
   let (is_err, content, summary) = outcome_parts(outcome)
   assert_false(is_err)
-  inspect(content, content="No matches.")
+  inspect(content, content="(no matches)")
   debug_inspect(
     summary,
     content=(
@@ -687,5 +687,41 @@ test "system_prompt_is_byte_stable" {
   let a = make_tools().system_prompt()
   let b = make_tools().system_prompt()
   assert_eq(a, b)
-  assert_true(a.contains("obsidian_outline"))
+  assert_true(a.contains("outline"))
+  assert_true(a.length() < 220)
+}
+
+
+///|
+test "obsidian_model_output_is_bounded" {
+  let raw = "x".repeat(OBS_MODEL_OUTPUT_CHARS + 500)
+  let out = obs_model_text(raw, OBS_MODEL_OUTPUT_CHARS)
+  assert_true(out.has_suffix("…[cut]"))
+  assert_true(out.length() < raw.length())
+}
+
+///|
+test "obsidian_tool_errors_use_smaller_budget" {
+  let raw = "e".repeat(OBS_MODEL_ERROR_CHARS + 500)
+  match tool_error(raw) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+      assert_true(content.has_suffix("…[cut]"))
+      assert_true(content.length() < raw.length())
+    }
+    _ => fail("expected bounded tool error")
+  }
+}
+
+///|
+test "obsidian_read_tool_definition_is_compact" {
+  let defs = make_tools().list_tools()
+  let mut found = false
+  for def in defs {
+    if def.name.to_string() == "obsidian_read_note" {
+      found = true
+      assert_true(def.description.contains("line|text"))
+      assert_true(def.description.length() < 150)
+    }
+  }
+  assert_true(found)
 }
