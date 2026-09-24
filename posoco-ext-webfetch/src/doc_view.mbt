@@ -55,14 +55,17 @@ fn slice_chars(content : String, offset : Int, max_chars : Int) -> PageSlice? {
 fn format_page(
   title : String,
   url : String,
-  content_type : String,
   slice : PageSlice,
 ) -> String {
-  let head = "Title: \{title}\nURL: \{url}\nContent-Type: \{content_type}\n\n\{slice.body}"
-  if slice.truncated {
-    "\{head}\n\n… [showing characters \{slice.offset}–\{slice.end} of \{slice.total}; call webfetch with offset=\{slice.end} to continue]"
+  let body = if slice.offset == 0 {
+    "# \{title}\n\{url}\n\n\{slice.body}"
   } else {
-    head
+    slice.body
+  }
+  if slice.truncated {
+    "\{body}\n\n… next=\{slice.end}/\{slice.total}"
+  } else {
+    body
   }
 }
 
@@ -70,7 +73,7 @@ fn format_page(
 /// Cross-host redirect stop. This is a success outcome, not an error: the
 /// model decides whether to trust the target and fetch it explicitly.
 fn format_redirect(original : String, target : String) -> String {
-  "Redirect: \{original} redirects to \{target} (different host; not followed automatically for safety). If you trust this target, call webfetch with url=\{target}."
+  "redirect blocked (cross-host): \{target}; fetch explicitly if trusted"
 }
 
 ///|
@@ -105,20 +108,20 @@ fn http_advice(status : Int) -> String {
 fn format_error(kind : ErrKind) -> String {
   match kind {
     HttpError(status~, reason~, url~) =>
-      "webfetch: HTTP \{status} \{reason} for '\{url}' — \{http_advice(status)}"
+      "webfetch: HTTP \{status} \{reason}: \{url}; \{http_advice(status)}"
     TooLarge(bytes~, url~) =>
-      "webfetch: response too large (\{bytes} bytes exceeds the 5 MB cap) for '\{url}'"
+      "webfetch: too large (\{bytes} bytes): \{url}"
     TimedOut(ms~, url~) =>
-      "webfetch: request to '\{url}' timed out after \{ms}ms — the site may be slow or blocking automated clients; retrying or using a different source may help"
+      "webfetch: timeout \{ms}ms: \{url}"
     UnsupportedType(ct~, url~) =>
-      "webfetch: unsupported content-type '\{ct}' for '\{url}' — this tool returns text, markdown, and JSON only"
+      "webfetch: unsupported type \{ct}: \{url}"
     HostBlocked(host~, reason~) =>
-      "webfetch: host '\{host}' is not allowed (\{reason}; private, local, or blocked address)"
+      "webfetch: blocked host \{host} (\{reason})"
     TooManyRedirects(hops~, url~) =>
-      "webfetch: too many redirects (\{hops}) following '\{url}'"
-    Transport(msg~, url~) => "webfetch: request to '\{url}' failed: \{msg}"
+      "webfetch: redirects>\{hops}: \{url}"
+    Transport(msg~, url~) => "webfetch: \{url}: \{msg}"
     OffsetPastEnd(offset~, total~, url~) =>
-      "webfetch: offset \{offset} is past the end of the content (total \{total} characters) for '\{url}'"
+      "webfetch: offset \{offset} > total \{total}: \{url}"
   }
 }
 
