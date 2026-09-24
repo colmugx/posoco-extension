@@ -1,23 +1,19 @@
 ///|
-fn skill_name_enum(catalog : SkillCatalog) -> Json {
-  let values : Array[Json] = []
-  for skill in catalog.skills {
-    values.push(Json::string(skill.name))
-  }
-  Json::array(values)
-}
-
-///|
 const SEMANTIC_SKILL_MIN_PROBABILITY = 0.6
 
 ///|
 const SKILL_SEARCH_TOOL_NAME = "skill_search"
 
 ///|
+/// Bound model-visible skill descriptions; internal matching keeps the full
+/// descriptor text.
+const SKILL_DESCRIPTION_PREVIEW_CHARS = 160
+
+///|
 fn Skills::search_tool_def(self : Skills) -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked(SKILL_SEARCH_TOOL_NAME),
-    description: "Search discovered Agent Skills by a natural-language task or capability. Returns relevant skill names and descriptions only; it never activates a skill. Use an exact returned name with " +
+    description: "Find relevant skills by task/capability. Returns names plus short descriptions; activate an exact returned name with " +
     self.config.activate_tool_name +
     ".",
     input_schema: Json::object({
@@ -25,7 +21,7 @@ fn Skills::search_tool_def(self : Skills) -> @posoco.ToolDef {
       "properties": Json::object({
         "query": Json::object({
           "type": Json::string("string"),
-          "description": Json::string("Task or capability to find a skill for"),
+          "description": Json::string("Task or capability"),
         }),
       }),
       "required": Json::array([Json::string("query")]),
@@ -62,7 +58,9 @@ fn skill_matches_query(skill : SkillDescriptor, tokens : Array[String]) -> Bool 
 fn skill_search_json(skill : SkillDescriptor) -> Json {
   Json::object({
     "name": Json::string(skill.name),
-    "description": Json::string(skill.description),
+    "description": Json::string(
+      unicode_scalar_preview(skill.description, SKILL_DESCRIPTION_PREVIEW_CHARS),
+    ),
   })
 }
 
@@ -75,12 +73,14 @@ fn skill_search_success(
   let lines : Array[String] = []
   for skill in skills {
     values.push(skill_search_json(skill))
-    lines.push("- \{skill.name}: \{skill.description}")
+    lines.push(
+      "\{skill.name}: \{unicode_scalar_preview(skill.description, SKILL_DESCRIPTION_PREVIEW_CHARS)}",
+    )
   }
   let content = if skills.is_empty() {
-    "No discovered skill matches '\{query}'."
+    "(no skills)"
   } else {
-    "Relevant skills for '\{query}':\n" + lines.join("\n")
+    lines.join("\n")
   }
   @posoco.ToolOutcome::Success(
     content~,
@@ -222,14 +222,13 @@ async fn Skills::search(
 fn Skills::activate_tool_def(self : Skills) -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked(self.config.activate_tool_name),
-    description: "Activate one discovered Agent Skill. Returns the full SKILL.md instructions on demand and lists bundled resources without loading them. Use the exact skill name from the available-skills catalog.",
+    description: "Load one skill's instructions and list bundled resources. Use an exact discovered skill name.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "name": Json::object({
           "type": Json::string("string"),
-          "description": Json::string("Exact discovered skill name"),
-          "enum": skill_name_enum(self.catalog),
+          "description": Json::string("Exact skill name"),
         }),
       }),
       "required": Json::array([Json::string("name")]),
@@ -245,19 +244,18 @@ fn Skills::activate_tool_def(self : Skills) -> @posoco.ToolDef {
 fn Skills::read_resource_tool_def(self : Skills) -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked(self.config.read_resource_tool_name),
-    description: "Read one UTF-8 text resource belonging to a discovered Agent Skill. Use this after that skill's activated instructions identify a resource that is actually needed. The path is resolved inside the discovered skill directory and cannot escape it.",
+    description: "Read one UTF-8 resource named by an activated skill. Path stays inside that skill directory.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "name": Json::object({
           "type": Json::string("string"),
-          "description": Json::string("Exact discovered skill name"),
-          "enum": skill_name_enum(self.catalog),
+          "description": Json::string("Exact skill name"),
         }),
         "path": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Resource path relative to the skill directory",
+            "Path relative to skill directory",
           ),
         }),
       }),
@@ -297,16 +295,16 @@ fn require_string_arg(
         Some(String(value)) => value
         Some(_) =>
           raise @posoco.RuntimeError::InvocationFailed(
-            tool + ": '" + key + "' argument must be a string",
+            tool + ": '" + key + "' must be a string",
           )
         None =>
           raise @posoco.RuntimeError::InvocationFailed(
-            tool + ": missing '" + key + "' argument",
+            tool + ": missing '" + key + "'",
           )
       }
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
-        tool + ": arguments must be a JSON object",
+        tool + ": arguments must be an object",
       )
   }
 }
@@ -321,7 +319,7 @@ pub impl @posoco.ToolProvider for Skills with fn execute(
     let query = require_string_arg(name, call.arguments, "query")
     if query.trim().is_empty() || query.length() > 4096 {
       raise @posoco.RuntimeError::InvocationFailed(
-        name + ": 'query' must be non-empty and at most 4096 characters",
+        name + ": 'query' must be 1..4096 chars",
       )
     }
     return self.search(query)
@@ -330,7 +328,7 @@ pub impl @posoco.ToolProvider for Skills with fn execute(
     let skill_name = require_string_arg(name, call.arguments, "name")
     if !runtime_skill_name_is_safe(skill_name) {
       raise @posoco.RuntimeError::InvocationFailed(
-        name + ": 'name' exceeds runtime safety constraints",
+        name + ": invalid 'name'",
       )
     }
     return self.activate(skill_name)
