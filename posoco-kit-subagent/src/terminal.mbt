@@ -18,6 +18,21 @@ pub extend TerminalState with Eq::{not_equal, equal}
 pub extend TerminalState with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+/// Bound the child's model-visible final answer. The terminal footer is added
+/// after this cap so session/usage metadata always survives intact.
+const SUBAGENT_RESULT_CHARS = 32_000
+
+///|
+fn bounded_result_text(text : String) -> (String, Bool) {
+  let clipped = @devkit.truncate_chars(text, SUBAGENT_RESULT_CHARS)
+  if clipped == text {
+    (clipped, false)
+  } else {
+    (clipped + "\n…[cut]", true)
+  }
+}
+
+///|
 /// Map a child run's terminal state to the `agent` tool result (design §2.1):
 /// `Completed` yields `Success`; every other state yields
 /// `ToolReportedError` whose text opens with a model-readable terminal
@@ -37,6 +52,7 @@ pub fn terminal_outcome(
   let footer = "child_session: \{child_session}\nusage: turns=\{turns} in=\{input_tokens} out=\{output_tokens}"
   match state {
     Completed => {
+      let (result_text, truncated) = bounded_result_text(result_text)
       let structured : Json = {
         "child_session": Json::string(child_session),
         "turns": Json::number(turns.to_double()),
@@ -44,6 +60,7 @@ pub fn terminal_outcome(
         "output_tokens": Json::number(output_tokens.to_double()),
         "state": Json::string("completed"),
         "kind": Json::string(kind),
+        "truncated": Json::boolean(truncated),
       }
       @posoco.ToolOutcome::Success(
         content=result_text + "\n" + footer,
