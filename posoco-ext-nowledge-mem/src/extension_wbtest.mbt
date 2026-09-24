@@ -306,8 +306,8 @@ async test "e2e: the system prompt carries guidance only, never data" {
     assert_true(model.received_messages.length() > 0)
     let messages = model.received_messages[0]
     let prompt = first_system_text(messages)
-    assert_true(prompt.contains("## Nowledge Mem Guidance"))
-    assert_true(prompt.contains("search"))
+    assert_true(prompt.contains("## Nowledge Mem"))
+    assert_true(prompt.contains("memory_search"))
     assert_false(prompt.contains("## Nowledge Mem Context Bundle"))
     assert_false(prompt.contains("# Owner Rules"))
     // The one MCP call is the session's inbound working-memory read, and with
@@ -599,4 +599,14 @@ test "truncate_context: oversized payloads carry the tail note" {
 test "truncate_context: payloads at the cap pass through" {
   let exact = String::from_array(Array::make(20000, 'a'))
   inspect(truncate_context(exact, "cetas") == exact, content="true")
+}
+
+
+///|
+test "startup_guidance_is_compact" {
+  let text = startup_guidance("cetas")
+  assert_true(text.contains("memory_search"))
+  assert_true(text.contains("thread_search"))
+  assert_true(text.contains("source_app=cetas"))
+  assert_true(text.length() < 420)
 }
