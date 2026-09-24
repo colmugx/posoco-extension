@@ -1194,10 +1194,10 @@ pub async fn MCPToolBridge::refresh_tools(
 /// cancelled — host cancellation outranks draining, so that identity
 /// propagates untouched instead of being swallowed into a normal return
 /// (`on_shutdown` shields the drain from that with `protect_from_cancel`).
-/// A `Stopped(reason)` value means the loop ended abnormally on its own:
-/// its original error was already re-raised into the host group's
-/// fail-fast when the loop task terminated, so teardown proceeds with
-/// nothing retried and nothing masked. Async since mcp 0.15: the
+/// `Cancelled` means the host cancelled the loop; `Failed(error)` means
+/// it ended abnormally on its own. In the failed case the original error was
+/// already re-raised into the host group's fail-fast when the loop task
+/// terminated, so teardown proceeds with nothing retried and nothing masked. Async since mcp 0.15: the
 /// underlying client close performs I/O and cannot block the caller.
 pub async fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
   for conn in self.connections {
@@ -1210,7 +1210,8 @@ pub async fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
         actor.close()
         match actor.join() {
           Graceful => ()
-          Stopped(_cause) => ()
+          Cancelled => ()
+          Failed(_cause) => ()
         }
       }
       None => ()

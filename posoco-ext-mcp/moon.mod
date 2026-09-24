@@ -1,13 +1,13 @@
 name = "colmugx/posoco-ext-mcp"
 
-version = "0.5.0"
+version = "0.5.1"
 
 import {
   "colmugx/posoco@0.18.5",
   "colmugx/posoco-devkit@0.4.0",
   "moonbitlang/async@0.22.3",
   "colmugx/mcp@0.17.5",
-  "colmugx/fuwaroid@0.1.1",
+  "colmugx/fuwaroid@0.3.1",
 }
 
 readme = "README.mbt.md"
