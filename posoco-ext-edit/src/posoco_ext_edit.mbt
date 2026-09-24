@@ -54,17 +54,17 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("edit"),
-      description: "Edit a file by exact string replacement: `old_text` is replaced with `new_text`. `old_text` must match the file exactly and, unless `replace_all` is true, must be unique in the file — an ambiguous match is rejected listing the matching line numbers. Line-number prefixes (`L12: `) copied from read output are stripped automatically. The file must have been read in this session and must not have changed since.",
+      description: "Exact text replacement in a fresh-read file. `old_text` must be unique unless `replace_all` is true; copied read line prefixes are accepted.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "path": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Path to the file to edit"),
+            "description": Json::string("File path"),
           }),
           "old_text": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Exact text to find in the file"),
+            "description": Json::string("Exact text to replace"),
           }),
           "new_text": Json::object({
             "type": Json::string("string"),
@@ -73,7 +73,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           "replace_all": Json::object({
             "type": Json::string("boolean"),
             "description": Json::string(
-              "Replace every occurrence (default: false; a non-unique match without this flag is an error)",
+              "Replace all matches; default false",
             ),
           }),
         }),
@@ -101,7 +101,7 @@ fn extract_edit_args(
         Some(String(s)) => s
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "edit: 'path' argument must be a string",
+            "edit: 'path' must be a string",
           )
         None => raise @posoco.RuntimeError::UnknownTool("edit: missing 'path'")
       }
@@ -109,7 +109,7 @@ fn extract_edit_args(
         Some(String(s)) => s
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "edit: 'old_text' argument must be a string",
+            "edit: 'old_text' must be a string",
           )
         None =>
           raise @posoco.RuntimeError::UnknownTool("edit: missing 'old_text'")
@@ -118,7 +118,7 @@ fn extract_edit_args(
         Some(String(s)) => s
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "edit: 'new_text' argument must be a string",
+            "edit: 'new_text' must be a string",
           )
         None =>
           raise @posoco.RuntimeError::UnknownTool("edit: missing 'new_text'")
@@ -128,14 +128,14 @@ fn extract_edit_args(
         Some(False) | None => false
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "edit: optional 'replace_all' must be a boolean",
+            "edit: 'replace_all' must be boolean",
           )
       }
       (p, o, n, ra)
     }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "edit: arguments must be a JSON object",
+        "edit: arguments must be an object",
       )
   }
 }
@@ -249,7 +249,7 @@ async fn execute_edit_impl(
   }
   if !io.exists(path) {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="File not found: \{@devkit.sanitize_path(raw_path)}",
+      content="edit: not found: \{@devkit.sanitize_path(raw_path)}",
       structured=None,
     )
   }
@@ -288,14 +288,14 @@ async fn execute_edit_impl(
   }
   if matches.length() == 0 {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="edit: old_text not found in \{@devkit.sanitize_path(raw_path)}; the file may have changed since your last read — read it again and retry with the exact current text",
+      content="edit: old_text not found; reread \{@devkit.sanitize_path(raw_path)}",
       structured=None,
     )
   }
   let match_lines = [ for m in matches => m.1 ]
   if matches.length() > 1 && !all {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="edit: old_text matches \{matches.length()} locations in \{@devkit.sanitize_path(raw_path)} at line(s) \{describe_match_lines(match_lines)}; add surrounding lines to make it unique, or pass replace_all: true",
+      content="edit: \{matches.length()} matches lines=\{describe_match_lines(match_lines)}; add context or replace_all=true",
       structured=None,
     )
   }
@@ -314,19 +314,14 @@ async fn execute_edit_impl(
     }
     None => ()
   }
-  let occurrence_word = if matches.length() == 1 {
-    "occurrence"
-  } else {
-    "occurrences"
-  }
-  let line_word = if matches.length() == 1 { "line" } else { "lines" }
-  let stripped_note = if stripped {
-    " (line-number prefixes stripped from old_text)"
-  } else {
-    ""
-  }
   @posoco.ToolOutcome::Success(
-    content="Edited \{@devkit.sanitize_path(raw_path)}: replaced \{matches.length()} \{occurrence_word} at \{line_word} \{describe_match_lines(match_lines)}\{stripped_note}",
-    structured=None,
+    content="ok: \{matches.length()} lines=\{describe_match_lines(match_lines)}",
+    structured=Some(
+      Json::object({
+        "count": Json::number(matches.length().to_double()),
+        "lines": Json::array(match_lines.map(fn(line) { Json::number(line.to_double()) })),
+        "stripped_read_prefix": Json::boolean(stripped),
+      }),
+    ),
   )
 }
