@@ -116,34 +116,41 @@ test "long write arguments keep structure but not the full file body" {
 }
 
 ///|
-test "large edit arguments have a hard total cap" {
+test "large edit string leaves keep head and tail" {
   let old_text = "OLD-" + String::make(3000, 'a') + "-OLD-END"
   let new_text = "NEW-" + String::make(3000, 'b') + "-NEW-END"
-  let message = asst_msg("", [
-    tool_call(
-      "edit",
-      Json::object({
-        "path": Json::string("src/main.mbt"),
-        "old_text": Json::string(old_text),
-        "new_text": Json::string(new_text),
-        "replace_all": Json::boolean(false),
-      }),
-    ),
-  ])
-  let args = render_tool_args(
-    match message {
-      AssistantMessage(tool_calls=[call, ..], ..) => call.arguments
-      _ => Json::null()
-    },
-  )
-  assert_true(args.contains("\"path\":\"src/main.mbt\""))
-  assert_true(args.contains("\"old_text\""))
-  assert_true(args.contains("\"new_text\""))
-  assert_true(args.contains("OLD-"))
-  assert_true(args.contains("NEW-END"))
-  assert_false(args.contains(old_text))
-  assert_false(args.contains(new_text))
-  assert_true(char_count(args) <= SUMMARY_TOOL_ARGS_CHARS)
+  let args = Json::object({
+    "path": Json::string("src/main.mbt"),
+    "old_text": Json::string(old_text),
+    "new_text": Json::string(new_text),
+    "replace_all": Json::boolean(false),
+  })
+  let rendered = render_tool_args(args)
+  assert_true(rendered.contains("\"path\":\"src/main.mbt\""))
+  assert_true(rendered.contains("\"old_text\""))
+  assert_true(rendered.contains("\"new_text\""))
+  assert_true(rendered.contains("OLD-"))
+  assert_true(rendered.contains("OLD-END"))
+  assert_true(rendered.contains("NEW-"))
+  assert_true(rendered.contains("NEW-END"))
+  assert_false(rendered.contains(old_text))
+  assert_false(rendered.contains(new_text))
+}
+
+///|
+test "many large argument fields hit the hard total cap" {
+  let big = "BEGIN-" + String::make(3000, 'z') + "-END"
+  let args = Json::object({
+    "a": Json::string(big),
+    "b": Json::string(big),
+    "c": Json::string(big),
+    "d": Json::string(big),
+    "e": Json::string(big),
+  })
+  let rendered = render_tool_args(args)
+  assert_eq(char_count(rendered), SUMMARY_TOOL_ARGS_CHARS)
+  assert_true(rendered.contains("…[cut]…"))
+  assert_false(rendered.contains(big))
 }
 
 ///|
