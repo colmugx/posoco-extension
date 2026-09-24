@@ -1,6 +1,6 @@
 name = "colmugx/posoco-ext-subagent"
 
-version = "0.1.0"
+version = "0.1.1"
 
 readme = "README.mbt.md"
 
@@ -14,7 +14,7 @@ description = "Posoco agent tool - run embedded subagents as a ToolProvider"
 
 import {
   "colmugx/posoco@0.18.5",
-  "colmugx/posoco-kit-subagent@0.1.0",
+  "colmugx/posoco-kit-subagent@0.1.1",
   "colmugx/posoco-ext-kind@0.1.0",
   "colmugx/posoco-ext-permission@0.2.0",
   "colmugx/posoco-devkit@0.4.0",
