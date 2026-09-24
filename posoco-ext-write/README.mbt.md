@@ -61,8 +61,8 @@ hosts that want neither.
   removes the temp file so no partial state is left behind.
 - **Size cap** — content over 1,000,000 UTF-8 bytes is refused with a
   `ToolReportedError` and the target is left untouched.
-- **Honest byte counts** — success reports UTF-8 bytes
-  (`Wrote N bytes to <path>`), not code units.
+- **Compact success** — model-visible success is just `ok`; UTF-8 byte count
+  remains available in structured metadata for observers/UIs.
 - **Anchor** — relative paths resolve against the `WorkspaceAnchor` root and
   key the freshness ledger canonically, so overwriting through a different
   relative spelling still passes the gate; results echo the path as written
