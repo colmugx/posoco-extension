@@ -243,11 +243,7 @@ async test "grep_max_matches_caps_output_with_footer" {
     )
     match result {
       Success(content~, structured~) => {
-        assert_true(
-          content.contains(
-            "\{dir}/hits.txt\n1|n1\n2|n2",
-          ),
-        )
+        assert_true(content.contains("\{dir}/hits.txt\n1|n1\n2|n2"))
         assert_true(content.has_suffix("… +1 matches"))
         match structured {
           Some(Object(meta)) => {
@@ -551,11 +547,10 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
   }
 }
 
-
 ///|
 test "grep_render_match_line_matches_compact_read_style" {
   assert_eq(
-    render_match_line({ path: "a.txt", line: 42, content: "needle" }),
+    render_match_line({ path: "a.txt", line: 42, content: "needle", }),
     "42|needle",
   )
 }
@@ -574,7 +569,12 @@ test "grep_render_match_line_uses_short_cut_marker" {
 
 ///|
 test "grep_result_text_does_not_echo_pattern_on_miss" {
-  let (text, count, truncated) = grep_result_text(Content, [], "secret-pattern", 100)
+  let (text, count, truncated) = grep_result_text(
+    Content,
+    [],
+    "secret-pattern",
+    100,
+  )
   assert_eq(text, "(no matches)")
   assert_eq(count, 0)
   assert_false(truncated)
@@ -584,11 +584,16 @@ test "grep_result_text_does_not_echo_pattern_on_miss" {
 ///|
 test "grep_files_footer_is_compact" {
   let matches = [
-    GrepMatch::{ path: "a", line: 1, content: "x" },
-    GrepMatch::{ path: "b", line: 1, content: "x" },
-    GrepMatch::{ path: "c", line: 1, content: "x" },
+    GrepMatch::{ path: "a", line: 1, content: "x", },
+    GrepMatch::{ path: "b", line: 1, content: "x", },
+    GrepMatch::{ path: "c", line: 1, content: "x", },
   ]
-  let (text, count, truncated) = grep_result_text(FilesWithMatches, matches, "x", 2)
+  let (text, count, truncated) = grep_result_text(
+    FilesWithMatches,
+    matches,
+    "x",
+    2,
+  )
   assert_eq(count, 3)
   assert_true(truncated)
   assert_true(text.has_suffix("… +1 files"))

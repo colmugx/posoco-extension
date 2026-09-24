@@ -52,11 +52,7 @@ fn slice_chars(content : String, offset : Int, max_chars : Int) -> PageSlice? {
 ///|
 /// Model-visible success page: header block, blank line, body; a blank line
 /// and a continuation footer are appended when the body was truncated.
-fn format_page(
-  title : String,
-  url : String,
-  slice : PageSlice,
-) -> String {
+fn format_page(title : String, url : String, slice : PageSlice) -> String {
   let body = if slice.offset == 0 {
     "# \{title}\n\{url}\n\n\{slice.body}"
   } else {
@@ -109,16 +105,11 @@ fn format_error(kind : ErrKind) -> String {
   match kind {
     HttpError(status~, reason~, url~) =>
       "webfetch: HTTP \{status} \{reason}: \{url}; \{http_advice(status)}"
-    TooLarge(bytes~, url~) =>
-      "webfetch: too large (\{bytes} bytes): \{url}"
-    TimedOut(ms~, url~) =>
-      "webfetch: timeout \{ms}ms: \{url}"
-    UnsupportedType(ct~, url~) =>
-      "webfetch: unsupported type \{ct}: \{url}"
-    HostBlocked(host~, reason~) =>
-      "webfetch: blocked host \{host} (\{reason})"
-    TooManyRedirects(hops~, url~) =>
-      "webfetch: redirects>\{hops}: \{url}"
+    TooLarge(bytes~, url~) => "webfetch: too large (\{bytes} bytes): \{url}"
+    TimedOut(ms~, url~) => "webfetch: timeout \{ms}ms: \{url}"
+    UnsupportedType(ct~, url~) => "webfetch: unsupported type \{ct}: \{url}"
+    HostBlocked(host~, reason~) => "webfetch: blocked host \{host} (\{reason})"
+    TooManyRedirects(hops~, url~) => "webfetch: redirects>\{hops}: \{url}"
     Transport(msg~, url~) => "webfetch: \{url}: \{msg}"
     OffsetPastEnd(offset~, total~, url~) =>
       "webfetch: offset \{offset} > total \{total}: \{url}"

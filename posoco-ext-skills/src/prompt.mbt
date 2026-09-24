@@ -97,9 +97,7 @@ pub fn SkillCatalog::render_prompt_body(
   if count < items.length() {
     while count > 0 {
       let omitted = items.length() - count
-      let notice = "(" +
-        omitted.to_string() +
-        " skills omitted)\n"
+      let notice = "(" + omitted.to_string() + " skills omitted)\n"
       if used + notice.length() + guidance.length() <= max_chars {
         break
       }
@@ -117,11 +115,7 @@ pub fn SkillCatalog::render_prompt_body(
   }
   if count < items.length() {
     let omitted = items.length() - count
-    b.write_string(
-      "(" +
-      omitted.to_string() +
-      " skills omitted)\n",
-    )
+    b.write_string("(" + omitted.to_string() + " skills omitted)\n")
   }
   b.write_string(guidance)
   b.to_string()

@@ -4,7 +4,7 @@
 /// Kill guarantees are observed through file markers the child would write
 /// if it survived: `cancel_effects` returns once the escalation is armed
 /// (the spawn's `graceful_cancel` handler runs protected and detached, so
-/// the task's own `wait` surfaces `TaskCancelled` immediately), and the
+/// the task's own `wait` surfaces `WaitedTaskAlreadyCancelled` immediately), and the
 /// marker's absence after the grace window proves the child died.
 
 ///|

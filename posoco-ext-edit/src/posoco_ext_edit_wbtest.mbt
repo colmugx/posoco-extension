@@ -215,9 +215,10 @@ async test "edit_ambiguous_match_lists_lines_and_is_rejected" {
     write_file_native(path, "x\nfoo\ny\nfoo\nz\n")
     match
       run_edit(EditTools::EditTools(), edit_text_call(path, "foo", "bar", None)) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
-        assert_eq(content, "edit: 2 matches lines=2, 4; add context or replace_all=true")
-      }
+      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
+        assert_eq(
+          content, "edit: 2 matches lines=2, 4; add context or replace_all=true",
+        )
       _ => fail("expected ambiguous edit to be rejected")
     }
   }
@@ -374,7 +375,6 @@ async test "edit_anchored_relative_path_resolves" {
   }
 }
 
-
 ///|
 test "edit_strip_line_number_prefix_accepts_compact_read_format" {
   assert_eq(strip_line_number_prefix("1|alpha"), Some("alpha"))
@@ -396,14 +396,12 @@ test "edit_strip_line_numbers_block_accepts_compact_read_block" {
   )
 }
 
-
 ///|
 test "edit_strip_line_number_prefix_rejects_non_prefix_matches" {
   assert_eq(strip_line_number_prefix("x1|alpha"), None)
   assert_eq(strip_line_number_prefix("L1:alpha"), None)
   assert_eq(strip_line_number_prefix("|alpha"), None)
 }
-
 
 ///|
 test "edit_tool_definition_stays_compact" {

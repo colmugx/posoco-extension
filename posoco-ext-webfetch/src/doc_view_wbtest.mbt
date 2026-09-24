@@ -321,7 +321,6 @@ test "doc_view structured_json field set and order" {
   )
 }
 
-
 ///|
 test "doc_view continuation_page_omits_repeated_metadata" {
   guard slice_chars("abcdefghij", 4, 3) is Some(s) else {

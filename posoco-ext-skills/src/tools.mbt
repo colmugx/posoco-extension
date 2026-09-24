@@ -75,11 +75,7 @@ fn skill_search_success(
       "\{skill.name}: \{unicode_scalar_preview(skill.description, SKILL_DESCRIPTION_PREVIEW_CHARS)}",
     )
   }
-  let content = if skills.is_empty() {
-    "(no skills)"
-  } else {
-    lines.join("\n")
-  }
+  let content = if skills.is_empty() { "(no skills)" } else { lines.join("\n") }
   @posoco.ToolOutcome::Success(
     content~,
     structured=Some(
@@ -252,9 +248,7 @@ fn Skills::read_resource_tool_def(self : Skills) -> @posoco.ToolDef {
         }),
         "path": Json::object({
           "type": Json::string("string"),
-          "description": Json::string(
-            "Path relative to skill directory",
-          ),
+          "description": Json::string("Path relative to skill directory"),
         }),
       }),
       "required": Json::array([Json::string("name"), Json::string("path")]),
@@ -325,9 +319,7 @@ pub impl @posoco.ToolProvider for Skills with fn execute(
   if name == self.config.activate_tool_name {
     let skill_name = require_string_arg(name, call.arguments, "name")
     if !runtime_skill_name_is_safe(skill_name) {
-      raise @posoco.RuntimeError::InvocationFailed(
-        name + ": invalid 'name'",
-      )
+      raise @posoco.RuntimeError::InvocationFailed(name + ": invalid 'name'")
     }
     return self.activate(skill_name)
   }

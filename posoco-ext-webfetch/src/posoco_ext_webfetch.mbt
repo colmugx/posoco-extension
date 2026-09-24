@@ -38,9 +38,7 @@ fn extract_fetch_args(
           )
       }
       if !url_length_ok(url) {
-        raise @posoco.RuntimeError::UnknownTool(
-          "webfetch: 'url' too long",
-        )
+        raise @posoco.RuntimeError::UnknownTool("webfetch: 'url' too long")
       }
       guard parse_url(url) is Some(parsed) else {
         raise @posoco.RuntimeError::UnknownTool(
@@ -271,9 +269,7 @@ pub impl @posoco.ToolProvider for WebFetchTools with fn list_tools(
           }),
           "offset": Json::object({
             "type": Json::string("integer"),
-            "description": Json::string(
-              "Continuation offset from next= footer",
-            ),
+            "description": Json::string("Continuation offset from next= footer"),
           }),
         }),
         "required": Json::array([Json::string("url")]),

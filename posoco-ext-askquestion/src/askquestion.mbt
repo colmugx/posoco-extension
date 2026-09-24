@@ -39,9 +39,7 @@ fn ask_question_schema() -> Json {
       }),
       "default": Json::object({
         "type": Json::string("string"),
-        "description": Json::string(
-          "Pre-filled input value",
-        ),
+        "description": Json::string("Pre-filled input value"),
       }),
       "default_index": Json::object({
         "type": Json::string("integer"),
@@ -128,9 +126,7 @@ fn parse_ask_spec(arguments : Json) -> AskSpec raise @posoco.RuntimeError {
   let question = match string_field(fields, "question") {
     Some(value) if value.trim() != "" => value
     Some(_) =>
-      raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: empty 'question'",
-      )
+      raise @posoco.RuntimeError::UnknownTool("ask_question: empty 'question'")
     None =>
       raise @posoco.RuntimeError::UnknownTool(
         "ask_question: missing 'question'",
@@ -145,9 +141,7 @@ fn parse_ask_spec(arguments : Json) -> AskSpec raise @posoco.RuntimeError {
   if prompt_type != "input" &&
     prompt_type != "confirm" &&
     prompt_type != "select" {
-    raise @posoco.RuntimeError::UnknownTool(
-      "ask_question: invalid 'type'",
-    )
+    raise @posoco.RuntimeError::UnknownTool("ask_question: invalid 'type'")
   }
   let default_index = default_index_field(fields)
   if prompt_type == "select" {

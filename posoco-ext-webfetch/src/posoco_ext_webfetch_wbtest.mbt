@@ -170,10 +170,7 @@ test "wf args rejects bad url values" {
   )
   match negative {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(
-        message,
-        content="webfetch: 'offset' must be >= 0",
-      )
+      inspect(message, content="webfetch: 'offset' must be >= 0")
     _ => fail("expected UnknownTool for negative offset")
   }
   let long_url = "https://ex.com/" + "a".repeat(2000)
@@ -182,10 +179,7 @@ test "wf args rejects bad url values" {
   )
   match too_long {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(
-        message,
-        content="webfetch: 'url' too long",
-      )
+      inspect(message, content="webfetch: 'url' too long")
     _ => fail("expected UnknownTool for over-long url")
   }
   let ftp = try_args(
@@ -345,10 +339,7 @@ async test "wf follows same-host redirect" {
     },
   ])
   let (content, _) = ok_page(try_wf(tools, wf_call("https://ex.com/a")))
-  inspect(
-    content,
-    content="# b\nhttps://ex.com/b\n\nhello",
-  )
+  inspect(content, content="# b\nhttps://ex.com/b\n\nhello")
   inspect(io.calls, content="2")
 }
 
@@ -387,10 +378,7 @@ async test "wf fails after five same-host hops" {
     }),
   )
   let content = err_page(try_wf(tools, wf_call("https://ex.com/a")))
-  inspect(
-    content,
-    content="webfetch: redirects>5: https://ex.com/a",
-  )
+  inspect(content, content="webfetch: redirects>5: https://ex.com/a")
   inspect(io.calls, content="6")
 }
 
@@ -466,10 +454,7 @@ async test "wf caches and serves the second call" {
   let (first_content, _) = ok_page(
     try_wf(tools, wf_call("https://ex.com/cache")),
   )
-  inspect(
-    first_content,
-    content="# cache\nhttps://ex.com/cache\n\nhello",
-  )
+  inspect(first_content, content="# cache\nhttps://ex.com/cache\n\nhello")
   let (second_content, m) = ok_page_object(
     try_wf(tools, wf_call("https://ex.com/cache")),
   )
@@ -514,10 +499,7 @@ async test "wf paginates and continues via offset" {
   let (second_content, _) = ok_page(
     try_wf(tools, wf_call("https://ex.com/slice", offset=3)),
   )
-  inspect(
-    second_content,
-    content="lo",
-  )
+  inspect(second_content, content="lo")
   // The continuation slices from the cache: still exactly one fetch.
   inspect(io.calls, content="1")
 }
@@ -586,10 +568,7 @@ async test "wf reports fetch timeout" {
     delay_ms=200,
   )
   let content = err_page(try_wf(tools, wf_call("https://ex.com/slow")))
-  inspect(
-    content,
-    content="webfetch: timeout 50ms: https://ex.com/slow",
-  )
+  inspect(content, content="webfetch: timeout 50ms: https://ex.com/slow")
   // The slow fetch started but never produced a reply.
   inspect(io.calls, content="1")
 }
@@ -617,10 +596,7 @@ async test "wf resolves relative redirect Location" {
     },
   ])
   let (content, _) = ok_page(try_wf(tools, wf_call("https://ex.com/")))
-  inspect(
-    content,
-    content="# page\nhttps://ex.com/docs/page\n\n# doc",
-  )
+  inspect(content, content="# page\nhttps://ex.com/docs/page\n\n# doc")
   inspect(io.calls, content="2")
   // The second hop resolved 'docs/page' against the base path '/'.
   inspect(io.urls[0], content="https://ex.com/")
@@ -664,13 +640,9 @@ async test "wf treats truncated=false as a complete reply even at the cap" {
     },
   ])
   let (content, _) = ok_page(try_wf(tools, wf_call("https://ex.com/exact")))
-  inspect(
-    content,
-    content="# exact\nhttps://ex.com/exact\n\nhello",
-  )
+  inspect(content, content="# exact\nhttps://ex.com/exact\n\nhello")
   inspect(io.calls, content="1")
 }
-
 
 ///|
 test "wf manifest_has_no_resident_prompt_contributor" {

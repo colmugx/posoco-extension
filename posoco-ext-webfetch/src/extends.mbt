@@ -6,4 +6,3 @@
 
 ///|
 pub extend WebFetchTools with @posoco.ToolProvider::{execute}
-

@@ -272,8 +272,7 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
     let tools = WriteTools::WriteTools(freshness=fresh, anchor=Some(anchor))
     // First write records the canonical (resolved) key.
     match run_write(tools, write_call("notes/a.txt", "v1")) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        assert_eq(content, "ok")
+      Ok(@posoco.ToolOutcome::Success(content~, ..)) => assert_eq(content, "ok")
       _ => fail("expected anchored write to succeed")
     }
     assert_true(@fs.exists(dir + "/notes/a.txt"))
@@ -288,7 +287,6 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
     assert_eq(text, "v2")
   }
 }
-
 
 ///|
 test "write_tool_definition_stays_compact" {

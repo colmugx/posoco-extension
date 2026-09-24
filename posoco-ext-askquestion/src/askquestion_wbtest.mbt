@@ -111,7 +111,6 @@ test "ask_question_manifest_and_policy" {
   assert_eq(manifest.lifecycle.length(), 1)
 }
 
-
 ///|
 test "ask_question_schema_uses_enum_for_prompt_type" {
   let schema = ask_question_schema().stringify()

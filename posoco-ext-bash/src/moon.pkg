@@ -9,7 +9,6 @@ import {
 }
 
 import {
-  "colmugx/posoco/types",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/env",

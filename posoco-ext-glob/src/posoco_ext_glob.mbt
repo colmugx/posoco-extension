@@ -58,21 +58,15 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         "properties": Json::object({
           "pattern": Json::object({
             "type": Json::string("string"),
-            "description": Json::string(
-              "Glob pattern, e.g. '**/*.mbt'",
-            ),
+            "description": Json::string("Glob pattern, e.g. '**/*.mbt'"),
           }),
           "path": Json::object({
             "type": Json::string("string"),
-            "description": Json::string(
-              "Base path; default '.'",
-            ),
+            "description": Json::string("Base path; default '.'"),
           }),
           "limit": Json::object({
             "type": Json::string("integer"),
-            "description": Json::string(
-              "Returned path cap; default 100",
-            ),
+            "description": Json::string("Returned path cap; default 100"),
           }),
         }),
         "required": Json::array([Json::string("pattern")]),
@@ -114,9 +108,7 @@ fn extract_glob_args(
         Some(Number(n, ..)) => {
           let v = n.to_int()
           if v <= 0 {
-            raise @posoco.RuntimeError::UnknownTool(
-              "glob: 'limit' must be > 0",
-            )
+            raise @posoco.RuntimeError::UnknownTool("glob: 'limit' must be > 0")
           }
           v
         }
@@ -205,7 +197,9 @@ async fn execute_glob_impl(
     shown += 1
   }
   let truncated = shown < total
-  let mut content = if shown == 0 { "(no files)" } else {
+  let mut content = if shown == 0 {
+    "(no files)"
+  } else {
     builder.to_string().trim_end(chars="\n").to_owned()
   }
   if truncated {

@@ -113,9 +113,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         "properties": Json::object({
           "pattern": Json::object({
             "type": Json::string("string"),
-            "description": Json::string(
-              "Literal search text",
-            ),
+            "description": Json::string("Literal search text"),
           }),
           "path": Json::object({
             "type": Json::string("string"),
@@ -123,9 +121,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           }),
           "glob": Json::object({
             "type": Json::string("string"),
-            "description": Json::string(
-              "File glob, e.g. '*.mbt'",
-            ),
+            "description": Json::string("File glob, e.g. '*.mbt'"),
           }),
           "output_mode": Json::object({
             "type": Json::string("string"),
@@ -139,9 +135,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           }),
           "max_matches": Json::object({
             "type": Json::string("integer"),
-            "description": Json::string(
-              "Returned entry cap; default 100",
-            ),
+            "description": Json::string("Returned entry cap; default 100"),
           }),
         }),
         "required": Json::array([Json::string("pattern")]),

@@ -20,6 +20,6 @@ description = "Posoco JSONL File Session Store"
 import {
   "colmugx/posoco@0.18.5",
   "colmugx/posoco-devkit@0.4.0",
-  "moonbitlang/async@0.22.2",
+  "moonbitlang/async@0.22.3",
   "moonbitlang/x@0.5.5",
 }

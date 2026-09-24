@@ -72,9 +72,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           }),
           "replace_all": Json::object({
             "type": Json::string("boolean"),
-            "description": Json::string(
-              "Replace all matches; default false",
-            ),
+            "description": Json::string("Replace all matches; default false"),
           }),
         }),
         "required": Json::array([
@@ -319,7 +317,9 @@ async fn execute_edit_impl(
     structured=Some(
       Json::object({
         "count": Json::number(matches.length().to_double()),
-        "lines": Json::array(match_lines.map(fn(line) { Json::number(line.to_double()) })),
+        "lines": Json::array(
+          match_lines.map(fn(line) { Json::number(line.to_double()) }),
+        ),
         "stripped_read_prefix": Json::boolean(stripped),
       }),
     ),

@@ -186,10 +186,7 @@ async test "read_offset_starts_at_requested_line" {
     )
     match outcome {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        inspect(
-          content,
-          content="4|line-4\n5|line-5\n… +5 lines; next=6",
-        )
+        inspect(content, content="4|line-4\n5|line-5\n… +5 lines; next=6")
       _ => fail("expected offset read to succeed")
     }
   }
@@ -650,7 +647,6 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
     }
   }
 }
-
 
 ///|
 test "read_format_page_uses_compact_prefix_and_marker" {

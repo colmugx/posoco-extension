@@ -4,7 +4,7 @@ version = "0.1.0"
 
 import {
   "colmugx/posoco@0.18.5",
-  "moonbitlang/async@0.22.2",
+  "moonbitlang/async@0.22.3",
   "moonbit-community/html@0.2.1",
 }
 

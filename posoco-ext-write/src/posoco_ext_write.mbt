@@ -185,9 +185,7 @@ async fn execute_write_impl(
   @posoco.ToolOutcome::Success(
     content="ok",
     structured=Some(
-      Json::object({
-        "bytes": Json::number(content_bytes.to_double()),
-      }),
+      Json::object({ "bytes": Json::number(content_bytes.to_double()) }),
     ),
   )
 }

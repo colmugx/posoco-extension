@@ -178,9 +178,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           }),
           "limit": Json::object({
             "type": Json::string("integer"),
-            "description": Json::string(
-              "Max lines; default 400",
-            ),
+            "description": Json::string("Max lines; default 400"),
           }),
         }),
         "required": Json::array([Json::string("path")]),
@@ -346,16 +344,12 @@ async fn execute_read_impl(
   }
   match offset_opt {
     Some(0) =>
-      raise @posoco.RuntimeError::UnknownTool(
-        "read: 'offset' must be nonzero",
-      )
+      raise @posoco.RuntimeError::UnknownTool("read: 'offset' must be nonzero")
     _ => ()
   }
   match limit_opt {
     Some(l) if l <= 0 =>
-      raise @posoco.RuntimeError::UnknownTool(
-        "read: 'limit' must be > 0",
-      )
+      raise @posoco.RuntimeError::UnknownTool("read: 'limit' must be > 0")
     _ => ()
   }
   // exists() returns false for a missing file (recoverable → message);

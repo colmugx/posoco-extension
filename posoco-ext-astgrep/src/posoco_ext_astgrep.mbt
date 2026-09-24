@@ -216,17 +216,9 @@ fn astgrep_parse_match(line : String) -> AstGrepMatch? {
     {
       "file": String(file),
       "text": String(text),
-      "range": {
-        "start": { "line": Number(line, ..), .. },
-        ..
-      },
+      "range": { "start": { "line": Number(line, ..), .. }, .. },
       ..
-    } =>
-      Some({
-        file,
-        line: line.to_int() + 1,
-        text,
-      })
+    } => Some({ file, line: line.to_int() + 1, text, })
     _ => None
   }
 }
