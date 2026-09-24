@@ -2,6 +2,7 @@
 test "wf skeleton" {
   let tools = WebFetchTools::WebFetchTools()
   inspect(tools.timeout_ms, content="30000")
+  inspect(tools.max_chars, content="24000")
 }
 
 ///|
@@ -40,7 +41,7 @@ impl HttpIo for FakeHttpIo with fn fetch(
 /// so tests can assert how many fetches ran and which URLs were requested.
 fn wf_tools(
   replies : Array[HttpReply],
-  max_chars? : Int = 50_000,
+  max_chars? : Int = 24_000,
   timeout_ms? : Int = 30_000,
   delay_ms? : Int = 0,
 ) -> (WebFetchTools, FakeHttpIo) {
@@ -133,13 +134,13 @@ test "wf args rejects malformed input" {
   )
   match wrong_type {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: 'url' argument must be a string")
+      inspect(message, content="webfetch: 'url' must be a string")
     _ => fail("expected UnknownTool for non-string url")
   }
   let not_object = try_args(Json::string("https://ex.com"))
   match not_object {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: arguments must be a JSON object")
+      inspect(message, content="webfetch: arguments must be an object")
     _ => fail("expected UnknownTool for non-object arguments")
   }
   let bad_offset = try_args(
@@ -152,7 +153,7 @@ test "wf args rejects malformed input" {
   )
   match bad_offset {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: optional 'offset' must be an integer")
+      inspect(message, content="webfetch: 'offset' must be an integer")
     _ => fail("expected UnknownTool for non-integer offset")
   }
 }
@@ -171,7 +172,7 @@ test "wf args rejects bad url values" {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
       inspect(
         message,
-        content="webfetch: 'offset' must be a non-negative integer",
+        content="webfetch: 'offset' must be >= 0",
       )
     _ => fail("expected UnknownTool for negative offset")
   }
@@ -183,7 +184,7 @@ test "wf args rejects bad url values" {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
       inspect(
         message,
-        content="webfetch: 'url' exceeds the 2000 character limit",
+        content="webfetch: 'url' too long",
       )
     _ => fail("expected UnknownTool for over-long url")
   }
@@ -307,7 +308,7 @@ async test "wf stops at cross-host redirect" {
   )
   inspect(
     content,
-    content="Redirect: https://ex.com/a redirects to https://other.org/page (different host; not followed automatically for safety). If you trust this target, call webfetch with url=https://other.org/page.",
+    content="redirect blocked (cross-host): https://other.org/page; fetch explicitly if trusted",
   )
   inspect(io.calls, content="1")
   match structured {
@@ -346,7 +347,7 @@ async test "wf follows same-host redirect" {
   let (content, _) = ok_page(try_wf(tools, wf_call("https://ex.com/a")))
   inspect(
     content,
-    content="Title: b\nURL: https://ex.com/b\nContent-Type: text/plain\n\nhello",
+    content="# b\nhttps://ex.com/b\n\nhello",
   )
   inspect(io.calls, content="2")
 }
@@ -367,7 +368,7 @@ async test "wf refuses private redirect target" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/a")))
   inspect(
     content,
-    content="webfetch: host '127.0.0.1' is not allowed (loopback address 127.0.0.1; private, local, or blocked address)",
+    content="webfetch: blocked host 127.0.0.1 (loopback address 127.0.0.1)",
   )
   inspect(io.calls, content="1")
 }
@@ -388,7 +389,7 @@ async test "wf fails after five same-host hops" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/a")))
   inspect(
     content,
-    content="webfetch: too many redirects (5) following 'https://ex.com/a'",
+    content="webfetch: redirects>5: https://ex.com/a",
   )
   inspect(io.calls, content="6")
 }
@@ -409,7 +410,7 @@ async test "wf reports 3xx without Location" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/a")))
   inspect(
     content,
-    content="webfetch: request to 'https://ex.com/a' failed: redirect without Location header",
+    content="webfetch: https://ex.com/a: redirect without Location header",
   )
   inspect(io.calls, content="1")
 }
@@ -430,7 +431,7 @@ async test "wf formats 404 as HttpError" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/a")))
   inspect(
     content,
-    content="webfetch: HTTP 404 Not Found for 'https://ex.com/a' — the page may have moved; try the site index or a search",
+    content="webfetch: HTTP 404 Not Found: https://ex.com/a; the page may have moved; try the site index or a search",
   )
   inspect(io.calls, content="1")
 }
@@ -441,7 +442,7 @@ async test "wf blocks private host before fetching" {
   let content = err_page(try_wf(tools, wf_call("http://127.0.0.1/x")))
   inspect(
     content,
-    content="webfetch: host '127.0.0.1' is not allowed (loopback address 127.0.0.1; private, local, or blocked address)",
+    content="webfetch: blocked host 127.0.0.1 (loopback address 127.0.0.1)",
   )
   inspect(io.calls, content="0")
 }
@@ -467,7 +468,7 @@ async test "wf caches and serves the second call" {
   )
   inspect(
     first_content,
-    content="Title: cache\nURL: https://ex.com/cache\nContent-Type: text/plain\n\nhello",
+    content="# cache\nhttps://ex.com/cache\n\nhello",
   )
   let (second_content, m) = ok_page_object(
     try_wf(tools, wf_call("https://ex.com/cache")),
@@ -500,7 +501,7 @@ async test "wf paginates and continues via offset" {
   )
   inspect(
     first_content,
-    content="Title: slice\nURL: https://ex.com/slice\nContent-Type: text/plain\n\nhel\n\n… [showing characters 0–3 of 5; call webfetch with offset=3 to continue]",
+    content="# slice\nhttps://ex.com/slice\n\nhel\n\n… next=3/5",
   )
   match first_structured {
     Some(Object(m)) => {
@@ -515,7 +516,7 @@ async test "wf paginates and continues via offset" {
   )
   inspect(
     second_content,
-    content="Title: slice\nURL: https://ex.com/slice\nContent-Type: text/plain\n\nlo",
+    content="lo",
   )
   // The continuation slices from the cache: still exactly one fetch.
   inspect(io.calls, content="1")
@@ -539,7 +540,7 @@ async test "wf reports offset past end" {
   )
   inspect(
     content,
-    content="webfetch: offset 99 is past the end of the content (total 5 characters) for 'https://ex.com/slice'",
+    content="webfetch: offset 99 > total 5: https://ex.com/slice",
   )
   inspect(io.calls, content="1")
 }
@@ -559,7 +560,7 @@ async test "wf reports unsupported content type" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/file")))
   inspect(
     content,
-    content="webfetch: unsupported content-type 'application/pdf' for 'https://ex.com/file' — this tool returns text, markdown, and JSON only",
+    content="webfetch: unsupported type application/pdf: https://ex.com/file",
   )
   // A failed dispatch is not cached: the retry refetches.
   let again = err_page(try_wf(tools, wf_call("https://ex.com/file")))
@@ -587,7 +588,7 @@ async test "wf reports fetch timeout" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/slow")))
   inspect(
     content,
-    content="webfetch: request to 'https://ex.com/slow' timed out after 50ms — the site may be slow or blocking automated clients; retrying or using a different source may help",
+    content="webfetch: timeout 50ms: https://ex.com/slow",
   )
   // The slow fetch started but never produced a reply.
   inspect(io.calls, content="1")
@@ -618,7 +619,7 @@ async test "wf resolves relative redirect Location" {
   let (content, _) = ok_page(try_wf(tools, wf_call("https://ex.com/")))
   inspect(
     content,
-    content="Title: page\nURL: https://ex.com/docs/page\nContent-Type: text/markdown\n\n# doc",
+    content="# page\nhttps://ex.com/docs/page\n\n# doc",
   )
   inspect(io.calls, content="2")
   // The second hop resolved 'docs/page' against the base path '/'.
@@ -641,7 +642,7 @@ async test "wf reports response too large when the body hits the byte cap" {
   let content = err_page(try_wf(tools, wf_call("https://ex.com/big")))
   inspect(
     content,
-    content="webfetch: response too large (5242880 bytes exceeds the 5 MB cap) for 'https://ex.com/big'",
+    content="webfetch: too large (5242880 bytes): https://ex.com/big",
   )
   // A failed dispatch is not cached: the retry refetches.
   let again = err_page(try_wf(tools, wf_call("https://ex.com/big")))
@@ -665,7 +666,15 @@ async test "wf treats truncated=false as a complete reply even at the cap" {
   let (content, _) = ok_page(try_wf(tools, wf_call("https://ex.com/exact")))
   inspect(
     content,
-    content="Title: exact\nURL: https://ex.com/exact\nContent-Type: text/plain\n\nhello",
+    content="# exact\nhttps://ex.com/exact\n\nhello",
   )
   inspect(io.calls, content="1")
+}
+
+
+///|
+test "wf manifest_has_no_resident_prompt_contributor" {
+  let manifest = WebFetchTools::WebFetchTools().manifest()
+  assert_eq(manifest.tools.length(), 1)
+  assert_eq(manifest.prompt_contributors.length(), 0)
 }
