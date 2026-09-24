@@ -111,11 +111,19 @@ test "delegate tooldef shape" {
       }
     _ => fail("input_schema must be a JSON object")
   }
-  assert_true(def.description.contains("depth-1"))
-  assert_true(def.description.contains("readonly"))
-  assert_true(def.description.contains("reuse child_session"))
-  assert_true(def.description.contains("background"))
-  assert_true(def.description.length() < 230)
+  // Deferred ToolDef is intentionally explicit for weaker models: it must be
+  // executable without reconstructing hidden relationships from terse labels.
+  assert_true(def.description.contains("visible herdr pane"))
+  assert_true(def.description.contains("user-position slot"))
+  assert_true(def.description.contains("depth-1 leaves"))
+  assert_true(def.description.contains("child_session"))
+  assert_true(def.description.contains("success, failure"))
+  assert_true(def.description.contains("readonly (default)"))
+  assert_true(def.description.contains("--yolo"))
+  assert_true(def.description.contains("background always starts a fresh child"))
+  assert_true(def.description.contains("parallel panes"))
+  assert_true(def.description.contains("pane readback can truncate"))
+  assert_true(def.description.contains("one work-stream = one child session"))
 }
 
 ///|
@@ -661,4 +669,54 @@ test "delegate schema carries direction enum and close_pane boolean default" {
       }
     _ => fail("input_schema must be a JSON object")
   }
+}
+
+
+///|
+test "delegate schema keeps weak-model recovery semantics explicit" {
+  let def = HerdrDelegate::shared_list_tools()[0]
+  guard def.input_schema is Object(fields) else {
+    fail("expected object schema")
+  }
+  guard fields.get("properties") is Some(Object(props)) else {
+    fail("expected properties")
+  }
+  guard props.get("task") is Some(Object(task)) else {
+    fail("expected task schema")
+  }
+  guard task.get("description") is Some(String(task_desc)) else {
+    fail("expected task description")
+  }
+  assert_true(task_desc.contains("single-line"))
+  assert_true(task_desc.contains("User-position slot"))
+
+  guard props.get("permission") is Some(Object(permission)) else {
+    fail("expected permission schema")
+  }
+  guard permission.get("description") is Some(String(permission_desc)) else {
+    fail("expected permission description")
+  }
+  assert_true(permission_desc.contains("cannot write"))
+  assert_true(permission_desc.contains("--yolo"))
+  assert_true(permission_desc.contains("unattended full permission"))
+
+  guard props.get("session") is Some(Object(session)) else {
+    fail("expected session schema")
+  }
+  guard session.get("description") is Some(String(session_desc)) else {
+    fail("expected session description")
+  }
+  assert_true(session_desc.contains("success, failure"))
+  assert_true(session_desc.contains("MUST reuse"))
+  assert_true(session_desc.contains("Omit 'session' for a new conversation"))
+
+  guard props.get("background") is Some(Object(background)) else {
+    fail("expected background schema")
+  }
+  guard background.get("description") is Some(String(background_desc)) else {
+    fail("expected background description")
+  }
+  assert_true(background_desc.contains("follow-up turn"))
+  assert_true(background_desc.contains("starts a fresh child"))
+  assert_true(background_desc.contains("cannot take 'session'"))
 }
