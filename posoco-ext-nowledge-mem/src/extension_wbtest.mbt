@@ -603,10 +603,16 @@ test "truncate_context: payloads at the cap pass through" {
 
 
 ///|
-test "startup_guidance_is_compact" {
+test "startup_guidance preserves routing and lifecycle rules compactly" {
   let text = startup_guidance("cetas")
   assert_true(text.contains("memory_search"))
   assert_true(text.contains("thread_search"))
-  assert_true(text.contains("source_app=cetas"))
-  assert_true(text.length() < 420)
+  assert_true(text.contains("topic changes"))
+  assert_true(text.contains("project conventions"))
+  assert_true(text.contains("Search before saving"))
+  assert_true(text.contains("settled, reusable knowledge"))
+  assert_true(text.contains("working-session state"))
+  assert_true(text.contains("<nmem-context type=\"memory\">"))
+  assert_true(text.contains("source_app=\"cetas\""))
+  assert_true(text.length() < 1800)
 }
