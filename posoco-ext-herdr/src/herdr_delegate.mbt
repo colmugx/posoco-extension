@@ -598,18 +598,24 @@ fn HerdrDelegate::background_task_run(
 }
 
 ///|
-/// Optional explicit host guidance. The default manifest does not inject this;
-/// the compact ToolDef carries the model-facing delegation rules.
+/// Resident host strategy. ToolDef covers call mechanics; this contributor
+/// keeps cross-call delegation policy visible for the whole session.
 pub impl @posoco.SystemPromptContributor for HerdrDelegate with fn system_prompt(
   self : HerdrDelegate,
 ) -> String {
-  "Herdr pane \{self.pane}: delegate independent work with herdr_delegate; prefer readonly and reuse child_session for follow-ups."
+  (
+    "Herdr pane \{self.pane}: `herdr_delegate` runs visible depth-1 cetas-headless children; children cannot delegate.\n" +
+    "- Use it for independent parallelizable subtasks, process isolation, or long work; multiple calls in one response run in parallel (cap 4).\n" +
+    "- Prefer permission=readonly for reconnaissance. write uses --yolo; use it only when the child must modify the workspace.\n" +
+    "- Pane readback can truncate; have children write important/long artifacts to workspace files.\n" +
+    "- Related/follow-up work MUST reuse the returned child_session, including after failure/timeout. One work-stream = one child session. Omit session only for a new conversation; never pass an empty session."
+  )
 }
 
 ///|
 /// A HerdrDelegate contributes its tool and declares the Agent-owned task
-/// capability it
-/// consumes for background delegations: the same value is a Lifecycle
+/// capability it consumes for background delegations and its resident
+/// strategy prompt: the same value is a Lifecycle
 /// contributor (captures the composed Tasks at on_compose) and an Observer
 /// (tracks the parent session from scoped events). No hooks: core's session
 /// inbox owns background-result delivery.
@@ -621,6 +627,7 @@ pub impl @posoco.Extension for HerdrDelegate with fn manifest(
     tools=[self],
     observers=[self as &@posoco.Observer],
     lifecycle=[self as &@posoco.Lifecycle],
+    prompt_contributors=[self],
     requires=[@posoco.Capability::Tasks],
   )
 }
