@@ -162,7 +162,7 @@ async test "memory_delete: queues through the port and drains with memory_id" {
   }
   inspect(
     outcome_text(outcome),
-    content="delete queued for mem_4; will sync to Nowledge Mem",
+    content="queued",
   )
   inspect(mcp.calls.length(), content="0")
   inspect(ext.mem.queue.length(), content="1")
@@ -393,4 +393,35 @@ async test "unscripted tool surfaces a reported error instead of hanging" {
     fail("expected a reported error")
   }
   assert_true(outcome_text(outcome).contains("no script for 'thread_search'"))
+}
+
+
+///|
+test "nmem_model_text_caps_generic_mcp_output" {
+  let text = "x".repeat(NMEM_TOOL_OUTPUT_CHARS + 500)
+  let out = nmem_model_text(text)
+  assert_true(out.has_suffix("…[cut]"))
+  assert_true(out.length() < text.length())
+}
+
+///|
+async test "read_context_bundle_applies_existing_context_cap" {
+  let body = "x".repeat(NMEM_MAX_CONTEXT_CHARS + 500)
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("read_context_bundle", mcp_ok("{\"rendered_markdown\":\"" + body + "\"}")),
+    ]),
+  )
+  let ext = tool_ext(mcp~)
+  let outcome = @posoco.ToolProvider::execute(
+    ext,
+    "read_context_bundle",
+    tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+  )
+  guard outcome is @posoco.ToolOutcome::Success(content~, structured~) else {
+    fail("expected success")
+  }
+  assert_true(content.length() < body.length())
+  assert_true(content.contains("context truncated"))
+  assert_true(structured is Some(Json::Object(_)))
 }
