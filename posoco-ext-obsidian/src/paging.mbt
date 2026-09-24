@@ -166,14 +166,14 @@ fn parse_search_context_json(output : String) -> Array[SearchHit] {
 
 ///|
 /// Rendering limits for paged tool output.
-const OBS_LINE_CHAR_CAP = 2000
+const OBS_LINE_CHAR_CAP = 1200
 
 ///|
-const OBS_BYTE_CAP = 100_000
+const OBS_BYTE_CAP = 40_000
 
 ///|
-/// Format a page of the note body: `L<line>: ` 1-indexed prefixes, long
-/// lines truncated with a marker, byte cap with a continuation footer.
+/// Format a compact page as `line|text` with bounded long lines and a short
+/// continuation footer.
 fn format_page(
   lines : ArrayView[String],
   first_line : Int,
@@ -185,24 +185,20 @@ fn format_page(
   let mut cut = false
   for idx, line in lines {
     let no = first_line + idx
-    let mut shown = line
-    if shown.length() > OBS_LINE_CHAR_CAP {
-      shown = "\{shown[:OBS_LINE_CHAR_CAP]} …[truncated]"
-    }
-    let chunk = "L\{no}: \{shown}\n"
-    if bytes + chunk.length() > OBS_BYTE_CAP {
+    let clipped = @devkit.truncate_chars(line, OBS_LINE_CHAR_CAP)
+    let shown = if clipped == line { clipped } else { clipped + "…[cut]" }
+    let chunk = "\{no}|\{shown}\n"
+    if bytes + @utf8.encode(chunk).length() > OBS_BYTE_CAP {
       cut = true
       break
     }
     sb.write_string(chunk)
-    bytes += chunk.length()
+    bytes += @utf8.encode(chunk).length()
     emitted += 1
   }
   let remaining = total_lines - first_line + 1 - emitted
   if cut || remaining > 0 {
-    sb.write_string(
-      "…[\{remaining} more lines; re-read with offset=\{first_line + emitted}]",
-    )
+    sb.write_string("… +\{remaining} lines; next=\{first_line + emitted}")
   }
   sb.to_string()
 }
