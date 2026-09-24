@@ -11,9 +11,8 @@ pub impl @posoco.Extension for WebFetchTools with fn extension_id(
 }
 
 ///|
-/// Declare the ports WebFetchTools contributes: ToolProvider (native+js) and
-/// SystemPromptContributor. The same `self` reference appears under both
-/// fields because WebFetchTools implements both port traits on one struct.
+/// Declare the ToolProvider contribution. Continuation and redirect recovery
+/// are carried by the tool/result protocol, so no resident prompt is needed.
 pub impl @posoco.Extension for WebFetchTools with fn manifest(
   self : WebFetchTools,
 ) -> @posoco.ExtensionManifest {
