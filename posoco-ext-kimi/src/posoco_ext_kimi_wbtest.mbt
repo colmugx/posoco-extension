@@ -1664,7 +1664,9 @@ test "compact_request_is_instructions_plus_input_without_tools" {
   guard body is Object(root) else { fail("expected object") }
   match root.get("instructions") {
     Some(String(instructions)) =>
-      assert_true(instructions.contains("context compaction engine"))
+      assert_true(
+        instructions.contains("Compress coding-agent context into XML"),
+      )
     _ => fail("expected the summary system prompt as instructions")
   }
   guard root.get("input") is Some(Array(items)) else {

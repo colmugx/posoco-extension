@@ -189,7 +189,6 @@ test "list_tools_declares_single_zcode_def" {
   }
 }
 
-
 ///|
 test "format_outcome_caps_long_result_but_keeps_footer_and_tail" {
   let body = "HEAD-" + "x".repeat(ZCODE_RESULT_CHAR_CAP + 500) + "-TAIL"

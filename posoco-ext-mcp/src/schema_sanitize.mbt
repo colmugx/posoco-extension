@@ -25,7 +25,9 @@ fn sanitize_schema_doc(value : Json, limit : Int) -> Json? {
   match value {
     Json::String(text) => {
       let clipped = @devkit.truncate_chars(text, limit)
-      Some(Json::string(if clipped == text { clipped } else { clipped + "…" }))
+      Some(
+        Json::string(if clipped == text { clipped } else { clipped + "…" }),
+      )
     }
     _ => None
   }
@@ -57,8 +59,7 @@ fn sanitize_tool_schema(schema : Json) -> Json {
               Json::True | Json::False => out[key] = value
               _ => ()
             }
-          "type" | "required" | "enum" | "const" | "default" =>
-            out[key] = value
+          "type" | "required" | "enum" | "const" | "default" => out[key] = value
           "description" =>
             match sanitize_schema_doc(value, MCP_SCHEMA_DESCRIPTION_CHARS) {
               Some(doc) => out[key] = doc

@@ -160,10 +160,7 @@ async test "memory_delete: queues through the port and drains with memory_id" {
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
   }
-  inspect(
-    outcome_text(outcome),
-    content="queued",
-  )
+  inspect(outcome_text(outcome), content="queued")
   inspect(mcp.calls.length(), content="0")
   inspect(ext.mem.queue.length(), content="1")
   ext.drain_memory_ops()
@@ -395,7 +392,6 @@ async test "unscripted tool surfaces a reported error instead of hanging" {
   assert_true(outcome_text(outcome).contains("no script for 'thread_search'"))
 }
 
-
 ///|
 test "nmem_model_text_caps_generic_mcp_output" {
   let text = "x".repeat(NMEM_TOOL_OUTPUT_CHARS + 500)
@@ -409,7 +405,10 @@ async test "read_context_bundle_applies_existing_context_cap" {
   let body = "x".repeat(NMEM_MAX_CONTEXT_CHARS + 500)
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
-      ("read_context_bundle", mcp_ok("{\"rendered_markdown\":\"" + body + "\"}")),
+      (
+        "read_context_bundle",
+        mcp_ok("{\"rendered_markdown\":\"" + body + "\"}"),
+      ),
     ]),
   )
   let ext = tool_ext(mcp~)

@@ -120,7 +120,9 @@ test "delegate tooldef shape" {
   assert_true(def.description.contains("success, failure"))
   assert_true(def.description.contains("readonly (default)"))
   assert_true(def.description.contains("--yolo"))
-  assert_true(def.description.contains("background always starts a fresh child"))
+  assert_true(
+    def.description.contains("background always starts a fresh child"),
+  )
   assert_true(def.description.contains("parallel panes"))
   assert_true(def.description.contains("pane readback can truncate"))
   assert_true(def.description.contains("one work-stream = one child session"))
@@ -671,7 +673,6 @@ test "delegate schema carries direction enum and close_pane boolean default" {
   }
 }
 
-
 ///|
 test "delegate schema keeps weak-model recovery semantics explicit" {
   let def = HerdrDelegate::shared_list_tools()[0]
@@ -687,7 +688,7 @@ test "delegate schema keeps weak-model recovery semantics explicit" {
   guard task.get("description") is Some(String(task_desc)) else {
     fail("expected task description")
   }
-  assert_true(task_desc.contains("single-line"))
+  assert_true(task_desc.contains("Single-line"))
   assert_true(task_desc.contains("User-position slot"))
 
   guard props.get("permission") is Some(Object(permission)) else {

@@ -50,7 +50,6 @@ pub fn SpawnLedger::remaining(self : SpawnLedger) -> Int {
   self.limit - self.labels.length()
 }
 
-
 ///|
 /// Reset the per-run budget at the next run boundary while preserving the
 /// configured limit.

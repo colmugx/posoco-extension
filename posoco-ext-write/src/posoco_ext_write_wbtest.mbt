@@ -227,10 +227,7 @@ async test "write_size_cap_is_a_reported_error" {
     let huge = "x".repeat(1_000_001)
     match run_write(WriteTools::WriteTools(), write_call(path, huge)) {
       Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
-        assert_true(
-          content.contains("1_000_001 bytes") ||
-          content.contains("1000001 bytes"),
-        )
+        assert_true(content.contains("1000001B > 1000000B"))
         assert_false(@fs.exists(path))
       }
       _ => fail("expected oversized write to be refused")

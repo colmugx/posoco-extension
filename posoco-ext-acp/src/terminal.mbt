@@ -163,8 +163,8 @@ async fn terminal_poll_once(
 }
 
 ///|
-/// Sleep one poll interval; a cancellation error raised by the sleep keeps
-/// its identity.
+/// Sleep one poll interval. Cancellation interrupts the sleep and is
+/// absorbed by `terminal_drive`'s `handle_cancellation`.
 async fn terminal_sleep(
   pause_ms : Int,
 ) -> Result[Unit, TerminalRunFailure] noraise {
@@ -198,6 +198,10 @@ async fn terminal_park(
 /// Drive one created terminal to exit: poll `terminal/output` until its
 /// `exitStatus` appears, then `terminal/wait_for_exit` for the
 /// authoritative code, then one drain poll for the output tail.
+/// Cancellation (async 0.22.3: uncatchable, not an error) is absorbed with
+/// `handle_cancellation` and classified as `CancelledRun`, so the caller
+/// still runs the protected kill/release cleanup and raises
+/// `TerminalCancelled` with the partial output.
 async fn terminal_drive(
   context : @acp.AgentContext,
   session_id : String,
@@ -207,63 +211,70 @@ async fn terminal_drive(
 ) -> Result[TerminalExitRun, TerminalRunFailure] noraise {
   let seen : Ref[String] = { val: "", }
   let started = @async.now()
-  let mut failure : TerminalRunFailure? = None
-  let mut exit_seen = false
-  while failure is None && !exit_seen {
-    if @async.is_being_cancelled() {
-      failure = Some(CancelledRun(seen.val))
-    } else {
-      match
-        terminal_poll_once(context, session_id, terminal_id, on_output, seen) {
-        Err(poll_failure) => failure = Some(poll_failure)
-        Ok(result) =>
-          if result.exit_status is Value(_) {
-            exit_seen = true
-          } else {
-            match terminal_park(started, timeout_ms, seen) {
-              Err(park_failure) => failure = Some(park_failure)
-              Ok(_) => ()
+  let failure : Ref[TerminalRunFailure?] = { val: None, }
+  let exit_seen : Ref[Bool] = { val: false, }
+  let outcome : Result[TerminalExitRun, TerminalRunFailure]? = @async.handle_cancellation(() => {
+      while failure.val is None && !exit_seen.val {
+        match
+          terminal_poll_once(context, session_id, terminal_id, on_output, seen) {
+          Err(poll_failure) => failure.val = Some(poll_failure)
+          Ok(result) =>
+            if result.exit_status is Value(_) {
+              exit_seen.val = true
+            } else {
+              match terminal_park(started, timeout_ms, seen) {
+                Err(park_failure) => failure.val = Some(park_failure)
+                Ok(_) => ()
+              }
             }
-          }
+        }
       }
-    }
+      if failure.val is Some(run_failure) {
+        Err(run_failure)
+      } else {
+        let wait_params : @acp.TerminalWaitForExitParams = {
+          session_id,
+          terminal_id,
+          meta: Omitted,
+        }
+        let waited = Ok(context.terminal_wait_for_exit(wait_params)) catch {
+          AgentContextCancelled(_) => Err(CancelledRun(seen.val))
+          error => Err(HostFailure(error))
+        }
+        match waited {
+          Err(wait_failure) => Err(wait_failure)
+          Ok(wait_result) =>
+            match
+              terminal_poll_once(
+                context, session_id, terminal_id, on_output, seen,
+              ) {
+              Err(drain_failure) => Err(drain_failure)
+              Ok(_) =>
+                Ok({
+                  output: seen.val,
+                  exit_code: match wait_result.exit_code {
+                    Value(code) =>
+                      if code <= 2147483647UL {
+                        Some(code.to_int())
+                      } else {
+                        None
+                      }
+                    _ => None
+                  },
+                })
+            }
+        }
+      }
+    },
+  ) catch {
+    // Unreachable while the wrapped body stays noraise;
+    // handle_cancellation's signature merely admits raising bodies.
+    error =>
+      abort("posoco-ext-acp: terminal_drive wrapped body raised: \{error}")
   }
-  match failure {
-    Some(run_failure) => Err(run_failure)
-    None => {
-      let wait_params : @acp.TerminalWaitForExitParams = {
-        session_id,
-        terminal_id,
-        meta: Omitted,
-      }
-      let waited = Ok(context.terminal_wait_for_exit(wait_params)) catch {
-        AgentContextCancelled(_) => Err(CancelledRun(seen.val))
-        error => Err(HostFailure(error))
-      }
-      match waited {
-        Err(wait_failure) => Err(wait_failure)
-        Ok(wait_result) =>
-          match
-            terminal_poll_once(
-              context, session_id, terminal_id, on_output, seen,
-            ) {
-            Err(drain_failure) => Err(drain_failure)
-            Ok(_) =>
-              Ok({
-                output: seen.val,
-                exit_code: match wait_result.exit_code {
-                  Value(code) =>
-                    if code <= 2147483647UL {
-                      Some(code.to_int())
-                    } else {
-                      None
-                    }
-                  _ => None
-                },
-              })
-          }
-      }
-    }
+  match outcome {
+    None => Err(CancelledRun(seen.val))
+    Some(result) => result
   }
 }
 

@@ -95,10 +95,7 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
       name="thread_search",
       description="Search past conversation threads for missing history/context.",
       properties=Map::from_array([
-        (
-          "query",
-          schema_prop("string", "Search query"),
-        ),
+        ("query", schema_prop("string", "Search query")),
         ("limit", schema_prop("integer", "Result limit")),
       ]),
       required=["query"],
@@ -108,14 +105,8 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
       description="Load one past thread with offset/limit paging.",
       properties=Map::from_array([
         ("thread_id", schema_prop("string", "Thread id")),
-        (
-          "limit",
-          schema_prop("integer", "Page size; server default 8"),
-        ),
-        (
-          "offset",
-          schema_prop("integer", "Message offset; default 0"),
-        ),
+        ("limit", schema_prop("integer", "Page size; server default 8")),
+        ("offset", schema_prop("integer", "Message offset; default 0")),
       ]),
       required=["thread_id"],
     ),
@@ -125,9 +116,7 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
       nmem_tool_def(
         name="memory_delete",
         description="Hard-delete a memory by id; irreversible.",
-        properties=Map::from_array([
-          ("id", schema_prop("string", "Memory id")),
-        ]),
+        properties=Map::from_array([("id", schema_prop("string", "Memory id"))]),
         required=["id"],
       ),
     )
@@ -268,7 +257,9 @@ async fn NowledgeMem::call_mcp_tool(
       tool_error(tool, "mcp error: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}")
     Ok({ text, .. }) =>
       @posoco.ToolOutcome::Success(
-        content=if tool == "read_context_bundle" { text } else {
+        content=if tool == "read_context_bundle" {
+          text
+        } else {
           nmem_model_text(text)
         },
         structured=parsed_structured(text),

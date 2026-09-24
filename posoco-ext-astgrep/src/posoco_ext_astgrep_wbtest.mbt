@@ -127,7 +127,7 @@ test "astgrep_missing_binary_error_lists_candidates_and_hint" {
   let message = missing_binary_error(["ast-grep", "sg"])
   assert_true(message.contains("ast-grep"))
   assert_true(message.contains("sg"))
-  assert_true(message.contains("brew install"))
+  assert_true(message.contains("install ast-grep"))
 }
 
 ///|

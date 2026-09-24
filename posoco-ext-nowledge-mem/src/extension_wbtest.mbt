@@ -601,7 +601,6 @@ test "truncate_context: payloads at the cap pass through" {
   inspect(truncate_context(exact, "cetas") == exact, content="true")
 }
 
-
 ///|
 test "startup_guidance preserves routing and lifecycle rules compactly" {
   let text = startup_guidance("cetas")

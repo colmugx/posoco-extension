@@ -11,6 +11,7 @@
 /// characters; tool output longer than `tool_output_char_limit` is cut to
 /// the limit and suffixed with `"\n[truncated]"`. Messages are joined with
 /// a blank line.
+
 ///|
 /// Preserve enough of each long string argument to identify both its opening
 /// and ending context (important for edits/code), while avoiding full file

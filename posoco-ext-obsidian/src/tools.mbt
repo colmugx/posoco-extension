@@ -116,15 +116,9 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
       name="obsidian_read_note",
       description="Read numbered note lines as `line|text`; offset is 1-based, limit defaults to 400. Records freshness.",
       properties=[
-        str_prop(
-          name="path",
-          description="Vault-relative note path",
-        ),
+        str_prop(name="path", description="Vault-relative note path"),
         int_prop(name="offset", description="1-based start line"),
-        int_prop(
-          name="limit",
-          description="Max lines; default 400",
-        ),
+        int_prop(name="limit", description="Max lines; default 400"),
       ],
       required=["path"],
       policy=@posoco.ExecutionPolicy::Parallel,
@@ -147,10 +141,7 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
       name="obsidian_list_notes",
       description="List files in the vault or a folder.",
       properties=[
-        str_prop(
-          name="dirpath",
-          description="Folder; default whole vault",
-        ),
+        str_prop(name="dirpath", description="Folder; default whole vault"),
         str_prop(name="ext", description="Filter by extension, e.g. md"),
       ],
       required=[],
@@ -179,14 +170,8 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
         description="Create a note; overwrite requires consent.",
         properties=[
           str_prop(name="path", description="Vault-relative note path"),
-          str_prop(
-            name="content",
-            description="Note content",
-          ),
-          bool_prop(
-            name="overwrite",
-            description="Overwrite; default false",
-          ),
+          str_prop(name="content", description="Note content"),
+          bool_prop(name="overwrite", description="Overwrite; default false"),
         ],
         required=["path", "content"],
         policy=@posoco.ExecutionPolicy::Exclusive,
@@ -204,14 +189,8 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
           enum_prop(name="target_type", description="Edit target type", [
             "heading", "frontmatter",
           ]),
-          str_prop(
-            name="target",
-            description="Heading or property name",
-          ),
-          str_prop(
-            name="content",
-            description="Replacement/appended content",
-          ),
+          str_prop(name="target", description="Heading or property name"),
+          str_prop(name="content", description="Replacement/appended content"),
         ],
         required=["path", "operation", "target_type", "target"],
         policy=@posoco.ExecutionPolicy::Exclusive,
@@ -223,10 +202,7 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
         description="Move/rename a note; Obsidian updates internal links.",
         properties=[
           str_prop(name="path", description="Current note path"),
-          str_prop(
-            name="new_path",
-            description="Destination note path",
-          ),
+          str_prop(name="new_path", description="Destination note path"),
         ],
         required=["path", "new_path"],
         policy=@posoco.ExecutionPolicy::Exclusive,
@@ -239,10 +215,7 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
           description="Delete a note; permanent deletion requires consent and confirm_path.",
           properties=[
             str_prop(name="path", description="Vault-relative note path"),
-            str_prop(
-              name="confirm_path",
-              description="Repeat path exactly",
-            ),
+            str_prop(name="confirm_path", description="Repeat path exactly"),
             bool_prop(
               name="permanent",
               description="Permanent delete; default false",

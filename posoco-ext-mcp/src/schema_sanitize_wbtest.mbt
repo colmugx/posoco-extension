@@ -48,7 +48,6 @@ test "sanitize rewrites schema false to true and passes booleans through" {
   )
 }
 
-
 ///|
 test "sanitize caps documentation but preserves validation fields" {
   let long_desc = "d".repeat(MCP_SCHEMA_DESCRIPTION_CHARS + 100)

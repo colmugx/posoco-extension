@@ -109,7 +109,11 @@ fn mcp_outcome_structured(truncated : Bool) -> Json? {
 ///|
 fn mcp_tool_description(description : String) -> String {
   let clipped = @devkit.truncate_chars(description, MCP_TOOL_DESCRIPTION_CHARS)
-  if clipped == description { clipped } else { clipped + "…" }
+  if clipped == description {
+    clipped
+  } else {
+    clipped + "…"
+  }
 }
 
 ///|

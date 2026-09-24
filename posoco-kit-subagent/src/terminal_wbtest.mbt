@@ -131,7 +131,6 @@ test "subagent_event_carries_child_identity" {
   assert_true(event.event is @posoco.TurnEvent::TurnStarted)
 }
 
-
 ///|
 test "terminal_completed_caps_child_text_but_keeps_footer" {
   let body = "HEAD-" + "x".repeat(SUBAGENT_RESULT_CHARS + 500) + "-TAIL"

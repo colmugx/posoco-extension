@@ -674,25 +674,21 @@ async test "defer runs on cancellation unwinding and sees latest cell state" {
       value_at_defer: 0,
       mut_capture_saw_latest: false,
     }
-    let observed : Array[Bool] = [false]
-    let task = group.spawn(() => {
-      let _ : Result[Unit, Error] = Ok(defer_probe_body(probe)) catch {
-        error => Err(error)
-      }
-      let _ : Result[Unit, Error] = Ok(defer_mut_capture_body(probe)) catch {
-        error => Err(error)
-      }
-      observed[0] = true
-    })
+    // Async 0.22.3: cancellation is uncatchable and unwinds the whole task
+    // closure, so each body runs in its own task; the defers still run on
+    // the unwind and are observed via the probe flags.
+    let task_a = group.spawn(() => defer_probe_body(probe))
+    let task_b = group.spawn(() => defer_mut_capture_body(probe))
     @async.sleep(100)
-    // The task is parked at its sleeps with both defers registered.
-    task.cancel()
+    // Both tasks are parked at their sleeps with defers registered.
+    task_a.cancel()
+    task_b.cancel()
     let mut waited = 0
-    while !observed[0] && waited < 5_000 {
+    while !(probe.deferred_ran && probe.mut_capture_saw_latest) &&
+          waited < 5_000 {
       @async.sleep(25)
       waited += 25
     }
-    assert_true(observed[0])
     assert_true(probe.deferred_ran)
     assert_eq(probe.value_at_defer, 42)
     assert_true(probe.mut_capture_saw_latest)
@@ -726,7 +722,6 @@ test "http_connect_params_preserves_injected_header_order" {
     _ => fail("expected http transport")
   }
 }
-
 
 ///|
 test "convert_tool_def_caps_external_description" {

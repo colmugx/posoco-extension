@@ -251,10 +251,7 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
     Some(String("")) => None
     Some(String(s)) => Some(s)
     None | Some(Null) => None
-    Some(_) =>
-      return Err(
-        "herdr_delegate: 'session' must be a string",
-      )
+    Some(_) => return Err("herdr_delegate: 'session' must be a string")
   }
   let timeout_ms = match obj.get("timeout_ms") {
     Some(Number(value, ..)) =>
@@ -603,13 +600,11 @@ fn HerdrDelegate::background_task_run(
 pub impl @posoco.SystemPromptContributor for HerdrDelegate with fn system_prompt(
   self : HerdrDelegate,
 ) -> String {
-  (
-    "Herdr pane \{self.pane}: `herdr_delegate` runs visible depth-1 cetas-headless children; children cannot delegate.\n" +
-    "- Use it for independent parallelizable subtasks, process isolation, or long work; multiple calls in one response run in parallel (cap 4).\n" +
-    "- Prefer permission=readonly for reconnaissance. write uses --yolo; use it only when the child must modify the workspace.\n" +
-    "- Pane readback can truncate; have children write important/long artifacts to workspace files.\n" +
-    "- Related/follow-up work MUST reuse the returned child_session, including after failure/timeout. One work-stream = one child session. Omit session only for a new conversation; never pass an empty session."
-  )
+  "Herdr pane \{self.pane}: `herdr_delegate` runs visible depth-1 cetas-headless children; children cannot delegate.\n" +
+  "- Use it for independent parallelizable subtasks, process isolation, or long work; multiple calls in one response run in parallel (cap 4).\n" +
+  "- Prefer permission=readonly for reconnaissance. write uses --yolo; use it only when the child must modify the workspace.\n" +
+  "- Pane readback can truncate; have children write important/long artifacts to workspace files.\n" +
+  "- Related/follow-up work MUST reuse the returned child_session, including after failure/timeout. One work-stream = one child session. Omit session only for a new conversation; never pass an empty session."
 }
 
 ///|

@@ -93,7 +93,6 @@ test "messages are joined with a blank line" {
   assert_eq(text, "[User]: a\n\n[User]: b")
 }
 
-
 ///|
 test "long write arguments keep structure but not the full file body" {
   let body = "BEGIN-" + String::make(3000, 'x') + "-END"

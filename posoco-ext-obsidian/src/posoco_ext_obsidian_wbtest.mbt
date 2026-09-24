@@ -161,10 +161,7 @@ async test "read_pagination_footer" {
   ])
   let (is_err, content, _) = outcome_parts(outcome)
   assert_false(is_err)
-  inspect(
-    content,
-    content="2|b\n3|c\n… +2 lines; next=4",
-  )
+  inspect(content, content="2|b\n3|c\n… +2 lines; next=4")
 }
 
 ///|
@@ -690,7 +687,6 @@ test "system_prompt_is_byte_stable" {
   assert_true(a.contains("outline"))
   assert_true(a.length() < 220)
 }
-
 
 ///|
 test "obsidian_model_output_is_bounded" {

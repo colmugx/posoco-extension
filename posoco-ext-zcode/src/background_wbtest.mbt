@@ -107,9 +107,7 @@ test "background with session_id is refused at parse" {
       default_mode="edit",
     ) {
     Err(message) =>
-      assert_true(
-        message.contains("foreground-only") && message.contains("1308"),
-      )
+      assert_true(message.contains("background cannot resume session_id"))
     Ok(_) => fail("expected background+session_id refusal")
   }
 }

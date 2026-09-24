@@ -181,9 +181,7 @@ pub fn zcode_parse_args(
         Some(_) => return Err("zcode: 'background' must be boolean")
       }
       if background && map.get("session_id") is Some(_) {
-        return Err(
-          "zcode: background cannot resume session_id",
-        )
+        return Err("zcode: background cannot resume session_id")
       }
       Ok({
         task,
@@ -205,11 +203,13 @@ pub fn zcode_parse_args(
 pub fn zcode_format_outcome(result : ZcodeTaskResult) -> @posoco.ToolOutcome {
   let (body, truncated) = zcode_result_text(result.final_text)
   let content = body + "\n\n" + zcode_result_footer(result)
-  let structured = Some(Json::object({
-    "session_id": Json::string(result.session_id),
-    "stop_reason": Json::string(result.stop_reason),
-    "truncated": Json::boolean(truncated),
-  }))
+  let structured = Some(
+    Json::object({
+      "session_id": Json::string(result.session_id),
+      "stop_reason": Json::string(result.stop_reason),
+      "truncated": Json::boolean(truncated),
+    }),
+  )
   if result.stop_reason == "success" {
     @posoco.ToolOutcome::Success(content~, structured~)
   } else {
@@ -231,12 +231,7 @@ fn zcode_tool_schema() -> Json {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("string")),
-                  (
-                    "description",
-                    Json::string(
-                      "Delegated task",
-                    ),
-                  ),
+                  ("description", Json::string("Delegated task")),
                 ]),
               ),
             ),
@@ -247,9 +242,7 @@ fn zcode_tool_schema() -> Json {
                   ("type", Json::string("string")),
                   (
                     "description",
-                    Json::string(
-                      "Working directory; default current directory",
-                    ),
+                    Json::string("Working directory; default current directory"),
                   ),
                 ]),
               ),
@@ -259,12 +252,7 @@ fn zcode_tool_schema() -> Json {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("string")),
-                  (
-                    "description",
-                    Json::string(
-                      "Session id to continue",
-                    ),
-                  ),
+                  ("description", Json::string("Session id to continue")),
                 ]),
               ),
             ),

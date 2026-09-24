@@ -81,21 +81,15 @@ fn agent_tool_schema() -> Json {
       }),
       "kind": Json::object({
         "type": Json::string("string"),
-        "description": Json::string(
-          "Preset kind; default coder",
-        ),
+        "description": Json::string("Preset kind; default coder"),
       }),
       "model": Json::object({
         "type": Json::string("string"),
-        "description": Json::string(
-          "Allowed model slot override",
-        ),
+        "description": Json::string("Allowed model slot override"),
       }),
       "effort": Json::object({
         "type": Json::string("string"),
-        "description": Json::string(
-          "Allowed effort override",
-        ),
+        "description": Json::string("Allowed effort override"),
       }),
       "tools": Json::object({
         "type": Json::string("array"),
@@ -123,15 +117,11 @@ fn agent_tool_schema() -> Json {
       }),
       "resume": Json::object({
         "type": Json::string("string"),
-        "description": Json::string(
-          "Child session id to resume",
-        ),
+        "description": Json::string("Child session id to resume"),
       }),
       "timeout_ms": Json::object({
         "type": Json::string("integer"),
-        "description": Json::string(
-          "Timeout ms; default 1800000",
-        ),
+        "description": Json::string("Timeout ms; default 1800000"),
       }),
       "background": Json::object({
         "type": Json::string("boolean"),

@@ -7,7 +7,7 @@ const SKILL_SEARCH_TOOL_NAME = "skill_search"
 ///|
 /// Bound model-visible skill descriptions; internal matching keeps the full
 /// descriptor text.
-const SKILL_DESCRIPTION_PREVIEW_CHARS = 160
+const SKILL_DESCRIPTION_PREVIEW_CHARS = 1024
 
 ///|
 fn Skills::search_tool_def(self : Skills) -> @posoco.ToolDef {
