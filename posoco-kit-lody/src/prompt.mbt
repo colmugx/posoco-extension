@@ -7,9 +7,20 @@
 pub fn prompt_section() -> String {
   (
     #|## Delegated tasks (lody)
-    #|Delegate long independent work with `lody_*` tools. Reuse one stable
-    #|task id for chat/poll/cancel. Treat task/update status fields as
-    #|authoritative; never infer state from titles. failed/timed_out/killed are
-    #|terminal: inspect error/output, then re-delegate narrower work if needed.
+    #|
+    #|This host can delegate self-contained work to parallel agent sessions.
+    #|
+    #|- Delegate long independent work through the delegated-task tools
+    #|  (prefixed `lody_`) instead of doing it inline; each delegation gets
+    #|  one stable task id — keep using the same id to chat with, poll, or
+    #|  cancel that task.
+    #|- Delegated tasks report state in two places: the `task` envelope on
+    #|  tool-call updates (pending / in_progress / completed / failed) and
+    #|  subagent listings (running / completed / failed / timed_out / killed
+    #|  / lost). Those fields are the only authority for task state; never
+    #|  infer it from a tool's human-readable title.
+    #|- failed, timed_out, and killed are terminal: read the task's error or
+    #|  output, then decide whether to re-delegate with a narrower prompt.
+    #|
   )
 }
