@@ -7,5 +7,3 @@
 ///|
 pub extend WebFetchTools with @posoco.ToolProvider::{execute}
 
-///|
-pub extend WebFetchTools with @posoco.SystemPromptContributor::{system_prompt}
