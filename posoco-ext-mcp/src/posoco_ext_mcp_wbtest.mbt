@@ -726,3 +726,44 @@ test "http_connect_params_preserves_injected_header_order" {
     _ => fail("expected http transport")
   }
 }
+
+
+///|
+test "convert_tool_def_caps_external_description" {
+  let long = "prefix-" + "x".repeat(MCP_TOOL_DESCRIPTION_CHARS + 100)
+  let def = convert_tool_def(
+    @types.ToolDefinition::{
+      name: "search",
+      description: long,
+      input_schema: Json::object({}),
+    },
+    "srv",
+  )
+  assert_true(def.description.has_prefix("prefix-"))
+  assert_true(def.description.has_suffix("…"))
+  assert_true(def.description.length() < long.length())
+}
+
+///|
+test "mcp_model_text_caps_success_and_error_surfaces" {
+  let raw = "HEAD-" + "x".repeat(MCP_SUCCESS_OUTPUT_CHARS + 500) + "-TAIL"
+  let (success, success_cut) = mcp_model_text(raw, MCP_SUCCESS_OUTPUT_CHARS)
+  assert_true(success_cut)
+  assert_true(success.has_prefix("HEAD-"))
+  assert_true(success.has_suffix("…[cut]"))
+  assert_true(success.length() < raw.length())
+
+  let (error, error_cut) = mcp_model_text(raw, MCP_ERROR_OUTPUT_CHARS)
+  assert_true(error_cut)
+  assert_true(error.length() < success.length())
+}
+
+///|
+test "mcp_outcome_structured_only_marks_truncation" {
+  assert_true(mcp_outcome_structured(false) is None)
+  match mcp_outcome_structured(true) {
+    Some(Json::Object(meta)) =>
+      assert_true(meta.get("truncated") is Some(Json::True))
+    _ => fail("expected truncation metadata")
+  }
+}
