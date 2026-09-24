@@ -58,9 +58,7 @@ fn skill_matches_query(skill : SkillDescriptor, tokens : Array[String]) -> Bool 
 fn skill_search_json(skill : SkillDescriptor) -> Json {
   Json::object({
     "name": Json::string(skill.name),
-    "description": Json::string(
-      unicode_scalar_preview(skill.description, SKILL_DESCRIPTION_PREVIEW_CHARS),
-    ),
+    "description": Json::string(skill.description),
   })
 }
 
