@@ -44,6 +44,61 @@ async test "agent_happy_path_returns_child_result_with_footer" {
 }
 
 ///|
+async test "spawn_budget_resets_at_each_parent_run" {
+  let composer = FakeComposer::FakeComposer(response_text="ok")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_spawn_budget(2),
+  )
+  let scope1 : @posoco.EventScope = {
+    session_id: @posoco.SessionId::unchecked("parent"),
+    run_id: @posoco.RunId::unchecked("run-1"),
+    turn_id: @posoco.TurnId::unchecked("turn-1"),
+  }
+  @posoco.Observer::on_event_at(
+    tools,
+    Some(scope1),
+    @posoco.TurnEvent::TurnStarted,
+  )
+  for task in ["one", "two"] {
+    let outcome = @posoco.ToolProvider::execute(
+      tools,
+      "agent",
+      agent_call(args_object([("task", Json::string(task))])),
+    )
+    assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  }
+  assert_eq(tools.ledger.remaining(), 0)
+
+  // Ordinary events in the same run do not replenish the budget.
+  @posoco.Observer::on_event_at(
+    tools,
+    Some(scope1),
+    @posoco.TurnEvent::TurnCompleted,
+  )
+  assert_eq(tools.ledger.remaining(), 0)
+
+  let scope2 : @posoco.EventScope = {
+    session_id: @posoco.SessionId::unchecked("parent"),
+    run_id: @posoco.RunId::unchecked("run-2"),
+    turn_id: @posoco.TurnId::unchecked("turn-2"),
+  }
+  @posoco.Observer::on_event_at(
+    tools,
+    Some(scope2),
+    @posoco.TurnEvent::TurnStarted,
+  )
+  assert_eq(tools.ledger.remaining(), 2)
+  let next = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(args_object([("task", Json::string("three"))])),
+  )
+  assert_true(next is @posoco.ToolOutcome::Success(_))
+  assert_eq(tools.ledger.remaining(), 1)
+}
+
+///|
 async test "spawn_budget_exhaustion_refuses_explicitly" {
   let composer = FakeComposer::FakeComposer(response_text="ok")
   let tools = test_tools(

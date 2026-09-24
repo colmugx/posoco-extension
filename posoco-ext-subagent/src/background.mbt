@@ -113,10 +113,15 @@ impl @posoco.Observer for SubagentTools with fn on_event(
 impl @posoco.Observer for SubagentTools with fn on_event_at(
   self : SubagentTools,
   scope : @posoco.EventScope?,
-  _event : @posoco.TurnEvent,
+  event : @posoco.TurnEvent,
 ) -> Unit {
   match scope {
-    Some(s) => self.session = Some(s.session_id.to_string())
+    Some(s) => {
+      self.session = Some(s.session_id.to_string())
+      if event is @posoco.TurnEvent::TurnStarted {
+        self.ledger.reset()
+      }
+    }
     None => ()
   }
 }

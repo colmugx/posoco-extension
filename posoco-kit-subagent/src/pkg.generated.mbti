@@ -119,6 +119,7 @@ pub(all) struct SpawnLedger {
 pub fn SpawnLedger::SpawnLedger(limit? : Int) -> Self
 pub fn SpawnLedger::acquired(Self) -> Array[String]
 pub fn SpawnLedger::remaining(Self) -> Int
+pub fn SpawnLedger::reset(Self) -> Unit
 pub fn SpawnLedger::to_repr(Self) -> @debug.Repr
 pub fn SpawnLedger::try_acquire(Self, String) -> Bool
 
