@@ -195,29 +195,11 @@ fn find_occurrences(content : String, needle : String) -> Array[(Int, Int)] {
 /// format and the legacy `L<digits>: ` format so old transcripts remain
 /// usable after the read output migration.
 fn strip_line_number_prefix(line : String) -> String? {
-  if line.length() >= 2 && line[0] >= '0' && line[0] <= '9' {
-    let mut i = 0
-    while i < line.length() && line[i] >= '0' && line[i] <= '9' {
-      i += 1
-    }
-    if i > 0 && i < line.length() && line[i] == '|' {
-      return Some(line[i + 1:].to_owned())
-    }
+  lexmatch line {
+    (re"^[0-9]+\|", after=rest) => Some(rest.to_owned())
+    (re"^L[0-9]+: ", after=rest) => Some(rest.to_owned())
+    _ => None
   }
-  if line.length() < 4 || line[0] != 'L' {
-    return None
-  }
-  let mut i = 1
-  while i < line.length() && line[i] >= '0' && line[i] <= '9' {
-    i += 1
-  }
-  if i == 1 || i + 1 >= line.length() {
-    return None
-  }
-  if line[i] == ':' && line[i + 1] == ' ' {
-    return Some(line[i + 2:].to_owned())
-  }
-  None
 }
 
 ///|
