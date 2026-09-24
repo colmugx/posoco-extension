@@ -1,8 +1,5 @@
 import {
   "colmugx/posoco",
   "moonbitlang/core/debug",
-}
-
-import {
   "moonbitlang/core/json",
-} for "wbtest"
+}
