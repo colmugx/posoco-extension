@@ -219,7 +219,7 @@ async test "glob_limit_caps_output_with_footer" {
         assert_true(
           content.contains("… +1 files"),
         )
-        // Header counts the total; body lists only the capped two.
+        // Body lists only the capped two; the footer reports the remainder.
         assert_eq(content.split("\n").to_array().length(), 3)
         match structured {
           Some(Object(meta)) => {
