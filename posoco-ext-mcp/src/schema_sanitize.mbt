@@ -14,6 +14,23 @@
 // Keep the allowlist in sync with the Kernel subset when upgrading posoco.
 
 ///|
+const MCP_SCHEMA_DESCRIPTION_CHARS = 240
+
+///|
+const MCP_SCHEMA_TITLE_CHARS = 120
+
+///|
+fn sanitize_schema_doc(value : Json, limit : Int) -> Json? {
+  match value {
+    Json::String(text) => {
+      let clipped = @devkit.truncate_chars(text, limit)
+      Some(Json::string(if clipped == text { clipped } else { clipped + "…" }))
+    }
+    _ => None
+  }
+}
+
+///|
 fn sanitize_tool_schema(schema : Json) -> Json {
   match schema {
     Json::Object(fields) => {
@@ -39,14 +56,20 @@ fn sanitize_tool_schema(schema : Json) -> Json {
               Json::True | Json::False => out[key] = value
               _ => ()
             }
-          "type"
-          | "required"
-          | "enum"
-          | "const"
-          | "title"
-          | "description"
-          | "default"
-          | "examples" => out[key] = value
+          "type" | "required" | "enum" | "const" | "default" =>
+            out[key] = value
+          "description" =>
+            match sanitize_schema_doc(value, MCP_SCHEMA_DESCRIPTION_CHARS) {
+              Some(doc) => out[key] = doc
+              None => ()
+            }
+          "title" =>
+            match sanitize_schema_doc(value, MCP_SCHEMA_TITLE_CHARS) {
+              Some(doc) => out[key] = doc
+              None => ()
+            }
+          // Examples are documentation-only and can dwarf the callable shape.
+          "examples" => ()
           _ => ()
         }
       }
