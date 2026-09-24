@@ -107,6 +107,12 @@ fn mcp_outcome_structured(truncated : Bool) -> Json? {
 }
 
 ///|
+fn mcp_tool_description(description : String) -> String {
+  let clipped = @devkit.truncate_chars(description, MCP_TOOL_DESCRIPTION_CHARS)
+  if clipped == description { clipped } else { clipped + "…" }
+}
+
+///|
 /// Convert MCP ToolDefinition to Posoco ToolDef with namespace prefix.
 /// The external input schema is sanitized to the Kernel's supported subset
 /// here — see schema_sanitize.mbt for why this cannot wait for the catalog.
@@ -118,13 +124,7 @@ fn convert_tool_def(
     name: @posoco.ToolName::unchecked(
       namespaced_tool_name(server_name, mcp_tool.name),
     ),
-    description: {
-      let clipped = @devkit.truncate_chars(
-        mcp_tool.description,
-        MCP_TOOL_DESCRIPTION_CHARS,
-      )
-      if clipped == mcp_tool.description { clipped } else { clipped + "…" }
-    },
+    description: mcp_tool_description(mcp_tool.description),
     input_schema: sanitize_tool_schema(mcp_tool.input_schema),
     owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
     policy: @posoco.ExecutionPolicy::Parallel,
