@@ -29,7 +29,7 @@ test "parse_empty_task_errs" {
     ),
   )
   match zcode_parse_args(arguments, default_mode="edit") {
-    Err(message) => assert_true(message.contains("non-empty"))
+    Err(message) => assert_true(message.contains("empty"))
     Ok(_) => fail("expected empty task to be rejected")
   }
 }
@@ -109,10 +109,15 @@ test "format_outcome_success" {
     tool_result_of(stop_reason="success", final_text="pong", usage=None),
   )
   match outcome {
-    Success(content~, ..) => {
+    Success(content~, structured~) => {
       assert_true(content.has_prefix("pong"))
       assert_true(content.contains("session_id: sess_1234"))
       assert_true(!content.contains("tokens:"))
+      match structured {
+        Some(Object(meta)) =>
+          assert_eq(meta.get("truncated"), Some(Json::boolean(false)))
+        _ => fail("expected structured metadata")
+      }
     }
     _ => fail("expected Success")
   }
@@ -182,4 +187,47 @@ test "list_tools_declares_single_zcode_def" {
     Some(Json::Array(required)) => assert_eq(required.length(), 1)
     _ => fail("expected required task")
   }
+}
+
+
+///|
+test "format_outcome_caps_long_result_but_keeps_footer_and_tail" {
+  let body = "HEAD-" + "x".repeat(ZCODE_RESULT_CHAR_CAP + 500) + "-TAIL"
+  let outcome = zcode_format_outcome(
+    tool_result_of(stop_reason="success", final_text=body, usage=None),
+  )
+  match outcome {
+    Success(content~, structured~) => {
+      assert_true(content.has_prefix("HEAD-"))
+      assert_true(content.contains("…[cut]…"))
+      assert_true(content.contains("-TAIL"))
+      assert_true(content.has_suffix("session_id: sess_1234"))
+      assert_false(content.contains(body))
+      match structured {
+        Some(Object(meta)) =>
+          assert_eq(meta.get("truncated"), Some(Json::boolean(true)))
+        _ => fail("expected structured metadata")
+      }
+    }
+    _ => fail("expected Success")
+  }
+}
+
+///|
+test "background_summary_uses_same_bounded_body_contract" {
+  let body = "HEAD-" + "x".repeat(ZCODE_RESULT_CHAR_CAP + 500) + "-TAIL"
+  let text = zcode_background_summary(
+    tool_result_of(stop_reason="success", final_text=body, usage=None),
+  )
+  assert_true(text.has_prefix("HEAD-"))
+  assert_true(text.contains("…[cut]…"))
+  assert_true(text.contains("-TAIL"))
+  assert_true(text.has_suffix("session_id: sess_1234"))
+  assert_false(text.contains(body))
+}
+
+///|
+test "zcode_tool_definition_is_compact" {
+  let def = zcode_tools().list_tools()[0]
+  assert_true(def.description.length() < 160)
 }
