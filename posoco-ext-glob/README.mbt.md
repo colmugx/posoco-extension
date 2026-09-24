@@ -49,11 +49,10 @@ the pruned directory names (default: `@devkit.default_ignore_patterns()`).
 - **Pruned traversal** — hidden entries and `ignores` directories are
   skipped on both engines; a pattern that only matches directories (e.g.
   `sub`) yields no results.
-- **Uniform output across engines** — both scanners feed one shared
-  formatter: `Found N files:` followed by one path per line (newest first),
-  plus a structured payload (`summary`, `count`, `truncated`) for
-  observers/UIs.
-- **Bounded output** — the `limit` cap (default 100) truncates the listing;
-  anything cut ends with a `… N more files; narrow the pattern or raise
-  limit` footer.
+- **Uniform compact output** — both scanners feed one shared formatter:
+  one path per line (newest first), with no redundant count header. Zero
+  matches return `(no files)`. Structured `summary`, `count`, and
+  `truncated` metadata remain available to observers/UIs.
+- **Bounded output** — `limit` defaults to 100 and model-visible paths are
+  also capped at 40 KB. Truncation uses the compact `… +N files` footer.
 - Scan failures surface as model-visible errors with the sanitized base path.
