@@ -72,7 +72,7 @@ fn format_page(
 ///|
 /// Cross-host redirect stop. This is a success outcome, not an error: the
 /// model decides whether to trust the target and fetch it explicitly.
-fn format_redirect(original : String, target : String) -> String {
+fn format_redirect(_original : String, target : String) -> String {
   "redirect blocked (cross-host): \{target}; fetch explicitly if trusted"
 }
 
