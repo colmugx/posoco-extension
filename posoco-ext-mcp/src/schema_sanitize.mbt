@@ -6,9 +6,10 @@
 // composition hard failure, and one rejected tool rejects the WHOLE catalog
 // refresh — so a single real-world server schema would make every MCP tool
 // invisible. External schemas are not under the host's control, so the
-// bridge adapts them at the boundary: keep the parameter shape (type,
-// properties, items, required, enum, const, documentation) and drop the
-// rest. Constraints are loosened, never invented; argument validation of
+// bridge adapts them at the boundary: keep the parameter shape and validation
+// fields (type, properties, items, required, enum, const, default), keep
+// bounded title/description documentation, and drop examples plus unsupported
+// keywords. Constraints are loosened, never invented; argument validation of
 // the sanitized schema stays permissive for the dropped keywords.
 //
 // Keep the allowlist in sync with the Kernel subset when upgrading posoco.
