@@ -29,6 +29,7 @@ test "terminal_completed_maps_to_success" {
       assert_eq(fields.get("input_tokens"), Some(Json::number(100.0)))
       assert_eq(fields.get("output_tokens"), Some(Json::number(50.0)))
       assert_eq(fields.get("kind"), Some(Json::string("coder")))
+      assert_eq(fields.get("truncated"), Some(Json::boolean(false)))
       assert_eq(fields.get("reason"), None)
     }
     _ => fail("expected structured object")
@@ -128,4 +129,33 @@ test "subagent_event_carries_child_identity" {
   assert_eq(event.child_session, "cs_9")
   assert_eq(event.kind, "scout")
   assert_true(event.event is @posoco.TurnEvent::TurnStarted)
+}
+
+
+///|
+test "terminal_completed_caps_child_text_but_keeps_footer" {
+  let body = "HEAD-" + "x".repeat(SUBAGENT_RESULT_CHARS + 500) + "-TAIL"
+  let outcome = terminal_outcome(
+    state=Completed,
+    kind="coder",
+    child_session="cs_1",
+    result_text=body,
+    turns=3,
+    input_tokens=100,
+    output_tokens=50,
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(content~, structured~) => {
+      assert_true(content.has_prefix("HEAD-"))
+      assert_true(content.contains("…[cut]"))
+      assert_true(content.has_suffix(FOOTER))
+      assert_false(content.contains(body))
+      match structured {
+        Some(Object(fields)) =>
+          assert_eq(fields.get("truncated"), Some(Json::boolean(true)))
+        _ => fail("expected structured object")
+      }
+    }
+    _ => fail("expected Success")
+  }
 }
