@@ -92,14 +92,14 @@ fn herdr_delegate_gate(
 fn herdr_delegate_tooldef() -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked("herdr_delegate"),
-    description: "Delegate one task to a fresh cetas-headless agent in a visible herdr pane: splits a new pane beside this one, launches cetas-headless there with the task, blocks until its completion marker or the timeout, then reads the pane back and returns the headless agent's answer as the tool result. 'task' is the user-position slot — untrusted content may flow there, and it must be a single line. Delegated agents are depth-1 leaves: they never receive delegation tools, so they cannot delegate further. The result footer carries 'peer_pane:' (the child's herdr pane id) and, when captured, 'child_session:' (returned on success, failure, and best-effort timeout; pass it back via 'session' to continue that child). 'permission' controls the child: readonly (default) runs cetas-headless --permission readonly (it cannot write); write runs it with --yolo (unattended full permission). 'model'/'effort'/'session' forward to cetas-headless; 'timeout_ms' bounds the wait (default 1800000 = 30 minutes). 'direction' is the split direction (default right, or down); 'close_pane' (default true) closes the child pane after a successful run — it never closes on failure or timeout, since a timed-out child may still be running. Long-running: pass background: true to get an immediate receipt (delegation_id) and receive the child's result as a follow-up turn — background always starts a fresh child and refuses 'session', since a timed-out child may still be running in its pane and resume stays foreground-only. Strategy: batch independent subtasks as multiple herdr_delegate calls in one response — they run as parallel panes (concurrency cap 4); send a readonly scout first and reserve write for tasks that must modify the workspace; tell children to write long artifacts to workspace files, since pane readback can truncate, and iterate on a child by passing its child_session back via 'session' — related tasks MUST reuse the same child session (one work-stream = one child session, never a fresh session per step; child_session is returned even on failure and timeout). Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child.",
+    description: "Delegate a task to a depth-1 cetas-headless child in a visible pane. Prefer readonly; reuse child_session for follow-ups. Parallel calls use separate panes; background starts fresh and cannot resume.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "task": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Single-line task for the delegated headless agent. User-position slot: untrusted content may flow here.",
+            "Single-line child user task",
           ),
         }),
         "permission": Json::object({
@@ -107,52 +107,52 @@ fn herdr_delegate_tooldef() -> @posoco.ToolDef {
           "enum": Json::array([Json::string("readonly"), Json::string("write")]),
           "default": Json::string("readonly"),
           "description": Json::string(
-            "readonly (default) launches headless with --permission readonly (cannot write); write launches with --yolo (unattended full permission)",
+            "readonly (default) or write (--yolo)",
           ),
         }),
         "model": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Optional model slot forwarded to cetas-headless --model",
+            "Optional model slot",
           ),
         }),
         "effort": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Optional reasoning effort forwarded to cetas-headless --effort",
+            "Optional reasoning effort",
           ),
         }),
         "session": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Child session id from a previous result or error footer (returned on success, failure, and best-effort timeout); re-launches headless with --session to continue that child. Related or follow-up tasks MUST reuse the same child session instead of spawning a new one. Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child (child_session from a prior result/error footer)",
+            "Prior child_session to continue; reuse for follow-ups",
           ),
         }),
         "timeout_ms": Json::object({
           "type": Json::string("integer"),
           "default": Json::number(1800000.0),
           "description": Json::string(
-            "Wait bound for the completion marker in milliseconds (default 1800000 = 30 minutes)",
+            "Timeout ms; default 1800000",
           ),
         }),
         "direction": Json::object({
           "type": Json::string("string"),
           "enum": Json::array([Json::string("right"), Json::string("down")]),
           "default": Json::string("right"),
-          "description": Json::string("Direction of the split (default right)"),
+          "description": Json::string("Split direction; default right"),
         }),
         "close_pane": Json::object({
           "type": Json::string("boolean"),
           "default": Json::boolean(true),
           "description": Json::string(
-            "Close the child pane after a successful run (default true); failures and timeouts leave the pane open",
+            "Close pane after success; default true",
           ),
         }),
         "background": Json::object({
           "type": Json::string("boolean"),
           "default": Json::boolean(false),
           "description": Json::string(
-            "Return a receipt immediately and run the delegation in the background; the result arrives later as a follow-up turn. Background always starts a fresh child and cannot take 'session'.",
+            "Background follow-up; starts fresh and cannot take session",
           ),
         }),
       }),
@@ -181,12 +181,12 @@ fn extract_delegate_task(args : Json) -> Result[String, String] {
         Some(String(task)) => Ok(task)
         _ =>
           Err(
-            "herdr_delegate: missing or invalid 'task'; pass a non-empty single-line string",
+            "herdr_delegate: missing/invalid 'task'",
           )
       }
     _ =>
       Err(
-        "herdr_delegate: invalid arguments; pass a JSON object with a 'task' string",
+        "herdr_delegate: arguments must be an object",
       )
   }
 }
@@ -210,18 +210,18 @@ priv struct HerdrDelegateArgs {
 fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
   let obj = match args {
     Object(obj) => obj
-    _ => return Err("herdr_delegate: invalid arguments; expected a JSON object")
+    _ => return Err("herdr_delegate: arguments must be an object")
   }
   let task = match obj.get("task") {
     Some(String(s)) =>
       if s == "" {
         return Err(
-          "herdr_delegate: 'task' must be a non-empty single-line string",
+          "herdr_delegate: empty 'task'",
         )
       } else {
         s
       }
-    _ => return Err("herdr_delegate: 'task' must be a non-empty string")
+    _ => return Err("herdr_delegate: 'task' must be a string")
   }
   let permission = match obj.get("permission") {
     Some(String("readonly")) => "readonly"
@@ -239,13 +239,13 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
     Some(String("")) => None
     Some(String(s)) => Some(s)
     None | Some(Null) => None
-    Some(_) => return Err("herdr_delegate: optional 'model' must be a string")
+    Some(_) => return Err("herdr_delegate: 'model' must be a string")
   }
   let effort = match obj.get("effort") {
     Some(String("")) => None
     Some(String(s)) => Some(s)
     None | Some(Null) => None
-    Some(_) => return Err("herdr_delegate: optional 'effort' must be a string")
+    Some(_) => return Err("herdr_delegate: 'effort' must be a string")
   }
   let session = match obj.get("session") {
     Some(String("")) => None
@@ -253,7 +253,7 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
     None | Some(Null) => None
     Some(_) =>
       return Err(
-        "herdr_delegate: optional 'session' must be a child session id string",
+        "herdr_delegate: 'session' must be a string",
       )
   }
   let timeout_ms = match obj.get("timeout_ms") {
@@ -261,7 +261,7 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
       if value > 0.0 {
         value.to_int()
       } else {
-        return Err("herdr_delegate: 'timeout_ms' must be a positive integer")
+        return Err("herdr_delegate: 'timeout_ms' must be > 0")
       }
     None | Some(Null) => herdr_default_timeout_ms
     Some(_) => return Err("herdr_delegate: 'timeout_ms' must be an integer")
@@ -289,7 +289,7 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
   }
   if background && session is Some(_) {
     return Err(
-      "herdr_delegate: background mode always starts a fresh child and cannot resume — a timed-out child may still be running in its pane and the delegate cannot distinguish it from a finished one; resume via a foreground call with 'session'",
+      "herdr_delegate: background cannot resume session",
     )
   }
   Ok({
@@ -342,7 +342,7 @@ async fn HerdrDelegate::execute_delegate_impl(
   }
   if self.active >= herdr_delegate_limit {
     return herdr_delegate_error(
-      "herdr_delegate: delegate concurrency limit reached (\{herdr_delegate_limit} active) — retry when earlier delegates finish",
+      "herdr_delegate: concurrency limit \{herdr_delegate_limit}",
     )
   }
   let args = match extract_delegate_args(call.arguments) {
@@ -598,27 +598,17 @@ fn HerdrDelegate::background_task_run(
 }
 
 ///|
-/// Herdr-context section for the assembled system prompt. Static text built
-/// only from construction-time fields (pane is fixed), honoring the
-/// byte-stability contract of SystemPromptContributor.
+/// Optional explicit host guidance. The default manifest does not inject this;
+/// the compact ToolDef carries the model-facing delegation rules.
 pub impl @posoco.SystemPromptContributor for HerdrDelegate with fn system_prompt(
   self : HerdrDelegate,
 ) -> String {
-  "You are running inside a herdr terminal-multiplexer pane (pane \{self.pane}). You can delegate work to depth-1 cetas-headless child agents in visible panes with the herdr_delegate tool; children never receive delegation tools.\n" +
-  "Use herdr_delegate for independent parallelizable subtasks (multiple calls in one response run as parallel panes, concurrency cap 4), for read-only reconnaissance first (permission=readonly), and for tasks that need process isolation or long runtime. Results are read back from the pane screen and long answers may truncate: tell children to write important artifacts to workspace files instead of long replies. Related or follow-up tasks MUST reuse the same child session — pass a result's child_session (also present on failure/timeout errors) back via the session argument. One work-stream = one child session; never open a fresh session for each step of the same logical task — reuse keeps context coherent and makes restarts after failure or timeout cheap. Omit session for a new conversation — never pass an empty string; pass session only to continue an existing child (child_session from a prior result/error footer).\n" +
-  "write permission (--yolo) is powerful: prefer readonly unless the task must modify the workspace."
+  "Herdr pane \{self.pane}: delegate independent work with herdr_delegate; prefer readonly and reuse child_session for follow-ups."
 }
 
 ///|
-pub impl @posoco.Extension for HerdrDelegate with fn extension_id(
-  _self : HerdrDelegate,
-) -> String {
-  "posoco_ext_herdr_delegate"
-}
-
-///|
-/// A HerdrDelegate contributes itself as a tool plus its herdr-context
-/// system-prompt section, and declares the Agent-owned task capability it
+/// A HerdrDelegate contributes its tool and declares the Agent-owned task
+/// capability it
 /// consumes for background delegations: the same value is a Lifecycle
 /// contributor (captures the composed Tasks at on_compose) and an Observer
 /// (tracks the parent session from scoped events). No hooks: core's session
@@ -631,7 +621,6 @@ pub impl @posoco.Extension for HerdrDelegate with fn manifest(
     tools=[self],
     observers=[self as &@posoco.Observer],
     lifecycle=[self as &@posoco.Lifecycle],
-    prompt_contributors=[self],
     requires=[@posoco.Capability::Tasks],
   )
 }
