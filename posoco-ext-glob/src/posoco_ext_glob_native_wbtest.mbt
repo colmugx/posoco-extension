@@ -99,7 +99,7 @@ async test "glob_zero_matches_fills_structured_summary" {
     )
     match result {
       Success(content~, structured~) => {
-        assert_eq(content, "Found 0 files:\n")
+        assert_eq(content, "(no files)")
         match structured {
           Some(Object(meta)) => {
             assert_true(meta.get("summary") is Some(String("no files")))
@@ -131,11 +131,11 @@ async test "glob_multi_file_fills_structured_summary" {
     match result {
       Success(content~, structured~) => {
         // Walk order is not alphabetical, so pin the exact shape, not the order.
-        assert_true(content.has_prefix("Found 2 files:\n"))
+        assert_false(content.has_prefix("Found "))
         assert_true(content.contains("\{dir}/a.mbt"))
         assert_true(content.contains("\{dir}/b.mbt"))
         assert_false(content.contains("c.txt"))
-        assert_eq(content.split("\n").to_array().length(), 4)
+        assert_eq(content.split("\n").to_array().length(), 2)
         match structured {
           Some(Object(meta)) => {
             assert_true(meta.get("summary") is Some(String("2 files")))
@@ -215,14 +215,12 @@ async test "glob_limit_caps_output_with_footer" {
     )
     match result {
       Success(content~, structured~) => {
-        assert_true(content.has_prefix("Found 3 files:\n"))
+        assert_false(content.has_prefix("Found "))
         assert_true(
-          content.contains(
-            "… 1 more files; narrow the pattern or raise limit",
-          ),
+          content.contains("… +1 files"),
         )
         // Header counts the total; body lists only the capped two.
-        assert_eq(content.split("\n").to_array().length(), 5)
+        assert_eq(content.split("\n").to_array().length(), 3)
         match structured {
           Some(Object(meta)) => {
             assert_true(meta.get("count") is Some(Number(3.0, ..)))
@@ -322,7 +320,7 @@ async test "glob_directory_pattern_yields_no_results" {
     )
     match result {
       Success(content~, structured~) => {
-        assert_eq(content, "Found 0 files:\n")
+        assert_eq(content, "(no files)")
         match structured {
           Some(Object(meta)) =>
             assert_true(meta.get("summary") is Some(String("no files")))
@@ -366,5 +364,24 @@ async test "glob_sorts_newest_first" {
       other =>
         fail("expected Success for mtime-sorted glob, got " + other.to_string())
     }
+  }
+}
+
+
+///|
+test "glob_result_contract_uses_no_verbose_header" {
+  let scanner = FakeGlobScanner::FakeGlobScanner(["a.mbt", "b.mbt"])
+  let result = execute_glob_impl(
+    scanner,
+    None,
+    glob_call_fields([("pattern", Json::string("*.mbt"))]),
+  )
+  match result {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.contains("a.mbt"))
+      assert_true(content.contains("b.mbt"))
+      assert_false(content.contains("Found"))
+    }
+    _ => fail("expected compact glob success")
   }
 }
