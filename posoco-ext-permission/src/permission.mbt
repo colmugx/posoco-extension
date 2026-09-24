@@ -227,7 +227,7 @@ fn PermissionPolicy::mode_reminder_text(self : PermissionPolicy) -> String? {
           ns="permission",
           kind="mode",
           trust=true,
-          content="Permission mode is read-only. Read-only inspection — including provably read-only shell commands — is pre-approved; file mutation, other shell execution, and unknown tools are rejected. Do not attempt them.",
+          content="Mode: read-only. Reads and provably read-only shell are allowed; mutation, other shell, and unknown tools are rejected.",
         ),
       )
     Auto =>
@@ -236,7 +236,7 @@ fn PermissionPolicy::mode_reminder_text(self : PermissionPolicy) -> String? {
           ns="permission",
           kind="mode",
           trust=true,
-          content="Permission mode is auto. Reads are pre-approved; every other operation is judged per call by a semantic gate that may approve or decline it without asking you. Prefer provably safe, task-scoped operations; a declined call is steering, not an error to retry blind.",
+          content="Mode: auto. Reads are allowed; other calls are judged per call and may be declined. Prefer safe task-scoped operations; do not blindly retry declines.",
         ),
       )
     WorkspaceWrite | Interactive | Yolo => None
