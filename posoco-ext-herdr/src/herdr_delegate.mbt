@@ -613,6 +613,13 @@ pub impl @posoco.SystemPromptContributor for HerdrDelegate with fn system_prompt
 }
 
 ///|
+pub impl @posoco.Extension for HerdrDelegate with fn extension_id(
+  _self : HerdrDelegate,
+) -> String {
+  "posoco_ext_herdr_delegate"
+}
+
+///|
 /// A HerdrDelegate contributes its tool and declares the Agent-owned task
 /// capability it consumes for background delegations and its resident
 /// strategy prompt: the same value is a Lifecycle
