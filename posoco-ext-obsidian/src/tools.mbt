@@ -99,14 +99,14 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
   let tools : Array[@posoco.ToolDef] = [
     tool_def(
       name="obsidian_search",
-      description="Search the Obsidian vault for text and return matching lines per file (grep-style). Use before reading to locate notes.",
+      description="Search vault text; returns matching note lines.",
       properties=[
         str_prop(name="query", description="Text to search for"),
         str_prop(name="folder", description="Limit search to this vault folder"),
-        int_prop(name="limit", description="Maximum number of files to return"),
+        int_prop(name="limit", description="Result limit"),
         bool_prop(
           name="case_sensitive",
-          description="Case-sensitive search (default false)",
+          description="Case-sensitive; default false",
         ),
       ],
       required=["query"],
@@ -114,16 +114,16 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
     ),
     tool_def(
       name="obsidian_read_note",
-      description="Read a vault note with `L<line>: ` numbered lines. Optional `offset` is the 1-indexed line to start from; optional `limit` caps lines returned. Reads record file state so write tools can detect stale targets.",
+      description="Read numbered note lines as `line|text`; offset is 1-based, limit defaults to 400. Records freshness.",
       properties=[
         str_prop(
           name="path",
-          description="Vault-relative note path (folder/note.md)",
+          description="Vault-relative note path",
         ),
-        int_prop(name="offset", description="1-indexed line to start from"),
+        int_prop(name="offset", description="1-based start line"),
         int_prop(
           name="limit",
-          description="Maximum number of lines to return (default 1000)",
+          description="Max lines; default 400",
         ),
       ],
       required=["path"],
@@ -131,14 +131,14 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
     ),
     tool_def(
       name="obsidian_get_frontmatter",
-      description="Read a note's frontmatter properties as a JSON object.",
+      description="Read note frontmatter JSON.",
       properties=[str_prop(name="path", description="Vault-relative note path")],
       required=["path"],
       policy=@posoco.ExecutionPolicy::Parallel,
     ),
     tool_def(
       name="obsidian_outline",
-      description="List a note's headings as [{level, heading, line}] JSON. Call before patching to locate sections.",
+      description="List note headings with level and line.",
       properties=[str_prop(name="path", description="Vault-relative note path")],
       required=["path"],
       policy=@posoco.ExecutionPolicy::Parallel,
@@ -149,7 +149,7 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
       properties=[
         str_prop(
           name="dirpath",
-          description="Folder to list (default: whole vault)",
+          description="Folder; default whole vault",
         ),
         str_prop(name="ext", description="Filter by extension, e.g. md"),
       ],
@@ -158,13 +158,13 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
     ),
     tool_def(
       name="obsidian_backlinks",
-      description="Vault link graph from Obsidian's own metadata: backlinks to a note, unresolved links, or orphan notes.",
+      description="Get backlinks, unresolved links, or orphan notes.",
       properties=[
         str_prop(
           name="path",
           description="Target note path (required for kind=backlinks)",
         ),
-        enum_prop(name="kind", description="Which link report to run", [
+        enum_prop(name="kind", description="Link report kind", [
           "backlinks", "unresolved", "orphans",
         ]),
       ],
@@ -176,16 +176,16 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
     tools.push(
       tool_def(
         name="obsidian_create_note",
-        description="Create a vault note. Refuses to overwrite unless `overwrite` is true (which requires user consent).",
+        description="Create a note; overwrite requires consent.",
         properties=[
           str_prop(name="path", description="Vault-relative note path"),
           str_prop(
             name="content",
-            description="Note content; newlines are preserved",
+            description="Note content",
           ),
           bool_prop(
             name="overwrite",
-            description="Overwrite an existing note (default false)",
+            description="Overwrite; default false",
           ),
         ],
         required=["path", "content"],
@@ -195,22 +195,22 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
     tools.push(
       tool_def(
         name="obsidian_patch_note",
-        description="Edit a note: `append`/`prepend` raw content (prepend skips frontmatter), or `replace`/`delete` a heading section located via obsidian_outline. `target_type=frontmatter` sets/removes a property key.",
+        description="Patch note content, heading sections, or frontmatter.",
         properties=[
           str_prop(name="path", description="Vault-relative note path"),
           enum_prop(name="operation", description="Edit operation", [
             "append", "prepend", "replace", "delete",
           ]),
-          enum_prop(name="target_type", description="What the edit targets", [
+          enum_prop(name="target_type", description="Edit target type", [
             "heading", "frontmatter",
           ]),
           str_prop(
             name="target",
-            description="Heading text (target_type=heading) or property name (target_type=frontmatter)",
+            description="Heading or property name",
           ),
           str_prop(
             name="content",
-            description="New content for append/prepend/replace or property value",
+            description="Replacement/appended content",
           ),
         ],
         required=["path", "operation", "target_type", "target"],
@@ -220,12 +220,12 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
     tools.push(
       tool_def(
         name="obsidian_move_note",
-        description="Move and/or rename a note; Obsidian updates internal links following the vault's own settings.",
+        description="Move/rename a note; Obsidian updates internal links.",
         properties=[
-          str_prop(name="path", description="Current vault-relative note path"),
+          str_prop(name="path", description="Current note path"),
           str_prop(
             name="new_path",
-            description="Destination vault-relative path (may rename, move, or both)",
+            description="Destination note path",
           ),
         ],
         required=["path", "new_path"],
@@ -236,16 +236,16 @@ fn shared_list_tools(config : ObsidianConfig) -> Array[@posoco.ToolDef] {
       tools.push(
         tool_def(
           name="obsidian_delete_note",
-          description="Delete a note. Moves to the vault trash unless `permanent` is true, which requires explicit user consent. `confirm_path` must equal `path` exactly.",
+          description="Delete a note; permanent deletion requires consent and confirm_path.",
           properties=[
             str_prop(name="path", description="Vault-relative note path"),
             str_prop(
               name="confirm_path",
-              description="Must repeat `path` verbatim",
+              description="Repeat path exactly",
             ),
             bool_prop(
               name="permanent",
-              description="Skip trash, delete permanently (default false)",
+              description="Permanent delete; default false",
             ),
           ],
           required=["path", "confirm_path"],
