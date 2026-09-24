@@ -77,8 +77,13 @@ async test "write_creates_missing_parents" {
       error => Err(error)
     }
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
-        assert_true(content.contains("Wrote 7 bytes"))
+      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+        assert_eq(content, "ok")
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("bytes") is Some(Number(7.0, ..)))
+          _ => fail("expected write byte metadata")
+        }
         assert_true(@fs.exists(path))
       }
       _ => fail("expected writing with a missing parent to succeed")
@@ -188,7 +193,7 @@ async test "write_without_ledger_allows_blind_overwrite" {
 
 ///|
 #cfg(target="native")
-async test "write_reports_utf8_bytes_not_code_units" {
+async test "write_reports_utf8_bytes_in_structured_metadata" {
   @async.with_task_group() <| group => {
     let dir = @fs.tmpdir(prefix="posoco-write-bytes")
     group.add_defer() <| () => {
@@ -197,8 +202,14 @@ async test "write_reports_utf8_bytes_not_code_units" {
     let path = dir + "/utf8.txt"
     // 5 chars, 6 UTF-8 bytes (é is two bytes).
     match run_write(WriteTools::WriteTools(), write_call(path, "héllo")) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        assert_true(content.contains("Wrote 6 bytes"))
+      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+        assert_eq(content, "ok")
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("bytes") is Some(Number(6.0, ..)))
+          _ => fail("expected write byte metadata")
+        }
+      }
       _ => fail("expected utf8 write to succeed")
     }
   }
@@ -262,7 +273,7 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
     // First write records the canonical (resolved) key.
     match run_write(tools, write_call("notes/a.txt", "v1")) {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        assert_true(content.contains("notes/a.txt"))
+        assert_eq(content, "ok")
       _ => fail("expected anchored write to succeed")
     }
     assert_true(@fs.exists(dir + "/notes/a.txt"))
@@ -276,4 +287,11 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
     }
     assert_eq(text, "v2")
   }
+}
+
+
+///|
+test "write_tool_definition_stays_compact" {
+  let def = WriteTools::WriteTools().list_tools()[0]
+  assert_true(def.description.length() < 160)
 }
