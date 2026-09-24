@@ -119,18 +119,23 @@ test "delegate tooldef shape" {
 }
 
 ///|
-test "delegate optional system prompt is compact and byte-stable" {
+test "delegate system prompt preserves resident strategy compactly" {
   let delegate = test_delegate()
   let first = delegate.system_prompt()
   assert_true(first.contains("1-1"))
-  assert_true(first.contains("herdr_delegate"))
-  assert_true(first.contains("reuse child_session"))
-  assert_true(first.length() < 160)
+  assert_true(first.contains("depth-1"))
+  assert_true(first.contains("independent parallelizable"))
+  assert_true(first.contains("permission=readonly"))
+  assert_true(first.contains("--yolo"))
+  assert_true(first.contains("readback can truncate"))
+  assert_true(first.contains("MUST reuse the returned child_session"))
+  assert_true(first.contains("One work-stream = one child session"))
+  assert_true(first.length() < 850)
   assert_eq(first, delegate.system_prompt())
 }
 
 ///|
-test "manifest lock: delegate has zero resident prompt cost" {
+test "manifest lock: delegate keeps one resident strategy contributor" {
   let delegate = test_delegate()
   assert_eq(delegate.extension_id(), "posoco_ext_herdr_delegate")
   let m = delegate.manifest()
@@ -144,7 +149,7 @@ test "manifest lock: delegate has zero resident prompt cost" {
   assert_eq(m.sessions.length(), 0)
   assert_eq(m.commands.length(), 0)
   assert_eq(m.memory.length(), 0)
-  assert_eq(m.prompt_contributors.length(), 0)
+  assert_eq(m.prompt_contributors.length(), 1)
   let reporter : HerdrReporter = {
     pane: "1-1",
     bin: "herdr",
