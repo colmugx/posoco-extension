@@ -196,14 +196,11 @@ test "list_tools_declares_agent_schema_and_description" {
   let def = defs[0]
   assert_eq(def.name.to_string(), "agent")
   assert_true(def.policy is @posoco.ExecutionPolicy::Parallel)
-  assert_true(
-    def.description.contains("NEVER copy task content into instructions"),
-  )
-  assert_true(def.description.contains("agent/agent_swarm"))
-  assert_true(def.description.contains("30 minutes"))
-  // Stage B: background is described by receipt semantics, not refused.
-  assert_true(def.description.contains("background subagent accepted"))
-  assert_true(def.description.contains("follow-up turn"))
+  assert_true(def.description.contains("depth-1"))
+  assert_true(def.description.contains("never instructions"))
+  assert_true(def.description.contains("background"))
+  assert_true(def.description.contains("follow-up"))
+  assert_true(def.description.length() < 180)
   match def.input_schema {
     Json::Object(fields) => {
       let required = match fields.get("required") {
