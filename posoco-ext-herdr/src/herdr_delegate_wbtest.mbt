@@ -111,28 +111,26 @@ test "delegate tooldef shape" {
       }
     _ => fail("input_schema must be a JSON object")
   }
-  assert_true(def.description.contains("parallel"))
+  assert_true(def.description.contains("depth-1"))
   assert_true(def.description.contains("readonly"))
-  assert_true(def.description.contains("MUST reuse"))
-  assert_true(def.description.contains("even on failure and timeout"))
-  assert_true(def.description.contains("never pass an empty string"))
+  assert_true(def.description.contains("reuse child_session"))
+  assert_true(def.description.contains("background"))
+  assert_true(def.description.length() < 230)
 }
 
 ///|
-test "delegate system prompt carries herdr context and is byte-stable" {
+test "delegate optional system prompt is compact and byte-stable" {
   let delegate = test_delegate()
   let first = delegate.system_prompt()
-  assert_true(first != "")
   assert_true(first.contains("1-1"))
-  assert_true(first.contains("depth-1"))
   assert_true(first.contains("herdr_delegate"))
-  assert_true(first.contains("MUST reuse"))
-  assert_true(first.contains("never pass an empty string"))
+  assert_true(first.contains("reuse child_session"))
+  assert_true(first.length() < 160)
   assert_eq(first, delegate.system_prompt())
 }
 
 ///|
-test "manifest lock: delegate contributes tool+prompt+lifecycle+observer, reporter stays tool-free" {
+test "manifest lock: delegate has zero resident prompt cost" {
   let delegate = test_delegate()
   assert_eq(delegate.extension_id(), "posoco_ext_herdr_delegate")
   let m = delegate.manifest()
@@ -146,7 +144,7 @@ test "manifest lock: delegate contributes tool+prompt+lifecycle+observer, report
   assert_eq(m.sessions.length(), 0)
   assert_eq(m.commands.length(), 0)
   assert_eq(m.memory.length(), 0)
-  assert_eq(m.prompt_contributors.length(), 1)
+  assert_eq(m.prompt_contributors.length(), 0)
   let reporter : HerdrReporter = {
     pane: "1-1",
     bin: "herdr",
