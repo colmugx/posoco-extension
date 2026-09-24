@@ -43,7 +43,7 @@ pub struct WebFetchTools {
 /// Canonical constructor. Use this everywhere to avoid cross-target naming drift.
 pub fn WebFetchTools::WebFetchTools(
   timeout_ms? : Int = 30_000,
-  max_chars? : Int = 50_000,
+  max_chars? : Int = 24_000,
   byte_cap? : Int = 5_242_880,
   cache? : DocCache,
   io? : &HttpIo? = None,
