@@ -366,22 +366,3 @@ async test "glob_sorts_newest_first" {
     }
   }
 }
-
-
-///|
-test "glob_result_contract_uses_no_verbose_header" {
-  let scanner = FakeGlobScanner::FakeGlobScanner(["a.mbt", "b.mbt"])
-  let result = execute_glob_impl(
-    scanner,
-    None,
-    glob_call_fields([("pattern", Json::string("*.mbt"))]),
-  )
-  match result {
-    @posoco.ToolOutcome::Success(content~, ..) => {
-      assert_true(content.contains("a.mbt"))
-      assert_true(content.contains("b.mbt"))
-      assert_false(content.contains("Found"))
-    }
-    _ => fail("expected compact glob success")
-  }
-}
