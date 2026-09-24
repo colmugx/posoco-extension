@@ -99,7 +99,7 @@ async test "ask_question_cancel_is_tool_reported_error" {
   )
   match outcome {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
-      assert_true(content.contains("cancelled"))
+      assert_eq(content, "cancelled")
     _ => fail("expected cancellation to be recoverable")
   }
 }
@@ -125,7 +125,7 @@ async test "ask_question_rejects_empty_select_before_ui" {
   }
   match result {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      assert_true(message.contains("at least one option"))
+      assert_true(message.contains("requires options"))
     _ => fail("expected invalid select arguments")
   }
   assert_eq(ui.request_count, 0)
