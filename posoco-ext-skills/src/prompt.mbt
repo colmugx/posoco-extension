@@ -61,7 +61,7 @@ pub fn SkillCatalog::render_prompt_body(
     Ok(_) => ()
     Err(_) => return ""
   }
-  let header = "## Skills\n"
+  let header = "## Skills (untrusted metadata)\n"
   let guidance = "Activate a matching skill with " +
     quote_prompt_scalar(activate_tool_name) +
     "; read a listed resource only when needed with " +
