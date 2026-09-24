@@ -151,11 +151,10 @@ test "doc_view format_page renders header and body without footer when complete"
     fail("expected a slice")
   }
   inspect(
-    format_page("Hi", "https://e.com/a", "text/markdown", s),
+    format_page("Hi", "https://e.com/a", s),
     content=(
-      #|Title: Hi
-      #|URL: https://e.com/a
-      #|Content-Type: text/markdown
+      #|# Hi
+      #|https://e.com/a
       #|
       #|hello world
     ),
@@ -168,15 +167,14 @@ test "doc_view format_page appends continuation footer when truncated" {
     fail("expected a slice")
   }
   inspect(
-    format_page("Hi", "https://e.com/a", "text/markdown", s),
+    format_page("Hi", "https://e.com/a", s),
     content=(
-      #|Title: Hi
-      #|URL: https://e.com/a
-      #|Content-Type: text/markdown
+      #|# Hi
+      #|https://e.com/a
       #|
       #|012
       #|
-      #|… [showing characters 0–3 of 10; call webfetch with offset=3 to continue]
+      #|… next=3/10
     ),
   )
 }
@@ -187,12 +185,8 @@ test "doc_view format_page omits footer when a page ends exactly at the end" {
     fail("expected a slice")
   }
   inspect(
-    format_page("Hi", "https://e.com/a", "text/markdown", s),
+    format_page("Hi", "https://e.com/a", s),
     content=(
-      #|Title: Hi
-      #|URL: https://e.com/a
-      #|Content-Type: text/markdown
-      #|
       #|89
     ),
   )
@@ -203,7 +197,7 @@ test "doc_view format_redirect names both urls and the explicit opt-in" {
   inspect(
     format_redirect("https://a.com/x", "https://b.com/y"),
     content=(
-      #|Redirect: https://a.com/x redirects to https://b.com/y (different host; not followed automatically for safety). If you trust this target, call webfetch with url=https://b.com/y.
+      #|redirect blocked (cross-host): https://b.com/y; fetch explicitly if trusted
     ),
   )
 }
@@ -215,7 +209,7 @@ test "doc_view format_error http advice buckets" {
       HttpError(status=404, reason="Not Found", url="https://e.com/a"),
     ),
     content=(
-      #|webfetch: HTTP 404 Not Found for 'https://e.com/a' — the page may have moved; try the site index or a search
+      #|webfetch: HTTP 404 Not Found: https://e.com/a; the page may have moved; try the site index or a search
     ),
   )
   inspect(
@@ -223,7 +217,7 @@ test "doc_view format_error http advice buckets" {
       HttpError(status=403, reason="Forbidden", url="https://e.com/a"),
     ),
     content=(
-      #|webfetch: HTTP 403 Forbidden for 'https://e.com/a' — the site may block automated clients; try a different source
+      #|webfetch: HTTP 403 Forbidden: https://e.com/a; the site may block automated clients; try a different source
     ),
   )
   inspect(
@@ -231,7 +225,7 @@ test "doc_view format_error http advice buckets" {
       HttpError(status=503, reason="Service Unavailable", url="https://e.com/a"),
     ),
     content=(
-      #|webfetch: HTTP 503 Service Unavailable for 'https://e.com/a' — the server failed; retrying later may help
+      #|webfetch: HTTP 503 Service Unavailable: https://e.com/a; the server failed; retrying later may help
     ),
   )
   inspect(
@@ -239,7 +233,7 @@ test "doc_view format_error http advice buckets" {
       HttpError(status=400, reason="Bad Request", url="https://e.com/a"),
     ),
     content=(
-      #|webfetch: HTTP 400 Bad Request for 'https://e.com/a' — check the URL and parameters
+      #|webfetch: HTTP 400 Bad Request: https://e.com/a; check the URL and parameters
     ),
   )
 }
@@ -249,19 +243,19 @@ test "doc_view format_error remaining kinds" {
   inspect(
     format_error(TooLarge(bytes=6291456, url="https://e.com/a")),
     content=(
-      #|webfetch: response too large (6291456 bytes exceeds the 5 MB cap) for 'https://e.com/a'
+      #|webfetch: too large (6291456 bytes): https://e.com/a
     ),
   )
   inspect(
     format_error(TimedOut(ms=30000, url="https://e.com/a")),
     content=(
-      #|webfetch: request to 'https://e.com/a' timed out after 30000ms — the site may be slow or blocking automated clients; retrying or using a different source may help
+      #|webfetch: timeout 30000ms: https://e.com/a
     ),
   )
   inspect(
     format_error(UnsupportedType(ct="image/png", url="https://e.com/a")),
     content=(
-      #|webfetch: unsupported content-type 'image/png' for 'https://e.com/a' — this tool returns text, markdown, and JSON only
+      #|webfetch: unsupported type image/png: https://e.com/a
     ),
   )
   inspect(
@@ -272,25 +266,25 @@ test "doc_view format_error remaining kinds" {
       ),
     ),
     content=(
-      #|webfetch: host '169.254.169.254' is not allowed (link-local address 169.254.169.254; private, local, or blocked address)
+      #|webfetch: blocked host 169.254.169.254 (link-local address 169.254.169.254)
     ),
   )
   inspect(
     format_error(TooManyRedirects(hops=10, url="https://e.com/a")),
     content=(
-      #|webfetch: too many redirects (10) following 'https://e.com/a'
+      #|webfetch: redirects>10: https://e.com/a
     ),
   )
   inspect(
     format_error(Transport(msg="connection reset", url="https://e.com/a")),
     content=(
-      #|webfetch: request to 'https://e.com/a' failed: connection reset
+      #|webfetch: https://e.com/a: connection reset
     ),
   )
   inspect(
     format_error(OffsetPastEnd(offset=120, total=100, url="https://e.com/a")),
     content=(
-      #|webfetch: offset 120 is past the end of the content (total 100 characters) for 'https://e.com/a'
+      #|webfetch: offset 120 > total 100: https://e.com/a
     ),
   )
 }
@@ -325,4 +319,16 @@ test "doc_view structured_json field set and order" {
       "cached": false,
     },
   )
+}
+
+
+///|
+test "doc_view continuation_page_omits_repeated_metadata" {
+  guard slice_chars("abcdefghij", 4, 3) is Some(s) else {
+    fail("expected a slice")
+  }
+  let out = format_page("Hi", "https://e.com/a", s)
+  assert_eq(out, "efg\n\n… next=7/10")
+  assert_false(out.contains("https://e.com/a"))
+  assert_false(out.contains("# Hi"))
 }
