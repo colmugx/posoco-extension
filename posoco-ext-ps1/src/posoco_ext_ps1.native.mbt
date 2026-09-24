@@ -45,6 +45,7 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
       ps1_decode_failure(exit_code)
     }
   }
+  let content = ps1_model_output(content, exit_code)
   let is_error = exit_code != 0 || decode_failed
   if is_error {
     @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
@@ -55,14 +56,14 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
 
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
-fn ps1_decode_failure(exit_code : Int) -> String {
-  "powershell: decode failed (stage=decode_output, category=invalid_utf8, exit_code=\{exit_code})"
+fn ps1_decode_failure(_exit_code : Int) -> String {
+  "powershell: invalid UTF-8"
 }
 
 ///|
 /// Native collect_output failure.
 fn ps1_collect_output_failure() -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "powershell: process failed (stage=collect_output)",
+    "powershell: process failed",
   )
 }
