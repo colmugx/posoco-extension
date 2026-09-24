@@ -10,7 +10,7 @@ pub(all) struct AskQuestionTools {
 ///|
 /// Construct an ask-question extension. The composed UI is wired during
 /// composition; constructing without a host that contributes a UiPort makes
-/// every ask_question report "Interactive UI is unavailable".
+/// every ask_question report "ui unavailable".
 pub fn AskQuestionTools::AskQuestionTools() -> AskQuestionTools {
   { ui: None, }
 }
