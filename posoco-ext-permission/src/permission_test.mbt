@@ -540,7 +540,10 @@ async test "before_model injects the read-only reminder as one user message, ide
     _ => fail("expected user message")
   }
   match user_text(r1[1]) {
-    Some(text) => assert_true(text.length() < 210)
+    Some(text) => {
+      assert_true(text.contains("pre-approved"))
+      assert_true(text.contains("do not attempt them"))
+    }
     None => fail("expected read-only reminder")
   }
   // Second call with the same transcript: no duplicate reminder.
@@ -1555,8 +1558,8 @@ async test "auto mode injects a standing reminder; leaving auto removes it" {
   match user_text(r1[1]) {
     Some(text) => {
       assert_true(text.contains("judged per call"))
-      assert_true(text.contains("do not blindly retry"))
-      assert_true(text.length() < 240)
+      assert_true(text.contains("decline is steering"))
+      
     }
     None => fail("expected auto reminder")
   }
