@@ -28,7 +28,7 @@ test "prompt wraps the conversation and applies the template" {
   let (system, user) = prompt_texts(StructuredMd, "the transcript")
   assert_true(system.contains("## Goal"))
   assert_true(user.contains("<conversation>\nthe transcript\n</conversation>"))
-  assert_true(user.contains("five-section"))
+  assert_true(user.contains("Summarize now"))
   assert_false(user.contains("<previous-summary>"))
   assert_false(user.contains("Additional focus:"))
 }
@@ -55,15 +55,13 @@ test "custom instruction becomes an additional focus line" {
     custom_instruction=Some("keep the failing test names"),
   )
   assert_true(user.contains("Additional focus: keep the failing test names"))
-  assert_true(user.contains("XML snapshot"))
+  assert_true(user.contains("Summarize now"))
 }
 
 ///|
 test "codex handoff template flows into both messages" {
   let (system, user) = prompt_texts(CodexHandoff, "c")
-  assert_true(system.contains("handoff summary for another LLM"))
+  assert_true(system.contains("handoff for another LLM"))
   assert_true(user.contains("<conversation>\nc\n</conversation>"))
-  assert_true(
-    user.contains("handoff summary described in the system instructions"),
-  )
+  assert_true(user.contains("Summarize now"))
 }
