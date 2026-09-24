@@ -92,3 +92,65 @@ test "messages are joined with a blank line" {
   let text = serialize_for_summary([user_msg("a"), user_msg("b")])
   assert_eq(text, "[User]: a\n\n[User]: b")
 }
+
+
+///|
+test "long write arguments keep structure but not the full file body" {
+  let body = "BEGIN-" + String::make(3000, 'x') + "-END"
+  let message = asst_msg("", [
+    tool_call(
+      "write",
+      Json::object({
+        "path": Json::string("src/main.mbt"),
+        "content": Json::string(body),
+      }),
+    ),
+  ])
+  let text = serialize_for_summary([message])
+  assert_true(text.contains("\"path\":\"src/main.mbt\""))
+  assert_true(text.contains("\"content\":\"BEGIN-"))
+  assert_true(text.contains("-END\""))
+  assert_true(text.contains("…[cut]…"))
+  assert_false(text.contains(body))
+  assert_true(char_count(text) < 2300)
+}
+
+///|
+test "large edit arguments have a hard total cap" {
+  let old_text = "OLD-" + String::make(3000, 'a') + "-OLD-END"
+  let new_text = "NEW-" + String::make(3000, 'b') + "-NEW-END"
+  let message = asst_msg("", [
+    tool_call(
+      "edit",
+      Json::object({
+        "path": Json::string("src/main.mbt"),
+        "old_text": Json::string(old_text),
+        "new_text": Json::string(new_text),
+        "replace_all": Json::boolean(false),
+      }),
+    ),
+  ])
+  let args = render_tool_args(
+    match message {
+      AssistantMessage(tool_calls=[call, ..], ..) => call.arguments
+      _ => Json::null()
+    },
+  )
+  assert_true(args.contains("\"path\":\"src/main.mbt\""))
+  assert_true(args.contains("\"old_text\""))
+  assert_true(args.contains("\"new_text\""))
+  assert_true(args.contains("OLD-"))
+  assert_true(args.contains("NEW-END"))
+  assert_false(args.contains(old_text))
+  assert_false(args.contains(new_text))
+  assert_true(char_count(args) <= SUMMARY_TOOL_ARGS_CHARS)
+}
+
+///|
+test "short tool arguments remain byte-for-byte unchanged" {
+  let args = Json::object({
+    "path": Json::string("main.mbt"),
+    "offset": Json::number(4.0),
+  })
+  assert_eq(render_tool_args(args), args.stringify())
+}
