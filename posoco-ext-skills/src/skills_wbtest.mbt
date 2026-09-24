@@ -1756,7 +1756,7 @@ async test "activation: resource directory retarget is detected before stale ent
   match skills.activate("demo") {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_false(content.contains("refs/secret.md"))
-      assert_true(content.contains("Resource listing warnings"))
+      assert_true(content.contains("warnings:"))
     }
     _ => fail("activation itself should remain recoverable")
   }
@@ -1781,7 +1781,7 @@ async test "activation: resource directory retarget after readdir discards enume
   match skills.activate("demo") {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_false(content.contains("refs/stale.md"))
-      assert_true(content.contains("Resource listing warnings"))
+      assert_true(content.contains("warnings:"))
     }
     _ => fail("activation itself should remain recoverable")
   }
@@ -1810,7 +1810,7 @@ async test "activation: resource listing budget counts quoted model-visible path
   match skills.activate("demo") {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_false(content.contains(quoted_name))
-      assert_true(content.contains("Resource listing was truncated"))
+      assert_true(content.contains("… resources truncated"))
     }
     _ => fail("activation should succeed with a truncated listing")
   }
@@ -1835,7 +1835,7 @@ async test "activation: resource listing has an aggregate model-visible characte
   })
   match skills.activate("demo") {
     @posoco.ToolOutcome::Success(content~, structured~) => {
-      assert_true(content.contains("Resource listing was truncated"))
+      assert_true(content.contains("… resources truncated"))
       match structured {
         Some(Object(values)) =>
           assert_eq(
@@ -1866,7 +1866,7 @@ async test "activation: resource warning details are bounded with an omitted cou
   match skills.activate("demo") {
     @posoco.ToolOutcome::Success(content~, structured~) => {
       assert_true(
-        content.contains("additional resource listing warnings were omitted"),
+        content.contains("… +") && content.contains("warnings"),
       )
       match structured {
         Some(Object(values)) =>
@@ -2292,7 +2292,7 @@ async test "skill_search never auto-activates and fails closed on low relevance"
   }
   match skills.execute("skill_search", call) {
     @posoco.ToolOutcome::Success(content~, ..) =>
-      assert_true(content.contains("No discovered skill matches"))
+      assert_eq(content, "(no skills)")
     _ => fail("expected conservative no-match result")
   }
   assert_eq(decision.call_count(), 1)
@@ -2300,7 +2300,7 @@ async test "skill_search never auto-activates and fails closed on low relevance"
 
 
 ///|
-test "skill_search model text previews descriptions but structured keeps full text" {
+async test "skill_search model text previews descriptions but structured keeps full text" {
   let fs = FakeFs()
   let long = "needle " + "x".repeat(SKILL_DESCRIPTION_PREVIEW_CHARS + 80)
   let skills = must_skills(
