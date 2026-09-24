@@ -18,9 +18,9 @@ async test "list_tools_contains_powershell" {
 async test "list_tools_description_names_exe_and_syntax" {
   let pwsh_defs = PowerShellTools(exe="pwsh").list_tools()
   assert_true(pwsh_defs[0].description.contains("pwsh"))
-  assert_true(pwsh_defs[0].description.contains("&&"))
+  assert_true(pwsh_defs[0].description.contains("&&/||"))
   let ps51_defs = PowerShellTools(exe="powershell").list_tools()
-  assert_true(ps51_defs[0].description.contains("NOT supported"))
+  assert_true(ps51_defs[0].description.contains("No &&/||"))
 }
 
 ///|
@@ -102,7 +102,7 @@ async test "extract_command_wrong_type_raises_precise_error" {
 }
 
 ///|
-async test "empty_command_has_arguments_stage" {
+async test "empty_command_is_compact_failure" {
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("tc_empty"),
     name: @posoco.ToolName::unchecked("powershell"),
@@ -112,20 +112,17 @@ async test "empty_command_has_arguments_stage" {
     error => Err(error)
   }
   match result {
-    Err(@posoco.RuntimeError::InvocationFailed(message)) => {
-      assert_true(message.contains("powershell"))
-      assert_true(message.contains("stage=arguments"))
-      assert_true(message.contains("empty_command"))
-    }
+    Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+      assert_eq(message, "powershell: empty cmd")
     _ => fail("expected empty command to fail before process execution")
   }
 }
 
 ///|
-test "collect_output_failure_mapping_is_stage_only" {
+test "collect_output_failure_mapping_is_compact" {
   match ps1_collect_output_failure() {
     @posoco.RuntimeError::InvocationFailed(message) =>
-      assert_eq(message, "powershell: process failed (stage=collect_output)")
+      assert_eq(message, "powershell: process failed")
     _ => fail("expected collect_output mapping to be InvocationFailed")
   }
 }
@@ -133,27 +130,21 @@ test "collect_output_failure_mapping_is_stage_only" {
 ///|
 test "windows_guidance_pwsh_flavor" {
   let text = windows_guidance("pwsh", "win32 10.0.26244")
-  assert_true(text.contains("Environment: Windows (win32 10.0.26244)"))
-  assert_true(text.contains("pipeline chains are supported"))
+  assert_true(text.contains("PowerShell (pwsh), not bash"))
   assert_true(text.contains("$env:NAME"))
-  assert_true(text.contains("NOT bash"))
-  assert_true(text.contains(".NET objects"))
+  assert_true(text.contains("Get-ChildItem"))
   assert_true(text.contains("Select-String"))
-  assert_true(text.contains("awk '{print $1}'"))
-  assert_true(text.contains("Get-ChildItem -Force"))
-  assert_true(text.contains("Get-ChildItem -Recurse"))
-  assert_true(text.contains("2>$null"))
-  assert_true(text.contains("backslashes"))
-  assert_true(text.contains("C:\\repo\\src\\main.rs"))
+  assert_true(text.contains("&&/|| supported"))
+  assert_true(text.length() < 180)
 }
 
 ///|
 test "windows_guidance_ps51_flavor" {
   let text = windows_guidance("powershell", "")
-  assert_false(text.contains("Environment: Windows ("))
-  assert_true(text.contains("NOT supported"))
+  assert_true(text.contains("PowerShell (powershell), not bash"))
+  assert_true(text.contains("no &&/||"))
   assert_true(text.contains("if ($?)"))
-  assert_true(text.contains("NOT bash"))
+  assert_true(text.length() < 190)
 }
 
 ///|
@@ -266,4 +257,26 @@ async test "env_var_roundtrip_via_env_provider" {
     Success(content~, ..) => assert_eq(content.trim(), "v1")
     _ => fail("expected Success for env var roundtrip")
   }
+}
+
+
+///|
+test "ps1_model_output_leaves_short_success_unchanged" {
+  assert_eq(ps1_model_output("ok\n", 0), "ok\n")
+}
+
+///|
+test "ps1_model_output_reports_nonzero_exit" {
+  assert_eq(ps1_model_output("failed", 7), "exit=7\nfailed")
+  assert_eq(ps1_model_output("", 2), "exit=2")
+}
+
+///|
+test "ps1_model_output_caps_long_output_and_keeps_head_tail" {
+  let raw = "HEAD-" + "x".repeat(40_000) + "-TAIL"
+  let out = ps1_model_output(raw, 0)
+  assert_eq(ps1_char_count(out), PS1_OUTPUT_CHAR_CAP)
+  assert_true(out.has_prefix("HEAD-"))
+  assert_true(out.contains("…[cut]…"))
+  assert_true(out.has_suffix("-TAIL"))
 }
