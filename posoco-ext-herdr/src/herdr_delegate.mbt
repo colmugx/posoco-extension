@@ -92,14 +92,14 @@ fn herdr_delegate_gate(
 fn herdr_delegate_tooldef() -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked("herdr_delegate"),
-    description: "Delegate a task to a depth-1 cetas-headless child in a visible pane. Prefer readonly; reuse child_session for follow-ups. Parallel calls use separate panes; background starts fresh and cannot resume.",
+    description: "Delegate one task to a fresh cetas-headless agent in a visible herdr pane: splits a new pane beside this one, launches cetas-headless there with the task, blocks until its completion marker or the timeout, then reads the pane back and returns the headless agent's answer as the tool result. 'task' is the user-position slot — untrusted content may flow there, and it must be a single line. Delegated agents are depth-1 leaves: they never receive delegation tools, so they cannot delegate further. The result footer carries 'peer_pane:' (the child's herdr pane id) and, when captured, 'child_session:' (returned on success, failure, and best-effort timeout; pass it back via 'session' to continue that child). 'permission' controls the child: readonly (default) runs cetas-headless --permission readonly (it cannot write); write runs it with --yolo (unattended full permission). 'model'/'effort'/'session' forward to cetas-headless; 'timeout_ms' bounds the wait (default 1800000 = 30 minutes). 'direction' is the split direction (default right, or down); 'close_pane' (default true) closes the child pane after a successful run — it never closes on failure or timeout, since a timed-out child may still be running. Long-running: pass background: true to get an immediate receipt (delegation_id) and receive the child's result as a follow-up turn — background always starts a fresh child and refuses 'session', since a timed-out child may still be running in its pane and resume stays foreground-only. Strategy: batch independent subtasks as multiple herdr_delegate calls in one response — they run as parallel panes (concurrency cap 4); send a readonly scout first and reserve write for tasks that must modify the workspace; tell children to write long artifacts to workspace files, since pane readback can truncate, and iterate on a child by passing its child_session back via 'session' — related tasks MUST reuse the same child session (one work-stream = one child session, never a fresh session per step; child_session is returned even on failure and timeout). Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "task": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Single-line child user task",
+            "Single-line task for the delegated headless agent. User-position slot: untrusted content may flow here.",
           ),
         }),
         "permission": Json::object({
@@ -107,52 +107,52 @@ fn herdr_delegate_tooldef() -> @posoco.ToolDef {
           "enum": Json::array([Json::string("readonly"), Json::string("write")]),
           "default": Json::string("readonly"),
           "description": Json::string(
-            "readonly (default) or write (--yolo)",
+            "readonly (default) launches headless with --permission readonly (cannot write); write launches with --yolo (unattended full permission)",
           ),
         }),
         "model": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Optional model slot",
+            "Optional model slot forwarded to cetas-headless --model",
           ),
         }),
         "effort": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Optional reasoning effort",
+            "Optional reasoning effort forwarded to cetas-headless --effort",
           ),
         }),
         "session": Json::object({
           "type": Json::string("string"),
           "description": Json::string(
-            "Prior child_session to continue; reuse for follow-ups",
+            "Child session id from a previous result or error footer (returned on success, failure, and best-effort timeout); re-launches headless with --session to continue that child. Related or follow-up tasks MUST reuse the same child session instead of spawning a new one. Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child (child_session from a prior result/error footer)",
           ),
         }),
         "timeout_ms": Json::object({
           "type": Json::string("integer"),
           "default": Json::number(1800000.0),
           "description": Json::string(
-            "Timeout ms; default 1800000",
+            "Wait bound for the completion marker in milliseconds (default 1800000 = 30 minutes)",
           ),
         }),
         "direction": Json::object({
           "type": Json::string("string"),
           "enum": Json::array([Json::string("right"), Json::string("down")]),
           "default": Json::string("right"),
-          "description": Json::string("Split direction; default right"),
+          "description": Json::string("Direction of the split (default right)"),
         }),
         "close_pane": Json::object({
           "type": Json::string("boolean"),
           "default": Json::boolean(true),
           "description": Json::string(
-            "Close pane after success; default true",
+            "Close the child pane after a successful run (default true); failures and timeouts leave the pane open",
           ),
         }),
         "background": Json::object({
           "type": Json::string("boolean"),
           "default": Json::boolean(false),
           "description": Json::string(
-            "Background follow-up; starts fresh and cannot take session",
+            "Return a receipt immediately and run the delegation in the background; the result arrives later as a follow-up turn. Background always starts a fresh child and cannot take 'session'.",
           ),
         }),
       }),
@@ -181,12 +181,12 @@ fn extract_delegate_task(args : Json) -> Result[String, String] {
         Some(String(task)) => Ok(task)
         _ =>
           Err(
-            "herdr_delegate: missing/invalid 'task'",
+            "herdr_delegate: missing or invalid 'task'; pass a non-empty single-line string",
           )
       }
     _ =>
       Err(
-        "herdr_delegate: arguments must be an object",
+        "herdr_delegate: invalid arguments; pass a JSON object with a 'task' string",
       )
   }
 }
@@ -210,13 +210,13 @@ priv struct HerdrDelegateArgs {
 fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
   let obj = match args {
     Object(obj) => obj
-    _ => return Err("herdr_delegate: arguments must be an object")
+    _ => return Err("herdr_delegate: invalid arguments; expected a JSON object")
   }
   let task = match obj.get("task") {
     Some(String(s)) =>
       if s == "" {
         return Err(
-          "herdr_delegate: empty 'task'",
+          "herdr_delegate: 'task' must be a non-empty single-line string",
         )
       } else {
         s
@@ -289,7 +289,7 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
   }
   if background && session is Some(_) {
     return Err(
-      "herdr_delegate: background cannot resume session",
+      "herdr_delegate: background mode always starts a fresh child and cannot resume — omit 'session' for background; use a foreground call with 'session' to continue an existing child",
     )
   }
   Ok({
@@ -342,7 +342,7 @@ async fn HerdrDelegate::execute_delegate_impl(
   }
   if self.active >= herdr_delegate_limit {
     return herdr_delegate_error(
-      "herdr_delegate: concurrency limit \{herdr_delegate_limit}",
+      "herdr_delegate: delegate concurrency limit reached (\{herdr_delegate_limit} active) — retry when earlier delegates finish",
     )
   }
   let args = match extract_delegate_args(call.arguments) {
