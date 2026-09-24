@@ -79,6 +79,34 @@ fn strip_namespace(namespaced : String, server_name : String) -> String {
 }
 
 ///|
+const MCP_TOOL_DESCRIPTION_CHARS = 300
+
+///|
+const MCP_SUCCESS_OUTPUT_CHARS = 40_000
+
+///|
+const MCP_ERROR_OUTPUT_CHARS = 8_000
+
+///|
+fn mcp_model_text(text : String, limit : Int) -> (String, Bool) {
+  let clipped = @devkit.truncate_chars(text, limit)
+  if clipped == text {
+    (clipped, false)
+  } else {
+    (clipped + "\n…[cut]", true)
+  }
+}
+
+///|
+fn mcp_outcome_structured(truncated : Bool) -> Json? {
+  if truncated {
+    Some(Json::object({ "truncated": Json::boolean(true) }))
+  } else {
+    None
+  }
+}
+
+///|
 /// Convert MCP ToolDefinition to Posoco ToolDef with namespace prefix.
 /// The external input schema is sanitized to the Kernel's supported subset
 /// here — see schema_sanitize.mbt for why this cannot wait for the catalog.
@@ -90,7 +118,13 @@ fn convert_tool_def(
     name: @posoco.ToolName::unchecked(
       namespaced_tool_name(server_name, mcp_tool.name),
     ),
-    description: mcp_tool.description,
+    description: {
+      let clipped = @devkit.truncate_chars(
+        mcp_tool.description,
+        MCP_TOOL_DESCRIPTION_CHARS,
+      )
+      if clipped == mcp_tool.description { clipped } else { clipped + "…" }
+    },
     input_schema: sanitize_tool_schema(mcp_tool.input_schema),
     owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
     policy: @posoco.ExecutionPolicy::Parallel,
@@ -1520,11 +1554,20 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
       // report. Only the typed failure surfaces here.
       raise mcp_call_failure(failure, original_name)
   }
-  let content = convert_content_to_string(result.content)
+  let raw = convert_content_to_string(result.content)
+  let (content, truncated) = mcp_model_text(
+    raw,
+    if result.is_error {
+      MCP_ERROR_OUTPUT_CHARS
+    } else {
+      MCP_SUCCESS_OUTPUT_CHARS
+    },
+  )
+  let structured = mcp_outcome_structured(truncated)
   if result.is_error {
-    @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
+    @posoco.ToolOutcome::ToolReportedError(content~, structured~)
   } else {
-    @posoco.ToolOutcome::Success(content~, structured=None)
+    @posoco.ToolOutcome::Success(content~, structured~)
   }
 }
 
