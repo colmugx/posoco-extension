@@ -13,7 +13,6 @@ text/markdown/JSON pass through, and long pages are paged with a resumable
 | Port | Contribution |
 |------|--------------|
 | `ToolProvider` | the `webfetch` tool, declared with `ExecutionPolicy::Parallel` (inert on wasm) |
-| `SystemPromptContributor` | continuation steering: re-fetch cross-host redirect targets, resume truncated pages with `offset` |
 | `Extension` | composes into `Agent(exts=[...])` |
 
 ## Usage
@@ -33,7 +32,7 @@ let agent = @posoco.Agent(exts=[webfetch, ..other_extensions], config~)
 
 Both constructors take the same knobs (all optional): `timeout_ms` per fetch
 (redirect hops included, default 30 000), `max_chars` returned per call
-(default 50 000), `byte_cap` per raw download (default 5 MB), `cache`
+(default 24 000), `byte_cap` per raw download (default 5 MB), `cache`
 (a `DocCache`; default built in), and `io` (an `HttpIo` override for tests
 and hosts with custom transports).
 
@@ -45,27 +44,27 @@ a permission gate's default policy.
 | Argument | Type | Description |
 |----------|------|-------------|
 | `url` | string, required | Absolute http/https URL, at most 2000 characters |
-| `offset` | int | Character offset to continue a truncated result from (given in the footer of the previous page) |
+| `offset` | int | Continuation offset from the previous `next=` footer |
 
 ## Output
 
-A successful call is a three-part text document, plus a structured payload
-(`url_requested`, `url_final`, `status`, `content_type`, `bytes_fetched`,
-`chars_total`, `chars_returned`, `offset`, `truncated`, `elapsed_ms`,
-`cached`) for observers/UIs:
+The first page carries only the provenance the model needs, plus the body:
 
 ```text
-Title: <page title>
-URL: <final URL after redirects>
-Content-Type: <server content-type>
+# <page title>
+<final URL after redirects>
 
 <markdown body>
 
-… [showing characters 0–50000 of 83211; call webfetch with offset=50000 to continue]
+… next=24000/83211
 ```
 
-The footer appears only when the body was truncated; a follow-up call with
-`offset=<end>` resumes from the cached conversion without re-fetching.
+Continuation pages omit the repeated title/URL and return only body text plus
+the same compact `next=<offset>/<total>` footer when more remains. A follow-up
+with `offset=<next>` slices the cached conversion without re-fetching.
+Structured metadata still carries `url_requested`, `url_final`, `status`,
+`content_type`, byte/character counts, offset, truncation, timing, and cache
+state for observers/UIs.
 
 ## Content handling
 
@@ -92,7 +91,7 @@ redirect to a **different host** is not followed: the result is a success
 naming the target so the model decides whether to trust it —
 
 ```text
-Redirect: https://a.example/x redirects to https://b.example/y (different host; not followed automatically for safety). If you trust this target, call webfetch with url=https://b.example/y.
+redirect blocked (cross-host): https://b.example/y; fetch explicitly if trusted
 ```
 
 ## Safety: SSRF guard
