@@ -206,7 +206,7 @@ async test "search_parses_json_and_counts" {
   assert_false(is_err)
   inspect(
     content,
-    content="notes/x.md:3: needle here\nnotes/y.md:7: needle too\n",
+    content="notes/x.md:3|needle here\nnotes/y.md:7|needle too\n",
   )
   debug_inspect(
     summary,
