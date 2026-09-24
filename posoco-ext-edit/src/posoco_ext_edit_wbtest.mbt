@@ -194,7 +194,7 @@ async test "edit_unique_match_reports_line" {
         edit_text_call(path, "beta", "BETA", None),
       ) {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
-        assert_true(content.contains("replaced 1 occurrence at line 2"))
+        assert_eq(content, "ok: 1 lines=2")
         let after = @fs.read_file(path).text()
         inspect(after, content="alpha\nBETA\ngamma\n")
       }
@@ -216,9 +216,7 @@ async test "edit_ambiguous_match_lists_lines_and_is_rejected" {
     match
       run_edit(EditTools::EditTools(), edit_text_call(path, "foo", "bar", None)) {
       Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
-        assert_true(content.contains("matches 2 locations"))
-        assert_true(content.contains("line(s) 2, 4"))
-        assert_true(content.contains("replace_all: true"))
+        assert_eq(content, "edit: 2 matches lines=2, 4; add context or replace_all=true")
       }
       _ => fail("expected ambiguous edit to be rejected")
     }
@@ -241,7 +239,7 @@ async test "edit_replace_all_replaces_every_occurrence" {
         edit_text_call(path, "foo", "bar", Some(Json::boolean(true))),
       ) {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        assert_true(content.contains("replaced 2 occurrences"))
+        assert_eq(content, "ok: 2 lines=2, 4")
       _ => fail("expected replace_all edit to succeed")
     }
     let after = @fs.read_file(path).text()
@@ -263,7 +261,7 @@ async test "edit_not_found_guides_reread" {
       run_edit(EditTools::EditTools(), edit_text_call(path, "nope", "x", None)) {
       Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
         assert_true(content.contains("old_text not found"))
-        assert_true(content.contains("read it again"))
+        assert_true(content.contains("reread"))
       }
       _ => fail("expected missing old_text to be a reported error")
     }
@@ -286,8 +284,14 @@ async test "edit_strips_line_number_prefixes_from_old_text" {
         EditTools::EditTools(),
         edit_text_call(path, "L2: beta", "BETA", None),
       ) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
-        assert_true(content.contains("line-number prefixes stripped"))
+      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+        assert_eq(content, "ok: 1 lines=2")
+        match structured {
+          Some(Object(meta)) =>
+            assert_true(meta.get("stripped_read_prefix") is Some(True))
+          _ => fail("expected edit metadata")
+        }
+      }
       _ => fail("expected prefixed edit to succeed via stripping")
     }
     let after = @fs.read_file(path).text()
@@ -360,7 +364,7 @@ async test "edit_anchored_relative_path_resolves" {
     let tools = EditTools::EditTools(anchor=Some(anchor))
     match run_edit(tools, edit_text_call("u.txt", "beta", "BETA", None)) {
       Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
-        assert_true(content.contains("u.txt"))
+        assert_eq(content, "ok: 1 lines=2")
         assert_false(content.contains(dir))
         let after = @fs.read_file(dir + "/u.txt").text()
         inspect(after, content="alpha\nBETA\ngamma\n")
@@ -398,4 +402,11 @@ test "edit_strip_line_number_prefix_rejects_non_prefix_matches" {
   assert_eq(strip_line_number_prefix("x1|alpha"), None)
   assert_eq(strip_line_number_prefix("L1:alpha"), None)
   assert_eq(strip_line_number_prefix("|alpha"), None)
+}
+
+
+///|
+test "edit_tool_definition_stays_compact" {
+  let def = EditTools::EditTools().list_tools()[0]
+  assert_true(def.description.length() < 180)
 }
