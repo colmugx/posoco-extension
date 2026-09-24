@@ -31,6 +31,10 @@ pub fn GlobTools::GlobTools(
 const GLOB_DEFAULT_LIMIT = 100
 
 ///|
+/// Hard cap on model-visible path bytes.
+const GLOB_BYTE_CAP = 40_000
+
+///|
 /// High-level glob search boundary.
 ///
 /// Native implements this with `@fs.walk` + a MoonBit glob-matching engine;
@@ -48,26 +52,26 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("glob"),
-      description: "Find files matching a glob pattern. Supports * (single segment wildcard) and ** (recursive). Example: '**/*.mbt' finds all .mbt files recursively. Returns file paths only (never directories), sorted by modification time (newest first). Hidden files and common ignore directories (.git, node_modules, _build, ...) are skipped. Optional 'limit' caps results (default 100); truncated results end with a footer reporting the remainder.",
+      description: "Find files by glob pattern. Returns paths only, newest first; skips hidden/ignored entries. `limit` defaults to 100.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "Glob pattern (e.g. '**/*.mbt', 'src/*.mbt')",
+              "Glob pattern, e.g. '**/*.mbt'",
             ),
           }),
           "path": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "Base directory to search (default: '.')",
+              "Base path; default '.'",
             ),
           }),
           "limit": Json::object({
             "type": Json::string("integer"),
             "description": Json::string(
-              "Maximum number of paths to return (default 100)",
+              "Returned path cap; default 100",
             ),
           }),
         }),
@@ -92,7 +96,7 @@ fn extract_glob_args(
         Some(String(s)) => s
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "glob: 'pattern' argument must be a string",
+            "glob: 'pattern' must be a string",
           )
         None =>
           raise @posoco.RuntimeError::UnknownTool("glob: missing 'pattern'")
@@ -102,7 +106,7 @@ fn extract_glob_args(
         None => "."
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "glob: optional 'path' must be a string",
+            "glob: 'path' must be a string",
           )
       }
       let limit = match obj.get("limit") {
@@ -111,21 +115,21 @@ fn extract_glob_args(
           let v = n.to_int()
           if v <= 0 {
             raise @posoco.RuntimeError::UnknownTool(
-              "glob: 'limit' must be greater than zero",
+              "glob: 'limit' must be > 0",
             )
           }
           v
         }
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "glob: optional 'limit' must be an integer",
+            "glob: 'limit' must be an integer",
           )
       }
       (p, b, limit)
     }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "glob: arguments must be a JSON object",
+        "glob: arguments must be an object",
       )
   }
 }
@@ -185,19 +189,31 @@ async fn execute_glob_impl(
       ]
   }
   let total = matches.length()
-  let shown = if total < limit { total } else { limit }
+  let max_entries = if total < limit { total } else { limit }
   let builder = StringBuilder()
-  for i in 0..<shown {
-    builder.write_string(matches[i])
+  let mut shown = 0
+  let mut bytes = 0
+  for i in 0..<max_entries {
+    let path = matches[i]
+    let path_bytes = @utf8.encode(path).length() + 1
+    if shown > 0 && bytes + path_bytes > GLOB_BYTE_CAP {
+      break
+    }
+    builder.write_string(path)
     builder.write_char('\n')
+    bytes += path_bytes
+    shown += 1
   }
-  let mut content = "Found \{total} files:\n\{builder.to_string()}"
-  if shown < total {
-    content = "\{content}… \{total - shown} more files; narrow the pattern or raise limit\n"
+  let truncated = shown < total
+  let mut content = if shown == 0 { "(no files)" } else {
+    builder.to_string().trim_end(chars="\n").to_owned()
+  }
+  if truncated {
+    content = "\{content}\n… +\{total - shown} files"
   }
   @posoco.ToolOutcome::Success(
     content~,
-    structured=Some(glob_structured(total, shown < total)),
+    structured=Some(glob_structured(total, truncated)),
   )
 }
 
