@@ -11,6 +11,11 @@ const NMEM_TOOL_TIMEOUT_MS : Int = 30000
 const NMEM_TOOL_ERROR_CHARS : Int = 500
 
 ///|
+/// Hard cap for generic MCP text exposed to the model. Structured JSON keeps
+/// the complete server payload for observers/UIs.
+const NMEM_TOOL_OUTPUT_CHARS : Int = 20_000
+
+///|
 /// Argument-shape rejection: the payload parsed but a field was missing,
 /// mistyped, or out of enum. Raised while parsing, surfaced to the model as
 /// a ToolReportedError it can correct.
@@ -66,50 +71,50 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
   let tools : Array[@posoco.ToolDef] = [
     nmem_tool_def(
       name="nmem_status",
-      description="Check the Nowledge Mem MCP connection: server identity, version, and tool count. Use this first when memory or thread tools misbehave.",
+      description="Check Nowledge Mem connectivity and server identity.",
       properties=Map::from_array([]),
       required=[],
     ),
     nmem_tool_def(
       name="read_context_bundle",
-      description="Read the Nowledge Mem context bundle: working memory plus related distilled knowledge rendered as markdown. The working-memory part is injected once at the session's opening — call this to re-read the combined bundle on demand after major context changes, not routinely.",
+      description="Read the current Nowledge Mem context bundle on demand.",
       properties=Map::from_array([]),
       required=[],
     ),
     nmem_tool_def(
       name="memory_update",
-      description="Update an existing Nowledge Mem memory in place when new information refines it (instead of saving a near-copy).",
+      description="Update an existing memory instead of saving a near-copy.",
       properties=Map::from_array([
-        ("id", schema_prop("string", "Id of the memory to update.")),
-        ("content", schema_prop("string", "Replacement content.")),
-        ("title", schema_prop("string", "Replacement title.")),
+        ("id", schema_prop("string", "Memory id")),
+        ("content", schema_prop("string", "Replacement content")),
+        ("title", schema_prop("string", "Replacement title")),
       ]),
       required=["id"],
     ),
     nmem_tool_def(
       name="thread_search",
-      description="Search past conversation threads (including sessions from other tools) for history and context the current transcript lacks.",
+      description="Search past conversation threads for missing history/context.",
       properties=Map::from_array([
         (
           "query",
-          schema_prop("string", "What to look for in past conversations."),
+          schema_prop("string", "Search query"),
         ),
-        ("limit", schema_prop("integer", "Maximum threads to return.")),
+        ("limit", schema_prop("integer", "Result limit")),
       ]),
       required=["query"],
     ),
     nmem_tool_def(
       name="thread_fetch_messages",
-      description="Load one past conversation thread with progressive detail: page through messages as needed.",
+      description="Load one past thread with offset/limit paging.",
       properties=Map::from_array([
-        ("thread_id", schema_prop("string", "Id of the thread to show.")),
+        ("thread_id", schema_prop("string", "Thread id")),
         (
           "limit",
-          schema_prop("integer", "Messages per page (server default 8)."),
+          schema_prop("integer", "Page size; server default 8"),
         ),
         (
           "offset",
-          schema_prop("integer", "Message offset into the thread (default 0)."),
+          schema_prop("integer", "Message offset; default 0"),
         ),
       ]),
       required=["thread_id"],
@@ -119,9 +124,9 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
     tools.push(
       nmem_tool_def(
         name="memory_delete",
-        description="Hard-delete a Nowledge Mem memory by id. Destructive and irreversible; search first and prefer updating instead.",
+        description="Hard-delete a memory by id; irreversible.",
         properties=Map::from_array([
-          ("id", schema_prop("string", "Id of the memory to delete.")),
+          ("id", schema_prop("string", "Memory id")),
         ]),
         required=["id"],
       ),
@@ -135,7 +140,7 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn list_tools(
 fn arg_fields(args : Json) -> Map[String, Json] raise ToolArgError {
   match args {
     Json::Object(fields) => fields
-    _ => raise ToolArgError("arguments must be a JSON object")
+    _ => raise ToolArgError("arguments must be an object")
   }
 }
 
@@ -147,7 +152,7 @@ fn opt_string(
   match fields.get(key) {
     None => None
     Some(Json::String(value)) => Some(value)
-    Some(_) => raise ToolArgError("field '\{key}' must be a string")
+    Some(_) => raise ToolArgError("'\{key}' must be a string")
   }
 }
 
@@ -158,7 +163,7 @@ fn req_string(
 ) -> String raise ToolArgError {
   match opt_string(fields, key) {
     Some(value) => value
-    None => raise ToolArgError("missing required field '\{key}'")
+    None => raise ToolArgError("missing '\{key}'")
   }
 }
 
@@ -170,9 +175,9 @@ fn opt_int(fields : Map[String, Json], key : String) -> Int? raise ToolArgError 
       if value.floor() == value {
         Some(value.to_int())
       } else {
-        raise ToolArgError("field '\{key}' must be an integer")
+        raise ToolArgError("'\{key}' must be an integer")
       }
-    Some(_) => raise ToolArgError("field '\{key}' must be an integer")
+    Some(_) => raise ToolArgError("'\{key}' must be an integer")
   }
 }
 
@@ -233,6 +238,15 @@ fn parsed_structured(text : String) -> Json? {
 }
 
 ///|
+fn nmem_model_text(text : String) -> String {
+  if text.length() <= NMEM_TOOL_OUTPUT_CHARS {
+    text
+  } else {
+    take_prefix(text, NMEM_TOOL_OUTPUT_CHARS) + "\n…[cut]"
+  }
+}
+
+///|
 /// One MCP tool call mapped onto a ToolOutcome. A transport-level failure
 /// or the server's own error flag is a ToolReportedError the model can
 /// react to; a clean reply
@@ -253,7 +267,7 @@ async fn NowledgeMem::call_mcp_tool(
       tool_error(tool, "mcp error: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}")
     Ok({ text, .. }) =>
       @posoco.ToolOutcome::Success(
-        content=text,
+        content=nmem_model_text(text),
         structured=parsed_structured(text),
       )
   }
@@ -302,7 +316,10 @@ async fn NowledgeMem::run_read_context_bundle(
         Some(content) => content
         None => raw
       }
-      @posoco.ToolOutcome::Success(content~, structured~)
+      @posoco.ToolOutcome::Success(
+        content=truncate_context(content, self.source_app),
+        structured~,
+      )
     }
     other => other
   }
@@ -317,7 +334,7 @@ fn parse_memory_update_args(
   let content = opt_string(fields, "content")
   let title = opt_string(fields, "title")
   if content is None && title is None {
-    raise ToolArgError("provide at least one of 'content' or 'title'")
+    raise ToolArgError("provide content or title")
   }
   (id, content, title)
 }
@@ -365,7 +382,7 @@ async fn NowledgeMem::run_memory_delete(
     err => return tool_error("memory_delete", err.to_string())
   }
   @posoco.ToolOutcome::Success(
-    content="delete queued for \{id}; will sync to Nowledge Mem",
+    content="queued",
     structured=Some(
       Json::object({ "queued": Json::boolean(true), "id": Json::string(id) }),
     ),
