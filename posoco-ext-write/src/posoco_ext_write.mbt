@@ -58,17 +58,17 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("write"),
-      description: "Write text content to a file. Creates the file if it does not exist (including parent directories); atomically replaces it if it does. Use write for new files or complete rewrites; use edit for targeted changes. If the file already exists, it must have been read in this session and must not have changed since.",
+      description: "Write or fully replace a text file atomically. Existing files must be fresh from a prior read; use edit for targeted changes.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "path": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Path to the file to write"),
+            "description": Json::string("File path"),
           }),
           "content": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Text content to write"),
+            "description": Json::string("Full file text"),
           }),
         }),
         "required": Json::array([Json::string("path"), Json::string("content")]),
@@ -91,7 +91,7 @@ fn extract_path_content(
         Some(String(s)) => s
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "write: 'path' argument must be a string",
+            "write: 'path' must be a string",
           )
         None => raise @posoco.RuntimeError::UnknownTool("write: missing 'path'")
       }
@@ -99,7 +99,7 @@ fn extract_path_content(
         Some(String(s)) => s
         Some(_) =>
           raise @posoco.RuntimeError::UnknownTool(
-            "write: 'content' argument must be a string",
+            "write: 'content' must be a string",
           )
         None =>
           raise @posoco.RuntimeError::UnknownTool("write: missing 'content'")
@@ -108,7 +108,7 @@ fn extract_path_content(
     }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "write: arguments must be a JSON object",
+        "write: arguments must be an object",
       )
   }
 }
@@ -152,7 +152,7 @@ async fn execute_write_impl(
   let content_bytes = @utf8.encode(content).length()
   if content_bytes > WRITE_MAX_BYTES {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="write: refused: content is \{content_bytes} bytes; the cap is \{WRITE_MAX_BYTES} bytes",
+      content="write: \{content_bytes}B > \{WRITE_MAX_BYTES}B",
       structured=None,
     )
   }
@@ -183,7 +183,11 @@ async fn execute_write_impl(
     None => ()
   }
   @posoco.ToolOutcome::Success(
-    content="Wrote \{content_bytes} bytes to \{@devkit.sanitize_path(raw_path)}",
-    structured=None,
+    content="ok",
+    structured=Some(
+      Json::object({
+        "bytes": Json::number(content_bytes.to_double()),
+      }),
+    ),
   )
 }
