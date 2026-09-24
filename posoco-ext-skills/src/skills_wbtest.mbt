@@ -667,8 +667,8 @@ test "prompt: truncation is explicit rather than silently hiding skills" {
     descriptor("beta", "Beta skill for another workflow", "/skills/beta"),
     descriptor("gamma", "Gamma skill for a third workflow", "/skills/gamma"),
   ])
-  let rendered = catalog.render_prompt_body(max_chars=700)
-  assert_true(rendered.length() <= 700)
+  let rendered = catalog.render_prompt_body(max_chars=250)
+  assert_true(rendered.length() <= 250)
   assert_true(rendered.contains("skills omitted"))
   assert_true(rendered.contains("activate_skill"))
 }
