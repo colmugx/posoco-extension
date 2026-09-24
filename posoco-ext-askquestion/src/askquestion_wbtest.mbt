@@ -91,7 +91,7 @@ test "ask_question_rejects_empty_select" {
   }
   match result {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      assert_true(message.contains("at least one option"))
+      assert_true(message.contains("requires options"))
     _ => fail("expected invalid select arguments")
   }
 }
@@ -106,7 +106,24 @@ test "ask_question_manifest_and_policy" {
   let manifest = tools.manifest()
   assert_eq(manifest.id, "posoco_ext_askquestion")
   assert_eq(manifest.tools.length(), 1)
-  assert_eq(manifest.prompt_contributors.length(), 1)
+  assert_eq(manifest.prompt_contributors.length(), 0)
   assert_eq(manifest.requires, [@posoco.Capability::Ui])
   assert_eq(manifest.lifecycle.length(), 1)
+}
+
+
+///|
+test "ask_question_schema_uses_enum_for_prompt_type" {
+  let schema = ask_question_schema().stringify()
+  assert_true(schema.contains("\"enum\""))
+  assert_true(schema.contains("\"input\""))
+  assert_true(schema.contains("\"confirm\""))
+  assert_true(schema.contains("\"select\""))
+}
+
+///|
+test "ask_question_manifest_has_no_resident_prompt_cost" {
+  let tools = AskQuestionTools()
+  assert_eq(tools.manifest().prompt_contributors.length(), 0)
+  assert_true(tools.system_prompt().length() < 130)
 }
