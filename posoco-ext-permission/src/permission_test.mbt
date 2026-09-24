@@ -539,6 +539,10 @@ async test "before_model injects the read-only reminder as one user message, ide
       }
     _ => fail("expected user message")
   }
+  match user_text(r1[1]) {
+    Some(text) => assert_true(text.length() < 210)
+    None => fail("expected read-only reminder")
+  }
   // Second call with the same transcript: no duplicate reminder.
   let r2 = policy.before_model(r1)
   assert_eq(r2.length(), 2)
@@ -1548,6 +1552,14 @@ async test "auto mode injects a standing reminder; leaving auto removes it" {
     text.has_prefix("<permission-context") &&
     text.contains("auto"),
   )
+  match user_text(r1[1]) {
+    Some(text) => {
+      assert_true(text.contains("judged per call"))
+      assert_true(text.contains("do not blindly retry"))
+      assert_true(text.length() < 240)
+    }
+    None => fail("expected auto reminder")
+  }
   policy.mode = Yolo
   let r2 = policy.before_model(r1)
   assert_eq(r2.length(), 1)
