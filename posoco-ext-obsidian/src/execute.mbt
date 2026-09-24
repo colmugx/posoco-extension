@@ -685,10 +685,6 @@ async fn ObsidianTools::exec_patch_section(
         return tool_error(write.output)
       }
       self.freshness.forget(path)
-      let prev_bytes = match current {
-        Some(s) => s.size.to_string()
-        None => "?"
-      }
       let summary = "\{operation} section \"\{target}\" in \{path}"
       ok(content=write.output, summary~)
     }
