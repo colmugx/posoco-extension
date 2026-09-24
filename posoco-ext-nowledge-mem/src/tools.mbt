@@ -250,8 +250,9 @@ fn nmem_model_text(text : String) -> String {
 /// One MCP tool call mapped onto a ToolOutcome. A transport-level failure
 /// or the server's own error flag is a ToolReportedError the model can
 /// react to; a clean reply
-/// returns the text content verbatim plus its parsed JSON in the structured
-/// channel when it is an object or array.
+/// returns bounded model text plus the complete parsed JSON in structured
+/// metadata. read_context_bundle keeps its raw JSON intact until its body is
+/// extracted, then applies the dedicated context cap.
 async fn NowledgeMem::call_mcp_tool(
   self : NowledgeMem,
   tool : String,
@@ -267,7 +268,9 @@ async fn NowledgeMem::call_mcp_tool(
       tool_error(tool, "mcp error: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}")
     Ok({ text, .. }) =>
       @posoco.ToolOutcome::Success(
-        content=nmem_model_text(text),
+        content=if tool == "read_context_bundle" { text } else {
+          nmem_model_text(text)
+        },
         structured=parsed_structured(text),
       )
   }
