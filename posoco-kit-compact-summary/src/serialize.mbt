@@ -103,6 +103,7 @@ fn render_tool_args(arguments : Json) -> String {
   )
 }
 
+///|
 pub fn serialize_for_summary(
   messages : Array[@posoco.Message],
   tool_output_char_limit? : Int = 2000,
