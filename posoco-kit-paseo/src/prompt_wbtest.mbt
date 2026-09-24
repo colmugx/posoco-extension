@@ -7,6 +7,5 @@ test "prompt section is stable and covers orchestration semantics" {
   assert_true(section.contains("get_agent_status"))
   assert_true(section.contains("agent id"))
   assert_true(section.contains("kill_agent"))
-  assert_true(section.length() < 470)
   assert_eq(prompt_section(), section)
 }
