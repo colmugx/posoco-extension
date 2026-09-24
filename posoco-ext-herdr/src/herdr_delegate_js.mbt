@@ -41,3 +41,6 @@ pub impl @posoco.ToolProvider for HerdrDelegate with fn execute(
       )
   }
 }
+
+///|
+pub extend HerdrDelegate with @posoco.ToolProvider::{list_tools}

@@ -92,3 +92,11 @@ pub impl HandoffStore for DefaultHandoffStore with fn write_atomic(
     Err("handoff store write failed: " + result.content())
   }
 }
+
+///|
+pub extend DefaultHandoffStore with HandoffStore::{
+  read,
+  write_atomic,
+  ensure_dir,
+  exists,
+}

@@ -63,7 +63,5 @@ fn ps1_decode_failure(_exit_code : Int) -> String {
 ///|
 /// Native collect_output failure.
 fn ps1_collect_output_failure() -> @posoco.RuntimeError {
-  @posoco.RuntimeError::InvocationFailed(
-    "powershell: process failed",
-  )
+  @posoco.RuntimeError::InvocationFailed("powershell: process failed")
 }

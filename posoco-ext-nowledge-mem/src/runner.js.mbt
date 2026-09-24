@@ -101,3 +101,6 @@ pub impl NmemPlatform for PlatformFs with fn write_home_file(
     }
   }
 }
+
+///|
+pub extend PlatformFs with NmemPlatform::{read_home_file, write_home_file}

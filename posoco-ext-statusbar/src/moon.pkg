@@ -8,6 +8,11 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
+// The async runtime is required by native-gated async tests only; default
+// target checks don't compile those files and misreport the import as unused.
+
+warnings = "-unused_package"
+
 options(
   targets: {
     "statusbar_wbtest.mbt": [ "native" ],

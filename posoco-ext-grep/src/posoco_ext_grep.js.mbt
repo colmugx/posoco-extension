@@ -462,3 +462,6 @@ pub impl @posoco.ToolProvider for GrepTools with fn execute(
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   execute_grep_impl(JsRgSearcher::{ ignores: self.ignores, }, self.anchor, call)
 }
+
+///|
+pub extend GrepTools with @posoco.ToolProvider::{list_tools}

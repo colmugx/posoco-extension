@@ -259,7 +259,6 @@ async test "env_var_roundtrip_via_env_provider" {
   }
 }
 
-
 ///|
 test "ps1_model_output_leaves_short_success_unchanged" {
   assert_eq(ps1_model_output("ok\n", 0), "ok\n")

@@ -204,3 +204,6 @@ pub impl @posoco.ToolProvider for GlobTools with fn execute(
     call,
   )
 }
+
+///|
+pub extend GlobTools with @posoco.ToolProvider::{list_tools}

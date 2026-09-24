@@ -126,6 +126,8 @@ pub struct PiCommandPort {
   host : JsPiHost
 }
 pub fn PiCommandPort::PiCommandPort(host~ : JsPiHost) -> Self
+pub fn PiCommandPort::commands(Self) -> Array[@port.CommandDef]
+pub async fn PiCommandPort::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub impl @port.CommandPort for PiCommandPort
 
 pub struct PiEventObserver {
@@ -143,6 +145,8 @@ pub struct PiEventObserver {
 }
 pub fn PiEventObserver::PiEventObserver(host~ : JsPiHost) -> Self
 pub fn PiEventObserver::emit_agent_boundary(Self) -> Unit
+pub fn PiEventObserver::on_event(Self, @types.TurnEvent) -> Unit
+pub fn PiEventObserver::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub fn PiEventObserver::reset_agent_run(Self) -> Unit
 pub impl @port.Observer for PiEventObserver
 
@@ -150,6 +154,12 @@ pub struct PiHook {
   host : JsPiHost
 }
 pub fn PiHook::PiHook(host~ : JsPiHost) -> Self
+pub async fn PiHook::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub async fn PiHook::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
+pub async fn PiHook::on_post_event(Self, @port.HookStage) -> Unit noraise
+pub async fn PiHook::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
+pub async fn PiHook::on_turn_begin(Self) -> Unit
+pub async fn PiHook::on_turn_end(Self) -> Unit
 pub impl @port.PipelineHook for PiHook
 
 pub(all) struct PiRuntime {

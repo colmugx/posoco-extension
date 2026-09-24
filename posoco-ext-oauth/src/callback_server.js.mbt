@@ -100,3 +100,6 @@ pub impl CallbackServer for JsCallbackServer with fn stop(
 pub fn create_callback_server() -> JsCallbackServer {
   { code: "", state: "", bun_server: None, }
 }
+
+///|
+pub extend JsCallbackServer with CallbackServer::{start, stop, wait_callback}

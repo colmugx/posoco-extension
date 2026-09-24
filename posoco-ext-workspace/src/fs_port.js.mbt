@@ -439,3 +439,18 @@ pub impl WorkspaceFs for JsWorkspaceFs with fn mkdir(_self, path, recursive~) {
     raise fs_err("mkdir")
   }
 }
+
+///|
+pub extend JsWorkspaceFs with WorkspaceFs::{
+  exists,
+  kind,
+  mkdir,
+  read_file,
+  readdir,
+  realpath,
+  remove,
+  rename,
+  walk,
+  write_file,
+  write_file_atomic,
+}

@@ -177,3 +177,11 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   publish_session_status(self.bus, id)
   self.current_id = Some(id)
 }
+
+///|
+pub extend JsonlSessionStore with @posoco.SessionStore::{
+  save,
+  append_messages,
+  load,
+  truncate,
+}

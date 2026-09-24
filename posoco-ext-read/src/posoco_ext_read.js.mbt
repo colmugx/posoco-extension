@@ -170,3 +170,6 @@ pub impl @posoco.ToolProvider for ReadTools with fn execute(
   }
   execute_read_impl(io, self.freshness, self.anchor, call)
 }
+
+///|
+pub extend ReadTools with @posoco.ToolProvider::{list_tools}

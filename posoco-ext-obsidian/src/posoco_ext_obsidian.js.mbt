@@ -141,3 +141,13 @@ pub impl @posoco.CommandPort for ObsidianTools with fn invoke(
     ui_hint=None,
   )
 }
+
+///|
+pub extend ObsidianTools with @posoco.Lifecycle::{
+  on_compose,
+  on_shutdown,
+  on_start,
+}
+
+///|
+pub extend ObsidianTools with @posoco.CommandPort::{invoke, commands}

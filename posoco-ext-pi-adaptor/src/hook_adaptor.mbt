@@ -145,3 +145,13 @@ pub impl @posoco.PipelineHook for PiHook with fn before_model(
 // generic validator is reachable — so for hook-free pi tools the effective
 // guard remains execution-time validation inside pi tools themselves; W4b
 // must land revalidation together with rewriting.
+
+///|
+pub extend PiHook with @posoco.PipelineHook::{
+  on_post_event,
+  on_turn_begin,
+  on_post_event_at,
+  before_model,
+  before_tool,
+  on_turn_end,
+}

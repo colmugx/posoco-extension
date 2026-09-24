@@ -155,3 +155,6 @@ pub impl @posoco.ToolProvider for AstGrepTools with fn execute(
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   execute_astgrep_impl(JsAstGrepSpawn::{ bin: None, }, self.anchor, call)
 }
+
+///|
+pub extend AstGrepTools with @posoco.ToolProvider::{list_tools}

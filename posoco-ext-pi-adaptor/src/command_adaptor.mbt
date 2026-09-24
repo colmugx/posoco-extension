@@ -212,3 +212,6 @@ fn command_outcome_json(outcome : @posoco.CommandOutcome) -> Json {
       )
   }
 }
+
+///|
+pub extend PiCommandPort with @posoco.CommandPort::{invoke, commands}

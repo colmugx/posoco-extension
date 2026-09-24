@@ -118,10 +118,7 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("string")),
-                  (
-                    "description",
-                    Json::string("PowerShell command"),
-                  ),
+                  ("description", Json::string("PowerShell command")),
                 ]),
               ),
             ),
@@ -172,9 +169,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
             )
         }
       } else {
-        raise @posoco.RuntimeError::UnknownTool(
-          "powershell: missing 'cmd'",
-        )
+        raise @posoco.RuntimeError::UnknownTool("powershell: missing 'cmd'")
       }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
@@ -186,9 +181,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
 ///|
 /// Shared empty-command error (used by both native + js execute paths).
 fn ps1_empty_command_failure() -> @posoco.RuntimeError {
-  @posoco.RuntimeError::InvocationFailed(
-    "powershell: empty cmd",
-  )
+  @posoco.RuntimeError::InvocationFailed("powershell: empty cmd")
 }
 
 ///|

@@ -422,3 +422,6 @@ pub fn PiEventObserver::reset_agent_run(self : PiEventObserver) -> Unit {
   self.run_messages = []
   self.reset_response()
 }
+
+///|
+pub extend PiEventObserver with @posoco.Observer::{on_event, on_event_at}
