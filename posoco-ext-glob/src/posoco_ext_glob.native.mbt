@@ -3,6 +3,73 @@ priv struct NativeGlobScanner {
   ignores : Array[String]
 }
 
+
+///|
+/// Compile the runtime glob once per scan. lexscan tokenizes each ordinary
+/// segment into literal chunks and '*' runs; '**' is handled at segment
+/// boundaries so it can cross '/' while '*' cannot.
+fn native_glob_regex(pattern : String) -> @string.Regex {
+  let segments = pattern.split("/").to_array()
+  let mut out = @string.Regex::unsafe_from_string("^")
+  let mut i = 0
+  let mut has_prefix = false
+  let mut suppress_separator = false
+  while i < segments.length() {
+    let segment = segments[i]
+    if segment == "**" {
+      while i + 1 < segments.length() && segments[i + 1] == "**" {
+        i += 1
+      }
+      if i + 1 == segments.length() {
+        out = out +
+          if has_prefix {
+            @string.Regex::unsafe_from_string("(?:/.*)?")
+          } else {
+            @string.Regex::unsafe_from_string(".*")
+          }
+        has_prefix = true
+        suppress_separator = false
+      } else {
+        out = out +
+          if has_prefix {
+            @string.Regex::unsafe_from_string("/(?:[^/]+/)*")
+          } else {
+            @string.Regex::unsafe_from_string("(?:[^/]+/)*")
+          }
+        has_prefix = true
+        suppress_separator = true
+      }
+    } else {
+      if has_prefix && !suppress_separator {
+        out = out + @string.Regex::string("/")
+      }
+      out = out + native_glob_segment_regex(segment)
+      has_prefix = true
+      suppress_separator = false
+    }
+    i += 1
+  }
+  out + @string.Regex::unsafe_from_string("$")
+}
+
+///|
+/// Compile one non-'**' path segment. Consecutive '*' tokens collapse to one
+/// '[^/]*'; literal runs are injected with Regex::string, so user input never
+/// becomes regex syntax.
+fn native_glob_segment_regex(segment : StringView) -> @string.Regex {
+  let scanner = @lexbuf.StringScanner::{ data: segment, cursor: 0 }
+  let mut out = @string.Regex::string("")
+  let mut done = false
+  while !done {
+    lexscan scanner with longest {
+      re"^\*+" => out = out + @string.Regex::unsafe_from_string("[^/]*")
+      re"^[^*]+" as literal => out = out + @string.Regex::string(literal)
+      _ => done = true
+    }
+  }
+  out
+}
+
 ///|
 /// Kind of `path`, or None when the stat fails (vanished or unreadable).
 async fn glob_file_kind(path : String) -> @fs.FileKind? {
@@ -19,6 +86,7 @@ impl GlobScanner for NativeGlobScanner with fn scan(
   pattern : String,
   base : String,
 ) -> Array[String] {
+  let matcher = native_glob_regex(pattern)
   let matches : Array[String] = []
   @fs.walk(
     base,
@@ -37,7 +105,7 @@ impl GlobScanner for NativeGlobScanner with fn scan(
           Some(@fs.FileKind::Directory) => continue
           Some(_) => ()
         }
-        if @devkit.glob_match(pattern, rel) {
+        if matcher.execute(rel) is Some(_) {
           matches.push(full)
         }
       }
