@@ -25,6 +25,76 @@ pub fn PowerShellTools::PowerShellTools(
   PowerShellTools::{ exe: resolve_exe(exe), anchor, }
 }
 
+///|
+const PS1_OUTPUT_CHAR_CAP = 32_768
+
+///|
+const PS1_OUTPUT_HEAD_CHARS = 4_096
+
+///|
+fn ps1_char_count(text : String) -> Int {
+  let mut count = 0
+  for _ in text {
+    count += 1
+  }
+  count
+}
+
+///|
+fn ps1_take_chars(text : String, limit : Int) -> String {
+  let chars : Array[Char] = []
+  let mut taken = 0
+  for ch in text {
+    if taken >= limit {
+      break
+    }
+    chars.push(ch)
+    taken += 1
+  }
+  String::from_array(chars)
+}
+
+///|
+fn ps1_tail_chars(text : String, total_chars : Int, limit : Int) -> String {
+  if limit <= 0 {
+    return ""
+  }
+  let skip = total_chars - limit
+  let chars : Array[Char] = []
+  let mut index = 0
+  for ch in text {
+    if index >= skip {
+      chars.push(ch)
+    }
+    index += 1
+  }
+  String::from_array(chars)
+}
+
+///|
+/// Bound model-visible shell output while preserving command context and the
+/// end-of-log diagnostics where PowerShell failures usually land.
+fn ps1_model_output(content : String, exit_code : Int) -> String {
+  let raw = if exit_code == 0 {
+    content
+  } else if content == "" {
+    "exit=\{exit_code}"
+  } else {
+    "exit=\{exit_code}\n\{content}"
+  }
+  let raw_chars = ps1_char_count(raw)
+  if raw_chars <= PS1_OUTPUT_CHAR_CAP {
+    return raw
+  }
+  let marker = "\n…[cut]…\n"
+  let tail_chars = PS1_OUTPUT_CHAR_CAP -
+    PS1_OUTPUT_HEAD_CHARS -
+    ps1_char_count(marker)
+  ps1_take_chars(raw, PS1_OUTPUT_HEAD_CHARS) +
+  marker +
+  ps1_tail_chars(raw, raw_chars, tail_chars)
+}
+
 // ToolProvider is split into two complete #cfg partitions (native/js real,
 // others inert); shared_list_tools avoids duplicating the ToolDef construction.
 
@@ -50,7 +120,7 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
                   ("type", Json::string("string")),
                   (
                     "description",
-                    Json::string("The PowerShell command to execute"),
+                    Json::string("PowerShell command"),
                   ),
                 ]),
               ),
@@ -62,14 +132,14 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
     ]),
   )
   let chaining = if exe.contains("pwsh") {
-    "PowerShell 7+ syntax: `&&` and `||` pipeline chains are supported."
+    "Supports &&/||."
   } else {
-    "Windows PowerShell 5.1 syntax: `&&` and `||` are NOT supported; chain statements with `;` or `if ($?)`."
+    "No &&/||; use ; or if ($?)."
   }
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("powershell"),
-      description: "Run a PowerShell command via \{exe} (-NoProfile -NonInteractive) on Windows. This is PowerShell, not bash — use PowerShell syntax and cmdlets (Select-String, Get-ChildItem, $env:NAME). \{chaining} Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root.",
+      description: "Run PowerShell via \{exe} on Windows. Use PowerShell syntax/cmdlets; fresh session at workspace root. \{chaining}",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_ps1"),
       policy: @posoco.ExecutionPolicy::Parallel,
@@ -90,7 +160,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
           Json::String(s) => s
           _ =>
             raise @posoco.RuntimeError::UnknownTool(
-              "powershell: 'cmd' argument must be a string",
+              "powershell: 'cmd' must be a string",
             )
         }
       } else if map.contains("command") {
@@ -98,17 +168,17 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
           Json::String(s) => s
           _ =>
             raise @posoco.RuntimeError::UnknownTool(
-              "powershell: 'command' argument must be a string",
+              "powershell: 'command' must be a string",
             )
         }
       } else {
         raise @posoco.RuntimeError::UnknownTool(
-          "powershell: missing 'cmd' or 'command' argument",
+          "powershell: missing 'cmd'",
         )
       }
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
-        "powershell: arguments must be a JSON object with a 'cmd' field",
+        "powershell: arguments must be an object",
       )
   }
 }
@@ -117,7 +187,7 @@ fn extract_command(args : Json) -> String raise @posoco.RuntimeError {
 /// Shared empty-command error (used by both native + js execute paths).
 fn ps1_empty_command_failure() -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "powershell: invocation failed (stage=arguments, category=empty_command)",
+    "powershell: empty cmd",
   )
 }
 
