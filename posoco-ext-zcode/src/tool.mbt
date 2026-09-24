@@ -15,6 +15,80 @@ pub extend ZcodeTaskArgs with Eq::{not_equal, equal}
 pub extend ZcodeTaskArgs with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+const ZCODE_RESULT_CHAR_CAP = 32_000
+
+///|
+const ZCODE_RESULT_HEAD_CHARS = 4_000
+
+///|
+fn zcode_char_count(text : String) -> Int {
+  let mut count = 0
+  for _ in text {
+    count += 1
+  }
+  count
+}
+
+///|
+fn zcode_take_chars(text : String, limit : Int) -> String {
+  let chars : Array[Char] = []
+  let mut count = 0
+  for ch in text {
+    if count >= limit {
+      break
+    }
+    chars.push(ch)
+    count += 1
+  }
+  String::from_array(chars)
+}
+
+///|
+fn zcode_tail_chars(text : String, total : Int, limit : Int) -> String {
+  let skip = total - limit
+  let chars : Array[Char] = []
+  let mut index = 0
+  for ch in text {
+    if index >= skip {
+      chars.push(ch)
+    }
+    index += 1
+  }
+  String::from_array(chars)
+}
+
+///|
+/// Bound delegated text while preserving both the answer opening and trailing
+/// diagnostics. Session/usage metadata is appended after this budget.
+fn zcode_result_text(text : String) -> (String, Bool) {
+  let total = zcode_char_count(text)
+  if total <= ZCODE_RESULT_CHAR_CAP {
+    return (text, false)
+  }
+  let marker = "\n…[cut]…\n"
+  let marker_chars = zcode_char_count(marker)
+  let tail = ZCODE_RESULT_CHAR_CAP - ZCODE_RESULT_HEAD_CHARS - marker_chars
+  (
+    zcode_take_chars(text, ZCODE_RESULT_HEAD_CHARS) +
+    marker +
+    zcode_tail_chars(text, total, tail),
+    true,
+  )
+}
+
+///|
+fn zcode_result_footer(result : ZcodeTaskResult) -> String {
+  let mut footer = "session_id: " + result.session_id
+  match result.usage {
+    Some(usage) =>
+      footer = footer +
+        "\ntokens: input=\{usage.input_tokens} output=\{usage.output_tokens} total=\{usage.total_tokens}"
+    None => ()
+  }
+  footer
+}
+
+///|
 pub(all) struct ZcodeTools {
   config : ZcodeConfig
   /// The Agent-owned task capability, captured at on_compose from the
@@ -63,14 +137,8 @@ pub fn zcode_tools(
 /// the response, the session id line (so the model can resume), and the
 /// usage line when known — same shape as the foreground result footer.
 pub fn zcode_background_summary(result : ZcodeTaskResult) -> String {
-  let mut content = result.final_text + "\n\nsession_id: " + result.session_id
-  match result.usage {
-    Some(usage) =>
-      content = content +
-        "\ntokens: input=\{usage.input_tokens} output=\{usage.output_tokens} total=\{usage.total_tokens}"
-    None => ()
-  }
-  content
+  let (body, _) = zcode_result_text(result.final_text)
+  body + "\n\n" + zcode_result_footer(result)
 }
 
 ///|
@@ -93,10 +161,10 @@ pub fn zcode_parse_args(
     Json::Object(map) => {
       let task = match zcode_arg_string(map, "task") {
         Some(task) => task
-        None => return Err("zcode: 'task' (non-empty string) is required")
+        None => return Err("zcode: missing 'task'")
       }
       if task == "" {
-        return Err("zcode: 'task' must be a non-empty string")
+        return Err("zcode: empty 'task'")
       }
       let mode = match zcode_arg_string(map, "mode") {
         Some(raw) =>
@@ -110,11 +178,11 @@ pub fn zcode_parse_args(
         None => false
         Some(Json::True) => true
         Some(Json::False) => false
-        Some(_) => return Err("zcode: 'background' must be a boolean")
+        Some(_) => return Err("zcode: 'background' must be boolean")
       }
       if background && map.get("session_id") is Some(_) {
         return Err(
-          "zcode: background mode starts a fresh session — resume via session_id is foreground-only (one in-flight prompt per session, upstream error 1308)",
+          "zcode: background cannot resume session_id",
         )
       }
       Ok({
@@ -125,7 +193,7 @@ pub fn zcode_parse_args(
         background,
       })
     }
-    _ => Err("zcode: arguments must be a JSON object")
+    _ => Err("zcode: arguments must be an object")
   }
 }
 
@@ -135,17 +203,17 @@ pub fn zcode_parse_args(
 /// failed / permission_denied surface as ToolReportedError so the model can
 /// react instead of treating the text as work product.
 pub fn zcode_format_outcome(result : ZcodeTaskResult) -> @posoco.ToolOutcome {
-  let mut content = result.final_text + "\n\nsession_id: " + result.session_id
-  match result.usage {
-    Some(usage) =>
-      content = content +
-        "\ntokens: input=\{usage.input_tokens} output=\{usage.output_tokens} total=\{usage.total_tokens}"
-    None => ()
-  }
+  let (body, truncated) = zcode_result_text(result.final_text)
+  let content = body + "\n\n" + zcode_result_footer(result)
+  let structured = Some(Json::object({
+    "session_id": Json::string(result.session_id),
+    "stop_reason": Json::string(result.stop_reason),
+    "truncated": Json::boolean(truncated),
+  }))
   if result.stop_reason == "success" {
-    @posoco.ToolOutcome::Success(content~, structured=None)
+    @posoco.ToolOutcome::Success(content~, structured~)
   } else {
-    @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
+    @posoco.ToolOutcome::ToolReportedError(content~, structured~)
   }
 }
 
@@ -166,7 +234,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "The complete instruction to delegate to zcode (plain text).",
+                      "Delegated task",
                     ),
                   ),
                 ]),
@@ -180,7 +248,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Working directory for the zcode session; defaults to the current directory.",
+                      "Working directory; default current directory",
                     ),
                   ),
                 ]),
@@ -194,7 +262,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "A previous zcode session id (sess_…) to continue; omit to start a new session.",
+                      "Session id to continue",
                     ),
                   ),
                 ]),
@@ -217,7 +285,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Permission mode; defaults to edit. yolo auto-approves and must be requested explicitly.",
+                      "Permission mode; default edit; yolo is explicit",
                     ),
                   ),
                 ]),
@@ -231,7 +299,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Return a receipt immediately and run the delegation in the background; the result arrives later as a follow-up turn. Background always starts a fresh session.",
+                      "Background run; result arrives as follow-up; starts fresh session",
                     ),
                   ),
                 ]),
@@ -252,7 +320,7 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn list_tools(
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("zcode"),
-      description: "Delegate a task to the local zcode CLI — the GLM coding-plan official harness with its own plugins and skills. zcode plans, edits files and runs commands inside its own session in the given working directory, then returns its final answer. Pass session_id (from a previous result) to continue that session instead of starting a new one. Long-running: a delegation may take many minutes — pass background: true to get an immediate receipt and receive the result as a follow-up turn. Default mode is edit; dangerous operations are denied by the bridge and reported back in the result text.",
+      description: "Delegate a task to the local zcode coding agent. Supports session resume and background follow-up; default permission mode is edit.",
       input_schema: zcode_tool_schema(),
       owner: @posoco.OwnerId::unchecked("placeholder"),
       policy: @posoco.ExecutionPolicy::Sequential,
