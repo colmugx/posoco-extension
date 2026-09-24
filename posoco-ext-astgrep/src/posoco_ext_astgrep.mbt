@@ -212,31 +212,23 @@ fn astgrep_structured(count : Int, returned : Int) -> Json {
 ///|
 fn astgrep_parse_match(line : String) -> AstGrepMatch? {
   let parsed = @json.parse(line) catch { _ => return None }
-  let fields = match parsed {
-    Object(fields) => fields
-    _ => return None
+  match parsed {
+    {
+      "file": String(file),
+      "text": String(text),
+      "range": {
+        "start": { "line": Number(line, ..), .. },
+        ..
+      },
+      ..
+    } =>
+      Some({
+        file,
+        line: line.to_int() + 1,
+        text,
+      })
+    _ => None
   }
-  let file = match fields.get("file") {
-    Some(String(value)) => value
-    _ => return None
-  }
-  let text = match fields.get("text") {
-    Some(String(value)) => value
-    _ => return None
-  }
-  let line = match fields.get("range") {
-    Some(Object(range)) =>
-      match range.get("start") {
-        Some(Object(start)) =>
-          match start.get("line") {
-            Some(Number(value, ..)) => value.to_int() + 1
-            _ => return None
-          }
-        _ => return None
-      }
-    _ => return None
-  }
-  Some({ file, line, text, })
 }
 
 ///|
