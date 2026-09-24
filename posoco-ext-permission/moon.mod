@@ -15,7 +15,7 @@ description = "Composable tool permission policy extension for Posoco coding age
 source = "src"
 
 import {
-  "colmugx/posoco@0.18.4",
+  "colmugx/posoco@0.18.5",
   "colmugx/posoco-devkit@0.4.0",
   "colmugx/posoco-ext-lazytools@0.1.0",
   "moonbitlang/async@0.22.2",
