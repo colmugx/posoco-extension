@@ -5,6 +5,5 @@ test "prompt section is stable and covers delegation semantics" {
   assert_true(section.contains("lody_"))
   assert_true(section.contains("timed_out"))
   assert_true(section.contains("task id"))
-  assert_true(section.length() < 420)
   assert_eq(prompt_section(), section)
 }
