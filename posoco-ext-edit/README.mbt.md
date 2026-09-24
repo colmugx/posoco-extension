@@ -15,7 +15,7 @@ the tool is not listed and execution raises `InvocationFailed`.
 - **>1 matches** → error listing the matching line numbers (up to five),
   telling the model to add surrounding context or pass `replace_all`.
 
-Line-number prefixes (`L12: `) that the model copied verbatim from read
+Line-number prefixes from current `12|text` or legacy `L12: text` read
 output are stripped automatically — but only as a whole block, and only when
 the raw text does not match. This is format hygiene for our own read output,
 not fuzzy matching.
@@ -42,7 +42,9 @@ not fuzzy matching.
   the anchor root never leaks into tool output.
 - **Atomic write** — temp file + rename on every target.
 - **Exclusive execution** — declared with `ExecutionPolicy::Exclusive`.
-- Success messages report the replacement count and line numbers.
+- **Compact success** — model-visible success is `ok: N lines=...`; detailed
+  count/line data and whether copied read prefixes were stripped are also
+  available in structured metadata.
 
 ## Usage
 
