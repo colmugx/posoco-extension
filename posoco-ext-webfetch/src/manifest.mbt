@@ -17,20 +17,7 @@ pub impl @posoco.Extension for WebFetchTools with fn extension_id(
 pub impl @posoco.Extension for WebFetchTools with fn manifest(
   self : WebFetchTools,
 ) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(id="posoco_ext_webfetch", tools=[self], prompt_contributors=[
-    self,
-  ])
-}
-
-///|
-/// Steering text taught alongside the tool definition: redirects to other
-/// hosts and truncated pages are both resumed with a follow-up call.
-pub impl @posoco.SystemPromptContributor for WebFetchTools with fn system_prompt(
-  _self : WebFetchTools,
-) -> String {
-  let prompt =
-    #|When `webfetch` reports a redirect to a different host, issue a new `webfetch` call with the redirect URL. When a `webfetch` result is truncated, continue reading with `offset` as directed in the footer instead of re-fetching the whole page.
-  prompt
+  @posoco.ExtensionManifest(id="posoco_ext_webfetch", tools=[self])
 }
 
 ///|
