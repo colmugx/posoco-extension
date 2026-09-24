@@ -23,7 +23,7 @@ let agent = @posoco.Agent(exts=[ask, ..other_extensions], config~)
 
 `ui` is your host's `UiPort` implementation (cetas-js, cetas-native,
 testkit, …). Register the extension only when an interactive UI exists;
-without one every call comes back as "Interactive UI is unavailable".
+without one every call returns `ui unavailable`.
 
 ## Tool arguments
 
@@ -50,9 +50,9 @@ Example call:
 
 - **Exclusive execution** — declared with `ExecutionPolicy::Exclusive`, so
   no other tools run while the question is on screen.
-- **Prompt contributor** — injects a system-prompt section telling the model
-  to ask only when a user decision or missing fact blocks progress, one
-  focused question at a time, preferring `select` with known choices.
+- **No resident prompt cost** — the manifest exposes only the tool; the same
+  usage constraint is carried by its compact ToolDef. The public prompt
+  contributor remains available for hosts that explicitly opt into it.
 - **Validation before UI** — bad arguments (missing/empty `question`, empty
   `options` for `select`, out-of-bounds `default_index`) raise
   `RuntimeError::UnknownTool` without ever touching the UI.
