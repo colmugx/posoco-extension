@@ -6,6 +6,8 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
+  "moonbitlang/core/lexbuf",
+  "moonbitlang/core/string",
 }
 
 import {
