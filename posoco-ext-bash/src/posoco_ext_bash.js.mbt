@@ -58,7 +58,14 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     None => ""
   }
   let proc = bun_spawn_shell(cmd, cwd)
-  let exit_code = proc.exit_code().wait() catch {
+  // The abort controller makes the exit wait cancellable: a bare `wait`
+  // parks the coroutine in a cancel-protected suspension, so an aborted
+  // turn would hang until the child exits on its own. On cancellation the
+  // errdefer aborts the controller (nothing listens — harmless) and the
+  // deferred kill terminates the child.
+  let wait_controller = @js_async.AbortController::new()
+  errdefer proc.kill_default()
+  let exit_code = proc.exit_code().wait(abort_controller=wait_controller) catch {
       _ => raise @posoco.RuntimeError::InvocationFailed("bash: process failed")
     }
   let stdout = proc.stdout_text().wait() catch { _ => "" }

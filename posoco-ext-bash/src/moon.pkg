@@ -1,11 +1,15 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/runtime",
   "colmugx/posoco-devkit" @devkit,
+  "moonbitlang/async",
   "moonbitlang/async/process",
   "moonbitlang/async/js_async",
 }
 
 import {
+  "colmugx/posoco/types",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/env",
@@ -16,7 +20,10 @@ supported_targets = "+native +js"
 options(
   targets: {
     "posoco_ext_bash.js.mbt": [ "js" ],
-    "posoco_ext_bash.native.mbt": [ "native", "wasm" ],
+    "posoco_ext_bash.native.mbt": [ "native" ],
+    "runtime_adaptor.js.mbt": [ "js" ],
+    "runtime_adaptor.native.mbt": [ "native" ],
+    "runtime_adaptor_wbtest.mbt": [ "native" ],
     "bash_native_path_wbtest.mbt": [ "native" ],
   },
 )
