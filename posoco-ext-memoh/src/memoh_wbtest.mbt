@@ -292,10 +292,11 @@ async test "Memoh approval source never creates local standing grants" {
 }
 
 ///|
-fn tk_support_new(
+async fn tk_support_new(
   _context : @acp.AgentContext,
   _params : @acp.NewSessionParams,
 ) -> @acp.NewSessionResult {
+  @async.sleep(0)
   {
     session_id: "s1",
     modes: @acp.ProtocolNullable::Omitted,
@@ -305,10 +306,11 @@ fn tk_support_new(
 }
 
 ///|
-fn tk_support_prompt(
+async fn tk_support_prompt(
   _context : @acp.AgentContext,
   _params : @acp.PromptParams,
 ) -> @acp.PromptResult {
+  @async.sleep(0)
   {
     stop_reason: @acp.StopReason::EndTurn,
     meta: @acp.ProtocolNullable::Omitted,
@@ -316,11 +318,11 @@ fn tk_support_prompt(
 }
 
 ///|
-fn tk_support_cancel(
+async fn tk_support_cancel(
   _context : @acp.AgentContext,
   _params : @acp.CancelParams,
 ) -> Unit {
-  ()
+  @async.sleep(0)
 }
 
 ///|
