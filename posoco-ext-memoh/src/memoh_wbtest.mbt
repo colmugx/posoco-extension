@@ -183,3 +183,145 @@ async test "context hook injects after stable system prompt and clears at turn e
     _ => fail("expected no stale Memoh context after turn end")
   }
 }
+
+///|
+fn tk_memoh_http_server(
+  name : String,
+  headers : Array[@acp.McpHttpHeader],
+) -> @acp.McpServer {
+  @acp.McpServer::Http({
+    name,
+    url: "http://127.0.0.1:9999/mcp/runtime-route",
+    headers,
+    meta: @acp.ProtocolNullable::Omitted,
+  })
+}
+
+///|
+test "Memoh Tools ACP declaration becomes a host-scoped HTTP MCP config" {
+  let config = memoh_tools_mcp_config(
+    @acp.ProtocolNullable::Value([
+      tk_memoh_http_server(
+        "Memoh Tools",
+        [
+          {
+            name: "X-Memoh-Runtime-Token",
+            value: "secret-runtime-token",
+            meta: @acp.ProtocolNullable::Omitted,
+          },
+          {
+            name: "X-Memoh-Session-Id",
+            value: "session-1",
+            meta: @acp.ProtocolNullable::Omitted,
+          },
+        ],
+      ),
+    ]),
+  )
+  assert_eq(config.name, "Memoh_Tools")
+  assert_true(config.auth is @mcp.ServerAuth::NoAuth)
+  match config.transport {
+    @transport.AnyTransport::HttpClient(http) => {
+      assert_eq(http.base_url, "http://127.0.0.1:9999/mcp/runtime-route")
+      assert_eq(http.extra_headers.length(), 2)
+      assert_eq(http.extra_headers[0].0, "X-Memoh-Runtime-Token")
+      assert_eq(http.extra_headers[0].1, "secret-runtime-token")
+      assert_eq(http.extra_headers[1].0, "X-Memoh-Session-Id")
+      assert_eq(http.extra_headers[1].1, "session-1")
+    }
+    _ => fail("expected HTTP MCP transport")
+  }
+}
+
+///|
+test "Memoh Tools slug alias is accepted and unrelated MCP servers are ignored" {
+  let unrelated : @acp.McpServer = @acp.McpServer::Http({
+    name: "Other Server",
+    url: "https://example.test/mcp",
+    headers: [],
+    meta: @acp.ProtocolNullable::Omitted,
+  })
+  let config = memoh_tools_mcp_config(
+    @acp.ProtocolNullable::Value([
+      unrelated,
+      tk_memoh_http_server("memoh_tools", []),
+    ]),
+  )
+  assert_eq(config.name, MEMOH_TOOLS_MCP_SLUG)
+}
+
+///|
+test "Memoh Tools MCP is required and must use HTTP" {
+  let missing : Result[@mcp.MCPServerConfig, MemohError] = Ok(
+    memoh_tools_mcp_config(@acp.ProtocolNullable::Omitted),
+  ) catch {
+    error => Err(error)
+  }
+  match missing {
+    Err(MissingToolGateway) => ()
+    _ => fail("expected MissingToolGateway")
+  }
+
+  let stdio : @acp.McpServer = @acp.McpServer::Stdio({
+    name: "Memoh Tools",
+    command: "/bin/false",
+    args: [],
+    env: [],
+    meta: @acp.ProtocolNullable::Omitted,
+  })
+  let unsupported : Result[@mcp.MCPServerConfig, MemohError] = Ok(
+    memoh_tools_mcp_config(@acp.ProtocolNullable::Value([stdio])),
+  ) catch {
+    error => Err(error)
+  }
+  match unsupported {
+    Err(UnsupportedMcpTransport(transport~)) =>
+      assert_eq(transport, "stdio")
+    _ => fail("expected UnsupportedMcpTransport")
+  }
+}
+
+///|
+test "Memoh Tools duplicate and empty header names fail without exposing values" {
+  let duplicate : Result[@mcp.MCPServerConfig, MemohError] = Ok(
+    memoh_tools_mcp_config(
+      @acp.ProtocolNullable::Value([
+        tk_memoh_http_server("Memoh Tools", []),
+        tk_memoh_http_server("Memoh_Tools", []),
+      ]),
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match duplicate {
+    Err(InvalidMcpServer(reason~)) =>
+      assert_true(reason.contains("multiple"))
+    _ => fail("expected duplicate declaration failure")
+  }
+
+  let invalid : Result[@mcp.MCPServerConfig, MemohError] = Ok(
+    memoh_tools_mcp_config(
+      @acp.ProtocolNullable::Value([
+        tk_memoh_http_server(
+          "Memoh Tools",
+          [
+            {
+              name: "",
+              value: "must-not-appear-in-error",
+              meta: @acp.ProtocolNullable::Omitted,
+            },
+          ],
+        ),
+      ]),
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match invalid {
+    Err(InvalidMcpServer(reason~)) => {
+      assert_false(reason.contains("must-not-appear-in-error"))
+      assert_true(reason.contains("header name"))
+    }
+    _ => fail("expected invalid header failure")
+  }
+}

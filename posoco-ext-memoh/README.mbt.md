@@ -47,11 +47,25 @@ context cannot bleed into the next turn.
 Other ACP block kinds are rejected instead of silently changing their
 authority or semantics.
 
+## Memoh Tools MCP
+
+`memoh_tools_mcp_config` selects the host-injected `Memoh Tools` HTTP MCP
+declaration from ACP `session/new`, accepts the `Memoh_Tools` slug alias,
+and converts it to a `posoco-ext-mcp` server config.
+
+The adapter forwards all non-empty HTTP headers in declaration order without
+logging their values. Unrelated ACP MCP declarations are ignored: Memoh itself
+is the federation and policy authority, so a Memoh-specific agent does not
+open an independent MCP path around the Tool Gateway. The internal server name
+is normalized to `Memoh_Tools` so Posoco's namespaced tool identifiers remain
+provider-safe.
+
+Missing Memoh Tools or a stdio/SSE declaration fails closed.
+
 ## Planned host surfaces
 
-The same `Memoh` extension will continue to grow Memoh-specific integration
-points such as Memoh Tools MCP discovery, safe transport configuration,
-host-specific diagnostics, memory, and steering enhancements.
+The same `Memoh` extension will continue to grow host-specific diagnostics,
+memory, and steering enhancements.
 
 Generic ACP protocol behavior does not belong here and stays in
 `posoco-ext-acp`.
