@@ -176,5 +176,10 @@ async test "context hook injects after stable system prompt and clears at turn e
 
   memoh.on_turn_end()
   let after = memoh.before_model(messages)
-  assert_true(after === messages)
+  assert_eq(after.length(), 2)
+  match after[1] {
+    @posoco.Message::UserMessage(content~) =>
+      assert_true(content[0] is @posoco.Content::Text("user request"))
+    _ => fail("expected no stale Memoh context after turn end")
+  }
 }
