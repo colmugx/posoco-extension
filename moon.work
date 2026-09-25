@@ -20,6 +20,7 @@ members = [
   "./posoco-ext-llm",
   "./posoco-ext-mbtx",
   "./posoco-ext-mcp",
+  "./posoco-ext-memoh",
   "./posoco-ext-nowledge-mem",
   "./posoco-ext-oauth",
   "./posoco-ext-obsidian",
