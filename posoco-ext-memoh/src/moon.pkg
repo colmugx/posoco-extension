@@ -1,6 +1,8 @@
 import {
   "colmugx/posoco",
   "colmugx/acp",
+  "colmugx/posoco-ext-mcp" @mcp,
+  "colmugx/mcp/transport",
 }
 
 import {

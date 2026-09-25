@@ -5,4 +5,7 @@ pub(all) suberror MemohError {
   MissingContext
   InvalidContext(reason~ : String)
   UnsupportedPromptBlock(kind~ : String)
+  MissingToolGateway
+  InvalidMcpServer(reason~ : String)
+  UnsupportedMcpTransport(transport~ : String)
 }
