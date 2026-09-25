@@ -48,10 +48,12 @@ test "sanitize rewrites schema false to true and passes booleans through" {
   )
 }
 
+
 ///|
-test "sanitize caps documentation but preserves validation fields" {
-  let long_desc = "d".repeat(MCP_SCHEMA_DESCRIPTION_CHARS + 100)
-  let long_title = "t".repeat(MCP_SCHEMA_TITLE_CHARS + 100)
+test "sanitize preserves documentation and validation fields" {
+  let long_desc = "d".repeat(1200) + "-critical-description-tail"
+  let long_title = "t".repeat(400) + "-critical-title-tail"
+  let examples = Json::array([Json::string("example payload")])
   let dirty = Json::object({
     "type": Json::string("string"),
     "description": Json::string(long_desc),
@@ -59,23 +61,15 @@ test "sanitize caps documentation but preserves validation fields" {
     "enum": Json::array([Json::string("a"), Json::string("b")]),
     "const": Json::string("a"),
     "default": Json::string("a"),
-    "examples": Json::array([Json::string("very large example")]),
+    "examples": examples,
   })
   guard sanitize_tool_schema(dirty) is Json::Object(clean) else {
     fail("expected object schema")
   }
-  guard clean.get("description") is Some(Json::String(desc)) else {
-    fail("expected description")
-  }
-  guard clean.get("title") is Some(Json::String(title)) else {
-    fail("expected title")
-  }
-  assert_true(desc.has_suffix("…"))
-  assert_true(title.has_suffix("…"))
-  assert_true(desc.length() < long_desc.length())
-  assert_true(title.length() < long_title.length())
+  assert_eq(clean.get("description"), Some(Json::string(long_desc)))
+  assert_eq(clean.get("title"), Some(Json::string(long_title)))
   assert_true(clean.get("enum") is Some(Json::Array(_)))
   assert_true(clean.get("const") is Some(Json::String("a")))
   assert_true(clean.get("default") is Some(Json::String("a")))
-  assert_true(clean.get("examples") is None)
+  assert_eq(clean.get("examples"), Some(examples))
 }

@@ -22,17 +22,41 @@ fn template_system_instruction(template : SummaryTemplate) -> String {
   match template {
     StructuredMd =>
       (
-        #|Summarize coding-agent context; do not continue the conversation. Output only Markdown with exactly these sections, in order:
+        #|You are a context summarization assistant. Read the conversation between a user and an AI coding assistant, then produce a structured summary following the exact format specified below. Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.
+        #|
+        #|Format the summary in Markdown with exactly these five sections, in this order:
+        #|
         #|## Goal
         #|## State
         #|## Key Decisions
         #|## Next
         #|## Relevant Files
-        #|State uses Done / In Progress / Blocked. Never omit a section; use "(none)" when empty. Preserve paths, commands, error strings, and identifiers verbatim. Do not mention compaction/summarization.
+        #|
+        #|Rules:
+        #|- The State section reports progress as Done / In Progress / Blocked items.
+        #|- Never omit a section. If a section has no content, write "(none)".
+        #|- Preserve file paths, commands, error strings, and identifiers verbatim.
+        #|- Do not mention that a compaction or summarization happened.
+        #|- Output only the summary text itself, with no preamble and no tool calls.
       )
     KimiXml =>
       (
-        #|Compress coding-agent context into XML. Priority: current task; errors/solutions; final code; system context; design decisions; TODO. Keep errors, stack traces, working solutions, and current task; merge duplicates; drop failed attempts but keep lessons; keep code <=20 lines whole, otherwise signature + key logic. Output only these tags, in order:
+        #|You are a context compaction engine for a coding agent. Condense the conversation into a structured XML snapshot so another agent can resume with full context.
+        #|
+        #|Compression priorities, highest first:
+        #|1. Current Task State
+        #|2. Errors & Solutions
+        #|3. Code Evolution (final working versions only)
+        #|4. System Context
+        #|5. Design Decisions
+        #|6. TODO
+        #|
+        #|MUST KEEP: error messages, stack traces, working solutions, the current task.
+        #|MERGE: duplicate or overlapping information into single statements.
+        #|REMOVE: failed attempts (keep the lessons learned).
+        #|CONDENSE: keep the full version of code under 20 lines, otherwise the signature plus key logic.
+        #|
+        #|Output the summary wrapped in exactly these XML tags, in this order:
         #|<current_focus> ... </current_focus>
         #|<environment> ... </environment>
         #|<completed_tasks> ... </completed_tasks>
@@ -41,11 +65,20 @@ fn template_system_instruction(template : SummaryTemplate) -> String {
         #|<important_context> ... </important_context>
       )
     CodexHandoff =>
-      "Create a concise handoff for another LLM: current progress/decisions; constraints/preferences; remaining next steps; critical data, examples, files, commands, or references. Output only the handoff."
+      (
+        #|You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task. Include: current progress and key decisions; important context, constraints, or user preferences; what remains to be done (clear next steps); any critical data, examples, or references needed to continue. Be concise, structured, and focused on helping the next LLM seamlessly continue the work. Output only the summary.
+      )
   }
 }
 
 ///|
-fn template_user_requirement(_template : SummaryTemplate) -> String {
-  "Summarize now; output only the requested format."
+fn template_user_requirement(template : SummaryTemplate) -> String {
+  match template {
+    StructuredMd =>
+      "Summarize the conversation above into the structured five-section format defined in the system instructions. Output only the summary."
+    KimiXml =>
+      "Condense the conversation above into the XML snapshot defined in the system instructions. Output only the XML snapshot."
+    CodexHandoff =>
+      "Summarize the conversation above as the handoff summary described in the system instructions. Output only the summary."
+  }
 }

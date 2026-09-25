@@ -161,10 +161,10 @@ pub fn zcode_parse_args(
     Json::Object(map) => {
       let task = match zcode_arg_string(map, "task") {
         Some(task) => task
-        None => return Err("zcode: missing 'task'")
+        None => return Err("zcode: 'task' (non-empty string) is required")
       }
       if task == "" {
-        return Err("zcode: empty 'task'")
+        return Err("zcode: 'task' must be a non-empty string")
       }
       let mode = match zcode_arg_string(map, "mode") {
         Some(raw) =>
@@ -178,10 +178,12 @@ pub fn zcode_parse_args(
         None => false
         Some(Json::True) => true
         Some(Json::False) => false
-        Some(_) => return Err("zcode: 'background' must be boolean")
+        Some(_) => return Err("zcode: 'background' must be a boolean")
       }
       if background && map.get("session_id") is Some(_) {
-        return Err("zcode: background cannot resume session_id")
+        return Err(
+          "zcode: background mode starts a fresh session — resume via session_id is foreground-only (one in-flight prompt per session, upstream error 1308)",
+        )
       }
       Ok({
         task,
@@ -191,7 +193,7 @@ pub fn zcode_parse_args(
         background,
       })
     }
-    _ => Err("zcode: arguments must be an object")
+    _ => Err("zcode: arguments must be a JSON object")
   }
 }
 
@@ -203,13 +205,11 @@ pub fn zcode_parse_args(
 pub fn zcode_format_outcome(result : ZcodeTaskResult) -> @posoco.ToolOutcome {
   let (body, truncated) = zcode_result_text(result.final_text)
   let content = body + "\n\n" + zcode_result_footer(result)
-  let structured = Some(
-    Json::object({
-      "session_id": Json::string(result.session_id),
-      "stop_reason": Json::string(result.stop_reason),
-      "truncated": Json::boolean(truncated),
-    }),
-  )
+  let structured = Some(Json::object({
+    "session_id": Json::string(result.session_id),
+    "stop_reason": Json::string(result.stop_reason),
+    "truncated": Json::boolean(truncated),
+  }))
   if result.stop_reason == "success" {
     @posoco.ToolOutcome::Success(content~, structured~)
   } else {
@@ -231,7 +231,12 @@ fn zcode_tool_schema() -> Json {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("string")),
-                  ("description", Json::string("Delegated task")),
+                  (
+                    "description",
+                    Json::string(
+                      "The complete instruction to delegate to zcode (plain text).",
+                    ),
+                  ),
                 ]),
               ),
             ),
@@ -242,7 +247,9 @@ fn zcode_tool_schema() -> Json {
                   ("type", Json::string("string")),
                   (
                     "description",
-                    Json::string("Working directory; default current directory"),
+                    Json::string(
+                      "Working directory for the zcode session; defaults to the current directory.",
+                    ),
                   ),
                 ]),
               ),
@@ -252,7 +259,12 @@ fn zcode_tool_schema() -> Json {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("string")),
-                  ("description", Json::string("Session id to continue")),
+                  (
+                    "description",
+                    Json::string(
+                      "A previous zcode session id (sess_…) to continue; omit to start a new session.",
+                    ),
+                  ),
                 ]),
               ),
             ),
@@ -273,7 +285,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Permission mode; default edit; yolo is explicit",
+                      "Permission mode; defaults to edit. yolo auto-approves and must be requested explicitly.",
                     ),
                   ),
                 ]),
@@ -287,7 +299,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Background run; result arrives as follow-up; starts fresh session",
+                      "Return a receipt immediately and run the delegation in the background; the result arrives later as a follow-up turn. Background always starts a fresh session.",
                     ),
                   ),
                 ]),
@@ -308,7 +320,7 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn list_tools(
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("zcode"),
-      description: "Delegate a task to the local zcode coding agent. Supports session resume and background follow-up; default permission mode is edit.",
+      description: "Delegate a task to the local zcode CLI — the GLM coding-plan official harness with its own plugins and skills. zcode plans, edits files and runs commands inside its own session in the given working directory, then returns its final answer. Pass session_id (from a previous result) to continue that session instead of starting a new one. Long-running: a delegation may take many minutes — pass background: true to get an immediate receipt and receive the result as a follow-up turn. Default mode is edit; dangerous operations are denied by the bridge and reported back in the result text.",
       input_schema: zcode_tool_schema(),
       owner: @posoco.OwnerId::unchecked("placeholder"),
       policy: @posoco.ExecutionPolicy::Sequential,

@@ -227,7 +227,10 @@ async test "write_size_cap_is_a_reported_error" {
     let huge = "x".repeat(1_000_001)
     match run_write(WriteTools::WriteTools(), write_call(path, huge)) {
       Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
-        assert_true(content.contains("1000001B > 1000000B"))
+        assert_true(
+          content.contains("1_000_001 bytes") ||
+          content.contains("1000001 bytes"),
+        )
         assert_false(@fs.exists(path))
       }
       _ => fail("expected oversized write to be refused")
@@ -286,7 +289,10 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
 }
 
 ///|
-test "write_tool_definition_stays_compact" {
+test "write_tool_definition_explains overwrite_and_freshness_contract" {
   let def = WriteTools::WriteTools().list_tools()[0]
-  assert_true(def.description.length() < 160)
+  assert_true(def.description.contains("fully replace"))
+  assert_true(def.description.contains("atomically"))
+  assert_true(def.description.contains("fresh from a prior read"))
+  assert_true(def.description.contains("use edit for targeted changes"))
 }

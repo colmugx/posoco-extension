@@ -723,9 +723,10 @@ test "http_connect_params_preserves_injected_header_order" {
   }
 }
 
+
 ///|
-test "convert_tool_def_caps_external_description" {
-  let long = "prefix-" + "x".repeat(MCP_TOOL_DESCRIPTION_CHARS + 100)
+test "convert_tool_def_preserves_external_description" {
+  let long = "prefix-" + "x".repeat(1200) + "-critical-tail"
   let def = convert_tool_def(
     @types.ToolDefinition::{
       name: "search",
@@ -734,9 +735,8 @@ test "convert_tool_def_caps_external_description" {
     },
     "srv",
   )
-  assert_true(def.description.has_prefix("prefix-"))
-  assert_true(def.description.has_suffix("…"))
-  assert_true(def.description.length() < long.length())
+  assert_eq(def.description, long)
+  assert_true(def.description.contains("-critical-tail"))
 }
 
 ///|

@@ -118,7 +118,10 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("string")),
-                  ("description", Json::string("PowerShell command")),
+                  (
+                    "description",
+                    Json::string("The PowerShell command to execute"),
+                  ),
                 ]),
               ),
             ),
@@ -129,14 +132,14 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
     ]),
   )
   let chaining = if exe.contains("pwsh") {
-    "Supports &&/||."
+    "PowerShell 7+ syntax: `&&` and `||` pipeline chains are supported."
   } else {
-    "No &&/||; use ; or if ($?)."
+    "Windows PowerShell 5.1 syntax: `&&` and `||` are NOT supported; chain statements with `;` or `if ($?)`."
   }
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("powershell"),
-      description: "Run PowerShell via \{exe} on Windows. Use PowerShell syntax/cmdlets; fresh session at workspace root. \{chaining}",
+      description: "Run a PowerShell command via \{exe} (-NoProfile -NonInteractive) on Windows. This is PowerShell, not bash — use PowerShell syntax and cmdlets (Select-String, Get-ChildItem, $env:NAME). \{chaining} Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root.",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_ps1"),
       policy: @posoco.ExecutionPolicy::Parallel,

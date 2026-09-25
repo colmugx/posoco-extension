@@ -404,7 +404,11 @@ test "edit_strip_line_number_prefix_rejects_non_prefix_matches" {
 }
 
 ///|
-test "edit_tool_definition_stays_compact" {
+test "edit_tool_definition_explains uniqueness_and_freshness_contract" {
   let def = EditTools::EditTools().list_tools()[0]
-  assert_true(def.description.length() < 180)
+  assert_true(def.description.contains("Exact text replacement"))
+  assert_true(def.description.contains("fresh-read"))
+  assert_true(def.description.contains("unique unless"))
+  assert_true(def.description.contains("replace_all"))
+  assert_true(def.description.contains("read line prefixes"))
 }

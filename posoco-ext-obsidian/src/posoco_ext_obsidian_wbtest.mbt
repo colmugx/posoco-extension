@@ -161,7 +161,10 @@ async test "read_pagination_footer" {
   ])
   let (is_err, content, _) = outcome_parts(outcome)
   assert_false(is_err)
-  inspect(content, content="2|b\n3|c\n… +2 lines; next=4")
+  inspect(
+    content,
+    content="2|b\n3|c\n… +2 lines; next=4",
+  )
 }
 
 ///|
@@ -680,13 +683,19 @@ fn is_write_tool(name : String) -> Bool {
 }
 
 ///|
-test "system_prompt_is_byte_stable" {
+test "system_prompt_is_byte_stable_and_preserves_workflow_rules" {
   let a = make_tools().system_prompt()
   let b = make_tools().system_prompt()
   assert_eq(a, b)
-  assert_true(a.contains("outline"))
-  assert_true(a.length() < 220)
+  assert_true(a.contains("Locate before you read"))
+  assert_true(a.contains("Never guess paths"))
+  assert_true(a.contains("obsidian_outline"))
+  assert_true(a.contains("exact heading text"))
+  assert_true(a.contains("ambiguous headings are refused"))
+  assert_true(a.contains("obsidian_move_note updates internal links"))
+  assert_true(a.contains("permanent deletion and overwrites ask the user for consent"))
 }
+
 
 ///|
 test "obsidian_model_output_is_bounded" {
@@ -709,15 +718,33 @@ test "obsidian_tool_errors_use_smaller_budget" {
 }
 
 ///|
-test "obsidian_read_tool_definition_is_compact" {
+test "obsidian_read_tool_definition_is_self_contained" {
   let defs = make_tools().list_tools()
   let mut found = false
   for def in defs {
     if def.name.to_string() == "obsidian_read_note" {
       found = true
       assert_true(def.description.contains("line|text"))
-      assert_true(def.description.length() < 150)
+      assert_true(def.description.contains("1-based"))
+      assert_true(def.description.contains("defaults to 400"))
+      assert_true(def.description.contains("freshness"))
     }
   }
   assert_true(found)
+}
+
+
+///|
+test "obsidian_patch_tool_definition_explains_operation_matrix" {
+  let defs = make_tools().list_tools()
+  for def in defs {
+    if def.name.to_string() == "obsidian_patch_note" {
+      assert_true(def.description.contains("append/prepend"))
+      assert_true(def.description.contains("replace/delete"))
+      assert_true(def.description.contains("obsidian_outline"))
+      assert_true(def.description.contains("target_type=frontmatter"))
+      return
+    }
+  }
+  fail("expected obsidian_patch_note")
 }

@@ -189,6 +189,7 @@ test "list_tools_declares_single_zcode_def" {
   }
 }
 
+
 ///|
 test "format_outcome_caps_long_result_but_keeps_footer_and_tail" {
   let body = "HEAD-" + "x".repeat(ZCODE_RESULT_CHAR_CAP + 500) + "-TAIL"
@@ -226,7 +227,51 @@ test "background_summary_uses_same_bounded_body_contract" {
 }
 
 ///|
-test "zcode_tool_definition_is_compact" {
+test "zcode_tool_definition_is_self_contained_for_weaker_models" {
   let def = zcode_tools().list_tools()[0]
-  assert_true(def.description.length() < 160)
+  assert_true(def.description.contains("GLM coding-plan official harness"))
+  assert_true(def.description.contains("plugins and skills"))
+  assert_true(def.description.contains("session_id"))
+  assert_true(def.description.contains("continue that session"))
+  assert_true(def.description.contains("background: true"))
+  assert_true(def.description.contains("follow-up turn"))
+  assert_true(def.description.contains("Default mode is edit"))
+  assert_true(def.description.contains("dangerous operations are denied"))
+}
+
+
+///|
+test "zcode_schema_explains_resume_permission_and_background_defaults" {
+  let schema = zcode_tools().list_tools()[0].input_schema
+  guard json_field(schema, "properties") is Some(Json::Object(props)) else {
+    fail("expected properties")
+  }
+  guard props.get("session_id") is Some(Json::Object(session)) else {
+    fail("expected session_id")
+  }
+  guard session.get("description") is Some(Json::String(session_desc)) else {
+    fail("expected session description")
+  }
+  assert_true(session_desc.contains("continue"))
+  assert_true(session_desc.contains("omit to start a new session"))
+
+  guard props.get("mode") is Some(Json::Object(mode)) else {
+    fail("expected mode")
+  }
+  guard mode.get("description") is Some(Json::String(mode_desc)) else {
+    fail("expected mode description")
+  }
+  assert_true(mode_desc.contains("defaults to edit"))
+  assert_true(mode_desc.contains("yolo auto-approves"))
+  assert_true(mode_desc.contains("requested explicitly"))
+
+  guard props.get("background") is Some(Json::Object(background)) else {
+    fail("expected background")
+  }
+  guard background.get("description") is Some(Json::String(background_desc)) else {
+    fail("expected background description")
+  }
+  assert_true(background_desc.contains("receipt immediately"))
+  assert_true(background_desc.contains("follow-up turn"))
+  assert_true(background_desc.contains("fresh session"))
 }

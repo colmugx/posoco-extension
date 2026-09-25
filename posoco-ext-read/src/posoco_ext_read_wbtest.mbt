@@ -228,7 +228,7 @@ async test "read_offset_past_end_names_total_lines" {
     )
     match outcome {
       Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
-        assert_true(content.contains("offset 99"))
+        assert_true(content.contains("past the end"))
         assert_true(content.contains("10 lines"))
       }
       _ => fail("expected past-end read to be a reported error")
@@ -642,7 +642,7 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
     )
     match run_read(absent_tools, read_call_args(path)) {
       Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
-        assert_true(content.contains("not found"))
+        assert_true(content.contains("File not found"))
       _ => fail("expected missing delegated file to be a reported error")
     }
   }

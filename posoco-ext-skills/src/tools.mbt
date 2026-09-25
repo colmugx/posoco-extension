@@ -216,13 +216,13 @@ async fn Skills::search(
 fn Skills::activate_tool_def(self : Skills) -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked(self.config.activate_tool_name),
-    description: "Load one skill's instructions and list bundled resources. Use an exact discovered skill name.",
+    description: "Activate one discovered Agent Skill. Returns the full SKILL.md instructions on demand and lists bundled resources without loading them. Use the exact skill name from the available-skills catalog.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "name": Json::object({
           "type": Json::string("string"),
-          "description": Json::string("Exact skill name"),
+          "description": Json::string("Exact discovered skill name"),
         }),
       }),
       "required": Json::array([Json::string("name")]),
@@ -238,7 +238,7 @@ fn Skills::activate_tool_def(self : Skills) -> @posoco.ToolDef {
 fn Skills::read_resource_tool_def(self : Skills) -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked(self.config.read_resource_tool_name),
-    description: "Read one UTF-8 resource named by an activated skill. Path stays inside that skill directory.",
+    description: "Read one UTF-8 text resource belonging to a discovered Agent Skill. Use this after that skill's activated instructions identify a resource that is actually needed. The path is resolved inside the discovered skill directory and cannot escape it.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
@@ -248,7 +248,7 @@ fn Skills::read_resource_tool_def(self : Skills) -> @posoco.ToolDef {
         }),
         "path": Json::object({
           "type": Json::string("string"),
-          "description": Json::string("Path relative to skill directory"),
+          "description": Json::string("Resource path relative to the skill directory"),
         }),
       }),
       "required": Json::array([Json::string("name"), Json::string("path")]),
@@ -319,7 +319,9 @@ pub impl @posoco.ToolProvider for Skills with fn execute(
   if name == self.config.activate_tool_name {
     let skill_name = require_string_arg(name, call.arguments, "name")
     if !runtime_skill_name_is_safe(skill_name) {
-      raise @posoco.RuntimeError::InvocationFailed(name + ": invalid 'name'")
+      raise @posoco.RuntimeError::InvocationFailed(
+        name + ": 'name' exceeds runtime safety constraints",
+      )
     }
     return self.activate(skill_name)
   }

@@ -101,5 +101,10 @@ pub impl @posoco.Lifecycle for ObsidianTools with fn on_compose(
 pub impl @posoco.SystemPromptContributor for ObsidianTools with fn system_prompt(
   _self : ObsidianTools,
 ) -> String {
-  "Obsidian: locate notes with search/list before reading; never guess paths. Use outline before heading replace/delete. Move notes with obsidian_move_note. Permanent delete/overwrite requires consent."
+  "Obsidian vault tools are available. Conventions:\n" +
+  "- Locate before you read: use obsidian_search to find notes; use obsidian_read_note with offset/limit for large notes.\n" +
+  "- Never guess paths; take them from search/list results exactly.\n" +
+  "- Before replacing or deleting a heading section, call obsidian_outline, then obsidian_patch_note with the exact heading text; ambiguous headings are refused.\n" +
+  "- obsidian_move_note updates internal links automatically; prefer it over rewriting links by hand.\n" +
+  "- Deletions go to the vault trash; permanent deletion and overwrites ask the user for consent."
 }

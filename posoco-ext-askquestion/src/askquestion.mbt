@@ -22,7 +22,7 @@ fn ask_question_schema() -> Json {
     "properties": Json::object({
       "question": Json::object({
         "type": Json::string("string"),
-        "description": Json::string("Question for the user"),
+        "description": Json::string("One focused question to present to the user"),
       }),
       "type": Json::object({
         "type": Json::string("string"),
@@ -35,7 +35,7 @@ fn ask_question_schema() -> Json {
       "options": Json::object({
         "type": Json::string("array"),
         "items": Json::object({ "type": Json::string("string") }),
-        "description": Json::string("Select choices"),
+        "description": Json::string("Concise choices for a select prompt"),
       }),
       "default": Json::object({
         "type": Json::string("string"),
@@ -252,7 +252,7 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("ask_question"),
-      description: "Ask one user question only when a decision or missing fact blocks progress; do not ask what tools can discover. Supports input, confirm, and select.",
+      description: "Ask exactly one focused user question only when a user decision or missing fact blocks progress. Do not ask for information available tools can discover. If known choices exist, prefer type=select with concise options; use type=confirm for yes/no; otherwise use type=input.",
       input_schema: ask_question_schema(),
       owner: @posoco.OwnerId::unchecked("posoco_ext_askquestion"),
       policy: @posoco.ExecutionPolicy::Exclusive,
@@ -308,7 +308,7 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
 pub impl @posoco.SystemPromptContributor for AskQuestionTools with fn system_prompt(
   _self : AskQuestionTools,
 ) -> String {
-  "Use ask_question only when a user decision or missing fact blocks progress; do not ask for discoverable information."
+  "Use ask_question only when a user decision or missing fact blocks progress. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
 }
 
 ///|
