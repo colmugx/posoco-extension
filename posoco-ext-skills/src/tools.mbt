@@ -248,7 +248,9 @@ fn Skills::read_resource_tool_def(self : Skills) -> @posoco.ToolDef {
         }),
         "path": Json::object({
           "type": Json::string("string"),
-          "description": Json::string("Resource path relative to the skill directory"),
+          "description": Json::string(
+            "Resource path relative to the skill directory",
+          ),
         }),
       }),
       "required": Json::array([Json::string("name"), Json::string("path")]),

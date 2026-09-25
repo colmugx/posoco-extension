@@ -205,11 +205,13 @@ pub fn zcode_parse_args(
 pub fn zcode_format_outcome(result : ZcodeTaskResult) -> @posoco.ToolOutcome {
   let (body, truncated) = zcode_result_text(result.final_text)
   let content = body + "\n\n" + zcode_result_footer(result)
-  let structured = Some(Json::object({
-    "session_id": Json::string(result.session_id),
-    "stop_reason": Json::string(result.stop_reason),
-    "truncated": Json::boolean(truncated),
-  }))
+  let structured = Some(
+    Json::object({
+      "session_id": Json::string(result.session_id),
+      "stop_reason": Json::string(result.stop_reason),
+      "truncated": Json::boolean(truncated),
+    }),
+  )
   if result.stop_reason == "success" {
     @posoco.ToolOutcome::Success(content~, structured~)
   } else {

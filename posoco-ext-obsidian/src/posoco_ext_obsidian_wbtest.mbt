@@ -161,10 +161,7 @@ async test "read_pagination_footer" {
   ])
   let (is_err, content, _) = outcome_parts(outcome)
   assert_false(is_err)
-  inspect(
-    content,
-    content="2|b\n3|c\n… +2 lines; next=4",
-  )
+  inspect(content, content="2|b\n3|c\n… +2 lines; next=4")
 }
 
 ///|
@@ -693,9 +690,10 @@ test "system_prompt_is_byte_stable_and_preserves_workflow_rules" {
   assert_true(a.contains("exact heading text"))
   assert_true(a.contains("ambiguous headings are refused"))
   assert_true(a.contains("obsidian_move_note updates internal links"))
-  assert_true(a.contains("permanent deletion and overwrites ask the user for consent"))
+  assert_true(
+    a.contains("permanent deletion and overwrites ask the user for consent"),
+  )
 }
-
 
 ///|
 test "obsidian_model_output_is_bounded" {
@@ -732,7 +730,6 @@ test "obsidian_read_tool_definition_is_self_contained" {
   }
   assert_true(found)
 }
-
 
 ///|
 test "obsidian_patch_tool_definition_explains_operation_matrix" {

@@ -48,7 +48,6 @@ test "sanitize rewrites schema false to true and passes booleans through" {
   )
 }
 
-
 ///|
 test "sanitize preserves documentation and validation fields" {
   let long_desc = "d".repeat(1200) + "-critical-description-tail"

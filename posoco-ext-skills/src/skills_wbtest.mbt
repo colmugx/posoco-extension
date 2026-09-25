@@ -2342,11 +2342,9 @@ test "skills prompt descriptions are capped independently of full catalog data" 
   assert_eq(catalog.skills[0].description, long)
 }
 
-
 ///|
 test "prompt: catalog keeps substantial description context for weak models" {
-  let description =
-    "Build release packages, validate checksums, and publish artifacts. " +
+  let description = "Build release packages, validate checksums, and publish artifacts. " +
     "Use this when preparing a tagged release across native targets. " +
     "Critical trigger: signed-release-with-provenance."
   let prompt = catalog_of([

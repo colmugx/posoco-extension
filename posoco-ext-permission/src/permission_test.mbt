@@ -1559,7 +1559,6 @@ async test "auto mode injects a standing reminder; leaving auto removes it" {
     Some(text) => {
       assert_true(text.contains("judged per call"))
       assert_true(text.contains("decline is steering"))
-      
     }
     None => fail("expected auto reminder")
   }

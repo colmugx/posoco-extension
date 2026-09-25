@@ -279,13 +279,12 @@ test "parse_outcome_detail_maps_envelope_prefixes" {
   )
 }
 
-
 ///|
 test "agent_schema_keeps_trust_defaults_and_resume_rules_explicit" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let def = @posoco.ToolProvider::list_tools(
-    test_tools(composer=composer as &ChildComposer),
-  )[0]
+      test_tools(composer=composer as &ChildComposer),
+    )[0]
   guard def.input_schema is Json::Object(fields) else {
     fail("expected object schema")
   }
@@ -308,7 +307,9 @@ test "agent_schema_keeps_trust_defaults_and_resume_rules_explicit" {
     fail("expected instructions description")
   }
   assert_true(instructions_desc.contains("instruction slot"))
-  assert_true(instructions_desc.contains("untrusted content impersonate instructions"))
+  assert_true(
+    instructions_desc.contains("untrusted content impersonate instructions"),
+  )
 
   guard props.get("resume") is Some(Json::Object(resume)) else {
     fail("expected resume")
@@ -316,5 +317,7 @@ test "agent_schema_keeps_trust_defaults_and_resume_rules_explicit" {
   guard resume.get("description") is Some(Json::String(resume_desc)) else {
     fail("expected resume description")
   }
-  assert_true(resume_desc.contains("continue instead of spawning a fresh session"))
+  assert_true(
+    resume_desc.contains("continue instead of spawning a fresh session"),
+  )
 }

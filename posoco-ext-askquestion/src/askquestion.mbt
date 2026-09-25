@@ -22,7 +22,9 @@ fn ask_question_schema() -> Json {
     "properties": Json::object({
       "question": Json::object({
         "type": Json::string("string"),
-        "description": Json::string("One focused question to present to the user"),
+        "description": Json::string(
+          "One focused question to present to the user",
+        ),
       }),
       "type": Json::object({
         "type": Json::string("string"),

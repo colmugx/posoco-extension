@@ -723,7 +723,6 @@ test "http_connect_params_preserves_injected_header_order" {
   }
 }
 
-
 ///|
 test "convert_tool_def_preserves_external_description" {
   let long = "prefix-" + "x".repeat(1200) + "-critical-tail"
