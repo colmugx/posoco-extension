@@ -673,6 +673,57 @@ async test "usage update size comes from the declared context window" {
 }
 
 ///|
+async test "usage update size follows runtime context window changes" {
+  let client = FakeAcpClient::FakeAcpClient()
+  let bridge = AcpBridge(context_window=Some(128000))
+  bridge.attach(context=fake_acp_context(client), session_id="s1")
+  // Project one update at the constructor-provided window, then switch the
+  // runtime model before flushing. The queued frame must retain 128k.
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("a")]),
+      usage=Some(tk_usage(10)),
+    ),
+  )
+  bridge.set_context_window(Some(1000000))
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("b")]),
+      usage=Some(tk_usage(20)),
+    ),
+  )
+  bridge.set_context_window(None)
+  bridge.ingest(
+    ModelResponseReceived(
+      message=tk_assistant(content=[@posoco.Content::Text("c")]),
+      usage=Some(tk_usage(30)),
+    ),
+  )
+  ignore(bridge.flush())
+  match client.sent[1].update {
+    UsageUpdate(usage) => {
+      assert_eq(usage.used, 10)
+      assert_eq(usage.size, 128000)
+    }
+    _ => fail("expected first usage update")
+  }
+  match client.sent[3].update {
+    UsageUpdate(usage) => {
+      assert_eq(usage.used, 30)
+      assert_eq(usage.size, 1000000)
+    }
+    _ => fail("expected second usage update")
+  }
+  match client.sent[5].update {
+    UsageUpdate(usage) => {
+      assert_eq(usage.used, 60)
+      assert_eq(usage.size, 0)
+    }
+    _ => fail("expected third usage update")
+  }
+}
+
+///|
 async test "usage update size stays zero without a context window" {
   let client = FakeAcpClient::FakeAcpClient()
   let bridge = AcpBridge()

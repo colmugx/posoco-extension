@@ -96,6 +96,7 @@ pub async fn AcpBridge::push_session_info_update(Self, session_id~ : String, tit
 pub fn AcpBridge::render(Self, @port.UiRender) -> Unit
 pub async fn AcpBridge::request(Self, @port.UiRequest) -> @port.UiResponse raise @error.UiError
 pub fn AcpBridge::session_id(Self) -> String?
+pub fn AcpBridge::set_context_window(Self, Int?) -> Unit
 pub fn[G] AcpBridge::spawn_pump(Self, @async.TaskGroup[G]) -> Unit
 pub fn AcpBridge::stop_reason(Self) -> @session.StopReason
 pub fn AcpBridge::take_failure(Self) -> String?

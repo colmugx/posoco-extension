@@ -124,6 +124,15 @@ Two MoonBit realities the call site above bakes in: the caller wraps the
 closure in `Some(...)` (the parameter itself is optional), and a
 multi-parameter closure needs explicit parameter type annotations.
 
+### Dynamic context window
+
+`context_window~` seeds the context window used for ACP `UsageUpdate.size`.
+A host that supports runtime model switching can call
+`bridge.set_context_window(Some(new_window))` after the switch; subsequent
+usage projections use the new value without resetting session-cumulative
+`used` tokens or message ids. Passing `None` restores the fallback size 0.
+Already queued usage updates keep the size captured at projection time.
+
 ## Wire mapping (ACP v1)
 
 | Posoco event | ACP `session/update` |
@@ -132,7 +141,7 @@ multi-parameter closure needs explicit parameter type annotations.
 | `ToolCallResult` | `ToolCallUpdate` (status `Completed`/`Failed`, text content) |
 | `ToolCallDeferred` | `ToolCallUpdate` (status `Pending`, deferred title) |
 | `StreamChunkReceived(TextDelta/ReasoningDelta)` | `AgentMessageChunk` / `AgentThoughtChunk` sharing one per-round `messageId` |
-| `ModelResponseReceived` | full `AgentThoughtChunk` + `AgentMessageChunk` (suppressed when the same text/thought already streamed this round) + cumulative `UsageUpdate` (`used` session-cumulative; `size` = the `context_window~` the host declared at construction, 0 when it did not) |
+| `ModelResponseReceived` | full `AgentThoughtChunk` + `AgentMessageChunk` (suppressed when the same text/thought already streamed this round) + cumulative `UsageUpdate` (`used` session-cumulative; `size` = the bridge's current host-declared context window, 0 when absent) |
 | `TurnFailed` | recorded for the host (`take_failure`) — v1 has no error-chunk update; turn errors belong on the `session/prompt` response |
 
 Tool kind is derived from the tool name (`read`/`grep`/`bash`/... plus

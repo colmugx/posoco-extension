@@ -88,7 +88,7 @@ pub struct AcpBridge {
   // projection time with (triggering event, projected update).
   meta_decorator : ((@posoco.TurnEvent, @acp.SessionUpdate) -> Json?)?
   // Host-declared model context window; `None` keeps UsageUpdate.size at 0.
-  priv context_window : Int?
+  priv mut context_window : Int?
   // Self-collected per-turn state (via Observer events). `message_seq` and
   // `used_tokens` persist across prompts (unique ids, session-cumulative
   // usage); everything below them is reset per turn or per attach.
@@ -137,6 +137,19 @@ pub fn AcpBridge::AcpBridge(
     last_finish: None,
     last_failure: None,
   }
+}
+
+///|
+/// Replace the model context window used by future `UsageUpdate.size`
+/// projections. Hosts may call this after a runtime model switch; already
+/// queued updates keep the size captured when they were projected. `None`
+/// restores the ACP fallback size of 0. This does not reset cumulative usage,
+/// message ids, queue state, or the ACP session binding.
+pub fn AcpBridge::set_context_window(
+  self : AcpBridge,
+  context_window : Int?,
+) -> Unit {
+  self.context_window = context_window
 }
 
 ///|
