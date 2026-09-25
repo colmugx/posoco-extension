@@ -426,18 +426,11 @@ async fn SubagentTools::spawn(
   // budget unit. Once acquired, the slot belongs to this child until its
   // foreground run returns or its Agent-owned background task actually exits.
   self.global_slots.acquire()
-  errdefer {
-    self.global_slots.release()
-  }
+  errdefer self.global_slots.release()
   let child = self.composer.compose(spec) catch {
     ComposerError::Failed(reason) => {
       self.global_slots.release()
-      return terminal_for(
-        bridge,
-        spec,
-        @kit.TerminalState::Failed(reason~),
-        "",
-      )
+      return terminal_for(bridge, spec, @kit.TerminalState::Failed(reason~), "")
     }
   }
   // Registered at spawn (design §5): both paths advertise the id in their
@@ -465,9 +458,7 @@ async fn SubagentTools::spawn(
     let runner : async () -> @posoco.Message = async fn() {
       // Ownership of the acquired global slot transfers to the background
       // task after submit succeeds. Release exactly once on every task exit.
-      errdefer {
-        self.global_slots.release()
-      }
+      errdefer self.global_slots.release()
       let result : @posoco.TurnResult = child.run_scoped(async fn(agent) {
         if spec.resuming {
           agent.resume_turn(spec.session_id)

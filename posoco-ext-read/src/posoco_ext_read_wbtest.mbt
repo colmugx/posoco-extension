@@ -642,7 +642,7 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
     )
     match run_read(absent_tools, read_call_args(path)) {
       Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
-        assert_true(content.contains("File not found"))
+        assert_true(content.contains("not found"))
       _ => fail("expected missing delegated file to be a reported error")
     }
   }

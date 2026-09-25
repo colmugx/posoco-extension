@@ -144,11 +144,7 @@ fn config_with_global_concurrency(limit : Int) -> @kit.SubagentConfig {
   let base = @kit.SubagentConfig::defaults()
   {
     ..base,
-    limits: {
-      ..base.limits,
-      global_concurrency: limit,
-      spawn_budget: 8,
-    },
+    limits: { ..base.limits, global_concurrency: limit, spawn_budget: 8, },
   }
 }
 
