@@ -264,6 +264,9 @@ pub impl @permission.ApprovalSource for TkApprovalSource with fn ask(
 }
 
 ///|
+pub extend TkApprovalSource with @permission.ApprovalSource::{ask}
+
+///|
 fn tk_approval_request() -> @permission.ApprovalRequest {
   {
     tool_name: "edit",
@@ -289,7 +292,7 @@ async test "Memoh approval source never creates local standing grants" {
 }
 
 ///|
-async fn tk_support_new(
+fn tk_support_new(
   _context : @acp.AgentContext,
   _params : @acp.NewSessionParams,
 ) -> @acp.NewSessionResult {
@@ -302,7 +305,7 @@ async fn tk_support_new(
 }
 
 ///|
-async fn tk_support_prompt(
+fn tk_support_prompt(
   _context : @acp.AgentContext,
   _params : @acp.PromptParams,
 ) -> @acp.PromptResult {
@@ -313,7 +316,7 @@ async fn tk_support_prompt(
 }
 
 ///|
-async fn tk_support_cancel(
+fn tk_support_cancel(
   _context : @acp.AgentContext,
   _params : @acp.CancelParams,
 ) -> Unit {
