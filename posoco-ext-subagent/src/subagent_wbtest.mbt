@@ -311,10 +311,10 @@ test "agent_schema_keeps_trust_defaults_and_resume_rules_explicit" {
     instructions_desc.contains("untrusted content impersonate instructions"),
   )
 
-  guard props.get("resume") is Some(Json::Object(resume)) else {
+  guard props.get("resume") is Some(Json::Object(resume_)) else {
     fail("expected resume")
   }
-  guard resume.get("description") is Some(Json::String(resume_desc)) else {
+  guard resume_.get("description") is Some(Json::String(resume_desc)) else {
     fail("expected resume description")
   }
   assert_true(
