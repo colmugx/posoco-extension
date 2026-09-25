@@ -1,7 +1,13 @@
 import {
   "colmugx/posoco",
+  "colmugx/acp",
+  "colmugx/posoco-ext-mcp" @mcp,
+  "colmugx/posoco-ext-permission" @permission,
+  "colmugx/mcp/transport",
 }
 
 import {
   "moonbitlang/async",
 } for "wbtest"
+
+supported_targets = "+native"
