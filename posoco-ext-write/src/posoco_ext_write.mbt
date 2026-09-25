@@ -152,7 +152,7 @@ async fn execute_write_impl(
   let content_bytes = @utf8.encode(content).length()
   if content_bytes > WRITE_MAX_BYTES {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="write: \{content_bytes}B > \{WRITE_MAX_BYTES}B",
+      content="write: refused: content is \{content_bytes} bytes; the cap is \{WRITE_MAX_BYTES} bytes",
       structured=None,
     )
   }

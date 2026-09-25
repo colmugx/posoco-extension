@@ -170,7 +170,7 @@ async test "command: unknown names and actions fail without raising" {
       ),
     ) {
     @posoco.CommandOutcome::Failure(reason~) =>
-      assert_true(reason.contains("skill: unknown nope"))
+      assert_true(reason.contains("Unknown skill"))
     _ => fail("expected failure for unknown skill name")
   }
   match

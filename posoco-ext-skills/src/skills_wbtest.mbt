@@ -663,21 +663,17 @@ test "catalog: SKILL.md path must belong to the declared skill directory" {
 }
 
 ///|
-/// Disabled for now: with the compact guidance text, a 250-char budget cannot
-/// fit any item plus the omission notice, so render_prompt_body returns ""
-/// instead of an explicit "(N skills omitted)" notice. Re-enable once the
-/// truncation reservation logic guarantees a notice under small budgets.
-// test "prompt: truncation is explicit rather than silently hiding skills" {
-//   let catalog = catalog_of([
-//     descriptor("alpha", "Alpha skill for one workflow", "/skills/alpha"),
-//     descriptor("beta", "Beta skill for another workflow", "/skills/beta"),
-//     descriptor("gamma", "Gamma skill for a third workflow", "/skills/gamma"),
-//   ])
-//   let rendered = catalog.render_prompt_body(max_chars=250)
-//   assert_true(rendered.length() <= 250)
-//   assert_true(rendered.contains("skills omitted"))
-//   assert_true(rendered.contains("activate_skill"))
-// }
+test "prompt: truncation is explicit rather than silently hiding skills" {
+  let catalog = catalog_of([
+    descriptor("alpha", "Alpha skill for one workflow", "/skills/alpha"),
+    descriptor("beta", "Beta skill for another workflow", "/skills/beta"),
+    descriptor("gamma", "Gamma skill for a third workflow", "/skills/gamma"),
+  ])
+  let rendered = catalog.render_prompt_body(max_chars=600)
+  assert_true(rendered.length() <= 600)
+  assert_true(rendered.contains("skills omitted"))
+  assert_true(rendered.contains("activate_skill"))
+}
 
 ///|
 test "discovery options: repository scope defaults on but can be trust-gated" {
@@ -1249,7 +1245,7 @@ async test "activation and resource size limits fail closed" {
   )
   match instruction_limited.activate("demo") {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
-      assert_true(content.contains("instructions too large"))
+      assert_true(content.contains("instructions exceed"))
     _ => fail("instruction limit must reject")
   }
   let file_limited = must_skills(
@@ -1643,7 +1639,7 @@ async test "tool provider rejects pathological name arguments even when schema v
   ignore(
     skills.execute("activate_skill", call) catch {
       @posoco.RuntimeError::InvocationFailed(message) => {
-        assert_true(message.contains("invalid 'name'"))
+        assert_true(message.contains("runtime safety"))
         rejected = true
         @posoco.ToolOutcome::ToolReportedError(
           content="caught",
@@ -2029,7 +2025,7 @@ async test "host API: unsafe skill names are rejected without reflecting attacke
   let huge = repeat_text("x", hard_max_skill_name_chars + 1000)
   match skills.activate_skill(huge) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
-      assert_eq(content, "skill: invalid name")
+      assert_eq(content, "Invalid skill name")
       assert_true(content.length() < 100)
     }
     _ => fail("unsafe activation name must be rejected")
@@ -2335,7 +2331,7 @@ async test "skill_search model text previews descriptions but structured keeps f
 
 ///|
 test "skills prompt descriptions are capped independently of full catalog data" {
-  let long = "prefix-" + "x".repeat(1500)
+  let long = "prefix-" + "x".repeat(500)
   let catalog = catalog_of([
     descriptor("long-skill", long, "/skills/long-skill"),
   ])
@@ -2344,4 +2340,17 @@ test "skills prompt descriptions are capped independently of full catalog data" 
   assert_true(rendered.contains("…"))
   assert_false(rendered.contains(long))
   assert_eq(catalog.skills[0].description, long)
+}
+
+
+///|
+test "prompt: catalog keeps substantial description context for weak models" {
+  let description =
+    "Build release packages, validate checksums, and publish artifacts. " +
+    "Use this when preparing a tagged release across native targets. " +
+    "Critical trigger: signed-release-with-provenance."
+  let prompt = catalog_of([
+    descriptor("release", description, "/skills/release"),
+  ]).render_prompt_body(max_chars=8000)
+  assert_true(prompt.contains("signed-release-with-provenance"))
 }

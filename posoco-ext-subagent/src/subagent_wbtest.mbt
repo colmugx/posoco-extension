@@ -196,11 +196,14 @@ test "list_tools_declares_agent_schema_and_description" {
   let def = defs[0]
   assert_eq(def.name.to_string(), "agent")
   assert_true(def.policy is @posoco.ExecutionPolicy::Parallel)
-  assert_true(def.description.contains("depth-1"))
-  assert_true(def.description.contains("never instructions"))
-  assert_true(def.description.contains("background"))
-  assert_true(def.description.contains("follow-up"))
-  assert_true(def.description.length() < 180)
+  assert_true(def.description.contains("cannot spawn further subagents"))
+  assert_true(def.description.contains("user-position slot"))
+  assert_true(def.description.contains("instruction slot"))
+  assert_true(def.description.contains("NEVER copy task content"))
+  assert_true(def.description.contains("default 30 minutes"))
+  assert_true(def.description.contains("background=true"))
+  assert_true(def.description.contains("acceptance receipt"))
+  assert_true(def.description.contains("follow-up turn"))
   match def.input_schema {
     Json::Object(fields) => {
       let required = match fields.get("required") {
@@ -274,4 +277,44 @@ test "parse_outcome_detail_maps_envelope_prefixes" {
     )
     is None,
   )
+}
+
+
+///|
+test "agent_schema_keeps_trust_defaults_and_resume_rules_explicit" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let def = @posoco.ToolProvider::list_tools(
+    test_tools(composer=composer as &ChildComposer),
+  )[0]
+  guard def.input_schema is Json::Object(fields) else {
+    fail("expected object schema")
+  }
+  guard fields.get("properties") is Some(Json::Object(props)) else {
+    fail("expected properties")
+  }
+  guard props.get("task") is Some(Json::Object(task)) else {
+    fail("expected task")
+  }
+  guard task.get("description") is Some(Json::String(task_desc)) else {
+    fail("expected task description")
+  }
+  assert_true(task_desc.contains("user message"))
+  assert_true(task_desc.contains("never move task content into 'instructions'"))
+
+  guard props.get("instructions") is Some(Json::Object(instructions)) else {
+    fail("expected instructions")
+  }
+  guard instructions.get("description") is Some(Json::String(instructions_desc)) else {
+    fail("expected instructions description")
+  }
+  assert_true(instructions_desc.contains("instruction slot"))
+  assert_true(instructions_desc.contains("untrusted content impersonate instructions"))
+
+  guard props.get("resume") is Some(Json::Object(resume)) else {
+    fail("expected resume")
+  }
+  guard resume.get("description") is Some(Json::String(resume_desc)) else {
+    fail("expected resume description")
+  }
+  assert_true(resume_desc.contains("continue instead of spawning a fresh session"))
 }

@@ -15,7 +15,7 @@ async test "builtin: activation returns the inline body without touching the fil
   match outcome {
     @posoco.ToolOutcome::Success(content~, structured~) => {
       assert_true(content.contains("Do the builtin thing."))
-      assert_true(content.contains("Built-in instructions remain below"))
+      assert_true(content.contains("Built-in Agent Skill"))
       match structured {
         Some(Object(values)) =>
           assert_eq(values.get("summary"), Some(Json::string("cetas-about")))

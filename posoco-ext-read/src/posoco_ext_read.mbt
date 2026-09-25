@@ -392,7 +392,7 @@ async fn execute_read_impl(
   }
   if offset_opt is Some(n) && n > 1 && n > page.total_lines {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="read: offset \{n} > \{page.total_lines} lines",
+      content="read: offset \{n} is past the end of the file (\{page.total_lines} lines)",
       structured=None,
     )
   }

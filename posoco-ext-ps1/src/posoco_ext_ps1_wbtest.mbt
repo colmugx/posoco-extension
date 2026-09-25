@@ -18,9 +18,13 @@ async test "list_tools_contains_powershell" {
 async test "list_tools_description_names_exe_and_syntax" {
   let pwsh_defs = PowerShellTools(exe="pwsh").list_tools()
   assert_true(pwsh_defs[0].description.contains("pwsh"))
-  assert_true(pwsh_defs[0].description.contains("&&/||"))
+  assert_true(pwsh_defs[0].description.contains("PowerShell, not bash"))
+  assert_true(pwsh_defs[0].description.contains("Select-String"))
+  assert_true(pwsh_defs[0].description.contains("$env:NAME"))
+  assert_true(pwsh_defs[0].description.contains("&&"))
   let ps51_defs = PowerShellTools(exe="powershell").list_tools()
-  assert_true(ps51_defs[0].description.contains("No &&/||"))
+  assert_true(ps51_defs[0].description.contains("NOT supported"))
+  assert_true(ps51_defs[0].description.contains("if ($?)"))
 }
 
 ///|
@@ -130,21 +134,28 @@ test "collect_output_failure_mapping_is_compact" {
 ///|
 test "windows_guidance_pwsh_flavor" {
   let text = windows_guidance("pwsh", "win32 10.0.26244")
-  assert_true(text.contains("PowerShell (pwsh), not bash"))
+  assert_true(text.contains("Environment: Windows"))
+  assert_true(text.contains("NOT bash"))
   assert_true(text.contains("$env:NAME"))
-  assert_true(text.contains("Get-ChildItem"))
+  assert_true(text.contains(".NET objects"))
   assert_true(text.contains("Select-String"))
-  assert_true(text.contains("&&/|| supported"))
-  assert_true(text.length() < 180)
+  assert_true(text.contains("awk '{print $1}'"))
+  assert_true(text.contains("Get-ChildItem -Force"))
+  assert_true(text.contains("Get-ChildItem -Recurse"))
+  assert_true(text.contains("2>$null"))
+  assert_true(text.contains("backslashes"))
+  assert_true(text.contains("C:\\repo\\src\\main.rs"))
+  assert_true(text.contains("pipeline chains are supported"))
 }
 
 ///|
 test "windows_guidance_ps51_flavor" {
   let text = windows_guidance("powershell", "")
-  assert_true(text.contains("PowerShell (powershell), not bash"))
-  assert_true(text.contains("no &&/||"))
+  assert_true(text.contains("Windows PowerShell 5.1"))
+  assert_true(text.contains("NOT supported"))
   assert_true(text.contains("if ($?)"))
-  assert_true(text.length() < 190)
+  assert_true(text.contains("NOT bash"))
+  assert_true(text.contains("Select-String"))
 }
 
 ///|
