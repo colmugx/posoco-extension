@@ -11,6 +11,13 @@
 /// storage slots stay un-gated on `attach`: they are pure in-memory queue
 /// appends (no IO), so ops composed before attach simply replay on the
 /// first attached drain — the D8 write-after semantics stay coherent.
+///
+/// Replay safety: the server's `memory_add` is not idempotent, so an op is
+/// only re-queued when the request provably never reached the server
+/// (`NmemCallError::NotSent` — connect/setup failure). A failure after send
+/// (timeout, broken response, server-flagged error) leaves the commit state
+/// unknown; replaying would risk storing the same memory again, so the op
+/// finishes with the failure recorded in `last_error` instead.
 
 ///|
 /// Timeout for one queued write-back (`memory_add` / `memory_delete`) during
@@ -103,6 +110,16 @@ fn drop_queued_add(state : MemoryState, target : String) -> Unit {
 }
 
 ///|
+/// Outcome of one queued write-back attempt. `Done` — the op leaves the
+/// queue: either the server accepted it, or the attempt failed after send
+/// and replaying is forbidden. `Retry` — the request never reached the
+/// server; the op goes back for the next drain.
+priv enum FlushVerdict {
+  Done
+  Retry
+}
+
+///|
 /// Arguments for one queued `Add`, mapping the metadata convention keys to
 /// the `memory_add` tool's properties (title / unit_type / importance /
 /// labels). Ambient identity rides the call so writes are attributed to the
@@ -144,15 +161,14 @@ fn memory_add_mcp_args(
 
 ///|
 /// Flush one queued `Add`: call `memory_add` and treat the server's own
-/// error flag as the failure signal. Any failure re-enqueues at the queue
-/// tail (the drain caller) — the thread-sync "retry next drain" philosophy.
-/// The server is the source of truth; there is no local replica to swap the
-/// ticket against.
+/// error flag as a failure after send — the server may have committed the
+/// content, so the op finishes instead of being replayed. Only a `NotSent`
+/// failure (never reached the wire) returns `Retry`.
 async fn NowledgeMem::flush_memory_add(
   self : NowledgeMem,
   content~ : String,
   metadata~ : Map[String, Json],
-) -> Bool {
+) -> FlushVerdict {
   let outcome = self.mcp.call_tool(
     "memory_add",
     memory_add_mcp_args(content, metadata, self.config),
@@ -160,31 +176,42 @@ async fn NowledgeMem::flush_memory_add(
   ) catch {
     err => {
       self.mem.last_error = Some("memory add failed: " + err.to_string())
-      return false
+      return Retry
     }
   }
   match outcome {
-    Err(message) => {
-      self.mem.last_error = Some("memory add failed: " + message)
-      false
+    Err(NotSent(message~)) => {
+      self.mem.last_error = Some(
+        "memory add failed (not sent, queued for retry): " + message,
+      )
+      Retry
+    }
+    Err(MaybePersisted(message~)) => {
+      self.mem.last_error = Some(
+        "memory add failed after send — write not replayed to avoid a duplicate: " +
+        message,
+      )
+      Done
     }
     Ok({ is_error: true, text, }) => {
       self.mem.last_error = Some(
-        "memory add failed: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}",
+        "memory add failed after send — write not replayed to avoid a duplicate: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}",
       )
-      false
+      Done
     }
-    Ok(_) => true
+    Ok(_) => Done
   }
 }
 
 ///|
 /// Flush one queued `Delete` with the `memory_delete` tool (`memory_id` is
-/// the server's argument name).
+/// the server's argument name). Same replay rule as adds: a failure after
+/// send may already have deleted the memory, so replaying could only loop
+/// on "not found" — the op finishes with the error recorded.
 async fn NowledgeMem::flush_memory_delete(
   self : NowledgeMem,
   id~ : String,
-) -> Bool {
+) -> FlushVerdict {
   let fields : Map[String, Json] = { "memory_id": Json::string(id) }
   let outcome = self.mcp.call_tool(
     "memory_delete",
@@ -193,39 +220,50 @@ async fn NowledgeMem::flush_memory_delete(
   ) catch {
     err => {
       self.mem.last_error = Some("memory delete failed: " + err.to_string())
-      return false
+      return Retry
     }
   }
   match outcome {
-    Err(message) => {
-      self.mem.last_error = Some("memory delete failed: " + message)
-      false
+    Err(NotSent(message~)) => {
+      self.mem.last_error = Some(
+        "memory delete failed (not sent, queued for retry): " + message,
+      )
+      Retry
+    }
+    Err(MaybePersisted(message~)) => {
+      self.mem.last_error = Some(
+        "memory delete failed after send — not replayed to avoid a duplicate: " +
+        message,
+      )
+      Done
     }
     Ok({ is_error: true, text, }) => {
       self.mem.last_error = Some(
-        "memory delete failed: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}",
+        "memory delete failed after send — not replayed to avoid a duplicate: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}",
       )
-      false
+      Done
     }
-    Ok(_) => true
+    Ok(_) => Done
   }
 }
 
 ///|
 /// Drain the write-after queue once: every op present at entry is attempted
-/// exactly once, in order; failures re-enqueue at the tail for the next
-/// drain rather than blocking the ops behind them.
+/// exactly once, in order; ops whose request provably never reached the
+/// server re-enqueue at the tail for the next drain rather than blocking
+/// the ops behind them.
 pub async fn NowledgeMem::drain_memory_ops(self : NowledgeMem) -> Unit {
   let mut remaining = self.mem.queue.length()
   while remaining > 0 {
     remaining = remaining - 1
     let op = self.mem.queue.remove(0)
-    let flushed = match op {
+    let verdict = match op {
       Add(content~, metadata~, ..) => self.flush_memory_add(content~, metadata~)
       Delete(id~) => self.flush_memory_delete(id~)
     }
-    if !flushed {
-      self.mem.queue.push(op)
+    match verdict {
+      Done => ()
+      Retry => self.mem.queue.push(op)
     }
   }
 }

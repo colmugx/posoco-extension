@@ -252,7 +252,14 @@ async fn NowledgeMem::call_mcp_tool(
     err => return tool_error(tool, err.to_string())
   }
   match outcome {
-    Err(message) => tool_error(tool, message)
+    Err(err) => {
+      let hint = match err {
+        MaybePersisted(..) =>
+          " (the call may have taken effect before the failure — verify before retrying)"
+        NotSent(..) => ""
+      }
+      tool_error(tool, err.message() + hint)
+    }
     Ok({ is_error: true, text, }) =>
       tool_error(tool, "mcp error: \{take_prefix(text, NMEM_TOOL_ERROR_CHARS)}")
     Ok({ text, .. }) =>

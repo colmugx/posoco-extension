@@ -68,7 +68,7 @@ pub impl @posoco.MemoryPort for NowledgeMem with fn search(
     Some(k) => fields["limit"] = Json::number(k.to_double())
     None => ()
   }
-  let outcome : Result[McpCallOutcome, String]? = try
+  let outcome : Result[McpCallOutcome, NmemCallError]? = try
     self.mcp.call_tool(
       "memory_search",
       mcp_args(self.config, fields, identity=true),
@@ -84,7 +84,8 @@ pub impl @posoco.MemoryPort for NowledgeMem with fn search(
       self.mem.last_error = Some("memory search failed: mcp call raised")
       raise @posoco.MemoryError::Search("mcp call raised")
     }
-    Some(Err(message)) => {
+    Some(Err(err)) => {
+      let message = err.message()
       self.mem.last_error = Some("memory search failed: " + message)
       raise @posoco.MemoryError::Search(message)
     }

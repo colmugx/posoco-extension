@@ -41,12 +41,15 @@ impl NmemPlatform for FakePlatform with fn write_home_file(
 }
 
 ///|
-/// One scripted MCP reply keyed by tool name. `Fail` scripts a
-/// transport-level failure; `Reply` scripts the server's answer (text and
-/// its own error flag).
+/// One scripted MCP reply keyed by tool name. `Fail` scripts a pre-send
+/// failure (the request never reached the wire — `NotSent`); `FailAfterSend`
+/// scripts a post-send failure (timeout/broken response —
+/// `MaybePersisted`, replay-forbidden); `Reply` scripts the server's answer
+/// (text and its own error flag).
 priv enum FakeMcpEntry {
   Reply(McpCallOutcome)
   Fail(String)
+  FailAfterSend(String)
 }
 
 ///|
@@ -105,13 +108,14 @@ impl NmemMcp for FakeNmemMcp with fn call_tool(
   tool : String,
   args : Json,
   timeout_ms~ : Int,
-) -> Result[McpCallOutcome, String] {
+) -> Result[McpCallOutcome, NmemCallError] {
   ignore(timeout_ms)
   self.calls.push((tool, args.stringify()))
   match self.script.get(tool) {
     Some(FakeMcpEntry::Reply(outcome)) => Ok(outcome)
-    Some(FakeMcpEntry::Fail(message)) => Err(message)
-    None => Err("no script for '\{tool}'")
+    Some(FakeMcpEntry::Fail(message)) => Err(NotSent(message~))
+    Some(FakeMcpEntry::FailAfterSend(message)) => Err(MaybePersisted(message~))
+    None => Err(NotSent(message="no script for '\{tool}'"))
   }
 }
 

@@ -12,6 +12,29 @@ pub(all) struct McpCallOutcome {
 pub extend McpCallOutcome with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+/// Why one MCP tool call failed, split by replay safety. `NotSent`: the
+/// request never reached the wire (connect/setup failed) — replaying the
+/// call cannot duplicate anything. `MaybePersisted`: the request was sent
+/// and the outcome is unknown (timeout, broken response, server-reported
+/// error) — the server may already have committed, so replaying a
+/// non-idempotent write such as `memory_add` would store a duplicate.
+pub(all) enum NmemCallError {
+  NotSent(message~ : String)
+  MaybePersisted(message~ : String)
+} derive(Debug)
+
+///|
+pub extend NmemCallError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+fn NmemCallError::message(self : NmemCallError) -> String {
+  match self {
+    NotSent(message~) => message
+    MaybePersisted(message~) => message
+  }
+}
+
+///|
 /// Narrow seam for the Nowledge Mem MCP connection.
 pub(open) trait NmemMcp {
   /// Install the resolved endpoint. Called once from `on_start`; calls
@@ -20,7 +43,7 @@ pub(open) trait NmemMcp {
   fn configure(Self, url~ : String, auth_token~ : String?, name~ : String) -> Unit
   async fn call_tool(Self, tool : String, args : Json, timeout_ms~ : Int) -> Result[
     McpCallOutcome,
-    String,
+    NmemCallError,
   ]
   /// Connectivity probe: ensure the connection, `list_tools`, and report the
   /// server identity plus tool count (the `nmem_status` / `/memory status`
@@ -179,19 +202,26 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
   tool : String,
   args : Json,
   timeout_ms~ : Int,
-) -> Result[McpCallOutcome, String] {
+) -> Result[McpCallOutcome, NmemCallError] {
   @async.with_timeout(timeout_ms, () => {
     let connected = self.ensure_connected() catch {
-      err => return Err("nowledge-mem mcp raised: " + err.to_string())
+      err =>
+        return Err(
+          NotSent(message="nowledge-mem mcp raised: " + err.to_string()),
+        )
     }
     let client = match connected {
       Ok(client) => client
-      Err(message) => return Err(message)
+      Err(message) => return Err(NotSent(message~))
     }
     let result = client.call_tool(tool, arguments=args.stringify()) catch {
       err => {
         self.drop_connection()
-        return Err("mcp call '\{tool}' raised: " + err.to_string())
+        return Err(
+          MaybePersisted(
+            message="mcp call '\{tool}' raised: " + err.to_string(),
+          ),
+        )
       }
     }
     let result = match result {
@@ -200,20 +230,30 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
         if is_connection_level_error(err) {
           self.drop_connection()
         }
-        return Err("mcp call '\{tool}' failed: " + err.message())
+        return Err(
+          MaybePersisted(message="mcp call '\{tool}' failed: " + err.message()),
+        )
       }
     }
     Ok({ is_error: result.is_error, text: call_result_text(result), })
   }) catch {
     @async.TimeoutError => {
       self.drop_connection()
-      Err("mcp call '\{tool}' timed out (timeout_ms=\{timeout_ms})")
+      Err(
+        MaybePersisted(
+          message="mcp call '\{tool}' timed out (timeout_ms=\{timeout_ms})",
+        ),
+      )
     }
     err => {
       if @async.is_being_cancelled() {
         raise err
       }
-      Err("nowledge-mem mcp call raised: " + err.to_string())
+      Err(
+        MaybePersisted(
+          message="nowledge-mem mcp call raised: " + err.to_string(),
+        ),
+      )
     }
   }
 }

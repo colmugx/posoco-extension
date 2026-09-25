@@ -42,7 +42,7 @@ fn wm_snapshot_content(text : String) -> String? {
 async fn NowledgeMem::read_working_memory_snapshot(
   self : NowledgeMem,
 ) -> Result[String?, String] noraise {
-  let outcome : Result[McpCallOutcome, String]? = try
+  let outcome : Result[McpCallOutcome, NmemCallError]? = try
     self.mcp.call_tool(
       "read_working_memory",
       mcp_args(self.config, Map([]), identity=true),
@@ -55,7 +55,7 @@ async fn NowledgeMem::read_working_memory_snapshot(
   }
   let reason = match outcome {
     None => "mcp call raised"
-    Some(Err(message)) => message
+    Some(Err(err)) => err.message()
     Some(Ok({ is_error: true, text, })) =>
       take_prefix(text, NMEM_TOOL_ERROR_CHARS)
     Some(Ok({ text, .. })) => return Ok(wm_snapshot_content(text))

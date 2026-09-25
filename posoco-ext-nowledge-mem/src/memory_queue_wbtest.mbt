@@ -158,7 +158,10 @@ async test "drain: failed adds re-enqueue at the tail and record last_error" {
 }
 
 ///|
-async test "drain: a server-flagged add failure re-enqueues and records detail" {
+async test "drain: a server-flagged add failure is terminal, not replayed" {
+  // The server answered after receiving the write; whether it committed is
+  // unknown, so replaying would risk a duplicate — the op finishes with the
+  // detail recorded instead.
   let ext = mem_ext(
     script=Map::from_array([("memory_add", mcp_server_error("quota exceeded"))]),
   )
@@ -166,11 +169,42 @@ async test "drain: a server-flagged add failure re-enqueues and records detail" 
     @posoco.MemoryPort::store(ext, content="note", metadata=Map::from_array([])),
   )
   ext.drain_memory_ops()
-  inspect(ext.mem.queue.length(), content="1")
+  inspect(ext.mem.queue.length(), content="0")
   guard ext.mem.last_error is Some(err) else {
     fail("expected last_error to be recorded")
   }
   assert_true(err.contains("quota exceeded"))
+  assert_true(err.contains("not replayed"))
+}
+
+///|
+async test "drain: an add that failed after send is not replayed" {
+  // Regression (2026-09-25): a timed-out/broken memory_add used to
+  // re-enqueue forever while the server had already stored the content, so
+  // every retry wrote the same memory again. A post-send failure must
+  // finish the op with exactly one wire attempt.
+  let mcp = FakeNmemMcp::FakeNmemMcp(
+    script=Map::from_array([
+      ("memory_add", FakeMcpEntry::FailAfterSend("response timeout")),
+    ]),
+  )
+  let ext = nmem_ext(mcp~)
+  ext.config = Some(lane_config())
+  ignore(
+    @posoco.MemoryPort::store(
+      ext,
+      content="once only",
+      metadata=Map::from_array([]),
+    ),
+  )
+  ext.drain_memory_ops()
+  ext.drain_memory_ops()
+  inspect(mcp.calls.length(), content="1")
+  inspect(ext.mem.queue.length(), content="0")
+  guard ext.mem.last_error is Some(err) else {
+    fail("expected last_error to be recorded")
+  }
+  assert_true(err.contains("response timeout"))
 }
 
 ///|
@@ -192,13 +226,15 @@ async test "drain: delete issues memory_delete with the memory_id argument" {
 }
 
 ///|
-async test "drain: a server-flagged delete failure re-enqueues" {
+async test "drain: a server-flagged delete failure is terminal, not replayed" {
+  // Post-send the memory may already be gone; replaying could only loop on
+  // "not found". The op finishes with the detail recorded.
   let ext = mem_ext(
     script=Map::from_array([("memory_delete", mcp_server_error("not found"))]),
   )
   @posoco.MemoryPort::delete(ext, "mem_7")
   ext.drain_memory_ops()
-  inspect(ext.mem.queue.length(), content="1")
+  inspect(ext.mem.queue.length(), content="0")
   guard ext.mem.last_error is Some(err) else {
     fail("expected last_error to be recorded")
   }
