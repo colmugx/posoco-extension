@@ -267,8 +267,8 @@ fn SubagentTools::finish(
 /// terminal arrives as a follow-up turn in the parent session) or a single
 /// blocking run under the timeout with the explicit terminal-state mapping.
 /// Multiple `agent` calls in one model response ride the kernel's parallel
-/// tool waves; the ledger and the registry are the only shared mutables and
-/// the single-threaded event loop makes their plain field operations safe.
+/// tool waves. The per-run ledger bounds total admissions; `global_slots`
+/// bounds simultaneously live children across foreground and background work.
 ///
 /// The child-run catch inspects the error to classify the terminal state, so
 /// the fragile-catch-all lint is suppressed (same precedent as core's
@@ -421,9 +421,24 @@ async fn SubagentTools::spawn(
     context_files: args.context_files,
     observers: [bridge as &@posoco.Observer],
   }
+  // The configured global cap is a lifetime semaphore, not a refusal gate:
+  // excess parallel calls wait FIFO and still consume only their one spawn
+  // budget unit. Once acquired, the slot belongs to this child until its
+  // foreground run returns or its Agent-owned background task actually exits.
+  self.global_slots.acquire()
+  errdefer {
+    self.global_slots.release()
+  }
   let child = self.composer.compose(spec) catch {
-    ComposerError::Failed(reason) =>
-      return terminal_for(bridge, spec, @kit.TerminalState::Failed(reason~), "")
+    ComposerError::Failed(reason) => {
+      self.global_slots.release()
+      return terminal_for(
+        bridge,
+        spec,
+        @kit.TerminalState::Failed(reason~),
+        "",
+      )
+    }
   }
   // Registered at spawn (design §5): both paths advertise the id in their
   // result footer, and `resume` accepts exactly these ids.
@@ -448,6 +463,11 @@ async fn SubagentTools::spawn(
     // cancellation mid-run cannot guarantee it. Timeout and cancellation
     // belong to core (TaskSpec.timeout_ms).
     let runner : async () -> @posoco.Message = async fn() {
+      // Ownership of the acquired global slot transfers to the background
+      // task after submit succeeds. Release exactly once on every task exit.
+      errdefer {
+        self.global_slots.release()
+      }
       let result : @posoco.TurnResult = child.run_scoped(async fn(agent) {
         if spec.resuming {
           agent.resume_turn(spec.session_id)
@@ -470,6 +490,7 @@ async fn SubagentTools::spawn(
       // swallowed into a returned value back into a real cancellation;
       // without a pending cancellation it is a no-op yield.
       @async.pause()
+      self.global_slots.release()
       result.message
     }
     match
@@ -505,6 +526,7 @@ async fn SubagentTools::spawn(
         )
       }
       Err(error) => {
+        self.global_slots.release()
         let reason = match error {
           @posoco.TaskSubmitError::Unavailable =>
             "the task scope is not active — run the host under Agent::run_scoped"
@@ -548,13 +570,15 @@ async fn SubagentTools::spawn(
     _ => None
   }
   match outcome {
-    Some(result) =>
+    Some(result) => {
+      self.global_slots.release()
       return self.finish(
         bridge,
         spec,
         @kit.TerminalState::Completed,
         assistant_text(result.message),
       )
+    }
     None => ()
   }
   let state = if timed_out {
@@ -570,6 +594,7 @@ async fn SubagentTools::spawn(
       None => @kit.TerminalState::Cancelled
     }
   }
+  self.global_slots.release()
   self.finish(bridge, spec, state, "")
 }
 

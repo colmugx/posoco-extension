@@ -44,6 +44,112 @@ async test "agent_happy_path_returns_child_result_with_footer" {
 }
 
 ///|
+priv struct ConcurrencyProbeModel {
+  entered : @async.Queue[Int]
+  release : @async.Queue[Unit]
+  mut active : Int
+  mut peak : Int
+}
+
+///|
+fn ConcurrencyProbeModel::new() -> ConcurrencyProbeModel {
+  {
+    entered: @async.Queue(kind=Unbounded),
+    release: @async.Queue(kind=Unbounded),
+    active: 0,
+    peak: 0,
+  }
+}
+
+///|
+impl @posoco.ModelPort for ConcurrencyProbeModel with fn chat(
+  self : ConcurrencyProbeModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  self.active = self.active + 1
+  if self.active > self.peak {
+    self.peak = self.active
+  }
+  ignore(self.entered.try_put(self.active) catch { _ => false })
+  ignore(
+    self.release.get() catch {
+      error => raise @posoco.ModelError::ResponseParse(error.to_string())
+    },
+  )
+  self.active = self.active - 1
+  @posoco.tk_stop_response("released")
+}
+
+///|
+impl @posoco.ModelPort for ConcurrencyProbeModel with fn compact(
+  _self : ConcurrencyProbeModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  raise @posoco.ModelError::ResponseParse(
+    "ConcurrencyProbeModel does not implement compact",
+  )
+}
+
+///|
+impl @posoco.ModelPort for ConcurrencyProbeModel with fn provider_config(
+  _self : ConcurrencyProbeModel,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
+}
+
+///|
+async test "global_concurrency_caps_parallel_child_lifetimes" {
+  let probe = ConcurrencyProbeModel::new()
+  let composer = FakeComposer::FakeComposer(
+    response_text="unused",
+    slow_model=Some(probe as &@posoco.ModelPort),
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_global_concurrency(2),
+  )
+  @async.with_task_group(async fn(group) {
+    let handles : Array[@async.Task[@posoco.ToolOutcome]] = []
+    for task in ["one", "two", "three"] {
+      handles.push(
+        group.spawn(async fn() {
+          @posoco.ToolProvider::execute(
+            tools,
+            "agent",
+            agent_call(args_object([("task", Json::string(task))])),
+          )
+        }),
+      )
+    }
+
+    ignore(probe.entered.get())
+    ignore(probe.entered.get())
+    assert_eq(probe.peak, 2)
+    assert_eq(composer.specs.length(), 2)
+    assert_true(probe.entered.try_get() is None)
+
+    probe.release.put(())
+    ignore(probe.entered.get())
+    assert_eq(probe.peak, 2)
+    assert_eq(composer.specs.length(), 3)
+
+    probe.release.put(())
+    probe.release.put(())
+    for handle in handles {
+      assert_true(handle.wait() is @posoco.ToolOutcome::Success(_))
+    }
+  })
+  assert_eq(tools.ledger.acquired().length(), 3)
+}
+
+///|
 async test "spawn_budget_resets_at_each_parent_run" {
   let composer = FakeComposer::FakeComposer(response_text="ok")
   let tools = test_tools(
@@ -633,6 +739,96 @@ fn build_parent_agent(
       tools=Map::from_array([("agent", tools as &@posoco.ToolProvider)]),
     ),
   )
+}
+
+///|
+async test "background_child_holds_global_slot_until_task_exit" {
+  let probe = ConcurrencyProbeModel::new()
+  let composer = FakeComposer::FakeComposer(
+    response_text="unused",
+    slow_model=Some(probe as &@posoco.ModelPort),
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_global_concurrency(1),
+  )
+  let model = BgParentModel::BgParentModel(
+    agent_arguments=args_object([
+      ("task", Json::string("background-one")),
+      ("background", Json::boolean(true)),
+    ]),
+    mid_sleep_ms=0,
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+
+  parent.run_scoped(async fn(agent) {
+    ignore(agent.run_turn(@posoco.tk_user_msg("start"), "parent_bg_slot"))
+    ignore(probe.entered.get())
+    assert_eq(probe.peak, 1)
+    assert_eq(composer.specs.length(), 1)
+
+    @async.with_task_group(async fn(group) {
+      let foreground = group.spawn(async fn() {
+        @posoco.ToolProvider::execute(
+          tools,
+          "agent",
+          agent_call(args_object([("task", Json::string("foreground-two"))])),
+        )
+      })
+
+      // The foreground call has spent its spawn-budget unit but is waiting
+      // on the lifetime semaphore: it must not compose/run a second child.
+      @async.pause()
+      assert_eq(tools.ledger.acquired().length(), 2)
+      assert_eq(composer.specs.length(), 1)
+      assert_true(probe.entered.try_get() is None)
+
+      // Completing the background child releases its slot only when the
+      // Agent-owned task runner exits; then the queued foreground call starts.
+      probe.release.put(())
+      ignore(probe.entered.get())
+      assert_eq(probe.peak, 1)
+      assert_eq(composer.specs.length(), 2)
+
+      probe.release.put(())
+      assert_true(foreground.wait() is @posoco.ToolOutcome::Success(_))
+    })
+  })
+  assert_eq(tools.ledger.acquired().length(), 2)
+}
+
+///|
+async test "background_cancellation_releases_global_slot" {
+  let probe = ConcurrencyProbeModel::new()
+  let composer = FakeComposer::FakeComposer(
+    response_text="unused",
+    slow_model=Some(probe as &@posoco.ModelPort),
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_global_concurrency(1),
+  )
+  let model = BgParentModel::BgParentModel(
+    agent_arguments=args_object([
+      ("task", Json::string("cancel-me")),
+      ("background", Json::boolean(true)),
+    ]),
+    mid_sleep_ms=0,
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+
+  parent.run_scoped(async fn(agent) {
+    ignore(agent.run_turn(@posoco.tk_user_msg("start"), "parent_bg_cancel"))
+    ignore(probe.entered.get())
+    assert_false(tools.global_slots.try_acquire())
+    // Returning closes the parent task scope. Core cancels the live
+    // background task; its runner's errdefer must release the semaphore.
+  })
+
+  assert_true(tools.global_slots.try_acquire())
+  tools.global_slots.release()
 }
 
 ///|

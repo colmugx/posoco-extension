@@ -140,6 +140,19 @@ fn config_with_spawn_budget(budget : Int) -> @kit.SubagentConfig {
 }
 
 ///|
+fn config_with_global_concurrency(limit : Int) -> @kit.SubagentConfig {
+  let base = @kit.SubagentConfig::defaults()
+  {
+    ..base,
+    limits: {
+      ..base.limits,
+      global_concurrency: limit,
+      spawn_budget: 8,
+    },
+  }
+}
+
+///|
 fn agent_call(arguments : Json) -> @posoco.ToolCall {
   {
     call_id: @posoco.CallId::unchecked("agent-test"),
