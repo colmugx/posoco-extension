@@ -3,7 +3,7 @@ async test "memoh session store is intentionally ephemeral" {
   let memoh = Memoh()
   let first = memoh.load("s1")
   assert_eq(first.messages.length(), 0)
-  assert_eq(first.metadata.size(), 0)
+  assert_eq(first.metadata.length(), 0)
 
   let user = @posoco.Message::UserMessage(content=[
     @posoco.Content::Text("hello"),
@@ -19,7 +19,7 @@ async test "memoh session store is intentionally ephemeral" {
 
   let after = memoh.load("s1")
   assert_eq(after.messages.length(), 0)
-  assert_eq(after.metadata.size(), 0)
+  assert_eq(after.metadata.length(), 0)
 }
 
 ///|
