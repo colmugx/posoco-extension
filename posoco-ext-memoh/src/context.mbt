@@ -53,4 +53,11 @@ pub impl @posoco.PipelineHook for Memoh with fn on_turn_end(
 }
 
 ///|
-pub extend Memoh with @posoco.PipelineHook::{before_model, on_turn_end}
+pub extend Memoh with @posoco.PipelineHook::{
+  before_model,
+  before_tool,
+  on_post_event,
+  on_post_event_at,
+  on_turn_begin,
+  on_turn_end,
+}
