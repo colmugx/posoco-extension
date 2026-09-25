@@ -400,3 +400,66 @@ async test "Memoh approval source preserves allow-once and denial" {
     _ => fail("expected denial to be preserved")
   }
 }
+
+///|
+fn tk_memoh_agent_caps(
+  embedded_context : Bool,
+  image : Bool,
+  http : Bool,
+) -> @acp.ProtocolNullable[@acp.AgentCapabilities] {
+  @acp.ProtocolNullable::Value({
+    load_session: @acp.ProtocolNullable::Omitted,
+    prompt_capabilities: @acp.ProtocolNullable::Value({
+      image: @acp.ProtocolNullable::Value(image),
+      audio: @acp.ProtocolNullable::Omitted,
+      embedded_context: @acp.ProtocolNullable::Value(embedded_context),
+      meta: @acp.ProtocolNullable::Omitted,
+    }),
+    mcp_capabilities: @acp.ProtocolNullable::Value({
+      http: @acp.ProtocolNullable::Value(http),
+      sse: @acp.ProtocolNullable::Omitted,
+      meta: @acp.ProtocolNullable::Omitted,
+    }),
+    auth: @acp.ProtocolNullable::Omitted,
+    session_capabilities: @acp.ProtocolNullable::Omitted,
+    meta: @acp.ProtocolNullable::Omitted,
+  })
+}
+
+///|
+test "Memoh agent contract requires embedded context image and HTTP MCP" {
+  require_memoh_agent_capabilities(tk_memoh_agent_caps(true, true, true))
+
+  let no_context : Result[Unit, MemohError] = Ok(
+    require_memoh_agent_capabilities(tk_memoh_agent_caps(false, true, true)),
+  ) catch {
+    error => Err(error)
+  }
+  match no_context {
+    Err(MissingAgentCapability(capability~)) =>
+      assert_eq(capability, "prompt.embedded_context")
+    _ => fail("expected embedded context capability failure")
+  }
+
+  let no_image : Result[Unit, MemohError] = Ok(
+    require_memoh_agent_capabilities(tk_memoh_agent_caps(true, false, true)),
+  ) catch {
+    error => Err(error)
+  }
+  match no_image {
+    Err(MissingAgentCapability(capability~)) =>
+      assert_eq(capability, "prompt.image")
+    _ => fail("expected image capability failure")
+  }
+
+  let no_http : Result[Unit, MemohError] = Ok(
+    require_memoh_agent_capabilities(tk_memoh_agent_caps(true, true, false)),
+  ) catch {
+    error => Err(error)
+  }
+  match no_http {
+    Err(MissingAgentCapability(capability~)) =>
+      assert_eq(capability, "mcp.http")
+    _ => fail("expected HTTP MCP capability failure")
+  }
+}
