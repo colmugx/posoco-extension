@@ -67,5 +67,7 @@ files or whose stem fails validation are ignored.
 - **`append_messages`** appends only the new message lines to an existing
   file; on first persistence for an id it writes a full JSONL file instead,
   so the first append behaves like a save.
-- Malformed message lines abort the load loudly (`SessionError::Load`) rather
-  than being skipped.
+- Malformed complete message lines abort the load loudly (`SessionError::Load`).
+  A malformed final physical line is ignored only when the file does not end
+  in `\n`, recovering the last complete checkpoint after a process dies
+  during an append.
