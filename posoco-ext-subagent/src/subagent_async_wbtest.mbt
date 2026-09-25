@@ -611,6 +611,91 @@ impl @posoco.ModelPort for BgParentModel with fn provider_config(
 }
 
 ///|
+/// Repeating parent model for the long-horizon spawn-budget regression.
+/// Every parent run emits one parallel wave of `width` agent calls and then
+/// stops, so the same Agent/session exercises a fresh TurnStarted boundary
+/// before the next wave.
+priv struct BudgetStressParentModel {
+  width : Int
+  mut calls : Int
+  mut run_index : Int
+  mut emit_wave : Bool
+}
+
+///|
+fn BudgetStressParentModel::BudgetStressParentModel(
+  width~ : Int,
+) -> BudgetStressParentModel {
+  { width, calls: 0, run_index: 0, emit_wave: true, }
+}
+
+///|
+fn budget_stress_wave(
+  run_index : Int,
+  width : Int,
+) -> @posoco.ModelCallResult {
+  let calls : Array[@posoco.ToolCall] = []
+  for i in 0..<width {
+    calls.push({
+      call_id: @posoco.CallId::unchecked("budget-\{run_index}-\{i}"),
+      name: @posoco.ToolName::unchecked("agent"),
+      arguments: args_object([
+        ("task", Json::string("budget child \{run_index}/\{i}")),
+      ]),
+    })
+  }
+  @posoco.ModelCallResult::{
+    completion: @posoco.Completion::Completion(
+      content=[],
+      tool_calls=calls,
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::ToolCalls,
+      usage=None,
+    ),
+    processed_messages: [],
+  }
+}
+
+///|
+impl @posoco.ModelPort for BudgetStressParentModel with fn chat(
+  self : BudgetStressParentModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  self.calls = self.calls + 1
+  if self.emit_wave {
+    self.emit_wave = false
+    self.run_index = self.run_index + 1
+    return budget_stress_wave(self.run_index, self.width)
+  }
+  self.emit_wave = true
+  @posoco.tk_stop_response("budget run \{self.run_index} complete")
+}
+
+///|
+impl @posoco.ModelPort for BudgetStressParentModel with fn compact(
+  _self : BudgetStressParentModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  raise @posoco.ModelError::ResponseParse(
+    "BudgetStressParentModel does not implement compact",
+  )
+}
+
+///|
+impl @posoco.ModelPort for BudgetStressParentModel with fn provider_config(
+  _self : BudgetStressParentModel,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
+}
+
+///|
 /// Compose the parent Agent for the background e2e tests: SubagentTools goes
 /// directly into `exts` (its manifest registers the tool provider, the
 /// before_model hook, the parent-session observer, and the lifecycle that
@@ -632,6 +717,43 @@ fn build_parent_agent(
       model~,
       tools=Map::from_array([("agent", tools as &@posoco.ToolProvider)]),
     ),
+  )
+}
+
+///|
+async test "spawn_budget_resets_across_long_horizon_real_parent_runs" {
+  let run_count = 12
+  let wave_width = 2
+  let composer = FakeComposer::FakeComposer(response_text="child ok")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_spawn_budget(wave_width),
+  )
+  let model = BudgetStressParentModel::BudgetStressParentModel(
+    width=wave_width,
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  let _ = parent.run_scoped(async fn(agent) {
+    for turn in 0..<run_count {
+      let result = agent.run_turn(
+        @posoco.tk_user_msg("budget turn \{turn}"),
+        "parent_budget_stress",
+      )
+      assert_eq(result.final_session_id, "parent_budget_stress")
+      // Each run receives a fresh budget and consumes exactly one full wave.
+      assert_eq(tools.ledger.remaining(), 0)
+      assert_eq(composer.specs.length(), (turn + 1) * wave_width)
+    }
+  })
+  let expected_children = run_count * wave_width
+  assert_eq(model.calls, run_count * 2)
+  assert_eq(composer.specs.length(), expected_children)
+  assert_eq(tools.background_children().length(), expected_children)
+  assert_eq(composer.specs[0].session_id, "subagent-1")
+  assert_eq(
+    composer.specs[expected_children - 1].session_id,
+    "subagent-\{expected_children}",
   )
 }
 
