@@ -374,11 +374,15 @@ async fn SubagentTools::spawn(
         structured=None,
       )
   }
+  let (parent_slot, parent_effort) = match self.parent_selection {
+    Some(current) => current()
+    None => (self.parent_slot, self.parent_effort)
+  }
   let selection = self.config.resolve(
     model=args.model,
     effort=args.effort,
-    parent_slot=self.parent_slot,
-    parent_effort=self.parent_effort,
+    parent_slot~,
+    parent_effort~,
   ) catch {
     @kit.SubagentConfigError::Invalid(message) =>
       return @posoco.ToolOutcome::ToolReportedError(

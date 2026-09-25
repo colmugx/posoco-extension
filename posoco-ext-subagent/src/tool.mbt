@@ -14,6 +14,10 @@ pub(all) struct SubagentTools {
   parent_slot : String
   /// Parent agent's active effort (inheritance fallback for `resolve`).
   parent_effort : String?
+  /// Optional live selection source. Hosts with mutable model routing should
+  /// supply this so inheritance observes the parent's current slot/effort at
+  /// spawn time instead of values captured when SubagentTools composed.
+  parent_selection : (() -> (String, String?))?
   /// Subscription callbacks; each bridged child event is forwarded to all.
   observers : Array[(@kit.SubagentEvent) -> Unit]
   /// Per-run spawn budget (design §6.3): acquisition is monotonic, refusal
@@ -53,6 +57,7 @@ pub fn SubagentTools::SubagentTools(
   composer~ : &ChildComposer,
   parent_slot~ : String,
   parent_effort? : String? = None,
+  parent_selection? : (() -> (String, String?))? = None,
   observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
 ) -> SubagentTools {
   let global_concurrency = if config.limits.global_concurrency < 1 {
@@ -66,6 +71,7 @@ pub fn SubagentTools::SubagentTools(
     composer,
     parent_slot,
     parent_effort,
+    parent_selection,
     observers,
     ledger: @kit.SpawnLedger::SpawnLedger(limit=config.limits.spawn_budget),
     global_slots: @async.Semaphore(global_concurrency),

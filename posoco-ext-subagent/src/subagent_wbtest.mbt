@@ -121,6 +121,7 @@ impl @posoco.ModelPort for SlowModel with fn provider_config(_self : SlowModel) 
 fn test_tools(
   composer~ : &ChildComposer,
   config? : @kit.SubagentConfig = @kit.SubagentConfig::defaults(),
+  parent_selection? : (() -> (String, String?))? = None,
   observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
 ) -> SubagentTools {
   SubagentTools::SubagentTools(
@@ -129,6 +130,7 @@ fn test_tools(
     composer~,
     parent_slot="parent/slot",
     parent_effort=None,
+    parent_selection~,
     observers~,
   )
 }
@@ -195,6 +197,40 @@ fn store_contains_user_text(
 // ---------------------------------------------------------------------------
 // Sync surface tests
 // ---------------------------------------------------------------------------
+
+///|
+async test "inheritance_reads_live_parent_selection_at_each_spawn" {
+  let composer = FakeComposer::FakeComposer(response_text="ok")
+  let active_slot = Ref("parent/a")
+  let active_effort : Ref[String?] = Ref(None)
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    parent_selection=Some(fn() { (active_slot.val, active_effort.val) }),
+  )
+
+  let first = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(args_object([("task", Json::string("first"))])),
+  )
+  assert_true(first is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs.length(), 1)
+  assert_eq(composer.specs[0].slot, "parent/a")
+  assert_true(composer.specs[0].effort is None)
+
+  active_slot.val = "parent/b"
+  active_effort.val = Some("high")
+
+  let second = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(args_object([("task", Json::string("second"))])),
+  )
+  assert_true(second is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs.length(), 2)
+  assert_eq(composer.specs[1].slot, "parent/b")
+  assert_eq(composer.specs[1].effort, Some("high"))
+}
 
 ///|
 test "list_tools_declares_agent_schema_and_description" {
