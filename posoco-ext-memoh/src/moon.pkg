@@ -2,6 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/acp",
   "colmugx/posoco-ext-mcp" @mcp,
+  "colmugx/posoco-ext-permission" @permission,
   "colmugx/mcp/transport",
 }
 

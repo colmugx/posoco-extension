@@ -62,6 +62,17 @@ provider-safe.
 
 Missing Memoh Tools or a stdio/SSE declaration fails closed.
 
+## Permission authority
+
+`MemohApprovalSource` wraps the normal approval source used by a Posoco
+`PermissionPolicy`. The wrapped source still performs the actual host
+approval request, but `AllowSession` and `AllowAlways` are deliberately
+demoted to `AllowOnce`.
+
+That prevents Posoco's normal agent-lifetime approval cache from becoming a
+second authorization authority. Memoh remains responsible for each relevant
+permission decision and for the exact lifetime/scope of any grant it issues.
+
 ## Planned host surfaces
 
 The same `Memoh` extension will continue to grow host-specific diagnostics,

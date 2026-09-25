@@ -325,3 +325,78 @@ test "Memoh Tools duplicate and empty header names fail without exposing values"
     _ => fail("expected invalid header failure")
   }
 }
+
+///|
+struct TkApprovalSource {
+  decision : @permission.ApprovalDecision
+  mut asks : Int
+}
+
+///|
+pub impl @permission.ApprovalSource for TkApprovalSource with fn ask(
+  self : TkApprovalSource,
+  _request : @permission.ApprovalRequest,
+) -> @permission.ApprovalDecision {
+  self.asks += 1
+  self.decision
+}
+
+///|
+fn tk_approval_request() -> @permission.ApprovalRequest {
+  {
+    tool_name: "edit",
+    call_id: "call-1",
+    category: "write",
+    arguments_preview: "{}",
+    arguments: Json::object({}),
+  }
+}
+
+///|
+async test "Memoh approval source demotes standing grants to one-shot" {
+  let session = TkApprovalSource::{
+    decision: @permission.ApprovalDecision::AllowSession,
+    asks: 0,
+  }
+  let wrapped_session = MemohApprovalSource(session)
+  assert_true(
+    wrapped_session.ask(tk_approval_request()) is
+      @permission.ApprovalDecision::AllowOnce,
+  )
+  assert_eq(session.asks, 1)
+
+  let always = TkApprovalSource::{
+    decision: @permission.ApprovalDecision::AllowAlways,
+    asks: 0,
+  }
+  let wrapped_always = MemohApprovalSource(always)
+  assert_true(
+    wrapped_always.ask(tk_approval_request()) is
+      @permission.ApprovalDecision::AllowOnce,
+  )
+  assert_eq(always.asks, 1)
+}
+
+///|
+async test "Memoh approval source preserves allow-once and denial" {
+  let once = TkApprovalSource::{
+    decision: @permission.ApprovalDecision::AllowOnce,
+    asks: 0,
+  }
+  let wrapped_once = MemohApprovalSource(once)
+  assert_true(
+    wrapped_once.ask(tk_approval_request()) is
+      @permission.ApprovalDecision::AllowOnce,
+  )
+
+  let denied = TkApprovalSource::{
+    decision: @permission.ApprovalDecision::Deny(reason="host denied"),
+    asks: 0,
+  }
+  let wrapped_denied = MemohApprovalSource(denied)
+  match wrapped_denied.ask(tk_approval_request()) {
+    @permission.ApprovalDecision::Deny(reason~) =>
+      assert_eq(reason, "host denied")
+    _ => fail("expected denial to be preserved")
+  }
+}
