@@ -8,4 +8,5 @@ pub(all) suberror MemohError {
   MissingToolGateway
   InvalidMcpServer(reason~ : String)
   UnsupportedMcpTransport(transport~ : String)
+  MissingAgentCapability(capability~ : String)
 }

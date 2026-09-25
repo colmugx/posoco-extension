@@ -30,6 +30,16 @@ let agent = @posoco.Agent(
 ## Memoh client and turn context
 
 The adapter validates the ACP client identity (`clientInfo.name == "memoh"`)
+and requires the dedicated runtime capability contract:
+
+- `prompt.embedded_context == true`;
+- `prompt.image == true`;
+- `mcp.http == true`.
+
+Missing capabilities fail startup instead of falling back to generic ACP
+semantics.
+
+It
 and decodes Memoh's canonical embedded context resource:
 
 ```text
