@@ -352,6 +352,35 @@ test "serde: malformed message line errors loudly" {
   }
 }
 
+
+///|
+test "serde: malformed unterminated final line recovers previous messages" {
+  let content = "{}\n{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"kept\"}]}\n{\"role\":\"assistant\""
+  match @posoco-ext-fs-session.session_from_jsonl(content) {
+    Ok(session) => {
+      assert_eq(session.messages.length(), 1)
+      match session.messages[0] {
+        @posoco.Message::UserMessage(content~) =>
+          match content[0] {
+            @posoco.Content::Text(text) => assert_eq(text, "kept")
+            _ => fail("expected text content")
+          }
+        _ => fail("expected user message")
+      }
+    }
+    Err(error) => fail("torn tail should recover: \{error}")
+  }
+}
+
+///|
+test "serde: malformed terminated final line is still corruption" {
+  let content = "{}\n{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"kept\"}]}\n{\"role\":\"assistant\"\n"
+  match @posoco-ext-fs-session.session_from_jsonl(content) {
+    Err(@posoco.SessionError::Load(_)) => ()
+    _ => fail("terminated malformed tail must remain a load error")
+  }
+}
+
 // Native IO tests (async, use @fs.tmpdir for unique scratch dirs)
 
 ///|
