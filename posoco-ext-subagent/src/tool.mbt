@@ -17,9 +17,13 @@ pub(all) struct SubagentTools {
   /// Subscription callbacks; each bridged child event is forwarded to all.
   observers : Array[(@kit.SubagentEvent) -> Unit]
   /// Per-run spawn budget (design §6.3): acquisition is monotonic, refusal
-  /// explicit. The only shared mutable state — the single-threaded event
-  /// loop makes plain field operations safe under parallel tool waves.
+  /// explicit. The single-threaded event loop makes ledger mutations safe
+  /// under parallel tool waves.
   ledger : @kit.SpawnLedger
+  /// Global child-lifetime concurrency gate. Calls above the configured cap
+  /// wait FIFO for a slot; background children hold their slot until their
+  /// Agent-owned task actually exits, not merely until the receipt returns.
+  priv global_slots : @async.Semaphore
   /// Foreground session-id minter (`subagent-<n>`).
   mut counter : Int
   /// The Agent-owned task capability, captured at `on_compose` from the
@@ -51,6 +55,11 @@ pub fn SubagentTools::SubagentTools(
   parent_effort? : String? = None,
   observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
 ) -> SubagentTools {
+  let global_concurrency = if config.limits.global_concurrency < 1 {
+    1
+  } else {
+    config.limits.global_concurrency
+  }
   {
     catalog,
     config,
@@ -59,6 +68,7 @@ pub fn SubagentTools::SubagentTools(
     parent_effort,
     observers,
     ledger: @kit.SpawnLedger::SpawnLedger(limit=config.limits.spawn_budget),
+    global_slots: @async.Semaphore(global_concurrency),
     counter: 0,
     tasks: None,
     session: None,
