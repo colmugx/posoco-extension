@@ -371,11 +371,15 @@ pub fn session_to_jsonl(session : @posoco.Session) -> String {
 /// - Empty / whitespace-only input → empty session (no error). This matches
 ///   SessionStore::load's "file does not exist → empty session" contract.
 /// - First non-empty line must be the metadata object.
-/// - Subsequent lines are parsed as messages; a malformed message aborts with
-///   `Err(Load(...))` so the caller can surface the corruption loudly.
+/// - Subsequent lines are parsed as messages; a malformed complete line aborts
+///   with `Err(Load(...))` so the caller can surface real corruption loudly.
+/// - A malformed final physical line is ignored only when the file does not
+///   end in `\n`. This is the torn-tail shape left when a process dies during
+///   an append; recovery returns the last fully persisted message boundary.
 pub fn session_from_jsonl(
   content : String,
 ) -> Result[@posoco.Session, @posoco.SessionError] {
+  let terminated = content.has_suffix("\n")
   // String::split returns Iter[StringView]; collect non-empty lines.
   let non_empty : Array[String] = []
   for line in content.split("\n") {
@@ -411,20 +415,28 @@ pub fn session_from_jsonl(
     let json = match json_parse {
       Ok(j) => j
       Err(e) =>
-        return Err(
-          @posoco.SessionError::Load(
-            "jsonl: failed to parse message line: \{e}",
-          ),
-        )
+        if i == non_empty.length() - 1 && !terminated {
+          return Ok(@posoco.Session::{ messages, metadata, })
+        } else {
+          return Err(
+            @posoco.SessionError::Load(
+              "jsonl: failed to parse message line: \{e}",
+            ),
+          )
+        }
     }
     match message_from_json(json) {
       Some(msg) => messages.push(msg)
       None =>
-        return Err(
-          @posoco.SessionError::Load(
-            "jsonl: malformed message at line \{i + 1}",
-          ),
-        )
+        if i == non_empty.length() - 1 && !terminated {
+          return Ok(@posoco.Session::{ messages, metadata, })
+        } else {
+          return Err(
+            @posoco.SessionError::Load(
+              "jsonl: malformed message at line \{i + 1}",
+            ),
+          )
+        }
     }
   }
   Ok(@posoco.Session::{ messages, metadata, })
