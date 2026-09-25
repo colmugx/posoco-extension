@@ -542,6 +542,120 @@ async test "missing_task_reports_error" {
   }
 }
 
+///|
+/// Child model that blocks until cancellation and records that the cancellation
+/// reached the child. The signal write is shielded so sticky cancellation
+/// cannot hide the observation from the parent test.
+priv struct ShutdownProbeModel {
+  started : Ref[Bool]
+  cancelled : Ref[Bool]
+}
+
+///|
+fn ShutdownProbeModel::ShutdownProbeModel() -> ShutdownProbeModel {
+  { started: { val: false, }, cancelled: { val: false, }, }
+}
+
+///|
+impl @posoco.ModelPort for ShutdownProbeModel with fn chat(
+  self : ShutdownProbeModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  self.started.val = true
+  let outcome : Result[Unit?, Error] = Ok(
+    @async.handle_cancellation(async fn() {
+      while true {
+        @async.pause()
+      }
+      ()
+    }),
+  ) catch {
+    error => Err(error)
+  }
+  match outcome {
+    Ok(None) => {
+      self.cancelled.val = true
+      // Cancellation is sticky. Re-enter a cancellation point so the child
+      // stays cancelled instead of returning a synthetic model response.
+      @async.pause()
+    }
+    Ok(Some(_)) =>
+      raise @posoco.ModelError::ResponseParse(
+        "shutdown probe loop returned without cancellation",
+      )
+    Err(error) =>
+      raise @posoco.ModelError::ResponseParse(error.to_string())
+  }
+  @posoco.tk_stop_response("unreachable probe response")
+}
+
+///|
+impl @posoco.ModelPort for ShutdownProbeModel with fn compact(
+  _self : ShutdownProbeModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  raise @posoco.ModelError::ResponseParse(
+    "ShutdownProbeModel does not implement compact",
+  )
+}
+
+///|
+impl @posoco.ModelPort for ShutdownProbeModel with fn provider_config(
+  _self : ShutdownProbeModel,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
+}
+
+///|
+priv struct ShutdownProbeComposer {
+  model : ShutdownProbeModel
+  store : @posoco.RecordingSessionStore
+  specs : Array[ChildSpec]
+}
+
+///|
+fn ShutdownProbeComposer::ShutdownProbeComposer(
+  model~ : ShutdownProbeModel,
+) -> ShutdownProbeComposer {
+  {
+    model,
+    store: @posoco.RecordingSessionStore::RecordingSessionStore(),
+    specs: [],
+  }
+}
+
+///|
+impl ChildComposer for ShutdownProbeComposer with fn compose(
+  self : ShutdownProbeComposer,
+  spec : ChildSpec,
+) -> @posoco.Agent raise ComposerError {
+  self.specs.push(spec)
+  let observers : Array[&@posoco.Observer] = []
+  for observer in spec.observers {
+    observers.push(observer)
+  }
+  @posoco.Agent(
+    exts=[
+      @posoco.tk_ext(id="model", model=Some(self.model)),
+      @posoco.tk_ext(
+        id="io",
+        sessions=[self.store as &@posoco.SessionStore],
+        observers~,
+      ),
+    ],
+    config=@posoco.tk_config(),
+  ) catch {
+    error => raise ComposerError::Failed("child compose failed: \{error}")
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Stage B end-to-end: background spawns driven through a real parent Agent
 // (Agent::with_runtime harness, mirroring core's runtime seam tests). The
@@ -633,6 +747,45 @@ fn build_parent_agent(
       tools=Map::from_array([("agent", tools as &@posoco.ToolProvider)]),
     ),
   )
+}
+
+///|
+async test "parent_scope_shutdown_cancels_running_background_subagent" {
+  let probe = ShutdownProbeModel::ShutdownProbeModel()
+  let composer = ShutdownProbeComposer::ShutdownProbeComposer(model=probe)
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let parent_model = BgParentModel::BgParentModel(
+    agent_arguments=args_object([
+      ("task", Json::string("stay alive until parent shutdown")),
+      ("background", Json::boolean(true)),
+    ]),
+    mid_sleep_ms=0,
+  )
+  let parent = build_parent_agent(
+    tools,
+    parent_model as &@posoco.ModelPort,
+    @posoco.RecordingSessionStore::RecordingSessionStore(),
+  )
+
+  let _ = parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(
+      @posoco.tk_user_msg("start background child"),
+      "parent_shutdown_cancel",
+    )
+    // Do not race shutdown against task startup: wait until the real child
+    // model is blocked inside its run before returning from the parent scope.
+    while !probe.started.val {
+      @async.pause()
+    }
+  })
+
+  // Returning from run_scoped closes task admission and cancels the live
+  // background child. Cooperative cancellation must reach the child and let
+  // the structured parent scope converge without an external watchdog.
+  assert_true(probe.cancelled.val)
+  assert_eq(composer.specs.length(), 1)
+  assert_eq(composer.specs[0].session_id, "subagent-1")
+  assert_eq(tools.background_children(), [("subagent-1", "running")])
 }
 
 ///|
