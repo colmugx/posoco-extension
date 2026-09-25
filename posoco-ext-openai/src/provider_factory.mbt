@@ -4,13 +4,18 @@
 ///|
 pub(all) struct OpenAIProvider {
   models_transport : &OpenAIModelsHttpTransport?
+  /// Injectable OAuth HTTP transport for the load-time token renewal; tests
+  /// observe refresh-grant wire requests, production leaves `None` for the
+  /// default transport.
+  oauth_transport : &@oauth.OAuthHttpTransport?
 }
 
 ///|
 pub fn OpenAIProvider::OpenAIProvider(
   transport? : &OpenAIModelsHttpTransport? = None,
+  oauth_transport? : &@oauth.OAuthHttpTransport? = None,
 ) -> OpenAIProvider {
-  OpenAIProvider::{ models_transport: transport, }
+  OpenAIProvider::{ models_transport: transport, oauth_transport, }
 }
 
 ///|
@@ -139,16 +144,6 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
   let credential = source.effective_credential("openai")
   match credential {
     Some(@oauth.ProviderCredential::OAuth(credential)) => {
-      let config = OpenAIConfig::from_codex_credential(credential, model)
-      let config = openai_apply_effort(config, requested_effort)
-      let account_id = match config.account_id {
-        Some(value) if value.length() > 0 => value
-        _ =>
-          raise @posoco.CompositionError::ManifestSchemaError(
-            manifest_id="posoco_ext_openai",
-            detail="Codex model refresh requires account_id credential metadata",
-          )
-      }
       let transport_impl = match self.models_transport {
         Some(value) => value
         None => {
@@ -157,17 +152,24 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
           transport
         }
       }
-      let models = fetch_codex_models_with_transport(
+      // Load-time renewal: expired tokens renew up front, a 401 renews once
+      // and retries, and only a rejected refresh_token surfaces here. The
+      // successful credential flows into the rebuilt slots so the composed
+      // router serves fresh tokens, not the stale stored one.
+      let (models, active_credential) = refresh_codex_models_with_renewal(
         transport_impl,
-        codex_oauth_api_base(),
-        config.api_key,
-        account_id,
-        openai_codex_models_client_version(),
-      ) catch {
-        err =>
+        self.oauth_transport,
+        credential,
+        source.credential_store,
+      )
+      let config = OpenAIConfig::from_codex_credential(active_credential, model)
+      let config = openai_apply_effort(config, requested_effort)
+      let account_id = match config.account_id {
+        Some(value) if value.length() > 0 => value
+        _ =>
           raise @posoco.CompositionError::ManifestSchemaError(
             manifest_id="posoco_ext_openai",
-            detail="Codex model catalog refresh failed: " + err.to_string(),
+            detail="Codex model refresh requires account_id credential metadata",
           )
       }
       // Best-effort usage probe: refresh is already a network round trip,

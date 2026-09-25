@@ -429,13 +429,41 @@ pub fn parse_codex_models(
 }
 
 ///|
-async fn fetch_models_with_transport(
+/// Typed fetch outcome for the load-time renewal flow: an HTTP status is
+/// distinguishable (401 retries after renewal) without parsing message text.
+/// Every other failure keeps the original `ModelError` untouched so public
+/// error strings stay stable.
+priv suberror ModelsFetchError {
+  HttpStatus(status~ : Int, body_chars~ : Int)
+  Upstream(@posoco.ModelError)
+}
+
+///|
+fn ModelsFetchError::to_model_error(
+  self : ModelsFetchError,
+) -> @posoco.ModelError {
+  match self {
+    HttpStatus(status~, body_chars~) =>
+      @posoco.ModelError::Transport(
+        "OpenAI models HTTP status: " +
+        status.to_string() +
+        ", body_chars=" +
+        body_chars.to_string(),
+      )
+    Upstream(err) => err
+  }
+}
+
+///|
+async fn fetch_models_json_with_transport(
   transport : &OpenAIModelsHttpTransport,
   url : String,
   headers : Map[String, String],
   dump_path? : String? = None,
-) -> Json raise @posoco.ModelError {
-  let response = transport.get(url, headers)
+) -> Json raise ModelsFetchError {
+  let response = transport.get(url, headers) catch {
+    err => raise ModelsFetchError::Upstream(err)
+  }
   // Best-effort raw-body dump.  It runs even for non-2xx responses (error
   // bodies diagnose auth/endpoint breakage too) and a failed write must
   // never break the fetch, so every write error is swallowed.
@@ -444,18 +472,30 @@ async fn fetch_models_with_transport(
     None => ()
   }
   if response.status < 200 || response.status >= 300 {
-    raise @posoco.ModelError::Transport(
-      "OpenAI models HTTP status: " +
-      response.status.to_string() +
-      ", body_chars=" +
-      response.body.length().to_string(),
+    raise ModelsFetchError::HttpStatus(
+      status=response.status,
+      body_chars=response.body.length(),
     )
   }
   @json.parse(response.body) catch {
     err =>
-      raise @posoco.ModelError::ResponseParse(
-        "OpenAI models JSON parse failed: " + err.to_string(),
+      raise ModelsFetchError::Upstream(
+        @posoco.ModelError::ResponseParse(
+          "OpenAI models JSON parse failed: " + err.to_string(),
+        ),
       )
+  }
+}
+
+///|
+async fn fetch_models_with_transport(
+  transport : &OpenAIModelsHttpTransport,
+  url : String,
+  headers : Map[String, String],
+  dump_path? : String? = None,
+) -> Json raise @posoco.ModelError {
+  fetch_models_json_with_transport(transport, url, headers, dump_path~) catch {
+    err => raise err.to_model_error()
   }
 }
 
@@ -489,9 +529,29 @@ pub async fn fetch_codex_models_with_transport(
   account_id : String,
   client_version : String,
 ) -> Array[CodexModelInfo] raise @posoco.ModelError {
+  fetch_codex_models_typed_with_transport(
+    transport, base_url, access_token, account_id, client_version,
+  ) catch {
+    err => raise err.to_model_error()
+  }
+}
+
+///|
+/// Typed-raising variant of `fetch_codex_models_with_transport`; the
+/// load-time renewal flow needs the raw HTTP status to detect a rejected
+/// access token.
+async fn fetch_codex_models_typed_with_transport(
+  transport : &OpenAIModelsHttpTransport,
+  base_url : String,
+  access_token : String,
+  account_id : String,
+  client_version : String,
+) -> Array[CodexModelInfo] raise ModelsFetchError {
   if account_id.length() == 0 {
-    raise @posoco.ModelError::Transport(
-      "Codex models request requires chatgpt-account-id metadata",
+    raise ModelsFetchError::Upstream(
+      @posoco.ModelError::Transport(
+        "Codex models request requires chatgpt-account-id metadata",
+      ),
     )
   }
   let headers : Map[String, String] = Map::from_array([
@@ -501,13 +561,15 @@ pub async fn fetch_codex_models_with_transport(
     ("originator", identity_originator),
     ("User-Agent", identity_user_agent_now()),
   ])
-  let payload = fetch_models_with_transport(
+  let payload = fetch_models_json_with_transport(
     transport,
     codex_models_url(base_url, client_version),
     headers,
     dump_path=Some(codex_models_dump_path),
   )
-  parse_codex_models(payload)
+  parse_codex_models(payload) catch {
+    err => raise ModelsFetchError::Upstream(err)
+  }
 }
 
 ///|

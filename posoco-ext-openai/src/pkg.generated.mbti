@@ -151,8 +151,9 @@ pub(all) struct OpenAIModelsHttpResponse {
 
 pub(all) struct OpenAIProvider {
   models_transport : &OpenAIModelsHttpTransport?
+  oauth_transport : &@posoco-ext-oauth.OAuthHttpTransport?
 }
-pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?) -> Self
+pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@posoco-ext-oauth.OAuthHttpTransport?) -> Self
 pub fn OpenAIProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
 pub fn OpenAIProvider::credential_id(Self) -> String
 pub async fn OpenAIProvider::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError

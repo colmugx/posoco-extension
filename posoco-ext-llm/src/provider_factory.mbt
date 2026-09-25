@@ -32,6 +32,10 @@ pub(all) struct ProviderConfigSource {
   /// expansion ignore it; a value the provider cannot decode degrades to the
   /// uncached build and never fails composition.
   cached_models : Json?
+  /// Canonical credential store the snapshot was read from. Providers that
+  /// renew credentials during `refresh` (load-time OAuth renewal) persist the
+  /// rotated record here; `None` keeps renewal memory-only.
+  credential_store : &@oauth.ProviderCredentialStore?
 }
 
 ///|
@@ -41,6 +45,7 @@ pub fn ProviderConfigSource::ProviderConfigSource(
   credential? : @oauth.Credential? = None,
   api_key_credential? : @oauth.ApiKeyCredential? = None,
   cached_models? : Json? = None,
+  credential_store? : &@oauth.ProviderCredentialStore? = None,
 ) -> ProviderConfigSource {
   {
     settings,
@@ -48,6 +53,7 @@ pub fn ProviderConfigSource::ProviderConfigSource(
     credential,
     api_key_credential,
     cached_models,
+    credential_store,
   }
 }
 

@@ -55,8 +55,9 @@ pub(all) struct ProviderConfigSource {
   credential : @posoco-ext-oauth.Credential?
   api_key_credential : @posoco-ext-oauth.ApiKeyCredential?
   cached_models : Json?
+  credential_store : &@posoco-ext-oauth.ProviderCredentialStore?
 }
-pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @posoco-ext-oauth.ProviderCredential?, credential? : @posoco-ext-oauth.Credential?, api_key_credential? : @posoco-ext-oauth.ApiKeyCredential?, cached_models? : Json?) -> Self
+pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @posoco-ext-oauth.ProviderCredential?, credential? : @posoco-ext-oauth.Credential?, api_key_credential? : @posoco-ext-oauth.ApiKeyCredential?, cached_models? : Json?, credential_store? : &@posoco-ext-oauth.ProviderCredentialStore?) -> Self
 pub fn ProviderConfigSource::effective_credential(Self, String) -> @posoco-ext-oauth.ProviderCredential? raise @error.CompositionError
 pub fn ProviderConfigSource::has_settings(Self) -> Bool
 pub fn ProviderConfigSource::setting(Self, String) -> Json? raise @error.CompositionError

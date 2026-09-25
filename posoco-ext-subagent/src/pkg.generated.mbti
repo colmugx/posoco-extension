@@ -40,6 +40,7 @@ pub(all) struct SubagentTools {
   composer : &ChildComposer
   parent_slot : String
   parent_effort : String?
+  parent_selection : (() -> (String, String?))?
   observers : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit]
   ledger : @posoco-kit-subagent.SpawnLedger
   mut counter : Int
@@ -47,7 +48,7 @@ pub(all) struct SubagentTools {
   mut session : String?
   // private fields
 }
-pub fn SubagentTools::SubagentTools(catalog~ : @posoco-ext-kind.KindCatalog, config~ : @posoco-kit-subagent.SubagentConfig, composer~ : &ChildComposer, parent_slot~ : String, parent_effort? : String?, observers? : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit]) -> Self
+pub fn SubagentTools::SubagentTools(catalog~ : @posoco-ext-kind.KindCatalog, config~ : @posoco-kit-subagent.SubagentConfig, composer~ : &ChildComposer, parent_slot~ : String, parent_effort? : String?, parent_selection? : (() -> (String, String?))?, observers? : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit]) -> Self
 pub fn SubagentTools::background_children(Self) -> Array[(String, String)]
 pub async fn SubagentTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn SubagentTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
