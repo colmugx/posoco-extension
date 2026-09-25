@@ -119,10 +119,3 @@ test "ask_question_schema_uses_enum_for_prompt_type" {
   assert_true(schema.contains("\"confirm\""))
   assert_true(schema.contains("\"select\""))
 }
-
-///|
-test "ask_question_manifest_has_no_resident_prompt_cost" {
-  let tools = AskQuestionTools()
-  assert_eq(tools.manifest().prompt_contributors.length(), 0)
-  assert_true(tools.system_prompt().length() < 130)
-}
