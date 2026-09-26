@@ -150,6 +150,65 @@ async test "global_concurrency_caps_parallel_child_lifetimes" {
 }
 
 ///|
+/// Child composer that injects one composition failure while delegating every
+/// other child to the ordinary real-Agent fake. This proves one failed row in
+/// a parallel parent tool wave cannot poison its sibling.
+priv struct SelectiveFailComposer {
+  inner : FakeComposer
+  fail_task : String
+  mut failures : Int
+}
+
+///|
+fn SelectiveFailComposer::SelectiveFailComposer(
+  fail_task~ : String,
+) -> SelectiveFailComposer {
+  {
+    inner: FakeComposer::FakeComposer(response_text="sibling child completed"),
+    fail_task,
+    failures: 0,
+  }
+}
+
+///|
+impl ChildComposer for SelectiveFailComposer with fn compose(
+  self : SelectiveFailComposer,
+  spec : ChildSpec,
+) -> @posoco.Agent raise ComposerError {
+  if spec.task == self.fail_task {
+    self.failures = self.failures + 1
+    raise ComposerError::Failed("injected sibling failure")
+  }
+  ChildComposer::compose(self.inner, spec)
+}
+
+///|
+fn sibling_failure_wave() -> @posoco.ModelCallResult {
+  let calls : Array[@posoco.ToolCall] = [
+    {
+      call_id: @posoco.CallId::unchecked("sibling-fail"),
+      name: @posoco.ToolName::unchecked("agent"),
+      arguments: args_object([("task", Json::string("explode"))]),
+    },
+    {
+      call_id: @posoco.CallId::unchecked("sibling-ok"),
+      name: @posoco.ToolName::unchecked("agent"),
+      arguments: args_object([("task", Json::string("survive"))]),
+    },
+  ]
+  @posoco.ModelCallResult::{
+    completion: @posoco.Completion::Completion(
+      content=[],
+      tool_calls=calls,
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::ToolCalls,
+      usage=None,
+    ),
+    processed_messages: [],
+  }
+}
+
+///|
 async test "spawn_budget_resets_at_each_parent_run" {
   let composer = FakeComposer::FakeComposer(response_text="ok")
   let tools = test_tools(
@@ -228,6 +287,55 @@ async test "spawn_budget_exhaustion_refuses_explicitly" {
         content, "spawn budget exhausted (1/1 used): explicit refusal — finish with the subagents you have",
       )
     _ => fail("expected explicit budget refusal")
+  }
+}
+
+///|
+async test "parallel_subagent_failure_does_not_poison_sibling_or_parent" {
+  let composer = SelectiveFailComposer::SelectiveFailComposer(
+    fail_task="explode",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_spawn_budget(2),
+  )
+  let model = @posoco.ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(sibling_failure_wave()),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("parent recovered after sibling failure"),
+    ),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  let result = parent.run_scoped(async fn(agent) {
+    agent.run_turn(
+      @posoco.tk_user_msg("run two independent children"),
+      "parent_sibling_isolation",
+    )
+  })
+
+  // The failed row is a tool-level terminal, not a wave-level exception:
+  // the sibling child still composes and runs, and the parent reaches its
+  // second model call instead of aborting the turn.
+  assert_eq(model.call_count(), 2)
+  assert_eq(result.final_session_id, "parent_sibling_isolation")
+  match result.message {
+    @posoco.Message::AssistantMessage(content=[@posoco.Content::Text(text)], ..) =>
+      assert_eq(text, "parent recovered after sibling failure")
+    _ => fail("expected the parent stop response")
+  }
+  assert_eq(composer.failures, 1)
+  assert_eq(composer.inner.specs.length(), 1)
+  assert_eq(composer.inner.specs[0].task, "survive")
+  assert_eq(tools.background_children().length(), 1)
+  match tools.registry.get(composer.inner.specs[0].session_id) {
+    Some(record) =>
+      match record.state {
+        Done("completed", summary) =>
+          assert_true(summary.contains("sibling child completed"))
+        _ => fail("successful sibling must remain completed")
+      }
+    None => fail("successful sibling must remain registered")
   }
 }
 
