@@ -14,6 +14,11 @@ async test "memoh session store is intentionally ephemeral" {
   }
   memoh.save("s1", dirty)
   memoh.append_messages("s1", 0, [user][:])
+  memoh.checkpoint("s1", {
+    from_index: 0,
+    messages: [user],
+    metadata: Some(Map::from_array([("marker", Json::string("next"))])),
+  })
   memoh.truncate("s1", 0)
 
   let after = memoh.load("s1")
