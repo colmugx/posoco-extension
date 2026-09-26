@@ -57,6 +57,16 @@ chronologically. A missing root directory is an empty list, the same
 missing-means-empty rule `load` applies; entries that are not `<id>.jsonl`
 files or whose stem fails validation are ignored.
 
+## Session titles
+
+`JsonlSessionStore::summary()` exposes host-facing session presentation
+metadata. Explicit `metadata["name"]` wins; otherwise new sessions use
+Posoco's stable `metadata[@posoco.SESSION_TITLE_METADATA_KEY]` value, derived
+from the first admitted caller input before memory or hook injection. Journals
+created before that metadata key existed retain a compatibility-only fallback
+to their first user-role message. Hosts should consume `display_title()`
+instead of inferring human provenance from transcript roles.
+
 ## Behavior
 
 - **Session ids are filename stems** — validated at the storage boundary

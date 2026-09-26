@@ -59,7 +59,7 @@ pub impl @port.SessionStore for JsonlSessionStore
 pub(all) struct SessionSummary {
   id : String
   name : String?
-  first_user_text : String
+  title : String?
 } derive(Eq, @debug.Debug)
 pub fn SessionSummary::equal(Self, Self) -> Bool
 pub fn SessionSummary::not_equal(Self, Self) -> Bool

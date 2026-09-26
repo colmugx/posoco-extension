@@ -7,16 +7,18 @@ fn sixty_char_text() -> String {
 }
 
 ///|
-async test "io[native]: summary picks the metadata name for the title" {
+async test "io[native]: explicit name wins over automatic title" {
   let root = fresh_root("summary-named")
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   store.save("sess_named", @posoco.Session::{
-    messages: [
-      @posoco.Message::UserMessage(content=[
-        @posoco.Content::Text(sixty_char_text()),
-      ]),
-    ],
-    metadata: Map::from_array([("name", Json::string("Weekly Review"))]),
+    messages: [],
+    metadata: Map::from_array([
+      ("name", Json::string("Weekly Review")),
+      (
+        @posoco.SESSION_TITLE_METADATA_KEY,
+        Json::string("automatic title should not win"),
+      ),
+    ]),
   }) catch {
     e => fail("seed named session failed: \{e}")
   }
@@ -25,6 +27,7 @@ async test "io[native]: summary picks the metadata name for the title" {
   }
   assert_eq(s.id, "sess_named")
   assert_eq(s.name, Some("Weekly Review"))
+  assert_eq(s.title, Some("automatic title should not win"))
   assert_eq(@posoco-ext-fs-session.display_title(s), "Weekly Review")
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
@@ -32,32 +35,84 @@ async test "io[native]: summary picks the metadata name for the title" {
 }
 
 ///|
-async test "io[native]: display_title truncates first user text at 50 chars" {
-  let root = fresh_root("summary-unnamed")
+async test "io[native]: automatic title comes from session metadata" {
+  let root = fresh_root("summary-title")
   let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
-  store.save("sess_unnamed", @posoco.Session::{
+  store.save("sess_title", @posoco.Session::{
     messages: [
-      // System messages and assistant replies never become the title.
+      @posoco.Message::UserMessage(content=[
+        @posoco.Content::Text("injected memory must not become the title"),
+      ]),
+    ],
+    metadata: Map::from_array([
+      (
+        @posoco.SESSION_TITLE_METADATA_KEY,
+        Json::string("  investigate   the login\n race condition  "),
+      ),
+    ]),
+  }) catch {
+    e => fail("seed titled session failed: \{e}")
+  }
+  let s = store.summary("sess_title") catch {
+    e => fail("summary failed: \{e}")
+  }
+  assert_eq(s.name, None)
+  assert_eq(s.title, Some("investigate the login race condition"))
+  assert_eq(
+    @posoco-ext-fs-session.display_title(s),
+    "investigate the login race condition",
+  )
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
+}
+
+///|
+async test "io[native]: automatic title truncates at 50 chars" {
+  let root = fresh_root("summary-title-truncated")
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
+  store.save("sess_title_truncated", @posoco.Session::{
+    messages: [],
+    metadata: Map::from_array([
+      (@posoco.SESSION_TITLE_METADATA_KEY, Json::string(sixty_char_text())),
+    ]),
+  }) catch {
+    e => fail("seed titled session failed: \{e}")
+  }
+  let s = store.summary("sess_title_truncated") catch {
+    e => fail("summary failed: \{e}")
+  }
+  assert_eq(
+    s.title,
+    Some("01234567890123456789012345678901234567890123456789"),
+  )
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
+}
+
+///|
+async test "io[native]: legacy session falls back to first user-role message" {
+  let root = fresh_root("summary-legacy")
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
+  store.save("sess_legacy", @posoco.Session::{
+    messages: [
       @posoco.Message::SystemMessage(content=[
         @posoco.Content::Text("system preamble is not a title"),
       ]),
       @posoco.Message::UserMessage(content=[
-        @posoco.Content::Text(sixty_char_text()),
+        @posoco.Content::Text("  old   session\n title  "),
       ]),
     ],
     metadata: Map::from_array([]),
   }) catch {
-    e => fail("seed unnamed session failed: \{e}")
+    e => fail("seed legacy session failed: \{e}")
   }
-  let s = store.summary("sess_unnamed") catch {
+  let s = store.summary("sess_legacy") catch {
     e => fail("summary failed: \{e}")
   }
-  assert_eq(s.name, None)
-  assert_eq(s.first_user_text, sixty_char_text())
-  assert_eq(
-    @posoco-ext-fs-session.display_title(s),
-    "01234567890123456789012345678901234567890123456789",
-  )
+  assert_eq(s.title, Some("old session title"))
+  assert_eq(@posoco-ext-fs-session.display_title(s), "old session title")
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
@@ -76,6 +131,8 @@ async test "io[native]: display_title falls back to the session id" {
   let s = store.summary("sess_silent") catch {
     e => fail("summary failed: \{e}")
   }
+  assert_eq(s.name, None)
+  assert_eq(s.title, None)
   assert_eq(@posoco-ext-fs-session.display_title(s), "sess_silent")
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
@@ -90,24 +147,11 @@ async test "io[native]: summary of a missing file is empty" {
     e => fail("summary of missing session failed: \{e}")
   }
   assert_eq(s.name, None)
-  assert_eq(s.first_user_text, "")
+  assert_eq(s.title, None)
   assert_eq(@posoco-ext-fs-session.display_title(s), "ghost")
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
-}
-
-///|
-test "display_title collapses whitespace before truncating" {
-  let s : @posoco-ext-fs-session.SessionSummary = {
-    id: "sess_ws",
-    name: None,
-    first_user_text: "  fix the \n\t parser  crash   reported downstream  ",
-  }
-  assert_eq(
-    @posoco-ext-fs-session.display_title(s),
-    "fix the parser crash reported downstream",
-  )
 }
 
 ///|
@@ -123,11 +167,11 @@ fn repeat_decade(times : Int) -> String {
 }
 
 ///|
-test "display_title cuts at char boundaries, not bytes" {
+test "display_title cuts metadata title at char boundaries, not bytes" {
   let s : @posoco-ext-fs-session.SessionSummary = {
     id: "sess_cjk",
     name: None,
-    first_user_text: repeat_decade(6),
+    title: Some(repeat_decade(6)),
   }
-  assert_eq(@posoco-ext-fs-session.display_title(s), repeat_decade(5))
+  assert_eq(@posoco-ext-fs-session.display_title(s), repeat_decade(6))
 }
