@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-memoh"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.18.5",
+  "colmugx/posoco@0.18.7",
   "colmugx/acp@0.2.0",
   "colmugx/posoco-ext-mcp@0.5.1",
   "colmugx/posoco-ext-permission@0.2.0",

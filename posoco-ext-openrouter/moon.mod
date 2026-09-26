@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-openrouter"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.18.5",
+  "colmugx/posoco@0.18.7",
   "colmugx/posoco-devkit@0.4.0",
   "colmugx/posoco-kit-chat-completions@0.1.0",
   "colmugx/posoco-kit-compact-summary@0.1.0",
