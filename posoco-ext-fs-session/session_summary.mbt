@@ -59,9 +59,7 @@ pub fn display_title(s : SessionSummary) -> String {
 /// Compatibility only: historical sessions have no `posoco.title`, so retain
 /// the old first-user heuristic when reading them. This is deliberately kept
 /// behind the summary projection and is not the contract for new sessions.
-fn legacy_title_from_messages(
-  messages : Array[@posoco.Message],
-) -> String? {
+fn legacy_title_from_messages(messages : Array[@posoco.Message]) -> String? {
   for msg in messages {
     match msg {
       @posoco.Message::UserMessage(content~) => {

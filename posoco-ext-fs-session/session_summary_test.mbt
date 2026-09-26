@@ -82,10 +82,7 @@ async test "io[native]: automatic title truncates at 50 chars" {
   let s = store.summary("sess_title_truncated") catch {
     e => fail("summary failed: \{e}")
   }
-  assert_eq(
-    s.title,
-    Some("01234567890123456789012345678901234567890123456789"),
-  )
+  assert_eq(s.title, Some("01234567890123456789012345678901234567890123456789"))
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
