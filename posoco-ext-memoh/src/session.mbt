@@ -35,6 +35,18 @@ pub impl @posoco.SessionStore for Memoh with fn append_messages(
 }
 
 ///|
+/// Ignore atomic checkpoint persistence explicitly. Memoh owns the durable
+/// transcript and metadata; even checkpoint-style commits must never create a
+/// second conversation authority inside the hosted agent.
+pub impl @posoco.SessionStore for Memoh with fn checkpoint(
+  _self : Memoh,
+  _id : String,
+  _checkpoint : @posoco.SessionCheckpoint,
+) -> Unit raise @posoco.SessionError {
+  ()
+}
+
+///|
 /// Ignore transcript truncation explicitly. Retry/edit/reset semantics are
 /// owned by Memoh, not by a local Posoco transcript.
 pub impl @posoco.SessionStore for Memoh with fn truncate(
@@ -50,5 +62,6 @@ pub extend Memoh with @posoco.SessionStore::{
   load,
   save,
   append_messages,
+  checkpoint,
   truncate,
 }
