@@ -31,7 +31,9 @@ fn memoh_http_mcp_config(
   let headers : Array[(String, String)] = []
   for header in server.headers {
     if header.name.trim().is_empty() {
-      raise InvalidMcpServer(reason="Memoh Tools contains an empty HTTP header name")
+      raise InvalidMcpServer(
+        reason="Memoh Tools contains an empty HTTP header name",
+      )
     }
     headers.push((header.name, header.value))
   }

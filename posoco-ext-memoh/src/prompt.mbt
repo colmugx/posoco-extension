@@ -49,10 +49,7 @@ pub fn decode_memoh_prompt(
         user_content.push(@posoco.Content::Text(text.text))
       @acp.ContentBlock::Image(image) =>
         user_content.push(
-          @posoco.Content::Image(
-            media_type=image.mime_type,
-            data=image.data,
-          ),
+          @posoco.Content::Image(media_type=image.mime_type, data=image.data),
         )
       @acp.ContentBlock::Resource(embedded) =>
         match embedded.resource {
@@ -87,8 +84,7 @@ pub fn decode_memoh_prompt(
             raise UnsupportedPromptBlock(kind="embedded blob resource")
           }
         }
-      @acp.ContentBlock::Audio(_) =>
-        raise UnsupportedPromptBlock(kind="audio")
+      @acp.ContentBlock::Audio(_) => raise UnsupportedPromptBlock(kind="audio")
       @acp.ContentBlock::ResourceLink(_) =>
         raise UnsupportedPromptBlock(kind="resource_link")
     }

@@ -90,10 +90,8 @@ test "prompt decoder separates host context from user text and image" {
   assert_eq(prompt.user_content.length(), 2)
   assert_true(prompt.user_content[0] is @posoco.Content::Text("fix it"))
   assert_true(
-    prompt.user_content[1] is @posoco.Content::Image(
-      media_type="image/png",
-      data="aGVsbG8=",
-    ),
+    prompt.user_content[1]
+    is @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
   )
 }
 
@@ -177,16 +175,13 @@ fn tk_memoh_http_server(
 test "Memoh Tools maps to host-scoped HTTP MCP config" {
   let config = memoh_tools_mcp_config(
     @acp.ProtocolNullable::Value([
-      tk_memoh_http_server(
-        "Memoh Tools",
-        [
-          {
-            name: "X-Memoh-Runtime-Token",
-            value: "secret-runtime-token",
-            meta: @acp.ProtocolNullable::Omitted,
-          },
-        ],
-      ),
+      tk_memoh_http_server("Memoh Tools", [
+        {
+          name: "X-Memoh-Runtime-Token",
+          value: "secret-runtime-token",
+          meta: @acp.ProtocolNullable::Omitted,
+        },
+      ]),
     ]),
   )
   assert_eq(config.name, MEMOH_TOOLS_MCP_SLUG)
@@ -285,8 +280,8 @@ async test "Memoh approval source never creates local standing grants" {
   }
   let wrapped = MemohApprovalSource(delegate)
   assert_true(
-    wrapped.ask(tk_approval_request()) is
-      @permission.ApprovalDecision::AllowOnce,
+    wrapped.ask(tk_approval_request())
+    is @permission.ApprovalDecision::AllowOnce,
   )
   assert_eq(delegate.asks, 1)
 }

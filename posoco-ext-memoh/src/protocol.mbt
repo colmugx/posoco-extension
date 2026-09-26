@@ -21,7 +21,9 @@ pub fn require_memoh_client(
       if client.name == MEMOH_CLIENT_NAME {
         ()
       } else {
-        raise InvalidClient(reason="expected clientInfo.name=memoh, got " + client.name)
+        raise InvalidClient(
+          reason="expected clientInfo.name=memoh, got " + client.name,
+        )
       }
     @acp.ProtocolNullable::Null =>
       raise InvalidClient(reason="clientInfo is null")
