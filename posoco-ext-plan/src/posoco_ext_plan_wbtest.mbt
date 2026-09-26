@@ -1,9 +1,6 @@
 ///|
-fn plan_mode_with_reads() -> PlanMode {
-  PlanMode(config=PlanModeConfig::{
-    ..PlanModeConfig::default(),
-    allowed_tools: ["read", "glob", "grep"],
-  })
+fn tk_plan() -> PlanMode {
+  PlanMode(config=PlanModeConfig::default())
 }
 
 ///|
@@ -61,7 +58,7 @@ fn plan_reminder_count(messages : Array[@kernel.Message]) -> Int {
 
 ///|
 async test "before_tool gates write tools by target while planning" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   // Markdown passes anywhere in the workspace — research notes and draft
   // plans are part of planning.
@@ -106,19 +103,18 @@ async test "before_tool gates write tools by target while planning" {
 async test "before_tool target gate is off unless write tools are configured" {
   let plan = PlanMode(config=PlanModeConfig::{
     ..PlanModeConfig::default(),
-    allowed_tools: ["read"],
     write_tools: [],
   })
   plan.start()
   match plan.before_tool(write_call("write", "docs/a.md")) {
-    @posoco.ToolDecision::Reject(..) => ()
-    other => fail("expected Reject with empty write_tools, got \{other}")
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve with empty write_tools, got \{other}")
   }
 }
 
 ///|
 async test "before_tool admits read-only shell commands while planning" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   // Read-only investigation commands pass through the shell gate.
   let read_only = [
@@ -152,41 +148,19 @@ async test "before_tool admits read-only shell commands while planning" {
 async test "before_tool shell gate is off unless the name is configured" {
   let plan = PlanMode(config=PlanModeConfig::{
     ..PlanModeConfig::default(),
-    allowed_tools: ["read"],
     shell_tools: [],
   })
   plan.start()
   match plan.before_tool(bash_call("ls -la")) {
-    @posoco.ToolDecision::Reject(..) => ()
+    @posoco.ToolDecision::Approve(..) => ()
     other =>
-      fail("expected Reject for bash with empty shell_tools, got \{other}")
-  }
-}
-
-///|
-async test "allowed_tools entries match by prefix with trailing *" {
-  let plan = PlanMode(config=PlanModeConfig::{
-    ..PlanModeConfig::default(),
-    allowed_tools: ["read", "browser_*"],
-  })
-  plan.start()
-  for name in ["read", "browser_snapshot", "browser_navigate", "browser_eval"] {
-    match plan.before_tool(tk_call(name)) {
-      @posoco.ToolDecision::Approve(..) => ()
-      other => fail("expected Approve for '\{name}', got \{other}")
-    }
-  }
-  for name in ["write", "browsermaker"] {
-    match plan.before_tool(tk_call(name)) {
-      @posoco.ToolDecision::Reject(..) => ()
-      other => fail("expected Reject for '\{name}', got \{other}")
-    }
+      fail("expected Approve for bash with empty shell_tools, got \{other}")
   }
 }
 
 ///|
 test "state machine transitions" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   assert_eq(plan.status(), PlanStatus::Off)
   plan.start()
   assert_eq(plan.status(), PlanStatus::Planning)
@@ -211,20 +185,50 @@ test "state machine transitions" {
 }
 
 ///|
-async test "before_tool gates non-allowed tools while planning" {
-  let plan = plan_mode_with_reads()
+async test "before_tool blocks only writes while planning" {
+  let plan = tk_plan()
   // Off: everything passes through.
   match plan.before_tool(tk_call("write")) {
     @posoco.ToolDecision::Approve(..) => ()
     other => fail("expected Approve while Off, got \{other}")
   }
   plan.start()
-  // Planning: allowed tools and the exit tool pass.
-  for name in ["read", "glob", "grep", "exit_plan_mode"] {
+  // Planning: read-side tools and the exit tool pass; unlisted extension
+  // tools (MCP namespaces, pi bridges) pass too — plan mode only blocks
+  // writes.
+  for
+    name in [
+      "read", "glob", "grep", "exit_plan_mode", "anysearch__search", "webfetch",
+    ] {
     match plan.before_tool(tk_call(name)) {
       @posoco.ToolDecision::Approve(..) => ()
       other => fail("expected Approve for '\{name}', got \{other}")
     }
+  }
+  // Deferred gateway calls classify by the inner tool name: a deferred
+  // write hits the write gate, a deferred read passes.
+  let deferred_write = tk_call_with_args(
+    "tool_execute",
+    Json::object({
+      "tool": Json::string("write"),
+      "arguments": Json::object({ "path": Json::string("src/x.rs") }),
+    }),
+  )
+  match plan.before_tool(deferred_write) {
+    @posoco.ToolDecision::Reject(reason~) =>
+      assert_true(reason.contains("plan mode"))
+    other => fail("expected Reject for deferred write, got \{other}")
+  }
+  let deferred_read = tk_call_with_args(
+    "tool_execute",
+    Json::object({
+      "tool": Json::string("webfetch"),
+      "arguments": Json::object({ "url": Json::string("https://example.com") }),
+    }),
+  )
+  match plan.before_tool(deferred_read) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve for deferred webfetch, got \{other}")
   }
   // Planning: write tools are rejected with guidance.
   match plan.before_tool(tk_call("write")) {
@@ -232,11 +236,16 @@ async test "before_tool gates non-allowed tools while planning" {
       assert_true(reason.contains("plan mode"))
     other => fail("expected Reject for 'write', got \{other}")
   }
-  // ReadyForApproval still gates until the user approves.
+  // ReadyForApproval still gates writes until the user approves; research
+  // tools stay usable.
   assert_true(plan.submit_plan("test plan", "plan"))
   match plan.before_tool(tk_call("write")) {
     @posoco.ToolDecision::Reject(..) => ()
     other => fail("expected Reject while ReadyForApproval, got \{other}")
+  }
+  match plan.before_tool(tk_call("webfetch")) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve while ReadyForApproval, got \{other}")
   }
   // After approval, everything passes again.
   ignore(plan.approve())
@@ -248,7 +257,7 @@ async test "before_tool gates non-allowed tools while planning" {
 
 ///|
 async test "before_model injects planning reminder at the end" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   let messages : Array[@kernel.Message] = [user_msg("hello")]
   let result = plan.before_model(messages)
@@ -256,13 +265,13 @@ async test "before_model injects planning reminder at the end" {
   let reminder = text_of(result[1]).unwrap()
   assert_true(reminder.has_prefix("<plan-context"))
   assert_true(reminder.contains("PLAN MODE"))
-  assert_true(reminder.contains("read, glob, grep"))
+  assert_true(reminder.contains("Only writes are gated"))
   assert_true(reminder.contains("exit_plan_mode"))
 }
 
 ///|
 async test "before_model is idempotent when the reminder is already present" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   let messages : Array[@kernel.Message] = [user_msg("hello")]
   let first = plan.before_model(messages)
@@ -274,7 +283,7 @@ async test "before_model is idempotent when the reminder is already present" {
 
 ///|
 async test "before_model replaces the reminder in place on mode switch" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   let messages = plan.before_model([user_msg("hello")])
   assert_true(plan.submit_plan("test plan", "the plan"))
@@ -288,7 +297,7 @@ async test "before_model replaces the reminder in place on mode switch" {
 
 ///|
 async test "before_model appends a one-time exit reminder when leaving plan mode" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   let messages = plan.before_model([user_msg("hello")])
   assert_eq(plan_reminder_count(messages), 1)
@@ -306,7 +315,7 @@ async test "before_model appends a one-time exit reminder when leaving plan mode
 
 ///|
 async test "before_model does nothing while Off" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   let messages : Array[@kernel.Message] = [user_msg("hello")]
   let result = plan.before_model(messages)
   assert_eq(result.length(), 1)
@@ -315,7 +324,7 @@ async test "before_model does nothing while Off" {
 
 ///|
 async test "exit_plan_mode tool records the plan" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   let outcome = plan.execute(
     "exit_plan_mode",
@@ -354,7 +363,7 @@ async test "exit_plan_mode tool records the plan" {
 
 ///|
 async test "exit_plan_mode tool outside plan mode reports an error" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   let outcome = plan.execute(
     "exit_plan_mode",
     tk_call_with_args(
@@ -375,7 +384,7 @@ async test "exit_plan_mode tool outside plan mode reports an error" {
 
 ///|
 async test "exit_plan_mode tool validates arguments" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   try plan.execute("exit_plan_mode", tk_call("exit_plan_mode")) catch {
     @posoco.RuntimeError::InvocationFailed(message) =>
@@ -396,7 +405,7 @@ async test "exit_plan_mode tool validates arguments" {
 
 ///|
 async test "list_tools declares the configured tools" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   // Without allow_model_entry, only the exit tool is advertised.
   let tools = plan.list_tools()
   assert_eq(tools.length(), 1)
@@ -413,7 +422,7 @@ async test "list_tools declares the configured tools" {
 
 ///|
 async test "bare /plan toggles plan mode" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   match plan.invoke("plan", Json::null()) {
     @posoco.CommandOutcome::Success(feedback~, structured~, ..) => {
       assert_true(feedback.contains("plan mode on"))
@@ -424,11 +433,6 @@ async test "bare /plan toggles plan mode" {
             "status": Json::string("planning"),
             "name": Json::null(),
             "plan": Json::null(),
-            "allowed_tools": Json::array([
-              Json::string("read"),
-              Json::string("glob"),
-              Json::string("grep"),
-            ]),
           }),
         ),
       )
@@ -446,7 +450,7 @@ async test "bare /plan toggles plan mode" {
 
 ///|
 async test "plan command on/off/status" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   // status inspects without touching state
   match plan.invoke("plan", Json::string("status")) {
     @posoco.CommandOutcome::Success(structured~, ..) =>
@@ -457,11 +461,6 @@ async test "plan command on/off/status" {
             "status": Json::string("off"),
             "name": Json::null(),
             "plan": Json::null(),
-            "allowed_tools": Json::array([
-              Json::string("read"),
-              Json::string("glob"),
-              Json::string("grep"),
-            ]),
           }),
         ),
       )
@@ -497,7 +496,7 @@ async test "enter_plan_mode tool enters without approval" {
   let tools = plan.list_tools()
   assert_eq(tools.length(), 2)
   assert_eq(tools[1].name.to_string(), "enter_plan_mode")
-  assert_true(tools[1].description.contains("read-only investigation"))
+  assert_true(tools[1].description.contains("switch to investigation"))
   assert_true(
     tools[1].description.contains("Markdown files anywhere in the workspace"),
   )
@@ -526,7 +525,7 @@ async test "enter_plan_mode tool enters without approval" {
 
 ///|
 async test "enter_plan_mode tool is rejected when model entry is disabled" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   try plan.execute("enter_plan_mode", tk_call("enter_plan_mode")) catch {
     @posoco.RuntimeError::UnknownTool(message) =>
       assert_true(message.contains("unknown tool"))
@@ -539,7 +538,7 @@ async test "enter_plan_mode tool is rejected when model entry is disabled" {
 
 ///|
 async test "plan.approve and plan.reject drive the approval flow" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   // nothing pending → Failure
   match plan.invoke("plan.approve", Json::null()) {
     @posoco.CommandOutcome::Failure(reason~) =>
@@ -571,7 +570,7 @@ async test "plan.approve and plan.reject drive the approval flow" {
 
 ///|
 async test "unknown command id raises NotFound" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   try plan.invoke("nope", Json::null()) catch {
     @posoco.CommandError::NotFound(id) => assert_eq(id, "nope")
     other => fail("expected NotFound, got \{other}")
@@ -582,7 +581,7 @@ async test "unknown command id raises NotFound" {
 
 ///|
 test "extension manifest wires the three port views" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   assert_eq(plan.extension_id(), "posoco_ext_plan")
   let manifest = plan.manifest()
   assert_eq(manifest.tools.length(), 1)
@@ -664,10 +663,6 @@ fn exit_call(plan_text : String) -> @posoco.ToolCall {
 async test "review source accepts the plan in one action" {
   let review = ScriptedReview::{ decision: Accept, asked: 0, }
   let plan = PlanMode(
-    config=PlanModeConfig::{
-      ..PlanModeConfig::default(),
-      allowed_tools: ["read"],
-    },
     review=Some(review as &PlanReviewSource),
   )
   plan.start()
@@ -711,10 +706,6 @@ async test "review revise keeps planning and feeds the reason back" {
     asked: 0,
   }
   let plan = PlanMode(
-    config=PlanModeConfig::{
-      ..PlanModeConfig::default(),
-      allowed_tools: ["read"],
-    },
     review=Some(review as &PlanReviewSource),
   )
   plan.start()
@@ -756,7 +747,7 @@ async test "review is only consulted while planning" {
 /// source; with none wired, the exit call waits for the user as
 /// ReadyForApproval (the approve command alone implements).
 async test "without a review source the exit tool waits for the user" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   let call = exit_call("1. unattended")
   match plan.before_tool(call) {
@@ -778,10 +769,6 @@ async test "without a review source the exit tool waits for the user" {
 async test "a failing review keeps planning with a retryable tool error" {
   let review = FailingReview::{ asked: 0, }
   let plan = PlanMode(
-    config=PlanModeConfig::{
-      ..PlanModeConfig::default(),
-      allowed_tools: ["read"],
-    },
     review=Some(review as &PlanReviewSource),
   )
   plan.start()
@@ -849,7 +836,7 @@ async test "without model entry only the exit tool is reported" {
 
 ///|
 async test "plan.reject without a reason fails" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   assert_true(plan.submit_plan("test plan", "the plan"))
   for
@@ -869,7 +856,7 @@ async test "plan.reject without a reason fails" {
 
 ///|
 async test "plan.dismiss discards the pending plan and exits" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   match plan.invoke("plan.dismiss", Json::null()) {
     @posoco.CommandOutcome::Failure(reason~) =>
       assert_true(reason.contains("no plan"))
@@ -889,10 +876,6 @@ async test "plan.dismiss discards the pending plan and exits" {
 async test "review dismiss cancels the plan and instructs the model to stop" {
   let review = ScriptedReview::{ decision: Dismiss, asked: 0, }
   let plan = PlanMode(
-    config=PlanModeConfig::{
-      ..PlanModeConfig::default(),
-      allowed_tools: ["read"],
-    },
     review=Some(review as &PlanReviewSource),
   )
   plan.start()
@@ -908,7 +891,7 @@ async test "review dismiss cancels the plan and instructs the model to stop" {
 
 ///|
 async test "completed plans are echoed once in the tool result" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   match
     plan.execute("exit_plan_mode", exit_call("1. first step\n2. second step")) {
@@ -924,10 +907,6 @@ async test "plan transitions publish status facts on the bus" {
   let gate = RecordingGate::{ events: [], }
   bus.subscribe(gate as &@devkit.BusSubscriber)
   let plan = PlanMode(
-    config=PlanModeConfig::{
-      ..PlanModeConfig::default(),
-      allowed_tools: ["read"],
-    },
     bus=Some(bus),
   )
   // The exemption report is the first event; status ops follow the devkit
@@ -1109,10 +1088,6 @@ fn planning_assistant_message(text : String) -> @kernel.Message {
 async test "planning narrative accumulates into the session draft file" {
   let fs = MemoryFs::MemoryFs()
   let plan = PlanMode(
-    config=PlanModeConfig::{
-      ..PlanModeConfig::default(),
-      allowed_tools: ["read"],
-    },
     fs=Some(fs as &@workspace.WorkspaceFs),
     session_name="cetas-1",
   )
@@ -1131,10 +1106,6 @@ async test "planning narrative accumulates into the session draft file" {
 async test "exit saves the named plan file and removes the draft" {
   let fs = MemoryFs::MemoryFs()
   let plan = PlanMode(
-    config=PlanModeConfig::{
-      ..PlanModeConfig::default(),
-      allowed_tools: ["read"],
-    },
     fs=Some(fs as &@workspace.WorkspaceFs),
     session_name="cetas-1",
   )
@@ -1168,7 +1139,7 @@ async test "exit saves the named plan file and removes the draft" {
 
 ///|
 async test "without a filesystem persistence is skipped silently" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   match plan.execute("exit_plan_mode", exit_call("1. step")) {
     @posoco.ToolOutcome::Success(content~, ..) =>
@@ -1179,7 +1150,7 @@ async test "without a filesystem persistence is skipped silently" {
 
 ///|
 async test "exit rejects an empty or missing plan name" {
-  let plan = plan_mode_with_reads()
+  let plan = tk_plan()
   plan.start()
   for
     args in [

@@ -2,6 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/posoco/kernel",
   "colmugx/posoco-devkit" @devkit,
+  "colmugx/posoco-ext-lazytools" @lazytools,
   "colmugx/posoco-ext-workspace" @workspace,
   "moonbitlang/core/debug",
 }

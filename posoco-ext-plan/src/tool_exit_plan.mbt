@@ -42,7 +42,7 @@ fn exit_tool_def(config : PlanModeConfig) -> @posoco.ToolDef {
 fn enter_tool_def(config : PlanModeConfig) -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked(config.enter_tool_name),
-    description: "Enter plan mode: switch to read-only investigation and produce a step-by-step plan before making any changes. Use for non-trivial tasks that modify the system. While planning you may write Markdown files anywhere in the workspace; every other change belongs in the plan.",
+    description: "Enter plan mode: switch to investigation and produce a step-by-step plan before making any changes. Use for non-trivial tasks that modify the system. While planning you may write Markdown files anywhere in the workspace; every other change belongs in the plan.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({}),

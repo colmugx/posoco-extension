@@ -11,7 +11,7 @@
 /// Usage:
 ///   let plan = PlanMode::PlanMode(config=PlanModeConfig::{
 ///     ..PlanModeConfig::default(),
-///     allowed_tools: ["read", "glob", "grep", "browser_*"],
+///     allow_model_entry: true,
 ///   })
 ///   let agent = Agent(exts=[plan], config=...)
 ///   // Enter/inspect plan mode through the `plan` command; the state
@@ -53,14 +53,11 @@ pub impl Show for PlanStatus with fn to_string(self : PlanStatus) -> String {
 pub extend PlanStatus with Show::{to_string, output}
 
 ///|
+/// Plan-mode gate configuration: a WRITE BLOCK, not an allow-list. While
+/// planning, `shell_tools` are gated per invocation (read-only commands
+/// only) and `write_tools` are gated by target (`writable_extensions`
+/// only); every other tool passes through to the permission lattice.
 pub(all) struct PlanModeConfig {
-  /// Tools that remain executable while planning (read-only tools such as
-  /// `read` / `glob` / `grep`). Entries may end with `*` to match a name
-  /// prefix — e.g. `browser_*` admits read-only inspection tools surfaced
-  /// by MCP bridges. Empty = every tool except the enter/exit tools and
-  /// read-only shell commands (see `shell_tools`) is rejected while plan
-  /// mode is active.
-  allowed_tools : Array[String]
   /// Shell-like tool names gated per invocation: the call passes when its
   /// `cmd` classifies read-only per this package's read-only classifier
   /// (shell_readonly.mbt). Empty disables per-invocation shell gating.
@@ -93,7 +90,6 @@ pub extend PlanModeConfig with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 pub fn PlanModeConfig::default() -> PlanModeConfig {
   {
-    allowed_tools: [],
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
     write_tools: ["write", "edit", "apply_patch"],
     writable_extensions: [".md"],
@@ -141,7 +137,6 @@ pub(all) struct PlanMode {
 /// async test "plan mode gates write tools until the plan is approved" {
 ///   let plan = @posoco-ext-plan.PlanMode::PlanMode(config=@posoco-ext-plan.PlanModeConfig::{
 ///     ..@posoco-ext-plan.PlanModeConfig::default(),
-///     allowed_tools: ["read", "glob", "grep"],
 ///   })
 ///   ignore(plan.invoke("plan", Json::string("on")))
 ///   let call : @posoco.ToolCall = @posoco.ToolCall::{
@@ -339,28 +334,5 @@ fn PlanMode::dismiss(self : PlanMode) -> Bool {
       true
     }
     _ => false
-  }
-}
-
-///|
-fn PlanMode::is_tool_allowed(self : PlanMode, name : String) -> Bool {
-  match self.status {
-    Off => true
-    _ =>
-      name == self.config.exit_tool_name ||
-      (name == self.config.enter_tool_name && self.config.allow_model_entry) ||
-      self.config.allowed_tools
-      .iter()
-      .any(fn(pattern) { tool_pattern_matches(pattern, name) })
-  }
-}
-
-///|
-fn tool_pattern_matches(pattern : String, name : String) -> Bool {
-  if pattern.has_suffix("*") {
-    let prefix = pattern.exact_view(end=pattern.length() - 1)
-    prefix.length() > 0 && name.has_prefix(prefix)
-  } else {
-    pattern == name
   }
 }

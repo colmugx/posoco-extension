@@ -10,7 +10,6 @@ fn PlanMode::status_json(self : PlanMode) -> Json {
     "status": Json::string(status),
     "name": name,
     "plan": plan,
-    "allowed_tools": Json::array(self.config.allowed_tools.map(Json::string)),
   })
 }
 

@@ -32,24 +32,37 @@ fn target_is_writable(path : String, config : PlanModeConfig) -> Bool {
 }
 
 ///|
-/// While Planning/ReadyForApproval: allowed names/patterns pass, shell
-/// tools pass read-only commands only, write tools pass only
+/// While Planning/ReadyForApproval the gate is a WRITE BLOCK, not an
+/// allow-list. Deferred gateway calls are classified by the inner tool
+/// name (`LazyTools::unwrap_call`): meta tools pass, the enter/exit pair
+/// passes, shell tools pass read-only commands only, write tools pass only
 /// `writable_extensions` targets (workspace confinement is the write
-/// tools' own anchoring, not this gate), everything else is rejected with
-/// steering. Rejections reach the model as `NotExecuted(RejectedByHook)`;
-/// another hook's `ApproveAfterConsent` outranks them. Plan-review of the
-/// exit tool is NOT this gate's job — it runs inside the exit tool's
-/// execution (see `review.mbt`).
+/// tools' own anchoring, not this gate), and every other tool passes
+/// through — the permission lattice governs it, and a user's just-given
+/// consent outranks any reject here. Rejections reach the model as
+/// `NotExecuted(RejectedByHook)`. Plan-review of the exit tool is NOT this
+/// gate's job — it runs inside the exit tool's execution (see `review.mbt`).
 pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
   self,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolDecision {
-  let name = call.name.to_string()
-  if self.is_tool_allowed(name) {
+  if self.status is Off {
+    return @posoco.ToolDecision::Approve(call~)
+  }
+  let (name, effective) = @lazytools.LazyTools::unwrap_call(call)
+  // Gateway meta calls have no side effects of their own: `tool_list`
+  // only browses the folded catalog, and a well-formed `tool_execute` was
+  // already unwrapped above — the literal name survives only for a
+  // malformed call, which executes nothing and fails at the gateway.
+  if @lazytools.LazyTools::is_meta_tool(name) {
+    return @posoco.ToolDecision::Approve(call~)
+  }
+  if name == self.config.exit_tool_name ||
+    (name == self.config.enter_tool_name && self.config.allow_model_entry) {
     return @posoco.ToolDecision::Approve(call~)
   }
   if self.config.shell_tools.contains(name) {
-    let read_only = match shell_command_of(call) {
+    let read_only = match shell_command_of(effective) {
       Some(cmd) => shell_command_is_read_only(cmd)
       None => false
     }
@@ -61,7 +74,7 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
     )
   }
   if self.config.write_tools.contains(name) {
-    match write_target_of(call) {
+    match write_target_of(effective) {
       Some(path) =>
         if target_is_writable(path, self.config) {
           return @posoco.ToolDecision::Approve(call~)
@@ -72,9 +85,9 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
       reason="plan mode: while planning, '\{name}' may only touch files ending in \{self.config.writable_extensions.join(", ")} (research notes, draft plans). Put every other change in the plan; it executes after the user accepts it ('\{self.config.exit_tool_name}').",
     )
   }
-  @posoco.ToolDecision::Reject(
-    reason="plan mode: tool '\{name}' is disabled while planning. Investigate freely, then call '\{self.config.exit_tool_name}' when the plan is ready.",
-  )
+  // Plan mode only blocks writes: research, search, MCP, and pi tools pass
+  // unlisted; the permission gate decides whether they run at all.
+  @posoco.ToolDecision::Approve(call~)
 }
 
 ///|
@@ -91,11 +104,6 @@ pub extend PlanMode with @posoco.PipelineHook::{
 /// needed, and every conclusion the plan rests on must be accurate and
 /// traceable.
 fn build_plan_prompt(config : PlanModeConfig) -> String {
-  let allowed = if config.allowed_tools.length() == 0 {
-    "none (all tools are disabled)"
-  } else {
-    config.allowed_tools.join(", ")
-  }
   let exit_tool = config.exit_tool_name
   let shell_line = if config.shell_tools.length() == 0 {
     ""
@@ -111,7 +119,7 @@ fn build_plan_prompt(config : PlanModeConfig) -> String {
     "[PLAN MODE]",
     "You are in plan mode — a research posture. Investigate the request as deeply as it takes: read code, run read-only commands, follow references. Do NOT modify anything except \{config.writable_extensions.join(", ")} files in the workspace.",
     "Every conclusion must be accurate and traceable: cite the evidence for each claim (file path and line, command output), verify assumptions before relying on them, and mark anything you could not verify as an explicit assumption.",
-    "Allowed tools while planning: \{allowed}.",
+    "Only writes are gated: research, search, and other investigation tools stay usable.",
     shell_line,
     write_line,
     "Investigate the request, then write a concrete, step-by-step implementation plan.",
