@@ -50,5 +50,6 @@ pub extend Memoh with @posoco.SessionStore::{
   load,
   save,
   append_messages,
+  checkpoint,
   truncate,
 }

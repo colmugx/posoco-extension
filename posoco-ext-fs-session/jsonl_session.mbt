@@ -138,6 +138,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
 pub extend JsonlSessionStore with @posoco.SessionStore::{
   save,
   append_messages,
+  checkpoint,
   load,
   truncate,
 }
