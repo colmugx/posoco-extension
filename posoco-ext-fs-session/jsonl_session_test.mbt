@@ -352,7 +352,6 @@ test "serde: malformed message line errors loudly" {
   }
 }
 
-
 ///|
 test "serde: malformed unterminated final line recovers previous messages" {
   let content = "{}\n{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"kept\"}]}\n{\"role\":\"assistant\""
