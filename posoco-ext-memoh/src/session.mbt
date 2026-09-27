@@ -47,6 +47,7 @@ pub impl @posoco.SessionStore for Memoh with fn truncate(
 
 ///|
 pub extend Memoh with @posoco.SessionStore::{
+  checkpoint,
   load,
   save,
   append_messages,
