@@ -155,13 +155,22 @@ async fn PlanMode::execute_exit(
   if self.status is Planning {
     match self.review {
       Some(source) => {
+        // Save at submission: the plan file is a durable record from the
+        // moment the plan exists, whatever the verdict turns out to be —
+        // a dismissed, revised, unanswered, or failed review still leaves
+        // the text on disk.
+        let saved = self.save_final_plan(plan_name, plan)
+        let saved_line = match saved {
+          Some(path) => "\n\nSaved to \{path}."
+          None => ""
+        }
         let decision = source.review(PlanReviewRequest::{
           name: plan_name,
           plan,
         }) catch {
           err =>
             return @posoco.ToolOutcome::ToolReportedError(
-              content="\{name}: plan review failed (\{err.to_string()}). Still in plan mode — call '\{name}' again once the review is available.",
+              content="\{name}: plan review failed (\{err.to_string()}). Still in plan mode — call '\{name}' again once the review is available.\{saved_line}",
               structured=None,
             )
         }
@@ -169,11 +178,6 @@ async fn PlanMode::execute_exit(
           Accept => {
             self.status = Off
             self.publish_status()
-            let saved = self.save_final_plan(plan_name, plan)
-            let saved_line = match saved {
-              Some(path) => "\n\nSaved to \{path}."
-              None => ""
-            }
             @posoco.ToolOutcome::Success(
               content="Plan accepted by the user — plan mode is off. Implement the plan now, starting with step 1:\n\n\{plan}\{saved_line}",
               structured=None,
@@ -181,14 +185,14 @@ async fn PlanMode::execute_exit(
           }
           Revise(feedback~) =>
             @posoco.ToolOutcome::ToolReportedError(
-              content="Plan returned for revision: \{feedback}. Stay in plan mode, incorporate the feedback, and call '\{name}' again with the revised plan.",
+              content="Plan returned for revision: \{feedback}. Stay in plan mode, incorporate the feedback, and call '\{name}' again with the revised plan.\{saved_line}",
               structured=None,
             )
           Dismiss => {
             self.status = Off
             self.publish_status()
             @posoco.ToolOutcome::ToolReportedError(
-              content="Plan dismissed by the user — the turn is cancelled. Make no further tool calls; end your reply now.",
+              content="Plan dismissed by the user — the turn is cancelled. Make no further tool calls; end your reply now.\{saved_line}",
               structured=None,
             )
           }

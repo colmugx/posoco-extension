@@ -6,11 +6,7 @@ fn PlanMode::status_json(self : PlanMode) -> Json {
     ReadyForApproval(name~, plan~) =>
       ("ready_for_approval", Json::string(name), Json::string(plan))
   }
-  Json::object({
-    "status": Json::string(status),
-    "name": name,
-    "plan": plan,
-  })
+  Json::object({ "status": Json::string(status), "name": name, "plan": plan })
 }
 
 ///|

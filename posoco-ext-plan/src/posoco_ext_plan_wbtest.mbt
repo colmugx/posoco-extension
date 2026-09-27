@@ -662,9 +662,7 @@ fn exit_call(plan_text : String) -> @posoco.ToolCall {
 ///|
 async test "review source accepts the plan in one action" {
   let review = ScriptedReview::{ decision: Accept, asked: 0, }
-  let plan = PlanMode(
-    review=Some(review as &PlanReviewSource),
-  )
+  let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
   let call = exit_call("1. do it")
   // before_tool is a pure gate: it approves the exit call without
@@ -705,9 +703,7 @@ async test "review revise keeps planning and feeds the reason back" {
     decision: Revise(feedback="add tests"),
     asked: 0,
   }
-  let plan = PlanMode(
-    review=Some(review as &PlanReviewSource),
-  )
+  let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
   let call = exit_call("1. do it")
   match plan.before_tool(call) {
@@ -768,9 +764,7 @@ async test "without a review source the exit tool waits for the user" {
 ///|
 async test "a failing review keeps planning with a retryable tool error" {
   let review = FailingReview::{ asked: 0, }
-  let plan = PlanMode(
-    review=Some(review as &PlanReviewSource),
-  )
+  let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
   match plan.execute("exit_plan_mode", exit_call("1. do it")) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
@@ -875,9 +869,7 @@ async test "plan.dismiss discards the pending plan and exits" {
 ///|
 async test "review dismiss cancels the plan and instructs the model to stop" {
   let review = ScriptedReview::{ decision: Dismiss, asked: 0, }
-  let plan = PlanMode(
-    review=Some(review as &PlanReviewSource),
-  )
+  let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
   match plan.execute("exit_plan_mode", exit_call("1. do it")) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
@@ -906,9 +898,7 @@ async test "plan transitions publish status facts on the bus" {
   let bus = @devkit.EventBus::EventBus()
   let gate = RecordingGate::{ events: [], }
   bus.subscribe(gate as &@devkit.BusSubscriber)
-  let plan = PlanMode(
-    bus=Some(bus),
-  )
+  let plan = PlanMode(bus=Some(bus))
   // The exemption report is the first event; status ops follow the devkit
   // protocol on the status topic: segment "plan" (priority 10, value
   // "Plan", or "Plan: <name>" once a plan waits) while active, unregister
@@ -1135,6 +1125,74 @@ async test "exit saves the named plan file and removes the draft" {
   assert_true(saved.contains("# Fix: the/bug v2"))
   assert_true(saved.contains("1. step"))
   assert_false(@workspace.WorkspaceFs::exists(fs, ".cetas/plan/cetas-1.md"))
+}
+
+///|
+async test "review-wired exit saves the plan file at submission, even on dismiss" {
+  let fs = MemoryFs::MemoryFs()
+  let review = ScriptedReview::{ decision: Dismiss, asked: 0, }
+  let plan = PlanMode(
+    review=Some(review as &PlanReviewSource),
+    fs=Some(fs as &@workspace.WorkspaceFs),
+    session_name="cetas-1",
+  )
+  plan.start()
+  match
+    plan.execute(
+      "exit_plan_mode",
+      tk_call_with_args(
+        "exit_plan_mode",
+        Json::object({
+          "name": Json::string("risky idea"),
+          "plan": Json::string("1. step"),
+        }),
+      ),
+    ) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+      assert_true(content.contains("Plan dismissed by the user"))
+      assert_true(
+        content.contains("Saved to .cetas/plan/risky-idea_cetas-1.md"),
+      )
+    }
+    _ => fail("expected the dismiss outcome")
+  }
+  // The named plan landed on disk even though the verdict was dismiss.
+  let saved = @workspace.WorkspaceFs::read_file(
+    fs, ".cetas/plan/risky-idea_cetas-1.md",
+  )
+  assert_true(saved.contains("# risky idea"))
+  assert_true(saved.contains("1. step"))
+  assert_false(@workspace.WorkspaceFs::exists(fs, ".cetas/plan/cetas-1.md"))
+}
+
+///|
+async test "a failed review still leaves the submitted plan on disk" {
+  let fs = MemoryFs::MemoryFs()
+  let review = FailingReview::{ asked: 0, }
+  let plan = PlanMode(
+    review=Some(review as &PlanReviewSource),
+    fs=Some(fs as &@workspace.WorkspaceFs),
+    session_name="cetas-1",
+  )
+  plan.start()
+  match
+    plan.execute(
+      "exit_plan_mode",
+      tk_call_with_args(
+        "exit_plan_mode",
+        Json::object({
+          "name": Json::string("pending idea"),
+          "plan": Json::string("1. step"),
+        }),
+      ),
+    ) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("plan review failed"))
+    _ => fail("expected the review-failed outcome")
+  }
+  assert_true(
+    @workspace.WorkspaceFs::exists(fs, ".cetas/plan/pending-idea_cetas-1.md"),
+  )
 }
 
 ///|
