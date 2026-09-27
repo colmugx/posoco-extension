@@ -140,6 +140,7 @@ pub extend JsonlSessionStore with @posoco.SessionStore::{
   append_messages,
   load,
   truncate,
+  checkpoint,
 }
 
 ///|

@@ -41,6 +41,7 @@ pub(all) struct JsonlSessionStore {
 }
 pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @posoco-devkit.EventBus?) -> Self
 pub async fn JsonlSessionStore::append_messages(Self, String, Int, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
+pub async fn JsonlSessionStore::checkpoint(Self, String, @port.SessionCheckpoint) -> Unit raise @error.SessionError
 pub fn JsonlSessionStore::commands(Self) -> Array[@port.CommandDef]
 pub fn JsonlSessionStore::extension_id(Self) -> String
 pub async fn JsonlSessionStore::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
