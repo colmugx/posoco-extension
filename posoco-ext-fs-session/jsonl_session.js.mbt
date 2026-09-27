@@ -180,6 +180,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
 
 ///|
 pub extend JsonlSessionStore with @posoco.SessionStore::{
+  checkpoint,
   save,
   append_messages,
   load,
