@@ -4,13 +4,17 @@
 // spawn envelope.
 
 ///|
-pub fn HerdrDelegate::detect(cwd~ : String) -> HerdrDelegate? {
+pub fn HerdrDelegate::detect(
+  cwd~ : String,
+  parent_yolo? : (() -> Bool)? = None,
+) -> HerdrDelegate? {
   herdr_delegate_gate(
     herdr_env("HERDR_ENV"),
     herdr_env("HERDR_PANE_ID"),
     herdr_env("HERDR_BIN_PATH"),
     herdr_env("CETAS_HEADLESS_BIN"),
     cwd,
+    parent_yolo~,
   )
 }
 

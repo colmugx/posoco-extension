@@ -3,13 +3,17 @@
 // @env; execution spawns the herdr CLI through @process.
 
 ///|
-pub fn HerdrDelegate::detect(cwd~ : String) -> HerdrDelegate? {
+pub fn HerdrDelegate::detect(
+  cwd~ : String,
+  parent_yolo? : (() -> Bool)? = None,
+) -> HerdrDelegate? {
   herdr_delegate_gate(
     @env.get_env_var("HERDR_ENV"),
     @env.get_env_var("HERDR_PANE_ID"),
     @env.get_env_var("HERDR_BIN_PATH"),
     @env.get_env_var("CETAS_HEADLESS_BIN"),
     cwd,
+    parent_yolo~,
   )
 }
 

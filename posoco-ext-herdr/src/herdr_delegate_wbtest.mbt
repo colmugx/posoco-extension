@@ -58,6 +58,7 @@ fn delegate_task_call(task : String) -> @posoco.ToolCall {
 ///|
 fn test_delegate(
   background_run? : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
+  parent_yolo? : (() -> Bool)? = None,
 ) -> HerdrDelegate {
   HerdrDelegate::HerdrDelegate(
     pane="1-1",
@@ -65,6 +66,7 @@ fn test_delegate(
     headless_bin="cetas-headless",
     cwd="/tmp/ws",
     background_run~,
+    parent_yolo~,
   )
 }
 
@@ -118,7 +120,9 @@ test "delegate tooldef shape" {
   assert_true(def.description.contains("depth-1 leaves"))
   assert_true(def.description.contains("child_session"))
   assert_true(def.description.contains("success, failure"))
-  assert_true(def.description.contains("readonly (default)"))
+  assert_true(
+    def.description.contains("Omitted permission follows the parent posture"),
+  )
   assert_true(def.description.contains("--yolo"))
   assert_true(
     def.description.contains("background always starts a fresh child"),
@@ -137,6 +141,7 @@ test "delegate system prompt preserves resident strategy compactly" {
   assert_true(first.contains("independent parallelizable"))
   assert_true(first.contains("permission=readonly"))
   assert_true(first.contains("--yolo"))
+  assert_true(first.contains("Omitted permission follows the parent"))
   assert_true(first.contains("readback can truncate"))
   assert_true(first.contains("MUST reuse the returned child_session"))
   assert_true(first.contains("One work-stream = one child session"))
@@ -207,6 +212,102 @@ async test "delegate happy path returns the answer with peer_pane and child_sess
     "herdr", "pane", "read", "1-3", "--source", "recent-unwrapped",
   ])
   assert_eq(fake.received[4], ["herdr", "pane", "close", "1-3"])
+}
+
+///|
+async test "delegate omitted permission defaults to yolo under a yolo parent" {
+  let delegate = test_delegate(parent_yolo=Some(fn() { true }))
+  let fake : FakeHerdrCli = {
+    results: happy_script("sess-yolo"),
+    index: 0,
+    received: [],
+  }
+  let outcome = delegate.execute_delegate_impl(
+    fake,
+    delegate_task_call("probe"),
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(..) => ()
+    other => fail("expected Success, got " + other.to_string())
+  }
+  let command_line = fake.received[1][4]
+  assert_true(command_line.contains("--yolo"))
+  assert_false(command_line.contains("--permission"))
+}
+
+///|
+async test "delegate explicit readonly overrides a yolo parent" {
+  let delegate = test_delegate(parent_yolo=Some(fn() { true }))
+  let fake : FakeHerdrCli = {
+    results: happy_script("sess-ro"),
+    index: 0,
+    received: [],
+  }
+  let outcome = delegate.execute_delegate_impl(
+    fake,
+    delegate_call([
+      ("task", Json::string("probe")),
+      ("permission", Json::string("readonly")),
+    ]),
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(..) => ()
+    other => fail("expected Success, got " + other.to_string())
+  }
+  let command_line = fake.received[1][4]
+  assert_true(command_line.contains("--permission readonly"))
+  assert_false(command_line.contains("--yolo"))
+}
+
+///|
+async test "delegate non-yolo parent keeps the readonly default" {
+  let delegate = test_delegate(parent_yolo=Some(fn() { false }))
+  let fake : FakeHerdrCli = {
+    results: happy_script("sess-def"),
+    index: 0,
+    received: [],
+  }
+  let outcome = delegate.execute_delegate_impl(
+    fake,
+    delegate_task_call("probe"),
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(..) => ()
+    other => fail("expected Success, got " + other.to_string())
+  }
+  let command_line = fake.received[1][4]
+  assert_true(command_line.contains("--permission readonly"))
+  assert_false(command_line.contains("--yolo"))
+}
+
+///|
+test "parse derives the parent-posture permission default" {
+  let delegate = test_delegate(parent_yolo=Some(fn() { true }))
+  let parsed = extract_delegate_args(
+    Json::object(
+      Map::from_array([
+        ("task", Json::string("t")),
+        ("background", Json::boolean(true)),
+      ]),
+    ),
+    HerdrDelegate::omitted_permission_default(delegate),
+  )
+  match parsed {
+    Ok(args) => {
+      assert_true(args.background)
+      assert_eq(args.permission, "write")
+    }
+    Err(message) => fail("background parse failed: " + message)
+  }
+  let plain = test_delegate()
+  match
+    extract_delegate_args(
+      Json::object(Map::from_array([("task", Json::string("t"))])),
+      HerdrDelegate::omitted_permission_default(plain),
+    ) {
+    Ok(args) => assert_eq(args.permission, "readonly")
+    Err(message) => fail("plain parse failed: " + message)
+  }
 }
 
 ///|

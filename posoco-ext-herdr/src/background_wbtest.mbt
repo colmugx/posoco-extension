@@ -76,6 +76,7 @@ test "background alone parses; background with session is refused at parse" {
           ("background", Json::boolean(true)),
         ]),
       ),
+      "readonly",
     ) {
     Ok(args) => assert_true(args.background)
     Err(message) => fail("background alone must parse, got: " + message)
@@ -89,6 +90,7 @@ test "background alone parses; background with session is refused at parse" {
           ("session", Json::string("sess-1")),
         ]),
       ),
+      "readonly",
     ) {
     Err(message) => {
       assert_true(message.contains("fresh child"))
@@ -104,6 +106,7 @@ test "background alone parses; background with session is refused at parse" {
           ("background", Json::string("yes")),
         ]),
       ),
+      "readonly",
     ) {
     Err(message) =>
       assert_true(message.contains("'background' must be a boolean"))

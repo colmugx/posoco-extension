@@ -28,6 +28,10 @@ pub struct HerdrDelegate {
   /// Slot management, the core timeout margin, and outcome projection stay
   /// in background_execute. Production leaves it None.
   priv background_run : (async (HerdrDelegate) -> @posoco.ToolOutcome)?
+  /// Live parent-posture probe, injected by the host: when it answers true
+  /// the omitted `permission` argument defaults to full-permission yolo
+  /// instead of readonly. None keeps the historical readonly default.
+  parent_yolo : (() -> Bool)?
 }
 
 ///|
@@ -37,6 +41,7 @@ pub fn HerdrDelegate::HerdrDelegate(
   headless_bin~ : String,
   cwd~ : String,
   background_run? : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
+  parent_yolo? : (() -> Bool)? = None,
 ) -> HerdrDelegate {
   {
     pane,
@@ -47,6 +52,7 @@ pub fn HerdrDelegate::HerdrDelegate(
     tasks: None,
     session: None,
     background_run,
+    parent_yolo,
   }
 }
 
@@ -68,6 +74,7 @@ fn herdr_delegate_gate(
   bin : String?,
   headless_bin : String?,
   cwd : String,
+  parent_yolo? : (() -> Bool)? = None,
 ) -> HerdrDelegate? {
   match herdr_gate(marker, pane, bin) {
     Some(cfg) => {
@@ -81,6 +88,7 @@ fn herdr_delegate_gate(
           bin=cfg.bin,
           headless_bin=headless,
           cwd~,
+          parent_yolo~,
         ),
       )
     }
@@ -92,7 +100,7 @@ fn herdr_delegate_gate(
 fn herdr_delegate_tooldef() -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked("herdr_delegate"),
-    description: "Delegate one task to a fresh cetas-headless agent in a visible herdr pane: splits a new pane beside this one, launches cetas-headless there with the task, blocks until its completion marker or the timeout, then reads the pane back and returns the headless agent's answer as the tool result. 'task' is the user-position slot — untrusted content may flow there, and it must be a single line. Delegated agents are depth-1 leaves: they never receive delegation tools, so they cannot delegate further. The result footer carries 'peer_pane:' (the child's herdr pane id) and, when captured, 'child_session:' (returned on success, failure, and best-effort timeout; pass it back via 'session' to continue that child). 'permission' controls the child: readonly (default) runs cetas-headless --permission readonly (it cannot write); write runs it with --yolo (unattended full permission). 'model'/'effort'/'session' forward to cetas-headless; 'timeout_ms' bounds the wait (default 1800000 = 30 minutes). 'direction' is the split direction (default right, or down); 'close_pane' (default true) closes the child pane after a successful run — it never closes on failure or timeout, since a timed-out child may still be running. Long-running: pass background: true to get an immediate receipt (delegation_id) and receive the child's result as a follow-up turn — background always starts a fresh child and refuses 'session', since a timed-out child may still be running in its pane and resume stays foreground-only. Strategy: batch independent subtasks as multiple herdr_delegate calls in one response — they run as parallel panes (concurrency cap 4); send a readonly scout first and reserve write for tasks that must modify the workspace; tell children to write long artifacts to workspace files, since pane readback can truncate, and iterate on a child by passing its child_session back via 'session' — related tasks MUST reuse the same child session (one work-stream = one child session, never a fresh session per step; child_session is returned even on failure and timeout). Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child.",
+    description: "Delegate one task to a fresh cetas-headless agent in a visible herdr pane: splits a new pane beside this one, launches cetas-headless there with the task, blocks until its completion marker or the timeout, then reads the pane back and returns the headless agent's answer as the tool result. 'task' is the user-position slot — untrusted content may flow there, and it must be a single line. Delegated agents are depth-1 leaves: they never receive delegation tools, so they cannot delegate further. The result footer carries 'peer_pane:' (the child's herdr pane id) and, when captured, 'child_session:' (returned on success, failure, and best-effort timeout; pass it back via 'session' to continue that child). 'permission' controls the child: readonly runs cetas-headless --permission readonly (it cannot write); write runs it with --yolo (unattended full permission). Omitted permission follows the parent posture: readonly normally, yolo full permission while the parent session runs in yolo mode; an explicit permission always wins. 'model'/'effort'/'session' forward to cetas-headless; 'timeout_ms' bounds the wait (default 1800000 = 30 minutes). 'direction' is the split direction (default right, or down); 'close_pane' (default true) closes the child pane after a successful run — it never closes on failure or timeout, since a timed-out child may still be running. Long-running: pass background: true to get an immediate receipt (delegation_id) and receive the child's result as a follow-up turn — background always starts a fresh child and refuses 'session', since a timed-out child may still be running in its pane and resume stays foreground-only. Strategy: batch independent subtasks as multiple herdr_delegate calls in one response — they run as parallel panes (concurrency cap 4); send a readonly scout first and reserve write for tasks that must modify the workspace; tell children to write long artifacts to workspace files, since pane readback can truncate, and iterate on a child by passing its child_session back via 'session' — related tasks MUST reuse the same child session (one work-stream = one child session, never a fresh session per step; child_session is returned even on failure and timeout). Omit 'session' for a new conversation — never pass an empty string; pass 'session' only to continue an existing child.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
@@ -105,9 +113,8 @@ fn herdr_delegate_tooldef() -> @posoco.ToolDef {
         "permission": Json::object({
           "type": Json::string("string"),
           "enum": Json::array([Json::string("readonly"), Json::string("write")]),
-          "default": Json::string("readonly"),
           "description": Json::string(
-            "readonly (default) launches headless with --permission readonly (cannot write); write launches with --yolo (unattended full permission)",
+            "readonly launches headless --permission readonly (cannot write); write launches with --yolo (unattended full permission). Omitted: readonly by default, yolo full permission while the parent session runs in yolo mode; an explicit permission always wins",
           ),
         }),
         "model": Json::object({
@@ -207,7 +214,12 @@ priv struct HerdrDelegateArgs {
 ///|
 /// Extract the remaining tool-call arguments. Validation failures return a
 /// model-visible fix hint; the caller turns them into a ToolReportedError.
-fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
+/// `default_permission` is the omitted-argument default (parent-posture
+/// derived); an explicit permission always wins.
+fn extract_delegate_args(
+  args : Json,
+  default_permission : String,
+) -> Result[HerdrDelegateArgs, String] {
   let obj = match args {
     Object(obj) => obj
     _ => return Err("herdr_delegate: invalid arguments; expected a JSON object")
@@ -230,7 +242,7 @@ fn extract_delegate_args(args : Json) -> Result[HerdrDelegateArgs, String] {
       return Err(
         "herdr_delegate: 'permission' must be \"readonly\" or \"write\", got \"\{other}\"",
       )
-    None | Some(Null) => "readonly"
+    None | Some(Null) => default_permission
     Some(_) => return Err("herdr_delegate: 'permission' must be a string")
   }
   // Empty strings normalize to None: an omitted flag means a new conversation
@@ -308,6 +320,16 @@ fn herdr_delegate_error(content : String) -> @posoco.ToolOutcome {
 }
 
 ///|
+/// The omitted-permission default: full-permission yolo while the parent
+/// session runs in yolo mode, readonly otherwise.
+fn HerdrDelegate::omitted_permission_default(self : HerdrDelegate) -> String {
+  match self.parent_yolo {
+    Some(is_yolo) => if is_yolo() { "write" } else { "readonly" }
+    None => "readonly"
+  }
+}
+
+///|
 /// The resumable-session line appended to success results and failure/timeout
 /// errors alike: the headless session id prints before the turn, so even a
 /// failed or timed-out run left a session the parent can resume.
@@ -342,7 +364,11 @@ async fn HerdrDelegate::execute_delegate_impl(
       "herdr_delegate: delegate concurrency limit reached (\{herdr_delegate_limit} active) — retry when earlier delegates finish",
     )
   }
-  let args = match extract_delegate_args(call.arguments) {
+  let args = match
+    extract_delegate_args(
+      call.arguments,
+      HerdrDelegate::omitted_permission_default(self),
+    ) {
     Ok(args) => args
     Err(message) => return herdr_delegate_error(message)
   }
@@ -602,7 +628,7 @@ pub impl @posoco.SystemPromptContributor for HerdrDelegate with fn system_prompt
 ) -> String {
   "Herdr pane \{self.pane}: `herdr_delegate` runs visible depth-1 cetas-headless children; children cannot delegate.\n" +
   "- Use it for independent parallelizable subtasks, process isolation, or long work; multiple calls in one response run in parallel (cap 4).\n" +
-  "- Prefer permission=readonly for reconnaissance. write uses --yolo; use it only when the child must modify the workspace.\n" +
+  "- Prefer permission=readonly for reconnaissance. write uses --yolo; use it only when the child must modify the workspace. Omitted permission follows the parent: readonly normally, yolo while the parent runs in yolo mode.\n" +
   "- Pane readback can truncate; have children write important/long artifacts to workspace files.\n" +
   "- Related/follow-up work MUST reuse the returned child_session, including after failure/timeout. One work-stream = one child session. Omit session only for a new conversation; never pass an empty session."
 }
