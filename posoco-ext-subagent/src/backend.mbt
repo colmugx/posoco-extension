@@ -477,6 +477,22 @@ async fn SubagentTools::spawn(
           // rather than failed, and core's timeout classification survives
           // the child adapter's error masking. Without a cancellation the
           // pause is a no-op yield and the original error propagates.
+          // Before the checkpoint: a cancelled coroutine must still emit its
+          // death declaration. Both cancellation shapes classify as
+          // "cancelled" — `PipelineAborted` (foreground wave cancellation)
+          // and `Cancelled` (core task timeout / host cancel); the delivery
+          // point records the authoritative timed_out distinction.
+          let state = match error {
+            @posoco.AgentError::PipelineAborted(_)
+            | @posoco.AgentError::Cancelled(_) => "cancelled"
+            _ => "failed"
+          }
+          self.emit_exit(
+            kind=spec.kind_name,
+            child_session=spec.session_id,
+            state_word=state,
+            detail=error.to_string(),
+          )
           @async.pause()
           raise error
         }
@@ -486,6 +502,12 @@ async fn SubagentTools::spawn(
       // without a pending cancellation it is a no-op yield.
       @async.pause()
       self.global_slots.release()
+      self.emit_exit(
+        kind=spec.kind_name,
+        child_session=spec.session_id,
+        state_word="completed",
+        detail=assistant_text(result.message),
+      )
       result.message
     }
     match

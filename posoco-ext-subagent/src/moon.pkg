@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-kit-subagent" @kit,
   "colmugx/posoco-ext-kind" @kind,
   "colmugx/posoco-ext-permission" @permission,

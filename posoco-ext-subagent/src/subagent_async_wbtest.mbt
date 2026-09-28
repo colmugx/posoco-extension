@@ -1106,3 +1106,249 @@ async test "subscribe_receives_spawned_and_terminal_events" {
   assert_eq(spawned, 1)
   assert_eq(terminal, 1)
 }
+
+///|
+/// Child model that always fails the turn: drives the runner's error path.
+priv struct FailingModel {
+  reason : String
+}
+
+///|
+fn FailingModel::FailingModel(reason~ : String) -> FailingModel {
+  { reason, }
+}
+
+///|
+impl @posoco.ModelPort for FailingModel with fn chat(
+  self : FailingModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  raise @posoco.ModelError::Transport(self.reason)
+}
+
+///|
+impl @posoco.ModelPort for FailingModel with fn compact(
+  _self : FailingModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  raise @posoco.ModelError::ResponseParse(
+    "FailingModel does not implement compact",
+  )
+}
+
+///|
+impl @posoco.ModelPort for FailingModel with fn provider_config(
+  _self : FailingModel,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
+}
+
+///|
+/// The exit declaration fires at true task exit, before any delivery: after
+/// the child has died but before turn 2, the subscription already saw
+/// `background_exited` while the registry still says "running" and no
+/// authoritative `background_terminal` has fired.
+async test "background_exit_declares_completed_at_task_exit" {
+  let events : Array[@kit.SubagentEvent] = []
+  let composer = FakeComposer::FakeComposer(response_text="child done")
+  let tools = test_tools(composer=composer as &ChildComposer, observers=[
+    fn(event) { events.push(event) },
+  ])
+  let model = BgParentModel::BgParentModel(
+    agent_arguments=args_object([
+      ("task", Json::string("dig")),
+      ("background", Json::boolean(true)),
+    ]),
+    mid_sleep_ms=0,
+  )
+  let parent = build_parent_agent(
+    tools,
+    model as &@posoco.ModelPort,
+    @posoco.RecordingSessionStore::RecordingSessionStore(),
+  )
+  let _ = parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go dig"), "parent_bg")
+    @async.sleep(300)
+    // Child has exited; the declaration is already out, the authoritative
+    // terminal is not (delivery happens at turn 2).
+    let mut exited_at = -1
+    let mut terminal_at = -1
+    for i, event in events {
+      match event.event {
+        @posoco.TurnEvent::Custom(label~, data~, ..) => {
+          if label == "background_exited" {
+            exited_at = i
+            match data {
+              Json::Object(fields) =>
+                match fields.get("state") {
+                  Some(Json::String("completed")) => ()
+                  _ => fail("expected exited state completed")
+                }
+              _ => fail("expected exited event data object")
+            }
+          }
+          if label == "background_terminal" {
+            terminal_at = i
+          }
+        }
+        _ => ()
+      }
+    }
+    assert_true(exited_at >= 0)
+    assert_true(terminal_at < 0)
+    assert_eq(tools.background_children(), [("subagent-1", "running")])
+    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+  })
+  let mut exited = 0
+  let mut terminal = 0
+  let mut spawned = 0
+  for event in events {
+    match event.event {
+      @posoco.TurnEvent::Custom(label~, ..) => {
+        if label == "background_spawned" {
+          spawned += 1
+        }
+        if label == "background_exited" {
+          exited += 1
+        }
+        if label == "background_terminal" {
+          terminal += 1
+        }
+      }
+      _ => ()
+    }
+  }
+  assert_eq(spawned, 1)
+  assert_eq(exited, 1)
+  assert_eq(terminal, 1)
+}
+
+///|
+/// A child whose model explodes declares `failed` at exit; the delivery
+/// point later records the authoritative failed terminal.
+async test "background_exit_declares_failed_on_child_error" {
+  let events : Array[@kit.SubagentEvent] = []
+  let composer = FakeComposer::FakeComposer(
+    response_text="never",
+    slow_model=Some(
+      FailingModel::FailingModel(reason="child model exploded")
+      as &@posoco.ModelPort,
+    ),
+  )
+  let tools = test_tools(composer=composer as &ChildComposer, observers=[
+    fn(event) { events.push(event) },
+  ])
+  let model = BgParentModel::BgParentModel(
+    agent_arguments=args_object([
+      ("task", Json::string("doomed")),
+      ("background", Json::boolean(true)),
+    ]),
+    mid_sleep_ms=0,
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  let _ = parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("start"), "parent_bg")
+    @async.sleep(300)
+    let mut failed_exit = false
+    for event in events {
+      match event.event {
+        @posoco.TurnEvent::Custom(label~, data~, ..) =>
+          if label == "background_exited" {
+            match data {
+              Json::Object(fields) =>
+                match fields.get("state") {
+                  Some(Json::String("failed")) => failed_exit = true
+                  _ => fail("expected exited state failed")
+                }
+              _ => fail("expected exited event data object")
+            }
+          }
+        _ => ()
+      }
+    }
+    assert_true(failed_exit)
+    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+  })
+  match tools.registry.get("subagent-1") {
+    Some(record) =>
+      match record.state {
+        Done("failed", summary) =>
+          assert_true(summary.contains("child model exploded"))
+        _ => fail("expected failed registry state for subagent-1")
+      }
+    None => fail("expected a registry record for subagent-1")
+  }
+}
+
+///|
+/// Core's timeout cancels the runner, so the exit declaration can only say
+/// "cancelled" (best-effort); the delivery point records the authoritative
+/// "timed_out". This gap is documented, not a bug.
+async test "background_timeout_exits_cancelled_then_records_timed_out" {
+  let events : Array[@kit.SubagentEvent] = []
+  let slow = SlowModel(delay_ms=60000)
+  let composer = FakeComposer::FakeComposer(
+    response_text="never",
+    slow_model=Some(slow as &@posoco.ModelPort),
+  )
+  let tools = test_tools(composer=composer as &ChildComposer, observers=[
+    fn(event) { events.push(event) },
+  ])
+  let model = BgParentModel::BgParentModel(
+    agent_arguments=args_object([
+      ("task", Json::string("slow job")),
+      ("background", Json::boolean(true)),
+      ("timeout_ms", Json::number(100.0)),
+    ]),
+    mid_sleep_ms=0,
+  )
+  let parent = build_parent_agent(
+    tools,
+    model as &@posoco.ModelPort,
+    @posoco.RecordingSessionStore::RecordingSessionStore(),
+  )
+  let _ = parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("start slow"), "parent_bg")
+    @async.sleep(500)
+    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg")
+  })
+  let mut exited_state = ""
+  let mut terminal_state = ""
+  for event in events {
+    match event.event {
+      @posoco.TurnEvent::Custom(label~, data~, ..) => {
+        if label == "background_exited" {
+          match data {
+            Json::Object(fields) =>
+              match fields.get("state") {
+                Some(Json::String(state)) => exited_state = state
+                _ => fail("expected exited event state")
+              }
+            _ => fail("expected exited event data object")
+          }
+        }
+        if label == "background_terminal" {
+          match data {
+            Json::Object(fields) =>
+              match fields.get("state") {
+                Some(Json::String(state)) => terminal_state = state
+                _ => fail("expected terminal event state")
+              }
+            _ => fail("expected terminal event data object")
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+  assert_eq(exited_state, "cancelled")
+  assert_eq(terminal_state, "timed_out")
+}

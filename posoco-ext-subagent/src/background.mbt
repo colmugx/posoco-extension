@@ -4,8 +4,11 @@
 /// outcomes. The extension owns no delivery machinery — core routes every
 /// background terminal into the parent session's inbox, and the result
 /// surfaces as a user message in the session's next ordinary turn. The
-/// extension's remaining job is observation at the delivery point
-/// (`before_model`) plus the subscription events hosts listen for.
+/// extension's jobs are the declaration-only `background_exited` event at
+/// true task exit (hosts/observers learn a death immediately; the runner
+/// does no bookkeeping there), observation at the delivery point
+/// (`before_model`) plus the authoritative `background_terminal` event
+/// hosts listen for.
 
 ///|
 /// Registry entry state for one spawned child: `Running` from spawn until
@@ -80,6 +83,40 @@ fn SubagentTools::emit_custom(
   for callback in self.observers {
     callback(event)
   }
+}
+
+///|
+/// Bound the best-effort exit detail; the authoritative full summary travels
+/// with the delivered outcome envelope.
+const EXIT_DETAIL_CHARS = 2_000
+
+///|
+/// Declaration-only broadcast at true task exit: hosts and observers learn a
+/// background child's death immediately instead of at the next delivery scan.
+/// The state word is best-effort (`"completed"` / `"failed"` /
+/// `"cancelled"` — a core-side timeout surfaces here as `"cancelled"`
+/// because the timer lives outside the runner); the authoritative
+/// `background_terminal` event with the final classification and summary
+/// still fires exactly once at the delivery point. No registry bookkeeping
+/// happens here (ruling 4: cancellation mid-run cannot guarantee it).
+fn SubagentTools::emit_exit(
+  self : SubagentTools,
+  kind~ : String,
+  child_session~ : String,
+  state_word~ : String,
+  detail~ : String,
+) -> Unit {
+  self.emit_custom(
+    child_session,
+    kind,
+    "background_exited",
+    Json::object({
+      "child_session": Json::string(child_session),
+      "kind": Json::string(kind),
+      "state": Json::string(state_word),
+      "detail": Json::string(@devkit.truncate_chars(detail, EXIT_DETAIL_CHARS)),
+    }),
+  )
 }
 
 ///|
