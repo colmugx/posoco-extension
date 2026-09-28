@@ -5,7 +5,10 @@
 // `rg --version` and checking the banner, so a grep shim on PATH (observed
 // in the wild) is rejected rather than failing on rg-only flags.
 // Tier 2 — an in-process walker over node:fs with the same semantics as the
-// native engine (literal match, hidden/ignore pruning, binary skip).
+// native engine (literal match, hidden/ignore pruning, binary skip). The
+// walker's node:fs members are bound with `#module` and injected into the
+// inline-JS envelopes as values (pattern follows posoco-ext-workspace
+// fs_port.js.mbt / moonbitlang/x/fs/fs_js.mbt).
 //
 // Pinned rg semantics for cross-target parity with the walker:
 // --no-ignore + explicit --glob excludes for the ignore list (no .gitignore
@@ -222,28 +225,51 @@ impl GrepSearcher for JsRgSearcher with fn search(
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-extern "js" fn js_readdir_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
-  #|   try { return JSON.stringify({ ok: true, entries: fs.readdirSync(path) }); }
+/// Opaque node Stats handle; only the inline-JS envelope touches it.
+#external
+priv type FsStats
+
+///|
+#module("node:fs")
+extern "js" fn fs_readdir_sync(path : String) -> FixedArray[String] = "readdirSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_stat_sync(path : String) -> FsStats = "statSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_read_text_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+extern "js" fn js_readdir_envelope(
+  readdir : (String) -> FixedArray[String],
+  path : String,
+) -> String =
+  #| (readdir, path) => {
+  #|   try { return JSON.stringify({ ok: true, entries: readdir(path) }); }
   #|   catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
-extern "js" fn js_stat_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
+extern "js" fn js_stat_envelope(
+  stat : (String) -> FsStats,
+  path : String,
+) -> String =
+  #| (stat, path) => {
   #|   try {
-  #|     const st = fs.statSync(path);
+  #|     const st = stat(path);
   #|     return JSON.stringify({ ok: true, dir: st.isDirectory() });
   #|   } catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
-extern "js" fn js_read_file_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
-  #|   try { return JSON.stringify({ ok: true, text: fs.readFileSync(path, "utf8") }); }
+extern "js" fn js_read_file_envelope(
+  read_text : (String, String) -> String,
+  path : String,
+) -> String =
+  #| (readText, path) => {
+  #|   try { return JSON.stringify({ ok: true, text: readText(path, "utf8") }); }
   #|   catch { return JSON.stringify({ ok: false }); }
   #| }
 
@@ -251,7 +277,7 @@ extern "js" fn js_read_file_envelope(path : String) -> String =
 /// Decode a `{ok, entries}` envelope; None means the directory could not be
 /// read.
 fn js_readdir_entries(path : String) -> Array[String]? {
-  let envelope : Json = @json.parse(js_readdir_envelope(path)) catch {
+  let envelope : Json = @json.parse(js_readdir_envelope(fs_readdir_sync, path)) catch {
     _ => return None
   }
   let fields = match envelope {
@@ -276,7 +302,7 @@ fn js_readdir_entries(path : String) -> Array[String]? {
 ///|
 /// Decode a `{ok, dir}` envelope; None means the stat failed.
 fn js_is_directory(path : String) -> Bool? {
-  let envelope : Json = @json.parse(js_stat_envelope(path)) catch {
+  let envelope : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
     _ => return None
   }
   let fields = match envelope {
@@ -293,7 +319,9 @@ fn js_is_directory(path : String) -> Bool? {
 ///|
 /// Decode a `{ok, text}` envelope; None means the read failed.
 fn js_read_file_text(path : String) -> String? {
-  let envelope : Json = @json.parse(js_read_file_envelope(path)) catch {
+  let envelope : Json = @json.parse(
+    js_read_file_envelope(fs_read_text_sync, path),
+  ) catch {
     _ => return None
   }
   let fields = match envelope {
