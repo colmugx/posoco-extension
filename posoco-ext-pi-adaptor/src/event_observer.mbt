@@ -105,10 +105,37 @@ fn pi_stop_reason(finish : @kernel.FinishReason) -> String {
 fn outcome_text(outcome : @kernel.ToolOutcome) -> String {
   match outcome {
     @kernel.Success(content~, ..) => content
+    @kernel.SuccessWithAttachments(content~, ..) => content
     @kernel.ToolReportedError(content~, ..) => content
     @kernel.RuntimeFailure(message~, ..) => message
     @kernel.NotExecuted(..) => "not executed"
   }
+}
+
+///|
+/// pi projection of one terminal tool outcome: the end marker plus the
+/// transcript-shaped tool message for the run_messages / turn_end payloads.
+fn PiEventObserver::emit_tool_end(
+  self : PiEventObserver,
+  call : @kernel.ToolCall,
+  outcome : @kernel.ToolOutcome,
+) -> Unit {
+  self.emit(
+    "tool_execution_end",
+    Json::object(
+      Map::from_array([
+        ("toolCallId", Json::string(call.call_id.to_string())),
+        ("toolName", Json::string(call.name.to_string())),
+        ("result", Json::string(outcome_text(outcome))),
+        ("isError", Json::boolean(outcome.is_failure())),
+      ]),
+    ),
+  )
+  let tool_result = pi_message_json(
+    @kernel.ToolMessage(call_id=call.call_id, tool_name=call.name, outcome~),
+  )
+  self.turn_tool_results.push(tool_result)
+  self.run_messages.push(tool_result)
 }
 
 ///|
@@ -170,20 +197,29 @@ fn pi_message_json(msg : @kernel.Message) -> Json {
         ]),
       )
     }
-    @kernel.ToolMessage(call_id~, tool_name~, outcome~) =>
+    @kernel.ToolMessage(call_id~, tool_name~, outcome~) => {
+      let content : Array[Json] = [
+        pi_content_json(@kernel.Text(outcome_text(outcome))),
+      ]
+      // Attachment blocks ride the toolResult content as pi parts.
+      match outcome {
+        @kernel.SuccessWithAttachments(attachments~, ..) =>
+          for block in attachments {
+            content.push(pi_content_json(block))
+          }
+        _ => ()
+      }
       Json::object(
         Map::from_array([
           ("role", Json::string("toolResult")),
           ("toolCallId", Json::string(call_id.to_string())),
           ("toolName", Json::string(tool_name.to_string())),
-          (
-            "content",
-            Json::array([pi_content_json(@kernel.Text(outcome_text(outcome)))]),
-          ),
+          ("content", Json::array(content)),
           ("isError", Json::boolean(outcome.is_failure())),
           ("timestamp", Json::number(js_now_ms())),
         ]),
       )
+    }
   }
 }
 
@@ -332,28 +368,48 @@ pub impl @posoco.Observer for PiEventObserver with fn on_event_at(
           ]),
         ),
       )
-    @posoco.TurnEvent::ToolCallResult(call~, result~, is_error~) => {
+    @posoco.TurnEvent::ToolCallSucceeded(
+      call~,
+      content~,
+      structured~,
+      attachments~
+    ) =>
+      if attachments.is_empty() {
+        self.emit_tool_end(call, @kernel.Success(content~, structured~))
+      } else {
+        self.emit_tool_end(
+          call,
+          @kernel.SuccessWithAttachments(content~, structured~, attachments~),
+        )
+      }
+    @posoco.TurnEvent::ToolCallFailed(call~, failure~) => {
+      let outcome : @kernel.ToolOutcome = match failure {
+        @kernel.ReportedError(content~, structured~) =>
+          @kernel.ToolReportedError(content~, structured~)
+        @kernel.Runtime(category~, message~) =>
+          @kernel.RuntimeFailure(error_category=category, message~)
+      }
+      self.emit_tool_end(call, outcome)
+    }
+    @posoco.TurnEvent::ToolCallRejected(call~, reason~) =>
+      self.emit_tool_end(
+        call,
+        @kernel.NotExecuted(reason~, original_call_id=call.call_id),
+      )
+    @posoco.TurnEvent::ToolCallAbandoned(call~, reason~) =>
+      // No outcome exists and the transcript never receives a tool message
+      // for this call, so only the pi end marker is emitted.
       self.emit(
         "tool_execution_end",
         Json::object(
           Map::from_array([
             ("toolCallId", Json::string(call.call_id.to_string())),
             ("toolName", Json::string(call.name.to_string())),
-            ("result", Json::string(outcome_text(result))),
-            ("isError", Json::boolean(is_error)),
+            ("result", Json::string(reason)),
+            ("isError", Json::boolean(true)),
           ]),
         ),
       )
-      let tool_result = pi_message_json(
-        @kernel.ToolMessage(
-          call_id=call.call_id,
-          tool_name=call.name,
-          outcome=result,
-        ),
-      )
-      self.turn_tool_results.push(tool_result)
-      self.run_messages.push(tool_result)
-    }
     @posoco.TurnEvent::TurnCompleted => {
       let message = match self.last_assistant {
         Some(json) => json

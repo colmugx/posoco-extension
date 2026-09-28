@@ -429,6 +429,26 @@ pub fn pi_adaptor_execute_effect_via_runtime(
             ),
           ]),
         ).stringify()
+      @kernel.SuccessWithAttachments(content~, structured~, attachments~) => {
+        let parts : Array[Json] = []
+        for block in attachments {
+          parts.push(pi_content_json(block))
+        }
+        Json::object(
+          Map::from_array([
+            ("kind", Json::string("SuccessWithAttachments")),
+            ("content", Json::string(content)),
+            (
+              "structured",
+              match structured {
+                Some(value) => value
+                None => Json::null()
+              },
+            ),
+            ("attachments", Json::array(parts)),
+          ]),
+        ).stringify()
+      }
       @kernel.ToolReportedError(content~, structured~) =>
         Json::object(
           Map::from_array([

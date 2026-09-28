@@ -83,11 +83,7 @@ async test "event bridge projects posoco turn events into pi handler payloads" {
       usage=None,
     ),
     ToolCallPending(call),
-    ToolCallResult(
-      call~,
-      result=@kernel.Success(content="pong", structured=None),
-      is_error=false,
-    ),
+    ToolCallSucceeded(call~, content="pong", structured=None, attachments=[]),
     TurnCompleted,
   ]
   for event in events {
