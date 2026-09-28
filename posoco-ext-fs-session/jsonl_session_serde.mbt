@@ -170,14 +170,19 @@ fn message_to_json(msg : @posoco.Message) -> Json {
       //   name         ← tool_name
       //   content[0]   ← outcome.content (for Success / ToolReportedError)
       // Other outcome variants serialise their summary as the text content so
-      // the message is still human-readable on disk.
+      // the message is still human-readable on disk. Attachment blocks
+      // (SuccessWithAttachments) follow the text block in the content array;
+      // readers that only take content[0] stay compatible.
       let content_text = outcome_content_text(outcome)
+      let blocks : Array[Json] = [
+        content_to_json(@posoco.Content::Text(content_text)),
+      ]
+      for block in outcome_attachments(outcome) {
+        blocks.push(content_to_json(block))
+      }
       let base = Map::from_array([
         ("role", Json::string("tool")),
-        (
-          "content",
-          Json::array([content_to_json(@posoco.Content::Text(content_text))]),
-        ),
+        ("content", Json::array(blocks)),
         ("tool_call_id", Json::string(call_id.to_string())),
         ("name", Json::string(tool_name.to_string())),
       ])
@@ -200,6 +205,15 @@ fn outcome_content_text(outcome : @posoco.ToolOutcome) -> String {
     @posoco.ToolOutcome::Success(content~, ..) => content
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => content
     other => other.summary()
+  }
+}
+
+///|
+/// Attachment blocks of a successful outcome (empty for everything else).
+fn outcome_attachments(outcome : @posoco.ToolOutcome) -> Array[@posoco.Content] {
+  match outcome {
+    @posoco.ToolOutcome::SuccessWithAttachments(attachments~, ..) => attachments
+    _ => []
   }
 }
 
@@ -312,13 +326,25 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                   Some(Json::String(s)) => s
                   _ => ""
                 }
-                // Best-effort content text for the outcome payload.
-                let content_text = match content.get(0) {
-                  Some(@posoco.Content::Text(t)) => t
-                  _ => ""
+                // Best-effort content text for the outcome payload: the
+                // first Text block; every further block (legacy files have
+                // none) is an attachment of a SuccessWithAttachments outcome.
+                let mut content_text = ""
+                let attachments : Array[@posoco.Content] = []
+                for block in content {
+                  match block {
+                    @posoco.Content::Text(t) =>
+                      if content_text == "" {
+                        content_text = t
+                      } else {
+                        attachments.push(block)
+                      }
+                    other => attachments.push(other)
+                  }
                 }
                 // is_error is only ever written as true; absent (legacy
-                // files) or anything else means success.
+                // files) or anything else means success. Errors never carry
+                // attachments (producer contract).
                 let outcome = match map.get("is_error") {
                   Some(Json::True) =>
                     @posoco.ToolOutcome::ToolReportedError(
@@ -326,10 +352,18 @@ fn message_from_json(json : Json) -> @posoco.Message? {
                       structured=None,
                     )
                   _ =>
-                    @posoco.ToolOutcome::Success(
-                      content=content_text,
-                      structured=None,
-                    )
+                    if attachments.is_empty() {
+                      @posoco.ToolOutcome::Success(
+                        content=content_text,
+                        structured=None,
+                      )
+                    } else {
+                      @posoco.ToolOutcome::SuccessWithAttachments(
+                        content=content_text,
+                        structured=None,
+                        attachments~,
+                      )
+                    }
                 }
                 Some(
                   @posoco.Message::ToolMessage(
