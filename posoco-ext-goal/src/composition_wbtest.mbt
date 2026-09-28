@@ -27,30 +27,32 @@ fn cw_compose_agent(
 }
 
 ///|
-/// The call must be observed as ToolCallPending strictly before its
-/// ToolCallResult, and both must be present.
-fn cw_assert_pending_then_result(
+/// Pre-pass rejects (unknown tool, schema mismatch) surface as
+/// ToolCallRejected directly — no ToolCallPending precedes them, and exactly
+/// one terminal event carries the call.
+fn cw_assert_rejected_without_pending(
   observer : @posoco.RecordingObserver,
   call_id : String,
 ) -> Unit raise {
-  let mut seen_pending = false
+  let mut terminals = 0
   for event in observer.events() {
     match event {
       @posoco.TurnEvent::ToolCallPending(call) =>
         if call.call_id.to_string() == call_id {
-          seen_pending = true
+          fail("ToolCallPending emitted for pre-pass reject \{call_id}")
         }
-      @posoco.TurnEvent::ToolCallResult(call~, ..) =>
+      @posoco.TurnEvent::ToolCallRejected(call~, ..) =>
         if call.call_id.to_string() == call_id {
-          if !seen_pending {
-            fail("ToolCallResult before ToolCallPending for \{call_id}")
-          }
-          return
+          terminals += 1
         }
       _ => ()
     }
   }
-  fail("missing pending/result pair for \{call_id}")
+  if terminals != 1 {
+    fail(
+      "expected exactly one ToolCallRejected for \{call_id}, got \{terminals}",
+    )
+  }
 }
 
 ///|
@@ -285,9 +287,9 @@ async test "bad_tool_args_reported_not_crashed" {
 ///|
 /// Unknown tool names never corrupt the goal state. The core completes the
 /// turn normally: the catalog routes by exact name, the goal provider is
-/// never consulted, and the rejected call is reported as ToolCallPending
-/// followed by ToolCallResult(NotExecuted). The provider phase below pins
-/// the ext's own unknown-name guard.
+/// never consulted, and the rejected call is reported as ToolCallRejected
+/// directly (pre-pass reject — no pending marker). The provider phase below
+/// pins the ext's own unknown-name guard.
 async test "unknown_tool_name_reported" {
   let goal = goal_extension(goal_condition="unknown tool recovery")
   let model = @posoco.ScriptedModel([
@@ -308,7 +310,7 @@ async test "unknown_tool_name_reported" {
     ) => ()
     _ => fail("expected NotExecuted(UnknownTool) for the unknown tool call")
   }
-  cw_assert_pending_then_result(observer, "c2")
+  cw_assert_rejected_without_pending(observer, "c2")
 
   let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("c3"),
