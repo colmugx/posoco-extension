@@ -182,6 +182,8 @@ fn estimate_message_tokens(message : @posoco.Message) -> Int {
     ToolMessage(outcome~, ..) =>
       match outcome {
         Success(content~, ..) => estimate_tokens(content)
+        SuccessWithAttachments(content~, attachments~, ..) =>
+          estimate_tokens(content) + content_tokens(attachments)
         ToolReportedError(content~, ..) => estimate_tokens(content)
         RuntimeFailure(message~, ..) => estimate_tokens(message)
         NotExecuted(..) => 0

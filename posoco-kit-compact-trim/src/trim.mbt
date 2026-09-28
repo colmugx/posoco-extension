@@ -68,6 +68,15 @@ fn message_chars(message : @posoco.Message) -> Int {
     ToolMessage(outcome~, ..) =>
       match outcome {
         Success(content~, ..) => total += content.length()
+        SuccessWithAttachments(content~, attachments~, ..) => {
+          total += content.length()
+          for block in attachments {
+            match block {
+              Text(t) => total += t.length()
+              Image(..) => total += 1024
+            }
+          }
+        }
         ToolReportedError(content~, ..) => total += content.length()
         RuntimeFailure(message~, ..) => total += message.length()
         NotExecuted(reason~, ..) => total += reason.to_string().length()

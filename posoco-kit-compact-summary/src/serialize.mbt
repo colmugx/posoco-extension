@@ -138,6 +138,16 @@ fn render_message(message : @posoco.Message, limit : Int) -> String {
       match outcome {
         Success(content~, ..) =>
           "[Tool result]: " + clamp_tool_output(content, limit)
+        SuccessWithAttachments(content~, attachments~, ..) => {
+          let note = if attachments.is_empty() {
+            ""
+          } else {
+            "\n[+" +
+            attachments.length().to_string() +
+            " media attachment(s) omitted]"
+          }
+          "[Tool result]: " + clamp_tool_output(content, limit) + note
+        }
         ToolReportedError(content~, ..) =>
           "[Tool error]: " + clamp_tool_output(content, limit)
         RuntimeFailure(message~, ..) =>

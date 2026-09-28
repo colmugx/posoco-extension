@@ -81,6 +81,18 @@ fn reasoning_tokens(reasoning : @posoco.Reasoning?) -> Int {
 fn outcome_tokens(outcome : @posoco.ToolOutcome) -> Int {
   match outcome {
     Success(content~, ..) => estimate_tokens(content)
+    SuccessWithAttachments(content~, attachments~, ..) => {
+      // Same block heuristic as the shared compact kits: text via the
+      // chars/4 estimator, each image block a flat 256 (~1024 chars / 4).
+      let mut total = estimate_tokens(content)
+      for block in attachments {
+        match block {
+          Text(t) => total += estimate_tokens(t)
+          Image(..) => total += 256
+        }
+      }
+      total
+    }
     ToolReportedError(content~, ..) => estimate_tokens(content)
     RuntimeFailure(message~, ..) => estimate_tokens(message)
     NotExecuted(..) => 0
