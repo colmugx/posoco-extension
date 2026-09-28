@@ -1,24 +1,44 @@
 // js (bun) target: scanning through node:fs sync APIs, pattern matching
-// through Bun.Glob. All synchronous; no Promise bridging. Throwing node
-// calls cross the FFI as JSON string envelopes (see docs/questions.md
-// 2026-08-19); Bun.Glob's `match` never throws for a valid pattern, so it
-// stays a plain pass-through extern.
+// through Bun.Glob. All synchronous; no Promise bridging. node:fs members
+// are bound with `#module` and injected into the inline-JS envelopes as
+// values (pattern follows posoco-ext-workspace fs_port.js.mbt /
+// moonbitlang/x/fs/fs_js.mbt); throwing node calls cross the FFI as JSON
+// string envelopes (see docs/questions.md 2026-08-19). Bun.Glob's `match`
+// never throws for a valid pattern, so it stays a plain pass-through
+// extern.
 
 ///|
-extern "js" fn js_readdir_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
-  #|   try { return JSON.stringify({ ok: true, entries: fs.readdirSync(path) }); }
+/// Opaque node Stats handle; only the inline-JS envelope touches it.
+#external
+priv type FsStats
+
+///|
+#module("node:fs")
+extern "js" fn fs_readdir_sync(path : String) -> FixedArray[String] = "readdirSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_stat_sync(path : String) -> FsStats = "statSync"
+
+///|
+extern "js" fn js_readdir_envelope(
+  readdir : (String) -> FixedArray[String],
+  path : String,
+) -> String =
+  #| (readdir, path) => {
+  #|   try { return JSON.stringify({ ok: true, entries: readdir(path) }); }
   #|   catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
 /// One stat envelope for both the directory check and the mtime sort.
-extern "js" fn js_stat_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
+extern "js" fn js_stat_envelope(
+  stat : (String) -> FsStats,
+  path : String,
+) -> String =
+  #| (stat, path) => {
   #|   try {
-  #|     const st = fs.statSync(path);
+  #|     const st = stat(path);
   #|     return JSON.stringify({ ok: true, dir: st.isDirectory(), mtimeMs: st.mtimeMs });
   #|   } catch { return JSON.stringify({ ok: false }); }
   #| }
@@ -39,7 +59,7 @@ extern "js" fn BunGlob::match_(self : BunGlob, path : String) -> Bool =
 ///|
 /// Decode the readdir envelope; None means the directory could not be read.
 fn js_readdir_entries(path : String) -> Array[String]? {
-  let envelope : Json = @json.parse(js_readdir_envelope(path)) catch {
+  let envelope : Json = @json.parse(js_readdir_envelope(fs_readdir_sync, path)) catch {
     _ => return None
   }
   let fields = match envelope {
@@ -71,7 +91,7 @@ priv struct JsStat {
 /// Decode the stat envelope; None means the stat failed or the envelope is
 /// malformed.
 fn js_stat(path : String) -> JsStat? {
-  let envelope : Json = @json.parse(js_stat_envelope(path)) catch {
+  let envelope : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
     _ => return None
   }
   let fields = match envelope {
