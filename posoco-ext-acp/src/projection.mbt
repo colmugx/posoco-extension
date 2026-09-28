@@ -214,6 +214,7 @@ pub fn acp_content_block(content : @posoco.Content) -> @acp.ContentBlock {
 pub fn acp_outcome_status(outcome : @posoco.ToolOutcome) -> @acp.ToolCallStatus {
   match outcome {
     Success(..) => Completed
+    SuccessWithAttachments(..) => Completed
     _ => Failed
   }
 }
@@ -226,6 +227,7 @@ pub fn acp_outcome_status(outcome : @posoco.ToolOutcome) -> @acp.ToolCallStatus 
 pub fn acp_outcome_text(outcome : @posoco.ToolOutcome) -> String {
   match outcome {
     Success(content~, ..) => content
+    SuccessWithAttachments(content~, ..) => content
     ToolReportedError(content~, ..) => content
     RuntimeFailure(error_category~, message~) =>
       "[\{error_category}] \{@devkit.sanitize_label(message)}"

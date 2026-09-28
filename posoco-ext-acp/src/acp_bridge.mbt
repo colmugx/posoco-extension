@@ -52,9 +52,9 @@ fn acp_wire_meta(meta : Json?) -> @acp.ProtocolNullable[Json] {
 /// Wire contract (ACP v1):
 /// - `ToolCallPending` → `ToolCall` announcement (status `Pending`, kind,
 ///   title, raw input, jump location when the arguments carry a `path`)
-/// - `ToolCallResult` → `ToolCallUpdate` (status `Completed`/`Failed`, text
-///   content)
-/// - `ToolCallDeferred` → `ToolCallUpdate` (status `Pending`, deferred title)
+/// - terminal tool events (`ToolCallSucceeded`/`ToolCallFailed`/
+///   `ToolCallRejected`) → `ToolCallUpdate` (status `Completed`/`Failed`,
+///   text content); `ToolCallAbandoned` sends no update
 /// - `StreamChunkReceived` text/reasoning deltas → streamed chunks sharing
 ///   one per-round `messageId`
 /// - `ModelResponseReceived` → full `AgentThoughtChunk`/`AgentMessageChunk`
@@ -409,6 +409,39 @@ fn AcpBridge::enqueue(
 }
 
 ///|
+/// Terminal tool events collapse back to one outcome-shaped ACP update.
+fn AcpBridge::ingest_tool_terminal(
+  self : AcpBridge,
+  event : @posoco.TurnEvent,
+  call : @posoco.ToolCall,
+  outcome : @posoco.ToolOutcome,
+) -> Unit {
+  self.enqueue(
+    event,
+    ToolCallUpdate({
+      tool_call_id: call.call_id.to_string(),
+      kind: Omitted,
+      status: Value(acp_outcome_status(outcome)),
+      title: Omitted,
+      content: Value([
+        Content({
+          content: Text({
+            annotations: Omitted,
+            text: acp_outcome_text(outcome),
+            meta: Omitted,
+          }),
+          meta: Omitted,
+        }),
+      ]),
+      locations: Omitted,
+      raw_input: Omitted,
+      raw_output: Omitted,
+      meta: Omitted,
+    }),
+  )
+}
+
+///|
 /// Project one turn event onto queued updates (Observer entry point).
 fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
   match event {
@@ -431,52 +464,37 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
           meta: Omitted,
         }),
       )
-    ToolCallResult(call~, result~, ..) =>
-      self.enqueue(
+    ToolCallSucceeded(call~, content~, structured~, ..) =>
+      self.ingest_tool_terminal(
         event,
-        ToolCallUpdate({
-          tool_call_id: call.call_id.to_string(),
-          kind: Omitted,
-          status: Value(acp_outcome_status(result)),
-          title: Omitted,
-          content: Value([
-            Content({
-              content: Text({
-                annotations: Omitted,
-                text: acp_outcome_text(result),
-                meta: Omitted,
-              }),
-              meta: Omitted,
-            }),
-          ]),
-          locations: Omitted,
-          raw_input: Omitted,
-          raw_output: Omitted,
-          meta: Omitted,
-        }),
+        call,
+        @posoco.ToolOutcome::Success(content~, structured~),
       )
-    ToolCallDeferred(call~, reason~) =>
-      self.enqueue(
+    ToolCallFailed(call~, failure~) => {
+      let outcome : @posoco.ToolOutcome = match failure {
+        ReportedError(content~, structured~) =>
+          @posoco.ToolOutcome::ToolReportedError(content~, structured~)
+        Runtime(category~, message~) =>
+          @posoco.ToolOutcome::RuntimeFailure(error_category=category, message~)
+      }
+      self.ingest_tool_terminal(event, call, outcome)
+    }
+    ToolCallRejected(call~, reason~) =>
+      self.ingest_tool_terminal(
         event,
-        ToolCallUpdate({
-          tool_call_id: call.call_id.to_string(),
-          kind: Omitted,
-          status: Value(Pending),
-          title: Value(
-            "\{acp_tool_title(call)} — deferred: \{@devkit.sanitize_label(reason)}",
-          ),
-          content: Omitted,
-          locations: Omitted,
-          raw_input: Omitted,
-          raw_output: Omitted,
-          meta: Omitted,
-        }),
+        call,
+        @posoco.ToolOutcome::NotExecuted(reason~, original_call_id=call.call_id),
       )
+    // Abandoned calls have no outcome; the run-end projection reports the
+    // interruption, so there is no ACP tool update to send.
+    ToolCallAbandoned(..) => ()
     ModelResponseReceived(message~, usage~) =>
       self.ingest_model_response(message, usage, event)
     StreamChunkReceived(chunk~) => self.ingest_stream_chunk(chunk, event)
     TurnFailed(message) => self.last_failure = Some(message)
     TurnCompleted
+    | ToolCallApproved(..)
+    | ToolCallStarted(..)
     | SessionRedirect(..)
     | ConfigWarning(..)
     | ConfigChanged(..)

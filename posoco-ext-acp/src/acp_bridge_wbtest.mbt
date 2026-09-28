@@ -350,10 +350,11 @@ async test "completion update keeps locations omitted" {
     ),
   )
   bridge.ingest(
-    ToolCallResult(
+    ToolCallSucceeded(
       call=tk_call("edit", id="c1"),
-      result=Success(content="ok", structured=None),
-      is_error=false,
+      content="ok",
+      structured=None,
+      attachments=[],
     ),
   )
   assert_eq(bridge.flush(), 2)
@@ -444,10 +445,11 @@ async test "flush delivers pending and result sequence with session stamp" {
   bridge.ingest(TurnStarted)
   bridge.ingest(ToolCallPending(tk_call("read", id="c1")))
   bridge.ingest(
-    ToolCallResult(
+    ToolCallSucceeded(
       call=tk_call("read", id="c1"),
-      result=Success(content="L1: hi", structured=None),
-      is_error=false,
+      content="L1: hi",
+      structured=None,
+      attachments=[],
     ),
   )
   assert_eq(bridge.flush(), 2)
@@ -488,10 +490,9 @@ async test "tool failure outcome maps to failed status" {
   let client = FakeAcpClient::FakeAcpClient()
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(
-    ToolCallResult(
+    ToolCallFailed(
       call=tk_call("bash", id="c2"),
-      result=ToolReportedError(content="exit 1", structured=None),
-      is_error=true,
+      failure=ReportedError(content="exit 1", structured=None),
     ),
   )
   ignore(bridge.flush())
@@ -503,25 +504,6 @@ async test "tool failure outcome maps to failed status" {
           assert_eq(text, "exit 1")
         _ => fail("expected text content")
       }
-    }
-    _ => fail("expected tool call update")
-  }
-}
-
-///|
-async test "deferred tool stays pending with a deferred title" {
-  let bridge = AcpBridge()
-  let client = FakeAcpClient::FakeAcpClient()
-  bridge.attach(context=fake_acp_context(client), session_id="s1")
-  bridge.ingest(
-    ToolCallDeferred(call=tk_call("bash", id="c3"), reason="waiting on host"),
-  )
-  ignore(bridge.flush())
-  match client.sent[0].update {
-    ToolCallUpdate(update) => {
-      assert_eq(update.tool_call_id, "c3")
-      assert_true(update.status is Value(Pending))
-      assert_eq(update.title, Value("bash — deferred: waiting on host"))
     }
     _ => fail("expected tool call update")
   }
@@ -824,7 +806,7 @@ async test "meta decorator stamps _meta on flushed frames and None omits it" {
       match event {
         ToolCallPending(call) =>
           Some(Json::object({ "tool": Json::string(call.name.to_string()) }))
-        ToolCallResult(..) => Some(Json::string("done"))
+        ToolCallSucceeded(..) => Some(Json::string("done"))
         _ => None
       }
     }),
@@ -832,10 +814,11 @@ async test "meta decorator stamps _meta on flushed frames and None omits it" {
   bridge.attach(context=fake_acp_context(client), session_id="s1")
   bridge.ingest(ToolCallPending(tk_call("read", id="c1")))
   bridge.ingest(
-    ToolCallResult(
+    ToolCallSucceeded(
       call=tk_call("read", id="c1"),
-      result=Success(content="ok", structured=None),
-      is_error=false,
+      content="ok",
+      structured=None,
+      attachments=[],
     ),
   )
   bridge.ingest(StreamChunkReceived(chunk=TextDelta(token="hi")))
@@ -1196,10 +1179,11 @@ async test "two bridges drive two sessions without cross-talk" {
   bridge_a.ingest(ToolCallPending(tk_call("read", id="a1")))
   bridge_b.ingest(ToolCallPending(tk_call("write", id="b1")))
   bridge_a.ingest(
-    ToolCallResult(
+    ToolCallSucceeded(
       call=tk_call("read", id="a1"),
-      result=Success(content="a", structured=None),
-      is_error=false,
+      content="a",
+      structured=None,
+      attachments=[],
     ),
   )
   assert_eq(bridge_a.flush(), 2)
