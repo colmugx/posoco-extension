@@ -375,6 +375,7 @@ test "acp_permission_request mirrors the pending announcement" {
     category: "write",
     arguments_preview: "{\"file_path\":\"a.txt\"}",
     arguments: Json::object({ "file_path": Json::string("a.txt") }),
+    scopes: ["edit"],
   })
   assert_eq(request.session_id, "session-1")
   assert_eq(request.tool_call.tool_call_id, "c9")
@@ -939,6 +940,7 @@ fn tk_approval(
     category: "unknown",
     arguments_preview: "{}",
     arguments: Json::object({}),
+    scopes: [name],
   }
 }
 
