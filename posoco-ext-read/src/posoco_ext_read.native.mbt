@@ -85,6 +85,38 @@ async fn native_read_lines(
 }
 
 ///|
+impl FsIo for NativeFsIo with fn read_image_base64(_self, path : String) -> String {
+  // Sized fixed-buffer read: `read_all` hands back an opaque private trait
+  // object, so the bytes loop is the stable path to raw payload bytes.
+  let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
+    _ => raise read_failure("read", path)
+  }
+  let size64 = file.size() catch {
+    _ => {
+      file.close()
+      raise read_failure("read", path)
+    }
+  }
+  let size = size64.to_int()
+  let buf : FixedArray[Byte] = FixedArray::make(size, b'\x00')
+  let mut filled = 0
+  while filled < size {
+    let n = file.read(buf, offset=filled, max_len=size - filled) catch {
+      _ => {
+        file.close()
+        raise read_failure("read", path)
+      }
+    }
+    if n <= 0 {
+      break
+    }
+    filled += n
+  }
+  file.close()
+  @base64.encode(Bytes::from_array(buf[0:filled])[:])
+}
+
+///|
 impl FsIo for NativeFsIo with fn read_lines(
   _self,
   path : String,

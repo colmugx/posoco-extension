@@ -2,7 +2,7 @@
 /// WriteTools — file writing tool provider.
 ///
 /// On native, writes via `@fs` (atomic temp+rename, parent dirs created).
-/// On js (bun), writes via `Bun.write` + `Bun.file().move()` rename. On
+/// On js, writes via node:fs (#module bindings, atomic temp+rename). On
 /// wasm-gc, the tool is not listed and execute raises
 /// `RuntimeError::InvocationFailed`.
 ///

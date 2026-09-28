@@ -1,10 +1,13 @@
 // js (bun) execution face for the shared pipeline. Process spawning goes
-// through Bun globals (Bun.spawn / Bun.which / Bun.env — never
-// node:child_process); file IO goes through node:fs sync APIs. Everything
-// throwing crosses the FFI as a JSON string envelope decoded with @json on
-// the MoonBit side (docs/questions.md 2026-08-19: `-> T raise` externs are
-// runtime-broken and `T?`/Error mappings are not used; empty-string
-// sentinels stand in for "missing").
+// through Bun globals (Bun.spawn / Bun.which — never node:child_process);
+// env reads use the node `process` global; file IO goes through node:fs sync
+// APIs bound with `#module` and injected into the inline-JS envelopes as
+// values (pattern follows posoco-ext-workspace fs_port.js.mbt /
+// moonbitlang/x/fs/fs_js.mbt). Everything throwing crosses the FFI as a
+// JSON string envelope decoded with @json on the MoonBit side
+// (docs/questions.md 2026-08-19: `-> T raise` externs are runtime-broken and
+// `T?`/Error mappings are not used; empty-string sentinels stand in for
+// "missing"; the `require` fallback recorded there is retired).
 //
 // The stage budget is enforced HERE, extern-side: on js the pipeline's
 // @async timing layer cannot kill a child it does not own, so the spawn
@@ -15,7 +18,7 @@
 
 ///|
 extern "js" fn js_env_raw(name : String) -> String =
-  #| (name) => Bun.env[name] ?? ""
+  #| (name) => process.env[name] ?? ""
 
 ///|
 /// `Bun.which` checks executability (not mere existence) within exactly the
@@ -70,13 +73,33 @@ extern "js" fn js_runner_envelope(
   #| }
 
 ///|
-extern "js" fn js_mktmpdir_envelope(prefix : String) -> String =
-  #| (prefix) => {
-  #|   const fs = require("node:fs");
-  #|   const path = require("node:path");
+#module("node:fs")
+extern "js" fn fs_mkdtemp_sync(prefix : String) -> String = "mkdtempSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_write_file_sync(path : String, content : String) -> Unit = "writeFileSync"
+
+///|
+/// rmSync's 2nd argument is a JS options object, so the declared 2nd
+/// parameter is only a value-passing shape; the envelope builds
+/// `{ recursive: true, force: true }` on the JS side.
+#module("node:fs")
+extern "js" fn fs_rm_sync(path : String, recursive : Bool) -> Unit = "rmSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_realpath_sync(path : String) -> String = "realpathSync"
+
+///|
+extern "js" fn js_mktmpdir_envelope(
+  mkdtemp : (String) -> String,
+  prefix : String,
+) -> String =
+  #| (mkdtemp, prefix) => {
   #|   try {
-  #|     const base = Bun.env.TMPDIR || Bun.env.TMP || "/tmp";
-  #|     return JSON.stringify({ ok: true, dir: fs.mkdtempSync(path.join(base, prefix)) });
+  #|     const base = process.env.TMPDIR || process.env.TMP || "/tmp";
+  #|     return JSON.stringify({ ok: true, dir: mkdtemp(`${base}/${prefix}`) });
   #|   } catch (e) {
   #|     return JSON.stringify({ ok: false, message: String(e) });
   #|   }
@@ -84,28 +107,32 @@ extern "js" fn js_mktmpdir_envelope(prefix : String) -> String =
 
 ///|
 extern "js" fn js_write_file_envelope(
+  write_file : (String, String) -> Unit,
   path : String,
   content : String,
 ) -> String =
-  #| (path, content) => {
-  #|   const fs = require("node:fs");
-  #|   try { fs.writeFileSync(path, content); return JSON.stringify({ ok: true }); }
+  #| (writeFile, path, content) => {
+  #|   try { writeFile(path, content); return JSON.stringify({ ok: true }); }
   #|   catch (e) { return JSON.stringify({ ok: false, message: String(e) }); }
   #| }
 
 ///|
-extern "js" fn js_rm_rf_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
-  #|   try { fs.rmSync(path, { recursive: true, force: true }); return JSON.stringify({ ok: true }); }
+extern "js" fn js_rm_rf_envelope(
+  rm : (String, Bool) -> Unit,
+  path : String,
+) -> String =
+  #| (rm, path) => {
+  #|   try { rm(path, { recursive: true, force: true }); return JSON.stringify({ ok: true }); }
   #|   catch (e) { return JSON.stringify({ ok: false, message: String(e) }); }
   #| }
 
 ///|
-extern "js" fn js_realpath_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
-  #|   try { return JSON.stringify({ ok: true, path: fs.realpathSync(path) }); }
+extern "js" fn js_realpath_envelope(
+  realpath : (String) -> String,
+  path : String,
+) -> String =
+  #| (realpath, path) => {
+  #|   try { return JSON.stringify({ ok: true, path: realpath(path) }); }
   #|   catch (e) { return JSON.stringify({ ok: false, path: path }); }
   #| }
 
@@ -239,7 +266,8 @@ fn mbtx_default_runner() -> &Runner {
 /// The call's one-shot temp directory (mkdtemp-style dir under TMPDIR, same
 /// shape as the native `@fs.tmpdir` face).
 fn mbtx_call_tmpdir() -> String raise @posoco.RuntimeError {
-  let fields = match js_envelope_fields(js_mktmpdir_envelope("posoco-mbtx-")) {
+  let fields = match
+    js_envelope_fields(js_mktmpdir_envelope(fs_mkdtemp_sync, "posoco-mbtx-")) {
     Some(fields) => fields
     None =>
       raise @posoco.RuntimeError::InvocationFailed(
@@ -260,7 +288,10 @@ fn mbtx_write_file(
   path : String,
   content : String,
 ) -> Unit raise @posoco.RuntimeError {
-  let fields = match js_envelope_fields(js_write_file_envelope(path, content)) {
+  let fields = match
+    js_envelope_fields(
+      js_write_file_envelope(fs_write_file_sync, path, content),
+    ) {
     Some(fields) => fields
     None =>
       raise @posoco.RuntimeError::InvocationFailed(
@@ -279,7 +310,7 @@ fn mbtx_write_file(
 /// lives under the system temp location either way).
 #warnings("-unused_error_type")
 fn mbtx_cleanup_tmpdir(tmpdir : String) -> Unit raise @posoco.RuntimeError {
-  ignore(js_rm_rf_envelope(tmpdir))
+  ignore(js_rm_rf_envelope(fs_rm_sync, tmpdir))
 }
 
 ///|
@@ -288,7 +319,7 @@ fn mbtx_cleanup_tmpdir(tmpdir : String) -> Unit raise @posoco.RuntimeError {
 /// native edge, whose @fs realpath is async; pragma: no js await points.)
 #warnings("-unused_async")
 async fn mbtx_realpath(path : String) -> String {
-  match js_envelope_fields(js_realpath_envelope(path)) {
+  match js_envelope_fields(js_realpath_envelope(fs_realpath_sync, path)) {
     Some(fields) =>
       if js_fields_bool(fields, "ok") {
         let resolved = js_fields_str(fields, "path")

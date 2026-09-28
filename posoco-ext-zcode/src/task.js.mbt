@@ -269,26 +269,74 @@ fn zcode_js_env_opt(key : String) -> String? {
 }
 
 ///|
-/// `Bun.file(path).exists()` — Promise<bool>, false for missing paths.
-extern "js" fn zcode_js_exists(path : String) -> @js_async.Promise[Bool] =
-  #| (path) => Bun.file(path).exists()
+/// node:fs members bound with `#module` and injected into the inline-JS
+/// wrappers as values (pattern follows posoco-ext-workspace fs_port.js.mbt /
+/// moonbitlang/x/fs/fs_js.mbt). existsSync never throws and returns false
+/// for missing paths — the sync counterpart of the old Bun.file().exists().
+#module("node:fs")
+extern "js" fn fs_exists_sync(path : String) -> Bool = "existsSync"
 
 ///|
-/// `Bun.file(path).text()` — Promise<String>, rejects when unreadable; the
-/// rejection becomes ZcodeCredsUnreadable at the call site.
-extern "js" fn zcode_js_file_text(path : String) -> @js_async.Promise[String] =
-  #| (path) => Bun.file(path).text()
+/// Opaque ok/content result for readFileSync failures ("" cannot be the
+/// sentinel: an empty file is valid content).
+#external
+priv type JsTextResult
+
+///|
+extern "js" fn JsTextResult::is_ok(self : Self) -> Bool =
+  #| (res) => res.ok
+
+///|
+extern "js" fn JsTextResult::content(self : Self) -> String =
+  #| (res) => res.content
+
+///|
+#module("node:fs")
+extern "js" fn fs_read_text_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+extern "js" fn zcode_js_file_text_ffi(
+  read_text : (String, String) -> String,
+  path : String,
+) -> JsTextResult =
+  #| (readFile, path) => {
+  #|   try {
+  #|     return { ok: true, content: readFile(path, "utf8") };
+  #|   } catch (error) {
+  #|     return { ok: false, content: String(error?.message ?? error) };
+  #|   }
+  #| }
 
 ///|
 /// `fs.realpathSync` with a "" failure sentinel; the caller degrades to "."
 /// exactly like the native `@fs.realpath` catch.
-extern "js" fn zcode_js_realpath(path : String) -> String =
-  #| (path) => { try { return require("node:fs").realpathSync(path); } catch (e) { return ""; } }
+#module("node:fs")
+extern "js" fn fs_realpath_sync(path : String) -> String = "realpathSync"
+
+///|
+extern "js" fn zcode_js_realpath(
+  realpath : (String) -> String,
+  path : String,
+) -> String =
+  #| (realpath, path) => { try { return realpath(path); } catch (e) { return ""; } }
+
+///|
+/// `fs.readdirSync(path)` as a JSON array string; "" sentinel on failure
+/// (docs/questions.md 2026-08-23: pure-value boundary, no Option across FFI).
+#module("node:fs")
+extern "js" fn fs_readdir_sync(path : String) -> FixedArray[String] = "readdirSync"
+
+///|
+extern "js" fn zcode_js_readdir_raw(
+  readdir : (String) -> FixedArray[String],
+  path : String,
+) -> String =
+  #| (readdir, path) => { try { return JSON.stringify(readdir(path)); } catch (e) { return ""; } }
 
 ///|
 /// Default cwd for the tool seam: the real current directory.
 fn zcode_cwd_default() -> String {
-  let real = zcode_js_realpath(".")
+  let real = zcode_js_realpath(fs_realpath_sync, ".")
   if real == "" {
     "."
   } else {
@@ -297,23 +345,20 @@ fn zcode_cwd_default() -> String {
 }
 
 ///|
-/// `fs.readdirSync(path)` as a JSON array string; "" sentinel on failure
-/// (docs/questions.md 2026-08-23: pure-value boundary, no Option across FFI).
-extern "js" fn zcode_js_readdir_raw(path : String) -> String =
-  #| (path) => { try { return JSON.stringify(require("node:fs").readdirSync(path)); } catch (e) { return ""; } }
-
-///|
 /// IO injections for the discovery tiers: a failed read, list or realpath
 /// degrades to None, never aborts composition.
-async fn zcode_js_read_file_opt(path : String) -> String? {
-  Some(zcode_js_file_text(path).wait()) catch {
-    _ => None
+fn zcode_js_read_file_opt(path : String) -> String? {
+  let res = zcode_js_file_text_ffi(fs_read_text_sync, path)
+  if res.is_ok() {
+    Some(res.content())
+  } else {
+    None
   }
 }
 
 ///|
 fn zcode_js_list_dir_opt(path : String) -> Array[String]? {
-  let raw = zcode_js_readdir_raw(path)
+  let raw = zcode_js_readdir_raw(fs_readdir_sync, path)
   if raw == "" {
     None
   } else {
@@ -338,7 +383,7 @@ fn zcode_js_list_dir_opt(path : String) -> Array[String]? {
 
 ///|
 fn zcode_js_realpath_opt(path : String) -> String? {
-  let real = zcode_js_realpath(path)
+  let real = zcode_js_realpath(fs_realpath_sync, path)
   if real == "" {
     None
   } else {
@@ -349,7 +394,7 @@ fn zcode_js_realpath_opt(path : String) -> String? {
 ///|
 /// js `zcode_resolve_command_io`: same candidate list and cache shape as the
 /// native pre-probe — static, .desktop and symlink tiers from
-/// zcode_probe_paths — with Bun.file.exists as the async probe and node:fs
+/// zcode_probe_paths — with node:fs existsSync as the probe and node:fs
 /// read/list/realpath behind the tier injections.
 async fn zcode_resolve_command_io(
   config~ : ZcodeConfig,
@@ -357,14 +402,14 @@ async fn zcode_resolve_command_io(
   let candidates = zcode_probe_paths(
     config~,
     env=zcode_js_env_opt,
-    read_file=zcode_js_read_file_opt,
+    read_file=fn(p : String) { zcode_js_read_file_opt(p) },
     // Sync fns pass the async injection slots through closure coercion.
     list_dir=fn(p : String) { zcode_js_list_dir_opt(p) },
     realpath=fn(p : String) { zcode_js_realpath_opt(p) },
   )
   let probed : Map[String, Bool] = Map::from_array([])
   for candidate in candidates {
-    probed[candidate] = zcode_js_exists(candidate).wait() catch { _ => false }
+    probed[candidate] = fs_exists_sync(candidate)
   }
   match
     zcode_resolve_command_from(config~, env=zcode_js_env_opt, candidates~, exists=path => {
@@ -377,11 +422,13 @@ async fn zcode_resolve_command_io(
 
 ///|
 /// Read the v2 credentials and build the provider registry payload.
-async fn zcode_registry_io(config~ : ZcodeConfig) -> Json raise ZcodeError {
+fn zcode_registry_io(config~ : ZcodeConfig) -> Json raise ZcodeError {
   let path = zcode_creds_path(config~, env=zcode_js_env_opt)
-  let text = zcode_js_file_text(path).wait() catch {
-    e => raise ZcodeCredsUnreadable(detail="cannot read \{path}: \{e}")
+  let res = zcode_js_file_text_ffi(fs_read_text_sync, path)
+  guard res.is_ok() else {
+    raise ZcodeCredsUnreadable(detail="cannot read \{path}: \{res.content()}")
   }
+  let text = res.content()
   let v2 = @json.parse(text) catch {
     e => raise ZcodeCredsUnreadable(detail="cannot parse \{path}: \{e}")
   }

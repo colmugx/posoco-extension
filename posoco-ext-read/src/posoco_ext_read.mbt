@@ -77,6 +77,10 @@ priv trait FsIo {
   /// count every line in the file (streaming on native) even past the window.
   async fn read_lines(self : Self, path : String, skip : Int, take : Int) -> LinePage raise @posoco.RuntimeError
 
+  /// Whole-file base64 payload for image attachments (native reads bytes;
+  /// js reads through the host). Raise = IO error.
+  async fn read_image_base64(self : Self, path : String) -> String raise @posoco.RuntimeError
+
   /// Return the last `take` lines of the file (tail window).
   async fn read_last_lines(self : Self, path : String, take : Int) -> LinePage raise @posoco.RuntimeError
 }
@@ -156,13 +160,41 @@ impl FsIo for DelegatedFsIo with fn read_last_lines(
 }
 
 ///|
+impl FsIo for DelegatedFsIo with fn read_image_base64(self, path : String) -> String {
+  self.direct.read_image_base64(path)
+}
+
+///|
+/// Inline image cap, mirroring the cetas-js attachment limit: larger images
+/// bloat both the request and the session JSONL; ask for a crop/downscale.
+const READ_IMAGE_MAX_BYTES : Int = 5 * 1024 * 1024
+
+///|
+/// Image extensions the read tool attaches for vision (`None` = not an
+/// image; text paging applies).
+fn image_mime(path : String) -> String? {
+  let lower = path.to_lower()
+  if lower.has_suffix(".png") {
+    Some("image/png")
+  } else if lower.has_suffix(".jpg") || lower.has_suffix(".jpeg") {
+    Some("image/jpeg")
+  } else if lower.has_suffix(".gif") {
+    Some("image/gif")
+  } else if lower.has_suffix(".webp") {
+    Some("image/webp")
+  } else {
+    None
+  }
+}
+
+///|
 /// Shared tool list for the `read` tool. Both native and js ReadTools expose
 /// the same tool definition; only the IO adaptor differs per target.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("read"),
-      description: "Read numbered file lines as `line|text`. `offset` is 1-based (negative reads tail); `limit` defaults to 400. Truncated pages report `next=N`. Records freshness for write/edit.",
+      description: "Read numbered file lines as `line|text`. `offset` is 1-based (negative reads tail); `limit` defaults to 400. Truncated pages report `next=N`. Image files (png/jpg/gif/webp, ≤5 MB) attach inline for vision instead. Records freshness for write/edit.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
@@ -361,6 +393,35 @@ async fn execute_read_impl(
     )
   }
   let stamp = io.stat(path)
+  // Image files attach whole (base64, size-capped) so vision models can see
+  // them; text paging never applies and offset/limit are ignored.
+  match image_mime(raw_path) {
+    Some(mime) => {
+      if stamp.size.to_int() > READ_IMAGE_MAX_BYTES {
+        return @posoco.ToolOutcome::ToolReportedError(
+          content="read: '\{@devkit.sanitize_path(raw_path)}' is \{stamp.size} bytes; the inline image cap is \{READ_IMAGE_MAX_BYTES} bytes — crop or downscale it first",
+          structured=None,
+        )
+      }
+      let data = io.read_image_base64(path)
+      match freshness {
+        Some(g) => g.note_read(path, stamp)
+        None => ()
+      }
+      return @posoco.ToolOutcome::SuccessWithAttachments(
+        content="[image \{@devkit.sanitize_path(raw_path)} — \{mime}, \{stamp.size} bytes, attached for vision]",
+        structured=Some(
+          Json::object({
+            "path": Json::string(raw_path),
+            "media_type": Json::string(mime),
+            "bytes": Json::number(stamp.size.to_double()),
+          }),
+        ),
+        attachments=[@posoco.Content::Image(media_type=mime, data~)],
+      )
+    }
+    None => ()
+  }
   let limit = match limit_opt {
     Some(l) => l
     None => READ_DEFAULT_LIMIT

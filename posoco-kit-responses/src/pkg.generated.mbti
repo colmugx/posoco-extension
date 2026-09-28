@@ -18,6 +18,8 @@ pub fn extract_tool_calls(provider~ : String, Json) -> (Array[@kernel.ToolCall],
 
 pub fn extract_usage(provider~ : String, Json) -> @kernel.Usage? raise @error.ModelError
 
+pub fn fold_tool_attachments(Array[@kernel.Message], Bool) -> Array[@kernel.Message]
+
 pub fn message_item_text(provider~ : String, Map[String, Json]) -> String raise @error.ModelError
 
 pub fn message_to_responses_items(@kernel.Message) -> Array[Json]

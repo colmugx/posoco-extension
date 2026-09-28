@@ -1,8 +1,7 @@
-///|
-// Bun is a global under bun; Bun.env reads are
-// synchronous, so detection needs no subprocess; Bun.spawn launches detached
-// and returns immediately, so reports are genuinely non-blocking. The target
-// runtime is bun — do not use node:child_process.
+// js (bun) backend: env reads use the node `process` global (the same object
+// Bun.env aliases); Bun.spawn launches detached and returns immediately, so
+// reports are genuinely non-blocking. The target runtime is bun — do not use
+// node:child_process.
 
 ///|
 // Pure value pass-through only — an Option never crosses the js FFI here
@@ -10,7 +9,7 @@
 // as JS undefined, so a `?? null` fallback would decode as Some(null) and
 // disable the env gate entirely. Blank means missing.
 extern "js" fn bun_env_get(name : String) -> String =
-  #| (name) => Bun.env[name] ?? ""
+  #| (name) => process.env[name] ?? ""
 
 ///|
 fn herdr_env(name : String) -> String? {

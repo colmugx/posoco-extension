@@ -590,7 +590,9 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
 /// user-level file at `user_mcp_json~` — the host owns that location) and
 /// return a bridge ready to `attach` + `activate`. A malformed file fails
 /// loud here — before any connection is attempted — with a sanitized
-/// message.
+/// message. Async on native (the reader awaits fs); js reads synchronously
+/// since the node:fs envelope is sync, hence the lint suppression here.
+#warnings("-unused_async")
 pub async fn MCPToolBridge::discover(
   cwd~ : String,
   user_mcp_json~ : String,

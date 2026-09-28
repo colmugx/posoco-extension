@@ -50,7 +50,29 @@ fn project_mcp_json_path(cwd : String) -> String {
 /// Read one mcp.json. `Ok(None)` = the file does not exist (not an error);
 /// `Err` = it exists but cannot be read or is not valid JSON. Errors carry
 /// the path label only — file contents never leak into messages.
+/// Native `read_file_text` is async; the js one is sync, so the wrapper is
+/// split per target to keep asyncness honest.
+#cfg(not(target="js"))
 async fn read_mcp_json(
+  path : String,
+  label : String,
+) -> Result[Json?, String] noraise {
+  match read_file_text(path) {
+    Missing => Ok(None)
+    IoFailed => Err("mcp.json read failed for '\{label}'")
+    NotUtf8 => Err("mcp.json is not valid UTF-8: '\{label}'")
+    Text(text) => {
+      let json = @json.parse(text) catch {
+        _ => return Err("mcp.json is not valid JSON: '\{label}'")
+      }
+      Ok(Some(json))
+    }
+  }
+}
+
+///|
+#cfg(target="js")
+fn read_mcp_json(
   path : String,
   label : String,
 ) -> Result[Json?, String] noraise {
@@ -492,7 +514,9 @@ fn merge_server_configs(
 /// `<cwd>/.mcp.json` and the user file at the injected `user_mcp_json`
 /// path (the host owns where user-level config lives). A missing file
 /// contributes nothing; malformed content fails loud with a sanitized
-/// message.
+/// message. Async on native (the reader awaits fs); js reads synchronously
+/// since the node:fs envelope is sync, hence the lint suppression here.
+#warnings("-unused_async")
 async fn discover_mcp_servers(
   cwd : String,
   user_mcp_json : String,

@@ -1,17 +1,28 @@
 ///|
-// Bun is a global under bun, so `process` and `Bun` need no require/import.
-// `require("os")` is used only for the optional platform-detail probe.
+// `process` and `Bun` are globals under bun and need no import. node:os for
+// the optional platform-detail probe is bound with `#module` and injected
+// into the wrapper as a value (pattern follows posoco-ext-workspace
+// fs_port.js.mbt / moonbitlang/x/fs/fs_js.mbt).
 
 ///|
 extern "js" fn ps1_platform_is_windows() -> Bool =
   #| () => process.platform === "win32"
 
 ///|
-extern "js" fn ps1_platform_detail() -> String =
-  #| () => {
-  #|   try { return process.platform + " " + require("os").release() }
+#module("node:os")
+extern "js" fn os_release() -> String = "release"
+
+///|
+extern "js" fn ps1_js_platform_detail(release : () -> String) -> String =
+  #| (release) => {
+  #|   try { return process.platform + " " + release() }
   #|   catch { return process.platform }
   #| }
+
+///|
+fn ps1_platform_detail() -> String {
+  ps1_js_platform_detail(os_release)
+}
 
 ///|
 /// Absolute path of `name` on PATH, or "" when not found.

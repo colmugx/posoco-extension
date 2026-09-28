@@ -1,12 +1,10 @@
 // js (bun) target: file IO through node:fs sync APIs, all synchronous — no
-// Promise bridging. History: (1) BunFile `size`/`lastModified` are plain
-// number getters, not Promises — declaring them `@js_async.Promise` and
-// calling `.wait()` crashed with `p.then is not a function`; (2) `extern "js"
-// fn ... raise` typechecks but its call sites decode a MoonBit Result
-// (`$tag === 1`) that a raw node return value never has, so EVERY call
-// fails. Both facts are recorded in docs/questions.md (2026-08-19). Throwing
-// node calls therefore cross the FFI as JSON string envelopes decoded on the
-// MoonBit side — the same boundary shape cetas-js's host_* functions use.
+// Promise bridging. node:fs members are bound with `#module` (the compiler
+// emits the import) and injected into the inline-JS envelopes as values;
+// pattern follows posoco-ext-workspace fs_port.js.mbt /
+// moonbitlang/x/fs/fs_js.mbt. Throwing node calls cross the FFI as JSON
+// string envelopes decoded on the MoonBit side (docs/questions.md
+// 2026-08-19; the `require` fallback recorded there is retired).
 
 ///|
 /// node:fs existsSync never throws; a plain pass-through extern is safe.
@@ -14,21 +12,60 @@
 extern "js" fn node_fs_exists_sync(path : String) -> Bool = "existsSync"
 
 ///|
-extern "js" fn js_stat_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
+/// Opaque node Stats / Buffer handles; only the inline-JS envelopes touch
+/// them.
+#external
+priv type FsStats
+
+///|
+#external
+priv type FsBuffer
+
+///|
+#module("node:fs")
+extern "js" fn fs_stat_sync(path : String) -> FsStats = "statSync"
+
+///|
+/// The 2-arg readFileSync returns a JS string; the 1-arg form returns a
+/// Buffer, whose base64 conversion stays inside the envelope.
+#module("node:fs")
+extern "js" fn fs_read_text_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_read_buffer_sync(path : String) -> FsBuffer = "readFileSync"
+
+///|
+extern "js" fn js_stat_envelope(
+  stat : (String) -> FsStats,
+  path : String,
+) -> String =
+  #| (stat, path) => {
   #|   try {
-  #|     const st = fs.statSync(path);
+  #|     const st = stat(path);
   #|     return JSON.stringify({ ok: true, size: st.size, ms: st.mtimeMs, dir: st.isDirectory() });
   #|   } catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
-extern "js" fn js_read_text_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
-  #|   try { return JSON.stringify({ ok: true, text: fs.readFileSync(path, "utf8") }); }
+extern "js" fn js_read_text_envelope(
+  read_text : (String, String) -> String,
+  path : String,
+) -> String =
+  #| (readText, path) => {
+  #|   try { return JSON.stringify({ ok: true, text: readText(path, "utf8") }); }
   #|   catch { return JSON.stringify({ ok: false }); }
+  #| }
+
+///|
+extern "js" fn js_read_base64_envelope(
+  read_buffer : (String) -> FsBuffer,
+  path : String,
+) -> String =
+  #| (readBuffer, path) => {
+  #|   try {
+  #|     return JSON.stringify({ ok: true, b64: readBuffer(path).toString("base64") });
+  #|   } catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
@@ -41,7 +78,7 @@ priv struct JsStatInfo {
 
 ///|
 fn js_stat_info(path : String) -> JsStatInfo {
-  let json : Json = @json.parse(js_stat_envelope(path)) catch {
+  let json : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
     _ => return { ok: false, size: 0, ms: 0.0, is_dir: false, }
   }
   let fields = match json {
@@ -105,7 +142,9 @@ impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
 fn js_read_page(
   path : String,
 ) -> (Array[String], Int64) raise @posoco.RuntimeError {
-  let envelope : Json = @json.parse(js_read_text_envelope(path)) catch {
+  let envelope : Json = @json.parse(
+    js_read_text_envelope(fs_read_text_sync, path),
+  ) catch {
     _ => raise read_failure("decode", path)
   }
   let fields = match envelope {
@@ -145,6 +184,23 @@ impl FsIo for JsFsIo with fn read_last_lines(_self, path : String, take : Int) -
   let take_eff = if take < total { take } else { total }
   let window = lines[total - take_eff:].to_owned()
   { lines: window, total_lines: total, total_bytes, }
+}
+
+///|
+impl FsIo for JsFsIo with fn read_image_base64(_self, path : String) -> String {
+  let json : Json = @json.parse(
+    js_read_base64_envelope(fs_read_buffer_sync, path),
+  ) catch {
+    _ => raise read_failure("read", path)
+  }
+  guard json is Json::Object(fields) else { raise read_failure("read", path) }
+  let ok = fields.get("ok") is Some(Json::True)
+  let b64 = fields.get("b64")
+  if ok && b64 is Some(Json::String(value)) {
+    value
+  } else {
+    raise read_failure("read", path)
+  }
 }
 
 ///|

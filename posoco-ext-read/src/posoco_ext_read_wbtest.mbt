@@ -661,3 +661,39 @@ test "read_format_page_uses_compact_prefix_and_marker" {
   assert_true(body.has_suffix("…[cut]"))
   assert_false(body.contains("L9: "))
 }
+
+///|
+#cfg(target="native")
+async test "read_attaches_image_files_whole_for_vision" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-read-image")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    let path = dir + "/shot.png"
+    @fs.write_file(path, "png-bytes-here", create_mode=CreateNew)
+    let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
+    match outcome {
+      Ok(
+        @posoco.ToolOutcome::SuccessWithAttachments(
+          content~,
+          structured=Some(_),
+          attachments~
+        )
+      ) => {
+        assert_true(content.contains("shot.png"))
+        assert_eq(attachments.length(), 1)
+        // The payload round-trips through the same base64 encoder.
+        let expected = @base64.encode(@utf8.encode("png-bytes-here")[:])
+        match attachments[0] {
+          @posoco.Content::Image(media_type="image/png", data~) =>
+            inspect(data, content=expected)
+          _ => fail("expected an image/png attachment block")
+        }
+      }
+      Ok(other) =>
+        fail("expected SuccessWithAttachments, got \{other.summary()}")
+      Err(error) => fail("image read must not raise: \{error.to_string()}")
+    }
+  }
+}

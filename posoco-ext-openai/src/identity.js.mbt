@@ -1,7 +1,9 @@
 ///|
 /// JS-backend platform probes (Bun/Node host). The externs return "" on
 /// failure; the wrappers fall back to "unknown" so header values are never
-/// blank.
+/// blank. node:os is bound with `#module` and injected into the wrapper as a
+/// value (pattern follows posoco-ext-workspace fs_port.js.mbt /
+/// moonbitlang/x/fs/fs_js.mbt).
 
 ///|
 fn identity_platform() -> String {
@@ -15,7 +17,7 @@ fn identity_platform() -> String {
 
 ///|
 fn identity_os_release() -> String {
-  let release = identity_js_os_release()
+  let release = identity_js_os_release(os_release)
   if release.length() > 0 {
     release
   } else {
@@ -40,9 +42,13 @@ extern "js" fn identity_js_platform() -> String =
   #| }
 
 ///|
-extern "js" fn identity_js_os_release() -> String =
-  #| () => {
-  #|   try { return require('os').release() || ''; } catch { return ''; }
+#module("node:os")
+extern "js" fn os_release() -> String = "release"
+
+///|
+extern "js" fn identity_js_os_release(release : () -> String) -> String =
+  #| (release) => {
+  #|   try { return release() || ''; } catch { return ''; }
   #| }
 
 ///|

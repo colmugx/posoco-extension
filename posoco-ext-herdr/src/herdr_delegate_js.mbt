@@ -1,7 +1,7 @@
 ///|
-// js (bun) backend wiring: detection reads Bun.env through the reporter's
-// shared `herdr_env` helper; execution spawns the herdr CLI through the Bun
-// spawn envelope.
+// js (bun) backend wiring: detection reads the node `process` env through
+// the reporter's shared `herdr_env` helper; execution spawns the herdr CLI
+// through the Bun spawn envelope.
 
 ///|
 pub fn HerdrDelegate::detect(

@@ -7,11 +7,26 @@
 extern "js" fn node_fs_exists_sync(path : String) -> Bool = "existsSync"
 
 ///|
-extern "js" fn js_kind_readdir_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
+/// Opaque node Stats-free readdir/read envelopes: node:fs members are bound
+/// with `#module` and injected into the inline-JS envelopes as values
+/// (pattern follows posoco-ext-workspace fs_port.js.mbt /
+/// moonbitlang/x/fs/fs_js.mbt); throwing node calls cross the FFI as JSON
+/// string envelopes decoded on the MoonBit side.
+#module("node:fs")
+extern "js" fn fs_readdir_sync(path : String) -> FixedArray[String] = "readdirSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_read_text_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+extern "js" fn js_kind_readdir_envelope(
+  readdir : (String) -> FixedArray[String],
+  path : String,
+) -> String =
+  #| (readdir, path) => {
   #|   try {
-  #|     const names = fs.readdirSync(path)
+  #|     const names = readdir(path)
   #|       .filter((n) => n.endsWith(".md"))
   #|       .sort();
   #|     return JSON.stringify({ ok: true, names });
@@ -19,11 +34,13 @@ extern "js" fn js_kind_readdir_envelope(path : String) -> String =
   #| }
 
 ///|
-extern "js" fn js_kind_read_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
+extern "js" fn js_kind_read_envelope(
+  read_text : (String, String) -> String,
+  path : String,
+) -> String =
+  #| (readText, path) => {
   #|   try {
-  #|     return JSON.stringify({ ok: true, data: fs.readFileSync(path, "utf8") });
+  #|     return JSON.stringify({ ok: true, data: readText(path, "utf8") });
   #|   } catch { return JSON.stringify({ ok: false }); }
   #| }
 
@@ -36,7 +53,7 @@ priv struct KindJsList {
 ///|
 fn js_kind_list(path : String) -> KindJsList {
   let fallback : KindJsList = { ok: false, names: [], }
-  let json : Json = @json.parse(js_kind_readdir_envelope(path)) catch {
+  let json : Json = @json.parse(js_kind_readdir_envelope(fs_readdir_sync, path)) catch {
     _ => return fallback
   }
   let fields = match json {
@@ -66,7 +83,7 @@ fn js_kind_list(path : String) -> KindJsList {
 
 ///|
 fn js_kind_text(path : String) -> String? {
-  let json : Json = @json.parse(js_kind_read_envelope(path)) catch {
+  let json : Json = @json.parse(js_kind_read_envelope(fs_read_text_sync, path)) catch {
     _ => return None
   }
   match json {

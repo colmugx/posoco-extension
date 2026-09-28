@@ -32,11 +32,15 @@ fn js_wbtest_call(source : String) -> @posoco.ToolCall {
 ///|
 /// Write an executable fixture script (tmpdir-fake-binary pattern from
 /// toolchain_wbtest.mbt). js_write_file_envelope cannot set modes, so the
-/// exec bit is applied here; returns "" on success.
-extern "js" fn js_wbtest_write_exec(path : String, body : String) -> String =
-  #| (path, body) => {
-  #|   const fs = require("node:fs");
-  #|   try { fs.writeFileSync(path, body, { mode: 0o755 }); return ""; }
+/// exec bit is applied here; returns "" on success. The `#module`-bound
+/// node:fs writer is injected as a value.
+extern "js" fn js_wbtest_write_exec(
+  write_file : (String, String) -> Unit,
+  path : String,
+  body : String,
+) -> String =
+  #| (writeFile, path, body) => {
+  #|   try { writeFile(path, body, { mode: 0o755 }); return ""; }
   #|   catch (e) { return String(e); }
   #| }
 
@@ -49,7 +53,8 @@ extern "js" fn js_wbtest_set_env(name : String, value : String) -> Unit =
 ///|
 /// Fresh temp dir populated with executable `#!/bin/sh` fixture scripts.
 fn js_wbtest_fixture_dir(scripts : Array[(String, String)]) -> String raise {
-  let fields = match js_envelope_fields(js_mktmpdir_envelope("mbtx-js-test-")) {
+  let fields = match
+    js_envelope_fields(js_mktmpdir_envelope(fs_mkdtemp_sync, "mbtx-js-test-")) {
     Some(fields) => fields
     None => fail("mbtx js tests: mkdtemp envelope decode failed")
   }
@@ -59,7 +64,7 @@ fn js_wbtest_fixture_dir(scripts : Array[(String, String)]) -> String raise {
   let dir = js_fields_str(fields, "dir")
   for script in scripts {
     let (name, body) = script
-    let error = js_wbtest_write_exec("\{dir}/\{name}", body)
+    let error = js_wbtest_write_exec(fs_write_file_sync, "\{dir}/\{name}", body)
     if error != "" {
       fail("mbtx js tests: could not write fixture \{name}: \{error}")
     }
@@ -96,7 +101,7 @@ async fn js_wbtest_proc_count(pattern : String) -> Int {
 test "which probe resolves executables inside one directory" {
   let dir = js_wbtest_fixture_dir([("probe-yes", "#!/bin/sh\nexit 0\n")])
   let plain = dir + "/probe-plain"
-  let _ = js_write_file_envelope(plain, "not executable")
+  let _ = js_write_file_envelope(fs_write_file_sync, plain, "not executable")
   assert_true(js_which_in("probe-yes", dir) != "")
   // Mere existence is not enough: the probe requires the exec bit.
   assert_true(js_which_in("probe-plain", dir) == "")

@@ -1,8 +1,9 @@
 ///|
-// Bun is a global under bun: `extern "js" fn ... = #| () => Bun.xxx()` works
-// without require/import. FFI stays on the two
-// proven stable boundaries (docs/questions.md 2026-08-19): pure value
-// pass-through (String/Bool) and Promise bridging via `@js_async.Promise::wait`.
+// node:fs sync APIs bound with `#module` and injected into the inline-JS
+// wrappers as values (pattern follows posoco-ext-workspace fs_port.js.mbt /
+// moonbitlang/x/fs/fs_js.mbt); FFI stays on the proven stable boundaries
+// (docs/questions.md 2026-08-19): pure value pass-through and typed
+// ok/content result objects.
 
 ///|
 /// `process.env[name] ?? ""` — pure value pass-through. Blank and missing
@@ -25,29 +26,79 @@ pub fn runner_get_env(name : String) -> String? {
 }
 
 ///|
-/// `Bun.file(path).text()` — Promise<String> that rejects when the file is
-/// missing or unreadable; the rejection is caught by the caller.
-extern "js" fn bun_file_text(path : String) -> @js_async.Promise[String] =
-  #| (path) => Bun.file(path).text()
+/// Opaque ok/content results: "" cannot double as a failure sentinel
+/// (empty home files are valid content).
+#external
+priv type JsTextResult
+
+///|
+#external
+priv type JsWriteResult
+
+///|
+extern "js" fn JsTextResult::is_ok(self : Self) -> Bool =
+  #| (res) => res.ok
+
+///|
+extern "js" fn JsTextResult::content(self : Self) -> String =
+  #| (res) => res.content
+
+///|
+extern "js" fn JsWriteResult::is_ok(self : Self) -> Bool =
+  #| (res) => res.ok
+
+///|
+extern "js" fn JsWriteResult::content(self : Self) -> String =
+  #| (res) => res.content
+
+///|
+#module("node:fs")
+extern "js" fn fs_read_text_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_write_file_sync(path : String, content : String) -> Unit = "writeFileSync"
+
+///|
+/// mkdirSync's 2nd argument is a JS options object, so the declared 2nd
+/// parameter is only a value-passing shape; the wrapper builds
+/// `{ recursive: true }` on the JS side.
+#module("node:fs")
+extern "js" fn fs_mkdir_sync(path : String, recursive : Bool) -> Unit = "mkdirSync"
+
+///|
+extern "js" fn js_read_home_text(
+  read_text : (String, String) -> String,
+  path : String,
+) -> JsTextResult =
+  #| (readFile, path) => {
+  #|   try {
+  #|     return { ok: true, content: readFile(path, "utf8") };
+  #|   } catch (error) {
+  #|     return { ok: false, content: String(error?.message ?? error) };
+  #|   }
+  #| }
+
+///|
+extern "js" fn js_write_home_file(
+  write_file : (String, String) -> Unit,
+  path : String,
+  content : String,
+) -> JsWriteResult =
+  #| (writeFile, path, content) => {
+  #|   try { writeFile(path, content); return { ok: true, content: "" }; }
+  #|   catch (error) { return { ok: false, content: String(error?.message ?? error) }; }
+  #| }
 
 ///|
 /// `fs.mkdirSync(dir, { recursive: true })` wrapped so a failure degrades to
-/// a no-op (an existing directory is the normal case; Bun.write surfaces
-/// real problems itself). Synchronous node:fs is a Bun builtin.
-extern "js" fn js_mkdir_p(dir : String) -> Unit =
-  #| (dir) => { try { require("node:fs").mkdirSync(dir, { recursive: true }); } catch (e) {} }
+/// a no-op (an existing directory is the normal case; the write below
+/// surfaces real problems itself). Synchronous node:fs is a Bun builtin.
+extern "js" fn js_mkdir_p(mkdir : (String, Bool) -> Unit, dir : String) -> Unit =
+  #| (mkdir, dir) => { try { mkdir(dir, { recursive: true }); } catch (e) {} }
 
 ///|
-/// `Bun.write(path, content)` — Promise<number> (bytes written); the count
-/// is discarded, only the rejection matters.
-extern "js" fn bun_write_file(
-  path : String,
-  content : String,
-) -> @js_async.Promise[Int] =
-  #| (path, content) => Bun.write(path, content)
-
-///|
-/// js (bun) `NmemPlatform`: home files via Bun.file / Bun.write.
+/// js `NmemPlatform`: home files through node:fs (#module bindings).
 pub(all) struct PlatformFs {
   // empty
 }
@@ -73,8 +124,12 @@ pub impl NmemPlatform for PlatformFs with fn read_home_file(
   match home_path(rel) {
     None => None
     Some(path) => {
-      let text = bun_file_text(path).wait() catch { _ => return None }
-      Some(text)
+      let res = js_read_home_text(fs_read_text_sync, path)
+      if res.is_ok() {
+        Some(res.content())
+      } else {
+        None
+      }
     }
   }
 }
@@ -92,12 +147,13 @@ pub impl NmemPlatform for PlatformFs with fn write_home_file(
         Some(at) => path[:at].to_owned()
         None => path
       }
-      js_mkdir_p(dir)
-      let written = bun_write_file(path, content).wait() catch {
-        err => return Err(err.to_string())
+      js_mkdir_p(fs_mkdir_sync, dir)
+      let res = js_write_home_file(fs_write_file_sync, path, content)
+      if res.is_ok() {
+        Ok(())
+      } else {
+        Err(res.content())
       }
-      ignore(written)
-      Ok(())
     }
   }
 }

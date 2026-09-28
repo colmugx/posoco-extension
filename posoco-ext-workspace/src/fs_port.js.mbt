@@ -296,18 +296,24 @@ pub impl WorkspaceFs for JsWorkspaceFs with fn write_file(_self, path, content) 
 ///|
 /// Write a sibling temp file (pid+time+random suffix, mode 0o600) then rename
 /// over the destination. A failed write removes the temp file; a failed
-/// rename leaves the original destination intact.
-extern "js" fn write_file_atomic_ffi(path : String, contents : String) -> Bool =
-  #| (path, contents) => {
-  #|   const fs = require("node:fs");
+/// rename leaves the original destination intact. The `#module`-bound node:fs
+/// members are injected as values — no `require` inside the FFI.
+extern "js" fn write_file_atomic_ffi(
+  write_file : (String, String) -> Unit,
+  rename : (String, String) -> Unit,
+  unlink : (String) -> Unit,
+  path : String,
+  contents : String,
+) -> Bool =
+  #| (writeFile, rename, unlink, path, contents) => {
   #|   const suffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   #|   const tmp = `${path}.tmp-${suffix}`;
   #|   try {
-  #|     fs.writeFileSync(tmp, contents, { encoding: "utf8", mode: 0o600 });
-  #|     fs.renameSync(tmp, path);
+  #|     writeFile(tmp, contents, { encoding: "utf8", mode: 0o600 });
+  #|     rename(tmp, path);
   #|     return true;
   #|   } catch {
-  #|     try { fs.unlinkSync(tmp); } catch {}
+  #|     try { unlink(tmp); } catch {}
   #|     return false;
   #|   }
   #| }
@@ -318,7 +324,9 @@ pub impl WorkspaceFs for JsWorkspaceFs with fn write_file_atomic(
   path,
   content,
 ) {
-  if !write_file_atomic_ffi(path, content) {
+  if !write_file_atomic_ffi(
+      write_file_sync_str, rename_sync, unlink_sync, path, content,
+    ) {
     raise fs_err("write_file_atomic")
   }
 }

@@ -16,9 +16,15 @@ pub fn derive_prompt_cache_key(String) -> String
 
 pub fn encode_chat_message_content(Array[@kernel.Content], supports_images? : Bool) -> EncodedChatContent
 
+pub fn fold_tool_attachments(Array[@kernel.Message], Bool) -> Array[@kernel.Message]
+
+pub fn image_placeholder(String, String) -> String
+
 pub fn is_prompt_cache_key_rejection(String) -> Bool
 
 pub fn is_transient_model_error(@error.ModelError) -> Bool
+
+pub fn outcome_wire_text(@kernel.ToolOutcome) -> String
 
 pub fn parse_reset_timestamp(String, default_tz_offset_minutes? : Int, now_ms~ : Int64) -> Int64?
 
