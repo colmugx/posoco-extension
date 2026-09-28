@@ -38,15 +38,8 @@ fn usage_call(name~ : String, inner? : String = "") -> @posoco.ToolCall {
 }
 
 ///|
-fn result_event(
-  call : @posoco.ToolCall,
-  is_error? : Bool = false,
-) -> @posoco.TurnEvent {
-  @posoco.TurnEvent::ToolCallResult(
-    call~,
-    result=@posoco.tk_ok_result("ok"),
-    is_error~,
-  )
+fn result_event(call : @posoco.ToolCall) -> @posoco.TurnEvent {
+  @posoco.TurnEvent::ToolCallSucceeded(call~, content="ok", structured=None, attachments=[])
 }
 
 ///|
@@ -311,7 +304,13 @@ test "usage_counts_direct_calls_skips_errors_unattributed_unscoped" {
   // Failed executions never count.
   profiles.on_event_at(
     Some(scope_for("s1")),
-    result_event(usage_call(name="mcp_search"), is_error=true),
+    @posoco.TurnEvent::ToolCallFailed(
+      call=usage_call(name="mcp_search"),
+      failure=@kernel.ToolFailure::ReportedError(
+        content="nope",
+        structured=None,
+      ),
+    ),
   )
   // Unattributed tool names are dropped.
   profiles.on_event_at(

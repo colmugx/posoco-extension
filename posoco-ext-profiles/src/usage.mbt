@@ -24,11 +24,11 @@ fn inner_tool_name(name : String, arguments : Json) -> String {
 }
 
 ///|
-/// Watch committed tool results. Only successful executions count
-/// (`is_error` is derived from the outcome variant), only tools present in
-/// the static attribution table count, and everything is keyed by session:
-/// a long-lived Agent serves many sessions, and an unscoped bucket would
-/// corrupt every save — out-of-run diagnostics carrying no scope are
+/// Watch committed tool results. Only successful executions count (failed,
+/// rejected, and abandoned calls never attribute usage), only tools present
+/// in the static attribution table count, and everything is keyed by
+/// session: a long-lived Agent serves many sessions, and an unscoped bucket
+/// would corrupt every save — out-of-run diagnostics carrying no scope are
 /// skipped.
 pub impl @posoco.Observer for Profiles with fn on_event_at(
   self : Profiles,
@@ -36,10 +36,7 @@ pub impl @posoco.Observer for Profiles with fn on_event_at(
   event : @posoco.TurnEvent,
 ) -> Unit {
   match event {
-    @posoco.TurnEvent::ToolCallResult(call~, is_error~, ..) => {
-      if is_error {
-        return
-      }
+    @posoco.TurnEvent::ToolCallSucceeded(call~, ..) => {
       let session_id = match scope {
         Some(s) => s.session_id.to_string()
         None => return
