@@ -619,3 +619,64 @@ test "startup_guidance preserves routing and lifecycle rules compactly" {
   assert_true(text.contains("source_app=\"cetas\""))
   assert_true(text.length() < 1800)
 }
+
+///|
+fn observer_tool_call() -> @posoco.ToolCall {
+  {
+    call_id: @posoco.CallId::unchecked("call_9"),
+    name: @posoco.ToolName::unchecked("grep"),
+    arguments: Json::null(),
+  }
+}
+
+///|
+/// The before_model snapshot only carries earlier rounds' ToolMessages; the
+/// Observer completes the current round from the terminal tool-call events.
+/// Abandoned calls have no model-visible outcome and append nothing.
+async test "on_event_at: terminal tool events complete the snapshot with current-round outcomes" {
+  let ext = nmem_ext()
+  ext.config = Some(lane_config())
+  let snapshot : Array[@posoco.Message] = [@posoco.tk_user_msg("run the check")]
+  ignore(@posoco.PipelineHook::before_model(ext, snapshot))
+  @posoco.Observer::on_event_at(
+    ext,
+    None,
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=assistant_msg("running"),
+      usage=None,
+    ),
+  )
+  @posoco.Observer::on_event_at(
+    ext,
+    None,
+    @posoco.TurnEvent::ToolCallSucceeded(
+      call=observer_tool_call(),
+      content="all green",
+      structured=None,
+      attachments=[],
+    ),
+  )
+  @posoco.Observer::on_event_at(
+    ext,
+    None,
+    @posoco.TurnEvent::ToolCallRejected(
+      call=observer_tool_call(),
+      reason=UnknownTool,
+    ),
+  )
+  @posoco.Observer::on_event_at(
+    ext,
+    None,
+    @posoco.TurnEvent::ToolCallAbandoned(
+      call=observer_tool_call(),
+      reason="run ended",
+    ),
+  )
+  inspect(ext.transcript.length(), content="4")
+  guard ext.transcript[2] is @posoco.Message::ToolMessage(..) else {
+    fail("expected the tool outcome appended")
+  }
+  guard ext.transcript[3] is @posoco.Message::ToolMessage(..) else {
+    fail("expected the rejection appended")
+  }
+}

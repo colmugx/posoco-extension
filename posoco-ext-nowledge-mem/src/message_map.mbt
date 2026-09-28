@@ -82,9 +82,73 @@ fn assistant_text(
 fn outcome_visible_text(outcome : @posoco.ToolOutcome) -> String {
   match outcome {
     @posoco.ToolOutcome::Success(content~, ..) => content
+    @posoco.ToolOutcome::SuccessWithAttachments(content~, ..) => content
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => content
     @posoco.ToolOutcome::RuntimeFailure(message~, ..) => message
     @posoco.ToolOutcome::NotExecuted(reason~, ..) => reason.to_string()
+  }
+}
+
+///|
+/// Model-visible transcript message for a terminal tool-call Observer
+/// event — the same `ToolMessage` a model adaptor writes for the outcome.
+/// The `before_model` snapshot only carries tool outcomes from earlier
+/// rounds, so the Observer completes the current round from these events
+/// (the assistant-side twin is `record_assistant`). `None` for every
+/// non-terminal node and for `ToolCallAbandoned`: an abandoned call has no
+/// outcome, so the model never sees one and there is nothing to sync.
+pub fn tool_event_message(event : @posoco.TurnEvent) -> @posoco.Message? {
+  match event {
+    @posoco.TurnEvent::ToolCallSucceeded(
+      call~,
+      content~,
+      structured~,
+      attachments~
+    ) => {
+      let outcome = if attachments.is_empty() {
+        @posoco.ToolOutcome::Success(content~, structured~)
+      } else {
+        @posoco.ToolOutcome::SuccessWithAttachments(
+          content~,
+          structured~,
+          attachments~,
+        )
+      }
+      Some(
+        @posoco.Message::ToolMessage(
+          call_id=call.call_id,
+          tool_name=call.name,
+          outcome~,
+        ),
+      )
+    }
+    @posoco.TurnEvent::ToolCallFailed(call~, failure~) => {
+      let outcome = match failure {
+        ReportedError(content~, structured~) =>
+          @posoco.ToolOutcome::ToolReportedError(content~, structured~)
+        Runtime(category~, message~) =>
+          @posoco.ToolOutcome::RuntimeFailure(error_category=category, message~)
+      }
+      Some(
+        @posoco.Message::ToolMessage(
+          call_id=call.call_id,
+          tool_name=call.name,
+          outcome~,
+        ),
+      )
+    }
+    @posoco.TurnEvent::ToolCallRejected(call~, reason~) =>
+      Some(
+        @posoco.Message::ToolMessage(
+          call_id=call.call_id,
+          tool_name=call.name,
+          outcome=@posoco.ToolOutcome::NotExecuted(
+            reason~,
+            original_call_id=call.call_id,
+          ),
+        ),
+      )
+    _ => None
   }
 }
 

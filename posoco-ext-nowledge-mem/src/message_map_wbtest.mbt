@@ -316,3 +316,99 @@ test "map_messages: skips the injected memory message and titles from the real u
   )
   inspect(thread_title(messages, "posoco"), content="first real question")
 }
+
+///|
+/// Terminal tool-call Observer events project onto the same ToolMessage a
+/// model adaptor writes for the outcome; non-terminal nodes and Abandoned
+/// (no model-visible outcome) project to None.
+test "tool_event_message: terminal nodes map onto model-visible tool messages" {
+  let call = named_tool_call("grep")
+  guard tool_event_message(
+      @posoco.TurnEvent::ToolCallSucceeded(
+        call~,
+        content="hit",
+        structured=None,
+        attachments=[],
+      ),
+    )
+    is Some(
+      @posoco.Message::ToolMessage(
+        outcome=Success(content="hit", structured=None),
+        ..
+      )
+    ) else {
+    fail("expected a Success ToolMessage")
+  }
+  guard tool_event_message(
+      @posoco.TurnEvent::ToolCallSucceeded(
+        call~,
+        content="chart",
+        structured=None,
+        attachments=[
+          @posoco.Content::Image(media_type="image/png", data="aGk="),
+        ],
+      ),
+    )
+    is Some(
+      @posoco.Message::ToolMessage(outcome=SuccessWithAttachments(..), ..)
+    ) else {
+    fail("expected a SuccessWithAttachments ToolMessage")
+  }
+  guard tool_event_message(
+      @posoco.TurnEvent::ToolCallFailed(
+        call~,
+        failure=Runtime(category="adapter", message="io broke"),
+      ),
+    )
+    is Some(
+      @posoco.Message::ToolMessage(
+        outcome=RuntimeFailure(message="io broke", ..),
+        ..
+      )
+    ) else {
+    fail("expected a RuntimeFailure ToolMessage")
+  }
+  guard tool_event_message(
+      @posoco.TurnEvent::ToolCallFailed(
+        call~,
+        failure=ReportedError(content="exit 1", structured=None),
+      ),
+    )
+    is Some(
+      @posoco.Message::ToolMessage(
+        outcome=ToolReportedError(content="exit 1", ..),
+        ..
+      )
+    ) else {
+    fail("expected a ToolReportedError ToolMessage")
+  }
+  guard tool_event_message(
+      @posoco.TurnEvent::ToolCallRejected(call~, reason=UnknownTool),
+    )
+    is Some(
+      @posoco.Message::ToolMessage(
+        outcome=NotExecuted(reason=UnknownTool, ..),
+        ..
+      )
+    ) else {
+    fail("expected a NotExecuted ToolMessage")
+  }
+}
+
+///|
+test "tool_event_message: non-terminal nodes and Abandoned project to None" {
+  let call = named_tool_call("grep")
+  let events : Array[@posoco.TurnEvent] = [
+    TurnStarted,
+    ToolCallPending(call),
+    ToolCallApproved(call~, consent_scope=Some("workspace")),
+    ToolCallStarted(call~),
+    ToolCallAbandoned(call~, reason="run ended"),
+    TurnCompleted,
+  ]
+  for event in events {
+    guard tool_event_message(event) is None else {
+      fail("expected no transcript message")
+    }
+  }
+}

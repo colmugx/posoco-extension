@@ -55,7 +55,8 @@ pub struct NowledgeMem {
   /// appends whose ops replay on the first attached drain (D8).
   mut attached : Bool
   /// Latest model-visible transcript snapshot (before_model) completed with
-  /// the committed assistant replies; the unit the sync engine flushes.
+  /// the committed assistant replies and current-round tool outcomes; the
+  /// unit the sync engine flushes.
   mut transcript : Array[@posoco.Message]
   mut current_session : String?
   engine : SyncEngine
@@ -319,17 +320,25 @@ pub impl @posoco.PipelineHook for NowledgeMem with fn before_model(
 }
 
 ///|
+/// Append one model-visible message to the snapshot unless it is already
+/// the last entry (duplicate committed/delivery guard).
+fn NowledgeMem::record_message(
+  self : NowledgeMem,
+  message : @posoco.Message,
+) -> Unit {
+  let last = self.transcript.length() - 1
+  if last < 0 || self.transcript[last] != message {
+    self.transcript.push(message)
+  }
+}
+
+///|
 fn NowledgeMem::record_assistant(
   self : NowledgeMem,
   message : @posoco.Message,
 ) -> Unit {
   match message {
-    @posoco.Message::AssistantMessage(..) => {
-      let last = self.transcript.length() - 1
-      if last < 0 || self.transcript[last] != message {
-        self.transcript.push(message)
-      }
-    }
+    @posoco.Message::AssistantMessage(..) => self.record_message(message)
     _ => ()
   }
 }
@@ -385,6 +394,16 @@ pub impl @posoco.Observer for NowledgeMem with fn on_event_at(
       }
     @posoco.TurnEvent::ModelResponseReceived(message~, ..) =>
       self.record_assistant(message)
+    @posoco.TurnEvent::ToolCallSucceeded(..)
+    | @posoco.TurnEvent::ToolCallFailed(..)
+    | @posoco.TurnEvent::ToolCallRejected(..) =>
+      // Complete the snapshot with the current round's tool outcomes: the
+      // before_model snapshot only carries earlier rounds' ToolMessages, so
+      // a turn ending after tools would otherwise sync stale results.
+      match tool_event_message(event) {
+        Some(message) => self.record_message(message)
+        None => ()
+      }
     @posoco.TurnEvent::SessionRedirect(from~, to~, ..) => {
       // The snapshot may belong to the old session, so stage it under the
       // old id (best effort — the observer slot cannot flush), then follow
