@@ -49,7 +49,10 @@ async test "ephemeral Memoh store preserves one-turn tool loop" {
     config=@posoco.tk_config(),
   )
 
-  let result = agent.run_turn(@posoco.tk_user_msg("use echo"), "memoh-tool-loop")
+  let result = agent.run_turn(
+    @posoco.tk_user_msg("use echo"),
+    "memoh-tool-loop",
+  )
   assert_eq(model.call_count(), 2)
   assert_eq(tools.exec_records().length(), 1)
   assert_eq(memoh_tool_loop_final_text(result), "done")
