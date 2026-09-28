@@ -1,8 +1,8 @@
 ///|
 /// EditTools — file editing tool provider (exact string replacement).
 ///
-/// On native, IO via `@fs` (atomic temp+rename). On js (bun), IO via
-/// `Bun.file`/`Bun.write` + `move()`. On wasm-gc, the tool is not
+/// On native, IO via `@fs` (atomic temp+rename). On js, IO via
+/// node:fs (`#module` bindings, atomic temp+rename). On wasm-gc, the tool is not
 /// listed and execute raises `RuntimeError::InvocationFailed`.
 ///
 /// Match contract: `old_text` must match the file content exactly and —

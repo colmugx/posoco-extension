@@ -1,7 +1,11 @@
 // js (bun) target: file IO through node:fs sync APIs, all synchronous — no
-// Promise bridging. Throwing node calls cross the FFI as JSON string
-// envelopes decoded on the MoonBit side (see docs/questions.md 2026-08-19
-// for why plain/raising extern forms are not usable for them).
+// Promise bridging. node:fs members are bound with `#module` and injected
+// into the inline-JS envelopes as values (pattern follows
+// posoco-ext-workspace fs_port.js.mbt / moonbitlang/x/fs/fs_js.mbt).
+// Throwing node calls cross the FFI as JSON string envelopes decoded on the
+// MoonBit side (see docs/questions.md 2026-08-19 for why plain/raising
+// extern forms are not usable for them; the `require` fallback recorded
+// there is retired).
 
 ///|
 /// node:fs existsSync never throws; a plain pass-through extern is safe.
@@ -9,39 +13,66 @@
 extern "js" fn node_fs_exists_sync(path : String) -> Bool = "existsSync"
 
 ///|
-extern "js" fn js_stat_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
+#external
+priv type FsStats
+
+///|
+#module("node:fs")
+extern "js" fn fs_stat_sync(path : String) -> FsStats = "statSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_read_text_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_write_file_sync(path : String, data : String) -> Unit = "writeFileSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_rename_sync(old_path : String, new_path : String) -> Unit = "renameSync"
+
+///|
+extern "js" fn js_stat_envelope(
+  stat : (String) -> FsStats,
+  path : String,
+) -> String =
+  #| (stat, path) => {
   #|   try {
-  #|     const st = fs.statSync(path);
+  #|     const st = stat(path);
   #|     return JSON.stringify({ ok: true, size: st.size, ms: st.mtimeMs });
   #|   } catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
-extern "js" fn js_read_text_envelope(path : String) -> String =
-  #| (path) => {
-  #|   const fs = require("node:fs");
-  #|   try { return JSON.stringify({ ok: true, text: fs.readFileSync(path, "utf8") }); }
+extern "js" fn js_read_text_envelope(
+  read_text : (String, String) -> String,
+  path : String,
+) -> String =
+  #| (readText, path) => {
+  #|   try { return JSON.stringify({ ok: true, text: readText(path, "utf8") }); }
   #|   catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
-extern "js" fn js_write_envelope(path : String, data : String) -> String =
-  #| (path, data) => {
-  #|   const fs = require("node:fs");
-  #|   try { fs.writeFileSync(path, data); return JSON.stringify({ ok: true }); }
+extern "js" fn js_write_envelope(
+  write_file : (String, String) -> Unit,
+  path : String,
+  data : String,
+) -> String =
+  #| (writeFile, path, data) => {
+  #|   try { writeFile(path, data); return JSON.stringify({ ok: true }); }
   #|   catch { return JSON.stringify({ ok: false }); }
   #| }
 
 ///|
 extern "js" fn js_rename_envelope(
+  rename : (String, String) -> Unit,
   old_path : String,
   new_path : String,
 ) -> String =
-  #| (oldPath, newPath) => {
-  #|   const fs = require("node:fs");
-  #|   try { fs.renameSync(oldPath, newPath); return JSON.stringify({ ok: true }); }
+  #| (rename, oldPath, newPath) => {
+  #|   try { rename(oldPath, newPath); return JSON.stringify({ ok: true }); }
   #|   catch { return JSON.stringify({ ok: false }); }
   #| }
 
@@ -60,7 +91,7 @@ priv struct JsStatInfo {
 
 ///|
 fn js_stat_info(path : String) -> JsStatInfo {
-  let json : Json = @json.parse(js_stat_envelope(path)) catch {
+  let json : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
     _ => return { ok: false, size: 0, ms: 0.0, }
   }
   let fields = match json {
@@ -122,7 +153,9 @@ impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
 
 ///|
 impl FsIo for JsFsIo with fn read_text(_self, path : String) -> String {
-  let envelope : Json = @json.parse(js_read_text_envelope(path)) catch {
+  let envelope : Json = @json.parse(
+    js_read_text_envelope(fs_read_text_sync, path),
+  ) catch {
     _ => raise edit_failure("decode", path)
   }
   let fields = match envelope {
@@ -143,10 +176,10 @@ impl FsIo for JsFsIo with fn write_atomic(
   content : String,
 ) -> Unit {
   let tmp = "\{path}.tmp-\{js_now_ms()}"
-  if !js_envelope_ok(js_write_envelope(tmp, content)) {
+  if !js_envelope_ok(js_write_envelope(fs_write_file_sync, tmp, content)) {
     raise edit_failure("write", path)
   }
-  if !js_envelope_ok(js_rename_envelope(tmp, path)) {
+  if !js_envelope_ok(js_rename_envelope(fs_rename_sync, tmp, path)) {
     raise edit_failure("write", path)
   }
 }
