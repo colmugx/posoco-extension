@@ -1111,6 +1111,10 @@ test "openai_input_assistant_tool_calls_emit_function_call_items" {
     Some(String("assistant")) => ()
     _ => fail("expected assistant message item")
   }
+  guard m0.get("content") is Some(Json::Array([Json::Object(part)])) else {
+    fail("expected single assistant content part")
+  }
+  assert_eq(part.get("type"), Some(Json::string("output_text")))
   guard items[1] is Object(fc) else { fail("expected function_call item") }
   match fc.get("type") {
     Some(String("function_call")) => ()
@@ -1341,8 +1345,8 @@ test "openai_compact_decodes_window" {
 
 ///|
 /// Decode → re-encode replays the window as-is: opaque items (compaction,
-/// reasoning) come back verbatim and the remaining items keep their order and
-/// canonical shape (assistant text normalizes to input_text).
+/// reasoning) come back verbatim and the remaining items keep their order
+/// and shape (assistant text roundtrips as `output_text`).
 test "openai_compact_roundtrip_replays_verbatim" {
   let window =
     #|{"output":[
@@ -1364,7 +1368,7 @@ test "openai_compact_roundtrip_replays_verbatim" {
     #|[{"type":"compaction","id":"cmp_1","encrypted_content":"zzz"},
     #| {"role":"user","content":[{"type":"input_text","text":"q1"}]},
     #| {"type":"reasoning","id":"rs_1","summary":[]},
-    #| {"role":"assistant","content":[{"type":"input_text","text":"a1"}]},
+    #| {"role":"assistant","content":[{"type":"output_text","text":"a1"}]},
     #| {"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{}"},
     #| {"type":"function_call_output","call_id":"call_1","output":"sunny"}]
   let expected = @json.parse(expected_window)
@@ -1494,7 +1498,7 @@ test "openai_compact_mixed_window_roundtrips_in_order" {
     #| {"type":"reasoning","id":"rs_9","summary":[],"encrypted_content":"gAAAA-reasoning"},
     #| {"type":"function_call","call_id":"call_9","name":"get_weather","arguments":"{\"city\":\"oslo\"}"},
     #| {"type":"function_call_output","call_id":"call_9","output":"-3c"},
-    #| {"role":"assistant","content":[{"type":"input_text","text":"-3c in oslo"}]}]
+    #| {"role":"assistant","content":[{"type":"output_text","text":"-3c in oslo"}]}]
   assert_true(Json::array(re_encoded) == @json.parse(expected_window))
 }
 
@@ -1516,7 +1520,7 @@ test "openai_compact_unknown_legal_items_pass_through" {
   let expected_window =
     #|[{"role":"user","content":[{"type":"input_text","text":"q"}]},
     #| {"type":"web_search_call","id":"ws_1","status":"completed"},
-    #| {"role":"assistant","content":[{"type":"input_text","text":"a"}]}]
+    #| {"role":"assistant","content":[{"type":"output_text","text":"a"}]}]
   assert_true(Json::array(re_encoded) == @json.parse(expected_window))
   let search_item =
     #|{"type":"web_search_call","id":"ws_1","status":"completed"}
