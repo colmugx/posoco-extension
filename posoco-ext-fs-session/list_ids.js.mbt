@@ -1,36 +1,68 @@
 ///|
-/// list_ids.js.mbt — JS target (bun runtime) directory listing for
-/// `list_ids`, using node:fs promises (Bun implements the Node fs API).
-/// Entry names are joined with "\n" on the JS side and split back here,
-/// keeping the extern surface a plain string.
+/// list_ids.js.mbt — JS target directory listing for `list_ids`, through
+/// node:fs bound with `#module`. A missing root lists no sessions, mirroring
+/// load's missing-file semantics; any other readdir failure raises.
 
 ///|
-/// fs.promises.readdir, with ENOENT folded to the empty string (a missing
-/// root lists no sessions, mirroring load's missing-file semantics).
-extern "js" fn fs_readdir_joined(path : String) -> @js_async.Promise[String] =
-  #| (path) => require("node:fs").promises.readdir(path).then(
-  #|   (names) => names.join("\n"),
-  #|   (error) => {
-  #|     if (error && error.code === "ENOENT") { return "" }
-  #|     throw error
-  #|   },
-  #| )
+#module("node:fs")
+extern "js" fn fs_readdir_sync(path : String) -> FixedArray[String] = "readdirSync"
 
 ///|
-/// Directory entries of root_dir (bun): an empty list when the root does
+extern "js" fn fs_readdir_envelope(
+  readdir : (String) -> FixedArray[String],
+  path : String,
+) -> String =
+  #| (readdir, path) => {
+  #|   try { return JSON.stringify({ ok: true, names: readdir(path) }); }
+  #|   catch (error) {
+  #|     if (error && error.code === "ENOENT") {
+  #|       return JSON.stringify({ ok: true, names: [] });
+  #|     }
+  #|     return JSON.stringify({
+  #|       ok: false,
+  #|       message: String(error?.message ?? error),
+  #|     });
+  #|   }
+  #| }
+
+///|
+/// Directory entries of root_dir: an empty list when the root does
 /// not exist; any other readdir failure is a load-side defect.
-async fn JsonlSessionStore::raw_dir_entries(
+fn JsonlSessionStore::raw_dir_entries(
   self : JsonlSessionStore,
 ) -> Array[String] raise @posoco.SessionError {
-  let joined = fs_readdir_joined(self.root_dir).wait() catch {
-    error =>
+  let envelope : Json = @json.parse(
+    fs_readdir_envelope(fs_readdir_sync, self.root_dir),
+  ) catch {
+    _ =>
       raise @posoco.SessionError::Load(
-        "jsonl[js]: failed to list " + self.root_dir + ": " + error.to_string(),
+        "jsonl[js]: failed to list " + self.root_dir,
       )
   }
-  let entries : Array[String] = []
-  for piece in joined.split("\n") {
-    entries.push(piece.to_owned())
+  let fields = match envelope {
+    Json::Object(fields) => fields
+    _ =>
+      raise @posoco.SessionError::Load(
+        "jsonl[js]: readdir envelope is not an object for " + self.root_dir,
+      )
   }
-  entries
+  match (fields.get("ok"), fields.get("names")) {
+    (Some(Json::True), Some(Json::Array(items))) => {
+      let entries : Array[String] = []
+      for item in items {
+        if item is Json::String(name) {
+          entries.push(name)
+        }
+      }
+      entries
+    }
+    (Some(Json::False), Some(Json::String(message))) =>
+      raise @posoco.SessionError::Load(
+        "jsonl[js]: failed to list " + self.root_dir + ": " + message,
+      )
+    _ =>
+      raise @posoco.SessionError::Load(
+        "jsonl[js]: readdir envelope malformed for " + self.root_dir,
+      )
+  }
 }

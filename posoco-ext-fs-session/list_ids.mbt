@@ -8,7 +8,18 @@
 /// sorted lexicographically (clock-minted ids therefore sort
 /// chronologically). A missing root is an empty list — the same
 /// missing-means-empty rule `load` applies to a missing session file.
+/// Native `raw_dir_entries` is async; the js one is sync, so the wrapper is
+/// split per target to keep asyncness honest.
+#cfg(not(target="js"))
 pub async fn JsonlSessionStore::list_ids(
+  self : JsonlSessionStore,
+) -> Array[String] raise @posoco.SessionError {
+  session_ids_from_dir_entries(self.raw_dir_entries())
+}
+
+///|
+#cfg(target="js")
+pub fn JsonlSessionStore::list_ids(
   self : JsonlSessionStore,
 ) -> Array[String] raise @posoco.SessionError {
   session_ids_from_dir_entries(self.raw_dir_entries())

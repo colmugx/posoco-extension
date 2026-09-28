@@ -1,8 +1,10 @@
 ///|
-/// jsonl_session.js.mbt — JS target (bun runtime) implementation.
+/// jsonl_session.js.mbt — JS target implementation.
 ///
-/// Uses Bun's global APIs (`Bun.file`, `Bun.write`). Bun.write auto-creates
-/// parent directories, so no explicit mkdir is needed.
+/// node:fs sync APIs bound with `#module` and injected into the inline-JS
+/// wrappers as values (pattern follows posoco-ext-workspace fs_port.js.mbt /
+/// moonbitlang/x/fs/fs_js.mbt). Unlike Bun.write, writeFileSync does not
+/// create parent directories, so every write ensures the store root first.
 
 ///|
 /// Persistent JSONL-backed session store (bun runtime).
@@ -23,37 +25,91 @@ pub fn JsonlSessionStore::JsonlSessionStore(
 }
 
 ///|
+/// node:fs bindings. mkdirSync's 2nd argument is a JS options object, so the
+/// declared 2nd parameter is only a value-passing shape; the wrapper builds
+/// `{ recursive: true }` on the JS side.
+#module("node:fs")
+extern "js" fn fs_exists_sync(path : String) -> Bool = "existsSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_read_text_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_write_file_sync(path : String, data : String) -> Unit = "writeFileSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_mkdir_sync(path : String, recursive : Bool) -> Unit = "mkdirSync"
+
+///|
+#module("node:fs")
+extern "js" fn fs_append_file_sync(path : String, data : String) -> Unit = "appendFileSync"
+
+///|
+/// Opaque ok/content results: "" cannot double as a failure sentinel
+/// (empty session files are valid content).
 #external
-priv type BunFile
+priv type JsTextResult
 
 ///|
-extern "js" fn bun_file(path : String) -> BunFile =
-  #| (path) => Bun.file(path)
+#external
+priv type JsWriteResult
 
 ///|
-extern "js" fn BunFile::text(self : BunFile) -> @js_async.Promise[String] =
-  #| (file) => file.text()
+extern "js" fn JsTextResult::is_ok(self : Self) -> Bool =
+  #| (res) => res.ok
 
 ///|
-extern "js" fn BunFile::exists(self : BunFile) -> @js_async.Promise[Bool] =
-  #| (file) => file.exists()
+extern "js" fn JsTextResult::content(self : Self) -> String =
+  #| (res) => res.content
 
 ///|
-extern "js" fn bun_write_string(
+extern "js" fn JsWriteResult::is_ok(self : Self) -> Bool =
+  #| (res) => res.ok
+
+///|
+extern "js" fn JsWriteResult::content(self : Self) -> String =
+  #| (res) => res.content
+
+///|
+extern "js" fn js_read_text_ffi(
+  read_text : (String, String) -> String,
+  path : String,
+) -> JsTextResult =
+  #| (readFile, path) => {
+  #|   try {
+  #|     return { ok: true, content: readFile(path, "utf8") };
+  #|   } catch (error) {
+  #|     return { ok: false, content: String(error?.message ?? error) };
+  #|   }
+  #| }
+
+///|
+extern "js" fn js_write_file_ffi(
+  mkdir : (String, Bool) -> Unit,
+  write_file : (String, String) -> Unit,
+  root_dir : String,
   path : String,
   data : String,
-) -> @js_async.Promise[Int] =
-  #| (path, data) => Bun.write(path, data)
+) -> JsWriteResult =
+  #| (mkdir, writeFile, rootDir, path, data) => {
+  #|   try { mkdir(rootDir, { recursive: true }); } catch (e) {}
+  #|   try { writeFile(path, data); return { ok: true, content: "" }; }
+  #|   catch (error) { return { ok: false, content: String(error?.message ?? error) }; }
+  #| }
 
 ///|
-/// fs.promises.appendFile — appends data, creating the file if missing (but
-/// not parent directories). Bun implements the Node fs promises API; the
-/// resolved byte count keeps the Promise[Int] shape of `bun_write_string`.
-extern "js" fn fs_append_file(
+extern "js" fn js_append_file_ffi(
+  append_file : (String, String) -> Unit,
   path : String,
   data : String,
-) -> @js_async.Promise[Int] =
-  #| (path, data) => require("node:fs").promises.appendFile(path, data).then(() => data.length)
+) -> JsWriteResult =
+  #| (appendFile, path, data) => {
+  #|   try { appendFile(path, data); return { ok: true, content: "" }; }
+  #|   catch (error) { return { ok: false, content: String(error?.message ?? error) }; }
+  #| }
 
 ///|
 fn js_load_session_path(
@@ -83,23 +139,16 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn load(
   id : String,
 ) -> @posoco.Session raise @posoco.SessionError {
   let path = js_load_session_path(self.root_dir, id)
-  let file = bun_file(path)
-  let exists = file.exists().wait() catch {
-      error =>
-        raise @posoco.SessionError::Load(
-          "jsonl[js]: exists() rejected for " + path + ": " + error.to_string(),
-        )
-    }
-  if !exists {
+  if !fs_exists_sync(path) {
     return @posoco.Session::{ messages: [], metadata: Map::from_array([]), }
   }
-  let content = file.text().wait() catch {
-      error =>
-        raise @posoco.SessionError::Load(
-          "jsonl[js]: text() rejected for " + path + ": " + error.to_string(),
-        )
-    }
-  match session_from_jsonl(content) {
+  let res = js_read_text_ffi(fs_read_text_sync, path)
+  if !res.is_ok() {
+    raise @posoco.SessionError::Load(
+      "jsonl[js]: readFileSync failed for " + path + ": " + res.content(),
+    )
+  }
+  match session_from_jsonl(res.content()) {
     Ok(s) => s
     Err(e) => raise e
   }
@@ -113,13 +162,17 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
 ) -> Unit raise @posoco.SessionError {
   let path = js_save_session_path(self.root_dir, id)
   let jsonl = session_to_jsonl(session)
-  try {
-    let _ = bun_write_string(path, jsonl).wait()
-  } catch {
-    error =>
-      raise @posoco.SessionError::Save(
-        "jsonl[js]: Bun.write rejected for " + path + ": " + error.to_string(),
-      )
+  let res = js_write_file_ffi(
+    fs_mkdir_sync,
+    fs_write_file_sync,
+    self.root_dir,
+    path,
+    jsonl,
+  )
+  if !res.is_ok() {
+    raise @posoco.SessionError::Save(
+      "jsonl[js]: write failed for " + path + ": " + res.content(),
+    )
   }
   publish_session_status(self.bus, id)
   self.current_id = Some(id)
@@ -137,24 +190,22 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
 ) -> Unit raise @posoco.SessionError {
   let _ = from_index
   let path = js_save_session_path(self.root_dir, id)
-  let exists = bun_file(path).exists().wait() catch {
-      error =>
-        raise @posoco.SessionError::Save(
-          "jsonl[js]: exists() rejected for " + path + ": " + error.to_string(),
-        )
-    }
-  if !exists {
+  if !fs_exists_sync(path) {
     let session : @posoco.Session = {
       messages: messages.to_owned(),
       metadata: Map::from_array([]),
     }
-    try {
-      let _ = bun_write_string(path, session_to_jsonl(session)).wait()
-    } catch {
-      error =>
-        raise @posoco.SessionError::Save(
-          "jsonl[js]: Bun.write rejected for " + path + ": " + error.to_string(),
-        )
+    let res = js_write_file_ffi(
+      fs_mkdir_sync,
+      fs_write_file_sync,
+      self.root_dir,
+      path,
+      session_to_jsonl(session),
+    )
+    if !res.is_ok() {
+      raise @posoco.SessionError::Save(
+        "jsonl[js]: write failed for " + path + ": " + res.content(),
+      )
     }
     publish_session_status(self.bus, id)
     self.current_id = Some(id)
@@ -166,13 +217,11 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
     buf.write_char('\n')
     buf.write_string(message_to_json(msg).stringify())
   }
-  try {
-    let _ = fs_append_file(path, buf.to_string()).wait()
-  } catch {
-    error =>
-      raise @posoco.SessionError::Save(
-        "jsonl[js]: appendFile rejected for " + path + ": " + error.to_string(),
-      )
+  let res = js_append_file_ffi(fs_append_file_sync, path, buf.to_string())
+  if !res.is_ok() {
+    raise @posoco.SessionError::Save(
+      "jsonl[js]: appendFile failed for " + path + ": " + res.content(),
+    )
   }
   publish_session_status(self.bus, id)
   self.current_id = Some(id)
