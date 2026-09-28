@@ -120,6 +120,7 @@ windows from it live.
 | `profile` | `coding` or `cn_coding` |
 | `base_url` | endpoint override (keeps the profile prefix on bare hosts) |
 | `reasoning_effort` | picker effort; `off` disables thinking |
+| `context_window` | declared model capacity in tokens; feeds the `ctx` status segment and auto-compact (Z.ai states no machine-readable window) |
 
 ## Dependencies
 

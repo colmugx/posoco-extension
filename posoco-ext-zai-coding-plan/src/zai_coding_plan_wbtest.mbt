@@ -264,3 +264,24 @@ async test "login: empty key is a typed failure" {
     _ => fail("expected failure")
   }
 }
+
+///|
+test "factory: coding-plan vision slot declares image_in (same capability as direct API)" {
+  let provider = ZaiCodingPlanProvider()
+  let result = @llm.ProviderFactory::build(
+    provider,
+    zcp_settings([
+      ("api_key", Json::string("k")),
+      ("model", Json::string("glm-5.3-flash")),
+    ]),
+  )
+  guard result is @llm.ProviderBuildResult::Ready(catalog) else {
+    fail("expected Ready")
+  }
+  for slot in catalog.slots {
+    assert_eq(
+      slot.capabilities.contains("image_in"),
+      slot.model_id == "glm-5.3-flash",
+    )
+  }
+}
