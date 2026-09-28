@@ -268,3 +268,98 @@ test "classify: quota 429 keeps typed reset, others redact" {
     content="None",
   )
 }
+
+///|
+test "encode: vision model sends image blocks as image_url parts" {
+  let body = build_chat_request(
+    [
+      @posoco.Message::UserMessage(content=[
+        @posoco.Content::Text("what is this?"),
+        @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
+      ]),
+    ],
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "glm-5.3-flash",
+    false,
+    true,
+    Some("high"),
+  )
+  json_inspect(body, content={
+    "model": "glm-5.3-flash",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "what is this?" },
+          {
+            "type": "image_url",
+            "image_url": { "url": "data:image/png;base64,aGVsbG8=" },
+          },
+        ],
+      },
+    ],
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "high",
+  })
+}
+
+///|
+test "encode: non-vision model downgrades images to explicit placeholders" {
+  let body = build_chat_request(
+    [
+      @posoco.Message::UserMessage(content=[
+        @posoco.Content::Text("see this?"),
+        @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
+      ]),
+    ],
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "glm-5.3",
+    false,
+    true,
+    Some("high"),
+  )
+  json_inspect(body, content={
+    "model": "glm-5.3",
+    "messages": [
+      {
+        "role": "user",
+        "content": "see this?\n[Attached image/png, ~0 KB, omitted: this model does not accept image input]",
+      },
+    ],
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "high",
+  })
+}
+
+///|
+test "encode: vision flag leaves text-only messages as plain strings" {
+  let body = build_chat_request(
+    [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "glm-5.3-flash",
+    false,
+    true,
+    Some("high"),
+  )
+  json_inspect(body, content={
+    "model": "glm-5.3-flash",
+    "messages": [{ "role": "user", "content": "hi" }],
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "high",
+  })
+}
+
+///|
+test "supports_images: only documented vision models, never guessed" {
+  assert_true(zai_supports_images("glm-5.3-flash"))
+  assert_false(zai_supports_images("glm-5.3"))
+  assert_false(zai_supports_images("glm-4.5-air"))
+  // Undocumented/unknown ids stay conservative even when the name looks
+  // vision-capable — image input is declared, not inferred.
+  assert_false(zai_supports_images("glm-4.5v"))
+  assert_false(zai_supports_images("glm-5.9-vision"))
+  assert_false(zai_supports_images("some-other"))
+}

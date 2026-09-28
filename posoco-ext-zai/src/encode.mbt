@@ -10,7 +10,10 @@
 /// - Message order is append-only (prefix-cache friendly).
 
 ///|
-fn encode_message(msg : @posoco.Message) -> Json {
+fn encode_message(
+  msg : @posoco.Message,
+  supports_images? : Bool = false,
+) -> Json {
   let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
     msg {
     SystemMessage(content~) => ("system", content, [], None, None)
@@ -33,7 +36,7 @@ fn encode_message(msg : @posoco.Message) -> Json {
     }
   }
   let content_json : Json = match
-    @chatkit.encode_chat_message_content(content_blocks) {
+    @chatkit.encode_chat_message_content(content_blocks, supports_images~) {
     TextContent(s) => Json::string(s)
     PartsContent(parts) => Json::array(parts)
   }
@@ -69,12 +72,7 @@ fn encode_message(msg : @posoco.Message) -> Json {
 
 ///|
 fn outcome_to_wire_text(outcome : @posoco.ToolOutcome) -> String {
-  match outcome {
-    Success(content~, ..) => content
-    ToolReportedError(content~, ..) => content
-    RuntimeFailure(message~, ..) => message
-    NotExecuted(reason~, ..) => reason.to_string()
-  }
+  @chatkit.outcome_wire_text(outcome)
 }
 
 ///|
@@ -103,9 +101,17 @@ fn build_chat_request(
   thinking_enabled : Bool,
   reasoning_effort_str : String?,
 ) -> Json {
+  let messages = @chatkit.fold_tool_attachments(
+    messages,
+    zai_supports_images(model),
+  )
   let body : Map[String, Json] = {
     "model": Json::string(model),
-    "messages": Json::array(messages.map(encode_message)),
+    "messages": Json::array(
+      messages.map(fn(msg) {
+        encode_message(msg, supports_images=zai_supports_images(model))
+      }),
+    ),
   }
   if tools.length() > 0 {
     body["tools"] = encode_tools(tools)

@@ -14,11 +14,16 @@ pub fn zai_platform_endpoint(platform : String) -> (String, String)? {
 /// GLM models the platform serves, with their picker-facing reasoning
 /// efforts. GLM-4.x takes `thinking: {type}` but no `reasoning_effort` (that
 /// field is GLM-5.2+); those models are always-on thinkers with no selector.
+/// `vision` marks models whose docs list image input; per Z.ai the capability
+/// applies to both the direct API and the Coding Plan endpoint. Unknown
+/// `/models` releases fall back to `vision: false` — image input is never
+/// guessed for an undocumented id.
 priv struct ZaiModelInfo {
   id : String
   efforts : Array[String]
   default_effort : String
   thinking_always : Bool
+  vision : Bool
 }
 
 ///|
@@ -29,24 +34,28 @@ fn zai_models() -> Array[ZaiModelInfo] {
       efforts: ["low", "high", "max"],
       default_effort: "high",
       thinking_always: false,
+      vision: true,
     },
     {
       id: "glm-5.3",
       efforts: ["low", "high", "max"],
       default_effort: "high",
       thinking_always: false,
+      vision: false,
     },
     {
       id: "glm-5.2",
       efforts: ["low", "high", "max"],
       default_effort: "high",
       thinking_always: false,
+      vision: false,
     },
     {
       id: "glm-4.5-air",
       efforts: [],
       default_effort: "",
       thinking_always: true,
+      vision: false,
     },
   ]
 }
@@ -67,6 +76,7 @@ fn zai_model_info(model : String) -> ZaiModelInfo? {
       efforts: ["low", "high", "max"],
       default_effort: "high",
       thinking_always: false,
+      vision: false,
     })
   } else if model.has_prefix("glm-4") {
     Some(ZaiModelInfo::{
@@ -74,9 +84,21 @@ fn zai_model_info(model : String) -> ZaiModelInfo? {
       efforts: [],
       default_effort: "",
       thinking_always: true,
+      vision: false,
     })
   } else {
     None
+  }
+}
+
+///|
+/// Whether the model accepts image input. Drives both the wire encoding
+/// (`supports_images`) and the slot capability (`image_in`) so the host UI
+/// gate and the adapter can never disagree.
+fn zai_supports_images(model : String) -> Bool {
+  match zai_model_info(model) {
+    Some(info) => info.vision
+    None => false
   }
 }
 

@@ -54,6 +54,11 @@ fn zai_catalog_slot(
     thinking_efforts=slot_efforts,
     default_effort~,
     context_window=config.context_window,
+    capabilities=if zai_supports_images(config.model) {
+      ["image_in"]
+    } else {
+      []
+    },
     rebuild_on_api_key=Some(fn(credential) {
       // The credential is authoritative for the endpoint only when it names a
       // known platform (the /login flow records it); otherwise the slot keeps

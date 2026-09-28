@@ -336,3 +336,24 @@ async test "login: empty key is a typed failure" {
     _ => fail("expected failure")
   }
 }
+
+///|
+test "factory: only vision model slots declare image_in" {
+  let provider = ZaiProvider()
+  let result = @llm.ProviderFactory::build(
+    provider,
+    zai_settings([
+      ("api_key", Json::string("k")),
+      ("model", Json::string("glm-5.3-flash")),
+    ]),
+  )
+  guard result is @llm.ProviderBuildResult::Ready(catalog) else {
+    fail("expected Ready")
+  }
+  for slot in catalog.slots {
+    assert_eq(
+      slot.capabilities.contains("image_in"),
+      slot.model_id == "glm-5.3-flash",
+    )
+  }
+}

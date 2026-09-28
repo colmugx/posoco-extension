@@ -106,6 +106,15 @@ prefix unless the URL carries its own path.
 - `Accept-Language: en-US,en` request header, per z.ai docs.
 - Usage decoding accounts for `prompt_tokens_details.cached_tokens`.
 
+## Context window
+
+Z.ai serves no machine-readable context capacity, so the window stays
+unknown unless the host declares one: a `context_window` settings key (whole
+token count) states the configured model's capacity. It feeds the provider
+config that the `ctx` status segment and auto-compact read; unknown windows
+are never guessed, and catalog ids other than the configured model keep an
+unknown window.
+
 ## Settings
 
 | key | meaning |
@@ -115,6 +124,7 @@ prefix unless the URL carries its own path.
 | `platform` | `zai` or `bigmodel`; ignored when the credential names one |
 | `base_url` | endpoint override (keeps the platform prefix on bare hosts) |
 | `reasoning_effort` | picker effort; `off` disables thinking |
+| `context_window` | declared model capacity in tokens; enables the `ctx` window/percent figures and auto-compact |
 
 ## Dependencies
 
