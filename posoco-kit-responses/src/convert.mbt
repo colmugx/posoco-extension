@@ -100,6 +100,8 @@ pub fn message_to_responses_items(msg : @posoco.Message) -> Array[Json] {
 fn outcome_to_wire_text(outcome : @posoco.ToolOutcome) -> String {
   match outcome {
     Success(content~, ..) => content
+    // Attachments ride the input-item strategy, not the output string.
+    SuccessWithAttachments(content~, ..) => content
     ToolReportedError(content~, ..) => content
     RuntimeFailure(message~, ..) => message
     NotExecuted(reason~, ..) => reason.to_string()
