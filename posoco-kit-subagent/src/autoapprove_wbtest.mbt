@@ -6,6 +6,7 @@ fn approval_request(tool : String) -> @permission.ApprovalRequest {
     category: "write",
     arguments_preview: "{}",
     arguments: Json::empty_object(),
+    scopes: ["write"],
   }
 }
 

@@ -546,6 +546,10 @@ test "openai_input_assistant_tool_calls_emit_function_call_items" {
     Some(String("assistant")) => ()
     _ => fail("expected assistant message item")
   }
+  guard m0.get("content") is Some(Json::Array([Json::Object(part)])) else {
+    fail("expected single assistant content part")
+  }
+  assert_eq(part.get("type"), Some(Json::string("output_text")))
   guard items[1] is Object(fc) else { fail("expected function_call item") }
   match fc.get("type") {
     Some(String("function_call")) => ()
@@ -594,6 +598,55 @@ test "openai_input_replays_reasoning_items_verbatim" {
     Some(String("assistant")) => ()
     _ => fail("expected assistant message item after reasoning")
   }
+}
+
+///|
+/// Regression: assistant-role text must encode as `output_text` — the
+/// Responses API rejects `input_text` on assistant messages with a 400
+/// invalid_value (this broke history replay and post-compact windows).
+test "assistant_text_encodes_as_output_text_parts" {
+  let msg : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let items = message_to_responses_items(msg)
+  assert_eq(items.length(), 1)
+  guard items[0] is Object(m) else { fail("expected message item") }
+  match m.get("role") {
+    Some(String("assistant")) => ()
+    _ => fail("expected assistant role")
+  }
+  guard m.get("content") is Some(Json::Array([Json::Object(part)])) else {
+    fail("expected single content part")
+  }
+  assert_eq(part.get("type"), Some(Json::string("output_text")))
+  assert_eq(part.get("text"), Some(Json::string("answer")))
+}
+
+///|
+/// Input-side roles keep `input_text`: only the assistant message is
+/// restricted to `output_text`.
+test "user_and_system_keep_input_text_parts" {
+  let user : @posoco.Message = @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("question"),
+  ])
+  let user_items = message_to_responses_items(user)
+  guard user_items[0] is Object(um) else { fail("expected user item") }
+  guard um.get("content") is Some(Json::Array([Json::Object(upart)])) else {
+    fail("expected single user content part")
+  }
+  assert_eq(upart.get("type"), Some(Json::string("input_text")))
+  let system : @posoco.Message = @posoco.Message::SystemMessage(content=[
+    @posoco.Content::Text("policy"),
+  ])
+  let system_items = message_to_responses_items(system)
+  guard system_items[0] is Object(sm) else { fail("expected system item") }
+  guard sm.get("content") is Some(Json::Array([Json::Object(spart)])) else {
+    fail("expected single system content part")
+  }
+  assert_eq(spart.get("type"), Some(Json::string("input_text")))
 }
 
 ///|

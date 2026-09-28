@@ -10,7 +10,10 @@
 /// to: reasoning items (verbatim replay from `Reasoning.raw`), then a
 /// `message` item (only when it carries visible content), then one
 /// `function_call` item per tool call (correlated with its
-/// `function_call_output` via `call_id`).
+/// `function_call_output` via `call_id`). Content parts are role-typed:
+/// input-side roles (`user`, `system`) emit `input_text` / `input_image`,
+/// while the assistant message emits `output_text` (the Responses API
+/// rejects `input_text` on assistant-role messages).
 pub fn message_to_responses_items(msg : @posoco.Message) -> Array[Json] {
   match msg {
     UserMessage(content~) =>
@@ -39,11 +42,12 @@ pub fn message_to_responses_items(msg : @posoco.Message) -> Array[Json] {
           }
         None => ()
       }
-      if !content.is_empty() {
+      let parts = assistant_content_parts(content)
+      if !parts.is_empty() {
         let fields : Array[(String, Json)] = [
           ("role", Json::string("assistant")),
         ]
-        fields.push(("content", Json::array(content.map(content_to_openai))))
+        fields.push(("content", Json::array(parts)))
         items.push(Json::object(Map::from_array(fields)))
       }
       // function_call items: the previous turn's tool calls must be passed
@@ -103,7 +107,8 @@ fn outcome_to_wire_text(outcome : @posoco.ToolOutcome) -> String {
 }
 
 ///|
-/// Convert a posoco Content item to OpenAI input content format.
+/// Convert a posoco Content item to OpenAI input content format (input-side
+/// roles: `user` / `system` / `developer`).
 fn content_to_openai(c : @posoco.Content) -> Json {
   match c {
     @posoco.Content::Text(t) =>
@@ -121,6 +126,31 @@ fn content_to_openai(c : @posoco.Content) -> Json {
         ]),
       )
   }
+}
+
+///|
+/// Assistant-role content parts: the Responses API only accepts
+/// `output_text` on assistant messages — `input_text` is input-side and
+/// fails validation with invalid_value. Images have no assistant message
+/// content-part type (image outputs arrive as separate
+/// `image_generation_call` items), so they are skipped.
+fn assistant_content_parts(content : Array[@posoco.Content]) -> Array[Json] {
+  let parts : Array[Json] = []
+  for c in content {
+    match c {
+      @posoco.Content::Text(t) =>
+        parts.push(
+          Json::object(
+            Map::from_array([
+              ("type", Json::string("output_text")),
+              ("text", Json::string(t)),
+            ]),
+          ),
+        )
+      @posoco.Content::Image(..) => ()
+    }
+  }
+  parts
 }
 
 ///|
