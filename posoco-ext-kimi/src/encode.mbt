@@ -71,7 +71,8 @@ fn kimi_sanitize_item_call_id(item : Json) -> Json {
 ///|
 fn kimi_input_items(messages : Array[@posoco.Message]) -> Array[Json] {
   let items : Array[Json] = []
-  for message in messages {
+  // Kimi models are text-only today: tool attachments degrade explicitly.
+  for message in @responses.fold_tool_attachments(messages, false) {
     match message {
       SystemMessage(..) => ()
       msg =>
