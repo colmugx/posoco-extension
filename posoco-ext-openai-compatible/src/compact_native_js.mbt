@@ -95,6 +95,7 @@ fn oai_compat_render_message(message : @posoco.Message) -> String {
     ToolMessage(tool_name~, outcome~, ..) => {
       let outcome_text = match outcome {
         Success(content~, ..) => content
+        SuccessWithAttachments(content~, ..) => content
         ToolReportedError(content~, ..) => "error: \{content}"
         RuntimeFailure(message~, ..) => "runtime failure: \{message}"
         NotExecuted(..) => "not executed"

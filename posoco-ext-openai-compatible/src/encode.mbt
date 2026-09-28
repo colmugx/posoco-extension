@@ -62,12 +62,7 @@ fn encode_message(msg : @posoco.Message, supports_images : Bool) -> Json {
 /// `content` field. Business errors surface their message; runtime failures
 /// surface their category+message.
 fn outcome_to_wire_text(outcome : @posoco.ToolOutcome) -> String {
-  match outcome {
-    Success(content~, ..) => content
-    ToolReportedError(content~, ..) => content
-    RuntimeFailure(message~, ..) => message
-    NotExecuted(reason~, ..) => reason.to_string()
-  }
+  @chatkit.outcome_wire_text(outcome)
 }
 
 ///|
@@ -119,7 +114,9 @@ fn build_chat_request(
   let body : Map[String, Json] = {
     "model": Json::string(model),
     "messages": Json::array(
-      messages.map(fn(m) { encode_message(m, supports_images) }),
+      @chatkit.fold_tool_attachments(messages, supports_images).map(fn(m) {
+        encode_message(m, supports_images)
+      }),
     ),
   }
   if tools.length() > 0 {
