@@ -45,21 +45,28 @@ fn LazyTools::recent_tools(self : LazyTools) -> Array[String] {
 }
 
 ///|
-/// Watch turn events for deferred executions. Only calls the gateway
-/// actually routed (inner name present in the index) count as usage —
-/// unknown-tool feedback never pollutes the hint.
+/// Watch turn events for deferred executions. Every terminal tool event
+/// (succeeded, failed, rejected, abandoned) counts as usage — only calls the
+/// gateway actually routed (inner name present in the index) count; unknown-
+/// tool feedback never pollutes the hint.
 pub impl @posoco.Observer for LazyTools with fn on_event(
   self : LazyTools,
   event : @posoco.TurnEvent,
 ) -> Unit {
   match event {
-    @posoco.TurnEvent::ToolCallResult(call~, ..) => {
-      let (name, _) = LazyTools::unwrap_call(call)
-      if name != "tool_execute" && self.by_name.contains(name) {
-        self.record_usage(name)
-      }
-    }
+    @posoco.TurnEvent::ToolCallSucceeded(call~, ..) => self.record_call(call)
+    @posoco.TurnEvent::ToolCallFailed(call~, ..) => self.record_call(call)
+    @posoco.TurnEvent::ToolCallRejected(call~, ..) => self.record_call(call)
+    @posoco.TurnEvent::ToolCallAbandoned(call~, ..) => self.record_call(call)
     _ => ()
+  }
+}
+
+///|
+fn LazyTools::record_call(self : LazyTools, call : @posoco.ToolCall) -> Unit {
+  let (name, _) = LazyTools::unwrap_call(call)
+  if name != "tool_execute" && self.by_name.contains(name) {
+    self.record_usage(name)
   }
 }
 

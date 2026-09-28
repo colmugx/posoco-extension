@@ -38,11 +38,7 @@ async test "manifest recent-tool views stay stable after usage events" {
     ),
   }
   manifest.observers[0].on_event(
-    @posoco.TurnEvent::ToolCallResult(
-      call~,
-      result=@posoco.ToolOutcome::Success(content="ok", structured=None),
-      is_error=false,
-    ),
+    @posoco.TurnEvent::ToolCallSucceeded(call~, content="ok", structured=None, attachments=[]),
   )
 
   let messages : Array[@posoco.Message] = [
