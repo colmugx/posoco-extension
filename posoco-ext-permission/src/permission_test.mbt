@@ -178,6 +178,82 @@ async test "shell approvals are remembered per segment scope" {
 }
 
 ///|
+async test "a tool-level grant covers every later command of the tool" {
+  let source = ScriptedApproval::{ decision: AllowToolSession, asked: 0, }
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  // The user grants the whole tool once...
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+  assert_true(policy.session_approved.contains("bash"))
+  // ...and every later command of that tool — any scope — runs unasked.
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "rm -rf x"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+  // Even a keyless shell call (no parseable `cmd`) is covered.
+  assert_true(
+    policy.before_tool(test_call("bash"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+}
+
+///|
+async test "a tool-level grant does not leak to other tools" {
+  let source = ScriptedApproval::{ decision: AllowToolSession, asked: 0, }
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 1)
+  // Another tool is still gated: its own ask happens (the bash grant does
+  // not cover it).
+  assert_true(
+    policy.before_tool(test_call_path("write", "src/a.txt"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(source.asked, 2)
+}
+
+///|
+async test "a tool-level grant short-circuits the auto judge" {
+  let source = ScriptedApproval::{ decision: AllowToolSession, asked: 0, }
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "npm run build"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  // Switch to Auto afterwards: explicit user consent recorded earlier
+  // outranks a fresh judgement, so the judge is never consulted.
+  policy.mode = Auto
+  let decision = @posoco.ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Fail(
+      @posoco.DecisionError::Transport("judge must not be reached"),
+    ),
+  ])
+  compose_permission_decision(policy, decision)
+  assert_true(
+    policy.before_tool(test_call_cmd("bash", "git push origin main"))
+    is @posoco.ToolDecision::ApproveAfterConsent(_),
+  )
+  assert_eq(decision.call_count(), 0)
+}
+
+///|
 async test "rtk prefix is stripped: moon and bare moon share one scope" {
   let source = ScriptedApproval::{ decision: AllowSession, asked: 0, }
   let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
@@ -1001,6 +1077,25 @@ async test "allow-always for escalated mbtx stays per-call" {
     approval=Some(source as &ApprovalSource),
   )
   // Even AllowAlways is demoted to per-call: every escalated run asks.
+  for i in 0..<3 {
+    assert_true(
+      policy.before_tool(test_call_mbtx(call_id="call-\{i}"))
+      is @posoco.ToolDecision::ApproveAfterConsent(_),
+    )
+    assert_eq(source.asked, i + 1)
+  }
+  assert_false(policy.session_approved.contains("mbtx"))
+}
+
+///|
+async test "allow-tool-session for escalated mbtx stays per-call" {
+  let source = ScriptedApproval::{ decision: AllowToolSession, asked: 0, }
+  let policy = @posoco-ext-permission.PermissionPolicy::PermissionPolicy(
+    WorkspaceWrite,
+    approval=Some(source as &ApprovalSource),
+  )
+  // Even AllowToolSession is demoted to per-call: an escalated run drops
+  // the sandbox, so no standing grant may be recorded from it.
   for i in 0..<3 {
     assert_true(
       policy.before_tool(test_call_mbtx(call_id="call-\{i}"))

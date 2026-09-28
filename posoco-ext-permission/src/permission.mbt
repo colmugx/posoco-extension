@@ -44,6 +44,10 @@ pub(all) struct ApprovalRequest {
   /// bridges (e.g. ACP's `session/request_permission` `raw_input`) need the
   /// complete payload, not the preview.
   arguments : Json
+  /// Approval-scope cache keys this call would be remembered under (see
+  /// `cache_keys`). Decision UIs label the session option with the scope
+  /// actually being granted; empty means the call is never cached.
+  scopes : Array[String]
 }
 
 ///|
@@ -64,6 +68,9 @@ pub(all) struct ApprovalRequest {
 /// `moon check` never greenlights `git push` or a compound `... && rm`.
 /// A shell call without a parseable `cmd` string is never remembered.
 /// `AllowAlways` is session-scoped (no on-disk persistence).
+/// `AllowToolSession` remembers the bare tool name instead: every later call
+/// of that tool — any shell command included — runs without asking for the
+/// rest of this agent's lifetime.
 pub(all) enum ApprovalDecision {
   /// Approve this one call only; do not cache.
   AllowOnce
@@ -72,6 +79,11 @@ pub(all) enum ApprovalDecision {
   AllowSession
   /// Approve and remember; v0 equivalent to AllowSession (no persistence).
   AllowAlways
+  /// Approve and remember the whole tool for the rest of this agent's
+  /// lifetime. Intended for shell asks where the per-command scope is too
+  /// narrow for the user's trust; decision UIs offer it only when they can
+  /// name the tool being trusted.
+  AllowToolSession
   /// Reject the call. With posoco's non-terminal hook rejection the denial
   /// is steering: the call is skipped, the reason returns to the model as a
   /// `NotExecuted(RejectedByHook)` tool result, and the turn continues —
@@ -112,6 +124,10 @@ pub(all) struct PermissionPolicy {
   /// without a prompt. None keeps every write behind the gate (hosts that
   /// do not wire a workspace keep the historical behavior).
   workspace : @devkit.WorkspaceAnchor?
+  /// The bus the policy subscribed to at construction, kept so it can
+  /// publish its own status-bar segment. None ⇒ status publication is a
+  /// silent no-op.
+  priv bus : @devkit.EventBus?
   /// Approvals remembered this agent lifetime, keyed by approval scope: the
   /// bare tool name for write/unknown tools, `"<tool>:<segment-scope>"` per
   /// shell command segment (e.g. `bash:ls`, `bash:moon` — a leading `rtk`
@@ -144,8 +160,10 @@ pub(all) struct PermissionPolicy {
 /// contract: write-class calls anchored inside the root are pre-approved.
 /// `bus`, when given, subscribes the policy to the
 /// cross-extension event bus so peer extensions can report tools that
-/// bypass this gate (topic `tool_exemptions`); construct subscribing gates
-/// before the extensions that report to them — the bus is fire-and-forget.
+/// bypass this gate (topic `tool_exemptions`) and publishes the active
+/// mode as the `permission` status-bar segment; construct subscribing
+/// gates before the extensions that report to them — the bus is
+/// fire-and-forget.
 pub fn PermissionPolicy::PermissionPolicy(
   mode : PermissionMode,
   approval? : &ApprovalSource? = None,
@@ -156,6 +174,7 @@ pub fn PermissionPolicy::PermissionPolicy(
     mode,
     approval,
     workspace,
+    bus,
     session_approved: Set([]),
     exempted: Map::from_array([]),
     // ask_question rides the read class: it talks to the user and touches
@@ -414,6 +433,11 @@ async fn PermissionPolicy::gate(
       break
     }
   }
+  // A tool-level grant remembers the bare tool name and covers every scope
+  // of every later call of this tool.
+  if !all_approved && self.session_approved.contains(name) {
+    all_approved = true
+  }
   if all_approved {
     return @posoco.ToolDecision::ApproveAfterConsent(
       call~,
@@ -432,6 +456,7 @@ async fn PermissionPolicy::gate(
         category,
         arguments_preview: preview_arguments(effective.arguments),
         arguments: effective.arguments,
+        scopes: keys,
       }
       match source.ask(request) {
         AllowOnce =>
@@ -447,6 +472,11 @@ async fn PermissionPolicy::gate(
           }
           let scope = if keys.length() > 0 { keys.join("&") } else { name }
           @posoco.ToolDecision::ApproveAfterConsent(call~, consent_scope=scope)
+        }
+        AllowToolSession => {
+          // One grant covers the whole tool for this agent's lifetime.
+          self.session_approved.add(name)
+          @posoco.ToolDecision::ApproveAfterConsent(call~, consent_scope=name)
         }
         Deny(reason~) =>
           @posoco.ToolDecision::Reject(
@@ -694,6 +724,7 @@ async fn PermissionPolicy::auto_gate(
   effective : @posoco.ToolCall,
   category : String,
 ) -> @posoco.ToolDecision {
+  let name = effective.name.to_string()
   let keys = self.cache_keys(effective, category)
   let mut all_approved = keys.length() > 0
   for k in keys {
@@ -701,6 +732,11 @@ async fn PermissionPolicy::auto_gate(
       all_approved = false
       break
     }
+  }
+  // Explicit user consent recorded earlier outranks a fresh judgement: a
+  // tool-level grant covers every scope of every later call of this tool.
+  if !all_approved && self.session_approved.contains(name) {
+    all_approved = true
   }
   if all_approved {
     return @posoco.ToolDecision::ApproveAfterConsent(
@@ -715,7 +751,6 @@ async fn PermissionPolicy::auto_gate(
         reason="permission: auto mode requires a DecisionPort; none is composed",
       )
   }
-  let name = effective.name.to_string()
   let questions = [
     @posoco.DecisionQuestion::Boolean(
       id="permission.auto_approve",
@@ -793,10 +828,11 @@ async fn PermissionPolicy::auto_gate(
 /// would ride the exemption unasked. The gate must therefore check this
 /// BEFORE the exemption lookup: escalated consent is structural here, not a
 /// promise by the reporting extension. Deliberate deviation from `gate`:
-/// `AllowSession`/`AllowAlways` are demoted to per-call consent and never
-/// written to `session_approved` — the host's broader grant covers only the
-/// call in front of us, because an escalated run drops the sandbox and its
-/// approvals must not be remembered. `None` for anything but a mbtx call
+/// `AllowSession`/`AllowAlways`/`AllowToolSession` are demoted to per-call
+/// consent and never written to `session_approved` — the host's broader
+/// grant covers only the call in front of us, because an escalated run drops
+/// the sandbox and its approvals must not be remembered. `None` for anything
+/// but a mbtx call
 /// carrying `"escalated": true`, leaving the normal flow untouched.
 async fn PermissionPolicy::mbtx_escalated(
   self : PermissionPolicy,
@@ -839,10 +875,13 @@ async fn PermissionPolicy::mbtx_escalated(
         category: "escalated",
         arguments_preview: preview_arguments(effective.arguments),
         arguments: effective.arguments,
+        scopes: [],
       }
       match source.ask(request) {
-        // AllowSession/AllowAlways deliberately do not add session keys.
-        AllowOnce | AllowSession | AllowAlways =>
+        // AllowSession/AllowAlways/AllowToolSession deliberately do not add
+        // session keys: an escalated run drops the sandbox, so no standing
+        // grant may be recorded from it.
+        AllowOnce | AllowSession | AllowAlways | AllowToolSession =>
           Some(
             @posoco.ToolDecision::ApproveAfterConsent(
               call~,
@@ -946,6 +985,47 @@ fn parse_mode_name(raw : String) -> PermissionMode? {
     "auto" => Some(Auto)
     "yolo" => Some(Yolo)
     _ => None
+  }
+}
+
+///|
+/// Publish the active mode as the `permission` status-bar segment
+/// (priority 10, leftmost of the llm-owned segments). `yolo` carries the
+/// `warning` role and `readonly` the `info` role; other modes publish
+/// uncolored. Re-publishing the register is idempotent — the owner-overwrite
+/// keeps the segment's bar position. Silent no-op without a bus.
+fn PermissionPolicy::publish_status(self : PermissionPolicy) -> Unit {
+  let bus = match self.bus {
+    Some(bus) => bus
+    None => return
+  }
+  match self.mode {
+    Yolo =>
+      @devkit.publish_status_register(
+        bus,
+        source="posoco_ext_permission",
+        segment="permission",
+        priority=10,
+        value=self.mode_name(),
+        color="warning",
+      )
+    ReadOnly =>
+      @devkit.publish_status_register(
+        bus,
+        source="posoco_ext_permission",
+        segment="permission",
+        priority=10,
+        value=self.mode_name(),
+        color="info",
+      )
+    _ =>
+      @devkit.publish_status_register(
+        bus,
+        source="posoco_ext_permission",
+        segment="permission",
+        priority=10,
+        value=self.mode_name(),
+      )
   }
 }
 
@@ -1088,6 +1168,7 @@ pub impl @posoco.CommandPort for PermissionPolicy with fn invoke(
               } else {
                 let previous = self.mode_name()
                 self.mode = mode
+                self.publish_status()
                 @posoco.CommandOutcome::Success(
                   feedback="permission mode: " + previous + " → " + action,
                   structured=None,
@@ -1143,6 +1224,9 @@ pub impl @posoco.Lifecycle for PermissionPolicy with fn on_compose(
       detail="PermissionMode::Auto requires a composed DecisionPort; none is present",
     )
   }
+  // All peers are constructed and subscribed by compose time, so the
+  // initial segment publication lands on a live status bar.
+  self.publish_status()
 }
 
 ///|

@@ -20,6 +20,7 @@ pub(all) enum ApprovalDecision {
   AllowOnce
   AllowSession
   AllowAlways
+  AllowToolSession
   Deny(reason~ : String)
 }
 
@@ -29,6 +30,7 @@ pub(all) struct ApprovalRequest {
   category : String
   arguments_preview : String
   arguments : Json
+  scopes : Array[String]
 }
 
 pub(all) enum PermissionMode {
