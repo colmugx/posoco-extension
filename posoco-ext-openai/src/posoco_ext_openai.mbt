@@ -348,7 +348,10 @@ fn build_request_body(
   stream? : Bool = false,
 ) -> Json {
   let input_items : Array[Json] = []
-  for m in messages {
+  // Tool-result attachments degrade to explicit placeholders until per-model
+  // image_input metadata lands in this provider (openai-compat has the
+  // config; the first-party catalog does not yet).
+  for m in @responses.fold_tool_attachments(messages, false) {
     for item in @responses.message_to_responses_items(m) {
       input_items.push(item)
     }
@@ -793,7 +796,7 @@ fn build_compact_request_body(
   model : String,
 ) -> Json {
   let input_items : Array[Json] = []
-  for m in messages {
+  for m in @responses.fold_tool_attachments(messages, false) {
     for item in @responses.message_to_responses_items(m) {
       input_items.push(item)
     }
