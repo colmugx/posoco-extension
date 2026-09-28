@@ -269,6 +269,7 @@ fn tk_approval_request() -> @permission.ApprovalRequest {
     category: "write",
     arguments_preview: "{}",
     arguments: Json::object({}),
+    scopes: ["edit"],
   }
 }
 

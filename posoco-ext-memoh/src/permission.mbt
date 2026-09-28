@@ -28,7 +28,8 @@ pub impl @permission.ApprovalSource for MemohApprovalSource with fn ask(
   match self.delegate.ask(request) {
     @permission.ApprovalDecision::AllowOnce
     | @permission.ApprovalDecision::AllowSession
-    | @permission.ApprovalDecision::AllowAlways =>
+    | @permission.ApprovalDecision::AllowAlways
+    | @permission.ApprovalDecision::AllowToolSession =>
       @permission.ApprovalDecision::AllowOnce
     @permission.ApprovalDecision::Deny(reason~) =>
       @permission.ApprovalDecision::Deny(reason~)
