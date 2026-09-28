@@ -66,6 +66,12 @@ pub impl @posoco-ext-llm.ApiKeyFactory for OpenCodeZenProvider
 pub impl @posoco-ext-llm.ProviderFactory for OpenCodeZenProvider
 pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
 
+type ZenAnchoredCompactPort
+pub async fn ZenAnchoredCompactPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn ZenAnchoredCompactPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn ZenAnchoredCompactPort::provider_config(Self) -> @port.ProviderConfig
+pub impl @port.ModelPort for ZenAnchoredCompactPort
+
 pub(all) struct ZenModelInfo {
   id : String
   owned_by : String
@@ -83,12 +89,6 @@ pub(all) struct ZenReasoningSurface {
 pub fn ZenReasoningSurface::equal(Self, Self) -> Bool
 pub fn ZenReasoningSurface::not_equal(Self, Self) -> Bool
 pub fn ZenReasoningSurface::to_repr(Self) -> @debug.Repr
-
-type ZenRetryModelPort
-pub async fn ZenRetryModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn ZenRetryModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
-pub fn ZenRetryModelPort::provider_config(Self) -> @port.ProviderConfig
-pub impl @port.ModelPort for ZenRetryModelPort
 
 // Type aliases
 

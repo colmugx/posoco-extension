@@ -67,7 +67,9 @@ fn zen_catalog_slot(
   surface : ZenReasoningSurface?,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
-  let port : &@posoco.ModelPort = zen_retry_port(OpenCodeZenModelPort(config))
+  let port : &@posoco.ModelPort = zen_anchored_compact_port(
+    OpenCodeZenModelPort(config),
+  )
   let slot_id = zen_provider_id + "/" + config.model
   let slot_efforts : Array[String] = match surface {
     None => ["off", "on"]

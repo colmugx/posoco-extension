@@ -1164,79 +1164,6 @@ test "ProviderFactory::build rebuilds level pickers from cached thinking_efforts
 }
 
 ///|
-/// Flaky inner port: raises `error` until `failures_left` is exhausted, then
-/// answers with an empty stop completion.
-struct FlakyModelPort {
-  calls : Ref[Int]
-  failures_left : Ref[Int]
-  error : @posoco.ModelError
-}
-
-///|
-fn FlakyModelPort::FlakyModelPort(
-  failures : Int,
-  error : @posoco.ModelError,
-) -> FlakyModelPort {
-  FlakyModelPort::{
-    calls: Ref::{ val: 0, },
-    failures_left: Ref::{ val: failures, },
-    error,
-  }
-}
-
-///|
-impl @posoco.ModelPort for FlakyModelPort with fn chat(
-  self : FlakyModelPort,
-  _scope : @posoco.InvocationScope,
-  _messages : ArrayView[@posoco.Message],
-  _tools : Array[@posoco.ToolDef],
-  _options : @posoco.ChatOptions,
-  _stream : @posoco.StreamMode,
-) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  self.calls.val += 1
-  if self.failures_left.val > 0 {
-    self.failures_left.val -= 1
-    raise self.error
-  }
-  @posoco.ModelCallResult::{
-    completion: @posoco.Completion::Completion(
-      content=[],
-      tool_calls=[],
-      reasoning=None,
-      finish_reason=@posoco.FinishReason::Stop,
-      usage=None,
-    ),
-    processed_messages: [],
-  }
-}
-
-///|
-impl @posoco.ModelPort for FlakyModelPort with fn compact(
-  self : FlakyModelPort,
-  _scope : @posoco.InvocationScope,
-  _messages : ArrayView[@posoco.Message],
-  _options : @posoco.ChatOptions,
-  _trigger : @posoco.CompactTrigger,
-) -> @posoco.CompactResult raise @posoco.ModelError {
-  self.calls.val += 1
-  if self.failures_left.val > 0 {
-    self.failures_left.val -= 1
-    raise self.error
-  }
-  @posoco.CompactResult::{
-    compacted_messages: [],
-    mode: @posoco.CompactMode::Replace,
-  }
-}
-
-///|
-impl @posoco.ModelPort for FlakyModelPort with fn provider_config(
-  _self : FlakyModelPort,
-) -> @posoco.ProviderConfig {
-  @posoco.ProviderConfig::empty()
-}
-
-///|
 fn zen_flaky_scope() -> @posoco.InvocationScope {
   @posoco.InvocationScope::{
     session_id: @posoco.SessionId::unchecked("zen-retry-test"),
@@ -1256,76 +1183,6 @@ fn zen_truncated_error() -> @posoco.ModelError {
   @posoco.ModelError::ResponseParse(
     "opencode-zen SSE truncated (stage=eof, terminal_marker=missing)",
   )
-}
-
-///|
-fn zen_gateway_503_error() -> @posoco.ModelError {
-  @posoco.ModelError::Transport(
-    "opencode-zen HTTP error (stage=chat_stream.http_status, status=503, body_bytes=175, body_category=utf8)",
-  )
-}
-
-///|
-async test "zen retry port retries truncated SSE failures until success" {
-  let inner = FlakyModelPort(2, zen_truncated_error())
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
-  let result = port.chat(
-    zen_flaky_scope(),
-    [],
-    [],
-    zen_flaky_options(),
-    @posoco.StreamMode::NoStream,
-  )
-  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
-  assert_eq(inner.calls.val, 3)
-}
-
-///|
-async test "zen retry port gives up after the retry budget" {
-  let inner = FlakyModelPort(99, zen_truncated_error())
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
-  let result = Ok(
-    port.chat(
-      zen_flaky_scope(),
-      [],
-      [],
-      zen_flaky_options(),
-      @posoco.StreamMode::NoStream,
-    ),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Ok(_) => fail("expected the truncation error after the retry budget")
-    Err(error) => assert_true(zen_retryable_error(error))
-  }
-  // 1 initial attempt + 3 retries.
-  assert_eq(inner.calls.val, 4)
-}
-
-///|
-async test "zen retry port does not retry other model errors" {
-  let inner = FlakyModelPort(
-    1,
-    @posoco.ModelError::Transport("connection reset"),
-  )
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
-  let result = Ok(
-    port.chat(
-      zen_flaky_scope(),
-      [],
-      [],
-      zen_flaky_options(),
-      @posoco.StreamMode::NoStream,
-    ),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Ok(_) => fail("expected the transport error to surface unretried")
-    Err(_) => ()
-  }
-  assert_eq(inner.calls.val, 1)
 }
 
 ///|
@@ -1402,13 +1259,13 @@ impl @posoco.ModelPort for ZenSummaryModelPort with fn provider_config(
 }
 
 ///|
-async test "zen retry port retries truncated SSE during compact" {
+async test "anchored compact replaces the transcript from one summarize call" {
   let inner = ZenSummaryModelPort::ZenSummaryModelPort(
-    1,
+    0,
     zen_truncated_error(),
     "anchored summary text",
   )
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
+  let port : &@posoco.ModelPort = zen_anchored_compact_port(inner)
   // Two ~2500-token turns: the keep-recent walk stops at the second long
   // turn (a safe user boundary), leaving the first turn as a nonempty head.
   let long_history = "detail ".repeat(1200)
@@ -1435,104 +1292,7 @@ async test "zen retry port retries truncated SSE during compact" {
     @posoco.CompactTrigger::Manual,
   )
   assert_true(result.mode == @posoco.CompactMode::Replace)
-  // 1 failed summarize attempt + 1 successful retry.
-  assert_eq(inner.calls.val, 2)
-}
-
-///|
-/// Zero-delay retry wrapper so tests don't wait out the backoff.
-fn zen_test_retry_port(inner : &@posoco.ModelPort) -> &@posoco.ModelPort {
-  ZenRetryModelPort::{
-    inner,
-    max_retries: zen_max_retries,
-    initial_delay_ms: 0,
-  }
-}
-
-///|
-async test "zen retry port retries mid-stream transport failures" {
-  let inner = FlakyModelPort(
-    1,
-    @posoco.ModelError::Transport(
-      "opencode-zen transport failure (stage=read_stream)",
-    ),
-  )
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
-  let result = port.chat(
-    zen_flaky_scope(),
-    [],
-    [],
-    zen_flaky_options(),
-    @posoco.StreamMode::NoStream,
-  )
-  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
-  assert_eq(inner.calls.val, 2)
-}
-
-///|
-async test "zen retry port does not retry pre-stream transport failures" {
-  let inner = FlakyModelPort(
-    1,
-    @posoco.ModelError::Transport("opencode-zen transport failure (stage=post)"),
-  )
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
-  let result = Ok(
-    port.chat(
-      zen_flaky_scope(),
-      [],
-      [],
-      zen_flaky_options(),
-      @posoco.StreamMode::NoStream,
-    ),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Ok(_) => fail("expected the stage=post error to surface unretried")
-    Err(_) => ()
-  }
-  assert_eq(inner.calls.val, 1)
-}
-
-///|
-async test "zen retry port retries gateway 503 responses until success" {
-  let inner = FlakyModelPort(2, zen_gateway_503_error())
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
-  let result = port.chat(
-    zen_flaky_scope(),
-    [],
-    [],
-    zen_flaky_options(),
-    @posoco.StreamMode::NoStream,
-  )
-  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
-  assert_eq(inner.calls.val, 3)
-}
-
-///|
-async test "zen retry port does not retry other http statuses" {
-  let inner = FlakyModelPort(
-    1,
-    @posoco.ModelError::Transport(
-      "opencode-zen HTTP error (stage=chat_stream.http_status, status=400, body=bad request)",
-    ),
-  )
-  let port : &@posoco.ModelPort = zen_test_retry_port(inner)
-  let result = Ok(
-    port.chat(
-      zen_flaky_scope(),
-      [],
-      [],
-      zen_flaky_options(),
-      @posoco.StreamMode::NoStream,
-    ),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Ok(_) => fail("expected the 400 error to surface unretried")
-    Err(_) => ()
-  }
+  // Exactly one summarize call: retrying is the router decorator's job.
   assert_eq(inner.calls.val, 1)
 }
 
