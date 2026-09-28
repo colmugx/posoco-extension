@@ -37,7 +37,7 @@ fn image_url_for(media_type : String, data : String) -> String {
 /// Placeholder for an image the endpoint cannot accept. The size is the
 /// decoded-byte estimate (base64 length × 3/4) so the model can gauge how
 /// much was attached without seeing it.
-fn image_placeholder(media_type : String, data : String) -> String {
+pub fn image_placeholder(media_type : String, data : String) -> String {
   let approx_kb = data.length() * 3 / 4096
   "[Attached " +
   media_type +
