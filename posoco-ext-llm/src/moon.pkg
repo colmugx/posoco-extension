@@ -3,6 +3,7 @@ import {
   "colmugx/posoco/types",
   "colmugx/posoco-devkit" @devkit,
   "colmugx/posoco-ext-oauth" @oauth,
+  "colmugx/posoco-kit-chat-completions" @chatkit,
   "moonbitlang/async",
   "moonbitlang/core/debug",
 }
@@ -20,6 +21,7 @@ options(
     // no backend restrictions on its core. Only the white-box tests are
     // native-only (they exercise async login/refresh paths).
     "router_wbtest.mbt": [ "native" ],
+    "transient_retry_wbtest.mbt": [ "native" ],
     "command_model_wbtest.mbt": [ "native" ],
     "command_model_pick_wbtest.mbt": [ "native" ],
     "command_model_quick_wbtest.mbt": [ "native" ],

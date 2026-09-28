@@ -141,10 +141,22 @@ pub fn RouterModelPort::from_catalogs(
   api_key_store? : &@oauth.ApiKeyStore? = None,
   auth_prompt? : &@oauth.AuthPromptInteraction? = None,
   extra_quota_sources? : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
+  transient_retry? : TransientRetryPolicy? = Some(
+    TransientRetryPolicy::default(),
+  ),
 ) -> RouterModelPort raise @posoco.CompositionError {
+  // from_catalogs is the one slot-ingestion seam: every provider port is
+  // wrapped with the transient-failure retry decorator here (chat and compact
+  // both dispatch through slot.port). A host that constructs RouterModelPort
+  // directly bypasses this policy. `None` disables retrying entirely.
   let slots : Array[ModelSlot] = []
   for catalog in catalogs {
     for slot in catalog.slots() {
+      let slot = match transient_retry {
+        Some(policy) =>
+          { ..slot, port: transient_retry_port(inner=slot.port, policy~), }
+        None => slot
+      }
       slots.push(slot)
     }
   }
