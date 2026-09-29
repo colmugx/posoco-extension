@@ -120,9 +120,6 @@ let agent = Agent(
 
 ## Provenance
 
-Protocol facts reverse-engineered and live-probed from zcode 0.16.5 (the
-app-server protocol is an undocumented internal contract); the regression
-guard is the env-gated live test above — re-run it after upgrading zcode.
-Design and evidence live in the posoco repository:
-`docs/cetas-zcode-design.md`, `docs/zcode-ext-implementation.md`,
-`docs/zcode/round1-plan.md`.
+Protocol facts are reverse-engineered and live-probed from zcode 0.16.5; the
+app-server protocol is undocumented. The env-gated live test above validates
+the wire contract against an installed zcode build.
