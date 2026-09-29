@@ -186,7 +186,7 @@ fn build_thread_message(
 /// Nowledge Mem thread messages.
 ///
 /// - SystemMessage is skipped: index 0 of a before_model payload is the
-///   aggregated system prompt, not user transcript (design §10-2).
+///   aggregated system prompt, not user transcript.
 /// - Core's injected session-opening memory message is filtered the same
 ///   way: injected context is not user speech — and dropping it keeps the
 ///   thread title the first real user message.
