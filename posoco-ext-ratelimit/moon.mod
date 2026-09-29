@@ -1,10 +1,11 @@
 name = "colmugx/posoco-ext-ratelimit"
 
-version = "0.3.0"
+version = "0.4.0"
 
 import {
   "colmugx/posoco@0.20.0",
-  "colmugx/posoco-devkit@0.3.0",
+  "colmugx/posoco-devkit@0.4.0",
+  "colmugx/fuwaroid@0.3.1",
   "moonbitlang/async@0.22.3",
 }
 
@@ -12,8 +13,8 @@ readme = "README.mbt.md"
 
 license = "Apache-2.0"
 
-keywords = [ "posoco", "rate-limit", "429", "auto-resume", "coding-plan" ]
+keywords = [ "posoco", "rate-limit", "429", "auto-resume", "fuwaroid" ]
 
-description = "Posoco rate-limit guard extension - records 429 quota resets per session and auto-resumes the interrupted turn when the provider-stated reset time arrives"
+description = "Posoco rate-limit guard extension - Fuwaroid-owned recovery state with event-driven supervised auto-resume"
 
 source = "src"
