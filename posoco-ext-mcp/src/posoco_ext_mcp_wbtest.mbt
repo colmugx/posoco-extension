@@ -492,7 +492,7 @@ fn registry_test_call(name : String) -> @posoco.ToolCall {
 }
 
 ///|
-/// Wave 1 regression (red before the slot registry): a routing entry may
+/// A routing entry may
 /// point at a slot that no longer holds a live connection — retired by a
 /// concurrent `reconnect_server`, or left behind when `close()` cleared the
 /// registry. `execute` must fail honestly instead of indexing a shifted or
@@ -662,8 +662,8 @@ async fn defer_mut_capture_body(probe : DeferProbe) -> Unit {
 }
 
 ///|
-/// Empirical pin for the defer discipline `invoke_mcp_tool` relies on
-/// (round-1 Wave B2): a caller cancellation raised at an await inside the
+/// Empirical pin for the defer discipline `invoke_mcp_tool` relies on: a
+/// caller cancellation raised at an await inside the
 /// callee still runs the callee's registered defer during unwinding, and the
 /// defer body observes the latest state of captured cells. This is what
 /// guarantees the EndCall pairing never leaks in_flight on the cancel path.
