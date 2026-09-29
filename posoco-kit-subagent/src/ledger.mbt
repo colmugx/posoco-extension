@@ -1,5 +1,5 @@
 ///|
-/// Per-run spawn budget ledger (design §6.3): counts spawns across the
+/// Per-run spawn budget ledger: counts spawns across the
 /// `agent` and `agent_swarm` tools of one run and refuses once the budget is
 /// exhausted — the caller rejects explicitly, nothing queues silently.
 /// Counting only in v1 (a concurrency semaphore belongs to the ext-swarm
