@@ -39,8 +39,8 @@ pub(all) struct ObsidianConfig {
   write_paths : Array[String]
   /// Whether the delete tool is listed at all.
   allow_delete : Bool
-  /// Never spawn `eval`/`dev:*` regardless of this flag in v1; kept so a
-  /// future opt-in is a config change, not a schema change.
+  /// Reserved compatibility flag. `eval` and `dev:*` remain disabled
+  /// regardless of its value.
   cli_eval_enabled : Bool
 }
 
