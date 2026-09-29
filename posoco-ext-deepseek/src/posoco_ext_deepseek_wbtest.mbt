@@ -1,8 +1,4 @@
 ///|
-/// Blackbox tests for posoco-ext-deepseek wire encoding/decoding.
-/// These test the pure encode/decode logic without any network calls.
-
-///|
 fn disabled_thinking_json() -> Json {
   Json::object({ "type": Json::string("disabled") })
 }
@@ -270,9 +266,6 @@ test "decode_chat_response_api_error" {
     Ok(_) => fail("expected error")
   }
 }
-
-///|
-/// SSE parser tests — process_deepseek_sse is pure (no network).
 
 ///|
 test "sse_text_delta" {
