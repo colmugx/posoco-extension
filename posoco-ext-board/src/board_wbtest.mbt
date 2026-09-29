@@ -42,7 +42,7 @@ impl @runtime.BoardWebServer for CommandFakeServer with fn last_error(_self) {
 
 ///|
 priv struct CommandFakeOpener {
-  mut urls : Array[String]
+  urls : Array[String]
 }
 
 ///|
