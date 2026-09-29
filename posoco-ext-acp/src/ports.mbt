@@ -91,9 +91,6 @@ pub impl @posoco.Extension for AcpBridge with fn manifest(self) -> @posoco.Exten
 pub extend AcpBridge with @posoco.Extension::{extension_id, manifest}
 
 ///|
-/// Convenience factory: construct an AcpBridge and return its Extension
-/// view. Hosts that already hold an AcpBridge instance should pass it
-/// directly instead of calling this helper.
 pub fn acp_extension() -> AcpBridge {
   AcpBridge()
 }
