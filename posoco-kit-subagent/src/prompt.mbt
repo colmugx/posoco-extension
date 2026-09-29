@@ -1,5 +1,5 @@
 ///|
-/// Hard cap on caller-supplied `instructions` (design §9.6): trust annotation
+/// Hard cap on caller-supplied `instructions`: trust annotation
 /// plus delimited rendering is the whole defense, so length is bounded.
 const MAX_INSTRUCTIONS_CHARS = 8192
 
@@ -12,7 +12,7 @@ pub(all) suberror PromptAssemblyError {
 }
 
 ///|
-/// Assemble a subagent system prompt (design §2.3): the kind template body is
+/// Assemble a subagent system prompt: the kind template body is
 /// the base, and caller `instructions` fill the `{{instructions}}` slot.
 /// Non-empty instructions are wrapped in a trust-annotated
 /// `<subagent-context>` envelope (devkit `context_envelope`) so the filled
