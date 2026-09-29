@@ -69,7 +69,7 @@ fn board_request_path(path : String) -> String {
 }
 
 ///|
-fn board_send(
+async fn board_send(
   conn : @http.ServerConnection,
   code : Int,
   reason : String,
@@ -351,7 +351,7 @@ pub struct NativeBrowserOpener {}
 
 ///|
 pub fn NativeBrowserOpener::NativeBrowserOpener() -> NativeBrowserOpener {
-  {}
+  NativeBrowserOpener::{ }
 }
 
 ///|
