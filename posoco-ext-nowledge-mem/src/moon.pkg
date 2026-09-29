@@ -22,10 +22,10 @@ import {
 
 warnings = "-unused_package"
 
-// The extension ships per-target platform runners (.native/.js) and pins its
-// wbtests to native; wasm is out of scope for v1 (plan D6), so the package
-// declares native+js as its whole target set. Restricted-target packages
-// carry no pkg.generated.mbti (moon info's canonical backend is Wasm).
+// The extension ships native/js platform runners and native wbtests. It does
+// not support wasm, so the package declares native+js as its whole target set.
+// Restricted-target packages carry no pkg.generated.mbti because moon info's
+// canonical backend is Wasm.
 
 supported_targets = "+native +js"
 
