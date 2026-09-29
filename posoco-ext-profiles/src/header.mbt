@@ -1,7 +1,7 @@
-// The activation header template (Q4): every activation — meta tool or
+// Every activation — meta tool or
 // manual — injects one UserMessage whose first Text line is exactly
 // `"profile <id> activated"`. The line is the durable activation record:
-// compact must preserve it (Q14) and the scanner below rebuilds the
+// compact must preserve it and the scanner below rebuilds the
 // activated set from it, so the template is frozen contract, not
 // presentation.
 
@@ -12,7 +12,7 @@ pub fn activation_header(id : String) -> String {
 }
 
 ///|
-/// Reconstruct the activated profile set from a transcript (Q14/Q18). The
+/// Reconstruct the activated profile set from a transcript. The
 /// transcript is the single source of truth and the extension keeps zero
 /// activation memory: scanning every UserMessage's first Text line for the
 /// exact header format rebuilds the set — on resume, after compact, and
@@ -40,7 +40,7 @@ pub fn scan_activated_profiles(
 }
 
 ///|
-/// Pending profile activations (Q18): ids whose activation tool call
+/// Pending profile activations: ids whose activation tool call
 /// succeeded but whose header line is not yet in the transcript — exactly
 /// what before_model must inject this request.
 ///
@@ -53,14 +53,14 @@ pub fn scan_activated_profiles(
 ///
 /// **Package-core invariant**: the `activated: <id>` success prefix and the
 /// `unknown profile: <id>` miss prefix are produced by this package's
-/// `activate_profile` meta tool (Wave 2) and consumed here. A first line
+/// `activate_profile` meta tool and consumed here. A first line
 /// starting with `unknown profile` is an explicit never-inject verdict; any
 /// other content shape or error outcome does not inject. Keep both sides in
 /// sync.
 ///
 /// Results are ordered by first appearance, deduplicated, and already
 /// injected ids (per `scan_activated_profiles`) are excluded — re-injecting
-/// an activated profile is a no-op (Q16).
+/// an activated profile is a no-op.
 pub fn find_pending_activations(
   messages : Array[@posoco.Message],
 ) -> Array[String] {
@@ -137,7 +137,7 @@ fn activation_result_verdict(
 
 ///|
 /// Strict header match: the line must be exactly `profile <id> activated`
-/// with a non-empty id (Q4 template). Prose merely mentioning the phrase, a
+/// with a non-empty id. Prose merely mentioning the phrase, a
 /// compact summary line, or a differently-shaped message yields None.
 fn header_profile_id(line : String) -> String? {
   let prefix = "profile "
