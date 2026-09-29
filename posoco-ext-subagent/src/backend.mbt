@@ -455,8 +455,8 @@ async fn SubagentTools::spawn(
     let user_message : @posoco.Message = @posoco.Message::UserMessage(content=[
       @posoco.Content::Text(spec.task),
     ])
-    // Background runner (ruling 4): the child owns its lifetime through its
-    // own run_scoped; the runner does no registry or event bookkeeping —
+    // The child owns its lifetime through its own run_scoped; the background
+    // runner does no registry or event bookkeeping —
     // cancellation mid-run cannot guarantee it. Timeout and cancellation
     // belong to core (TaskSpec.timeout_ms).
     let runner : async () -> @posoco.Message = async fn() {
