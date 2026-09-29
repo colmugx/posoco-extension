@@ -1,5 +1,6 @@
 ///|
 pub struct NativeBoardWebServer {
+  mut hub : BoardEventHub?
   mut server : @http.Server?
   mut endpoint : BoardEndpoint?
   mut token : String?
@@ -11,6 +12,7 @@ pub struct NativeBoardWebServer {
 ///|
 pub fn NativeBoardWebServer::NativeBoardWebServer() -> NativeBoardWebServer {
   {
+    hub: None,
     server: None,
     endpoint: None,
     token: None,
@@ -128,15 +130,27 @@ fn board_request_token_ok(
 
 ///|
 fn board_placeholder_page() -> String {
-  "<!doctype html><html><head><meta charset=\"utf-8\"><title>Posoco Board</title></head>" +
-  "<body><main><h1>Posoco Board</h1><p id=\"status\">connecting…</p></main>" +
-  "<script>(function(){const q=new URLSearchParams(location.search);const t=q.get('token');" +
-  "if(!t){document.getElementById('status').textContent='missing bootstrap token';return;}" +
-  "const u='ws://'+location.host+'/ws?token='+encodeURIComponent(t);" +
-  "const ws=new WebSocket(u);ws.onopen=()=>document.getElementById('status').textContent='connected';" +
-  "ws.onclose=()=>document.getElementById('status').textContent='disconnected';" +
-  "ws.onerror=()=>document.getElementById('status').textContent='connection error';})();</script>" +
-  "</body></html>"
+  "<!doctype html><html><head><meta charset=\"utf-8\"><title>Posoco Board</title>" +
+  "<style>body{font:14px system-ui;margin:24px}#timeline{white-space:pre-wrap;font-family:monospace}" +
+  ".meta{color:#666}</style></head><body><main><h1>Posoco Board</h1>" +
+  "<p class=\"meta\">connection: <span id=\"status\">connecting</span> · seq: <span id=\"seq\">0</span></p>" +
+  "<div id=\"timeline\"></div></main><script>(function(){" +
+  "const q=new URLSearchParams(location.search),t=q.get('token'),status=document.getElementById('status')," +
+  "seqEl=document.getElementById('seq'),timeline=document.getElementById('timeline');" +
+  "if(!t){status.textContent='missing bootstrap token';return;}" +
+  "let last=Number(sessionStorage.getItem('posoco.board.last_seq')||'0'),timer=null;" +
+  "const setSeq=(n)=>{last=Math.max(last,Number(n)||0);seqEl.textContent=String(last);" +
+  "sessionStorage.setItem('posoco.board.last_seq',String(last));};" +
+  "const line=(e)=>{const d=document.createElement('div');d.textContent=e.seq+' '+e.kind+" +
+  "(e.scope&&e.scope.session_id?' ['+e.scope.session_id+']':'');timeline.appendChild(d);setSeq(e.seq);};" +
+  "const snapshot=(f)=>{timeline.textContent='';const es=(f.payload&&f.payload.events)||[];es.forEach(line);setSeq(f.last_seq);};" +
+  "const connect=()=>{status.textContent='connecting';const ws=new WebSocket('ws://'+location.host+'/ws?token='+encodeURIComponent(t));" +
+  "ws.onopen=()=>{status.textContent='connected';ws.send(JSON.stringify({type:'hello',last_seq:last,protocol_version:1}));};" +
+  "ws.onmessage=(m)=>{let f;try{f=JSON.parse(m.data)}catch(_){return;}if(f.type==='event')line(f);" +
+  "else if(f.type==='snapshot')snapshot(f);else if(f.type==='resync_required'){last=0;sessionStorage.setItem('posoco.board.last_seq','0');ws.close();}" +
+  "else if(f.type==='error'){status.textContent='error: '+f.code;}};" +
+  "ws.onclose=()=>{status.textContent='disconnected';clearTimeout(timer);timer=setTimeout(connect,500);};" +
+  "ws.onerror=()=>{status.textContent='connection error';};};connect();})();</script></body></html>"
 }
 
 ///|
@@ -168,17 +182,81 @@ async fn NativeBoardWebServer::handle_ws(
     board_send(conn, 401, "Unauthorized", "text/plain; charset=utf-8", "unauthorized")
     return
   }
+  let hub = match self.hub {
+    Some(value) => value
+    None => {
+      board_send(conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "event hub unavailable")
+      return
+    }
+  }
   let ws = @websocket.from_http_server(request, conn)
   defer ws.close()
-  for ;; {
-    let message = ws.recv() catch {
-      @websocket.ConnectionClosed(_) => break
-      _ => break
-    }
-    let _ = message.read_all()
-  }
-}
 
+  let hello_text = ws.recv().read_all().text() catch {
+    _ => return
+  }
+  let hello = match @protocol.decode_client_frame(hello_text) {
+    Ok(@protocol.BoardClientFrame::Hello(value)) => value
+    Err(@protocol.BoardProtocolError::UnsupportedVersion(expected~, got~)) => {
+      ws.send_text(
+        @protocol.encode_server_frame(
+          @protocol.BoardServerFrame::ServerError({
+            code: "unsupported_protocol_version",
+            message: "expected protocol \{expected}, got \{got}",
+          }),
+        ),
+      ) catch {
+        _ => ()
+      }
+      ws.send_close() catch { _ => () }
+      return
+    }
+    _ => {
+      ws.send_text(
+        @protocol.encode_server_frame(
+          @protocol.BoardServerFrame::ServerError({
+            code: "hello_required",
+            message: "first websocket frame must be hello",
+          }),
+        ),
+      ) catch {
+        _ => ()
+      }
+      ws.send_close() catch { _ => () }
+      return
+    }
+  }
+
+  let mailbox = hub.register_client()
+  defer hub.unregister_client(mailbox.client_id())
+  for frame in hub.sync_frames(hello.last_seq) {
+    ws.send_text(@protocol.encode_server_frame(frame))
+  }
+
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, allow_failure=true, () => {
+      while true {
+        let frame = match mailbox.next_frame() {
+          Some(value) => value
+          None => break
+        }
+        ws.send_text(@protocol.encode_server_frame(frame)) catch { _ => break }
+        if frame is @protocol.BoardServerFrame::ResyncRequired(_) {
+          ws.send_close() catch { _ => () }
+          break
+        }
+      }
+    })
+    while true {
+      let raw = ws.recv().read_all().text() catch { _ => break }
+      match @protocol.decode_client_frame(raw) {
+        Ok(@protocol.BoardClientFrame::Hello(_)) => ()
+        Ok(@protocol.BoardClientFrame::Command(_)) => ()
+        Err(_) => ()
+      }
+    }
+  })
+}
 ///|
 async fn NativeBoardWebServer::handle_request(
   self : NativeBoardWebServer,
@@ -250,6 +328,14 @@ async fn NativeBoardWebServer::handle_request(
     _ =>
       board_send(conn, 404, "Not Found", "text/plain; charset=utf-8", "not found")
   }
+}
+
+///|
+pub impl BoardWebServer for NativeBoardWebServer with fn attach_event_hub(
+  self,
+  hub,
+) {
+  self.hub = Some(hub)
 }
 
 ///|
@@ -388,14 +474,15 @@ pub impl BrowserOpener for NativeBrowserOpener with fn open(_self, url) {
 }
 
 ///|
-pub fn default_board_runtime(event_buffer : Int) -> BoardRuntime {
+pub fn default_board_runtime(event_buffer : Int, client_queue_depth : Int) -> BoardRuntime {
   let server = NativeBoardWebServer::NativeBoardWebServer()
   let opener = NativeBrowserOpener::NativeBrowserOpener()
-  BoardRuntime::with_adapters(event_buffer~, server=server, opener=opener)
+  BoardRuntime::with_adapters(event_buffer~, client_queue_depth~, server=server, opener=opener)
 }
 
 ///|
 pub extend NativeBoardWebServer with BoardWebServer::{
+  attach_event_hub,
   bind,
   run,
   browser_url,
