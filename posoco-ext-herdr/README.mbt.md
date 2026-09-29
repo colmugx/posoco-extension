@@ -50,7 +50,7 @@ match @herdr.HerdrDelegate::detect(cwd=runtime.config.cwd) {
 with `exts` feeding `Agent(exts=[..], config~)`. cetas-bun is the only
 shipped outlet holding the delegate. cetas-headless wires the reporter only
 (`lib/host.mbt`): **headless never composes `HerdrDelegate`** — it is a
-depth-1 leaf by hard rule (2026-09-10), so a delegated child can never
+depth-1 leaf by hard rule, so a delegated child can never
 delegate further.
 
 ## Presence (HerdrReporter)
