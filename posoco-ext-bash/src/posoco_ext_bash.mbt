@@ -182,7 +182,7 @@ fn bash_empty_command_failure() -> @posoco.RuntimeError {
 /// Per-target import keepers: each backend compiles only one execute path,
 /// so the other backend's import would trip `unused_package`. `@process`
 /// backs the native runner, `@js_async` the bun runner.
-#cfg(not(target="native"))
+#cfg(target="js")
 let _process_import_keeper : Unit = ignore(@process.unimplemented)
 
 ///|
