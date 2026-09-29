@@ -302,7 +302,7 @@ fn recovery_fold_cmd(
         }
       }
     }
-    ResumeCompleted(ticket~) => {
+    Poll(now_ms~) => dispatch_due(ctx, state, effects, now_ms)\n    ResumeCompleted(ticket~) => {
       match state.inflight {
         Some(current) if current == ticket => {
           state.inflight = None
@@ -377,7 +377,7 @@ fn RateLimitRuntime::start(
   trace~ : (String) -> Unit,
 ) -> RateLimitRuntime {
   let supervisor : @fuwaroid.Supervisor[Unit] = @fuwaroid.Supervisor(group~)
-  let effects : RuntimeEffects = { supervisor, now_ms, sleep_ms, resume, trace, }
+  let effects : RuntimeEffects = {\n    supervisor,\n    now_ms,\n    sleep_ms,\n    resume,\n    trace,\n    publish_status,\n  }
   let init : RecoveryState = {
     pending: [],
     attempts: Map::from_array([]),
