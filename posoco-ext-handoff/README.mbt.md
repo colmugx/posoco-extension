@@ -209,7 +209,7 @@ Structured command callers may supply:
 - `validation_failed[]`
 - `validation_not_run[]`
 
-## Deliberate v1 boundary
+## Non-goals
 
 The extension does not implement accept/reject/cancel protocol state, session
 identity, workspace ownership, conversation export, automatic conversation
