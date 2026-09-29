@@ -45,7 +45,7 @@ behind the lazytools gateway the whole time.
   re-run before every model request within a run (src/header.mbt,
   src/hook.mbt).
 - **Event**: each injection publishes `profiles.activated` with payload
-  `{id, members}` on the devkit `EventBus` at the injection point (F4) —
+  `{id, members}` on the devkit `EventBus` at the injection point —
   publishing with no bus or no subscribers is a no-op (src/hook.mbt).
 
 ## Meta tool
@@ -57,7 +57,7 @@ exactly as listed in the menu. The result text is contract, not prose
 - Known id — `Success` whose first line is `activated: <id>`, followed by the
   notice that the manual is injected with the **next model request** and takes
   effect within the current turn, so the model must not end the turn to wait
-  for another user message (F7).
+  for another user message.
 - Unknown id — `Success` whose first line is `unknown profile: <id>` followed
   by `available: <every activatable id>`, `all` included (the menu mirror).
   The hook reads the same first line as a never-inject verdict.
@@ -91,7 +91,7 @@ session's observed usage as a new profile (src/command.mbt):
    enters the in-memory catalog immediately, so `activate_profile` accepts it
    the same session; the menu and the deep-deferred views stay
    composition-time static and the full benefit lands at the next composition
-   (Q19) (src/command.mbt, src/prompt_menu.mbt).
+   (src/command.mbt, src/prompt_menu.mbt).
 
 ## Composition seam
 
@@ -104,7 +104,7 @@ touches a session (src/defer_view.mbt, src/profiles.mbt):
   double-injects). `captured` maps ext id to the stripped prompt text;
   `views` are the replacements to register — extensions with neither tools
   nor prompt sections pass through unchanged. The deferred set itself is the
-  host's Q10 policy (typically the union of loaded profiles' exts; hosts may
+  host's policy (typically the union of loaded profiles' exts; hosts may
   protect never-defer extensions by leaving them out).
 - `Profiles::build(manifests~, defer_set~, captured_prompts~, attribution~,
   bus?, store?, session_store?, summarizer?)` — every input is a
@@ -116,7 +116,7 @@ touches a session (src/defer_view.mbt, src/profiles.mbt):
   Referenced-but-uncomposed ext ids are reported via `Profiles::warnings()`
   and annotated in the menu; activation proceeds without them (src/types.mbt,
   src/profiles.mbt, src/prompt_menu.mbt).
-- **Register profiles BEFORE lazytools** (Q17): hook chains run in
+- **Register profiles BEFORE lazytools**: hook chains run in
   registration order, so the lazytools envelope stays last. Register the
   deep-deferred views instead of the member originals, or their prompts stay
   resident and activation double-injects (src/extends.mbt, src/defer_view.mbt).
@@ -142,7 +142,7 @@ let agent = @posoco.Agent(
 )
 ```
 
-## Deliberate v1 boundary
+## Host integration limits
 
 - **Host wiring is not finished.** cetas hosts do not yet (a) pass
   `session_id` in command invoke args, (b) inject a `SessionStore` at build,
@@ -155,7 +155,7 @@ let agent = @posoco.Agent(
   (src/command.mbt).
 - **Compact contract across packages**: compactors must preserve every
   `profile <id> activated` header line (bodies may compress) — resume rebuild
-  scans them (Q14). This is a requirement on the posoco-kit-compact-* kits
+  scans them. This is a requirement on the posoco-kit-compact-* kits
   and currently has no owner (src/header.mbt).
 - The `/profiles` selector lists catalog manifests only; the builtin `all` is
   reachable through the menu's fallback sentence and the meta tool, not the
