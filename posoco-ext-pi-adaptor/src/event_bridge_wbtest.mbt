@@ -1,5 +1,4 @@
 ///|
-/// Whitebox helper: register a payload-capturing handler for one pi event.
 extern "js" fn wbtest_on_capture(
   host : JsPiHost,
   event : String,
