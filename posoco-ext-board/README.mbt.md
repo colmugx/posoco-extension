@@ -4,12 +4,12 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S1 local control plane
+## Current status: S2A synchronous event projection
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
-It still does **not** observe Agent turns, persist Board domain state or execute
-Agent work.
+S2A adds read-only Observer projection into the existing in-memory telemetry
+history. It does **not** persist Board domain state or execute Agent work.
 
 The native backend binds exactly `127.0.0.1:0`: the OS selects an available
 loopback port. Each listener instance receives a fresh 256-bit secret from the
@@ -74,6 +74,57 @@ and `BoardSnapshot`; raw Posoco `TurnEvent` values are never exposed on the
 wire. Transport `seq` and authoritative `board_revision` are distinct
 counters: telemetry may advance `seq` without changing Board domain revision.
 
+## Event projection (S2A)
+
+The manifest registers one synchronous Observer and no PipelineHook. Projection
+calls only `runtime.publish_telemetry`, always with `board_revision=0`; the hub
+owns monotonic `seq`. No server attachment or startup is needed to record events.
+`EventScope` IDs are explicitly copied into protocol-owned scope fields, without
+normalizing or guessing IDs. Missing scope stays absent, including during a run.
+
+| Posoco event | Board kind |
+| --- | --- |
+| TurnStarted / Completed / Failed | `run.started` / `run.completed` / `run.failed` |
+| TextDelta / ReasoningDelta | `assistant.delta` / `assistant.reasoning_delta` |
+| ToolCallPending / Succeeded | `tool.pending` / `tool.completed` |
+| ToolCallFailed / Rejected / Abandoned | `tool.failed` |
+| ModelResponseReceived | `model.response` |
+| UserRequestStarted / Finished | `run.blocked` / `run.resumed` |
+| StreamChunksDropped / ConfigWarning | `runtime.warning` |
+
+Tool payloads contain the original `call_id`, a display `tool` name and a safe
+`preview`. Pending/failure/rejection/abandonment previews are fixed labels;
+success previews use sanitized content. Run failures and configuration warnings
+use fixed labels, not raw error/configuration values. Warning codes are
+`stream_chunks_dropped` (with `count`) and `config_warning`.
+`model.response` contains only structured `usage`: absent usage is null, and each
+missing token count is null, never synthesized as zero or summed into a total.
+Other events (including tool approval/start and non-text stream chunks) are
+ignored rather than duplicated.
+
+Display fields first check the input length in O(1), before any copying,
+scanning or normalization. Inputs exceeding **16384 UTF-16 code units** are
+omitted entirely as `[truncated]`, never sampled for a prefix. At or below that
+budget, filtering removes C0 controls (U+0000–U+001F) except tab (U+0009) and
+newline (U+000A), DEL/C1 (U+007F–U+009F), bidi embedding/override controls
+(U+202A–U+202E) and bidi isolate controls (U+2066–U+2069). Credential matching
+happens after control removal, so controls cannot split a credential label.
+Whole newline-delimited lines containing Authorization, api_key, apikey,
+access_token, refresh_token, password or secret are then redacted,
+case-insensitively, before display truncation. Output is capped at **1024 Unicode
+characters**, including `...[truncated]` when that display cap is exceeded.
+This intentionally over-redacts substring matches. Arguments,
+structured tool results, attachments, full model messages and provider error
+payloads are never serialized. Scope and call IDs are correlation identifiers,
+not display text, and are preserved verbatim.
+
+This is a per-event display filter, not a credential/DLP guarantee: labels split
+across separate stream events, unlabeled credentials and arbitrary sensitive
+prose are not detected. There is no cross-event buffering or current-run state.
+Telemetry remains in the existing bounded history; S2A adds no WebSocket event
+delivery, replay/reconnect logic, queues, UI, domain state, persistence, Tasks or
+Agent execution. The existing S1 server lifecycle is unchanged.
+
 ## Task vocabulary
 
 The implementation keeps three task concepts separate:
@@ -96,7 +147,7 @@ scheduler.
 
 ## Packages
 
-- root package: config, commands and lifecycle adapter;
+- root package: config, commands, lifecycle adapter and Observer projection;
 - `protocol`: UI/server-independent JSON wire types and codecs;
 - `runtime`: event history, server lifecycle, platform server/browser seams.
 

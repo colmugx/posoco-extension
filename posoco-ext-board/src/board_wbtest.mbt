@@ -52,14 +52,14 @@ impl @runtime.BrowserOpener for CommandFakeOpener with fn open(self, url) {
 }
 
 ///|
-test "board extension exposes only command and lifecycle surfaces in s1" {
+test "board extension exposes command lifecycle and observer surfaces in s2a" {
   let board = BoardExtension::BoardExtension()
   assert_eq(board.extension_id(), "posoco_ext_board")
   let manifest = board.manifest()
   assert_eq(manifest.id, "posoco_ext_board")
   assert_eq(manifest.tools.length(), 0)
   assert_eq(manifest.commands.length(), 1)
-  assert_eq(manifest.observers.length(), 0)
+  assert_eq(manifest.observers.length(), 1)
   assert_eq(manifest.hooks.length(), 0)
   assert_eq(manifest.lifecycle.length(), 1)
   assert_eq(manifest.requires.length(), 0)
@@ -85,10 +85,7 @@ test "board config exposes localhost-safe defaults" {
 async test "board command opens reuses and closes one runtime" {
   let server : CommandFakeServer = { binds: 0, alive: false, }
   let opener : CommandFakeOpener = { urls: [], }
-  let runtime = @runtime.BoardRuntime::with_adapters(
-    server=server,
-    opener=opener,
-  )
+  let runtime = @runtime.BoardRuntime::with_adapters(server~, opener~)
   let board = BoardExtension::with_runtime(runtime~)
   @async.with_task_group(group => {
     board.attach(group)
@@ -119,10 +116,7 @@ async test "board command opens reuses and closes one runtime" {
 async test "board open fails clearly before runtime attach" {
   let server : CommandFakeServer = { binds: 0, alive: false, }
   let opener : CommandFakeOpener = { urls: [], }
-  let runtime = @runtime.BoardRuntime::with_adapters(
-    server=server,
-    opener=opener,
-  )
+  let runtime = @runtime.BoardRuntime::with_adapters(server~, opener~)
   let board = BoardExtension::with_runtime(runtime~)
   match board.invoke("board.open", Json::null()) {
     Failure(reason~) => assert_true(reason.contains("attach"))
