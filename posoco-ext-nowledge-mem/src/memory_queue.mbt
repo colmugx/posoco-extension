@@ -1,5 +1,5 @@
 ///|
-/// The local write-after queue (plan D8): `MemoryPort`'s storage slots
+/// The local write-after queue: `MemoryPort`'s storage slots
 /// (`store`/`delete`) are the single write path and they feed this queue —
 /// `store` queues an `Add` and hands out a pending ticket synchronously,
 /// `delete` drops a pending ticket locally or queues a remote delete; the
