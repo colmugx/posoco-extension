@@ -1,9 +1,8 @@
 ///|
 /// Native+wasm twin of wire_log.js.mbt.
 ///
-/// The wire log is currently js/bun-only; wiring it for native+wasm needs
-/// @fs/@env plumbing that has not been built yet. On native and wasm the
-/// wire log is disabled and both functions are no-ops.
+/// Wire logging is js/bun-only. On native and wasm it is disabled and both
+/// functions are no-ops.
 
 ///|
 /// Always None on native+wasm: the wire log is unavailable (see file header).
