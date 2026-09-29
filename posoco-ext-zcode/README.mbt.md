@@ -110,9 +110,9 @@ let agent = Agent(
   The enumeration is IO-free and public (`zcode_candidate_paths` for the
   static tiers, `zcode_probe_paths` with injected read/list/realpath for the
   full list), so hosts can probe the paths through their own filesystem port.
-  Known limits: Windows `reg query` uninstall-string lookup is a possible
-  future tier (the Program Files candidates above cover standard installs);
-  AppImage installs cannot be discovered statically — set `ZCODE_BIN`.
+  Known limits: detection does not inspect Windows uninstall-registry entries
+  (the Program Files candidates above cover standard installs); AppImage
+  installs cannot be discovered statically — set `ZCODE_BIN`.
 - Credentials path override: `ZCODE_CREDS`; the default is
   `<HOME|USERPROFILE>/.zcode/v2/config.json`.
 - Live wire test (makes one real GLM call, ~30k input tokens):
