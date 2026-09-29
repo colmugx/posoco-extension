@@ -1,6 +1,4 @@
 ///|
-/// Whitebox helper: register a pi tool carrying (or omitting) promptSnippet /
-/// promptGuidelines, exercising the same state shape registerTool produces.
 extern "js" fn wbtest_register_pi_tool_prompt(
   host : JsPiHost,
   name : String,
