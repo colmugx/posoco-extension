@@ -4,10 +4,9 @@
 // node:child_process.
 
 ///|
-// Pure value pass-through only — an Option never crosses the js FFI here
-// (docs/questions.md 2026-08-19 stable boundaries): MoonBit None is encoded
-// as JS undefined, so a `?? null` fallback would decode as Some(null) and
-// disable the env gate entirely. Blank means missing.
+// Pure value pass-through only — an Option never crosses the JS FFI here.
+// MoonBit None is encoded as JS undefined, so a `?? null` fallback would
+// decode as Some(null) and disable the env gate entirely. Blank means missing.
 extern "js" fn bun_env_get(name : String) -> String =
   #| (name) => process.env[name] ?? ""
 
