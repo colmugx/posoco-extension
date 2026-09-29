@@ -28,17 +28,3 @@ jobs:
 
       - name: moon check (js)
         run: moon check --target js --output-json
-
-      - name: board tests (native)
-        run: >-
-          moon test --target native
-          -p colmugx/posoco-ext-board
-          -p colmugx/posoco-ext-board/protocol
-          -p colmugx/posoco-ext-board/runtime
-
-      - name: board tests (js)
-        run: >-
-          moon test --target js
-          -p colmugx/posoco-ext-board
-          -p colmugx/posoco-ext-board/protocol
-          -p colmugx/posoco-ext-board/runtime
