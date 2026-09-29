@@ -16,8 +16,8 @@
 /// identity (`TerminalCancelled`), it is never folded into a host failure.
 ///
 /// This is a plain struct adapter: it implements no posoco port and never
-/// appears in an extension manifest. Interactive terminals (start, feed,
-/// drain on a live handle) are future work.
+/// appears in an extension manifest. Interactive live-handle terminals are
+/// not supported by this adapter.
 
 ///|
 /// Milliseconds between `terminal/output` polls while the command runs.
