@@ -1,5 +1,5 @@
 ///|
-/// Per-connection serial fold (round-1 Wave A2): generation, health, and
+/// Per-connection serial fold: generation, health, and
 /// in-flight admission pairing live inside one fuwaroid loop per
 /// connection; every kind of IO stays in the caller's async task. Reports
 /// (`EndCall`/`EndReconnect`) carry the generation they belong to, and a
@@ -10,7 +10,7 @@
 /// is private to the mcp package (only `connect_http`/`connect_stdio`
 /// build one), so the actor is generic over the token it holds and hands
 /// out. Production wires `ConnActor[@client.MCPClient]`; the fold rules are
-/// client-agnostic. Wave 3 does the integration.
+/// client-agnostic.
 
 ///|
 /// Connection health folded by the actor.
