@@ -1,22 +1,22 @@
 ///|
 /// The `## Profiles` system-prompt section: the resident menu the model
 /// picks `activate_profile` arguments from (one content, two uses with the
-/// manifest description — §2).
+/// manifest description.
 
 ///|
 /// Description truncation cap for one menu row, in characters. Adjustable:
-/// long author descriptions are cut so a row stays one line (§10).
+/// long author descriptions are cut so a row stays one line.
 const MENU_DESCRIPTION_CAP = 160
 
 ///|
-/// The fixed one-sentence description of the builtin `all` preset (§2):
+/// The fixed one-sentence description of the builtin `all` preset:
 /// profiles are never empty — when no profile matches, `all` is the
 /// structurally guaranteed fallback.
 const ALL_PROFILE_DESCRIPTION = "covers every deferred extension; activate when no specific profile matches"
 
 ///|
 /// One menu row: `id: description`, plus the dangling suffix when the
-/// manifest references uncomposed extensions (Q13).
+/// manifest references uncomposed extensions.
 fn menu_row(entry : ProfileEntry) -> String {
   let mut row = "\{entry.id}: \{truncate_menu_description(entry.description)}"
   if !entry.dangling.is_empty() {
@@ -39,10 +39,10 @@ fn truncate_menu_description(description : String) -> String {
 ///|
 /// The system-prompt menu section.
 ///
-/// Byte-stability is contractual (§7.2): the content depends only on
+/// Byte-stability is contractual: the content depends only on
 /// composition-time build inputs. Profiles saved at runtime enter the
 /// in-memory catalog at once — activate_profile accepts them and the
-/// unknown-id enumeration lists them (Q19) — but they deliberately do NOT
+/// unknown-id enumeration lists them — but they deliberately do NOT
 /// appear here: the menu, like the deep-deferred views, stays frozen for
 /// the composition's lifetime so the prompt-cache prefix never breaks. The
 /// full benefit (a menu row of its own plus deferred manuals) is realized
