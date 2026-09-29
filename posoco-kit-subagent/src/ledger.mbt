@@ -2,9 +2,9 @@
 /// Per-run spawn budget ledger: counts spawns across the
 /// `agent` and `agent_swarm` tools of one run and refuses once the budget is
 /// exhausted — the caller rejects explicitly, nothing queues silently.
-/// Counting only in v1 (a concurrency semaphore belongs to the ext-swarm
-/// wave); acquisition is monotonic — there is no release, and duplicate
-/// labels are recorded as separate acquisitions for audit.
+/// Acquisition is monotonic within a run: there is no release, and duplicate
+/// labels are recorded as separate acquisitions for audit. Concurrency is
+/// enforced separately from this budget ledger.
 pub(all) struct SpawnLedger {
   /// Maximum acquisitions; `remaining` reaches 0 here.
   limit : Int
@@ -17,7 +17,7 @@ pub(all) struct SpawnLedger {
 pub extend SpawnLedger with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Fresh ledger with the given spawn budget (default: the §9.2 value 64).
+/// Fresh ledger with the given spawn budget (default: 64).
 pub fn SpawnLedger::SpawnLedger(limit? : Int = 64) -> SpawnLedger {
   { limit, labels: [], }
 }
