@@ -15,7 +15,7 @@ import {
 // package has no DefaultHandoffStore impl on wasm/wasm-gc. Declare the real
 // backend set so default-target checks skip instead of failing on the trait.
 
-supported_targets = "+native+js"
+supported_targets = "+native +js +wasm"
 
 options(
   targets: {
