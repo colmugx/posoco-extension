@@ -9,12 +9,11 @@
 /// `reasoning_effort` array, that descriptor wins over the policy.
 
 ///|
-/// The provider-wide selectable reasoning efforts (2026-09 API revision): the
-/// complete ladder, advertised because the extension passes the selected
+/// The provider-wide selectable reasoning efforts: the complete ladder,
+/// advertised because the extension passes the selected
 /// effort through verbatim and DeepSeek's server maps it itself.
 ///
-/// User-verified server behavior (2026-09) — DeepSeek maps any requested
-/// effort itself:
+/// DeepSeek maps requested effort levels server-side:
 ///
 /// ```text
 /// requested  → actual
