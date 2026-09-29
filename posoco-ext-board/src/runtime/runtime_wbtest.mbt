@@ -1,4 +1,61 @@
 ///|
+priv struct FakeBoardServer {
+  mut binds : Int
+  mut closes : Int
+  mut alive : Bool
+  mut browser : String?
+}
+
+///|
+impl BoardWebServer for FakeBoardServer with fn bind(self) {
+  self.binds += 1
+  @async.sleep(10)
+  self.alive = true
+  self.browser = Some("http://127.0.0.1:18080/?token=test-only")
+  Ok({ host: "127.0.0.1", port: 18080, })
+}
+
+///|
+impl BoardWebServer for FakeBoardServer with fn run(_self) {
+  Ok(())
+}
+
+///|
+impl BoardWebServer for FakeBoardServer with fn browser_url(self) {
+  self.browser
+}
+
+///|
+impl BoardWebServer for FakeBoardServer with fn close(self) {
+  if self.alive {
+    self.closes += 1
+  }
+  self.alive = false
+  self.browser = None
+}
+
+///|
+impl BoardWebServer for FakeBoardServer with fn is_alive(self) {
+  self.alive
+}
+
+///|
+impl BoardWebServer for FakeBoardServer with fn last_error(_self) {
+  None
+}
+
+///|
+priv struct FakeBrowserOpener {
+  opened : Array[String]
+}
+
+///|
+impl BrowserOpener for FakeBrowserOpener with fn open(self, url) {
+  self.opened.push(url)
+  Ok(())
+}
+
+///|
 test "event hub mints monotonic seq" {
   let hub = BoardEventHub::BoardEventHub(capacity=8)
   let first = hub.publish(
@@ -59,4 +116,69 @@ test "event hub evicts oldest events at capacity" {
   let replay = hub.history_since(2L)
   assert_eq(replay.length(), 1)
   assert_eq(replay[0].seq, 3L)
+}
+
+///|
+async test "ensure_server is idempotent under concurrent opens" {
+  let server : FakeBoardServer = {
+    binds: 0,
+    closes: 0,
+    alive: false,
+    browser: None,
+  }
+  let opener : FakeBrowserOpener = { opened: [], }
+  let runtime = BoardRuntime::with_adapters(server=server, opener=opener)
+  @async.with_task_group(group => {
+    runtime.attach(group)
+    let results = @async.all([
+      () => runtime.open_board(),
+      () => runtime.open_board(),
+    ])
+    assert_eq(results.length(), 2)
+    assert_true(results[0] is Ok(_))
+    assert_true(results[1] is Ok(_))
+    assert_eq(server.binds, 1)
+    assert_eq(opener.opened.length(), 2)
+    runtime.close_server()
+    assert_eq(server.closes, 1)
+  })
+}
+
+///|
+async test "close is idempotent and later open rebinds" {
+  let server : FakeBoardServer = {
+    binds: 0,
+    closes: 0,
+    alive: false,
+    browser: None,
+  }
+  let opener : FakeBrowserOpener = { opened: [], }
+  let runtime = BoardRuntime::with_adapters(server=server, opener=opener)
+  @async.with_task_group(group => {
+    runtime.attach(group)
+    assert_true(runtime.ensure_server() is Ok(_))
+    runtime.close_server()
+    runtime.close_server()
+    assert_eq(server.closes, 1)
+    assert_true(runtime.ensure_server() is Ok(_))
+    assert_eq(server.binds, 2)
+    runtime.shutdown()
+  })
+}
+
+///|
+async test "server start requires host task-group ownership" {
+  let server : FakeBoardServer = {
+    binds: 0,
+    closes: 0,
+    alive: false,
+    browser: None,
+  }
+  let opener : FakeBrowserOpener = { opened: [], }
+  let runtime = BoardRuntime::with_adapters(server=server, opener=opener)
+  match runtime.ensure_server() {
+    Err(message) => assert_true(message.contains("attach"))
+    Ok(_) => fail("unattached runtime must not create an orphan server")
+  }
+  assert_eq(server.binds, 0)
 }
