@@ -4,8 +4,8 @@ Goal-driven autonomous looping extension for [Posoco](https://mooncakes.io/docs/
 
 One `GoalRunner` turns an agent into a verified autonomous loop: it
 contributes the `goal_update_plan` tool and accounts for turns and tokens
-as an `Observer`. Core 0.13.0 assembles the system prompt once per Agent
-lifetime, so the extension never touches it; instead the run charter is
+as an `Observer`. The system prompt is assembled once per Agent lifetime, so
+the extension never touches it; instead the run charter is
 folded into the first working turn's user input, merged above that turn's
 progress envelope.
 `GoalRunner::execute` drives `agent.run_turn` one turn at a time — feeding
@@ -24,9 +24,8 @@ exhausted, or the run stalls.
 
 The same `GoalRunner` reference appears under both fields, so the two
 views share one state machine; goal-run turn inputs are driven by
-`execute`, not by a pipeline hook. There is no prompt contributor: under
-core 0.13.0 static system-prompt semantics, the charter is folded into
-the first working turn's user input instead.
+`execute`, not by a pipeline hook. There is no prompt contributor: the charter
+is folded into the first working turn's user input instead.
 
 ## Usage
 
@@ -69,9 +68,8 @@ All harness output is rendered as trusted `<goal-context>` envelopes so the mode
   definition of done, plan rules, and the tag protocol. It is built at
   each `execute()` start from the `GoalOptions` values and delivered once:
   on the run's first working turn, merged into the user input above that
-  turn's progress envelope. The core injects the system prompt once,
-  statically (posoco 0.13.0 single static injection), so this extension
-  never touches it; after the first working turn the charter stays in the
+  turn's progress envelope. The core injects the system prompt once, so this
+  extension never touches it; after the first working turn the charter stays in the
   append-only transcript and later turns carry only fresh progress
   envelopes.
 - **Progress recitation** — every work turn appends one user message with a
@@ -181,9 +179,8 @@ Build with `GoalOptions::default(goal_condition~)`, mutate, then
 
 GoalRunner is **not** a model port — compose a `ModelPort` extension
 alongside it. It contributes exactly one tool and one observer: no hooks,
-commands, session stores, or prompt contributors (under core 0.13.0 static
-system-prompt semantics the charter rides the first working turn's user
-input). There are no
+commands, session stores, or prompt contributors; the charter rides the first
+working turn's user input. There are no
 parallel subagents inside a goal — the loop drives one `agent.run_turn`
 at a time, sequentially, against a tool-set fixed for the agent's
 lifetime (composed once at `Agent` construction; a goal run never adds
