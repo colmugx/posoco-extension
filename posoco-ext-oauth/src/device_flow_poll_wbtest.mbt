@@ -1,8 +1,7 @@
 ///|
-/// Regression: RFC 8628 interval is seconds, and the poll loop must sleep
-/// interval*1000ms — treating it as milliseconds hammered the token endpoint
-/// ~interval×100 times per second until device-code expiry. This file is not
-/// target-gated so the timing contract holds on native and js.
+/// RFC 8628 expresses the polling interval in seconds, so the loop sleeps
+/// interval*1000ms between token requests. This file is not target-gated so
+/// the timing contract holds on native and js.
 
 ///|
 struct TimedPollTransport {
