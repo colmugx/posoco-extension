@@ -360,7 +360,7 @@ async fn e2e_cancel_scenario(node : String, notification_log : String) -> Unit {
         )
     }
     bridge.close()
-    // Contract 6' evidence: the SDK abort path now best-effort notifies the
+    // The SDK abort path best-effort notifies the
     // server before re-raising the cancellation, so the fixture log must
     // contain a notifications/cancelled whose requestId is a non-empty
     // string (string form of the in-flight request id, "client aborted").
@@ -943,7 +943,7 @@ fn e2e_slot0_actor(
 }
 
 ///|
-/// Wave 4 close discipline, wiring level. A queued-before-close EndCall
+/// Close discipline at the wiring level. A queued-before-close EndCall
 /// folds during the drain; `close(); join()` returning IS the drain
 /// confirmation, a second join returns the recorded Graceful immediately
 /// (multi-waiter safe), late tells are refused with MailboxClosed, and the
