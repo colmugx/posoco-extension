@@ -14,7 +14,7 @@ import {
   "moonbitlang/core/env",
 } for "wbtest"
 
-supported_targets = "+native +js +wasm"
+warnings = "-unused_package"\n\nsupported_targets = "+native +js +wasm"
 
 options(
   targets: {
