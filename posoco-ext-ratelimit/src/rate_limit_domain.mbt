@@ -67,11 +67,6 @@ priv struct RecoveryTicket {
   attempt : Int
 } derive(Eq, Debug)
 
-///|
-priv extend RecoveryTicket with Eq::{equal, not_equal}
-
-///|
-priv extend RecoveryTicket with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Read-only compatibility view for hosts and tests. This is a projection,
