@@ -3,8 +3,7 @@
 // emits the import) and injected into the inline-JS envelopes as values;
 // pattern follows posoco-ext-workspace fs_port.js.mbt /
 // moonbitlang/x/fs/fs_js.mbt. Throwing node calls cross the FFI as JSON
-// string envelopes decoded on the MoonBit side (docs/questions.md
-// 2026-08-19; the `require` fallback recorded there is retired).
+// string envelopes decoded on the MoonBit side.
 
 ///|
 /// node:fs existsSync never throws; a plain pass-through extern is safe.
