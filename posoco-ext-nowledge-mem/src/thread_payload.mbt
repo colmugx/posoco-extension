@@ -87,10 +87,8 @@ pub fn should_sync(messages : Array[NmemThreadMessage]) -> Bool {
 
 ///|
 /// Assemble the POST /threads request body.
-/// `project` is still null: hosts do not pass a workspace root into this
-/// extension. `HostContext.cwd` is
-/// the single cwd source (`WorkspaceAnchor`); threading it here is future
-/// work.
+/// `project` is null because this extension receives no workspace-root field;
+/// `HostContext.cwd` remains the sole cwd source (`WorkspaceAnchor`).
 pub fn build_thread_body(
   thread_id~ : String,
   title~ : String,
