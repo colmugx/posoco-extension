@@ -4,8 +4,8 @@
 
 priv struct DevkitStatusSink {
   bus : @devkit.EventBus?
-  priv mut announced_segment : String?
-  priv mut announced_value : String?
+  mut announced_segment : String?
+  mut announced_value : String?
 }
 
 ///|
