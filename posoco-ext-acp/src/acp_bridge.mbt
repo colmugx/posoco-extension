@@ -35,8 +35,8 @@ fn acp_wire_meta(meta : Json?) -> @acp.ProtocolNullable[Json] {
 /// `@permission.PermissionPolicy`), `UiPort::request` maps interactive
 /// requests onto ACP elicitations, and `Lifecycle::on_shutdown` closes the
 /// outbound queue (so a long-lived pump exits) and releases the session
-/// binding. Hosts (a future cetas-acp) own the acp.mbt endpoint and stdio
-/// runtime and `attach` the typed `AgentContext` plus the ACP session id.
+/// binding. Hosts own the acp.mbt endpoint and stdio runtime and `attach` the
+/// typed `AgentContext` plus the ACP session id.
 ///
 /// The observer path is synchronous, so events are enqueued on an async
 /// queue; `flush` (deterministic, call it at turn end) and `spawn_pump`
@@ -349,8 +349,8 @@ pub fn AcpBridge::stop_reason(self : AcpBridge) -> @acp.StopReason {
 
 ///|
 /// Consume the sanitized failure message of the last `TurnFailed` (if any).
-/// v1 has no error-chunk session update, so the host reads this to fail the
-/// `session/prompt` response.
+/// ACP exposes no error-chunk session update here, so the host reads this to
+/// fail the `session/prompt` response.
 pub fn AcpBridge::take_failure(self : AcpBridge) -> String? {
   let failure = self.last_failure
   self.last_failure = None
