@@ -98,10 +98,36 @@ pub extend BoardClientFrame with Eq::{equal, not_equal}
 pub extend BoardClientFrame with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+pub(all) struct BoardResyncRequired {
+  reason : String
+  current_seq : Int64
+} derive(Eq, Debug)
+
+///|
+pub extend BoardResyncRequired with Eq::{equal, not_equal}
+
+///|
+pub extend BoardResyncRequired with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub(all) struct BoardServerError {
+  code : String
+  message : String
+} derive(Eq, Debug)
+
+///|
+pub extend BoardServerError with Eq::{equal, not_equal}
+
+///|
+pub extend BoardServerError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub(all) enum BoardServerFrame {
   CommandResult(BoardCommandResult)
   Event(BoardWireEvent)
   Snapshot(BoardSnapshot)
+  ResyncRequired(BoardResyncRequired)
+  ServerError(BoardServerError)
 } derive(Eq, Debug)
 
 ///|
