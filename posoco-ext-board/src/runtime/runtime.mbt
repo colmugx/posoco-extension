@@ -44,7 +44,7 @@ pub fn[G] BoardRuntime::attach(
 }
 
 ///|
-fn BoardRuntime::settle_server_task(self : BoardRuntime) -> Unit {
+async fn BoardRuntime::settle_server_task(self : BoardRuntime) -> Unit {
   match (self.supervisor, self.server_task) {
     (Some(supervisor), Some(task)) => {
       let tasks = [task]
