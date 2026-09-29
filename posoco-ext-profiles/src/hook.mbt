@@ -1,8 +1,8 @@
 ///|
-/// before_model injection (Q18): the activation point. Every pending
+/// before_model injection: the activation point. Every pending
 /// activation — an `activate_profile` success whose header line is not yet
 /// in the transcript — gets exactly one UserMessage appended here. The bus
-/// event fires at this injection point too (F4): the activation knowledge
+/// event fires at this injection point too: the activation knowledge
 /// lives in the hook, not in the tool's execute.
 
 ///|
@@ -39,12 +39,12 @@ pub extend Profiles with @posoco.PipelineHook::{
 
 ///|
 /// The one activation message both the meta-tool path and the manual
-/// `/profiles` path converge on (Q18: one template, one invariant —
-/// "activated" means this message exists in the transcript). First line is
+/// `/profiles` path converge on: one template, one invariant — "activated"
+/// means this message exists in the transcript. First line is
 /// the frozen header, then a blank line, then the manual.
 ///
-/// Coverage = defer_set ∩ members (Q19's construction-time guard against
-/// re-injecting resident prompt sections): deferred members get their
+/// Coverage = defer_set ∩ members, preventing
+/// resident prompt sections from being re-injected: deferred members get their
 /// captured manual text in fixed member order (catalog-independent);
 /// members outside the deferral are already resident and only listed, never
 /// re-injected.
@@ -62,8 +62,6 @@ fn Profiles::activation_message(
     if self.defer_set.contains(ext_id) {
       match self.captured_prompts.get(ext_id) {
         Some(text) => manuals.push(text)
-        // Deep-deferred but contributing no prompt section: nothing to
-        // inject for this member.
         None => ()
       }
     } else {
@@ -84,7 +82,7 @@ fn Profiles::activation_message(
 }
 
 ///|
-/// Fire-and-forget product notification (F4): topic `profiles.activated`,
+/// Fire-and-forget product notification: topic `profiles.activated`,
 /// payload `{id, members}`. Publishing with no bus or no subscribers is a
 /// no-op by the bus contract.
 fn Profiles::publish_activated(self : Profiles, id : String) -> Unit {
