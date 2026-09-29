@@ -507,10 +507,9 @@ suberror HostEof derive(Debug)
 pub extend HostEof with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Cancellation regression: when a host group tears down (cetas-acp stdin
-/// EOF), the aborting body fails the group and the flusher is cancelled
-/// mid-sleep; the loop must re-raise the cancellation so the teardown
-/// completes. Swallowing it would leave the idle loop spinning — the
+/// When a host group tears down, cancellation can reach the flusher
+/// mid-sleep; the loop must re-raise it so teardown completes. Swallowing it
+/// would leave the idle loop spinning — the
 /// sleep is its only suspension point. The with_timeout watchdog bounds
 /// the assertion, and `stopped` staying false proves the exit came from
 /// cancellation, not stop().
