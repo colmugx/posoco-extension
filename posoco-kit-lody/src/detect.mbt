@@ -4,8 +4,7 @@
 // sections.
 
 ///|
-/// MCP server names under which the lody host injects its tools (the
-/// cetas-lody plan: `mcpServers = [lody]`).
+/// MCP server names under which the lody host injects its tools.
 pub fn lody_server_names() -> Array[String] {
   ["lody"]
 }
