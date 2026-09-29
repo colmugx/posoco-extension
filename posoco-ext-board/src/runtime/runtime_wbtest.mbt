@@ -7,6 +7,11 @@ priv struct FakeBoardServer {
 }
 
 ///|
+impl BoardWebServer for FakeBoardServer with fn attach_event_hub(_self, _hub) {
+  ()
+}
+
+///|
 impl BoardWebServer for FakeBoardServer with fn bind(self) {
   self.binds += 1
   @async.sleep(10)
