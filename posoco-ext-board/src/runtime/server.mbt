@@ -62,6 +62,7 @@ pub fn BoardServerStatus::to_json(self : BoardServerStatus) -> Json {
 /// Target seam for the local Board control plane. Implementations own the
 /// instance token and must never expose it through endpoint/status values.
 pub(open) trait BoardWebServer {
+  fn attach_event_hub(Self, hub : BoardEventHub) -> Unit
   async fn bind(Self) -> Result[BoardEndpoint, String]
   async fn run(Self) -> Result[Unit, String]
   fn browser_url(Self) -> String?
