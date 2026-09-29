@@ -103,7 +103,7 @@ async test "board command opens reuses and closes one runtime" {
     match status {
       Success(structured=Some(Json::Object(fields)), ..) => {
         assert_eq(fields.get("state"), Some(Json::string("running")))
-        assert_false(structured.stringify().contains("test-only"))
+        assert_false(Json::object(fields).stringify().contains("test-only"))
       }
       _ => fail("expected structured running status")
     }
