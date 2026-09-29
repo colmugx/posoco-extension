@@ -1,6 +1,6 @@
 ///|
 /// The `agent` tool: delegates one task to an embedded subagent per call and
-/// returns the child's terminal state (design §2.1). Tool semantics live in
+/// returns the child's terminal state. Tool semantics live in
 /// this extension; child composition is injected through the `ChildComposer`
 /// port, so the extension stays decoupled from host feature-set assembly.
 pub(all) struct SubagentTools {
@@ -20,7 +20,7 @@ pub(all) struct SubagentTools {
   parent_selection : (() -> (String, String?))?
   /// Subscription callbacks; each bridged child event is forwarded to all.
   observers : Array[(@kit.SubagentEvent) -> Unit]
-  /// Per-run spawn budget (design §6.3): acquisition is monotonic, refusal
+  /// Per-run spawn budget: acquisition is monotonic, refusal
   /// explicit. The single-threaded event loop makes ledger mutations safe
   /// under parallel tool waves.
   ledger : @kit.SpawnLedger
