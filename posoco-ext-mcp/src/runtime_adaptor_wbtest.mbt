@@ -135,9 +135,9 @@ suberror HarnessTrigger
 /// cannot reach a deterministic provider raise in this suite — the mcp SDK
 /// has no injectable transport (`AnyTransport` is a closed enum, `MCPClient`
 /// has no public constructor), so a bridge raise requires a live server.
-/// This test pins the constructible half of the contract (the delegation
-/// path stays transparent while ambient-cancelled); Wave 2 e2e with
-/// test_fixtures servers asserts the handled-branch re-raise identity.
+/// This test pins the constructible half of the contract: the delegation
+/// path stays transparent while ambient-cancelled. The live-fixture e2e suite
+/// covers the handled-branch re-raise identity.
 async test "mcp_runtime_execute_tool_delegates_under_ambient_cancellation" {
   let fallback = RecordingRuntime::{ executed: [], }
   let bridge = MCPToolBridge()
