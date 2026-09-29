@@ -14,8 +14,6 @@ pub impl @posoco.Extension for WriteTools with fn manifest(self) -> @posoco.Exte
 pub extend WriteTools with @posoco.Extension::{extension_id, manifest}
 
 ///|
-/// Convenience factory: construct a WriteTools and return it. Hosts that
-/// already hold a WriteTools instance should pass it directly.
 pub fn write_extension() -> WriteTools {
   WriteTools::WriteTools()
 }
