@@ -1,5 +1,5 @@
 ///|
-/// The `activate_profile` meta tool: the model's self-activation path (Q2).
+/// The `activate_profile` meta tool is the model's self-activation path.
 /// The result text is contract, not prose — `header.mbt`'s pending scanner
 /// consumes the `activated: <id>` / `unknown profile: <id>` first lines
 /// (frozen prefixes; keep both sides in sync).
@@ -54,7 +54,7 @@ pub impl @posoco.ToolProvider for Profiles with fn list_tools(_self : Profiles) 
 
 ///|
 /// Route the activation call. No session state is read or written here
-/// (Q18): the result text only announces what the before_model hook will
+/// the result text only announces what the before_model hook will
 /// inject; the activation knowledge lives in the hook.
 pub impl @posoco.ToolProvider for Profiles with fn execute(
   self : Profiles,
@@ -84,7 +84,7 @@ pub impl @posoco.ToolProvider for Profiles with fn execute(
   }
   match self.find_entry(id) {
     Some(_) =>
-      // F7 wording (Q18): the manual rides the next model request — the
+      // The manual rides the next model request; the
       // model must NOT end the turn to wait for another user message.
       @posoco.ToolOutcome::Success(
         content="activated: \{id}\n\nThe '\{id}' manual is injected with the next model request and takes effect within this turn — no further user message is needed.",
@@ -92,7 +92,7 @@ pub impl @posoco.ToolProvider for Profiles with fn execute(
       )
     None =>
       // Unknown id: explicit never-inject verdict plus the menu mirror
-      // (Q16), `all` included.
+      // `all` included.
       @posoco.ToolOutcome::Success(
         content="unknown profile: \{id}\navailable: \{self.available_ids().join(", ")}",
         structured=None,
