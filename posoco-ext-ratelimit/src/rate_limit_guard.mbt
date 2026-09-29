@@ -83,9 +83,7 @@ pub fn RateLimitGuard::start(
       ignore(agent.resume_turn(session_id, continuation=note))
     },
     trace=self.trace,
-    publish_status=fn(status : RecoveryStatus?) {
-      sink.publish(status)
-    },
+    publish_status=fn(status : RecoveryStatus?) { sink.publish(status) },
   )
   self.runtime = Some(runtime)
 }
@@ -218,10 +216,7 @@ fn RateLimitGuard::send(
 ) -> Unit {
   match self.runtime {
     Some(runtime) => runtime.tell(command)
-    None =>
-      (self.trace)(
-        "rate-limit event ignored before start(group, agent)",
-      )
+    None => (self.trace)("rate-limit event ignored before start(group, agent)")
   }
 }
 

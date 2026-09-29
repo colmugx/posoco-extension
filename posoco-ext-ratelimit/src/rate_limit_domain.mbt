@@ -1,7 +1,6 @@
 ///|
 /// Pure rate-limit domain model. No Posoco, EventBus, task or Fuwaroid types
 /// belong here; the runtime is only a serialized owner of this state.
-
 priv struct RecoveryPolicy {
   margin_ms : Int64
   max_attempts : Int
@@ -36,8 +35,7 @@ fn RecoveryPolicy::schedule(
       }
       let shift = if attempt - 1 > 4 { 4 } else { attempt - 1 }
       let mut backoff = self.probe_interval_ms << shift
-      if self.max_probe_interval_ms > 0L &&
-        backoff > self.max_probe_interval_ms {
+      if self.max_probe_interval_ms > 0L && backoff > self.max_probe_interval_ms {
         backoff = self.max_probe_interval_ms
       }
       Scheduled(now_ms + backoff)

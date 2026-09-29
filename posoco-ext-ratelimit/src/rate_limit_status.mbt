@@ -1,7 +1,6 @@
 ///|
 /// Status presentation adapter. The rate-limit domain/runtime only emits a
 /// RecoveryStatus projection; this adapter owns EventBus naming/formatting.
-
 priv struct DevkitStatusSink {
   bus : @devkit.EventBus?
   mut announced_segment : String?
@@ -9,7 +8,9 @@ priv struct DevkitStatusSink {
 }
 
 ///|
-fn DevkitStatusSink::DevkitStatusSink(bus : @devkit.EventBus?) -> DevkitStatusSink {
+fn DevkitStatusSink::DevkitStatusSink(
+  bus : @devkit.EventBus?,
+) -> DevkitStatusSink {
   { bus, announced_segment: None, announced_value: None, }
 }
 
@@ -38,7 +39,11 @@ fn civil_from_days(z : Int64) -> (Int64, Int, Int) {
 
 ///|
 fn pad2(value : Int64) -> String {
-  if value < 10L { "0\{value}" } else { "\{value}" }
+  if value < 10L {
+    "0\{value}"
+  } else {
+    "\{value}"
+  }
 }
 
 ///|
@@ -61,10 +66,12 @@ fn DevkitStatusSink::publish(
   }
   let next : (String, String)? = match status {
     Some(status) =>
-      Some((
-        reset_segment(status.window_label),
-        fmt_reset_at(status.earliest_resume_at),
-      ))
+      Some(
+        (
+          reset_segment(status.window_label),
+          fmt_reset_at(status.earliest_resume_at),
+        ),
+      )
     None => None
   }
 

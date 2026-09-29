@@ -52,11 +52,11 @@ test "reset formatting remains UTC and deterministic" {
 
 ///|
 async test "hook events mutate only actor-owned recovery state" {
-  let guard_ext = RateLimitGuard(
-    margin_ms=0,
-    now_ms=fn() { 49000L },
-    sleep_ms=async fn(_ms : Int) { @async.sleep(60000) },
-  )
+  let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 49000L }, sleep_ms=async fn(
+    _ms : Int,
+  ) {
+    @async.sleep(60000)
+  })
   let model = @posoco.ScriptedModel::ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("unused")),
   ])
@@ -86,10 +86,11 @@ async test "hook events mutate only actor-owned recovery state" {
 
 ///|
 async test "cancel_pending invalidates actor schedule" {
-  let guard_ext = RateLimitGuard(
-    now_ms=fn() { 1000L },
-    sleep_ms=async fn(_ms : Int) { @async.sleep(60000) },
-  )
+  let guard_ext = RateLimitGuard(now_ms=fn() { 1000L }, sleep_ms=async fn(
+    _ms : Int,
+  ) {
+    @async.sleep(60000)
+  })
   let model = @posoco.ScriptedModel::ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("unused")),
   ])
@@ -128,10 +129,7 @@ async test "429 failed turn auto-resumes through supervised event timer" {
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("resumed")),
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
-  let guard_ext = RateLimitGuard(
-    margin_ms=0,
-    now_ms=fn() { 0L },
-  )
+  let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 0L })
   let agent = @posoco.Agent(
     exts=[
       @posoco.tk_ext(id="model", model=Some(model)),
@@ -201,7 +199,9 @@ pub impl @posoco.ModelPort for DelayedModel with fn compact(
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
-  raise @posoco.ModelError::ResponseParse("DelayedModel does not implement compact")
+  raise @posoco.ModelError::ResponseParse(
+    "DelayedModel does not implement compact",
+  )
 }
 
 ///|
@@ -218,11 +218,11 @@ pub extend DelayedModel with @posoco.ModelPort::{provider_config, chat, compact}
 async test "simultaneous due sessions serialize resume execution" {
   let now = Ref(1000L)
   let model : DelayedModel = { delay_ms: 100, started: 0, finished: 0, }
-  let guard_ext = RateLimitGuard(
-    margin_ms=0,
-    now_ms=fn() { now.val },
-    sleep_ms=async fn(_ms : Int) { @async.sleep(60000) },
-  )
+  let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { now.val }, sleep_ms=async fn(
+    _ms : Int,
+  ) {
+    @async.sleep(60000)
+  })
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   store.seed("s1", {
     messages: [@posoco.tk_user_msg("task one")],

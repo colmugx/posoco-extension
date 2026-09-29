@@ -2,14 +2,13 @@
 /// Serialized rate-limit runtime. RecoveryState has exactly one writer: the
 /// Fuwaroid command fold. Timers and Agent resume calls are supervised async
 /// effects that can only report back through runtime messages.
-
 priv enum RecoveryCommand {
   RateLimitObserved(
     session_id~ : String,
     reset_at_ms~ : Int64?,
     provider_code~ : String?,
     window_label~ : String?,
-    encountered_at_ms~ : Int64,
+    encountered_at_ms~ : Int64
   )
   TurnFailed(session_id~ : String)
   TurnCompleted(session_id~ : String)
@@ -21,16 +20,19 @@ priv enum RecoveryCommand {
   Stop
 }
 
+///|
 priv enum RecoveryQuery {
   Snapshot
   Status
 }
 
+///|
 priv enum RecoveryReply {
   SnapshotReply(Array[RateLimitPending])
   StatusReply(RecoveryStatus?)
 }
 
+///|
 priv struct RecoveryState {
   mut pending : Array[RecoveryEntry]
   attempts : Map[String, Int]
@@ -39,6 +41,7 @@ priv struct RecoveryState {
   mut stopped : Bool
 }
 
+///|
 priv struct RuntimeEffects {
   supervisor : @fuwaroid.Supervisor[Unit]
   now_ms : () -> Int64
@@ -48,6 +51,7 @@ priv struct RuntimeEffects {
   publish_status : (RecoveryStatus?) -> Unit
 }
 
+///|
 priv struct RateLimitRuntime {
   actor : @fuwaroid.Fuwaroid[RecoveryCommand, RecoveryQuery, RecoveryReply]
   effects : RuntimeEffects
@@ -145,9 +149,7 @@ fn dispatch_due(
           let _ = address.tell(ResumeCompleted(ticket~))
         }
         Err(error) => {
-          let _ = address.tell(
-            ResumeFailed(ticket~, error=error.to_string()),
-          )
+          let _ = address.tell(ResumeFailed(ticket~, error=error.to_string()))
         }
       }
     },
@@ -243,20 +245,13 @@ fn recovery_fold_cmd(
       reset_at_ms~,
       provider_code~,
       window_label~,
-      encountered_at_ms~,
+      encountered_at_ms~
     ) =>
       record_limit(
-        ctx,
-        state,
-        effects,
-        policy,
-        session_id,
-        reset_at_ms,
-        provider_code,
-        window_label,
+        ctx, state, effects, policy, session_id, reset_at_ms, provider_code, window_label,
         encountered_at_ms,
       )
-    TurnFailed(session_id~) => {
+    TurnFailed(session_id~) =>
       match find_recovery_index(state.pending, session_id) {
         Some(index) => {
           state.pending[index].recovery_ready = true
@@ -266,7 +261,6 @@ fn recovery_fold_cmd(
         }
         None => ()
       }
-    }
     TurnCompleted(session_id~) => {
       state.attempts.remove(session_id)
       state.pending = state.pending.filter(fn(entry) {
@@ -275,7 +269,7 @@ fn recovery_fold_cmd(
       // Keep inflight ownership until the resume worker reports completion.
       // TurnCompleted is emitted before resume_turn returns.
     }
-    TimerFired(epoch~, deadline~) => {
+    TimerFired(epoch~, deadline~) =>
       if epoch == state.epoch {
         let still_relevant = state.pending.any(fn(entry) {
           entry.recovery_ready && entry.resume_at_ms == deadline
@@ -284,9 +278,8 @@ fn recovery_fold_cmd(
           dispatch_due(ctx, state, effects, (effects.now_ms)())
         }
       }
-    }
     Poll(now_ms~) => dispatch_due(ctx, state, effects, now_ms)
-    ResumeCompleted(ticket~) => {
+    ResumeCompleted(ticket~) =>
       match state.inflight {
         Some(current) if current == ticket => {
           state.inflight = None
@@ -297,16 +290,16 @@ fn recovery_fold_cmd(
         }
         _ => ()
       }
-    }
-    ResumeFailed(ticket~, error~) => {
+    ResumeFailed(ticket~, error~) =>
       match state.inflight {
         Some(current) if current == ticket => {
           state.inflight = None
           if ticket.epoch == state.epoch {
             let re_recorded = find_recovery_index(
-              state.pending,
-              ticket.session_id,
-            ) is Some(_)
+                state.pending,
+                ticket.session_id,
+              )
+              is Some(_)
             if re_recorded {
               (effects.trace)(
                 "rate-limit recovery for session \{ticket.session_id} hit another rate limit",
@@ -321,7 +314,6 @@ fn recovery_fold_cmd(
         }
         _ => ()
       }
-    }
     CancelPending => {
       state.epoch = state.epoch + 1
       state.pending = []
@@ -410,9 +402,7 @@ async fn RateLimitRuntime::snapshot(
 }
 
 ///|
-async fn RateLimitRuntime::status(
-  self : RateLimitRuntime,
-) -> RecoveryStatus? {
+async fn RateLimitRuntime::status(self : RateLimitRuntime) -> RecoveryStatus? {
   match self.actor.ask(Status, timeout_ms=5000) {
     Ok(StatusReply(value)) => value
     _ => None
