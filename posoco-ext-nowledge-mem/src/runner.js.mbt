@@ -14,8 +14,8 @@ extern "js" fn js_env_raw(name : String) -> String =
 
 ///|
 /// js env lookup for the shared platform surface. Home-directory resolution
-/// on js goes through `process.env.HOME` (Windows hosts are a documented v1
-/// limitation, plan D7).
+/// on js goes through `process.env.HOME`; Windows hosts without `HOME` are
+/// unsupported by this implementation.
 pub fn runner_get_env(name : String) -> String? {
   let raw = js_env_raw(name)
   if raw == "" {
