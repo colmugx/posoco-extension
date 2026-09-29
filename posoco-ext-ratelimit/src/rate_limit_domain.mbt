@@ -65,8 +65,7 @@ priv struct RecoveryTicket {
   session_id : String
   epoch : Int
   attempt : Int
-} derive(Eq, Debug)
-
+} derive(Eq)
 
 ///|
 /// Read-only compatibility view for hosts and tests. This is a projection,
