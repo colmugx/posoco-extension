@@ -23,9 +23,6 @@ pub impl @posoco.Extension for ReadTools with fn manifest(self) -> @posoco.Exten
 pub extend ReadTools with @posoco.Extension::{extension_id, manifest}
 
 ///|
-/// Convenience factory: construct a ReadTools and return its Extension view.
-/// Hosts that already hold a ReadTools instance should pass it directly
-/// instead of calling this helper.
 pub fn read_extension() -> ReadTools {
   ReadTools::ReadTools()
 }
