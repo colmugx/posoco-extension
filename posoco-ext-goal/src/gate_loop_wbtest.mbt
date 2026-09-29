@@ -1,9 +1,4 @@
 ///|
-/// Loop-level white-box tests for GoalRunner::execute: the verifier gate
-/// (confirm / retract / budget), verifier turns counting against the turn
-/// budget, the wrap-up turn mutating the plan, and the three stall detectors.
-
-///|
 /// Compose model + sessions + one GoalRunner into an Agent (testkit shape).
 fn gate_build_agent(
   goal : GoalRunner,
@@ -285,9 +280,8 @@ async test "stall_plan_frozen_pause" {
 
 ///|
 /// A run that neither signals nor stalls stops at budget.max_turns without
-/// consuming the rest of the script (regression: without the budget check the
-/// loop would exhaust ScriptedModel and surface Failed instead).
-async test "budget_exhaustion_regression" {
+/// consuming the rest of the script.
+async test "budget exhaustion stops without consuming extra model steps" {
   let options = GoalOptions::default(goal_condition="never finishes")
   options.budget.max_turns = 2
   let goal = GoalRunner(options~)

@@ -14,14 +14,16 @@ import {
   "moonbitlang/core/env",
 } for "wbtest"
 
-supported_targets = "+native +js"
+warnings = "-unused_package"
+
+supported_targets = "+native +js +wasm"
 
 options(
   targets: {
     "posoco_ext_bash.js.mbt": [ "js" ],
-    "posoco_ext_bash.native.mbt": [ "native" ],
+    "posoco_ext_bash.native.mbt": [ "native", "wasm" ],
     "runtime_adaptor.js.mbt": [ "js" ],
-    "runtime_adaptor.native.mbt": [ "native" ],
+    "runtime_adaptor.native.mbt": [ "native", "wasm" ],
     "runtime_adaptor_wbtest.mbt": [ "native" ],
     "bash_native_path_wbtest.mbt": [ "native" ],
   },

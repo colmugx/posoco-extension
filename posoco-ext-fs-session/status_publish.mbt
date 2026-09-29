@@ -1,9 +1,6 @@
 ///|
-/// status_publish.mbt — shared by both targets. After a successful persist,
-/// the session id is announced on the devkit status bus so a status bar can
-/// display the current session. Re-registering on every persist is
-/// intentional: the bridge keeps the first register for a segment, so later
-/// registers are idempotent there.
+/// Announce the persisted session id on the status bus. Re-registering on
+/// every persist is intentional because later registrations are idempotent.
 fn publish_session_status(bus : @devkit.EventBus?, id : String) -> Unit {
   match bus {
     Some(bus) =>

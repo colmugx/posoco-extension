@@ -643,8 +643,6 @@ test "decode_chat_response rejects a structured API error" {
 }
 
 ///|
-/// Helper: a fully-configured settings source carrying a reasoning_efforts
-/// declaration, so effort-selector tests share one fixture.
 fn effort_settings_source(
   reasoning_effort : String,
   reasoning_efforts : Json,

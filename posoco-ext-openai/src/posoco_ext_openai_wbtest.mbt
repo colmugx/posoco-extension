@@ -1975,8 +1975,7 @@ test "openai 429 retry-after header yields the reset time" {
 }
 
 ///|
-/// Real-wire corpus regression: two SSE streams captured verbatim from the
-/// Codex backend (chatgpt.com/backend-api/codex/responses), one low-effort
+/// Real-wire corpus: two SSE streams captured verbatim from the Codex backend (chatgpt.com/backend-api/codex/responses), one low-effort
 /// with a single function_call at output_index 0, one effort=max where a
 /// reasoning item occupies output_index 0 and the function_call sits at
 /// output_index 1. Guards the wire-format contract end to end: compact

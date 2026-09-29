@@ -16,19 +16,11 @@ warnings = "-unused_package"
 
 options(
   targets: {
-    "jsonl_session.mbt": [ "native" ],
+    "jsonl_session.mbt": [ "native", "wasm" ],
     "jsonl_session.js.mbt": [ "js" ],
-    "jsonl_session_serde.mbt": [ "native", "js" ],
-    "session_id.mbt": [ "native", "js" ],
-    "manifest.mbt": [ "native", "js" ],
-    "status_publish.mbt": [ "native", "js" ],
     "session_id_test.mbt": [ "native", "js" ],
     "companion_path_test.mbt": [ "native", "js" ],
-    "list_ids.mbt": [ "native", "js" ],
     "list_ids.js.mbt": [ "js" ],
-    "project_dir.mbt": [ "native", "js" ],
-    "session_summary.mbt": [ "native", "js" ],
-    "name_command.mbt": [ "native", "js" ],
     "project_dir_test.mbt": [ "native" ],
     "session_summary_test.mbt": [ "native" ],
     "name_command_test.mbt": [ "native" ],

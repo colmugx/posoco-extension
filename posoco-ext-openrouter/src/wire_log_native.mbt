@@ -1,6 +1,5 @@
 ///|
-/// The wire log is js/bun-only; wiring it for native+wasm needs @fs/@env
-/// plumbing that has not been built yet, so it stays a no-op here.
+/// Wire logging is js/bun-only; native and wasm use this no-op implementation.
 
 ///|
 fn wire_log_path() -> String? {

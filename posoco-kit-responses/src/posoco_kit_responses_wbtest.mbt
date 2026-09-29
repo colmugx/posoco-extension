@@ -601,8 +601,8 @@ test "openai_input_replays_reasoning_items_verbatim" {
 }
 
 ///|
-/// Regression: assistant-role text must encode as `output_text` — the
-/// Responses API rejects `input_text` on assistant messages with a 400
+/// Assistant-role text must encode as `output_text`; the Responses API
+/// rejects `input_text` on assistant messages with a 400
 /// invalid_value (this broke history replay and post-compact windows).
 test "assistant_text_encodes_as_output_text_parts" {
   let msg : @posoco.Message = @posoco.Message::AssistantMessage(

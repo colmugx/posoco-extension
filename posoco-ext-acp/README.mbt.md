@@ -178,8 +178,7 @@ identity (`TerminalCancelled`) and is never folded into a host failure.
 signal) and the `output` captured at exit; `AcpTerminalError` is
 `HostCallFailed(method_name~, cause~)`,
 `TerminalTimedOut(timeout_ms~, partial_output~)`, or
-`TerminalCancelled(partial_output~)`. Interactive terminals (start/feed/
-drain on a live handle) are future work.
+`TerminalCancelled(partial_output~)`. Interactive terminal handles (start/feed/drain) are not part of this adapter.
 
 ### AcpHostFs
 
@@ -201,9 +200,8 @@ composes `agent_spec` / `agent_serve_stdio_with_outbound` from `colmugx/acp`
 with `Agent(exts=[...])` from Posoco and wires the two through this bridge).
 `colmugx/acp` itself stays independent of Posoco by design.
 
-Targets **ACP v1** — exactly what `colmugx/acp` implements today. When the
-SDK ships v2, this extension upgrades with it and deletes the v1-only
-behavior; there is no compatibility layer and no legacy path.
+Targets **ACP v1**, matching the current `colmugx/acp` contract. There is no
+cross-version compatibility layer.
 
 ## License
 

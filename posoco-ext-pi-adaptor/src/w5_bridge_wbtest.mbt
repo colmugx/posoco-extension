@@ -1,5 +1,4 @@
 ///|
-/// Whitebox helper: call host.api.appendEntry directly.
 extern "js" fn wbtest_call_append_entry(
   host : JsPiHost,
   custom_type : String,

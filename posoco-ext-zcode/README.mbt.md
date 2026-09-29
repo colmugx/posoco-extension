@@ -110,9 +110,9 @@ let agent = Agent(
   The enumeration is IO-free and public (`zcode_candidate_paths` for the
   static tiers, `zcode_probe_paths` with injected read/list/realpath for the
   full list), so hosts can probe the paths through their own filesystem port.
-  Known limits: Windows `reg query` uninstall-string lookup is a possible
-  future tier (the Program Files candidates above cover standard installs);
-  AppImage installs cannot be discovered statically — set `ZCODE_BIN`.
+  Known limits: detection does not inspect Windows uninstall-registry entries
+  (the Program Files candidates above cover standard installs); AppImage
+  installs cannot be discovered statically — set `ZCODE_BIN`.
 - Credentials path override: `ZCODE_CREDS`; the default is
   `<HOME|USERPROFILE>/.zcode/v2/config.json`.
 - Live wire test (makes one real GLM call, ~30k input tokens):
@@ -120,9 +120,6 @@ let agent = Agent(
 
 ## Provenance
 
-Protocol facts reverse-engineered and live-probed from zcode 0.16.5 (the
-app-server protocol is an undocumented internal contract); the regression
-guard is the env-gated live test above — re-run it after upgrading zcode.
-Design and evidence live in the posoco repository:
-`docs/cetas-zcode-design.md`, `docs/zcode-ext-implementation.md`,
-`docs/zcode/round1-plan.md`.
+Protocol facts are reverse-engineered and live-probed from zcode 0.16.5; the
+app-server protocol is undocumented. The env-gated live test above validates
+the wire contract against an installed zcode build.

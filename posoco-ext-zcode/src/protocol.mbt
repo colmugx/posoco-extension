@@ -150,7 +150,6 @@ pub fn ZcodeWire::to_line(self : ZcodeWire) -> String {
 }
 
 ///|
-/// Field access helpers shared by events.mbt and registry.mbt.
 fn json_field(j : Json, key : String) -> Json? {
   match j {
     Json::Object(map) => map.get(key)

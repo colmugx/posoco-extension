@@ -107,10 +107,8 @@ async fn LazyNmemMcp::ensure_connected(
     self.client = None
     self.connected_url = None
   }
-  // nmem-serv is a known 2025-11-25 legacy MCP server: its modern-era
-  // discover probe is rejected with 422, so connect straight to the legacy
-  // initialize and skip the probe (saves one doomed POST per connection).
-  // MARK: if nmem-serv upgrades to the modern protocol, update `era=` here.
+  // nmem-serv rejects the modern discover probe with 422, so connect
+  // straight to the legacy initialize and skip one doomed POST.
   let connect = async fn() {
     match self.auth_token {
       Some(token) =>
