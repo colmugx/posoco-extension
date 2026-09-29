@@ -1,5 +1,5 @@
 ///|
-/// Session usage attribution for `/profile save` (Q15): an Observer that
+/// Session usage attribution for `/profile save`: an Observer that
 /// counts successful tool executions per session, unwrapping lazytools
 /// gateway calls to their inner tool name first.
 
