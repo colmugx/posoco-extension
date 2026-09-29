@@ -223,12 +223,19 @@ async test "simultaneous due sessions serialize resume execution" {
     now_ms=fn() { now.val },
     sleep_ms=async fn(_ms : Int) { @async.sleep(60000) },
   )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  store.seed("s1", {
+    messages: [@posoco.tk_user_msg("task one")],
+    metadata: Map::from_array([]),
+  })
+  store.seed("s2", {
+    messages: [@posoco.tk_user_msg("task two")],
+    metadata: Map::from_array([]),
+  })
   let agent = @posoco.Agent(
     exts=[
       @posoco.tk_ext(id="model", model=Some(model)),
-      @posoco.tk_ext(id="io", sessions=[
-        @posoco.RecordingSessionStore::RecordingSessionStore(),
-      ]),
+      @posoco.tk_ext(id="io", sessions=[store]),
       guard_ext,
     ],
     config=@posoco.tk_config(),
