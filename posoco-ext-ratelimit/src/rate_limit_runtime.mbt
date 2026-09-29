@@ -77,11 +77,15 @@ fn spawn_timer(
   epoch : Int,
   deadline : Int64,
 ) -> Unit {
-  let wait = delay_ms(deadline, (effects.now_ms)())
   let address = ctx.address
   let spawned = effects.supervisor.spawn(
     async fn() {
-      (effects.sleep_ms)(wait)
+      let mut remaining = deadline - (effects.now_ms)()
+      while remaining > 0L {
+        let wait = delay_ms(deadline, (effects.now_ms)())
+        (effects.sleep_ms)(wait)
+        remaining = deadline - (effects.now_ms)()
+      }
       let _ = address.tell(TimerFired(epoch~, deadline~))
     },
     label="ratelimit-timer",
@@ -181,7 +185,7 @@ fn record_limit(
     Some(ticket) if ticket.session_id == session_id &&
       ticket.epoch != state.epoch => {
       (effects.trace)(
-        "ignored stale rate-limit failure for session {session_id}",
+        "ignored stale rate-limit failure for session \{session_id}",
       )
       return
     }
@@ -200,7 +204,7 @@ fn record_limit(
         entry.session_id != session_id
       })
       (effects.trace)(
-        "rate-limit resume gave up on session {session_id} after {attempt} attempts",
+        "rate-limit resume gave up on session \{session_id} after \{attempt} attempts",
       )
     }
     Unschedulable => ()
@@ -220,7 +224,7 @@ fn record_limit(
         None => state.pending.push(entry)
       }
       (effects.trace)(
-        "rate limit on session {session_id} (code={Repr(provider_code)}), encountered_at_ms={encountered_at_ms}, reset_at_ms={Repr(reset_at_ms)}, resume scheduled at {resume_at_ms}",
+        "rate limit on session \{session_id} (code=\{Repr(provider_code)}), encountered_at_ms=\{encountered_at_ms}, reset_at_ms=\{Repr(reset_at_ms)}, resume scheduled at \{resume_at_ms}",
       )
       spawn_timer(ctx, effects, state.epoch, resume_at_ms)
     }
@@ -307,11 +311,11 @@ fn recovery_fold_cmd(
             ) is Some(_)
             if re_recorded {
               (effects.trace)(
-                "rate-limit recovery for session {ticket.session_id} hit another rate limit",
+                "rate-limit recovery for session \{ticket.session_id} hit another rate limit",
               )
             } else {
               (effects.trace)(
-                "rate-limit recovery failed without retry for session {ticket.session_id}: {error}",
+                "rate-limit recovery failed without retry for session \{ticket.session_id}: \{error}",
               )
             }
             dispatch_due(ctx, state, effects, (effects.now_ms)())
