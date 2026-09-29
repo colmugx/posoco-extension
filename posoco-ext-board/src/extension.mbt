@@ -69,6 +69,8 @@ pub impl @posoco.Extension for BoardExtension with fn manifest(
 ) -> @posoco.ExtensionManifest {
   @posoco.ExtensionManifest(
     id="posoco_ext_board",
+    observers=[self],
+    hooks=[self],
     lifecycle=[self],
     commands=[self],
   )
