@@ -89,7 +89,7 @@ async test "start_probes_without_attach_records_skip_failures" {
 }
 
 ///|
-/// Q1 group contract: activating without `attach` records an honest
+/// Activating without `attach` records an honest
 /// "needs a task group" failure for EVERY pending server — http configs no
 /// longer sneak through on the old group-less direct-connect form.
 async test "activate_without_attach_fails_http_servers_honestly" {
@@ -113,7 +113,7 @@ async test "activate_without_attach_fails_http_servers_honestly" {
 }
 
 ///|
-/// Q1 group contract: `reconnect_server` without `attach` fails honestly,
+/// `reconnect_server` without `attach` fails honestly,
 /// and the precondition fires before any destructive work — no slot is
 /// retired and the revision never moves.
 async test "reconnect_server_without_attach_fails_honestly" {
