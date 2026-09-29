@@ -35,7 +35,7 @@ fn BackgroundRecord::BackgroundRecord(kind~ : String) -> BackgroundRecord {
 }
 
 ///|
-/// Host-facing dynamic subscription (design §3.3): appends to the same
+/// Host-facing dynamic subscription: appends to the same
 /// channel the constructor's `observers` seeded. Manifest stays unchanged.
 pub fn SubagentTools::subscribe(
   self : SubagentTools,
