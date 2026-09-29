@@ -130,7 +130,6 @@ fn kind_yaml_mapping(
 }
 
 ///|
-/// Required non-empty string field.
 fn kind_required_string(
   mapping : Map[String, @yaml.Yaml],
   key : String,
