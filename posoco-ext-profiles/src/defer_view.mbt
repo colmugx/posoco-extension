@@ -1,10 +1,10 @@
 ///|
-/// Deep deferral (Q9/F2): profiles' member extensions are deferred past the
+/// Profile member extensions are deferred past the
 /// prompt layer as well as the tool layer. lazytools' toolless views keep an
 /// extension's prompt contributions resident; a deep-deferred view strips
 /// BOTH `tools` and `prompt_contributors`, because activation re-injects the
 /// stripped prompt text once per profile — keeping it resident would
-/// duplicate it in every turn (F2's double-injection trap).
+/// duplicate it in every turn.
 
 ///|
 /// A view of an extension whose `tools` and `prompt_contributors` arrays are
@@ -30,10 +30,9 @@ impl @posoco.Extension for DeepDeferredView with fn manifest(
 }
 
 ///|
-/// Deep-defer a set of extensions during composition (Q10/Q19: the deferred
-/// set is the host's policy — typically the union of loaded profiles' exts;
-/// hosts may additionally protect never-defer extensions by not passing them
-/// here).
+/// Deep-defer a host-selected set of extensions during composition. The set
+/// is typically the union of loaded profiles' members; hosts can keep an
+/// extension resident by leaving it out.
 ///
 /// Returns:
 /// - the stripped prompt text keyed by `extension_id`: the wrapped
