@@ -201,9 +201,8 @@ composes `agent_spec` / `agent_serve_stdio_with_outbound` from `colmugx/acp`
 with `Agent(exts=[...])` from Posoco and wires the two through this bridge).
 `colmugx/acp` itself stays independent of Posoco by design.
 
-Targets **ACP v1** — exactly what `colmugx/acp` implements today. When the
-SDK ships v2, this extension upgrades with it and deletes the v1-only
-behavior; there is no compatibility layer and no legacy path.
+Targets **ACP v1**, matching the current `colmugx/acp` contract. There is no
+cross-version compatibility layer.
 
 ## License
 
