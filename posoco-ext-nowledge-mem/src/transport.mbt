@@ -12,7 +12,7 @@ pub(all) struct NmemResponse {
 pub extend NmemResponse with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Narrow HTTP seam for Nowledge Mem thread sync (plan D7): one JSON POST with
+/// Narrow HTTP seam for Nowledge Mem thread sync: one JSON POST with
 /// a timeout, all failures normalized to `Err(String)`. Production sync uses
 /// `HttpNmemTransport`; tests and hosts inject a scripted fake.
 pub(open) trait NmemTransport {
@@ -28,7 +28,7 @@ pub(open) trait NmemTransport {
 ///|
 /// Default `NmemTransport` backed by `moonbitlang/async/http`. Its js backend
 /// is fetch-based with the same API, so this implementation is shared by the
-/// native and js targets (plan D1); no per-target split is needed.
+/// native and js targets; no per-target split is needed.
 pub(all) struct HttpNmemTransport {
   // empty
 }
@@ -41,7 +41,7 @@ pub fn HttpNmemTransport::HttpNmemTransport() -> HttpNmemTransport {
 ///|
 /// Headers every Nowledge Mem request carries: JSON content type, plus the
 /// dual auth headers (`Authorization: Bearer` and `X-NMEM-API-Key`) when an
-/// API key is configured (plan §1.3).
+/// API key is configured.
 pub fn nmem_request_headers(config : NmemConfig) -> Map[String, String] {
   let headers : Map[String, String] = { "Content-Type": "application/json" }
   match config.api_key {
@@ -56,7 +56,7 @@ pub fn nmem_request_headers(config : NmemConfig) -> Map[String, String] {
 
 ///|
 /// Inject the configured space as a top-level `space_id` when `body` is an
-/// object without one (plan §1.3: `space` rides the request body, not the
+/// object without one (`space` rides the request body, not the
 /// URL). Returns a new Json with `space_id` appended after the existing
 /// fields; non-object bodies, objects that already carry `space_id`, and a
 /// `None` space pass through unchanged.
