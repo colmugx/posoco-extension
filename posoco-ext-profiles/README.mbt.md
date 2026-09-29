@@ -144,7 +144,7 @@ let agent = @posoco.Agent(
 
 ## Host integration limits
 
-- **Host wiring is not finished.** cetas hosts do not yet (a) pass
+- **Cetas host integration is partial.** Current cetas hosts do not (a) pass
   `session_id` in command invoke args, (b) inject a `SessionStore` at build,
   or (c) apply the deep-deferred views. Consequences inside the package:
   `/profiles` selection reaches `manual_activate` and returns an explicit
