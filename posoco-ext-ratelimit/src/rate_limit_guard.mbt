@@ -79,7 +79,7 @@ pub fn RateLimitGuard::start(
     policy=self.policy,
     now_ms=self.now_ms,
     sleep_ms=self.sleep_ms,
-    resume=async fn(session_id : String) {
+    execute_resume=async fn(session_id : String) {
       ignore(agent.resume_turn(session_id, continuation=note))
     },
     trace=self.trace,
@@ -97,11 +97,13 @@ pub fn RateLimitGuard::spawn_monitor(
   self : RateLimitGuard,
   group : @async.TaskGroup[Unit],
 ) -> Unit {
-  let agent = match self.agent {
-    Some(agent) => agent
-    None => fail("rate-limit guard must bind(agent) before spawn_monitor(group)")
+  match self.agent {
+    Some(agent) => self.start(group~, agent~)
+    None =>
+      (self.trace)(
+        "rate-limit guard must bind(agent) before spawn_monitor(group)",
+      )
   }
-  self.start(group~, agent~)
 }
 
 ///|
