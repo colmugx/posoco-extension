@@ -1,10 +1,8 @@
-// vocabulary.mbt — the Paseo multi-agent orchestration tool vocabulary
-// (cetas-paseo-plan Phase 3). Paseo exposes its orchestration tools through
-// an MCP fallback with no on-wire prefix, so the names below are the full
-// wire identities. Paseo has no official contract repository: the tool list
-// comes from the plan's Phase 3 verification set and everything around it is
-// a local proposal — awaiting on-wire verification at the cetas-acp dispatch
-// point.
+// vocabulary.mbt — the Paseo multi-agent orchestration tool vocabulary.
+// Paseo exposes its orchestration tools through an MCP fallback with no
+// on-wire prefix, so the names below are the full wire identities. Paseo has
+// no official contract repository; these names remain a local compatibility
+// surface until verified against the live wire protocol.
 
 ///|
 /// `create_agent` — spawn a child agent (the parallel delegation entry
@@ -55,9 +53,9 @@ pub fn paseo_tool_names() -> Array[String] {
 
 ///|
 /// MCP server name under which Paseo injects its orchestration tools. The
-/// plan pins the injection form (host-side MCP handed over via ACP
-/// `session/new.mcpServers`) but never pins the server's name; `paseo` is
-/// the local proposal — awaiting on-wire verification.
+/// Host-side MCP is handed over via ACP `session/new.mcpServers`, but the
+/// server name is not defined by an official Paseo contract; `paseo` is the
+/// local compatibility choice pending live wire verification.
 pub const PASEO_MCP_SERVER_NAME : String = "paseo"
 
 ///|
