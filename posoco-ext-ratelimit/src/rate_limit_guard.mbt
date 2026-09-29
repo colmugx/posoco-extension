@@ -5,15 +5,15 @@
 /// only translates Posoco hook/observer/lifecycle events into runtime
 /// commands and owns startup wiring.
 pub struct RateLimitGuard {
-  mut agent : @posoco.Agent?
-  mut runtime : RateLimitRuntime?
-  resume_note : String
-  policy : RecoveryPolicy
-  now_ms : () -> Int64
-  sleep_ms : async (Int) -> Unit
-  trace : (String) -> Unit
-  status_sink : DevkitStatusSink
-  shutdown_timeout_ms : Int
+  priv mut agent : @posoco.Agent?
+  priv mut runtime : RateLimitRuntime?
+  priv resume_note : String
+  priv policy : RecoveryPolicy
+  priv now_ms : () -> Int64
+  priv sleep_ms : async (Int) -> Unit
+  priv trace : (String) -> Unit
+  priv status_sink : DevkitStatusSink
+  priv shutdown_timeout_ms : Int
 }
 
 ///|
