@@ -1,5 +1,5 @@
 ///|
-/// Unattended approval source for embedded subagents (design §6.2): the child
+/// Unattended approval source for embedded subagents: the child
 /// never surfaces an approval dialog to the parent UI — `ask` always answers
 /// `AllowAlways`, so unattended runs cannot hang on a prompt. Kind-level
 /// permission modes keep their semantics: a `ReadOnly` kind still hard-rejects
