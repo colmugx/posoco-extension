@@ -1,8 +1,7 @@
 ///|
 // node:fs sync APIs bound with `#module` and injected into the inline-JS
 // wrappers as values (pattern follows posoco-ext-workspace fs_port.js.mbt /
-// moonbitlang/x/fs/fs_js.mbt); FFI stays on the proven stable boundaries
-// (docs/questions.md 2026-08-19): pure value pass-through and typed
+// moonbitlang/x/fs/fs_js.mbt); FFI stays on pure value pass-through and typed
 // ok/content result objects.
 
 ///|
