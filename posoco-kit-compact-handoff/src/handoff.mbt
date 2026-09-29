@@ -4,7 +4,7 @@
 // grep/read it to recover full context.
 
 ///|
-/// Working preamble identifying the first user message of a handoff thread.
+/// Preamble identifying the first user message of a handoff thread.
 pub const HANDOFF_PREFIX : String = "This session continues from a previous conversation that was compacted. Summary of the earlier work:"
 
 ///|
