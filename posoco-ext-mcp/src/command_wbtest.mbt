@@ -158,8 +158,8 @@ async test "status_rows maps failures and pending before activation" {
 
 ///|
 /// A retired slot (no client, no actor — what `retire_slot` and a failed
-/// `reconnect_server` refill leave behind) displays as retired: the Wave A1
-/// transitional "connected, 0 tools" distortion is gone.
+/// `reconnect_server` refill leave behind) displays as retired instead of as
+/// a misleading "connected, 0 tools" row.
 async test "status_rows displays retired slots as retired" {
   let bridge = registry_test_bridge(
     [
