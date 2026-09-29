@@ -52,9 +52,9 @@ pub fn DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport() -> D
 ///|
 /// Codex uses the client version as a request query parameter.  Keep this
 /// provider-owned value aligned with the Codex CLI release shipped by the
-/// extension; the current upstream release is 0.153.4.
+/// extension; the current upstream release is 0.155.1.
 pub fn openai_codex_models_client_version() -> String {
-  "0.153.4"
+  "0.155.1"
 }
 
 ///|
