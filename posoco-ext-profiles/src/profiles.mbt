@@ -7,18 +7,18 @@
 /// `profile <id> activated` header plus the members' stripped prompt
 /// manuals (tools stay behind the lazytools gateway), and one devkit
 /// EventBus event. The extension keeps ZERO in-memory activation state —
-/// the transcript is the single source of truth (Q18).
+/// the transcript is the single source of truth.
 
 ///|
 /// One uniform profile view. The builtin `all` and every manifest become
 /// the same value shape, so lookup, enumeration, menu-free activation, and
-/// injection run through one code path with no `all` special-casing (Q11).
+/// injection run through one code path with no `all` special-casing.
 priv struct ProfileEntry {
   id : String
   description : String
   members : Array[String]
   /// Ext ids the manifest references that were neither deep-deferred nor
-  /// composed (Q13). Empty entries activate nothing extra.
+  /// composed. Empty entries activate nothing extra.
   dangling : Array[String]
 }
 
@@ -26,35 +26,35 @@ priv struct ProfileEntry {
 /// The profiles extension. Opaque: compose via `Profiles::build`.
 pub struct Profiles {
   /// Authorable manifests. Grows when `/profile save` commits a manifest —
-  /// immediately visible to lookup/enumeration/activation (Q19). The
+  /// immediately visible to lookup/enumeration/activation. The
   /// builtin `all` lives outside this array but every read path unifies
   /// both through `entries()`.
   priv catalog : Array[ProfileEntry]
   /// The one program-decided builtin preset: members = the deep-deferred
-  /// set. Not authorable (Q16), activated like any profile (Q11).
+  /// set. Not authorable, activated like any profile.
   priv builtin_all : ProfileEntry
-  /// The composition-time deep-deferred set (the host's Q10 policy
-  /// product). Fixed after build; injection coverage = defer_set ∩ members
-  /// (Q19's anti-double-injection guard).
+  /// The composition-time deep-deferred set chosen by the host. Fixed after
+  /// build; injection coverage is defer_set ∩ members to avoid re-injecting
+  /// resident prompt sections.
   priv defer_set : Array[String]
   /// ext_id → stripped prompt manual (the `deep_defer_extensions` product
   /// the host wires in).
   priv captured_prompts : Map[String, String]
   /// tool name → ext id — the host's composition-time static snapshot
-  /// (Q15), never a usage log.
+  /// never a usage log.
   priv attribution : Map[String, String]
-  /// Load-time warnings for manifests referencing uncomposed exts (Q13).
+  /// Load-time warnings for manifests referencing uncomposed extensions.
   priv dangling_warnings : Array[String]
   priv bus : @devkit.EventBus?
   priv store : &ProfileStore?
   priv session_store : &@posoco.SessionStore?
   priv summarizer : ((Array[(String, Int)]) -> (String, String))?
-  /// Composed UiPort, wired once at `on_compose` (Q17). Composition wiring,
+  /// Composed UiPort, wired once at `on_compose`. Composition wiring,
   /// not activation state.
   priv mut ui : &@posoco.UiPort?
   /// Per-session tool usage counters: session_id → tool name → count. The
   /// input to `/profile save`. Together with `catalog` this is the ONLY
-  /// mutable state; there is deliberately no activated-set field (Q18).
+  /// mutable state; there is deliberately no activated-set field.
   priv usage : Map[String, Map[String, Int]]
 }
 
@@ -79,7 +79,7 @@ pub fn Profiles::build(
   let warnings : Array[String] = []
   let seen : Map[String, Unit] = Map::from_array([])
   for manifest in manifests {
-    // `all` is reserved (Q16) and duplicate ids collapse (first wins) — a
+    // `all` is reserved and duplicate ids collapse (first wins) — a
     // defensive guard for host merge bugs, not a policy path.
     if manifest.id == reserved_profile_id || seen.contains(manifest.id) {
       continue
@@ -122,7 +122,7 @@ pub fn Profiles::build(
 ///|
 /// All profile entries: the builtin `all` first, then the catalog in
 /// manifest order (runtime saves append at the end). One list, one read
-/// path — lookup, enumeration and activation never branch on `all` (Q11).
+/// path — lookup, enumeration and activation never branch on `all`.
 fn Profiles::entries(self : Profiles) -> Array[ProfileEntry] {
   let all : Array[ProfileEntry] = [self.builtin_all]
   for entry in self.catalog {
@@ -142,14 +142,13 @@ fn Profiles::find_entry(self : Profiles, id : String) -> ProfileEntry? {
 }
 
 ///|
-/// Every activatable id: `all` plus catalog ids in catalog order (Q16's
-/// unknown-id enumeration).
+/// Every activatable id: `all` plus catalog ids in catalog order.
 fn Profiles::available_ids(self : Profiles) -> Array[String] {
   self.entries().map(fn(entry) { entry.id })
 }
 
 ///|
-/// Load-time manifest warnings (Q13): profiles referencing extensions that
+/// Load-time manifest warnings: profiles referencing extensions that
 /// were neither deep-deferred nor composed. Non-fatal — the menu annotates
 /// the entry and activation proceeds without the missing members.
 pub fn Profiles::warnings(self : Profiles) -> Array[String] {
@@ -158,8 +157,7 @@ pub fn Profiles::warnings(self : Profiles) -> Array[String] {
 
 ///|
 /// Ext ids not covered by the composition: outside the deep-deferred set
-/// AND absent from the attribution table's values (Q13's
-/// `defer_set ∪ attribution values` membership check).
+/// AND absent from the attribution table's values.
 fn dangling_ext_ids(
   exts : Array[String],
   defer_set : Array[String],
