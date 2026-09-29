@@ -1,5 +1,5 @@
 ///|
-// Contract tests for the turn-end commit (plan D3, 2026-09-09 revision):
+// Contract tests for the turn-end commit:
 // config resolution and every drain are attach-gated, so a composition
 // that never attaches is fully network- and config-inert — run_turn
 // returns without staging a lane or issuing a single POST. The commit
