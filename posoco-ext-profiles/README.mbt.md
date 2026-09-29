@@ -29,7 +29,7 @@ behind the lazytools gateway the whole time.
 - **The header line is frozen contract, not presentation.** Every activation —
   meta tool or manual — injects exactly one user message whose first Text line
   is `profile <id> activated` (src/header.mbt, src/hook.mbt). Compactors must
-  preserve this line; see the v1 boundary below.
+  preserve this line; see the integration limits below.
 - **Pending detection**: an executed `activate_profile` call whose
   `Success` result first line starts with `activated: ` and whose header line
   is not yet in the transcript is pending and gets injected; a first line
@@ -156,7 +156,7 @@ let agent = @posoco.Agent(
 - **Compact contract across packages**: compactors must preserve every
   `profile <id> activated` header line (bodies may compress) — resume rebuild
   scans them. This is a requirement on the posoco-kit-compact-* kits
-  and currently has no owner (src/header.mbt).
+  (src/header.mbt).
 - The `/profiles` selector lists catalog manifests only; the builtin `all` is
   reachable through the menu's fallback sentence and the meta tool, not the
   selector (src/command.mbt, src/prompt_menu.mbt).
