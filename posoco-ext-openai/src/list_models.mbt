@@ -51,8 +51,8 @@ pub fn DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport() -> D
 
 ///|
 /// Codex uses the client version as a request query parameter.  Keep this
-/// provider-owned value aligned with the Codex CLI release shipped by the
-/// extension; the current upstream release is 0.155.1.
+/// provider-owned value aligned with the Codex CLI client used for model
+/// discovery.
 pub fn openai_codex_models_client_version() -> String {
   "0.155.1"
 }
@@ -62,9 +62,9 @@ let openai_models_timeout_ms : Int = 5000
 
 ///|
 /// Deliberate /tmp diagnostic (no home plumbing): every Codex `/models` body
-/// read overwrites this file with the raw response so filter regressions
-/// (e.g. a wiped model list) stay inspectable offline.  The write is
-/// best-effort — failure is swallowed and never breaks the fetch.
+/// read overwrites this file with the raw response so model-list filtering
+/// remains inspectable offline. The write is best-effort — failure is
+/// swallowed and never breaks the fetch.
 let codex_models_dump_path : String = "/tmp/cetas-codex-models.json"
 
 ///|
@@ -93,8 +93,8 @@ pub impl OpenAIModelsHttpTransport for DefaultOpenAIModelsHttpTransport with fn 
   headers : Map[String, String],
 ) -> OpenAIModelsHttpResponse raise @posoco.ModelError {
   @async.with_timeout(openai_models_timeout_ms, () => {
-    // async 0.21: convert at this single @http boundary; the transport
-    // contract stays Map[String, String] so fakes stay http-free.
+    // Convert at this single @http boundary; the transport contract stays
+    // Map[String, String] so fakes stay http-free.
     let http_headers : @http.Headers = Map([])
     for k, v in headers {
       http_headers[k] = v
