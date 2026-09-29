@@ -8,6 +8,8 @@ async fn board_http_get(url : String) -> (Int, String) {
 async test "native server binds loopback random port and guards bootstrap" {
   let server = NativeBoardWebServer::NativeBoardWebServer()
   let web : &BoardWebServer = server
+  let hub = BoardEventHub::BoardEventHub(capacity=8, client_queue_depth=4)
+  web.attach_event_hub(hub)
   @async.with_task_group(group => {
     let endpoint = match web.bind() {
       Ok(value) => value
@@ -68,8 +70,49 @@ async test "native server binds loopback random port and guards bootstrap" {
       endpoint.ws_url() + "?token=" + token,
       headers={ "Origin": endpoint.base_url() },
     )
+    ws.send_text(
+      @protocol.encode_client_frame(
+        @protocol.BoardClientFrame::Hello({
+          last_seq: 0L,
+          protocol_version: @protocol.protocol_version(),
+        }),
+      ),
+    )
+    let first_frame = @protocol.decode_server_frame(ws.recv().read_all().text())
+    assert_true(first_frame is Ok(@protocol.BoardServerFrame::Snapshot(_)))
+
+    let published = hub.publish(
+      board_revision=0L,
+      kind="run.started",
+      payload=Json::object({}),
+    )
+    match @protocol.decode_server_frame(ws.recv().read_all().text()) {
+      Ok(@protocol.BoardServerFrame::Event(event)) =>
+        assert_eq(event.seq, published.seq)
+      _ => fail("live websocket client must receive published event")
+    }
     ws.send_close()
     ws.close()
+
+    let reconnect = @websocket.connect(
+      endpoint.ws_url() + "?token=" + token,
+      headers={ "Origin": endpoint.base_url() },
+    )
+    reconnect.send_text(
+      @protocol.encode_client_frame(
+        @protocol.BoardClientFrame::Hello({
+          last_seq: 0L,
+          protocol_version: @protocol.protocol_version(),
+        }),
+      ),
+    )
+    match @protocol.decode_server_frame(reconnect.recv().read_all().text()) {
+      Ok(@protocol.BoardServerFrame::Snapshot(snapshot)) =>
+        assert_eq(snapshot.last_seq, published.seq)
+      _ => fail("fresh reconnect must receive a current snapshot")
+    }
+    reconnect.send_close()
+    reconnect.close()
     web.close()
   })
 }
@@ -78,6 +121,8 @@ async test "native server binds loopback random port and guards bootstrap" {
 async test "native close is idempotent and rebind mints fresh secret" {
   let server = NativeBoardWebServer::NativeBoardWebServer()
   let web : &BoardWebServer = server
+  let hub = BoardEventHub::BoardEventHub()
+  web.attach_event_hub(hub)
   @async.with_task_group(group => {
     let first = match web.bind() {
       Ok(value) => value
