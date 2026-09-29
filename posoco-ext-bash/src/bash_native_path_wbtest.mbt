@@ -1,12 +1,7 @@
 ///|
-/// Native-only white-box tests: these exercise the `@process` execute path
-/// (and `bash_collect_output_failure`, which lives in
-/// `posoco_ext_bash.native.mbt`), so the js target — where the execute path
-/// is the bun runner — excludes this file.
-///
-/// The runtime tests spawn the user's real `/bin/sh`, so they run only when
-/// BASH_LIVE=1 is set; CI and default runs skip. The anchored variants use a
-/// tmpdir root (never `/` and the host's real `/etc`).
+/// Runtime cases spawn the user's real `/bin/sh`, so they run only when
+/// BASH_LIVE=1 is set. Anchored cases use a tmpdir root instead of the host's
+/// real filesystem.
 test "collect_output_failure_mapping_is_compact" {
   match bash_collect_output_failure() {
     @posoco.RuntimeError::InvocationFailed(message) =>
@@ -16,7 +11,6 @@ test "collect_output_failure_mapping_is_compact" {
 }
 
 ///|
-/// BASH_LIVE=1 opts in to the real-shell runtime tests; unset skips them.
 fn bash_live_enabled() -> Bool {
   match @env.get_env_var("BASH_LIVE") {
     Some("1") => true
