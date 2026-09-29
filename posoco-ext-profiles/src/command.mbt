@@ -1,9 +1,9 @@
 ///|
-/// Slash surface. `/profiles` is the manual activation fallback (Q17): it
+/// Slash surface. `/profiles` is the manual activation fallback: it
 /// mirrors the meta tool through the SAME activation-message constructor,
-/// appending via the SessionStore port. `/profile save` (§5, skill-creator
-/// shape) persists the session's observed tool usage as a new profile. The
-/// composed UiPort is wired once at `on_compose` (Q17).
+/// appending via the SessionStore port. `/profile save` persists the session's
+/// observed tool usage as a new profile. The composed UiPort is wired once at
+/// `on_compose`.
 
 ///|
 /// Capture the composed UiPort. Sync on purpose — wiring, not acting (the
@@ -156,7 +156,7 @@ async fn Profiles::invoke_select_profiles(
 
 ///|
 /// Manual activation — the same injection template as the meta-tool path
-/// (Q17/Q18: one template, one invariant). Appends directly through the
+/// using one shared template and invariant. Appends directly through the
 /// SessionStore port at the current transcript tail, then fires the same
 /// bus event the hook path fires.
 async fn Profiles::manual_activate(
@@ -225,13 +225,13 @@ fn Profiles::invoke_profile_action(
 }
 
 ///|
-/// `/profile save` (§5): fully manual. Name/description come from the
+/// `/profile save` is fully manual. Name/description come from the
 /// host's summarizer when wired, else a deterministic derivation; an
 /// explicit `name` argument overrides both names. The id is minted legal
 /// and unique; the manifest persists through the ProfileStore seam when
-/// wired, and — regardless — enters the in-memory catalog immediately (Q19:
+/// wired, and — regardless — enters the in-memory catalog immediately:
 /// activate_profile accepts it this session; the menu catches up next
-/// composition).
+/// composition.
 fn Profiles::invoke_save_profile(
   self : Profiles,
   args : Json,
@@ -334,7 +334,7 @@ fn json_string_field(args : Json, key : String) -> String? {
 }
 
 ///|
-/// Mint a legal, unused profile id from a display name (Q16): lowercase,
+/// Mint a legal, unused profile id from a display name: lowercase,
 /// non-alphanumeric runs collapse to `-`, edges trimmed; the reserved `all`
 /// and catalog collisions get a `-N` suffix. Falls back when nothing
 /// survives the sanitization.
