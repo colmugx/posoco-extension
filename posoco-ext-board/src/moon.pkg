@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-ext-board/runtime" @runtime,
+  "moonbitlang/async",
   "moonbitlang/core/debug",
 }
 
