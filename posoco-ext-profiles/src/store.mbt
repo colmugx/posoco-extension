@@ -6,7 +6,7 @@
 ///
 /// - `read_all` hands back every stored manifest as (level, raw content)
 ///   pairs. The level vocabulary is host-owned ("user" / "project" per the
-///   redesign; project overrides user when ids collide — Q12). The content
+///   host policy; project overrides user when ids collide). The content
 ///   is the raw manifest text the host stored; parse it with
 ///   `parse_profile_manifest`.
 /// - `write` persists one manifest under a level. Hosts key the storage by
