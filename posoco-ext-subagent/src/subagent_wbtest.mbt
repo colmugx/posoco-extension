@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // Test fakes + helpers for the `agent` tool (whitebox).
 //
-// The fake composer builds a REAL child Agent from testkit fakes
-// (ScriptedModel + RecordingSessionStore), mirroring what the cetas-side
-// glue will do in Round 2; it records every ChildSpec it receives.
+// The fake composer builds a real child Agent from testkit fakes
+// (ScriptedModel + RecordingSessionStore) and records every ChildSpec it
+// receives.
 // ---------------------------------------------------------------------------
 
 ///|
