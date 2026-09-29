@@ -1,5 +1,5 @@
 ///|
-/// Narrow platform seam for Nowledge Mem local-file access (plan D7):
+/// Narrow platform seam for Nowledge Mem local-file access:
 /// `read_home_file` reads a path relative
 /// to the user's home directory, `write_home_file` writes one back (the
 /// `/nmem url` persistence path) — the only local IO the extension does
