@@ -1,5 +1,5 @@
 ///|
-/// ConnActor fold-table coverage (round-1 Wave A2). The client payload is
+/// ConnActor fold-table coverage. The client payload is
 /// an Int identity token: `@client.MCPClient` cannot be constructed
 /// outside the mcp package (its constructor is private to that package),
 /// and the fold rules are client-agnostic, so the state machine is pinned
