@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <stdlib.h>
 #include "moonbit.h"
 
 #if defined(_WIN32)
