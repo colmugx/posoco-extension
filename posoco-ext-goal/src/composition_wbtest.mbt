@@ -198,9 +198,9 @@ async test "update_plan_tool_rewrites_state_through_agent" {
 }
 
 ///|
-/// Under core 0.13.0 the system prompt is assembled once per Agent lifetime,
-/// so the charter rides the first working turn's user input instead: that
-/// turn's input merges the charter above the progress envelope, later turns
+/// The system prompt is assembled once per Agent lifetime, so the charter
+/// rides the first working turn's user input instead: that turn's input
+/// merges the charter above the progress envelope, later turns
 /// append user inputs carrying only the progress envelope (the charter
 /// survives in the append-only transcript), and no model call ever sees a
 /// goal-authored SystemMessage.
