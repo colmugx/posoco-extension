@@ -276,7 +276,7 @@ fn recovery_fold_cmd(
         Some(index) => {
           state.pending[index].recovery_ready = true
           let deadline = state.pending[index].resume_at_ms
-          spawn_timer(ctx, effects, state.epoch, deadline, deadline - 1L)
+          spawn_timer(ctx, effects, state.epoch, deadline, (effects.now_ms)())
         }
         None => ()
       }
@@ -377,7 +377,7 @@ fn RateLimitRuntime::start(
   trace~ : (String) -> Unit,
 ) -> RateLimitRuntime {
   let supervisor : @fuwaroid.Supervisor[Unit] = @fuwaroid.Supervisor(group~)
-  let effects : RuntimeEffects = { supervisor, sleep_ms, resume, trace, }
+  let effects : RuntimeEffects = { supervisor, now_ms, sleep_ms, resume, trace, }
   let init : RecoveryState = {
     pending: [],
     attempts: Map::from_array([]),
