@@ -8,6 +8,14 @@ pub fn UnsupportedBoardWebServer::UnsupportedBoardWebServer(
 }
 
 ///|
+pub impl BoardWebServer for UnsupportedBoardWebServer with fn attach_event_hub(
+  _self,
+  _hub,
+) {
+  ()
+}
+
+///|
 pub impl BoardWebServer for UnsupportedBoardWebServer with fn bind(_self) {
   Err("posoco-ext-board S1 local control plane is native-only")
 }
@@ -46,14 +54,15 @@ pub impl BrowserOpener for UnsupportedBrowserOpener with fn open(_self, _url) {
 }
 
 ///|
-pub fn default_board_runtime(event_buffer : Int) -> BoardRuntime {
+pub fn default_board_runtime(event_buffer : Int, client_queue_depth : Int) -> BoardRuntime {
   let server = UnsupportedBoardWebServer::UnsupportedBoardWebServer()
   let opener = UnsupportedBrowserOpener::{ }
-  BoardRuntime::with_adapters(event_buffer~, server=server, opener=opener)
+  BoardRuntime::with_adapters(event_buffer~, client_queue_depth~, server=server, opener=opener)
 }
 
 ///|
 pub extend UnsupportedBoardWebServer with BoardWebServer::{
+  attach_event_hub,
   bind,
   run,
   browser_url,
