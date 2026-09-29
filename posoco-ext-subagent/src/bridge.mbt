@@ -1,7 +1,7 @@
 ///|
-/// Event bridge attached to one child run (design §3.3): projects child
+/// Event bridge attached to one child run: projects child
 /// `TurnEvent`s onto the extension's subscription channel as tagged
-/// `SubagentEvent`s and accumulates the run's cost attribution (design §3.4)
+/// `SubagentEvent`s and accumulates the run's cost attribution
 /// — turn count from `TurnCompleted`, token usage from every
 /// `ModelResponseReceived`. Created per spawn; its counters are read after
 /// the child run ends to build the usage footer.
