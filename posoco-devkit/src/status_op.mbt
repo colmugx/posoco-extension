@@ -1,6 +1,6 @@
 ///|
 /// `status_op` — the wire protocol shared by every status-bar publisher and
-/// the statusbar bridge (see `docs/statusbar-bridge/r1-plan.md`).
+/// the statusbar bridge.
 ///
 /// Extensions publish on topic "status" through the three helpers; the
 /// bridge subscribes to the bus and decodes each event with
