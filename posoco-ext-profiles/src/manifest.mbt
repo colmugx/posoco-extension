@@ -12,11 +12,11 @@ pub impl @posoco.Extension for Profiles with fn extension_id(_self : Profiles) -
 /// (the menu), one CommandPort (/profiles, /profile save), one Lifecycle
 /// (UiPort wiring).
 ///
-/// Host wiring notes: register this extension BEFORE lazytools (Q17 — hook
-/// chains run in registration order, so the lazytools envelope stays last),
+/// Host wiring notes: register this extension BEFORE lazytools because hook
+/// chains run in registration order, so the lazytools envelope stays last,
 /// and register deep-deferred views (`deep_defer_extensions`) instead of
 /// the originals for member extensions, or their prompts would still be
-/// resident and activation would double-inject (F2).
+/// resident and activation would double-inject.
 pub impl @posoco.Extension for Profiles with fn manifest(self : Profiles) -> @posoco.ExtensionManifest {
   @posoco.ExtensionManifest(
     id="posoco_ext_profiles",
