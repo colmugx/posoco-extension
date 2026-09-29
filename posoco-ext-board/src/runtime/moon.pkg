@@ -2,6 +2,7 @@ import {
   "colmugx/fuwaroid",
   "colmugx/posoco-ext-board/protocol" @protocol,
   "moonbitlang/async",
+  "moonbitlang/async/aqueue",
   "moonbitlang/async/http",
   "moonbitlang/async/process",
   "moonbitlang/async/socket",
