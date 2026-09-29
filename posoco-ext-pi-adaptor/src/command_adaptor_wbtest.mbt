@@ -1,6 +1,4 @@
 ///|
-/// Whitebox helper: register a pi command whose handler captures its args and
-/// context, then returns `feedback` (or throws when feedback is "__throw__").
 extern "js" fn wbtest_register_pi_command(
   host : JsPiHost,
   name : String,
