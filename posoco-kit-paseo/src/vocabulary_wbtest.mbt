@@ -1,5 +1,5 @@
 ///|
-test "the vocabulary is the eight Phase 3 tool names" {
+test "the vocabulary contains the eight orchestration tool names" {
   inspect(
     paseo_tool_names().join(","),
     content="create_agent,send_agent_prompt,get_agent_status,list_agents,cancel_agent,archive_agent,kill_agent,update_agent",
