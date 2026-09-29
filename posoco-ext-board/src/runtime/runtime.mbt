@@ -91,9 +91,7 @@ async fn BoardRuntime::ensure_server_locked(
   }
   let server = self.server
   let spawned = supervisor.spawn(
-    async fn() {
-      let _ = server.run()
-    },
+    async fn() { let _ = server.run() },
     label="board-http",
   )
   match spawned {
@@ -199,13 +197,13 @@ pub fn BoardRuntime::publish_telemetry(
   scope? : @protocol.BoardEventScope? = None,
   payload~ : Json,
 ) -> @protocol.BoardWireEvent {
-  self.hub.publish(board_revision~, kind~, scope=scope, payload~)
+  self.hub.publish(board_revision~, kind~, scope~, payload~)
 }
 
 ///|
-pub fn BoardRuntime::event_history(self : BoardRuntime) -> Array[
-  @protocol.BoardWireEvent,
-] {
+pub fn BoardRuntime::event_history(
+  self : BoardRuntime,
+) -> Array[@protocol.BoardWireEvent] {
   self.hub.history()
 }
 

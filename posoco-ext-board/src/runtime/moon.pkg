@@ -1,6 +1,6 @@
 import {
   "colmugx/fuwaroid",
-  "colmugx/posoco-ext-board/protocol" @protocol,
+  "colmugx/posoco-ext-board/protocol",
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/async/process",

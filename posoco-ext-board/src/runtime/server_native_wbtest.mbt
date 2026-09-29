@@ -20,7 +20,9 @@ async test "native server binds loopback random port and guards bootstrap" {
     })
     @async.sleep(10)
 
-    let (health_code, health_body) = board_http_get(endpoint.base_url() + "/health")
+    let (health_code, health_body) = board_http_get(
+      endpoint.base_url() + "/health",
+    )
     assert_eq(health_code, 200)
     assert_true(health_body.contains("\"ok\":true"))
     assert_false(health_body.contains("token"))
@@ -55,19 +57,17 @@ async test "native server binds loopback random port and guards bootstrap" {
     assert_true(bad is Err(_))
 
     let bad_origin : Result[@websocket.Conn, Error] = Ok(
-      @websocket.connect(
-        endpoint.ws_url() + "?token=" + token,
-        headers={ "Origin": "http://example.invalid" },
-      ),
+      @websocket.connect(endpoint.ws_url() + "?token=" + token, headers={
+        "Origin": "http://example.invalid",
+      }),
     ) catch {
       error => Err(error)
     }
     assert_true(bad_origin is Err(_))
 
-    let ws = @websocket.connect(
-      endpoint.ws_url() + "?token=" + token,
-      headers={ "Origin": endpoint.base_url() },
-    )
+    let ws = @websocket.connect(endpoint.ws_url() + "?token=" + token, headers={
+      "Origin": endpoint.base_url(),
+    })
     ws.send_close()
     ws.close()
     web.close()

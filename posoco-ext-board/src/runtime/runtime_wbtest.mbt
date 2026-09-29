@@ -127,7 +127,7 @@ async test "ensure_server is idempotent under concurrent opens" {
     browser: None,
   }
   let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server=server, opener=opener)
+  let runtime = BoardRuntime::with_adapters(server~, opener~)
   @async.with_task_group(group => {
     runtime.attach(group)
     let results = @async.all([
@@ -153,7 +153,7 @@ async test "close is idempotent and later open rebinds" {
     browser: None,
   }
   let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server=server, opener=opener)
+  let runtime = BoardRuntime::with_adapters(server~, opener~)
   @async.with_task_group(group => {
     runtime.attach(group)
     assert_true(runtime.ensure_server() is Ok(_))
@@ -175,7 +175,7 @@ async test "server start requires host task-group ownership" {
     browser: None,
   }
   let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server=server, opener=opener)
+  let runtime = BoardRuntime::with_adapters(server~, opener~)
   match runtime.ensure_server() {
     Err(message) => assert_true(message.contains("attach"))
     Ok(_) => fail("unattached runtime must not create an orphan server")

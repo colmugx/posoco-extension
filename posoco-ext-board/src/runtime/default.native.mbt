@@ -76,15 +76,11 @@ async fn board_send(
   content_type : String,
   body : String,
 ) -> Unit {
-  conn.send_response(
-    code,
-    reason,
-    extra_headers={
-      "Content-Type": content_type,
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  )
+  conn.send_response(code, reason, extra_headers={
+    "Content-Type": content_type,
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  })
   conn.write(body)
   conn.end_response()
 }
@@ -119,10 +115,7 @@ fn board_request_origin_ok(
 }
 
 ///|
-fn board_request_token_ok(
-  request : @http.Request,
-  token : String,
-) -> Bool {
+fn board_request_token_ok(request : @http.Request, token : String) -> Bool {
   board_query_param(request.path, "token") == Some(token)
 }
 
@@ -148,14 +141,18 @@ async fn NativeBoardWebServer::handle_ws(
   let endpoint = match self.endpoint {
     Some(value) => value
     None => {
-      board_send(conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running")
+      board_send(
+        conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running",
+      )
       return
     }
   }
   let token = match self.token {
     Some(value) => value
     None => {
-      board_send(conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running")
+      board_send(
+        conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running",
+      )
       return
     }
   }
@@ -165,7 +162,9 @@ async fn NativeBoardWebServer::handle_ws(
     return
   }
   if !board_request_token_ok(request, token) {
-    board_send(conn, 401, "Unauthorized", "text/plain; charset=utf-8", "unauthorized")
+    board_send(
+      conn, 401, "Unauthorized", "text/plain; charset=utf-8", "unauthorized",
+    )
     return
   }
   let ws = @websocket.from_http_server(request, conn)
@@ -188,7 +187,9 @@ async fn NativeBoardWebServer::handle_request(
   let endpoint = match self.endpoint {
     Some(value) => value
     None => {
-      board_send(conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running")
+      board_send(
+        conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running",
+      )
       return
     }
   }
@@ -213,7 +214,9 @@ async fn NativeBoardWebServer::handle_request(
   let token = match self.token {
     Some(value) => value
     None => {
-      board_send(conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running")
+      board_send(
+        conn, 503, "Service Unavailable", "text/plain; charset=utf-8", "not running",
+      )
       return
     }
   }
@@ -222,7 +225,9 @@ async fn NativeBoardWebServer::handle_request(
     return
   }
   if !board_request_token_ok(request, token) {
-    board_send(conn, 401, "Unauthorized", "text/plain; charset=utf-8", "unauthorized")
+    board_send(
+      conn, 401, "Unauthorized", "text/plain; charset=utf-8", "unauthorized",
+    )
     return
   }
   match path {
@@ -241,14 +246,18 @@ async fn NativeBoardWebServer::handle_request(
         "OK",
         "application/json; charset=utf-8",
         Json::object({
-          "protocol_version": Json::number(@protocol.protocol_version().to_double()),
+          "protocol_version": Json::number(
+            @protocol.protocol_version().to_double(),
+          ),
           "host": Json::string(endpoint.host),
           "port": Json::number(endpoint.port.to_double()),
           "ws_path": Json::string("/ws"),
         }).stringify(),
       )
     _ =>
-      board_send(conn, 404, "Not Found", "text/plain; charset=utf-8", "not found")
+      board_send(
+        conn, 404, "Not Found", "text/plain; charset=utf-8", "not found",
+      )
   }
 }
 
@@ -367,7 +376,8 @@ async fn board_run_opener(
   match result {
     Ok(0) => Ok(())
     Ok(code) => Err("board: browser opener '\{command}' exited with \{code}")
-    Err(error) => Err("board: browser opener '\{command}' failed: " + error.to_string())
+    Err(error) =>
+      Err("board: browser opener '\{command}' failed: " + error.to_string())
   }
 }
 
@@ -381,8 +391,7 @@ pub impl BrowserOpener for NativeBrowserOpener with fn open(_self, url) {
     Err(linux_error) =>
       match board_run_opener("open", [url]) {
         Ok(_) => Ok(())
-        Err(mac_error) =>
-          Err(linux_error + "; fallback failed: " + mac_error)
+        Err(mac_error) => Err(linux_error + "; fallback failed: " + mac_error)
       }
   }
 }
@@ -391,7 +400,7 @@ pub impl BrowserOpener for NativeBrowserOpener with fn open(_self, url) {
 pub fn default_board_runtime(event_buffer : Int) -> BoardRuntime {
   let server = NativeBoardWebServer::NativeBoardWebServer()
   let opener = NativeBrowserOpener::NativeBrowserOpener()
-  BoardRuntime::with_adapters(event_buffer~, server=server, opener=opener)
+  BoardRuntime::with_adapters(event_buffer~, server~, opener~)
 }
 
 ///|
