@@ -1,5 +1,5 @@
 ///|
-/// One configured model slot (design §6.4): a router slot plus the reasoning
+/// One configured model slot: a router slot plus the reasoning
 /// efforts it offers. `efforts` empty means the slot accepts any effort;
 /// `default_effort` is returned when the caller picks the slot without an
 /// effort.
@@ -16,7 +16,7 @@ pub extend ConfigModel with Eq::{not_equal, equal}
 pub extend ConfigModel with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Numeric bundle of subagent-config.json (design §6.4, §9.2). Defaults live
+/// Numeric bundle of subagent-config.json. Defaults live
 /// in `SubagentConfig::defaults`.
 pub(all) struct SubagentLimits {
   swarm_items : Int
@@ -264,7 +264,7 @@ pub extend ResolvedSelection with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Resolve the spawn-time `model`/`effort` overrides against the configured
-/// range (design §6.4). With configured models, the explicit model must name
+/// range. With configured models, the explicit model must name
 /// a configured slot and the effort must be offered by that slot; a model
 /// without an effort gets the entry's `default_effort`; no model falls back
 /// to `default_slot`. `parent_*` is used only in inheritance mode. Error
