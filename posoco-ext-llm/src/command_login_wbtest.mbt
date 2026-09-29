@@ -1,9 +1,4 @@
 ///|
-/// Deterministic OAuth fakes for the router command boundary. These tests do
-/// not exercise a provider's network flow; they verify the router's
-/// orchestration, persistence, and slot replacement contract.
-
-///|
 struct LoginTestOAuth {
   credential : @oauth.Credential
 }
@@ -54,7 +49,6 @@ struct LoginTestStore {
 }
 
 ///|
-/// API-key fakes keep the provider-neutral prompt/store contract executable.
 struct LoginTestApiKeyProvider {}
 
 ///|
