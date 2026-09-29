@@ -219,7 +219,7 @@ pub fn BatchResult::summary(self : BatchResult) -> String {
 
 ///|
 /// Map the Agent's terminal task status onto the kit's terminal
-/// classification (design §2.1): statuses correspond one-to-one; the
+/// classification: statuses correspond one-to-one; the
 /// message payload of `Completed` is not re-interpreted here.
 pub fn task_status_to_terminal(status~ : @posoco.TaskStatus) -> TerminalState {
   match status {
