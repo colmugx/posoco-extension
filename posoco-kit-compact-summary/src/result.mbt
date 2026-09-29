@@ -2,8 +2,6 @@
 /// Anchor prefix of the user message that carries a summary in a
 /// Replace-mode result. Both this kit's own products and later turns
 /// recognize prior summaries by this prefix (progressive anchoring).
-///
-/// Working value; the final wording is a deferred product decision.
 pub const SUMMARY_PREFIX : String = "Previous context has been compacted. Here is the summary of the earlier conversation:"
 
 ///|
