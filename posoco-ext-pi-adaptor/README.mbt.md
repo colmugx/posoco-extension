@@ -70,7 +70,7 @@ Exercised through the cetas-js host with the bun-installed npm package
 | Events | `session_start` delivered per session (`new`/`resume` reasons); the package's `session_tree` / `session_shutdown` handlers register but the host never fires those events (no session-branch or shutdown surface in v1) |
 | UI | package `ctx.ui.notify/setWidget/select/theme` calls project to the host UI port (theme renders as identity text passthrough) |
 | Prompt | the tools' `promptSnippet`s reach the model inside the `<pi-tools>` system-message block |
-| Persistence | `appendEntry("web-search-results", ...)` round-trips: observer `Custom` events at emission, `Session.metadata["pi.custom_entries"]` at turn end, restore on the next process via seeded entries (mechanism verified cross-process with the W5 fixture; this is what makes `get_search_content` usable across restarts) |
+| Persistence | `appendEntry("web-search-results", ...)` round-trips: observer `Custom` events at emission, `Session.metadata["pi.custom_entries"]` at turn end, restore on the next process via seeded entries; this keeps `get_search_content` usable across restarts |
 
 Not exercised: live provider-backed `web_search` execution (every bundled
 search provider needs API keys this lab does not have); `fetch_content` is
@@ -266,13 +266,12 @@ control with Posoco — packages cannot rewire `setActiveTools` /
 (provider composition), the `input` event (user input pipeline), or
 `user_bash` (host base tools). Component-closure UI (`ui.custom`, `editor`,
 `renderCall`, `MessageRenderer`, footer/header, themes) is not projectable
-across the FFI. The `pi.events`/flags bus stays a TODO until a target package
-needs it.
+across the FFI. The `pi.events`/flags bus is not projected because no supported target package
+requires it.
 
-Parked (reopens on demand): `before_agent_start` system-prompt replacement
-and `context` message rewriting (W4b) must land together with argument
-revalidation — posoco core validates tool arguments before hooks run and does
-not revalidate after a hook rewrite, so enabling rewriting without
+`before_agent_start` system-prompt replacement and `context` message rewriting
+remain disabled because Posoco validates tool arguments before hooks run and
+does not revalidate after a hook rewrite. Enabling rewriting without paired
 revalidation would bypass schema checks.
 
 ## AgentHarness (pi "v3") mapping
@@ -289,13 +288,10 @@ package imports harness APIs yet. When that changes, the port lookup is:
 | `before_tool` (chained argument replacement, revalidated; block fails closed) | `PipelineHook::before_tool` | default `Approve` — no argument rewriting in v1; core validates reducer-side before hooks and never revalidates after a rewrite, so revalidation must pair with any future rewriting |
 | `before_run_end` follow-up | `RuntimeControl::enqueue_follow_up` | `PiRuntime` parked-followup queue flushed at the next `call_model` |
 
-pi version knowledge lives entirely in the adaptor's JS bridge, whose
-by-name dispatch tolerates absent members — a future harness generation
-would rewrite `pi_bridge.mbt` and the manifest filling, not the ports above.
-Reopen triggers (checked monthly): the pi agent CHANGELOG announcing an
-AgentSession → AgentHarness migration, `HarnessNotImplemented` dissolving
-release by release, or pi-web-access dropping its `*` peer range for harness
-imports.
+Pi version knowledge lives entirely in the adaptor's JS bridge. Its by-name
+dispatch tolerates absent members, so an AgentHarness migration can be handled
+inside `pi_bridge.mbt` and manifest filling without changing the Posoco ports
+above.
 
 ## Trust model
 
