@@ -187,3 +187,79 @@ async test "server start requires host task-group ownership" {
   }
   assert_eq(server.binds, 0)
 }
+
+
+///|
+test "replay returns covered events and snapshot on history gap" {
+  let hub = BoardEventHub::BoardEventHub(capacity=3, client_queue_depth=2)
+  for i in 1..=5 {
+    let _ = hub.publish(
+      board_revision=0L,
+      kind="tick",
+      payload=Json::number(i.to_double()),
+    )
+  }
+  let replay = hub.sync_frames(4L)
+  assert_eq(replay.length(), 1)
+  match replay[0] {
+    @protocol.BoardServerFrame::Event(event) => assert_eq(event.seq, 5L)
+    _ => fail("covered replay must return event frames")
+  }
+  let gap = hub.sync_frames(1L)
+  assert_eq(gap.length(), 1)
+  match gap[0] {
+    @protocol.BoardServerFrame::Snapshot(snapshot) => {
+      assert_eq(snapshot.last_seq, 5L)
+      assert_eq(snapshot.board_revision, 0L)
+    }
+    _ => fail("history gap must return snapshot")
+  }
+}
+
+///|
+async test "slow client overflow forces explicit resync" {
+  let hub = BoardEventHub::BoardEventHub(capacity=8, client_queue_depth=2)
+  let client = hub.register_client()
+  for i in 0..<3 {
+    let _ = hub.publish(
+      board_revision=0L,
+      kind="delta",
+      payload=Json::number(i.to_double()),
+    )
+  }
+  match client.next_frame() {
+    Some(@protocol.BoardServerFrame::ResyncRequired(value)) => {
+      assert_eq(value.reason, "client_queue_overflow")
+      assert_eq(value.current_seq, 3L)
+    }
+    _ => fail("overflow must not silently continue event delivery")
+  }
+  hub.unregister_client(client.client_id())
+}
+
+///|
+async test "multiple clients receive the same live sequence" {
+  let hub = BoardEventHub::BoardEventHub(capacity=8, client_queue_depth=4)
+  let a = hub.register_client()
+  let b = hub.register_client()
+  let published = hub.publish(
+    board_revision=0L,
+    kind="run.started",
+    payload=Json::object({}),
+  )
+  let af = a.next_frame()
+  let bf = b.next_frame()
+  match (af, bf) {
+    (
+      Some(@protocol.BoardServerFrame::Event(ae)),
+      Some(@protocol.BoardServerFrame::Event(be)),
+    ) => {
+      assert_eq(ae.seq, published.seq)
+      assert_eq(be.seq, published.seq)
+    }
+    _ => fail("both clients must receive the published event")
+  }
+  hub.unregister_client(a.client_id())
+  hub.unregister_client(b.client_id())
+  assert_eq(hub.client_count(), 0)
+}
