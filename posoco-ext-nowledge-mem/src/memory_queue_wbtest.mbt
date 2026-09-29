@@ -179,10 +179,9 @@ async test "drain: a server-flagged add failure is terminal, not replayed" {
 
 ///|
 async test "drain: an add that failed after send is not replayed" {
-  // Regression (2026-09-25): a timed-out/broken memory_add used to
-  // re-enqueue forever while the server had already stored the content, so
-  // every retry wrote the same memory again. A post-send failure must
-  // finish the op with exactly one wire attempt.
+  // A post-send failure may occur after the server stored the content, so
+  // replaying it could duplicate memory. The op must finish after one wire
+  // attempt.
   let mcp = FakeNmemMcp::FakeNmemMcp(
     script=Map::from_array([
       ("memory_add", FakeMcpEntry::FailAfterSend("response timeout")),
