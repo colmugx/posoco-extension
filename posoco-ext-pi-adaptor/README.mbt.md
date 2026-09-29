@@ -1,7 +1,7 @@
 # posoco-ext-pi-adaptor
 
 `posoco-ext-pi-adaptor` is a JavaScript-target compatibility host for loading
-Pi ecosystem extensions inside Posoco 0.14.
+Pi ecosystem extensions inside Posoco.
 
 It keeps Posoco's Agent and internal Puppet state machine in control. Pi tool
 execution is connected through the public Posoco runtime seam:
@@ -67,7 +67,7 @@ Exercised through the cetas-js host with the bun-installed npm package
 | Tool execution | `fetch_content` executed end to end inside a real agent turn with live network access (smoke-pi.ts, repeated online runs) |
 | Commands | `registerCommand` registrations surface as `/pi:websearch`, `/pi:curator`, `/pi:search`, `/pi:google-account` through the `pi:` command namespace (bridge verified against fixtures; the curator's own browser window is not part of the verification) |
 | Shortcuts | `registerShortcut` (curator + activity keys) rides the shortcut-only `pi:#<key>` defs |
-| Events | `session_start` delivered per session (`new`/`resume` reasons); the package's `session_tree` / `session_shutdown` handlers register but the host never fires those events (no session-branch or shutdown surface in v1) |
+| Events | `session_start` delivered per session (`new`/`resume` reasons); the package's `session_tree` / `session_shutdown` handlers register but the host never fires those events because it exposes no session-branch or shutdown surface |
 | UI | package `ctx.ui.notify/setWidget/select/theme` calls project to the host UI port (theme renders as identity text passthrough) |
 | Prompt | the tools' `promptSnippet`s reach the model inside the `<pi-tools>` system-message block |
 | Persistence | `appendEntry("web-search-results", ...)` round-trips: observer `Custom` events at emission, `Session.metadata["pi.custom_entries"]` at turn end, restore on the next process via seeded entries; this keeps `get_search_content` usable across restarts |
@@ -285,7 +285,7 @@ package imports harness APIs yet. When that changes, the port lookup is:
 | --- | --- | --- |
 | passive event stream (`watch` / `events.on` — listeners cannot mutate) | `Observer` | `PiEventObserver` projects turn events into `pi.on(...)` handlers |
 | `before_run` / `transform_context` (messages append / systemPrompt replace) | `PipelineHook::before_model` | `PiHook` `<pi-tools>` block; context rewriting parked |
-| `before_tool` (chained argument replacement, revalidated; block fails closed) | `PipelineHook::before_tool` | default `Approve` — no argument rewriting in v1; core validates reducer-side before hooks and never revalidates after a rewrite, so revalidation must pair with any future rewriting |
+| `before_tool` (chained argument replacement, revalidated; block fails closed) | `PipelineHook::before_tool` | default `Approve` — argument rewriting is disabled because core validates reducer-side before hooks and does not revalidate after a rewrite; rewriting requires paired revalidation |
 | `before_run_end` follow-up | `RuntimeControl::enqueue_follow_up` | `PiRuntime` parked-followup queue flushed at the next `call_model` |
 
 Pi version knowledge lives entirely in the adaptor's JS bridge. Its by-name
@@ -311,7 +311,7 @@ const host = await PiPackageHost.fromModuleUrl(moduleUrl, {
 });
 ```
 
-## Ecosystem scan (not yet supported)
+## Ecosystem compatibility scan
 
 Beyond the supported package above, the currently active Pi package ecosystem
 was source-reviewed against the adaptor's exposed API surface. Statuses are
