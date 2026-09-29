@@ -1,9 +1,6 @@
 ///|
-/// Pure projection helpers: Posoco kernel values → ACP v1 wire values.
-///
-/// Everything in this file is a total function with no state and no IO, so
-/// the bridge (`acp_bridge.mbt`) stays a thin state machine over these
-/// translations and every mapping here is directly unit-testable.
+/// Posoco kernel values → ACP v1 wire values. These mappings are pure so the
+/// bridge remains a thin state machine over projection.
 
 ///|
 /// Strip one MCP-style `server__tool` namespace segment: the kind heuristic
