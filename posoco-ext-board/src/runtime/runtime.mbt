@@ -6,9 +6,7 @@ pub struct BoardRuntime {
 }
 
 ///|
-pub fn BoardRuntime::BoardRuntime(
-  event_buffer? : Int = 4096,
-) -> BoardRuntime {
+pub fn BoardRuntime::BoardRuntime(event_buffer? : Int = 4096) -> BoardRuntime {
   { hub: BoardEventHub::BoardEventHub(capacity=event_buffer), }
 }
 
@@ -20,13 +18,13 @@ pub fn BoardRuntime::publish_telemetry(
   scope? : @protocol.BoardEventScope? = None,
   payload~ : Json,
 ) -> @protocol.BoardWireEvent {
-  self.hub.publish(board_revision~, kind~, scope=scope, payload~)
+  self.hub.publish(board_revision~, kind~, scope~, payload~)
 }
 
 ///|
-pub fn BoardRuntime::event_history(self : BoardRuntime) -> Array[
-  @protocol.BoardWireEvent,
-] {
+pub fn BoardRuntime::event_history(
+  self : BoardRuntime,
+) -> Array[@protocol.BoardWireEvent] {
   self.hub.history()
 }
 

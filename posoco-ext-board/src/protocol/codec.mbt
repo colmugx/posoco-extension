@@ -250,7 +250,8 @@ pub fn decode_client_frame(
         Ok(value) => value
         Err(error) => return Err(error)
       }
-      let expected_revision = match required_int64(fields, "expected_revision") {
+      let expected_revision = match
+        required_int64(fields, "expected_revision") {
         Ok(value) => value
         Err(error) => return Err(error)
       }

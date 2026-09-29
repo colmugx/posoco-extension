@@ -12,8 +12,6 @@ import {
 
 warnings = "-unused_package"
 
-supported_targets = "+native +js +wasm"
-
 options(
   targets: {
     "posoco_ext_write.js.mbt": [ "js" ],

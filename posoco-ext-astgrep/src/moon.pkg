@@ -13,8 +13,6 @@ import {
 
 warnings = "-unused_package"
 
-supported_targets = "+native +js +wasm"
-
 options(
   targets: {
     "posoco_ext_astgrep.js.mbt": [ "js" ],

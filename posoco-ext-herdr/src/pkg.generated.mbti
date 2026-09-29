@@ -1,0 +1,66 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-herdr"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct HerdrDelegate {
+  pane : String
+  bin : String
+  headless_bin : String
+  cwd : String
+  mut active : Int
+  mut tasks : @port.Tasks?
+  mut session : String?
+  parent_yolo : (() -> Bool)?
+  // private fields
+}
+pub fn HerdrDelegate::HerdrDelegate(pane~ : String, bin~ : String, headless_bin~ : String, cwd~ : String, background_run? : (async (Self) -> @kernel.ToolOutcome)?, parent_yolo? : (() -> Bool)?) -> Self
+pub fn HerdrDelegate::detect(cwd~ : String, parent_yolo? : (() -> Bool)?) -> Self?
+pub async fn HerdrDelegate::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn HerdrDelegate::extension_id(Self) -> String
+pub fn HerdrDelegate::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn HerdrDelegate::manifest(Self) -> @port.ExtensionManifest
+pub fn HerdrDelegate::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn HerdrDelegate::on_event(Self, @types.TurnEvent) -> Unit
+pub fn HerdrDelegate::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn HerdrDelegate::on_shutdown(Self) -> Unit
+pub async fn HerdrDelegate::on_start(Self) -> Unit
+pub fn HerdrDelegate::shared_list_tools() -> Array[@kernel.ToolDef]
+pub fn HerdrDelegate::system_prompt(Self) -> String
+pub impl @port.Extension for HerdrDelegate
+pub impl @port.Lifecycle for HerdrDelegate
+pub impl @port.Observer for HerdrDelegate
+pub impl @port.SystemPromptContributor for HerdrDelegate
+pub impl @port.ToolProvider for HerdrDelegate
+
+pub struct HerdrReporter {
+  pane : String
+  bin : String
+  spawn : (String, Array[String]) -> Unit
+}
+pub fn HerdrReporter::detect() -> Self?
+pub fn HerdrReporter::extension_id(Self) -> String
+pub fn HerdrReporter::manifest(Self) -> @port.ExtensionManifest
+pub fn HerdrReporter::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub fn HerdrReporter::on_event(Self, @types.TurnEvent) -> Unit
+pub fn HerdrReporter::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn HerdrReporter::on_shutdown(Self) -> Unit
+pub async fn HerdrReporter::on_start(Self) -> Unit
+pub fn HerdrReporter::release(Self) -> Unit
+pub impl @port.Extension for HerdrReporter
+pub impl @port.Lifecycle for HerdrReporter
+pub impl @port.Observer for HerdrReporter
+
+// Type aliases
+
+// Traits

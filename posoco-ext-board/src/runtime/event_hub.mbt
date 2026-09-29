@@ -46,9 +46,9 @@ pub fn BoardEventHub::current_seq(self : BoardEventHub) -> Int64 {
 }
 
 ///|
-pub fn BoardEventHub::history(self : BoardEventHub) -> Array[
-  @protocol.BoardWireEvent,
-] {
+pub fn BoardEventHub::history(
+  self : BoardEventHub,
+) -> Array[@protocol.BoardWireEvent] {
   self.history_.map(fn(event) { event })
 }
 
