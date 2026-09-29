@@ -428,6 +428,7 @@ async test "refresh_tools_on_empty_bridge_bumps_revision" {
 
 ///|
 /// Parse-test surface over `http_connect_params` (url slice).
+#warnings("-unused_value")
 fn http_url(t : @transport.HttpClientTransport) -> String {
   let (url, _, _) = http_connect_params(t)
   url

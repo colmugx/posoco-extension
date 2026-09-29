@@ -42,7 +42,7 @@ async test "io[js]: save and append publish the session status register" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
-  let store = JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
   let msgs : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
   ]
@@ -77,7 +77,7 @@ async test "io[js]: append_messages first write stores full jsonl" {
     return
   }
   let root = "/tmp/posoco-fs-session-js-first-" + js_now_ms().to_string()
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let msgs : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
     @posoco.Message::AssistantMessage(
@@ -110,7 +110,7 @@ async test "io[js]: append_messages on existing file appends only new lines" {
     return
   }
   let root = "/tmp/posoco-fs-session-js-append-" + js_now_ms().to_string()
-  let store = JsonlSessionStore::JsonlSessionStore(root)
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
   let first : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("one")]),
   ]
