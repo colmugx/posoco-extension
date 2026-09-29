@@ -1,6 +1,6 @@
 ///|
 /// Reserved profile id: the one program-decided builtin preset meaning
-/// "every deep-deferred extension". Manifest files may never claim it (Q16) —
+/// "every deep-deferred extension". Manifest files may never claim it —
 /// `all` is activated like any profile but is not authorable.
 let reserved_profile_id : String = "all"
 
@@ -11,7 +11,7 @@ let reserved_profile_id : String = "all"
 ///
 /// - `id` doubles as the manifest file name stem and the activation
 ///   identity. It must be non-empty, contain no path separators, and must
-///   not be the reserved id `all` (Q16).
+///   not be the reserved id `all`.
 /// - `description` is the one-sentence "when to activate" line the profile
 ///   menu shows; one content, two uses (menu + save flow).
 /// - `exts` is the member extension id list, deduplicated preserving first
