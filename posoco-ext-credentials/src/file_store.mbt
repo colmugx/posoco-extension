@@ -4,8 +4,8 @@
 /// This is the first durable backend. It performs no target-specific IO of
 /// its own: all filesystem access goes through the injected `WorkspaceFs`
 /// boundary, so the same store serves native (`NativeWorkspaceFs`) and js
-/// (`JsWorkspaceFs`) hosts. Future OS secret-manager backends implement the
-/// same `@oauth.ProviderCredentialStore` trait in their own module.
+/// (`JsWorkspaceFs`) hosts. Alternative credential backends can implement the
+/// same `@oauth.ProviderCredentialStore` trait.
 ///
 /// The record format is the canonical tagged record from `record.mbt`. There
 /// is deliberately no legacy-file migration: a malformed record is a typed
