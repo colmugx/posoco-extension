@@ -1,0 +1,6 @@
+import {
+  "colmugx/posoco-ext-board/protocol" @protocol,
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native +js"
