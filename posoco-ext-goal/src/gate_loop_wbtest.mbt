@@ -1,9 +1,4 @@
 ///|
-/// Loop-level white-box tests for GoalRunner::execute: the verifier gate
-/// (confirm / retract / budget), verifier turns counting against the turn
-/// budget, the wrap-up turn mutating the plan, and the three stall detectors.
-
-///|
 /// Compose model + sessions + one GoalRunner into an Agent (testkit shape).
 fn gate_build_agent(
   goal : GoalRunner,
