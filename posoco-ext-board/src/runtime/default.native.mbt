@@ -26,8 +26,8 @@ fn board_hex(bytes : Bytes) -> String {
   let out = StringBuilder()
   for byte in bytes {
     let n = byte.to_int()
-    out.write_char(hex[(n >> 4) & 0x0f])
-    out.write_char(hex[n & 0x0f])
+    out.write_char(hex.get_char((n >> 4) & 0x0f).unwrap())
+    out.write_char(hex.get_char(n & 0x0f).unwrap())
   }
   out.to_string()
 }
@@ -393,3 +393,16 @@ pub fn default_board_runtime(event_buffer : Int) -> BoardRuntime {
   let opener = NativeBrowserOpener::NativeBrowserOpener()
   BoardRuntime::with_adapters(event_buffer~, server=server, opener=opener)
 }
+
+///|
+pub extend NativeBoardWebServer with BoardWebServer::{
+  bind,
+  run,
+  browser_url,
+  close,
+  is_alive,
+  last_error,
+}
+
+///|
+pub extend NativeBrowserOpener with BrowserOpener::{open}
