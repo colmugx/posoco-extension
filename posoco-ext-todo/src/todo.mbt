@@ -9,8 +9,8 @@
 /// (`requires: [Capability::Ui]`, empty `ui` manifest slot).
 ///
 /// State is an in-process session list with a monotonic revision counter —
-/// no file persistence in v1: restarting the process starts from an empty
-/// list. Durable persistence is left to a later milestone.
+/// restarting the process starts from an empty list; this extension does not
+/// persist the list to disk.
 ///
 /// Usage:
 ///   let todos = TodoList::TodoList()
