@@ -1,6 +1,26 @@
 import {
+  "colmugx/fuwaroid",
   "colmugx/posoco-ext-board/protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
 
 supported_targets = "+native +js"
+
+warnings = "-unused_package"
+
+options(
+  "native-stub": [ "random_stub.c" ],
+  targets: {
+    "default.native.mbt": [ "native" ],
+    "default.js.mbt": [ "js" ],
+    "random.native.mbt": [ "native" ],
+    "server_native_wbtest.mbt": [ "native" ],
+  },
+)
