@@ -3,9 +3,8 @@
 // into the inline-JS envelopes as values (pattern follows
 // posoco-ext-workspace fs_port.js.mbt / moonbitlang/x/fs/fs_js.mbt).
 // Throwing node calls cross the FFI as JSON string envelopes decoded on the
-// MoonBit side (see docs/questions.md 2026-08-19 for why plain/raising
-// extern forms are not usable for them; the `require` fallback recorded
-// there is retired).
+// MoonBit side because plain raising extern forms cannot represent these
+// failures safely.
 
 ///|
 /// node:fs existsSync never throws; a plain pass-through extern is safe.
