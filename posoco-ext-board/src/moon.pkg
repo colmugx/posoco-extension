@@ -1,0 +1,7 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-board/runtime" @runtime,
+  "moonbitlang/core/debug",
+}
+
+supported_targets = "+native +js"
