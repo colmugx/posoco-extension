@@ -15,7 +15,7 @@ pub fn BoardExtension::BoardExtension(
   }
   {
     config,
-    runtime_: @runtime.default_board_runtime(config.event_buffer),
+    runtime_: @runtime.default_board_runtime(config.event_buffer, config.client_queue_depth),
   }
 }
 
