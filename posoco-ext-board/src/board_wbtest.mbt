@@ -5,6 +5,14 @@ priv struct CommandFakeServer {
 }
 
 ///|
+impl @runtime.BoardWebServer for CommandFakeServer with fn attach_event_hub(
+  _self,
+  _hub,
+) {
+  ()
+}
+
+///|
 impl @runtime.BoardWebServer for CommandFakeServer with fn bind(self) {
   self.binds += 1
   self.alive = true
@@ -52,15 +60,15 @@ impl @runtime.BrowserOpener for CommandFakeOpener with fn open(self, url) {
 }
 
 ///|
-test "board extension exposes only command and lifecycle surfaces in s1" {
+test "board extension exposes realtime observer and hook surfaces in s2" {
   let board = BoardExtension::BoardExtension()
   assert_eq(board.extension_id(), "posoco_ext_board")
   let manifest = board.manifest()
   assert_eq(manifest.id, "posoco_ext_board")
   assert_eq(manifest.tools.length(), 0)
   assert_eq(manifest.commands.length(), 1)
-  assert_eq(manifest.observers.length(), 0)
-  assert_eq(manifest.hooks.length(), 0)
+  assert_eq(manifest.observers.length(), 1)
+  assert_eq(manifest.hooks.length(), 1)
   assert_eq(manifest.lifecycle.length(), 1)
   assert_eq(manifest.requires.length(), 0)
   let defs = board.commands()
