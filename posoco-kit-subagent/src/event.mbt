@@ -1,5 +1,5 @@
 ///|
-/// One child-run event forwarded across the event bridge (design §3.3): a
+/// One child-run event forwarded across the event bridge: a
 /// `BridgeObserver` attached to the child Agent tags each kernel `TurnEvent`
 /// with the child session and kind before pushing it onto the extension's
 /// internal multicast channel; hosts subscribe with
