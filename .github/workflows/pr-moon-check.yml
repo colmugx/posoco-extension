@@ -28,3 +28,11 @@ jobs:
 
       - name: moon check (js)
         run: moon check --target js --output-json
+
+      - name: board tests (native)
+        working-directory: posoco-ext-board
+        run: moon test --target native
+
+      - name: board tests (js)
+        working-directory: posoco-ext-board
+        run: moon test --target js
