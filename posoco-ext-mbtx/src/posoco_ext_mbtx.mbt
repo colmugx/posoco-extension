@@ -68,7 +68,7 @@ pub(all) struct SpawnRule {
 }
 
 ///|
-/// Default subprocess allowlist (design §5). Every entry allows any
+/// Default subprocess allowlist. Every entry allows any
 /// arguments; the excluded face is everything else — notably any shell or
 /// interpreter (sh, bash, zsh, fish, python, node, deno), xargs, and
 /// curl/wget piping. This is not a security perimeter: spawned children get
