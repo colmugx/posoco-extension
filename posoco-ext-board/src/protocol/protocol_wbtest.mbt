@@ -109,3 +109,18 @@ test "event encoding keeps seq and board_revision as separate fields" {
     _ => fail("encoded event must be an object")
   }
 }
+
+
+///|
+test "reconnect control frames round-trip" {
+  let frames : Array[BoardServerFrame] = [
+    ResyncRequired({ reason: "client_queue_overflow", current_seq: 42L, }),
+    ServerError({ code: "hello_required", message: "first frame must be hello", }),
+  ]
+  for frame in frames {
+    match decode_server_frame(encode_server_frame(frame)) {
+      Ok(decoded) => assert_eq(decoded, frame)
+      Err(_) => fail("reconnect control frame must round-trip")
+    }
+  }
+}
