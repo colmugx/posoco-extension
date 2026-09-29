@@ -41,5 +41,4 @@ let agent = @posoco.Agent(exts=[todos], config=...)
 ```
 
 State is in-process and session-scoped with a monotonic revision counter;
-restarting the process starts from an empty list. File persistence is
-deliberately left to a later milestone.
+restarting the process starts from an empty list.
