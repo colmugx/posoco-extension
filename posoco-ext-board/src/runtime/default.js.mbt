@@ -4,7 +4,7 @@ pub struct UnsupportedBoardWebServer {}
 ///|
 pub fn UnsupportedBoardWebServer::UnsupportedBoardWebServer(
 ) -> UnsupportedBoardWebServer {
-  {}
+  UnsupportedBoardWebServer::{ }
 }
 
 ///|
@@ -51,3 +51,16 @@ pub fn default_board_runtime(event_buffer : Int) -> BoardRuntime {
   let opener = UnsupportedBrowserOpener::{ }
   BoardRuntime::with_adapters(event_buffer~, server=server, opener=opener)
 }
+
+///|
+pub extend UnsupportedBoardWebServer with BoardWebServer::{
+  bind,
+  run,
+  browser_url,
+  close,
+  is_alive,
+  last_error,
+}
+
+///|
+pub extend UnsupportedBrowserOpener with BrowserOpener::{open}
