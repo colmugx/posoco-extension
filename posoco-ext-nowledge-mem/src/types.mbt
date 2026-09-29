@@ -2,7 +2,7 @@
 /// Role a Nowledge Mem thread message carries on the wire:
 /// `"user" | "assistant" | "system"`. `System` exists
 /// for wire completeness but is never produced by `map_messages`: system
-/// transcript entries are excluded by design (§10-2).
+/// transcript entries are excluded by the message-mapping contract.
 pub(all) enum NmemRole {
   User
   Assistant
