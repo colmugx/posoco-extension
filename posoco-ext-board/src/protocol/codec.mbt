@@ -193,6 +193,24 @@ pub fn BoardSnapshot::to_json(self : BoardSnapshot) -> Json {
 }
 
 ///|
+pub fn BoardResyncRequired::to_json(self : BoardResyncRequired) -> Json {
+  Json::object({
+    "type": Json::string("resync_required"),
+    "reason": Json::string(self.reason),
+    "current_seq": Json::number(self.current_seq.to_double()),
+  })
+}
+
+///|
+pub fn BoardServerError::to_json(self : BoardServerError) -> Json {
+  Json::object({
+    "type": Json::string("error"),
+    "code": Json::string(self.code),
+    "message": Json::string(self.message),
+  })
+}
+
+///|
 pub fn encode_client_frame(frame : BoardClientFrame) -> String {
   match frame {
     Hello(value) => value.to_json().stringify()
@@ -206,6 +224,8 @@ pub fn encode_server_frame(frame : BoardServerFrame) -> String {
     CommandResult(value) => value.to_json().stringify()
     Event(value) => value.to_json().stringify()
     Snapshot(value) => value.to_json().stringify()
+    ResyncRequired(value) => value.to_json().stringify()
+    ServerError(value) => value.to_json().stringify()
   }
 }
 
@@ -355,6 +375,28 @@ pub fn decode_server_frame(
           payload,
         }),
       )
+    }
+    "resync_required" => {
+      let reason = match required_string(fields, "reason") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      let current_seq = match required_int64(fields, "current_seq") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      Ok(ResyncRequired({ reason, current_seq, }))
+    }
+    "error" => {
+      let code = match required_string(fields, "code") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      let message = match required_string(fields, "message") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      Ok(ServerError({ code, message, }))
     }
     other => Err(InvalidFrame("unsupported server frame type '\{other}'"))
   }
