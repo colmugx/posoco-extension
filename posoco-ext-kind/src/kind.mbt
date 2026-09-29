@@ -292,7 +292,6 @@ pub struct KindCatalog {
 }
 
 ///|
-/// Look up a kind by name (the catalog key). Unknown names yield None.
 pub fn KindCatalog::get(self : KindCatalog, name : String) -> KindSpec? {
   self.entries.get(name)
 }
