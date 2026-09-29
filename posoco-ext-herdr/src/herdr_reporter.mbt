@@ -46,6 +46,8 @@ pub struct HerdrReporter {
 }
 
 ///|
+/// TODO: 是要使用还是要移除
+#warnings("-unused_value")
 fn HerdrReporter::from_config(cfg : HerdrConfig) -> HerdrReporter {
   { pane: cfg.pane, bin: cfg.bin, spawn: herdr_spawn_report, }
 }

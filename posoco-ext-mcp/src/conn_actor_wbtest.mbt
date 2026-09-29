@@ -25,7 +25,6 @@ async fn conn_actor_view(
 }
 
 ///|
-/// True when the folded view is exactly this health/generation/in_flight.
 async fn conn_view_is(
   actor : ConnActor[Int],
   health~ : ConnHealth,

@@ -257,9 +257,6 @@ test "creds_path_priority_config_env_home" {
 }
 
 ///|
-/// Candidate enumeration and the async detect helper.
-
-///|
 test "candidate_paths_empty_when_bin_or_env_trusted" {
   let config = { ..zcode_config(), bin: Some("/opt/first/zcode"), }
   assert_eq(zcode_candidate_paths(config~, env=config_env_of([])), [])

@@ -98,7 +98,7 @@ const EXIT_DETAIL_CHARS = 2_000
 /// because the timer lives outside the runner); the authoritative
 /// `background_terminal` event with the final classification and summary
 /// still fires exactly once at the delivery point. No registry bookkeeping
-/// happens here (ruling 4: cancellation mid-run cannot guarantee it).
+/// happens here because cancellation mid-run cannot guarantee completion.
 fn SubagentTools::emit_exit(
   self : SubagentTools,
   kind~ : String,

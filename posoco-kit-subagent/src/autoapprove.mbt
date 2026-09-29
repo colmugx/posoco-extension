@@ -7,7 +7,6 @@
 pub struct AutoApprove {}
 
 ///|
-/// Stateless marker value.
 pub fn AutoApprove::AutoApprove() -> AutoApprove {
   AutoApprove::{ }
 }

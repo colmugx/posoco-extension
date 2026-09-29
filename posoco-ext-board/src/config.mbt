@@ -23,11 +23,5 @@ pub fn BoardConfig::BoardConfig(
   event_buffer? : Int = 4096,
   client_queue_depth? : Int = 256,
 ) -> BoardConfig {
-  {
-    auto_start,
-    auto_open,
-    bind_host,
-    event_buffer,
-    client_queue_depth,
-  }
+  { auto_start, auto_open, bind_host, event_buffer, client_queue_depth, }
 }

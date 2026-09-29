@@ -9,7 +9,6 @@ import {
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async",
-  "moonbitlang/async/semaphore",
   "moonbitlang/core/debug",
 }
 
@@ -18,35 +17,16 @@ import {
 // Errors
 
 // Types and methods
-type PendingResume
-
 pub struct RateLimitGuard {
-  mut agent : @posoco.Agent?
-  mut pending : Array[PendingResume]
-  attempts : Map[String, Int]
-  mut stopped : Bool
-  mut generation : Int
-  mut active_resume_generation : Int?
-  resume_note : String
-  margin_ms : Int64
-  max_attempts : Int
-  poll_interval_ms : Int
-  probe_interval_ms : Int64
-  now_ms : () -> Int64
-  sleep_ms : async (Int) -> Unit
-  turn_lock : @semaphore.Semaphore
-  trace : (String) -> Unit
-  bus : @posoco-devkit.EventBus?
   // private fields
 }
-pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, now_ms? : () -> Int64, sleep_ms? : async (Int) -> Unit, trace? : (String) -> Unit, bus? : @posoco-devkit.EventBus?) -> Self
+pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, max_probe_interval_ms? : Int64, shutdown_timeout_ms? : Int, now_ms? : () -> Int64, sleep_ms? : async (Int) -> Unit, trace? : (String) -> Unit, bus? : @posoco-devkit.EventBus?) -> Self
 pub async fn RateLimitGuard::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn RateLimitGuard::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn RateLimitGuard::bind(Self, @posoco.Agent) -> Unit
 pub fn RateLimitGuard::cancel_pending(Self) -> Unit
 pub fn RateLimitGuard::extension_id(Self) -> String
 pub fn RateLimitGuard::manifest(Self) -> @port.ExtensionManifest
-pub async fn RateLimitGuard::monitor(Self) -> Unit
 pub fn RateLimitGuard::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn RateLimitGuard::on_event(Self, @types.TurnEvent) -> Unit
 pub fn RateLimitGuard::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
@@ -56,9 +36,11 @@ pub async fn RateLimitGuard::on_shutdown(Self) -> Unit
 pub async fn RateLimitGuard::on_start(Self) -> Unit
 pub async fn RateLimitGuard::on_turn_begin(Self) -> Unit
 pub async fn RateLimitGuard::on_turn_end(Self) -> Unit
-pub fn RateLimitGuard::pending_snapshots(Self) -> Array[RateLimitPending]
 pub async fn RateLimitGuard::poll(Self) -> Unit
-pub fn[G] RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[G]) -> Unit
+pub async fn RateLimitGuard::shutdown(Self) -> Unit
+pub async fn RateLimitGuard::snapshot(Self) -> Array[RateLimitPending]
+pub fn RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[Unit]) -> Unit
+pub fn RateLimitGuard::start(Self, group~ : @async.TaskGroup[Unit], agent~ : @posoco.Agent) -> Unit
 pub fn RateLimitGuard::stop(Self) -> Unit
 pub impl @port.Extension for RateLimitGuard
 pub impl @port.Lifecycle for RateLimitGuard

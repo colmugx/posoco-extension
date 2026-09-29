@@ -1,6 +1,5 @@
 ///|
-/// Flusher poll interval (upstream THREAD_SYNC_DEBOUNCE_MS = 750; plan D3
-/// turns the debounce into a polling loop).
+/// Flusher poll interval, matching upstream THREAD_SYNC_DEBOUNCE_MS = 750.
 const NMEM_FLUSHER_INTERVAL_MS : Int = 750
 
 ///|

@@ -16,8 +16,7 @@ The extension is split into four responsibilities:
   state. Hooks and workers can only communicate with it through messages.
 - **Fuwaroid Supervisor** — owns one-shot timers and resume workers.
 
-The old `Semaphore(1)` and periodic polling monitor are gone. Resume
-serialization is a runtime invariant: at most one `RecoveryTicket` is
+Resume serialization is a runtime invariant: at most one `RecoveryTicket` is
 in-flight. Timers are one-shot and stale-safe through `epoch + deadline`
 validation.
 

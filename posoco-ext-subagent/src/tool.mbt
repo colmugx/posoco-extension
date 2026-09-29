@@ -84,7 +84,7 @@ pub fn SubagentTools::SubagentTools(
 }
 
 ///|
-/// JSON schema of the `agent` tool (design §2.1 parameter face).
+/// JSON schema of the `agent` tool.
 fn agent_tool_schema() -> Json {
   Json::object({
     "type": Json::string("object"),

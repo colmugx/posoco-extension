@@ -130,7 +130,6 @@ fn kind_yaml_mapping(
 }
 
 ///|
-/// Required non-empty string field.
 fn kind_required_string(
   mapping : Map[String, @yaml.Yaml],
   key : String,
@@ -293,7 +292,6 @@ pub struct KindCatalog {
 }
 
 ///|
-/// Look up a kind by name (the catalog key). Unknown names yield None.
 pub fn KindCatalog::get(self : KindCatalog, name : String) -> KindSpec? {
   self.entries.get(name)
 }

@@ -7,7 +7,7 @@ enum ScriptedReply {
 }
 
 ///|
-/// NmemTransport fake (plan D7): replies pop off `script` in order, every
+/// NmemTransport fake: replies pop off `script` in order, every
 /// received (url, body) pair is recorded for assertions, and a call past the
 /// end of the script aborts — each flush must issue exactly its expected
 /// requests.

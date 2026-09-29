@@ -1,7 +1,4 @@
 ///|
-/// Whitebox tests for internal helpers and type conversions.
-
-///|
 /// Test-build equality for the ConnActor fold types. None of them derives
 /// Eq in production: the only production instantiation is
 /// `ConnReply[@client.MCPClient]`, and `@client.MCPClient` has no `Eq`, so
@@ -180,8 +177,6 @@ test "catalog_collision_does_not_mutate_previous_snapshot" {
     Err(message) => assert_true(message.contains("collision"))
     Ok(_) => fail("expected namespaced collision")
   }
-  // The production transaction helper never invokes commit for a failed plan,
-  // leaving the known-good snapshot available unchanged.
   assert_eq(commits.length(), 0)
   assert_eq(previous_tools.length(), 1)
   assert_eq(previous_tools[0].name.to_string(), "legacy__read")

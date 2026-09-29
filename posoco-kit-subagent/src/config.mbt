@@ -60,8 +60,8 @@ pub(all) suberror SubagentConfigError {
 }
 
 ///|
-/// Conservative numeric bundle from design §9.2: swarm items 16, group
-/// concurrency 4, global concurrency 20, timeout 30 minutes, spawn budget 64.
+/// Conservative defaults: swarm items 16, group concurrency 4, global
+/// concurrency 20, timeout 30 minutes, spawn budget 64.
 pub fn SubagentConfig::defaults() -> SubagentConfig {
   {
     models: [],
