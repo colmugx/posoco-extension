@@ -16,11 +16,17 @@ pub struct BoardRuntime {
 /// Adapter-injection constructor used by tests and future target backends.
 pub fn BoardRuntime::with_adapters(
   event_buffer? : Int = 4096,
+  client_queue_depth? : Int = 256,
   server~ : &BoardWebServer,
   opener~ : &BrowserOpener,
 ) -> BoardRuntime {
+  let hub = BoardEventHub::BoardEventHub(
+    capacity=event_buffer,
+    client_queue_depth~,
+  )
+  server.attach_event_hub(hub)
   {
-    hub: BoardEventHub::BoardEventHub(capacity=event_buffer),
+    hub,
     server,
     opener,
     gate: @async.Mutex::Mutex(),
@@ -212,4 +218,18 @@ pub fn BoardRuntime::event_history(self : BoardRuntime) -> Array[
 ///|
 pub fn BoardRuntime::current_seq(self : BoardRuntime) -> Int64 {
   self.hub.current_seq()
+}
+
+
+///|
+pub fn BoardRuntime::sync_frames(
+  self : BoardRuntime,
+  last_seq : Int64,
+) -> Array[@protocol.BoardServerFrame] {
+  self.hub.sync_frames(last_seq)
+}
+
+///|
+pub fn BoardRuntime::event_hub(self : BoardRuntime) -> BoardEventHub {
+  self.hub
 }
