@@ -167,8 +167,8 @@ fn acp_title(name : String, arguments : Json) -> String {
 /// wire encoder (`encode_tool_location`) validates absolute paths at
 /// serialization time and a relative path would fail the frame and break
 /// the pump. Cetas prompts the model to use workspace-relative paths, so
-/// relative operands are left `Omitted` until a future host-side resolve
-/// enhancement can absolutize them. Windows drive letters (`C:\...`) are
+/// relative operands are left `Omitted` because this layer cannot safely
+/// absolutize them. Windows drive letters (`C:\...`) are
 /// outside the supported surface (cetas-acp runs in a native POSIX
 /// context); the SDK also accepts UNC/drive-letter forms, but the stricter
 /// `/` gate here is always a subset of its check.
