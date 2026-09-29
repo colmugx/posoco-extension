@@ -13,10 +13,7 @@ pub fn BoardExtension::BoardExtension(
       "posoco-ext-board S1 only permits bind_host=127.0.0.1; remote listeners are forbidden",
     )
   }
-  {
-    config,
-    runtime_: @runtime.default_board_runtime(config.event_buffer),
-  }
+  { config, runtime_: @runtime.default_board_runtime(config.event_buffer), }
 }
 
 ///|
@@ -62,8 +59,7 @@ pub impl @posoco.Extension for BoardExtension with fn extension_id(
 }
 
 ///|
-/// S1 contributes user commands plus shutdown cleanup. It still declares no
-/// Posoco Tasks capability and observes no Agent events.
+/// Commands, shutdown cleanup and synchronous display telemetry only; no Tasks.
 pub impl @posoco.Extension for BoardExtension with fn manifest(
   self : BoardExtension,
 ) -> @posoco.ExtensionManifest {
@@ -71,6 +67,7 @@ pub impl @posoco.Extension for BoardExtension with fn manifest(
     id="posoco_ext_board",
     lifecycle=[self],
     commands=[self],
+    observers=[self],
   )
 }
 
@@ -163,7 +160,10 @@ pub impl @posoco.CommandPort for BoardExtension with fn invoke(
     }
     "board.status" => {
       let status = self.runtime_.status()
-      board_command_success("Board status: " + status.to_json().stringify(), status)
+      board_command_success(
+        "Board status: " + status.to_json().stringify(),
+        status,
+      )
     }
     "board.close" => {
       self.runtime_.close_server() catch {
@@ -185,4 +185,8 @@ pub extend BoardExtension with @posoco.Extension::{extension_id, manifest}
 pub extend BoardExtension with @posoco.CommandPort::{commands, invoke}
 
 ///|
-pub extend BoardExtension with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}
+pub extend BoardExtension with @posoco.Lifecycle::{
+  on_compose,
+  on_start,
+  on_shutdown,
+}
