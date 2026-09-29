@@ -46,7 +46,7 @@ impl BoardWebServer for FakeBoardServer with fn last_error(_self) {
 
 ///|
 priv struct FakeBrowserOpener {
-  mut opened : Array[String]
+  opened : Array[String]
 }
 
 ///|
