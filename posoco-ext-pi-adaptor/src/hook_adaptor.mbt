@@ -135,16 +135,12 @@ pub impl @posoco.PipelineHook for PiHook with fn before_model(
     }
   }
 }
-// before_tool stays at its default (Approve unchanged): v1 implements no
-// argument rewriting (parked W4b). Revalidation ruling recorded here: posoco
-// core validates tool arguments reducer-side BEFORE hooks run
-// (kernel_exec/reducer_model.mbt classify_rejected_outcome) and does NOT
-// revalidate after a hook rewrite (pump.mbt rebuilds ExecuteTool payloads
-// verbatim). Revalidating against the raw pi schema generically is not
-// feasible from the host state — TypeBox ships bundled per package and no
-// generic validator is reachable — so for hook-free pi tools the effective
-// guard remains execution-time validation inside pi tools themselves; W4b
-// must land revalidation together with rewriting.
+// before_tool stays at its default (Approve unchanged): this adapter does not
+// rewrite arguments. Core validates tool arguments before hooks run and does
+// not revalidate after a hook rewrite. A generic second validation pass is not
+// available from the host state because TypeBox is bundled per package, so
+// hook-free pi tools continue to rely on their own execution-time validation.
+// Argument rewriting remains disabled unless revalidation can be coupled to it.
 
 ///|
 pub extend PiHook with @posoco.PipelineHook::{
