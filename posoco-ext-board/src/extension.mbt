@@ -145,8 +145,14 @@ pub impl @posoco.CommandPort for BoardExtension with fn invoke(
   _args : Json,
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
   match id {
-    "board.open" | "board" =>
-      match self.runtime_.open_board() {
+    "board.open" | "board" => {
+      let opened = self.runtime_.open_board() catch {
+        error =>
+          return @posoco.CommandOutcome::Failure(
+            reason="board open failed: " + error.to_string(),
+          )
+      }
+      match opened {
         Ok(endpoint) =>
           board_command_success(
             "Board opened at " + endpoint.base_url(),
@@ -154,12 +160,18 @@ pub impl @posoco.CommandPort for BoardExtension with fn invoke(
           )
         Err(error) => @posoco.CommandOutcome::Failure(reason=error)
       }
+    }
     "board.status" => {
       let status = self.runtime_.status()
       board_command_success("Board status: " + status.to_json().stringify(), status)
     }
     "board.close" => {
-      self.runtime_.close_server()
+      self.runtime_.close_server() catch {
+        error =>
+          return @posoco.CommandOutcome::Failure(
+            reason="board close failed: " + error.to_string(),
+          )
+      }
       board_command_success("Board closed", self.runtime_.status())
     }
     _ => raise @posoco.CommandError::NotFound(id)
@@ -173,4 +185,4 @@ pub extend BoardExtension with @posoco.Extension::{extension_id, manifest}
 pub extend BoardExtension with @posoco.CommandPort::{commands, invoke}
 
 ///|
-pub extend BoardExtension with @posoco.Lifecycle::{on_shutdown}
+pub extend BoardExtension with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}
