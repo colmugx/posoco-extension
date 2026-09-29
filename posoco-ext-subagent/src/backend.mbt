@@ -258,7 +258,7 @@ fn SubagentTools::finish(
 }
 
 ///|
-/// Run one spawn (design §2.1, §3.2, §5): parse args, refuse background
+/// Run one spawn: parse args, refuse background
 /// calls that lack the composed task capability or a known parent session
 /// before the budget gate (a refused call consumes no budget slot), validate
 /// `resume` against the child registry, then the budget gate, argument
@@ -287,7 +287,7 @@ async fn SubagentTools::spawn(
   }
   // Background refusals precede the budget gate (keep no-burn): the composed
   // capability and the known parent session are host-wiring gaps, not budget
-  // conditions (design §5). The values bind here for the submit below.
+  // conditions. The values bind here for the submit below.
   let mut capability : @posoco.Tasks? = None
   let mut parent_session : String? = None
   if args.background {
@@ -308,7 +308,7 @@ async fn SubagentTools::spawn(
         )
     }
   }
-  // Resume validation (design §5): a `resume` id must be a child this tool
+  // Resume validation: a `resume` id must be a child this tool
   // spawned; the ids are exactly what the tool-result footer advertises.
   // Checked before the budget gate: a mistyped id consumes nothing.
   match args.resume_id {
@@ -330,7 +330,7 @@ async fn SubagentTools::spawn(
       }
     None => ()
   }
-  // Budget (design §6.3): explicit refusal, never a silent queue.
+  // Budget: explicit refusal, never a silent queue.
   if !self.ledger.try_acquire("agent") {
     return @posoco.ToolOutcome::ToolReportedError(
       content="spawn budget exhausted (\{self.ledger.acquired().length()}/\{self.config.limits.spawn_budget} used): explicit refusal — finish with the subagents you have",
@@ -346,7 +346,7 @@ async fn SubagentTools::spawn(
       )
   }
   // Tool face: spawn whitelist ∩ kind whitelist, one layer, no propagation
-  // along any chain (design §6.2). Absent argument = the kind's own face.
+  // along any chain. Absent argument = the kind's own face.
   let tools = match args.tools {
     None => kind_spec.tools.copy()
     Some(requested) => {
@@ -437,7 +437,7 @@ async fn SubagentTools::spawn(
       return terminal_for(bridge, spec, @kit.TerminalState::Failed(reason~), "")
     }
   }
-  // Registered at spawn (design §5): both paths advertise the id in their
+  // Registered at spawn: both paths advertise the id in their
   // result footer, and `resume` accepts exactly these ids.
   self.registry[spec.session_id] = BackgroundRecord::BackgroundRecord(
     kind=spec.kind_name,
@@ -562,7 +562,7 @@ async fn SubagentTools::spawn(
   let user_message : @posoco.Message = @posoco.Message::UserMessage(content=[
     @posoco.Content::Text(args.task),
   ])
-  // Timeout wraps the child run (design §3.2). The `timed_out` flag — not
+  // Timeout wraps the child run. The `timed_out` flag — not
   // the unwinding error — decides the terminal classification: real model
   // adapters wrap cancellation into typed transport errors, so a child dying
   // mid-cancel must not masquerade as a business failure. Wave cancellation
