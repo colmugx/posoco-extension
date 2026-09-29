@@ -32,7 +32,7 @@ capped by `max_probe_interval_ms`. Attempts remain capped per session by
 
 ## Wiring
 
-Preferred 0.4 API:
+Recommended API:
 
 ```mbt nocheck
 let guard = @ratelimit.RateLimitGuard()
@@ -53,15 +53,15 @@ let agent = @posoco.Agent(
 `start(group~, agent~)` binds the Posoco executor and starts both the Fuwaroid
 state loop and its Supervisor.
 
-For compatibility, the old two-step wiring remains available:
+The two-step compatibility wiring remains available:
 
 ```mbt nocheck
 guard.bind(agent)
 guard.spawn_monitor(group)
 ```
 
-Despite the old name, `spawn_monitor` no longer starts a polling loop; it is a
-wrapper around the event-driven runtime.
+`spawn_monitor` is a compatibility wrapper around the event-driven runtime; it
+does not start a polling loop.
 
 ## Snapshot and control
 
@@ -74,9 +74,9 @@ guard.shutdown()
 `snapshot()` is async because actor-owned state is never exposed by alias.
 The ask also acts as a FIFO barrier for previously sent hook/observer events.
 
-`poll()` remains as a compatibility seam for hosts that used to drive the
-scheduler manually. It does not scan in a background loop; it only asks the
-actor to dispatch work that is already due at the injected clock.
+`poll()` is a compatibility seam for manually driven schedulers. It does not
+scan in a background loop; it only asks the actor to dispatch work that is
+already due at the injected clock.
 
 ## Concurrency guarantees
 
