@@ -1,41 +1,94 @@
 # posoco-ext-ratelimit
 
-Records provider quota verdicts (HTTP 429 with a stated reset time) per
-session and auto-resumes the interrupted turn when the reset time arrives.
+\`posoco-ext-ratelimit\` watches typed provider quota/rate-limit verdicts and
+automatically resumes the interrupted Posoco session after the provider's reset
+deadline.
 
-Coding-plan providers (Claude, Codex, z.ai GLM, …) throttle with 429 and a
-reset hint. Posoco modelports raise the typed
-`ModelError::RateLimited(RateLimitInfo)` for those verdicts; this extension
-watches them, remembers `{session, reset time, interrupted input}`, and at
-reset time re-runs the turn on the same session id with the same model
-selection. A turn that dies on 429 persists nothing to the session store
-(posoco saves only completed turns), so resending the original input cannot
-duplicate anything.
+## Architecture
 
-Verdicts with a stated reset time resume at that time (plus `margin_ms`).
-Verdicts without one — Kimi's "quota will be refreshed in the next period",
-whose only documented wait signal is the `Retry-After` header when the
-provider sends it — fall back to probing: retry after `probe_interval_ms`
-(default 15 min), doubling per attempt up to 1 hour. Set
-`probe_interval_ms=0` to ignore unschedulable verdicts entirely. Resumes
-are capped per session (`max_attempts`, default 3); a successful turn
-clears the counter.
+The extension is split into four responsibilities:
+
+- **RateLimitGuard** — thin Posoco \`PipelineHook\` / \`Observer\` /
+  \`Lifecycle\` adapter.
+- **RecoveryPolicy / RecoveryState** — provider deadline, probe backoff,
+  attempts and per-session recovery data.
+- **RateLimitRuntime** — one \`Fuwaroid\` loop that owns all mutable recovery
+  state. Hooks and workers can only communicate with it through messages.
+- **Fuwaroid Supervisor** — owns one-shot timers and resume workers.
+
+The old \`Semaphore(1)\` and periodic polling monitor are gone. Resume
+serialization is a runtime invariant: at most one \`RecoveryTicket\` is
+in-flight. Timers are one-shot and stale-safe through \`epoch + deadline\`
+validation.
+
+A failed Posoco turn persists its failed-turn transcript before the
+\`TurnFailed\` observer boundary. The guard therefore records the quota verdict
+first, but does not make that session recoverable until \`TurnFailed\` arrives.
+This prevents recovery from racing the failed transcript checkpoint.
+
+Verdicts with a reset timestamp resume at \`reset_at_ms + margin_ms\`. Verdicts
+without a timestamp use exponential probe backoff from \`probe_interval_ms\`,
+capped by \`max_probe_interval_ms\`. Attempts remain capped per session by
+\`max_attempts\`.
 
 ## Wiring
 
-```mbt nocheck
+Preferred 0.4 API:
+
+\`\`\`mbt nocheck
 let guard = @ratelimit.RateLimitGuard()
-let agent = @posoco.Agent(exts=[guard, model_ext, io_ext], config)
+let agent = @posoco.Agent(
+  exts=[guard, model_ext, io_ext],
+  config,
+)
+
+@async.with_task_group(group => {
+  guard.start(group~, agent~)
+
+  // run the host / agent here
+
+  guard.shutdown()
+})
+\`\`\`
+
+\`start(group~, agent~)\` binds the Posoco executor and starts both the Fuwaroid
+state loop and its Supervisor.
+
+For compatibility, the old two-step wiring remains available:
+
+\`\`\`mbt nocheck
 guard.bind(agent)
-// MoonBit async has no detached spawn: the monitor lives in the host's
-// task group (same pattern as posoco-ext-acp's spawn_pump).
-@async.with_task_group(group => guard.spawn_monitor(group))
-```
+guard.spawn_monitor(group)
+\`\`\`
 
-Hosts that already run a periodic loop can call `guard.poll()` from it
-instead of spawning the monitor. `pending_snapshots()` exposes the current
-schedule for status UIs.
+Despite the old name, \`spawn_monitor\` no longer starts a polling loop; it is a
+wrapper around the event-driven runtime.
 
-Requires a modelport that classifies 429 as `ModelError::RateLimited` —
-posoco-ext-zai, posoco-ext-openai-compatible and posoco-ext-kimi do; others
-adopt the shared classifier in posoco-kit-chat-completions.
+## Snapshot and control
+
+\`\`\`mbt nocheck
+let pending = guard.snapshot()
+guard.cancel_pending()
+guard.shutdown()
+\`\`\`
+
+\`snapshot()\` is async because actor-owned state is never exposed by alias.
+The ask also acts as a FIFO barrier for previously sent hook/observer events.
+
+\`poll()\` remains as a compatibility seam for hosts that used to drive the
+scheduler manually. It does not scan in a background loop; it only asks the
+actor to dispatch work that is already due at the injected clock.
+
+## Concurrency guarantees
+
+- all \`RecoveryState\` mutation happens in one Fuwaroid command fold;
+- async timer/resume workers never mutate business state directly;
+- stale worker results are ignored by \`RecoveryTicket(epoch)\`;
+- \`cancel_pending()\` advances the epoch and invalidates pending/in-flight
+  recovery;
+- only one resume worker can be in-flight per runtime;
+- shutdown closes the actor and uses \`Supervisor::shutdown\` for bounded
+  cancellation/settlement.
+
+Requires a modelport that classifies quota failures as typed
+\`ModelError::RateLimited\`.
