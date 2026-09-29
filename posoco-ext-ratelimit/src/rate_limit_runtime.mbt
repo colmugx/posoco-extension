@@ -24,13 +24,11 @@ priv enum RecoveryCommand {
 priv enum RecoveryQuery {
   Snapshot
   Status
-  IsStopped
 }
 
 priv enum RecoveryReply {
   SnapshotReply(Array[RateLimitPending])
   StatusReply(RecoveryStatus?)
-  StoppedReply(Bool)
 }
 
 priv struct RecoveryState {
@@ -45,7 +43,7 @@ priv struct RuntimeEffects {
   supervisor : @fuwaroid.Supervisor[Unit]
   now_ms : () -> Int64
   sleep_ms : async (Int) -> Unit
-  resume : async (String) -> Unit
+  execute_resume : async (String) -> Unit
   trace : (String) -> Unit
   publish_status : (RecoveryStatus?) -> Unit
 }
@@ -135,11 +133,11 @@ fn dispatch_due(
     item.session_id != entry.session_id
   })
   let address = ctx.address
-  let resume = effects.resume
+  let execute_resume = effects.execute_resume
   let trace = effects.trace
   let spawned = effects.supervisor.spawn(
     async fn() {
-      let outcome : Result[Unit, Error] = Ok(resume(ticket.session_id)) catch {
+      let outcome : Result[Unit, Error] = Ok(execute_resume(ticket.session_id)) catch {
         error => Err(error)
       }
       match outcome {
@@ -350,7 +348,6 @@ fn recovery_fold_query(
   let reply = match query {
     Snapshot => SnapshotReply(recovery_snapshot(state.pending))
     Status => StatusReply(recovery_status(state.pending))
-    IsStopped => StoppedReply(state.stopped)
   }
   (state, reply)
 }
@@ -361,7 +358,7 @@ fn RateLimitRuntime::start(
   policy~ : RecoveryPolicy,
   now_ms~ : () -> Int64,
   sleep_ms~ : async (Int) -> Unit,
-  resume~ : async (String) -> Unit,
+  execute_resume~ : async (String) -> Unit,
   trace~ : (String) -> Unit,
   publish_status~ : (RecoveryStatus?) -> Unit,
 ) -> RateLimitRuntime {
@@ -370,7 +367,7 @@ fn RateLimitRuntime::start(
     supervisor,
     now_ms,
     sleep_ms,
-    resume,
+    execute_resume,
     trace,
     publish_status,
   }
@@ -419,14 +416,6 @@ async fn RateLimitRuntime::status(
   match self.actor.ask(Status, timeout_ms=5000) {
     Ok(StatusReply(value)) => value
     _ => None
-  }
-}
-
-///|
-async fn RateLimitRuntime::is_stopped(self : RateLimitRuntime) -> Bool {
-  match self.actor.ask(IsStopped, timeout_ms=5000) {
-    Ok(StoppedReply(value)) => value
-    _ => true
   }
 }
 
