@@ -178,8 +178,7 @@ identity (`TerminalCancelled`) and is never folded into a host failure.
 signal) and the `output` captured at exit; `AcpTerminalError` is
 `HostCallFailed(method_name~, cause~)`,
 `TerminalTimedOut(timeout_ms~, partial_output~)`, or
-`TerminalCancelled(partial_output~)`. Interactive terminals (start/feed/
-drain on a live handle) are future work.
+`TerminalCancelled(partial_output~)`. Interactive terminal handles (start/feed/drain) are not part of this adapter.
 
 ### AcpHostFs
 
