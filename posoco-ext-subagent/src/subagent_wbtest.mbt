@@ -8,12 +8,10 @@
 
 ///|
 priv struct FakeComposer {
-  /// Text the child's scripted model answers with.
   response_text : String
   /// When set, the child uses this model instead of a ScriptedModel
   /// (used by the timeout test).
   slow_model : &@posoco.ModelPort?
-  /// Extra observer attached to every composed child (records child events).
   child_recorder : @posoco.RecordingObserver
   store : @posoco.RecordingSessionStore
   specs : Array[ChildSpec]
@@ -165,8 +163,6 @@ fn args_object(pairs : Array[(String, Json)]) -> Json {
 }
 
 ///|
-/// True when the session's persisted messages contain a user message whose
-/// text includes `needle` (the background-result envelope assertion).
 fn store_contains_user_text(
   store : @posoco.RecordingSessionStore,
   session_id : String,
