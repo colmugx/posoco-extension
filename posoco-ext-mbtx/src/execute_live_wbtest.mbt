@@ -3,7 +3,7 @@
 /// run when MBTX_LIVE=1 is set. Besides spawning the toolchain, the
 /// policy-deny test compiles a snippet importing `moonbitlang/async`, which
 /// needs a one-time registry fetch (`moon update`) over the network on
-/// machines that never fetched it (design §8.4) — with the gate closed that
+/// machines that never fetched it — with the gate closed that
 /// fetch no longer fires by default. Environments with the toolchain but no
 /// opt-in skip cleanly.
 
