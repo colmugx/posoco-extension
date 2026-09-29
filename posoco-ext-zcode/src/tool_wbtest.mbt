@@ -1,7 +1,4 @@
 ///|
-/// Pure-function coverage for argument parsing and outcome formatting.
-
-///|
 fn tool_args_of(text : String) -> Json raise {
   @json.parse(text) catch {
     err => fail(err.to_string())
