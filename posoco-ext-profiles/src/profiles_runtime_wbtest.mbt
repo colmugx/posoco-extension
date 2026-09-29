@@ -102,8 +102,8 @@ async test "activate_profile_known_id_first_line_contract" {
     profiles.execute("activate_profile", activate_call("c1", profile="moonbit")) {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_eq(first_line(content), "activated: moonbit")
-      // F7 wording: the manual rides the next model request — never
-      // "wait for the next user message".
+      // The manual rides the next model request, never "wait for the next
+      // user message".
       assert_true(content.contains("next model request"))
       assert_true(content.contains("within this turn"))
     }
@@ -163,7 +163,7 @@ async test "hook_injects_manual_with_coverage_and_resident_line" {
       match content {
         [@posoco.Content::Text(text), ..] => {
           assert_true(text.has_prefix("profile moonbit activated\n\n"))
-          // Q19 coverage: the deferred member's manual is injected...
+          // The deferred member's manual is injected...
           assert_true(text.contains("NMem manual."))
           // ...the resident member is only listed, never re-injected.
           assert_true(
@@ -540,8 +540,8 @@ async test "profile_save_writes_store_and_catalog_visible" {
     }
     Err(msg) => fail("unexpected read error: \{msg}")
   }
-  // Q19: the saved manifest is activatable through the meta tool in the
-  // same session, without recomposition.
+  // The saved manifest is activatable through the meta tool in the same
+  // session, without recomposition.
   match
     profiles.execute(
       "activate_profile",
@@ -669,7 +669,7 @@ test "menu_lists_fallback_sentence_rows_and_dangling_suffix_stably" {
   )
   // Byte stability: two reads, same bytes.
   assert_eq(prompt, profiles.system_prompt())
-  // Q13 warnings surface for hosts as well.
+  // Dangling-extension warnings surface for hosts as well.
   assert_eq(profiles.warnings().length(), 1)
 }
 
