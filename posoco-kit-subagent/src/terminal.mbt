@@ -1,5 +1,5 @@
 ///|
-/// How a subagent run ended (design §2.1 failure semantics): the terminal
+/// How a subagent run ended: the terminal
 /// classification is always explicit in the tool result, never silent.
 pub(all) enum TerminalState {
   Completed
@@ -33,7 +33,7 @@ fn bounded_result_text(text : String) -> (String, Bool) {
 }
 
 ///|
-/// Map a child run's terminal state to the `agent` tool result (design §2.1):
+/// Map a child run's terminal state to the `agent` tool result:
 /// `Completed` yields `Success`; every other state yields
 /// `ToolReportedError` whose text opens with a model-readable terminal
 /// classification (`failed: <reason>` / `timed out` / `cancelled`) so the
