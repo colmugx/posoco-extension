@@ -1,13 +1,9 @@
 ///|
 /// The picker-facing effort list: an implicit leading "off" (thinking
-/// disabled on the wire) plus every declared level. A model with no declared
-/// levels (non-reasoning) exposes no selector at all.
-fn deepseek_slot_efforts(config : DeepSeekConfig) -> Array[String] {
-  if config.thinking_efforts.is_empty() {
-    return []
-  }
+/// disabled on the wire) plus the uniform provider ladder.
+fn deepseek_slot_efforts() -> Array[String] {
   let efforts : Array[String] = ["off"]
-  efforts.append(config.thinking_efforts.copy())
+  efforts.append(deepseek_reasoning_efforts().copy())
   efforts
 }
 
@@ -29,22 +25,13 @@ fn deepseek_catalog_slot(
 ) -> @llm.ModelSlot {
   let port : &@posoco.ModelPort = DeepSeekModelPort(config, ctx~)
   let slot_id = "deepseek/" + config.model
-  let slot_efforts = deepseek_slot_efforts(config)
-  let default_effort = if slot_efforts.is_empty() {
-    None
-  } else {
-    Some(deepseek_effort_label(config))
-  }
-  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if slot_efforts.is_empty() {
-    None
-  } else {
-    Some(fn(effort) {
-      let rebuilt_config = config.with_reasoning_effort(effort) catch {
-        err =>
-          abort("DeepSeek catalog effort rebuild failed: " + err.to_string())
-      }
-      deepseek_catalog_slot(rebuilt_config, ctx, api_key)
-    })
+  let slot_efforts = deepseek_slot_efforts()
+  let default_effort = Some(deepseek_effort_label(config))
+  let rebuild_on_effort : (String) -> @llm.ModelSlot = fn(effort) {
+    let rebuilt_config = config.with_reasoning_effort(effort) catch {
+      err => abort("DeepSeek catalog effort rebuild failed: " + err.to_string())
+    }
+    deepseek_catalog_slot(rebuilt_config, ctx, api_key)
   }
   let slot = @llm.ModelSlot::ModelSlot(
     id=slot_id,
@@ -62,46 +49,31 @@ fn deepseek_catalog_slot(
         base_url=config.base_url,
         endpoint_prefix=config.endpoint_prefix,
         reasoning_effort=config.reasoning_effort,
-        thinking_efforts=config.thinking_efforts,
       )
       deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     }),
-    rebuild_on_effort~,
+    rebuild_on_effort=Some(rebuild_on_effort),
   )
   slot
 }
 
 ///|
-/// Build one slot from a provider-discovered model record.  The selected
-/// effort is kept only when the server-derived descriptor still advertises it;
-/// otherwise the descriptor's default is used, or no thinking effort is sent
-/// for a non-reasoning model. An explicitly configured off (empty effort)
-/// always wins, so a reasoning model can be run with thinking disabled.
+/// Build one slot from a provider-discovered model record. The configured
+/// effort carries over verbatim — every DeepSeek model accepts the same
+/// ladder, and an explicitly configured off (empty effort) means thinking is
+/// disabled on the wire.
 fn deepseek_catalog_slot_from_info(
   base_config : DeepSeekConfig,
   info : DeepSeekModelInfo,
   ctx : @devkit.ExtContext,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
-  let selected_effort = if info.thinking_efforts.is_empty() {
-    ""
-  } else if base_config.reasoning_effort == "" {
-    ""
-  } else if info.thinking_efforts.contains(base_config.reasoning_effort) {
-    base_config.reasoning_effort
-  } else {
-    match info.default_effort {
-      Some(value) => value
-      None => info.thinking_efforts[0]
-    }
-  }
   let config = DeepSeekConfig(
     base_config.api_key,
     model=info.id,
     base_url=base_config.base_url,
     endpoint_prefix=base_config.endpoint_prefix,
-    reasoning_effort=selected_effort,
-    thinking_efforts=info.thinking_efforts,
+    reasoning_effort=base_config.reasoning_effort,
   )
   deepseek_catalog_slot(config, ctx, api_key)
 }

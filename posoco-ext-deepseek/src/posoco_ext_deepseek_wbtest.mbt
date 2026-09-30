@@ -467,14 +467,6 @@ test "encode_message_tool_result_carries_tool_call_id" {
 }
 
 ///|
-test "deepseek_config_defaults_to_single_model" {
-  let config = DeepSeekConfig("key")
-  assert_eq(config.api_key, "key")
-  assert_eq(config.base_url, "https://api.deepseek.com")
-  assert_eq(config.model, "deepseek-v4-flash")
-}
-
-///|
 test "deepseek_config_custom_model_passes_through" {
   let config = DeepSeekConfig("key", model="custom-model")
   assert_eq(config.model, "custom-model")
@@ -482,14 +474,22 @@ test "deepseek_config_custom_model_passes_through" {
 
 ///|
 test "endpoint_helpers_build_chat_and_fim_url" {
-  let config = DeepSeekConfig("key", base_url="https://api.deepseek.com")
+  let config = DeepSeekConfig(
+    "key",
+    model="deepseek-flash",
+    base_url="https://api.deepseek.com",
+  )
   assert_eq(chat_url(config), "https://api.deepseek.com/chat/completions")
   assert_eq(fim_url(config), "https://api.deepseek.com/beta/completions")
 }
 
 ///|
 test "fim_url_does_not_duplicate_suffix" {
-  let config = DeepSeekConfig("key", base_url="https://api.deepseek.com/beta")
+  let config = DeepSeekConfig(
+    "key",
+    model="deepseek-flash",
+    base_url="https://api.deepseek.com/beta",
+  )
   assert_eq(fim_url(config), "https://api.deepseek.com/beta/completions")
 }
 
@@ -504,13 +504,13 @@ test "build_chat_request_high_thinking_no_warn" {
     [user_msg("hi")],
     [],
     chat_options(),
-    "deepseek-v4-flash",
+    "deepseek-flash",
     false,
     enabled_thinking_json(),
     Some("high"),
   )
   guard body is Object(root) else { fail("expected object") }
-  assert_json_field_string(root, "model", "deepseek-v4-flash")
+  assert_json_field_string(root, "model", "deepseek-flash")
   guard root.get("thinking") is Some(Object(thinking)) else {
     fail("expected thinking object")
   }
@@ -528,7 +528,7 @@ test "build_chat_request_maximum_thinking_no_warn" {
     [user_msg("hi")],
     [],
     chat_options(),
-    "deepseek-v4-flash",
+    "deepseek-flash",
     false,
     enabled_thinking_json(),
     Some("max"),
@@ -551,7 +551,7 @@ test "build_chat_request_off_disables_thinking_no_warn" {
     [user_msg("hi")],
     [],
     chat_options(),
-    "deepseek-v4-flash",
+    "deepseek-flash",
     false,
     disabled_thinking_json(),
     None,
@@ -1189,7 +1189,9 @@ test "t07b_deepseek_valid_fim_response_still_decodes" {
 /// exact public call shapes type-checked here without performing HTTP I/O.
 async test "t08_deepseek_public_fim_examples_compile" {
   @async.protect_from_cancel(() => ())
-  let port = DeepSeekModelPort(DeepSeekConfig("fixture-key"))
+  let port = DeepSeekModelPort(
+    DeepSeekConfig("fixture-key", model="deepseek-flash"),
+  )
   let messages : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("output JSON")]),
   ]
@@ -1204,7 +1206,11 @@ async test "t08_deepseek_public_fim_examples_compile" {
 
 ///|
 test "DeepSeekConfig::with_reasoning_effort maps off to empty and validates membership" {
-  let config = DeepSeekConfig("sk-test", reasoning_effort="high")
+  let config = DeepSeekConfig(
+    "sk-test",
+    model="deepseek-flash",
+    reasoning_effort="high",
+  )
   assert_eq(config.with_reasoning_effort("off").reasoning_effort, "")
   assert_eq(config.with_reasoning_effort("max").reasoning_effort, "max")
   assert_eq(config.with_reasoning_effort("low").reasoning_effort, "low")
@@ -1220,7 +1226,11 @@ test "DeepSeekConfig::with_reasoning_effort maps off to empty and validates memb
 
 ///|
 test "default_thinking_config disables thinking whenever the effort is empty" {
-  let config = DeepSeekConfig("sk-test", reasoning_effort="")
+  let config = DeepSeekConfig(
+    "sk-test",
+    model="deepseek-flash",
+    reasoning_effort="",
+  )
   let port = DeepSeekModelPort(config)
   let (thinking, effort) = port.default_thinking_config()
   guard thinking is Json::Object({ "type": Json::String("disabled"), .. }) else {
@@ -1231,7 +1241,11 @@ test "default_thinking_config disables thinking whenever the effort is empty" {
 
 ///|
 test "model_catalog slot advertises an implicit off and derives the default effort" {
-  let config = DeepSeekConfig("sk-test", reasoning_effort="high")
+  let config = DeepSeekConfig(
+    "sk-test",
+    model="deepseek-flash",
+    reasoning_effort="high",
+  )
   let port = DeepSeekModelPort(config)
   let catalog = port.model_catalog()
   let slot = catalog.slots()[0]
@@ -1260,6 +1274,7 @@ test "ProviderFactory::build accepts reasoning_effort off and produces a disable
       Json::object(
         Map::from_array([
           ("api_key", Json::string("sk-test")),
+          ("model", Json::string("deepseek-flash")),
           ("reasoning_effort", Json::string("off")),
         ]),
       ),
@@ -1287,6 +1302,7 @@ test "ProviderFactory::build accepts reasoning_effort low" {
       Json::object(
         Map::from_array([
           ("api_key", Json::string("sk-test")),
+          ("model", Json::string("deepseek-flash")),
           ("reasoning_effort", Json::string("low")),
         ]),
       ),
@@ -1345,16 +1361,17 @@ test "ProviderFactory::build expands host-cached records into a multi-slot catal
   match factory.build(source) {
     @llm.ProviderBuildResult::Ready(catalog) => {
       let slots = catalog.slots()
-      // The configured model is pinned first; reasoning profiles are
-      // re-derived from ids exactly as the live refresh would.
+      // The configured model is pinned first; the uniform effort ladder is
+      // re-derived exactly as the live refresh would.
       assert_eq(slots.length(), 2)
       assert_eq(slots[0].id, "deepseek/deepseek-chat")
       assert_eq(slots[1].id, "deepseek/deepseek-reasoner")
-      assert_eq(slots[1].thinking_efforts, [
-        "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
-      ])
-      assert_eq(slots[1].default_effort, Some("high"))
-      assert_eq(slots[0].thinking_efforts, [])
+      for slot in slots {
+        assert_eq(slot.thinking_efforts, [
+          "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+        ])
+        assert_eq(slot.default_effort, Some("high"))
+      }
     }
     @llm.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog from cached records")
@@ -1379,7 +1396,12 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
     ] {
     let source = @llm.ProviderConfigSource::ProviderConfigSource(
       settings=Some(
-        Json::object(Map::from_array([("api_key", Json::string("sk-test"))])),
+        Json::object(
+          Map::from_array([
+            ("api_key", Json::string("sk-test")),
+            ("model", Json::string("deepseek-flash")),
+          ]),
+        ),
       ),
       cached_models=Some(bad),
     )
@@ -1387,13 +1409,47 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
       @llm.ProviderBuildResult::Ready(catalog) => {
         let slots = catalog.slots()
         assert_true(slots.length() == 1)
-        assert_eq(slots[0].model_id, "deepseek-v4-flash")
+        assert_eq(slots[0].model_id, "deepseek-flash")
       }
       @llm.ProviderBuildResult::Unconfigured =>
         fail(
           "bad cache records must degrade to the static build, not Unconfigured",
         )
     }
+  }
+}
+
+///|
+test "ProviderFactory::build fails typed when settings omit model" {
+  let provider = DeepSeekProvider()
+  let factory : &@llm.ProviderFactory = provider
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(Map::from_array([("api_key", Json::string("sk-test"))])),
+    ),
+  )
+  let result = Ok(factory.build(source)) catch { err => Err(err) }
+  match result {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("required setting is missing: model"))
+    _ => fail("a missing model setting must be a typed composition failure")
+  }
+}
+
+///|
+async test "DeepSeek refresh fails typed when settings omit model" {
+  let provider = DeepSeekProvider()
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(Map::from_array([("api_key", Json::string("sk-test"))])),
+    ),
+    provider_credential=None,
+  )
+  let result = Ok(provider.refresh(source)) catch { err => Err(err) }
+  match result {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("required setting is missing: model"))
+    _ => fail("a missing model setting must be a typed composition failure")
   }
 }
 
@@ -1590,7 +1646,9 @@ fn dsc_scope(
 
 ///|
 test "provider_config reports the configured window" {
-  let port = DeepSeekModelPort(DeepSeekConfig("k", context_window=Some(65536)))
+  let port = DeepSeekModelPort(
+    DeepSeekConfig("k", model="deepseek-flash", context_window=Some(65536)),
+  )
   let config = @posoco.ModelPort::provider_config(port)
   assert_true(config.context_window == Some(65536))
   assert_true(config.compact_threshold == Some(0.80))
@@ -1599,7 +1657,7 @@ test "provider_config reports the configured window" {
 
 ///|
 test "panic deepseek config rejects a non-positive context window" {
-  ignore(DeepSeekConfig("k", context_window=Some(0)))
+  ignore(DeepSeekConfig("k", model="deepseek-flash", context_window=Some(0)))
 }
 
 ///|
@@ -1632,7 +1690,9 @@ test "auto plan stays eviction-only below the line" {
 
 ///|
 async test "auto compact returns an eviction-only replace without a network call" {
-  let port = DeepSeekModelPort(DeepSeekConfig("k", context_window=Some(100000)))
+  let port = DeepSeekModelPort(
+    DeepSeekConfig("k", model="deepseek-flash", context_window=Some(100000)),
+  )
   let messages = ds_auto_fixture()
   let result = @posoco.ModelPort::compact(
     port,
@@ -1667,7 +1727,7 @@ test "auto plan uses the verified pressure reading over the estimate" {
 ///|
 async test "auto compact sizes from the scope pressure over local config" {
   // local config carries no window; only the scope advisory does
-  let port = DeepSeekModelPort(DeepSeekConfig("k"))
+  let port = DeepSeekModelPort(DeepSeekConfig("k", model="deepseek-flash"))
   let pressure : @posoco.ContextPressure = {
     window_tokens: Some(100000),
     occupancy_tokens: Some(50),

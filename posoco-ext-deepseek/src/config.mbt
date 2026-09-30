@@ -12,14 +12,10 @@ pub(all) struct DeepSeekConfig {
   /// Endpoint path prefix, e.g. "/v1" when base_url is "http://host:port".
   endpoint_prefix : String
   /// Provider-owned reasoning effort. Passed through verbatim; DeepSeek's
-  /// server maps the requested effort level itself.
+  /// server maps the requested effort level itself. The empty string means
+  /// thinking is off; every other value must be on the uniform ladder from
+  /// `deepseek_reasoning_efforts`.
   reasoning_effort : String
-  /// Effort values declared by the provider catalog for this model. The
-  /// constructor default is the full policy ladder from
-  /// `deepseek_reasoning_efforts` (server-side mapping table in
-  /// src/list_models.mbt), so statically composed slots advertise the same
-  /// levels as discovery-derived slots.
-  thinking_efforts : Array[String]
   /// Token budget ceiling reported to the host so auto-compact can size
   /// itself. None leaves auto-compact disabled — an unknown window is never
   /// guessed (the /models endpoint carries no context length).
@@ -35,19 +31,14 @@ pub extend DeepSeekConfig with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 pub fn DeepSeekConfig::DeepSeekConfig(
   api_key : String,
-  model? : String = "deepseek-v4-flash",
+  model~ : String,
   base_url? : String = "https://api.deepseek.com",
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
-  thinking_efforts? : Array[String] = deepseek_reasoning_efforts(),
   context_window? : Int? = None,
 ) -> DeepSeekConfig {
-  if (thinking_efforts.is_empty() && reasoning_effort != "") ||
-    (
-      !thinking_efforts.is_empty() &&
-      reasoning_effort != "" &&
-      !thinking_efforts.contains(reasoning_effort)
-    ) {
+  if reasoning_effort != "" &&
+    !deepseek_reasoning_efforts().contains(reasoning_effort) {
     abort(
       "posoco-ext-deepseek: unsupported reasoning effort: " + reasoning_effort,
     )
@@ -65,7 +56,6 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     model,
     endpoint_prefix,
     reasoning_effort,
-    thinking_efforts,
     context_window,
   }
 }
@@ -73,7 +63,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
 ///|
 /// Rebuild a provider config with a validated effort value. The picker-facing
 /// "off" entry maps to "" (thinking disabled on the wire); any other value
-/// must be one of the declared `thinking_efforts`.
+/// must be on the uniform provider ladder.
 pub fn DeepSeekConfig::with_reasoning_effort(
   self : DeepSeekConfig,
   effort : String,
@@ -81,7 +71,7 @@ pub fn DeepSeekConfig::with_reasoning_effort(
   if effort == "off" {
     return { ..self, reasoning_effort: "", }
   }
-  if !self.thinking_efforts.contains(effort) {
+  if !deepseek_reasoning_efforts().contains(effort) {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_deepseek",
       detail="unsupported reasoning effort: " + effort,

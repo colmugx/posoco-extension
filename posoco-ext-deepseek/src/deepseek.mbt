@@ -36,12 +36,11 @@ fn prefix_url(config : DeepSeekConfig) -> String {
 ///|
 /// DeepSeek's provider-owned thinking config. An empty `reasoning_effort`
 /// means thinking is switched off: the wire carries `{type: "disabled"}` and
-/// no `reasoning_effort` field, regardless of the advertised effort list.
+/// no `reasoning_effort` field.
 fn DeepSeekModelPort::default_thinking_config(
   self : DeepSeekModelPort,
 ) -> (Json, String?) {
-  if self.config.thinking_efforts.is_empty() ||
-    self.config.reasoning_effort == "" {
+  if self.config.reasoning_effort == "" {
     (Json::object({ "type": Json::string("disabled") }), None)
   } else {
     (enabled_thinking_json(), Some(self.config.reasoning_effort))

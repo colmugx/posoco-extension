@@ -41,10 +41,9 @@ pub(all) struct DeepSeekConfig {
   model : String
   endpoint_prefix : String
   reasoning_effort : String
-  thinking_efforts : Array[String]
   context_window : Int?
 } derive(Eq, @debug.Debug)
-pub fn DeepSeekConfig::DeepSeekConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String], context_window? : Int?) -> Self
+pub fn DeepSeekConfig::DeepSeekConfig(String, model~ : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, context_window? : Int?) -> Self
 pub fn DeepSeekConfig::equal(Self, Self) -> Bool
 pub fn DeepSeekConfig::not_equal(Self, Self) -> Bool
 pub fn DeepSeekConfig::to_repr(Self) -> @debug.Repr
@@ -53,8 +52,6 @@ pub fn DeepSeekConfig::with_reasoning_effort(Self, String) -> Self raise @error.
 pub(all) struct DeepSeekModelInfo {
   id : String
   owned_by : String
-  thinking_efforts : Array[String]
-  default_effort : String?
 }
 
 pub(all) struct DeepSeekModelPort {

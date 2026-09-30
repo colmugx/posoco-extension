@@ -29,7 +29,7 @@ moon add colmugx/posoco-ext-deepseek
 
 let config = @deepseek.DeepSeekConfig(
   "sk-...",
-  model="deepseek-v4-flash", // default; may be omitted
+  model="deepseek-flash", // required — no default model id exists in code
 )
 let port = @deepseek.DeepSeekModelPort(config)
 let catalog = port.model_catalog()
@@ -70,18 +70,17 @@ let result = port.chat_prefix_completion(messages, "```json\n", Some(["```"]))
 | **API key** | `DeepSeekProvider` implements `@llm.ApiKeyFactory`; hosts supply only a generic secret prompt/store |
 
 Hosts may call provider-owned `RefreshableProviderFactory::refresh` during
-explicit startup or login to update model order and reasoning-effort
-capabilities from the authenticated `/models` response. DeepSeek's `/models`
-schema declares no effort field, so the extension advertises the complete
-ladder `minimal/low/medium/high/xhigh/max/ultra` for the documented
-v4/reasoner families — the selection is passed through verbatim and DeepSeek's
-server maps it itself (minimal/low→low, medium/high/xhigh→high, max/ultra→max)
-— and never guesses that an unknown
-model is a reasoning model; a well-formed per-model `reasoning_effort` array
-in the response takes precedence over that policy when present. Request
+explicit startup or login to update model order from the authenticated
+`/models` response. Reasoning effort is a uniform provider policy: every
+DeepSeek model advertises the complete ladder
+`minimal/low/medium/high/xhigh/max/ultra` — the selection is passed through
+verbatim and DeepSeek's server maps it itself (minimal/low→low,
+medium/high/xhigh→high, max/ultra→max). Request
 timeouts, non-2xx statuses, invalid
 UTF-8/JSON, and empty catalogs are all typed failures with no implicit
-fallback to a static model; the standard OpenAI envelope must also carry
+fallback to a static model; the `model` setting is required — build and
+refresh raise a typed `CompositionError` when it is missing, so no model id
+is hardcoded as a fallback; the standard OpenAI envelope must also carry
 `object: "list"`, and the configured model id keeps priority in the refreshed
 result.
 
@@ -125,7 +124,7 @@ and retry fields were removed. Use one model id:
 ```moonbit
 let config = @deepseek.DeepSeekConfig(
   "sk-...",
-  model="deepseek-v4-flash",
+  model="deepseek-flash",
 )
 ```
 
