@@ -1324,3 +1324,154 @@ async test "low-confidence decision effort falls back to the active slot" {
   assert_true(router.decision_slot_for_chat(messages[:], 0) is None)
   assert_eq(decision.call_count(), 1)
 }
+
+// ------------------------------------------------------- pending defaults
+
+///|
+test "allow_missing_default keeps an absent persisted selection pending" {
+  let slot = router_test_slot("one/a", "one", "model-a", [])
+  let router = RouterModelPort(
+    slots=[slot],
+    default_slot_id="openai/g1",
+    allow_missing_default=true,
+  )
+  assert_eq(router.active_slot_id(), "openai/g1")
+  assert_true(router.active_slot_opt() is None)
+  // Display facts parse from the "provider/model" id.
+  assert_eq(router.current_provider_id(), "openai")
+  assert_eq(router.current_model_id(), "g1")
+}
+
+///|
+test "a missing default without the flag still fails composition" {
+  let slot = router_test_slot("one/a", "one", "model-a", [])
+  let result = Ok(RouterModelPort(slots=[slot], default_slot_id="gone/z")) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("unknown default model slot: gone/z"))
+    _ => fail("expected unknown default slot composition failure")
+  }
+}
+
+///|
+test "a pending default fails dispatch with a typed request error" {
+  let slot = router_test_slot("one/a", "one", "model-a", [])
+  let router = RouterModelPort(
+    slots=[slot],
+    default_slot_id="openai/g1",
+    allow_missing_default=true,
+  )
+  try router.dispatch_slot() catch {
+    @posoco.ModelError::RequestBuild(message) =>
+      assert_true(message.contains("model slot 'openai/g1' is not configured"))
+    _ => fail("expected a RequestBuild error")
+  } noraise {
+    _ => fail("expected dispatch to fail")
+  }
+}
+
+///|
+test "a pending default reports an empty provider config" {
+  let slot = router_effort_slot("one/a", "one", "model-a")
+  let router = RouterModelPort(
+    slots=[slot],
+    default_slot_id="openai/g1",
+    allow_missing_default=true,
+  )
+  assert_eq(router.provider_config(), @posoco.ProviderConfig::empty())
+}
+
+///|
+test "replace_provider_slots heals a pending selection when the slot appears" {
+  let router = RouterModelPort(
+    slots=[router_test_slot("one/a", "one", "model-a", [])],
+    default_slot_id="one/g1",
+    allow_missing_default=true,
+  )
+  let replacements = [
+    router_test_slot("one/g1", "one", "model-g1", []),
+    router_test_slot("one/g2", "one", "model-g2", []),
+  ]
+  router.replace_provider_slots("one", replacements) catch {
+    _ => fail("unexpected replacement failure")
+  }
+  // The persisted selection is now a real slot; it stays active.
+  assert_eq(router.active_slot_id(), "one/g1")
+  assert_true(router.active_slot_opt() is Some(_))
+}
+
+///|
+test "replace_provider_slots keeps a pending selection pending when absent" {
+  let router = RouterModelPort(
+    slots=[router_test_slot("one/a", "one", "model-a", [])],
+    default_slot_id="one/gone",
+    allow_missing_default=true,
+  )
+  let replacements = [router_test_slot("one/new", "one", "model-new", [])]
+  router.replace_provider_slots("one", replacements) catch {
+    _ => fail("unexpected replacement failure")
+  }
+  // No silent switch: the pending id stays active and requests keep failing.
+  assert_eq(router.active_slot_id(), "one/gone")
+  assert_true(router.active_slot_opt() is None)
+}
+
+///|
+test "switch_slot heals a pending selection" {
+  let slot = router_test_slot("one/a", "one", "model-a", [])
+  let router = RouterModelPort(
+    slots=[slot],
+    default_slot_id="openai/g1",
+    allow_missing_default=true,
+  )
+  router.switch_slot("one/a") catch {
+    _ => fail("unexpected slot switch failure")
+  }
+  assert_eq(router.active_slot_id(), "one/a")
+  assert_true(router.active_slot_opt() is Some(_))
+}
+
+///|
+test "from_catalogs forwards allow_missing_default" {
+  let port : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: [],
+  }
+  let catalog = ProviderModelCatalog::ProviderModelCatalog(provider_id="one", slots=[
+    ModelSlot::ModelSlot(
+      id="one/a",
+      label="a",
+      provider_id="one",
+      model_id="model-a",
+      port~,
+    ),
+  ])
+  let router = RouterModelPort::from_catalogs(
+    [catalog],
+    default_slot_id="openai/g1",
+    allow_missing_default=true,
+  )
+  assert_eq(router.active_slot_id(), "openai/g1")
+}
+
+///|
+test "a pending default publishes the model segment from the persisted id" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let slot = router_test_slot("one/a", "one", "model-a", [])
+  let router = RouterModelPort(
+    slots=[slot],
+    default_slot_id="openai/g1",
+    allow_missing_default=true,
+    bus=Some(bus),
+  )
+  router.publish_model_status()
+  assert_eq(capture.events.length(), 1)
+  match @devkit.decode_status_op(capture.events[0]) {
+    Some(@devkit.StatusOp::Register(segment="model", value=Some(value), ..)) =>
+      assert_eq(value, "g1:default")
+    _ => fail("expected a model status register")
+  }
+}

@@ -37,6 +37,80 @@ pub(all) struct OpenAIModelsHttpResponse {
 }
 
 ///|
+/// One host-cached discovery record (`~/.cetas/model_lists.json`, written by
+/// cetas-core `catalog_model_records` from a refreshed catalog). This is the
+/// offline expansion input for the static `build` path.
+pub(all) struct OpenAICachedModel {
+  model_id : String
+  thinking_efforts : Array[String]
+  default_effort : String?
+  context_window : Int?
+  image_in : Bool
+}
+
+///|
+/// Tolerantly decode host-cached model records for offline catalog
+/// expansion. Malformed or empty shapes degrade to `None` (the static
+/// single-model build) and never fail composition — the cache is derived,
+/// re-derivable data.
+fn parse_cached_openai_models(records : Json?) -> Array[OpenAICachedModel]? {
+  let items = match records {
+    Some(Json::Array(items)) if items.length() > 0 => items
+    _ => return None
+  }
+  let models : Array[OpenAICachedModel] = []
+  for item in items {
+    let fields = match item {
+      Json::Object(fields) => fields
+      _ => return None
+    }
+    let model_id = match fields.get("model_id") {
+      Some(Json::String(value)) if value.length() > 0 => value
+      _ => return None
+    }
+    let thinking_efforts : Array[String] = match
+      fields.get("thinking_efforts") {
+      Some(Json::Array(values)) => {
+        let efforts : Array[String] = []
+        for value in values {
+          match value {
+            Json::String(effort) if effort.length() > 0 => efforts.push(effort)
+            _ => return None
+          }
+        }
+        efforts
+      }
+      Some(_) => return None
+      None => []
+    }
+    let default_effort : String? = match fields.get("default_effort") {
+      Some(Json::String(value)) if value.length() > 0 => Some(value)
+      Some(Json::Null) | None => None
+      _ => return None
+    }
+    let context_window : Int? = match fields.get("context_window") {
+      Some(Json::Number(value, ..)) => Some(value.to_int())
+      Some(Json::Null) | None => None
+      _ => return None
+    }
+    let image_in = match fields.get("image_in") {
+      Some(Json::True) => true
+      Some(Json::False) => false
+      Some(Json::Null) | None => false
+      _ => return None
+    }
+    models.push({
+      model_id,
+      thinking_efforts,
+      default_effort,
+      context_window,
+      image_in,
+    })
+  }
+  Some(models)
+}
+
+///|
 pub(open) trait OpenAIModelsHttpTransport {
   async fn get(Self, url : String, headers : Map[String, String]) -> OpenAIModelsHttpResponse raise @posoco.ModelError
 }

@@ -12,8 +12,14 @@ fn RouterModelPort::publish_model_status(self : RouterModelPort) -> Unit {
   let effort = match self.active_effort {
     Some(value) => value
     None =>
-      match self.active_slot().default_effort {
-        Some(value) => value
+      match self.active_slot_opt() {
+        Some(slot) =>
+          match slot.default_effort {
+            Some(value) => value
+            None => "default"
+          }
+        // A pending default renders with the slot-default label until its
+        // slot appears; the model id itself comes from the persisted id.
         None => "default"
       }
   }

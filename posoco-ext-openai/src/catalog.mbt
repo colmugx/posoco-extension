@@ -303,6 +303,146 @@ fn codex_catalog_slot_from_info(
 }
 
 ///|
+/// Build one offline slot from a cached discovery record over the Codex
+/// OAuth endpoint. Mirrors `codex_catalog_slot_from_info`: the record is the
+/// already-filtered projection of a refreshed catalog, so no visibility rule
+/// re-runs here; the selected effort honours the base config when still
+/// advertised.
+fn codex_catalog_slot_from_cached(
+  base_config : OpenAIConfig,
+  info : OpenAICachedModel,
+  oauth : &@oauth.OAuthProvider,
+  api_key : &@llm.ApiKeyFactory,
+  quota_tracker : CodexQuotaTracker?,
+) -> @llm.ModelSlot {
+  let selected_effort = match base_config.reasoning_effort {
+    Some(value) if info.thinking_efforts.contains(value) => Some(value)
+    _ => info.default_effort
+  }
+  let config = OpenAIConfig::with_base_url(
+    base_config.api_key,
+    info.model_id,
+    codex_oauth_api_base(),
+  )
+  let config = {
+    ..config,
+    account_id: base_config.account_id,
+    reasoning_effort: selected_effort,
+    context_window: info.context_window,
+  }
+  let capabilities : Array[String] = ["chat", "streaming", "oauth"]
+  if info.image_in {
+    capabilities.push("image_in")
+  }
+  if !info.thinking_efforts.is_empty() {
+    capabilities.push("reasoning")
+  }
+  openai_catalog_slot(
+    config,
+    oauth,
+    api_key,
+    thinking_efforts=info.thinking_efforts,
+    context_window=info.context_window,
+    capabilities~,
+    default_effort=info.default_effort,
+    quota_tracker~,
+  )
+}
+
+///|
+/// Build one offline slot from a cached discovery record over the plain
+/// OpenAI-compatible API endpoint.
+fn api_catalog_slot_from_cached(
+  base_config : OpenAIConfig,
+  info : OpenAICachedModel,
+  oauth : &@oauth.OAuthProvider,
+  api_key : &@llm.ApiKeyFactory,
+  quota_tracker : CodexQuotaTracker?,
+) -> @llm.ModelSlot {
+  let config = OpenAIConfig::with_base_url(
+    base_config.api_key,
+    info.model_id,
+    base_config.base_url,
+  )
+  let capabilities : Array[String] = ["chat", "streaming", "api_key"]
+  if info.image_in {
+    capabilities.push("image_in")
+  }
+  if !info.thinking_efforts.is_empty() {
+    capabilities.push("reasoning")
+  }
+  openai_catalog_slot(
+    config,
+    oauth,
+    api_key,
+    thinking_efforts=info.thinking_efforts,
+    context_window=info.context_window,
+    capabilities~,
+    default_effort=info.default_effort,
+    quota_tracker~,
+  )
+}
+
+///|
+/// Rebuild the multi-slot catalog offline from host-cached discovery
+/// records, so a restart announces the previously refreshed model list
+/// without a network request. `chatgpt_mode~` selects the Codex OAuth slot
+/// shape; records arrive in the refreshed catalog's order.
+pub fn OpenAIModelPort::model_catalog_from_cached_models(
+  self : OpenAIModelPort,
+  models : Array[OpenAICachedModel],
+  chatgpt_mode~ : Bool,
+) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
+  if models.is_empty() {
+    raise @posoco.CompositionError::ManifestSchemaError(
+      manifest_id="posoco_ext_openai",
+      detail="cached OpenAI model records are empty",
+    )
+  }
+  let oauth = openai_oauth_factory()
+  let api_key = openai_api_key_factory()
+  let slots : Array[@llm.ModelSlot] = []
+  let mut has_reasoning = false
+  for info in models {
+    if !info.thinking_efforts.is_empty() {
+      has_reasoning = true
+    }
+    slots.push(
+      if chatgpt_mode {
+        codex_catalog_slot_from_cached(
+          self.config,
+          info,
+          oauth,
+          api_key,
+          self.quota_tracker,
+        )
+      } else {
+        api_catalog_slot_from_cached(
+          self.config,
+          info,
+          oauth,
+          api_key,
+          self.quota_tracker,
+        )
+      },
+    )
+  }
+  let capabilities : Array[String] = if chatgpt_mode {
+    ["chat", "streaming", "oauth"]
+  } else {
+    ["chat", "streaming", "api_key"]
+  }
+  if has_reasoning {
+    capabilities.push("reasoning")
+  }
+  @llm.ProviderModelCatalog::ProviderModelCatalog(
+    provider_id="openai",
+    slots~,
+    capabilities~,
+  )
+}
+
+///|
 /// Build the catalog from a live Codex `/models` response.  Only the ChatGPT
 /// OAuth refresh path reaches here (the endpoint requires the account header),
 /// so the ChatGPT-auth visibility rule applies: `supported_in_api` does not

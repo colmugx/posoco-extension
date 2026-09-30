@@ -419,7 +419,15 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
     "effort" =>
       match effort_command_selection(args) {
         None => {
-          let slot = self.active_slot()
+          let slot = match self.active_slot_opt() {
+            Some(slot) => slot
+            None =>
+              return @posoco.CommandOutcome::Failure(
+                reason="active model slot '" +
+                  self.active_id +
+                  "' is not configured; switch with /model or log in to the provider",
+              )
+          }
           let current = match self.active_effort {
             Some(value) => Some(value)
             None => slot.default_effort
@@ -436,7 +444,15 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
           )
         }
         Some(level) => {
-          let slot = self.active_slot()
+          let slot = match self.active_slot_opt() {
+            Some(slot) => slot
+            None =>
+              return @posoco.CommandOutcome::Failure(
+                reason="active model slot '" +
+                  self.active_id +
+                  "' is not configured; switch with /model or log in to the provider",
+              )
+          }
           if slot.thinking_efforts.is_empty() {
             @posoco.CommandOutcome::Failure(
               reason="model slot does not support effort selection: " +

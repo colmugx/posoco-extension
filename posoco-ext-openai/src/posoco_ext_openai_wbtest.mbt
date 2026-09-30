@@ -2609,3 +2609,124 @@ async test "valid credential with healthy catalog skips renewal entirely" {
   assert_eq(oauth_transport_impl.requests.length(), 0)
   assert_eq(models_transport_impl.urls.length(), 2)
 }
+
+// ------------------------------------------------ offline cache expansion
+
+///|
+fn codex_test_source_with_cache(
+  cache : String,
+) -> @llm.ProviderConfigSource raise {
+  let credential = @oauth.Credential::Credential(
+    access_token=codex_test_access_token(),
+    refresh_token="refresh",
+    expires_at=0,
+    metadata=Map([("account_id", "acct-123")]),
+  )
+  @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      @json.parse("{\"model\":\"gpt-codex\",\"reasoning_effort\":\"xhigh\"}"),
+    ),
+    provider_credential=Some(@oauth.ProviderCredential::OAuth(credential)),
+    cached_models=Some(@json.parse(cache)),
+  )
+}
+
+///|
+test "build expands host-cached codex records into the multi-slot catalog offline" {
+  let provider = OpenAIProvider()
+  let cache = "[" +
+    "{\"model_id\":\"gpt-codex\",\"thinking_efforts\":[\"low\",\"medium\",\"xhigh\"],\"default_effort\":\"medium\",\"context_window\":272000,\"image_in\":true}," +
+    "{\"model_id\":\"gpt-next\",\"thinking_efforts\":[\"low\"],\"default_effort\":\"low\",\"context_window\":128000,\"image_in\":false}" +
+    "]"
+  match provider.build(codex_test_source_with_cache(cache)) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 2)
+      // Cache order is preserved; slot ids keep the provider/model shape.
+      assert_eq(slots[0].id, "openai/gpt-codex")
+      assert_eq(slots[1].id, "openai/gpt-next")
+      assert_eq(slots[0].thinking_efforts, ["low", "medium", "xhigh"])
+      assert_eq(slots[0].default_effort, Some("medium"))
+      assert_eq(slots[0].context_window, Some(272000))
+      assert_true(slots[0].capabilities.contains("image_in"))
+      assert_true(slots[1].context_window == Some(128000))
+      assert_eq(catalog.capabilities, [
+        "chat", "streaming", "oauth", "reasoning",
+      ])
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("an OAuth source with a cache must build")
+  }
+}
+
+///|
+test "build keeps a persisted codex effort only while it is advertised" {
+  let provider = OpenAIProvider()
+  let cache = "[" +
+    "{\"model_id\":\"gpt-codex\",\"thinking_efforts\":[\"low\"],\"default_effort\":\"low\",\"context_window\":null,\"image_in\":false}" +
+    "]"
+  match provider.build(codex_test_source_with_cache(cache)) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 1)
+      assert_eq(slots[0].default_effort, Some("low"))
+      assert_false(slots[0].capabilities.contains("image_in"))
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("an OAuth source with a cache must build")
+  }
+}
+
+///|
+test "build expands host-cached api-key records without oauth" {
+  let provider = OpenAIProvider()
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    provider_credential=Some(
+      @oauth.ProviderCredential::ApiKey(
+        @oauth.ApiKeyCredential::ApiKeyCredential(secret="sk-test"),
+      ),
+    ),
+    cached_models=Some(
+      @json.parse(
+        "[{\"model_id\":\"gpt-a\",\"thinking_efforts\":[],\"default_effort\":null,\"context_window\":null,\"image_in\":false}]",
+      ),
+    ),
+  )
+  match provider.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 1)
+      assert_eq(slots[0].id, "openai/gpt-a")
+      assert_eq(catalog.capabilities, ["chat", "streaming", "api_key"])
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("an api-key source was configured")
+  }
+}
+
+///|
+test "a malformed cache degrades to the static single-model catalog" {
+  let provider = OpenAIProvider()
+  let source = codex_test_source_with_cache("[{\"broken\":true}]")
+  match provider.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_eq(slots.length(), 1)
+      assert_eq(slots[0].id, "openai/gpt-codex")
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("an OAuth source was configured")
+  }
+}
+
+///|
+test "an empty cache degrades to the static single-model catalog" {
+  let provider = OpenAIProvider()
+  let source = codex_test_source_with_cache("[]")
+  match provider.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) =>
+      assert_eq(catalog.slots().length(), 1)
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("an OAuth source was configured")
+  }
+}

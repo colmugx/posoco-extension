@@ -117,7 +117,21 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
     quota_tracker=Some(codex_shared_quota_tracker()),
   )
   openai_register_intelligence_metrics()
-  @llm.ProviderBuildResult::Ready(port.model_catalog())
+  // Offline expansion: host-cached discovery records rebuild the full
+  // multi-slot catalog without a network request, so a persisted selection
+  // restores after restart. A malformed/empty cache degrades to the static
+  // single-model catalog and never fails composition.
+  let chatgpt_mode = match credential {
+    Some(@oauth.ProviderCredential::OAuth(_)) => true
+    _ => false
+  }
+  match parse_cached_openai_models(source.cached_models) {
+    Some(models) =>
+      @llm.ProviderBuildResult::Ready(
+        port.model_catalog_from_cached_models(models, chatgpt_mode~),
+      )
+    None => @llm.ProviderBuildResult::Ready(port.model_catalog())
+  }
 }
 
 ///|

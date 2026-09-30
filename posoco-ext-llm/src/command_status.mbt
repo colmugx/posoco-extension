@@ -54,24 +54,38 @@ fn RouterModelPort::status_report(
   self : RouterModelPort,
   readings? : Array[@devkit.QuotaReading] = [],
 ) -> (String, Json) {
-  let slot = self.active_slot()
+  let slot = self.active_slot_opt()
   let effort = match self.active_effort() {
     Some(value) => value
     None =>
-      match slot.default_effort {
-        Some(value) => value
+      match slot {
+        Some(slot) =>
+          match slot.default_effort {
+            Some(value) => value
+            None => "default"
+          }
+        // Pending default: the persisted selection has no slot object yet.
         None => "default"
       }
   }
-  let context = match slot.context_window {
-    Some(n) => "\{n} tokens"
+  let context = match slot {
+    Some(slot) =>
+      match slot.context_window {
+        Some(n) => "\{n} tokens"
+        None => "unknown"
+      }
     None => "unknown"
   }
-  let efforts = if slot.thinking_efforts.is_empty() {
-    "n/a"
-  } else {
-    slot.thinking_efforts.join(",")
+  let efforts = match slot {
+    Some(slot) =>
+      if slot.thinking_efforts.is_empty() {
+        "n/a"
+      } else {
+        slot.thinking_efforts.join(",")
+      }
+    None => "n/a"
   }
+  let configured = slot is Some(_)
   let quota : Array[(String, String)] = []
   let shown : Array[String] = []
   for window in ["5h", "weekly"] {
@@ -116,6 +130,11 @@ fn RouterModelPort::status_report(
     "context window: \{context}",
     "reasoning efforts: \{efforts}",
   ]
+  if !configured {
+    lines.push(
+      "state: pending — persisted slot is not in the startup catalog; requests fail until it appears",
+    )
+  }
   if quota.is_empty() {
     lines.push("quota: no readings yet")
   } else {
@@ -134,8 +153,12 @@ fn RouterModelPort::status_report(
     quota_fields.push((entry.0, Json::string(entry.1)))
   }
   let effort_values : Array[Json] = []
-  for value in slot.thinking_efforts {
-    effort_values.push(Json::string(value))
+  match slot {
+    Some(slot) =>
+      for value in slot.thinking_efforts {
+        effort_values.push(Json::string(value))
+      }
+    None => ()
   }
   let structured = Json::object(
     Map::from_array([
@@ -144,12 +167,17 @@ fn RouterModelPort::status_report(
       ("effort", Json::string(effort)),
       (
         "context_window",
-        match slot.context_window {
-          Some(n) => Json::number(n.to_double())
+        match slot {
+          Some(slot) =>
+            match slot.context_window {
+              Some(n) => Json::number(n.to_double())
+              None => Json::null()
+            }
           None => Json::null()
         },
       ),
       ("reasoning_efforts", Json::array(effort_values)),
+      ("pending", Json::boolean(!configured)),
       (
         "quota",
         if quota.is_empty() {

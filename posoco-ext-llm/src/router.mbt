@@ -52,12 +52,17 @@ pub(all) struct RouterModelPort {
 ///|
 /// Construct a router from a non-empty, uniquely keyed slot list.
 ///
-/// An empty default id selects the first slot in insertion order. Composition
-/// failures are raised before the router is returned, so callers never see a
-/// partially populated routing table.
+/// An empty default id selects the first slot in insertion order. A
+/// non-empty default that is absent from `slots` raises, unless
+/// `allow_missing_default` is set: hosts then keep the persisted selection
+/// as a *pending* active id — requests to it fail visibly until the slot
+/// appears (login/refresh) instead of silently moving to another model.
+/// Composition failures are raised before the router is returned, so
+/// callers never see a partially populated routing table.
 pub fn RouterModelPort::RouterModelPort(
   slots~ : Array[ModelSlot],
   default_slot_id? : String = "",
+  allow_missing_default? : Bool = false,
   bus? : @devkit.EventBus? = None,
   provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
   cred_store? : &@oauth.CredentialStore? = None,
@@ -89,6 +94,8 @@ pub fn RouterModelPort::RouterModelPort(
   }
   let active_id = if default_slot_id.length() == 0 {
     slot_order[0]
+  } else if !slot_map.contains(default_slot_id) && allow_missing_default {
+    default_slot_id
   } else {
     if !slot_map.contains(default_slot_id) {
       raise @posoco.CompositionError::ManifestSchemaError(
@@ -134,6 +141,7 @@ pub fn RouterModelPort::RouterModelPort(
 pub fn RouterModelPort::from_catalogs(
   catalogs : Array[ProviderModelCatalog],
   default_slot_id? : String = "",
+  allow_missing_default? : Bool = false,
   bus? : @devkit.EventBus? = None,
   provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
   cred_store? : &@oauth.CredentialStore? = None,
@@ -163,6 +171,7 @@ pub fn RouterModelPort::from_catalogs(
   RouterModelPort(
     slots~,
     default_slot_id~,
+    allow_missing_default~,
     bus~,
     provider_credential_store~,
     cred_store~,
@@ -174,16 +183,39 @@ pub fn RouterModelPort::from_catalogs(
 }
 
 ///|
-/// Return the active slot. A missing active slot is an internal invariant
-/// violation and must fail loudly instead of silently falling back.
-fn RouterModelPort::active_slot(self : RouterModelPort) -> ModelSlot {
+/// Return the active slot when it exists. `None` marks a pending default: a
+/// persisted selection whose slot is absent from the current catalogs — a
+/// visible user state, not an invariant violation.
+fn RouterModelPort::active_slot_opt(self : RouterModelPort) -> ModelSlot? {
+  self.slots.get(self.active_id)
+}
+
+///|
+/// Dispatch target for model calls. A pending default fails the request with
+/// a typed error so the user sees exactly which selection cannot be served.
+fn RouterModelPort::dispatch_slot(
+  self : RouterModelPort,
+) -> ModelSlot raise @posoco.ModelError {
   match self.slots.get(self.active_id) {
     Some(slot) => slot
     None =>
-      abort(
-        "posoco_ext_llm router invariant violated: active slot is missing: " +
-        self.active_id,
+      raise @posoco.ModelError::RequestBuild(
+        "model slot '" +
+        self.active_id +
+        "' is not configured (persisted selection); switch with /model or log in to the provider",
       )
+  }
+}
+
+///|
+/// Split a `"provider/model"` slot id into its parts. Every provider
+/// extension builds slot ids in this shape; a malformed id degrades to the
+/// whole string in both parts — the result is display-only, never a routing
+/// fact.
+fn split_slot_id(slot_id : String) -> (String, String) {
+  match slot_id.find("/") {
+    Some(index) => (slot_id[0:index].to_owned(), slot_id[index + 1:].to_owned())
+    None => (slot_id, slot_id)
   }
 }
 
@@ -217,12 +249,18 @@ pub fn RouterModelPort::active_slot_id(self : RouterModelPort) -> String {
 
 ///|
 pub fn RouterModelPort::current_provider_id(self : RouterModelPort) -> String {
-  self.active_slot().provider_id
+  match self.active_slot_opt() {
+    Some(slot) => slot.provider_id
+    None => split_slot_id(self.active_id).0
+  }
 }
 
 ///|
 pub fn RouterModelPort::current_model_id(self : RouterModelPort) -> String {
-  self.active_slot().model_id
+  match self.active_slot_opt() {
+    Some(slot) => slot.model_id
+    None => split_slot_id(self.active_id).1
+  }
 }
 
 ///|
@@ -262,8 +300,10 @@ pub fn RouterModelPort::switch_slot(
 /// fails before any mutation, so a rejected replacement leaves the routing
 /// table untouched. The active selection survives when its slot id still
 /// exists afterwards (the slot object is swapped, selection and effort stay);
-/// when the active slot disappears, selection falls back to the provider's
-/// first new slot and the effort selection is cleared.
+/// when a previously present active slot disappears, selection falls back to
+/// the provider's first new slot and the effort selection is cleared. A
+/// pending default is untouched: if the replacement provides its slot the
+/// selection heals in place, otherwise it stays pending.
 ///
 /// Every success path ends with a model-status republication, so the status
 /// bar reflects the swapped catalog; the provider event rides only the
@@ -296,6 +336,10 @@ pub fn RouterModelPort::replace_provider_slots(
     seen[slot.id] = ()
   }
   let old_active_id = self.active_id
+  // A pending default (persisted selection without a slot object) must stay
+  // pending across replacements: only a previously present active slot can
+  // fall back to the provider's first new slot.
+  let had_active = self.slots.contains(old_active_id)
   // Drop the provider's previous ids from the ordered list, then re-insert
   // the replacement ids where the provider's first old id appeared (append
   // when the provider contributed no slots before).
@@ -328,7 +372,7 @@ pub fn RouterModelPort::replace_provider_slots(
   }
   self.slot_order.clear()
   self.slot_order.append(replaced_order)
-  if !self.slots.contains(old_active_id) {
+  if had_active && !self.slots.contains(old_active_id) {
     self.active_id = slots[0].id
     self.active_effort = None
     self.publish_provider_event()
@@ -404,7 +448,10 @@ async fn RouterModelPort::decision_slot_for_chat(
     Some(decision) => decision
     None => return None
   }
-  let slot = self.active_slot()
+  let slot = match self.active_slot_opt() {
+    Some(slot) => slot
+    None => return None
+  }
   if slot.thinking_efforts.length() < 2 || slot.rebuild_on_effort is None {
     return None
   }
@@ -470,7 +517,7 @@ pub impl @posoco.ModelPort for RouterModelPort with fn chat(
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let slot = match self.decision_slot_for_chat(messages, tools.length()) {
     Some(slot) => slot
-    None => self.active_slot()
+    None => self.dispatch_slot()
   }
   let result = slot.port.chat(scope, messages, tools, options, stream)
   // Refresh after the response: the registry pull never delays the first
@@ -490,14 +537,19 @@ pub impl @posoco.ModelPort for RouterModelPort with fn compact(
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
-  self.active_slot().port.compact(scope, messages, options, trigger)
+  self.dispatch_slot().port.compact(scope, messages, options, trigger)
 }
 
 ///|
 pub impl @posoco.ModelPort for RouterModelPort with fn provider_config(
   self : RouterModelPort,
 ) -> @posoco.ProviderConfig {
-  self.active_slot().port.provider_config()
+  match self.active_slot_opt() {
+    Some(slot) => slot.port.provider_config()
+    // A pending default reports no capabilities: auto-compact stays off and
+    // effort resets instead of fabricating facts for a slot that is absent.
+    None => @posoco.ProviderConfig::empty()
+  }
 }
 
 ///|
