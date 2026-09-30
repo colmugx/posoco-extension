@@ -42,7 +42,10 @@ async test "io[js]: save and append publish the session status register" {
   let bus = @devkit.EventBus()
   let capture = StatusCapture::StatusCapture()
   bus.subscribe(capture)
-  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root, bus=Some(bus))
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
+    root,
+    bus=Some(bus),
+  )
   let msgs : Array[@posoco.Message] = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
   ]

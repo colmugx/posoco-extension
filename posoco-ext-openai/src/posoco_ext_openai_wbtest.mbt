@@ -1042,7 +1042,7 @@ async test "codex refresh sends version and account headers and preserves effort
   }
   assert_eq(
     transport_impl.urls[0],
-    "https://chatgpt.com/backend-api/codex/models?client_version=0.155.1",
+    "https://chatgpt.com/backend-api/codex/models?client_version=0.159.0",
   )
   assert_eq(
     transport_impl.headers[0].get("Authorization"),

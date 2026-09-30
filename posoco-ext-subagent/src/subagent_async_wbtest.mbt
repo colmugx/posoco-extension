@@ -357,7 +357,7 @@ async test "unknown_kind_lists_catalog_names" {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
       assert_true(content.contains("unknown kind 'wizard'"))
       assert_true(content.contains("coder"))
-      assert_true(content.contains("scout"))
+      assert_true(content.contains("explore"))
       assert_true(content.contains("reviewer"))
       assert_true(content.contains("oracle"))
     }
@@ -403,7 +403,7 @@ async test "empty_tool_intersection_errors_with_both_lists" {
       agent_call(
         args_object([
           ("task", Json::string("t")),
-          ("kind", Json::string("scout")),
+          ("kind", Json::string("explore")),
           ("tools", Json::array([Json::string("bash")])),
         ]),
       ),
@@ -411,7 +411,7 @@ async test "empty_tool_intersection_errors_with_both_lists" {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
       assert_true(content.contains("empty"))
       assert_true(content.contains("bash"))
-      assert_true(content.contains("scout"))
+      assert_true(content.contains("explore"))
       assert_true(content.contains("read"))
     }
     _ => fail("expected empty-intersection error")
@@ -426,7 +426,10 @@ async test "tools_absent_uses_kind_whitelist" {
     tools,
     "agent",
     agent_call(
-      args_object([("task", Json::string("t")), ("kind", Json::string("scout"))]),
+      args_object([
+        ("task", Json::string("t")),
+        ("kind", Json::string("explore")),
+      ]),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))

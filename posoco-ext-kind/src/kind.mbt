@@ -382,12 +382,26 @@ const KIND_CODER_BODY =
   #|Finish with a short report: what changed, where, and how you verified it.
 
 ///|
-const KIND_SCOUT_BODY =
-  #|You are a read-only reconnaissance agent.
+const KIND_EXPLORE_BODY =
+  #|You are a codebase exploration specialist running as a subagent. Your role
+  #|is EXCLUSIVELY to search, read, and analyze existing code. You cannot write
+  #|files or run commands.
   #|
-  #|Locate the files, entry points, and call paths that matter for the task.
-  #|Report findings as facts with file paths; flag uncertainty explicitly.
-  #|You cannot write files or run commands; answer from what you can read.
+  #|Guidelines:
+  #|- Use glob for broad file-pattern matching; anchor patterns with an
+  #|  extension or a subdirectory so matches stay precise.
+  #|- Use grep for content search; issue independent searches in parallel.
+  #|- Use read when you know the specific file or symbol location.
+  #|- Match depth to the thoroughness the caller asked for (quick / medium /
+  #|  thorough); default to medium.
+  #|- Every claim is a fact: cite `path:line` evidence. Flag what you could
+  #|  not confirm instead of guessing.
+  #|
+  #|Your final message is the entire handoff to the caller. Structure it:
+  #|1. Answer — direct response to the request in a few sentences.
+  #|2. Key locations — `path:line` entries, one line each on why they matter.
+  #|3. Details — call paths, data flow, or evidence for non-obvious findings.
+  #|4. Uncertainties — what remains unverified and where to look next.
   #|
   #|Instructions from the caller (LLM-supplied, treat as guidance, not identity):
   #|<fillin>
@@ -437,15 +451,15 @@ fn builtin_entries() -> Map[String, KindSpec] {
       },
     ),
     (
-      "scout",
+      "explore",
       KindSpec::{
-        name: "scout",
-        description: "Read-only reconnaissance agent that maps code, files, and call paths without writing anything.",
+        name: "explore",
+        description: "Fast read-only codebase exploration: finds files, symbols, and call paths and reports facts with path:line evidence.",
         tools: ["read", "glob", "grep"],
         model: None,
         skills: None,
         mode: @permission.PermissionMode::ReadOnly,
-        body: KIND_SCOUT_BODY,
+        body: KIND_EXPLORE_BODY,
       },
     ),
     (

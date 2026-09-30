@@ -160,7 +160,7 @@ test "render_kind_body_multiple_bindings" {
 ///|
 test "builtin_catalog_kinds" {
   let cat = KindCatalog::builtin()
-  assert_eq(cat.names(), ["coder", "oracle", "reviewer", "scout"])
+  assert_eq(cat.names(), ["coder", "explore", "oracle", "reviewer"])
   assert_eq(cat.diagnostics(), [])
   for name in cat.names() {
     match cat.get(name) {
@@ -191,16 +191,16 @@ test "builtin_coder_is_the_default_face" {
 ///|
 test "builtin_readonly_kinds" {
   let cat = KindCatalog::builtin()
-  for name in ["scout", "reviewer", "oracle"] {
+  for name in ["explore", "reviewer", "oracle"] {
     match cat.get(name) {
       Some(spec) =>
         assert_true(spec.mode is @permission.PermissionMode::ReadOnly)
       None => fail("missing builtin kind " + name)
     }
   }
-  match cat.get("scout") {
-    Some(scout) => assert_eq(scout.tools, ["read", "glob", "grep"])
-    None => fail("missing scout")
+  match cat.get("explore") {
+    Some(explore) => assert_eq(explore.tools, ["read", "glob", "grep"])
+    None => fail("missing explore")
   }
   match cat.get("oracle") {
     Some(oracle) => assert_eq(oracle.tools, [])
@@ -309,7 +309,7 @@ async test "load_without_directories_returns_clean_builtin" {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     }
     let cat = KindCatalog::load(home=root, cwd=root + "/nowhere")
-    assert_eq(cat.names(), ["coder", "oracle", "reviewer", "scout"])
+    assert_eq(cat.names(), ["coder", "explore", "oracle", "reviewer"])
     assert_eq(cat.diagnostics(), [])
   }
 }

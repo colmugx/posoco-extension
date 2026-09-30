@@ -54,7 +54,7 @@ pub fn DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport() -> D
 /// provider-owned value aligned with the Codex CLI client used for model
 /// discovery.
 pub fn openai_codex_models_client_version() -> String {
-  "0.155.1"
+  "0.159.0"
 }
 
 ///|
