@@ -22,7 +22,7 @@ pub impl @oauth.AuthPromptInteraction for ZenApiKeyPrompt with fn prompt(
 }
 
 ///|
-pub extend ZenApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+pub extend ZenApiKeyPrompt with @posoco/ext-oauth.AuthPromptInteraction::{
   prompt,
 }
 

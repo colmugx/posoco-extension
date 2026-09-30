@@ -41,7 +41,7 @@ moon add colmugx/posoco-ext-openai-compatible
 
 ```moonbit
 // moon.pkg: "colmugx/posoco-ext-openai-compatible" @openai_compatible
-//            (+ "colmugx/posoco-ext-llm" @llm for the router)
+//            (+ "posoco/ext-llm" @llm for the router)
 
 let config = @openai_compatible.OpenAICompatibleConfig(
   "sk-...",
@@ -209,9 +209,9 @@ together with no host-side changes.
 ## Dependencies
 
 - `colmugx/posoco` — ModelPort trait + types
-- `colmugx/posoco-devkit` — `ExtContext` logger helper
-- `colmugx/posoco-ext-llm` — provider-neutral catalog/router
-- `colmugx/posoco-ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
-- `colmugx/posoco-kit-chat-completions` — shared SSE parsing, 429
+- `posoco/devkit` — `ExtContext` logger helper
+- `posoco/ext-llm` — provider-neutral catalog/router
+- `posoco/ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
+- `posoco/kit-chat-completions` — shared SSE parsing, 429
   classification, content encoding, and `prompt_cache_key` helpers
 - `moonbitlang/async/http` — HTTP transport

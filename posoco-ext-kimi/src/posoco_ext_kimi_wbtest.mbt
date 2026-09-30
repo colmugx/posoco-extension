@@ -90,7 +90,7 @@ pub impl @oauth.OAuthHttpTransport for KimiOAuthTransport with fn post(
 }
 
 ///|
-pub extend KimiOAuthTransport with @colmugx/posoco-ext-oauth.OAuthHttpTransport::{
+pub extend KimiOAuthTransport with @posoco/ext-oauth.OAuthHttpTransport::{
   post,
   get,
 }
@@ -104,7 +104,7 @@ pub impl @oauth.AuthPromptInteraction for KimiApiKeyPrompt with fn prompt(
 }
 
 ///|
-pub extend KimiApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+pub extend KimiApiKeyPrompt with @posoco/ext-oauth.AuthPromptInteraction::{
   prompt,
 }
 
@@ -222,7 +222,7 @@ pub impl @oauth.OAuthHttpTransport for KimiRetryOAuthTransport with fn post(
 }
 
 ///|
-pub extend KimiRetryOAuthTransport with @colmugx/posoco-ext-oauth.OAuthHttpTransport::{
+pub extend KimiRetryOAuthTransport with @posoco/ext-oauth.OAuthHttpTransport::{
   post,
   get,
 }

@@ -2,10 +2,10 @@
 package "colmugx/posoco-ext-edit"
 
 import {
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "posoco/devkit",
 }
 
 // Values
@@ -15,10 +15,10 @@ pub fn edit_extension() -> EditTools
 
 // Types and methods
 pub(all) struct EditTools {
-  freshness : @posoco-devkit.FreshnessGuard?
-  anchor : @posoco-devkit.WorkspaceAnchor?
+  freshness : @devkit.FreshnessGuard?
+  anchor : @devkit.WorkspaceAnchor?
 }
-pub fn EditTools::EditTools(freshness? : @posoco-devkit.FreshnessGuard, anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub fn EditTools::EditTools(freshness? : @devkit.FreshnessGuard, anchor? : @devkit.WorkspaceAnchor?) -> Self
 pub async fn EditTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn EditTools::extension_id(Self) -> String
 pub fn EditTools::list_tools(Self) -> Array[@kernel.ToolDef]

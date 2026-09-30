@@ -2,7 +2,7 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/io",
   "colmugx/posoco",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "colmugx/posoco-ext-workspace" @workspace,
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/encoding/utf8",

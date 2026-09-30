@@ -2,7 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/posoco-ext-kind" @kind,
   "colmugx/posoco-ext-permission" @permission,
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "moonbitlang/core/json",
   "moonbitlang/core/debug",
 }

@@ -1,9 +1,9 @@
 import {
   "colmugx/posoco",
-  "colmugx/posoco-devkit" @devkit,
-  "colmugx/posoco-ext-llm" @llm,
-  "colmugx/posoco-ext-oauth" @oauth,
-  "colmugx/posoco-kit-chat-completions" @chatkit,
+  "posoco/devkit",
+  "posoco/ext-llm" @llm,
+  "posoco/ext-oauth" @oauth,
+  "posoco/kit-chat-completions" @chatkit,
   "colmugx/posoco-kit-compact-summary" @compact_summary,
   "moonbitlang/async",
   "moonbitlang/async/http",

@@ -2,10 +2,10 @@
 package "colmugx/posoco-ext-glob"
 
 import {
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "posoco/devkit",
 }
 
 // Values
@@ -15,10 +15,10 @@ pub fn glob_extension() -> GlobTools
 
 // Types and methods
 pub(all) struct GlobTools {
-  anchor : @posoco-devkit.WorkspaceAnchor?
+  anchor : @devkit.WorkspaceAnchor?
   ignores : Array[String]
 }
-pub fn GlobTools::GlobTools(anchor? : @posoco-devkit.WorkspaceAnchor?, ignores? : Array[String]) -> Self
+pub fn GlobTools::GlobTools(anchor? : @devkit.WorkspaceAnchor?, ignores? : Array[String]) -> Self
 pub async fn GlobTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GlobTools::extension_id(Self) -> String
 pub fn GlobTools::list_tools(Self) -> Array[@kernel.ToolDef]

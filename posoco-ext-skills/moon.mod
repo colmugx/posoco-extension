@@ -18,5 +18,5 @@ import {
   "colmugx/posoco@0.20.0",
   "colmugx/posoco-ext-workspace@0.1.0",
   "moonbit-community/yaml@0.0.5",
-  "moonbitlang/async@0.22.3",
+  "moonbitlang/async@0.22.4",
 }

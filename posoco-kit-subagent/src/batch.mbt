@@ -14,10 +14,13 @@ pub(all) struct BatchItem {
   task : String
   /// Resolved kind name.
   kind_name : String
-  /// Resolved model slot and reasoning effort.
-  selection : ResolvedSelection
-  /// Resolved tool face (spawn whitelist ∩ kind whitelist).
-  tools : Array[String]
+  /// Resolved model slot.
+  slot : String
+  /// Resolved reasoning effort (None = the slot's default).
+  effort : String?
+  /// Resolved tool face: None = the host default core face, Some(list) =
+  /// explicit whitelist (possibly empty).
+  tools : Array[String]?
   /// Permission posture the child runs with.
   permission : @permission.PermissionMode
   /// Execution lifetime the coordinator requests from the Agent.

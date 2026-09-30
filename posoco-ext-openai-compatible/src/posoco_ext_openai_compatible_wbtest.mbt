@@ -30,7 +30,7 @@ pub impl @oauth.AuthPromptInteraction for OaiCompatApiKeyPrompt with fn prompt(
 }
 
 ///|
-pub extend OaiCompatApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+pub extend OaiCompatApiKeyPrompt with @posoco/ext-oauth.AuthPromptInteraction::{
   prompt,
 }
 

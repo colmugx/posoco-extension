@@ -70,7 +70,7 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn provider_id(
 }
 
 ///|
-pub extend DeepSeekProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+pub extend DeepSeekProvider with @posoco/ext-llm.ProviderFactory::{
   credential_id,
   provider_id,
   build,
@@ -282,7 +282,7 @@ pub impl @llm.ApiKeyFactory for DeepSeekProvider with fn provider_id(
 }
 
 ///|
-pub extend DeepSeekProvider with @colmugx/posoco-ext-llm.ApiKeyFactory::{login}
+pub extend DeepSeekProvider with @posoco/ext-llm.ApiKeyFactory::{login}
 
 ///|
 pub impl @llm.ApiKeyFactory for DeepSeekProvider with fn credential_id(

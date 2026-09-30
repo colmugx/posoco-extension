@@ -1,4 +1,4 @@
-name = "colmugx/posoco-kit-chat-completions"
+name = "posoco/kit-chat-completions"
 
 version = "0.1.0"
 

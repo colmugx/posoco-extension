@@ -2,7 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/posoco/kernel",
   "colmugx/posoco/runtime",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "colmugx/mcp/client",
   "colmugx/mcp/transport",
   "colmugx/mcp/protocol/types",

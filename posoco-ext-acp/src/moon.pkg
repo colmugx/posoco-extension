@@ -1,7 +1,7 @@
 import {
   "colmugx/posoco",
   "colmugx/acp",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "colmugx/posoco-ext-permission" @permission,
   "moonbitlang/async",
   "moonbitlang/async/aqueue",

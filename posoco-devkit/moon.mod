@@ -1,6 +1,6 @@
-name = "colmugx/posoco-devkit"
+name = "posoco/devkit"
 
-version = "0.4.0"
+version = "0.4.1"
 
 readme = "README.mbt.md"
 
@@ -13,6 +13,6 @@ description = "Small helper layer for Posoco extension authors"
 source = "src"
 
 import {
-  "moonbitlang/async@0.22.3",
+  "moonbitlang/async@0.22.4",
   "moonbitlang/x@0.5.5",
 }

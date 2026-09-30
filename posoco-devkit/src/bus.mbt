@@ -26,7 +26,7 @@
 /// # Example
 /// ```mbt check
 /// test "publish with no subscribers completes silently" {
-///   let bus = @posoco-devkit.EventBus::EventBus()
+///   let bus = @devkit.EventBus::EventBus()
 ///   bus.publish({
 ///     source: "posoco_ext_scrum",
 ///     topic: "status",

@@ -2,12 +2,12 @@
 package "colmugx/posoco-ext-profiles"
 
 import {
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "posoco/devkit",
 }
 
 // Values
@@ -40,7 +40,7 @@ pub struct Profiles {
 }
 pub async fn Profiles::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn Profiles::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
-pub fn Profiles::build(manifests~ : Array[ProfileManifest], defer_set~ : Array[String], captured_prompts~ : Map[String, String], attribution~ : Map[String, String], bus? : @posoco-devkit.EventBus?, store? : &ProfileStore?, session_store? : &@port.SessionStore?, summarizer? : ((Array[(String, Int)]) -> (String, String))?) -> Self
+pub fn Profiles::build(manifests~ : Array[ProfileManifest], defer_set~ : Array[String], captured_prompts~ : Map[String, String], attribution~ : Map[String, String], bus? : @devkit.EventBus?, store? : &ProfileStore?, session_store? : &@port.SessionStore?, summarizer? : ((Array[(String, Int)]) -> (String, String))?) -> Self
 pub fn Profiles::commands(Self) -> Array[@port.CommandDef]
 pub async fn Profiles::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn Profiles::extension_id(Self) -> String

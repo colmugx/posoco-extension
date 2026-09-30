@@ -179,6 +179,4 @@ pub impl @devkit.QuotaSource for ZaiCodingPlanQuotaSource with fn read(
 }
 
 ///|
-pub extend ZaiCodingPlanQuotaSource with @colmugx/posoco-devkit.QuotaSource::{
-  read,
-}
+pub extend ZaiCodingPlanQuotaSource with @posoco/devkit.QuotaSource::{read}

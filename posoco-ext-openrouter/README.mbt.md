@@ -186,9 +186,9 @@ POSOCO_WIRE_LOG=~/.cetas/wire.log bun run start
 ## Dependencies
 
 - `colmugx/posoco` — `ModelPort` trait + kernel types (`Reasoning.raw` carries `reasoning_details`)
-- `colmugx/posoco-devkit` — `ExtContext` logger helper
-- `colmugx/posoco-kit-chat-completions` — error classification, usage/cache-key helpers (the SSE processor is deliberately not shared)
+- `posoco/devkit` — `ExtContext` logger helper
+- `posoco/kit-chat-completions` — error classification, usage/cache-key helpers (the SSE processor is deliberately not shared)
 - `colmugx/posoco-kit-compact-summary` — summarize-based compaction
-- `colmugx/posoco-ext-llm` — provider-neutral catalog/router
-- `colmugx/posoco-ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
+- `posoco/ext-llm` — provider-neutral catalog/router
+- `posoco/ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
 - `moonbitlang/async/http` — HTTP transport

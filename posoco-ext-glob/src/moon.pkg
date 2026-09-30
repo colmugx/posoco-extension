@@ -2,7 +2,7 @@ warnings = "-unused_package"
 
 import {
   "colmugx/posoco",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "moonbitlang/async/fs",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",

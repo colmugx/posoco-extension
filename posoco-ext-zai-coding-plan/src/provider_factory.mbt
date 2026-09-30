@@ -76,7 +76,7 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn provider_id(
 }
 
 ///|
-pub extend ZaiCodingPlanProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+pub extend ZaiCodingPlanProvider with @posoco/ext-llm.ProviderFactory::{
   credential_id,
   provider_id,
   build,
@@ -225,9 +225,7 @@ pub impl @llm.ApiKeyFactory for ZaiCodingPlanProvider with fn provider_id(
 }
 
 ///|
-pub extend ZaiCodingPlanProvider with @colmugx/posoco-ext-llm.ApiKeyFactory::{
-  login,
-}
+pub extend ZaiCodingPlanProvider with @posoco/ext-llm.ApiKeyFactory::{login}
 
 ///|
 pub impl @llm.ApiKeyFactory for ZaiCodingPlanProvider with fn credential_id(

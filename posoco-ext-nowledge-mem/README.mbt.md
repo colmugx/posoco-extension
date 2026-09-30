@@ -186,7 +186,11 @@ session inbound state).
 records the lane's `last_error` (memory writes, `mem.last_error`) and
 leaves the acknowledged cursor untouched; the next turn re-stages the
 transcript and commits again before returning (idempotency keys make the
-re-send safe server-side). Queued memory writes re-enqueue at the tail. No
+re-send safe server-side). Queued memory writes re-enqueue at the tail
+only when the request provably never reached the server; a failure after
+send (timeout, broken response, server-flagged error) finishes the op with
+the reason recorded on `mem.last_error`, because the server's
+non-idempotent `memory_add` would otherwise store the same memory again. No
 failed sync can abort a turn — the turn-end drain carries its own
 `NMEM_SYNC_TIMEOUT_MS` budget, so it cannot stall the return either.
 

@@ -31,11 +31,11 @@ stores ship for headless hosts and tests.
 ## Usage
 
 ```bash
-moon add colmugx/posoco-ext-oauth
+moon add posoco/ext-oauth
 ```
 
 ```moonbit nocheck
-// moon.pkg: "colmugx/posoco-ext-oauth" @oauth
+// moon.pkg: "posoco/ext-oauth" @oauth
 
 let server : &@oauth.CallbackServer = @oauth.create_callback_server()
 let transport : &@oauth.OAuthHttpTransport =
@@ -165,7 +165,7 @@ Device flow stays supported for providers whose authorization servers require
 it:
 
 ```moonbit nocheck
-// moon.pkg: "colmugx/posoco-ext-oauth" @oauth
+// moon.pkg: "posoco/ext-oauth" @oauth
 
 let config = @oauth.DeviceFlowConfig(
   client_id="your-client-id",

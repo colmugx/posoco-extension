@@ -701,7 +701,7 @@ pub impl @oauth.OAuthHttpTransport for CodexRecordingTransport with fn post(
 }
 
 ///|
-pub extend CodexRecordingTransport with @colmugx/posoco-ext-oauth.OAuthHttpTransport::{
+pub extend CodexRecordingTransport with @posoco/ext-oauth.OAuthHttpTransport::{
   post,
   get,
 }
@@ -724,7 +724,7 @@ pub impl @oauth.AuthInteraction for CodexRecordingInteraction with fn notify(
 }
 
 ///|
-pub extend CodexRecordingInteraction with @colmugx/posoco-ext-oauth.AuthInteraction::{
+pub extend CodexRecordingInteraction with @posoco/ext-oauth.AuthInteraction::{
   notify,
   is_cancelled,
 }
@@ -757,7 +757,7 @@ pub impl @oauth.CallbackServer for CodexFakeCallbackServer with fn start(
 }
 
 ///|
-pub extend CodexFakeCallbackServer with @colmugx/posoco-ext-oauth.CallbackServer::{
+pub extend CodexFakeCallbackServer with @posoco/ext-oauth.CallbackServer::{
   start,
   stop,
   wait_callback,
@@ -2266,7 +2266,7 @@ pub impl @oauth.ProviderCredentialStore for LoadRefreshFailingStore with fn dele
 }
 
 ///|
-pub extend LoadRefreshFailingStore with @colmugx/posoco-ext-oauth.ProviderCredentialStore::{
+pub extend LoadRefreshFailingStore with @posoco/ext-oauth.ProviderCredentialStore::{
   read,
   write,
   delete,

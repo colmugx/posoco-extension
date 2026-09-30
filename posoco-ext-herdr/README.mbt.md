@@ -30,11 +30,11 @@ host may hold either alone.
 ## Usage
 
 ```bash
-moon add colmugx/posoco-ext-herdr
+moon add posoco/ext-herdr
 ```
 
 ```moonbit
-// moon.pkg: "colmugx/posoco-ext-herdr" @herdr
+// moon.pkg: "posoco/ext-herdr" @herdr
 
 // copied from cetas-js/lib/cetas_js.mbt — both detections are env-gated:
 match @herdr.HerdrReporter::detect() {

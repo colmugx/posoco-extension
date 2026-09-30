@@ -110,7 +110,7 @@ pub impl @llm.ProviderFactory for KimiProvider with fn provider_id(
 }
 
 ///|
-pub extend KimiProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+pub extend KimiProvider with @posoco/ext-llm.ProviderFactory::{
   credential_id,
   provider_id,
   build,
@@ -192,7 +192,7 @@ pub impl @llm.RefreshableProviderFactory for KimiProvider with fn provider_id(
 }
 
 ///|
-pub extend KimiProvider with @colmugx/posoco-ext-llm.RefreshableProviderFactory::{
+pub extend KimiProvider with @posoco/ext-llm.RefreshableProviderFactory::{
   refresh,
 }
 
@@ -283,7 +283,7 @@ pub impl @llm.OAuthFactory for KimiProvider with fn provider_id(
 }
 
 ///|
-pub extend KimiProvider with @colmugx/posoco-ext-llm.OAuthFactory::{login}
+pub extend KimiProvider with @posoco/ext-llm.OAuthFactory::{login}
 
 ///|
 pub impl @llm.OAuthFactory for KimiProvider with fn credential_id(

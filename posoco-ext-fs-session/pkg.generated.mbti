@@ -2,12 +2,12 @@
 package "colmugx/posoco-ext-fs-session"
 
 import {
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "posoco/devkit",
 }
 
 // Values
@@ -36,10 +36,10 @@ pub fn validate_session_id(String) -> Result[Unit, String]
 // Types and methods
 pub(all) struct JsonlSessionStore {
   root_dir : String
-  bus : @posoco-devkit.EventBus?
+  bus : @devkit.EventBus?
   mut current_id : String?
 }
-pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @posoco-devkit.EventBus?) -> Self
+pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @devkit.EventBus?) -> Self
 pub async fn JsonlSessionStore::append_messages(Self, String, Int, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
 pub async fn JsonlSessionStore::checkpoint(Self, String, @port.SessionCheckpoint) -> Unit raise @error.SessionError
 pub fn JsonlSessionStore::commands(Self) -> Array[@port.CommandDef]

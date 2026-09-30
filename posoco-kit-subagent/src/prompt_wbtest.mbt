@@ -16,7 +16,7 @@ fn prompt_test_kind() -> @kind.KindSpec {
   {
     name: "coder",
     description: "test kind",
-    tools: [],
+    tools: Some([]),
     model: None,
     effort: None,
     skills: None,

@@ -224,7 +224,7 @@ pub impl @devkit.BusSubscriber for StatusBar with fn on_bus_event(
 }
 
 ///|
-pub extend StatusBar with @colmugx/posoco-devkit.BusSubscriber::{on_bus_event}
+pub extend StatusBar with @posoco/devkit.BusSubscriber::{on_bus_event}
 
 ///|
 /// Direct path, same semantics as a bus `update` op: set `segment` on

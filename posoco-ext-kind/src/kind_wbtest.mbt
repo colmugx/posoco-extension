@@ -27,7 +27,7 @@ test "parse_kind_file_all_fields_comma_list" {
   let spec = parse_kind_file(source)
   assert_eq(spec.name, "fix")
   assert_eq(spec.description, "Tight-scope fixer")
-  assert_eq(spec.tools, ["read", "edit", "bash"])
+  assert_eq(spec.tools, Some(["read", "edit", "bash"]))
   assert_eq(spec.model, Some("zai/glm-5.3"))
   assert_eq(spec.effort, Some("high"))
   assert_eq(spec.skills, Some(["repo-map", "tree"]))
@@ -51,7 +51,7 @@ test "parse_kind_file_dash_lists" {
     "---\n" +
     "Body"
   let spec = parse_kind_file(source)
-  assert_eq(spec.tools, ["read", "glob", "grep"])
+  assert_eq(spec.tools, Some(["read", "glob", "grep"]))
   assert_eq(spec.skills, Some(["repo-map"]))
 }
 
@@ -60,7 +60,7 @@ test "parse_kind_file_defaults" {
   let spec = parse_kind_file(
     "---\nname: plain\ndescription: Bare kind\n---\nBody with {{instructions}}",
   )
-  assert_eq(spec.tools, [])
+  assert_eq(spec.tools, None)
   assert_eq(spec.model, None)
   assert_eq(spec.effort, None)
   assert_eq(spec.skills, None)
@@ -73,7 +73,7 @@ test "parse_kind_file_empty_tools_list_is_legal" {
   let spec = parse_kind_file(
     "---\nname: bare\ndescription: No tools\ntools: []\n---\nBody",
   )
-  assert_eq(spec.tools, [])
+  assert_eq(spec.tools, Some([]))
 }
 
 ///|
@@ -184,7 +184,10 @@ test "builtin_coder_is_the_default_face" {
   match cat.get("coder") {
     Some(coder) => {
       assert_true(coder.mode is @permission.PermissionMode::WorkspaceWrite)
-      assert_eq(coder.tools, ["read", "write", "edit", "glob", "grep", "bash"])
+      assert_eq(
+        coder.tools,
+        Some(["read", "write", "edit", "glob", "grep", "bash"]),
+      )
       assert_eq(coder.model, None)
       assert_eq(coder.skills, None)
     }
@@ -203,11 +206,11 @@ test "builtin_readonly_kinds" {
     }
   }
   match cat.get("explore") {
-    Some(explore) => assert_eq(explore.tools, ["read", "glob", "grep"])
+    Some(explore) => assert_eq(explore.tools, Some(["read", "glob", "grep"]))
     None => fail("missing explore")
   }
   match cat.get("oracle") {
-    Some(oracle) => assert_eq(oracle.tools, [])
+    Some(oracle) => assert_eq(oracle.tools, Some([]))
     None => fail("missing oracle")
   }
   assert_true(cat.get("nope") is None)
@@ -284,7 +287,7 @@ async test "load_project_overrides_global_and_skips_bad_files" {
       Some(coder) => {
         assert_eq(coder.description, "Project coder")
         assert_true(coder.mode is @permission.PermissionMode::ReadOnly)
-        assert_eq(coder.tools, ["read", "glob"])
+        assert_eq(coder.tools, Some(["read", "glob"]))
         assert_true(coder.body.contains("PROJECT"))
       }
       None => fail("expected project coder override")
@@ -363,11 +366,67 @@ async test "load_global_directory_alone_overrides_builtin" {
       Some(oracle) => {
         assert_eq(oracle.description, "House oracle")
         assert_true(oracle.mode is @permission.PermissionMode::Interactive)
-        assert_eq(oracle.tools, ["read"])
+        assert_eq(oracle.tools, Some(["read"]))
         assert_true(oracle.body.contains("HOUSE"))
       }
       None => fail("expected global oracle override")
     }
     assert_eq(cat.diagnostics(), [])
   }
+}
+
+///|
+test "kind_spec_from_json_full_fields" {
+  let text =
+    #|{"name": "news_search", "description": "Content retrieval",
+    #|"model": "deepseek/deepseek-flash", "effort": "high",
+    #|"tools": "read, webfetch", "mode": "readonly"}
+  let value : Json = @json.parse(text) catch {
+    _ => fail("probe json must parse")
+  }
+  let spec = kind_spec_from_json(value)
+  assert_eq(spec.name, "news_search")
+  assert_eq(spec.description, "Content retrieval")
+  assert_eq(spec.model, Some("deepseek/deepseek-flash"))
+  assert_eq(spec.effort, Some("high"))
+  assert_eq(spec.tools, Some(["read", "webfetch"]))
+  assert_true(spec.mode is @permission.PermissionMode::ReadOnly)
+}
+
+///|
+test "kind_spec_from_json_defaults_body_and_tools" {
+  let value : Json = @json.parse(
+    "{\"name\": \"quick\", \"description\": \"Quick helper\"}",
+  ) catch {
+    _ => fail("probe json must parse")
+  }
+  let spec = kind_spec_from_json(value)
+  assert_eq(spec.tools, None)
+  assert_eq(spec.model, None)
+  assert_eq(spec.effort, None)
+  assert_eq(spec.skills, None)
+  assert_true(spec.mode is @permission.PermissionMode::WorkspaceWrite)
+  assert_true(spec.body.contains("You are quick, a subagent. Quick helper"))
+  assert_true(spec.body.contains("{{instructions}}"))
+  assert_true(spec.body.contains("<fillin>"))
+}
+
+///|
+test "kind_spec_from_json_rejects_bad_entries" {
+  let bad : Json = @json.parse("{\"name\": \"x\"}") catch {
+    _ => fail("probe json must parse")
+  }
+  let outcome : Result[KindSpec, KindError] = Ok(kind_spec_from_json(bad)) catch {
+    error => Err(error)
+  }
+  assert_true(outcome is Err(_))
+  let non_object : Json = @json.parse("[]") catch {
+    _ => fail("probe json must parse")
+  }
+  let non_object_outcome : Result[KindSpec, KindError] = Ok(
+    kind_spec_from_json(non_object),
+  ) catch {
+    error => Err(error)
+  }
+  assert_true(non_object_outcome is Err(_))
 }

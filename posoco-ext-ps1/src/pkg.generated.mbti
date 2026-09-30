@@ -2,10 +2,10 @@
 package "colmugx/posoco-ext-ps1"
 
 import {
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "posoco/devkit",
 }
 
 // Values
@@ -20,9 +20,9 @@ pub fn ps1_extension() -> PowerShellTools
 // Types and methods
 pub(all) struct PowerShellTools {
   exe : String
-  anchor : @posoco-devkit.WorkspaceAnchor?
+  anchor : @devkit.WorkspaceAnchor?
 }
-pub fn PowerShellTools::PowerShellTools(exe? : String, anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub fn PowerShellTools::PowerShellTools(exe? : String, anchor? : @devkit.WorkspaceAnchor?) -> Self
 pub async fn PowerShellTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn PowerShellTools::extension_id(Self) -> String
 pub fn PowerShellTools::list_tools(Self) -> Array[@kernel.ToolDef]

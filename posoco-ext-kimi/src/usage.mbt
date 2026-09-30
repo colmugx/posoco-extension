@@ -232,4 +232,4 @@ pub impl @devkit.QuotaSource for KimiUsageSource with fn read(
 }
 
 ///|
-pub extend KimiUsageSource with @colmugx/posoco-devkit.QuotaSource::{read}
+pub extend KimiUsageSource with @posoco/devkit.QuotaSource::{read}

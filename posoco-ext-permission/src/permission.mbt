@@ -219,9 +219,7 @@ pub impl @devkit.BusSubscriber for PermissionPolicy with fn on_bus_event(
 }
 
 ///|
-pub extend PermissionPolicy with @colmugx/posoco-devkit.BusSubscriber::{
-  on_bus_event,
-}
+pub extend PermissionPolicy with @posoco/devkit.BusSubscriber::{on_bus_event}
 
 ///|
 pub fn PermissionPolicy::mode(self : PermissionPolicy) -> PermissionMode {

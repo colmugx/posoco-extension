@@ -2,12 +2,12 @@
 package "colmugx/posoco-ext-bash"
 
 import {
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/runtime",
   "colmugx/posoco/types",
+  "posoco/devkit",
 }
 
 // Values
@@ -19,7 +19,7 @@ pub fn bash_extension() -> ShellTools
 pub struct CancellableShellRuntime {
   // private fields
 }
-pub fn CancellableShellRuntime::CancellableShellRuntime(fallback~ : &@runtime.Runtime, anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub fn CancellableShellRuntime::CancellableShellRuntime(fallback~ : &@runtime.Runtime, anchor? : @devkit.WorkspaceAnchor?) -> Self
 pub async fn CancellableShellRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
 pub async fn CancellableShellRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
 pub async fn CancellableShellRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
@@ -29,9 +29,9 @@ pub impl @runtime.Runtime for CancellableShellRuntime
 type ShellChildHandle
 
 pub(all) struct ShellTools {
-  anchor : @posoco-devkit.WorkspaceAnchor?
+  anchor : @devkit.WorkspaceAnchor?
 }
-pub fn ShellTools::ShellTools(anchor? : @posoco-devkit.WorkspaceAnchor?) -> Self
+pub fn ShellTools::ShellTools(anchor? : @devkit.WorkspaceAnchor?) -> Self
 pub async fn ShellTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn ShellTools::extension_id(Self) -> String
 pub fn ShellTools::list_tools(Self) -> Array[@kernel.ToolDef]

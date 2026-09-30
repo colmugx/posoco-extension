@@ -2,7 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/posoco/kernel",
   "colmugx/posoco/runtime",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "moonbitlang/async",
   "moonbitlang/async/process",
   "moonbitlang/async/js_async",

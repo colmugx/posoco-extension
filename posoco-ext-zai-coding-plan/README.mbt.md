@@ -126,7 +126,7 @@ windows from it live.
 
 - `colmugx/posoco` — ModelPort trait + types
 - `colmugx/posoco-ext-zai` — shared GLM protocol, catalog, config
-- `colmugx/posoco-devkit` — `ExtContext` logger helper
-- `colmugx/posoco-ext-llm` — provider-neutral catalog/router
-- `colmugx/posoco-ext-oauth` — credential store / auth prompt seams
+- `posoco/devkit` — `ExtContext` logger helper
+- `posoco/ext-llm` — provider-neutral catalog/router
+- `posoco/ext-oauth` — credential store / auth prompt seams
 - `moonbitlang/async` — async test runtime

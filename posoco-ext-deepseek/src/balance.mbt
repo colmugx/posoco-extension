@@ -143,4 +143,4 @@ pub impl @devkit.QuotaSource for DeepSeekBalanceSource with fn read(
 }
 
 ///|
-pub extend DeepSeekBalanceSource with @colmugx/posoco-devkit.QuotaSource::{read}
+pub extend DeepSeekBalanceSource with @posoco/devkit.QuotaSource::{read}

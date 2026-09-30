@@ -37,7 +37,12 @@ impl KindFs for NativeKindFs with fn read_text(_self, path : String) -> String {
 }
 
 ///|
-/// Native entry: load via `@fs`.
-pub async fn KindCatalog::load(home~ : String, cwd~ : String) -> KindCatalog {
-  load_with_io(NativeKindFs::{ }, home~, cwd~)
+/// Native entry: load via `@fs`. `extra` entries register between the
+/// builtin table and the on-disk overlays (same-name overlays win).
+pub async fn KindCatalog::load(
+  home~ : String,
+  cwd~ : String,
+  extra? : Array[KindSpec] = [],
+) -> KindCatalog {
+  load_with_io(NativeKindFs::{ }, home~, cwd~, extra~)
 }

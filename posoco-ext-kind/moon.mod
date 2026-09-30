@@ -15,9 +15,9 @@ description = "Kind catalog and delimit-region template rendering for Posoco sub
 import {
   "colmugx/posoco@0.20.0",
   "colmugx/posoco-ext-permission@0.2.0",
-  "colmugx/posoco-devkit@0.4.0",
+  "posoco/devkit@0.4.1",
   "moonbit-community/yaml@0.0.5",
-  "moonbitlang/async@0.22.3",
+  "moonbitlang/async@0.22.4",
 }
 
 source = "src"

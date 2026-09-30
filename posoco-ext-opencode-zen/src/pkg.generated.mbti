@@ -2,14 +2,14 @@
 package "colmugx/posoco-ext-opencode-zen"
 
 import {
-  "colmugx/posoco-devkit",
-  "colmugx/posoco-ext-llm",
-  "colmugx/posoco-ext-oauth",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
+  "posoco/devkit",
+  "posoco/ext-llm",
+  "posoco/ext-oauth",
 }
 
 // Values
@@ -19,9 +19,9 @@ pub fn parse_models_dev_surfaces(Json) -> Map[String, ZenReasoningSurface] raise
 
 pub fn parse_zen_models(Json) -> Array[ZenModelInfo] raise @error.ModelError
 
-pub fn zen_model_catalog(OpenCodeZenConfig, Array[ZenModelInfo], String, Map[String, ZenReasoningSurface], &@posoco-ext-llm.ApiKeyFactory) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn zen_model_catalog(OpenCodeZenConfig, Array[ZenModelInfo], String, Map[String, ZenReasoningSurface], &@ext-llm.ApiKeyFactory) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
 
-pub fn zen_static_catalog(OpenCodeZenConfig, &@posoco-ext-llm.ApiKeyFactory) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn zen_static_catalog(OpenCodeZenConfig, &@ext-llm.ApiKeyFactory) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
 
 // Errors
 
@@ -54,17 +54,17 @@ pub fn OpenCodeZenModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenCodeZenModelPort
 
 pub(all) struct OpenCodeZenProvider {
-  ctx : @posoco-devkit.ExtContext
+  ctx : @devkit.ExtContext
 }
-pub fn OpenCodeZenProvider::OpenCodeZenProvider(ctx? : @posoco-devkit.ExtContext) -> Self
-pub fn OpenCodeZenProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn OpenCodeZenProvider::OpenCodeZenProvider(ctx? : @devkit.ExtContext) -> Self
+pub fn OpenCodeZenProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
 pub fn OpenCodeZenProvider::credential_id(Self) -> String
-pub async fn OpenCodeZenProvider::login(Self, &@posoco-ext-oauth.AuthPromptInteraction) -> @posoco-ext-oauth.ApiKeyCredential raise @posoco-ext-oauth.OAuthError
+pub async fn OpenCodeZenProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
 pub fn OpenCodeZenProvider::provider_id(Self) -> String
-pub async fn OpenCodeZenProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
-pub impl @posoco-ext-llm.ApiKeyFactory for OpenCodeZenProvider
-pub impl @posoco-ext-llm.ProviderFactory for OpenCodeZenProvider
-pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
+pub async fn OpenCodeZenProvider::refresh(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub impl @ext-llm.ApiKeyFactory for OpenCodeZenProvider
+pub impl @ext-llm.ProviderFactory for OpenCodeZenProvider
+pub impl @ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
 
 type ZenAnchoredCompactPort
 pub async fn ZenAnchoredCompactPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError

@@ -38,7 +38,7 @@ pub impl @oauth.AuthPromptInteraction for DeepSeekApiKeyPrompt with fn prompt(
 }
 
 ///|
-pub extend DeepSeekApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+pub extend DeepSeekApiKeyPrompt with @posoco/ext-oauth.AuthPromptInteraction::{
   prompt,
 }
 

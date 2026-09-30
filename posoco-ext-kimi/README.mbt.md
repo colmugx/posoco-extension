@@ -166,12 +166,12 @@ wiring. API-key mode (the Moonshot Open Platform, `api.moonshot.ai`) has no
 ## Dependencies
 
 - `colmugx/posoco` — ModelPort trait + types
-- `colmugx/posoco-devkit` — `ExtContext` logger helper + quota registry
-- `colmugx/posoco-ext-llm` — provider-neutral catalog/router
-- `colmugx/posoco-ext-oauth` — OAuth provider contract and credential store
+- `posoco/devkit` — `ExtContext` logger helper + quota registry
+- `posoco/ext-llm` — provider-neutral catalog/router
+- `posoco/ext-oauth` — OAuth provider contract and credential store
 - `colmugx/posoco-kit-responses` — OpenAI Responses wire kit (items, SSE,
   termination classification)
-- `colmugx/posoco-kit-chat-completions` — HTTP error classification and
+- `posoco/kit-chat-completions` — HTTP error classification and
   `prompt_cache_key` helpers reused from the shared kit
 - `colmugx/posoco-kit-compact-summary` — structured summary template for compact
 - `moonbitlang/async/http` — HTTP transport

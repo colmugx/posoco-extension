@@ -1,6 +1,6 @@
 import {
   "colmugx/posoco",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "colmugx/fuwaroid",
   "moonbitlang/async",
   "moonbitlang/core/debug",
@@ -8,7 +8,7 @@ import {
 
 import {
   "colmugx/posoco",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "colmugx/fuwaroid",
   "moonbitlang/async",
 } for "wbtest"

@@ -218,9 +218,7 @@ pub impl @devkit.BusSubscriber for CodexQuotaStatus with fn on_bus_event(
 }
 
 ///|
-pub extend CodexQuotaStatus with @colmugx/posoco-devkit.BusSubscriber::{
-  on_bus_event,
-}
+pub extend CodexQuotaStatus with @posoco/devkit.BusSubscriber::{on_bus_event}
 
 ///|
 /// Refresh probes or history replay may already have filled the tracker

@@ -389,7 +389,7 @@ async test "tools_argument_intersects_kind_whitelist_both_ways" {
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
   // 'grep' kept (in both), 'nonexistent_tool' dropped (not in kind), the
   // kind-only 'read' never enters the face, duplicate 'grep' collapsed.
-  assert_eq(composer.specs[0].tools, ["grep"])
+  assert_eq(composer.specs[0].tools, Some(["grep"]))
 }
 
 ///|
@@ -419,11 +419,11 @@ async test "empty_tool_intersection_errors_with_both_lists" {
 }
 
 ///|
-async test "kind_binding_resolves_through_config_pool" {
+async test "kind_binding_beats_config_default" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(
     composer=composer as &ChildComposer,
-    config=config_with_pool(),
+    config=config_with_default(model="mtplx/local", effort=Some("low")),
     catalog=catalog_with_bound_kind(),
   )
   let outcome = @posoco.ToolProvider::execute(
@@ -438,7 +438,7 @@ async test "kind_binding_resolves_through_config_pool" {
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
   assert_eq(composer.specs[0].slot, "kimi/k2")
-  // The kind's bound effort beats the slot's configured default_effort.
+  // The kind's bound effort wins; the config default never mixes in.
   assert_eq(composer.specs[0].effort, Some("high"))
 }
 
@@ -447,7 +447,7 @@ async test "explicit_args_override_kind_binding" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(
     composer=composer as &ChildComposer,
-    config=config_with_pool(),
+    config=config_with_default(model="mtplx/local", effort=Some("low")),
     catalog=catalog_with_bound_kind(),
   )
   let outcome = @posoco.ToolProvider::execute(
@@ -468,34 +468,27 @@ async test "explicit_args_override_kind_binding" {
 }
 
 ///|
-async test "kind_binding_to_unknown_pool_slot_errors_listing_allowed" {
+async test "default_model_applies_to_unbound_kinds" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(
     composer=composer as &ChildComposer,
-    config=config_other_pool(),
+    config=config_with_default(model="mtplx/local", effort=Some("low")),
     catalog=catalog_with_bound_kind(),
   )
-  match
-    @posoco.ToolProvider::execute(
-      tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("kind", Json::string("porter")),
-        ]),
-      ),
-    ) {
-    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
-      assert_true(content.contains("unknown subagent model 'kimi/k2'"))
-      assert_true(content.contains("zai/glm"))
-    }
-    _ => fail("expected model error")
-  }
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(
+      args_object([("task", Json::string("t")), ("kind", Json::string("coder"))]),
+    ),
+  )
+  assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs[0].slot, "mtplx/local")
+  assert_eq(composer.specs[0].effort, Some("low"))
 }
 
 ///|
-async test "kind_binding_passes_through_in_inheritance_mode" {
+async test "unbound_kind_inherits_parent_when_no_default" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(
     composer=composer as &ChildComposer,
@@ -505,15 +498,12 @@ async test "kind_binding_passes_through_in_inheritance_mode" {
     tools,
     "agent",
     agent_call(
-      args_object([
-        ("task", Json::string("t")),
-        ("kind", Json::string("porter")),
-      ]),
+      args_object([("task", Json::string("t")), ("kind", Json::string("coder"))]),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
-  assert_eq(composer.specs[0].slot, "kimi/k2")
-  assert_eq(composer.specs[0].effort, Some("high"))
+  assert_eq(composer.specs[0].slot, "parent/slot")
+  assert_true(composer.specs[0].effort is None)
 }
 
 ///|
@@ -531,7 +521,39 @@ async test "tools_absent_uses_kind_whitelist" {
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
-  assert_eq(composer.specs[0].tools, ["read", "glob", "grep"])
+  assert_eq(composer.specs[0].tools, Some(["read", "glob", "grep"]))
+}
+
+///|
+async test "unbound_kind_face_inherits_default_as_none" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+  )
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(
+      args_object([("task", Json::string("t")), ("kind", Json::string("loose"))]),
+    ),
+  )
+  assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  assert_true(composer.specs[0].tools is None)
+  // Explicit args.tools on an inheriting kind are kept as-is.
+  let narrowed = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(
+      args_object([
+        ("task", Json::string("t")),
+        ("kind", Json::string("loose")),
+        ("tools", Json::array([Json::string("grep")])),
+      ]),
+    ),
+  )
+  assert_true(narrowed is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs[1].tools, Some(["grep"]))
 }
 
 ///|
@@ -556,29 +578,26 @@ async test "instructions_over_8192_chars_rejected" {
 }
 
 ///|
-async test "resolve_rejects_model_outside_configured_range" {
+async test "explicit_literal_model_falls_back_to_parent_effort" {
   let composer = FakeComposer::FakeComposer(response_text="x")
-  let base = @kit.SubagentConfig::defaults()
-  let config : @kit.SubagentConfig = {
-    models: [{ slot: "x", efforts: [], default_effort: None, }],
-    default_slot: Some("x"),
-    limits: base.limits,
-  }
-  let tools = test_tools(composer=composer as &ChildComposer, config~)
-  match
-    @posoco.ToolProvider::execute(
-      tools,
-      "agent",
-      agent_call(
-        args_object([("task", Json::string("t")), ("model", Json::string("y"))]),
-      ),
-    ) {
-    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
-      assert_true(content.contains("y"))
-      assert_true(content.contains("x"))
-    }
-    _ => fail("expected resolve rejection")
-  }
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    parent_selection=Some(fn() { ("parent/slot", Some("max")) }),
+  )
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(
+      args_object([
+        ("task", Json::string("t")),
+        ("kind", Json::string("coder")),
+        ("model", Json::string("zai/glm")),
+      ]),
+    ),
+  )
+  assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs[0].slot, "zai/glm")
+  assert_eq(composer.specs[0].effort, Some("max"))
 }
 
 ///|

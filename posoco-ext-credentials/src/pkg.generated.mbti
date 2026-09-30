@@ -2,17 +2,17 @@
 package "colmugx/posoco-ext-credentials"
 
 import {
-  "colmugx/posoco-ext-oauth",
   "colmugx/posoco-ext-workspace",
   "colmugx/posoco/error",
+  "posoco/ext-oauth",
 }
 
 // Values
-pub fn encode_provider_credential(@posoco-ext-oauth.ProviderCredential) -> String
+pub fn encode_provider_credential(@ext-oauth.ProviderCredential) -> String
 
-pub fn parse_provider_credential(Json, String) -> @posoco-ext-oauth.ProviderCredential raise @error.CompositionError
+pub fn parse_provider_credential(Json, String) -> @ext-oauth.ProviderCredential raise @error.CompositionError
 
-pub fn parse_provider_credential_text(String, String) -> @posoco-ext-oauth.ProviderCredential raise @error.CompositionError
+pub fn parse_provider_credential_text(String, String) -> @ext-oauth.ProviderCredential raise @error.CompositionError
 
 // Errors
 
@@ -22,10 +22,10 @@ pub struct FileProviderCredentialStore {
   dir : String
 }
 pub fn FileProviderCredentialStore::FileProviderCredentialStore(&@posoco-ext-workspace.WorkspaceFs, String) -> Self
-pub async fn FileProviderCredentialStore::delete(Self, String) -> Unit raise @posoco-ext-oauth.OAuthError
-pub async fn FileProviderCredentialStore::read(Self, String) -> @posoco-ext-oauth.ProviderCredential? raise @posoco-ext-oauth.OAuthError
-pub async fn FileProviderCredentialStore::write(Self, String, @posoco-ext-oauth.ProviderCredential) -> Unit raise @posoco-ext-oauth.OAuthError
-pub impl @posoco-ext-oauth.ProviderCredentialStore for FileProviderCredentialStore
+pub async fn FileProviderCredentialStore::delete(Self, String) -> Unit raise @ext-oauth.OAuthError
+pub async fn FileProviderCredentialStore::read(Self, String) -> @ext-oauth.ProviderCredential? raise @ext-oauth.OAuthError
+pub async fn FileProviderCredentialStore::write(Self, String, @ext-oauth.ProviderCredential) -> Unit raise @ext-oauth.OAuthError
+pub impl @ext-oauth.ProviderCredentialStore for FileProviderCredentialStore
 
 // Type aliases
 

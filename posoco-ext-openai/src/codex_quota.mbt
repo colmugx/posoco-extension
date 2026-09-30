@@ -214,4 +214,4 @@ pub impl @devkit.QuotaSource for CodexQuotaTracker with fn read(
 }
 
 ///|
-pub extend CodexQuotaTracker with @colmugx/posoco-devkit.QuotaSource::{read}
+pub extend CodexQuotaTracker with @posoco/devkit.QuotaSource::{read}

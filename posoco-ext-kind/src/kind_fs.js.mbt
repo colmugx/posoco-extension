@@ -130,7 +130,12 @@ impl KindFs for JsKindFs with fn read_text(_self, path : String) -> String {
 }
 
 ///|
-/// js entry: load via node:fs.
-pub async fn KindCatalog::load(home~ : String, cwd~ : String) -> KindCatalog {
-  load_with_io(JsKindFs::{ }, home~, cwd~)
+/// js entry: load via node:fs. `extra` entries register between the
+/// builtin table and the on-disk overlays (same-name overlays win).
+pub async fn KindCatalog::load(
+  home~ : String,
+  cwd~ : String,
+  extra? : Array[KindSpec] = [],
+) -> KindCatalog {
+  load_with_io(JsKindFs::{ }, home~, cwd~, extra~)
 }

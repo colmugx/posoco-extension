@@ -849,7 +849,7 @@ pub impl @oauth.AuthPromptInteraction for OpenRouterApiKeyPrompt with fn prompt(
 }
 
 ///|
-pub extend OpenRouterApiKeyPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+pub extend OpenRouterApiKeyPrompt with @posoco/ext-oauth.AuthPromptInteraction::{
   prompt,
 }
 

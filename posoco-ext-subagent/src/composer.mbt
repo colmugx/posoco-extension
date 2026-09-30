@@ -18,9 +18,11 @@ pub(all) struct ChildSpec {
   /// True when continuing an existing child session (composer swaps in the
   /// fs-session store). Named `resuming`: `resume` is a reserved keyword.
   resuming : Bool
-  /// Spawn whitelist ∩ kind whitelist, computed by the tool.
-  /// Depth 1 is structural: this face never contains `agent`/`agent_swarm`.
-  tools : Array[String]
+  /// Spawn face resolved by the tool: `None` = the host default core face
+  /// (the composer expands it), `Some([])` = no tools, `Some(list)` =
+  /// explicit whitelist ∩ kind whitelist. Depth 1 is structural: this face
+  /// never contains `agent`/`agent_swarm`.
+  tools : Array[String]?
   /// `None` = do not load skills; `Some(list)` = whitelist; `Some([])` =
   /// load everything discovered.
   skills : Array[String]?
@@ -29,9 +31,10 @@ pub(all) struct ChildSpec {
   /// System prompt assembled by the kit (`assemble_system_prompt`): kind
   /// template plus the trust-annotated instructions fill-in.
   system_prompt : String
-  /// Model slot resolved from subagent-config (kit `resolve`).
+  /// Model slot: explicit arg > kind binding > config default_model >
+  /// parent's live selection.
   slot : String
-  /// Reasoning effort resolved from subagent-config.
+  /// Reasoning effort following the slot's source layer.
   effort : String?
   /// Whether the child inherits project context files (AGENTS.md etc.).
   context_files : Bool

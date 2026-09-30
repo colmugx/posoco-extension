@@ -35,7 +35,7 @@ moon add colmugx/posoco-ext-opencode-zen
 
 ```moonbit
 // moon.pkg: "colmugx/posoco-ext-opencode-zen" @opencode_zen
-//            (+ "colmugx/posoco-ext-llm" @llm for the router)
+//            (+ "posoco/ext-llm" @llm for the router)
 
 let provider = @opencode_zen.OpenCodeZenProvider()
 let config = @opencode_zen.OpenCodeZenConfig(
@@ -210,9 +210,9 @@ failures, other HTTP statuses) are never retried.
 ## Dependencies
 
 - `colmugx/posoco` — `ModelPort` trait + `ModelError` / `CompositionError` types
-- `colmugx/posoco-devkit` — `ExtContext`
-- `colmugx/posoco-ext-llm` — `ProviderFactory` / `RefreshableProviderFactory` / `ApiKeyFactory` / `ProviderModelCatalog` / `ModelSlot`
-- `colmugx/posoco-ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
-- `colmugx/posoco-kit-chat-completions` — shared SSE line parsing / 429 classification / content-encoding helpers
+- `posoco/devkit` — `ExtContext`
+- `posoco/ext-llm` — `ProviderFactory` / `RefreshableProviderFactory` / `ApiKeyFactory` / `ProviderModelCatalog` / `ModelSlot`
+- `posoco/ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
+- `posoco/kit-chat-completions` — shared SSE line parsing / 429 classification / content-encoding helpers
 - `colmugx/posoco-kit-compact-summary` — anchored summary template, cut selection, and Replace builder
 - `moonbitlang/async/http` — `/models` and chat transport

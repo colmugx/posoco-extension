@@ -575,6 +575,4 @@ pub impl @devkit.BusSubscriber for RouterModelPort with fn on_bus_event(
 }
 
 ///|
-pub extend RouterModelPort with @colmugx/posoco-devkit.BusSubscriber::{
-  on_bus_event,
-}
+pub extend RouterModelPort with @posoco/devkit.BusSubscriber::{on_bus_event}

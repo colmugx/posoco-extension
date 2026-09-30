@@ -2,10 +2,10 @@
 package "colmugx/posoco-ext-mbtx"
 
 import {
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "posoco/devkit",
 }
 
 // Values
@@ -15,16 +15,16 @@ pub fn mbtx_extension() -> MbtxTools
 
 // Types and methods
 pub struct MbtxTools {
-  anchor : @posoco-devkit.WorkspaceAnchor?
+  anchor : @devkit.WorkspaceAnchor?
   allowlist : Array[SpawnRule]
   run_timeout_ms : Int
   escalation : Bool
   toolchain_bin : String?
-  bus : @posoco-devkit.EventBus?
+  bus : @devkit.EventBus?
   mut resolved : String?
   // private fields
 }
-pub fn MbtxTools::MbtxTools(anchor? : @posoco-devkit.WorkspaceAnchor?, allowlist_extra? : Array[SpawnRule], allowlist_without? : Array[String], run_timeout_ms? : Int, escalation? : Bool, toolchain_bin? : String?, bus? : @posoco-devkit.EventBus?) -> Self
+pub fn MbtxTools::MbtxTools(anchor? : @devkit.WorkspaceAnchor?, allowlist_extra? : Array[SpawnRule], allowlist_without? : Array[String], run_timeout_ms? : Int, escalation? : Bool, toolchain_bin? : String?, bus? : @devkit.EventBus?) -> Self
 pub async fn MbtxTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn MbtxTools::extension_id(Self) -> String
 pub fn MbtxTools::list_tools(Self) -> Array[@kernel.ToolDef]

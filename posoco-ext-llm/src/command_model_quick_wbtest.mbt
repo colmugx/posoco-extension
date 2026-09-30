@@ -15,7 +15,7 @@ pub impl @devkit.QuotaSource for QuickPickQuotaSource with fn read(
 }
 
 ///|
-pub extend QuickPickQuotaSource with @colmugx/posoco-devkit.QuotaSource::{read}
+pub extend QuickPickQuotaSource with @posoco/devkit.QuotaSource::{read}
 
 ///|
 fn quick_pick_slot(id : String, provider_id : String) -> ModelSlot {

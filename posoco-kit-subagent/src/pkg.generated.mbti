@@ -55,8 +55,9 @@ pub(all) struct BatchItem {
   child_session_id : String
   task : String
   kind_name : String
-  selection : ResolvedSelection
-  tools : Array[String]
+  slot : String
+  effort : String?
+  tools : Array[String]?
   permission : @posoco-ext-permission.PermissionMode
   mode : @port.TaskMode
   timeout_ms : Int
@@ -95,23 +96,6 @@ pub fn BatchState::on_outcome(Self, outcome~ : @port.TaskOutcome) -> Unit
 pub fn BatchState::result(Self) -> BatchResult
 pub fn BatchState::to_repr(Self) -> @debug.Repr
 
-pub(all) struct ConfigModel {
-  slot : String
-  efforts : Array[String]
-  default_effort : String?
-} derive(Eq, @debug.Debug)
-pub fn ConfigModel::equal(Self, Self) -> Bool
-pub fn ConfigModel::not_equal(Self, Self) -> Bool
-pub fn ConfigModel::to_repr(Self) -> @debug.Repr
-
-pub(all) struct ResolvedSelection {
-  slot : String
-  effort : String?
-} derive(Eq, @debug.Debug)
-pub fn ResolvedSelection::equal(Self, Self) -> Bool
-pub fn ResolvedSelection::not_equal(Self, Self) -> Bool
-pub fn ResolvedSelection::to_repr(Self) -> @debug.Repr
-
 pub(all) struct SpawnLedger {
   limit : Int
   labels : Array[String]
@@ -124,14 +108,13 @@ pub fn SpawnLedger::to_repr(Self) -> @debug.Repr
 pub fn SpawnLedger::try_acquire(Self, String) -> Bool
 
 pub(all) struct SubagentConfig {
-  models : Array[ConfigModel]
-  default_slot : String?
+  default_model : String?
+  default_effort : String?
   limits : SubagentLimits
 } derive(Eq, @debug.Debug)
 pub fn SubagentConfig::defaults() -> Self
 pub fn SubagentConfig::equal(Self, Self) -> Bool
 pub fn SubagentConfig::not_equal(Self, Self) -> Bool
-pub fn SubagentConfig::resolve(Self, model? : String?, effort? : String?, parent_slot~ : String, parent_effort? : String?) -> ResolvedSelection raise SubagentConfigError
 pub fn SubagentConfig::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubagentEvent {

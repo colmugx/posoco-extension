@@ -129,9 +129,9 @@ unknown window.
 ## Dependencies
 
 - `colmugx/posoco` — ModelPort trait + types
-- `colmugx/posoco-devkit` — `ExtContext` logger helper
-- `colmugx/posoco-ext-llm` — provider-neutral catalog/router
-- `colmugx/posoco-ext-oauth` — credential store / auth prompt seams
-- `colmugx/posoco-kit-chat-completions` — shared chat-completions protocol kit
+- `posoco/devkit` — `ExtContext` logger helper
+- `posoco/ext-llm` — provider-neutral catalog/router
+- `posoco/ext-oauth` — credential store / auth prompt seams
+- `posoco/kit-chat-completions` — shared chat-completions protocol kit
 - `colmugx/posoco-kit-compact-summary` — client-side compaction
 - `moonbitlang/async/http` — HTTP transport

@@ -2,21 +2,21 @@
 package "colmugx/posoco-ext-openrouter"
 
 import {
-  "colmugx/posoco-devkit",
-  "colmugx/posoco-ext-llm",
-  "colmugx/posoco-ext-oauth",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
+  "posoco/devkit",
+  "posoco/ext-llm",
+  "posoco/ext-oauth",
 }
 
 // Values
 pub async fn fetch_openrouter_models(String, String) -> Array[OpenRouterModelInfo] raise @error.ModelError
 
-pub fn openrouter_model_catalog(String, String, Array[OpenRouterModelInfo], String, &@posoco-ext-llm.ApiKeyFactory, http_referer? : String?, title? : String?) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn openrouter_model_catalog(String, String, Array[OpenRouterModelInfo], String, &@ext-llm.ApiKeyFactory, http_referer? : String?, title? : String?) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
 
 pub fn parse_cached_openrouter_models(Json?) -> Array[OpenRouterModelInfo]?
 
@@ -26,13 +26,13 @@ pub fn parse_openrouter_models(Json) -> Array[OpenRouterModelInfo] raise @error.
 
 // Types and methods
 pub(all) struct OpenRouterApiKeyFactory {
-  ctx : @posoco-devkit.ExtContext
+  ctx : @devkit.ExtContext
 }
-pub fn OpenRouterApiKeyFactory::OpenRouterApiKeyFactory(ctx? : @posoco-devkit.ExtContext) -> Self
+pub fn OpenRouterApiKeyFactory::OpenRouterApiKeyFactory(ctx? : @devkit.ExtContext) -> Self
 pub fn OpenRouterApiKeyFactory::credential_id(Self) -> String
-pub async fn OpenRouterApiKeyFactory::login(Self, &@posoco-ext-oauth.AuthPromptInteraction) -> @posoco-ext-oauth.ApiKeyCredential raise @posoco-ext-oauth.OAuthError
+pub async fn OpenRouterApiKeyFactory::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
 pub fn OpenRouterApiKeyFactory::provider_id(Self) -> String
-pub impl @posoco-ext-llm.ApiKeyFactory for OpenRouterApiKeyFactory
+pub impl @ext-llm.ApiKeyFactory for OpenRouterApiKeyFactory
 
 pub(all) struct OpenRouterConfig {
   api_key : String
@@ -82,16 +82,16 @@ pub impl @port.Extension for OpenRouterModelPort
 pub impl @port.ModelPort for OpenRouterModelPort
 
 pub(all) struct OpenRouterProvider {
-  ctx : @posoco-devkit.ExtContext
+  ctx : @devkit.ExtContext
   prompt_cache_key_rejection_state : @ref.Ref[Bool]
 }
-pub fn OpenRouterProvider::OpenRouterProvider(ctx? : @posoco-devkit.ExtContext) -> Self
-pub fn OpenRouterProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn OpenRouterProvider::OpenRouterProvider(ctx? : @devkit.ExtContext) -> Self
+pub fn OpenRouterProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
 pub fn OpenRouterProvider::credential_id(Self) -> String
 pub fn OpenRouterProvider::provider_id(Self) -> String
-pub async fn OpenRouterProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
-pub impl @posoco-ext-llm.ProviderFactory for OpenRouterProvider
-pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenRouterProvider
+pub async fn OpenRouterProvider::refresh(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub impl @ext-llm.ProviderFactory for OpenRouterProvider
+pub impl @ext-llm.RefreshableProviderFactory for OpenRouterProvider
 
 // Type aliases
 

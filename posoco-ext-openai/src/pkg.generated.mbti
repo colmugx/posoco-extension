@@ -2,14 +2,14 @@
 package "colmugx/posoco-ext-openai"
 
 import {
-  "colmugx/posoco-devkit",
-  "colmugx/posoco-ext-llm",
-  "colmugx/posoco-ext-oauth",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async/http",
+  "posoco/devkit",
+  "posoco/ext-llm",
+  "posoco/ext-oauth",
 }
 
 // Values
@@ -23,7 +23,7 @@ pub async fn fetch_codex_models(String, String, String, client_version? : String
 
 pub async fn fetch_codex_models_with_transport(&OpenAIModelsHttpTransport, String, String, String, String) -> Array[CodexModelInfo] raise @error.ModelError
 
-pub async fn fetch_codex_usage_with_transport(&OpenAIModelsHttpTransport, String, String, String, now_ms? : () -> Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
+pub async fn fetch_codex_usage_with_transport(&OpenAIModelsHttpTransport, String, String, String, now_ms? : () -> Int64) -> Result[Array[@devkit.QuotaReading], String]
 
 pub async fn fetch_models(String, String) -> Array[String] raise @error.ModelError
 
@@ -31,17 +31,17 @@ pub async fn fetch_openai_models(String, String) -> Array[OpenAIModelInfo] raise
 
 pub async fn fetch_openai_models_with_transport(&OpenAIModelsHttpTransport, String, String) -> Array[OpenAIModelInfo] raise @error.ModelError
 
-pub fn intelligence_metrics_source() -> &@posoco-devkit.ModelMetricsSource
+pub fn intelligence_metrics_source() -> &@devkit.ModelMetricsSource
 
 pub fn openai_codex_models_client_version() -> String
 
 pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
 
-pub fn parse_codex_quota_headers(Map[@http.CaseInsensitiveString, String], fetched_at_ms~ : Int64) -> Array[@posoco-devkit.QuotaReading]
+pub fn parse_codex_quota_headers(Map[@http.CaseInsensitiveString, String], fetched_at_ms~ : Int64) -> Array[@devkit.QuotaReading]
 
-pub fn parse_codex_usage(Json, fetched_at_ms~ : Int64) -> Result[Array[@posoco-devkit.QuotaReading], String]
+pub fn parse_codex_usage(Json, fetched_at_ms~ : Int64) -> Result[Array[@devkit.QuotaReading], String]
 
-pub fn parse_intelligence_metrics(String) -> Result[Array[@posoco-devkit.MetricsPoint], String]
+pub fn parse_intelligence_metrics(String) -> Result[Array[@devkit.MetricsPoint], String]
 
 pub fn parse_openai_models(Json) -> Array[OpenAIModelInfo] raise @error.ModelError
 
@@ -61,45 +61,45 @@ pub(all) struct CodexModelInfo {
 }
 
 pub(all) struct CodexOAuth {
-  transport : &@posoco-ext-oauth.OAuthHttpTransport?
+  transport : &@ext-oauth.OAuthHttpTransport?
 }
-pub fn CodexOAuth::CodexOAuth(transport? : &@posoco-ext-oauth.OAuthHttpTransport?) -> Self
-pub async fn CodexOAuth::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
+pub fn CodexOAuth::CodexOAuth(transport? : &@ext-oauth.OAuthHttpTransport?) -> Self
+pub async fn CodexOAuth::login(Self, &@ext-oauth.AuthInteraction) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
 pub fn CodexOAuth::provider_id(Self) -> String
-pub async fn CodexOAuth::refresh(Self, @posoco-ext-oauth.Credential) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
-pub fn CodexOAuth::to_auth(Self, @posoco-ext-oauth.Credential) -> @posoco-ext-oauth.AuthHeader
-pub impl @posoco-ext-oauth.OAuthProvider for CodexOAuth
+pub async fn CodexOAuth::refresh(Self, @ext-oauth.Credential) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
+pub fn CodexOAuth::to_auth(Self, @ext-oauth.Credential) -> @ext-oauth.AuthHeader
+pub impl @ext-oauth.OAuthProvider for CodexOAuth
 
 pub struct CodexQuotaStatus {
   tracker : CodexQuotaTracker
-  bus : @posoco-devkit.EventBus?
-  mut last : Array[@posoco-devkit.QuotaReading]
+  bus : @devkit.EventBus?
+  mut last : Array[@devkit.QuotaReading]
   // private fields
 }
-pub fn CodexQuotaStatus::CodexQuotaStatus(bus? : @posoco-devkit.EventBus?, tracker? : CodexQuotaTracker?) -> Self
+pub fn CodexQuotaStatus::CodexQuotaStatus(bus? : @devkit.EventBus?, tracker? : CodexQuotaTracker?) -> Self
 pub fn CodexQuotaStatus::extension_id(Self) -> String
 pub fn CodexQuotaStatus::manifest(Self) -> @port.ExtensionManifest
-pub fn CodexQuotaStatus::on_bus_event(Self, @posoco-devkit.BusEvent) -> Unit
+pub fn CodexQuotaStatus::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn CodexQuotaStatus::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn CodexQuotaStatus::on_event(Self, @types.TurnEvent) -> Unit
 pub fn CodexQuotaStatus::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn CodexQuotaStatus::on_shutdown(Self) -> Unit
 pub async fn CodexQuotaStatus::on_start(Self) -> Unit
-pub impl @posoco-devkit.BusSubscriber for CodexQuotaStatus
 pub impl @port.Extension for CodexQuotaStatus
 pub impl @port.Lifecycle for CodexQuotaStatus
 pub impl @port.Observer for CodexQuotaStatus
+pub impl @devkit.BusSubscriber for CodexQuotaStatus
 
 pub(all) struct CodexQuotaTracker {
-  mut latest : Array[@posoco-devkit.QuotaReading]?
+  mut latest : Array[@devkit.QuotaReading]?
   now_ms : () -> Int64
 }
 pub fn CodexQuotaTracker::CodexQuotaTracker(now_ms? : () -> Int64) -> Self
 pub fn CodexQuotaTracker::capture(Self, Map[@http.CaseInsensitiveString, String]) -> Unit
-pub fn CodexQuotaTracker::capture_readings(Self, Array[@posoco-devkit.QuotaReading]) -> Unit
-pub async fn CodexQuotaTracker::read(Self) -> Result[Array[@posoco-devkit.QuotaReading], String]
-pub fn CodexQuotaTracker::snapshots(Self) -> Array[@posoco-devkit.QuotaReading]
-pub impl @posoco-devkit.QuotaSource for CodexQuotaTracker
+pub fn CodexQuotaTracker::capture_readings(Self, Array[@devkit.QuotaReading]) -> Unit
+pub async fn CodexQuotaTracker::read(Self) -> Result[Array[@devkit.QuotaReading], String]
+pub fn CodexQuotaTracker::snapshots(Self) -> Array[@devkit.QuotaReading]
+pub impl @devkit.QuotaSource for CodexQuotaTracker
 
 pub(all) struct CodexReasoningLevel {
   effort : String
@@ -130,7 +130,7 @@ pub(all) struct OpenAIConfig {
   context_window : Int?
 }
 pub fn OpenAIConfig::OpenAIConfig(String, String) -> Self
-pub fn OpenAIConfig::from_codex_credential(@posoco-ext-oauth.Credential, String) -> Self
+pub fn OpenAIConfig::from_codex_credential(@ext-oauth.Credential, String) -> Self
 pub fn OpenAIConfig::with_base_url(String, String, String) -> Self
 pub fn OpenAIConfig::with_reasoning_effort(Self, String) -> Self
 
@@ -146,10 +146,10 @@ pub(all) struct OpenAIModelPort {
 pub fn OpenAIModelPort::OpenAIModelPort(OpenAIConfig, quota_tracker? : CodexQuotaTracker?) -> Self
 pub async fn OpenAIModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub async fn OpenAIModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
-pub fn OpenAIModelPort::model_catalog(Self) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAIModelPort::model_catalog_from_cached_models(Self, Array[OpenAICachedModel], chatgpt_mode~ : Bool) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAIModelPort::model_catalog_from_codex_models(Self, Array[CodexModelInfo]) -> @posoco-ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog_from_cached_models(Self, Array[OpenAICachedModel], chatgpt_mode~ : Bool) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog_from_codex_models(Self, Array[CodexModelInfo]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenAIModelPort
 
@@ -160,18 +160,18 @@ pub(all) struct OpenAIModelsHttpResponse {
 
 pub(all) struct OpenAIProvider {
   models_transport : &OpenAIModelsHttpTransport?
-  oauth_transport : &@posoco-ext-oauth.OAuthHttpTransport?
+  oauth_transport : &@ext-oauth.OAuthHttpTransport?
 }
-pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@posoco-ext-oauth.OAuthHttpTransport?) -> Self
-pub fn OpenAIProvider::build(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@ext-oauth.OAuthHttpTransport?) -> Self
+pub fn OpenAIProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
 pub fn OpenAIProvider::credential_id(Self) -> String
-pub async fn OpenAIProvider::login(Self, &@posoco-ext-oauth.AuthInteraction) -> @posoco-ext-oauth.Credential raise @posoco-ext-oauth.OAuthError
+pub async fn OpenAIProvider::login(Self, &@ext-oauth.AuthInteraction) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
 pub fn OpenAIProvider::provider_id(Self) -> String
-pub async fn OpenAIProvider::refresh(Self, @posoco-ext-llm.ProviderConfigSource) -> @posoco-ext-llm.ProviderBuildResult raise @error.CompositionError
-pub impl @posoco-ext-llm.ApiKeyFactory for OpenAIProvider
-pub impl @posoco-ext-llm.OAuthFactory for OpenAIProvider
-pub impl @posoco-ext-llm.ProviderFactory for OpenAIProvider
-pub impl @posoco-ext-llm.RefreshableProviderFactory for OpenAIProvider
+pub async fn OpenAIProvider::refresh(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub impl @ext-llm.ApiKeyFactory for OpenAIProvider
+pub impl @ext-llm.OAuthFactory for OpenAIProvider
+pub impl @ext-llm.ProviderFactory for OpenAIProvider
+pub impl @ext-llm.RefreshableProviderFactory for OpenAIProvider
 
 // Type aliases
 

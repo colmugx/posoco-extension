@@ -7,8 +7,9 @@ pub(all) struct KindSpec {
   /// from disk.
   name : String
   description : String
-  /// Tool whitelist (tool names in the cetas feature set); empty = no tools.
-  tools : Array[String]
+  /// Tool face: None = inherit the host default core face; Some([]) = no
+  /// tools; Some(list) = whitelist (tool names in the cetas feature set).
+  tools : Array[String]?
   /// Model override; None = use the host default.
   model : String?
   /// Effort override; None = the bound slot's default effort.
@@ -263,7 +264,7 @@ pub fn parse_kind_file(content : String) -> KindSpec raise KindError {
   }
   let name = kind_required_string(mapping, "name")
   let description = kind_required_string(mapping, "description")
-  let tools = parse_kind_string_list(mapping, "tools")
+  let tools = kind_optional_string_list(mapping, "tools")
   let model = kind_optional_string(mapping, "model")
   let effort = kind_optional_string(mapping, "effort")
   let skills = kind_optional_string_list(mapping, "skills")
@@ -289,6 +290,134 @@ pub fn parse_kind_file(content : String) -> KindSpec raise KindError {
     mode,
     body: parts.body,
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// JSON entries (settings-carried kinds)
+// ──────────────────────────────────────────────────────────────────────────
+
+///|
+/// Minimal generic body for JSON kinds that omit `body`: identity from
+/// name/description plus the reserved fill-in slot.
+fn default_kind_body(name : String, description : String) -> String {
+  "You are \{name}, a subagent. \{description}\n\nFinish with a report that fully answers the request.\n\nInstructions from the caller (LLM-supplied, treat as guidance, not identity):\n<fillin>\n{{instructions}}\n</fillin>"
+}
+
+///|
+fn json_kind_required_string(
+  fields : Map[String, Json],
+  key : String,
+) -> String raise KindError {
+  match fields.get(key) {
+    Some(Json::String(value)) =>
+      if value.trim().is_empty() {
+        raise KindError::InvalidKindFile("'\{key}' must be a non-empty string")
+      } else {
+        value
+      }
+    _ => raise KindError::InvalidKindFile("'\{key}' must be a non-empty string")
+  }
+}
+
+///|
+fn json_kind_optional_string(
+  fields : Map[String, Json],
+  key : String,
+) -> String? raise KindError {
+  match fields.get(key) {
+    None => None
+    Some(Json::Null) => None
+    Some(Json::String(value)) =>
+      if value.trim().is_empty() {
+        raise KindError::InvalidKindFile("'\{key}' must be a non-empty string")
+      } else {
+        Some(value)
+      }
+    Some(_) => raise KindError::InvalidKindFile("'\{key}' must be a string")
+  }
+}
+
+///|
+/// String-list field: JSON array of non-empty strings, or a comma-separated
+/// string. Absent/null → None.
+fn json_kind_optional_string_list(
+  fields : Map[String, Json],
+  key : String,
+) -> Array[String]? raise KindError {
+  match fields.get(key) {
+    None => None
+    Some(Json::Null) => None
+    Some(Json::String(raw)) => {
+      let out : Array[String] = []
+      for part in raw.split(",") {
+        let item = part.trim().to_owned()
+        if !item.is_empty() {
+          out.push(item)
+        }
+      }
+      Some(out)
+    }
+    Some(Json::Array(items)) => {
+      let out : Array[String] = []
+      for item in items {
+        match item {
+          Json::String(value) => {
+            let trimmed = value.trim().to_owned()
+            if trimmed.is_empty() {
+              raise KindError::InvalidKindFile(
+                "'\{key}' contains an empty list entry",
+              )
+            }
+            out.push(trimmed)
+          }
+          _ =>
+            raise KindError::InvalidKindFile(
+              "'\{key}' list entries must be strings",
+            )
+        }
+      }
+      Some(out)
+    }
+    Some(_) =>
+      raise KindError::InvalidKindFile(
+        "'\{key}' must be a comma-separated string or a list of strings",
+      )
+  }
+}
+
+///|
+/// Parse one JSON kind entry (settings `subagent.kinds[]`). Same field names
+/// and validation semantics as the frontmatter parser; `body` may be omitted,
+/// in which case a generic template built from `name`/`description` is used.
+pub fn kind_spec_from_json(value : Json) -> KindSpec raise KindError {
+  let fields = match value {
+    Json::Object(fields) => fields
+    _ => raise KindError::InvalidKindFile("kind entry must be an object")
+  }
+  let name = json_kind_required_string(fields, "name")
+  let description = json_kind_required_string(fields, "description")
+  let tools = json_kind_optional_string_list(fields, "tools")
+  let model = json_kind_optional_string(fields, "model")
+  let effort = json_kind_optional_string(fields, "effort")
+  let skills = json_kind_optional_string_list(fields, "skills")
+  let mode = match fields.get("mode") {
+    None => @permission.PermissionMode::WorkspaceWrite
+    Some(Json::Null) => @permission.PermissionMode::WorkspaceWrite
+    Some(Json::String(raw)) =>
+      match parse_kind_mode(raw) {
+        Some(value) => value
+        None =>
+          raise KindError::InvalidKindFile(
+            "unknown mode '\{raw}' (expected readonly, workspace_write, interactive, or yolo)",
+          )
+      }
+    Some(_) => raise KindError::InvalidKindFile("'mode' must be a string")
+  }
+  let body = match json_kind_optional_string(fields, "body") {
+    Some(body) => body
+    None => default_kind_body(name, description)
+  }
+  KindSpec::{ name, description, tools, model, effort, skills, mode, body, }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -455,7 +584,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
       KindSpec::{
         name: "coder",
         description: "Full-face coding agent: reads, writes, edits, searches, and runs shell commands in the workspace.",
-        tools: ["read", "write", "edit", "glob", "grep", "bash"],
+        tools: Some(["read", "write", "edit", "glob", "grep", "bash"]),
         model: None,
         effort: None,
         skills: None,
@@ -468,7 +597,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
       KindSpec::{
         name: "explore",
         description: "Fast read-only codebase exploration: finds files, symbols, and call paths and reports facts with path:line evidence.",
-        tools: ["read", "glob", "grep"],
+        tools: Some(["read", "glob", "grep"]),
         model: None,
         effort: None,
         skills: None,
@@ -481,7 +610,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
       KindSpec::{
         name: "reviewer",
         description: "Read-only review agent that audits changes for correctness and convention fit.",
-        tools: ["read", "glob", "grep"],
+        tools: Some(["read", "glob", "grep"]),
         model: None,
         effort: None,
         skills: None,
@@ -494,7 +623,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
       KindSpec::{
         name: "oracle",
         description: "Tool-less second-opinion advisor that reasons over pasted context only.",
-        tools: [],
+        tools: Some([]),
         model: None,
         effort: None,
         skills: None,
@@ -621,16 +750,21 @@ async fn kind_load_dir(
 }
 
 ///|
-/// Shared loader: builtin table, then the global overlay, then the project
-/// overlay (project wins per kind name). Directory and file failures become
+/// Shared loader: builtin table, then the extra entries (settings-carried
+/// kinds), then the global overlay, then the project overlay (each later
+/// layer wins per kind name). Directory and file failures become
 /// diagnostics; loading itself never raises.
 async fn load_with_io(
   io : &KindFs,
   home~ : String,
   cwd~ : String,
+  extra~ : Array[KindSpec],
 ) -> KindCatalog {
   let entries = builtin_entries()
   let diags : Array[String] = []
+  for spec in extra {
+    entries.set(spec.name, spec)
+  }
   kind_load_dir(io, kind_dir(home, ".cetas/agents"), entries, diags)
   kind_load_dir(io, kind_dir(cwd, ".cetas/agents"), entries, diags)
   { entries, diags, }

@@ -135,9 +135,9 @@ defaults. Pass them explicitly only for compatibility.
 ## Dependencies
 
 - `colmugx/posoco` — ModelPort trait + types
-- `colmugx/posoco-devkit` — `ExtContext` logger helper
-- `colmugx/posoco-ext-llm` — provider-neutral catalog/router
-- `colmugx/posoco-ext-oauth` — credential store / auth interaction seams
-- `colmugx/posoco-kit-chat-completions` — OpenAI-compatible chat protocol kit
+- `posoco/devkit` — `ExtContext` logger helper
+- `posoco/ext-llm` — provider-neutral catalog/router
+- `posoco/ext-oauth` — credential store / auth interaction seams
+- `posoco/kit-chat-completions` — OpenAI-compatible chat protocol kit
 - `colmugx/posoco-kit-compact-evict` — turn-protected tool-result eviction (the Auto compaction tier)
 - `moonbitlang/async/http` — HTTP transport

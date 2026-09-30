@@ -370,7 +370,7 @@ pub impl @devkit.QuotaSource for StatusQuotaSource with fn read(
 }
 
 ///|
-pub extend StatusQuotaSource with @colmugx/posoco-devkit.QuotaSource::{read}
+pub extend StatusQuotaSource with @posoco/devkit.QuotaSource::{read}
 
 ///|
 /// Bus capture for the status invoke test.

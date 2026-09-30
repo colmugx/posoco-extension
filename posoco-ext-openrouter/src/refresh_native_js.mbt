@@ -52,6 +52,6 @@ pub impl @llm.RefreshableProviderFactory for OpenRouterProvider with fn refresh(
 }
 
 ///|
-pub extend OpenRouterProvider with @colmugx/posoco-ext-llm.RefreshableProviderFactory::{
+pub extend OpenRouterProvider with @posoco/ext-llm.RefreshableProviderFactory::{
   refresh,
 }

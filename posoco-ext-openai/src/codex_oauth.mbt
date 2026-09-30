@@ -112,7 +112,7 @@ pub impl @oauth.OAuthProvider for CodexOAuth with fn provider_id(
 }
 
 ///|
-pub extend CodexOAuth with @colmugx/posoco-ext-oauth.OAuthProvider::{
+pub extend CodexOAuth with @posoco/ext-oauth.OAuthProvider::{
   provider_id,
   refresh,
   to_auth,

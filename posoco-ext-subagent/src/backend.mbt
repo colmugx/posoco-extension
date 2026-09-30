@@ -345,27 +345,30 @@ async fn SubagentTools::spawn(
         structured=None,
       )
   }
-  // Tool face: spawn whitelist ∩ kind whitelist, one layer, no propagation
-  // along any chain. Absent argument = the kind's own face.
-  let tools = match args.tools {
-    None => kind_spec.tools.copy()
-    Some(requested) => {
+  // Tool face: spawn args ∩ kind face, one layer, no propagation along any
+  // chain. Absent on both sides = the host default core face (the composer
+  // expands it).
+  let tools : Array[String]? = match (args.tools, kind_spec.tools) {
+    (Some(requested), Some(whitelist)) => {
       let intersection : Array[String] = []
       let seen : Set[String] = Set([])
       for tool in requested {
-        if !seen.contains(tool) && list_contains(kind_spec.tools, tool) {
+        if !seen.contains(tool) && list_contains(whitelist, tool) {
           seen.add(tool)
           intersection.push(tool)
         }
       }
       if intersection.is_empty() {
         return @posoco.ToolOutcome::ToolReportedError(
-          content="tool whitelist is empty after intersection: requested [\{requested.join(", ")}] ∩ kind '\{kind_spec.name}' [\{kind_spec.tools.join(", ")}] — request at least one tool from the kind's whitelist",
+          content="tool whitelist is empty after intersection: requested [\{requested.join(", ")}] ∩ kind '\{kind_spec.name}' [\{whitelist.join(", ")}] — request at least one tool from the kind's whitelist",
           structured=None,
         )
       }
-      intersection
+      Some(intersection)
     }
+    (Some(requested), None) => Some(requested)
+    (None, Some(whitelist)) => Some(whitelist.copy())
+    (None, None) => None
   }
   let system_prompt = assemble_prompt(kind_spec, args.instructions) catch {
     @kit.PromptAssemblyError::InstructionsTooLong(message) =>
@@ -378,33 +381,36 @@ async fn SubagentTools::spawn(
     Some(current) => current()
     None => (self.parent_slot, self.parent_effort)
   }
-  // Resolution order: explicit args beat the kind's binding; unbound fields
-  // fall through to the config default and then the parent's selection
-  // (inside `resolve`).
-  let requested_model = match args.model {
-    Some(model) => Some(model)
-    None => kind_spec.model
+  // Model chain: explicit args > kind binding > config default_model >
+  // the parent's live selection. The effort follows the slot's source
+  // layer (kind.effort / default_effort), else the parent's effort.
+  let slot = match args.model {
+    Some(model) => model
+    None =>
+      match kind_spec.model {
+        Some(model) => model
+        None =>
+          match self.config.default_model {
+            Some(model) => model
+            None => parent_slot
+          }
+      }
   }
-  let requested_effort = match args.effort {
+  let layer_effort : String? = if args.model is Some(_) {
+    None
+  } else {
+    match kind_spec.model {
+      Some(_) => kind_spec.effort
+      None => self.config.default_effort
+    }
+  }
+  let effort : String? = match args.effort {
     Some(effort) => Some(effort)
-    None => kind_spec.effort
-  }
-  let selection = self.config.resolve(
-    model=requested_model,
-    effort=requested_effort,
-    parent_slot~,
-    parent_effort~,
-  ) catch {
-    @kit.SubagentConfigError::Invalid(message) =>
-      return @posoco.ToolOutcome::ToolReportedError(
-        content="agent: \{message}",
-        structured=None,
-      )
-    @kit.SubagentConfigError::Malformed(message) =>
-      return @posoco.ToolOutcome::ToolReportedError(
-        content="agent: \{message}",
-        structured=None,
-      )
+    None =>
+      match layer_effort {
+        Some(effort) => Some(effort)
+        None => parent_effort
+      }
   }
   let (session_id, resumed) = match args.resume_id {
     Some(id) => (id, true)
@@ -431,8 +437,8 @@ async fn SubagentTools::spawn(
     skills: args.skills,
     mode: kind_spec.mode,
     system_prompt,
-    slot: selection.slot,
-    effort: selection.effort,
+    slot,
+    effort,
     context_files: args.context_files,
     observers: [bridge as &@posoco.Observer],
   }

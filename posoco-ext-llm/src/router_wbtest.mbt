@@ -905,7 +905,7 @@ pub impl @devkit.QuotaSource for RouterQuotaSource with fn read(
 }
 
 ///|
-pub extend RouterQuotaSource with @colmugx/posoco-devkit.QuotaSource::{read}
+pub extend RouterQuotaSource with @posoco/devkit.QuotaSource::{read}
 
 ///|
 fn router_quota_slot(id : String, provider_id : String) -> ModelSlot {

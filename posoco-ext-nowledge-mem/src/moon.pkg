@@ -2,7 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/mcp/client",
   "colmugx/mcp/protocol/types",
-  "colmugx/posoco-devkit" @devkit,
+  "posoco/devkit",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/http",

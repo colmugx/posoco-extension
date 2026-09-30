@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn kind_spec_from_json(Json) -> KindSpec raise KindError
+
 pub fn parse_kind_file(String) -> KindSpec raise KindError
 
 pub fn render_kind_body(String, Array[(String, String)]) -> String
@@ -25,14 +27,14 @@ pub struct KindCatalog {
 pub fn KindCatalog::builtin() -> Self
 pub fn KindCatalog::diagnostics(Self) -> Array[String]
 pub fn KindCatalog::get(Self, String) -> KindSpec?
-pub async fn KindCatalog::load(home~ : String, cwd~ : String) -> Self
+pub async fn KindCatalog::load(home~ : String, cwd~ : String, extra? : Array[KindSpec]) -> Self
 pub fn KindCatalog::names(Self) -> Array[String]
 pub fn KindCatalog::with_entries(Array[KindSpec]) -> Self raise KindError
 
 pub(all) struct KindSpec {
   name : String
   description : String
-  tools : Array[String]
+  tools : Array[String]?
   model : String?
   effort : String?
   skills : Array[String]?

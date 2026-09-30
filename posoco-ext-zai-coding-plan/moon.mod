@@ -5,10 +5,10 @@ version = "0.1.0"
 import {
   "colmugx/posoco@0.20.0",
   "colmugx/posoco-ext-zai@0.1.0",
-  "colmugx/posoco-devkit@0.4.0",
-  "colmugx/posoco-ext-llm@0.2.0",
-  "colmugx/posoco-ext-oauth@0.1.0",
-  "moonbitlang/async@0.22.3",
+  "posoco/devkit@0.4.1",
+  "posoco/ext-llm@0.2.0",
+  "posoco/ext-oauth@0.1.0",
+  "moonbitlang/async@0.22.4",
 }
 
 readme = "README.mbt.md"

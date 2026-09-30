@@ -67,7 +67,7 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn provider_id(
 }
 
 ///|
-pub extend OpenAIProvider with @colmugx/posoco-ext-llm.ProviderFactory::{
+pub extend OpenAIProvider with @posoco/ext-llm.ProviderFactory::{
   credential_id,
   provider_id,
   build,
@@ -300,7 +300,7 @@ pub impl @llm.OAuthFactory for OpenAIProvider with fn provider_id(
 }
 
 ///|
-pub extend OpenAIProvider with @colmugx/posoco-ext-llm.OAuthFactory::{login}
+pub extend OpenAIProvider with @posoco/ext-llm.OAuthFactory::{login}
 
 ///|
 pub impl @llm.OAuthFactory for OpenAIProvider with fn credential_id(

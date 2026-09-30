@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "colmugx/posoco-ext-oauth"
+package "posoco/ext-oauth"
 
 import {
   "moonbitlang/core/debug",

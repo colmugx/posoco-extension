@@ -11,7 +11,7 @@ pub impl @oauth.OAuthProvider for LoginTestOAuth with fn provider_id(
 }
 
 ///|
-pub extend LoginTestOAuth with @colmugx/posoco-ext-oauth.OAuthProvider::{
+pub extend LoginTestOAuth with @posoco/ext-oauth.OAuthProvider::{
   provider_id,
   refresh,
   login,
@@ -135,7 +135,7 @@ pub impl @oauth.AuthPromptInteraction for LoginTestPrompt with fn prompt(
 }
 
 ///|
-pub extend LoginTestPrompt with @colmugx/posoco-ext-oauth.AuthPromptInteraction::{
+pub extend LoginTestPrompt with @posoco/ext-oauth.AuthPromptInteraction::{
   prompt,
 }
 
@@ -148,7 +148,7 @@ pub impl @oauth.CredentialStore for LoginTestStore with fn read(
 }
 
 ///|
-pub extend LoginTestStore with @colmugx/posoco-ext-oauth.CredentialStore::{
+pub extend LoginTestStore with @posoco/ext-oauth.CredentialStore::{
   read,
   delete,
   write,

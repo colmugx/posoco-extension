@@ -45,6 +45,6 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh
 }
 
 ///|
-pub extend OpenCodeZenProvider with @colmugx/posoco-ext-llm.RefreshableProviderFactory::{
+pub extend OpenCodeZenProvider with @posoco/ext-llm.RefreshableProviderFactory::{
   refresh,
 }

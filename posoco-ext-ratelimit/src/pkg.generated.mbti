@@ -3,13 +3,13 @@ package "colmugx/posoco-ext-ratelimit"
 
 import {
   "colmugx/posoco",
-  "colmugx/posoco-devkit",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async",
   "moonbitlang/core/debug",
+  "posoco/devkit",
 }
 
 // Values
@@ -20,7 +20,7 @@ import {
 pub struct RateLimitGuard {
   // private fields
 }
-pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, max_probe_interval_ms? : Int64, shutdown_timeout_ms? : Int, now_ms? : () -> Int64, sleep_ms? : async (Int) -> Unit, trace? : (String) -> Unit, bus? : @posoco-devkit.EventBus?) -> Self
+pub fn RateLimitGuard::RateLimitGuard(resume_note? : String, margin_ms? : Int64, max_attempts? : Int, poll_interval_ms? : Int, probe_interval_ms? : Int64, max_probe_interval_ms? : Int64, shutdown_timeout_ms? : Int, now_ms? : () -> Int64, sleep_ms? : async (Int) -> Unit, trace? : (String) -> Unit, bus? : @devkit.EventBus?) -> Self
 pub async fn RateLimitGuard::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn RateLimitGuard::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn RateLimitGuard::bind(Self, @posoco.Agent) -> Unit

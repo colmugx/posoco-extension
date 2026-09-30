@@ -17,8 +17,8 @@ import {
   "colmugx/posoco-kit-subagent@0.1.1",
   "colmugx/posoco-ext-kind@0.1.0",
   "colmugx/posoco-ext-permission@0.2.0",
-  "colmugx/posoco-devkit@0.4.0",
-  "moonbitlang/async@0.22.3",
+  "posoco/devkit@0.4.1",
+  "moonbitlang/async@0.22.4",
 }
 
 source = "src"

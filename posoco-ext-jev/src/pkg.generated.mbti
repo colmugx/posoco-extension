@@ -2,7 +2,7 @@
 package "colmugx/posoco-ext-jev"
 
 import {
-  "colmugx/posoco-ext-oauth",
+  "posoco/ext-oauth",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",

@@ -24,7 +24,7 @@ pub(all) struct ChildSpec {
   kind_name : String
   session_id : String
   resuming : Bool
-  tools : Array[String]
+  tools : Array[String]?
   skills : Array[String]?
   mode : @posoco-ext-permission.PermissionMode
   system_prompt : String

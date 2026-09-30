@@ -1,6 +1,6 @@
 import {
   "colmugx/posoco",
-  "colmugx/posoco-ext-oauth" @oauth,
+  "posoco/ext-oauth" @oauth,
   "colmugx/posoco-ext-workspace" @workspace,
   "moonbitlang/core/json",
 }

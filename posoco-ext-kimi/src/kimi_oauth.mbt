@@ -45,7 +45,7 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn provider_id(
 }
 
 ///|
-pub extend KimiOAuth with @colmugx/posoco-ext-oauth.OAuthProvider::{
+pub extend KimiOAuth with @posoco/ext-oauth.OAuthProvider::{
   provider_id,
   refresh,
   to_auth,
