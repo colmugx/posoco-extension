@@ -5,14 +5,18 @@
 /// revision expectation can win per state version.
 ///
 /// S3A commits in memory only. The S3B persistence barrier belongs in
-/// `coordinator_fold_query`'s Mutate arm, between an accepted proposal and
+/// `coordinator_fold_command`, between an accepted proposal and
 /// the replacement of the committed state.
 
 ///|
-/// Every client interaction is a request served by the loop; S3A has no
-/// fire-and-forget commands, so the command slot stays Unit.
-priv enum BoardRequest {
-  Mutate(@domain.BoardCommand)
+/// Completion belongs to this submission, never to the authoritative state.
+priv struct BoardMutation {
+  command : @domain.BoardCommand
+  completion : Ref[Result[Array[@domain.BoardEvent], @domain.BoardError]?]
+}
+
+///|
+priv enum BoardQuery {
   Snapshot
   GetTask(@domain.BoardTaskId)
   ListTasks
@@ -23,7 +27,6 @@ priv enum BoardRequest {
 
 ///|
 priv enum BoardReply {
-  Mutation(Result[Array[@domain.BoardEvent], @domain.BoardError])
   SnapshotReply(@domain.BoardStateSnapshot)
   TaskReply(@domain.BoardTask?)
   TasksReply(Array[@domain.BoardTask])
@@ -59,7 +62,7 @@ let coordinator_ask_timeout_ms : Int = 5000
 
 ///|
 pub struct BoardCoordinator {
-  priv mut actor : @fuwaroid.Fuwaroid[Unit, BoardRequest, BoardReply]?
+  priv mut actor : @fuwaroid.Fuwaroid[BoardMutation, BoardQuery, BoardReply]?
   priv mut stopped : Bool
 }
 
@@ -83,7 +86,7 @@ pub fn BoardCoordinator::attach(
       @fuwaroid.Fuwaroid::spawn(
         group~,
         init=@domain.BoardState::BoardState(),
-        on_cmd=fn(_ctx, state, _unit) { state },
+        on_cmd=coordinator_fold_command,
         on_query=coordinator_fold_query,
       ),
     )
@@ -92,21 +95,32 @@ pub fn BoardCoordinator::attach(
 }
 
 ///|
-fn coordinator_fold_query(
-  _ctx : @fuwaroid.Ctx[Unit, BoardRequest, BoardReply],
+fn coordinator_fold_command(
+  _ctx : @fuwaroid.Ctx[BoardMutation, BoardQuery, BoardReply],
   state : @domain.BoardState,
-  request : BoardRequest,
+  mutation : BoardMutation,
+) -> @domain.BoardState {
+  match @domain.BoardDomain::propose(state, mutation.command) {
+    Ok(proposal) => {
+      // S3A-only in-memory commit. S3B inserts persistence before this
+      // replacement and completion; browser mutations remain unsupported.
+      mutation.completion.val = Some(Ok(proposal.events))
+      proposal.next_state
+    }
+    Err(error) => {
+      mutation.completion.val = Some(Err(error))
+      state
+    }
+  }
+}
+
+///|
+fn coordinator_fold_query(
+  _ctx : @fuwaroid.Ctx[BoardMutation, BoardQuery, BoardReply],
+  state : @domain.BoardState,
+  request : BoardQuery,
 ) -> (@domain.BoardState, BoardReply) {
   match request {
-    Mutate(command) =>
-      match @domain.BoardDomain::propose(state, command) {
-        Ok(proposal) =>
-          // Single-writer commit: the proposal's detached next state
-          // replaces the committed state in this one synchronous step.
-          // S3B inserts its persistence barrier here, before the commit.
-          (proposal.next_state, Mutation(Ok(proposal.events)))
-        Err(error) => (state, Mutation(Err(error)))
-      }
     Snapshot => (state, SnapshotReply(state.snapshot()))
     GetTask(id) => (state, TaskReply(state.task(id)))
     ListTasks => (state, TasksReply(state.tasks()))
@@ -127,7 +141,7 @@ fn coordinator_failure(failure : @fuwaroid.AskFailure) -> BoardCoordinatorError 
 ///|
 async fn BoardCoordinator::request(
   self : BoardCoordinator,
-  request : BoardRequest,
+  request : BoardQuery,
 ) -> Result[BoardReply, BoardCoordinatorError] {
   let actor = match self.actor {
     Some(actor) => actor
@@ -152,14 +166,26 @@ pub async fn BoardCoordinator::submit(
   // caller mutating its arrays in the meantime must not alter what gets
   // validated and admitted.
   let command = command.copy_detached()
-  let reply = match self.request(Mutate(command)) {
-    Ok(reply) => reply
-    Err(error) => return Err(error)
+  let actor = match self.actor {
+    Some(actor) => actor
+    None => return Err(if self.stopped { Closed } else { NotAttached })
   }
-  match reply {
-    Mutation(Ok(events)) => Ok(events)
-    Mutation(Err(error)) => Err(Rejected(error))
-    _ => abort("board coordinator: reply does not match a mutation request")
+  let completion = Ref(None)
+  match actor.tell({ command, completion, }) {
+    Ok(_) => ()
+    Err(_) => return Err(Closed)
+  }
+  // A read-only query is a FIFO served barrier, not a mutation request.
+  // Its reply proves on_cmd has filled this submission's completion.
+  // Use the captured actor even if shutdown drops the coordinator handle.
+  match actor.ask(Revision, timeout_ms=coordinator_ask_timeout_ms) {
+    Ok(_) => ()
+    Err(failure) => return Err(coordinator_failure(failure))
+  }
+  match completion.val {
+    Some(Ok(events)) => Ok(events)
+    Some(Err(error)) => Err(Rejected(error))
+    None => abort("board coordinator: command not served before FIFO barrier")
   }
 }
 

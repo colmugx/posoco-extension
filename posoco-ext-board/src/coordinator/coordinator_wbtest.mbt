@@ -44,6 +44,44 @@ fn[T] assert_rejected(
 }
 
 ///|
+async test "command handler alone commits FIFO mutations without any query" {
+  @async.with_task_group(group => {
+    let coordinator = BoardCoordinator::BoardCoordinator()
+    coordinator.attach(group~)
+    let actor = coordinator.actor.unwrap()
+    let first = Ref(None)
+    let second = Ref(None)
+    assert_true(
+      actor.tell({ command: c_create("t1", 0L), completion: first, }) is Ok(_),
+    )
+    assert_true(
+      actor.tell({ command: c_move("t1", 1L), completion: second, }) is Ok(_),
+    )
+    // Drain without any ask: only on_cmd can have committed these changes.
+    actor.close()
+    let _ = actor.join()
+    assert_eq(
+      first.val,
+      Some(Ok([@domain.TaskCreated(id=cid("t1"), at_ms=1000L)])),
+    )
+    assert_eq(
+      second.val,
+      Some(
+        Ok([
+          @domain.TaskStageChanged(
+            id=cid("t1"),
+            from=@domain.Created,
+            to=@domain.Refining,
+            at_ms=2000L,
+          ),
+        ]),
+      ),
+    )
+    coordinator.shutdown()
+  })
+}
+
+///|
 async test "coordinator requests fail clearly before attach" {
   let coordinator = BoardCoordinator::BoardCoordinator()
   assert_rejected(coordinator.submit(command=c_create("t1", 0L)), NotAttached)
@@ -101,6 +139,10 @@ async test "two concurrent callers of one revision produce exactly one success" 
     let losers = results.filter(result => result is Err(Rejected(_)))
     assert_eq(winners.length(), 1)
     assert_eq(losers.length(), 1)
+    assert_rejected(
+      losers[0],
+      Rejected(@domain.RevisionConflict(expected=0L, actual=1L)),
+    )
     assert_eq(coordinator.revision().unwrap(), 1L)
     assert_eq(coordinator.tasks().unwrap().length(), 1)
   })
@@ -147,6 +189,7 @@ async test "queries return detached copies" {
     assert_eq(coordinator.attempts().unwrap().length(), 0)
     assert_eq(coordinator.task(id=cid("ghost")).unwrap(), None)
     assert_eq(coordinator.attempt(id=caid("a1")).unwrap(), None)
+    assert_eq(coordinator.revision().unwrap(), 1L)
   })
 }
 
