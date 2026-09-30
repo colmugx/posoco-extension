@@ -76,17 +76,19 @@ pub async fn run_pkce_browser_flow(
   let pkce = generate_pkce()
   let state = generate_state()
   let actual_port = start_callback_server(config, server)
-  // OAuth requires an identical redirect_uri in authorize and exchange.
-  let redirect_uri = rewrite_redirect_port(
-    config.redirect_uri,
-    config.callback_port,
-    actual_port,
-  )
-  let auth_url = build_authorize_url(config, pkce, state, redirect_uri)
-  interaction.notify(AuthMessage::AuthUrl(auth_url))
-  let winner = receive_callback(auth_url, server, prompt)
-  // Every path after start must release the port.
-  server.stop()
+  let (redirect_uri, winner) = {
+    defer server.stop()
+    // OAuth requires an identical redirect_uri in authorize and exchange.
+    let redirect_uri = rewrite_redirect_port(
+      config.redirect_uri,
+      config.callback_port,
+      actual_port,
+    )
+    let auth_url = build_authorize_url(config, pkce, state, redirect_uri)
+    interaction.notify(AuthMessage::AuthUrl(auth_url))
+    let winner = receive_callback(auth_url, server, prompt)
+    (redirect_uri, winner)
+  }
   let (code, received_state) = match winner {
     ServerWon(code, received) => (code, received)
     PasteWon(code, received) => (code, received)

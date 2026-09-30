@@ -617,6 +617,112 @@ async test "transport failure after start still stops the server" {
 }
 
 ///|
+async test "callback wait failure stops the server without exchange or persistence" {
+  let interaction = RecordingAuthInteraction::new()
+  let server_impl : FakeCallbackServer = {
+    fail_ports: [],
+    started_ports: [],
+    interaction,
+    delivered: None,
+    delivered_code: "",
+    block_until_stopped: false,
+    raise_immediately: true,
+    wait_delay_ms: 0,
+    stop_count: 0,
+  }
+  let transport_impl : BrowserFlowTransport = {
+    requests: [],
+    response: OAuthHttpResponse::{ status: 200, body: TOKEN_BODY, },
+    fail: false,
+  }
+  let persisted : Array[Credential] = []
+  let result = Ok(
+    {
+      let credential = run_pkce_browser_flow(
+        flow_config([], None),
+        interaction,
+        server_impl,
+        transport_impl,
+      )
+      persisted.push(credential)
+    },
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OAuthError::ExpiredToken) => ()
+    Err(error) => fail("expected wait failure, got: " + Show::to_string(error))
+    Ok(_) => fail("failed callback wait must not return a credential")
+  }
+  assert_eq(server_impl.started_ports, [1455])
+  assert_eq(server_impl.stop_count, 1)
+  assert_eq(transport_impl.requests.length(), 0)
+  assert_eq(persisted.length(), 0)
+}
+
+///|
+async test "callback wait cancellation stops the server without exchange or persistence" {
+  // Cover both the direct wait and the manual-paste race receive branches.
+  for race in [false, true] {
+    let interaction = RecordingAuthInteraction::new()
+    let server_impl : FakeCallbackServer = {
+      fail_ports: [],
+      started_ports: [],
+      interaction,
+      delivered: None,
+      delivered_code: "",
+      block_until_stopped: true,
+      raise_immediately: false,
+      wait_delay_ms: 0,
+      stop_count: 0,
+    }
+    let transport_impl : BrowserFlowTransport = {
+      requests: [],
+      response: OAuthHttpResponse::{ status: 200, body: TOKEN_BODY, },
+      fail: false,
+    }
+    let prompt_impl : ScriptedPromptInteraction = {
+      inputs: [],
+      echo_url_code: "unused_code",
+      delay_ms: 60000,
+      index: 0,
+    }
+    let prompt : &AuthPromptInteraction? = if race {
+      Some(prompt_impl)
+    } else {
+      None
+    }
+    let persisted : Array[Credential] = []
+    @async.with_task_group() <| group => {
+      let task = group.spawn(
+        () => {
+          let credential = run_pkce_browser_flow(
+            flow_config([], None),
+            interaction,
+            server_impl,
+            transport_impl,
+            prompt?,
+          )
+          persisted.push(credential)
+        },
+        allow_failure=true,
+      )
+      // Notification follows successful start and precedes the blocking wait.
+      // Wait for it rather than depending on a timer to schedule cancellation.
+      while interaction.messages.is_empty() {
+        @async.pause()
+      }
+      assert_eq(server_impl.started_ports, [1455])
+      assert_eq(server_impl.stop_count, 0)
+      task.cancel()
+    }
+    assert_eq(server_impl.stop_count, 1)
+    assert_eq(transport_impl.requests.length(), 0)
+    assert_eq(persisted.length(), 0)
+  }
+}
+
+///|
 async test "paste wins the race against a silent server" {
   let interaction = RecordingAuthInteraction::new()
   let server_impl : FakeCallbackServer = {

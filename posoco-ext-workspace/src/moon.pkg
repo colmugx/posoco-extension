@@ -1,6 +1,8 @@
 import {
   "colmugx/posoco",
+  "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
   "moonbitlang/core/debug",
 }
 
@@ -12,10 +14,13 @@ warnings = "-unused_package"
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/types",
 } for "wbtest"
 
 options(
+  "native-stub": [ "fs_atomic_test_stub.c" ],
   targets: {
+    "fs_atomic_native_wbtest.mbt": [ "native" ],
     "fs_port.native.mbt": [ "native", "wasm" ],
     "fs_port.js.mbt": [ "js" ],
   },

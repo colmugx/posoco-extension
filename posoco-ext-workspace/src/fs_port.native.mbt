@@ -10,7 +10,7 @@
 // ──────────────────────────────────────────────────────────────────────────
 
 ///|
-/// Native-only `WorkspaceFs` backed by `@fs`.
+/// Native/wasm `WorkspaceFs` backed by `@fs`.
 pub struct NativeWorkspaceFs {}
 
 ///|
@@ -74,9 +74,82 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file(
 }
 
 ///|
-/// In-process counter giving each atomic-write temp file a unique sibling
-/// name; credentials are low-concurrency, so a process-local suffix suffices.
+/// Names are candidates only: exclusive creation establishes ownership even
+/// across processes and in the presence of stale files or symlinks.
 let atomic_write_counter : Ref[Int] = { val: 0, }
+
+///|
+fn atomic_write_candidate(path : String) -> String {
+  atomic_write_counter.val += 1
+  "\{path}.tmp-\{atomic_write_counter.val}"
+}
+
+///|
+/// Candidate naming and writing are narrow test seams; acquisition, cleanup,
+/// and commit always use real file handles and filesystem operations.
+async fn native_write_file_atomic(
+  path : String,
+  content : String,
+  next_candidate? : (String) -> String = atomic_write_candidate,
+  write? : async (@fs.File, String) -> Unit = async fn(file, text) {
+    file.write(text)
+  },
+) -> Unit raise WorkspaceFsError {
+  let owned : Ref[(@fs.File, String)?] = Ref(None)
+  let committed = Ref(false)
+  // Install cleanup before creation. Acquisition cannot be cancelled between
+  // creating a file and recording which handle/path we own.
+  defer (match owned.val {
+    None => ()
+    Some((file, tmp)) => {
+      file.close()
+      if !committed.val {
+        // @fs.remove is nocancel, so task cancellation cannot skip removal.
+        @fs.remove(tmp) catch {
+          _ => raise fs_err("write_file_atomic: staging cleanup")
+        }
+      }
+    }
+  })
+  @async.protect_from_cancel(() => {
+    for _ in 0..<128 {
+      let tmp = next_candidate(path)
+      let file = @fs.open(
+        tmp,
+        mode=WriteOnly,
+        create_mode=CreateNew,
+        permission=0o600,
+      ) catch {
+        @os_error.OSError(_) as err if err.is_EEXIST() => continue
+        _ => raise fs_err("write_file_atomic: staging create")
+      }
+      owned.val = Some((file, tmp))
+      return
+    }
+    raise fs_err("write_file_atomic: staging name collisions")
+  }) catch {
+    WorkspaceFsError(_) as err => raise err
+    _ => raise fs_err("write_file_atomic: staging create")
+  }
+  guard owned.val is Some((file, tmp)) else {
+    raise fs_err("write_file_atomic: staging create")
+  }
+  write(file, content) catch {
+    _ => raise fs_err("write_file_atomic: staging write")
+  }
+  file.close()
+  // Honour cancellation before entering the atomic commit region. Once the
+  // rename starts, cancellation cannot leave a successful replace ambiguous.
+  @async.pause()
+  @async.protect_from_cancel(() => {
+    @fs.rename(tmp, path, replace=true) catch {
+      _ => raise fs_err("write_file_atomic: replace")
+    }
+    committed.val = true
+  }) catch {
+    _ => raise fs_err("write_file_atomic: replace")
+  }
+}
 
 ///|
 pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file_atomic(
@@ -84,20 +157,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file_atomic(
   path,
   content,
 ) {
-  atomic_write_counter.val += 1
-  let tmp = "\{path}.tmp-\{atomic_write_counter.val}"
-  // Owner-only create: the primary consumer is credential persistence.
-  @fs.write_file(tmp, content, create_mode=OpenOrCreate, permission=0o600) catch {
-    _ => raise fs_err("write_file_atomic")
-  }
-  @fs.rename(tmp, path, replace=true) catch {
-    _ => {
-      @fs.remove(tmp) catch {
-        _ => ()
-      }
-      raise fs_err("write_file_atomic")
-    }
-  }
+  native_write_file_atomic(path, content)
 }
 
 ///|
@@ -150,7 +210,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn mkdir(
   path,
   recursive~,
 ) {
-  @fs.mkdir(path, recursive~) catch {
+  @fs.mkdir(path, recursive~, allow_exist=true) catch {
     _ => raise fs_err("mkdir")
   }
 }
