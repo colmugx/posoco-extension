@@ -50,9 +50,9 @@ pub fn BoardExtension::runtime(self : BoardExtension) -> @runtime.BoardRuntime {
 ///|
 /// Bind Board-owned long-lived workers to the host's structured-concurrency
 /// scope. This is runtime ownership only; it does not bind an Agent.
-pub fn[G] BoardExtension::attach(
+pub fn BoardExtension::attach(
   self : BoardExtension,
-  group : @async.TaskGroup[G],
+  group : @async.TaskGroup[Unit],
 ) -> Unit {
   self.runtime_.attach(group)
 }

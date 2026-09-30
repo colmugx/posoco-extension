@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S2B read-only realtime and reconnect
+## Current status: S3A in-memory Board domain and coordinator on top of S2B realtime
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -188,12 +188,49 @@ Run the browser VM regressions from the extension workspace with
 The `.mbtx` keeps lifecycle/snapshot test scenarios and assertions in MoonBit;
 Node VM bindings simulate DOM, sockets and timers without a browser or server.
 
+## Board domain and coordinator (S3A)
+
+S3A adds a pure Board domain (`domain`) and a single-writer coordinator
+(`coordinator`). The domain owns no clock, no randomness, no IO and no JSON:
+every command carries its expected revision plus explicit ids and timestamps,
+and `BoardDomain::propose(state, command)` either returns a fully detached
+successor state with ordered typed events, or a typed rejection that leaves
+the input state untouched. Accepted mutations advance the revision by exactly
+one. Stage moves follow one central table: Created→Refining/Suspended;
+Refining→Ready/Suspended; Ready→Running/Refining/Suspended;
+Running→Review/Suspended; Review→Done/Ready/Refining/Suspended; Done→Refining;
+Suspended→Created/Refining/Ready. Entering Ready stamps `ready_since_ms` and
+leaving clears it; Ready never requires dependencies to be Done. Dependencies
+are validated for existence, self-reference, duplicate edges and DAG cycles.
+Attempts run Queued→Running→{Succeeded,Failed,Cancelled,Interrupted} with
+`started_at_ms`/`finished_at_ms` stamped by their own commands; Review attempts
+start implicitly Pending and accept exactly one Approved/ChangesRequested.
+Execution-specific invariants (Running↔Attempt↔stage coupling) are deferred to
+S4 by design.
+
+The coordinator serializes every mutation and query through one Fuwaroid loop:
+concurrent callers are FIFO-ordered and two submissions with the same expected
+revision produce exactly one success. Commands are deep-copied before the
+first suspension point, so a caller mutating its arrays while queued cannot
+alter what is admitted. Query results and snapshots are detached deep copies.
+Repeated `attach(group)` is idempotent; `shutdown` closes admission, drains
+the mailbox and joins the loop; a later attach owns a fresh in-memory board.
+
+Explicitly out of scope in S3A: no durable storage or restore (the S3B
+persistence barrier belongs between an accepted proposal and the commit in the
+coordinator fold), no browser/UI changes, no domain events published to the
+telemetry EventHub (`seq` and Board revision remain independent counters), and
+WebSocket commands still answer `unsupported_in_current_stage`. One deviation
+from the earlier host API: `attach` now takes a concrete
+`@async.TaskGroup[Unit]` because `Fuwaroid::spawn` pins that group type;
+behavior for existing hosts is unchanged.
+
 ## Task vocabulary
 
 The implementation keeps three task concepts separate:
 
-- **BoardTask / Attempt** — product/business lifecycle. These arrive with the
-  Board domain stage and are not implemented in S1.
+- **BoardTask / Attempt** — product/business lifecycle. Owned by the S3A
+  `domain`/`coordinator` packages as in-memory state.
 - **Fuwaroid SupervisedTask** — ownership of Board runtime coroutines. In S1 it
   owns the local server worker through the host TaskGroup.
 - **Posoco TaskSpec / TaskHandle** — Agent-owned child/background work. The
@@ -212,7 +249,9 @@ scheduler.
 
 - root package: config, commands, lifecycle adapter and Observer projection;
 - `protocol`: UI/server-independent JSON wire types and codecs;
-- `runtime`: event history, server lifecycle, platform server/browser seams.
+- `runtime`: event history, server lifecycle, platform server/browser seams;
+- `domain`: pure Board task/attempt lifecycle, FSM and propose decisions;
+- `coordinator`: Fuwaroid single-writer owner of the committed Board state.
 
-Later stages add the Board domain and persistence, then Agent execution without
+Later stages add persistence, domain event delivery and Agent execution without
 changing these ownership boundaries.

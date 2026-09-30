@@ -1,11 +1,13 @@
 ///|
 /// S1 runtime facade: telemetry remains independent from local control-plane
 /// lifecycle. Long-lived server work is owned by a Fuwaroid Supervisor bound
-/// to a host TaskGroup through attach().
+/// to a host TaskGroup through attach(); the S3A single-writer Board
+/// coordinator runs its own Fuwaroid loop on the same host scope.
 pub struct BoardRuntime {
   hub : BoardEventHub
   server : &BoardWebServer
   opener : &BrowserOpener
+  coordinator : @coordinator.BoardCoordinator
   gate : @async.Mutex
   mut supervisor : @fuwaroid.Supervisor[Unit]?
   mut server_task : @fuwaroid.SupervisedTask[Unit]?
@@ -27,6 +29,7 @@ pub fn BoardRuntime::with_adapters(
     hub,
     server,
     opener,
+    coordinator: @coordinator.BoardCoordinator::BoardCoordinator(),
     gate: @async.Mutex::Mutex(),
     supervisor: None,
     server_task: None,
@@ -36,15 +39,17 @@ pub fn BoardRuntime::with_adapters(
 
 ///|
 /// Bind long-lived runtime workers to a host-owned structured-concurrency
-/// scope. Repeated attach is idempotent; S1 attaches only server ownership,
-/// not an Agent or Posoco Tasks capability.
-pub fn[G] BoardRuntime::attach(
+/// scope: the local server Supervisor and the single-writer Board domain
+/// coordinator. Repeated attach is idempotent for both; S3A attaches no
+/// Agent and no Posoco Tasks capability.
+pub fn BoardRuntime::attach(
   self : BoardRuntime,
-  group : @async.TaskGroup[G],
+  group : @async.TaskGroup[Unit],
 ) -> Unit {
   if self.supervisor is None {
     self.supervisor = Some(@fuwaroid.Supervisor(group~))
   }
+  self.coordinator.attach(group~)
 }
 
 ///|
@@ -165,17 +170,23 @@ pub async fn BoardRuntime::close_server(self : BoardRuntime) -> Unit {
 }
 
 ///|
-/// Final lifecycle teardown: close the listener, then close Supervisor
-/// admission and bounded-settle any remaining runtime workers.
+/// Final lifecycle teardown: close the listener, close coordinator
+/// admission and join its drained loop, then bounded-settle any remaining
+/// runtime workers. Idempotent. The whole cleanup is shielded from
+/// cancellation, mirroring the gate-protected server paths: a cancelled
+/// caller cannot leave a half-open listener or an unjoined coordinator.
 pub async fn BoardRuntime::shutdown(self : BoardRuntime) -> Unit {
-  self.close_server()
-  match self.supervisor {
-    Some(supervisor) => {
-      let _ = supervisor.shutdown(timeout_ms=5000)
-      self.supervisor = None
+  @async.protect_from_cancel(() => {
+    self.close_server()
+    self.coordinator.shutdown()
+    match self.supervisor {
+      Some(supervisor) => {
+        let _ = supervisor.shutdown(timeout_ms=5000)
+        self.supervisor = None
+      }
+      None => ()
     }
-    None => ()
-  }
+  })
 }
 
 ///|
