@@ -378,9 +378,20 @@ async fn SubagentTools::spawn(
     Some(current) => current()
     None => (self.parent_slot, self.parent_effort)
   }
+  // Resolution order: explicit args beat the kind's binding; unbound fields
+  // fall through to the config default and then the parent's selection
+  // (inside `resolve`).
+  let requested_model = match args.model {
+    Some(model) => Some(model)
+    None => kind_spec.model
+  }
+  let requested_effort = match args.effort {
+    Some(effort) => Some(effort)
+    None => kind_spec.effort
+  }
   let selection = self.config.resolve(
-    model=args.model,
-    effort=args.effort,
+    model=requested_model,
+    effort=requested_effort,
     parent_slot~,
     parent_effort~,
   ) catch {

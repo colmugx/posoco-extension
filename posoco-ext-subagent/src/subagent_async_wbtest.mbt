@@ -419,6 +419,104 @@ async test "empty_tool_intersection_errors_with_both_lists" {
 }
 
 ///|
+async test "kind_binding_resolves_through_config_pool" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_pool(),
+    catalog=catalog_with_bound_kind(),
+  )
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(
+      args_object([
+        ("task", Json::string("t")),
+        ("kind", Json::string("porter")),
+      ]),
+    ),
+  )
+  assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs[0].slot, "kimi/k2")
+  // The kind's bound effort beats the slot's configured default_effort.
+  assert_eq(composer.specs[0].effort, Some("high"))
+}
+
+///|
+async test "explicit_args_override_kind_binding" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_pool(),
+    catalog=catalog_with_bound_kind(),
+  )
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(
+      args_object([
+        ("task", Json::string("t")),
+        ("kind", Json::string("porter")),
+        ("model", Json::string("zai/glm")),
+        ("effort", Json::string("low")),
+      ]),
+    ),
+  )
+  assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs[0].slot, "zai/glm")
+  assert_eq(composer.specs[0].effort, Some("low"))
+}
+
+///|
+async test "kind_binding_to_unknown_pool_slot_errors_listing_allowed" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_other_pool(),
+    catalog=catalog_with_bound_kind(),
+  )
+  match
+    @posoco.ToolProvider::execute(
+      tools,
+      "agent",
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("porter")),
+        ]),
+      ),
+    ) {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+      assert_true(content.contains("unknown subagent model 'kimi/k2'"))
+      assert_true(content.contains("zai/glm"))
+    }
+    _ => fail("expected model error")
+  }
+}
+
+///|
+async test "kind_binding_passes_through_in_inheritance_mode" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+  )
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    "agent",
+    agent_call(
+      args_object([
+        ("task", Json::string("t")),
+        ("kind", Json::string("porter")),
+      ]),
+    ),
+  )
+  assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  assert_eq(composer.specs[0].slot, "kimi/k2")
+  assert_eq(composer.specs[0].effort, Some("high"))
+}
+
+///|
 async test "tools_absent_uses_kind_whitelist" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(composer=composer as &ChildComposer)

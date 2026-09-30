@@ -121,9 +121,10 @@ fn test_tools(
   config? : @kit.SubagentConfig = @kit.SubagentConfig::defaults(),
   parent_selection? : (() -> (String, String?))? = None,
   observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
+  catalog? : @kind.KindCatalog = @kind.KindCatalog::builtin(),
 ) -> SubagentTools {
   SubagentTools::SubagentTools(
-    catalog=@kind.KindCatalog::builtin(),
+    catalog~,
     config~,
     composer~,
     parent_slot="parent/slot",
@@ -131,6 +132,106 @@ fn test_tools(
     parent_selection~,
     observers~,
   )
+}
+
+///|
+/// Catalog with a builtin-like coder plus a model+effort-bound kind, feeding
+/// the binding-resolution and description tests.
+fn catalog_with_bound_kind() -> @kind.KindCatalog {
+  let coder : @kind.KindSpec = {
+    name: "coder",
+    description: "Full-face coding agent",
+    tools: ["read", "write", "edit", "glob", "grep", "bash"],
+    model: None,
+    effort: None,
+    skills: None,
+    mode: @permission.PermissionMode::WorkspaceWrite,
+    body: "Coder body {{instructions}}",
+  }
+  let porter : @kind.KindSpec = {
+    name: "porter",
+    description: "Bound reconnaissance kind",
+    tools: ["read"],
+    model: Some("kimi/k2"),
+    effort: Some("high"),
+    skills: None,
+    mode: @permission.PermissionMode::ReadOnly,
+    body: "Bound body {{instructions}}",
+  }
+  @kind.KindCatalog::with_entries([coder, porter]) catch {
+    _ => abort("unreachable")
+  }
+}
+
+///|
+/// Range-mode config: kimi/k2 (default) offers low/high defaulting to low;
+/// zai/glm accepts any effort.
+fn config_with_pool() -> @kit.SubagentConfig {
+  {
+    models: [
+      {
+        slot: "kimi/k2",
+        efforts: ["low", "high"],
+        default_effort: Some("low"),
+      },
+      { slot: "zai/glm", efforts: [], default_effort: None, },
+    ],
+    default_slot: Some("kimi/k2"),
+    limits: @kit.SubagentConfig::defaults().limits,
+  }
+}
+
+///|
+/// Range-mode pool that does not contain the bound kind's slot.
+fn config_other_pool() -> @kit.SubagentConfig {
+  {
+    models: [
+      { slot: "zai/glm", efforts: ["high"], default_effort: Some("high"), },
+    ],
+    default_slot: Some("zai/glm"),
+    limits: @kit.SubagentConfig::defaults().limits,
+  }
+}
+
+///|
+test "list_tools_description_lists_kind_catalog" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+  )
+  let def = @posoco.ToolProvider::list_tools(tools)[0]
+  assert_true(def.description.contains("Available kinds (pass via kind):"))
+  assert_true(def.description.contains("- coder: "))
+  assert_true(def.description.contains(" [default]"))
+  assert_true(
+    def.description.contains(
+      "- porter: Bound reconnaissance kind (model: kimi/k2, effort: high)",
+    ),
+  )
+  assert_true(
+    def.description.contains(
+      "Omit model/effort to use the kind's binding, then the configured default, then your current selection.",
+    ),
+  )
+  assert_false(def.description.contains("Available models"))
+}
+
+///|
+test "list_tools_description_lists_model_pool_in_range_mode" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    config=config_with_pool(),
+  )
+  let def = @posoco.ToolProvider::list_tools(tools)[0]
+  assert_true(def.description.contains("Available models (pass via model):"))
+  assert_true(
+    def.description.contains(
+      "- kimi/k2 [default]: efforts low, high (default low)",
+    ),
+  )
+  assert_true(def.description.contains("- zai/glm: any effort"))
 }
 
 ///|

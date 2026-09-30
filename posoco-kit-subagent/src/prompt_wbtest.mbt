@@ -18,6 +18,7 @@ fn prompt_test_kind() -> @kind.KindSpec {
     description: "test kind",
     tools: [],
     model: None,
+    effort: None,
     skills: None,
     mode: @permission.PermissionMode::WorkspaceWrite,
     body: "Base prompt.\n<fillin>\n{{instructions}}\n</fillin>\nEnd.",

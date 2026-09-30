@@ -17,6 +17,7 @@ test "parse_kind_file_all_fields_comma_list" {
     "description: Tight-scope fixer\n" +
     "tools: read, edit , bash\n" +
     "model: zai/glm-5.3\n" +
+    "effort: high\n" +
     "skills: repo-map, tree\n" +
     "mode: yolo\n" +
     "unknown_key: ignored\n" +
@@ -28,6 +29,7 @@ test "parse_kind_file_all_fields_comma_list" {
   assert_eq(spec.description, "Tight-scope fixer")
   assert_eq(spec.tools, ["read", "edit", "bash"])
   assert_eq(spec.model, Some("zai/glm-5.3"))
+  assert_eq(spec.effort, Some("high"))
   assert_eq(spec.skills, Some(["repo-map", "tree"]))
   assert_true(spec.mode is @permission.PermissionMode::Yolo)
   assert_true(spec.body.contains("Body line one."))
@@ -60,6 +62,7 @@ test "parse_kind_file_defaults" {
   )
   assert_eq(spec.tools, [])
   assert_eq(spec.model, None)
+  assert_eq(spec.effort, None)
   assert_eq(spec.skills, None)
   assert_true(spec.mode is @permission.PermissionMode::WorkspaceWrite)
   assert_true(spec.body.contains("{{instructions}}"))
@@ -166,6 +169,7 @@ test "builtin_catalog_kinds" {
     match cat.get(name) {
       Some(spec) => {
         assert_false(spec.description.is_empty())
+        assert_eq(spec.effort, None)
         assert_true(spec.body.contains("{{instructions}}"))
         assert_true(spec.body.contains("<fillin>"))
       }

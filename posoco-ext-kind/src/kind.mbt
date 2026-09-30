@@ -11,6 +11,8 @@ pub(all) struct KindSpec {
   tools : Array[String]
   /// Model override; None = use the host default.
   model : String?
+  /// Effort override; None = the bound slot's default effort.
+  effort : String?
   /// Skill allow-list; None = do not load skills at all.
   skills : Array[String]?
   /// Permission posture for the subagent.
@@ -263,6 +265,7 @@ pub fn parse_kind_file(content : String) -> KindSpec raise KindError {
   let description = kind_required_string(mapping, "description")
   let tools = parse_kind_string_list(mapping, "tools")
   let model = kind_optional_string(mapping, "model")
+  let effort = kind_optional_string(mapping, "effort")
   let skills = kind_optional_string_list(mapping, "skills")
   let mode = match mapping.get("mode") {
     None => @permission.PermissionMode::WorkspaceWrite
@@ -276,7 +279,16 @@ pub fn parse_kind_file(content : String) -> KindSpec raise KindError {
       }
     Some(_) => raise KindError::InvalidKindFile("'mode' must be a string")
   }
-  KindSpec::{ name, description, tools, model, skills, mode, body: parts.body, }
+  KindSpec::{
+    name,
+    description,
+    tools,
+    model,
+    effort,
+    skills,
+    mode,
+    body: parts.body,
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -445,6 +457,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
         description: "Full-face coding agent: reads, writes, edits, searches, and runs shell commands in the workspace.",
         tools: ["read", "write", "edit", "glob", "grep", "bash"],
         model: None,
+        effort: None,
         skills: None,
         mode: @permission.PermissionMode::WorkspaceWrite,
         body: KIND_CODER_BODY,
@@ -457,6 +470,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
         description: "Fast read-only codebase exploration: finds files, symbols, and call paths and reports facts with path:line evidence.",
         tools: ["read", "glob", "grep"],
         model: None,
+        effort: None,
         skills: None,
         mode: @permission.PermissionMode::ReadOnly,
         body: KIND_EXPLORE_BODY,
@@ -469,6 +483,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
         description: "Read-only review agent that audits changes for correctness and convention fit.",
         tools: ["read", "glob", "grep"],
         model: None,
+        effort: None,
         skills: None,
         mode: @permission.PermissionMode::ReadOnly,
         body: KIND_REVIEWER_BODY,
@@ -481,6 +496,7 @@ fn builtin_entries() -> Map[String, KindSpec] {
         description: "Tool-less second-opinion advisor that reasons over pasted context only.",
         tools: [],
         model: None,
+        effort: None,
         skills: None,
         mode: @permission.PermissionMode::ReadOnly,
         body: KIND_ORACLE_BODY,
