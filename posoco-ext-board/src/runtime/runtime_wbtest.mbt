@@ -182,3 +182,138 @@ async test "server start requires host task-group ownership" {
   }
   assert_eq(server.binds, 0)
 }
+
+///|
+fn runtime_create(id : String, rev : Int64) -> @domain.BoardCommand {
+  @domain.BoardCommand::CreateTask(
+    id=@domain.BoardTaskId::BoardTaskId(id),
+    title="task \{id}",
+    description="",
+    priority=@domain.Normal,
+    definition_of_done=[],
+    dependencies=[],
+    at_ms=1000L,
+    expected_revision=rev,
+  )
+}
+
+///|
+async test "runtime owns one coordinator and telemetry stays independent" {
+  let server : FakeBoardServer = {
+    binds: 0,
+    closes: 0,
+    alive: false,
+    browser: None,
+  }
+  let opener : FakeBrowserOpener = { opened: [], }
+  let runtime = BoardRuntime::with_adapters(server~, opener~)
+  // Before attach the domain is unreachable, like the server worker.
+  assert_true(
+    runtime.coordinator.submit(command=runtime_create("t1", 0L))
+    is Err(NotAttached),
+  )
+  @async.with_task_group(group => {
+    runtime.attach(group)
+    let events = runtime.coordinator.submit(command=runtime_create("t1", 0L))
+    assert_eq(events.unwrap().length(), 1)
+    assert_eq(runtime.coordinator.revision().unwrap(), 1L)
+    // Repeated attach is idempotent for the coordinator too.
+    runtime.attach(group)
+    let _ = runtime.coordinator.submit(command=runtime_create("t2", 1L))
+    assert_eq(runtime.coordinator.revision().unwrap(), 2L)
+    // Domain revision and telemetry seq are fully independent counters.
+    assert_eq(runtime.current_seq(), 0L)
+    let event = runtime.publish_telemetry(
+      board_revision=0L,
+      kind="tick",
+      payload=Json::null(),
+    )
+    assert_eq(event.seq, 1L)
+    assert_eq(runtime.coordinator.revision().unwrap(), 2L)
+    let _ = runtime.coordinator.submit(command=runtime_create("t3", 2L))
+    assert_eq(runtime.current_seq(), 1L)
+    assert_eq(runtime.coordinator.revision().unwrap(), 3L)
+    runtime.shutdown()
+  })
+  // Shutdown closes coordinator admission; a fresh attach starts at zero.
+  assert_true(runtime.coordinator.revision() is Err(Closed))
+  assert_true(
+    runtime.coordinator.submit(command=runtime_create("t4", 3L)) is Err(Closed),
+  )
+  @async.with_task_group(group => {
+    runtime.attach(group)
+    assert_eq(runtime.coordinator.revision().unwrap(), 0L)
+    let _ = runtime.coordinator.submit(command=runtime_create("t1", 0L))
+    assert_eq(runtime.coordinator.revision().unwrap(), 1L)
+    runtime.shutdown()
+  })
+}
+
+///|
+/// Server whose run resists cancellation briefly, so a shutdown's
+/// settle_server_task bounded wait is long enough to park in deterministically.
+priv struct SlowStopServer {
+  mut closes : Int
+  mut alive : Bool
+}
+
+///|
+impl BoardWebServer for SlowStopServer with fn bind(self) {
+  self.alive = true
+  Ok({ host: "127.0.0.1", port: 18081, })
+}
+
+///|
+impl BoardWebServer for SlowStopServer with fn run(_self) {
+  let _ = @async.protect_from_cancel(() => @async.sleep(200))
+  Ok(())
+}
+
+///|
+impl BoardWebServer for SlowStopServer with fn browser_url(_self) {
+  None
+}
+
+///|
+impl BoardWebServer for SlowStopServer with fn close(self) {
+  if self.alive {
+    self.closes += 1
+  }
+  self.alive = false
+}
+
+///|
+impl BoardWebServer for SlowStopServer with fn is_alive(self) {
+  self.alive
+}
+
+///|
+impl BoardWebServer for SlowStopServer with fn last_error(_self) {
+  None
+}
+
+///|
+async test "runtime shutdown cleanup completes even when cancelled" {
+  let server : SlowStopServer = { closes: 0, alive: false, }
+  let opener : FakeBrowserOpener = { opened: [], }
+  let runtime = BoardRuntime::with_adapters(server~, opener~)
+  @async.with_task_group(group => {
+    runtime.attach(group)
+    let _ = runtime.coordinator.submit(command=runtime_create("t1", 0L))
+    assert_true(runtime.ensure_server() is Ok(_))
+    let task = group.spawn(() => runtime.shutdown())
+    // Cancel while the teardown is parked in settle_server_task's bounded
+    // wait (the fake run resists cancellation for 200ms): the protected
+    // cleanup must still close the listener and shut the coordinator down.
+    @async.sleep(10)
+    task.cancel()
+    let _ = task.wait() catch { _ => () }
+    assert_eq(server.closes, 1)
+    assert_false(server.alive)
+    assert_true(runtime.coordinator.revision() is Err(Closed))
+    assert_true(
+      runtime.coordinator.submit(command=runtime_create("t2", 1L))
+      is Err(Closed),
+    )
+  })
+}

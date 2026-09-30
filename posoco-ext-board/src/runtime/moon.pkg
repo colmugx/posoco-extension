@@ -1,5 +1,6 @@
 import {
   "colmugx/fuwaroid",
+  "colmugx/posoco-ext-board/coordinator",
   "colmugx/posoco-ext-board/protocol",
   "moonbitlang/async",
   "moonbitlang/async/http",
@@ -11,6 +12,10 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
+
+import {
+  "colmugx/posoco-ext-board/domain",
+} for "wbtest"
 
 supported_targets = "+native +js"
 

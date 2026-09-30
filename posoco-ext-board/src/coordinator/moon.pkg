@@ -1,0 +1,8 @@
+import {
+  "colmugx/fuwaroid",
+  "colmugx/posoco-ext-board/domain",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+supported_targets = "+native +js"
