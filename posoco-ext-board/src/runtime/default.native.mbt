@@ -1,5 +1,7 @@
 ///|
 pub struct NativeBoardWebServer {
+  hub : BoardEventHub
+  connections : Array[@async.Task[Unit]]
   mut server : @http.Server?
   mut endpoint : BoardEndpoint?
   mut token : String?
@@ -9,8 +11,12 @@ pub struct NativeBoardWebServer {
 }
 
 ///|
-pub fn NativeBoardWebServer::NativeBoardWebServer() -> NativeBoardWebServer {
+pub fn NativeBoardWebServer::NativeBoardWebServer(
+  hub? : BoardEventHub = BoardEventHub(),
+) -> NativeBoardWebServer {
   {
+    hub,
+    connections: [],
     server: None,
     endpoint: None,
     token: None,
@@ -121,15 +127,140 @@ fn board_request_token_ok(request : @http.Request, token : String) -> Bool {
 
 ///|
 fn board_placeholder_page() -> String {
-  "<!doctype html><html><head><meta charset=\"utf-8\"><title>Posoco Board</title></head>" +
-  "<body><main><h1>Posoco Board</h1><p id=\"status\">connecting…</p></main>" +
-  "<script>(function(){const q=new URLSearchParams(location.search);const t=q.get('token');" +
-  "if(!t){document.getElementById('status').textContent='missing bootstrap token';return;}" +
-  "const u='ws://'+location.host+'/ws?token='+encodeURIComponent(t);" +
-  "const ws=new WebSocket(u);ws.onopen=()=>document.getElementById('status').textContent='connected';" +
-  "ws.onclose=()=>document.getElementById('status').textContent='disconnected';" +
-  "ws.onerror=()=>document.getElementById('status').textContent='connection error';})();</script>" +
-  "</body></html>"
+  let page =
+    #|<!doctype html><html><head><meta charset="utf-8"><title>Posoco Board diagnostics</title></head>
+    #|<body><main><h1>Board diagnostics</h1><p id="status">connecting</p><pre id="events"></pre></main>
+    #|<script>(()=>{
+    #|const status=document.getElementById('status'), output=document.getElementById('events');
+    #|const token=new URLSearchParams(location.search).get('token');
+    #|if(!token){status.textContent='missing bootstrap token';return;}
+    #|const key='board.cursor.'+location.host, valid=n=>Number.isSafeInteger(n)&&n>=0;
+    #|let seq=0, lines=[], socket=null, timer=null, stopped=false, suspended=false, delay=250;
+    #|try{const saved=Number(sessionStorage.getItem(key));if(valid(saved))seq=saved;}catch(_){}
+    #|const cursor=n=>{seq=n;try{sessionStorage.setItem(key,String(n));}catch(_){}};
+    #|const show=s=>{status.textContent=s+' | seq '+seq;};
+    #|const line=e=>('seq '+e.seq+' | kind '+String(e.kind)+' | scope '+JSON.stringify(e.scope??null)).slice(0,512);
+    #|const render=()=>{output.textContent=lines.join('\n');};
+    #|const reset=(ws,s)=>{cursor(0);lines=[];render();show(s);ws.close();};
+    #|function connect(){
+    #|  timer=null;if(stopped||suspended||socket!==null)return;
+    #|  const ws=new WebSocket('ws://'+location.host+'/ws?token='+encodeURIComponent(token));socket=ws;
+    #|  ws.onopen=()=>{if(socket!==ws||stopped||suspended)return;ws.send(JSON.stringify({type:'hello',protocol_version:1,last_seq:seq}));show('connected; hello sent');};
+    #|  ws.onmessage=ev=>{
+    #|    if(socket!==ws||ws.readyState!==WebSocket.OPEN||stopped||suspended)return;
+    #|    try{
+    #|      const f=JSON.parse(ev.data);
+    #|      if(f.type==='resync_required'){reset(ws,'resync required');return;}
+    #|      if(f.type==='error'){show('protocol error: '+String(f.code).slice(0,80));stopped=true;ws.close();return;}
+    #|      if(f.type==='snapshot'){
+    #|        if(f.protocol_version!==1||!valid(f.last_seq)||!Array.isArray(f.payload?.events))throw Error();
+    #|        const events=f.payload.events, first=f.last_seq-events.length+1;
+    #|        if(first<1||(events.length===0&&f.last_seq!==0))throw Error();
+    #|        for(let i=0;i<events.length;i++){const e=events[i];if(e.type!=='event'||!valid(e.seq)||e.seq!==first+i)throw Error();}
+    #|        lines=events.slice(-100).map(line);cursor(f.last_seq);render();show('snapshot');delay=250;
+    #|      }else if(f.type==='event'){
+    #|        if(!valid(f.seq))throw Error();if(f.seq<=seq)return;
+    #|        if(f.seq!==seq+1){reset(ws,'sequence gap; reconnecting');return;}
+    #|        cursor(f.seq);lines.push(line(f));lines=lines.slice(-100);render();show('live');delay=250;
+    #|      }
+    #|    }catch(_){reset(ws,'invalid frame; reconnecting');}
+    #|  };
+    #|  ws.onerror=()=>{if(socket===ws)show('connection error');};
+    #|  ws.onclose=()=>{if(socket!==ws)return;socket=null;if(stopped)return;show('disconnected; reconnecting');if(timer===null){timer=setTimeout(connect,delay);delay=Math.min(delay*2,10000);}};
+    #|}
+    #|addEventListener('pagehide',()=>{suspended=true;if(timer!==null)clearTimeout(timer);timer=null;const old=socket;socket=null;if(old)old.close();});
+    #|addEventListener('pageshow',e=>{if(e.persisted&&suspended){suspended=false;delay=250;connect();}});
+    #|connect();
+    #|})();</script></body></html>
+  page
+}
+
+///|
+priv suberror BoardFrameError {
+  ExpectedText
+  FrameTooLarge
+}
+
+///|
+async fn board_read_text(ws : @websocket.Conn) -> String {
+  let message = ws.recv()
+  guard message.kind is Text else { raise ExpectedText }
+  let bytes : Array[Byte] = []
+  while message.read_some(max_len=8193 - bytes.length()) is Some(chunk) {
+    for byte in chunk {
+      bytes.push(byte)
+    }
+    if bytes.length() > 8192 {
+      raise FrameTooLarge
+    }
+  }
+  @utf8.decode(Bytes::from_array(bytes))
+}
+
+///|
+async fn board_receive_hello(
+  ws : @websocket.Conn,
+) -> Result[@protocol.BoardHello, @protocol.BoardServerFrame] {
+  let raw = @async.with_timeout(5000, () => board_read_text(ws)) catch {
+    @async.TimeoutError =>
+      return Err(
+        @protocol.Error(
+          code="hello_timeout",
+          message="Hello required within 5 seconds",
+        ),
+      )
+    ExpectedText =>
+      return Err(
+        @protocol.Error(code="expected_text", message="Hello must be text"),
+      )
+    FrameTooLarge =>
+      return Err(
+        @protocol.Error(
+          code="frame_too_large",
+          message="Client frames are limited to 8192 bytes",
+        ),
+      )
+    error => raise error
+  }
+  match @protocol.decode_client_frame(raw) {
+    Ok(Hello(hello)) => Ok(hello)
+    Ok(Command(_)) =>
+      Err(
+        @protocol.Error(
+          code="hello_required",
+          message="First frame must be Hello",
+        ),
+      )
+    Err(UnsupportedVersion(..)) =>
+      Err(
+        @protocol.Error(
+          code="unsupported_version",
+          message="Expected protocol version 1",
+        ),
+      )
+    Err(_) =>
+      Err(
+        @protocol.Error(code="invalid_hello", message="Invalid Hello or cursor"),
+      )
+  }
+}
+
+///|
+async fn board_write_frame(
+  ws : @websocket.Conn,
+  frame : @protocol.BoardServerFrame,
+) -> Unit {
+  @async.with_timeout(1000, () => {
+    ws.send_text(@protocol.encode_server_frame(frame))
+  })
+}
+
+///|
+async fn board_client_sender(
+  ws : @websocket.Conn,
+  client : BoardSubscription,
+) -> Unit {
+  board_send_subscription(client, frame => board_write_frame(ws, frame))
 }
 
 ///|
@@ -169,12 +300,66 @@ async fn NativeBoardWebServer::handle_ws(
   }
   let ws = @websocket.from_http_server(request, conn)
   defer ws.close()
-  for ;; {
-    let message = ws.recv() catch {
-      @websocket.ConnectionClosed(_) => break
-      _ => break
+  if self.closing || self.token != Some(token) {
+    return
+  }
+  @async.with_task_group(group => {
+    let task = group.spawn(() => self.serve_ws(ws))
+    self.connections.push(task)
+    defer (for i, candidate in self.connections {
+      if physical_equal(candidate, task) {
+        let _ = self.connections.remove(i)
+        break
+      }
+    })
+    task.wait()
+  }) catch {
+    _ => ()
+  }
+}
+
+///|
+async fn NativeBoardWebServer::serve_ws(
+  self : NativeBoardWebServer,
+  ws : @websocket.Conn,
+) -> Unit {
+  let first = board_receive_hello(ws) catch { _ => return }
+  let hello = match first {
+    Ok(hello) => hello
+    Err(frame) => {
+      board_write_frame(ws, frame) catch {
+        _ => ()
+      }
+      return
     }
-    let _ = message.read_all()
+  }
+  let client = self.hub.subscribe(hello.last_seq)
+  defer self.hub.unsubscribe(client)
+  // any owns and joins both local tasks on success, failure and cancellation.
+  @async.any([
+    () => board_client_sender(ws, client),
+    () => {
+      for ;; {
+        let raw = board_read_text(ws)
+        let frame = match @protocol.decode_client_frame(raw) {
+          Ok(Command(command)) =>
+            @protocol.CommandResult({
+              command_id: command.command_id,
+              accepted: false,
+              error: Some("unsupported_in_current_stage"),
+              current_revision: Some(0L),
+            })
+          _ =>
+            @protocol.Error(
+              code="invalid_frame",
+              message="Expected Command after Hello",
+            )
+        }
+        client.enqueue(frame, self.hub.current_seq())
+      }
+    },
+  ]) catch {
+    _ => ()
   }
 }
 
@@ -336,6 +521,9 @@ pub impl BoardWebServer for NativeBoardWebServer with fn browser_url(self) {
 pub impl BoardWebServer for NativeBoardWebServer with fn close(self) {
   self.closing = true
   self.alive = false
+  for task in self.connections {
+    task.cancel()
+  }
   match self.server {
     Some(server) => server.close()
     None => ()
@@ -397,10 +585,14 @@ pub impl BrowserOpener for NativeBrowserOpener with fn open(_self, url) {
 }
 
 ///|
-pub fn default_board_runtime(event_buffer : Int) -> BoardRuntime {
-  let server = NativeBoardWebServer::NativeBoardWebServer()
+pub fn default_board_runtime(
+  event_buffer : Int,
+  client_queue_depth? : Int = 256,
+) -> BoardRuntime {
+  let hub = BoardEventHub(capacity=event_buffer, client_queue_depth~)
+  let server = NativeBoardWebServer(hub~)
   let opener = NativeBrowserOpener::NativeBrowserOpener()
-  BoardRuntime::with_adapters(event_buffer~, server~, opener~)
+  BoardRuntime::with_adapters(hub~, server~, opener~)
 }
 
 ///|

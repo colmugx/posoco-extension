@@ -8,6 +8,7 @@ import {
   "moonbitlang/async/websocket",
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
 
@@ -22,5 +23,6 @@ options(
     "default.js.mbt": [ "js" ],
     "random.native.mbt": [ "native" ],
     "server_native_wbtest.mbt": [ "native" ],
+    "realtime_native_wbtest.mbt": [ "native" ],
   },
 )

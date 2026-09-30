@@ -13,7 +13,13 @@ pub fn BoardExtension::BoardExtension(
       "posoco-ext-board S1 only permits bind_host=127.0.0.1; remote listeners are forbidden",
     )
   }
-  { config, runtime_: @runtime.default_board_runtime(config.event_buffer), }
+  {
+    config,
+    runtime_: @runtime.default_board_runtime(
+      config.event_buffer,
+      client_queue_depth=config.client_queue_depth,
+    ),
+  }
 }
 
 ///|
