@@ -14,13 +14,17 @@ pub struct BoardRuntime {
 
 ///|
 /// Adapter-injection constructor used by tests and future target backends.
+/// A telemetry-serving adapter must receive the same `hub` passed here. The
+/// default allocates an independent hub; it cannot discover a server's hub.
+/// Prefer `default_board_runtime` unless explicitly wiring server and runtime.
 pub fn BoardRuntime::with_adapters(
   event_buffer? : Int = 4096,
+  hub? : BoardEventHub = BoardEventHub(capacity=event_buffer),
   server~ : &BoardWebServer,
   opener~ : &BrowserOpener,
 ) -> BoardRuntime {
   {
-    hub: BoardEventHub::BoardEventHub(capacity=event_buffer),
+    hub,
     server,
     opener,
     gate: @async.Mutex::Mutex(),

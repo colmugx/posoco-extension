@@ -34,7 +34,14 @@ fn required_int64(
   key : String,
 ) -> Result[Int64, BoardProtocolError] {
   match fields.get(key) {
-    Some(Json::Number(value, ..)) => Ok(value.to_int64())
+    Some(Json::Number(value, ..)) =>
+      if value < 0 ||
+        value > 9007199254740991.0 ||
+        value.to_int64().to_double() != value {
+        Err(InvalidFrame("field '\{key}' must be a nonnegative safe integer"))
+      } else {
+        Ok(value.to_int64())
+      }
     Some(_) => Err(InvalidFrame("field '\{key}' must be a number"))
     None => Err(InvalidFrame("missing field '\{key}'"))
   }
@@ -46,7 +53,8 @@ fn required_int(
   key : String,
 ) -> Result[Int, BoardProtocolError] {
   match required_int64(fields, key) {
-    Ok(value) => Ok(value.to_int())
+    Ok(value) if value <= 2147483647L => Ok(value.to_int())
+    Ok(_) => Err(InvalidFrame("field '\{key}' exceeds integer range"))
     Err(error) => Err(error)
   }
 }
@@ -206,6 +214,18 @@ pub fn encode_server_frame(frame : BoardServerFrame) -> String {
     CommandResult(value) => value.to_json().stringify()
     Event(value) => value.to_json().stringify()
     Snapshot(value) => value.to_json().stringify()
+    ResyncRequired(reason~, current_seq~) =>
+      Json::object({
+        "type": "resync_required",
+        "reason": reason.to_json(),
+        "current_seq": Json::number(current_seq.to_double()),
+      }).stringify()
+    Error(code~, message~) =>
+      Json::object({
+        "type": "error",
+        "code": code.to_json(),
+        "message": message.to_json(),
+      }).stringify()
   }
 }
 
@@ -282,6 +302,28 @@ pub fn decode_server_frame(
     Err(error) => return Err(error)
   }
   match kind {
+    "resync_required" => {
+      let reason = match required_string(fields, "reason") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      let current_seq = match required_int64(fields, "current_seq") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      Ok(ResyncRequired(reason~, current_seq~))
+    }
+    "error" => {
+      let code = match required_string(fields, "code") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      let message = match required_string(fields, "message") {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      Ok(Error(code~, message~))
+    }
     "command_result" => {
       let command_id = match required_string(fields, "command_id") {
         Ok(value) => value

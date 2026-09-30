@@ -45,10 +45,14 @@ pub impl BrowserOpener for UnsupportedBrowserOpener with fn open(_self, _url) {
 }
 
 ///|
-pub fn default_board_runtime(event_buffer : Int) -> BoardRuntime {
+pub fn default_board_runtime(
+  event_buffer : Int,
+  client_queue_depth? : Int = 256,
+) -> BoardRuntime {
   let server = UnsupportedBoardWebServer::UnsupportedBoardWebServer()
   let opener = UnsupportedBrowserOpener::{ }
-  BoardRuntime::with_adapters(event_buffer~, server~, opener~)
+  let hub = BoardEventHub(capacity=event_buffer, client_queue_depth~)
+  BoardRuntime::with_adapters(hub~, server~, opener~)
 }
 
 ///|

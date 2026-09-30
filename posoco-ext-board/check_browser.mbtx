@@ -1,0 +1,255 @@
+// Run from the extension workspace:
+// moon run --target js --output-json posoco-ext-board/check_browser.mbtx
+// Scenario control and assertions stay in MoonBit. JS FFI only supplies the
+// Node VM and the browser DOM/socket/timer bindings for the embedded client.
+
+///|
+#external
+type Browser
+
+///|
+extern "js" fn read_text(path : String) -> String =
+  #|path => require('node:fs').readFileSync(path, 'utf8')
+
+///|
+extern "js" fn browser(source : String, saved : String) -> Browser =
+  #|(source, saved) => {
+  #|  const elements={status:{textContent:''},events:{textContent:''}};
+  #|  const store=new Map([['board.cursor.localhost:123',saved]]);
+  #|  const sockets=[], timers=new Map(), handlers={};let id=0;
+  #|  class Socket {
+  #|    static OPEN=1;
+  #|    constructor(url){this.url=url;this.readyState=0;this.sent=[];sockets.push(this);}
+  #|    send(data){this.sent.push(JSON.parse(data));}
+  #|    close(){this.readyState=2;}
+  #|  }
+  #|  const context={
+  #|    URLSearchParams,WebSocket:Socket,location:{host:'localhost:123',search:'?token=private'},
+  #|    document:{getElementById:k=>elements[k]},
+  #|    sessionStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},
+  #|    setTimeout:(f,ms)=>{timers.set(++id,{f,ms});return id;},
+  #|    clearTimeout:i=>timers.delete(i),addEventListener:(k,f)=>handlers[k]=f
+  #|  };
+  #|  require('node:vm').runInNewContext(source,context);
+  #|  return {elements,store,sockets,timers,handlers};
+  #|}
+
+///|
+extern "js" fn Browser::open(self : Browser, index : Int) -> Unit =
+  #|(b,i) => {const ws=b.sockets[i];ws.readyState=1;ws.onopen();}
+
+///|
+extern "js" fn Browser::message(
+  self : Browser,
+  index : Int,
+  frame : String,
+) -> Unit =
+  #|(b,i,frame) => b.sockets[i].onmessage({data:frame})
+
+///|
+extern "js" fn Browser::closed(self : Browser, index : Int) -> Unit =
+  #|(b,i) => {const ws=b.sockets[i];ws.readyState=3;ws.onclose();}
+
+///|
+extern "js" fn Browser::lifecycle(
+  self : Browser,
+  kind : String,
+  persisted : Bool,
+) -> Unit =
+  #|(b,kind,persisted) => b.handlers[kind]({persisted})
+
+///|
+extern "js" fn Browser::retry(self : Browser) -> Int =
+  #|b => {const [id,timer]=b.timers.entries().next().value;b.timers.delete(id);timer.f();return timer.ms;}
+
+///|
+extern "js" fn Browser::socket_count(self : Browser) -> Int =
+  #|b => b.sockets.length
+
+///|
+extern "js" fn Browser::timer_count(self : Browser) -> Int =
+  #|b => b.timers.size
+
+///|
+extern "js" fn Browser::state(self : Browser, index : Int) -> Int =
+  #|(b,i) => b.sockets[i].readyState
+
+///|
+extern "js" fn Browser::hello_cursor(self : Browser, index : Int) -> String =
+  #|(b,i) => String(b.sockets[i].sent[0].last_seq)
+
+///|
+extern "js" fn Browser::cursor(self : Browser) -> String =
+  #|b => b.store.get('board.cursor.localhost:123')
+
+///|
+extern "js" fn Browser::text(self : Browser, id : String) -> String =
+  #|(b,id) => b.elements[id].textContent
+
+///|
+fn snapshot(seqs : Array[Int], last : Int) -> String {
+  let frame : Json = {
+    "type": "snapshot",
+    "protocol_version": 1,
+    "last_seq": last,
+    "payload": {
+      "events": seqs.map(seq => {
+        (
+          { "type": "event", "seq": seq, "kind": "tick", "scope": Json::null() } :
+          Json)
+      }),
+    },
+  }
+  frame.stringify()
+}
+
+///|
+fn event(seq : Int) -> String {
+  let frame : Json = {
+    "type": "event",
+    "seq": seq,
+    "kind": "tick",
+    "scope": Json::null(),
+  }
+  frame.stringify()
+}
+
+///|
+fn check_bfcache(source : String) -> Unit raise {
+  let b = browser(source, "12")
+  b.open(0)
+  assert_eq(b.hello_cursor(0), "12")
+  b.lifecycle("pageshow", false)
+  assert_eq(b.socket_count(), 1)
+  b.message(0, event(13))
+  b.lifecycle("pagehide", true)
+  assert_eq(b.state(0), 2)
+  assert_eq(b.timer_count(), 0)
+  b.lifecycle("pageshow", true)
+  b.lifecycle("pageshow", true)
+  assert_eq(b.socket_count(), 2)
+  assert_eq(b.timer_count(), 0)
+  b.open(1)
+  assert_eq(b.hello_cursor(1), "13")
+  // Delayed callbacks from the detached socket cannot affect the restored one.
+  b.closed(0)
+  b.message(0, event(99))
+  assert_eq(b.cursor(), "13")
+  assert_eq(b.state(1), 1)
+  assert_eq(b.timer_count(), 0)
+  b.message(1, event(14))
+  assert_eq(b.cursor(), "14")
+  // Suspension while a reconnect timer is pending also resumes exactly once.
+  b.closed(1)
+  assert_eq(b.timer_count(), 1)
+  b.lifecycle("pagehide", true)
+  assert_eq(b.timer_count(), 0)
+  b.lifecycle("pageshow", true)
+  assert_eq(b.socket_count(), 3)
+  b.open(2)
+  assert_eq(b.hello_cursor(2), "14")
+  b.lifecycle("pagehide", true)
+  b.closed(2)
+  b.lifecycle("pageshow", true)
+  assert_eq(b.socket_count(), 4)
+  assert_eq(b.timer_count(), 0)
+  // A non-persisted pageshow does not revive a suspended document.
+  b.lifecycle("pagehide", false)
+  b.lifecycle("pageshow", false)
+  assert_eq(b.socket_count(), 4)
+  assert_eq(b.timer_count(), 0)
+  // Protocol-error stop is terminal even after a persisted restore.
+  let terminal = browser(source, "0")
+  terminal.open(0)
+  terminal.message(0, "{\"type\":\"error\",\"code\":\"unsupported_version\"}")
+  terminal.lifecycle("pagehide", true)
+  terminal.lifecycle("pageshow", true)
+  terminal.closed(0)
+  assert_eq(terminal.socket_count(), 1)
+  assert_eq(terminal.timer_count(), 0)
+}
+
+///|
+fn check_snapshots(source : String) -> Unit raise {
+  for
+    (seqs, last) in [
+      ([1, 3], 5),
+      ([1, 3], 3),
+      ([3, 4], 5),
+      ([], 5),
+      ([0], 0),
+      ([3, 3], 3),
+      ([4, 3], 4),
+    ] {
+    let b = browser(source, "9")
+    b.open(0)
+    b.message(0, snapshot(seqs, last))
+    assert_eq(b.cursor(), "0")
+    assert_eq(b.state(0), 2)
+    assert_eq(b.text("events"), "")
+    assert_true(b.text("status").contains("invalid frame"))
+    b.closed(0)
+    assert_eq(b.timer_count(), 1)
+    assert_eq(b.retry(), 250)
+    b.open(1)
+    assert_eq(b.hello_cursor(1), "0")
+  }
+  for (seqs, last) in [([], 0), ([1], 1), ([3, 4], 4), ([5], 5)] {
+    let b = browser(source, "9")
+    b.open(0)
+    b.message(0, snapshot(seqs, last))
+    assert_eq(b.cursor(), last.to_string())
+    assert_eq(b.state(0), 1)
+    assert_eq(b.timer_count(), 0)
+    assert_true(b.text("status").contains("snapshot"))
+  }
+}
+
+///|
+fn check_live_gap(source : String) -> Unit raise {
+  let b = browser(source, "0")
+  b.open(0)
+  b.message(0, snapshot(Array::makei(120, i => i + 1), 120))
+  assert_eq(b.text("events").split("\n").count(), 100)
+  let before = b.text("events")
+  b.message(0, event(120))
+  assert_eq(b.text("events"), before)
+  b.message(0, event(121))
+  assert_eq(b.cursor(), "121")
+  b.message(0, event(123))
+  assert_eq(b.cursor(), "0")
+  assert_eq(b.state(0), 2)
+  b.closed(0)
+  b.closed(0)
+  assert_eq(b.timer_count(), 1)
+  assert_eq(b.retry(), 250)
+  b.open(1)
+  assert_eq(b.hello_cursor(1), "0")
+  b.message(1, "{\"type\":\"resync_required\",\"current_seq\":123}")
+  assert_eq(b.cursor(), "0")
+  b.closed(1)
+  assert_eq(b.retry(), 500)
+  b.lifecycle("pagehide", true)
+  assert_eq(b.timer_count(), 0)
+}
+
+///|
+fn main raise {
+  let file = read_text("posoco-ext-board/src/runtime/default.native.mbt")
+  let lines : Array[String] = []
+  for line in file.split("\n") {
+    if line.find("#|") is Some(index) {
+      lines.push(line[index + 2:].to_owned())
+    }
+  }
+  let html = lines.join("\n")
+  let source = html[html.find("<script>").unwrap() + 8:html
+  .find("</script>")
+  .unwrap()].to_owned()
+  check_bfcache(source)
+  check_snapshots(source)
+  check_live_gap(source)
+  println(
+    "Browser diagnostics: BFCache lifecycle, strict snapshots, duplicate/gap/resync and bounded replay checks passed",
+  )
+}

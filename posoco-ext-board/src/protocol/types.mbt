@@ -102,6 +102,8 @@ pub(all) enum BoardServerFrame {
   CommandResult(BoardCommandResult)
   Event(BoardWireEvent)
   Snapshot(BoardSnapshot)
+  ResyncRequired(reason~ : String, current_seq~ : Int64)
+  Error(code~ : String, message~ : String)
 } derive(Eq, Debug)
 
 ///|

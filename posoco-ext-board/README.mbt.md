@@ -4,12 +4,14 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S2A synchronous event projection
+## Current status: S2B read-only realtime and reconnect
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
 S2A adds read-only Observer projection into the existing in-memory telemetry
-history. It does **not** persist Board domain state or execute Agent work.
+history. S2B delivers that same sanitized history over authenticated native
+WebSockets, with bounded client mailboxes and reconnect replay. It does **not**
+persist Board domain state or execute Agent work.
 
 The native backend binds exactly `127.0.0.1:0`: the OS selects an available
 loopback port. Each listener instance receives a fresh 256-bit secret from the
@@ -24,9 +26,9 @@ S1 routes are:
 - `/health` — token-free liveness only;
 - `/api/bootstrap?token=...` — protocol/endpoint metadata, never the token;
 - `/ws?token=...` — authenticated WebSocket upgrade;
-- `/?token=...` — minimal placeholder page until the product UI stage.
+- `/?token=...` — bounded text-only diagnostics, not a product UI.
 
-The JavaScript target remains intentionally unsupported for the server in S1;
+The JavaScript target remains intentionally unsupported for the server;
 it still compiles against the same runtime abstraction.
 
 ## Host wiring
@@ -53,6 +55,21 @@ let agent = @posoco.Agent(
 `attach(group)` in S1 owns Board runtime workers only. It does not bind an
 Agent and does not grant `Capability::Tasks`; Agent binding and execution are
 introduced in a later stage.
+
+For custom native adapter injection, construct one hub and pass it to **both**
+the server and runtime. Their optional defaults allocate independent hubs;
+`with_adapters` does not inspect or replace a server's hub. The default factory
+already performs this shared wiring.
+
+```mbt nocheck
+let hub = @runtime.BoardEventHub(capacity=4096, client_queue_depth=256)
+let server = @runtime.NativeBoardWebServer(hub~)
+let runtime = @runtime.BoardRuntime::with_adapters(
+  hub~,
+  server~,
+  opener=@runtime.NativeBrowserOpener(),
+)
+```
 
 ## Commands
 
@@ -125,6 +142,52 @@ Telemetry remains in the existing bounded history; S2A adds no WebSocket event
 delivery, replay/reconnect logic, queues, UI, domain state, persistence, Tasks or
 Agent execution. The existing S1 server lifecycle is unchanged.
 
+## Realtime and reconnect (S2B)
+
+The first WebSocket message must be a v1 text `Hello`, within 5 seconds and
+8192 bytes. Cursors must be nonnegative JSON safe integers. Invalid Hello,
+command-first and unsupported versions receive a small `error` frame and
+close. Later commands return `accepted=false`,
+`error="unsupported_in_current_stage"`, `current_revision=0`, without mutation.
+
+Subscription computes bootstrap and registers the live mailbox synchronously:
+
+- `last_seq == current_seq`: empty replay, including the empty `0/0` case;
+- `last_seq == 0` with existing events: explicit snapshot reset;
+- retained history covers the missing interval: ordered event replay;
+- a history gap or future cursor: snapshot of `{ "events": retained_history }`.
+
+Snapshots use `last_seq=current_seq` and `board_revision=0`; they contain only
+the existing sanitized telemetry, not domain state. Initial frames are separate
+from the live mailbox, so a large replay cannot overflow itself. The default
+history capacity remains `event_buffer=4096`; each client has its own
+`client_queue_depth=256` mailbox. Publishing only retains history and uses
+synchronous `try_put`: no waiting, JSON stringification or network I/O.
+
+Overflow makes that subscription terminal. The sender cancels and joins any
+blocked write, best-effort sends `resync_required` with
+`reason="client_queue_overflow"` and `current_seq`, then closes. If a fragmented
+write was interrupted, another application frame is unsafe and the connection
+closes without a resync frame. Writes have a 1-second deadline. All connection
+exits unregister and close the mailbox; shutdown explicitly cancels local
+connection tasks. No connection task outlives its structured scope.
+
+The diagnostics page uses `textContent`, at most 100 lines of 512 characters,
+and only status/seq/kind/scope. It replaces snapshots, ignores duplicate events,
+resets on gaps/resync, stores only the cursor in `sessionStorage`, and reconnects
+with 250ms–10s backoff. An empty replay displays “connected; hello sent”; there
+is no fabricated snapshot or acknowledgement. Snapshot events must be a
+contiguous retained suffix ending exactly at `last_seq`; an empty snapshot is
+valid only at `last_seq=0`. Invalid snapshots reset the cursor and reconnect.
+`pagehide` closes and detaches the socket and clears the reconnect timer;
+persisted `pageshow` resumes once with the retained cursor. Late callbacks from
+the old socket are ignored, and a protocol-error stop remains terminal.
+The server remains native-only; protocol, replay and mailbox tests also run on JS.
+Run the browser VM regressions from the extension workspace with
+`moon run --target js --output-json posoco-ext-board/check_browser.mbtx`.
+The `.mbtx` keeps lifecycle/snapshot test scenarios and assertions in MoonBit;
+Node VM bindings simulate DOM, sockets and timers without a browser or server.
+
 ## Task vocabulary
 
 The implementation keeps three task concepts separate:
@@ -151,5 +214,5 @@ scheduler.
 - `protocol`: UI/server-independent JSON wire types and codecs;
 - `runtime`: event history, server lifecycle, platform server/browser seams.
 
-Later stages add event projection/reconnect, the Board domain and persistence,
-then Agent execution without changing these ownership boundaries.
+Later stages add the Board domain and persistence, then Agent execution without
+changing these ownership boundaries.
