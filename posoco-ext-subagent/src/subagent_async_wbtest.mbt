@@ -834,6 +834,8 @@ async test "bridge_observer_forwards_child_events_tagged" {
   for event in events {
     assert_eq(event.child_session, "subagent-1")
     assert_eq(event.kind, "coder")
+    // The bridge tags events with the spawning parent tool-call id.
+    assert_eq(event.parent_call, "agent-test")
     match event.event {
       @posoco.TurnEvent::TurnCompleted => completed = completed + 1
       _ => ()

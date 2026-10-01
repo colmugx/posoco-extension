@@ -723,12 +723,21 @@ async fn openai_post_json(
     )
     if compact {
       // Compact carries safe structural fields only; no provider excerpt.
+      // Endpoint kind + model make a 404/400 self-describing: which base
+      // URL and which model slug the server rejected.
+      let endpoint_kind = if config.base_url == codex_oauth_api_base() {
+        "codex_oauth"
+      } else {
+        "api_key"
+      }
       raise @posoco.ModelError::Transport(
         format_compact_http_error(
           response.code,
           body_summary,
           body_text,
           response.headers.get("x-request-id"),
+          endpoint_kind~,
+          model=config.model,
         ),
       )
     }

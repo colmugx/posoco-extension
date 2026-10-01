@@ -25,6 +25,7 @@ options(
     "session_summary_test.mbt": [ "native" ],
     "name_command_test.mbt": [ "native" ],
     "jsonl_session_test.mbt": [ "native" ],
+    "compact_replay_wbtest.mbt": [ "native" ],
     "jsonl_session_js_test.mbt": [ "js" ],
     "list_ids_test.mbt": [ "native" ],
   },

@@ -64,16 +64,21 @@ pub fn SubagentTools::background_children(
 
 ///|
 /// Emit one extension-labeled `Custom` event on the subscription channel.
+/// `parent_call` is the spawning call id for events that belong to a live
+/// foreground run; lifecycle labels for background children pass
+/// `"background"` (no parent row exists).
 fn SubagentTools::emit_custom(
   self : SubagentTools,
   child_session : String,
   kind : String,
+  parent_call : String,
   label : String,
   data : Json,
 ) -> Unit {
   let event : @kit.SubagentEvent = {
     child_session,
     kind,
+    parent_call,
     event: @posoco.TurnEvent::Custom(
       source="posoco_ext_subagent",
       label~,
@@ -109,6 +114,7 @@ fn SubagentTools::emit_exit(
   self.emit_custom(
     child_session,
     kind,
+    "background",
     "background_exited",
     Json::object({
       "child_session": Json::string(child_session),
@@ -231,6 +237,7 @@ fn SubagentTools::record_terminal(
   self.emit_custom(
     child_session,
     record.kind,
+    "background",
     "background_terminal",
     Json::object({
       "child_session": Json::string(child_session),

@@ -120,6 +120,7 @@ pub fn SubagentConfig::to_repr(Self) -> @debug.Repr
 pub(all) struct SubagentEvent {
   child_session : String
   kind : String
+  parent_call : String
   event : @types.TurnEvent
 } derive(@debug.Debug)
 pub fn SubagentEvent::to_repr(Self) -> @debug.Repr

@@ -8,6 +8,7 @@
 priv struct BridgeObserver {
   child_session : String
   kind : String
+  parent_call : String
   callbacks : Array[(@kit.SubagentEvent) -> Unit]
   mut turns : Int
   mut input_tokens : Int
@@ -18,11 +19,13 @@ priv struct BridgeObserver {
 fn BridgeObserver::BridgeObserver(
   child_session~ : String,
   kind~ : String,
+  parent_call~ : String,
   callbacks~ : Array[(@kit.SubagentEvent) -> Unit],
 ) -> BridgeObserver {
   {
     child_session,
     kind,
+    parent_call,
     callbacks,
     turns: 0,
     input_tokens: 0,
@@ -56,6 +59,7 @@ fn BridgeObserver::handle(
   let tagged : @kit.SubagentEvent = {
     child_session: self.child_session,
     kind: self.kind,
+    parent_call: self.parent_call,
     event,
   }
   for callback in self.callbacks {

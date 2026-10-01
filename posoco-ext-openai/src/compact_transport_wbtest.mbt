@@ -418,6 +418,8 @@ async test "openai_compact_loopback_400_diagnostics_are_safe" {
   }
   assert_true(message.contains("stage=compact_http_status"))
   assert_true(message.contains("status=400"))
+  assert_true(message.contains("endpoint=api_key"))
+  assert_true(message.contains("model=gpt-5"))
   assert_true(message.contains("code=invalid_api_key"))
   assert_true(message.contains("param=model"))
   assert_true(message.contains("category=invalid_request_error"))

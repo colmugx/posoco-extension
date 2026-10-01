@@ -426,7 +426,26 @@ async fn SubagentTools::spawn(
   let bridge = BridgeObserver::BridgeObserver(
     child_session=session_id,
     kind=kind_spec.name,
+    parent_call=call.call_id.to_string(),
     callbacks=self.observers,
+  )
+  // Spawn announcement: carries the resolved model/effort so hosts can badge
+  // the live row. Emitted before the child runs.
+  self.emit_custom(
+    session_id,
+    kind_spec.name,
+    call.call_id.to_string(),
+    "spawned",
+    Json::object({
+      "child_session": Json::string(session_id),
+      "kind": Json::string(kind_spec.name),
+      "model": Json::string(slot),
+      "effort": match effort {
+        Some(effort) => Json::string(effort)
+        None => Json::null()
+      },
+      "background": Json::boolean(args.background),
+    }),
   )
   let spec : ChildSpec = {
     task: args.task,
@@ -541,6 +560,7 @@ async fn SubagentTools::spawn(
         self.emit_custom(
           spec.session_id,
           spec.kind_name,
+          "background",
           "background_spawned",
           Json::object({
             "child_session": Json::string(spec.session_id),

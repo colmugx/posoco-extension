@@ -115,6 +115,8 @@ fn format_compact_http_error(
   body_summary : OpenAIErrorBodySummary,
   body_text : String?,
   request_id_header : String?,
+  endpoint_kind~ : String,
+  model~ : String,
 ) -> String {
   let (code, param, category) = compact_provider_error_meta(body_text)
   let request_id = match request_id_header {
@@ -125,6 +127,11 @@ fn format_compact_http_error(
   buf.write_string(
     "OpenAI HTTP error (stage=compact_http_status, status=\{status}",
   )
+  buf.write_string(", endpoint=\{endpoint_kind}")
+  match compact_error_meta_text(model) {
+    Some(model_id) => buf.write_string(", model=\{model_id}")
+    None => ()
+  }
   match code {
     Some(value) => buf.write_string(", code=\{value}")
     None => ()
