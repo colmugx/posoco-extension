@@ -1,0 +1,20 @@
+import {
+  "colmugx/posoco-ext-board/domain",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native +js"
+
+warnings = "-unused_package"
+
+options(
+  "native-stub": [ "truncate_stub.c" ],
+  targets: {
+    "file.native.mbt": [ "native" ],
+    "file_native_wbtest.mbt": [ "native" ],
+  },
+)
