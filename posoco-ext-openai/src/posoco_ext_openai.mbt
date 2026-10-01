@@ -180,14 +180,7 @@ fn format_openai_http_error(
   body_summary : OpenAIErrorBodySummary,
   excerpt? : String? = None,
 ) -> String {
-  let summary = match body_summary {
-    BodyChars(length) => "body_chars=\{length}, body_category=utf8"
-    BodyBytesUtf8(length) => "body_bytes=\{length}, body_category=utf8"
-    BodyBytesInvalidUtf8(length) =>
-      "body_bytes=\{length}, body_category=invalid_utf8"
-    BodyReadFailed => "body_category=read_failed"
-    BodyUnavailable => "body_category=unavailable"
-  }
+  let summary = http_error_body_summary_text(body_summary)
   let excerpt_field = match excerpt {
     Some(text) => ", body_excerpt=\"\{text}\""
     None => ""
@@ -346,16 +339,11 @@ fn build_request_body(
   model : String,
   reasoning_effort : String?,
   stream? : Bool = false,
-) -> Json {
-  let input_items : Array[Json] = []
-  // Tool-result attachments degrade to explicit placeholders until per-model
-  // image_input metadata lands in this provider (openai-compat has the
-  // config; the first-party catalog does not yet).
-  for m in @responses.fold_tool_attachments(messages, false) {
-    for item in @responses.message_to_responses_items(m) {
-      input_items.push(item)
-    }
-  }
+) -> Json raise @posoco.ModelError {
+  // The shared window encoder replays a compact raw anchor's stored output
+  // verbatim after validating its canonical projection; ordinary messages
+  // encode normally.
+  let input_items : Array[Json] = openai_encode_window_items(messages)
   let fields : Array[(String, Json)] = [
     ("model", Json::string(model)),
     ("input", Json::array(input_items)),
@@ -674,13 +662,14 @@ async fn openai_post_json(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),
       )
   }
+  // Every exit closes the client — including a coroutine cancellation that
+  // unwinds a pending send/read without ever reaching an error handler.
+  defer client.close()
   let response = client.post(path_prefix + path, body.stringify()) catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=send_request): " + err.to_string(),
       )
-    }
   }
   match quota_tracker {
     Some(tracker) => tracker.capture(response.headers)
@@ -688,7 +677,6 @@ async fn openai_post_json(
   }
   let body_data = client.read_all() catch {
     _ => {
-      client.close()
       match
         openai_quota_verdict(
           response.code,
@@ -713,7 +701,6 @@ async fn openai_post_json(
       }
     }
   }
-  client.close()
   if !is_openai_http_success(response.code) {
     let body_text : String? = Some(body_data.text()) catch { _ => None }
     let decoded_chars : Int? = match body_text {
@@ -730,6 +717,21 @@ async fn openai_post_json(
       Some(err) => raise err
       None => ()
     }
+    let body_summary = classify_openai_error_body(
+      body_data.binary().length(),
+      decoded_chars,
+    )
+    if compact {
+      // Compact carries safe structural fields only; no provider excerpt.
+      raise @posoco.ModelError::Transport(
+        format_compact_http_error(
+          response.code,
+          body_summary,
+          body_text,
+          response.headers.get("x-request-id"),
+        ),
+      )
+    }
     let excerpt = match body_text {
       Some(text) => bounded_error_excerpt(text)
       None => None
@@ -738,7 +740,7 @@ async fn openai_post_json(
       classify_openai_http_status(
         "http_status",
         response.code,
-        classify_openai_error_body(body_data.binary().length(), decoded_chars),
+        body_summary,
         excerpt~,
       ) {
       Some(err) => raise err
@@ -794,13 +796,10 @@ async fn OpenAIModelPort::chat_nonstream(
 fn build_compact_request_body(
   messages : Array[@posoco.Message],
   model : String,
-) -> Json {
-  let input_items : Array[Json] = []
-  for m in @responses.fold_tool_attachments(messages, false) {
-    for item in @responses.message_to_responses_items(m) {
-      input_items.push(item)
-    }
-  }
+) -> Json raise @posoco.ModelError {
+  // Recompact uses the same window encoder as chat: a previously compacted
+  // window replays its stored raw output, not the decoded projection.
+  let input_items : Array[Json] = openai_encode_window_items(messages)
   Json::object(
     Map::from_array([
       ("model", Json::string(model)),
@@ -812,10 +811,15 @@ fn build_compact_request_body(
 ///|
 /// Validate a /responses/compact response envelope and decode its output
 /// items into canonical messages.
+///
+/// A non-empty output window is prefixed with a synthetic assistant anchor
+/// carrying the original output array verbatim in the OpenAI-private raw
+/// envelope; the decoded messages follow it as the canonical projection.
+/// An empty output stays empty so the empty-window guard keeps failing.
 fn parse_compact_response(
   resp_json : Json,
 ) -> Array[@posoco.Message] raise @posoco.ModelError {
-  let output = match resp_json {
+  let items = match resp_json {
     Json::Object(map) => {
       match map.get("error") {
         Some(Json::Object(_)) =>
@@ -824,10 +828,10 @@ fn parse_compact_response(
           )
         _ => ()
       }
+      // Missing/null output is a protocol failure, not an empty window:
+      // decoding it as [] would wipe the session and report success.
       match map.get("output") {
-        Some(Json::Array(_) as out) => out
-        // Missing/null output is a protocol failure, not an empty window:
-        // decoding it as [] would wipe the session and report success.
+        Some(Json::Array(items)) => items
         Some(Json::Null) | None =>
           raise @posoco.ModelError::ResponseParse(
             "OpenAI compact parse failure (stage=output, category=missing_output)",
@@ -843,7 +847,23 @@ fn parse_compact_response(
         "OpenAI compact parse failure (stage=response, category=not_object)",
       )
   }
-  openai_items_to_posoco_messages(output)
+  // An empty output stays empty (no anchor): an anchor must never turn an
+  // empty provider output into an apparent success window.
+  if items.is_empty() {
+    return []
+  }
+  let window : Array[@posoco.Message] = [
+    @posoco.Message::AssistantMessage(
+      content=[],
+      tool_calls=[],
+      reasoning=Some(compact_raw_anchor_reasoning(items)),
+      finish_reason=@posoco.FinishReason::Stop,
+    ),
+  ]
+  for m in openai_items_to_posoco_messages(Json::array(items)) {
+    window.push(m)
+  }
+  window
 }
 
 ///|
@@ -875,9 +895,8 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
   validate_openai_config(self.config)
   let request_messages = messages.to_owned()
   let body = build_compact_request_body(request_messages, self.config.model)
-  let resp_json = openai_post_json(
+  let resp_json = openai_compact_post_json(
     self.config,
-    "/responses/compact",
     body,
     Some(scope.session_id.to_string()),
     quota_tracker=self.quota_tracker,

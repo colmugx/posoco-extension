@@ -25,6 +25,7 @@ options(
     "identity.js.mbt": [ "js" ],
     "identity.native.mbt": [ "native" ],
     "posoco_ext_openai_wbtest.mbt": [ "native" ],
+    "compact_transport_wbtest.mbt": [ "native" ],
     "codex_quota_wbtest.mbt": [ "native" ],
     "codex_usage_wbtest.mbt": [ "native" ],
     "quota_status_wbtest.mbt": [ "native" ],

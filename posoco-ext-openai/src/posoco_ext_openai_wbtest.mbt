@@ -1265,10 +1265,37 @@ test "openai_compact_decodes_window" {
     #|  {"type":"function_call_output","call_id":"call_1","output":"sunny"}
     #|]}
   let messages = parse_compact_response(@json.parse(window))
-  assert_eq(messages.length(), 5)
-  // The leading compaction item flushes as a synthetic empty assistant ahead
-  // of the user message, preserving wire order.
+  // The anchored window: a synthetic assistant anchor carrying the verbatim
+  // output array, followed by the canonical projection for consumers.
+  assert_eq(messages.length(), 6)
   match messages[0] {
+    @posoco.Message::AssistantMessage(content~, tool_calls~, reasoning~, ..) => {
+      assert_eq(content.length(), 0)
+      assert_eq(tool_calls.length(), 0)
+      match reasoning {
+        Some({ raw: Some(Json::Object(fields)), .. }) =>
+          match fields.get("posoco.openai.compact_raw_window") {
+            Some(Json::Object(payload)) => {
+              match payload.get("version") {
+                Some(Json::Number(v, ..)) => assert_eq(v, 1.0)
+                _ => fail("anchor envelope must be versioned")
+              }
+              match payload.get("output") {
+                // The full original output array is retained exactly.
+                Some(Json::Array(stored)) => assert_eq(stored.length(), 6)
+                _ => fail("anchor envelope must store the output array")
+              }
+            }
+            _ => fail("anchor raw must be the OpenAI-private envelope")
+          }
+        _ => fail("anchor must carry the raw compact window")
+      }
+    }
+    _ => fail("expected synthetic anchor assistant at the window head")
+  }
+  // The leading compaction item still flushes as a synthetic empty assistant
+  // in the projection, preserving wire order.
+  match messages[1] {
     @posoco.Message::AssistantMessage(content~, reasoning~, ..) => {
       assert_eq(content.length(), 0)
       match reasoning {
@@ -1292,7 +1319,7 @@ test "openai_compact_decodes_window" {
     }
     _ => fail("expected synthetic assistant for leading compaction item")
   }
-  match messages[1] {
+  match messages[2] {
     @posoco.Message::UserMessage(content~) =>
       match content[0] {
         @posoco.Content::Text(t) => assert_eq(t, "q1")
@@ -1300,7 +1327,7 @@ test "openai_compact_decodes_window" {
       }
     _ => fail("expected user message")
   }
-  match messages[2] {
+  match messages[3] {
     @posoco.Message::AssistantMessage(content~, reasoning~, tool_calls~, ..) => {
       assert_eq(tool_calls.length(), 0)
       match content[0] {
@@ -1318,7 +1345,7 @@ test "openai_compact_decodes_window" {
     }
     _ => fail("expected assistant message")
   }
-  match messages[3] {
+  match messages[4] {
     @posoco.Message::AssistantMessage(tool_calls~, finish_reason~, ..) => {
       assert_eq(tool_calls.length(), 1)
       assert_eq(tool_calls[0].call_id.to_string(), "call_1")
@@ -1330,7 +1357,7 @@ test "openai_compact_decodes_window" {
     }
     _ => fail("expected synthetic assistant carrying the function_call")
   }
-  match messages[4] {
+  match messages[5] {
     @posoco.Message::ToolMessage(call_id~, outcome~, ..) => {
       assert_eq(call_id.to_string(), "call_1")
       match outcome {
@@ -1344,9 +1371,10 @@ test "openai_compact_decodes_window" {
 }
 
 ///|
-/// Decode → re-encode replays the window as-is: opaque items (compaction,
-/// reasoning) come back verbatim and the remaining items keep their order
-/// and shape (assistant text roundtrips as `output_text`).
+/// Decode → encode through the real OpenAI window encoder replays the compact
+/// output as-is: opaque items (compaction, reasoning) come back verbatim and
+/// the remaining items keep their order and shape (assistant text roundtrips
+/// as `output_text`).
 test "openai_compact_roundtrip_replays_verbatim" {
   let window =
     #|{"output":[
@@ -1358,11 +1386,16 @@ test "openai_compact_roundtrip_replays_verbatim" {
     #|  {"type":"function_call_output","call_id":"call_1","output":"sunny"}
     #|]}
   let messages = parse_compact_response(@json.parse(window))
-  let re_encoded : Array[Json] = []
-  for m in messages {
-    for item in @responses.message_to_responses_items(m) {
-      re_encoded.push(item)
-    }
+  let body = build_request_body(
+    messages,
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "gpt-5",
+    None,
+  )
+  guard body is Json::Object(fields) else { fail("expected object body") }
+  guard fields.get("input") is Some(Json::Array(re_encoded)) else {
+    fail("expected input item array")
   }
   let expected_window =
     #|[{"type":"compaction","id":"cmp_1","encrypted_content":"zzz"},
@@ -1485,12 +1518,28 @@ test "openai_compact_mixed_window_roundtrips_in_order" {
     #|  {"role":"assistant","content":[{"type":"output_text","text":"-3c in oslo"}]}
     #|]}
   let messages = parse_compact_response(@json.parse(window))
-  assert_eq(messages.length(), 5)
-  let re_encoded : Array[Json] = []
-  for m in messages {
-    for item in @responses.message_to_responses_items(m) {
-      re_encoded.push(item)
+  // Anchor + canonical projection for the mixed window.
+  assert_eq(messages.length(), 6)
+  match messages[0] {
+    @posoco.Message::AssistantMessage(content~, reasoning~, ..) => {
+      assert_eq(content.length(), 0)
+      match reasoning {
+        Some({ raw: Some(Json::Object(_)), .. }) => ()
+        _ => fail("anchor must carry the raw envelope")
+      }
     }
+    _ => fail("expected anchor assistant at the window head")
+  }
+  let body = build_request_body(
+    messages,
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "gpt-5",
+    None,
+  )
+  guard body is Json::Object(fields) else { fail("expected object body") }
+  guard fields.get("input") is Some(Json::Array(re_encoded)) else {
+    fail("expected input item array")
   }
   let expected_window =
     #|[{"type":"compaction","id":"cmp_9","encrypted_content":"enc-state-v2"},
@@ -1511,11 +1560,16 @@ test "openai_compact_unknown_legal_items_pass_through" {
     #|  {"role":"assistant","content":[{"type":"output_text","text":"a"}]}
     #|]}
   let messages = parse_compact_response(@json.parse(window))
-  let re_encoded : Array[Json] = []
-  for m in messages {
-    for item in @responses.message_to_responses_items(m) {
-      re_encoded.push(item)
-    }
+  let body = build_request_body(
+    messages,
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "gpt-5",
+    None,
+  )
+  guard body is Json::Object(fields) else { fail("expected object body") }
+  guard fields.get("input") is Some(Json::Array(re_encoded)) else {
+    fail("expected input item array")
   }
   let expected_window =
     #|[{"role":"user","content":[{"type":"input_text","text":"q"}]},
@@ -1531,11 +1585,18 @@ test "openai_compact_unknown_legal_items_pass_through" {
     #|  {"type":"web_search_call","id":"ws_2","status":"completed"}
     #|]}
   let trailing = parse_compact_response(@json.parse(trailing_window))
-  let trailing_re : Array[Json] = []
-  for m in trailing {
-    for item in @responses.message_to_responses_items(m) {
-      trailing_re.push(item)
-    }
+  let trailing_body = build_request_body(
+    trailing,
+    [],
+    { temperature: None, max_output_tokens: None, },
+    "gpt-5",
+    None,
+  )
+  guard trailing_body is Json::Object(trailing_fields) else {
+    fail("expected object body")
+  }
+  guard trailing_fields.get("input") is Some(Json::Array(trailing_re)) else {
+    fail("expected input item array")
   }
   let trailing_expected =
     #|[{"role":"user","content":[{"type":"input_text","text":"q"}]},

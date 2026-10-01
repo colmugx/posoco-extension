@@ -6,6 +6,42 @@
 /// decode of `/responses/compact` output items into canonical messages.
 
 ///|
+/// Display-only projection. The authoritative array remains in the anchor;
+/// neither these placeholders nor concatenated text are emitted on the wire.
+fn compact_content_parts_display(
+  parts : Array[Json],
+  stage : String,
+) -> String raise @posoco.ModelError {
+  let display = StringBuilder()
+  for part in parts {
+    guard part is Json::Object(fields) else {
+      raise @posoco.ModelError::ResponseParse(
+        "OpenAI compact parse failure (stage=\{stage}, category=wrong_type)",
+      )
+    }
+    match fields.get("type") {
+      Some(Json::String("input_text" | "output_text" | "text")) =>
+        match fields.get("text") {
+          Some(Json::String(text)) => display.write_string(text)
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "OpenAI compact parse failure (stage=\{stage}, category=wrong_type)",
+            )
+        }
+      Some(Json::String("input_image")) =>
+        display.write_string("[OpenAI compact image content]")
+      Some(Json::String("input_file")) =>
+        display.write_string("[OpenAI compact file content]")
+      _ =>
+        raise @posoco.ModelError::ResponseParse(
+          "OpenAI compact parse failure (stage=\{stage}, category=unknown_part)",
+        )
+    }
+  }
+  display.to_string()
+}
+
+///|
 /// Decode Responses API items back into canonical messages. Used for
 /// `/responses/compact` output, which is the canonical next context window
 /// ("pass it into your next /responses call as-is — do not prune").
@@ -89,7 +125,8 @@ fn openai_items_to_posoco_messages(
           "function_call_output" => {
             flush_empty_assistant()
             let call_id = match map.get("call_id") {
-              Some(Json::String(s)) if s != "" => s
+              Some(Json::String(s)) if s != "" => Some(s)
+              None => None
               _ =>
                 raise @posoco.ModelError::ResponseParse(
                   "OpenAI compact parse failure (stage=tool.call_id, category=missing)",
@@ -97,27 +134,70 @@ fn openai_items_to_posoco_messages(
             }
             let text = match map.get("output") {
               Some(Json::String(s)) => s
+              Some(Json::Array(parts)) =>
+                compact_content_parts_display(parts, "tool.output")
               Some(_) =>
                 raise @posoco.ModelError::ResponseParse(
                   "OpenAI compact parse failure (stage=tool.output, category=wrong_type)",
                 )
-              None => ""
+              None =>
+                raise @posoco.ModelError::ResponseParse(
+                  "OpenAI compact parse failure (stage=tool.output, category=missing)",
+                )
             }
-            messages.push(
-              @posoco.Message::ToolMessage(
-                call_id=@posoco.CallId::unchecked(call_id),
-                // The output item does not name the tool; the name is not
-                // re-encoded on the wire, so an empty placeholder is kept.
-                tool_name=@posoco.ToolName::unchecked(""),
-                outcome=@posoco.ToolOutcome::Success(
-                  content=text,
-                  structured=None,
-                ),
-              ),
-            )
+            match call_id {
+              Some(call_id) =>
+                messages.push(
+                  @posoco.Message::ToolMessage(
+                    call_id=@posoco.CallId::unchecked(call_id),
+                    // The output item does not name the tool; the name is not
+                    // re-encoded on the wire, so an empty placeholder is kept.
+                    tool_name=@posoco.ToolName::unchecked(""),
+                    outcome=@posoco.ToolOutcome::Success(
+                      content=text,
+                      structured=None,
+                    ),
+                  ),
+                )
+              // Newer schemas allow an absent call_id. Canonical ToolMessage
+              // requires one: retain the item as opaque state, never invent it.
+              None => pending_state.push(item)
+            }
           }
           "message" => {
-            let text = @responses.message_item_text(provider="OpenAI", map)
+            let visible_text = @responses.message_item_text(
+              provider="OpenAI",
+              map,
+            )
+            let text = if visible_text != "" {
+              visible_text
+            } else {
+              // Image/file-only retained turns must not look like empty user
+              // input. These labels are canonical display, never wire content.
+              let display = StringBuilder()
+              match map.get("content") {
+                Some(Json::Array(parts)) =>
+                  for part in parts {
+                    match part {
+                      Json::Object(fields) =>
+                        match fields.get("type") {
+                          Some(Json::String("input_image")) =>
+                            display.write_string(
+                              "[OpenAI compact image content]",
+                            )
+                          Some(Json::String("input_file")) =>
+                            display.write_string(
+                              "[OpenAI compact file content]",
+                            )
+                          _ => ()
+                        }
+                      _ => ()
+                    }
+                  }
+                _ => ()
+              }
+              display.to_string()
+            }
             match role {
               "assistant" => {
                 let reasoning = take_reasoning()
