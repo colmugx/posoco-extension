@@ -266,15 +266,15 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
 ///|
 pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
   self : AskQuestionTools,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   if name != "ask_question" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_askquestion: unknown tool '" + name + "'",
     )
   }
-  let spec = parse_ask_spec(call.arguments)
+  let spec = parse_ask_spec(ctx.arguments)
   let ui = match self.ui {
     Some(ui) => ui
     None =>

@@ -16,7 +16,7 @@ pub(all) struct AskQuestionTools {
   mut ui : &@port.UiPort?
 }
 pub fn AskQuestionTools::AskQuestionTools() -> Self
-pub async fn AskQuestionTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn AskQuestionTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn AskQuestionTools::extension_id(Self) -> String
 pub fn AskQuestionTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn AskQuestionTools::manifest(Self) -> @port.ExtensionManifest

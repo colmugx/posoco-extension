@@ -43,14 +43,25 @@ fn ask_call(arguments : Json) -> @posoco.ToolCall {
 }
 
 ///|
+/// Effect context for provider calls (no-op registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 async test "ask_question_input_returns_text" {
   let ui = ScriptedUi(@posoco.UiResponse::Text("MoonBit"))
   let tools = AskQuestionTools()
   tools.ui = Some(ui as &@posoco.UiPort)
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "ask_question",
-    ask_call(Json::object({ "question": Json::string("Language?") })),
+    test_ctx(ask_call(Json::object({ "question": Json::string("Language?") }))),
   )
   match outcome {
     @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "MoonBit")
@@ -71,14 +82,15 @@ async test "ask_question_select_returns_selected_value" {
   tools.ui = Some(ui as &@posoco.UiPort)
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "ask_question",
-    ask_call(
-      Json::object({
-        "question": Json::string("Choose"),
-        "type": Json::string("select"),
-        "options": Json::array([Json::string("A"), Json::string("B")]),
-        "default_index": Json::number(1.0),
-      }),
+    test_ctx(
+      ask_call(
+        Json::object({
+          "question": Json::string("Choose"),
+          "type": Json::string("select"),
+          "options": Json::array([Json::string("A"), Json::string("B")]),
+          "default_index": Json::number(1.0),
+        }),
+      ),
     ),
   )
   match outcome {
@@ -94,8 +106,7 @@ async test "ask_question_cancel_is_tool_reported_error" {
   tools.ui = Some(ui as &@posoco.UiPort)
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "ask_question",
-    ask_call(Json::object({ "question": Json::string("Continue?") })),
+    test_ctx(ask_call(Json::object({ "question": Json::string("Continue?") }))),
   )
   match outcome {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
@@ -112,12 +123,13 @@ async test "ask_question_rejects_empty_select_before_ui" {
   let result : Result[@posoco.ToolOutcome, @posoco.RuntimeError] = Ok(
     @posoco.ToolProvider::execute(
       tools,
-      "ask_question",
-      ask_call(
-        Json::object({
-          "question": Json::string("Choose"),
-          "type": Json::string("select"),
-        }),
+      test_ctx(
+        ask_call(
+          Json::object({
+            "question": Json::string("Choose"),
+            "type": Json::string("select"),
+          }),
+        ),
       ),
     ),
   ) catch {

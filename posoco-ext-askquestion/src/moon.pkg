@@ -3,5 +3,6 @@ import {
 }
 
 import {
+  "colmugx/posoco/kernel",
   "moonbitlang/async",
 } for "wbtest"
