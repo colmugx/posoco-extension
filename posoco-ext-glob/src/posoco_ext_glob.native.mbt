@@ -91,9 +91,13 @@ async fn sort_newest_first(paths : Array[String]) -> Unit noraise {
 /// `execute_glob_impl`; this method only supplies the walk-based scanner.
 pub impl @posoco.ToolProvider for GlobTools with fn execute(
   self : GlobTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   execute_glob_impl(
     NativeGlobScanner::{ ignores: self.ignores, },
     self.anchor,

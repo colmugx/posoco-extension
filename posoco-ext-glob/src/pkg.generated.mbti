@@ -19,7 +19,7 @@ pub(all) struct GlobTools {
   ignores : Array[String]
 }
 pub fn GlobTools::GlobTools(anchor? : @devkit.WorkspaceAnchor?, ignores? : Array[String]) -> Self
-pub async fn GlobTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn GlobTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GlobTools::extension_id(Self) -> String
 pub fn GlobTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn GlobTools::manifest(Self) -> @port.ExtensionManifest

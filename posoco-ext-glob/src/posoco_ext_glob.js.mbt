@@ -215,9 +215,13 @@ pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
 /// matcher.
 pub impl @posoco.ToolProvider for GlobTools with fn execute(
   self : GlobTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   execute_glob_impl(
     JsGlobScanner::{ ignores: self.ignores, },
     self.anchor,

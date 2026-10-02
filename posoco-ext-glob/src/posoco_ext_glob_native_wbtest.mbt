@@ -1,4 +1,18 @@
 ///|
+/// Build the effect-scoped `ToolCallContext` the 0.21 `execute` signature
+/// hands providers, wrapping a synthetic `ToolCall` (effect id 1, no-op
+/// cancellation registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 fn glob_call(pattern : String, path : Json?) -> @posoco.ToolCall {
   let fields : Array[(String, Json)] = [("pattern", Json::string(pattern))]
   match path {
@@ -24,7 +38,7 @@ async test "glob_wrong_type_pattern_is_not_reported_as_missing" {
     name: @posoco.ToolName::unchecked("glob"),
     arguments: Json::object(Map::from_array([("pattern", Json::boolean(true))])),
   }
-  let outcome = Ok(GlobTools::GlobTools().execute("glob", call)) catch {
+  let outcome = Ok(GlobTools::GlobTools().execute(test_ctx(call))) catch {
     error => Err(error)
   }
   match outcome {
@@ -41,8 +55,7 @@ async test "glob_wrong_type_pattern_is_not_reported_as_missing" {
 async test "glob_rejects_malformed_optional_path" {
   let outcome = Ok(
     GlobTools::GlobTools().execute(
-      "glob",
-      glob_call("*.mbt", Some(Json::number(1.0))),
+      test_ctx(glob_call("*.mbt", Some(Json::number(1.0)))),
     ),
   ) catch {
     error => Err(error)
@@ -60,8 +73,7 @@ async test "glob_missing_base_is_loud_without_os_error" {
   @fs.rmdir(dir, recursive=true)
   let outcome = Ok(
     GlobTools::GlobTools().execute(
-      "glob",
-      glob_call("*.mbt", Some(Json::string(dir))),
+      test_ctx(glob_call("*.mbt", Some(Json::string(dir)))),
     ),
   ) catch {
     error => Err(error)
@@ -94,8 +106,7 @@ async test "glob_zero_matches_fills_structured_summary" {
     }
     @fs.write_file("\{dir}/a.mbt", "// a\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
-      "glob",
-      glob_call("**/*.noext", Some(Json::string(dir))),
+      test_ctx(glob_call("**/*.noext", Some(Json::string(dir)))),
     )
     match result {
       Success(content~, structured~) => {
@@ -125,8 +136,7 @@ async test "glob_multi_file_fills_structured_summary" {
     @fs.write_file("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
     @fs.write_file("\{dir}/c.txt", "// c\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
-      "glob",
-      glob_call("**/*.mbt", Some(Json::string(dir))),
+      test_ctx(glob_call("**/*.mbt", Some(Json::string(dir)))),
     )
     match result {
       Success(content~, structured~) => {
@@ -168,7 +178,7 @@ async test "glob_anchored_base_resolves_and_stays_base_relative" {
       name: @posoco.ToolName::unchecked("glob"),
       arguments: Json::object({ "pattern": Json::string("**/*.txt") }),
     }
-    match tools.execute("glob", call) {
+    match tools.execute(test_ctx(call)) {
       @posoco.ToolOutcome::Success(content~, ..) => {
         assert_true(content.contains("a.txt"))
         assert_true(content.contains("sub/b.txt"))
@@ -185,7 +195,7 @@ async test "glob_anchored_base_resolves_and_stays_base_relative" {
         "path": Json::string("sub"),
       }),
     }
-    match tools.execute("glob", sub_call) {
+    match tools.execute(test_ctx(sub_call)) {
       @posoco.ToolOutcome::Success(content~, ..) => {
         assert_true(content.contains("b.txt"))
         assert_false(content.contains(dir))
@@ -206,12 +216,13 @@ async test "glob_limit_caps_output_with_footer" {
     @fs.write_file("\{dir}/b.mbt", "// b\n", create_mode=CreateNew)
     @fs.write_file("\{dir}/c.mbt", "// c\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
-      "glob",
-      glob_call_fields([
-        ("pattern", Json::string("*.mbt")),
-        ("path", Json::string(dir)),
-        ("limit", Json::number(2.0)),
-      ]),
+      test_ctx(
+        glob_call_fields([
+          ("pattern", Json::string("*.mbt")),
+          ("path", Json::string(dir)),
+          ("limit", Json::number(2.0)),
+        ]),
+      ),
     )
     match result {
       Success(content~, structured~) => {
@@ -243,8 +254,12 @@ async test "glob_limit_wrong_type_and_value_are_loud" {
   for value in cases {
     let outcome = Ok(
       GlobTools::GlobTools().execute(
-        "glob",
-        glob_call_fields([("pattern", Json::string("*.mbt")), ("limit", value)]),
+        test_ctx(
+          glob_call_fields([
+            ("pattern", Json::string("*.mbt")),
+            ("limit", value),
+          ]),
+        ),
       ),
     ) catch {
       error => Err(error)
@@ -276,11 +291,12 @@ async test "glob_returns_files_only_and_prunes_ignores_and_hidden" {
     @fs.mkdir("\{dir}/.hidden")
     @fs.write_file("\{dir}/.hidden/x.mbt", "// x\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
-      "glob",
-      glob_call_fields([
-        ("pattern", Json::string("**/*.mbt")),
-        ("path", Json::string(dir)),
-      ]),
+      test_ctx(
+        glob_call_fields([
+          ("pattern", Json::string("**/*.mbt")),
+          ("path", Json::string(dir)),
+        ]),
+      ),
     )
     match result {
       Success(content~, structured~) => {
@@ -310,11 +326,12 @@ async test "glob_directory_pattern_yields_no_results" {
     @fs.mkdir("\{dir}/sub")
     @fs.write_file("\{dir}/sub/keep.txt", "x", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
-      "glob",
-      glob_call_fields([
-        ("pattern", Json::string("sub")),
-        ("path", Json::string(dir)),
-      ]),
+      test_ctx(
+        glob_call_fields([
+          ("pattern", Json::string("sub")),
+          ("path", Json::string(dir)),
+        ]),
+      ),
     )
     match result {
       Success(content~, structured~) => {
@@ -344,11 +361,12 @@ async test "glob_sorts_newest_first" {
     @async.sleep(60)
     @fs.write_file("\{dir}/newer.mbt", "// newer\n", create_mode=CreateNew)
     let result = GlobTools::GlobTools().execute(
-      "glob",
-      glob_call_fields([
-        ("pattern", Json::string("*.mbt")),
-        ("path", Json::string(dir)),
-      ]),
+      test_ctx(
+        glob_call_fields([
+          ("pattern", Json::string("*.mbt")),
+          ("path", Json::string(dir)),
+        ]),
+      ),
     )
     match result {
       Success(content~, ..) => {
