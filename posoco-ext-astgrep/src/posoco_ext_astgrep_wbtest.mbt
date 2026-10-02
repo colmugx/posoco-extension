@@ -1,4 +1,18 @@
 ///|
+/// Build the effect-scoped `ToolCallContext` the 0.21 `execute` signature
+/// hands providers, wrapping a synthetic `ToolCall` (effect id 1, no-op
+/// cancellation registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 fn astgrep_call_with_arguments(arguments : Json) -> @posoco.ToolCall {
   {
     call_id: @posoco.CallId::unchecked("astgrep-test"),
@@ -62,8 +76,7 @@ test "astgrep_tooldef_shape" {
 async test "astgrep_missing_pattern_is_tool_reported_error" {
   let result = Ok(
     AstGrepTools::AstGrepTools().execute(
-      "astgrep",
-      astgrep_call_with_arguments(Json::object(Map::from_array([]))),
+      test_ctx(astgrep_call_with_arguments(Json::object(Map::from_array([])))),
     ),
   ) catch {
     e => Err(e)
@@ -79,9 +92,10 @@ async test "astgrep_missing_pattern_is_tool_reported_error" {
 async test "astgrep_wrong_typed_pattern_is_tool_reported_error" {
   let result = Ok(
     AstGrepTools::AstGrepTools().execute(
-      "astgrep",
-      astgrep_call_with_arguments(
-        Json::object(Map::from_array([("pattern", Json::number(1.0))])),
+      test_ctx(
+        astgrep_call_with_arguments(
+          Json::object(Map::from_array([("pattern", Json::number(1.0))])),
+        ),
       ),
     ),
   ) catch {

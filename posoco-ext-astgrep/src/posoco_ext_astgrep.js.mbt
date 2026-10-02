@@ -150,9 +150,13 @@ pub impl @posoco.ToolProvider for AstGrepTools with fn list_tools(
 /// the binary installed.
 pub impl @posoco.ToolProvider for AstGrepTools with fn execute(
   self : AstGrepTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   execute_astgrep_impl(JsAstGrepSpawn::{ bin: None, }, self.anchor, call)
 }
 
