@@ -89,6 +89,7 @@ impl @posoco.ModelPort for ConcurrencyProbeModel with fn compact(
   _self : ConcurrencyProbeModel,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
@@ -931,6 +932,7 @@ impl @posoco.ModelPort for BgParentModel with fn compact(
   _self : BgParentModel,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
@@ -1257,6 +1259,7 @@ impl @posoco.ModelPort for FailingModel with fn compact(
   _self : FailingModel,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

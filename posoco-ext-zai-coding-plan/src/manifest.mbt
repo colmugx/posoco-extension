@@ -38,11 +38,12 @@ pub impl @posoco.ModelPort for ZaiCodingPlanModelPort with fn compact(
   self : ZaiCodingPlanModelPort,
   scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   let port : &@posoco.ModelPort = self.inner
-  port.compact(scope, messages, options, trigger)
+  port.compact(scope, messages, tools, options, trigger)
 }
 
 ///|

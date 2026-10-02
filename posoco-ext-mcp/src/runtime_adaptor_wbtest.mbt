@@ -53,6 +53,7 @@ pub impl @runtime.Runtime for RecordingRuntime with fn compact(
   self,
   scope : @kernel.InvocationScope,
   _messages : ArrayView[@kernel.Message],
+  _tools : Array[@kernel.ToolDef],
   _call_options : Json,
   _trigger : @kernel.CompactTrigger,
 ) -> Result[@kernel.CompactResult, @kernel.ModelFailure] {
