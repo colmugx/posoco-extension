@@ -378,6 +378,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
   self : DeepSeekModelPort,
   scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

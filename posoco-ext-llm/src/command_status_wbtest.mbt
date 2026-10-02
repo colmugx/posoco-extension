@@ -32,6 +32,7 @@ pub impl @posoco.ModelPort for StatusTestPort with fn compact(
   _self : StatusTestPort,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

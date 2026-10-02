@@ -1240,6 +1240,7 @@ impl @posoco.ModelPort for ZenSummaryModelPort with fn compact(
   _self : ZenSummaryModelPort,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
@@ -1288,6 +1289,7 @@ async test "anchored compact replaces the transcript from one summarize call" {
   let result = port.compact(
     zen_flaky_scope(),
     messages[:],
+    [],
     zen_flaky_options(),
     @posoco.CompactTrigger::Manual,
   )

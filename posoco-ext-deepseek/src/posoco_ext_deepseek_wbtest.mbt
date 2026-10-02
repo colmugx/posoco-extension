@@ -1698,6 +1698,7 @@ async test "auto compact returns an eviction-only replace without a network call
     port,
     dsc_scope(),
     messages[:],
+    [],
     chat_options(),
     @posoco.CompactTrigger::Auto,
   )
@@ -1738,6 +1739,7 @@ async test "auto compact sizes from the scope pressure over local config" {
     port,
     dsc_scope(pressure=Some(pressure)),
     messages[:],
+    [],
     chat_options(),
     @posoco.CompactTrigger::Auto,
   )

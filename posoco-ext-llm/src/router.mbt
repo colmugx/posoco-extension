@@ -534,10 +534,11 @@ pub impl @posoco.ModelPort for RouterModelPort with fn compact(
   self : RouterModelPort,
   scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
-  self.dispatch_slot().port.compact(scope, messages, options, trigger)
+  self.dispatch_slot().port.compact(scope, messages, tools, options, trigger)
 }
 
 ///|

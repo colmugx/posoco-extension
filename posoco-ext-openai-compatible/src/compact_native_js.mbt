@@ -126,6 +126,7 @@ pub impl @posoco.ModelPort for OpenAICompatibleModelPort with fn compact(
   self : OpenAICompatibleModelPort,
   scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

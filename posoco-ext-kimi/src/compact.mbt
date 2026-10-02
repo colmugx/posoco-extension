@@ -115,6 +115,7 @@ pub impl @posoco.ModelPort for KimiModelPort with fn compact(
   self : KimiModelPort,
   _scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

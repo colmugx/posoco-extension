@@ -31,6 +31,7 @@ pub impl @posoco.ModelPort for RouterTestPort with fn compact(
   _self : RouterTestPort,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
@@ -873,6 +874,7 @@ pub impl @posoco.ModelPort for RouterChatTestPort with fn compact(
   _self : RouterChatTestPort,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

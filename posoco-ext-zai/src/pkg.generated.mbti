@@ -62,7 +62,7 @@ pub(all) struct ZaiModelPort {
 }
 pub fn ZaiModelPort::ZaiModelPort(ZaiConfig, ctx? : @devkit.ExtContext) -> Self
 pub async fn ZaiModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn ZaiModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn ZaiModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn ZaiModelPort::extension_id(Self) -> String
 pub fn ZaiModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn ZaiModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError

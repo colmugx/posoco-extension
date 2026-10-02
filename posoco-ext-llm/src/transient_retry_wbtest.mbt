@@ -4,6 +4,7 @@
 struct FakeModelPort {
   chat_calls : Ref[Int]
   compact_calls : Ref[Int]
+  compact_tools : Array[Array[@posoco.ToolDef]]
   chat_failures_left : Ref[Int]
   compact_failures_left : Ref[Int]
   error : @posoco.ModelError
@@ -17,6 +18,7 @@ fn FakeModelPort::FakeModelPort(
   FakeModelPort::{
     chat_calls: Ref::{ val: 0, },
     compact_calls: Ref::{ val: 0, },
+    compact_tools: [],
     chat_failures_left: Ref::{ val: chat_failures, },
     compact_failures_left: Ref::{ val: 0, },
     error,
@@ -61,10 +63,12 @@ impl @posoco.ModelPort for FakeModelPort with fn compact(
   self : FakeModelPort,
   _scope : @posoco.InvocationScope,
   _messages : ArrayView[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
   _options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   self.compact_calls.val += 1
+  self.compact_tools.push(tools.copy())
   if self.compact_failures_left.val > 0 {
     self.compact_failures_left.val -= 1
     raise self.error
@@ -330,15 +334,19 @@ async test "transient retry retries transient failures during compact" {
     inner~,
     policy=zero_delay_policy(),
   )
+  let tools = [@posoco.tk_tool_def("echo", "compact context")]
   let result = port.compact(
     flaky_scope(),
     [],
+    tools,
     flaky_options(),
     @posoco.CompactTrigger::Manual,
   )
   assert_true(result.mode == @posoco.CompactMode::Replace)
   // 1 failed compact attempt + 1 successful retry.
   assert_eq(inner.compact_calls.val, 2)
+  assert_true(inner.compact_tools == [tools, tools])
+  assert_eq(inner.chat_calls.val, 0)
 }
 
 ///|
@@ -354,6 +362,7 @@ async test "transient retry gives up compact after the retry budget" {
     port.compact(
       flaky_scope(),
       [],
+      [],
       flaky_options(),
       @posoco.CompactTrigger::Manual,
     ),
@@ -366,6 +375,53 @@ async test "transient retry gives up compact after the retry budget" {
     Err(_) => ()
   }
   assert_eq(inner.compact_calls.val, 4)
+}
+
+///|
+async test "router compact forwards explicit tools to the active slot without chat" {
+  let first = FakeModelPort::FakeModelPort(0, flaky_error_truncated)
+  let second = FakeModelPort::FakeModelPort(0, flaky_error_truncated)
+  let router = RouterModelPort(slots=[
+    ModelSlot::ModelSlot(
+      id="first",
+      label="first",
+      provider_id="one",
+      model_id="model-a",
+      port=first,
+    ),
+    ModelSlot::ModelSlot(
+      id="second",
+      label="second",
+      provider_id="two",
+      model_id="model-b",
+      port=second,
+    ),
+  ])
+  let port : &@posoco.ModelPort = router
+  let tools = [@posoco.tk_tool_def("echo", "snapshot tools")]
+  ignore(
+    port.compact(
+      flaky_scope(),
+      [],
+      tools,
+      flaky_options(),
+      @posoco.CompactTrigger::Manual,
+    ),
+  )
+  router.switch_slot("second")
+  ignore(
+    port.compact(
+      flaky_scope(),
+      [],
+      [],
+      flaky_options(),
+      @posoco.CompactTrigger::Auto,
+    ),
+  )
+  assert_true(first.compact_tools == [tools])
+  assert_true(second.compact_tools == [[]])
+  assert_eq(first.chat_calls.val, 0)
+  assert_eq(second.chat_calls.val, 0)
 }
 
 ///|

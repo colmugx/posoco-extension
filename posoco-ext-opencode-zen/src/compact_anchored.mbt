@@ -116,6 +116,7 @@ pub impl @posoco.ModelPort for ZenAnchoredCompactPort with fn compact(
   self : ZenAnchoredCompactPort,
   scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {

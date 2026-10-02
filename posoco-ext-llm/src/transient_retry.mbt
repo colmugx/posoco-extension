@@ -75,13 +75,16 @@ pub impl @posoco.ModelPort for TransientRetryModelPort with fn compact(
   self : TransientRetryModelPort,
   scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   let mut retries_left = self.policy.max_retries
   let mut delay_ms = self.policy.initial_delay_ms
   while true {
-    let result = Ok(self.inner.compact(scope, messages, options, trigger)) catch {
+    let result = Ok(
+      self.inner.compact(scope, messages, tools, options, trigger),
+    ) catch {
       error => Err(error)
     }
     match result {

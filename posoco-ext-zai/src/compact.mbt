@@ -65,6 +65,7 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn compact(
   self : ZaiModelPort,
   _scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   _trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
