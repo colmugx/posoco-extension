@@ -8,8 +8,17 @@
 /// On native and wasm, executes via `@process.collect_output_merged("sh", ...)`.
 /// On js (bun), executes via `Bun.spawn`. On wasm-gc, the tool is not
 /// listed and execute raises `RuntimeError::InvocationFailed`.
-pub(all) struct ShellTools {
+///
+/// The provider is also `ToolCancellable`: `bash` spawns register their
+/// child under the call's `effect_id` via `ToolCallContext.register_cancel`,
+/// so an aborted turn kills the child instead of orphaning it
+/// (signal → grace window → hard kill).
+pub struct ShellTools {
   anchor : @devkit.WorkspaceAnchor?
+  /// Live shell children keyed by effect id. Entries whose execute path
+  /// already completed are dropped; unwind-only cleanup may leave a stale
+  /// exited entry, pruned by the next cancel.
+  in_flight : Map[Int, ShellChildHandle]
 }
 
 ///|
@@ -17,7 +26,46 @@ pub(all) struct ShellTools {
 pub fn ShellTools::ShellTools(
   anchor? : @devkit.WorkspaceAnchor? = None,
 ) -> ShellTools {
-  ShellTools::{ anchor, }
+  ShellTools::{ anchor, in_flight: Map::from_array([]), }
+}
+
+///|
+/// Grace window between the interrupt signal and the hard kill, matching
+/// the native spawn's `graceful_cancel` timeout so both escalation paths
+/// agree.
+let shell_cancel_grace_ms : Int = 2000
+
+///|
+/// Terminate a registered shell child: signal, wait out the grace period,
+/// then hard-kill. Stale exited entries left by unwind-only cleanup are
+/// pruned first. Reports `Propagated` when a live child was handled.
+pub impl @posoco.ToolCancellable for ShellTools with fn cancel(
+  self,
+  effect_id : @kernel.EffectId,
+  _reason : @kernel.CancelReason,
+) -> @kernel.CancelDisposition {
+  let stale : Array[Int] = []
+  for key, handle in self.in_flight {
+    if handle.exited {
+      stale.push(key)
+    }
+  }
+  for key in stale {
+    self.in_flight.remove(key)
+  }
+  let key = effect_id.to_int()
+  match self.in_flight.get(key) {
+    Some(handle) => {
+      shell_child_interrupt(handle)
+      let exited = shell_child_await_exit(handle, shell_cancel_grace_ms + 500)
+      if !exited {
+        shell_child_hard_kill(handle)
+      }
+      self.in_flight.remove(key)
+      @kernel.CancelDisposition::Propagated
+    }
+    None => @kernel.CancelDisposition::NotPropagated
+  }
 }
 
 ///|

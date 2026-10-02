@@ -28,6 +28,18 @@ async fn bash_anchor_root() -> String {
 }
 
 ///|
+/// Effect context for live-gated provider calls (no-op registrar).
+fn live_shell_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 /// Invalid UTF-8 from an exit-0 process is an explicit business error, not a
 /// successful result with silently replaced output.
 async test "non_utf8_output_is_explicit_tool_error" {
@@ -43,7 +55,7 @@ async test "non_utf8_output_is_explicit_tool_error" {
       Map::from_array([("cmd", Json::string("printf '\\377'"))]),
     ),
   }
-  let result = tools.execute("bash", call)
+  let result = tools.execute(live_shell_ctx(call))
   // Invalid UTF-8 from an exit-0 process is a business-level error, surfaced
   // as ToolReportedError (not Success).
   match result {
@@ -74,7 +86,7 @@ async test "anchored_shell_starts_in_anchor_root" {
     name: @posoco.ToolName::unchecked("bash"),
     arguments: Json::object(Map::from_array([("cmd", Json::string("pwd"))])),
   }
-  match tools.execute("bash", call) {
+  match tools.execute(live_shell_ctx(call)) {
     Success(content~, ..) => assert_eq(content.trim(), @fs.realpath(root))
     _ => fail("expected Success for pwd")
   }
@@ -100,7 +112,7 @@ async test "anchored_shell_resolves_relative_paths_from_root" {
       Map::from_array([("cmd", Json::string("cd etc && pwd"))]),
     ),
   }
-  match tools.execute("bash", call) {
+  match tools.execute(live_shell_ctx(call)) {
     Success(content~, ..) =>
       assert_eq(content.trim(), @fs.realpath("\{root}/etc"))
     _ => fail("expected Success for cd etc and pwd")

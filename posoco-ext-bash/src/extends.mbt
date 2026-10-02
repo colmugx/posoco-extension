@@ -6,3 +6,6 @@
 
 ///|
 pub extend ShellTools with @posoco.ToolProvider::{execute, list_tools}
+
+///|
+pub extend ShellTools with @posoco.ToolCancellable::{cancel}

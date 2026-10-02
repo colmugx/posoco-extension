@@ -22,9 +22,7 @@ options(
   targets: {
     "posoco_ext_bash.js.mbt": [ "js" ],
     "posoco_ext_bash.native.mbt": [ "native", "wasm" ],
-    "runtime_adaptor.js.mbt": [ "js" ],
-    "runtime_adaptor.native.mbt": [ "native", "wasm" ],
-    "runtime_adaptor_wbtest.mbt": [ "native" ],
+    "shell_cancel_wbtest.mbt": [ "native" ],
     "bash_native_path_wbtest.mbt": [ "native" ],
   },
 )
