@@ -76,17 +76,19 @@ pub impl @runtime.Runtime for McpRuntime with fn execute_tool(
 ) -> @kernel.ToolOutcome {
   let name = context.tool_name.to_string()
   if self.handles(name) {
-    let call : @kernel.ToolCall = {
+    let ctx : @posoco.ToolCallContext = {
+      effect_id: context.effect_id,
       call_id: context.call_id,
       name: context.tool_name,
       arguments: context.arguments,
+      register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
     }
     // Every error-translating catch must re-raise while the task is being
     // cancelled: a cancellation injected at a suspension point inside the
     // bridge would otherwise be re-labeled `ToolProviderError` and lose the
     // identity the run loop's abort depends on (same rule as the colmugx/mcp
     // transport catches).
-    @posoco.ToolProvider::execute(self.bridge, name, call) catch {
+    @posoco.ToolProvider::execute(self.bridge, ctx) catch {
       error =>
         if @async.is_being_cancelled() {
           raise error

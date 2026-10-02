@@ -488,6 +488,19 @@ fn registry_test_call(name : String) -> @posoco.ToolCall {
 }
 
 ///|
+/// Pack a registry test ToolCall into the 0.21 ToolCallContext the provider
+/// now receives: no-op register_cancel keeps cancellation NotPropagated.
+fn registry_test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 /// A routing entry may
 /// point at a slot that no longer holds a live connection — retired by a
 /// concurrent `reconnect_server`, or left behind when `close()` cleared the
@@ -499,8 +512,7 @@ async test "execute_route_to_vanished_slot_fails_honestly" {
   let outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError] = Ok(
     @posoco.ToolProvider::execute(
       bridge,
-      "gone__tool",
-      registry_test_call("gone__tool"),
+      registry_test_ctx(registry_test_call("gone__tool")),
     ),
   ) catch {
     error => Err(error)
@@ -573,8 +585,7 @@ async test "execute_route_to_retired_slot_fails_honestly" {
   let outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError] = Ok(
     @posoco.ToolProvider::execute(
       bridge,
-      "gone__tool",
-      registry_test_call("gone__tool"),
+      registry_test_ctx(registry_test_call("gone__tool")),
     ),
   ) catch {
     error => Err(error)

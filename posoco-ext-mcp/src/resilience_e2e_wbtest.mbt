@@ -120,6 +120,19 @@ fn e2e_call(
 }
 
 ///|
+/// Pack an e2e ToolCall into the 0.21 ToolCallContext the provider now
+/// receives: no-op register_cancel keeps cancellation NotPropagated.
+fn e2e_test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 /// One tool call through the ToolProvider boundary; Err carries the
 /// RuntimeError rendering (e.g. "RuntimeError::InvocationFailed(...)").
 async fn e2e_execute(
@@ -129,7 +142,7 @@ async fn e2e_execute(
 ) -> Result[String, String] {
   let call = e2e_call(tool, arguments)
   let outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError] = Ok(
-    @posoco.ToolProvider::execute(bridge, tool, call),
+    @posoco.ToolProvider::execute(bridge, e2e_test_ctx(call)),
   ) catch {
     error => Err(error)
   }

@@ -1498,10 +1498,9 @@ pub extend MCPToolBridge with @posoco.ToolProvider::{execute, list_tools}
 /// ToolProvider (execute): route tool calls to the correct MCP server.
 pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   self,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let call_name = call.name.to_string()
+  let call_name = ctx.name.to_string()
   let conn_idx = match self.tool_to_conn.get(call_name) {
     Some(idx) => idx
     None =>
@@ -1522,7 +1521,7 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   }
   let invoked_server = conn.name
   let original_name = strip_namespace(call_name, invoked_server)
-  let args_str = call.arguments.stringify()
+  let args_str = ctx.arguments.stringify()
   let attempted = self.invoke_mcp_tool(conn_idx, original_name, args_str) catch {
     _ =>
       // invoke_mcp_tool raises only while the task is being cancelled (its
