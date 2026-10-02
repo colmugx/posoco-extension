@@ -2,6 +2,20 @@
 /// Test helpers.
 
 ///|
+/// Build the effect-scoped `ToolCallContext` the 0.21 `execute` signature
+/// hands providers, wrapping a synthetic `ToolCall` (effect id 1, no-op
+/// cancellation registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 fn edit_call(path : String, replace_all : Json?) -> @posoco.ToolCall {
   edit_call_fields(
     Json::string(path),
@@ -67,7 +81,7 @@ async test "edit_required_fields_distinguish_wrong_type_from_missing" {
   ]
   for pair in cases {
     let (call, field) = pair
-    let outcome = Ok(EditTools::EditTools().execute("edit", call)) catch {
+    let outcome = Ok(EditTools::EditTools().execute(test_ctx(call))) catch {
       error => Err(error)
     }
     match outcome {
@@ -96,8 +110,7 @@ test "edit_failure_mappers_cover_stat_decode_and_write" {
 async test "edit_rejects_malformed_optional_replace_all" {
   let outcome = Ok(
     EditTools::EditTools().execute(
-      "edit",
-      edit_call("unused", Some(Json::string("yes"))),
+      test_ctx(edit_call("unused", Some(Json::string("yes")))),
     ),
   ) catch {
     error => Err(error)
@@ -118,7 +131,7 @@ async test "edit_directory_is_loud_without_os_error" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let outcome = Ok(
-      EditTools::EditTools().execute("edit", edit_call(dir, None)),
+      EditTools::EditTools().execute(test_ctx(edit_call(dir, None))),
     ) catch {
       error => Err(error)
     }
@@ -151,7 +164,7 @@ async fn run_edit(
   tools : EditTools,
   call : @posoco.ToolCall,
 ) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute("edit", call)) catch {
+  Ok(tools.execute(test_ctx(call))) catch {
     error => Err(error)
   }
 }

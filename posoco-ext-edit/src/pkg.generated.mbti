@@ -19,7 +19,7 @@ pub(all) struct EditTools {
   anchor : @devkit.WorkspaceAnchor?
 }
 pub fn EditTools::EditTools(freshness? : @devkit.FreshnessGuard, anchor? : @devkit.WorkspaceAnchor?) -> Self
-pub async fn EditTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn EditTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn EditTools::extension_id(Self) -> String
 pub fn EditTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn EditTools::manifest(Self) -> @port.ExtensionManifest

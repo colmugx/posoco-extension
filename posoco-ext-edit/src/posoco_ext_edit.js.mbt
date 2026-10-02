@@ -195,8 +195,12 @@ pub impl @posoco.ToolProvider for EditTools with fn list_tools(
 /// `execute_edit_impl`; this method only supplies the node:fs-backed adaptor.
 pub impl @posoco.ToolProvider for EditTools with fn execute(
   self : EditTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   execute_edit_impl(JsFsIo::{ }, self.freshness, self.anchor, call)
 }
