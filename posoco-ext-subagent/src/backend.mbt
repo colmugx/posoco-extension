@@ -655,15 +655,15 @@ async fn SubagentTools::spawn(
 ///|
 pub impl @posoco.ToolProvider for SubagentTools with fn execute(
   self : SubagentTools,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   if name != "agent" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_subagent: unknown tool '\{name}'",
     )
   }
-  self.spawn(call) catch {
+  self.spawn({ call_id: ctx.call_id, name: ctx.name, arguments: ctx.arguments, }) catch {
     error =>
       raise @posoco.RuntimeError::InvocationFailed(
         "agent tool: \{error.to_string()}",

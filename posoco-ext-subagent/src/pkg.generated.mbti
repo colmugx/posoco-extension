@@ -51,7 +51,7 @@ pub(all) struct SubagentTools {
 pub fn SubagentTools::SubagentTools(catalog~ : @posoco-ext-kind.KindCatalog, config~ : @posoco-kit-subagent.SubagentConfig, composer~ : &ChildComposer, parent_slot~ : String, parent_effort? : String?, parent_selection? : (() -> (String, String?))?, observers? : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit]) -> Self
 pub fn SubagentTools::background_children(Self) -> Array[(String, String)]
 pub async fn SubagentTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
-pub async fn SubagentTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn SubagentTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn SubagentTools::extension_id(Self) -> String
 pub fn SubagentTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn SubagentTools::manifest(Self) -> @port.ExtensionManifest

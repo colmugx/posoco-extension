@@ -11,8 +11,9 @@ async test "agent_happy_path_returns_child_result_with_footer" {
   let tools = test_tools(composer=composer as &ChildComposer)
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("write the tests"))])),
+    test_ctx(
+      agent_call(args_object([("task", Json::string("write the tests"))])),
+    ),
   )
   match outcome {
     @posoco.ToolOutcome::Success(content~, structured~) => {
@@ -123,8 +124,7 @@ async test "global_concurrency_caps_parallel_child_lifetimes" {
         group.spawn(async fn() {
           @posoco.ToolProvider::execute(
             tools,
-            "agent",
-            agent_call(args_object([("task", Json::string(task))])),
+            test_ctx(agent_call(args_object([("task", Json::string(task))]))),
           )
         }),
       )
@@ -229,8 +229,7 @@ async test "spawn_budget_resets_at_each_parent_run" {
   for task in ["one", "two"] {
     let outcome = @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(args_object([("task", Json::string(task))])),
+      test_ctx(agent_call(args_object([("task", Json::string(task))]))),
     )
     assert_true(outcome is @posoco.ToolOutcome::Success(_))
   }
@@ -257,8 +256,7 @@ async test "spawn_budget_resets_at_each_parent_run" {
   assert_eq(tools.ledger.remaining(), 2)
   let next = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("three"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("three"))]))),
   )
   assert_true(next is @posoco.ToolOutcome::Success(_))
   assert_eq(tools.ledger.remaining(), 1)
@@ -273,15 +271,13 @@ async test "spawn_budget_exhaustion_refuses_explicitly" {
   )
   let first = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("first"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("first"))]))),
   )
   assert_true(first is @posoco.ToolOutcome::Success(_))
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(args_object([("task", Json::string("second"))])),
+      test_ctx(agent_call(args_object([("task", Json::string("second"))]))),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_eq(
@@ -347,12 +343,13 @@ async test "unknown_kind_lists_catalog_names" {
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("kind", Json::string("wizard")),
-        ]),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("t")),
+            ("kind", Json::string("wizard")),
+          ]),
+        ),
       ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
@@ -372,19 +369,20 @@ async test "tools_argument_intersects_kind_whitelist_both_ways" {
   let tools = test_tools(composer=composer as &ChildComposer)
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t")),
-        (
-          "tools",
-          Json::array([
-            Json::string("grep"),
-            Json::string("nonexistent_tool"),
-            Json::string("grep"),
-          ]),
-        ),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          (
+            "tools",
+            Json::array([
+              Json::string("grep"),
+              Json::string("nonexistent_tool"),
+              Json::string("grep"),
+            ]),
+          ),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -400,13 +398,14 @@ async test "empty_tool_intersection_errors_with_both_lists" {
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("kind", Json::string("explore")),
-          ("tools", Json::array([Json::string("bash")])),
-        ]),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("t")),
+            ("kind", Json::string("explore")),
+            ("tools", Json::array([Json::string("bash")])),
+          ]),
+        ),
       ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
@@ -429,12 +428,13 @@ async test "kind_binding_beats_config_default" {
   )
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t")),
-        ("kind", Json::string("porter")),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("porter")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -453,14 +453,15 @@ async test "explicit_args_override_kind_binding" {
   )
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t")),
-        ("kind", Json::string("porter")),
-        ("model", Json::string("zai/glm")),
-        ("effort", Json::string("low")),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("porter")),
+          ("model", Json::string("zai/glm")),
+          ("effort", Json::string("low")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -478,9 +479,13 @@ async test "default_model_applies_to_unbound_kinds" {
   )
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([("task", Json::string("t")), ("kind", Json::string("coder"))]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("coder")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -497,9 +502,13 @@ async test "unbound_kind_inherits_parent_when_no_default" {
   )
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([("task", Json::string("t")), ("kind", Json::string("coder"))]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("coder")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -513,12 +522,13 @@ async test "tools_absent_uses_kind_whitelist" {
   let tools = test_tools(composer=composer as &ChildComposer)
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t")),
-        ("kind", Json::string("explore")),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("explore")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -534,9 +544,13 @@ async test "unbound_kind_face_inherits_default_as_none" {
   )
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([("task", Json::string("t")), ("kind", Json::string("loose"))]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("loose")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -544,13 +558,14 @@ async test "unbound_kind_face_inherits_default_as_none" {
   // Explicit args.tools on an inheriting kind are kept as-is.
   let narrowed = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t")),
-        ("kind", Json::string("loose")),
-        ("tools", Json::array([Json::string("grep")])),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("loose")),
+          ("tools", Json::array([Json::string("grep")])),
+        ]),
+      ),
     ),
   )
   assert_true(narrowed is @posoco.ToolOutcome::Success(_))
@@ -564,12 +579,13 @@ async test "instructions_over_8192_chars_rejected" {
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("instructions", Json::string("x".repeat(8193))),
-        ]),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("t")),
+            ("instructions", Json::string("x".repeat(8193))),
+          ]),
+        ),
       ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
@@ -587,13 +603,14 @@ async test "explicit_literal_model_falls_back_to_parent_effort" {
   )
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t")),
-        ("kind", Json::string("coder")),
-        ("model", Json::string("zai/glm")),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("coder")),
+          ("model", Json::string("zai/glm")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -611,8 +628,7 @@ async test "composer_failure_maps_to_failed_terminal_state" {
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(args_object([("task", Json::string("t"))])),
+      test_ctx(agent_call(args_object([("task", Json::string("t"))]))),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
       assert_true(content.contains("failed: no features left"))
@@ -632,12 +648,13 @@ async test "background_without_composed_capability_refused_and_does_not_consume_
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("bg")),
-          ("background", Json::boolean(true)),
-        ]),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("bg")),
+            ("background", Json::boolean(true)),
+          ]),
+        ),
       ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
@@ -653,8 +670,7 @@ async test "background_without_composed_capability_refused_and_does_not_consume_
   assert_eq(tools.ledger.acquired().length(), 0)
   let foreground = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("fg"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("fg"))]))),
   )
   assert_true(foreground is @posoco.ToolOutcome::Success(_))
 }
@@ -666,39 +682,41 @@ async test "skills_argument_maps_to_child_spec" {
   // absent and false → None
   let _ = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("t1"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("t1"))]))),
   )
   let _ = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t2")),
-        ("skills", Json::boolean(false)),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t2")),
+          ("skills", Json::boolean(false)),
+        ]),
+      ),
     ),
   )
   // true → Some([]) (load all discovered)
   let _ = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t3")),
-        ("skills", Json::boolean(true)),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t3")),
+          ("skills", Json::boolean(true)),
+        ]),
+      ),
     ),
   )
   // array → whitelist
   let _ = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("t4")),
-        ("skills", Json::array([Json::string("alpha"), Json::string("beta")])),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("t4")),
+          ("skills", Json::array([Json::string("alpha"), Json::string("beta")])),
+        ]),
+      ),
     ),
   )
   assert_eq(composer.specs.length(), 4)
@@ -721,12 +739,13 @@ async test "resume_unknown_id_lists_known_children" {
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("resume", Json::string("ghost")),
-        ]),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("t")),
+            ("resume", Json::string("ghost")),
+          ]),
+        ),
       ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
@@ -740,19 +759,19 @@ async test "resume_unknown_id_lists_known_children" {
   // unknown resume lists exactly that known set.
   let spawned = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("t"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("t"))]))),
   )
   assert_true(spawned is @posoco.ToolOutcome::Success(_))
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("resume", Json::string("ghost")),
-        ]),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("t")),
+            ("resume", Json::string("ghost")),
+          ]),
+        ),
       ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
@@ -769,18 +788,18 @@ async test "resume_known_id_passes_session_id_through" {
   let tools = test_tools(composer=composer as &ChildComposer)
   let first = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("t1"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("t1"))]))),
   )
   assert_true(first is @posoco.ToolOutcome::Success(_))
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(
-      args_object([
-        ("task", Json::string("continue")),
-        ("resume", Json::string("subagent-1")),
-      ]),
+    test_ctx(
+      agent_call(
+        args_object([
+          ("task", Json::string("continue")),
+          ("resume", Json::string("subagent-1")),
+        ]),
+      ),
     ),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
@@ -802,12 +821,13 @@ async test "timeout_ms_enforced_around_child_run" {
   match
     @posoco.ToolProvider::execute(
       tools,
-      "agent",
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("timeout_ms", Json::number(100.0)),
-        ]),
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("t")),
+            ("timeout_ms", Json::number(100.0)),
+          ]),
+        ),
       ),
     ) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
@@ -827,8 +847,7 @@ async test "bridge_observer_forwards_child_events_tagged" {
   ])
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("t"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("t"))]))),
   )
   assert_true(outcome is @posoco.ToolOutcome::Success(_))
   let mut completed = 0
@@ -851,14 +870,15 @@ async test "bridge_observer_forwards_child_events_tagged" {
 async test "unknown_tool_name_raises_unknown_tool" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(composer=composer as &ChildComposer)
+  // The name now rides the call itself, so the unknown name goes in the call.
+  let call = agent_call(args_object([("task", Json::string("t"))]))
+  let stranger : @posoco.ToolCall = {
+    call_id: call.call_id,
+    name: @posoco.ToolName::unchecked("not_agent"),
+    arguments: call.arguments,
+  }
   let raised : Bool = try {
-    ignore(
-      @posoco.ToolProvider::execute(
-        tools,
-        "not_agent",
-        agent_call(args_object([("task", Json::string("t"))])),
-      ),
-    )
+    ignore(@posoco.ToolProvider::execute(tools, test_ctx(stranger)))
     false
   } catch {
     @posoco.RuntimeError::UnknownTool(_) => true
@@ -872,7 +892,7 @@ async test "missing_task_reports_error" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(composer=composer as &ChildComposer)
   match
-    @posoco.ToolProvider::execute(tools, "agent", agent_call(args_object([]))) {
+    @posoco.ToolProvider::execute(tools, test_ctx(agent_call(args_object([])))) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.contains("task"))
     _ => fail("expected missing-task error")
@@ -1004,8 +1024,9 @@ async test "background_child_holds_global_slot_until_task_exit" {
       let foreground = group.spawn(async fn() {
         @posoco.ToolProvider::execute(
           tools,
-          "agent",
-          agent_call(args_object([("task", Json::string("foreground-two"))])),
+          test_ctx(
+            agent_call(args_object([("task", Json::string("foreground-two"))])),
+          ),
         )
       })
 

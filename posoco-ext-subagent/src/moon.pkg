@@ -7,11 +7,12 @@ import {
   "moonbitlang/async",
 }
 
-// @runtime (PortRuntime harness) and @error (CompositionError) serve only
-// the whitebox async tests.
+// @runtime (PortRuntime harness), @error (CompositionError) and @kernel
+// (EffectId for ToolCallContext literals) serve only the whitebox async tests.
 import {
   "colmugx/posoco/runtime",
   "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
 } for "wbtest"
 
 warnings = "-unused_package"

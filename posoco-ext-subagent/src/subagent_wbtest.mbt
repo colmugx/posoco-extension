@@ -252,6 +252,18 @@ fn agent_call(arguments : Json) -> @posoco.ToolCall {
 }
 
 ///|
+/// Adapt a legacy ToolCall to the 0.21 ToolCallContext shape.
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 fn args_object(pairs : Array[(String, Json)]) -> Json {
   Json::object(Map::from_array(pairs))
 }
@@ -300,8 +312,7 @@ async test "inheritance_reads_live_parent_selection_at_each_spawn" {
 
   let first = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("first"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("first"))]))),
   )
   assert_true(first is @posoco.ToolOutcome::Success(_))
   assert_eq(composer.specs.length(), 1)
@@ -313,8 +324,7 @@ async test "inheritance_reads_live_parent_selection_at_each_spawn" {
 
   let second = @posoco.ToolProvider::execute(
     tools,
-    "agent",
-    agent_call(args_object([("task", Json::string("second"))])),
+    test_ctx(agent_call(args_object([("task", Json::string("second"))]))),
   )
   assert_true(second is @posoco.ToolOutcome::Success(_))
   assert_eq(composer.specs.length(), 2)
