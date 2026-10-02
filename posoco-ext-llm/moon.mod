@@ -3,7 +3,7 @@ name = "posoco/ext-llm"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.20.2",
+  "colmugx/posoco@0.20.3",
   "posoco/devkit@0.4.1",
   "posoco/ext-oauth@0.1.0",
   "posoco/kit-chat-completions@0.1.0",

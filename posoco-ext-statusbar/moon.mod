@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-statusbar"
 version = "0.3.0"
 
 import {
-  "colmugx/posoco@0.20.2",
+  "colmugx/posoco@0.20.3",
   "posoco/devkit@0.4.1",
   "moonbitlang/async@0.22.4",
 }

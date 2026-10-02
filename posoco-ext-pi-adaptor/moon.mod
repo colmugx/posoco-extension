@@ -7,7 +7,7 @@ preferred_target = "js"
 supported_targets = "js"
 
 import {
-  "colmugx/posoco@0.20.2",
+  "colmugx/posoco@0.20.3",
   "moonbitlang/async@0.22.4",
 }
 

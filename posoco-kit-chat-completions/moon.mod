@@ -3,7 +3,7 @@ name = "posoco/kit-chat-completions"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.20.2",
+  "colmugx/posoco@0.20.3",
   "moonbitlang/x@0.5.5",
 }
 
