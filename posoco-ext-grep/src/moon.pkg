@@ -11,6 +11,7 @@ import {
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "colmugx/posoco/kernel",
 } for "wbtest"
 
 warnings = "-unused_package"

@@ -58,15 +58,15 @@ pub impl @posoco.ToolProvider for Profiles with fn list_tools(_self : Profiles) 
 /// inject; the activation knowledge lives in the hook.
 pub impl @posoco.ToolProvider for Profiles with fn execute(
   self : Profiles,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   if name != "activate_profile" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_profiles: no tool named '\{name}'",
     )
   }
-  let requested = match call.arguments {
+  let requested = match ctx.arguments {
     Json::Object(fields) =>
       match fields.get("profile") {
         Some(Json::String(id)) => Some(id)

@@ -306,11 +306,11 @@ fn require_string_arg(
 ///|
 pub impl @posoco.ToolProvider for Skills with fn execute(
   self : Skills,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   if name == SKILL_SEARCH_TOOL_NAME {
-    let query = require_string_arg(name, call.arguments, "query")
+    let query = require_string_arg(name, ctx.arguments, "query")
     if query.trim().is_empty() || query.length() > 4096 {
       raise @posoco.RuntimeError::InvocationFailed(
         name + ": 'query' must be 1..4096 chars",
@@ -319,7 +319,7 @@ pub impl @posoco.ToolProvider for Skills with fn execute(
     return self.search(query)
   }
   if name == self.config.activate_tool_name {
-    let skill_name = require_string_arg(name, call.arguments, "name")
+    let skill_name = require_string_arg(name, ctx.arguments, "name")
     if !runtime_skill_name_is_safe(skill_name) {
       raise @posoco.RuntimeError::InvocationFailed(
         name + ": 'name' exceeds runtime safety constraints",
@@ -328,13 +328,13 @@ pub impl @posoco.ToolProvider for Skills with fn execute(
     return self.activate(skill_name)
   }
   if name == self.config.read_resource_tool_name {
-    let skill_name = require_string_arg(name, call.arguments, "name")
+    let skill_name = require_string_arg(name, ctx.arguments, "name")
     if !runtime_skill_name_is_safe(skill_name) {
       raise @posoco.RuntimeError::InvocationFailed(
         name + ": 'name' exceeds runtime safety constraints",
       )
     }
-    let path = require_string_arg(name, call.arguments, "path")
+    let path = require_string_arg(name, ctx.arguments, "path")
     return self.read_resource(skill_name, path)
   }
   raise @posoco.RuntimeError::UnknownTool("posoco_ext_skills: unknown tool")

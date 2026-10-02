@@ -121,9 +121,14 @@ fn TodoList::execute_read(
 ///|
 pub impl @posoco.ToolProvider for TodoList with fn execute(
   self : TodoList,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   if name == "todo_write" {
     return self.execute_write(name, call)
   }

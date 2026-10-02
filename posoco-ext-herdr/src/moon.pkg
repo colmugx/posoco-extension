@@ -10,6 +10,7 @@ import {
 
 import {
   "moonbitlang/async",
+  "colmugx/posoco/kernel",
 } for "wbtest"
 
 // @env and @utf8 are used by herdr_native.mbt only but must stay imported

@@ -352,8 +352,7 @@ impl @posoco.ToolProvider for LogToolProvider with fn list_tools(
 ///|
 impl @posoco.ToolProvider for LogToolProvider with fn execute(
   self : LogToolProvider,
-  _name : String,
-  _call : @posoco.ToolCall,
+  _ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome {
   self.log.push("tool")
   @posoco.tk_ok_result("ok")

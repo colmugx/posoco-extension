@@ -235,8 +235,7 @@ async test "js live: hello snippet walks both stages to Success" {
   }
   let tools = MbtxTools()
   let outcome = tools.execute(
-    "mbtx",
-    js_wbtest_call("fn main {\n  println(\"mbtx js live ok\")\n}\n"),
+    test_ctx(js_wbtest_call("fn main {\n  println(\"mbtx js live ok\")\n}\n")),
   )
   let content = match outcome {
     @posoco.ToolOutcome::Success(content~, structured=None) => content
@@ -259,9 +258,10 @@ async test "js live: run timeout reports error and terminates moonrun" {
   let baseline = js_wbtest_proc_count("moonrun")
   let tools = MbtxTools(run_timeout_ms=3000)
   let outcome = tools.execute(
-    "mbtx",
-    js_wbtest_call(
-      "fn main {\n  let mut i = 0\n  while true {\n    i = i + 1\n  }\n}\n",
+    test_ctx(
+      js_wbtest_call(
+        "fn main {\n  let mut i = 0\n  while true {\n    i = i + 1\n  }\n}\n",
+      ),
     ),
   )
   let content = match outcome {

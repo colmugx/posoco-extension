@@ -171,10 +171,9 @@ pub struct TodoList {
 /// ```mbt check
 /// async test "todo_write round-trips through todo_read" {
 ///   let todos = @posoco-ext-todo.TodoList::TodoList()
-///   let write : @posoco.ToolCall = @posoco.ToolCall::{
-///     call_id: @posoco.CallId::unchecked("c1"),
-///     name: @posoco.ToolName::unchecked("todo_write"),
-///     arguments: Json::object({
+///   let write = @posoco.tk_tool_call_ctx(
+///     name="todo_write",
+///     arguments=Json::object({
 ///       "todos": Json::array([
 ///         Json::object({
 ///           "content": Json::string("Survey the code"),
@@ -186,17 +185,13 @@ pub struct TodoList {
 ///         }),
 ///       ]),
 ///     }),
-///   }
-///   match todos.execute("todo_write", write) {
+///   )
+///   match todos.execute(write) {
 ///     @posoco.ToolOutcome::Success(..) => ()
 ///     _ => fail("expected Success")
 ///   }
-///   let read : @posoco.ToolCall = @posoco.ToolCall::{
-///     call_id: @posoco.CallId::unchecked("c2"),
-///     name: @posoco.ToolName::unchecked("todo_read"),
-///     arguments: Json::object(Map::from_array([])),
-///   }
-///   match todos.execute("todo_read", read) {
+///   let read = @posoco.tk_tool_call_ctx(name="todo_read")
+///   match todos.execute(read) {
 ///     @posoco.ToolOutcome::Success(content~, ..) =>
 ///       assert_true(content.contains("Patch the parser"))
 ///     _ => fail("expected Success")

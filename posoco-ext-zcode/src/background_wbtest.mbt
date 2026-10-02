@@ -15,6 +15,18 @@ fn background_call(args? : Array[(String, Json)] = []) -> @posoco.ToolCall {
 }
 
 ///|
+/// Adapt a legacy ToolCall to the 0.21 ToolCallContext shape.
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 /// Content of the first Success tool result in a transcript, if any.
 fn background_success_tool_text(messages : Array[@posoco.Message]) -> String? {
   for message in messages {
@@ -83,8 +95,7 @@ async test "background without composition is an explicit tool error" {
   let tools = zcode_tools()
   let outcome = @posoco.ToolProvider::execute(
     tools,
-    "zcode",
-    background_call(args=[("background", Json::boolean(true))]),
+    test_ctx(background_call(args=[("background", Json::boolean(true))])),
   )
   match outcome {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>

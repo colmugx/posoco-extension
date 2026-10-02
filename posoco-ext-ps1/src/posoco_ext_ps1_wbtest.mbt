@@ -6,6 +6,18 @@
 /// runs skip, and no probe process is started either).
 
 ///|
+/// Effect context for provider calls (no-op registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 async test "list_tools_contains_powershell" {
   let tools = PowerShellTools(exe="pwsh")
   let tool_defs = tools.list_tools()
@@ -112,7 +124,7 @@ async test "empty_command_is_compact_failure" {
     name: @posoco.ToolName::unchecked("powershell"),
     arguments: Json::object(Map::from_array([("cmd", Json::string(""))])),
   }
-  let result = Ok(PowerShellTools(exe="pwsh").execute("powershell", call)) catch {
+  let result = Ok(PowerShellTools(exe="pwsh").execute(test_ctx(call))) catch {
     error => Err(error)
   }
   match result {
@@ -194,7 +206,7 @@ async test "write_output_succeeds" {
       Map::from_array([("cmd", Json::string("Write-Output 'ps1_ok'"))]),
     ),
   }
-  match tools.execute("powershell", call) {
+  match tools.execute(test_ctx(call)) {
     Success(content~, ..) => assert_eq(content.trim(), "ps1_ok")
     _ => fail("expected Success for Write-Output")
   }
@@ -212,7 +224,7 @@ async test "nonzero_exit_is_reported_error" {
     name: @posoco.ToolName::unchecked("powershell"),
     arguments: Json::object(Map::from_array([("cmd", Json::string("exit 3"))])),
   }
-  match tools.execute("powershell", call) {
+  match tools.execute(test_ctx(call)) {
     ToolReportedError(..) => ()
     _ => fail("expected ToolReportedError for exit 3")
   }
@@ -237,7 +249,7 @@ async test "anchored_session_starts_in_anchor_root" {
       Map::from_array([("cmd", Json::string("(Get-Location).Path"))]),
     ),
   }
-  match tools.execute("powershell", call) {
+  match tools.execute(test_ctx(call)) {
     Success(content~, ..) => assert_eq(content.trim(), "/")
     _ => fail("expected Success for (Get-Location).Path")
   }
@@ -264,7 +276,7 @@ async test "env_var_roundtrip_via_env_provider" {
       ]),
     ),
   }
-  match tools.execute("powershell", call) {
+  match tools.execute(test_ctx(call)) {
     Success(content~, ..) => assert_eq(content.trim(), "v1")
     _ => fail("expected Success for env var roundtrip")
   }

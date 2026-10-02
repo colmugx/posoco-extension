@@ -363,16 +363,16 @@ fn zcode_runtime_error(
 ///|
 pub impl @posoco.ToolProvider for ZcodeTools with fn execute(
   self : ZcodeTools,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   if name != "zcode" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_zcode: no tool named '\{name}'",
     )
   }
   let args = match
-    zcode_parse_args(call.arguments, default_mode=self.config.default_mode) {
+    zcode_parse_args(ctx.arguments, default_mode=self.config.default_mode) {
     Ok(args) => args
     Err(message) =>
       return @posoco.ToolOutcome::ToolReportedError(

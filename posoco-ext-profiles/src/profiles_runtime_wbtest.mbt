@@ -80,8 +80,7 @@ async test "activate_profile_unknown_id_enumerates_all_and_catalog" {
     captured_prompts=Map::from_array([]),
     attribution=Map::from_array([]),
   )
-  match
-    profiles.execute("activate_profile", activate_call("c1", profile="nope")) {
+  match profiles.execute(test_ctx(activate_call("c1", profile="nope"))) {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_eq(first_line(content), "unknown profile: nope")
       assert_true(content.contains("available: all, moonbit, web"))
@@ -98,8 +97,7 @@ async test "activate_profile_known_id_first_line_contract" {
     captured_prompts=Map::from_array([("nmem", "NMem manual.")]),
     attribution=Map::from_array([]),
   )
-  match
-    profiles.execute("activate_profile", activate_call("c1", profile="moonbit")) {
+  match profiles.execute(test_ctx(activate_call("c1", profile="moonbit"))) {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_eq(first_line(content), "activated: moonbit")
       // The manual rides the next model request, never "wait for the next
@@ -108,6 +106,18 @@ async test "activate_profile_known_id_first_line_contract" {
       assert_true(content.contains("within this turn"))
     }
     _ => fail("known id must answer Success")
+  }
+}
+
+///|
+/// Effect context for provider calls (no-op registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
   }
 }
 
@@ -124,13 +134,18 @@ async test "activate_profile_bad_arguments_report_error" {
     name: @posoco.ToolName::unchecked("activate_profile"),
     arguments: Json::object(Map::from_array([])),
   }
-  match profiles.execute("activate_profile", malformed) {
+  match profiles.execute(test_ctx(malformed)) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.contains("\"profile\""))
     _ => fail("bad arguments must answer ToolReportedError")
   }
+  let foreign : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("c1"),
+    name: @posoco.ToolName::unchecked("other_tool"),
+    arguments: Json::object(Map::from_array([])),
+  }
   let raised : Result[@posoco.ToolOutcome, Error] = Ok(
-    profiles.execute("other_tool", malformed),
+    profiles.execute(test_ctx(foreign)),
   ) catch {
     error => Err(error)
   }
@@ -543,10 +558,7 @@ async test "profile_save_writes_store_and_catalog_visible" {
   // The saved manifest is activatable through the meta tool in the same
   // session, without recomposition.
   match
-    profiles.execute(
-      "activate_profile",
-      activate_call("c9", profile="session-ext-mcp"),
-    ) {
+    profiles.execute(test_ctx(activate_call("c9", profile="session-ext-mcp"))) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_eq(first_line(content), "activated: session-ext-mcp")
     _ => fail("saved profile must be activatable immediately")

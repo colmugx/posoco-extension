@@ -76,8 +76,7 @@ async test "live: hello snippet walks both stages to Success" {
   }
   let tools = MbtxTools()
   let outcome = tools.execute(
-    "mbtx",
-    mbtx_live_call("fn main {\n  println(\"mbtx live ok\")\n}\n"),
+    test_ctx(mbtx_live_call("fn main {\n  println(\"mbtx live ok\")\n}\n")),
   )
   let content = match outcome {
     @posoco.ToolOutcome::Success(content~, structured=None) => content
@@ -101,7 +100,7 @@ async test "live: write outside the tmpdir is denied by the policy" {
   let escape_path = "/tmp/posoco-mbtx-live-escape-should-not-exist.txt"
   let source = "import {\n  \"moonbitlang/async\",\n  \"moonbitlang/async/fs\"\n}\n\nasync fn main raise {\n  @fs.write_file(\"\{escape_path}\", \"nope\", create_mode=CreateOrTruncate)\n  println(\"wrote outside\")\n}\n"
   let tools = MbtxTools()
-  let outcome = tools.execute("mbtx", mbtx_live_call(source))
+  let outcome = tools.execute(test_ctx(mbtx_live_call(source)))
   let content = mbtx_live_expect_reported_error(outcome)
   assert_true(content.contains("Sandbox policy blocked"))
   assert_true(content.contains(escape_path))
@@ -129,9 +128,10 @@ async test "live: run timeout reports error and terminates moonrun" {
   let baseline = mbtx_live_moonrun_count()
   let tools = MbtxTools(run_timeout_ms=3000)
   let outcome = tools.execute(
-    "mbtx",
-    mbtx_live_call(
-      "fn main {\n  let mut i = 0\n  while true {\n    i = i + 1\n  }\n}\n",
+    test_ctx(
+      mbtx_live_call(
+        "fn main {\n  let mut i = 0\n  while true {\n    i = i + 1\n  }\n}\n",
+      ),
     ),
   )
   let content = mbtx_live_expect_reported_error(outcome)
@@ -149,11 +149,12 @@ async test "live: run timeout reports error and terminates moonrun" {
 async test "live cmd: sh is rejected by the extension allowlist before spawn" {
   let tools = MbtxTools()
   let outcome = tools.execute(
-    "cmd",
-    cmd_call(id="tc_cmd_live2", program="sh", args=[
-      Json::string("-c"),
-      Json::string("echo pwned"),
-    ]),
+    test_ctx(
+      cmd_call(id="tc_cmd_live2", program="sh", args=[
+        Json::string("-c"),
+        Json::string("echo pwned"),
+      ]),
+    ),
   )
   let content = mbtx_live_expect_reported_error(outcome)
   assert_true(content.contains("'sh' is not on the subprocess allowlist"))

@@ -52,10 +52,9 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn list_tools(
 ///|
 pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
   self : PowerShellTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let cmd = extract_command(call.arguments)
+  let cmd = extract_command(ctx.arguments)
   if cmd == "" {
     raise ps1_empty_command_failure()
   }

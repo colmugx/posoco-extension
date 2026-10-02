@@ -23,7 +23,7 @@ pub(all) struct PowerShellTools {
   anchor : @devkit.WorkspaceAnchor?
 }
 pub fn PowerShellTools::PowerShellTools(exe? : String, anchor? : @devkit.WorkspaceAnchor?) -> Self
-pub async fn PowerShellTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn PowerShellTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn PowerShellTools::extension_id(Self) -> String
 pub fn PowerShellTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn PowerShellTools::manifest(Self) -> @port.ExtensionManifest

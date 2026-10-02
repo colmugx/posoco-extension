@@ -21,7 +21,7 @@ pub(all) struct ReadTools {
   fs : &@posoco-ext-workspace.WorkspaceFs?
 }
 pub fn ReadTools::ReadTools(freshness? : @devkit.FreshnessGuard, anchor? : @devkit.WorkspaceAnchor?, fs? : &@posoco-ext-workspace.WorkspaceFs?) -> Self
-pub async fn ReadTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn ReadTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn ReadTools::extension_id(Self) -> String
 pub fn ReadTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn ReadTools::manifest(Self) -> @port.ExtensionManifest

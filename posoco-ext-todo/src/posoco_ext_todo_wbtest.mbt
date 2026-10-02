@@ -37,11 +37,16 @@ impl @posoco.UiPort for RecordingUi with fn request(
 }
 
 ///|
-fn tk_call_with_args(name : String, arguments : Json) -> @posoco.ToolCall {
-  @posoco.ToolCall::{
+fn tk_call_with_args(
+  name : String,
+  arguments : Json,
+) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
     call_id: @posoco.CallId::unchecked("call_1"),
     name: @posoco.ToolName::unchecked(name),
     arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
   }
 }
 
@@ -61,7 +66,7 @@ fn todos_json(entries : Array[(String, String)]) -> Json {
 }
 
 ///|
-fn write_call(entries : Array[(String, String)]) -> @posoco.ToolCall {
+fn write_call(entries : Array[(String, String)]) -> @posoco.ToolCallContext {
   tk_call_with_args("todo_write", todos_json(entries))
 }
 
@@ -71,7 +76,7 @@ async fn expect_write_error(
   arguments : Json,
   needle : String,
 ) -> Unit {
-  match todo.execute("todo_write", tk_call_with_args("todo_write", arguments)) {
+  match todo.execute(tk_call_with_args("todo_write", arguments)) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.contains(needle))
     _ => fail("expected ToolReportedError")
@@ -82,10 +87,7 @@ async fn expect_write_error(
 async test "todo_write replaces the list and bumps the revision" {
   let todo = TodoList::TodoList()
   match
-    todo.execute(
-      "todo_write",
-      write_call([("first", "in_progress"), ("second", "pending")]),
-    ) {
+    todo.execute(write_call([("first", "in_progress"), ("second", "pending")])) {
     @posoco.ToolOutcome::Success(..) => ()
     _ => fail("expected Success")
   }
@@ -94,7 +96,6 @@ async test "todo_write replaces the list and bumps the revision" {
   // Full replacement: a new call swaps every entry.
   match
     todo.execute(
-      "todo_write",
       write_call([
         ("only", "pending"),
         ("another", "pending"),
@@ -115,7 +116,6 @@ async test "todo_write result text is the rendered preview with a structured sum
   let todo = TodoList::TodoList()
   match
     todo.execute(
-      "todo_write",
       write_call([
         ("survey", "completed"),
         ("patch", "in_progress"),
@@ -211,7 +211,6 @@ async test "todo_write enforces the list size limit" {
   }
   match
     todo.execute(
-      "todo_write",
       tk_call_with_args(
         "todo_write",
         Json::object({ "todos": Json::array(exact) }),
@@ -226,11 +225,7 @@ async test "todo_write enforces the list size limit" {
 async test "todo_write allows at most one in_progress" {
   let todo = TodoList::TodoList()
   // Exactly one in_progress is accepted.
-  match
-    todo.execute(
-      "todo_write",
-      write_call([("a", "in_progress"), ("b", "pending")]),
-    ) {
+  match todo.execute(write_call([("a", "in_progress"), ("b", "pending")])) {
     @posoco.ToolOutcome::Success(..) => ()
     _ => fail("expected Success for a single in_progress")
   }
@@ -306,8 +301,7 @@ async test "todo_write rejects malformed arguments" {
 ///|
 async test "todo_read reports the empty list" {
   let todo = TodoList::TodoList()
-  match
-    todo.execute("todo_read", tk_call_with_args("todo_read", Json::null())) {
+  match todo.execute(tk_call_with_args("todo_read", Json::null())) {
     @posoco.ToolOutcome::Success(content~, structured~) => {
       assert_true(content.contains("Todo list is empty"))
       assert_true(content.contains("todo_write"))
@@ -335,12 +329,10 @@ async test "todo_read returns the current list" {
   let todo = TodoList::TodoList()
   ignore(
     todo.execute(
-      "todo_write",
       write_call([("survey", "completed"), ("patch", "in_progress")]),
     ),
   )
-  match
-    todo.execute("todo_read", tk_call_with_args("todo_read", Json::null())) {
+  match todo.execute(tk_call_with_args("todo_read", Json::null())) {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_true(content.contains("revision 1"))
       assert_true(content.contains("[x] 1. survey"))
@@ -353,9 +345,8 @@ async test "todo_read returns the current list" {
 ///|
 async test "an empty todos array clears the list" {
   let todo = TodoList::TodoList()
-  ignore(todo.execute("todo_write", write_call([("a", "pending")])))
-  match
-    todo.execute("todo_write", tk_call_with_args("todo_write", todos_json([]))) {
+  ignore(todo.execute(write_call([("a", "pending")])))
+  match todo.execute(tk_call_with_args("todo_write", todos_json([]))) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("no todos"))
     _ => fail("expected Success")
@@ -369,12 +360,7 @@ async test "every successful write pushes one Widget render intent" {
   let ui = RecordingUi()
   let todo = TodoList::TodoList()
   todo.ui = ui as &@posoco.UiPort
-  ignore(
-    todo.execute(
-      "todo_write",
-      write_call([("a", "in_progress"), ("b", "pending")]),
-    ),
-  )
+  ignore(todo.execute(write_call([("a", "in_progress"), ("b", "pending")])))
   assert_eq(ui.renders.length(), 1)
   let render = ui.renders[0]
   assert_eq(render.slot, @posoco.UiSlot::Widget)
@@ -390,7 +376,7 @@ async test "every successful write pushes one Widget render intent" {
     _ => fail("expected a Lines body")
   }
   // Same key replaces: the second write refreshes the single region.
-  ignore(todo.execute("todo_write", write_call([("c", "pending")])))
+  ignore(todo.execute(write_call([("c", "pending")])))
   assert_eq(ui.renders.length(), 2)
   match ui.renders[1].body {
     @posoco.UiBody::Lines(lines) => assert_eq(lines.length(), 1)
@@ -403,7 +389,7 @@ async test "rejected writes render nothing" {
   let ui = RecordingUi()
   let todo = TodoList::TodoList()
   todo.ui = ui as &@posoco.UiPort
-  ignore(todo.execute("todo_write", write_call([("good", "pending")])))
+  ignore(todo.execute(write_call([("good", "pending")])))
   assert_eq(ui.renders.length(), 1)
   expect_write_error(
     todo,
@@ -417,7 +403,7 @@ async test "rejected writes render nothing" {
 async test "without a composed UI writes still succeed" {
   // The default is NoopUiPort: pre-compose and headless hosts are no-ops.
   let todo = TodoList::TodoList()
-  match todo.execute("todo_write", write_call([("a", "pending")])) {
+  match todo.execute(write_call([("a", "pending")])) {
     @posoco.ToolOutcome::Success(..) => ()
     _ => fail("expected Success without a UI")
   }
@@ -436,7 +422,7 @@ async test "on_compose stores the composed UI and writes render through it" {
       ui=ui as &@posoco.UiPort,
     ),
   )
-  ignore(todo.execute("todo_write", write_call([("a", "pending")])))
+  ignore(todo.execute(write_call([("a", "pending")])))
   assert_eq(ui.renders.length(), 1)
   assert_eq(ui.renders[0].key, "todo")
 }
@@ -451,7 +437,6 @@ async test "/todo command renders the list without touching state" {
   }
   ignore(
     todo.execute(
-      "todo_write",
       write_call([("survey", "completed"), ("patch", "in_progress")]),
     ),
   )

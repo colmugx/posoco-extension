@@ -1,4 +1,18 @@
 ///|
+/// Build the effect-scoped `ToolCallContext` the 0.21 `execute` signature
+/// hands providers, wrapping a synthetic `ToolCall` (effect id 1, no-op
+/// cancellation registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 fn grep_call(pattern : String, path : String) -> @posoco.ToolCall {
   @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("grep-test"),
@@ -44,7 +58,7 @@ async test "grep_required_pattern_distinguishes_wrong_type_from_missing" {
   ]
   for case in cases {
     let (call, expected, is_missing) = case
-    let result = Ok(GrepTools::GrepTools().execute("grep", call)) catch {
+    let result = Ok(GrepTools::GrepTools().execute(test_ctx(call))) catch {
       error => Err(error)
     }
     match result {
@@ -62,8 +76,7 @@ async test "grep_required_pattern_distinguishes_wrong_type_from_missing" {
 async test "grep_empty_pattern_is_rejected" {
   let result = Ok(
     GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_fields([("pattern", Json::string(""))]),
+      test_ctx(grep_call_fields([("pattern", Json::string(""))])),
     ),
   ) catch {
     error => Err(error)
@@ -79,13 +92,14 @@ async test "grep_empty_pattern_is_rejected" {
 async test "grep_wrong_type_optional_path_is_loud" {
   let result = Ok(
     GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_with_arguments(
-        Json::object(
-          Map::from_array([
-            ("pattern", Json::string("needle")),
-            ("path", Json::number(1.0)),
-          ]),
+      test_ctx(
+        grep_call_with_arguments(
+          Json::object(
+            Map::from_array([
+              ("pattern", Json::string("needle")),
+              ("path", Json::number(1.0)),
+            ]),
+          ),
         ),
       ),
     ),
@@ -103,13 +117,14 @@ async test "grep_wrong_type_optional_path_is_loud" {
 async test "grep_wrong_type_optional_glob_is_loud" {
   let result = Ok(
     GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_with_arguments(
-        Json::object(
-          Map::from_array([
-            ("pattern", Json::string("needle")),
-            ("glob", Json::boolean(true)),
-          ]),
+      test_ctx(
+        grep_call_with_arguments(
+          Json::object(
+            Map::from_array([
+              ("pattern", Json::string("needle")),
+              ("glob", Json::boolean(true)),
+            ]),
+          ),
         ),
       ),
     ),
@@ -144,7 +159,7 @@ async test "grep_unknown_output_mode_and_bad_max_matches_are_loud" {
     ]),
   ]
   for call in cases {
-    let result = Ok(GrepTools::GrepTools().execute("grep", call)) catch {
+    let result = Ok(GrepTools::GrepTools().execute(test_ctx(call))) catch {
       error => Err(error)
     }
     match result {
@@ -167,8 +182,7 @@ async test "grep_zero_matches_is_success" {
       create_mode=CreateNew,
     )
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call("missing", dir),
+      test_ctx(grep_call("missing", dir)),
     )
     match result {
       Success(content~, structured~) => {
@@ -201,8 +215,7 @@ async test "grep_multi_match_groups_by_file" {
       create_mode=CreateNew,
     )
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call("needle", dir),
+      test_ctx(grep_call("needle", dir)),
     )
     match result {
       Success(content~, structured~) => {
@@ -234,12 +247,13 @@ async test "grep_max_matches_caps_output_with_footer" {
     }
     @fs.write_file("\{dir}/hits.txt", "n1\nn2\nn3\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_fields([
-        ("pattern", Json::string("n")),
-        ("path", Json::string(dir)),
-        ("max_matches", Json::number(2.0)),
-      ]),
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("n")),
+          ("path", Json::string(dir)),
+          ("max_matches", Json::number(2.0)),
+        ]),
+      ),
     )
     match result {
       Success(content~, structured~) => {
@@ -270,12 +284,13 @@ async test "grep_files_with_matches_mode_lists_paths_only" {
     @fs.write_file("\{dir}/b.txt", "x needle y\n", create_mode=CreateNew)
     @fs.write_file("\{dir}/c.txt", "nothing\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_fields([
-        ("pattern", Json::string("needle")),
-        ("path", Json::string(dir)),
-        ("output_mode", Json::string("files_with_matches")),
-      ]),
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("needle")),
+          ("path", Json::string(dir)),
+          ("output_mode", Json::string("files_with_matches")),
+        ]),
+      ),
     )
     match result {
       Success(content~, structured~) => {
@@ -307,12 +322,13 @@ async test "grep_count_mode_reports_matches_per_file" {
     @fs.write_file("\{dir}/a.txt", "needle\nneedle\n", create_mode=CreateNew)
     @fs.write_file("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_fields([
-        ("pattern", Json::string("needle")),
-        ("path", Json::string(dir)),
-        ("output_mode", Json::string("count")),
-      ]),
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("needle")),
+          ("path", Json::string(dir)),
+          ("output_mode", Json::string("count")),
+        ]),
+      ),
     )
     match result {
       Success(content~, structured~) => {
@@ -339,18 +355,21 @@ async test "grep_case_insensitive_flag_broadens_matching" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     @fs.write_file("\{dir}/mixed.txt", "NEEDLE here\n", create_mode=CreateNew)
-    let plain = GrepTools::GrepTools().execute("grep", grep_call("needle", dir))
+    let plain = GrepTools::GrepTools().execute(
+      test_ctx(grep_call("needle", dir)),
+    )
     match plain {
       Success(content~, ..) => assert_eq(content, "(no matches)")
       other => fail("expected case-sensitive miss, got " + other.to_string())
     }
     let insensitive = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_fields([
-        ("pattern", Json::string("needle")),
-        ("path", Json::string(dir)),
-        ("case_insensitive", Json::boolean(true)),
-      ]),
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("needle")),
+          ("path", Json::string(dir)),
+          ("case_insensitive", Json::boolean(true)),
+        ]),
+      ),
     )
     match insensitive {
       Success(content~, ..) => assert_true(content.contains("1|NEEDLE here"))
@@ -364,7 +383,7 @@ async test "grep_missing_base_is_loud" {
   let dir = @fs.tmpdir(prefix="posoco-grep-missing")
   @fs.rmdir(dir, recursive=true)
   let result = Ok(
-    GrepTools::GrepTools().execute("grep", grep_call("anything", dir)),
+    GrepTools::GrepTools().execute(test_ctx(grep_call("anything", dir))),
   ) catch {
     e => Err(e)
   }
@@ -394,8 +413,7 @@ async test "grep_skips_binary_and_unreadable_files_without_failing" {
     )
     @fs.write_file("\{dir}/hit.txt", "needle\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call("needle", dir),
+      test_ctx(grep_call("needle", dir)),
     )
     match result {
       Success(content~, structured~) => {
@@ -440,8 +458,7 @@ async test "grep_prunes_ignores_and_hidden_entries" {
       create_mode=CreateNew,
     )
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call("needle", dir),
+      test_ctx(grep_call("needle", dir)),
     )
     match result {
       Success(content~, structured~) => {
@@ -470,12 +487,13 @@ async test "grep_glob_filter_narrows_searched_files" {
     @fs.write_file("\{dir}/a.mbt", "needle\n", create_mode=CreateNew)
     @fs.write_file("\{dir}/b.txt", "needle\n", create_mode=CreateNew)
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call_fields([
-        ("pattern", Json::string("needle")),
-        ("path", Json::string(dir)),
-        ("glob", Json::string("*.mbt")),
-      ]),
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("needle")),
+          ("path", Json::string(dir)),
+          ("glob", Json::string("*.mbt")),
+        ]),
+      ),
     )
     match result {
       Success(content~, ..) => {
@@ -501,8 +519,7 @@ async test "grep_long_line_is_truncated_with_marker" {
       create_mode=CreateNew,
     )
     let result = GrepTools::GrepTools().execute(
-      "grep",
-      grep_call("needle", dir),
+      test_ctx(grep_call("needle", dir)),
     )
     match result {
       Success(content~, ..) => {
@@ -536,7 +553,7 @@ async test "grep_anchored_base_resolves_and_rebases_paths" {
       name: @posoco.ToolName::unchecked("grep"),
       arguments: Json::object({ "pattern": Json::string("needle") }),
     }
-    match tools.execute("grep", call) {
+    match tools.execute(test_ctx(call)) {
       @posoco.ToolOutcome::Success(content~, ..) => {
         assert_true(content.contains("a.txt"))
         assert_true(content.contains("1|needle here"))

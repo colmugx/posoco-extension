@@ -19,7 +19,7 @@ pub(all) struct WriteTools {
   anchor : @devkit.WorkspaceAnchor?
 }
 pub fn WriteTools::WriteTools(freshness? : @devkit.FreshnessGuard, anchor? : @devkit.WorkspaceAnchor?) -> Self
-pub async fn WriteTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn WriteTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn WriteTools::extension_id(Self) -> String
 pub fn WriteTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn WriteTools::manifest(Self) -> @port.ExtensionManifest

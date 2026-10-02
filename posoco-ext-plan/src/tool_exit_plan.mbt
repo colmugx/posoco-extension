@@ -216,9 +216,14 @@ async fn PlanMode::execute_exit(
 ///|
 pub impl @posoco.ToolProvider for PlanMode with fn execute(
   self,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   if name == self.config.exit_tool_name {
     return self.execute_exit(name, call)
   }

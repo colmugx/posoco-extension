@@ -29,7 +29,7 @@ pub struct TodoList {
 }
 pub fn TodoList::TodoList() -> Self
 pub fn TodoList::commands(Self) -> Array[@port.CommandDef]
-pub async fn TodoList::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn TodoList::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn TodoList::extension_id(Self) -> String
 pub async fn TodoList::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn TodoList::items(Self) -> Array[TodoItem]

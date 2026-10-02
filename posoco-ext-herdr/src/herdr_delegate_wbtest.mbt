@@ -51,6 +51,18 @@ fn delegate_call(fields : Array[(String, Json)]) -> @posoco.ToolCall {
 }
 
 ///|
+/// Adapt a legacy ToolCall to the 0.21 ToolCallContext shape.
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 fn delegate_task_call(task : String) -> @posoco.ToolCall {
   delegate_call([("task", Json::string(task))])
 }
@@ -635,9 +647,14 @@ async test "delegate validates task and permission before any cli call" {
 ///|
 async test "execute raises UnknownTool for other names" {
   let delegate = test_delegate()
-  let result = Ok(delegate.execute("herdr_report", delegate_task_call("x"))) catch {
-    e => Err(e)
+  // The name now rides the call itself, so the unknown name goes in the call.
+  let call = delegate_task_call("x")
+  let stranger : @posoco.ToolCall = {
+    call_id: call.call_id,
+    name: @posoco.ToolName::unchecked("herdr_report"),
+    arguments: call.arguments,
   }
+  let result = Ok(delegate.execute(test_ctx(stranger))) catch { e => Err(e) }
   match result {
     Err(@posoco.RuntimeError::UnknownTool(message)) =>
       assert_true(message.contains("unknown tool"))

@@ -106,7 +106,7 @@ pub(all) struct PiAdaptor {
   mut hidden_tools : Map[String, Bool]
 }
 pub fn PiAdaptor::PiAdaptor() -> Self
-pub async fn PiAdaptor::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn PiAdaptor::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn PiAdaptor::extension_id(Self) -> String
 pub fn PiAdaptor::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn PiAdaptor::manifest(Self) -> @port.ExtensionManifest
@@ -172,7 +172,7 @@ pub fn PiRuntime::PiRuntime(adaptor~ : PiAdaptor, fallback~ : &@runtime.Runtime)
 pub fn PiRuntime::attach_control(Self, @posoco.AgentControl) -> Unit
 pub async fn PiRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
 pub async fn PiRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
-pub async fn PiRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
+pub async fn PiRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
 pub async fn PiRuntime::execute_tool(Self, @runtime.EffectContext) -> @kernel.ToolOutcome
 pub impl @runtime.Runtime for PiRuntime
 

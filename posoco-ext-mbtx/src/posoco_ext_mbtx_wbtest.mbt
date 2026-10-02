@@ -304,7 +304,7 @@ async test "decode errors surface before the execution pipeline" {
       ("target", Json::string("native")),
     ]),
   }
-  let result = Ok(tools.execute("mbtx", call)) catch { e => Err(e) }
+  let result = Ok(tools.execute(test_ctx(call))) catch { e => Err(e) }
   match result {
     Err(@posoco.RuntimeError::UnknownTool(msg)) =>
       assert_true(msg.contains("native"))

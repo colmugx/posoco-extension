@@ -3,6 +3,18 @@
 /// (Execute-loop behavior is covered by gate_loop_wbtest / composition_wbtest.)
 
 ///|
+/// Effect context for a plan-tool call (no-op registrar).
+fn test_ctx(name : String, arguments : Json) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: @posoco.CallId::unchecked("c1"),
+    name: @posoco.ToolName::unchecked(name),
+    arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 /// A plan-tool ToolCall carrying the given arguments.
 fn plan_call(arguments : Json) -> @posoco.ToolCall {
   @posoco.ToolCall::{
@@ -126,7 +138,7 @@ async test "goal_runner_plan_accessor" {
   )
 
   match
-    @posoco.ToolProvider::execute(goal, "goal_update_plan", plan_call(args)) {
+    @posoco.ToolProvider::execute(goal, test_ctx("goal_update_plan", args)) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("0/2"))
     _ => fail("expected Success")
@@ -141,9 +153,9 @@ async test "goal_runner_plan_accessor" {
 ///|
 async test "tool_rejects_bad_args" {
   let goal = goal_extension(goal_condition="bad args")
-  let call = plan_call(Json::string("not an object"))
+  let ctx = test_ctx("goal_update_plan", Json::string("not an object"))
 
-  match @posoco.ToolProvider::execute(goal, "goal_update_plan", call) {
+  match @posoco.ToolProvider::execute(goal, ctx) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.length() > 0)
     _ => fail("expected ToolReportedError")
@@ -153,13 +165,9 @@ async test "tool_rejects_bad_args" {
 ///|
 async test "tool_unknown_name" {
   let goal = goal_extension(goal_condition="unknown")
-  let call = @posoco.ToolCall::{
-    call_id: @posoco.CallId::unchecked("c1"),
-    name: @posoco.ToolName::unchecked("other_tool"),
-    arguments: Json::null(),
-  }
+  let ctx = test_ctx("other_tool", Json::null())
 
-  match @posoco.ToolProvider::execute(goal, "other_tool", call) {
+  match @posoco.ToolProvider::execute(goal, ctx) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_eq(content, "unknown tool")
     _ => fail("expected ToolReportedError")

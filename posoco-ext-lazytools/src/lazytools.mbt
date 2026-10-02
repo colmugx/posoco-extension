@@ -201,12 +201,17 @@ pub impl @posoco.ToolProvider for LazyTools with fn list_tools(
 /// maps it exactly as if the child had been called directly.
 pub impl @posoco.ToolProvider for LazyTools with fn execute(
   self : LazyTools,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   match name {
     "tool_list" => self.execute_list(call)
-    "tool_execute" => self.execute_deferred(call)
+    "tool_execute" => self.execute_deferred(ctx, call)
     _ =>
       raise @posoco.RuntimeError::UnknownTool(
         "lazytools: no tool named '\{name}'",

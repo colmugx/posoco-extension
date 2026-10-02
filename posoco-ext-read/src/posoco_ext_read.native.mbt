@@ -160,9 +160,13 @@ pub extend ReadTools with @posoco.ToolProvider::{list_tools}
 /// @fs kept for the freshness stat) when `fs` was provided.
 pub impl @posoco.ToolProvider for ReadTools with fn execute(
   self : ReadTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   let io : &FsIo = match self.fs {
     Some(fs) => DelegatedFsIo::{ fs, direct: NativeFsIo::{ }, } as &FsIo
     None => NativeFsIo::{ } as &FsIo

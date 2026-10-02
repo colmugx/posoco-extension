@@ -2,6 +2,21 @@
 /// ——— Test helpers ———
 
 ///|
+/// Build the effect-scoped `ToolCallContext` the 0.21 `execute` signature
+/// hands providers, wrapping a synthetic `ToolCall` (effect id 1, no-op
+/// cancellation registrar).
+#cfg(target="native")
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 #cfg(target="native")
 fn read_call(path : String) -> @posoco.ToolCall {
   {
@@ -19,7 +34,7 @@ async test "read_wrong_type_path_is_not_reported_as_missing" {
     name: @posoco.ToolName::unchecked("read"),
     arguments: Json::object(Map::from_array([("path", Json::number(1.0))])),
   }
-  let outcome = Ok(ReadTools::ReadTools().execute("read", call)) catch {
+  let outcome = Ok(ReadTools::ReadTools().execute(test_ctx(call))) catch {
     error => Err(error)
   }
   match outcome {
@@ -53,7 +68,7 @@ async test "read_directory_is_loud_without_os_error" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
-    let outcome = Ok(ReadTools::ReadTools().execute("read", read_call(dir))) catch {
+    let outcome = Ok(ReadTools::ReadTools().execute(test_ctx(read_call(dir)))) catch {
       error => Err(error)
     }
     match outcome {
@@ -77,7 +92,7 @@ async test "read_invalid_utf8_names_binary_file" {
     }
     let path = dir + "/invalid.bin"
     @fs.write_file(path, b"\xff", create_mode=CreateNew)
-    let outcome = Ok(ReadTools::ReadTools().execute("read", read_call(path))) catch {
+    let outcome = Ok(ReadTools::ReadTools().execute(test_ctx(read_call(path)))) catch {
       error => Err(error)
     }
     match outcome {
@@ -131,7 +146,7 @@ async fn run_read(
   tools : ReadTools,
   call : @posoco.ToolCall,
 ) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute("read", call)) catch {
+  Ok(tools.execute(test_ctx(call))) catch {
     error => Err(error)
   }
 }

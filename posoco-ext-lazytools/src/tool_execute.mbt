@@ -5,6 +5,7 @@
 /// called directly.
 async fn LazyTools::execute_deferred(
   self : LazyTools,
+  ctx : @posoco.ToolCallContext,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let args = arguments_object("tool_execute", call)
@@ -24,7 +25,16 @@ async fn LazyTools::execute_deferred(
         name: @posoco.ToolName::unchecked(tool),
         arguments: Json::object(inner_args),
       }
-      provider.execute(tool, inner)
+      // Same effect identity and registrar ride along, so an interruptible
+      // child still registers its cancellable facet for THIS effect.
+      let inner_ctx : @posoco.ToolCallContext = {
+        effect_id: ctx.effect_id,
+        call_id: inner.call_id,
+        name: inner.name,
+        arguments: inner.arguments,
+        register_cancel: ctx.register_cancel,
+      }
+      provider.execute(inner_ctx)
     }
   }
 }

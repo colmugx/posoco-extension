@@ -2,6 +2,20 @@
 /// Test helpers.
 
 ///|
+/// Build the effect-scoped `ToolCallContext` the 0.21 `execute` signature
+/// hands providers, wrapping a synthetic `ToolCall` (effect id 1, no-op
+/// cancellation registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 #cfg(target="native")
 fn write_call(path : String, content : String) -> @posoco.ToolCall {
   {
@@ -48,7 +62,7 @@ async test "write_required_fields_distinguish_wrong_type_from_missing" {
   ]
   for pair in cases {
     let (call, field) = pair
-    let outcome = Ok(WriteTools::WriteTools().execute("write", call)) catch {
+    let outcome = Ok(WriteTools::WriteTools().execute(test_ctx(call))) catch {
       error => Err(error)
     }
     match outcome {
@@ -72,7 +86,7 @@ async test "write_creates_missing_parents" {
     }
     let path = dir + "/missing-parent/output.txt"
     let outcome = Ok(
-      WriteTools::WriteTools().execute("write", write_call(path, "content")),
+      WriteTools::WriteTools().execute(test_ctx(write_call(path, "content"))),
     ) catch {
       error => Err(error)
     }
@@ -97,7 +111,7 @@ async fn run_write(
   tools : WriteTools,
   call : @posoco.ToolCall,
 ) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute("write", call)) catch {
+  Ok(tools.execute(test_ctx(call))) catch {
     error => Err(error)
   }
 }

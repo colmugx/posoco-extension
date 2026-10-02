@@ -69,11 +69,23 @@ fn wf_call(url : String, offset? : Int) -> @posoco.ToolCall {
 }
 
 ///|
+/// Effect context for provider calls (no-op registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 async fn try_wf(
   tools : WebFetchTools,
   call : @posoco.ToolCall,
 ) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute("webfetch", call)) catch {
+  Ok(tools.execute(test_ctx(call))) catch {
     error => Err(error)
   }
 }

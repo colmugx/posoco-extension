@@ -11,6 +11,10 @@ import {
   "moonbitlang/core/json",
 }
 
+import {
+  "colmugx/posoco/kernel",
+} for "wbtest"
+
 supported_targets = "+native +js"
 
 // @fs/@io/@process serve only task.native.mbt and @js_async only

@@ -35,10 +35,13 @@ pub impl @posoco.ToolProvider for ObsidianTools with fn list_tools(
 ///|
 pub impl @posoco.ToolProvider for ObsidianTools with fn execute(
   self : ObsidianTools,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  self.execute_impl(NativeCliIo::{ }, name, call)
+  self.execute_impl(NativeCliIo::{ }, ctx.name.to_string(), {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  })
 }
 
 ///|

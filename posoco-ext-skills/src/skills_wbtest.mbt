@@ -1158,7 +1158,7 @@ async test "tool provider: execute routes activation and resource reads through 
     name: @posoco.ToolName::unchecked("activate_skill"),
     arguments: Json::object({ "name": Json::string("demo") }),
   }
-  match skills.execute("activate_skill", activate_call) {
+  match skills.execute(test_ctx(activate_call)) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("Use guide.md when needed."))
     _ => fail("public activation tool route should succeed")
@@ -1171,9 +1171,21 @@ async test "tool provider: execute routes activation and resource reads through 
       "path": Json::string("guide.md"),
     }),
   }
-  match skills.execute("read_skill_resource", read_call) {
+  match skills.execute(test_ctx(read_call)) {
     @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "Guide")
     _ => fail("public resource tool route should succeed")
+  }
+}
+
+///|
+/// Effect context for provider calls (no-op registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
   }
 }
 
@@ -1194,7 +1206,7 @@ async test "tool provider: malformed arguments and unknown routes raise typed ru
   }
   let mut bad_arg_rejected = false
   ignore(
-    skills.execute("activate_skill", bad_call) catch {
+    skills.execute(test_ctx(bad_call)) catch {
       @posoco.RuntimeError::InvocationFailed(message) => {
         assert_true(message.contains("must be a string"))
         bad_arg_rejected = true
@@ -1214,7 +1226,7 @@ async test "tool provider: malformed arguments and unknown routes raise typed ru
   }
   let mut unknown_rejected = false
   ignore(
-    skills.execute("no_such_tool", unknown_call) catch {
+    skills.execute(test_ctx(unknown_call)) catch {
       @posoco.RuntimeError::UnknownTool(message) => {
         assert_true(message.contains("unknown tool"))
         unknown_rejected = true
@@ -1641,7 +1653,7 @@ async test "tool provider rejects pathological name arguments even when schema v
   }
   let mut rejected = false
   ignore(
-    skills.execute("activate_skill", call) catch {
+    skills.execute(test_ctx(call)) catch {
       @posoco.RuntimeError::InvocationFailed(message) => {
         assert_true(message.contains("runtime safety"))
         rejected = true
@@ -2084,12 +2096,12 @@ async test "tool provider: unknown routes do not reflect attacker-controlled rou
   let route = repeat_text("x", 5000) + "\u{202E}hidden"
   let call = @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("unknown-large"),
-    name: @posoco.ToolName::unchecked("ignored"),
+    name: @posoco.ToolName::unchecked(route),
     arguments: Json::empty_object(),
   }
   let mut rejected = false
   ignore(
-    skills.execute(route, call) catch {
+    skills.execute(test_ctx(call)) catch {
       @posoco.RuntimeError::UnknownTool(message) => {
         assert_eq(message, "posoco_ext_skills: unknown tool")
         assert_true(message.length() < 100)
@@ -2192,7 +2204,7 @@ async test "skill_search keeps lexical matches deterministic before decision fal
     name: @posoco.ToolName::unchecked("skill_search"),
     arguments: Json::object({ "query": Json::string("pdf documents") }),
   }
-  match skills.execute("skill_search", call) {
+  match skills.execute(test_ctx(call)) {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_true(content.contains("pdf"))
       assert_false(content.contains("slides"))
@@ -2244,7 +2256,7 @@ async test "skill_search uses decision port only after lexical miss" {
     name: @posoco.ToolName::unchecked("skill_search"),
     arguments: Json::object({ "query": Json::string("pitch deck") }),
   }
-  match skills.execute("skill_search", call) {
+  match skills.execute(test_ctx(call)) {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_true(content.contains("slides"))
       assert_false(content.contains("pdf"))
@@ -2296,7 +2308,7 @@ async test "skill_search never auto-activates and fails closed on low relevance"
     name: @posoco.ToolName::unchecked("skill_search"),
     arguments: Json::object({ "query": Json::string("unrelated capability") }),
   }
-  match skills.execute("skill_search", call) {
+  match skills.execute(test_ctx(call)) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_eq(content, "(no skills)")
     _ => fail("expected conservative no-match result")

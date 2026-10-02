@@ -483,9 +483,9 @@ async fn NowledgeMem::dispatch_tool(
 /// RuntimeFailure so the run continues.
 pub impl @posoco.ToolProvider for NowledgeMem with fn execute(
   self : NowledgeMem,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   match name {
     "nmem_status"
     | "read_context_bundle"
@@ -498,7 +498,7 @@ pub impl @posoco.ToolProvider for NowledgeMem with fn execute(
         "\{NMEM_EXTENSION_ID}: unknown tool '\{name}'",
       )
   }
-  self.dispatch_tool(name, call.arguments) catch {
+  self.dispatch_tool(name, ctx.arguments) catch {
     err =>
       @posoco.ToolOutcome::RuntimeFailure(
         error_category=NMEM_EXTENSION_ID,

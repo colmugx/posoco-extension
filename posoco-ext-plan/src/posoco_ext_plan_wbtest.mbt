@@ -18,6 +18,35 @@ fn tk_call_with_args(name : String, arguments : Json) -> @posoco.ToolCall {
 }
 
 ///|
+
+///|
+/// Effect context for provider calls (no-op registrar).
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
+fn tk_ctx_with_args(name : String, arguments : Json) -> @posoco.ToolCallContext {
+  test_ctx(tk_call_with_args(name, arguments))
+}
+
+///|
+fn tk_ctx(name : String) -> @posoco.ToolCallContext {
+  test_ctx(tk_call(name))
+}
+
+///|
+fn exit_ctx(plan_text : String) -> @posoco.ToolCallContext {
+  test_ctx(exit_call(plan_text))
+}
+
+///|
 fn bash_call(cmd : String) -> @posoco.ToolCall {
   tk_call_with_args("bash", Json::object({ "cmd": Json::string(cmd) }))
 }
@@ -327,8 +356,7 @@ async test "exit_plan_mode tool records the plan" {
   let plan = tk_plan()
   plan.start()
   let outcome = plan.execute(
-    "exit_plan_mode",
-    tk_call_with_args(
+    tk_ctx_with_args(
       "exit_plan_mode",
       Json::object({
         "name": Json::string("read then edit"),
@@ -365,8 +393,7 @@ async test "exit_plan_mode tool records the plan" {
 async test "exit_plan_mode tool outside plan mode reports an error" {
   let plan = tk_plan()
   let outcome = plan.execute(
-    "exit_plan_mode",
-    tk_call_with_args(
+    tk_ctx_with_args(
       "exit_plan_mode",
       Json::object({
         "name": Json::string("too early"),
@@ -386,7 +413,7 @@ async test "exit_plan_mode tool outside plan mode reports an error" {
 async test "exit_plan_mode tool validates arguments" {
   let plan = tk_plan()
   plan.start()
-  try plan.execute("exit_plan_mode", tk_call("exit_plan_mode")) catch {
+  try plan.execute(tk_ctx("exit_plan_mode")) catch {
     @posoco.RuntimeError::InvocationFailed(message) =>
       assert_true(message.contains("arguments must be a JSON object"))
     other => fail("expected InvocationFailed, got \{other}")
@@ -394,7 +421,7 @@ async test "exit_plan_mode tool validates arguments" {
     _ => fail("expected InvocationFailed for non-object arguments")
   }
   // Unknown tool name raises UnknownTool.
-  try plan.execute("other_tool", tk_call("other_tool")) catch {
+  try plan.execute(tk_ctx("other_tool")) catch {
     @posoco.RuntimeError::UnknownTool(message) =>
       assert_true(message.contains("unknown tool"))
     other => fail("expected UnknownTool, got \{other}")
@@ -500,7 +527,7 @@ async test "enter_plan_mode tool enters without approval" {
   assert_true(
     tools[1].description.contains("Markdown files anywhere in the workspace"),
   )
-  let outcome = plan.execute("enter_plan_mode", tk_call("enter_plan_mode"))
+  let outcome = plan.execute(tk_ctx("enter_plan_mode"))
   match outcome {
     @posoco.ToolOutcome::Success(content~, ..) => {
       assert_true(content.contains("Plan mode is now active"))
@@ -510,14 +537,14 @@ async test "enter_plan_mode tool enters without approval" {
   }
   assert_eq(plan.status(), PlanStatus::Planning)
   // Idempotent while planning.
-  match plan.execute("enter_plan_mode", tk_call("enter_plan_mode")) {
+  match plan.execute(tk_ctx("enter_plan_mode")) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("Already in plan mode"))
     other => fail("expected Success, got \{other}")
   }
   // Blocked once a plan is awaiting approval.
   assert_true(plan.submit_plan("test plan", "plan"))
-  match plan.execute("enter_plan_mode", tk_call("enter_plan_mode")) {
+  match plan.execute(tk_ctx("enter_plan_mode")) {
     @posoco.ToolOutcome::ToolReportedError(..) => ()
     other => fail("expected ToolReportedError, got \{other}")
   }
@@ -526,7 +553,7 @@ async test "enter_plan_mode tool enters without approval" {
 ///|
 async test "enter_plan_mode tool is rejected when model entry is disabled" {
   let plan = tk_plan()
-  try plan.execute("enter_plan_mode", tk_call("enter_plan_mode")) catch {
+  try plan.execute(tk_ctx("enter_plan_mode")) catch {
     @posoco.RuntimeError::UnknownTool(message) =>
       assert_true(message.contains("unknown tool"))
     other => fail("expected UnknownTool, got \{other}")
@@ -673,7 +700,7 @@ async test "review source accepts the plan in one action" {
   }
   assert_eq(review.asked, 0)
   // The review runs inside the execution: accepted + plan mode off.
-  match plan.execute("exit_plan_mode", call) {
+  match plan.execute(test_ctx(call)) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("accepted"))
     other => fail("expected Success, got \{other}")
@@ -688,7 +715,7 @@ async test "review request carries the plan name and full text" {
   let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
   let call = exit_call("1. do it\n2. verify it")
-  match plan.execute("exit_plan_mode", call) {
+  match plan.execute(test_ctx(call)) {
     @posoco.ToolOutcome::Success(..) => ()
     other => fail("expected Success, got \{other}")
   }
@@ -710,7 +737,7 @@ async test "review revise keeps planning and feeds the reason back" {
     @posoco.ToolDecision::Approve(..) => ()
     other => fail("expected Approve, got \{other}")
   }
-  match plan.execute("exit_plan_mode", call) {
+  match plan.execute(test_ctx(call)) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.contains("add tests"))
     other => fail("expected ToolReportedError, got \{other}")
@@ -730,7 +757,7 @@ async test "review is only consulted while planning" {
     other => fail("expected Approve, got \{other}")
   }
   assert_eq(review.asked, 0)
-  match plan.execute("exit_plan_mode", call) {
+  match plan.execute(test_ctx(call)) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.contains("not in plan mode"))
     other => fail("expected ToolReportedError, got \{other}")
@@ -750,7 +777,7 @@ async test "without a review source the exit tool waits for the user" {
     @posoco.ToolDecision::Approve(..) => ()
     other => fail("expected Approve, got \{other}")
   }
-  match plan.execute("exit_plan_mode", call) {
+  match plan.execute(test_ctx(call)) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("submitted for user approval"))
     other => fail("expected Success, got \{other}")
@@ -766,7 +793,7 @@ async test "a failing review keeps planning with a retryable tool error" {
   let review = FailingReview::{ asked: 0, }
   let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
-  match plan.execute("exit_plan_mode", exit_call("1. do it")) {
+  match plan.execute(exit_ctx("1. do it")) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       // Error::to_string only carries the constructor path, so the tool
       // result names the failure generically; the host logs the detail.
@@ -871,7 +898,7 @@ async test "review dismiss cancels the plan and instructs the model to stop" {
   let review = ScriptedReview::{ decision: Dismiss, asked: 0, }
   let plan = PlanMode(review=Some(review as &PlanReviewSource))
   plan.start()
-  match plan.execute("exit_plan_mode", exit_call("1. do it")) {
+  match plan.execute(exit_ctx("1. do it")) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
       assert_true(content.contains("dismissed"))
       assert_true(content.contains("no further tool calls"))
@@ -885,8 +912,7 @@ async test "review dismiss cancels the plan and instructs the model to stop" {
 async test "completed plans are echoed once in the tool result" {
   let plan = tk_plan()
   plan.start()
-  match
-    plan.execute("exit_plan_mode", exit_call("1. first step\n2. second step")) {
+  match plan.execute(exit_ctx("1. first step\n2. second step")) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("1. first step\n2. second step"))
     other => fail("expected Success, got \{other}")
@@ -1103,8 +1129,7 @@ async test "exit saves the named plan file and removes the draft" {
   ignore(plan.before_model([planning_assistant_message("investigation notes")]))
   match
     plan.execute(
-      "exit_plan_mode",
-      tk_call_with_args(
+      tk_ctx_with_args(
         "exit_plan_mode",
         Json::object({
           "name": Json::string("Fix: the/bug v2"),
@@ -1139,8 +1164,7 @@ async test "review-wired exit saves the plan file at submission, even on dismiss
   plan.start()
   match
     plan.execute(
-      "exit_plan_mode",
-      tk_call_with_args(
+      tk_ctx_with_args(
         "exit_plan_mode",
         Json::object({
           "name": Json::string("risky idea"),
@@ -1177,8 +1201,7 @@ async test "a failed review still leaves the submitted plan on disk" {
   plan.start()
   match
     plan.execute(
-      "exit_plan_mode",
-      tk_call_with_args(
+      tk_ctx_with_args(
         "exit_plan_mode",
         Json::object({
           "name": Json::string("pending idea"),
@@ -1199,7 +1222,7 @@ async test "a failed review still leaves the submitted plan on disk" {
 async test "without a filesystem persistence is skipped silently" {
   let plan = tk_plan()
   plan.start()
-  match plan.execute("exit_plan_mode", exit_call("1. step")) {
+  match plan.execute(exit_ctx("1. step")) {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_false(content.contains("Saved to"))
     _ => fail("expected Success")
@@ -1216,9 +1239,7 @@ async test "exit rejects an empty or missing plan name" {
       Json::object({ "name": Json::string("  "), "plan": Json::string("p") }),
       Json::object({ "name": Json::number(1), "plan": Json::string("p") }),
     ] {
-    try
-      plan.execute("exit_plan_mode", tk_call_with_args("exit_plan_mode", args))
-    catch {
+    try plan.execute(tk_ctx_with_args("exit_plan_mode", args)) catch {
       @posoco.RuntimeError::InvocationFailed(message) =>
         assert_true(message.contains("name"))
       _ => fail("expected InvocationFailed about name")

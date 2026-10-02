@@ -48,6 +48,18 @@ fn meta_call(name : String, args : Map[String, Json]) -> @posoco.ToolCall {
 }
 
 ///|
+/// Effect context for meta-tool calls (no-op registrar).
+fn test_ctx(name : String, args : Map[String, Json]) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: @posoco.CallId::unchecked("meta-1"),
+    name: @posoco.ToolName::unchecked(name),
+    arguments: Json::object(args),
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 fn expect_success(outcome : @posoco.ToolOutcome) -> String raise {
   match outcome {
     @posoco.ToolOutcome::Success(content~, ..) => content
@@ -153,7 +165,7 @@ async test "tool_list_without_keyword_lists_every_group_with_schemas" {
   )
   let ext = build_ok([web, nmem])
   let content = expect_success(
-    ext.execute("tool_list", meta_call("tool_list", Map::from_array([]))),
+    ext.execute(test_ctx("tool_list", Map::from_array([]))),
   )
   assert_true(content.has_prefix("all 2 folded groups:"))
   assert_false(content.contains("\n  {"))
@@ -196,8 +208,7 @@ async test "tool_list_keyword_returns_whole_matching_groups" {
   // A keyword hit on tool names promotes the WHOLE group.
   let content = expect_success(
     ext.execute(
-      "tool_list",
-      meta_call(
+      test_ctx(
         "tool_list",
         Map::from_array([("keyword", Json::string("memory"))]),
       ),
@@ -210,8 +221,7 @@ async test "tool_list_keyword_returns_whole_matching_groups" {
   // A keyword hit on the display id works too (posoco_ext_ stripped).
   let by_id = expect_success(
     ext.execute(
-      "tool_list",
-      meta_call(
+      test_ctx(
         "tool_list",
         Map::from_array([("keyword", Json::string("nowledge_mem"))]),
       ),
@@ -231,11 +241,7 @@ async test "tool_list_no_match_steers_to_full_browse" {
   let ext = build_ok([child])
   let content = expect_success(
     ext.execute(
-      "tool_list",
-      meta_call(
-        "tool_list",
-        Map::from_array([("keyword", Json::string("zzz"))]),
-      ),
+      test_ctx("tool_list", Map::from_array([("keyword", Json::string("zzz"))])),
     ),
   )
   assert_true(content.contains("No folded tool group matches 'zzz'"))
@@ -300,8 +306,7 @@ async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
   )
   let content = expect_success(
     ext.execute(
-      "tool_list",
-      meta_call(
+      test_ctx(
         "tool_list",
         Map::from_array([("keyword", Json::string("remember previous context"))]),
       ),
@@ -356,8 +361,7 @@ async test "tool_list_semantic_fallback_is_conservative_on_low_probability" {
   )
   let content = expect_success(
     ext.execute(
-      "tool_list",
-      meta_call(
+      test_ctx(
         "tool_list",
         Map::from_array([("keyword", Json::string("unrelated semantic phrase"))]),
       ),
@@ -386,8 +390,7 @@ async test "tool_execute_routes_to_owner_and_preserves_call_id" {
   )
   let ext = build_ok([child])
   let outcome = ext.execute(
-    "tool_execute",
-    meta_call(
+    test_ctx(
       "tool_execute",
       Map::from_array([
         ("tool", Json::string("github_create_issue")),
@@ -443,8 +446,7 @@ async test "tool_execute_defaults_missing_arguments_to_empty_object" {
   let ext = build_ok([child])
   let _ = expect_success(
     ext.execute(
-      "tool_execute",
-      meta_call(
+      test_ctx(
         "tool_execute",
         Map::from_array([("tool", Json::string("list_all"))]),
       ),
@@ -466,8 +468,7 @@ async test "tool_execute_unknown_tool_is_tool_reported_error_with_steering" {
   )
   let ext = build_ok([child])
   let outcome = ext.execute(
-    "tool_execute",
-    meta_call("tool_execute", Map::from_array([("tool", Json::string("nope"))])),
+    test_ctx("tool_execute", Map::from_array([("tool", Json::string("nope"))])),
   )
   match outcome {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
@@ -490,8 +491,7 @@ async test "child_runtime_error_propagates_verbatim" {
   let ext = build_ok([child])
   let outcome = Ok(
     ext.execute(
-      "tool_execute",
-      meta_call(
+      test_ctx(
         "tool_execute",
         Map::from_array([("tool", Json::string("read"))]),
       ),
@@ -517,9 +517,7 @@ async test "meta_argument_mistakes_raise_unknown_tool" {
   )
   let ext = build_ok([child])
   // tool_execute: missing 'tool'
-  let missing = Ok(
-    ext.execute("tool_execute", meta_call("tool_execute", Map::from_array([]))),
-  ) catch {
+  let missing = Ok(ext.execute(test_ctx("tool_execute", Map::from_array([])))) catch {
     error => Err(error)
   }
   match missing {
@@ -530,11 +528,7 @@ async test "meta_argument_mistakes_raise_unknown_tool" {
   // tool_list: blank keyword
   let blank = Ok(
     ext.execute(
-      "tool_list",
-      meta_call(
-        "tool_list",
-        Map::from_array([("keyword", Json::string("   "))]),
-      ),
+      test_ctx("tool_list", Map::from_array([("keyword", Json::string("   "))])),
     ),
   ) catch {
     error => Err(error)
@@ -879,8 +873,7 @@ async test "tool_list_semantic_fallback_supports_a_single_folded_group" {
   )
   let content = expect_success(
     ext.execute(
-      "tool_list",
-      meta_call(
+      test_ctx(
         "tool_list",
         Map::from_array([("keyword", Json::string("remember context"))]),
       ),

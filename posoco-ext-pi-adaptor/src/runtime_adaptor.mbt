@@ -356,10 +356,11 @@ pub impl @runtime.Runtime for PiRuntime with fn compact(
   self,
   scope : @kernel.InvocationScope,
   messages : ArrayView[@kernel.Message],
+  tools : Array[@kernel.ToolDef],
   call_options : Json,
   trigger : @kernel.CompactTrigger,
 ) -> Result[@kernel.CompactResult, @kernel.ModelFailure] {
-  self.fallback.compact(scope, messages, call_options, trigger)
+  self.fallback.compact(scope, messages, tools, call_options, trigger)
 }
 
 ///|

@@ -42,7 +42,7 @@ pub async fn Profiles::before_model(Self, Array[@kernel.Message]) -> Array[@kern
 pub async fn Profiles::before_tool(Self, @kernel.ToolCall) -> @port.ToolDecision
 pub fn Profiles::build(manifests~ : Array[ProfileManifest], defer_set~ : Array[String], captured_prompts~ : Map[String, String], attribution~ : Map[String, String], bus? : @devkit.EventBus?, store? : &ProfileStore?, session_store? : &@port.SessionStore?, summarizer? : ((Array[(String, Int)]) -> (String, String))?) -> Self
 pub fn Profiles::commands(Self) -> Array[@port.CommandDef]
-pub async fn Profiles::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn Profiles::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn Profiles::extension_id(Self) -> String
 pub async fn Profiles::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn Profiles::list_tools(Self) -> Array[@kernel.ToolDef]

@@ -22,7 +22,7 @@ pub fn LazyTools::build(providers~ : Array[&@port.ToolProvider]) -> Result[Self,
 pub fn LazyTools::defer_extensions(exts~ : Array[&@port.Extension]) -> Result[(Self, Array[&@port.Extension]), String]
 pub fn LazyTools::deferred_count(Self) -> Int
 pub fn LazyTools::deferred_names(Self) -> Array[String]
-pub async fn LazyTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn LazyTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn LazyTools::extension_id(Self) -> String
 pub fn LazyTools::is_meta_tool(String) -> Bool
 pub fn LazyTools::list_tools(Self) -> Array[@kernel.ToolDef]

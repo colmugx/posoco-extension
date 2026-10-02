@@ -30,15 +30,19 @@ pub impl @posoco.ToolProvider for HerdrDelegate with fn list_tools(
 /// shared `execute_delegate_impl`; this method only supplies the CLI backend.
 pub impl @posoco.ToolProvider for HerdrDelegate with fn execute(
   self : HerdrDelegate,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   if name != "herdr_delegate" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_herdr_delegate: unknown tool '\{name}'",
     )
   }
-  self.execute_delegate_impl(JsHerdrCli::{ }, call) catch {
+  self.execute_delegate_impl(JsHerdrCli::{ }, {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }) catch {
     error =>
       raise @posoco.RuntimeError::InvocationFailed(
         "herdr_delegate: \{error.to_string()}",

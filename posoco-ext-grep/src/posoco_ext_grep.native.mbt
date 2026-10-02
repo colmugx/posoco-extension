@@ -131,9 +131,13 @@ pub extend GrepTools with @posoco.ToolProvider::{list_tools}
 /// `execute_grep_impl`; this method only supplies the walk-based searcher.
 pub impl @posoco.ToolProvider for GrepTools with fn execute(
   self : GrepTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let call : @posoco.ToolCall = {
+    call_id: ctx.call_id,
+    name: ctx.name,
+    arguments: ctx.arguments,
+  }
   execute_grep_impl(
     NativeGrepSearcher::{ ignores: self.ignores, },
     self.anchor,

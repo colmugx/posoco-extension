@@ -407,14 +407,14 @@ pub impl @posoco.ToolProvider for PiAdaptor with fn list_tools(
 /// Agent::with_runtime so execution can suspend without blocking JavaScript.
 pub impl @posoco.ToolProvider for PiAdaptor with fn execute(
   adaptor : PiAdaptor,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   let result = js_execute_sync(
     adaptor.host,
     name,
-    call.call_id.to_string(),
-    call.arguments.stringify(),
+    ctx.call_id.to_string(),
+    ctx.arguments.stringify(),
   )
   let structured = parse_optional_json(result.details_json())
   if result.is_error() {

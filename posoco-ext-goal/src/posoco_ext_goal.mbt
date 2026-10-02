@@ -303,16 +303,16 @@ pub impl @posoco.ToolProvider for GoalRunner with fn list_tools(self) -> Array[
 ///|
 pub impl @posoco.ToolProvider for GoalRunner with fn execute(
   self,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   if name != self.options.plan_tool_name {
     return @posoco.ToolOutcome::ToolReportedError(
       content="unknown tool",
       structured=None,
     )
   }
-  match GoalPlan::from_tool_args(call.arguments) {
+  match GoalPlan::from_tool_args(ctx.arguments) {
     Err(msg) =>
       @posoco.ToolOutcome::ToolReportedError(content=msg, structured=None)
     Ok(parsed) => {

@@ -287,10 +287,9 @@ pub extend WebFetchTools with @posoco.ToolProvider::{list_tools}
 ///|
 pub impl @posoco.ToolProvider for WebFetchTools with fn execute(
   self : WebFetchTools,
-  _name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (parsed, offset) = extract_fetch_args(call.arguments)
+  let (parsed, offset) = extract_fetch_args(ctx.arguments)
   let req_url = parsed.to_url_string()
   let offset0 = match offset {
     Some(o) => o

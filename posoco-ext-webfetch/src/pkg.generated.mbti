@@ -58,7 +58,7 @@ pub struct WebFetchTools {
   io : &HttpIo?
 }
 pub fn WebFetchTools::WebFetchTools(timeout_ms? : Int, max_chars? : Int, byte_cap? : Int, cache? : DocCache, io? : &HttpIo?) -> Self
-pub async fn WebFetchTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn WebFetchTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn WebFetchTools::extension_id(Self) -> String
 pub fn WebFetchTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn WebFetchTools::manifest(Self) -> @port.ExtensionManifest

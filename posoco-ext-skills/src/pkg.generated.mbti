@@ -126,7 +126,7 @@ pub fn Skills::catalog(Self) -> SkillCatalog
 pub fn Skills::commands(Self) -> Array[@port.CommandDef]
 pub fn Skills::config(Self) -> SkillsConfig
 pub async fn Skills::discover(&@posoco-ext-workspace.WorkspaceFs, cwd~ : String, home~ : String, discovery_options? : SkillDiscoveryOptions, config? : SkillsConfig) -> Self? noraise
-pub async fn Skills::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn Skills::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn Skills::extension_id(Self) -> String
 pub fn Skills::from_catalog(&@posoco-ext-workspace.WorkspaceFs, catalog~ : SkillCatalog, config? : SkillsConfig) -> Result[Self, String]
 pub async fn Skills::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError

@@ -8,6 +8,18 @@ fn tool_call(name : String, arguments : Json) -> @posoco.ToolCall {
 }
 
 ///|
+/// Adapt a legacy ToolCall to the 0.21 ToolCallContext shape.
+fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: 1, },
+    call_id: call.call_id,
+    name: call.name,
+    arguments: call.arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
 /// Extension over echo transport with a scripted MCP client, an optional
 /// space-scoped config, and the delete-tool toggle.
 fn tool_ext(
@@ -84,8 +96,7 @@ async test "nmem_status: probe report on success, failure message on error" {
   let ok_ext = tool_ext(mcp=ok_mcp)
   let ok = @posoco.ToolProvider::execute(
     ok_ext,
-    "nmem_status",
-    tool_call("nmem_status", Json::object(Map::from_array([]))),
+    test_ctx(tool_call("nmem_status", Json::object(Map::from_array([])))),
   )
   guard ok is @posoco.ToolOutcome::Success(content~, structured~) else {
     fail("expected success")
@@ -101,8 +112,7 @@ async test "nmem_status: probe report on success, failure message on error" {
   let down_ext = tool_ext(mcp=down_mcp)
   let down = @posoco.ToolProvider::execute(
     down_ext,
-    "nmem_status",
-    tool_call("nmem_status", Json::object(Map::from_array([]))),
+    test_ctx(tool_call("nmem_status", Json::object(Map::from_array([])))),
   )
   guard down is @posoco.ToolOutcome::ToolReportedError(..) else {
     fail("expected a reported error")
@@ -118,10 +128,11 @@ async test "memory_update: tool args map id to memory_id with content and title"
   let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "memory_update",
-    tool_call(
-      "memory_update",
-      j("{\"id\":\"mem_3\",\"content\":\"new text\",\"title\":\"New\"}"),
+    test_ctx(
+      tool_call(
+        "memory_update",
+        j("{\"id\":\"mem_3\",\"content\":\"new text\",\"title\":\"New\"}"),
+      ),
     ),
   )
   guard outcome is @posoco.ToolOutcome::Success(..) else {
@@ -154,8 +165,7 @@ async test "memory_delete: queues through the port and drains with memory_id" {
   let ext = tool_ext(mcp~, expose_delete_tool=true)
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "memory_delete",
-    tool_call("memory_delete", j("{\"id\":\"mem_4\"}")),
+    test_ctx(tool_call("memory_delete", j("{\"id\":\"mem_4\"}"))),
   )
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
@@ -182,10 +192,11 @@ async test "thread_fetch_messages: thread_id with optional paging args" {
   let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "thread_fetch_messages",
-    tool_call(
-      "thread_fetch_messages",
-      j("{\"thread_id\":\"th_1\",\"limit\":5,\"offset\":8}"),
+    test_ctx(
+      tool_call(
+        "thread_fetch_messages",
+        j("{\"thread_id\":\"th_1\",\"limit\":5,\"offset\":8}"),
+      ),
     ),
   )
   guard outcome is @posoco.ToolOutcome::Success(..) else {
@@ -215,8 +226,9 @@ async test "thread_search: query and limit with identity scope" {
   let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "thread_search",
-    tool_call("thread_search", j("{\"query\":\"deploy\",\"limit\":5}")),
+    test_ctx(
+      tool_call("thread_search", j("{\"query\":\"deploy\",\"limit\":5}")),
+    ),
   )
   guard outcome is @posoco.ToolOutcome::Success(..) else {
     fail("expected success")
@@ -243,8 +255,7 @@ async test "execute: unknown tool raises RuntimeError::UnknownTool" {
   try
     @posoco.ToolProvider::execute(
       ext,
-      "thread_create",
-      tool_call("thread_create", Json::object(Map::from_array([]))),
+      test_ctx(tool_call("thread_create", Json::object(Map::from_array([])))),
     )
   catch {
     @posoco.RuntimeError::UnknownTool(_) => ()
@@ -262,7 +273,10 @@ async test "execute: retired tool names are unknown" {
   let ext = tool_ext()
   for name in ["memory_search", "memory_add", "read_working_memory"] {
     try
-      @posoco.ToolProvider::execute(ext, name, tool_call(name, Json::null()))
+      @posoco.ToolProvider::execute(
+        ext,
+        test_ctx(tool_call(name, Json::null())),
+      )
     catch {
       @posoco.RuntimeError::UnknownTool(_) => ()
       _ => fail("expected UnknownTool for \{name}")
@@ -285,8 +299,9 @@ async test "read_context_bundle: markdown chain, ambient scope" {
   let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "read_context_bundle",
-    tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    test_ctx(
+      tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    ),
   )
   guard outcome is @posoco.ToolOutcome::Success(content~, structured~) else {
     fail("expected success")
@@ -311,8 +326,9 @@ async test "read_context_bundle: markdown chain, ambient scope" {
   let md_ext = tool_ext(mcp=md_mcp)
   let md = @posoco.ToolProvider::execute(
     md_ext,
-    "read_context_bundle",
-    tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    test_ctx(
+      tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    ),
   )
   guard md is @posoco.ToolOutcome::Success(content=md_content, ..) else {
     fail("expected success")
@@ -326,8 +342,9 @@ async test "read_context_bundle: markdown chain, ambient scope" {
   let plain_ext = tool_ext(mcp=plain_mcp)
   let plain = @posoco.ToolProvider::execute(
     plain_ext,
-    "read_context_bundle",
-    tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    test_ctx(
+      tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    ),
   )
   guard plain is @posoco.ToolOutcome::Success(content=plain_content, ..) else {
     fail("expected success")
@@ -342,8 +359,9 @@ async test "read_context_bundle: markdown chain, ambient scope" {
   let scoped_ext = tool_ext(mcp=scoped_mcp, space=Some("team"))
   let scoped = @posoco.ToolProvider::execute(
     scoped_ext,
-    "read_context_bundle",
-    tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    test_ctx(
+      tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    ),
   )
   guard scoped is @posoco.ToolOutcome::Success(content=scoped_content, ..) else {
     fail("expected success")
@@ -364,8 +382,7 @@ async test "thread tools attach parsed reply text as structured payload" {
   )
   let thread = @posoco.ToolProvider::execute(
     tool_ext(mcp=thread_mcp),
-    "thread_search",
-    tool_call("thread_search", j("{\"query\":\"x\"}")),
+    test_ctx(tool_call("thread_search", j("{\"query\":\"x\"}"))),
   )
   guard thread
     is @posoco.ToolOutcome::Success(
@@ -383,8 +400,7 @@ async test "unscripted tool surfaces a reported error instead of hanging" {
   let ext = tool_ext()
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "thread_search",
-    tool_call("thread_search", j("{\"query\":\"x\"}")),
+    test_ctx(tool_call("thread_search", j("{\"query\":\"x\"}"))),
   )
   guard outcome is @posoco.ToolOutcome::ToolReportedError(..) else {
     fail("expected a reported error")
@@ -414,8 +430,9 @@ async test "read_context_bundle_applies_existing_context_cap" {
   let ext = tool_ext(mcp~)
   let outcome = @posoco.ToolProvider::execute(
     ext,
-    "read_context_bundle",
-    tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    test_ctx(
+      tool_call("read_context_bundle", Json::object(Map::from_array([]))),
+    ),
   )
   guard outcome is @posoco.ToolOutcome::Success(content~, structured~) else {
     fail("expected success")

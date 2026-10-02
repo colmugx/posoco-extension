@@ -26,7 +26,7 @@ pub struct HerdrDelegate {
 }
 pub fn HerdrDelegate::HerdrDelegate(pane~ : String, bin~ : String, headless_bin~ : String, cwd~ : String, background_run? : (async (Self) -> @kernel.ToolOutcome)?, parent_yolo? : (() -> Bool)?) -> Self
 pub fn HerdrDelegate::detect(cwd~ : String, parent_yolo? : (() -> Bool)?) -> Self?
-pub async fn HerdrDelegate::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn HerdrDelegate::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn HerdrDelegate::extension_id(Self) -> String
 pub fn HerdrDelegate::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn HerdrDelegate::manifest(Self) -> @port.ExtensionManifest

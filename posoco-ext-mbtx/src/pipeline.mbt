@@ -40,15 +40,15 @@ pub impl @posoco.ToolProvider for MbtxTools with fn list_tools(self : MbtxTools)
 #cfg(any(target="native", target="wasm", target="js"))
 pub impl @posoco.ToolProvider for MbtxTools with fn execute(
   self : MbtxTools,
-  name : String,
-  call : @posoco.ToolCall,
+  ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let name = ctx.name.to_string()
   // Decode errors surface first so argument feedback keeps working.
   if name == "cmd" {
-    let args = decode_cmd_args(call.arguments)
+    let args = decode_cmd_args(ctx.arguments)
     return self.execute_cmd(args)
   }
-  let args = self.decode_args(call.arguments)
+  let args = self.decode_args(ctx.arguments)
   self.execute_pipeline(args)
 }
 

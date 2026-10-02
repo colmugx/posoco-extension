@@ -25,7 +25,7 @@ pub struct MbtxTools {
   // private fields
 }
 pub fn MbtxTools::MbtxTools(anchor? : @devkit.WorkspaceAnchor?, allowlist_extra? : Array[SpawnRule], allowlist_without? : Array[String], run_timeout_ms? : Int, escalation? : Bool, toolchain_bin? : String?, bus? : @devkit.EventBus?) -> Self
-pub async fn MbtxTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn MbtxTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn MbtxTools::extension_id(Self) -> String
 pub fn MbtxTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn MbtxTools::manifest(Self) -> @port.ExtensionManifest

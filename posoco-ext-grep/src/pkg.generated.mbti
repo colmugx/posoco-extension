@@ -19,7 +19,7 @@ pub(all) struct GrepTools {
   ignores : Array[String]
 }
 pub fn GrepTools::GrepTools(anchor? : @devkit.WorkspaceAnchor?, ignores? : Array[String]) -> Self
-pub async fn GrepTools::execute(Self, String, @kernel.ToolCall) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub async fn GrepTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn GrepTools::extension_id(Self) -> String
 pub fn GrepTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn GrepTools::manifest(Self) -> @port.ExtensionManifest
