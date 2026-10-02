@@ -8,14 +8,22 @@ pub(all) struct OpenAIProvider {
   /// observe refresh-grant wire requests, production leaves `None` for the
   /// default transport.
   oauth_transport : &@oauth.OAuthHttpTransport?
+  cache_dir : String?
+  priv last_client_version : Ref[String?]
 }
 
 ///|
 pub fn OpenAIProvider::OpenAIProvider(
   transport? : &OpenAIModelsHttpTransport? = None,
   oauth_transport? : &@oauth.OAuthHttpTransport? = None,
+  cache_dir? : String? = None,
 ) -> OpenAIProvider {
-  OpenAIProvider::{ models_transport: transport, oauth_transport, }
+  OpenAIProvider::{
+    models_transport: transport,
+    oauth_transport,
+    cache_dir,
+    last_client_version: Ref(None),
+  }
 }
 
 ///|
@@ -166,6 +174,17 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
           transport
         }
       }
+      let cache = OpenAIVersionFileCache::{
+        directory: match self.cache_dir {
+          Some(directory) => Some(directory)
+          None => openai_default_cache_dir()
+        },
+        last_version: self.last_client_version,
+      }
+      let client_version = resolve_codex_client_version_with_transport(
+        transport_impl,
+        Some(cache as &CodexClientVersionCache),
+      )
       // Load-time renewal: expired tokens renew up front, a 401 renews once
       // and retries, and only a rejected refresh_token surfaces here. The
       // successful credential flows into the rebuilt slots so the composed
@@ -175,6 +194,7 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
         self.oauth_transport,
         credential,
         source.credential_store,
+        client_version,
       )
       let config = OpenAIConfig::from_codex_credential(active_credential, model)
       let config = openai_apply_effort(config, requested_effort)

@@ -11,10 +11,13 @@ import {
   "moonbitlang/async/io",
   "moonbitlang/async/socket",
   "moonbitlang/core/json",
+  "moonbitlang/core/env",
   "moonbitlang/core/random",
   "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/codec/base64",
+  "moonbitlang/x/crypto",
+  "moonbitlang/x/uuid",
 }
 
 warnings = "-unused_package"
@@ -24,8 +27,13 @@ options(
   targets: {
     "identity.js.mbt": [ "js" ],
     "identity.native.mbt": [ "native" ],
+    "version_file_cache.native.mbt": [ "native" ],
+    "version_file_cache.js.mbt": [ "js" ],
     "posoco_ext_openai_wbtest.mbt": [ "native" ],
+    "codex_version_wbtest.mbt": [ "native" ],
     "compact_transport_wbtest.mbt": [ "native" ],
+    "latest_contract_wbtest.mbt": [ "native" ],
+    "compact_security_wbtest.mbt": [ "native" ],
     "codex_quota_wbtest.mbt": [ "native" ],
     "codex_usage_wbtest.mbt": [ "native" ],
     "quota_status_wbtest.mbt": [ "native" ],

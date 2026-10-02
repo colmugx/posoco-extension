@@ -1,4 +1,4 @@
-///|
+///|///|
 /// Real loopback HTTP tests for the OpenAI compact endpoint (W3): the port
 /// under test is the production `OpenAIModelPort::compact` driving
 /// `openai_post_json` against an ephemeral in-process `@http.Server`. No
@@ -7,6 +7,7 @@
 ///|
 /// Scripted behavior for one accepted compact request.
 priv enum CompactReply {
+  LatestV2Route
   /// Full HTTP response after an optional delay.
   Respond(
     status~ : Int,
@@ -129,6 +130,23 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
       self.replies[index]
     }
     match reply {
+      LatestV2Route => {
+        let legacy = request.path.has_suffix("/responses/compact")
+        let _ = attempt_async(() => {
+          conn.send_response(if legacy { 404 } else { 200 }, "OK")
+        })
+        let _ = attempt_async(() => {
+          conn.write_string(
+            if legacy {
+              "{\"error\":{\"type\":\"invalid_request_error\"}}"
+            } else {
+              "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"compaction\",\"id\":\"cmp_latest\",\"encrypted_content\":\"opaque-latest\"}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_latest\",\"status\":\"completed\"}}\n\n"
+            },
+          )
+        })
+        let _ = attempt_async(() => conn.end_response())
+        conn.close()
+      }
       Respond(status~, body~, headers~, delay_ms~) => {
         if delay_ms > 0 {
           @async.sleep(delay_ms)
@@ -157,7 +175,7 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
         // Status + head go out; the body never does. The client parks in its
         // body read.
         let _ = attempt_async(() => conn.send_response(200, "OK"))
-        let _ = attempt_async(() => conn.write_string("{\"output\":"))
+        let _ = attempt_async(() => conn.write_string("data: "))
         self.park_until_client_disconnect(conn)
       }
       Hang => self.park_until_client_disconnect(conn)
@@ -249,6 +267,7 @@ async fn compact_loopback_call_many(
         port.compact(
           compact_loopback_scope(),
           compact_loopback_messages(),
+          [],
           { temperature: None, max_output_tokens: None, },
           @posoco.CompactTrigger::Manual,
         ),
@@ -263,140 +282,25 @@ async fn compact_loopback_call_many(
 }
 
 ///|
-test "openai_compact_default_deadline_matches_pinned_codex_policy" {
-  assert_eq(openai_compact_deadline_ms, 300_000 * 4)
-  assert_eq(openai_compact_deadline_ms, 1_200_000)
-}
-
-///|
-async fn compact_deadline_loopback_retry(reply : CompactReply) -> Unit {
-  let loopback = CompactLoopback::bind([
-    reply,
-    Respond(
-      status=200,
-      body="{\"output\":[{\"role\":\"user\",\"content\":\"q1\"}]}",
-      headers=[],
-      delay_ms=0,
-    ),
-  ])
-  defer loopback.stop()
-  @async.with_timeout(3000, () => {
-    @async.with_task_group() <| group => {
-      defer loopback.stop()
-      let _ = group.spawn(() => loopback.serve(), allow_failure=true)
-      let port = compact_loopback_port(
-        "http://127.0.0.1:\{loopback.server.addr.port()}/v1",
-      )
-      let body = build_compact_request_body(
-        compact_loopback_messages(),
-        port.config.model,
-      )
-      let outcome = @async.with_timeout(1000, () => {
-        Ok(
-          openai_compact_post_json(
-            port.config,
-            body,
-            Some("compact-loopback"),
-            deadline_ms=100,
-          ),
-        ) catch {
-          e => Err(e)
-        }
-      }) catch {
-        @async.TimeoutError =>
-          fail("outer test watchdog fired instead of compact deadline")
-        err => raise err
-      }
-      guard outcome is Err(@posoco.ModelError::Transport(message)) else {
-        fail("expected typed compact deadline Transport")
-      }
-      assert_eq(
-        message, "OpenAI transport failure (stage=compact_deadline, category=timeout, deadline_ms=100)",
-      )
-      assert_eq(loopback.requests.length(), 1)
-      @async.with_timeout(1000, () => {
-        while !loopback.client_disconnected {
-          @async.pause()
-        }
-      })
-      // The failed request is not automatically retried. A new explicit
-      // compact on the same ModelPort must still succeed.
-      let retry = port.compact(
-        compact_loopback_scope(),
-        compact_loopback_messages(),
-        { temperature: None, max_output_tokens: None, },
-        @posoco.CompactTrigger::Manual,
-      )
-      assert_true(retry.mode is @posoco.CompactMode::Replace)
-      assert_eq(loopback.requests.length(), 2)
-    }
-  })
-}
-
-///|
-async test "openai_compact_deadline_during_status_wait_disconnects_and_retries" {
-  compact_deadline_loopback_retry(Hang)
-}
-
-///|
-async test "openai_compact_deadline_during_body_read_disconnects_and_retries" {
-  compact_deadline_loopback_retry(HeadThenHang)
-}
-
-///|
-async test "openai_compact_loopback_wire_shape_is_minimal_model_input" {
-  let (result, loopback) = compact_loopback_call(
-    Respond(
-      status=200,
-      body="{\"output\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"q1\"}]}]}",
-      headers=[],
-      delay_ms=0,
-    ),
-  )
-  loopback.stop()
-  guard result is Ok(compacted) else { fail("compact must succeed") }
+async test "openai_compact_latest_route_rejects_legacy_404_and_accepts_responses_sse" {
+  let (result, loopback) = compact_loopback_call(LatestV2Route)
+  guard result is Ok(compacted) else {
+    fail("V2 compact must succeed on /responses; /compact is 404")
+  }
   assert_true(compacted.mode is @posoco.CompactMode::Replace)
   assert_eq(loopback.requests.length(), 1)
-  let request = loopback.requests[0]
-  guard request.meth is @http.RequestMethod::Post else {
-    fail("compact must POST")
-  }
-  assert_eq(request.path, "/v1/responses/compact")
-  assert_eq(request.headers.get("Authorization"), Some("Bearer k-test"))
-  assert_eq(request.headers.get("Content-Type"), Some("application/json"))
-  match request.headers.get("User-Agent") {
-    Some(ua) => assert_true(ua.has_prefix("posoco/ext-openai ("))
-    None => fail("compact must send the posoco User-Agent")
-  }
-  assert_true(request.headers.get("originator") is None)
-  assert_true(request.headers.get("session-id") is None)
-  // The public compact request stays the official minimal {model, input}.
+  assert_eq(loopback.requests[0].path, "/v1/responses")
   guard @json.parse(loopback.bodies[0]) is Json::Object(fields) else {
-    fail("request body must be a JSON object")
+    fail("object body required")
   }
-  assert_eq(fields.length(), 2)
-  assert_eq(fields.get("model"), Some(Json::string("gpt-5")))
+  assert_eq(fields.get("stream"), Some(Json::boolean(true)))
   guard fields.get("input") is Some(Json::Array(items)) else {
-    fail("request input must be an item array")
+    fail("input required")
   }
-  assert_eq(items.length(), 1)
-}
-
-///|
-async test "openai_compact_loopback_success_replays_output_window" {
-  let (result, loopback) = compact_loopback_call(
-    Respond(
-      status=200,
-      body="{\"output\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"kept\"}]},{\"type\":\"compaction\",\"id\":\"cmp_1\",\"encrypted_content\":\"zzz\"}]}",
-      headers=[],
-      delay_ms=0,
-    ),
+  assert_eq(
+    items[items.length() - 1],
+    @json.parse("{\"type\":\"compaction_trigger\"}"),
   )
-  loopback.stop()
-  guard result is Ok(compacted) else { fail("compact must succeed") }
-  // Anchor + retained user + synthetic state assistant.
-  assert_eq(compacted.compacted_messages.length(), 3)
-  assert_eq(loopback.bodies.length(), 1)
 }
 
 ///|
@@ -529,62 +433,12 @@ async test "openai_compact_loopback_500_single_request_no_retry" {
 }
 
 ///|
-async test "openai_compact_loopback_invalid_json_body_fails_loud" {
-  let (result, loopback) = compact_loopback_call(
-    Respond(status=200, body="not-json{", headers=[], delay_ms=0),
-  )
-  loopback.stop()
-  guard result is Err(@posoco.ModelError::ResponseParse(message)) else {
-    fail("invalid JSON must raise ResponseParse")
-  }
-  assert_true(message.contains("stage=json"))
-}
-
-///|
-/// Missing/null output are protocol failures; an empty output stays an
-/// empty-window failure. The window is never silently replaced.
-async test "openai_compact_loopback_missing_null_empty_output_fail" {
-  let (outcomes_all, loopback) = compact_loopback_call_many([
-    Respond(
-      status=200,
-      body="{\"status\":\"completed\"}",
-      headers=[],
-      delay_ms=0,
-    ),
-    Respond(
-      status=200,
-      body="{\"output\":null,\"status\":\"completed\"}",
-      headers=[],
-      delay_ms=0,
-    ),
-    Respond(status=200, body="{\"output\":[]}", headers=[], delay_ms=0),
-  ])
-  loopback.stop()
-  assert_eq(outcomes_all.length(), 3)
-  for outcome in outcomes_all {
-    guard outcome is Err(@posoco.ModelError::ResponseParse(message)) else {
-      fail("degenerate outputs must raise ResponseParse")
-    }
-    assert_true(
-      message.contains("category=missing_output") ||
-      message.contains("category=empty_window"),
-    )
-  }
-  assert_eq(loopback.requests.length(), 3)
-}
-
-///|
 /// A connection closed mid-body fails loudly instead of reporting success,
 /// and the same port stays usable for the next compact.
 async test "openai_compact_loopback_premature_disconnect_fails_loud" {
   let loopback = CompactLoopback::bind([
     RespondTruncated(status=200, partial="{\"output\":[{\"role\":\"user\""),
-    Respond(
-      status=200,
-      body="{\"output\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"q1\"}]}]}",
-      headers=[],
-      delay_ms=0,
-    ),
+    Respond(status=200, body=compact_v2_success_sse(), headers=[], delay_ms=0),
   ])
   let outcomes : Array[Result[@posoco.CompactResult, @posoco.ModelError]] = []
   let step = @async.with_timeout(20000, () => {
@@ -598,6 +452,7 @@ async test "openai_compact_loopback_premature_disconnect_fails_loud" {
           port.compact(
             compact_loopback_scope(),
             compact_loopback_messages(),
+            [],
             { temperature: None, max_output_tokens: None, },
             @posoco.CompactTrigger::Manual,
           ),
@@ -626,12 +481,7 @@ async test "openai_compact_loopback_premature_disconnect_fails_loud" {
 async test "openai_compact_loopback_cancel_during_status_wait_cleans_and_retries" {
   let loopback = CompactLoopback::bind([
     Hang,
-    Respond(
-      status=200,
-      body="{\"output\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"q1\"}]}]}",
-      headers=[],
-      delay_ms=0,
-    ),
+    Respond(status=200, body=compact_v2_success_sse(), headers=[], delay_ms=0),
   ])
   let step = @async.with_timeout(20000, () => {
     @async.with_task_group() <| group => {
@@ -645,6 +495,7 @@ async test "openai_compact_loopback_cancel_during_status_wait_cleans_and_retries
             port.compact(
               compact_loopback_scope(),
               compact_loopback_messages(),
+              [],
               { temperature: None, max_output_tokens: None, },
               @posoco.CompactTrigger::Manual,
             ),
@@ -669,6 +520,7 @@ async test "openai_compact_loopback_cancel_during_status_wait_cleans_and_retries
       let retry = port.compact(
         compact_loopback_scope(),
         compact_loopback_messages(),
+        [],
         { temperature: None, max_output_tokens: None, },
         @posoco.CompactTrigger::Manual,
       )
@@ -691,12 +543,7 @@ async test "openai_compact_loopback_cancel_during_status_wait_cleans_and_retries
 async test "openai_compact_loopback_cancel_during_body_read_cleans_and_retries" {
   let loopback = CompactLoopback::bind([
     HeadThenHang,
-    Respond(
-      status=200,
-      body="{\"output\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"q1\"}]}]}",
-      headers=[],
-      delay_ms=0,
-    ),
+    Respond(status=200, body=compact_v2_success_sse(), headers=[], delay_ms=0),
   ])
   let step = @async.with_timeout(20000, () => {
     @async.with_task_group() <| group => {
@@ -710,6 +557,7 @@ async test "openai_compact_loopback_cancel_during_body_read_cleans_and_retries" 
             port.compact(
               compact_loopback_scope(),
               compact_loopback_messages(),
+              [],
               { temperature: None, max_output_tokens: None, },
               @posoco.CompactTrigger::Manual,
             ),
@@ -734,6 +582,7 @@ async test "openai_compact_loopback_cancel_during_body_read_cleans_and_retries" 
       let retry = port.compact(
         compact_loopback_scope(),
         compact_loopback_messages(),
+        [],
         { temperature: None, max_output_tokens: None, },
         @posoco.CompactTrigger::Manual,
       )

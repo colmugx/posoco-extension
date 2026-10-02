@@ -14,6 +14,7 @@ pub(all) struct OpenAIConfig {
   /// = unknown (API-key discovery reports no window); auto-compact stays
   /// off rather than guessing.
   context_window : Int?
+  use_responses_lite : Bool
 }
 
 ///|
@@ -30,6 +31,7 @@ pub fn OpenAIConfig::OpenAIConfig(
     account_id: None,
     reasoning_effort: None,
     context_window: None,
+    use_responses_lite: false,
   }
 }
 
@@ -52,6 +54,7 @@ pub fn OpenAIConfig::with_base_url(
     account_id: None,
     reasoning_effort: None,
     context_window: None,
+    use_responses_lite: false,
   }
 }
 
@@ -249,7 +252,6 @@ fn build_headers(
   config : OpenAIConfig,
   session_id : String?,
   stream : Bool,
-  compact : Bool,
 ) -> @http.Headers {
   let headers : @http.Headers = {
     "Authorization": "Bearer \{config.api_key}",
@@ -272,9 +274,12 @@ fn build_headers(
     for key, value in codex_protocol_headers(sid, stream) {
       headers[@http.CaseInsensitiveString(key)] = value
     }
-    if compact {
-      headers.set("x-codex-installation-id", identity_installation_id())
-    }
+  }
+  if config.use_responses_lite {
+    headers.set("x-openai-internal-codex-responses-lite", "true")
+  }
+  if stream {
+    headers.set("Accept", "text/event-stream")
   }
   headers
 }
@@ -331,19 +336,43 @@ fn validate_openai_config(
 }
 
 ///|
-/// Build the JSON request body for the Responses API.
+/// Lift the base-instruction system items out of an encoded input window.
+/// Chat and compact share this lift so the two request paths cannot drift on
+/// instructions placement: the joined text becomes the top-level
+/// `instructions` field (ordinary branch) or the developer-message Lite
+/// prefix, and the remaining history items keep their order.
+fn split_openai_base_instructions(
+  input : Array[Json],
+) -> (Array[Json], Array[String]) raise @posoco.ModelError {
+  let history : Array[Json] = []
+  let instructions : Array[String] = []
+  for item in input {
+    match item {
+      Json::Object(fields) if fields.get("role") == Some(Json::string("system")) =>
+        instructions.push(
+          @responses.message_item_text(provider="OpenAI", fields),
+        )
+      _ => history.push(item)
+    }
+  }
+  (history, instructions)
+}
+
+///|
+/// Build the JSON request body fields for the Responses API from an already
+/// encoded input window. Ordinary-branch placement follows the fixed
+/// official contract: base instructions go to the top-level `instructions`
+/// field and tools to the top-level `tools` field, each sent only when
+/// non-empty (no `[]`/"" placeholders).
 fn build_request_body(
-  messages : Array[@posoco.Message],
+  input_items : Array[Json],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   model : String,
   reasoning_effort : String?,
+  instructions? : String = "",
   stream? : Bool = false,
-) -> Json raise @posoco.ModelError {
-  // The shared window encoder replays a compact raw anchor's stored output
-  // verbatim after validating its canonical projection; ordinary messages
-  // encode normally.
-  let input_items : Array[Json] = openai_encode_window_items(messages)
+) -> Json {
   let fields : Array[(String, Json)] = [
     ("model", Json::string(model)),
     ("input", Json::array(input_items)),
@@ -354,6 +383,9 @@ fn build_request_body(
   ]
   if stream {
     fields.push(("stream", Json::boolean(true)))
+  }
+  if instructions.length() > 0 {
+    fields.push(("instructions", Json::string(instructions)))
   }
   if !tools.is_empty() {
     let tool_defs = tools.map(fn(t) { @responses.tool_to_responses_wire(t) })
@@ -391,6 +423,70 @@ fn build_request_body(
   }
   let final_fields = append_options(fields, options)
   Json::object(Map::from_array(final_fields))
+}
+
+///|
+/// Shared private request preparation used by both chat and compact: builds
+/// the ordinary Responses body from the encoded window and lifted base
+/// instructions, applies the caller's compact-only control fields, then
+/// applies the current model's `use_responses_lite` shaping. Because both
+/// entry points end here, instructions/tools/Lite encoding cannot drift
+/// between them; the Lite shaping stays the final authority (it removes the
+/// top-level instructions/tools and pins `parallel_tool_calls` to false).
+fn openai_prepare_request_body(
+  config : OpenAIConfig,
+  session_id : String,
+  input_items : Array[Json],
+  instructions : Array[String],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+  stream? : Bool = false,
+  extra_fields? : Array[(String, Json)] = [],
+) -> Json {
+  let body = build_request_body(
+    input_items,
+    tools,
+    options,
+    config.model,
+    config.reasoning_effort,
+    instructions=instructions.join("\n\n"),
+    stream~,
+  )
+  guard body is Json::Object(fields) else { abort("request builder object") }
+  for entry in extra_fields {
+    fields[entry.0] = entry.1
+  }
+  if config.use_responses_lite {
+    apply_responses_lite_shape(fields, session_id)
+  }
+  body
+}
+
+///|
+/// Chat-side shared preparation: the shared window encoder replays a compact
+/// raw anchor's stored output verbatim after validating its canonical
+/// projection, ordinary messages encode normally, and the base instructions
+/// are lifted before the shared body preparation runs. Compact reuses the
+/// same preparation and only appends its trailing `compaction_trigger`.
+fn openai_prepare_request(
+  config : OpenAIConfig,
+  session_id : String,
+  messages : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+  stream? : Bool = false,
+) -> Json raise @posoco.ModelError {
+  let input = openai_encode_window_items(messages)
+  let (history, instructions) = split_openai_base_instructions(input)
+  openai_prepare_request_body(
+    config,
+    session_id,
+    history,
+    instructions,
+    tools,
+    options,
+    stream~,
+  )
 }
 
 ///|
@@ -440,6 +536,17 @@ pub extend OpenAIModelPort with @posoco.ModelPort::{
 }
 
 ///|
+/// Mid-stream read failures are retryable transport errors. The router-level
+/// transient retry (posoco-ext-llm) keys on the exact "stage=read_stream"
+/// wording via @chatkit.is_transient_model_error, so the message construction
+/// stays anchored here — transient_contract_wbtest pins the classification.
+fn read_stream_transport_error(err : Error) -> @posoco.ModelError {
+  @posoco.ModelError::Transport(
+    "OpenAI transport failure (stage=read_stream): " + err.to_string(),
+  )
+}
+
+///|
 async fn OpenAIModelPort::chat_stream(
   self : OpenAIModelPort,
   session_id : String,
@@ -449,15 +556,15 @@ async fn OpenAIModelPort::chat_stream(
   on_chunk : (@posoco.StreamChunk) -> Unit,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   validate_openai_config(self.config)
-  let body = build_request_body(
+  let body = openai_prepare_request(
+    self.config,
+    session_id,
     messages,
     tools,
     options,
-    self.config.model,
-    self.config.reasoning_effort,
     stream=true,
   )
-  let headers = build_headers(self.config, Some(session_id), true, false)
+  let headers = build_headers(self.config, Some(session_id), true)
   let (origin, path_prefix) = split_openai_base_url(self.config.base_url)
   let client = @http.Client::Client(origin, headers~) catch {
     err =>
@@ -465,37 +572,34 @@ async fn OpenAIModelPort::chat_stream(
         "OpenAI transport failure (stage=create_client): " + err.to_string(),
       )
   }
+  // Every exit closes the client exactly once — including a coroutine
+  // cancellation that unwinds a pending read without reaching an error
+  // handler. Double-close is not safe on the JS backend: re-closing an
+  // errored response stream re-drops the rejected cancel() promise.
+  defer client.close()
   client.request(@http.RequestMethod::Post, path_prefix + "/responses") catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=send_request): " + err.to_string(),
       )
-    }
   }
   client.write(body.stringify()) catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=write_body): " + err.to_string(),
       )
-    }
   }
   client.flush() catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=flush): " + err.to_string(),
       )
-    }
   }
   let response = client.end_request() catch {
-    err => {
-      client.close()
+    err =>
       raise @posoco.ModelError::Transport(
         "OpenAI transport failure (stage=end_request): " + err.to_string(),
       )
-    }
   }
   // Capture before the status branch: an exhausted 429 still states the
   // authoritative percentages and reset times.
@@ -507,7 +611,6 @@ async fn OpenAIModelPort::chat_stream(
     let (err_summary, body_text) = read_error_body_summary(client) catch {
       _ => (BodyUnavailable, None)
     }
-    client.close()
     match
       openai_quota_verdict(
         response.code,
@@ -539,12 +642,7 @@ async fn OpenAIModelPort::chat_stream(
   let mut last_yield = @async.now()
   while !done {
     let line = client.read_until("\n") catch {
-      err => {
-        client.close()
-        raise @posoco.ModelError::Transport(
-          "OpenAI transport failure (stage=read_stream): " + err.to_string(),
-        )
-      }
+      err => raise read_stream_transport_error(err)
     }
     match line {
       Some(data) => {
@@ -565,8 +663,7 @@ async fn OpenAIModelPort::chat_stream(
           }
         }
       }
-      None => {
-        client.close()
+      None =>
         match
           @responses.classify_stream_termination(
             provider="OpenAI",
@@ -575,7 +672,6 @@ async fn OpenAIModelPort::chat_stream(
           Some(err) => raise err
           None => done = true
         }
-      }
     }
     // A buffered SSE burst makes read_until complete without suspending,
     // so this loop can spin through the whole stream in one coroutine
@@ -588,7 +684,6 @@ async fn OpenAIModelPort::chat_stream(
       last_yield = now
     }
   }
-  client.close()
   match
     @responses.classify_stream_termination(
       provider="OpenAI",
@@ -643,9 +738,9 @@ fn attach_reasoning_items_responses(
 }
 
 ///|
-/// Shared POST helper for the Responses API family: builds the client, sends
+/// POST helper for the Responses API family: builds the client, sends
 /// the JSON body, classifies transport/HTTP failures, and parses the response
-/// JSON. Used by chat (non-stream) and compact.
+/// JSON. Used by chat (non-stream); compact streams through its own V2 path.
 async fn openai_post_json(
   config : OpenAIConfig,
   path : String,
@@ -653,8 +748,7 @@ async fn openai_post_json(
   session_id : String?,
   quota_tracker? : CodexQuotaTracker? = None,
 ) -> Json raise @posoco.ModelError {
-  let compact = path == "/responses/compact"
-  let headers = build_headers(config, session_id, false, compact)
+  let headers = build_headers(config, session_id, false)
   let (origin, path_prefix) = split_openai_base_url(config.base_url)
   let client = @http.Client::Client(origin, headers~) catch {
     err =>
@@ -721,26 +815,6 @@ async fn openai_post_json(
       body_data.binary().length(),
       decoded_chars,
     )
-    if compact {
-      // Compact carries safe structural fields only; no provider excerpt.
-      // Endpoint kind + model make a 404/400 self-describing: which base
-      // URL and which model slug the server rejected.
-      let endpoint_kind = if config.base_url == codex_oauth_api_base() {
-        "codex_oauth"
-      } else {
-        "api_key"
-      }
-      raise @posoco.ModelError::Transport(
-        format_compact_http_error(
-          response.code,
-          body_summary,
-          body_text,
-          response.headers.get("x-request-id"),
-          endpoint_kind~,
-          model=config.model,
-        ),
-      )
-    }
     let excerpt = match body_text {
       Some(text) => bounded_error_excerpt(text)
       None => None
@@ -779,12 +853,12 @@ async fn OpenAIModelPort::chat_nonstream(
   options : @posoco.ChatOptions,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   validate_openai_config(self.config)
-  let body = build_request_body(
+  let body = openai_prepare_request(
+    self.config,
+    session_id,
     messages,
     tools,
     options,
-    self.config.model,
-    self.config.reasoning_effort,
   )
   let resp_json = openai_post_json(
     self.config,
@@ -798,124 +872,6 @@ async fn OpenAIModelPort::chat_nonstream(
     resp_json,
   )
   @posoco.ModelCallResult::{ completion, processed_messages: messages, }
-}
-
-///|
-/// Build the request body for the standalone compaction endpoint.
-fn build_compact_request_body(
-  messages : Array[@posoco.Message],
-  model : String,
-) -> Json raise @posoco.ModelError {
-  // Recompact uses the same window encoder as chat: a previously compacted
-  // window replays its stored raw output, not the decoded projection.
-  let input_items : Array[Json] = openai_encode_window_items(messages)
-  Json::object(
-    Map::from_array([
-      ("model", Json::string(model)),
-      ("input", Json::array(input_items)),
-    ]),
-  )
-}
-
-///|
-/// Validate a /responses/compact response envelope and decode its output
-/// items into canonical messages.
-///
-/// A non-empty output window is prefixed with a synthetic assistant anchor
-/// carrying the original output array verbatim in the OpenAI-private raw
-/// envelope; the decoded messages follow it as the canonical projection.
-/// An empty output stays empty so the empty-window guard keeps failing.
-fn parse_compact_response(
-  resp_json : Json,
-) -> Array[@posoco.Message] raise @posoco.ModelError {
-  let items = match resp_json {
-    Json::Object(map) => {
-      match map.get("error") {
-        Some(Json::Object(_)) =>
-          raise @posoco.ModelError::ResponseParse(
-            "OpenAI compact terminal failure (stage=error, category=provider_error)",
-          )
-        _ => ()
-      }
-      // Missing/null output is a protocol failure, not an empty window:
-      // decoding it as [] would wipe the session and report success.
-      match map.get("output") {
-        Some(Json::Array(items)) => items
-        Some(Json::Null) | None =>
-          raise @posoco.ModelError::ResponseParse(
-            "OpenAI compact parse failure (stage=output, category=missing_output)",
-          )
-        Some(_) =>
-          raise @posoco.ModelError::ResponseParse(
-            "OpenAI compact parse failure (stage=output, category=wrong_type)",
-          )
-      }
-    }
-    _ =>
-      raise @posoco.ModelError::ResponseParse(
-        "OpenAI compact parse failure (stage=response, category=not_object)",
-      )
-  }
-  // An empty output stays empty (no anchor): an anchor must never turn an
-  // empty provider output into an apparent success window.
-  if items.is_empty() {
-    return []
-  }
-  let window : Array[@posoco.Message] = [
-    @posoco.Message::AssistantMessage(
-      content=[],
-      tool_calls=[],
-      reasoning=Some(compact_raw_anchor_reasoning(items)),
-      finish_reason=@posoco.FinishReason::Stop,
-    ),
-  ]
-  for m in openai_items_to_posoco_messages(Json::array(items)) {
-    window.push(m)
-  }
-  window
-}
-
-///|
-fn validate_compact_window(
-  request_messages : Array[@posoco.Message],
-  compacted : Array[@posoco.Message],
-) -> Unit raise @posoco.ModelError {
-  if request_messages.length() > 0 && compacted.length() == 0 {
-    raise @posoco.ModelError::ResponseParse(
-      "OpenAI compact parse failure (stage=output, category=empty_window)",
-    )
-  }
-}
-
-///|
-/// Compact via the official standalone endpoint
-/// (POST /responses/compact). Fully stateless and ZDR-friendly: we send the
-/// full current window and the endpoint returns the canonical next context
-/// window ("pass it into your next /responses call as-is — do not prune"),
-/// which maps to Replace semantics. The opaque compaction item rides
-/// Reasoning.raw and replays verbatim on subsequent chat calls.
-pub impl @posoco.ModelPort for OpenAIModelPort with fn compact(
-  self : OpenAIModelPort,
-  scope : @posoco.InvocationScope,
-  messages : ArrayView[@posoco.Message],
-  _options : @posoco.ChatOptions,
-  _trigger : @posoco.CompactTrigger,
-) -> @posoco.CompactResult raise @posoco.ModelError {
-  validate_openai_config(self.config)
-  let request_messages = messages.to_owned()
-  let body = build_compact_request_body(request_messages, self.config.model)
-  let resp_json = openai_compact_post_json(
-    self.config,
-    body,
-    Some(scope.session_id.to_string()),
-    quota_tracker=self.quota_tracker,
-  )
-  let compacted = parse_compact_response(resp_json)
-  validate_compact_window(request_messages, compacted)
-  @posoco.CompactResult::{
-    compacted_messages: compacted,
-    mode: @posoco.CompactMode::Replace,
-  }
 }
 
 ///|

@@ -101,11 +101,16 @@ async fn renew_codex_credential(
 /// access token renews before the request; a 401 rejection renews once and
 /// retries once. Returns the models together with the credential that served
 /// the successful request so the rebuilt slots carry fresh tokens too.
+///
+/// `client_version` is resolved once by the caller (online discovery → last
+/// cached success → built-in constant) and is used verbatim for both the
+/// initial request and the 401 retry.
 async fn refresh_codex_models_with_renewal(
   transport : &OpenAIModelsHttpTransport,
   oauth_transport : &@oauth.OAuthHttpTransport?,
   credential : @oauth.Credential,
   credential_store : &@oauth.ProviderCredentialStore?,
+  client_version : String,
 ) -> (Array[CodexModelInfo], @oauth.Credential) raise @posoco.CompositionError {
   let mut active = credential
   let mut renewed = false
@@ -118,7 +123,7 @@ async fn refresh_codex_models_with_renewal(
     codex_oauth_api_base(),
     active.access_token,
     codex_account_id_of(active),
-    openai_codex_models_client_version(),
+    client_version,
   ) catch {
     ModelsFetchError::HttpStatus(status=401, ..) => {
       // The renewal already ran once (expired pre-check or a prior 401);
@@ -139,7 +144,7 @@ async fn refresh_codex_models_with_renewal(
         codex_oauth_api_base(),
         refreshed.access_token,
         codex_account_id_of(refreshed),
-        openai_codex_models_client_version(),
+        client_version,
       ) catch {
         err => raise codex_models_refresh_failed_error(err)
       }

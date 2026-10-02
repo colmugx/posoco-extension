@@ -1,18 +1,14 @@
 ///|
 /// OpenAI-private raw compact-window replay.
 ///
-/// The standalone `/responses/compact` output array is the authoritative next
-/// input window ("pass it into your next /responses call as-is — do not
-/// prune"), and canonical messages cannot represent every item faithfully
-/// (opaque `encrypted_content`, item `id`/`status`, multi-modal parts,
-/// hosted-tool items). The compact decode therefore stores the original
-/// output array verbatim in a versioned provider-private envelope on a
-/// dedicated synthetic assistant anchor, and keeps the decoded messages after
-/// the anchor as the canonical projection for user/activation/context
-/// consumers. The shared input encoder below recognizes the envelope,
-/// validates that the projection still equals a deterministic decode of the
-/// stored output, and then replays the raw items exactly once, skipping only
-/// the validated projection.
+/// V2 installs latest retained history plus the new opaque compaction item.
+/// Canonical messages cannot faithfully represent encrypted state, item ids,
+/// metadata and multi-modal parts. Store that assembled history verbatim in
+/// the provider-private envelope on a synthetic anchor, with a deterministic
+/// canonical projection after it for display and persistence consumers.
+/// Replay validates the projection and emits the stored history exactly once.
+/// Existing persisted envelopes remain checked; they are not a legacy compact
+/// transport or a fallback strategy.
 
 ///|
 /// Marker key of the provider-private envelope. Never serialized as a wire

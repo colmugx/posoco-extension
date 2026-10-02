@@ -131,17 +131,62 @@ pub fn parse_codex_quota_headers(
 ///|
 /// Captures the latest Codex quota snapshot from response headers and
 /// replays it as a `QuotaSource`. Shared by reference with the model port,
-/// which feeds it on every chat response.
+/// which feeds it on every chat response. Changes are announced to
+/// subscribers so a capture landing outside a consumer's own triggers —
+/// the startup usage probe, which follows compose — still reaches them.
 pub(all) struct CodexQuotaTracker {
   mut latest : Array[@devkit.QuotaReading]?
   now_ms : () -> Int64
+  /// Change listeners keyed by the tracker-generated subscription token
+  /// each registration received. Coexisting publishers (several agents or
+  /// buses over one process tracker) each keep their own token, so no
+  /// registration can clobber or detach another.
+  priv listeners : Map[Int, () -> Unit]
 }
+
+///|
+/// Monotonic source of subscription tokens; one process, one counter.
+let codex_quota_listener_seq : Ref[Int] = Ref::{ val: 0, }
 
 ///|
 pub fn CodexQuotaTracker::CodexQuotaTracker(
   now_ms? : () -> Int64 = fn() { @async.now() },
 ) -> CodexQuotaTracker {
-  { latest: None, now_ms, }
+  { latest: None, now_ms, listeners: Map::from_array([]), }
+}
+
+///|
+/// Watch tracker changes: `notify` runs after every capture that advanced
+/// the snapshot. Returns this registration's token — the only handle that
+/// unsubscribes it, so coexisting consumers never touch each other.
+fn CodexQuotaTracker::subscribe(
+  self : CodexQuotaTracker,
+  notify~ : () -> Unit,
+) -> Int {
+  codex_quota_listener_seq.val += 1
+  let token = codex_quota_listener_seq.val
+  self.listeners[token] = notify
+  token
+}
+
+///|
+/// Detach exactly the registration that received `token`; a no-op for a
+/// token that is gone or never existed.
+fn CodexQuotaTracker::unsubscribe(
+  self : CodexQuotaTracker,
+  token : Int,
+) -> Unit {
+  ignore(self.listeners.remove(token))
+}
+
+///|
+/// Notify listeners over a snapshot of the map, so a listener that
+/// (un)subscribes during delivery cannot skew the iteration.
+fn CodexQuotaTracker::notify_listeners(self : CodexQuotaTracker) -> Unit {
+  let listeners = self.listeners.values().collect()
+  for notify in listeners {
+    notify()
+  }
 }
 
 ///|
@@ -155,6 +200,7 @@ pub fn CodexQuotaTracker::capture(
   let parsed = parse_codex_quota_headers(headers, fetched_at_ms=(self.now_ms)())
   if parsed.length() > 0 {
     self.latest = Some(parsed)
+    self.notify_listeners()
   }
 }
 
@@ -168,6 +214,7 @@ pub fn CodexQuotaTracker::capture_readings(
 ) -> Unit {
   if readings.length() > 0 {
     self.latest = Some(readings)
+    self.notify_listeners()
   }
 }
 

@@ -3,7 +3,7 @@
 ///
 /// The wire-generic items/tool/usage/SSE machinery lives in the shared
 /// `posoco-kit-responses` module; this file keeps only the compact-specific
-/// decode of `/responses/compact` output items into canonical messages.
+/// decode of assembled compact-window items into canonical messages.
 
 ///|
 /// Display-only projection. The authoritative array remains in the anchor;

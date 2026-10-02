@@ -1,10 +1,7 @@
 ///|
-/// Compact-specific HTTP error diagnostics (W3): safe, bounded, parseable
-/// `key=value` fields for the compact endpoint only — stage, status, the
-/// provider error object's structural `code`/`param`/`type` and the
-/// `x-request-id` response header. Arbitrary provider body text (including
-/// `error.message`) is never echoed for compact, so no credential,
-/// transcript, or encrypted payload can leak through the excerpt channel.
+/// Adapter-owned compact diagnostics. Core relays this safe bounded label
+/// without interpreting its fields. Provider messages and response payloads
+/// never enter the label.
 
 ///|
 /// Upper bound for any single allowlisted diagnostic value.
@@ -42,7 +39,13 @@ fn compact_error_meta_text(text : String) -> String? {
 ///|
 fn compact_error_meta_value(value : Json) -> String? {
   match value {
-    Json::String(text) => compact_error_meta_text(text)
+    Json::String(text) if [
+        "invalid_api_key", "invalid_request_error", "rate_limit_error", "rate_limit_exceeded",
+        "insufficient_quota", "usage_limit_reached", "context_length_exceeded", "unsupported_parameter",
+        "model_not_found", "server_error", "authentication_error", "permission_error",
+        "model", "input", "tools", "instructions", "reasoning", "stream", "max_output_tokens",
+        "temperature",
+      ].contains(text) => Some(text)
     _ => None
   }
 }
@@ -107,9 +110,9 @@ fn http_error_body_summary_text(summary : OpenAIErrorBodySummary) -> String {
 }
 
 ///|
-/// Compact HTTP failure message: safe structural fields first (parseable as
-/// comma-separated key=value inside the wrapper), then the redacted body
-/// size/category summary. Never an arbitrary provider excerpt.
+/// Prioritize request identity and provider verdict before optional context.
+/// The adapter's aggregate bound leaves room for core's error wrappers under
+/// the 512-character display limit; core need not parse or reorder fields.
 fn format_compact_http_error(
   status : Int,
   body_summary : OpenAIErrorBodySummary,
@@ -120,34 +123,34 @@ fn format_compact_http_error(
 ) -> String {
   let (code, param, category) = compact_provider_error_meta(body_text)
   let request_id = match request_id_header {
-    Some(value) => compact_error_meta_text(value)
-    None => None
+    Some(value) if value.has_prefix("req_") => compact_error_meta_text(value)
+    _ => None
   }
+  let prefix = "OpenAI HTTP error (stage=compact_http_status, status=\{status}"
+  let fields : Array[(String, String?)] = [
+    ("request_id", request_id),
+    ("code", code),
+    ("param", param),
+    ("category", category),
+    ("endpoint", compact_error_meta_text(endpoint_kind)),
+    ("model", compact_error_meta_text(model)),
+  ]
   let buf = StringBuilder()
-  buf.write_string(
-    "OpenAI HTTP error (stage=compact_http_status, status=\{status}",
-  )
-  buf.write_string(", endpoint=\{endpoint_kind}")
-  match compact_error_meta_text(model) {
-    Some(model_id) => buf.write_string(", model=\{model_id}")
-    None => ()
+  buf.write_string(prefix)
+  let mut remaining = 352 - prefix.length() - 1
+  for (key, value) in fields {
+    if value is Some(value) {
+      let part = ", \{key}=\{value}"
+      if part.length() <= remaining {
+        buf.write_string(part)
+        remaining -= part.length()
+      }
+    }
   }
-  match code {
-    Some(value) => buf.write_string(", code=\{value}")
-    None => ()
+  let summary = ", " + http_error_body_summary_text(body_summary)
+  if summary.length() <= remaining {
+    buf.write_string(summary)
   }
-  match param {
-    Some(value) => buf.write_string(", param=\{value}")
-    None => ()
-  }
-  match category {
-    Some(value) => buf.write_string(", category=\{value}")
-    None => ()
-  }
-  match request_id {
-    Some(value) => buf.write_string(", request_id=\{value}")
-    None => ()
-  }
-  buf.write_string(", \{http_error_body_summary_text(body_summary)})")
+  buf.write_string(")")
   buf.to_string()
 }

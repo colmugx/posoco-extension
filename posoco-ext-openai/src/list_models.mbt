@@ -7,6 +7,7 @@
 pub(all) struct OpenAIModelInfo {
   id : String
   display_name : String
+  use_responses_lite : Bool
 }
 
 ///|
@@ -26,6 +27,7 @@ pub(all) struct CodexModelInfo {
   supported_in_api : Bool
   priority : Int
   context_window : Int?
+  use_responses_lite : Bool
 }
 
 ///|
@@ -46,6 +48,7 @@ pub(all) struct OpenAICachedModel {
   default_effort : String?
   context_window : Int?
   image_in : Bool
+  use_responses_lite : Bool
 }
 
 ///|
@@ -105,6 +108,9 @@ fn parse_cached_openai_models(records : Json?) -> Array[OpenAICachedModel]? {
       default_effort,
       context_window,
       image_in,
+      use_responses_lite: model_responses_lite(fields) catch {
+        _ => return None
+      },
     })
   }
   Some(models)
@@ -414,7 +420,11 @@ pub fn parse_openai_models(
           "OpenAI models item display_name must be a string",
         )
     }
-    result.push(OpenAIModelInfo::{ id, display_name, })
+    result.push(OpenAIModelInfo::{
+      id,
+      display_name,
+      use_responses_lite: model_responses_lite(fields),
+    })
   }
   result
 }
@@ -497,6 +507,7 @@ pub fn parse_codex_models(
       supported_in_api,
       priority,
       context_window,
+      use_responses_lite: model_responses_lite(fields),
     })
   }
   result

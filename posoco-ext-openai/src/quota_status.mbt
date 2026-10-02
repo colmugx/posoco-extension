@@ -4,11 +4,11 @@
 /// Codex is push-shaped: the authoritative 5-hour and weekly percentages
 /// ride on chat responses (header capture) or the usage endpoint, both of
 /// which land in a `CodexQuotaTracker`. This extension is the consumer end
-/// of that pipeline: it observes `ModelResponseReceived`, replays the
-/// tracker snapshot as `5h` / `weekly` status segments through the devkit
-/// status protocol, and unregisters windows whose reading disappeared.
-/// Router provider events scope that visibility to the codex provider;
-/// with `bus = None` every publication is a silent no-op.
+/// of that pipeline: it observes `ModelResponseReceived` and tracker
+/// captures, replays the tracker snapshot as `5h` / `weekly` status segments
+/// through the devkit status protocol, and unregisters windows whose reading
+/// disappeared. Router provider events scope that visibility to the codex
+/// provider; with `bus = None` every publication is a silent no-op.
 
 ///|
 /// Windows worth a segment: the two rate-limit windows with a stated
@@ -55,6 +55,9 @@ pub struct CodexQuotaStatus {
   /// Active provider last announced on the bus "provider" topic. `None`
   /// until one arrives — no router events keeps the windows visible.
   priv mut active_provider : String?
+  /// This registration's tracker subscription token — the only handle that
+  /// unsubscribes it, so shutdown never detaches a coexisting publisher.
+  priv mut token : Int?
 }
 
 ///|
@@ -75,11 +78,19 @@ pub fn CodexQuotaStatus::CodexQuotaStatus(
     bus,
     last: [],
     active_provider: None,
+    token: None,
   }
   match bus {
     Some(bus) => bus.subscribe(status as &@devkit.BusSubscriber)
     None => ()
   }
+  // Tracker changes reach the bar even when they land outside this
+  // publisher's own triggers: the startup usage probe fills the shared
+  // tracker after compose and before any chat response exists. The token
+  // stays publisher-owned, so coexisting lifetimes never detach each other.
+  status.token = Some(
+    status.tracker.subscribe(notify=fn() { status.publish_if_changed() }),
+  )
   status
 }
 
@@ -90,8 +101,13 @@ pub fn CodexQuotaStatus::CodexQuotaStatus(
 /// stale percentage never lingers on the bar. While another provider is
 /// active (a provider event announced it) every trigger is gated off:
 /// `on_bus_event` already unregistered the windows and nothing re-claims
-/// them until codex re-activates.
+/// them until codex re-activates. A stopped publisher (shutdown detached its
+/// tracker token) never publishes: the bus registration survives shutdown,
+/// so every path through here is gated on the live subscription.
 fn CodexQuotaStatus::publish_if_changed(self : CodexQuotaStatus) -> Unit {
+  if self.token is None {
+    return
+  }
   let bus = match self.bus {
     Some(bus) => bus
     None => return
@@ -177,11 +193,17 @@ pub extend CodexQuotaStatus with @posoco.Observer::{on_event, on_event_at}
 /// gates further publications; "openai" republishes immediately. Events on
 /// other topics, or with a missing/mistyped `provider_id`, are ignored.
 /// Without a bus there is no subscription, so visibility never flips and
-/// hosts without a router keep the old always-visible behavior.
+/// hosts without a router keep the old always-visible behavior. A stopped
+/// publisher ignores every event: the bus registration outlives shutdown,
+/// and acting on late provider events would strip a successor's windows or
+/// republish behind its back.
 pub impl @devkit.BusSubscriber for CodexQuotaStatus with fn on_bus_event(
   self : CodexQuotaStatus,
   event : @devkit.BusEvent,
 ) -> Unit {
+  if self.token is None {
+    return
+  }
   if event.topic != "provider" {
     return
   }
@@ -240,11 +262,19 @@ pub extend CodexQuotaStatus with @posoco.Lifecycle::{
 }
 
 ///|
-/// Nothing to release: the publisher holds no resources beyond the tracker.
+/// Release this publisher's tracker registration: the tracker is
+/// process-shared and outlives any single publisher, so shutdown detaches
+/// exactly its own token and leaves coexisting publishers subscribed.
 pub impl @posoco.Lifecycle for CodexQuotaStatus with fn on_shutdown(
   self : CodexQuotaStatus,
 ) -> Unit {
-  ignore(self)
+  match self.token {
+    Some(token) => {
+      self.tracker.unsubscribe(token)
+      self.token = None
+    }
+    None => ()
+  }
 }
 
 ///|

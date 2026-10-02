@@ -15,6 +15,8 @@ import {
 // Values
 pub fn codex_oauth_api_base() -> String
 
+pub fn codex_release_discovery_url() -> String
+
 pub fn codex_shared_quota_tracker() -> CodexQuotaTracker
 
 pub fn codex_usage_url(String) -> String
@@ -34,6 +36,8 @@ pub async fn fetch_openai_models_with_transport(&OpenAIModelsHttpTransport, Stri
 pub fn intelligence_metrics_source() -> &@devkit.ModelMetricsSource
 
 pub fn openai_codex_models_client_version() -> String
+
+pub fn parse_codex_client_version_payload(String) -> String?
 
 pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
 
@@ -58,6 +62,7 @@ pub(all) struct CodexModelInfo {
   supported_in_api : Bool
   priority : Int
   context_window : Int?
+  use_responses_lite : Bool
 }
 
 pub(all) struct CodexOAuth {
@@ -93,6 +98,7 @@ pub impl @devkit.BusSubscriber for CodexQuotaStatus
 pub(all) struct CodexQuotaTracker {
   mut latest : Array[@devkit.QuotaReading]?
   now_ms : () -> Int64
+  // private fields
 }
 pub fn CodexQuotaTracker::CodexQuotaTracker(now_ms? : () -> Int64) -> Self
 pub fn CodexQuotaTracker::capture(Self, Map[@http.CaseInsensitiveString, String]) -> Unit
@@ -118,6 +124,7 @@ pub(all) struct OpenAICachedModel {
   default_effort : String?
   context_window : Int?
   image_in : Bool
+  use_responses_lite : Bool
 }
 
 pub(all) struct OpenAIConfig {
@@ -128,6 +135,7 @@ pub(all) struct OpenAIConfig {
   account_id : String?
   reasoning_effort : String?
   context_window : Int?
+  use_responses_lite : Bool
 }
 pub fn OpenAIConfig::OpenAIConfig(String, String) -> Self
 pub fn OpenAIConfig::from_codex_credential(@ext-oauth.Credential, String) -> Self
@@ -137,6 +145,7 @@ pub fn OpenAIConfig::with_reasoning_effort(Self, String) -> Self
 pub(all) struct OpenAIModelInfo {
   id : String
   display_name : String
+  use_responses_lite : Bool
 }
 
 pub(all) struct OpenAIModelPort {
@@ -145,7 +154,7 @@ pub(all) struct OpenAIModelPort {
 }
 pub fn OpenAIModelPort::OpenAIModelPort(OpenAIConfig, quota_tracker? : CodexQuotaTracker?) -> Self
 pub async fn OpenAIModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn OpenAIModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn OpenAIModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn OpenAIModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::model_catalog_from_cached_models(Self, Array[OpenAICachedModel], chatgpt_mode~ : Bool) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
@@ -161,8 +170,9 @@ pub(all) struct OpenAIModelsHttpResponse {
 pub(all) struct OpenAIProvider {
   models_transport : &OpenAIModelsHttpTransport?
   oauth_transport : &@ext-oauth.OAuthHttpTransport?
+  version_cache : &CodexClientVersionCache?
 }
-pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@ext-oauth.OAuthHttpTransport?) -> Self
+pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@ext-oauth.OAuthHttpTransport?, version_cache? : &CodexClientVersionCache?) -> Self
 pub fn OpenAIProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
 pub fn OpenAIProvider::credential_id(Self) -> String
 pub async fn OpenAIProvider::login(Self, &@ext-oauth.AuthInteraction) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
@@ -176,6 +186,11 @@ pub impl @ext-llm.RefreshableProviderFactory for OpenAIProvider
 // Type aliases
 
 // Traits
+pub(open) trait CodexClientVersionCache {
+  async fn read(Self) -> String? noraise
+  async fn write(Self, String) -> Unit noraise
+}
+
 pub(open) trait OpenAIModelsHttpTransport {
   async fn get(Self, String, Map[String, String]) -> OpenAIModelsHttpResponse raise @error.ModelError
 }

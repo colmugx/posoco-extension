@@ -42,6 +42,10 @@ fn openai_catalog_slot(
   // Every slot port shares the factory port's quota tracker so switching
   // models (or rebuilding a slot on credential/effort change) never drops
   // the Codex header capture.
+  let capabilities = capabilities.copy()
+  if config.use_responses_lite && !capabilities.contains("use_responses_lite") {
+    capabilities.push("use_responses_lite")
+  }
   let port : &@posoco.ModelPort = OpenAIModelPort(config, quota_tracker~)
   let slot_id = "openai/" + config.model
   let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if thinking_efforts.is_empty() {
@@ -79,7 +83,11 @@ fn openai_catalog_slot(
     default_effort~,
     rebuild_on_credential=Some(fn(credential) {
       let base = OpenAIConfig::from_codex_credential(credential, config.model)
-      let base = { ..base, context_window: config.context_window, }
+      let base = {
+        ..base,
+        context_window: config.context_window,
+        use_responses_lite: config.use_responses_lite,
+      }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
         refreshed,
@@ -99,7 +107,11 @@ fn openai_catalog_slot(
         config.model,
         openai_api_base_for_key(config),
       )
-      let base = { ..base, context_window: config.context_window, }
+      let base = {
+        ..base,
+        context_window: config.context_window,
+        use_responses_lite: config.use_responses_lite,
+      }
       let refreshed = openai_apply_effort(base, config.reasoning_effort)
       openai_catalog_slot(
         refreshed,
@@ -194,6 +206,7 @@ pub fn OpenAIModelPort::model_catalog_from_api_models(
       info.id,
       self.config.base_url,
     )
+    let config = { ..config, use_responses_lite: info.use_responses_lite, }
     slots.push(
       openai_catalog_slot(
         config,
@@ -284,8 +297,12 @@ fn codex_catalog_slot_from_info(
     account_id: base_config.account_id,
     reasoning_effort: selected_effort,
     context_window: info.context_window,
+    use_responses_lite: info.use_responses_lite,
   }
   let capabilities : Array[String] = ["chat", "streaming", "oauth", "image_in"]
+  if info.use_responses_lite {
+    capabilities.push("use_responses_lite")
+  }
   if !efforts.is_empty() {
     capabilities.push("reasoning")
   }
@@ -329,8 +346,12 @@ fn codex_catalog_slot_from_cached(
     account_id: base_config.account_id,
     reasoning_effort: selected_effort,
     context_window: info.context_window,
+    use_responses_lite: info.use_responses_lite,
   }
   let capabilities : Array[String] = ["chat", "streaming", "oauth"]
+  if info.use_responses_lite {
+    capabilities.push("use_responses_lite")
+  }
   if info.image_in {
     capabilities.push("image_in")
   }
@@ -364,7 +385,19 @@ fn api_catalog_slot_from_cached(
     info.model_id,
     base_config.base_url,
   )
+  let config = {
+    ..config,
+    context_window: info.context_window,
+    reasoning_effort: match base_config.reasoning_effort {
+      Some(value) if info.thinking_efforts.contains(value) => Some(value)
+      _ => info.default_effort
+    },
+    use_responses_lite: info.use_responses_lite,
+  }
   let capabilities : Array[String] = ["chat", "streaming", "api_key"]
+  if info.use_responses_lite {
+    capabilities.push("use_responses_lite")
+  }
   if info.image_in {
     capabilities.push("image_in")
   }

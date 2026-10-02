@@ -1,4 +1,4 @@
-///|
+///|///|
 /// Honest client identity for the Codex subscription backend: posoco reports
 /// itself as `posoco` (never as codex_cli_rs) while mirroring the official
 /// Codex CLI protocol header shape from codex-rs.
@@ -59,23 +59,6 @@ fn identity_uuid_v4() -> String {
     }
   }
   out.to_string()
-}
-
-///|
-let identity_installation_cell : Ref[String?] = Ref::{ val: None, }
-
-///|
-/// Process-stable installation id (`x-codex-installation-id`), minted once
-/// per process and reused by every call afterwards.
-fn identity_installation_id() -> String {
-  match identity_installation_cell.val {
-    Some(id) => id
-    None => {
-      let id = identity_uuid_v4()
-      identity_installation_cell.val = Some(id)
-      id
-    }
-  }
 }
 
 ///|
