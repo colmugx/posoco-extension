@@ -91,8 +91,32 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn credential_id(
 }
 
 ///|
+/// Publish the live usage probe under the provider id so the `/status`
+/// command and the router's bar refresh read it live at command time. Every
+/// configured build/refresh re-registers, so the registry holds the latest
+/// credential snapshot. The usage endpoint is OAuth-only (bearer + account
+/// header), so API-key builds leave the id unregistered.
+fn openai_register_quota_source(
+  transport : &OpenAIModelsHttpTransport?,
+  config : OpenAIConfig,
+) -> Unit {
+  match config.account_id {
+    Some(account_id) if account_id.length() > 0 => {
+      let source = CodexUsageQuotaSource::CodexUsageQuotaSource(
+        transport~,
+        access_token=config.api_key,
+        account_id~,
+      )
+      let borrowed : &@devkit.QuotaSource = source
+      @devkit.quota_registry_register("openai", borrowed)
+    }
+    _ => ()
+  }
+}
+
+///|
 pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
-  _self : OpenAIProvider,
+  self : OpenAIProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
   let model = match openai_setting_string(source, "model") {
@@ -124,6 +148,13 @@ pub impl @llm.ProviderFactory for OpenAIProvider with fn build(
     config,
     quota_tracker=Some(codex_shared_quota_tracker()),
   )
+  // Pull-style quota: the OAuth credential is the only shape that can serve
+  // the usage endpoint, so only that build publishes the live source.
+  match credential {
+    Some(@oauth.ProviderCredential::OAuth(_)) =>
+      openai_register_quota_source(self.models_transport, config)
+    _ => ()
+  }
   openai_register_intelligence_metrics()
   // Offline expansion: host-cached discovery records rebuild the full
   // multi-slot catalog without a network request, so a persisted selection
@@ -226,6 +257,9 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
         config,
         quota_tracker=Some(codex_shared_quota_tracker()),
       )
+      // Same registry publication as build: refresh carries the renewed
+      // credential, so the /status pull source follows it.
+      openai_register_quota_source(Some(transport_impl), config)
       openai_register_intelligence_metrics()
       @llm.ProviderBuildResult::Ready(
         port.model_catalog_from_codex_models(models),

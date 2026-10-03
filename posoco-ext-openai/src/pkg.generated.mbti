@@ -108,6 +108,18 @@ pub(all) struct CodexReasoningLevel {
   description : String
 }
 
+pub(all) struct CodexUsageQuotaSource {
+  transport : &OpenAIModelsHttpTransport?
+  api_base : String
+  access_token : String
+  account_id : String
+  tracker : CodexQuotaTracker?
+  now_ms : () -> Int64
+}
+pub fn CodexUsageQuotaSource::CodexUsageQuotaSource(transport? : &OpenAIModelsHttpTransport?, api_base? : String, access_token~ : String, account_id~ : String, tracker? : CodexQuotaTracker?, now_ms? : () -> Int64) -> Self
+pub async fn CodexUsageQuotaSource::read(Self) -> Result[Array[@devkit.QuotaReading], String]
+pub impl @devkit.QuotaSource for CodexUsageQuotaSource
+
 pub(all) struct DefaultOpenAIModelsHttpTransport {
 }
 pub fn DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport() -> Self

@@ -39,6 +39,7 @@ options(
     "compact_security_wbtest.mbt": [ "native" ],
     "codex_quota_wbtest.mbt": [ "native" ],
     "codex_usage_wbtest.mbt": [ "native" ],
+    "codex_status_live_wbtest.mbt": [ "native" ],
     "quota_status_wbtest.mbt": [ "native" ],
     "intelligence_metrics_wbtest.mbt": [ "native" ],
   },

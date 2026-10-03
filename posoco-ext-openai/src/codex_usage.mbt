@@ -179,3 +179,69 @@ pub async fn fetch_codex_usage_with_transport(
   }
   parse_codex_usage(payload, fetched_at_ms=now_ms())
 }
+
+///|
+/// Live `/status` pull source over the wham/usage endpoint.
+///
+/// The devkit registry hands the `/status` command (and the router's bar
+/// refresh) whatever source is registered under the active provider id, so
+/// `read` probes the endpoint live with the credential snapshot its
+/// registration carried — every configured build/refresh re-registers, so
+/// the registry holds the latest token. A successful read captures into the
+/// tracker, which is what puts the same fresh windows on the statusbar the
+/// report states; a failed read states nothing, leaving both the tracker
+/// snapshot and the already-published segments untouched.
+pub(all) struct CodexUsageQuotaSource {
+  transport : &OpenAIModelsHttpTransport?
+  api_base : String
+  access_token : String
+  account_id : String
+  tracker : CodexQuotaTracker?
+  now_ms : () -> Int64
+}
+
+///|
+pub fn CodexUsageQuotaSource::CodexUsageQuotaSource(
+  transport? : &OpenAIModelsHttpTransport? = None,
+  api_base? : String = codex_oauth_api_base(),
+  access_token~ : String,
+  account_id~ : String,
+  tracker? : CodexQuotaTracker? = None,
+  now_ms? : () -> Int64 = fn() { @async.now() },
+) -> CodexUsageQuotaSource {
+  { transport, api_base, access_token, account_id, tracker, now_ms, }
+}
+
+///|
+pub impl @devkit.QuotaSource for CodexUsageQuotaSource with fn read(
+  self : CodexUsageQuotaSource,
+) -> Result[Array[@devkit.QuotaReading], String] {
+  let transport : &OpenAIModelsHttpTransport = match self.transport {
+    Some(value) => value
+    None => {
+      let default_transport = DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport()
+      default_transport
+    }
+  }
+  let usage = fetch_codex_usage_with_transport(
+    transport,
+    self.api_base,
+    self.access_token,
+    self.account_id,
+    now_ms=self.now_ms,
+  )
+  match usage {
+    Ok(readings) => {
+      let tracker = match self.tracker {
+        Some(value) => value
+        None => codex_shared_quota_tracker()
+      }
+      tracker.capture_readings(readings)
+      usage
+    }
+    Err(_) => usage
+  }
+}
+
+///|
+pub extend CodexUsageQuotaSource with @posoco/devkit.QuotaSource::{read}

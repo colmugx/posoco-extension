@@ -417,6 +417,10 @@ test "codex quota status re-shows windows when codex re-activates" {
 /// capture alone must publish the windows on the bus, and `/status` must
 /// report the same percentages without a model response ever arriving.
 async test "startup usage probe publishes quota and /status reports it before any chat" {
+  // This file owns the openai quota view through the injected tracker; a
+  // build from another test file may have left a live source in the
+  // process-global registry, so clear the id before composing.
+  @devkit.quota_registry_unregister("openai")
   let bus = @devkit.EventBus::EventBus()
   let recorder = QuotaBusRecorder::{ events: [], }
   bus.subscribe(recorder as &@devkit.BusSubscriber)
@@ -561,6 +565,8 @@ fn codex_usage_fixture_later() -> Json {
 /// older one stops only its own notifications, and the surviving bus keeps
 /// feeding both the bar and `/status` — all before any chat.
 async test "coexisting publishers stay independent across buses and lifetimes" {
+  // Same registry hygiene as the startup regression above.
+  @devkit.quota_registry_unregister("openai")
   let tracker = CodexQuotaTracker::CodexQuotaTracker(now_ms=fn() {
     1757000000000L
   })
