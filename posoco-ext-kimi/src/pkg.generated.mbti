@@ -74,7 +74,7 @@ pub(all) struct KimiModelPort {
 }
 pub fn KimiModelPort::KimiModelPort(KimiConfig, ctx? : @devkit.ExtContext) -> Self
 pub async fn KimiModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn KimiModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn KimiModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn KimiModelPort::extension_id(Self) -> String
 pub fn KimiModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn KimiModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError

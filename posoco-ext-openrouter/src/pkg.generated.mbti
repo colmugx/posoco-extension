@@ -74,7 +74,7 @@ pub(all) struct OpenRouterModelPort {
 }
 pub fn OpenRouterModelPort::OpenRouterModelPort(OpenRouterConfig) -> Self
 pub async fn OpenRouterModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn OpenRouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn OpenRouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn OpenRouterModelPort::extension_id(Self) -> String
 pub fn OpenRouterModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn OpenRouterModelPort::provider_config(Self) -> @port.ProviderConfig

@@ -96,7 +96,7 @@ pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_slot_id(Self) -> String
 pub async fn RouterModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub fn RouterModelPort::commands(Self) -> Array[@port.CommandDef]
-pub async fn RouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn RouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn RouterModelPort::current_model_id(Self) -> String
 pub fn RouterModelPort::current_provider_id(Self) -> String
 pub fn RouterModelPort::extension_id(Self) -> String
@@ -126,7 +126,7 @@ pub impl @devkit.BusSubscriber for RouterModelPort
 
 type TransientRetryModelPort
 pub async fn TransientRetryModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn TransientRetryModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn TransientRetryModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn TransientRetryModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for TransientRetryModelPort
 

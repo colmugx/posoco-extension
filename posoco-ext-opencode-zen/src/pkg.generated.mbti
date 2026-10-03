@@ -49,7 +49,7 @@ pub(all) struct OpenCodeZenModelPort {
 }
 pub fn OpenCodeZenModelPort::OpenCodeZenModelPort(OpenCodeZenConfig) -> Self
 pub async fn OpenCodeZenModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn OpenCodeZenModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn OpenCodeZenModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn OpenCodeZenModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenCodeZenModelPort
 
@@ -68,7 +68,7 @@ pub impl @ext-llm.RefreshableProviderFactory for OpenCodeZenProvider
 
 type ZenAnchoredCompactPort
 pub async fn ZenAnchoredCompactPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn ZenAnchoredCompactPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn ZenAnchoredCompactPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn ZenAnchoredCompactPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for ZenAnchoredCompactPort
 

@@ -29,7 +29,7 @@ pub(all) struct ZaiCodingPlanModelPort {
 }
 pub fn ZaiCodingPlanModelPort::ZaiCodingPlanModelPort(@posoco-ext-zai.ZaiConfig, ctx? : @devkit.ExtContext) -> Self
 pub async fn ZaiCodingPlanModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn ZaiCodingPlanModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn ZaiCodingPlanModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn ZaiCodingPlanModelPort::extension_id(Self) -> String
 pub fn ZaiCodingPlanModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn ZaiCodingPlanModelPort::provider_config(Self) -> @port.ProviderConfig

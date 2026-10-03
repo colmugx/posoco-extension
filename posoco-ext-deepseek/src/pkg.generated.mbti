@@ -61,7 +61,7 @@ pub(all) struct DeepSeekModelPort {
 pub fn DeepSeekModelPort::DeepSeekModelPort(DeepSeekConfig, ctx? : @devkit.ExtContext) -> Self
 pub async fn DeepSeekModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub async fn DeepSeekModelPort::chat_prefix_completion(Self, Array[@kernel.Message], String, Array[String]?) -> String raise @error.ModelError
-pub async fn DeepSeekModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn DeepSeekModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn DeepSeekModelPort::extension_id(Self) -> String
 pub async fn DeepSeekModelPort::fim_completion(Self, String, String?, max_tokens? : Int) -> String raise @error.ModelError
 pub fn DeepSeekModelPort::manifest(Self) -> @port.ExtensionManifest

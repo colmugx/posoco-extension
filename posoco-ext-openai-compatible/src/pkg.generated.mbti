@@ -45,7 +45,7 @@ pub(all) struct OpenAICompatibleModelPort {
 }
 pub fn OpenAICompatibleModelPort::OpenAICompatibleModelPort(String, OpenAICompatibleConfig, request_headers? : () -> Map[String, String]) -> Self
 pub async fn OpenAICompatibleModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
-pub async fn OpenAICompatibleModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub async fn OpenAICompatibleModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn OpenAICompatibleModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAICompatibleModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenAICompatibleModelPort
