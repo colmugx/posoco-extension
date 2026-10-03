@@ -10,7 +10,7 @@ let write_tmp_counter : Ref[Int] = { val: 0, }
 /// error (permission, broken symlink), which surfaces as a RuntimeError.
 impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
   @fs.exists(path) catch {
-    _ => raise write_failure("stat", path)
+    error => raise write_failure("stat", path, error.to_string())
   }
 }
 
@@ -19,15 +19,15 @@ impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
 /// (`@fs` exposes size only on `File`, not as a path-based stat).
 impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
   let (mtime_s, mtime_ns) = @fs.mtime(path) catch {
-    _ => raise write_failure("stat", path)
+    error => raise write_failure("stat", path, error.to_string())
   }
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
-    _ => raise write_failure("stat", path)
+    error => raise write_failure("stat", path, error.to_string())
   }
   let size = file.size() catch {
-    _ => {
+    error => {
       file.close()
-      raise write_failure("stat", path)
+      raise write_failure("stat", path, error.to_string())
     }
   }
   file.close()
@@ -52,14 +52,14 @@ impl FsIo for NativeFsIo with fn write_atomic(
   write_tmp_counter.val += 1
   let tmp = "\{path}.tmp-\{write_tmp_counter.val}"
   @fs.write_file(tmp, content, create_mode=CreateOrTruncate, permission=0o644) catch {
-    _ => raise write_failure("write", path)
+    error => raise write_failure("write", path, error.to_string())
   }
   @fs.rename(tmp, path, replace=true) catch {
-    _ => {
+    error => {
       @fs.remove(tmp) catch {
         _ => ()
       }
-      raise write_failure("write", path)
+      raise write_failure("write", path, error.to_string())
     }
   }
 }

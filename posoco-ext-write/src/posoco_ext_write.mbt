@@ -114,10 +114,15 @@ fn extract_path_content(
 }
 
 ///|
-/// Format a `write` failure RuntimeError with sanitized path.
-fn write_failure(stage : String, path : String) -> @posoco.RuntimeError {
+/// Format a `write` failure RuntimeError with sanitized path and the
+/// underlying IO cause.
+fn write_failure(
+  stage : String,
+  path : String,
+  cause : String,
+) -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "write: \{stage} failed for '\{@devkit.sanitize_path(path)}'",
+    "write: \{stage} failed for '\{@devkit.sanitize_path(path)}': \{cause}",
   )
 }
 

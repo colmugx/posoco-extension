@@ -8,7 +8,6 @@ import {
 } for "test"
 
 import {
-  "colmugx/posoco/kernel",
   "moonbitlang/async",
 } for "wbtest"
 

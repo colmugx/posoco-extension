@@ -43,12 +43,12 @@ extern "js" fn js_stat_envelope(
   #|   try {
   #|     const st = stat(path);
   #|     return JSON.stringify({ ok: true, size: st.size, ms: st.mtimeMs });
-  #|   } catch { return JSON.stringify({ ok: false }); }
+  #|   } catch (e) { return JSON.stringify({ ok: false, err: String(e && e.message ? e.message : e) }); }
   #| }
 
 ///|
-/// `{ok}` envelope for throwing mutations; the MoonBit side only needs
-/// success/failure — failures surface as the tool's typed stage error.
+/// `{ok}` envelope for throwing mutations; failures carry the node error
+/// text in `err` so the MoonBit side can surface the cause.
 extern "js" fn js_write_envelope(
   write_file : (String, String) -> Unit,
   path : String,
@@ -56,7 +56,7 @@ extern "js" fn js_write_envelope(
 ) -> String =
   #| (writeFile, path, data) => {
   #|   try { writeFile(path, data); return JSON.stringify({ ok: true }); }
-  #|   catch { return JSON.stringify({ ok: false }); }
+  #|   catch (e) { return JSON.stringify({ ok: false, err: String(e && e.message ? e.message : e) }); }
   #| }
 
 ///|
@@ -67,7 +67,7 @@ extern "js" fn js_rename_envelope(
 ) -> String =
   #| (rename, oldPath, newPath) => {
   #|   try { rename(oldPath, newPath); return JSON.stringify({ ok: true }); }
-  #|   catch { return JSON.stringify({ ok: false }); }
+  #|   catch (e) { return JSON.stringify({ ok: false, err: String(e && e.message ? e.message : e) }); }
   #| }
 
 ///|
@@ -94,20 +94,26 @@ priv struct JsStatInfo {
 }
 
 ///|
-fn js_stat_info(path : String) -> JsStatInfo {
+/// `Err(cause)` carries the node error text from the envelope's `err` field;
+/// envelope-shape anomalies report a literal cause instead.
+fn js_stat_info(path : String) -> Result[JsStatInfo, String] {
   let json : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
-    _ => return { ok: false, size: 0, ms: 0.0, }
+    _ => return Err("malformed stat envelope")
   }
   let fields = match json {
     Json::Object(fields) => fields
-    _ => return { ok: false, size: 0, ms: 0.0, }
+    _ => return Err("malformed stat envelope")
   }
   let ok = match fields.get("ok") {
     Some(Json::True) => true
     _ => false
   }
   if !ok {
-    return { ok: false, size: 0, ms: 0.0, }
+    let cause = match fields.get("err") {
+      Some(Json::String(value)) => value
+      _ => "stat failed"
+    }
+    return Err(cause)
   }
   let size = match fields.get("size") {
     Some(Json::Number(value, ..)) => value.to_int()
@@ -117,19 +123,27 @@ fn js_stat_info(path : String) -> JsStatInfo {
     Some(Json::Number(value, ..)) => value
     _ => 0.0
   }
-  { ok: true, size, ms, }
+  Ok({ ok: true, size, ms, })
 }
 
 ///|
-fn js_envelope_ok(envelope : String) -> Bool {
-  let json : Json = @json.parse(envelope) catch { _ => return false }
+/// `None` on success; `Some(cause)` carries the failure text from the
+/// envelope's `err` field.
+fn js_envelope_err(envelope : String) -> String? {
+  let json : Json = @json.parse(envelope) catch {
+    _ => return Some("malformed envelope")
+  }
   match json {
     Json::Object(fields) =>
       match fields.get("ok") {
-        Some(Json::True) => true
-        _ => false
+        Some(Json::True) => None
+        _ =>
+          match fields.get("err") {
+            Some(Json::String(value)) => Some(value)
+            _ => Some("operation failed")
+          }
       }
-    _ => false
+    _ => Some("malformed envelope")
   }
 }
 
@@ -147,9 +161,9 @@ impl FsIo for JsFsIo with fn exists(_self, path : String) -> Bool {
 /// granularity is what the js runtime offers; the guard only ever compares
 /// stamps produced by the same runtime, so it stays self-consistent.
 impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
-  let info = js_stat_info(path)
-  if !info.ok {
-    raise write_failure("stat", path)
+  let info = match js_stat_info(path) {
+    Ok(info) => info
+    Err(cause) => raise write_failure("stat", path, cause)
   }
   let mtime_s = (info.ms / 1000.0).to_int64()
   let mtime_ns = (info.ms % 1000.0 * 1_000_000.0).to_int()
@@ -170,11 +184,13 @@ impl FsIo for JsFsIo with fn write_atomic(
     let _ = js_mkdir_recursive_envelope(fs_mkdir_sync, parent)
   }
   let tmp = "\{path}.tmp-\{js_now_ms()}"
-  if !js_envelope_ok(js_write_envelope(fs_write_file_sync, tmp, content)) {
-    raise write_failure("write", path)
+  match js_envelope_err(js_write_envelope(fs_write_file_sync, tmp, content)) {
+    Some(cause) => raise write_failure("write", path, cause)
+    None => ()
   }
-  if !js_envelope_ok(js_rename_envelope(fs_rename_sync, tmp, path)) {
-    raise write_failure("write", path)
+  match js_envelope_err(js_rename_envelope(fs_rename_sync, tmp, path)) {
+    Some(cause) => raise write_failure("write", path, cause)
+    None => ()
   }
 }
 
