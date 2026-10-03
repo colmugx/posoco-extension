@@ -236,7 +236,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "The complete instruction to delegate to zcode (plain text).",
+                      "Complete task for the zcode session (plain text).",
                     ),
                   ),
                 ]),
@@ -250,7 +250,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Working directory for the zcode session; defaults to the current directory.",
+                      "Working directory; defaults to the current directory.",
                     ),
                   ),
                 ]),
@@ -264,7 +264,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "A previous zcode session id (sess_…) to continue; omit to start a new session.",
+                      "Previous session id (sess_…) to continue; omit for a new session.",
                     ),
                   ),
                 ]),
@@ -287,7 +287,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Permission mode; defaults to edit. yolo auto-approves and must be requested explicitly.",
+                      "defaults to edit; yolo auto-approves; must be requested explicitly.",
                     ),
                   ),
                 ]),
@@ -301,7 +301,7 @@ fn zcode_tool_schema() -> Json {
                   (
                     "description",
                     Json::string(
-                      "Return a receipt immediately and run the delegation in the background; the result arrives later as a follow-up turn. Background always starts a fresh session.",
+                      "Immediate receipt; result arrives as a follow-up turn. Always starts a fresh session.",
                     ),
                   ),
                 ]),
@@ -322,7 +322,7 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn list_tools(
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("zcode"),
-      description: "Delegate a task to the local zcode CLI — the GLM coding-plan official harness with its own plugins and skills. zcode plans, edits files and runs commands inside its own session in the given working directory, then returns its final answer. Pass session_id (from a previous result) to continue that session instead of starting a new one. Long-running: a delegation may take many minutes — pass background: true to get an immediate receipt and receive the result as a follow-up turn. Default mode is edit; dangerous operations are denied by the bridge and reported back in the result text.",
+      description: "Delegate a task to the local zcode CLI (GLM coding-plan harness with its own plugins and skills); it plans, edits files and runs commands in its own session under the given cwd, then returns its final answer. Pass session_id from a previous result to continue that session. Long-running delegations: pass background: true for an immediate receipt; the result arrives as a follow-up turn. Default mode is edit; dangerous operations are denied by the bridge and reported in the result text.",
       input_schema: zcode_tool_schema(),
       owner: @posoco.OwnerId::unchecked("placeholder"),
       policy: @posoco.ExecutionPolicy::Sequential,

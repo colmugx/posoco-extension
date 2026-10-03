@@ -15,13 +15,13 @@
 fn write_tool_def() -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked("todo_write"),
-    description: "Write the structured task list for the current session, replacing any previous list. Use it to plan multi-step work (roughly three steps or more) before starting, and keep it current while working: exactly ONE task may be 'in_progress' at any time, mark tasks 'completed' the moment they finish, append newly discovered steps as 'pending'. Skip it for single, straightforward actions. Pass an empty array to clear the list.",
+    description: "Write the session task list, replacing any previous list. Plan multi-step work (three or more steps) before starting and keep it current: exactly ONE task may be 'in_progress' at any time; mark 'completed' the moment tasks finish; append newly found steps as 'pending'. Skip for single straightforward actions. Empty array clears the list.",
     input_schema: Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "todos": Json::object({
           "type": Json::string("array"),
-          "description": "The complete task list in execution order (max \{MAX_TODOS} entries); at most one entry may have status 'in_progress'.",
+          "description": "Complete task list in execution order (max \{MAX_TODOS}).",
           "items": Json::object({
             "type": Json::string("object"),
             "properties": Json::object({
@@ -36,7 +36,6 @@ fn write_tool_def() -> @posoco.ToolDef {
                   Json::string("in_progress"),
                   Json::string("completed"),
                 ]),
-                "description": "pending = not started, in_progress = currently being worked on (at most one), completed = done",
               }),
             }),
             "required": Json::array([

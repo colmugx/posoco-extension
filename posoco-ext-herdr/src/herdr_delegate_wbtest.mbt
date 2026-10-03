@@ -125,23 +125,24 @@ test "delegate tooldef shape" {
       }
     _ => fail("input_schema must be a JSON object")
   }
-  // Deferred ToolDef is intentionally explicit for weaker models: it must be
-  // executable without reconstructing hidden relationships from terse labels.
+  // Deferred ToolDef stays lean: call mechanics only. Cross-call policy
+  // (batching, readonly-first, artifact files) belongs to the resident
+  // strategy prompt, not to text paid on every request.
   assert_true(def.description.contains("visible herdr pane"))
   assert_true(def.description.contains("user-position slot"))
   assert_true(def.description.contains("depth-1 leaves"))
   assert_true(def.description.contains("child_session"))
-  assert_true(def.description.contains("success, failure"))
+  assert_true(def.description.contains("returned even on failure/timeout"))
   assert_true(
     def.description.contains("Omitted permission follows the parent posture"),
   )
   assert_true(def.description.contains("--yolo"))
-  assert_true(
-    def.description.contains("background always starts a fresh child"),
-  )
-  assert_true(def.description.contains("parallel panes"))
-  assert_true(def.description.contains("pane readback can truncate"))
-  assert_true(def.description.contains("one work-stream = one child session"))
+  assert_true(def.description.contains("background: true"))
+  assert_true(def.description.contains("follow-up turn"))
+  // Policy moved to the resident strategy prompt — must not come back.
+  assert_false(def.description.contains("parallel panes"))
+  assert_false(def.description.contains("pane readback can truncate"))
+  assert_false(def.description.contains("readonly explore"))
 }
 
 ///|

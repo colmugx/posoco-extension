@@ -225,7 +225,7 @@ test "background_summary_uses_same_bounded_body_contract" {
 ///|
 test "zcode_tool_definition_is_self_contained_for_weaker_models" {
   let def = zcode_tools().list_tools()[0]
-  assert_true(def.description.contains("GLM coding-plan official harness"))
+  assert_true(def.description.contains("GLM coding-plan harness"))
   assert_true(def.description.contains("plugins and skills"))
   assert_true(def.description.contains("session_id"))
   assert_true(def.description.contains("continue that session"))
@@ -248,7 +248,7 @@ test "zcode_schema_explains_resume_permission_and_background_defaults" {
     fail("expected session description")
   }
   assert_true(session_desc.contains("continue"))
-  assert_true(session_desc.contains("omit to start a new session"))
+  assert_true(session_desc.contains("omit for a new session"))
 
   guard props.get("mode") is Some(Json::Object(mode)) else {
     fail("expected mode")
@@ -266,7 +266,7 @@ test "zcode_schema_explains_resume_permission_and_background_defaults" {
   guard background.get("description") is Some(Json::String(background_desc)) else {
     fail("expected background description")
   }
-  assert_true(background_desc.contains("receipt immediately"))
+  assert_true(background_desc.contains("receipt"))
   assert_true(background_desc.contains("follow-up turn"))
   assert_true(background_desc.contains("fresh session"))
 }
