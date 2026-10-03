@@ -22,10 +22,12 @@ test "known Qwen3.8 defaults expose thinking and tool streaming" {
   assert_true(config.preserve_thinking)
   assert_true(config.tool_stream)
   assert_true(config.supports_images)
-  debug_inspect(
-    qwen_slot_efforts(config),
-    content="["off", "low", "medium", "xhigh"]",
-  )
+  let efforts = qwen_slot_efforts(config)
+  assert_eq(efforts.length(), 4)
+  assert_eq(efforts[0], "off")
+  assert_eq(efforts[1], "low")
+  assert_eq(efforts[2], "medium")
+  assert_eq(efforts[3], "xhigh")
 }
 
 ///|
