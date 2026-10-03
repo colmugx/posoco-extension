@@ -51,7 +51,7 @@ fn qwen_catalog_slot(
 ///|
 pub fn QwenModelPort::model_catalog(
   self : QwenModelPort,
-) -> @llm.ProviderModelCatalog {
+) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="qwen",
     slots=[qwen_catalog_slot(self.config, self.ctx)],
