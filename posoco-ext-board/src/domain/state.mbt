@@ -87,7 +87,7 @@ fn compare_attempt_order(a : Attempt, b : Attempt) -> Int {
 ///|
 /// Array-bearing records are always copied, never shared across state
 /// boundaries.
-fn BoardTask::copy_detached(self : BoardTask) -> BoardTask {
+pub fn BoardTask::copy_detached(self : BoardTask) -> BoardTask {
   {
     ..self,
     definition_of_done: self.definition_of_done.copy(),
@@ -96,7 +96,7 @@ fn BoardTask::copy_detached(self : BoardTask) -> BoardTask {
 }
 
 ///|
-fn Attempt::copy_detached(self : Attempt) -> Attempt {
+pub fn Attempt::copy_detached(self : Attempt) -> Attempt {
   { ..self, }
 }
 
