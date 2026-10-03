@@ -43,7 +43,7 @@ extern "js" fn js_stat_envelope(
   #|   try {
   #|     const st = stat(path);
   #|     return JSON.stringify({ ok: true, size: st.size, ms: st.mtimeMs, dir: st.isDirectory() });
-  #|   } catch { return JSON.stringify({ ok: false }); }
+  #|   } catch (e) { return JSON.stringify({ ok: false, err: String(e && e.message ? e.message : e) }); }
   #| }
 
 ///|
@@ -53,7 +53,7 @@ extern "js" fn js_read_text_envelope(
 ) -> String =
   #| (readText, path) => {
   #|   try { return JSON.stringify({ ok: true, text: readText(path, "utf8") }); }
-  #|   catch { return JSON.stringify({ ok: false }); }
+  #|   catch (e) { return JSON.stringify({ ok: false, err: String(e && e.message ? e.message : e) }); }
   #| }
 
 ///|
@@ -64,7 +64,7 @@ extern "js" fn js_read_base64_envelope(
   #| (readBuffer, path) => {
   #|   try {
   #|     return JSON.stringify({ ok: true, b64: readBuffer(path).toString("base64") });
-  #|   } catch { return JSON.stringify({ ok: false }); }
+  #|   } catch (e) { return JSON.stringify({ ok: false, err: String(e && e.message ? e.message : e) }); }
   #| }
 
 ///|
@@ -76,20 +76,26 @@ priv struct JsStatInfo {
 }
 
 ///|
-fn js_stat_info(path : String) -> JsStatInfo {
+/// `Err(cause)` carries the node error text from the envelope's `err` field;
+/// envelope-shape anomalies report a literal cause instead.
+fn js_stat_info(path : String) -> Result[JsStatInfo, String] {
   let json : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
-    _ => return { ok: false, size: 0, ms: 0.0, is_dir: false, }
+    _ => return Err("malformed stat envelope")
   }
   let fields = match json {
     Json::Object(fields) => fields
-    _ => return { ok: false, size: 0, ms: 0.0, is_dir: false, }
+    _ => return Err("malformed stat envelope")
   }
   let ok = match fields.get("ok") {
     Some(Json::True) => true
     _ => false
   }
   if !ok {
-    return { ok: false, size: 0, ms: 0.0, is_dir: false, }
+    let cause = match fields.get("err") {
+      Some(Json::String(value)) => value
+      _ => "stat failed"
+    }
+    return Err(cause)
   }
   let size = match fields.get("size") {
     Some(Json::Number(value, ..)) => value.to_int()
@@ -103,7 +109,7 @@ fn js_stat_info(path : String) -> JsStatInfo {
     Some(Json::True) => true
     _ => false
   }
-  { ok: true, size, ms, is_dir, }
+  Ok({ ok: true, size, ms, is_dir, })
 }
 
 ///|
@@ -122,12 +128,12 @@ impl FsIo for JsFsIo with fn exists(_self, path : String) -> Bool {
 /// Directory classification matches the native adaptor: a directory read
 /// surfaces with the `read` stage, not `stat`.
 impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
-  let info = js_stat_info(path)
-  if !info.ok {
-    raise read_failure("stat", path)
+  let info = match js_stat_info(path) {
+    Ok(info) => info
+    Err(cause) => raise read_failure("stat", path, cause)
   }
   if info.is_dir {
-    raise read_failure("read", path)
+    raise read_failure("read", path, "is a directory")
   }
   let mtime_s = (info.ms / 1000.0).to_int64()
   let mtime_ns = (info.ms % 1000.0 * 1_000_000.0).to_int()
@@ -136,23 +142,29 @@ impl FsIo for JsFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
 
 ///|
 /// One-shot read then slice. readFileSync(path, "utf8") reads + decodes
-/// together, so a failure is IO or decode with no way to tell them apart
-/// (stage `decode`).
+/// together; the envelope's `err` text distinguishes an IO failure (stage
+/// `read`) from the indistinguishable-shape case (stage `decode`).
 fn js_read_page(
   path : String,
 ) -> (Array[String], Int64) raise @posoco.RuntimeError {
   let envelope : Json = @json.parse(
     js_read_text_envelope(fs_read_text_sync, path),
   ) catch {
-    _ => raise read_failure("decode", path)
+    _ => raise read_failure("decode", path, "malformed read envelope")
   }
   let fields = match envelope {
     Json::Object(fields) => fields
-    _ => raise read_failure("decode", path)
+    _ => raise read_failure("decode", path, "malformed read envelope")
   }
   let text = match (fields.get("ok"), fields.get("text")) {
     (Some(Json::True), Some(Json::String(text))) => text
-    _ => raise read_failure("decode", path)
+    _ => {
+      let cause = match fields.get("err") {
+        Some(Json::String(value)) => value
+        _ => "malformed read envelope"
+      }
+      raise read_failure("read", path, cause)
+    }
   }
   let total_bytes = @utf8.encode(text).length()
   (split_file_lines(text), total_bytes.to_int64())
@@ -190,15 +202,21 @@ impl FsIo for JsFsIo with fn read_image_base64(_self, path : String) -> String {
   let json : Json = @json.parse(
     js_read_base64_envelope(fs_read_buffer_sync, path),
   ) catch {
-    _ => raise read_failure("read", path)
+    _ => raise read_failure("read", path, "malformed read envelope")
   }
-  guard json is Json::Object(fields) else { raise read_failure("read", path) }
+  guard json is Json::Object(fields) else {
+    raise read_failure("read", path, "malformed read envelope")
+  }
   let ok = fields.get("ok") is Some(Json::True)
   let b64 = fields.get("b64")
   if ok && b64 is Some(Json::String(value)) {
     value
   } else {
-    raise read_failure("read", path)
+    let cause = match fields.get("err") {
+      Some(Json::String(value)) => value
+      _ => "malformed read envelope"
+    }
+    raise read_failure("read", path, cause)
   }
 }
 

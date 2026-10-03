@@ -50,9 +50,10 @@ async test "read_wrong_type_path_is_not_reported_as_missing" {
 ///|
 test "read_stat_failure_mapping_is_safe_and_explicit" {
   let raw = "stat-line\n" + "x".repeat(200) + "TAIL_SECRET"
-  match read_failure("stat", raw) {
+  match read_failure("stat", raw, "ENOENT: no such file or directory") {
     @posoco.RuntimeError::InvocationFailed(message) => {
       assert_true(message.has_prefix("read: stat failed for '"))
+      assert_true(message.has_suffix(": ENOENT: no such file or directory"))
       assert_false(message.contains("\n"))
       assert_false(message.contains("TAIL_SECRET"))
     }
@@ -75,7 +76,9 @@ async test "read_directory_is_loud_without_os_error" {
       Err(@posoco.RuntimeError::InvocationFailed(message)) =>
         assert_eq(
           message,
-          "read: read failed for '" + @devkit.sanitize_path(dir) + "'",
+          "read: read failed for '" +
+          @devkit.sanitize_path(dir) +
+          "': is a directory",
         )
       _ => fail("expected reading a directory to fail")
     }

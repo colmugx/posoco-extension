@@ -100,7 +100,7 @@ priv struct DelegatedFsIo {
 ///|
 impl FsIo for DelegatedFsIo with fn exists(self, path : String) -> Bool {
   self.fs.exists(path) catch {
-    _ => raise read_failure("stat", path)
+    WorkspaceFsError(reason) => raise read_failure("stat", path, reason)
   }
 }
 
@@ -117,7 +117,9 @@ async fn delegated_read_page(
   fs : &@workspace.WorkspaceFs,
   path : String,
 ) -> LinePage raise @posoco.RuntimeError {
-  let text = fs.read_file(path) catch { _ => raise read_failure("read", path) }
+  let text = fs.read_file(path) catch {
+    WorkspaceFsError(reason) => raise read_failure("read", path, reason)
+  }
   let lines = split_file_lines(text)
   let total_bytes = @utf8.encode(text).length()
   { lines, total_lines: lines.length(), total_bytes: total_bytes.to_int64(), }
@@ -265,10 +267,15 @@ fn extract_read_args(
 }
 
 ///|
-/// Format a `read` failure RuntimeError with sanitized path.
-fn read_failure(stage : String, path : String) -> @posoco.RuntimeError {
+/// Format a `read` failure RuntimeError with sanitized path and the
+/// underlying IO cause.
+fn read_failure(
+  stage : String,
+  path : String,
+  cause : String,
+) -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "read: \{stage} failed for '\{@devkit.sanitize_path(path)}'",
+    "read: \{stage} failed for '\{@devkit.sanitize_path(path)}': \{cause}",
   )
 }
 

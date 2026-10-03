@@ -6,7 +6,7 @@ priv struct NativeFsIo {}
 /// error (permission, broken symlink), which surfaces as a RuntimeError.
 impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
   @fs.exists(path) catch {
-    _ => raise read_failure("stat", path)
+    error => raise read_failure("stat", path, error.to_string())
   }
 }
 
@@ -16,20 +16,22 @@ impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
 impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
   // Classify directories before opening: a directory read must surface with
   // the same `read` stage as the whole-file reader it replaces, not `stat`.
-  let kind = @fs.kind(path) catch { _ => raise read_failure("stat", path) }
+  let kind = @fs.kind(path) catch {
+    error => raise read_failure("stat", path, error.to_string())
+  }
   if kind is @fs.FileKind::Directory {
-    raise read_failure("read", path)
+    raise read_failure("read", path, "is a directory")
   }
   let (mtime_s, mtime_ns) = @fs.mtime(path) catch {
-    _ => raise read_failure("stat", path)
+    error => raise read_failure("stat", path, error.to_string())
   }
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
-    _ => raise read_failure("stat", path)
+    error => raise read_failure("stat", path, error.to_string())
   }
   let size = file.size() catch {
-    _ => {
+    error => {
       file.close()
-      raise read_failure("stat", path)
+      raise read_failure("stat", path, error.to_string())
     }
   }
   file.close()
@@ -47,12 +49,12 @@ async fn native_read_lines(
   take : Int,
 ) -> LinePage raise @posoco.RuntimeError {
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
-    _ => raise read_failure("read", path)
+    error => raise read_failure("read", path, error.to_string())
   }
   let total_bytes = file.size() catch {
-    _ => {
+    error => {
       file.close()
-      raise read_failure("read", path)
+      raise read_failure("read", path, error.to_string())
     }
   }
   let lines : Array[String] = []
@@ -66,7 +68,7 @@ async fn native_read_lines(
             raise @posoco.RuntimeError::InvocationFailed(
               "read: '\{@devkit.sanitize_path(path)}' is not valid UTF-8 (binary file); use grep or bash to inspect it",
             )
-          _ => raise read_failure("read", path)
+          _ => raise read_failure("read", path, e.to_string())
         }
       }
     }
@@ -89,12 +91,12 @@ impl FsIo for NativeFsIo with fn read_image_base64(_self, path : String) -> Stri
   // Sized fixed-buffer read: `read_all` hands back an opaque private trait
   // object, so the bytes loop is the stable path to raw payload bytes.
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
-    _ => raise read_failure("read", path)
+    error => raise read_failure("read", path, error.to_string())
   }
   let size64 = file.size() catch {
-    _ => {
+    error => {
       file.close()
-      raise read_failure("read", path)
+      raise read_failure("read", path, error.to_string())
     }
   }
   let size = size64.to_int()
@@ -102,9 +104,9 @@ impl FsIo for NativeFsIo with fn read_image_base64(_self, path : String) -> Stri
   let mut filled = 0
   while filled < size {
     let n = file.read(buf, offset=filled, max_len=size - filled) catch {
-      _ => {
+      error => {
         file.close()
-        raise read_failure("read", path)
+        raise read_failure("read", path, error.to_string())
       }
     }
     if n <= 0 {
