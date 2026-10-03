@@ -34,6 +34,7 @@ members = [
   "./posoco-ext-plan",
   "./posoco-ext-profiles",
   "./posoco-ext-ps1",
+  "./posoco-ext-qwen",
   "./posoco-ext-ratelimit",
   "./posoco-ext-read",
   "./posoco-ext-rtk",
