@@ -157,7 +157,9 @@ async test "edit_directory_is_loud_without_os_error" {
       Err(@posoco.RuntimeError::InvocationFailed(message)) =>
         assert_eq(
           message,
-          "edit: read failed for '" + @devkit.sanitize_path(dir) + "': Is a directory",
+          "edit: read failed for '" +
+          @devkit.sanitize_path(dir) +
+          "': Is a directory",
         )
       _ => fail("expected editing a directory to fail reading")
     }

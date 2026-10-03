@@ -88,7 +88,6 @@ extern "js" fn js_now_ms() -> Int =
 ///|
 /// Decoded stat envelope (write/edit never need the directory flag).
 priv struct JsStatInfo {
-  ok : Bool
   size : Int
   ms : Double
 }
@@ -123,7 +122,7 @@ fn js_stat_info(path : String) -> Result[JsStatInfo, String] {
     Some(Json::Number(value, ..)) => value
     _ => 0.0
   }
-  Ok({ ok: true, size, ms, })
+  Ok({ size, ms, })
 }
 
 ///|

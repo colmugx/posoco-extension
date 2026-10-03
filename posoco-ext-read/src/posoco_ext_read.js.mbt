@@ -69,7 +69,6 @@ extern "js" fn js_read_base64_envelope(
 
 ///|
 priv struct JsStatInfo {
-  ok : Bool
   size : Int
   ms : Double
   is_dir : Bool
@@ -109,7 +108,7 @@ fn js_stat_info(path : String) -> Result[JsStatInfo, String] {
     Some(Json::True) => true
     _ => false
   }
-  Ok({ ok: true, size, ms, is_dir, })
+  Ok({ size, ms, is_dir, })
 }
 
 ///|

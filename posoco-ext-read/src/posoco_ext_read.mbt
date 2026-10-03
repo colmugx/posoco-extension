@@ -281,7 +281,10 @@ fn core_cause(cause : String) -> String {
         let head = text[:pos]
         let mut ident = head.length() > 0
         for ch in head {
-          let ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
+          let ok = (ch >= 'a' && ch <= 'z') ||
+            (ch >= 'A' && ch <= 'Z') ||
+            (ch >= '0' && ch <= '9') ||
+            ch == '_'
           if !ok {
             ident = false
             break
@@ -303,9 +306,10 @@ fn core_cause(cause : String) -> String {
     }
     None => ()
   }
-  for tag in [
-    ", open '", ", stat '", ", lstat '", ", scandir '", ", readdir '", ", readlink '",
-  ] {
+  for
+    tag in [
+      ", open '", ", stat '", ", lstat '", ", scandir '", ", readdir '", ", readlink '",
+    ] {
     match text.find(tag) {
       Some(pos) => {
         text = text[:pos].to_owned()
