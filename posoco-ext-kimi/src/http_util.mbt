@@ -1,6 +1,4 @@
 ///|
-
-///|
 /// Redacted non-2xx body metadata; the raw body never enters error text.
 priv enum KimiErrorBodySummary {
   BodyBytesUtf8(Int)

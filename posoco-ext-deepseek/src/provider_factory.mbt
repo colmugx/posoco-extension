@@ -204,8 +204,6 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn provider_i
 }
 
 ///|
-
-///|
 /// Explicit live model discovery. Unlike `build`, this path performs exactly
 /// one authenticated `/models` request and fails composition on transport or
 /// schema errors; it never falls back to the configured static model.

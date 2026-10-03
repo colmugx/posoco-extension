@@ -309,8 +309,6 @@ pub impl @llm.ApiKeyFactory for KimiProvider with fn provider_id(
 }
 
 ///|
-
-///|
 pub impl @llm.ApiKeyFactory for KimiProvider with fn credential_id(
   _self : KimiProvider,
 ) -> String {

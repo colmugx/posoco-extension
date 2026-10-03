@@ -1,6 +1,4 @@
 ///|
-
-///|
 /// Kimi OAuth endpoints (from kimi-code/kosong source).
 let kimi_client_id : String = "17e5f671-d194-4dfb-9706-5516cb48c098"
 

@@ -183,8 +183,6 @@ pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn provider_id(
 }
 
 ///|
-
-///|
 pub impl @llm.RefreshableProviderFactory for OpenAIProvider with fn refresh(
   self : OpenAIProvider,
   source : @llm.ProviderConfigSource,
@@ -381,8 +379,6 @@ pub impl @llm.ApiKeyFactory for OpenAIProvider with fn provider_id(
 ) -> String {
   "openai"
 }
-
-///|
 
 ///|
 pub impl @llm.ApiKeyFactory for OpenAIProvider with fn credential_id(

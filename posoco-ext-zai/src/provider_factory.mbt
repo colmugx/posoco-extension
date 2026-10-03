@@ -325,8 +325,6 @@ pub impl @llm.RefreshableProviderFactory for ZaiProvider with fn provider_id(
 }
 
 ///|
-
-///|
 /// Explicit live model discovery: exactly one authenticated `/models` request
 /// against the resolved platform endpoint. Unlike `build`, this path fails
 /// composition on transport or schema errors; it never falls back to the

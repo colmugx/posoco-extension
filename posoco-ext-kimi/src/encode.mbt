@@ -1,6 +1,4 @@
 ///|
-
-///|
 fn sanitize_tool_call_id(id : String) -> String {
   let buf = StringBuilder()
   for ch in id {

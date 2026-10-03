@@ -466,8 +466,6 @@ extern "js" fn js_catalog_snapshot_json(host : JsPiHost) -> String =
   #| })
 
 ///|
-
-///|
 /// Live prompt self-description of the currently registered Pi tools: one
 /// JSON entry per tool carrying a non-empty promptSnippet or
 /// promptGuidelines, in registration order. Hidden tools (base wins) never

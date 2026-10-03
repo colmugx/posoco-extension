@@ -18,8 +18,6 @@ fn tk_call_with_args(name : String, arguments : Json) -> @posoco.ToolCall {
 }
 
 ///|
-
-///|
 /// Effect context for provider calls (no-op registrar).
 fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
   {
