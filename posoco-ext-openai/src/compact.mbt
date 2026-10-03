@@ -59,6 +59,23 @@ fn compact_v2_parse_failure(
 }
 
 ///|
+/// A marker-less stream end — EOF, or a `[DONE]` that never delivered
+/// `response.completed` — shares the chat stream's clean-EOF classification
+/// so the router-level transient retry replays a truncated compact like a
+/// truncated chat. Protocol failures use compact_v2_parse_failure instead
+/// and stay non-transient.
+fn compact_termination_error() -> @posoco.ModelError {
+  match
+    @responses.classify_stream_termination(
+      provider="OpenAI",
+      @responses.StreamTermination::CleanEof,
+    ) {
+    Some(err) => err
+    None => abort("clean EOF must classify as an error")
+  }
+}
+
+///|
 /// Only output_item.done supplies the durable opaque item. completed.output,
 /// text deltas and [DONE] cannot substitute for the V2 terminal contract.
 fn CompactV2Stream::event(
@@ -183,16 +200,14 @@ async fn OpenAIModelPort::compact_v2_stream(
           "OpenAI compact transport failure (stage=read_stream)",
         )
     }
-    guard line is Some(line) else {
-      raise compact_v2_parse_failure("terminal", "missing_completed")
-    }
+    guard line is Some(line) else { raise compact_termination_error() }
     let line = line.trim_end(chars="\r\n")
     if line.is_empty() {
       if !data.is_empty() {
         let payload = data.join("\n")
         data.clear()
         if payload == "[DONE]" {
-          raise compact_v2_parse_failure("terminal", "missing_completed")
+          raise compact_termination_error()
         }
         if state.event(payload) {
           guard state.item is Some(item) else {
@@ -217,7 +232,7 @@ async fn OpenAIModelPort::compact_v2_stream(
       last_yield = now
     }
   }
-  raise compact_v2_parse_failure("terminal", "missing_completed")
+  raise compact_termination_error()
 }
 
 ///|

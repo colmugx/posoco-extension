@@ -110,57 +110,20 @@ fn compact_fragment_matches(
 }
 
 ///|
-/// The contextual user exclusions are source markers, not content heuristics.
-/// Visible hook prompts take precedence over contextual fragments.
-fn compact_contextual_user_text(text : String) -> Bool {
-  for
-    (open, close) in [
-      ("# AGENTS.md instructions", "</INSTRUCTIONS>"),
-      ("<environment_context>", "</environment_context>"),
-      (
-        "<agent_message_board_notification>", "</agent_message_board_notification>",
-      ),
-      ("<skill>", "</skill>"),
-      ("<user_shell_command>", "</user_shell_command>"),
-      ("<turn_aborted>", "</turn_aborted>"),
-      ("<subagent_notification>", "</subagent_notification>"),
-      ("<recommended_plugins>", "</recommended_plugins>"),
-    ] {
-    if compact_fragment_matches(text, open, close) {
-      return true
-    }
-  }
-  compact_internal_or_legacy_context(text)
-}
-
-///|
+/// Minimal provenance decision: Cetas has no typed hook/context provenance,
+/// so retention never guesses a user message's origin from marker text — a
+/// real user may submit wrapper-shaped text verbatim. Every ordinary user
+/// message is retained subject to the budget; other roles stay excluded and
+/// the developer image-resize notice keeps its source group.
 fn compact_retained_user(item : Json) -> Bool {
   guard item is Json::Object(fields) &&
     fields.get("role") == Some(Json::string("user")) else {
     return false
   }
   match fields.get("type") {
-    None | Some(Json::String("message")) => ()
-    _ => return false
+    None | Some(Json::String("message")) => true
+    _ => false
   }
-  let parts = compact_message_parts(item)
-  let mut contextual = false
-  let mut hook = false
-  let mut hook_only = true
-  for part in parts {
-    match compact_part_text(part) {
-      Some(text) =>
-        if compact_visible_hook_text(text) {
-          hook = true
-        } else if compact_contextual_user_text(text) {
-          contextual = true
-        } else {
-          hook_only = false
-        }
-      None => hook_only = false
-    }
-  }
-  (hook && hook_only) || (!contextual && !hook)
 }
 
 ///|

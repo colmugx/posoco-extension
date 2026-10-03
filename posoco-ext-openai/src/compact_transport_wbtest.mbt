@@ -23,6 +23,10 @@ priv enum CompactReply {
   Hang
   /// Send a head and a body fragment, then close mid-body.
   RespondTruncated(status~ : Int, partial~ : String)
+  /// Complete HTTP framing around an SSE body that ends before the terminal
+  /// marker: the client sees a clean EOF, and the connection stays open so
+  /// the parked server read observes the client's resource close.
+  CleanEofStream
 }
 
 ///|
@@ -183,6 +187,16 @@ async fn CompactLoopback::serve(self : CompactLoopback) -> Unit {
         let _ = attempt_async(() => conn.send_response(status, "OK"))
         let _ = attempt_async(() => conn.write_string(partial))
         conn.close()
+      }
+      CleanEofStream => {
+        let _ = attempt_async(() => conn.send_response(200, "OK"))
+        let _ = attempt_async(() => {
+          conn.write_string(
+            "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"compaction\",\"id\":\"cmp_trunc\",\"encrypted_content\":\"opaque-truncated\"}}\n\n",
+          )
+        })
+        let _ = attempt_async(() => conn.end_response())
+        self.park_until_client_disconnect(conn)
       }
     }
   }
@@ -597,4 +611,113 @@ async test "openai_compact_loopback_cancel_during_body_read_cleans_and_retries" 
     fail("cancellation scenario timed out")
   }
   assert_eq(loopback.requests.length(), 2)
+}
+
+///|
+/// A stream that ends without the V2 terminal contract takes the shared
+/// clean-EOF truncation shape (transient), while provider-declared terminal
+/// events stay protocol failures. An explicit retry after either succeeds.
+async test "openai_compact_loopback_truncation_transient_and_protocol_errors_not" {
+  let item = "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"compaction\",\"encrypted_content\":\"encrypted-secret\"}}\n\n"
+  let scenarios : Array[(String, Bool)] = [
+    // EOF after partial progress: truncated, not a protocol verdict.
+    (item, true),
+    // [DONE] without response.completed: same truncation shape.
+    (item + "data: [DONE]\n\n", true),
+    // Provider-declared terminal event: protocol error, never retried.
+    ("data: {\"type\":\"response.failed\"}\n\n", false),
+  ]
+  let replies : Array[CompactReply] = []
+  for scenario in scenarios {
+    let (body, _) = scenario
+    replies.push(Respond(status=200, body~, headers=[], delay_ms=0))
+    replies.push(LatestV2Route)
+  }
+  let (outcomes, server) = @async.with_timeout(20000, () => {
+    compact_loopback_call_many(replies)
+  })
+  assert_eq(server.requests.length(), scenarios.length() * 2)
+  for i, scenario in scenarios {
+    let (_, transient) = scenario
+    let err = match outcomes[i * 2] {
+      Err(err) => err
+      Ok(_) => fail("stream without the terminal contract must fail")
+    }
+    assert_eq(@chatkit.is_transient_model_error(err), transient)
+    guard err is @posoco.ModelError::ResponseParse(message) else {
+      fail("compact failures stay parse-classified")
+    }
+    if transient {
+      assert_true(message.contains("SSE truncated"))
+    } else {
+      assert_false(message.contains("SSE truncated"))
+    }
+    assert_false(message.contains("encrypted-secret"))
+    guard outcomes[i * 2 + 1] is Ok(_) else {
+      fail("explicit retry after failure must succeed")
+    }
+  }
+}
+
+///|
+/// No adapter retry layer exists: the truncation is replayed by the existing
+/// ext-llm transient_retry_port wrapping the provider slot. The retry sends
+/// the identical request snapshot on a fresh client, the failed attempt's
+/// client is closed (observed as a server-side disconnect), and the same port
+/// serves the successful compact.
+async test "openai_compact_loopback_truncation_retries_via_ext_llm_transient_retry_port" {
+  let loopback = CompactLoopback::bind([
+    CleanEofStream,
+    Respond(status=200, body=compact_v2_success_sse(), headers=[], delay_ms=0),
+  ])
+  let boxed : Array[Result[@posoco.CompactResult, @posoco.ModelError]] = []
+  let step = @async.with_timeout(20000, () => {
+    @async.with_task_group() <| group => {
+      let _ = group.spawn(() => loopback.serve(), allow_failure=true)
+      let inner : &@posoco.ModelPort = compact_loopback_port(
+        "http://127.0.0.1:\{loopback.server.addr.port()}/v1",
+      )
+      let port = @llm.transient_retry_port(inner~, policy={
+        max_retries: 1,
+        initial_delay_ms: 1,
+      })
+      boxed.push(
+        Ok(
+          port.compact(
+            compact_loopback_scope(),
+            compact_loopback_messages(),
+            [],
+            { temperature: None, max_output_tokens: None, },
+            @posoco.CompactTrigger::Manual,
+          ),
+        ) catch {
+          e => Err(e)
+        },
+      )
+      loopback.stop()
+    }
+    1
+  }) catch {
+    _ => 0
+  }
+  if step == 0 {
+    fail("transient retry scenario timed out")
+  }
+  guard boxed[0] is Ok(compacted) else {
+    fail("clean-EOF truncation must retry to success")
+  }
+  // Exactly one replay: the truncation consumed the single granted retry.
+  assert_eq(loopback.requests.length(), 2)
+  // The replayed request carries the unchanged snapshot, byte for byte.
+  assert_eq(loopback.bodies[0], loopback.bodies[1])
+  // The failed attempt closed its client; the server observed the disconnect.
+  assert_true(loopback.client_disconnected)
+  // The installed window is the successful attempt's snapshot, replayed once.
+  let window = Json::array(
+    openai_encode_window_items(compacted.compacted_messages),
+  ).stringify()
+  assert_true(window.contains("q1"))
+  assert_true(window.contains("opaque-fixture"))
+  assert_false(window.contains("opaque-truncated"))
+  assert_false(window.contains("compaction_trigger"))
 }

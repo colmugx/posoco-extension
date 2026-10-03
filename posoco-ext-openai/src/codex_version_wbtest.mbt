@@ -1,8 +1,10 @@
 ///|
 /// White-box tests for Codex client-version discovery and persistence.
 /// Everything runs on injected fakes (no sockets): the probe transport below
-/// answers scripted responses, and the caches stand in for the host's file
-/// IO. Native-only, matching the package's other transport tests.
+/// answers scripted responses. Resolver-level tests script the private
+/// in-memory cache seam; provider-level tests run the real file cache through
+/// an isolated `cache_dir` fixture. Native-only, matching the package's other
+/// transport tests.
 
 ///|
 /// Build a GitHub `/releases/latest`-shaped body with a pinned tag and flags.
@@ -74,46 +76,35 @@ pub impl OpenAIModelsHttpTransport for UnreachableModelsTransport with fn get(
 pub extend UnreachableModelsTransport with OpenAIModelsHttpTransport::{get}
 
 ///|
-/// In-memory stand-in for the host version cache: records persisted versions
-/// and serves a scripted raw payload. `drop_writes` simulates host IO
-/// failure — the write is swallowed and nothing persists, exactly the
-/// host-side contract for a failed atomic write.
+/// In-memory stand-in for the private persistence seam: resolver-level tests
+/// script the raw payload it serves and observe the writes it records.
 struct RecordingVersionCache {
   log : Array[String]
-  stored : Array[String]
   raw : String?
-  drop_writes : Bool
 }
 
 ///|
 fn RecordingVersionCache::RecordingVersionCache(
   log : Array[String],
   raw? : String? = None,
-  drop_writes? : Bool = false,
 ) -> RecordingVersionCache {
-  { log, stored: [], raw, drop_writes, }
+  { log, raw, }
 }
 
 ///|
-pub impl CodexClientVersionCache for RecordingVersionCache with fn read(
+impl CodexClientVersionCache for RecordingVersionCache with fn read(
   self : RecordingVersionCache,
 ) -> String? {
   self.raw
 }
 
 ///|
-pub impl CodexClientVersionCache for RecordingVersionCache with fn write(
+impl CodexClientVersionCache for RecordingVersionCache with fn write(
   self : RecordingVersionCache,
   version : String,
 ) -> Unit {
   self.log.push("write " + version)
-  if !self.drop_writes {
-    self.stored.push(version)
-  }
 }
-
-///|
-pub extend RecordingVersionCache with CodexClientVersionCache::{read, write}
 
 ///|
 /// Configured OAuth source shaped like the production Codex credential.
@@ -220,26 +211,34 @@ async test "online discovery saves the version before the catalog request" {
     ],
   )
   let transport : &OpenAIModelsHttpTransport = transport_impl
-  let cache_impl = RecordingVersionCache::RecordingVersionCache(log)
-  let cache : &CodexClientVersionCache = cache_impl
-  let provider = OpenAIProvider(
-    transport=Some(transport),
-    version_cache=Some(cache),
-  )
-  match provider.refresh(codex_version_refresh_source()) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
-  // Ordering: discovery GET, then the persist, then the catalog request —
-  // the save never waits for the model request to succeed.
-  assert_eq(log, [
-    "get " + codex_release_discovery_url(),
-    "write 0.160.0",
-    "get https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
-    "get https://chatgpt.com/backend-api/wham/usage",
-  ])
-  assert_eq(cache_impl.stored, ["0.160.0"])
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(transport),
+      cache_dir=Some(directory),
+    )
+    match provider.refresh(codex_version_refresh_source()) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+    // Ordering: discovery GET, then the catalog request — which already
+    // carries the freshly discovered version, so the persist never waited
+    // for it.
+    assert_eq(log, [
+      "get " + codex_release_discovery_url(),
+      "get https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+      "get https://chatgpt.com/backend-api/wham/usage",
+    ])
+    // The discovered version reached the isolated cache as a real file in
+    // the current payload format.
+    let persisted = version_cache_fixture_read_file(
+      directory, "codex_client_version.json",
+    )
+    assert_eq(
+      persisted.map(parse_codex_client_version_payload),
+      Some(Some("0.160.0")),
+    )
+  })
 }
 
 ///|
@@ -299,27 +298,35 @@ async test "discovery failure falls back to the persisted cache version" {
     ],
   )
   let transport : &OpenAIModelsHttpTransport = transport_impl
-  let cache_impl = RecordingVersionCache::RecordingVersionCache(
-    log,
-    raw=Some("{\"client_version\":\"0.158.0\"}"),
-  )
-  let cache : &CodexClientVersionCache = cache_impl
-  let provider = OpenAIProvider(
-    transport=Some(transport),
-    version_cache=Some(cache),
-  )
-  match provider.refresh(codex_version_refresh_source()) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
-  // No discovery success means no cache write, and the catalog request used
-  // the last persisted version.
-  assert_eq(cache_impl.stored, [])
-  assert_eq(
-    transport_impl.log[1],
-    "get https://chatgpt.com/backend-api/codex/models?client_version=0.158.0",
-  )
+  version_cache_with_fixture(directory => {
+    // Seed the isolated cache with the last persisted success, shaped like
+    // the host's record on disk.
+    version_cache_fixture_write_file(
+      directory, "codex_client_version.json", "{\"client_version\":\"0.158.0\"}\n",
+    )
+    let provider = OpenAIProvider(
+      transport=Some(transport),
+      cache_dir=Some(directory),
+    )
+    match provider.refresh(codex_version_refresh_source()) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+    // No discovery success means no cache write: the record still holds the
+    // seeded version, and the catalog request used it.
+    let persisted = version_cache_fixture_read_file(
+      directory, "codex_client_version.json",
+    )
+    assert_eq(
+      persisted.map(parse_codex_client_version_payload),
+      Some(Some("0.158.0")),
+    )
+    assert_eq(
+      transport_impl.log[1],
+      "get https://chatgpt.com/backend-api/codex/models?client_version=0.158.0",
+    )
+  })
 }
 
 ///|
@@ -374,11 +381,13 @@ async test "missing or invalid cache falls back to the built-in constant" {
 }
 
 ///|
-async test "no injected cache seam keeps the built-in version and stays offline" {
+async test "a refused discovery keeps the built-in version without persisting" {
   let log : Array[String] = []
   let transport_impl = CodexVersionProbeTransport::CodexVersionProbeTransport(
     log,
     [
+      // 1: discovery refused; 2: models; 3: best-effort usage probe.
+      OpenAIModelsHttpResponse::{ status: 500, body: "{\"message\":\"boom\"}", },
       OpenAIModelsHttpResponse::{
         status: 200,
         body: load_refresh_models_body(),
@@ -390,19 +399,29 @@ async test "no injected cache seam keeps the built-in version and stays offline"
     ],
   )
   let transport : &OpenAIModelsHttpTransport = transport_impl
-  let provider = OpenAIProvider(transport=Some(transport))
-  match provider.refresh(codex_version_refresh_source()) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
-  // No GitHub query ran at all: offline builds and opt-out hosts keep the
-  // exact pre-discovery request shape.
-  assert_eq(transport_impl.calls, 2)
-  assert_eq(
-    transport_impl.log[0],
-    "get https://chatgpt.com/backend-api/codex/models?client_version=0.159.0",
-  )
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(transport),
+      cache_dir=Some(directory),
+    )
+    match provider.refresh(codex_version_refresh_source()) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+    // No discovery success: the built-in version stands in and nothing is
+    // persisted into the isolated cache.
+    assert_eq(transport_impl.calls, 3)
+    assert_eq(transport_impl.log[0], "get " + codex_release_discovery_url())
+    assert_eq(
+      transport_impl.log[1],
+      "get https://chatgpt.com/backend-api/codex/models?client_version=0.159.0",
+    )
+    assert_true(
+      version_cache_fixture_read_file(directory, "codex_client_version.json")
+      is None,
+    )
+  })
 }
 
 ///|
@@ -419,32 +438,38 @@ async test "model request failure keeps the original error and the saved version
     ],
   )
   let transport : &OpenAIModelsHttpTransport = transport_impl
-  let cache_impl = RecordingVersionCache::RecordingVersionCache(log)
-  let cache : &CodexClientVersionCache = cache_impl
-  let provider = OpenAIProvider(
-    transport=Some(transport),
-    version_cache=Some(cache),
-  )
-  try provider.refresh(codex_version_refresh_source()) catch {
-    @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
-      // The original models-refresh error text is preserved verbatim inside
-      // the typed composition error.
-      assert_eq(manifest_id, "posoco_ext_openai")
-      assert_true(
-        detail.contains(
-          "OpenAI models HTTP status: 500, body_chars=" +
-          "{\"error\":\"down\"}".length().to_string(),
-        ),
-      )
-      assert_true(detail.contains("Codex model catalog refresh failed: "))
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(transport),
+      cache_dir=Some(directory),
+    )
+    try provider.refresh(codex_version_refresh_source()) catch {
+      @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
+        // The original models-refresh error text is preserved verbatim inside
+        // the typed composition error.
+        assert_eq(manifest_id, "posoco_ext_openai")
+        assert_true(
+          detail.contains(
+            "OpenAI models HTTP status: 500, body_chars=" +
+            "{\"error\":\"down\"}".length().to_string(),
+          ),
+        )
+        assert_true(detail.contains("Codex model catalog refresh failed: "))
+      }
+      _ => fail("expected the typed models refresh failure")
+    } noraise {
+      _ => fail("expected the refresh to fail on the models request")
     }
-    _ => fail("expected the typed models refresh failure")
-  } noraise {
-    _ => fail("expected the refresh to fail on the models request")
-  }
-  // The version was persisted even though the model request failed: saving
-  // is gated on discovery success only.
-  assert_eq(cache_impl.stored, ["0.160.0"])
+    // The version was persisted even though the model request failed: saving
+    // is gated on discovery success only.
+    let persisted = version_cache_fixture_read_file(
+      directory, "codex_client_version.json",
+    )
+    assert_eq(
+      persisted.map(parse_codex_client_version_payload),
+      Some(Some("0.160.0")),
+    )
+  })
 }
 
 ///|
@@ -483,36 +508,36 @@ async test "401 renewal retry reuses the same resolved version" {
     ],
   }
   let oauth_transport : &@oauth.OAuthHttpTransport = oauth_transport_impl
-  let cache_impl = RecordingVersionCache::RecordingVersionCache(log)
-  let cache : &CodexClientVersionCache = cache_impl
-  let provider = OpenAIProvider(
-    transport=Some(transport),
-    oauth_transport=Some(oauth_transport),
-    version_cache=Some(cache),
-  )
-  match provider.refresh(codex_version_refresh_source()) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
-  // Exactly one renewal and one retry; both catalog requests carry the same
-  // resolved version, and discovery ran exactly once for the whole refresh.
-  assert_eq(oauth_transport_impl.requests.length(), 1)
-  let models_urls = [transport_impl.log[2], transport_impl.log[3]]
-  assert_eq(
-    models_urls[0],
-    "get https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
-  )
-  assert_eq(models_urls[0], models_urls[1])
-  // The first request carried the stored token, the retry the renewed one.
-  assert_eq(
-    transport_impl.header_log[1].get("Authorization"),
-    Some("Bearer " + codex_test_access_token()),
-  )
-  assert_eq(
-    transport_impl.header_log[2].get("Authorization"),
-    Some("Bearer " + codex_renewed_access_token()),
-  )
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(transport),
+      oauth_transport=Some(oauth_transport),
+      cache_dir=Some(directory),
+    )
+    match provider.refresh(codex_version_refresh_source()) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+    // Exactly one renewal and one retry; both catalog requests carry the same
+    // resolved version, and discovery ran exactly once for the whole refresh.
+    assert_eq(oauth_transport_impl.requests.length(), 1)
+    let models_urls = [transport_impl.log[1], transport_impl.log[2]]
+    assert_eq(
+      models_urls[0],
+      "get https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+    )
+    assert_eq(models_urls[0], models_urls[1])
+    // The first request carried the stored token, the retry the renewed one.
+    assert_eq(
+      transport_impl.header_log[1].get("Authorization"),
+      Some("Bearer " + codex_test_access_token()),
+    )
+    assert_eq(
+      transport_impl.header_log[2].get("Authorization"),
+      Some("Bearer " + codex_renewed_access_token()),
+    )
+  })
 }
 
 ///|
@@ -536,28 +561,27 @@ async test "a failed version-cache write does not shadow the refresh" {
     ],
   )
   let transport : &OpenAIModelsHttpTransport = transport_impl
-  // drop_writes stands in for the host's atomic write failing: nothing
-  // persists, and the refresh must still succeed on the discovered version.
-  let cache_impl = RecordingVersionCache::RecordingVersionCache(
-    log,
-    drop_writes=true,
-  )
-  let cache : &CodexClientVersionCache = cache_impl
-  let provider = OpenAIProvider(
-    transport=Some(transport),
-    version_cache=Some(cache),
-  )
-  match provider.refresh(codex_version_refresh_source()) {
-    @llm.ProviderBuildResult::Ready(catalog) =>
-      assert_eq(catalog.slots().length(), 1)
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
-  assert_eq(
-    transport_impl.log[2],
-    "get https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
-  )
-  assert_eq(cache_impl.stored, [])
+  // A regular file occupies the cache_dir path, so every host write fails
+  // like a full disk or a read-only cache root: nothing persists, and the
+  // refresh must still succeed on the discovered version.
+  version_cache_with_fixture(directory => {
+    version_cache_fixture_write_file(directory, "occupied", "not a directory")
+    let provider = OpenAIProvider(
+      transport=Some(transport),
+      cache_dir=Some(openai_cache_join(directory, "occupied")),
+    )
+    match provider.refresh(codex_version_refresh_source()) {
+      @llm.ProviderBuildResult::Ready(catalog) =>
+        assert_eq(catalog.slots().length(), 1)
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+    assert_eq(version_cache_fixture_list(directory), ["occupied"])
+    assert_eq(
+      transport_impl.log[1],
+      "get https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+    )
+  })
 }
 
 ///|

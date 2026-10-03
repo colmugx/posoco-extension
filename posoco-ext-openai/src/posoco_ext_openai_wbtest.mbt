@@ -990,6 +990,11 @@ async test "codex refresh sends version and account headers and preserves effort
     urls: [],
     headers: [],
     responses: [
+      // 1: release discovery; 2: models; 3: best-effort usage probe.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: codex_release_body("rust-v0.160.0"),
+      },
       OpenAIModelsHttpResponse::{
         status: 200,
         body: "{\"models\":[{" +
@@ -1001,7 +1006,6 @@ async test "codex refresh sends version and account headers and preserves effort
         "\"visibility\":\"list\",\"supported_in_api\":true,\"priority\":1," +
         "\"context_window\":272000}]}",
       },
-      // Second call: the best-effort usage probe rides the same transport.
       OpenAIModelsHttpResponse::{
         status: 200,
         body: "{\"rate_limit\":{\"primary_window\":{\"used_percent\":10.0,\"limit_window_seconds\":18000,\"reset_at\":1777936568}}}",
@@ -1009,53 +1013,61 @@ async test "codex refresh sends version and account headers and preserves effort
     ],
   }
   let transport : &OpenAIModelsHttpTransport = transport_impl
-  let provider = OpenAIProvider(transport=Some(transport))
-  let credential = @oauth.Credential::Credential(
-    access_token=codex_test_access_token(),
-    refresh_token="refresh",
-    expires_at=0,
-    metadata=Map([("account_id", "acct-123")]),
-  )
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(
-      @json.parse("{\"model\":\"gpt-codex\",\"reasoning_effort\":\"xhigh\"}"),
-    ),
-    provider_credential=Some(@oauth.ProviderCredential::OAuth(credential)),
-  )
-  let result = provider.refresh(source)
-  match result {
-    @llm.ProviderBuildResult::Ready(catalog) => {
-      let slots = catalog.slots()
-      assert_eq(slots.length(), 1)
-      assert_eq(slots[0].thinking_efforts, ["low", "medium", "xhigh"])
-      assert_eq(slots[0].default_effort, Some("medium"))
-      match slots[0].rebuild_on_effort {
-        Some(rebuild) => {
-          let changed = rebuild("low")
-          assert_eq(changed.thinking_efforts, ["low", "medium", "xhigh"])
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(transport),
+      cache_dir=Some(directory),
+    )
+    let credential = @oauth.Credential::Credential(
+      access_token=codex_test_access_token(),
+      refresh_token="refresh",
+      expires_at=0,
+      metadata=Map([("account_id", "acct-123")]),
+    )
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(
+        @json.parse("{\"model\":\"gpt-codex\",\"reasoning_effort\":\"xhigh\"}"),
+      ),
+      provider_credential=Some(@oauth.ProviderCredential::OAuth(credential)),
+    )
+    let result = provider.refresh(source)
+    match result {
+      @llm.ProviderBuildResult::Ready(catalog) => {
+        let slots = catalog.slots()
+        assert_eq(slots.length(), 1)
+        assert_eq(slots[0].thinking_efforts, ["low", "medium", "xhigh"])
+        assert_eq(slots[0].default_effort, Some("medium"))
+        match slots[0].rebuild_on_effort {
+          Some(rebuild) => {
+            let changed = rebuild("low")
+            assert_eq(changed.thinking_efforts, ["low", "medium", "xhigh"])
+          }
+          None => fail("Codex reasoning levels must expose effort rebuild")
         }
-        None => fail("Codex reasoning levels must expose effort rebuild")
       }
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
     }
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
+  })
+  // Discovery ran first, credential-free, and the catalog request carried the
+  // freshly discovered version with the account header.
+  assert_eq(transport_impl.urls[0], codex_release_discovery_url())
   assert_eq(
-    transport_impl.urls[0],
-    "https://chatgpt.com/backend-api/codex/models?client_version=0.159.0",
+    transport_impl.urls[1],
+    "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
   )
   assert_eq(
-    transport_impl.headers[0].get("Authorization"),
+    transport_impl.headers[1].get("Authorization"),
     Some("Bearer " + codex_test_access_token()),
   )
   assert_eq(
-    transport_impl.headers[0].get("chatgpt-account-id"),
+    transport_impl.headers[1].get("chatgpt-account-id"),
     Some("acct-123"),
   )
   // The refresh also probes the usage endpoint on the same transport so the
   // 5h/weekly snapshot starts populated without model traffic.
   assert_eq(
-    transport_impl.urls[1],
+    transport_impl.urls[2],
     "https://chatgpt.com/backend-api/wham/usage",
   )
 }
@@ -1975,6 +1987,11 @@ async test "expired codex credential renews before the catalog fetch" {
     urls: [],
     headers: [],
     responses: [
+      // 1: release discovery; 2: models; 3: best-effort usage probe.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: codex_release_body("rust-v0.160.0"),
+      },
       OpenAIModelsHttpResponse::{
         status: 200,
         body: load_refresh_models_body(),
@@ -1997,30 +2014,33 @@ async test "expired codex credential renews before the catalog fetch" {
   }
   let oauth_transport : &@oauth.OAuthHttpTransport = oauth_transport_impl
   let store = @oauth.InMemoryProviderCredentialStore::InMemoryProviderCredentialStore()
-  let provider = OpenAIProvider(
-    transport=Some(models_transport),
-    oauth_transport=Some(oauth_transport),
-  )
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
-    provider_credential=Some(
-      @oauth.ProviderCredential::OAuth(load_refresh_expired_credential()),
-    ),
-    credential_store=Some(store),
-  )
-  match provider.refresh(source) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(models_transport),
+      oauth_transport=Some(oauth_transport),
+      cache_dir=Some(directory),
+    )
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
+      provider_credential=Some(
+        @oauth.ProviderCredential::OAuth(load_refresh_expired_credential()),
+      ),
+      credential_store=Some(store),
+    )
+    match provider.refresh(source) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+  })
   // The refresh grant ran once, before any models request.
   assert_eq(oauth_transport_impl.requests.length(), 1)
   assert_true(
     oauth_transport_impl.requests[0].body.contains("grant_type=refresh_token"),
   )
-  assert_eq(models_transport_impl.urls.length(), 2)
+  assert_eq(models_transport_impl.urls.length(), 3)
   assert_eq(
-    models_transport_impl.headers[0].get("Authorization"),
+    models_transport_impl.headers[1].get("Authorization"),
     Some("Bearer " + codex_renewed_access_token()),
   )
   // The rotated record persists under the router provider id.
@@ -2037,6 +2057,12 @@ async test "rejected codex access token renews once and retries the fetch" {
     urls: [],
     headers: [],
     responses: [
+      // 1: release discovery; 2: first models call rejected; 3: retry;
+      // 4: best-effort usage probe.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: codex_release_body("rust-v0.160.0"),
+      },
       OpenAIModelsHttpResponse::{
         status: 401,
         body: "{\"error\":\"expired\"}",
@@ -2062,36 +2088,39 @@ async test "rejected codex access token renews once and retries the fetch" {
     ],
   }
   let oauth_transport : &@oauth.OAuthHttpTransport = oauth_transport_impl
-  let provider = OpenAIProvider(
-    transport=Some(models_transport),
-    oauth_transport=Some(oauth_transport),
-  )
-  let valid = @oauth.Credential::Credential(
-    access_token=codex_test_access_token(),
-    refresh_token="refresh",
-    expires_at=0,
-    metadata=Map([("account_id", "acct-123")]),
-  )
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
-    provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
-  )
-  match provider.refresh(source) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(models_transport),
+      oauth_transport=Some(oauth_transport),
+      cache_dir=Some(directory),
+    )
+    let valid = @oauth.Credential::Credential(
+      access_token=codex_test_access_token(),
+      refresh_token="refresh",
+      expires_at=0,
+      metadata=Map([("account_id", "acct-123")]),
+    )
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
+      provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
+    )
+    match provider.refresh(source) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+  })
   // No pre-renewal for a valid token; the 401 triggered exactly one renewal
   // and exactly one retry carrying the renewed bearer token. The usage probe
-  // rides the same transport as the third GET.
+  // rides the same transport as the fourth GET.
   assert_eq(oauth_transport_impl.requests.length(), 1)
-  assert_eq(models_transport_impl.urls.length(), 3)
+  assert_eq(models_transport_impl.urls.length(), 4)
   assert_eq(
-    models_transport_impl.headers[0].get("Authorization"),
+    models_transport_impl.headers[1].get("Authorization"),
     Some("Bearer " + codex_test_access_token()),
   )
   assert_eq(
-    models_transport_impl.headers[1].get("Authorization"),
+    models_transport_impl.headers[2].get("Authorization"),
     Some("Bearer " + codex_renewed_access_token()),
   )
 }
@@ -2102,6 +2131,11 @@ async test "rejected refresh_token surfaces the renewal error without a retry" {
     urls: [],
     headers: [],
     responses: [
+      // 1: release discovery; 2: first models call rejected.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: codex_release_body("rust-v0.160.0"),
+      },
       OpenAIModelsHttpResponse::{
         status: 401,
         body: "{\"error\":\"expired\"}",
@@ -2119,32 +2153,35 @@ async test "rejected refresh_token surfaces the renewal error without a retry" {
     ],
   }
   let oauth_transport : &@oauth.OAuthHttpTransport = oauth_transport_impl
-  let provider = OpenAIProvider(
-    transport=Some(models_transport),
-    oauth_transport=Some(oauth_transport),
-  )
-  let valid = @oauth.Credential::Credential(
-    access_token=codex_test_access_token(),
-    refresh_token="revoked",
-    expires_at=0,
-    metadata=Map([("account_id", "acct-123")]),
-  )
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
-    provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
-  )
-  try provider.refresh(source) catch {
-    @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
-      assert_eq(manifest_id, "posoco_ext_openai")
-      assert_true(detail.contains("invalid_grant"))
-      // One renewal attempt, no models retry.
-      assert_eq(oauth_transport_impl.requests.length(), 1)
-      assert_eq(models_transport_impl.urls.length(), 1)
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(models_transport),
+      oauth_transport=Some(oauth_transport),
+      cache_dir=Some(directory),
+    )
+    let valid = @oauth.Credential::Credential(
+      access_token=codex_test_access_token(),
+      refresh_token="revoked",
+      expires_at=0,
+      metadata=Map([("account_id", "acct-123")]),
+    )
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
+      provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
+    )
+    try provider.refresh(source) catch {
+      @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
+        assert_eq(manifest_id, "posoco_ext_openai")
+        assert_true(detail.contains("invalid_grant"))
+        // One renewal attempt, no models retry.
+        assert_eq(oauth_transport_impl.requests.length(), 1)
+        assert_eq(models_transport_impl.urls.length(), 2)
+      }
+      _ => fail("expected the typed renewal error")
+    } noraise {
+      _ => fail("expected the refresh to fail on invalid_grant")
     }
-    _ => fail("expected the typed renewal error")
-  } noraise {
-    _ => fail("expected the refresh to fail on invalid_grant")
-  }
+  })
 }
 
 ///|
@@ -2153,6 +2190,12 @@ async test "renewal persists through a failing store and still serves slots" {
     urls: [],
     headers: [],
     responses: [
+      // 1: release discovery; 2: first models call rejected; 3: retry;
+      // 4: best-effort usage probe.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: codex_release_body("rust-v0.160.0"),
+      },
       OpenAIModelsHttpResponse::{
         status: 401,
         body: "{\"error\":\"expired\"}",
@@ -2178,30 +2221,33 @@ async test "renewal persists through a failing store and still serves slots" {
     ],
   }
   let oauth_transport : &@oauth.OAuthHttpTransport = oauth_transport_impl
-  let provider = OpenAIProvider(
-    transport=Some(models_transport),
-    oauth_transport=Some(oauth_transport),
-  )
-  let valid = @oauth.Credential::Credential(
-    access_token=codex_test_access_token(),
-    refresh_token="refresh",
-    expires_at=0,
-    metadata=Map([("account_id", "acct-123")]),
-  )
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
-    provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
-    credential_store=Some(LoadRefreshFailingStore::{ }),
-  )
-  match provider.refresh(source) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(models_transport),
+      oauth_transport=Some(oauth_transport),
+      cache_dir=Some(directory),
+    )
+    let valid = @oauth.Credential::Credential(
+      access_token=codex_test_access_token(),
+      refresh_token="refresh",
+      expires_at=0,
+      metadata=Map([("account_id", "acct-123")]),
+    )
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
+      provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
+      credential_store=Some(LoadRefreshFailingStore::{ }),
+    )
+    match provider.refresh(source) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+  })
   // The renewed token still reached the retried request despite the failed
   // persistence.
   assert_eq(
-    models_transport_impl.headers[1].get("Authorization"),
+    models_transport_impl.headers[2].get("Authorization"),
     Some("Bearer " + codex_renewed_access_token()),
   )
 }
@@ -2212,6 +2258,11 @@ async test "renewal-rejected access token after pre-renewal stops without a seco
     urls: [],
     headers: [],
     responses: [
+      // 1: release discovery; 2: first models call rejected.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: codex_release_body("rust-v0.160.0"),
+      },
       OpenAIModelsHttpResponse::{
         status: 401,
         body: "{\"error\":\"expired\"}",
@@ -2229,27 +2280,30 @@ async test "renewal-rejected access token after pre-renewal stops without a seco
     ],
   }
   let oauth_transport : &@oauth.OAuthHttpTransport = oauth_transport_impl
-  let provider = OpenAIProvider(
-    transport=Some(models_transport),
-    oauth_transport=Some(oauth_transport),
-  )
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
-    provider_credential=Some(
-      @oauth.ProviderCredential::OAuth(load_refresh_expired_credential()),
-    ),
-  )
-  try provider.refresh(source) catch {
-    @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
-      assert_eq(manifest_id, "posoco_ext_openai")
-      assert_true(detail.contains("rejected after renewal"))
-      assert_eq(oauth_transport_impl.requests.length(), 1)
-      assert_eq(models_transport_impl.urls.length(), 1)
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(models_transport),
+      oauth_transport=Some(oauth_transport),
+      cache_dir=Some(directory),
+    )
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
+      provider_credential=Some(
+        @oauth.ProviderCredential::OAuth(load_refresh_expired_credential()),
+      ),
+    )
+    try provider.refresh(source) catch {
+      @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
+        assert_eq(manifest_id, "posoco_ext_openai")
+        assert_true(detail.contains("rejected after renewal"))
+        assert_eq(oauth_transport_impl.requests.length(), 1)
+        assert_eq(models_transport_impl.urls.length(), 2)
+      }
+      _ => fail("expected the post-renewal rejection error")
+    } noraise {
+      _ => fail("expected the refresh to fail after a renewed rejection")
     }
-    _ => fail("expected the post-renewal rejection error")
-  } noraise {
-    _ => fail("expected the refresh to fail after a renewed rejection")
-  }
+  })
 }
 
 ///|
@@ -2258,6 +2312,11 @@ async test "valid credential with healthy catalog skips renewal entirely" {
     urls: [],
     headers: [],
     responses: [
+      // 1: release discovery; 2: models; 3: best-effort usage probe.
+      OpenAIModelsHttpResponse::{
+        status: 200,
+        body: codex_release_body("rust-v0.160.0"),
+      },
       OpenAIModelsHttpResponse::{
         status: 200,
         body: load_refresh_models_body(),
@@ -2274,27 +2333,30 @@ async test "valid credential with healthy catalog skips renewal entirely" {
     responses: [],
   }
   let oauth_transport : &@oauth.OAuthHttpTransport = oauth_transport_impl
-  let provider = OpenAIProvider(
-    transport=Some(models_transport),
-    oauth_transport=Some(oauth_transport),
-  )
-  let valid = @oauth.Credential::Credential(
-    access_token=codex_test_access_token(),
-    refresh_token="refresh",
-    expires_at=0,
-    metadata=Map([("account_id", "acct-123")]),
-  )
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
-    provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
-  )
-  match provider.refresh(source) {
-    @llm.ProviderBuildResult::Ready(_) => ()
-    @llm.ProviderBuildResult::Unconfigured =>
-      fail("OAuth source was configured")
-  }
+  version_cache_with_fixture(directory => {
+    let provider = OpenAIProvider(
+      transport=Some(models_transport),
+      oauth_transport=Some(oauth_transport),
+      cache_dir=Some(directory),
+    )
+    let valid = @oauth.Credential::Credential(
+      access_token=codex_test_access_token(),
+      refresh_token="refresh",
+      expires_at=0,
+      metadata=Map([("account_id", "acct-123")]),
+    )
+    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(@json.parse("{\"model\":\"gpt-codex\"}")),
+      provider_credential=Some(@oauth.ProviderCredential::OAuth(valid)),
+    )
+    match provider.refresh(source) {
+      @llm.ProviderBuildResult::Ready(_) => ()
+      @llm.ProviderBuildResult::Unconfigured =>
+        fail("OAuth source was configured")
+    }
+  })
   assert_eq(oauth_transport_impl.requests.length(), 0)
-  assert_eq(models_transport_impl.urls.length(), 2)
+  assert_eq(models_transport_impl.urls.length(), 3)
 }
 
 // ------------------------------------------------ offline cache expansion

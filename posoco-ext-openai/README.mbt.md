@@ -54,7 +54,14 @@ typed `OAuthError::HttpError`.
 the refresh seam explicitly; normal provider construction never performs a
 network request. API-key credentials use the standard `{data:[{id}]}`
 endpoint, while Codex OAuth uses the provider-specific
-`/models?client_version=0.159.0` endpoint and `models[]` metadata. Codex
+`/models?client_version=<resolved-version>` endpoint and `models[]` metadata.
+Each explicit Codex refresh first probes the public GitHub stable release
+endpoint without subscription credentials. A valid version is cached under
+`cache_dir` (or the platform cache directory); failed discovery falls back to
+the last successful cached version, then the built-in version. The resolved
+version is fixed for the whole refresh, including a 401 renewal retry.
+File persistence is best-effort on native and JS; other targets retain the
+process-local successful version and otherwise use the built-in fallback. Codex
 reasoning levels are copied in server order, and hidden or
 `supported_in_api=false` records are excluded from selectable slots. The
 provider-owned HTTP transport is injectable for deterministic tests. The
@@ -159,27 +166,38 @@ the llm router's `cache` status segment and posoco-ext-stats already render.
 
 ## Session compaction
 
-Compaction goes through the official standalone endpoint
-(`POST /responses/compact`, `src/posoco_ext_openai.mbt:820-849`): the full
-current window is sent as `input` items and the response's `output` array is
-the canonical next window, committed as `CompactMode::Replace` — the
-endpoint is stateless and ZDR-friendly, and the opaque compaction item
-replays verbatim on subsequent chat calls. The response envelope is
-validated before anything is accepted (`src/posoco_ext_openai.mbt:770-817`):
+The extension uses Codex Responses Compaction V2: a streaming
+`POST /responses` prepared by the same request builder as chat, with one
+trailing `compaction_trigger` input item (`src/compact.mbt`). Current
+tools and base instructions are included; model metadata controls Responses
+Lite shaping on both paths. The trigger is request-only, never persisted.
+OpenAI's public standalone `/responses/compact` endpoint remains supported
+by OpenAI, but is not the compaction path implemented by this extension.
 
-- A JSON `error` object in the envelope is a terminal
-  `category=provider_error` failure.
-- Missing or `null` `output` is a hard `ResponseParse` failure
-  (`category=missing_output`) — never decoded as an empty window, which
-  would wipe the session and report success.
-- A non-array `output` fails as `category=wrong_type`; a non-object
-  envelope as `category=not_object`.
-- An empty window for a non-empty session fails as `category=empty_window`
-  (an already-empty session may compact to an empty window).
-- Mixed windows — compaction item, user, reasoning, function call and
-  output, assistant text — roundtrip verbatim and in order; unknown but
-  legal wire items pass through untouched (tests `openai_compact_*`,
-  `src/posoco_ext_openai_wbtest.mbt:1334-1454`).
+Success requires `response.completed` with an id and exactly one opaque
+compaction item delivered by `response.output_item.done`. Other output items
+are not installed. Provider failures, malformed items and zero/multiple
+compaction items fail without returning a replacement window. All
+`response.incomplete` events are rejected here: this is deliberately stricter
+than Codex's normalization of `reason=interrupted`.
+
+The adapter builds the replacement window locally: newest-first retained
+user messages within a 64,000-token approximate budget (including images),
+restored to their original order, followed by the new opaque compaction item.
+Without explicit provenance, every ordinary UserMessage is conservatively
+eligible: Codex XML/text markers, Cetas context wrappers and hook-looking
+text do not prove a message's source. This differs from Codex harness
+classification; injected user-role context may therefore remain, and older
+profile-activation messages are not guaranteed to survive budget exhaustion.
+Other message roles are not promoted to user/hook provenance.
+
+A private raw anchor and checked canonical projection preserve the installed
+window for replay and persistence (`src/compact_window.mbt`). The provider
+returns `CompactMode::Replace`; Agent owns committing session state.
+Premature EOF or `[DONE]` without completion is a transient truncated-stream
+failure. When composed through ext-llm, its existing retry wrapper owns the
+budget and delay; the OpenAI port adds no second retry loop. Direct callers
+receive the error and decide whether to retry.
 
 ## Request shaping
 
@@ -234,13 +252,11 @@ carrying status, body-size metadata, and a bounded excerpt of the decoded body
 request item. The full response payload never crosses the error boundary;
 undecodable or unreadable bodies carry no excerpt.
 
-Cancellation during a stream — the read wait or the cooperative pause that
-lets the host dispatch interrupts — raises
-`OpenAI transport failure (stage=..., category=cancelled)`
-(`src/posoco_ext_openai.mbt:164-174,502-513,547-563`). The
-`category=cancelled` token is the classification carrier: hosts match on it
-instead of provider text, because the raise type cannot carry the coroutine
-cancellation itself.
+Streaming clients close on every exit using `defer`, including coroutine
+cancellation. Cooperative pauses keep buffered SSE bursts interruptible.
+Cancellation and truncated-stream transport failures are distinct lifecycle
+conditions; hosts must use their operation cancellation mechanism rather than
+relying on a provider error-text cancellation token.
 
 ## Wire identity
 
@@ -258,8 +274,6 @@ mirrored only when `base_url` is the Codex subscription endpoint:
   same value
 - `x-codex-window-id` — the session id plus `:0` (window 0)
 - `Accept` — `text/event-stream` while streaming, `application/json` otherwise
-- `x-codex-installation-id` — a process-stable UUID minted once per process,
-  added only on compact requests
 
 Codex model discovery sends `originator` and the User-Agent alongside
 `chatgpt-account-id`, not the full protocol set.

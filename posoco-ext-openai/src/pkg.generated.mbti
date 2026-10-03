@@ -15,8 +15,6 @@ import {
 // Values
 pub fn codex_oauth_api_base() -> String
 
-pub fn codex_release_discovery_url() -> String
-
 pub fn codex_shared_quota_tracker() -> CodexQuotaTracker
 
 pub fn codex_usage_url(String) -> String
@@ -36,8 +34,6 @@ pub async fn fetch_openai_models_with_transport(&OpenAIModelsHttpTransport, Stri
 pub fn intelligence_metrics_source() -> &@devkit.ModelMetricsSource
 
 pub fn openai_codex_models_client_version() -> String
-
-pub fn parse_codex_client_version_payload(String) -> String?
 
 pub fn parse_codex_models(Json) -> Array[CodexModelInfo] raise @error.ModelError
 
@@ -170,9 +166,10 @@ pub(all) struct OpenAIModelsHttpResponse {
 pub(all) struct OpenAIProvider {
   models_transport : &OpenAIModelsHttpTransport?
   oauth_transport : &@ext-oauth.OAuthHttpTransport?
-  version_cache : &CodexClientVersionCache?
+  cache_dir : String?
+  // private fields
 }
-pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@ext-oauth.OAuthHttpTransport?, version_cache? : &CodexClientVersionCache?) -> Self
+pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@ext-oauth.OAuthHttpTransport?, cache_dir? : String?) -> Self
 pub fn OpenAIProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
 pub fn OpenAIProvider::credential_id(Self) -> String
 pub async fn OpenAIProvider::login(Self, &@ext-oauth.AuthInteraction) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
@@ -186,11 +183,6 @@ pub impl @ext-llm.RefreshableProviderFactory for OpenAIProvider
 // Type aliases
 
 // Traits
-pub(open) trait CodexClientVersionCache {
-  async fn read(Self) -> String? noraise
-  async fn write(Self, String) -> Unit noraise
-}
-
 pub(open) trait OpenAIModelsHttpTransport {
   async fn get(Self, String, Map[String, String]) -> OpenAIModelsHttpResponse raise @error.ModelError
 }

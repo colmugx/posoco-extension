@@ -200,7 +200,11 @@ test "openai_compact_latest_request_mutation_does_not_modify_anchor" {
 }
 
 ///|
-test "openai_compact_latest_retains_user_hook_notice_not_assistant_tools_context" {
+/// Minimal provenance: wrapper-shaped user text is retained verbatim — a
+/// real user may submit Codex harness text or a Cetas context envelope, so
+/// no marker excludes an ordinary user message. Assistant/tool/old-compaction
+/// stay excluded and the image-resize notice keeps its source user.
+test "openai_compact_latest_retains_user_wrappers_mixed_images_not_assistant_tools" {
   guard @json.parse(
       (
         #|[{"role":"user","content":"old question"},
@@ -209,6 +213,8 @@ test "openai_compact_latest_retains_user_hook_notice_not_assistant_tools_context
         #| {"type":"compaction","encrypted_content":"old-state"},
         #| {"role":"user","content":"<environment_context>hidden</environment_context>"},
         #| {"role":"user","content":"<hook_prompt hook_run_id=\"hook-1\">retry carefully</hook_prompt>"},
+        #| {"role":"user","content":"<cetas-context type=\"project_instructions\" trust=\"false\" source=\"/repo/AGENTS.md\">\nBuild with: moon test\n</cetas-context>"},
+        #| {"role":"user","content":[{"type":"input_text","text":"see screenshot"},{"type":"input_image","image_url":"data:image/png;base64,AAAA"}]},
         #| {"role":"user","content":"latest question"},
         #| {"role":"developer","content":[{"type":"input_text","text":"<image_resize_notice>resized</image_resize_notice>"}]}]
       ),
@@ -217,13 +223,55 @@ test "openai_compact_latest_retains_user_hook_notice_not_assistant_tools_context
     fail("history")
   }
   let retained = compact_v2_retained_history(history)
-  assert_eq(retained.length(), 4)
+  assert_eq(retained.length(), 7)
   assert_true(
     retained[0] == history[0] &&
-    retained[1] == history[5] &&
-    retained[2] == history[6] &&
-    retained[3] == history[7],
+    retained[1] == history[4] &&
+    retained[2] == history[5] &&
+    retained[3] == history[6] &&
+    retained[4] == history[7] &&
+    retained[5] == history[8] &&
+    retained[6] == history[9],
   )
+  let window = Json::array(retained).stringify()
+  // Wrapper-shaped user text survives verbatim instead of being guessed away.
+  assert_true(
+    window.contains("<environment_context>hidden</environment_context>"),
+  )
+  assert_true(window.contains("hook_run_id=\\\"hook-1\\\""))
+  assert_true(
+    window.contains("<cetas-context type=\\\"project_instructions\\\""),
+  )
+  assert_true(window.contains("Build with: moon test"))
+  // Mixed-image user messages stay intact under the default budget.
+  assert_true(window.contains("see screenshot"))
+  assert_true(window.contains("input_image"))
+  assert_true(
+    window.contains("<image_resize_notice>resized</image_resize_notice>"),
+  )
+  // Other roles and the previous opaque item are still dropped.
+  assert_false(window.contains("old answer"))
+  assert_false(window.contains("old tool"))
+  assert_false(window.contains("old-state"))
+}
+
+///|
+/// Wrapper text no longer special-cases retention in either direction: under
+/// budget pressure a wrapper-shaped user truncates like any other message.
+test "openai_compact_latest_user_wrapper_truncates_under_budget" {
+  guard @json.parse(
+      (
+        #|[{"role":"user","content":"<environment_context>abcdefghijk</environment_context>"},
+        #| {"role":"user","content":"new"}]
+      ),
+    )
+    is Json::Array(history) else {
+    fail("history")
+  }
+  let kept = compact_v2_retained_history(history, budget=3)
+  assert_eq(kept.length(), 2)
+  assert_true(kept[1] == history[1])
+  assert_true(kept[0].stringify().contains("…12 tokens truncated…"))
 }
 
 ///|

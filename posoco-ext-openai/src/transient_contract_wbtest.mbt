@@ -24,6 +24,36 @@ test "truncated SSE (clean EOF) stays retry-classifiable" {
 }
 
 ///|
+/// Compact reuses the same shared clean-EOF classification for a marker-less
+/// stream end (EOF, or [DONE] without response.completed), so the router
+/// retry replays a truncated compact like a truncated chat.
+test "compact clean EOF termination keeps the shared retry shape" {
+  assert_true(@chatkit.is_transient_model_error(compact_termination_error()))
+}
+
+///|
+/// Malformed events and provider-declared failures are protocol errors:
+/// retrying cannot fix them, so they never take the truncation shape.
+test "compact protocol failures stay non-retryable" {
+  for
+    failure in [
+      compact_v2_parse_failure("json", "invalid_json"),
+      compact_v2_parse_failure("event", "missing_type"),
+      compact_v2_parse_failure("output", "compaction_count"),
+      compact_v2_parse_failure("completed", "missing_id"),
+      compact_v2_parse_failure("terminal", "provider_error"),
+    ] {
+    assert_false(@chatkit.is_transient_model_error(failure))
+  }
+  let state = CompactV2Stream::{ compaction_count: 0, item: None, }
+  try state.event("{\"type\":\"response.failed\"}") catch {
+    err => assert_false(@chatkit.is_transient_model_error(err))
+  } noraise {
+    _ => fail("response.failed must fail the compact stream")
+  }
+}
+
+///|
 test "mid-stream read failures stay retry-classifiable" {
   let err = read_stream_transport_error(Failure::Failure("socket reset"))
   assert_true(@chatkit.is_transient_model_error(err))
