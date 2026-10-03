@@ -8,7 +8,7 @@ let edit_tmp_counter : Ref[Int] = { val: 0, }
 ///|
 impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
   @fs.exists(path) catch {
-    _ => raise edit_failure("stat", path)
+    error => raise edit_failure("stat", path, error.to_string())
   }
 }
 
@@ -16,15 +16,15 @@ impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {
 /// Stamp for freshness tracking: `mtime` plus size from an open read handle.
 impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp {
   let (mtime_s, mtime_ns) = @fs.mtime(path) catch {
-    _ => raise edit_failure("stat", path)
+    error => raise edit_failure("stat", path, error.to_string())
   }
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
-    _ => raise edit_failure("stat", path)
+    error => raise edit_failure("stat", path, error.to_string())
   }
   let size = file.size() catch {
-    _ => {
+    error => {
       file.close()
-      raise edit_failure("stat", path)
+      raise edit_failure("stat", path, error.to_string())
     }
   }
   file.close()
@@ -33,9 +33,11 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
 
 ///|
 impl FsIo for NativeFsIo with fn read_text(_self, path : String) -> String {
-  let data = @fs.read_file(path) catch { _ => raise edit_failure("read", path) }
+  let data = @fs.read_file(path) catch {
+    error => raise edit_failure("read", path, error.to_string())
+  }
   data.text() catch {
-    _ => raise edit_failure("decode", path)
+    _ => raise edit_failure("decode", path, "invalid UTF-8")
   }
 }
 
@@ -50,14 +52,14 @@ impl FsIo for NativeFsIo with fn write_atomic(
   edit_tmp_counter.val += 1
   let tmp = "\{path}.tmp-\{edit_tmp_counter.val}"
   @fs.write_file(tmp, content, create_mode=CreateOrTruncate, permission=0o644) catch {
-    _ => raise edit_failure("write", path)
+    error => raise edit_failure("write", path, error.to_string())
   }
   @fs.rename(tmp, path, replace=true) catch {
-    _ => {
+    error => {
       @fs.remove(tmp) catch {
         _ => ()
       }
-      raise edit_failure("write", path)
+      raise edit_failure("write", path, error.to_string())
     }
   }
 }

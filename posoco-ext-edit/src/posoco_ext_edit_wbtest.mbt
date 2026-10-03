@@ -98,9 +98,14 @@ async test "edit_required_fields_distinguish_wrong_type_from_missing" {
 ///|
 test "edit_failure_mappers_cover_stat_decode_and_write" {
   for stage in ["stat", "decode", "write"] {
-    match edit_failure(stage, "safe-path") {
+    match edit_failure(stage, "safe-path", "EACCES: permission denied") {
       @posoco.RuntimeError::InvocationFailed(message) =>
-        assert_eq(message, "edit: " + stage + " failed for 'safe-path'")
+        assert_eq(
+          message,
+          "edit: " +
+          stage +
+          " failed for 'safe-path': EACCES: permission denied",
+        )
       _ => fail("expected edit stage mapping to be InvocationFailed")
     }
   }
@@ -136,11 +141,14 @@ async test "edit_directory_is_loud_without_os_error" {
       error => Err(error)
     }
     match outcome {
-      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
-        assert_eq(
-          message,
-          "edit: read failed for '" + @devkit.sanitize_path(dir) + "'",
+      Err(@posoco.RuntimeError::InvocationFailed(message)) => {
+        assert_true(
+          message.has_prefix(
+            "edit: read failed for '" + @devkit.sanitize_path(dir) + "': ",
+          ),
         )
+        assert_true(message.contains("Is a directory"))
+      }
       _ => fail("expected editing a directory to fail reading")
     }
   }

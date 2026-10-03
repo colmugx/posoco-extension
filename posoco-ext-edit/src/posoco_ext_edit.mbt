@@ -139,10 +139,15 @@ fn extract_edit_args(
 }
 
 ///|
-/// Format an `edit` failure RuntimeError with sanitized path.
-fn edit_failure(stage : String, path : String) -> @posoco.RuntimeError {
+/// Format an `edit` failure RuntimeError with sanitized path and the
+/// underlying IO cause.
+fn edit_failure(
+  stage : String,
+  path : String,
+  cause : String,
+) -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "edit: \{stage} failed for '\{@devkit.sanitize_path(path)}'",
+    "edit: \{stage} failed for '\{@devkit.sanitize_path(path)}': \{cause}",
   )
 }
 
