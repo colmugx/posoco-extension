@@ -127,6 +127,7 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
       }
       let acc = @posoco.StreamAccumulator::StreamAccumulator()
       let mut done = false
+      let mut saw_finish = false
       let mut last_yield = @async.now()
       while !done {
         let line = client.read_until("\n") catch {
@@ -147,10 +148,17 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
                 // finish_reason. Keep draining until [DONE] so usage is not
                 // lost. The shared parser still records the finish_reason.
                 if payload == "[DONE]" {
-                  let _ = process_qwen_sse(payload, acc, on_chunk)
+                  // The shared parser emits Finish("stop") for [DONE]. When a
+                  // prior finish_reason was already recorded, skip feeding the
+                  // marker so tool_calls/length is not clobbered back to stop.
+                  if !saw_finish {
+                    let _ = process_qwen_sse(payload, acc, on_chunk)
+                  }
                   done = true
                 } else {
-                  let _ = process_qwen_sse(payload, acc, on_chunk)
+                  if process_qwen_sse(payload, acc, on_chunk) {
+                    saw_finish = true
+                  }
                 }
               }
             }
