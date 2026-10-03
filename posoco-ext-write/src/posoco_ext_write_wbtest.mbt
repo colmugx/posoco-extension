@@ -31,6 +31,19 @@ fn write_call(path : String, content : String) -> @posoco.ToolCall {
 }
 
 ///|
+test "core_cause_strips_shell_operation_prefix_and_node_tail" {
+  assert_eq(
+    core_cause("OSError(\"@fs.File::read(): Is a directory\")"),
+    "Is a directory",
+  )
+  assert_eq(
+    core_cause("ENOENT: no such file or directory, open '/tmp/x'"),
+    "ENOENT: no such file or directory",
+  )
+  assert_eq(core_cause("is a directory"), "is a directory")
+}
+
+///|
 async test "write_required_fields_distinguish_wrong_type_from_missing" {
   let cases : Array[(@posoco.ToolCall, String)] = [
     (

@@ -96,6 +96,19 @@ async test "edit_required_fields_distinguish_wrong_type_from_missing" {
 }
 
 ///|
+test "core_cause_strips_shell_operation_prefix_and_node_tail" {
+  assert_eq(
+    core_cause("OSError(\"@fs.File::read(): Is a directory\")"),
+    "Is a directory",
+  )
+  assert_eq(
+    core_cause("ENOENT: no such file or directory, open '/tmp/x'"),
+    "ENOENT: no such file or directory",
+  )
+  assert_eq(core_cause("is a directory"), "is a directory")
+}
+
+///|
 test "edit_failure_mappers_cover_stat_decode_and_write" {
   for stage in ["stat", "decode", "write"] {
     match edit_failure(stage, "safe-path", "EACCES: permission denied") {
@@ -141,14 +154,11 @@ async test "edit_directory_is_loud_without_os_error" {
       error => Err(error)
     }
     match outcome {
-      Err(@posoco.RuntimeError::InvocationFailed(message)) => {
-        assert_true(
-          message.has_prefix(
-            "edit: read failed for '" + @devkit.sanitize_path(dir) + "': ",
-          ),
+      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+        assert_eq(
+          message,
+          "edit: read failed for '" + @devkit.sanitize_path(dir) + "': Is a directory",
         )
-        assert_true(message.contains("Is a directory"))
-      }
       _ => fail("expected editing a directory to fail reading")
     }
   }

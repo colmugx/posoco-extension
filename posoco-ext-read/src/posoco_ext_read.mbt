@@ -267,6 +267,57 @@ fn extract_read_args(
 }
 
 ///|
+/// Reduce a raised error rendering to the bare reason: unwrap a
+/// `<Constructor>("payload")` shell (`OSError("...")`, `Fail("...")`, ...),
+/// drop the internal operation prefix (`@fs.File::read(): Is a directory`
+/// -> `Is a directory`), and cut node's appended syscall tail
+/// (`EACCES: ..., open '/p'` -> `EACCES: ...`). Errno-style prefixes carry
+/// signal and stay.
+fn core_cause(cause : String) -> String {
+  let mut text = cause
+  if text.has_suffix("\")") {
+    match text.find("(\"") {
+      Some(pos) => {
+        let head = text[:pos]
+        let mut ident = head.length() > 0
+        for ch in head {
+          let ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
+          if !ok {
+            ident = false
+            break
+          }
+        }
+        if ident {
+          text = text[pos + 2:text.length() - 2].to_owned()
+        }
+      }
+      None => ()
+    }
+  }
+  match text.find(": ") {
+    Some(pos) => {
+      let head = text[:pos]
+      if head.has_suffix(")") || head.contains("::") {
+        text = text[pos + 2:].to_owned()
+      }
+    }
+    None => ()
+  }
+  for tag in [
+    ", open '", ", stat '", ", lstat '", ", scandir '", ", readdir '", ", readlink '",
+  ] {
+    match text.find(tag) {
+      Some(pos) => {
+        text = text[:pos].to_owned()
+        break
+      }
+      None => ()
+    }
+  }
+  text
+}
+
+///|
 /// Format a `read` failure RuntimeError with sanitized path and the
 /// underlying IO cause.
 fn read_failure(
@@ -275,7 +326,7 @@ fn read_failure(
   cause : String,
 ) -> @posoco.RuntimeError {
   @posoco.RuntimeError::InvocationFailed(
-    "read: \{stage} failed for '\{@devkit.sanitize_path(path)}': \{cause}",
+    "read: \{stage} failed for '\{@devkit.sanitize_path(path)}': \{core_cause(cause)}",
   )
 }
 

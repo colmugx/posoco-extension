@@ -48,6 +48,24 @@ async test "read_wrong_type_path_is_not_reported_as_missing" {
 }
 
 ///|
+test "core_cause_strips_shell_operation_prefix_and_node_tail" {
+  assert_eq(
+    core_cause("OSError(\"@fs.File::read(): Is a directory\")"),
+    "Is a directory",
+  )
+  assert_eq(
+    core_cause("Fail(\"@fs.open(): No such file or directory\")"),
+    "No such file or directory",
+  )
+  assert_eq(
+    core_cause("ENOENT: no such file or directory, open '/tmp/x'"),
+    "ENOENT: no such file or directory",
+  )
+  assert_eq(core_cause("is a directory"), "is a directory")
+  assert_eq(core_cause("malformed stat envelope"), "malformed stat envelope")
+}
+
+///|
 test "read_stat_failure_mapping_is_safe_and_explicit" {
   let raw = "stat-line\n" + "x".repeat(200) + "TAIL_SECRET"
   match read_failure("stat", raw, "ENOENT: no such file or directory") {
