@@ -128,6 +128,23 @@ test "content-free chunks are skipped without emitting chunks" {
   )
   assert_false(done3)
   assert_eq(chunks3.length(), 0)
+  // Empty text/reasoning strings are wire-level placeholders, not semantic
+  // deltas. Emitting them would create false phase transitions in consumers.
+  let (done4, _, chunks4) = run_sse(
+    "{\"choices\":[{\"delta\":{\"content\":\"\",\"reasoning_content\":\"\"},\"finish_reason\":null}]}",
+  )
+  assert_false(done4)
+  assert_eq(chunks4.length(), 0)
+  // A non-empty reasoning delta still survives beside an empty text placeholder.
+  let (done5, acc5, chunks5) = run_sse(
+    "{\"choices\":[{\"delta\":{\"content\":\"\",\"reasoning_content\":\"think\"},\"finish_reason\":null}]}",
+  )
+  assert_false(done5)
+  assert_eq(chunks5.length(), 1)
+  match acc5.to_completion().message.reasoning {
+    Some(r) => assert_eq(r.content, "think")
+    None => fail("expected reasoning")
+  }
 }
 
 ///|
