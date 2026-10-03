@@ -6,7 +6,8 @@ fn is_qwen_http_success(status : Int) -> Bool {
 ///|
 async fn read_qwen_error_body(client : @http.Client) -> String? {
   let data = client.read_all() catch { _ => return None }
-  data.text() catch { _ => return None }
+  let text = data.text() catch { _ => return None }
+  Some(text)
 }
 
 ///|
