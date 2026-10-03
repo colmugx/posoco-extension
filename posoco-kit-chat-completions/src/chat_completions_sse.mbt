@@ -188,9 +188,11 @@ pub fn process_chat_completions_sse(
     Some(Object(delta)) => {
       match delta.get("content") {
         Some(String(token)) => {
-          let chunk = @posoco.StreamChunk::TextDelta(token~)
-          on_chunk(chunk)
-          acc.push(chunk)
+          if token.length() > 0 {
+            let chunk = @posoco.StreamChunk::TextDelta(token~)
+            on_chunk(chunk)
+            acc.push(chunk)
+          }
         }
         Some(Null) | None => ()
         Some(_) =>
@@ -201,9 +203,11 @@ pub fn process_chat_completions_sse(
       // Reasoning content delta (optional; some compatible servers emit it)
       match delta.get("reasoning_content") {
         Some(String(token)) => {
-          let chunk = @posoco.StreamChunk::ReasoningDelta(token~)
-          on_chunk(chunk)
-          acc.push(chunk)
+          if token.length() > 0 {
+            let chunk = @posoco.StreamChunk::ReasoningDelta(token~)
+            on_chunk(chunk)
+            acc.push(chunk)
+          }
         }
         Some(Null) | None => ()
         Some(_) =>
