@@ -52,14 +52,14 @@ test "request replays reasoning_content when preserve_thinking is enabled" {
       content=[@posoco.Content::Text("answer")],
       tool_calls=[],
       reasoning=Some(@posoco.Reasoning::{ content: "think", raw: None, }),
-      finish_reason=Some(@posoco.FinishReason::Stop),
+      finish_reason=@posoco.FinishReason::Stop,
     ),
   ]
   let body = build_chat_request(
     config,
     messages,
     [],
-    @posoco.ChatOptions::default(),
+    @posoco.ChatOptions::{ temperature: None, max_output_tokens: None, },
     false,
   )
   guard body is Json::Object(root) else { fail("expected object") }
@@ -83,7 +83,7 @@ test "stream request enables tool_stream and usage" {
     config,
     [],
     [],
-    @posoco.ChatOptions::default(),
+    @posoco.ChatOptions::{ temperature: None, max_output_tokens: None, },
     true,
   )
   guard body is Json::Object(root) else { fail("expected object") }
