@@ -38,10 +38,7 @@ fn qwen_catalog_slot(
     context_window=config.context_window,
     capabilities~,
     rebuild_on_api_key=Some(fn(credential) {
-      let rebuilt = {
-        ..config,
-        api_key: credential.secret,
-      }
+      let rebuilt = { ..config, api_key: credential.secret, }
       qwen_catalog_slot(rebuilt, ctx)
     }),
     rebuild_on_effort~,

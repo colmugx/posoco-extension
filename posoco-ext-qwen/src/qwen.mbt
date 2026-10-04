@@ -155,10 +155,8 @@ pub impl @posoco.ModelPort for QwenModelPort with fn chat(
                     let _ = process_qwen_sse(payload, acc, on_chunk)
                   }
                   done = true
-                } else {
-                  if process_qwen_sse(payload, acc, on_chunk) {
-                    saw_finish = true
-                  }
+                } else if process_qwen_sse(payload, acc, on_chunk) {
+                  saw_finish = true
                 }
               }
             }
@@ -199,4 +197,8 @@ pub impl @posoco.ModelPort for QwenModelPort with fn provider_config(
 }
 
 ///|
-pub extend QwenModelPort with @posoco.ModelPort::{provider_config, chat, compact}
+pub extend QwenModelPort with @posoco.ModelPort::{
+  provider_config,
+  chat,
+  compact,
+}

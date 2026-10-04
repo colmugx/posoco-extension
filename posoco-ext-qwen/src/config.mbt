@@ -41,15 +41,7 @@ fn qwen_model_info(model : String) -> QwenModelInfo? {
 
 ///|
 fn qwen_reasoning_effort_supported(value : String) -> Bool {
-  [
-    "none",
-    "minimal",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
-    "max",
-  ].contains(value)
+  ["none", "minimal", "low", "medium", "high", "xhigh", "max"].contains(value)
 }
 
 ///|
@@ -166,12 +158,7 @@ fn qwen_slot_efforts(config : QwenConfig) -> Array[String] {
       values.append(info.efforts.copy())
       values
     }
-    None =>
-      if config.enable_thinking is Some(_) {
-        ["off", "on"]
-      } else {
-        []
-      }
+    None => if config.enable_thinking is Some(_) { ["off", "on"] } else { [] }
   }
 }
 
@@ -199,7 +186,11 @@ pub fn QwenConfig::with_reasoning_effort(
   match qwen_model_info(self.model) {
     Some(info) => {
       if effort == "off" {
-        return { ..self, reasoning_effort: Some("none"), enable_thinking: None, }
+        return {
+          ..self,
+          reasoning_effort: Some("none"),
+          enable_thinking: None,
+        }
       }
       if !info.efforts.contains(effort) {
         raise @posoco.CompositionError::ManifestSchemaError(
@@ -211,7 +202,8 @@ pub fn QwenConfig::with_reasoning_effort(
     }
     None =>
       match effort {
-        "off" => { ..self, reasoning_effort: None, enable_thinking: Some(false), }
+        "off" =>
+          { ..self, reasoning_effort: None, enable_thinking: Some(false), }
         "on" => { ..self, reasoning_effort: None, enable_thinking: Some(true), }
         _ =>
           raise @posoco.CompositionError::ManifestSchemaError(

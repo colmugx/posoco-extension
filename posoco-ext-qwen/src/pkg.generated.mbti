@@ -1,0 +1,66 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-qwen"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+  "posoco/devkit",
+  "posoco/ext-llm",
+  "posoco/ext-oauth",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct QwenConfig {
+  api_key : String
+  base_url : String
+  endpoint_prefix : String
+  model : String
+  reasoning_effort : String?
+  enable_thinking : Bool?
+  preserve_thinking : Bool
+  emit_preserve_thinking : Bool
+  tool_stream : Bool
+  supports_images : Bool
+  context_window : Int?
+} derive(Eq, @debug.Debug)
+pub fn QwenConfig::QwenConfig(String, base_url~ : String, model? : String, endpoint_prefix? : String, reasoning_effort? : String?, enable_thinking? : Bool?, preserve_thinking? : Bool?, tool_stream? : Bool?, supports_images? : Bool?, context_window? : Int?) -> Self
+pub fn QwenConfig::equal(Self, Self) -> Bool
+pub fn QwenConfig::not_equal(Self, Self) -> Bool
+pub fn QwenConfig::to_repr(Self) -> @debug.Repr
+pub fn QwenConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+pub(all) struct QwenModelPort {
+  config : QwenConfig
+  ctx : @devkit.ExtContext
+}
+pub fn QwenModelPort::QwenModelPort(QwenConfig, ctx? : @devkit.ExtContext) -> Self
+pub async fn QwenModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn QwenModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn QwenModelPort::extension_id(Self) -> String
+pub fn QwenModelPort::manifest(Self) -> @port.ExtensionManifest
+pub fn QwenModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn QwenModelPort::provider_config(Self) -> @port.ProviderConfig
+pub impl @port.Extension for QwenModelPort
+pub impl @port.ModelPort for QwenModelPort
+
+pub(all) struct QwenProvider {
+  ctx : @devkit.ExtContext
+}
+pub fn QwenProvider::QwenProvider(ctx? : @devkit.ExtContext) -> Self
+pub fn QwenProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn QwenProvider::credential_id(Self) -> String
+pub async fn QwenProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
+pub fn QwenProvider::provider_id(Self) -> String
+pub impl @ext-llm.ApiKeyFactory for QwenProvider
+pub impl @ext-llm.ProviderFactory for QwenProvider
+
+// Type aliases
+
+// Traits

@@ -17,7 +17,5 @@ import {
 } for "wbtest"
 
 options(
-  targets: {
-    "posoco_ext_qwen_wbtest.mbt": [ "native" ],
-  },
+  targets: { "posoco_ext_qwen_wbtest.mbt": [ "native" ] },
 )
