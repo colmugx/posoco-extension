@@ -16,7 +16,7 @@ import {
 pub struct HerdrDelegate {
   pane : String
   bin : String
-  headless_bin : String
+  run_bin : String
   cwd : String
   mut active : Int
   mut tasks : @port.Tasks?
@@ -24,7 +24,7 @@ pub struct HerdrDelegate {
   parent_yolo : (() -> Bool)?
   // private fields
 }
-pub fn HerdrDelegate::HerdrDelegate(pane~ : String, bin~ : String, headless_bin~ : String, cwd~ : String, background_run? : (async (Self) -> @kernel.ToolOutcome)?, parent_yolo? : (() -> Bool)?) -> Self
+pub fn HerdrDelegate::HerdrDelegate(pane~ : String, bin~ : String, run_bin~ : String, cwd~ : String, background_run? : (async (Self) -> @kernel.ToolOutcome)?, parent_yolo? : (() -> Bool)?) -> Self
 pub fn HerdrDelegate::detect(cwd~ : String, parent_yolo? : (() -> Bool)?) -> Self?
 pub async fn HerdrDelegate::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn HerdrDelegate::extension_id(Self) -> String

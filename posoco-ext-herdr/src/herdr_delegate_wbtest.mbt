@@ -75,7 +75,7 @@ fn test_delegate(
   HerdrDelegate::HerdrDelegate(
     pane="1-1",
     bin="herdr",
-    headless_bin="cetas-headless",
+    run_bin="cetas-run",
     cwd="/tmp/ws",
     background_run~,
     parent_yolo~,
@@ -95,7 +95,7 @@ fn happy_script(session : String) -> Array[(Int, String, String)] {
     (0, "", ""),
     (
       0,
-      "session: \{session}\nheadless answer body\n[cetas-headless] turn 1 done\n",
+      "session: \{session}\nheadless answer body\n[cetas-run] turn 1 done\n",
       "",
     ),
     (0, "{\"result\":{\"type\":\"ok\"}}", ""),
@@ -215,7 +215,7 @@ async test "delegate happy path returns the answer with peer_pane and child_sess
     "--no-focus",
   ])
   assert_eq(fake.received[1], [
-    "herdr", "pane", "run", "1-3", "cetas-headless --permission readonly -- 'fix the bug' ; echo '[cetas-headless] pane-id'le",
+    "herdr", "pane", "run", "1-3", "cetas-run --permission readonly -- 'fix the bug' ; echo '[cetas-run] pane-id'le",
   ])
   assert_eq(fake.received[2], [
     "herdr", "pane", "wait-output", "--regex", herdr_wait_regex, "--source", "recent-unwrapped",
@@ -324,7 +324,7 @@ test "parse derives the parent-posture permission default" {
 }
 
 ///|
-async test "delegate surfaces the headless failure line as ToolReportedError with peer_pane and child_session" {
+async test "delegate surfaces the child failure line as ToolReportedError with peer_pane and child_session" {
   let delegate = test_delegate()
   let fake : FakeHerdrCli = {
     results: [
@@ -332,7 +332,7 @@ async test "delegate surfaces the headless failure line as ToolReportedError wit
       (0, "", ""),
       (0, "", ""),
       (
-        0, "session: s1\n[cetas-headless] turn failed: model exploded\n[cetas-headless] turn 1 done\n",
+        0, "session: s1\n[cetas-run] turn failed: model exploded\n[cetas-run] turn 1 done\n",
         "",
       ),
     ],
@@ -376,7 +376,7 @@ async test "empty session/model/effort arguments are normalized away before the 
   assert_false(command_line.contains("--session"))
   assert_false(command_line.contains("--model"))
   assert_false(command_line.contains("--effort"))
-  assert_true(command_line.contains("; echo '[cetas-headless] pane-id'le"))
+  assert_true(command_line.contains("; echo '[cetas-run] pane-id'le"))
 }
 
 ///|
@@ -388,7 +388,7 @@ async test "child exit with no protocol line surfaces the pane excerpt as ToolRe
       (0, "", ""),
       (0, "", ""),
       (
-        0, "cetas-headless: unrecognized argument '--mdoel'\nUsage: cetas-headless [OPTIONS] --task <TASK>\n\n[cetas-headless] pane-idle\n❯ \n",
+        0, "bash: cetas-run: command not found\n\n[cetas-run] pane-idle\n❯ \n",
         "",
       ),
     ],
@@ -401,9 +401,7 @@ async test "child exit with no protocol line surfaces the pane excerpt as ToolRe
         content.contains("child exited before printing a completion marker"),
       )
       assert_true(content.contains("peer_pane: 1-3"))
-      assert_true(
-        content.contains("Usage: cetas-headless [OPTIONS] --task <TASK>"),
-      )
+      assert_true(content.contains("command not found"))
       // Prompt junk after the idle sentinel must not leak into the excerpt.
       assert_false(content.contains("❯"))
     }
@@ -420,10 +418,7 @@ async test "failure without a session line carries no child_session" {
       split_ok(),
       (0, "", ""),
       (0, "", ""),
-      (
-        0, "[cetas-headless] turn failed: boom\n[cetas-headless] turn 1 done\n",
-        "",
-      ),
+      (0, "[cetas-run] turn failed: boom\n[cetas-run] turn 1 done\n", ""),
     ],
     index: 0,
     received: [],
@@ -556,7 +551,7 @@ async test "delegate launch failure is a ToolReportedError" {
   }
   match delegate.execute_delegate_impl(fake, delegate_task_call("x")) {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
-      assert_true(content.contains("launching headless"))
+      assert_true(content.contains("launching cetas-run"))
       assert_true(content.contains("herdr: pane is dead"))
     }
     other =>
@@ -737,7 +732,7 @@ async test "a failed pane close still returns Success with a note footer" {
       split_ok(),
       (0, "", ""),
       (0, "", ""),
-      (0, "session: s9\nanswer body\n[cetas-headless] turn 1 done\n", ""),
+      (0, "session: s9\nanswer body\n[cetas-run] turn 1 done\n", ""),
       (1, "", "{\"error\":{\"code\":\"boom\"}}"),
     ],
     index: 0,

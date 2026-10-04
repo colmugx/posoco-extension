@@ -12,7 +12,7 @@ pub fn HerdrDelegate::detect(
     herdr_env("HERDR_ENV"),
     herdr_env("HERDR_PANE_ID"),
     herdr_env("HERDR_BIN_PATH"),
-    herdr_env("CETAS_HEADLESS_BIN"),
+    herdr_env("CETAS_RUN_BIN"),
     cwd,
     parent_yolo~,
   )

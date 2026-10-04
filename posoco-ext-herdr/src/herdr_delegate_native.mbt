@@ -11,7 +11,7 @@ pub fn HerdrDelegate::detect(
     @env.get_env_var("HERDR_ENV"),
     @env.get_env_var("HERDR_PANE_ID"),
     @env.get_env_var("HERDR_BIN_PATH"),
-    @env.get_env_var("CETAS_HEADLESS_BIN"),
+    @env.get_env_var("CETAS_RUN_BIN"),
     cwd,
     parent_yolo~,
   )

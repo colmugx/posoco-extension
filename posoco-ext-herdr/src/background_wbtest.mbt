@@ -1,7 +1,7 @@
 ///|
 /// Background wiring tests: the delegation runs through the shared channel
 /// flow scripted on FakeHerdrCli (see herdr_delegate_wbtest.mbt) — no real
-/// herdr CLI, no cetas-headless process.
+/// herdr CLI, no cetas-run process.
 
 ///|
 /// Content of the first Success tool result in a transcript, if any.

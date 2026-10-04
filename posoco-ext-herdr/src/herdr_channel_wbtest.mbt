@@ -8,8 +8,8 @@ test "channel argv builders produce the herdr verb shapes" {
     "herdr", "pane", "split", "--pane", "1-1", "--direction", "down", "--cwd", "/tmp/ws",
     "--no-focus",
   ])
-  assert_eq(herdr_run_argv("herdr", "1-2", "cetas-headless -- 'do it'"), [
-    "herdr", "pane", "run", "1-2", "cetas-headless -- 'do it'",
+  assert_eq(herdr_run_argv("herdr", "1-2", "cetas-run -- 'do it'"), [
+    "herdr", "pane", "run", "1-2", "cetas-run -- 'do it'",
   ])
   assert_eq(herdr_wait_argv("herdr", "1-2", 5000), [
     "herdr", "pane", "wait-output", "--regex", herdr_wait_regex, "--source", "recent-unwrapped",
@@ -26,7 +26,7 @@ test "wait regex covers marker, failure line, and idle sentinel, and nothing ech
   // Pinned character-for-character: the herdr CLI takes a Rust regex with
   // substring (unanchored) semantics.
   assert_eq(
-    herdr_wait_regex, "\\[cetas-headless\\] (turn [0-9]+ done|turn failed:|pane-idle)",
+    herdr_wait_regex, "\\[cetas-run\\] (turn [0-9]+ done|turn failed:|pane-idle)",
   )
 }
 
@@ -51,72 +51,58 @@ test "split pane id parses from result.pane.pane_id; errors and garbage yield No
 }
 
 ///|
-test "headless command line maps permission, forwards optional flags, ends with the idle sentinel" {
+test "run command line maps permission, forwards optional flags, ends with the idle sentinel" {
   inspect(
-    headless_command_line(
-      "cetas-headless",
-      "readonly",
-      None,
-      None,
-      None,
-      "the task",
-    ),
-    content="cetas-headless --permission readonly -- 'the task' ; echo '[cetas-headless] pane-id'le",
+    run_command_line("cetas-run", "readonly", None, None, None, "the task"),
+    content="cetas-run --permission readonly -- 'the task' ; echo '[cetas-run] pane-id'le",
   )
   inspect(
-    headless_command_line(
-      "cetas-headless",
+    run_command_line(
+      "cetas-run",
       "write",
       Some("kimi-k2"),
       Some("high"),
       Some("sess-9"),
       "the task",
     ),
-    content="cetas-headless --yolo --model kimi-k2 --effort high --session sess-9 -- 'the task' ; echo '[cetas-headless] pane-id'le",
+    content="cetas-run --yolo --model kimi-k2 --effort high --session sess-9 -- 'the task' ; echo '[cetas-run] pane-id'le",
   )
   inspect(
-    headless_command_line(
-      "cetas-headless",
-      "readonly",
-      None,
-      None,
-      None,
-      "it's",
-    ),
-    content="cetas-headless --permission readonly -- 'it'\\''s' ; echo '[cetas-headless] pane-id'le",
+    run_command_line("cetas-run", "readonly", None, None, None, "it's"),
+    content="cetas-run --permission readonly -- 'it'\\''s' ; echo '[cetas-run] pane-id'le",
   )
 }
 
 ///|
-test "headless command line skips empty model/effort/session values" {
+test "run command line skips empty model/effort/session values" {
   inspect(
-    headless_command_line(
-      "cetas-headless",
+    run_command_line(
+      "cetas-run",
       "readonly",
       Some(""),
       Some(""),
       Some(""),
       "the task",
     ),
-    content="cetas-headless --permission readonly -- 'the task' ; echo '[cetas-headless] pane-id'le",
+    content="cetas-run --permission readonly -- 'the task' ; echo '[cetas-run] pane-id'le",
   )
   inspect(
-    headless_command_line(
-      "cetas-headless",
+    run_command_line(
+      "cetas-run",
       "readonly",
       Some(""),
       None,
       Some("sess-1"),
       "the task",
     ),
-    content="cetas-headless --permission readonly --session sess-1 -- 'the task' ; echo '[cetas-headless] pane-id'le",
+    content="cetas-run --permission readonly --session sess-1 -- 'the task' ; echo '[cetas-run] pane-id'le",
   )
 }
 
 ///|
 test "parse_pane_text: session line bounds the answer, marker is stripped" {
   let pane = parse_pane_text(
-    "session: sess-7\nheadless answer body\n[cetas-headless] turn 1 done\n",
+    "session: sess-7\nheadless answer body\n[cetas-run] turn 1 done\n",
   )
   assert_eq(pane.answer, "headless answer body")
   assert_eq(pane.child_session, Some("sess-7"))
@@ -126,13 +112,12 @@ test "parse_pane_text: session line bounds the answer, marker is stripped" {
 
 ///|
 test "parse_pane_text: idle-sentinel line is terminal, truncates the prompt junk, and leaves done false" {
+  // A child that dies before any protocol line (here: the binary is missing)
+  // still ends at the sentinel the pane shell echoes.
   let pane = parse_pane_text(
-    "cetas-headless: unrecognized argument '--mdoel'\nUsage: cetas-headless [OPTIONS] --task <TASK>\n[cetas-headless] pane-idle\n❯ \n",
+    "bash: cetas-run: command not found\n[cetas-run] pane-idle\n❯ \n",
   )
-  assert_eq(
-    pane.answer,
-    "cetas-headless: unrecognized argument '--mdoel'\nUsage: cetas-headless [OPTIONS] --task <TASK>",
-  )
+  assert_eq(pane.answer, "bash: cetas-run: command not found")
   assert_eq(pane.child_session, None)
   assert_eq(pane.failure, None)
   assert_eq(pane.done, false)
@@ -140,7 +125,7 @@ test "parse_pane_text: idle-sentinel line is terminal, truncates the prompt junk
 
 ///|
 test "parse_pane_text: session line before an idle sentinel still yields child_session" {
-  let pane = parse_pane_text("session: s2\n[cetas-headless] pane-idle\n❯ \n")
+  let pane = parse_pane_text("session: s2\n[cetas-run] pane-idle\n❯ \n")
   assert_eq(pane.answer, "")
   assert_eq(pane.child_session, Some("s2"))
   assert_eq(pane.done, false)
@@ -149,7 +134,7 @@ test "parse_pane_text: session line before an idle sentinel still yields child_s
 ///|
 test "parse_pane_text: failure line replaces the answer block" {
   let pane = parse_pane_text(
-    "session: s1\n[cetas-headless] turn failed: model exploded\n[cetas-headless] turn 1 done\n",
+    "session: s1\n[cetas-run] turn failed: model exploded\n[cetas-run] turn 1 done\n",
   )
   assert_eq(pane.answer, "")
   assert_eq(pane.child_session, Some("s1"))
@@ -159,7 +144,7 @@ test "parse_pane_text: failure line replaces the answer block" {
 ///|
 test "parse_pane_text: prompt redraw after the marker is dropped" {
   let pane = parse_pane_text(
-    "session: cetas-1789036261302\npong\n[cetas-headless] turn 1 done\n\n/private/tmp via C v17.0.0-clang via  v24.15.7 took 7s\n❯\n",
+    "session: cetas-1789036261302\npong\n[cetas-run] turn 1 done\n\n/private/tmp via C v17.0.0-clang via  v24.15.7 took 7s\n❯\n",
   )
   assert_eq(pane.answer, "pong")
   assert_eq(pane.child_session, Some("cetas-1789036261302"))
@@ -168,9 +153,7 @@ test "parse_pane_text: prompt redraw after the marker is dropped" {
 
 ///|
 test "parse_pane_text: no session line falls back to the whole screen" {
-  let pane = parse_pane_text(
-    "preamble\nanswer body\n[cetas-headless] turn 1 done\n",
-  )
+  let pane = parse_pane_text("preamble\nanswer body\n[cetas-run] turn 1 done\n")
   assert_eq(pane.answer, "preamble\nanswer body")
   assert_eq(pane.child_session, None)
   assert_eq(pane.failure, None)

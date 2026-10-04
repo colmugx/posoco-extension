@@ -9,19 +9,19 @@ priv trait HerdrCli {
 }
 
 ///|
-// One-shot headless always finishes turn 1 (cetas-headless lib/loop.mbt
-// prints turn_marker(1)); parse_pane_text treats a line containing this as
-// both the done flag and the success terminal.
-let herdr_headless_marker : String = "[cetas-headless] turn 1 done"
+// One-shot runs always finish turn 1 (cetas-run lib/loop.mbt prints
+// turn_marker(1)); parse_pane_text treats a line containing this as both the
+// done flag and the success terminal.
+let herdr_run_marker : String = "[cetas-run] turn 1 done"
 
 ///|
 /// One Rust regex covering every terminal line the child (or its pane shell)
 /// can print: the completion marker, the failure line, and the idle sentinel
 /// the launcher echoes when the pane returns to a command-ready state.
-let herdr_wait_regex : String = "\\[cetas-headless\\] (turn [0-9]+ done|turn failed:|pane-idle)"
+let herdr_wait_regex : String = "\\[cetas-run\\] (turn [0-9]+ done|turn failed:|pane-idle)"
 
 ///|
-let herdr_turn_failed_prefix : String = "[cetas-headless] turn failed: "
+let herdr_turn_failed_prefix : String = "[cetas-run] turn failed: "
 
 ///|
 /// Idle sentinel: the pane shell echoes this after the child exits (the pane
@@ -29,7 +29,7 @@ let herdr_turn_failed_prefix : String = "[cetas-headless] turn failed: "
 /// quote boundary (`pane-id'le`) so the command-line echo never contains the
 /// full literal — only the executed echo's output does; wait-output searches
 /// existing pane output, which includes the typed echo.
-let herdr_idle_sentinel : String = "[cetas-headless] pane-idle"
+let herdr_idle_sentinel : String = "[cetas-run] pane-idle"
 
 ///|
 let herdr_session_prefix : String = "session: "
@@ -132,19 +132,19 @@ fn herdr_push_flag(
 }
 
 ///|
-/// Shell command line for `pane run`: the headless binary, permission flags
+/// Shell command line for `pane run`: the cetas-run binary, permission flags
 /// (readonly default, `--yolo` for write), optional model/effort/session
 /// (empty strings are skipped), then `--` and the single-quoted task, and a
 /// trailing idle-sentinel echo.
-fn headless_command_line(
-  headless_bin : String,
+fn run_command_line(
+  run_bin : String,
   permission : String,
   model : String?,
   effort : String?,
   session : String?,
   task : String,
 ) -> String {
-  let parts : Array[String] = [headless_bin]
+  let parts : Array[String] = [run_bin]
   if permission == "write" {
     parts.push("--yolo")
   } else {
@@ -159,7 +159,7 @@ fn headless_command_line(
   // Idle sentinel for the wait regex: typed split across a quote boundary
   // (`pane-id'le`) so the command-line echo never contains the full literal —
   // only the executed echo's output does.
-  parts.push("; echo '[cetas-headless] pane-id'le")
+  parts.push("; echo '[cetas-run] pane-id'le")
   parts.join(" ")
 }
 
@@ -173,7 +173,7 @@ priv struct HerdrPaneResult {
 
 ///|
 /// Parse the merged pane screen (the pty folds stdout and stderr together).
-/// Text-mode headless prints `session: <id>` first, then the answer, then
+/// Text-mode cetas-run prints `session: <id>` first, then the answer, then
 /// the completion marker; the failure line replaces the answer block. The
 /// answer is everything after the session line (or the whole screen when no
 /// session line appeared) up to the FIRST terminal line (marker, failure, or
@@ -214,11 +214,11 @@ fn parse_pane_text(text : String) -> HerdrPaneResult {
         None => ()
       }
     }
-    if line.contains(herdr_headless_marker) {
+    if line.contains(herdr_run_marker) {
       done = true
     }
     if terminal_idx < 0 {
-      if line.contains(herdr_headless_marker) ||
+      if line.contains(herdr_run_marker) ||
         line.contains(herdr_idle_sentinel) ||
         failure_idx == i {
         terminal_idx = i
