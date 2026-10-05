@@ -59,13 +59,17 @@ async test "native observer projection stays sanitized through live and retained
       let raw = reconnect.recv().read_all().text()
       assert_false(raw.contains("SENTINEL"))
       guard @protocol.decode_server_frame(raw) is Ok(Snapshot(snapshot)) else {
-        fail("gap requires retained snapshot")
+        fail("gap requires authoritative snapshot")
       }
       assert_eq(snapshot.last_seq, 4L)
       assert_eq(snapshot.board_revision, 0L)
+      // The retained reset is the authoritative composite: sanitized board
+      // projection plus the retained sanitized telemetry suffix.
       assert_eq(snapshot.payload, {
+        "board": { "revision": Json::number(0), "tasks": [], "attempts": [] },
         "events": runtime.event_history().map(event => event.to_json()),
       })
+      assert_false(raw.contains("PRIVATE_SENTINEL"))
       assert_eq(runtime.event_history().length(), 2)
       runtime.shutdown()
       assert_eq(hub.subscriber_count(), 0)

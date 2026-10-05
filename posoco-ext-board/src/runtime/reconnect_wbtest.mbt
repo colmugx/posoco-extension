@@ -6,70 +6,108 @@ fn hub_tick(hub : BoardEventHub) -> @protocol.BoardWireEvent {
 }
 
 ///|
-fn assert_snapshot(
-  client : BoardSubscription,
-  hub : BoardEventHub,
-) -> Unit raise {
-  let frames = client.initial()
-  assert_eq(frames.length(), 1)
-  guard frames[0] is Snapshot(snapshot) else { fail("expected snapshot") }
-  assert_eq(snapshot.last_seq, hub.current_seq())
-  assert_eq(snapshot.board_revision, 0L)
-  assert_eq(snapshot.protocol_version, @protocol.protocol_version())
-  assert_eq(snapshot.payload, {
-    "events": hub.history().map(event => event.to_json()),
-  })
-}
-
-///|
 test "replay boundaries empty current zero covered gap and future" {
   let hub = BoardEventHub(capacity=2)
   let empty = hub.subscribe(0L)
+  assert_eq(empty.plan, Live)
   assert_eq(empty.initial(), [])
   hub.unsubscribe(empty)
   let future_empty = hub.subscribe(1L)
-  assert_snapshot(future_empty, hub)
+  // A cursor ahead of the head requires an authoritative snapshot; the hub
+  // never fabricates one.
+  assert_eq(future_empty.plan, SnapshotRequired)
+  assert_eq(future_empty.initial(), [])
   hub.unsubscribe(future_empty)
   let first = hub_tick(hub)
   let zero = hub.subscribe(0L)
-  assert_snapshot(zero, hub)
+  assert_eq(zero.plan, SnapshotRequired)
+  assert_eq(zero.initial(), [])
   hub.unsubscribe(zero)
   let second = hub_tick(hub)
   let third = hub_tick(hub)
   let covered = hub.subscribe(first.seq)
+  assert_eq(covered.plan, Replay([second, third]))
   assert_eq(covered.initial(), [@protocol.Event(second), @protocol.Event(third)])
   hub.unsubscribe(covered)
   let current = hub.subscribe(3L)
+  assert_eq(current.plan, Live)
   assert_eq(current.initial(), [])
   hub.unsubscribe(current)
   let fourth = hub_tick(hub)
   assert_eq(fourth.seq, 4L)
+  // Zero with existing events, a gap below the retained head and a future
+  // cursor all demand the authoritative snapshot.
   for cursor in [0L, 1L, 5L] {
     let reset = hub.subscribe(cursor)
-    assert_snapshot(reset, hub)
+    assert_eq(reset.plan, SnapshotRequired)
+    assert_eq(reset.initial(), [])
     hub.unsubscribe(reset)
   }
   assert_eq(hub.subscriber_count(), 0)
 }
 
 ///|
-async test "atomic bootstrap then live never fills mailbox with replay" {
+test "history_through bounds the contiguous retained tail" {
+  let hub = BoardEventHub(capacity=4)
+  for _ in 0..<3 {
+    let _ = hub_tick(hub)
+  }
+  assert_eq(hub.history_through(2L).map(event => event.seq), [1L, 2L])
+  assert_eq(hub.history_through(0L).length(), 0)
+  assert_eq(hub.history_through(99L).length(), 3)
+}
+
+///|
+async test "snapshot plan installs the authoritative frame and the sender skips stale live" {
+  let hub = BoardEventHub(capacity=8, client_queue_depth=8)
+  for _ in 0..<2 {
+    let _ = hub_tick(hub)
+  }
+  let client = hub.subscribe(0L)
+  defer hub.unsubscribe(client)
+  assert_eq(client.plan, SnapshotRequired)
+  // Live events accumulate in the mailbox while the authoritative
+  // bootstrap is awaited.
+  let _third = hub_tick(hub)
+  let _fourth = hub_tick(hub)
+  client.install_snapshot({
+    protocol_version: @protocol.protocol_version(),
+    last_seq: 4L,
+    board_revision: 0L,
+    payload: { "events": [] },
+  })
+  assert_eq(client.baseline_seq, 4L)
+  let fifth = hub_tick(hub)
+  assert_eq(client.next(), @protocol.Event(fifth))
+  assert_eq(client.initial(), [
+    @protocol.Snapshot({
+      protocol_version: @protocol.protocol_version(),
+      last_seq: 4L,
+      board_revision: 0L,
+      payload: { "events": [] },
+    }),
+  ])
+}
+
+///|
+async test "atomic replay then live never fills mailbox with replay" {
   let hub = BoardEventHub(capacity=8, client_queue_depth=2)
   for _ in 0..<5 {
     let _ = hub_tick(hub)
   }
   let client = hub.subscribe(1L)
+  assert_true(client.plan is Replay(_))
   assert_eq(client.initial().length(), 4)
   assert_eq(client.resync_required(), None)
   let live = hub_tick(hub)
   assert_eq(client.initial().length(), 4)
   assert_eq(client.next(), @protocol.Event(live))
   let snapshot = hub.subscribe(0L)
+  // Zero cursor demands the authoritative snapshot; no frame is fabricated
+  // and the live frames keep flowing after registration.
+  assert_eq(snapshot.plan, SnapshotRequired)
+  assert_eq(snapshot.initial(), [])
   let next = hub_tick(hub)
-  guard snapshot.initial()[0] is Snapshot(frame) else {
-    fail("expected snapshot")
-  }
-  assert_eq(frame.last_seq, 6L)
   assert_eq(snapshot.next(), @protocol.Event(next))
   hub.unsubscribe(client)
   hub.unsubscribe(snapshot)
@@ -133,6 +171,12 @@ async test "overflow cancels and joins a blocked bootstrap writer" {
   let _ = hub_tick(hub)
   let client = hub.subscribe(0L)
   defer hub.unsubscribe(client)
+  client.install_snapshot({
+    protocol_version: @protocol.protocol_version(),
+    last_seq: 1L,
+    board_revision: 0L,
+    payload: { "events": [] },
+  })
   let entered : @async.Queue[Unit] = @async.Queue(kind=Blocking(1))
   let blocked : @async.Queue[Unit] = @async.Queue(kind=Blocking(1))
   let mut exited = false

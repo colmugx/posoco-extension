@@ -2,6 +2,10 @@
 pub struct NativeBoardWebServer {
   hub : BoardEventHub
   connections : Array[@async.Task[Unit]]
+  /// Authoritative snapshot source, installed by the runtime through the
+  /// `BoardWebServer` trait. `None` means snapshot-required subscriptions
+  /// receive an explicit resync instead of a snapshot.
+  mut snapshot_provider : (async () -> Result[@protocol.BoardSnapshot, String])?
   mut server : @http.Server?
   mut endpoint : BoardEndpoint?
   mut token : String?
@@ -17,6 +21,7 @@ pub fn NativeBoardWebServer::NativeBoardWebServer(
   {
     hub,
     connections: [],
+    snapshot_provider: None,
     server: None,
     endpoint: None,
     token: None,
@@ -135,11 +140,11 @@ fn board_placeholder_page() -> String {
     #|const token=new URLSearchParams(location.search).get('token');
     #|if(!token){status.textContent='missing bootstrap token';return;}
     #|const key='board.cursor.'+location.host, valid=n=>Number.isSafeInteger(n)&&n>=0;
-    #|let seq=0, lines=[], socket=null, timer=null, stopped=false, suspended=false, delay=250;
+    #|let seq=0, boardrev=0, tasks=0, attempts=0, lines=[], socket=null, timer=null, stopped=false, suspended=false, delay=250;
     #|try{const saved=Number(sessionStorage.getItem(key));if(valid(saved))seq=saved;}catch(_){}
     #|const cursor=n=>{seq=n;try{sessionStorage.setItem(key,String(n));}catch(_){}};
-    #|const show=s=>{status.textContent=s+' | seq '+seq;};
-    #|const line=e=>('seq '+e.seq+' | kind '+String(e.kind)+' | scope '+JSON.stringify(e.scope??null)).slice(0,512);
+    #|const show=s=>{status.textContent=s+' | board '+boardrev+' | tasks '+tasks+' | attempts '+attempts+' | seq '+seq;};
+    #|const line=e=>('seq '+e.seq+' | rev '+e.board_revision+' | kind '+String(e.kind)+' | scope '+JSON.stringify(e.scope??null)).slice(0,512);
     #|const render=()=>{output.textContent=lines.join('\n');};
     #|const reset=(ws,s)=>{cursor(0);lines=[];render();show(s);ws.close();};
     #|function connect(){
@@ -153,11 +158,20 @@ fn board_placeholder_page() -> String {
     #|      if(f.type==='resync_required'){reset(ws,'resync required');return;}
     #|      if(f.type==='error'){show('protocol error: '+String(f.code).slice(0,80));stopped=true;ws.close();return;}
     #|      if(f.type==='snapshot'){
-    #|        if(f.protocol_version!==1||!valid(f.last_seq)||!Array.isArray(f.payload?.events))throw Error();
+    #|        if(f.protocol_version!==1||!valid(f.last_seq)||!valid(f.board_revision)||!Array.isArray(f.payload?.events))throw Error();
+    #|        const board=f.payload.board;
+    #|        if(board===null||typeof board!=='object'||Array.isArray(board))throw Error();
+    #|        if(!valid(board.revision)||board.revision!==f.board_revision)throw Error();
+    #|        if(!Array.isArray(board.tasks)||!Array.isArray(board.attempts))throw Error();
     #|        const events=f.payload.events, first=f.last_seq-events.length+1;
-    #|        if(first<1||(events.length===0&&f.last_seq!==0))throw Error();
-    #|        for(let i=0;i<events.length;i++){const e=events[i];if(e.type!=='event'||!valid(e.seq)||e.seq!==first+i)throw Error();}
-    #|        lines=events.slice(-100).map(line);cursor(f.last_seq);render();show('snapshot');delay=250;
+    #|        if(events.length===0&&f.last_seq!==0)throw Error();
+    #|        if(events.length>0){
+    #|          if(first<1)throw Error();
+    #|          for(let i=0;i<events.length;i++){const e=events[i];if(e.type!=='event'||!valid(e.seq)||e.seq!==first+i)throw Error();}
+    #|          lines=events.slice(-100).map(line);
+    #|        }else{lines=[];}
+    #|        boardrev=f.board_revision;tasks=board.tasks.length;attempts=board.attempts.length;
+    #|        cursor(f.last_seq);render();show('snapshot');delay=250;
     #|      }else if(f.type==='event'){
     #|        if(!valid(f.seq))throw Error();if(f.seq<=seq)return;
     #|        if(f.seq!==seq+1){reset(ws,'sequence gap; reconnecting');return;}
@@ -319,6 +333,63 @@ async fn NativeBoardWebServer::handle_ws(
 }
 
 ///|
+/// Best-effort explicit resync frame. The connection always closes after
+/// it; a fragmented interrupted write closes silently instead.
+async fn NativeBoardWebServer::resync(
+  self : NativeBoardWebServer,
+  ws : @websocket.Conn,
+  reason : String,
+) -> Unit {
+  board_write_frame(
+    ws,
+    @protocol.ResyncRequired(reason~, current_seq=self.hub.current_seq()),
+  ) catch {
+    _ => ()
+  }
+}
+
+///|
+/// Authoritative bootstrap of a `SnapshotRequired` subscription. The
+/// provider is awaited only after synchronous registration, so live events
+/// accumulate in the mailbox while the coordinator settles; the installed
+/// snapshot carries the boundary and the sender drops stale mailbox
+/// duplicates. Any failure sends one resync frame and closes: no snapshot
+/// is ever fabricated here. A mailbox overflow while the provider is
+/// awaited resyncs with `client_queue_overflow` before anything is
+/// installed or sent: the answered snapshot is already stale by the time it
+/// arrives.
+async fn NativeBoardWebServer::bootstrap_client(
+  self : NativeBoardWebServer,
+  ws : @websocket.Conn,
+  client : BoardSubscription,
+) -> Bool {
+  let provider = match self.snapshot_provider {
+    Some(provider) => provider
+    None => {
+      self.resync(ws, "snapshot_unavailable")
+      return false
+    }
+  }
+  match provider() {
+    Ok(snapshot) => {
+      // Live events queued during the provider await may have overflowed
+      // the bounded mailbox. An overflowed bootstrap must never install or
+      // send the now-stale snapshot: one explicit resync closes instead.
+      if client.resync_required() is Some(_) {
+        self.resync(ws, "client_queue_overflow")
+        return false
+      }
+      client.install_snapshot(snapshot)
+      true
+    }
+    Err(reason) => {
+      self.resync(ws, reason)
+      false
+    }
+  }
+}
+
+///|
 async fn NativeBoardWebServer::serve_ws(
   self : NativeBoardWebServer,
   ws : @websocket.Conn,
@@ -333,8 +404,15 @@ async fn NativeBoardWebServer::serve_ws(
       return
     }
   }
+  // Registration is synchronous; the authoritative bootstrap of a
+  // snapshot-required plan is the only awaited step.
   let client = self.hub.subscribe(hello.last_seq)
   defer self.hub.unsubscribe(client)
+  if client.plan is SnapshotRequired {
+    if !(self.bootstrap_client(ws, client) catch { _ => false }) {
+      return
+    }
+  }
   // any owns and joins both local tasks on success, failure and cancellation.
   @async.any([
     () => board_client_sender(ws, client),
@@ -347,7 +425,7 @@ async fn NativeBoardWebServer::serve_ws(
               command_id: command.command_id,
               accepted: false,
               error: Some("unsupported_in_current_stage"),
-              current_revision: Some(0L),
+              current_revision: None,
             })
           _ =>
             @protocol.Error(
@@ -544,6 +622,14 @@ pub impl BoardWebServer for NativeBoardWebServer with fn last_error(self) {
 }
 
 ///|
+pub impl BoardWebServer for NativeBoardWebServer with fn set_snapshot_provider(
+  self,
+  provider,
+) {
+  self.snapshot_provider = Some(provider)
+}
+
+///|
 pub struct NativeBrowserOpener {}
 
 ///|
@@ -609,6 +695,7 @@ pub extend NativeBoardWebServer with BoardWebServer::{
   close,
   is_alive,
   last_error,
+  set_snapshot_provider,
 }
 
 ///|

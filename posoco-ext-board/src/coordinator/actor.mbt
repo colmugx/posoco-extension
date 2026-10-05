@@ -78,6 +78,7 @@ priv enum WorkerReport {
 ///|
 priv enum BoardQuery {
   Snapshot
+  StreamSnapshot
   GetTask(@domain.BoardTaskId)
   ListTasks
   GetAttempt(@domain.AttemptId)
@@ -88,6 +89,7 @@ priv enum BoardQuery {
 ///|
 priv enum BoardReply {
   SnapshotReply(@domain.BoardStateSnapshot)
+  StreamSnapshotReply(BoardStreamSnapshot)
   TaskReply(@domain.BoardTask?)
   TasksReply(Array[@domain.BoardTask])
   AttemptReply(@domain.Attempt?)
@@ -168,6 +170,27 @@ fn[T] deliver(queue : @aqueue.Queue[T], value : T) -> Unit {
 ///|
 fn sync_status(core : CoordinatorCore, state : CoordinatorState) -> Unit {
   core.coordinator.phase_status = state.status()
+}
+
+///|
+/// Shared commit bookkeeping for every durable settlement: replace the
+/// committed board and observe the synchronous `on_commit` hook with deeply
+/// detached inputs. The hook runs after the committed state was assigned
+/// and before any caller — the committing submission or a parked ready
+/// waiter — is answered. An empty event list is an unchanged load, not a
+/// commit: it does not observe the hook.
+fn coordinator_commit(
+  core : CoordinatorCore,
+  state : CoordinatorState,
+  committed : @domain.BoardState,
+  snapshot : @domain.BoardStateSnapshot,
+  events : Array[@domain.BoardEvent],
+) -> Unit {
+  state.committed = committed
+  if events.is_empty() {
+    return
+  }
+  (core.coordinator.on_commit)(snapshot.copy_detached(), events.copy())
 }
 
 ///|
@@ -325,7 +348,16 @@ fn coordinator_restored(
     Ok(recovery) =>
       match @domain.BoardState::from_snapshot(recovery.snapshot) {
         Ok(restored) => {
-          state.committed = restored
+          // The recovery persist is a durable transaction like any other:
+          // its recovery mutations stream exactly once, an unchanged load
+          // streams nothing.
+          coordinator_commit(
+            core,
+            state,
+            restored,
+            recovery.snapshot,
+            recovery.events,
+          )
           state.restored = true
           state.phase = Ready
         }
@@ -379,7 +411,13 @@ fn coordinator_persisted(
   match outcome {
     Ok(_) => {
       state.pending = None
-      state.committed = pending.candidate
+      coordinator_commit(
+        core,
+        state,
+        pending.candidate,
+        pending.candidate.snapshot(),
+        pending.events,
+      )
       deliver(pending.completion, Ok(pending.events))
     }
     Err(@store.DurabilityUncertain(detail)) => {
@@ -424,9 +462,16 @@ fn coordinator_reloaded(
     Ok(snapshot) =>
       if snapshot_matches(snapshot, pending.candidate.snapshot()) {
         // The write had landed after all: adopt the candidate, but the
-        // caller still learns the outcome was uncertain.
+        // caller still learns the outcome was uncertain. The candidate
+        // commits exactly once — the stream observes its events here.
         state.pending = None
-        state.committed = pending.candidate
+        coordinator_commit(
+          core,
+          state,
+          pending.candidate,
+          pending.candidate.snapshot(),
+          pending.events,
+        )
         state.phase = Ready
         deliver(pending.completion, Err(DurabilityUncertain(detail)))
         coordinator_ok_waiters(state)
@@ -562,7 +607,7 @@ fn coordinator_fail_waiters(
 /// Read-only query fold. Until the durable board is settled the loop
 /// answers explicitly instead of guessing state.
 fn coordinator_on_query(
-  _core : CoordinatorCore,
+  core : CoordinatorCore,
   _ctx : @fuwaroid.Ctx[BoardMsg, BoardQuery, BoardReply],
   state : CoordinatorState,
   query : BoardQuery,
@@ -583,6 +628,13 @@ fn coordinator_on_query(
   }
   let reply = match query {
     Snapshot => SnapshotReply(state.committed.snapshot())
+    StreamSnapshot =>
+      // The callback is evaluated while the loop owns the committed state,
+      // so board and boundary answer one consistent instant.
+      StreamSnapshotReply({
+        board_snapshot: state.committed.snapshot(),
+        stream_seq: (core.coordinator.stream_cursor)(),
+      })
     GetTask(id) => TaskReply(state.committed.task(id))
     ListTasks => TasksReply(state.committed.tasks())
     GetAttempt(id) => AttemptReply(state.committed.attempt(id))

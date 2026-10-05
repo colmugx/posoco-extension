@@ -13,8 +13,11 @@ test "subscription bootstrap and bounded overflow public API" {
   assert_true(client.resync_required() is Some(_))
   hub.unsubscribe(client)
   assert_eq(hub.subscriber_count(), 0)
+  // A zero cursor with retained events demands the authoritative snapshot
+  // plan; the hub itself never fabricates one.
   let reconnect = hub.subscribe(0L)
-  assert_eq(reconnect.initial().length(), 1)
+  assert_true(reconnect.plan is @runtime.SnapshotRequired)
+  assert_eq(reconnect.initial().length(), 0)
   assert_true(reconnect.resync_required() is None)
   hub.unsubscribe(reconnect)
 }

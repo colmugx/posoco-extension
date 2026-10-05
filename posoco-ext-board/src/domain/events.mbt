@@ -1,6 +1,6 @@
 ///|
-/// Typed facts produced by accepted mutations, in order. S3A never
-/// publishes these to the telemetry EventHub; delivery is a later stage.
+/// Typed facts produced by accepted mutations, in order. The domain stays
+/// transport-free; the runtime projects committed events onto the wire.
 pub(all) enum BoardEvent {
   TaskCreated(id~ : BoardTaskId, at_ms~ : Int64)
   TaskUpdated(id~ : BoardTaskId, at_ms~ : Int64)
