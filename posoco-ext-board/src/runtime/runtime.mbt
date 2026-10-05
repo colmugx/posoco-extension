@@ -20,8 +20,10 @@ pub struct BoardRuntime {
 /// default allocates an independent hub; it cannot discover a server's hub.
 /// The coordinator restores from `store` (default: an empty
 /// `MemoryBoardStore`), with `now_ms` supplying recovery time (default:
-/// deterministic 0). Prefer `default_board_runtime` unless explicitly wiring
-/// server and runtime.
+/// deterministic 0). Its `stream_cursor` reads the hub head on demand, and
+/// its `on_commit` hook publishes every committed event into that hub.
+/// Prefer `default_board_runtime` unless explicitly wiring server and
+/// runtime.
 pub fn BoardRuntime::with_adapters(
   event_buffer? : Int = 4096,
   hub? : BoardEventHub = BoardEventHub(capacity=event_buffer),
@@ -37,6 +39,10 @@ pub fn BoardRuntime::with_adapters(
     coordinator: @coordinator.BoardCoordinator::BoardCoordinator(
       store~,
       now_ms~,
+      on_commit=(snapshot, events) => {
+        board_publish_commit(hub, snapshot, events)
+      },
+      stream_cursor=() => hub.current_seq(),
     ),
     gate: @async.Mutex::Mutex(),
     supervisor: None,
@@ -99,6 +105,10 @@ async fn BoardRuntime::ensure_server_locked(
       )
   }
   self.server_status = Starting
+  // The runtime is the server's authoritative snapshot source; the
+  // bootstrap awaits the durable coordinator, so it is installed as an
+  // async provider from this async start path.
+  self.server.set_snapshot_provider(async fn() { self.bootstrap_snapshot() })
   let endpoint = match self.server.bind() {
     Ok(value) => value
     Err(error) => {

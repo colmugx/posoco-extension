@@ -65,6 +65,7 @@ pub extend UnsupportedBoardWebServer with BoardWebServer::{
   close,
   is_alive,
   last_error,
+  set_snapshot_provider,
 }
 
 ///|

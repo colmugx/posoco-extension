@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S3B2A durable Board coordinator on top of S2B realtime
+## Current status: S3B2B1 runtime streaming and authoritative snapshots on top of S3B2A
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -148,7 +148,8 @@ The first WebSocket message must be a v1 text `Hello`, within 5 seconds and
 8192 bytes. Cursors must be nonnegative JSON safe integers. Invalid Hello,
 command-first and unsupported versions receive a small `error` frame and
 close. Later commands return `accepted=false`,
-`error="unsupported_in_current_stage"`, `current_revision=0`, without mutation.
+`error="unsupported_in_current_stage"` without a `current_revision`, because
+the stage answers no domain query; without mutation.
 
 Subscription computes bootstrap and registers the live mailbox synchronously:
 
@@ -248,6 +249,52 @@ Explicitly out of scope: WebSocket domain mutations, authoritative domain
 EventHub publication, Board domain wire snapshots, Agent execution, scheduler,
 UI, Posoco Tasks and GitHub Actions changes. Telemetry `seq` and Board revision
 remain independent; WebSocket commands still answer
+`unsupported_in_current_stage`.
+
+## Runtime streaming and authoritative snapshots (S3B2B1)
+
+The runtime is the only place where the durable coordinator and the telemetry
+hub meet; the hub never learns about the coordinator and the coordinator never
+learns about the hub. The runtime installs a synchronous `on_commit` hook that
+projects every committed domain event into the same hub through
+`@protocol.project_event`: the projected kind and payload carry the committed
+revision, `seq` stays zero (the hub mints the transport sequence) and `scope`
+stays absent, because a domain commit carries no Posoco attribution. Telemetry
+projection is unchanged and keeps revision 0. A gated persist publishes
+nothing; an uncertain persist publishes its events exactly once when — and only
+when — the reconciliation adopts the candidate; a reload that keeps the prior
+board leaves the stream untouched. Startup recovery streams its recovery
+mutations once, and an unchanged load streams nothing.
+
+`BoardCoordinator::stream_cursor` stores a callback that supplies the committed
+event-stream position on demand; the runtime configures it to the hub head, and
+`stream_snapshot` evaluates it synchronously on the loop while the committed
+state is copied, so the answered `BoardStreamSnapshot` boundary is the actual
+hub position — telemetry included — at query time. The runtime's
+`bootstrap_snapshot` composites the authoritative wire snapshot from that exact
+boundary: `last_seq` is `stream.stream_seq` (never a later hub head), the board
+payload comes from `@protocol.snapshot_to_json` and `events` are every retained
+hub event up to and ending exactly at the boundary
+(`BoardEventHub::history_through`). Loading gates the bootstrap through
+`wait_ready`; telemetry and the `/board` control plane stay live meanwhile.
+A boundary whose retained suffix was evicted is never served: the bootstrap
+retries with a fresher boundary a bounded number of times and then answers
+`history_overflow`; a coordinator that is not ready answers
+`snapshot_unavailable`. No fabricated or empty snapshot is ever produced, and
+no store detail reaches the wire.
+
+`BoardEventHub::subscribe` registers synchronously and returns an explicit
+plan: `Live` (cursor at the head, including the empty `0/0` case), `Replay`
+(the contiguous retained suffix after the cursor) or `SnapshotRequired` (zero
+with events, a gap, an evicted history or a future cursor). The hub never
+fabricates a snapshot. The server fulfils `SnapshotRequired` through the
+runtime-installed snapshot provider — a `BoardWebServer` trait method with a
+no-op default — after registration, so live events accumulate in the mailbox
+while the coordinator settles; the installed snapshot carries the boundary and
+the subscription drops stale mailbox events at or before it. A server without
+a provider, like a failed bootstrap, answers one explicit `resync_required`
+frame (`snapshot_unavailable`) and closes. Client mailboxes still overflow to
+a terminal `client_queue_overflow` resync. WebSocket domain commands remain
 `unsupported_in_current_stage`.
 
 ## Task vocabulary

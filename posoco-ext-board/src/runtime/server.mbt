@@ -61,6 +61,10 @@ pub fn BoardServerStatus::to_json(self : BoardServerStatus) -> Json {
 ///|
 /// Target seam for the local Board control plane. Implementations own the
 /// instance token and must never expose it through endpoint/status values.
+/// The snapshot provider awaits the durable coordinator and returns the
+/// composite wire snapshot, or a resync reason when no trustworthy snapshot
+/// can be produced; the runtime installs exactly one per server while
+/// starting the control plane.
 pub(open) trait BoardWebServer {
   async fn bind(Self) -> Result[BoardEndpoint, String]
   async fn run(Self) -> Result[Unit, String]
@@ -68,6 +72,21 @@ pub(open) trait BoardWebServer {
   fn close(Self) -> Unit
   fn is_alive(Self) -> Bool
   fn last_error(Self) -> String?
+  /// Install the authoritative snapshot provider. Default: none — a server
+  /// without a provider answers snapshot-required subscriptions with an
+  /// explicit resync frame and closes, instead of fabricating a snapshot.
+  async fn set_snapshot_provider(
+    Self,
+    provider : async () -> Result[@protocol.BoardSnapshot, String],
+  ) -> Unit = _
+}
+
+///|
+impl BoardWebServer with fn set_snapshot_provider(
+  _self,
+  _provider : async () -> Result[@protocol.BoardSnapshot, String],
+) -> Unit {
+  ()
 }
 
 ///|

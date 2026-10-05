@@ -65,7 +65,10 @@ async test "native shared runtime hello live reconnect two three and command rej
       }
       assert_eq(snapshot.last_seq, 1L)
       assert_eq(snapshot.board_revision, 0L)
-      assert_eq(snapshot.payload, { "events": [first.to_json()] })
+      assert_eq(snapshot.payload, {
+        "board": { "revision": Json::number(0), "tasks": [], "attempts": [] },
+        "events": [first.to_json()],
+      })
       let second = runtime.publish_telemetry(
         board_revision=0L,
         kind="run.completed",
@@ -100,7 +103,7 @@ async test "native shared runtime hello live reconnect two three and command rej
           command_id: "c-1",
           accepted: false,
           error: Some("unsupported_in_current_stage"),
-          current_revision: Some(0L),
+          current_revision: None,
         }),
       )
       assert_eq(runtime.current_seq(), 3L)
@@ -176,15 +179,18 @@ async test "native retained snapshot security gates and connection cleanup" {
     @async.with_task_group(group => {
       let hub = BoardEventHub(capacity=2)
       let server = NativeBoardWebServer(hub~)
-      let endpoint = match server.bind() {
+      let opener : FakeBrowserOpener = { opened: [], }
+      let runtime = BoardRuntime::with_adapters(hub~, server~, opener~)
+      runtime.attach(group)
+      assert_true(runtime.coordinator.wait_ready() is Ok(_))
+      let endpoint = match runtime.ensure_server() {
         Ok(value) => value
         Err(_) => fail("bind failed")
       }
-      defer server.close()
-      group.spawn_bg(no_wait=true, () => {
-        let _ = server.run()
-      })
-      let token = board_query_param(server.browser_url().unwrap(), "token").unwrap()
+      let token = board_query_param(
+        runtime.server.browser_url().unwrap(),
+        "token",
+      ).unwrap()
       let url = endpoint.ws_url() + "?token=" + token
       let bad_headers : Array[Map[@http.CaseInsensitiveString, String]] = [
         { "Host": "evil.invalid" },
@@ -211,7 +217,10 @@ async test "native retained snapshot security gates and connection cleanup" {
         }
         assert_eq(snapshot.last_seq, 4L)
         assert_eq(snapshot.board_revision, 0L)
+        // Every unserveable cursor receives the same authoritative
+        // composite: the committed board plus the retained event suffix.
         assert_eq(snapshot.payload, {
+          "board": { "revision": Json::number(0), "tasks": [], "attempts": [] },
           "events": hub.history().map(event => event.to_json()),
         })
         assert_false(snapshot.payload.stringify().contains(token))
@@ -224,7 +233,7 @@ async test "native retained snapshot security gates and connection cleanup" {
       board_wait_clients(hub, 1)
       let live = hub_tick(hub)
       assert_eq(board_test_frame(current), @protocol.Event(live))
-      server.close()
+      runtime.close_server()
       board_wait_clients(hub, 0)
       @async.with_timeout(1000, () => {
         while server.connections.length() != 0 {
@@ -232,6 +241,7 @@ async test "native retained snapshot security gates and connection cleanup" {
         }
       })
       assert_eq(server.connections.length(), 0)
+      runtime.shutdown()
     })
   })
 }
@@ -242,15 +252,18 @@ async test "native overflow sends resync closes and reset zero snapshots" {
     @async.with_task_group(group => {
       let hub = BoardEventHub(client_queue_depth=2)
       let server = NativeBoardWebServer(hub~)
-      let endpoint = match server.bind() {
+      let opener : FakeBrowserOpener = { opened: [], }
+      let runtime = BoardRuntime::with_adapters(hub~, server~, opener~)
+      runtime.attach(group)
+      assert_true(runtime.coordinator.wait_ready() is Ok(_))
+      let endpoint = match runtime.ensure_server() {
         Ok(value) => value
         Err(_) => fail("bind failed")
       }
-      defer server.close()
-      group.spawn_bg(no_wait=true, () => {
-        let _ = server.run()
-      })
-      let token = board_query_param(server.browser_url().unwrap(), "token").unwrap()
+      let token = board_query_param(
+        runtime.server.browser_url().unwrap(),
+        "token",
+      ).unwrap()
       let url = endpoint.ws_url() + "?token=" + token
       let ws = @websocket.connect(url)
       defer ws.close()
@@ -272,8 +285,73 @@ async test "native overflow sends resync closes and reset zero snapshots" {
       guard board_test_frame(reconnect) is Snapshot(snapshot) else {
         fail("reset requires snapshot")
       }
+      // The reset snapshot is authoritative: committed board plus the full
+      // retained telemetry suffix.
       assert_eq(snapshot.last_seq, 4L)
-      server.close()
+      assert_eq(snapshot.board_revision, 0L)
+      assert_eq(snapshot.payload, {
+        "board": { "revision": Json::number(0), "tasks": [], "attempts": [] },
+        "events": hub.history().map(event => event.to_json()),
+      })
+      runtime.close_server()
+      board_wait_clients(hub, 0)
+      runtime.shutdown()
+    })
+  })
+}
+
+///|
+async test "native overflow during provider await resyncs and never installs the snapshot" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let hub = BoardEventHub(client_queue_depth=1)
+      let server = NativeBoardWebServer(hub~)
+      let endpoint = match server.bind() {
+        Ok(value) => value
+        Err(_) => fail("bind failed")
+      }
+      defer server.close()
+      group.spawn_bg(no_wait=true, () => {
+        let _ = server.run()
+      })
+      // One tick before connecting: Hello 0 plans SnapshotRequired.
+      let initial = hub_tick(hub)
+      let entered : @async.Queue[Unit] = @async.Queue(kind=@aqueue.Blocking(1))
+      let release : @async.Queue[Unit] = @async.Queue(kind=@aqueue.Blocking(1))
+      server.set_snapshot_provider(async fn() {
+        entered.put(())
+        release.get()
+        Ok({
+          protocol_version: @protocol.protocol_version(),
+          last_seq: 1L,
+          board_revision: 0L,
+          payload: {
+            "board": {
+              "revision": Json::number(0),
+              "tasks": [],
+              "attempts": [],
+            },
+            "events": [initial.to_json()],
+          },
+        })
+      })
+      let token = board_query_param(server.browser_url().unwrap(), "token").unwrap()
+      let ws = @websocket.connect(endpoint.ws_url() + "?token=" + token)
+      defer ws.close()
+      board_test_hello(ws, 0L)
+      @async.with_timeout(1000, () => entered.get())
+      // The provider is parked after registration: the depth-one mailbox
+      // overflows while the bootstrap is still awaited.
+      let _ = hub_tick(hub)
+      let _ = hub_tick(hub)
+      release.put(())
+      assert_eq(
+        board_test_frame(ws),
+        @protocol.ResyncRequired(reason="client_queue_overflow", current_seq=3L),
+      )
+      // The connection closes and no snapshot frame is ever delivered.
+      let closed = Some(ws.recv()) catch { _ => None }
+      assert_true(closed is None)
       board_wait_clients(hub, 0)
     })
   })

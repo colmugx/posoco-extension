@@ -198,7 +198,7 @@ fn runtime_create(id : String, rev : Int64) -> @domain.BoardCommand {
 }
 
 ///|
-async test "runtime owns one coordinator and telemetry stays independent" {
+async test "runtime streams committed domain events into the shared hub" {
   let server : FakeBoardServer = {
     binds: 0,
     closes: 0,
@@ -216,41 +216,58 @@ async test "runtime owns one coordinator and telemetry stays independent" {
     runtime.attach(group)
     // Loading is asynchronous; readiness gates every domain API use.
     assert_true(runtime.coordinator.wait_ready() is Ok(_))
+    assert_eq(runtime.current_seq(), 0L)
+    assert_eq(runtime.coordinator.stream_cursor(), 0L)
     let events = runtime.coordinator.submit(command=runtime_create("t1", 0L))
     assert_eq(events.unwrap().length(), 1)
+    // The commit projected into the shared hub with the committed revision.
+    assert_eq(runtime.current_seq(), 1L)
+    assert_eq(runtime.coordinator.stream_cursor(), 1L)
+    let streamed = runtime.event_history()
+    assert_eq(streamed.length(), 1)
+    assert_eq(streamed[0].seq, 1L)
+    assert_eq(streamed[0].board_revision, 1L)
+    assert_eq(streamed[0].kind, "board.task.created")
+    assert_eq(streamed[0].scope, None)
     assert_eq(runtime.coordinator.revision().unwrap(), 1L)
-    // Repeated attach is idempotent for the coordinator too.
-    runtime.attach(group)
-    let _ = runtime.coordinator.submit(command=runtime_create("t2", 1L))
-    assert_eq(runtime.coordinator.revision().unwrap(), 2L)
-    // Domain revision and telemetry seq are fully independent counters.
-    assert_eq(runtime.current_seq(), 0L)
-    let event = runtime.publish_telemetry(
+    // Telemetry shares the sequence space but never moves the revision.
+    let tick = runtime.publish_telemetry(
       board_revision=0L,
       kind="tick",
       payload=Json::null(),
     )
-    assert_eq(event.seq, 1L)
+    assert_eq(tick.seq, 2L)
+    assert_eq(runtime.coordinator.revision().unwrap(), 1L)
+    // Repeated attach is idempotent for the coordinator and the hook.
+    runtime.attach(group)
+    let _ = runtime.coordinator.submit(command=runtime_create("t2", 1L))
     assert_eq(runtime.coordinator.revision().unwrap(), 2L)
-    let _ = runtime.coordinator.submit(command=runtime_create("t3", 2L))
-    assert_eq(runtime.current_seq(), 1L)
-    assert_eq(runtime.coordinator.revision().unwrap(), 3L)
+    assert_eq(runtime.current_seq(), 3L)
+    assert_eq(runtime.coordinator.stream_cursor(), 3L)
     runtime.shutdown()
   })
   // Shutdown closes coordinator admission...
   assert_true(runtime.coordinator.revision() is Err(Closed))
   assert_true(
-    runtime.coordinator.submit(command=runtime_create("t4", 3L)) is Err(Closed),
+    runtime.coordinator.submit(command=runtime_create("t4", 2L)) is Err(Closed),
   )
   // ...and a fresh attach restores the runtime's durable board instead of
-  // starting over: three committed tasks, no fabricated revision reset.
+  // starting over: two committed tasks, an intact hub sequence and the
+  // stream cursor reading the live hub head.
   @async.with_task_group(group => {
     runtime.attach(group)
     assert_true(runtime.coordinator.wait_ready() is Ok(_))
+    assert_eq(runtime.coordinator.revision().unwrap(), 2L)
+    assert_eq(runtime.coordinator.stream_cursor(), 3L)
+    assert_eq(runtime.coordinator.tasks().unwrap().length(), 2)
+    let _ = runtime.coordinator.submit(command=runtime_create("t4", 2L))
     assert_eq(runtime.coordinator.revision().unwrap(), 3L)
-    assert_eq(runtime.coordinator.tasks().unwrap().length(), 3)
-    let _ = runtime.coordinator.submit(command=runtime_create("t4", 3L))
-    assert_eq(runtime.coordinator.revision().unwrap(), 4L)
+    assert_eq(runtime.current_seq(), 4L)
+    assert_eq(runtime.coordinator.stream_cursor(), 4L)
+    // The authoritative bootstrap answers the exact hub boundary it read.
+    let frame = runtime.bootstrap_snapshot().unwrap()
+    assert_eq(frame.last_seq, 4L)
+    assert_eq(frame.board_revision, 3L)
     runtime.shutdown()
   })
 }

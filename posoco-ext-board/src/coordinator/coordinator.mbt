@@ -64,6 +64,20 @@ pub extend BoardCoordinatorError with Eq::{equal, not_equal}
 pub extend BoardCoordinatorError with @debug.Debug::{to_repr}
 
 ///|
+/// Detached committed board together with the actual event-stream position
+/// observed when the query was answered.
+pub(all) struct BoardStreamSnapshot {
+  board_snapshot : @domain.BoardStateSnapshot
+  stream_seq : Int64
+} derive(Eq, Debug)
+
+///|
+pub extend BoardStreamSnapshot with Eq::{equal, not_equal}
+
+///|
+pub extend BoardStreamSnapshot with @debug.Debug::{to_repr}
+
+///|
 /// Lifecycle phase of the durable coordinator, readable without blocking.
 pub(all) enum BoardCoordinatorStatus {
   /// attach(group) was never called.
@@ -108,6 +122,13 @@ pub struct BoardCoordinator {
   priv mut phase_status : BoardCoordinatorStatus
   priv store : &@store.BoardStore
   priv now_ms : () -> Int64
+  /// Synchronous commit observer; runs on the loop after the committed
+  /// state was assigned and before the committing caller is answered.
+  priv on_commit : (@domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Unit
+  /// Live committed event-stream cursor. Called synchronously by the
+  /// `StreamSnapshot` handler on the loop, so the answered boundary is the
+  /// actual caller-owned sequence position (hub head) at query time.
+  priv stream_cursor : () -> Int64
 }
 
 ///|
@@ -117,6 +138,11 @@ pub struct BoardCoordinator {
 pub fn BoardCoordinator::BoardCoordinator(
   store? : &@store.BoardStore = @store.MemoryBoardStore(),
   now_ms? : () -> Int64 = () => 0L,
+  on_commit? : (@domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Unit = (
+    _,
+    _,
+  ) => (),
+  stream_cursor? : () -> Int64 = () => 0L,
 ) -> BoardCoordinator {
   {
     actor: None,
@@ -129,6 +155,8 @@ pub fn BoardCoordinator::BoardCoordinator(
     phase_status: Detached,
     store,
     now_ms,
+    on_commit,
+    stream_cursor,
   }
 }
 
@@ -288,6 +316,34 @@ pub async fn BoardCoordinator::snapshot(
     SnapshotReply(snapshot) => Ok(snapshot)
     _ => abort("board coordinator: reply does not match a snapshot request")
   }
+}
+
+///|
+/// Detached committed board together with the actual event-stream position
+/// of the query: the configured `stream_cursor` callback is evaluated
+/// synchronously on the loop while the committed state is copied, so the
+/// answered boundary covers every event and telemetry item published up to
+/// that instant. Answers like any other query: before the durable board
+/// settled it reports the explicit phase error instead of a fabricated
+/// stream position.
+pub async fn BoardCoordinator::stream_snapshot(
+  self : BoardCoordinator,
+) -> Result[BoardStreamSnapshot, BoardCoordinatorError] {
+  let reply = match self.request(StreamSnapshot) {
+    Ok(reply) => reply
+    Err(error) => return Err(error)
+  }
+  match reply {
+    StreamSnapshotReply(stream) => Ok(stream)
+    _ => abort("board coordinator: reply does not match a stream request")
+  }
+}
+
+///|
+/// Current committed event-stream position, read through the configured
+/// callback without blocking the loop.
+pub fn BoardCoordinator::stream_cursor(self : BoardCoordinator) -> Int64 {
+  (self.stream_cursor)()
 }
 
 ///|

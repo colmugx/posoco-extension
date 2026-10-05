@@ -88,6 +88,45 @@ extern "js" fn Browser::text(self : Browser, id : String) -> String =
 
 ///|
 fn snapshot(seqs : Array[Int], last : Int) -> String {
+  composite_snapshot(
+    { "revision": last, "tasks": [], "attempts": [] },
+    last,
+    seqs,
+    last,
+  )
+}
+
+///|
+fn composite_snapshot(
+  board : Json,
+  revision : Int,
+  seqs : Array[Int],
+  last : Int,
+) -> String {
+  let frame : Json = {
+    "type": "snapshot",
+    "protocol_version": 1,
+    "last_seq": last,
+    "board_revision": revision,
+    "payload": {
+      "board": board,
+      "events": seqs.map(seq => {
+        (
+          {
+            "type": "event",
+            "seq": seq,
+            "board_revision": revision,
+            "kind": "tick",
+            "scope": Json::null(),
+          } : Json)
+      }),
+    },
+  }
+  frame.stringify()
+}
+
+///|
+fn raw_snapshot_without_board(seqs : Array[Int], last : Int) -> String {
   let frame : Json = {
     "type": "snapshot",
     "protocol_version": 1,
@@ -171,6 +210,9 @@ fn check_bfcache(source : String) -> Unit raise {
 
 ///|
 fn check_snapshots(source : String) -> Unit raise {
+  // Invalid: non-contiguous or misaligned suffixes, seq zero inside the
+  // stream, duplicated or regressed seqs, and an empty suffix at any
+  // nonzero cursor (the authoritative board always carries its events).
   for
     (seqs, last) in [
       ([1, 3], 5),
@@ -203,6 +245,102 @@ fn check_snapshots(source : String) -> Unit raise {
     assert_eq(b.timer_count(), 0)
     assert_true(b.text("status").contains("snapshot"))
   }
+  // A missing or malformed board resets with the invalid-frame path and
+  // closes instead of being ignored.
+  let missing_board = browser(source, "9")
+  missing_board.open(0)
+  missing_board.message(0, raw_snapshot_without_board([1], 1))
+  assert_eq(missing_board.cursor(), "0")
+  assert_eq(missing_board.state(0), 2)
+  assert_true(missing_board.text("status").contains("invalid frame"))
+  missing_board.closed(0)
+  assert_eq(missing_board.timer_count(), 1)
+}
+
+///|
+
+///|
+fn check_composite_snapshots(source : String) -> Unit raise {
+  // A well-formed authoritative composite is rendered: the events suffix is
+  // displayed with each event's own board_revision, the cursor follows
+  // last_seq and the status carries the board revision and record counts.
+  let board : Json = {
+    "revision": 12,
+    "tasks": [{ "id": "t1", "title": "task" }],
+    "attempts": [{ "id": "a1", "task_id": "t1" }],
+  }
+  let b = browser(source, "2")
+  b.open(0)
+  b.message(0, composite_snapshot(board, 12, [11, 12], 12))
+  assert_eq(b.cursor(), "12")
+  assert_eq(b.state(0), 1)
+  assert_true(b.text("status").contains("snapshot"))
+  assert_true(b.text("status").contains("board 12 | tasks 1 | attempts 1"))
+  assert_eq(b.text("events").split("\n").count(), 2)
+  assert_true(b.text("events").contains("seq 11 | rev 12 | kind tick"))
+  assert_true(b.text("events").contains("seq 12 | rev 12 | kind tick"))
+  // A live telemetry event appends its own (zero) board_revision to the
+  // timeline but never overwrites the displayed board revision or counts.
+  b.message(0, "{\"type\":\"event\",\"seq\":13,\"board_revision\":0,\"kind\":\"runtime.warning\",\"scope\":null}")
+  assert_eq(b.cursor(), "13")
+  assert_true(b.text("events").contains("seq 13 | rev 0 | kind runtime.warning"))
+  assert_true(b.text("status").contains("board 12 | tasks 1 | attempts 1"))
+  b.closed(0)
+  // Missing, malformed or mismatched boards reset with the invalid-frame
+  // path and close instead of being ignored.
+  let missing_board = browser(source, "9")
+  missing_board.open(0)
+  missing_board.message(0, raw_snapshot_without_board([5], 5))
+  assert_eq(missing_board.cursor(), "0")
+  assert_eq(missing_board.state(0), 2)
+  assert_true(missing_board.text("status").contains("invalid frame"))
+  missing_board.closed(0)
+  assert_eq(missing_board.timer_count(), 1)
+  let junk : Json = Json::string("junk")
+  let number_board : Json = Json::number(7)
+  let wrong_shape : Json = { "unexpected": "shape" }
+  let null_board : Json = Json::null()
+  let bad_tasks : Json = { "revision": 7, "tasks": "nope", "attempts": [] }
+  let bad_attempts : Json = { "revision": 7, "tasks": [], "attempts": "nope" }
+  let bad : Array[(Json, Int)] = [
+    (junk, 7),
+    (number_board, 7),
+    (wrong_shape, 7),
+    (null_board, 7),
+    (bad_tasks, 7),
+    (bad_attempts, 7),
+  ]
+  for (bad_board, revision) in bad {
+    let b = browser(source, "9")
+    b.open(0)
+    b.message(0, composite_snapshot(bad_board, revision, [5], 5))
+    assert_eq(b.cursor(), "0")
+    assert_eq(b.state(0), 2)
+    assert_true(b.text("status").contains("invalid frame"))
+    b.closed(0)
+    assert_eq(b.timer_count(), 1)
+  }
+  // A board whose revision disagrees with the outer board_revision is a
+  // mismatch: reset and close, never silent acceptance.
+  let mismatched : Json = { "revision": 8, "tasks": [], "attempts": [] }
+  let b = browser(source, "9")
+  b.open(0)
+  b.message(0, composite_snapshot(mismatched, 7, [], 0))
+  assert_eq(b.cursor(), "0")
+  assert_eq(b.state(0), 2)
+  assert_true(b.text("status").contains("invalid frame"))
+  b.closed(0)
+  assert_eq(b.timer_count(), 1)
+  // A valid board with an empty suffix is accepted only at last_seq zero:
+  // board-only snapshot, counts displayed, no fabricated events.
+  let empty = browser(source, "9")
+  empty.open(0)
+  empty.message(0, composite_snapshot(board, 12, [], 0))
+  assert_eq(empty.cursor(), "0")
+  assert_eq(empty.state(0), 1)
+  assert_eq(empty.text("events"), "")
+  assert_true(empty.text("status").contains("board 12 | tasks 1 | attempts 1"))
+  empty.closed(0)
 }
 
 ///|
@@ -248,8 +386,9 @@ fn main raise {
   .unwrap()].to_owned()
   check_bfcache(source)
   check_snapshots(source)
+  check_composite_snapshots(source)
   check_live_gap(source)
   println(
-    "Browser diagnostics: BFCache lifecycle, strict snapshots, duplicate/gap/resync and bounded replay checks passed",
+    "Browser diagnostics: BFCache lifecycle, strict snapshots, authoritative composites, duplicate/gap/resync and bounded replay checks passed",
   )
 }
