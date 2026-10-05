@@ -392,6 +392,63 @@ async test "a recovery persist failure fails restore before anything is served" 
 }
 
 ///|
+async test "startup recovery uncertainty that reloads recovered candidate becomes ready" {
+  @async.with_task_group(group => {
+    let store = ScriptedBoardStore::new()
+    let running = snapshot_of(4L, [task_record("t1", @domain.Running, 5L)], [
+      attempt_record("a1", "t1", @domain.Running),
+    ])
+    let recovered = @store.recover_snapshot(running, at_ms=77L).unwrap()
+    store.loads.push_back(LoadOk(load_of(running)))
+    store.persists.push_back(StepUncertain("directory fsync lost"))
+    store.loads.push_back(LoadOk(load_of(recovered.snapshot)))
+    let coordinator = scripted_coordinator(store, now_ms=() => 77L)
+    coordinator.attach(group~)
+
+    assert_true(coordinator.wait_ready() is Ok(_))
+    assert_eq(coordinator.status(), Ready)
+    assert_eq(coordinator.revision(), Ok(5L))
+    assert_eq(
+      coordinator.task(id=cid("t1")).unwrap().unwrap().stage,
+      @domain.Suspended,
+    )
+    assert_eq(
+      coordinator.attempt(id=caid("a1")).unwrap().unwrap().status,
+      @domain.Interrupted,
+    )
+    assert_eq(store.persist_attempts, 1)
+    coordinator.shutdown()
+  })
+}
+
+///|
+async test "startup recovery uncertainty never exposes unrecovered old snapshot" {
+  @async.with_task_group(group => {
+    let store = ScriptedBoardStore::new()
+    let running = snapshot_of(4L, [task_record("t1", @domain.Running, 5L)], [
+      attempt_record("a1", "t1", @domain.Running),
+    ])
+    store.loads.push_back(LoadOk(load_of(running)))
+    store.persists.push_back(StepUncertain("directory fsync lost"))
+    store.loads.push_back(LoadOk(load_of(running)))
+    let coordinator = scripted_coordinator(store, now_ms=() => 77L)
+    coordinator.attach(group~)
+
+    match coordinator.wait_ready() {
+      Err(RestoreFailed(Store(@store.DurabilityUncertain(_)))) => ()
+      _ => fail("old Running snapshot after uncertain recovery must not become Ready")
+    }
+    assert_eq(coordinator.status(), Failed)
+    assert_true(
+      coordinator.revision()
+      is Err(RestoreFailed(Store(@store.DurabilityUncertain(_)))),
+    )
+    assert_eq(store.persist_attempts, 1)
+    coordinator.shutdown()
+  })
+}
+
+///|
 async test "every pre-visibility persist failure keeps the committed board untouched" {
   for
     stage in [
