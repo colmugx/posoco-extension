@@ -80,7 +80,28 @@ pub fn RateLimitGuard::start(
     now_ms=self.now_ms,
     sleep_ms=self.sleep_ms,
     execute_resume=async fn(session_id : String) {
-      ignore(agent.resume_turn(session_id, continuation=note))
+      // Posoco 0.21 keeps the failed operation admitted until its
+      // operation_settled boundary. TurnFailed is observable slightly before
+      // that boundary, so an immediately-due recovery may transiently lose
+      // admission with Busy. Busy means nothing was rerun: yield and retry
+      // until the incumbent operation settles. Every other error remains the
+      // recovery result and is reported back through the runtime actor.
+      let mut resumed = false
+      while !resumed {
+        let outcome : Result[Unit, @posoco.AgentError] = Ok(
+          {
+            ignore(agent.resume_turn(session_id, continuation=note))
+            ()
+          },
+        ) catch {
+          error => Err(error)
+        }
+        match outcome {
+          Ok(_) => resumed = true
+          Err(@posoco.AgentError::Busy(..)) => @async.sleep(1)
+          Err(error) => raise error
+        }
+      }
     },
     trace=self.trace,
     publish_status=fn(status : RecoveryStatus?) { sink.publish(status) },

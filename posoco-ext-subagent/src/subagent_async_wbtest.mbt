@@ -1229,11 +1229,16 @@ async test "subscribe_receives_spawned_and_terminal_events" {
     assert_eq(event.kind, "coder")
     match event.event {
       @posoco.TurnEvent::Custom(source~, label~, data~) => {
-        assert_eq(source, "posoco_ext_subagent")
+        // Posoco 0.21 projects core operation lifecycle Custom events through
+        // child observers too. The bridge deliberately forwards the complete
+        // child event stream, so only extension-owned labels constrain the
+        // extension source here.
         if label == "background_spawned" {
+          assert_eq(source, "posoco_ext_subagent")
           spawned = spawned + 1
         }
         if label == "background_terminal" {
+          assert_eq(source, "posoco_ext_subagent")
           terminal = terminal + 1
           match data {
             Json::Object(fields) =>
