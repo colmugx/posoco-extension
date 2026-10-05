@@ -2,6 +2,7 @@ import {
   "colmugx/fuwaroid",
   "colmugx/posoco-ext-board/coordinator",
   "colmugx/posoco-ext-board/protocol",
+  "colmugx/posoco-ext-board/store",
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/async/process",
@@ -15,6 +16,7 @@ import {
 
 import {
   "colmugx/posoco-ext-board/domain",
+  "moonbitlang/async/aqueue",
 } for "wbtest"
 
 supported_targets = "+native +js"

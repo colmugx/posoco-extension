@@ -45,6 +45,8 @@ pub impl BrowserOpener for UnsupportedBrowserOpener with fn open(_self, _url) {
 }
 
 ///|
+/// JS default runtime: unsupported server/opener adapters over the default
+/// in-memory store. The control plane and the file store are native-only.
 pub fn default_board_runtime(
   event_buffer : Int,
   client_queue_depth? : Int = 256,

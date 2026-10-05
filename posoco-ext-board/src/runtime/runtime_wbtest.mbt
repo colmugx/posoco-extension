@@ -214,6 +214,8 @@ async test "runtime owns one coordinator and telemetry stays independent" {
   )
   @async.with_task_group(group => {
     runtime.attach(group)
+    // Loading is asynchronous; readiness gates every domain API use.
+    assert_true(runtime.coordinator.wait_ready() is Ok(_))
     let events = runtime.coordinator.submit(command=runtime_create("t1", 0L))
     assert_eq(events.unwrap().length(), 1)
     assert_eq(runtime.coordinator.revision().unwrap(), 1L)
@@ -235,16 +237,20 @@ async test "runtime owns one coordinator and telemetry stays independent" {
     assert_eq(runtime.coordinator.revision().unwrap(), 3L)
     runtime.shutdown()
   })
-  // Shutdown closes coordinator admission; a fresh attach starts at zero.
+  // Shutdown closes coordinator admission...
   assert_true(runtime.coordinator.revision() is Err(Closed))
   assert_true(
     runtime.coordinator.submit(command=runtime_create("t4", 3L)) is Err(Closed),
   )
+  // ...and a fresh attach restores the runtime's durable board instead of
+  // starting over: three committed tasks, no fabricated revision reset.
   @async.with_task_group(group => {
     runtime.attach(group)
-    assert_eq(runtime.coordinator.revision().unwrap(), 0L)
-    let _ = runtime.coordinator.submit(command=runtime_create("t1", 0L))
-    assert_eq(runtime.coordinator.revision().unwrap(), 1L)
+    assert_true(runtime.coordinator.wait_ready() is Ok(_))
+    assert_eq(runtime.coordinator.revision().unwrap(), 3L)
+    assert_eq(runtime.coordinator.tasks().unwrap().length(), 3)
+    let _ = runtime.coordinator.submit(command=runtime_create("t4", 3L))
+    assert_eq(runtime.coordinator.revision().unwrap(), 4L)
     runtime.shutdown()
   })
 }
@@ -299,6 +305,7 @@ async test "runtime shutdown cleanup completes even when cancelled" {
   let runtime = BoardRuntime::with_adapters(server~, opener~)
   @async.with_task_group(group => {
     runtime.attach(group)
+    assert_true(runtime.coordinator.wait_ready() is Ok(_))
     let _ = runtime.coordinator.submit(command=runtime_create("t1", 0L))
     assert_true(runtime.ensure_server() is Ok(_))
     let task = group.spawn(() => runtime.shutdown())
@@ -315,5 +322,74 @@ async test "runtime shutdown cleanup completes even when cancelled" {
       runtime.coordinator.submit(command=runtime_create("t2", 1L))
       is Err(Closed),
     )
+  })
+}
+
+///|
+/// Seed one committed board through the same codec the coordinator restores
+/// from. Lives in the runtime tests because the domain package cannot import
+/// the store package without a dependency cycle.
+async fn durable_seed() -> &@store.BoardStore {
+  let store : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore()
+  let created = @domain.BoardDomain::propose(
+    @domain.BoardState::BoardState(),
+    runtime_create("durable", 0L),
+  ).unwrap()
+  let snapshot = created.next_state.snapshot()
+  // The domain accepts exactly what the storage codec accepts.
+  let decoded = @store.decode_snapshot(
+    @store.encode_snapshot(snapshot).unwrap(),
+  ).unwrap()
+  assert_eq(decoded, snapshot)
+  assert_true(@domain.BoardState::from_snapshot(decoded) is Ok(_))
+  assert_eq(store.persist(snapshot, created.events), Ok(()))
+  store
+}
+
+///|
+async test "runtime loading restores its own store and stays isolated" {
+  let durable = durable_seed()
+  let server_a : FakeBoardServer = {
+    binds: 0,
+    closes: 0,
+    alive: false,
+    browser: None,
+  }
+  let opener_a : FakeBrowserOpener = { opened: [], }
+  let server_b : FakeBoardServer = {
+    binds: 0,
+    closes: 0,
+    alive: false,
+    browser: None,
+  }
+  let opener_b : FakeBrowserOpener = { opened: [], }
+  let restoring = BoardRuntime::with_adapters(
+    server=server_a,
+    opener=opener_a,
+    store=durable,
+  )
+  let isolated = BoardRuntime::with_adapters(server=server_b, opener=opener_b)
+  @async.with_task_group(group => {
+    restoring.attach(group)
+    isolated.attach(group)
+    assert_true(restoring.coordinator.wait_ready() is Ok(_))
+    assert_true(isolated.coordinator.wait_ready() is Ok(_))
+    // Each runtime loaded only its own store.
+    assert_eq(restoring.coordinator.revision().unwrap(), 1L)
+    assert_eq(restoring.coordinator.tasks().unwrap().length(), 1)
+    assert_eq(isolated.coordinator.revision().unwrap(), 0L)
+    assert_eq(isolated.coordinator.tasks().unwrap().length(), 0)
+    // Mutations stay inside their own runtime's board.
+    let _ = restoring.coordinator.submit(command=runtime_create("next", 1L))
+    assert_eq(restoring.coordinator.revision().unwrap(), 2L)
+    assert_eq(isolated.coordinator.revision().unwrap(), 0L)
+    let _ = isolated.coordinator.submit(command=runtime_create("t1", 0L))
+    assert_eq(isolated.coordinator.revision().unwrap(), 1L)
+    // Only the restoring runtime's commits reached the durable store.
+    let loaded = durable.load().unwrap().snapshot
+    assert_eq(loaded.revision, 2L)
+    assert_eq(loaded.tasks.length(), 2)
+    restoring.shutdown()
+    isolated.shutdown()
   })
 }
