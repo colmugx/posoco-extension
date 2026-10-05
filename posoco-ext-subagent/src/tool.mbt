@@ -34,6 +34,15 @@ pub(all) struct SubagentTools {
   /// `Capability::Tasks` the manifest requires. `None` before composition;
   /// submits also need the host to run the Agent under `run_scoped`.
   mut tasks : @posoco.Tasks?
+  /// The Agent-owned wakeup capability, captured at `on_compose` from the
+  /// `Capability::Wakeup` the manifest requires. `None` before composition.
+  mut wakeup : @posoco.WakeupPort?
+  /// Automatic wakeup policy, default off (docs/wakeup-port.md §10): when
+  /// enabled, a core `background_outcome_ready` receipt for one of this
+  /// extension's still-undelivered background tasks requests one ordinary
+  /// turn through the wakeup capability. Off keeps lazy delivery — outcomes
+  /// surface on the session's next ordinary turn.
+  auto_wakeup : Bool
   /// Parent session of the operation currently executing, tracked from
   /// scoped observer events — background results are addressed to it.
   mut session : String?
@@ -49,8 +58,11 @@ pub(all) struct SubagentTools {
 /// subscription channel (`SubagentEvent` multicast); `subscribe` appends to
 /// the same list dynamically. Background spawns go through the composed
 /// task capability: compose this extension's manifest (it requires
-/// `Capability::Tasks`, captures the capability at `on_compose`, and tracks
-/// the parent session as an observer) and run the Agent under `run_scoped`.
+/// `Capability::Tasks` + `Capability::Wakeup`, captures both at `on_compose`,
+/// and tracks the parent session as an observer) and run the Agent under
+/// `run_scoped`. `auto_wakeup` opts into automatic wakeup after a managed
+/// background outcome is enqueued; the default off preserves lazy delivery
+/// for hosts that have not integrated wakeup execution.
 pub fn SubagentTools::SubagentTools(
   catalog~ : @kind.KindCatalog,
   config~ : @kit.SubagentConfig,
@@ -59,6 +71,7 @@ pub fn SubagentTools::SubagentTools(
   parent_effort? : String? = None,
   parent_selection? : (() -> (String, String?))? = None,
   observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
+  auto_wakeup? : Bool = false,
 ) -> SubagentTools {
   let global_concurrency = if config.limits.global_concurrency < 1 {
     1
@@ -77,6 +90,8 @@ pub fn SubagentTools::SubagentTools(
     global_slots: @async.Semaphore(global_concurrency),
     counter: 0,
     tasks: None,
+    wakeup: None,
+    auto_wakeup,
     session: None,
     unobserved: Map::from_array([]),
     registry: Map::from_array([]),

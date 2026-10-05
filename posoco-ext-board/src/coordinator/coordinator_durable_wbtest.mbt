@@ -436,7 +436,10 @@ async test "startup recovery uncertainty never exposes unrecovered old snapshot"
 
     match coordinator.wait_ready() {
       Err(RestoreFailed(Store(@store.DurabilityUncertain(_)))) => ()
-      _ => fail("old Running snapshot after uncertain recovery must not become Ready")
+      _ =>
+        fail(
+          "old Running snapshot after uncertain recovery must not become Ready",
+        )
     }
     assert_eq(coordinator.status(), Failed)
     assert_true(

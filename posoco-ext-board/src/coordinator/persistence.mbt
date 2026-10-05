@@ -36,13 +36,15 @@ async fn restore_board(
         // Ready without another successful recovery persistence cycle.
         Err(
           @store.DurabilityUncertain(
-            detail + "; startup recovery reload retained the pre-recovery snapshot",
+            detail +
+            "; startup recovery reload retained the pre-recovery snapshot",
           ),
         )
       } else {
         Err(
           @store.DurabilityUncertain(
-            detail + "; startup recovery reload matched neither recovered nor prior snapshot",
+            detail +
+            "; startup recovery reload matched neither recovered nor prior snapshot",
           ),
         )
       }

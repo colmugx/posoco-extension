@@ -126,13 +126,14 @@ fn SubagentTools::emit_exit(
 }
 
 ///|
-/// Wire phase: capture the composed task capability the manifest requires.
-/// Submitting still needs the host to run the Agent under `run_scoped`.
+/// Wire phase: capture the composed task and wakeup capabilities the
+/// manifest requires.
 impl @posoco.Lifecycle for SubagentTools with fn on_compose(
   self : SubagentTools,
   view : @posoco.CompositionView,
 ) {
   self.tasks = view.tasks()
+  self.wakeup = view.wakeup()
 }
 
 ///|
@@ -152,7 +153,9 @@ impl @posoco.Observer for SubagentTools with fn on_event(
 
 ///|
 /// Track the parent session from scoped events: a background task's result
-/// is addressed to the session whose turn spawned it.
+/// is addressed to the session whose turn spawned it. Out-of-run events
+/// (scope `None`) go to the wakeup policy — core's ready projection carries
+/// no scope, session attribution travels in the event data.
 impl @posoco.Observer for SubagentTools with fn on_event_at(
   self : SubagentTools,
   scope : @posoco.EventScope?,
@@ -165,8 +168,82 @@ impl @posoco.Observer for SubagentTools with fn on_event_at(
         self.ledger.reset()
       }
     }
-    None => ()
+    None => self.observe_ready(event)
   }
+}
+
+///|
+/// Coalescing key for automatic wakeup requests: one stable tag per parent
+/// session, so a burst of background completions shares one ticket and a
+/// single ordinary turn delivers every outcome already boxed in the inbox.
+const BACKGROUND_WAKEUP_TAG = "subagent-background"
+
+///|
+/// Fixed explanation carried as the wakeup note. Deliberately constant: the
+/// outcome body never travels with the request — it stays in the session
+/// inbox, and delivery remains core-owned through the existing injection
+/// point.
+const BACKGROUND_WAKEUP_NOTE = "a background subagent finished; its outcome envelope is queued in this session's inbox"
+
+///|
+/// String value of one field in a `Custom` event's JSON payload; a missing
+/// field or non-string value projects to the empty string.
+fn json_string_field(data : Json, key : String) -> String {
+  match data {
+    Json::Object(fields) =>
+      match fields.get(key) {
+        Some(Json::String(value)) => value
+        _ => ""
+      }
+    _ => ""
+  }
+}
+
+///|
+/// Automatic wakeup policy (docs/wakeup-port.md §10), default off. Core's
+/// `background_outcome_ready` fires only after the outcome was boxed into
+/// the session inbox and before any wakeup-driven input could read it; when
+/// the policy is enabled and the receipt belongs to one of this extension's
+/// still-undelivered background tasks, request one ordinary turn for the
+/// receipt's own session through the Agent-owned wakeup capability. The
+/// request is synchronous admission (never awaits, safe from observers) and
+/// stays scheduling-only: no session-store or Puppet access. With the policy
+/// off nothing here runs and lazy delivery is preserved; a rejected request
+/// (in practice only `ScopeInactive` after shutdown) also falls back to lazy
+/// delivery.
+fn SubagentTools::observe_ready(
+  self : SubagentTools,
+  event : @posoco.TurnEvent,
+) -> Unit {
+  if !self.auto_wakeup {
+    return
+  }
+  let wakeup = match self.wakeup {
+    Some(wakeup) => wakeup
+    None => return
+  }
+  let (source, label, data) = match event {
+    @posoco.TurnEvent::Custom(source~, label~, data~) => (source, label, data)
+    _ => return
+  }
+  if source != "posoco.tasks" || label != "background_outcome_ready" {
+    return
+  }
+  let task_id = json_string_field(data, "task_id")
+  let session = json_string_field(data, "session")
+  // Ownership and freshness: only a receipt this extension accepted whose
+  // outcome is still undelivered; the session comes from the event data,
+  // never from the display-side tracked session.
+  if task_id == "" || session == "" || !self.unobserved.contains(task_id) {
+    return
+  }
+  ignore(
+    wakeup.request(
+      session~,
+      tag=BACKGROUND_WAKEUP_TAG,
+      note=BACKGROUND_WAKEUP_NOTE,
+    ),
+  )
 }
 
 ///|
