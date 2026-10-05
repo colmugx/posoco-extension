@@ -1,8 +1,17 @@
 import {
   "colmugx/fuwaroid",
   "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/store",
   "moonbitlang/async",
+  "moonbitlang/async/aqueue",
   "moonbitlang/core/debug",
+  "moonbitlang/core/deque",
 }
+
+import {
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/store",
+  "moonbitlang/async",
+} for "test"
 
 supported_targets = "+native +js"

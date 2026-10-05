@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S3A in-memory Board domain and coordinator on top of S2B realtime
+## Current status: S3B2A durable Board coordinator on top of S2B realtime
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -52,9 +52,9 @@ let agent = @posoco.Agent(
 })
 ```
 
-`attach(group)` in S1 owns Board runtime workers only. It does not bind an
-Agent and does not grant `Capability::Tasks`; Agent binding and execution are
-introduced in a later stage.
+`attach(group)` owns the Board server supervisor and durable coordinator
+workers. It does not bind an Agent or grant `Capability::Tasks`; Agent binding
+and execution are introduced in a later stage.
 
 For custom native adapter injection, construct one hub and pass it to **both**
 the server and runtime. Their optional defaults allocate independent hubs;
@@ -208,29 +208,54 @@ start implicitly Pending and accept exactly one Approved/ChangesRequested.
 Execution-specific invariants (Running↔Attempt↔stage coupling) are deferred to
 S4 by design.
 
-The coordinator serializes every mutation and query through one Fuwaroid loop:
-concurrent callers are FIFO-ordered and two submissions with the same expected
-revision produce exactly one success. Commands are deep-copied before the
-first suspension point, so a caller mutating its arrays while queued cannot
-alter what is admitted. Query results and snapshots are detached deep copies.
-Repeated `attach(group)` is idempotent; `shutdown` closes admission, drains
-the mailbox and joins the loop; a later attach owns a fresh in-memory board.
+## Durable coordinator (S3B2A)
 
-Explicitly out of scope in S3A: no durable storage or restore (the S3B
-persistence barrier belongs between an accepted proposal and the commit in the
-coordinator fold), no browser/UI changes, no domain events published to the
-telemetry EventHub (`seq` and Board revision remain independent counters), and
-WebSocket commands still answer `unsupported_in_current_stage`. One deviation
-from the earlier host API: `attach` now takes a concrete
-`@async.TaskGroup[Unit]` because `Fuwaroid::spawn` pins that group type;
-behavior for existing hosts is unchanged.
+The coordinator's synchronous Fuwaroid handlers own committed state, one
+pending candidate, and FIFO deferred submissions. Store IO belongs exclusively
+to a Supervisor bound to the host TaskGroup; workers report settlement through
+actor messages. **Persist before commit:** queries see only committed state,
+and a submission succeeds only after its matching persistence ticket succeeds.
+Deferred commands are proposed against the latest committed state only after
+the previous transaction settles. A failed write before snapshot replacement
+leaves state and revision unchanged, so a queued command can still use the old
+expected revision. Commands and query results are deep detached.
+
+`attach(group)` remains synchronous and starts asynchronous load/recovery.
+Call `wait_ready()` before querying the domain API; loading queries return an
+explicit initialization error rather than a fabricated empty board. Submissions
+received during loading or reconciliation queue until settlement.
+Startup uses S3B1 `load_recover_persist`: Running tasks become Suspended and
+Running attempts become Interrupted, with the recovered revision durable before
+readiness. Corruption and failed recovery writes fail initialization. Snapshot
+restoration validates structure and preserves revision without creating mutations.
+
+The native default uses `FileBoardStore(root=".")`; adapter injection and JS
+use `MemoryBoardStore`. A minimal `now_ms` function supplies recovery time;
+native defaults use real time, while tests supply deterministic values.
+Read-only realtime `/board` telemetry remains usable independently of domain
+initialization.
+
+A post-rename `DurabilityUncertain` triggers reconciliation, never an assumed
+rollback. Reload matching the candidate makes it committed; reload matching
+the previous snapshot preserves it. In both cases the caller receives a typed
+uncertainty error and must refresh. An unexpected snapshot or reload failure
+makes the coordinator failed/read-only. Shutdown closes submission admission,
+settles active IO and explicitly rejects deferred submissions before closing
+and joining the actor, then shuts down its Supervisor. Cancelling a submit
+waiter does not cancel an already accepted transaction.
+
+Explicitly out of scope: WebSocket domain mutations, authoritative domain
+EventHub publication, Board domain wire snapshots, Agent execution, scheduler,
+UI, Posoco Tasks and GitHub Actions changes. Telemetry `seq` and Board revision
+remain independent; WebSocket commands still answer
+`unsupported_in_current_stage`.
 
 ## Task vocabulary
 
 The implementation keeps three task concepts separate:
 
-- **BoardTask / Attempt** — product/business lifecycle. Owned by the S3A
-  `domain`/`coordinator` packages as in-memory state.
+- **BoardTask / Attempt** — product/business lifecycle. Owned by the
+  `domain`/`coordinator` packages, with durable snapshots in `store`.
 - **Fuwaroid SupervisedTask** — ownership of Board runtime coroutines. In S1 it
   owns the local server worker through the host TaskGroup.
 - **Posoco TaskSpec / TaskHandle** — Agent-owned child/background work. The

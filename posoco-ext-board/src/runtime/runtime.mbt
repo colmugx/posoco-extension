@@ -1,8 +1,8 @@
 ///|
 /// S1 runtime facade: telemetry remains independent from local control-plane
 /// lifecycle. Long-lived server work is owned by a Fuwaroid Supervisor bound
-/// to a host TaskGroup through attach(); the S3A single-writer Board
-/// coordinator runs its own Fuwaroid loop on the same host scope.
+/// to a host TaskGroup through attach(); the durable Board coordinator owns
+/// its actor and persistence Supervisor on the same host scope.
 pub struct BoardRuntime {
   hub : BoardEventHub
   server : &BoardWebServer
@@ -18,18 +18,26 @@ pub struct BoardRuntime {
 /// Adapter-injection constructor used by tests and future target backends.
 /// A telemetry-serving adapter must receive the same `hub` passed here. The
 /// default allocates an independent hub; it cannot discover a server's hub.
-/// Prefer `default_board_runtime` unless explicitly wiring server and runtime.
+/// The coordinator restores from `store` (default: an empty
+/// `MemoryBoardStore`), with `now_ms` supplying recovery time (default:
+/// deterministic 0). Prefer `default_board_runtime` unless explicitly wiring
+/// server and runtime.
 pub fn BoardRuntime::with_adapters(
   event_buffer? : Int = 4096,
   hub? : BoardEventHub = BoardEventHub(capacity=event_buffer),
   server~ : &BoardWebServer,
   opener~ : &BrowserOpener,
+  store? : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore(),
+  now_ms? : () -> Int64 = () => 0L,
 ) -> BoardRuntime {
   {
     hub,
     server,
     opener,
-    coordinator: @coordinator.BoardCoordinator::BoardCoordinator(),
+    coordinator: @coordinator.BoardCoordinator::BoardCoordinator(
+      store~,
+      now_ms~,
+    ),
     gate: @async.Mutex::Mutex(),
     supervisor: None,
     server_task: None,
@@ -40,8 +48,8 @@ pub fn BoardRuntime::with_adapters(
 ///|
 /// Bind long-lived runtime workers to a host-owned structured-concurrency
 /// scope: the local server Supervisor and the single-writer Board domain
-/// coordinator. Repeated attach is idempotent for both; S3A attaches no
-/// Agent and no Posoco Tasks capability.
+/// coordinator. Repeated attach is idempotent for both; no Agent or Posoco
+/// Tasks capability is attached.
 pub fn BoardRuntime::attach(
   self : BoardRuntime,
   group : @async.TaskGroup[Unit],

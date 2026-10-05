@@ -585,6 +585,7 @@ pub impl BrowserOpener for NativeBrowserOpener with fn open(_self, url) {
 }
 
 ///|
+/// Native defaults use durable storage and Unix-epoch recovery timestamps.
 pub fn default_board_runtime(
   event_buffer : Int,
   client_queue_depth? : Int = 256,
@@ -592,7 +593,12 @@ pub fn default_board_runtime(
   let hub = BoardEventHub(capacity=event_buffer, client_queue_depth~)
   let server = NativeBoardWebServer(hub~)
   let opener = NativeBrowserOpener::NativeBrowserOpener()
-  BoardRuntime::with_adapters(hub~, server~, opener~)
+  let store : &@store.BoardStore = @store.FileBoardStore::FileBoardStore(
+    root=".",
+  )
+  BoardRuntime::with_adapters(hub~, server~, opener~, store~, now_ms=() => {
+    @env.now().reinterpret_as_int64()
+  })
 }
 
 ///|
