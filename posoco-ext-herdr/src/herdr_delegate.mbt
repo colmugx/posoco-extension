@@ -408,6 +408,14 @@ async fn HerdrDelegate::run_channel(
         "herdr_delegate: split output carried no pane id: \{herdr_excerpt(split_out)}",
       )
   }
+  // Readiness barrier: split returns before the new pane's shell initializes,
+  // and typing into that half-initialized pty loses the command tail to the
+  // canonical→raw tty mode switch (an unclosed-quote line that never
+  // executes). Best-effort — every outcome proceeds; an unmatchable prompt
+  // degrades to the fixed timeout as a settle delay.
+  let (_ready_exit, _ready_out, _ready_err) = cli.run(
+    herdr_ready_argv(self.bin, new_pane),
+  )
   let command_line = run_command_line(
     self.run_bin,
     args.permission,

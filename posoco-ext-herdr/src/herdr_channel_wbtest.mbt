@@ -11,6 +11,18 @@ test "channel argv builders produce the herdr verb shapes" {
   assert_eq(herdr_run_argv("herdr", "1-2", "cetas-run -- 'do it'"), [
     "herdr", "pane", "run", "1-2", "cetas-run -- 'do it'",
   ])
+  assert_eq(herdr_ready_argv("herdr", "1-2"), [
+    "herdr",
+    "pane",
+    "wait-output",
+    "--regex",
+    herdr_ready_regex,
+    "--source",
+    "recent-unwrapped",
+    "--timeout",
+    herdr_ready_timeout_ms.to_string(),
+    "1-2",
+  ])
   assert_eq(herdr_wait_argv("herdr", "1-2", 5000), [
     "herdr", "pane", "wait-output", "--regex", herdr_wait_regex, "--source", "recent-unwrapped",
     "--timeout", "5000", "1-2",
@@ -28,6 +40,14 @@ test "wait regex covers marker, failure line, and idle sentinel, and nothing ech
   assert_eq(
     herdr_wait_regex, "\\[cetas-run\\] (turn [0-9]+ done|turn failed:|pane-idle)",
   )
+}
+
+///|
+test "ready regex covers the default prompt characters of the common shells" {
+  // fish/starship/powerlevel10k ❯, oh-my-zsh ➜, bash/sh $, root #, zsh % —
+  // unmatchable prompts fall back to the readiness timeout as a settle delay.
+  assert_eq(herdr_ready_regex, "[❯➜$#%]")
+  assert_true(herdr_ready_timeout_ms > 0 && herdr_ready_timeout_ms < 5000)
 }
 
 ///|

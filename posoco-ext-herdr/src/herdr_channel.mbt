@@ -35,6 +35,23 @@ let herdr_idle_sentinel : String = "[cetas-run] pane-idle"
 let herdr_session_prefix : String = "session: "
 
 ///|
+/// Prompt-readiness pattern: `pane split` returns before the new pane's
+/// shell has initialized, and typing the command into that half-initialized
+/// pty loses its tail to the canonical→raw tty mode switch — the pane ends
+/// up at an unclosed-quote line that never executes. These characters cover
+/// the default prompts of the common shells: fish/starship/powerlevel10k
+/// `❯`, oh-my-zsh `➜`, bash/sh `$`, root `#`, zsh `%`.
+let herdr_ready_regex : String = "[❯➜$#%]"
+
+///|
+/// Readiness bound. Best-effort barrier: a prompt match, a timeout, or a
+/// CLI error all proceed — an unmatchable prompt degrades to this fixed
+/// settle delay before typing, which also closes the race. Kept below the
+/// background path's +5000 ms core-timeout margin so the graceful protocol
+/// timeout still wins even for tiny delegation timeouts.
+let herdr_ready_timeout_ms : Int = 4000
+
+///|
 fn herdr_split_argv(
   bin : String,
   pane : String,
@@ -55,6 +72,24 @@ fn herdr_run_argv(
   command_line : String,
 ) -> Array[String] {
   [bin, "pane", "run", new_pane, command_line]
+}
+
+///|
+/// Wait for the new pane's first prompt render before typing. Same unwrapped
+/// source as the terminal wait, so pty line-wrapping cannot hide the prompt.
+fn herdr_ready_argv(bin : String, new_pane : String) -> Array[String] {
+  [
+    bin,
+    "pane",
+    "wait-output",
+    "--regex",
+    herdr_ready_regex,
+    "--source",
+    "recent-unwrapped",
+    "--timeout",
+    herdr_ready_timeout_ms.to_string(),
+    new_pane,
+  ]
 }
 
 ///|

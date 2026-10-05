@@ -91,6 +91,8 @@ fn split_ok() -> (Int, String, String) {
 fn happy_script(session : String) -> Array[(Int, String, String)] {
   [
     split_ok(),
+    // Readiness barrier: prompt wait-output, outcome ignored.
+    (0, "", ""),
     (0, "", ""),
     (0, "", ""),
     (
@@ -209,22 +211,59 @@ async test "delegate happy path returns the answer with peer_pane and child_sess
     }
     other => fail("expected Success, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 5)
+  assert_eq(fake.received.length(), 6)
   assert_eq(fake.received[0], [
     "herdr", "pane", "split", "--pane", "1-1", "--direction", "right", "--cwd", "/tmp/ws",
     "--no-focus",
   ])
   assert_eq(fake.received[1], [
-    "herdr", "pane", "run", "1-3", "cetas-run --permission readonly -- 'fix the bug' ; echo '[cetas-run] pane-id'le",
+    "herdr", "pane", "wait-output", "--regex", herdr_ready_regex, "--source", "recent-unwrapped",
+    "--timeout", "4000", "1-3",
   ])
   assert_eq(fake.received[2], [
+    "herdr", "pane", "run", "1-3", "cetas-run --permission readonly -- 'fix the bug' ; echo '[cetas-run] pane-id'le",
+  ])
+  assert_eq(fake.received[3], [
     "herdr", "pane", "wait-output", "--regex", herdr_wait_regex, "--source", "recent-unwrapped",
     "--timeout", "1800000", "1-3",
   ])
-  assert_eq(fake.received[3], [
+  assert_eq(fake.received[4], [
     "herdr", "pane", "read", "1-3", "--source", "recent-unwrapped",
   ])
-  assert_eq(fake.received[4], ["herdr", "pane", "close", "1-3"])
+  assert_eq(fake.received[5], ["herdr", "pane", "close", "1-3"])
+}
+
+///|
+async test "readiness barrier times out and still launches the delegation" {
+  let delegate = test_delegate()
+  let fake : FakeHerdrCli = {
+    results: [
+      split_ok(),
+      // Prompt never matched (custom prompt): timeout envelope, proceed.
+      (1, "", "{\"error\":{\"code\":\"timeout\",\"message\":\"no prompt\"}}"),
+      (0, "", ""),
+      (0, "", ""),
+      (0, "session: s-r\nlate answer\n[cetas-run] turn 1 done\n", ""),
+      (0, "{\"result\":{\"type\":\"ok\"}}", ""),
+    ],
+    index: 0,
+    received: [],
+  }
+  match delegate.execute_delegate_impl(fake, delegate_task_call("x")) {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("late answer"))
+    other =>
+      fail(
+        "expected Success past a readiness timeout, got " + other.to_string(),
+      )
+  }
+  assert_eq(fake.received.length(), 6)
+  assert_eq(fake.received[1], [
+    "herdr", "pane", "wait-output", "--regex", herdr_ready_regex, "--source", "recent-unwrapped",
+    "--timeout", "4000", "1-3",
+  ])
+  // The command was still typed after the barrier.
+  assert_true(fake.received[2] is [_, "pane", "run", _, _])
 }
 
 ///|
@@ -243,7 +282,7 @@ async test "delegate omitted permission defaults to yolo under a yolo parent" {
     @posoco.ToolOutcome::Success(..) => ()
     other => fail("expected Success, got " + other.to_string())
   }
-  let command_line = fake.received[1][4]
+  let command_line = fake.received[2][4]
   assert_true(command_line.contains("--yolo"))
   assert_false(command_line.contains("--permission"))
 }
@@ -267,7 +306,7 @@ async test "delegate explicit readonly overrides a yolo parent" {
     @posoco.ToolOutcome::Success(..) => ()
     other => fail("expected Success, got " + other.to_string())
   }
-  let command_line = fake.received[1][4]
+  let command_line = fake.received[2][4]
   assert_true(command_line.contains("--permission readonly"))
   assert_false(command_line.contains("--yolo"))
 }
@@ -288,7 +327,7 @@ async test "delegate non-yolo parent keeps the readonly default" {
     @posoco.ToolOutcome::Success(..) => ()
     other => fail("expected Success, got " + other.to_string())
   }
-  let command_line = fake.received[1][4]
+  let command_line = fake.received[2][4]
   assert_true(command_line.contains("--permission readonly"))
   assert_false(command_line.contains("--yolo"))
 }
@@ -331,6 +370,7 @@ async test "delegate surfaces the child failure line as ToolReportedError with p
       split_ok(),
       (0, "", ""),
       (0, "", ""),
+      (0, "", ""),
       (
         0, "session: s1\n[cetas-run] turn failed: model exploded\n[cetas-run] turn 1 done\n",
         "",
@@ -348,7 +388,7 @@ async test "delegate surfaces the child failure line as ToolReportedError with p
     }
     other => fail("expected ToolReportedError, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 4)
+  assert_eq(fake.received.length(), 5)
 }
 
 ///|
@@ -372,7 +412,7 @@ async test "empty session/model/effort arguments are normalized away before the 
     @posoco.ToolOutcome::Success(..) => ()
     other => fail("expected Success, got " + other.to_string())
   }
-  let command_line = fake.received[1][4]
+  let command_line = fake.received[2][4]
   assert_false(command_line.contains("--session"))
   assert_false(command_line.contains("--model"))
   assert_false(command_line.contains("--effort"))
@@ -385,6 +425,7 @@ async test "child exit with no protocol line surfaces the pane excerpt as ToolRe
   let fake : FakeHerdrCli = {
     results: [
       split_ok(),
+      (0, "", ""),
       (0, "", ""),
       (0, "", ""),
       (
@@ -407,7 +448,7 @@ async test "child exit with no protocol line surfaces the pane excerpt as ToolRe
     }
     other => fail("expected ToolReportedError, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 4)
+  assert_eq(fake.received.length(), 5)
 }
 
 ///|
@@ -416,6 +457,7 @@ async test "failure without a session line carries no child_session" {
   let fake : FakeHerdrCli = {
     results: [
       split_ok(),
+      (0, "", ""),
       (0, "", ""),
       (0, "", ""),
       (0, "[cetas-run] turn failed: boom\n[cetas-run] turn 1 done\n", ""),
@@ -431,7 +473,7 @@ async test "failure without a session line carries no child_session" {
     }
     other => fail("expected ToolReportedError, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 4)
+  assert_eq(fake.received.length(), 5)
 }
 
 ///|
@@ -440,6 +482,7 @@ async test "delegate wait timeout best-effort reads child_session into the error
   let fake : FakeHerdrCli = {
     results: [
       split_ok(),
+      (0, "", ""),
       (0, "", ""),
       (
         1, "", "{\"error\":{\"code\":\"timeout\",\"message\":\"no marker within timeout\"}}",
@@ -467,10 +510,10 @@ async test "delegate wait timeout best-effort reads child_session into the error
     other =>
       fail("expected timeout ToolReportedError, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 4)
-  assert_eq(fake.received[2][6], "recent-unwrapped")
-  assert_eq(fake.received[2][8], "5000")
-  assert_eq(fake.received[3], [
+  assert_eq(fake.received.length(), 5)
+  assert_eq(fake.received[3][6], "recent-unwrapped")
+  assert_eq(fake.received[3][8], "5000")
+  assert_eq(fake.received[4], [
     "herdr", "pane", "read", "1-3", "--source", "recent-unwrapped",
   ])
 }
@@ -481,6 +524,7 @@ async test "timeout with an unreadable pane still errors without child_session" 
   let fake : FakeHerdrCli = {
     results: [
       split_ok(),
+      (0, "", ""),
       (0, "", ""),
       (
         1, "", "{\"error\":{\"code\":\"timeout\",\"message\":\"no marker within timeout\"}}",
@@ -507,7 +551,7 @@ async test "timeout with an unreadable pane still errors without child_session" 
     other =>
       fail("expected timeout ToolReportedError, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 4)
+  assert_eq(fake.received.length(), 5)
 }
 
 ///|
@@ -545,7 +589,7 @@ async test "delegate split failure and unparseable split output are ToolReported
 async test "delegate launch failure is a ToolReportedError" {
   let delegate = test_delegate()
   let fake : FakeHerdrCli = {
-    results: [split_ok(), (2, "", "herdr: pane is dead")],
+    results: [split_ok(), (0, "", ""), (2, "", "herdr: pane is dead")],
     index: 0,
     received: [],
   }
@@ -714,7 +758,7 @@ async test "close_pane=false keeps the pane and skips the close call" {
       assert_false(content.contains("auto-close"))
     other => fail("expected Success, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 4)
+  assert_eq(fake.received.length(), 5)
   assert_eq(fake.received[0], [
     "herdr", "pane", "split", "--pane", "1-1", "--direction", "down", "--cwd", "/tmp/ws",
     "--no-focus",
@@ -730,6 +774,7 @@ async test "a failed pane close still returns Success with a note footer" {
   let fake : FakeHerdrCli = {
     results: [
       split_ok(),
+      (0, "", ""),
       (0, "", ""),
       (0, "", ""),
       (0, "session: s9\nanswer body\n[cetas-run] turn 1 done\n", ""),
@@ -748,8 +793,8 @@ async test "a failed pane close still returns Success with a note footer" {
     other =>
       fail("expected Success despite close failure, got " + other.to_string())
   }
-  assert_eq(fake.received.length(), 5)
-  assert_eq(fake.received[4], ["herdr", "pane", "close", "1-3"])
+  assert_eq(fake.received.length(), 6)
+  assert_eq(fake.received[5], ["herdr", "pane", "close", "1-3"])
 }
 
 ///|

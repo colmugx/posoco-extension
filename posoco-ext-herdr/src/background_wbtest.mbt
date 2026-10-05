@@ -194,7 +194,7 @@ async test "background receipt accepted and channel outcome delivered next turn"
     }),
   )
   // The runner executed the full channel flow through the fake CLI.
-  assert_eq(fake.received.length(), 5)
+  assert_eq(fake.received.length(), 6)
   assert_eq(model.call_count(), 3)
   let persisted = (store as &@posoco.SessionStore).load("sess_1")
   guard bg_success_tool_text(persisted.messages) is Some(receipt) else {
