@@ -20,7 +20,7 @@ async fn board_test_hello(
       @protocol.Hello({
         last_seq: cursor,
         protocol_version: @protocol.protocol_version(),
-        has_board_snapshot~,
+        has_board_snapshot: has_board_snapshot,
       }),
     ),
   )
