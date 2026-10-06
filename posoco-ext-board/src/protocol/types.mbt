@@ -2,6 +2,10 @@
 pub(all) struct BoardHello {
   last_seq : Int64
   protocol_version : Int
+  /// True only when this live client context still owns an authoritative
+  /// Board projection corresponding to last_seq. A persisted cursor alone
+  /// is not a Board baseline.
+  has_board_snapshot : Bool
 } derive(Eq, Debug)
 
 ///|
