@@ -3,11 +3,36 @@ test "hello codec round-trips" {
   let frame = BoardClientFrame::Hello({
     last_seq: 0L,
     protocol_version: protocol_version(),
+    has_board_snapshot: true,
   })
   match decode_client_frame(encode_client_frame(frame)) {
     Ok(decoded) => assert_eq(decoded, frame)
     Err(_) => fail("unexpected decode error")
   }
+}
+
+///|
+test "legacy hello without baseline capability fails safe to false" {
+  let raw = Json::object({
+    "type": Json::string("hello"),
+    "last_seq": Json::number(17),
+    "protocol_version": Json::number(protocol_version().to_double()),
+  }).stringify()
+  assert_eq(
+    decode_client_frame(raw),
+    Ok(Hello({
+      last_seq: 17L,
+      protocol_version: protocol_version(),
+      has_board_snapshot: false,
+    })),
+  )
+  let invalid = Json::object({
+    "type": Json::string("hello"),
+    "last_seq": Json::number(17),
+    "protocol_version": Json::number(protocol_version().to_double()),
+    "has_board_snapshot": Json::string("yes"),
+  }).stringify()
+  assert_true(decode_client_frame(invalid) is Err(InvalidFrame(_)))
 }
 
 ///|
