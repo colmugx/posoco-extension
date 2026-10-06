@@ -97,6 +97,20 @@ fn optional_int64(
 }
 
 ///|
+/// Missing capability means false so older clients fail safe into a full
+/// authoritative snapshot instead of being trusted from cursor possession.
+fn optional_hello_baseline(
+  fields : Map[String, Json],
+) -> Result[Bool, BoardProtocolError] {
+  match fields.get("has_board_snapshot") {
+    None => Ok(false)
+    Some(Json::True) => Ok(true)
+    Some(Json::False) => Ok(false)
+    Some(_) => Err(InvalidFrame("field 'has_board_snapshot' must be a boolean"))
+  }
+}
+
+///|
 fn scope_to_json(scope : BoardEventScope) -> Json {
   Json::object({
     "session_id": match scope.session_id {
@@ -142,6 +156,7 @@ pub fn BoardHello::to_json(self : BoardHello) -> Json {
     "type": Json::string("hello"),
     "last_seq": Json::number(self.last_seq.to_double()),
     "protocol_version": Json::number(self.protocol_version.to_double()),
+    "has_board_snapshot": Json::boolean(self.has_board_snapshot),
   })
 }
 
@@ -255,10 +270,14 @@ pub fn decode_client_frame(
         Ok(value) => value
         Err(error) => return Err(error)
       }
+      let has_board_snapshot = match optional_hello_baseline(fields) {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
       if version != protocol_version() {
         Err(UnsupportedVersion(expected=protocol_version(), got=version))
       } else {
-        Ok(Hello({ last_seq, protocol_version: version, }))
+        Ok(Hello({ last_seq, protocol_version: version, has_board_snapshot, }))
       }
     }
     "command" => {
