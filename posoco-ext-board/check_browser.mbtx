@@ -79,6 +79,13 @@ extern "js" fn Browser::hello_cursor(self : Browser, index : Int) -> String =
   #|(b,i) => String(b.sockets[i].sent[0].last_seq)
 
 ///|
+extern "js" fn Browser::hello_has_board_snapshot(
+  self : Browser,
+  index : Int,
+) -> Bool =
+  #|(b,i) => b.sockets[i].sent[0].has_board_snapshot === true
+
+///|
 extern "js" fn Browser::cursor(self : Browser) -> String =
   #|b => b.store.get('board.cursor.localhost:123')
 
@@ -158,6 +165,10 @@ fn check_bfcache(source : String) -> Unit raise {
   let b = browser(source, "12")
   b.open(0)
   assert_eq(b.hello_cursor(0), "12")
+  assert_false(b.hello_has_board_snapshot(0))
+  // A fresh document may recover a cursor from sessionStorage, but it has
+  // no authoritative Board projection until the snapshot lands.
+  b.message(0, snapshot([12], 12))
   b.lifecycle("pageshow", false)
   assert_eq(b.socket_count(), 1)
   b.message(0, event(13))
@@ -170,6 +181,7 @@ fn check_bfcache(source : String) -> Unit raise {
   assert_eq(b.timer_count(), 0)
   b.open(1)
   assert_eq(b.hello_cursor(1), "13")
+  assert_true(b.hello_has_board_snapshot(1))
   // Delayed callbacks from the detached socket cannot affect the restored one.
   b.closed(0)
   b.message(0, event(99))
@@ -235,6 +247,7 @@ fn check_snapshots(source : String) -> Unit raise {
     assert_eq(b.retry(), 250)
     b.open(1)
     assert_eq(b.hello_cursor(1), "0")
+    assert_false(b.hello_has_board_snapshot(1))
   }
   for (seqs, last) in [([], 0), ([1], 1), ([3, 4], 4), ([5], 5)] {
     let b = browser(source, "9")
@@ -285,7 +298,21 @@ fn check_composite_snapshots(source : String) -> Unit raise {
   assert_eq(b.cursor(), "13")
   assert_true(b.text("events").contains("seq 13 | rev 0 | kind runtime.warning"))
   assert_true(b.text("status").contains("board 12 | tasks 1 | attempts 1"))
+  // Telemetry-only reconnect in the same document retains the Board baseline.
   b.closed(0)
+  assert_eq(b.retry(), 250)
+  b.open(1)
+  assert_eq(b.hello_cursor(1), "13")
+  assert_true(b.hello_has_board_snapshot(1))
+  // Diagnostics does not apply domain events into a local Board model.
+  // Seeing one invalidates the baseline so the next reconnect requests a
+  // fresh authoritative snapshot.
+  b.message(1, "{\"type\":\"event\",\"seq\":14,\"board_revision\":13,\"kind\":\"board.task.updated\",\"scope\":null}")
+  b.closed(1)
+  assert_eq(b.retry(), 250)
+  b.open(2)
+  assert_eq(b.hello_cursor(2), "14")
+  assert_false(b.hello_has_board_snapshot(2))
   // Missing, malformed or mismatched boards reset with the invalid-frame
   // path and close instead of being ignored.
   let missing_board = browser(source, "9")
@@ -363,6 +390,7 @@ fn check_live_gap(source : String) -> Unit raise {
   assert_eq(b.retry(), 250)
   b.open(1)
   assert_eq(b.hello_cursor(1), "0")
+  assert_false(b.hello_has_board_snapshot(1))
   b.message(1, "{\"type\":\"resync_required\",\"current_seq\":123}")
   assert_eq(b.cursor(), "0")
   b.closed(1)
