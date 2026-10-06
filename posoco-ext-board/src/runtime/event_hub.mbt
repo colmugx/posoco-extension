@@ -113,10 +113,13 @@ fn BoardSubscription::enqueue(
 pub fn BoardEventHub::subscribe(
   self : BoardEventHub,
   last_seq : Int64,
+  has_board_snapshot : Bool,
 ) -> BoardSubscription {
   let current = self.current_seq()
   let mut initial_frames : Array[@protocol.BoardServerFrame] = []
-  let plan : BoardSubscriptionPlan = if last_seq == current {
+  let plan : BoardSubscriptionPlan = if !has_board_snapshot {
+    SnapshotRequired
+  } else if last_seq == current {
     Live
   } else if last_seq > 0L &&
     last_seq < current &&
