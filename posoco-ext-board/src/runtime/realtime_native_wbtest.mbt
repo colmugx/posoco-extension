@@ -10,12 +10,17 @@ async fn board_test_frame(ws : @websocket.Conn) -> @protocol.BoardServerFrame {
 }
 
 ///|
-async fn board_test_hello(ws : @websocket.Conn, cursor : Int64) -> Unit {
+async fn board_test_hello(
+  ws : @websocket.Conn,
+  cursor : Int64,
+  has_board_snapshot? : Bool = false,
+) -> Unit {
   ws.send_text(
     @protocol.encode_client_frame(
       @protocol.Hello({
         last_seq: cursor,
         protocol_version: @protocol.protocol_version(),
+        has_board_snapshot~,
       }),
     ),
   )
@@ -84,7 +89,7 @@ async test "native shared runtime hello live reconnect two three and command rej
       )
       let reconnect = @websocket.connect(url)
       defer reconnect.close()
-      board_test_hello(reconnect, 1L)
+      board_test_hello(reconnect, 1L, has_board_snapshot=true)
       assert_eq(board_test_frame(reconnect), @protocol.Event(second))
       assert_eq(board_test_frame(reconnect), @protocol.Event(third))
       reconnect.send_text(
@@ -208,7 +213,7 @@ async test "native retained snapshot security gates and connection cleanup" {
       for _ in 0..<4 {
         let _ = hub_tick(hub)
       }
-      for cursor in [0L, 1L, 99L] {
+      for cursor in [0L, 1L, 4L, 99L] {
         let ws = @websocket.connect(url)
         defer ws.close()
         board_test_hello(ws, cursor)
@@ -229,7 +234,7 @@ async test "native retained snapshot security gates and connection cleanup" {
       }
       let current = @websocket.connect(url)
       defer current.close()
-      board_test_hello(current, 4L)
+      board_test_hello(current, 4L, has_board_snapshot=true)
       board_wait_clients(hub, 1)
       let live = hub_tick(hub)
       assert_eq(board_test_frame(current), @protocol.Event(live))
