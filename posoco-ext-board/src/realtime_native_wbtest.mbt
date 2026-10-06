@@ -25,7 +25,11 @@ async test "native observer projection stays sanitized through live and retained
       )
       ws.send_text(
         @protocol.encode_client_frame(
-          @protocol.Hello({ last_seq: 0L, protocol_version: 1, }),
+          @protocol.Hello({
+            last_seq: 0L,
+            protocol_version: 1,
+            has_board_snapshot: false,
+          }),
         ),
       )
       let bootstrap = ws.recv().read_all().text()
@@ -53,7 +57,11 @@ async test "native observer projection stays sanitized through live and retained
       defer reconnect.close()
       reconnect.send_text(
         @protocol.encode_client_frame(
-          @protocol.Hello({ last_seq: 1L, protocol_version: 1, }),
+          @protocol.Hello({
+            last_seq: 1L,
+            protocol_version: 1,
+            has_board_snapshot: true,
+          }),
         ),
       )
       let raw = reconnect.recv().read_all().text()
