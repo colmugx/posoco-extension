@@ -20,11 +20,13 @@ test "legacy hello without baseline capability fails safe to false" {
   }).stringify()
   assert_eq(
     decode_client_frame(raw),
-    Ok(Hello({
-      last_seq: 17L,
-      protocol_version: protocol_version(),
-      has_board_snapshot: false,
-    })),
+    Ok(
+      Hello({
+        last_seq: 17L,
+        protocol_version: protocol_version(),
+        has_board_snapshot: false,
+      }),
+    ),
   )
   let invalid = Json::object({
     "type": Json::string("hello"),

@@ -406,10 +406,7 @@ async fn NativeBoardWebServer::serve_ws(
   }
   // Registration is synchronous; the authoritative bootstrap of a
   // snapshot-required plan is the only awaited step.
-  let client = self.hub.subscribe(
-    hello.last_seq,
-    hello.has_board_snapshot,
-  )
+  let client = self.hub.subscribe(hello.last_seq, hello.has_board_snapshot)
   defer self.hub.unsubscribe(client)
   if client.plan is SnapshotRequired {
     if !(self.bootstrap_client(ws, client) catch { _ => false }) {
