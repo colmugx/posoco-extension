@@ -140,17 +140,17 @@ fn board_placeholder_page() -> String {
     #|const token=new URLSearchParams(location.search).get('token');
     #|if(!token){status.textContent='missing bootstrap token';return;}
     #|const key='board.cursor.'+location.host, valid=n=>Number.isSafeInteger(n)&&n>=0;
-    #|let seq=0, boardrev=0, tasks=0, attempts=0, lines=[], socket=null, timer=null, stopped=false, suspended=false, delay=250;
+    #|let seq=0, boardrev=0, tasks=0, attempts=0, hasBoard=false, lines=[], socket=null, timer=null, stopped=false, suspended=false, delay=250;
     #|try{const saved=Number(sessionStorage.getItem(key));if(valid(saved))seq=saved;}catch(_){}
     #|const cursor=n=>{seq=n;try{sessionStorage.setItem(key,String(n));}catch(_){}};
     #|const show=s=>{status.textContent=s+' | board '+boardrev+' | tasks '+tasks+' | attempts '+attempts+' | seq '+seq;};
     #|const line=e=>('seq '+e.seq+' | rev '+e.board_revision+' | kind '+String(e.kind)+' | scope '+JSON.stringify(e.scope??null)).slice(0,512);
     #|const render=()=>{output.textContent=lines.join('\n');};
-    #|const reset=(ws,s)=>{cursor(0);lines=[];render();show(s);ws.close();};
+    #|const reset=(ws,s)=>{cursor(0);hasBoard=false;boardrev=0;tasks=0;attempts=0;lines=[];render();show(s);ws.close();};
     #|function connect(){
     #|  timer=null;if(stopped||suspended||socket!==null)return;
     #|  const ws=new WebSocket('ws://'+location.host+'/ws?token='+encodeURIComponent(token));socket=ws;
-    #|  ws.onopen=()=>{if(socket!==ws||stopped||suspended)return;ws.send(JSON.stringify({type:'hello',protocol_version:1,last_seq:seq}));show('connected; hello sent');};
+    #|  ws.onopen=()=>{if(socket!==ws||stopped||suspended)return;ws.send(JSON.stringify({type:'hello',protocol_version:1,last_seq:seq,has_board_snapshot:hasBoard}));show('connected; hello sent');};
     #|  ws.onmessage=ev=>{
     #|    if(socket!==ws||ws.readyState!==WebSocket.OPEN||stopped||suspended)return;
     #|    try{
@@ -170,12 +170,12 @@ fn board_placeholder_page() -> String {
     #|          for(let i=0;i<events.length;i++){const e=events[i];if(e.type!=='event'||!valid(e.seq)||e.seq!==first+i)throw Error();}
     #|          lines=events.slice(-100).map(line);
     #|        }else{lines=[];}
-    #|        boardrev=f.board_revision;tasks=board.tasks.length;attempts=board.attempts.length;
+    #|        boardrev=f.board_revision;tasks=board.tasks.length;attempts=board.attempts.length;hasBoard=true;
     #|        cursor(f.last_seq);render();show('snapshot');delay=250;
     #|      }else if(f.type==='event'){
     #|        if(!valid(f.seq))throw Error();if(f.seq<=seq)return;
     #|        if(f.seq!==seq+1){reset(ws,'sequence gap; reconnecting');return;}
-    #|        cursor(f.seq);lines.push(line(f));lines=lines.slice(-100);render();show('live');delay=250;
+    #|        cursor(f.seq);if(String(f.kind).startsWith('board.'))hasBoard=false;lines.push(line(f));lines=lines.slice(-100);render();show('live');delay=250;
     #|      }
     #|    }catch(_){reset(ws,'invalid frame; reconnecting');}
     #|  };
@@ -406,7 +406,10 @@ async fn NativeBoardWebServer::serve_ws(
   }
   // Registration is synchronous; the authoritative bootstrap of a
   // snapshot-required plan is the only awaited step.
-  let client = self.hub.subscribe(hello.last_seq)
+  let client = self.hub.subscribe(
+    hello.last_seq,
+    hello.has_board_snapshot,
+  )
   defer self.hub.unsubscribe(client)
   if client.plan is SnapshotRequired {
     if !(self.bootstrap_client(ws, client) catch { _ => false }) {
