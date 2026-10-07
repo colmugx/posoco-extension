@@ -117,6 +117,39 @@ pub extend BoardServerFrame with Eq::{equal, not_equal}
 pub extend BoardServerFrame with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+/// Typed rejection of one client command frame by the pure wire command
+/// decoder. Both cases carry the frame's `command_id`, so a rejection can
+/// still be answered with a `BoardCommandResult` correlated to the exact
+/// frame that caused it — including the empty-id case.
+pub(all) enum BoardCommandDecodeError {
+  /// The frame itself is unusable: an empty `command_id` or a name outside
+  /// the fixed command table. No schema can be selected, so args are not
+  /// inspected.
+  InvalidCommand(command_id~ : String, reason~ : String)
+  /// The name is known but the args payload violates its schema: non-object
+  /// args, a field outside the allowlist, a missing or wrongly typed field,
+  /// or a disallowed enum string. Payload values are never validated beyond
+  /// the schema; semantics stay with the domain.
+  InvalidArguments(command_id~ : String, name~ : String, reason~ : String)
+} derive(Eq, Debug)
+
+///|
+pub extend BoardCommandDecodeError with Eq::{equal, not_equal}
+
+///|
+pub extend BoardCommandDecodeError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// Stable wire rejection code. Reasons are local diagnostics only, never
+/// included in a browser CommandResult.
+pub fn BoardCommandDecodeError::code(self : BoardCommandDecodeError) -> String {
+  match self {
+    InvalidCommand(..) => "invalid_command"
+    InvalidArguments(..) => "invalid_arguments"
+  }
+}
+
+///|
 pub(all) enum BoardProtocolError {
   InvalidJson(String)
   InvalidFrame(String)

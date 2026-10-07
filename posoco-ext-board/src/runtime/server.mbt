@@ -79,12 +79,30 @@ pub(open) trait BoardWebServer {
     Self,
     provider : async () -> Result[@protocol.BoardSnapshot, String],
   ) -> Unit = _
+  /// Install the authoritative command handler. Default: none — a server
+  /// without a handler answers every `Command` with `accepted=false`
+  /// (`"unsupported_in_current_stage"`) and mutates nothing. Symmetric to
+  /// `set_snapshot_provider`: the runtime installs exactly one per server
+  /// while starting the control plane, and the returned result is answered
+  /// only on the issuing connection.
+  async fn set_command_handler(
+    Self,
+    handler : async (@protocol.BoardClientCommand) -> @protocol.BoardCommandResult,
+  ) -> Unit = _
 }
 
 ///|
 impl BoardWebServer with fn set_snapshot_provider(
   _self,
   _provider : async () -> Result[@protocol.BoardSnapshot, String],
+) -> Unit {
+  ()
+}
+
+///|
+impl BoardWebServer with fn set_command_handler(
+  _self,
+  _handler : async (@protocol.BoardClientCommand) -> @protocol.BoardCommandResult,
 ) -> Unit {
   ()
 }

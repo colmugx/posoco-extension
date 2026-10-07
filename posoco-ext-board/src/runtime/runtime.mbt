@@ -8,6 +8,7 @@ pub struct BoardRuntime {
   server : &BoardWebServer
   opener : &BrowserOpener
   coordinator : @coordinator.BoardCoordinator
+  now_ms : () -> Int64
   gate : @async.Mutex
   mut supervisor : @fuwaroid.Supervisor[Unit]?
   mut server_task : @fuwaroid.SupervisedTask[Unit]?
@@ -19,8 +20,9 @@ pub struct BoardRuntime {
 /// A telemetry-serving adapter must receive the same `hub` passed here. The
 /// default allocates an independent hub; it cannot discover a server's hub.
 /// The coordinator restores from `store` (default: an empty
-/// `MemoryBoardStore`), with `now_ms` supplying recovery time (default:
-/// deterministic 0). Its `stream_cursor` reads the hub head on demand, and
+/// `MemoryBoardStore`), with `now_ms` supplying recovery and server-owned
+/// mutation timestamps (default: deterministic 0). Its `stream_cursor` reads
+/// the hub head on demand, and
 /// its `on_commit` hook publishes every committed event into that hub.
 /// Prefer `default_board_runtime` unless explicitly wiring server and
 /// runtime.
@@ -44,6 +46,7 @@ pub fn BoardRuntime::with_adapters(
       },
       stream_cursor=() => hub.current_seq(),
     ),
+    now_ms,
     gate: @async.Mutex::Mutex(),
     supervisor: None,
     server_task: None,
@@ -109,6 +112,9 @@ async fn BoardRuntime::ensure_server_locked(
   // bootstrap awaits the durable coordinator, so it is installed as an
   // async provider from this async start path.
   self.server.set_snapshot_provider(async fn() { self.bootstrap_snapshot() })
+  self.server.set_command_handler(async fn(command) {
+    self.handle_command(command)
+  })
   let endpoint = match self.server.bind() {
     Ok(value) => value
     Err(error) => {

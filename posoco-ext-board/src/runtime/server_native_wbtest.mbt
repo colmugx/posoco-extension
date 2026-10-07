@@ -102,3 +102,87 @@ async test "native close is idempotent and rebind mints fresh secret" {
     web.close()
   })
 }
+
+///|
+async test "native command seam defaults to unsupported and serves installed handler" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let hub = BoardEventHub()
+      let server = NativeBoardWebServer(hub~)
+      let endpoint = match server.bind() {
+        Ok(value) => value
+        Err(_) => fail("bind failed")
+      }
+      defer server.close()
+      group.spawn_bg(no_wait=true, () => {
+        let _ = server.run()
+      })
+      let token = board_query_param(server.browser_url().unwrap(), "token").unwrap()
+      let url = endpoint.ws_url() + "?token=" + token
+      // An isolated server without an installed handler still answers the
+      // stage-neutral rejection on the issuing connection; nothing is
+      // mutated and nothing is published into the hub stream.
+      let bare = @websocket.connect(url)
+      board_test_hello(bare, 0L, has_board_snapshot=true)
+      board_wait_clients(hub, 1)
+      bare.send_text(
+        @protocol.encode_client_frame(
+          @protocol.Command({
+            command_id: "bare-1",
+            name: "board.task.create",
+            expected_revision: 0L,
+            args: { "id": "t1", "title": "task" },
+          }),
+        ),
+      )
+      assert_eq(
+        board_test_frame(bare),
+        @protocol.CommandResult({
+          command_id: "bare-1",
+          accepted: false,
+          error: Some("unsupported_in_current_stage"),
+          current_revision: None,
+        }),
+      )
+      assert_eq(hub.current_seq(), 0L)
+      bare.close()
+      board_wait_clients(hub, 0)
+      // Installing a handler through the symmetric seam redirects the same
+      // path to the authoritative answer. The result stays scoped to this
+      // connection and the hub history remains untouched.
+      server.set_command_handler(fn(command) {
+        {
+          command_id: command.command_id,
+          accepted: true,
+          error: None,
+          current_revision: Some(command.expected_revision + 1L),
+        }
+      })
+      let served = @websocket.connect(url)
+      board_test_hello(served, 0L, has_board_snapshot=true)
+      board_wait_clients(hub, 1)
+      served.send_text(
+        @protocol.encode_client_frame(
+          @protocol.Command({
+            command_id: "served-1",
+            name: "board.task.create",
+            expected_revision: 7L,
+            args: {},
+          }),
+        ),
+      )
+      assert_eq(
+        board_test_frame(served),
+        @protocol.CommandResult({
+          command_id: "served-1",
+          accepted: true,
+          error: None,
+          current_revision: Some(8L),
+        }),
+      )
+      assert_eq(hub.current_seq(), 0L)
+      served.close()
+      board_wait_clients(hub, 0)
+    })
+  })
+}
