@@ -6,6 +6,10 @@ pub struct NativeBoardWebServer {
   /// `BoardWebServer` trait. `None` means snapshot-required subscriptions
   /// receive an explicit resync instead of a snapshot.
   mut snapshot_provider : (async () -> Result[@protocol.BoardSnapshot, String])?
+  /// Authoritative command handler, symmetric to `snapshot_provider` and
+  /// installed through the same trait. `None` means every `Command` still
+  /// receives `unsupported_in_current_stage` and nothing is ever mutated.
+  mut command_handler : (async (@protocol.BoardClientCommand) -> @protocol.BoardCommandResult)?
   mut server : @http.Server?
   mut endpoint : BoardEndpoint?
   mut token : String?
@@ -22,6 +26,7 @@ pub fn NativeBoardWebServer::NativeBoardWebServer(
     hub,
     connections: [],
     snapshot_provider: None,
+    command_handler: None,
     server: None,
     endpoint: None,
     token: None,
@@ -420,13 +425,23 @@ async fn NativeBoardWebServer::serve_ws(
       for ;; {
         let raw = board_read_text(ws)
         let frame = match @protocol.decode_client_frame(raw) {
-          Ok(Command(command)) =>
-            @protocol.CommandResult({
-              command_id: command.command_id,
-              accepted: false,
-              error: Some("unsupported_in_current_stage"),
-              current_revision: None,
-            })
+          Ok(Command(command)) => {
+            // The installed handler owns the authoritative answer; without
+            // one the stage-neutral rejection stands. The result is
+            // enqueued only for this connection and never published into
+            // hub history.
+            let result = match self.command_handler {
+              Some(handler) => handler(command)
+              None =>
+                {
+                  command_id: command.command_id,
+                  accepted: false,
+                  error: Some("unsupported_in_current_stage"),
+                  current_revision: None,
+                }
+            }
+            @protocol.CommandResult(result)
+          }
           _ =>
             @protocol.Error(
               code="invalid_frame",
@@ -630,6 +645,14 @@ pub impl BoardWebServer for NativeBoardWebServer with fn set_snapshot_provider(
 }
 
 ///|
+pub impl BoardWebServer for NativeBoardWebServer with fn set_command_handler(
+  self,
+  handler,
+) {
+  self.command_handler = Some(handler)
+}
+
+///|
 pub struct NativeBrowserOpener {}
 
 ///|
@@ -696,6 +719,7 @@ pub extend NativeBoardWebServer with BoardWebServer::{
   is_alive,
   last_error,
   set_snapshot_provider,
+  set_command_handler,
 }
 
 ///|

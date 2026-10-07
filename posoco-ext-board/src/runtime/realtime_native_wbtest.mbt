@@ -107,8 +107,8 @@ async test "native shared runtime hello live reconnect two three and command rej
         @protocol.CommandResult({
           command_id: "c-1",
           accepted: false,
-          error: Some("unsupported_in_current_stage"),
-          current_revision: None,
+          error: Some("invalid_command"),
+          current_revision: Some(0L),
         }),
       )
       assert_eq(runtime.current_seq(), 3L)
@@ -273,6 +273,10 @@ async test "native overflow sends resync closes and reset zero snapshots" {
       let ws = @websocket.connect(url)
       defer ws.close()
       board_test_hello(ws, 0L)
+      guard board_test_frame(ws) is Snapshot(initial_snapshot) else {
+        fail("initial snapshot required before the live overflow burst")
+      }
+      assert_eq(initial_snapshot.last_seq, 0L)
       board_wait_clients(hub, 1)
       for _ in 0..<4 {
         let _ = hub_tick(hub)

@@ -313,6 +313,19 @@ fn check_composite_snapshots(source : String) -> Unit raise {
   b.open(2)
   assert_eq(b.hello_cursor(2), "14")
   assert_false(b.hello_has_board_snapshot(2))
+  // The passive diagnostics page never sends commands, so a command_result
+  // frame is foreign to it: it is ignored without advancing the cursor,
+  // resetting or closing.
+  b.message(2, "{\"type\":\"command_result\",\"command_id\":\"c-1\",\"accepted\":true,\"current_revision\":15}")
+  assert_eq(b.cursor(), "14")
+  assert_eq(b.state(2), 1)
+  assert_eq(b.timer_count(), 0)
+  b.closed(2)
+  // Only authoritative frames reset backoff; the ignored result does not.
+  assert_eq(b.retry(), 500)
+  b.open(3)
+  assert_eq(b.hello_cursor(3), "14")
+  assert_false(b.hello_has_board_snapshot(3))
   // Missing, malformed or mismatched boards reset with the invalid-frame
   // path and close instead of being ignored.
   let missing_board = browser(source, "9")

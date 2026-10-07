@@ -31,5 +31,7 @@ options(
     "random.native.mbt": [ "native" ],
     "server_native_wbtest.mbt": [ "native" ],
     "realtime_native_wbtest.mbt": [ "native" ],
+    "commands_native_wbtest.mbt": [ "native" ],
+    "command_delivery_native_wbtest.mbt": [ "native" ],
   },
 )

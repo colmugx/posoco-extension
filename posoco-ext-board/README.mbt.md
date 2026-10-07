@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S3B2B1 runtime streaming and authoritative snapshots on top of S3B2A
+## Current status: S3B2B2 runtime command handler and WebSocket commands on top of S3B2B1
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -147,9 +147,10 @@ Agent execution. The existing S1 server lifecycle is unchanged.
 The first WebSocket message must be a v1 text `Hello`, within 5 seconds and
 8192 bytes. Cursors must be nonnegative JSON safe integers. Invalid Hello,
 command-first and unsupported versions receive a small `error` frame and
-close. Later commands return `accepted=false`,
-`error="unsupported_in_current_stage"` without a `current_revision`, because
-the stage answers no domain query; without mutation.
+close. Commands are answered through the command handler seam introduced in
+S3B2B2 (see below); a server without an installed handler keeps answering
+`accepted=false`, `error="unsupported_in_current_stage"` without a
+`current_revision`, and never mutates.
 
 Subscription computes bootstrap and registers the live mailbox synchronously:
 
@@ -183,6 +184,13 @@ valid only at `last_seq=0`. Invalid snapshots reset the cursor and reconnect.
 `pagehide` closes and detaches the socket and clears the reconnect timer;
 persisted `pageshow` resumes once with the retained cursor. Late callbacks from
 the old socket are ignored, and a protocol-error stop remains terminal.
+The page is a passive observer: it never sends commands, so `command_result`
+frames — which are addressed only to the commanding connection — never arrive,
+and any unrecognized frame is ignored without advancing the cursor. It keeps
+its Board baseline across telemetry-only reconnects, and any `board.*` event
+invalidates that baseline, so the next reconnect Hello reports
+`has_board_snapshot=false` and receives a fresh authoritative snapshot. It is
+bounded text-only diagnostics, not a product UI.
 The server remains native-only; protocol, replay and mailbox tests also run on JS.
 Run the browser VM regressions from the extension workspace with
 `moon run --target js --output-json posoco-ext-board/check_browser.mbtx`.
@@ -245,11 +253,12 @@ settles active IO and explicitly rejects deferred submissions before closing
 and joining the actor, then shuts down its Supervisor. Cancelling a submit
 waiter does not cancel an already accepted transaction.
 
-Explicitly out of scope: WebSocket domain mutations, authoritative domain
-EventHub publication, Board domain wire snapshots, Agent execution, scheduler,
-UI, Posoco Tasks and GitHub Actions changes. Telemetry `seq` and Board revision
-remain independent; WebSocket commands still answer
-`unsupported_in_current_stage`.
+Explicitly out of scope for S3B2A itself: authoritative domain EventHub
+publication, Board domain wire snapshots, Agent execution, scheduler, UI,
+Posoco Tasks and GitHub Actions changes. Telemetry `seq` and Board revision
+remain independent; WebSocket commands still answered
+`unsupported_in_current_stage` at this stage — S3B2B2 wires the runtime
+command handler below.
 
 ## Runtime streaming and authoritative snapshots (S3B2B1)
 
@@ -294,8 +303,90 @@ while the coordinator settles; the installed snapshot carries the boundary and
 the subscription drops stale mailbox events at or before it. A server without
 a provider, like a failed bootstrap, answers one explicit `resync_required`
 frame (`snapshot_unavailable`) and closes. Client mailboxes still overflow to
-a terminal `client_queue_overflow` resync. WebSocket domain commands remain
-`unsupported_in_current_stage`.
+a terminal `client_queue_overflow` resync. WebSocket domain commands still
+answered `unsupported_in_current_stage` at this stage; S3B2B2 adds the
+runtime command handler below.
+
+## WebSocket commands and the runtime handler (S3B2B2)
+
+`BoardWebServer` gains `set_command_handler`, taking
+`async (BoardClientCommand) -> BoardCommandResult` with a no-op default —
+symmetric to `set_snapshot_provider`. The runtime installs exactly one
+handler, `BoardRuntime::handle_command`, while starting the control plane. A
+server without an installed handler — for example a custom native adapter
+wired without the runtime — keeps answering every decoded `Command` with
+`accepted=false`, `error="unsupported_in_current_stage"` and no
+`current_revision`; that fallback mutates and publishes nothing. The
+server only parses the frame and forwards: the decoded `Command` is handed to
+the installed handler and the returned `CommandResult` is enqueued through
+the existing bounded per-client mailbox. The result is delivered only on the
+issuing connection and never enters EventHub history; gate-protected
+lifecycle, Hello/security checks, snapshot bootstrap and overflow resync are
+unchanged. Every domain timestamp is stamped by the runtime from its own
+`now_ms` — clients never send clocks.
+
+Eight commands are accepted, each keyed by `expected_revision` for optimistic
+concurrency and using the stable `board.*` wire names decoded in `protocol`:
+
+| Command | Args |
+| --- | --- |
+| `board.task.create` | `id`, `title`, `description`, `priority`, `definition_of_done`, `dependencies` (all required) |
+| `board.task.update` | required `id`; optional `title`, `description`, `priority`, `definition_of_done` |
+| `board.task.set_dependencies` | `id`, `dependencies` |
+| `board.task.move` | `id`, `to` |
+| `board.attempt.queue` | `id`, `task_id`, `kind` |
+| `board.attempt.start` | `id` |
+| `board.attempt.finish` | `id`, `outcome` |
+| `board.review.record` | `id`, `decision` |
+
+Every `args` must be an object. IDs and text fields are strings;
+`definition_of_done` and `dependencies` are string arrays. Task and attempt IDs
+are explicitly client-provided. Update fields omitted from args remain unchanged;
+present fields must have the correct type, and explicit `null` is rejected.
+`definition_of_done: []` explicitly clears DoD; dependencies change only through
+`board.task.set_dependencies`.
+
+Enum strings are fixed: `priority` = `low | normal | high | critical`;
+`to` = `created | refining | ready | running | review | done | suspended`;
+`kind` = `discuss | execute | review`;
+`outcome` = `succeeded | failed | cancelled | interrupted`;
+`decision` = `approved | changes_requested` (never `pending`).
+`expected_revision` stays at frame top level, and `at_ms`, `revision`, persistence
+metadata and every other unknown args field are rejected. The pure decoder
+receives `at_ms` explicitly from the runtime's injected `now_ms` seam; it never
+reads a clock or duplicates domain validation.
+
+Fields are strict: unknown names and missing required fields are rejected,
+and `args` are never reflected back. Rejections use stable wire codes —
+`invalid_command` (empty `command_id` or unknown name),
+`invalid_arguments` (malformed args), `revision_conflict`,
+`task_not_found`, `attempt_not_found`, `invalid_transition`,
+`invalid_attempt_transition`, `invalid_review_transition`,
+`dependency_not_found`, `self_dependency`, `duplicate_dependency`,
+`dependency_cycle`, `duplicate_task`, `duplicate_attempt`, `invalid_input`,
+`board_initializing`, `board_unavailable`, `board_timeout`,
+`persistence_failed` and `durability_uncertain` — and never carry entity
+identifiers, store details or validation reasons. An accepted result carries
+the new revision as `current_revision`; a rejection carries the current
+committed revision when the coordinator can answer (`None` when unavailable).
+`revision_conflict` uses the domain's `actual` revision. These are command
+rejections, not protocol failures: the connection remains usable.
+
+`command_id` is correlation only. It is not a durable deduplication key: a
+lost result does not undo a commit and there is no automatic retry. When the
+connection drops, the client must refresh authoritative state — a fresh
+snapshot or cursor replay — instead of blindly resending the mutation.
+Ordering is deliberate: the projected event(s) of an accepted commit arrive
+before the `command_result` on the same connection. A `durability_uncertain`
+rejection answers `accepted=false` even though the mutation may still have
+committed; reconciliation has already resolved the durable state, so the
+client must refresh rather than assume either outcome. For example, candidate
+reconciliation may send `board.task.created` at revision 1 followed by
+`accepted=false`, `error="durability_uncertain"`, `current_revision=1`.
+A pre-visibility persist failure instead returns `persistence_failed` with the
+old revision and emits no Board event. Result delivery overflow sends
+`resync_required` and closes the connection; an already durable commit is never
+rolled back because its response could not be delivered.
 
 ## Task vocabulary
 
