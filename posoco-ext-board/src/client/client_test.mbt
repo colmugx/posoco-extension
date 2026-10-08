@@ -337,15 +337,30 @@ test "all eight board event kinds upsert full entities in place" {
       attempt_event(
         seq=6L,
         revision=3L,
+        kind="board.attempt.queued",
+        attempt=wire_attempt(status="queued"),
+      ),
+    ),
+    @client.Applied,
+  )
+  assert_eq_eq(replica.attempts()[0].status, @client.Queued)
+  assert_eq_eq(
+    replica.apply_event(
+      attempt_event(
+        seq=7L,
+        revision=3L,
+        kind="board.attempt.started",
         attempt=wire_attempt(status="running", started=Json::number(4000)),
       ),
     ),
     @client.Applied,
   )
+  assert_eq_eq(replica.attempts()[0].status, @client.Running)
+  assert_eq_eq(replica.attempts()[0].started_at_ms, Some(4000L))
   assert_eq_eq(
     replica.apply_event(
       attempt_event(
-        seq=7L,
+        seq=8L,
         revision=4L,
         kind="board.attempt.finished",
         attempt=wire_attempt(status="succeeded", finished=Json::number(5000)),
@@ -356,7 +371,7 @@ test "all eight board event kinds upsert full entities in place" {
   assert_eq_eq(
     replica.apply_event(
       attempt_event(
-        seq=8L,
+        seq=9L,
         revision=4L,
         kind="board.review.recorded",
         attempt=wire_attempt(
@@ -369,7 +384,7 @@ test "all eight board event kinds upsert full entities in place" {
     @client.Applied,
   )
   assert_eq_eq(replica.revision(), 4L)
-  assert_eq_eq(replica.last_seq(), 8L)
+  assert_eq_eq(replica.last_seq(), 9L)
   let tasks = replica.tasks()
   assert_eq_eq(tasks.length(), 2)
   assert_eq_eq(tasks[0].id, "t1")
