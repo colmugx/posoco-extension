@@ -28,7 +28,11 @@ fn projection_scope(suffix : String) -> @posoco.EventScope {
 
 ///|
 test "board projection all mappings preserve order seq and zero revision without IO" {
-  let server : CommandFakeServer = { binds: 0, alive: false, }
+  let server : CommandFakeServer = {
+    backend_installed: false,
+    binds: 0,
+    alive: false,
+  }
   let opener : CommandFakeOpener = { urls: [], }
   let runtime = @runtime.BoardRuntime::with_adapters(
     backend=@backend.BoardBackend::BoardBackend(),

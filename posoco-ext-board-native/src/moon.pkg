@@ -1,0 +1,27 @@
+import {
+  "colmugx/posoco-ext-board" @board,
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/protocol",
+  "colmugx/posoco-ext-board/runtime",
+  "colmugx/posoco-ext-board/store",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/moonback",
+}
+
+import {
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/json",
+  "colmugx/posoco-ext-board/domain",
+} for "wbtest"
+
+supported_targets = "native"
+
+options(
+  "native-stub": [ "random_stub.c" ],
+)

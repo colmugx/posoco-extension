@@ -5,6 +5,7 @@ members = [
   "./posoco-ext-astgrep",
   "./posoco-ext-bash",
   "./posoco-ext-board",
+  "./posoco-ext-board-native",
   "./posoco-ext-context",
   "./posoco-ext-credentials",
   "./posoco-ext-deepseek",

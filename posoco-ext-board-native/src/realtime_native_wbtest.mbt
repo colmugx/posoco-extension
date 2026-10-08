@@ -257,12 +257,9 @@ async test "native retained snapshot security gates and connection cleanup" {
       assert_eq(board_test_frame(current), @protocol.Event(live))
       runtime.close_server()
       board_wait_clients(backend, 0)
-      @async.with_timeout(1000, () => {
-        while server.connections.length() != 0 {
-          @async.sleep(1)
-        }
-      })
-      assert_eq(server.connections.length(), 0)
+      assert_eq(runtime.status(), Stopped)
+      let closed = Some(current.recv()) catch { _ => None }
+      assert_true(closed is None)
       runtime.shutdown()
     })
   })
@@ -415,19 +412,15 @@ async test "native shutdown cancels a reader still waiting for Hello" {
         Err(_) => fail("bind failed")
       }
       defer server.close()
-      group.spawn_bg(no_wait=true, () => {
+      let serving = group.spawn(() => {
         let _ = server.run()
       })
       let token = board_query_param(server.browser_url().unwrap(), "token").unwrap()
       let ws = @websocket.connect(endpoint.ws_url() + "?token=" + token)
       defer ws.close()
-      while server.connections.length() == 0 {
-        @async.sleep(1)
-      }
+      // The completed upgrade proves MoonBack owns the pending Hello reader.
       server.close()
-      while server.connections.length() != 0 {
-        @async.sleep(1)
-      }
+      serving.wait()
       assert_eq(backend.subscriber_count(), 0)
       let closed = Some(ws.recv()) catch { _ => None }
       assert_true(closed is None)

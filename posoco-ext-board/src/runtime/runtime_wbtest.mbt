@@ -3,6 +3,7 @@
 /// exercised headless in `src/backend`; here the fake adapters prove the
 /// runtime binds, opens, closes and settles exactly once.
 priv struct FakeBoardServer {
+  mut backend_installed : Bool
   mut binds : Int
   mut closes : Int
   mut alive : Bool
@@ -11,6 +12,9 @@ priv struct FakeBoardServer {
 
 ///|
 impl BoardWebServer for FakeBoardServer with fn bind(self) {
+  if !self.backend_installed {
+    return Err("board backend not installed")
+  }
   self.binds += 1
   @async.sleep(10)
   self.alive = true
@@ -48,6 +52,14 @@ impl BoardWebServer for FakeBoardServer with fn last_error(_self) {
 }
 
 ///|
+impl BoardWebServer for FakeBoardServer with fn set_backend(
+  self,
+  _backend : @backend.BoardBackend,
+) {
+  self.backend_installed = true
+}
+
+///|
 priv struct FakeBrowserOpener {
   opened : Array[String]
 }
@@ -60,7 +72,13 @@ impl BrowserOpener for FakeBrowserOpener with fn open(self, url) {
 
 ///|
 fn lifecycle_server() -> FakeBoardServer {
-  { binds: 0, closes: 0, alive: false, browser: None, }
+  {
+    backend_installed: false,
+    binds: 0,
+    closes: 0,
+    alive: false,
+    browser: None,
+  }
 }
 
 ///|
@@ -162,6 +180,29 @@ async test "ensure_server is idempotent under concurrent opens" {
 }
 
 ///|
+async test "ensure_server installs the backend before bind" {
+  let server = lifecycle_server()
+  let opener = lifecycle_opener()
+  let runtime = BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
+  // The fake refuses to bind without an installed backend, so a successful
+  // bind is proof that the runtime ran set_backend first.
+  assert_true(BoardWebServer::bind(server) is Err(_))
+  assert_eq(server.binds, 0)
+  @async.with_task_group(group => {
+    runtime.attach(group)
+    assert_false(server.backend_installed)
+    assert_true(runtime.ensure_server() is Ok(_))
+    assert_true(server.backend_installed)
+    assert_eq(server.binds, 1)
+    runtime.shutdown()
+  })
+}
+
+///|
 async test "close is idempotent and later open rebinds" {
   let server = lifecycle_server()
   let opener = lifecycle_opener()
@@ -202,12 +243,16 @@ async test "server start requires host task-group ownership" {
 /// Server whose run resists cancellation briefly, so a shutdown's
 /// settle_server_task bounded wait is long enough to park in deterministically.
 priv struct SlowStopServer {
+  mut backend_installed : Bool
   mut closes : Int
   mut alive : Bool
 }
 
 ///|
 impl BoardWebServer for SlowStopServer with fn bind(self) {
+  if !self.backend_installed {
+    return Err("board backend not installed")
+  }
   self.alive = true
   Ok({ host: "127.0.0.1", port: 18081, })
 }
@@ -242,8 +287,20 @@ impl BoardWebServer for SlowStopServer with fn last_error(_self) {
 }
 
 ///|
+impl BoardWebServer for SlowStopServer with fn set_backend(
+  self,
+  _backend : @backend.BoardBackend,
+) {
+  self.backend_installed = true
+}
+
+///|
 async test "runtime shutdown cleanup completes even when cancelled" {
-  let server : SlowStopServer = { closes: 0, alive: false, }
+  let server : SlowStopServer = {
+    backend_installed: false,
+    closes: 0,
+    alive: false,
+  }
   let opener = lifecycle_opener()
   let runtime = BoardRuntime::with_adapters(
     backend=@backend.BoardBackend::BoardBackend(),

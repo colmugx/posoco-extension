@@ -3,13 +3,13 @@ async test "native observer projection stays sanitized through live and retained
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let backend = @backend.BoardBackend::BoardBackend(event_buffer=2)
-      let server = @runtime.NativeBoardWebServer(backend=Some(backend))
+      let server = NativeBoardWebServer(backend=Some(backend))
       let runtime = @runtime.BoardRuntime::with_adapters(
         backend~,
         server~,
-        opener=@runtime.NativeBrowserOpener(),
+        opener=NativeBrowserOpener(),
       )
-      let board = BoardExtension::with_runtime(runtime~)
+      let board = @board.BoardExtension::with_runtime(runtime~)
       board.attach(group)
       let endpoint = match runtime.ensure_server() {
         Ok(value) => value
