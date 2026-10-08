@@ -1,0 +1,9 @@
+import {
+  "colmugx/posoco-ext-board/client",
+  "colmugx/posoco-ext-board/protocol",
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/websocket",
+}
+
+supported_targets = "js"

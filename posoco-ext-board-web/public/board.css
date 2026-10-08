@@ -1,0 +1,22 @@
+:root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; --surface: #fff; --background: #f5f6f8; --text: #202735; --muted: #596579; --border: #dfe3e9; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--text); }
+.board-shell { padding: 24px; max-width: 1800px; margin: auto; }
+.board-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+h1 { margin: 0; font-size: 28px; }
+.board-meta { margin: 0; color: var(--muted); }
+.connection, .priority { border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.status { color: var(--muted); }
+.empty-state { padding: 20px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; }
+.lanes { display: grid; grid-template-columns: repeat(7, minmax(230px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 16px; }
+.lane { min-width: 0; }
+h2 { font-size: 14px; margin: 12px 0; }
+.cards { display: grid; gap: 10px; }
+.task-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; min-width: 0; overflow-wrap: anywhere; }
+.task-topline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.entity-id, .task-meta { color: var(--muted); font-size: 12px; }
+h3 { margin: 12px 0 8px; font-size: 16px; }
+.description { color: var(--muted); margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.attempt-status { margin: 8px 0 0; font-size: 13px; }
+@media (prefers-color-scheme: dark) { :root { --surface: #202731; --background: #151a22; --text: #e7ebf2; --muted: #a8b4c5; --border: #364252; } }
+@media (max-width: 600px) { .board-shell { padding: 16px; } .board-header { gap: 8px 16px; } .board-meta { flex-basis: 100%; } }

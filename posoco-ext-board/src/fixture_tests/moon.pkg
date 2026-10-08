@@ -1,0 +1,10 @@
+import {
+  "colmugx/posoco-ext-board/client",
+  "colmugx/posoco-ext-board/protocol",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+} for "test"
+
+supported_targets = "native"
