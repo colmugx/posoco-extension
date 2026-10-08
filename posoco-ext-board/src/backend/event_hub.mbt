@@ -1,6 +1,73 @@
 ///|
+/// Detached copy of a JSON tree. Mutable `Object` maps and `Array` items are
+/// duplicated, so no reader can ever reach into retained backend state.
+fn board_json_detached(value : Json) -> Json {
+  match value {
+    Json::Array(items) => Json::array(items.map(board_json_detached))
+    Json::Object(fields) => {
+      let copy : Map[String, Json] = Map::from_array([])
+      for key, item in fields {
+        copy[key] = board_json_detached(item)
+      }
+      Json::object(copy)
+    }
+    other => other
+  }
+}
+
+///|
+fn board_scope_detached(
+  scope : @protocol.BoardEventScope,
+) -> @protocol.BoardEventScope {
+  {
+    session_id: scope.session_id,
+    run_id: scope.run_id,
+    turn_id: scope.turn_id,
+  }
+}
+
+///|
+fn board_event_detached(
+  event : @protocol.BoardWireEvent,
+) -> @protocol.BoardWireEvent {
+  {
+    seq: event.seq,
+    board_revision: event.board_revision,
+    kind: event.kind,
+    scope: event.scope.map(board_scope_detached),
+    payload: board_json_detached(event.payload),
+  }
+}
+
+///|
+fn board_snapshot_detached(
+  snapshot : @protocol.BoardSnapshot,
+) -> @protocol.BoardSnapshot {
+  {
+    protocol_version: snapshot.protocol_version,
+    last_seq: snapshot.last_seq,
+    board_revision: snapshot.board_revision,
+    payload: board_json_detached(snapshot.payload),
+  }
+}
+
+///|
+fn board_frame_detached(
+  frame : @protocol.BoardServerFrame,
+) -> @protocol.BoardServerFrame {
+  match frame {
+    @protocol.Event(event) => @protocol.Event(board_event_detached(event))
+    @protocol.Snapshot(snapshot) =>
+      @protocol.Snapshot(board_snapshot_detached(snapshot))
+    other => other
+  }
+}
+
+///|
 /// Bounded sanitized telemetry history and synchronous per-client fanout.
-pub struct BoardEventHub {
+/// The hub is backend-owned: adapters only ever see detached events,
+/// explicit subscriptions and integer cursors.
+priv struct BoardEventHub {
   capacity : Int
   client_queue_depth : Int
   mut next_seq : Int64
@@ -36,18 +103,18 @@ pub extend BoardSubscriptionPlan with @moonbitlang/core/debug.Debug::{to_repr}
 pub struct BoardSubscription {
   /// Bootstrap plan computed atomically with registration.
   plan : BoardSubscriptionPlan
-  mut initial_frames : Array[@protocol.BoardServerFrame]
+  priv mut initial_frames : Array[@protocol.BoardServerFrame]
   /// Bootstrap boundary: events at or before it were already covered by the
   /// installed snapshot, so the sender drops their stale mailbox copies.
-  mut baseline_seq : Int64
-  mailbox : @async.Queue[@protocol.BoardServerFrame]
-  overflow : @async.Queue[Unit]
-  mut dirty_seq : Int64?
-  mut closed : Bool
+  priv mut baseline_seq : Int64
+  priv mailbox : @async.Queue[@protocol.BoardServerFrame]
+  priv overflow : @async.Queue[Unit]
+  priv mut dirty_seq : Int64?
+  priv mut closed : Bool
 }
 
 ///|
-pub fn BoardEventHub::BoardEventHub(
+fn BoardEventHub::BoardEventHub(
   capacity? : Int = 4096,
   client_queue_depth? : Int = 256,
 ) -> BoardEventHub {
@@ -58,20 +125,22 @@ pub fn BoardEventHub::BoardEventHub(
 }
 
 ///|
-pub fn BoardEventHub::publish(
+fn BoardEventHub::publish(
   self : BoardEventHub,
   board_revision~ : Int64,
   kind~ : String,
   scope? : @protocol.BoardEventScope? = None,
   payload~ : Json,
 ) -> @protocol.BoardWireEvent {
-  let event : @protocol.BoardWireEvent = {
+  // The publisher keeps its payload; the retained event and every fanout
+  // copy are detached from it.
+  let event : @protocol.BoardWireEvent = board_event_detached({
     seq: self.next_seq,
     board_revision,
     kind,
     scope,
     payload,
-  }
+  })
   self.next_seq = self.next_seq + 1L
   self.history_.push(event)
   while self.history_.length() > self.capacity {
@@ -80,7 +149,7 @@ pub fn BoardEventHub::publish(
   for client in self.clients {
     client.enqueue(@protocol.Event(event), event.seq)
   }
-  event
+  board_event_detached(event)
 }
 
 ///|
@@ -108,9 +177,9 @@ fn BoardSubscription::enqueue(
 /// Registration computes the explicit bootstrap plan atomically: there is
 /// no suspension point, initial replay does not consume mailbox capacity
 /// and no snapshot is ever fabricated here. A `SnapshotRequired` plan is
-/// fulfilled by the caller — the runtime builds the authoritative composite
+/// fulfilled by the caller — the backend builds the authoritative composite
 /// through the coordinator and installs it with `install_snapshot`.
-pub fn BoardEventHub::subscribe(
+fn BoardEventHub::subscribe(
   self : BoardEventHub,
   last_seq : Int64,
   has_board_snapshot : Bool,
@@ -154,14 +223,14 @@ pub fn BoardSubscription::install_snapshot(
   frame : @protocol.BoardSnapshot,
 ) -> Unit {
   self.baseline_seq = frame.last_seq
-  self.initial_frames = [@protocol.Snapshot(frame)]
+  self.initial_frames = [@protocol.Snapshot(board_snapshot_detached(frame))]
 }
 
 ///|
 pub fn BoardSubscription::initial(
   self : BoardSubscription,
 ) -> Array[@protocol.BoardServerFrame] {
-  self.initial_frames.copy()
+  self.initial_frames.map(board_frame_detached)
 }
 
 ///|
@@ -205,13 +274,13 @@ pub async fn BoardSubscription::next(
     }
     let frame = self.resync_required().unwrap_or(frame)
     if !board_stale_frame(self, frame) {
-      return frame
+      return board_frame_detached(frame)
     }
   }
 }
 
 ///|
-pub fn BoardEventHub::unsubscribe(
+fn BoardEventHub::unsubscribe(
   self : BoardEventHub,
   client : BoardSubscription,
 ) -> Unit {
@@ -228,37 +297,82 @@ pub fn BoardEventHub::unsubscribe(
 }
 
 ///|
-pub fn BoardEventHub::subscriber_count(self : BoardEventHub) -> Int {
+fn BoardEventHub::subscriber_count(self : BoardEventHub) -> Int {
   self.clients.length()
 }
 
 ///|
-pub fn BoardEventHub::current_seq(self : BoardEventHub) -> Int64 {
+fn BoardEventHub::current_seq(self : BoardEventHub) -> Int64 {
   self.next_seq - 1L
 }
 
 ///|
-pub fn BoardEventHub::history(
+fn BoardEventHub::history(
   self : BoardEventHub,
 ) -> Array[@protocol.BoardWireEvent] {
-  self.history_.copy()
+  self.history_.map(board_event_detached)
 }
 
 ///|
-pub fn BoardEventHub::history_since(
+fn BoardEventHub::history_since(
   self : BoardEventHub,
   after_seq : Int64,
 ) -> Array[@protocol.BoardWireEvent] {
-  self.history_.filter(event => event.seq > after_seq)
+  self.history_.filter(event => event.seq > after_seq).map(board_event_detached)
 }
 
 ///|
 /// Retained events up to and including `through_seq`: the contiguous
 /// retained tail a composite bootstrap extends with the live frames after
 /// its stream boundary.
-pub fn BoardEventHub::history_through(
+fn BoardEventHub::history_through(
   self : BoardEventHub,
   through_seq : Int64,
 ) -> Array[@protocol.BoardWireEvent] {
-  self.history_.filter(event => event.seq <= through_seq)
+  self.history_
+  .filter(event => event.seq <= through_seq)
+  .map(board_event_detached)
+}
+
+///|
+/// One application writer. The overflow watcher cancels and joins an
+/// in-flight send before teardown, including while a large bootstrap is
+/// being written.
+#warnings("-unused_value")
+pub async fn BoardSubscription::pump(
+  self : BoardSubscription,
+  send : async (@protocol.BoardServerFrame) -> Unit,
+) -> Unit {
+  let mut writing = false
+  @async.any([
+    () => {
+      for frame in self.initial_frames {
+        if self.dirty_seq is Some(_) {
+          return
+        }
+        writing = true
+        send(board_frame_detached(frame))
+        writing = false
+      }
+      for ;; {
+        let frame = self.next()
+        if self.dirty_seq is Some(_) {
+          return
+        }
+        writing = true
+        send(frame)
+        writing = false
+      }
+    },
+    () => self.overflow.get(),
+  ])
+  // A cancelled fragmented WebSocket write cannot safely start another
+  // message. In that case close immediately; otherwise resync is best effort.
+  if !writing {
+    if self.resync_required() is Some(frame) {
+      @async.with_timeout(1000, () => send(frame)) catch {
+        _ => ()
+      }
+    }
+  }
 }

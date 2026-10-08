@@ -32,7 +32,7 @@ fn board_coordinator_error_code(
 }
 
 ///|
-async fn BoardRuntime::command_revision(self : BoardRuntime) -> Int64? {
+async fn BoardBackend::command_revision(self : BoardBackend) -> Int64? {
   match self.coordinator.revision() {
     Ok(revision) => Some(revision)
     Err(_) => None
@@ -43,8 +43,8 @@ async fn BoardRuntime::command_revision(self : BoardRuntime) -> Int64? {
 /// command_id is correlation only, not a durable idempotency key. A lost
 /// response does not undo a commit; clients must refresh authoritative state
 /// rather than automatically retrying a mutation.
-pub async fn BoardRuntime::handle_command(
-  self : BoardRuntime,
+pub async fn BoardBackend::handle_command(
+  self : BoardBackend,
   wire : @protocol.BoardClientCommand,
 ) -> @protocol.BoardCommandResult {
   let command = match @protocol.decode_board_command(wire, (self.now_ms)()) {

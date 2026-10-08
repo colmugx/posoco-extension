@@ -1,4 +1,7 @@
 ///|
+/// Runtime lifecycle tests: presentation ownership only. The backend is
+/// exercised headless in `src/backend`; here the fake adapters prove the
+/// runtime binds, opens, closes and settles exactly once.
 priv struct FakeBoardServer {
   mut binds : Int
   mut closes : Int
@@ -56,78 +59,87 @@ impl BrowserOpener for FakeBrowserOpener with fn open(self, url) {
 }
 
 ///|
-test "event hub mints monotonic seq" {
-  let hub = BoardEventHub::BoardEventHub(capacity=8)
-  let first = hub.publish(
-    board_revision=0L,
-    kind="turn.started",
-    payload=Json::null(),
-  )
-  let second = hub.publish(
-    board_revision=0L,
-    kind="assistant.delta",
-    payload=Json::string("x"),
-  )
-  assert_eq(first.seq, 1L)
-  assert_eq(second.seq, 2L)
-  assert_eq(hub.current_seq(), 2L)
+fn lifecycle_server() -> FakeBoardServer {
+  { binds: 0, closes: 0, alive: false, browser: None, }
 }
 
 ///|
-test "event seq advances independently from board revision" {
-  let hub = BoardEventHub::BoardEventHub(capacity=8)
-  let a = hub.publish(
-    board_revision=7L,
-    kind="assistant.delta",
-    payload=Json::string("a"),
-  )
-  let b = hub.publish(
-    board_revision=7L,
-    kind="assistant.delta",
-    payload=Json::string("b"),
-  )
-  let c = hub.publish(
-    board_revision=8L,
-    kind="task.transitioned",
-    payload=Json::null(),
-  )
-  assert_eq(a.seq, 1L)
-  assert_eq(b.seq, 2L)
-  assert_eq(c.seq, 3L)
-  assert_eq(a.board_revision, 7L)
-  assert_eq(b.board_revision, 7L)
-  assert_eq(c.board_revision, 8L)
+fn lifecycle_opener() -> FakeBrowserOpener {
+  { opened: [], }
 }
 
 ///|
-test "event hub evicts oldest events at capacity" {
-  let hub = BoardEventHub::BoardEventHub(capacity=2)
-  for i in 0..<3 {
-    let _ = hub.publish(
-      board_revision=0L,
-      kind="tick",
-      payload=Json::number(i.to_double()),
-    )
+/// Standard create wire command; the backend owns `at_ms`, so it is never
+/// sent.
+fn wire_create(
+  command_id : String,
+  id : String,
+  rev : Int64,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    name: "board.task.create",
+    expected_revision: rev,
+    args: {
+      "id": id,
+      "title": "task \{id}",
+      "description": "",
+      "priority": "normal",
+      "definition_of_done": [],
+      "dependencies": [],
+    },
   }
-  let history = hub.history()
-  assert_eq(history.length(), 2)
-  assert_eq(history[0].seq, 2L)
-  assert_eq(history[1].seq, 3L)
-  let replay = hub.history_since(2L)
-  assert_eq(replay.length(), 1)
-  assert_eq(replay[0].seq, 3L)
+}
+
+///|
+async test "attach serves the headless backend with zero binds and opens" {
+  let server = lifecycle_server()
+  let opener = lifecycle_opener()
+  let runtime = BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
+  @async.with_task_group(group => {
+    runtime.attach(group)
+    // No presentation lifecycle ran, but the headless control plane is
+    // fully served through the runtime's backend accessor.
+    assert_eq(server.binds, 0)
+    assert_eq(opener.opened.length(), 0)
+    assert_eq(runtime.status(), Stopped)
+    let accepted = runtime
+      .backend()
+      .handle_command(wire_create("headless-1", "t1", 0L))
+    assert_eq(accepted.accepted, true)
+    assert_eq(accepted.current_revision, Some(1L))
+    let frame = runtime.backend().bootstrap_snapshot().unwrap()
+    assert_eq(frame.last_seq, 1L)
+    assert_eq(frame.board_revision, 1L)
+    let client = runtime.backend().subscribe(1L, true)
+    assert_eq(client.plan, Live)
+    runtime.backend().unsubscribe(client)
+    let tick = runtime
+      .backend()
+      .publish_telemetry(
+        board_revision=0L,
+        kind="runtime.warning",
+        payload=Json::null(),
+      )
+    assert_eq(tick.seq, 2L)
+    assert_eq(runtime.backend().subscriber_count(), 0)
+    runtime.shutdown()
+  })
 }
 
 ///|
 async test "ensure_server is idempotent under concurrent opens" {
-  let server : FakeBoardServer = {
-    binds: 0,
-    closes: 0,
-    alive: false,
-    browser: None,
-  }
-  let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server~, opener~)
+  let server = lifecycle_server()
+  let opener = lifecycle_opener()
+  let runtime = BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
   @async.with_task_group(group => {
     runtime.attach(group)
     let results = @async.all([
@@ -141,19 +153,23 @@ async test "ensure_server is idempotent under concurrent opens" {
     assert_eq(opener.opened.length(), 2)
     runtime.close_server()
     assert_eq(server.closes, 1)
+    // close_server never shuts the backend down: headless service continues.
+    assert_true(
+      runtime.backend().handle_command(wire_create("after-close", "t1", 0L)).accepted,
+    )
+    runtime.shutdown()
   })
 }
 
 ///|
 async test "close is idempotent and later open rebinds" {
-  let server : FakeBoardServer = {
-    binds: 0,
-    closes: 0,
-    alive: false,
-    browser: None,
-  }
-  let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server~, opener~)
+  let server = lifecycle_server()
+  let opener = lifecycle_opener()
+  let runtime = BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
   @async.with_task_group(group => {
     runtime.attach(group)
     assert_true(runtime.ensure_server() is Ok(_))
@@ -168,108 +184,18 @@ async test "close is idempotent and later open rebinds" {
 
 ///|
 async test "server start requires host task-group ownership" {
-  let server : FakeBoardServer = {
-    binds: 0,
-    closes: 0,
-    alive: false,
-    browser: None,
-  }
-  let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server~, opener~)
+  let server = lifecycle_server()
+  let opener = lifecycle_opener()
+  let runtime = BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
   match runtime.ensure_server() {
     Err(message) => assert_true(message.contains("attach"))
     Ok(_) => fail("unattached runtime must not create an orphan server")
   }
   assert_eq(server.binds, 0)
-}
-
-///|
-fn runtime_create(id : String, rev : Int64) -> @domain.BoardCommand {
-  @domain.BoardCommand::CreateTask(
-    id=@domain.BoardTaskId::BoardTaskId(id),
-    title="task \{id}",
-    description="",
-    priority=@domain.Normal,
-    definition_of_done=[],
-    dependencies=[],
-    at_ms=1000L,
-    expected_revision=rev,
-  )
-}
-
-///|
-async test "runtime streams committed domain events into the shared hub" {
-  let server : FakeBoardServer = {
-    binds: 0,
-    closes: 0,
-    alive: false,
-    browser: None,
-  }
-  let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server~, opener~)
-  // Before attach the domain is unreachable, like the server worker.
-  assert_true(
-    runtime.coordinator.submit(command=runtime_create("t1", 0L))
-    is Err(NotAttached),
-  )
-  @async.with_task_group(group => {
-    runtime.attach(group)
-    // Loading is asynchronous; readiness gates every domain API use.
-    assert_true(runtime.coordinator.wait_ready() is Ok(_))
-    assert_eq(runtime.current_seq(), 0L)
-    assert_eq(runtime.coordinator.stream_cursor(), 0L)
-    let events = runtime.coordinator.submit(command=runtime_create("t1", 0L))
-    assert_eq(events.unwrap().length(), 1)
-    // The commit projected into the shared hub with the committed revision.
-    assert_eq(runtime.current_seq(), 1L)
-    assert_eq(runtime.coordinator.stream_cursor(), 1L)
-    let streamed = runtime.event_history()
-    assert_eq(streamed.length(), 1)
-    assert_eq(streamed[0].seq, 1L)
-    assert_eq(streamed[0].board_revision, 1L)
-    assert_eq(streamed[0].kind, "board.task.created")
-    assert_eq(streamed[0].scope, None)
-    assert_eq(runtime.coordinator.revision().unwrap(), 1L)
-    // Telemetry shares the sequence space but never moves the revision.
-    let tick = runtime.publish_telemetry(
-      board_revision=0L,
-      kind="tick",
-      payload=Json::null(),
-    )
-    assert_eq(tick.seq, 2L)
-    assert_eq(runtime.coordinator.revision().unwrap(), 1L)
-    // Repeated attach is idempotent for the coordinator and the hook.
-    runtime.attach(group)
-    let _ = runtime.coordinator.submit(command=runtime_create("t2", 1L))
-    assert_eq(runtime.coordinator.revision().unwrap(), 2L)
-    assert_eq(runtime.current_seq(), 3L)
-    assert_eq(runtime.coordinator.stream_cursor(), 3L)
-    runtime.shutdown()
-  })
-  // Shutdown closes coordinator admission...
-  assert_true(runtime.coordinator.revision() is Err(Closed))
-  assert_true(
-    runtime.coordinator.submit(command=runtime_create("t4", 2L)) is Err(Closed),
-  )
-  // ...and a fresh attach restores the runtime's durable board instead of
-  // starting over: two committed tasks, an intact hub sequence and the
-  // stream cursor reading the live hub head.
-  @async.with_task_group(group => {
-    runtime.attach(group)
-    assert_true(runtime.coordinator.wait_ready() is Ok(_))
-    assert_eq(runtime.coordinator.revision().unwrap(), 2L)
-    assert_eq(runtime.coordinator.stream_cursor(), 3L)
-    assert_eq(runtime.coordinator.tasks().unwrap().length(), 2)
-    let _ = runtime.coordinator.submit(command=runtime_create("t4", 2L))
-    assert_eq(runtime.coordinator.revision().unwrap(), 3L)
-    assert_eq(runtime.current_seq(), 4L)
-    assert_eq(runtime.coordinator.stream_cursor(), 4L)
-    // The authoritative bootstrap answers the exact hub boundary it read.
-    let frame = runtime.bootstrap_snapshot().unwrap()
-    assert_eq(frame.last_seq, 4L)
-    assert_eq(frame.board_revision, 3L)
-    runtime.shutdown()
-  })
 }
 
 ///|
@@ -318,95 +244,35 @@ impl BoardWebServer for SlowStopServer with fn last_error(_self) {
 ///|
 async test "runtime shutdown cleanup completes even when cancelled" {
   let server : SlowStopServer = { closes: 0, alive: false, }
-  let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(server~, opener~)
+  let opener = lifecycle_opener()
+  let runtime = BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
   @async.with_task_group(group => {
     runtime.attach(group)
-    assert_true(runtime.coordinator.wait_ready() is Ok(_))
-    let _ = runtime.coordinator.submit(command=runtime_create("t1", 0L))
+    assert_true(
+      runtime.backend().handle_command(wire_create("t1", "t1", 0L)).accepted,
+    )
     assert_true(runtime.ensure_server() is Ok(_))
     let task = group.spawn(() => runtime.shutdown())
     // Cancel while the teardown is parked in settle_server_task's bounded
     // wait (the fake run resists cancellation for 200ms): the protected
-    // cleanup must still close the listener and shut the coordinator down.
+    // cleanup must still close the listener and shut the backend down.
     @async.sleep(10)
     task.cancel()
     let _ = task.wait() catch { _ => () }
     assert_eq(server.closes, 1)
     assert_false(server.alive)
-    assert_true(runtime.coordinator.revision() is Err(Closed))
-    assert_true(
-      runtime.coordinator.submit(command=runtime_create("t2", 1L))
-      is Err(Closed),
+    let closed = runtime.backend().handle_command(wire_create("t2", "t2", 1L))
+    assert_false(closed.accepted)
+    assert_eq(closed.error, Some("board_unavailable"))
+    assert_eq(closed.current_revision, None)
+    assert_eq(
+      runtime.backend().bootstrap_snapshot(),
+      Err("snapshot_unavailable"),
     )
-  })
-}
-
-///|
-/// Seed one committed board through the same codec the coordinator restores
-/// from. Lives in the runtime tests because the domain package cannot import
-/// the store package without a dependency cycle.
-async fn durable_seed() -> &@store.BoardStore {
-  let store : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore()
-  let created = @domain.BoardDomain::propose(
-    @domain.BoardState::BoardState(),
-    runtime_create("durable", 0L),
-  ).unwrap()
-  let snapshot = created.next_state.snapshot()
-  // The domain accepts exactly what the storage codec accepts.
-  let decoded = @store.decode_snapshot(
-    @store.encode_snapshot(snapshot).unwrap(),
-  ).unwrap()
-  assert_eq(decoded, snapshot)
-  assert_true(@domain.BoardState::from_snapshot(decoded) is Ok(_))
-  assert_eq(store.persist(snapshot, created.events), Ok(()))
-  store
-}
-
-///|
-async test "runtime loading restores its own store and stays isolated" {
-  let durable = durable_seed()
-  let server_a : FakeBoardServer = {
-    binds: 0,
-    closes: 0,
-    alive: false,
-    browser: None,
-  }
-  let opener_a : FakeBrowserOpener = { opened: [], }
-  let server_b : FakeBoardServer = {
-    binds: 0,
-    closes: 0,
-    alive: false,
-    browser: None,
-  }
-  let opener_b : FakeBrowserOpener = { opened: [], }
-  let restoring = BoardRuntime::with_adapters(
-    server=server_a,
-    opener=opener_a,
-    store=durable,
-  )
-  let isolated = BoardRuntime::with_adapters(server=server_b, opener=opener_b)
-  @async.with_task_group(group => {
-    restoring.attach(group)
-    isolated.attach(group)
-    assert_true(restoring.coordinator.wait_ready() is Ok(_))
-    assert_true(isolated.coordinator.wait_ready() is Ok(_))
-    // Each runtime loaded only its own store.
-    assert_eq(restoring.coordinator.revision().unwrap(), 1L)
-    assert_eq(restoring.coordinator.tasks().unwrap().length(), 1)
-    assert_eq(isolated.coordinator.revision().unwrap(), 0L)
-    assert_eq(isolated.coordinator.tasks().unwrap().length(), 0)
-    // Mutations stay inside their own runtime's board.
-    let _ = restoring.coordinator.submit(command=runtime_create("next", 1L))
-    assert_eq(restoring.coordinator.revision().unwrap(), 2L)
-    assert_eq(isolated.coordinator.revision().unwrap(), 0L)
-    let _ = isolated.coordinator.submit(command=runtime_create("t1", 0L))
-    assert_eq(isolated.coordinator.revision().unwrap(), 1L)
-    // Only the restoring runtime's commits reached the durable store.
-    let loaded = durable.load().unwrap().snapshot
-    assert_eq(loaded.revision, 2L)
-    assert_eq(loaded.tasks.length(), 2)
-    restoring.shutdown()
-    isolated.shutdown()
+    runtime.shutdown()
   })
 }

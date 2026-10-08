@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S3B2B2 runtime command handler and WebSocket commands on top of S3B2B1
+## Current status: S3C0 headless backend and standalone presentation boundary
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -13,7 +13,7 @@ history. S2B delivers that same sanitized history over authenticated native
 WebSockets, with bounded client mailboxes and reconnect replay. It does **not**
 persist Board domain state or execute Agent work.
 
-The native backend binds exactly `127.0.0.1:0`: the OS selects an available
+The native standalone Web server binds exactly `127.0.0.1:0`: the OS selects an available
 loopback port. Each listener instance receives a fresh 256-bit secret from the
 OS entropy source. The secret is process-local, never persisted and never
 returned by `/health`, `/api/bootstrap` or `board.status`. The browser
@@ -28,8 +28,38 @@ S1 routes are:
 - `/ws?token=...` — authenticated WebSocket upgrade;
 - `/?token=...` — bounded text-only diagnostics, not a product UI.
 
-The JavaScript target remains intentionally unsupported for the server;
-it still compiles against the same runtime abstraction.
+The JavaScript target remains intentionally unsupported for the standalone
+server and browser opener. The headless backend is fully usable on both native
+and JS.
+
+## Architecture boundary (S3C0)
+
+- **BoardBackend** = durable headless product service: Coordinator ownership,
+  persistence, commands, consistent snapshots, telemetry, history and subscriptions.
+- **BoardRuntime** = standalone presentation host composition: one backend,
+  Web server, browser opener and gated server lifecycle.
+- **BoardWebServer** = presentation transport adapter: HTTP/WebSocket framing,
+  security gates and connection lifetime, not Board mutation semantics.
+- **BrowserOpener** = standalone UX adapter, never part of the backend.
+
+Dependency arrows point from a consumer to its service:
+
+```text
+protocol / domain / store / coordinator
+                  ↑
+               backend
+                  ↑
+               runtime
+                  ↑
+            root extension
+```
+
+`backend` does not depend on `runtime`, HTTP, WebSocket, socket or process
+packages. It owns no listener, browser process or standalone server status.
+Embedded hosts may consume `BoardBackend` directly and do not need to start or
+open the standalone Web presentation. A web host or desktop host owns its own
+presentation lifecycle; a TUI standalone browser host keeps the existing
+`/board` workflow. No concrete host-product dependency is required.
 
 ## Host wiring
 
@@ -52,24 +82,51 @@ let agent = @posoco.Agent(
 })
 ```
 
-`attach(group)` owns the Board server supervisor and durable coordinator
-workers. It does not bind an Agent or grant `Capability::Tasks`; Agent binding
-and execution are introduced in a later stage.
+`attach(group)` attaches durable backend workers and prepares the standalone
+server supervisor. It does **not** bind a listener or open a browser, bind an
+Agent or grant `Capability::Tasks`.
 
-For custom native adapter injection, construct one hub and pass it to **both**
-the server and runtime. Their optional defaults allocate independent hubs;
-`with_adapters` does not inspect or replace a server's hub. The default factory
-already performs this shared wiring.
+For embedded use, construct and attach only the backend:
 
 ```mbt nocheck
-let hub = @runtime.BoardEventHub(capacity=4096, client_queue_depth=256)
-let server = @runtime.NativeBoardWebServer(hub~)
+let backend = @backend.BoardBackend(
+  store=@store.MemoryBoardStore(),
+  now_ms=() => 1234L,
+)
+@async.with_task_group(group => {
+  backend.attach(group)
+  // Consume handle_command, bootstrap_snapshot and subscriptions here.
+  backend.shutdown()
+})
+```
+
+A subscription is registered synchronously with `subscribe(last_seq,
+has_board_snapshot)`. Fulfil `SnapshotRequired` with `bootstrap_snapshot()` and
+`subscription.install_snapshot(snapshot)`; `Live` and `Replay` retain their
+existing cursor semantics. Consume `initial()` then `next()`, and unregister
+with `unsubscribe(subscription)` when the host connection ends. Use
+`enqueue_local(subscription, frame)` for connection-local responses, never to
+publish command results into stream history. `current_seq()` and
+`event_history()` expose read-only detached diagnostics.
+
+For custom native presentation adapters, inject one backend into the runtime:
+
+```mbt nocheck
+let backend = @backend.BoardBackend(event_buffer=4096, client_queue_depth=256)
+let server = @runtime.NativeBoardWebServer()
 let runtime = @runtime.BoardRuntime::with_adapters(
-  hub~,
+  backend~,
   server~,
   opener=@runtime.NativeBrowserOpener(),
 )
 ```
+
+`BoardRuntime::backend()` and `BoardExtension::backend()` expose the headless
+service without requiring callers to understand the standalone Web server.
+Before binding, the runtime installs the backend through the single
+`BoardWebServer::set_backend` seam. The native server refuses `bind()` with
+`"board backend not installed"` when no backend is installed; it never fabricates
+Board state.
 
 ## Commands
 
@@ -78,10 +135,13 @@ The extension contributes three commands:
 - `board.open` — alias `board` for slash-style hosts; lazily start/reuse the
   control plane and open/focus the browser page;
 - `board.status` — token-free control-plane status;
-- `board.close` — idempotently stop the current listener.
+- `board.close` — idempotently stop the current standalone listener, **not**
+  the backend. Headless commands, snapshots and subscriptions remain usable;
+  reopening the presentation shows their committed state.
 
-Lifecycle startup does not open a browser. Lifecycle shutdown closes the
-listener and settles supervised runtime work.
+Lifecycle startup does not open a browser. Final extension shutdown closes the
+standalone presentation first, then shuts down the backend and settles the
+remaining supervised host work.
 
 ## Wire protocol
 
@@ -94,7 +154,7 @@ counters: telemetry may advance `seq` without changing Board domain revision.
 ## Event projection (S2A)
 
 The manifest registers one synchronous Observer and no PipelineHook. Projection
-calls only `runtime.publish_telemetry`, always with `board_revision=0`; the hub
+calls only `backend.publish_telemetry`, always with `board_revision=0`; the hub
 owns monotonic `seq`. No server attachment or startup is needed to record events.
 `EventScope` IDs are explicitly copied into protocol-owned scope fields, without
 normalizing or guessing IDs. Missing scope stays absent, including during a run.
@@ -147,10 +207,9 @@ Agent execution. The existing S1 server lifecycle is unchanged.
 The first WebSocket message must be a v1 text `Hello`, within 5 seconds and
 8192 bytes. Cursors must be nonnegative JSON safe integers. Invalid Hello,
 command-first and unsupported versions receive a small `error` frame and
-close. Commands are answered through the command handler seam introduced in
-S3B2B2 (see below); a server without an installed handler keeps answering
-`accepted=false`, `error="unsupported_in_current_stage"` without a
-`current_revision`, and never mutates.
+close. Commands are answered by the installed backend with the S3B2B2
+semantics below. S3C0 replaces separate snapshot/command closures with backend
+binding; the native server without a backend refuses to bind.
 
 Subscription computes bootstrap and registers the live mailbox synchronously:
 
@@ -260,11 +319,11 @@ remain independent; WebSocket commands still answered
 `unsupported_in_current_stage` at this stage — S3B2B2 wires the runtime
 command handler below.
 
-## Runtime streaming and authoritative snapshots (S3B2B1)
+## Backend streaming and authoritative snapshots (S3B2B1, moved in S3C0)
 
-The runtime is the only place where the durable coordinator and the telemetry
+The backend is the only place where the durable coordinator and the telemetry
 hub meet; the hub never learns about the coordinator and the coordinator never
-learns about the hub. The runtime installs a synchronous `on_commit` hook that
+learns about the hub. The backend installs a synchronous `on_commit` hook that
 projects every committed domain event into the same hub through
 `@protocol.project_event`: the projected kind and payload carry the committed
 revision, `seq` stays zero (the hub mints the transport sequence) and `scope`
@@ -276,10 +335,10 @@ board leaves the stream untouched. Startup recovery streams its recovery
 mutations once, and an unchanged load streams nothing.
 
 `BoardCoordinator::stream_cursor` stores a callback that supplies the committed
-event-stream position on demand; the runtime configures it to the hub head, and
+event-stream position on demand; the backend configures it to the hub head, and
 `stream_snapshot` evaluates it synchronously on the loop while the committed
 state is copied, so the answered `BoardStreamSnapshot` boundary is the actual
-hub position — telemetry included — at query time. The runtime's
+hub position — telemetry included — at query time. The backend's
 `bootstrap_snapshot` composites the authoritative wire snapshot from that exact
 boundary: `last_seq` is `stream.stream_seq` (never a later hub head), the board
 payload comes from `@protocol.snapshot_to_json` and `events` are every retained
@@ -292,38 +351,28 @@ retries with a fresher boundary a bounded number of times and then answers
 `snapshot_unavailable`. No fabricated or empty snapshot is ever produced, and
 no store detail reaches the wire.
 
-`BoardEventHub::subscribe` registers synchronously and returns an explicit
+`BoardBackend::subscribe` registers synchronously and returns an explicit
 plan: `Live` (cursor at the head, including the empty `0/0` case), `Replay`
-(the contiguous retained suffix after the cursor) or `SnapshotRequired` (zero
-with events, a gap, an evicted history or a future cursor). The hub never
-fabricates a snapshot. The server fulfils `SnapshotRequired` through the
-runtime-installed snapshot provider — a `BoardWebServer` trait method with a
-no-op default — after registration, so live events accumulate in the mailbox
-while the coordinator settles; the installed snapshot carries the boundary and
-the subscription drops stale mailbox events at or before it. A server without
-a provider, like a failed bootstrap, answers one explicit `resync_required`
-frame (`snapshot_unavailable`) and closes. Client mailboxes still overflow to
-a terminal `client_queue_overflow` resync. WebSocket domain commands still
-answered `unsupported_in_current_stage` at this stage; S3B2B2 adds the
-runtime command handler below.
+(the contiguous retained suffix after the cursor) or `SnapshotRequired` (no
+Board baseline, zero with events, a gap, an evicted history or a future cursor).
+The hub never fabricates a snapshot. The server fulfils `SnapshotRequired`
+through `backend.bootstrap_snapshot()` after registration, so live events
+accumulate in the mailbox while the coordinator settles; the installed snapshot
+carries the boundary and the subscription drops stale mailbox events at or
+before it. A failed bootstrap answers one explicit `resync_required` frame
+(`snapshot_unavailable` or `history_overflow`) and closes. Client mailboxes
+still overflow to a terminal `client_queue_overflow` resync.
 
-## WebSocket commands and the runtime handler (S3B2B2)
+## WebSocket commands and the backend handler (S3B2B2, moved in S3C0)
 
-`BoardWebServer` gains `set_command_handler`, taking
-`async (BoardClientCommand) -> BoardCommandResult` with a no-op default —
-symmetric to `set_snapshot_provider`. The runtime installs exactly one
-handler, `BoardRuntime::handle_command`, while starting the control plane. A
-server without an installed handler — for example a custom native adapter
-wired without the runtime — keeps answering every decoded `Command` with
-`accepted=false`, `error="unsupported_in_current_stage"` and no
-`current_revision`; that fallback mutates and publishes nothing. The
-server only parses the frame and forwards: the decoded `Command` is handed to
-the installed handler and the returned `CommandResult` is enqueued through
-the existing bounded per-client mailbox. The result is delivered only on the
-issuing connection and never enters EventHub history; gate-protected
-lifecycle, Hello/security checks, snapshot bootstrap and overflow resync are
-unchanged. Every domain timestamp is stamped by the runtime from its own
-`now_ms` — clients never send clocks.
+`BoardWebServer::set_backend` installs one service before bind. The native
+server only parses and forwards: a decoded `Command` is handed to
+`BoardBackend::handle_command`, and the returned `CommandResult` is enqueued
+through `backend.enqueue_local` on the existing bounded per-client mailbox.
+The result is delivered only on the issuing connection and never enters EventHub
+history; gate-protected lifecycle, Hello/security checks, snapshot bootstrap
+and overflow resync are unchanged. Every domain timestamp is stamped by the
+backend from its own `now_ms` — clients never send clocks.
 
 Eight commands are accepted, each keyed by `expected_revision` for optimistic
 concurrency and using the stable `board.*` wire names decoded in `protocol`:
@@ -353,7 +402,7 @@ Enum strings are fixed: `priority` = `low | normal | high | critical`;
 `decision` = `approved | changes_requested` (never `pending`).
 `expected_revision` stays at frame top level, and `at_ms`, `revision`, persistence
 metadata and every other unknown args field are rejected. The pure decoder
-receives `at_ms` explicitly from the runtime's injected `now_ms` seam; it never
+receives `at_ms` explicitly from the backend's injected `now_ms` seam; it never
 reads a clock or duplicates domain validation.
 
 Fields are strict: unknown names and missing required fields are rejected,
@@ -412,9 +461,13 @@ scheduler.
 
 - root package: config, commands, lifecycle adapter and Observer projection;
 - `protocol`: UI/server-independent JSON wire types and codecs;
-- `runtime`: event history, server lifecycle, platform server/browser seams;
 - `domain`: pure Board task/attempt lifecycle, FSM and propose decisions;
-- `coordinator`: Fuwaroid single-writer owner of the committed Board state.
+- `store`: durable snapshot persistence and recovery adapters;
+- `coordinator`: Fuwaroid single-writer owner of the committed Board state;
+- `backend`: target-neutral headless service, command/snapshot composition and
+  authoritative stream ownership; no runtime or Web/process dependencies;
+- `runtime`: standalone server lifecycle and platform server/browser adapters,
+  consuming the backend through its narrow public API.
 
-Later stages add persistence, domain event delivery and Agent execution without
-changing these ownership boundaries.
+S3C0 changes ownership boundaries, not wire or durable mutation semantics.
+MoonBack migration, Rabbita/product UI and Agent execution remain out of scope.

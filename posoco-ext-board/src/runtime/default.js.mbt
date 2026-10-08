@@ -45,16 +45,20 @@ pub impl BrowserOpener for UnsupportedBrowserOpener with fn open(_self, _url) {
 }
 
 ///|
-/// JS default runtime: unsupported server/opener adapters over the default
-/// in-memory store. The control plane and the file store are native-only.
+/// JS default runtime: an unsupported server and opener over a fully usable
+/// headless backend. The control plane and the file store are native-only;
+/// commands, snapshots and subscriptions are not.
 pub fn default_board_runtime(
   event_buffer : Int,
   client_queue_depth? : Int = 256,
 ) -> BoardRuntime {
+  let backend = @backend.BoardBackend::BoardBackend(
+    event_buffer~,
+    client_queue_depth~,
+  )
   let server = UnsupportedBoardWebServer::UnsupportedBoardWebServer()
   let opener = UnsupportedBrowserOpener::{ }
-  let hub = BoardEventHub(capacity=event_buffer, client_queue_depth~)
-  BoardRuntime::with_adapters(hub~, server~, opener~)
+  BoardRuntime::with_adapters(backend~, server~, opener~)
 }
 
 ///|
@@ -65,8 +69,7 @@ pub extend UnsupportedBoardWebServer with BoardWebServer::{
   close,
   is_alive,
   last_error,
-  set_snapshot_provider,
-  set_command_handler,
+  set_backend,
 }
 
 ///|

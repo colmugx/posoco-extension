@@ -1,9 +1,8 @@
 ///|
-/// S3B2B2 native WebSocket E2E: real loopback sockets drive the command
-/// handler the runtime installs before bind, against the durable
-/// coordinator over memory and failure-injecting stores.
-
-///|
+/// S3C0 native WebSocket E2E: real loopback sockets drive the installed
+/// backend over the durable coordinator. The durable-truth assertions for
+/// the full command chain live in `src/backend` (headless); this file keeps
+/// the transport semantics: frame ordering, correlation, security, limits.
 /// Send one wire Command frame.
 async fn board_native_command(
   ws : @websocket.Conn,
@@ -58,25 +57,34 @@ fn board_native_create_args(id : String) -> Json {
 }
 
 ///|
+fn board_native_section(payload : Json, key : String) -> Json raise {
+  guard payload is Json::Object(fields) else {
+    fail("expected an object payload")
+  }
+  fields.get(key).unwrap_or(Json::null())
+}
+
+///|
+fn board_native_items(value : Json) -> Array[Json] raise {
+  guard value is Json::Array(items) else { fail("expected an array") }
+  items
+}
+
+///|
 /// Ready, bound runtime over an explicit store, wired to a real native
-/// server and shared hub through the adapter constructor.
+/// server and one backend through the adapter constructor. Readiness is
+/// gated by the authoritative bootstrap instead of coordinator internals.
 async fn board_native_runtime_store(
   group : @async.TaskGroup[Unit],
   store~ : &@store.BoardStore,
   now_ms~ : () -> Int64,
 ) -> BoardRuntime {
-  let hub = BoardEventHub()
-  let server = NativeBoardWebServer(hub~)
+  let backend = @backend.BoardBackend::BoardBackend(store~, now_ms~)
+  let server = NativeBoardWebServer::NativeBoardWebServer()
   let opener : FakeBrowserOpener = { opened: [], }
-  let runtime = BoardRuntime::with_adapters(
-    hub~,
-    server~,
-    opener~,
-    store~,
-    now_ms~,
-  )
+  let runtime = BoardRuntime::with_adapters(backend~, server~, opener~)
   runtime.attach(group)
-  assert_true(runtime.coordinator.wait_ready() is Ok(_))
+  assert_true(runtime.backend().bootstrap_snapshot() is Ok(_))
   assert_true(runtime.ensure_server() is Ok(_))
   runtime
 }
@@ -102,68 +110,6 @@ fn board_native_url(runtime : BoardRuntime) -> String raise {
 }
 
 ///|
-/// Failure-injecting store in the style of the durable coordinator tests:
-/// deterministic counters instead of timing. An uncertain persist leaves
-/// the attempted snapshot reloadable, modelling a write that crossed the
-/// visibility boundary before the error surfaced.
-priv struct CommandScriptStore {
-  /// Remaining pre-visibility persist failures.
-  mut fail_persists : Int
-  /// Remaining persists that report uncertain durability.
-  mut uncertain_persists : Int
-  /// Snapshot of a persist that may have landed despite the error.
-  mut landed : @domain.BoardStateSnapshot?
-  mut durable : @domain.BoardStateSnapshot
-  journal : Array[@store.JournalRecord]
-  mut persist_attempts : Int
-}
-
-///|
-fn CommandScriptStore::CommandScriptStore() -> CommandScriptStore {
-  {
-    fail_persists: 0,
-    uncertain_persists: 0,
-    landed: None,
-    durable: @store.empty_snapshot(),
-    journal: [],
-    persist_attempts: 0,
-  }
-}
-
-///|
-impl @store.BoardStore for CommandScriptStore with fn load(self) {
-  let snapshot = match self.landed {
-    Some(snapshot) => snapshot
-    None => self.durable
-  }
-  Ok({ snapshot: snapshot.copy_detached(), journal: self.journal.copy(), })
-}
-
-///|
-impl @store.BoardStore for CommandScriptStore with fn persist(
-  self,
-  snapshot,
-  events,
-) {
-  self.persist_attempts = self.persist_attempts + 1
-  if self.fail_persists > 0 {
-    self.fail_persists = self.fail_persists - 1
-    return Err(@store.Injected(@store.TempWrite))
-  }
-  if self.uncertain_persists > 0 {
-    self.uncertain_persists = self.uncertain_persists - 1
-    self.landed = Some(snapshot.copy_detached())
-    return Err(@store.DurabilityUncertain("injected directory fsync loss"))
-  }
-  self.landed = None
-  self.durable = snapshot.copy_detached()
-  for event in events {
-    self.journal.push({ schema_version: 1, revision: snapshot.revision, event, })
-  }
-  Ok(())
-}
-
-///|
 async test "native create stamps deterministic server time and answers event then result" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
@@ -172,7 +118,7 @@ async test "native create stamps deterministic server time and answers event the
       let ws = @websocket.connect(url)
       defer ws.close()
       board_test_hello(ws, 0L, has_board_snapshot=true)
-      board_wait_clients(runtime.hub, 1)
+      board_wait_clients(runtime.backend(), 1)
       board_native_command(
         ws,
         "create-1",
@@ -216,7 +162,7 @@ async test "native create stamps deterministic server time and answers event the
       )
       assert_eq(runtime.event_history(), [event])
       ws.close()
-      board_wait_clients(runtime.hub, 0)
+      board_wait_clients(runtime.backend(), 0)
       // A fresh connection bootstraps from the durable baseline.
       let fresh = @websocket.connect(url)
       defer fresh.close()
@@ -261,7 +207,7 @@ async test "native command chain covers all eight names with ordered events" {
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
       board_test_hello(ws, 0L, has_board_snapshot=true)
-      board_wait_clients(runtime.hub, 1)
+      board_wait_clients(runtime.backend(), 1)
       let chain : Array[(String, String, Int64, Json, String)] = [
         (
           "chain-1",
@@ -341,20 +287,12 @@ async test "native command chain covers all eight names with ordered events" {
         )
       }
       assert_eq(runtime.current_seq(), 8L)
-      assert_eq(runtime.coordinator.revision(), Ok(8L))
-      let task = runtime.coordinator
-        .task(id=@domain.BoardTaskId::BoardTaskId("t1"))
-        .unwrap()
-        .unwrap()
-      assert_eq(task.title, "renamed t1")
-      assert_eq(task.stage, @domain.Refining)
-      assert_eq(task.updated_at_ms, 1234L)
-      let attempt = runtime.coordinator
-        .attempt(id=@domain.AttemptId::AttemptId("a1"))
-        .unwrap()
-        .unwrap()
-      assert_eq(attempt.status, @domain.Succeeded)
-      assert_eq(attempt.review, Some(@domain.Approved))
+      // The durable truth of the whole chain is asserted headless in
+      // src/backend; over the wire the committed revision 8 and the
+      // authoritative snapshot carry it.
+      let snapshot = runtime.backend().bootstrap_snapshot().unwrap()
+      assert_eq(snapshot.last_seq, 8L)
+      assert_eq(snapshot.board_revision, 8L)
       runtime.shutdown()
     })
   })
@@ -372,7 +310,7 @@ async test "native two clients conflict then fresh revision retry succeeds" {
       let ws_b = @websocket.connect(url)
       defer ws_b.close()
       board_test_hello(ws_b, 0L, has_board_snapshot=true)
-      board_wait_clients(runtime.hub, 2)
+      board_wait_clients(runtime.backend(), 2)
       board_native_command(
         ws_a,
         "a-create",
@@ -418,13 +356,11 @@ async test "native two clients conflict then fresh revision retry succeeds" {
         current_revision: Some(2L),
       })
       assert_eq(board_test_frame(ws_a), @protocol.Event(retried))
-      assert_eq(runtime.coordinator.revision(), Ok(2L))
-      let task = runtime.coordinator
-        .task(id=@domain.BoardTaskId::BoardTaskId("t1"))
-        .unwrap()
-        .unwrap()
-      assert_eq(task.stage, @domain.Refining)
-      assert_eq(task.updated_at_ms, 1234L)
+      let snapshot = runtime.backend().bootstrap_snapshot().unwrap()
+      assert_eq(snapshot.board_revision, 2L)
+      let board = board_native_section(snapshot.payload, "board")
+      let task = board_native_items(board_native_section(board, "tasks"))[0]
+      assert_eq(board_native_section(task, "stage"), Json::string("refining"))
       runtime.shutdown()
     })
   })
@@ -438,7 +374,7 @@ async test "native invalid commands answer and keep the socket alive" {
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
       board_test_hello(ws, 0L, has_board_snapshot=true)
-      board_wait_clients(runtime.hub, 1)
+      board_wait_clients(runtime.backend(), 1)
       board_native_command(ws, "bad-name", "board.task.destroy", 0L, {})
       assert_eq(board_native_result(ws, "bad-name"), {
         command_id: "bad-name",
@@ -487,7 +423,10 @@ async test "native invalid commands answer and keep the socket alive" {
       })
       assert_eq(runtime.current_seq(), 0L)
       assert_eq(runtime.event_history(), [])
-      assert_eq(runtime.coordinator.revision(), Ok(0L))
+      assert_eq(
+        runtime.backend().bootstrap_snapshot().unwrap().board_revision,
+        0L,
+      )
       // The same socket keeps serving valid commands.
       board_native_command(
         ws,
@@ -515,7 +454,7 @@ async test "native command_id correlates twice without deduplication" {
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
       board_test_hello(ws, 0L, has_board_snapshot=true)
-      board_wait_clients(runtime.hub, 1)
+      board_wait_clients(runtime.backend(), 1)
       board_native_command(
         ws,
         "same-id",
@@ -551,11 +490,78 @@ async test "native command_id correlates twice without deduplication" {
         error: None,
         current_revision: Some(2L),
       })
-      assert_eq(runtime.coordinator.revision(), Ok(2L))
-      assert_eq(runtime.coordinator.tasks().unwrap().length(), 2)
+      let snapshot = runtime.backend().bootstrap_snapshot().unwrap()
+      assert_eq(snapshot.board_revision, 2L)
+      let board = board_native_section(snapshot.payload, "board")
+      assert_eq(
+        board_native_items(board_native_section(board, "tasks")).length(),
+        2,
+      )
       runtime.shutdown()
     })
   })
+}
+
+///|
+/// Failure-injecting store in the style of the durable coordinator tests:
+/// deterministic counters instead of timing. An uncertain persist leaves
+/// the attempted snapshot reloadable, modelling a write that crossed the
+/// visibility boundary before the error surfaced.
+priv struct CommandScriptStore {
+  /// Remaining pre-visibility persist failures.
+  mut fail_persists : Int
+  /// Remaining persists that report uncertain durability.
+  mut uncertain_persists : Int
+  /// Snapshot of a persist that may have landed despite the error.
+  mut landed : @domain.BoardStateSnapshot?
+  mut durable : @domain.BoardStateSnapshot
+  journal : Array[@store.JournalRecord]
+  mut persist_attempts : Int
+}
+
+///|
+fn CommandScriptStore::CommandScriptStore() -> CommandScriptStore {
+  {
+    fail_persists: 0,
+    uncertain_persists: 0,
+    landed: None,
+    durable: @store.empty_snapshot(),
+    journal: [],
+    persist_attempts: 0,
+  }
+}
+
+///|
+impl @store.BoardStore for CommandScriptStore with fn load(self) {
+  let snapshot = match self.landed {
+    Some(snapshot) => snapshot
+    None => self.durable
+  }
+  Ok({ snapshot: snapshot.copy_detached(), journal: self.journal.copy(), })
+}
+
+///|
+impl @store.BoardStore for CommandScriptStore with fn persist(
+  self,
+  snapshot,
+  events,
+) {
+  self.persist_attempts = self.persist_attempts + 1
+  if self.fail_persists > 0 {
+    self.fail_persists = self.fail_persists - 1
+    return Err(@store.Injected(@store.TempWrite))
+  }
+  if self.uncertain_persists > 0 {
+    self.uncertain_persists = self.uncertain_persists - 1
+    self.landed = Some(snapshot.copy_detached())
+    return Err(@store.DurabilityUncertain("injected directory fsync loss"))
+  }
+  self.landed = None
+  self.durable = snapshot.copy_detached()
+  for event in events {
+    self.journal.push({ schema_version: 1, revision: snapshot.revision, event, })
+  }
+  Ok(())
 }
 
 ///|
@@ -568,7 +574,7 @@ async test "native pre-visibility persistence failure mints no event and moves n
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
       board_test_hello(ws, 0L, has_board_snapshot=true)
-      board_wait_clients(runtime.hub, 1)
+      board_wait_clients(runtime.backend(), 1)
       board_native_command(
         ws,
         "doomed",
@@ -585,10 +591,13 @@ async test "native pre-visibility persistence failure mints no event and moves n
       })
       assert_eq(runtime.current_seq(), 0L)
       assert_eq(runtime.event_history(), [])
-      assert_eq(runtime.coordinator.revision(), Ok(0L))
+      assert_eq(
+        runtime.backend().bootstrap_snapshot().unwrap().board_revision,
+        0L,
+      )
       assert_eq(store.persist_attempts, 1)
       assert_eq(store.journal.length(), 0)
-      // The coordinator stays ready: the retried write commits.
+      // The backend stays ready: the retried write commits.
       board_native_command(
         ws,
         "retried",
@@ -601,7 +610,6 @@ async test "native pre-visibility persistence failure mints no event and moves n
       }
       assert_eq(created.seq, 1L)
       assert_true(board_native_result(ws, "retried").accepted)
-      assert_eq(runtime.coordinator.revision(), Ok(1L))
       assert_eq(store.journal.length(), 1)
       runtime.shutdown()
     })
@@ -618,7 +626,7 @@ async test "native uncertain durability reloads the candidate then answers false
       let ws = @websocket.connect(board_native_url(runtime))
       defer ws.close()
       board_test_hello(ws, 0L, has_board_snapshot=true)
-      board_wait_clients(runtime.hub, 1)
+      board_wait_clients(runtime.backend(), 1)
       board_native_command(
         ws,
         "uncertain",
@@ -640,14 +648,11 @@ async test "native uncertain durability reloads the candidate then answers false
         error: Some("durability_uncertain"),
         current_revision: Some(1L),
       })
-      assert_eq(runtime.coordinator.revision(), Ok(1L))
-      assert_eq(
-        runtime.coordinator
-        .task(id=@domain.BoardTaskId::BoardTaskId("t1"))
-        .unwrap()
-        .unwrap().created_at_ms,
-        1234L,
-      )
+      let snapshot = runtime.backend().bootstrap_snapshot().unwrap()
+      assert_eq(snapshot.board_revision, 1L)
+      let board = board_native_section(snapshot.payload, "board")
+      let task = board_native_items(board_native_section(board, "tasks"))[0]
+      assert_eq(board_native_section(task, "created_at_ms"), Json::number(1234))
       assert_eq(runtime.current_seq(), 1L)
       assert_eq(store.persist_attempts, 1)
       runtime.shutdown()

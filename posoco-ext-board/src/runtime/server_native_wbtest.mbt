@@ -6,7 +6,9 @@ async fn board_http_get(url : String) -> (Int, String) {
 
 ///|
 async test "native server binds loopback random port and guards bootstrap" {
-  let server = NativeBoardWebServer::NativeBoardWebServer()
+  let server = NativeBoardWebServer::NativeBoardWebServer(
+    backend=Some(@backend.BoardBackend::BoardBackend()),
+  )
   let web : &BoardWebServer = server
   @async.with_task_group(group => {
     let endpoint = match web.bind() {
@@ -76,7 +78,9 @@ async test "native server binds loopback random port and guards bootstrap" {
 
 ///|
 async test "native close is idempotent and rebind mints fresh secret" {
-  let server = NativeBoardWebServer::NativeBoardWebServer()
+  let server = NativeBoardWebServer::NativeBoardWebServer(
+    backend=Some(@backend.BoardBackend::BoardBackend()),
+  )
   let web : &BoardWebServer = server
   @async.with_task_group(group => {
     let first = match web.bind() {
@@ -104,85 +108,126 @@ async test "native close is idempotent and rebind mints fresh secret" {
 }
 
 ///|
-async test "native command seam defaults to unsupported and serves installed handler" {
+async test "native server refuses to bind until a backend is installed and then serves it" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let hub = BoardEventHub()
-      let server = NativeBoardWebServer(hub~)
-      let endpoint = match server.bind() {
+      let server = NativeBoardWebServer::NativeBoardWebServer()
+      let web : &BoardWebServer = server
+      // Presentation plumbing without a backend must not serve anything.
+      assert_eq(web.bind(), Err("board backend not installed"))
+      let backend = @backend.BoardBackend::BoardBackend()
+      web.set_backend(backend)
+      let endpoint = match web.bind() {
         Ok(value) => value
-        Err(_) => fail("bind failed")
+        Err(_) => fail("bind failed with an installed backend")
       }
       defer server.close()
       group.spawn_bg(no_wait=true, () => {
         let _ = server.run()
       })
       let token = board_query_param(server.browser_url().unwrap(), "token").unwrap()
-      let url = endpoint.ws_url() + "?token=" + token
-      // An isolated server without an installed handler still answers the
-      // stage-neutral rejection on the issuing connection; nothing is
-      // mutated and nothing is published into the hub stream.
-      let bare = @websocket.connect(url)
-      board_test_hello(bare, 0L, has_board_snapshot=true)
-      board_wait_clients(hub, 1)
-      bare.send_text(
-        @protocol.encode_client_frame(
-          @protocol.Command({
-            command_id: "bare-1",
-            name: "board.task.create",
-            expected_revision: 0L,
-            args: { "id": "t1", "title": "task" },
-          }),
-        ),
-      )
-      assert_eq(
-        board_test_frame(bare),
-        @protocol.CommandResult({
-          command_id: "bare-1",
-          accepted: false,
-          error: Some("unsupported_in_current_stage"),
-          current_revision: None,
-        }),
-      )
-      assert_eq(hub.current_seq(), 0L)
-      bare.close()
-      board_wait_clients(hub, 0)
-      // Installing a handler through the symmetric seam redirects the same
-      // path to the authoritative answer. The result stays scoped to this
-      // connection and the hub history remains untouched.
-      server.set_command_handler(fn(command) {
-        {
-          command_id: command.command_id,
-          accepted: true,
-          error: None,
-          current_revision: Some(command.expected_revision + 1L),
-        }
-      })
-      let served = @websocket.connect(url)
-      board_test_hello(served, 0L, has_board_snapshot=true)
-      board_wait_clients(hub, 1)
-      served.send_text(
+      let ws = @websocket.connect(endpoint.ws_url() + "?token=" + token)
+      defer ws.close()
+      board_test_hello(ws, 0L, has_board_snapshot=true)
+      board_wait_clients(backend, 1)
+      // The installed backend owns the authoritative answer; the rejection
+      // is a decoded-command verdict, not a stage-neutral stub.
+      ws.send_text(
         @protocol.encode_client_frame(
           @protocol.Command({
             command_id: "served-1",
-            name: "board.task.create",
+            name: "board.task.destroy",
             expected_revision: 7L,
             args: {},
           }),
         ),
       )
       assert_eq(
-        board_test_frame(served),
+        board_test_frame(ws),
         @protocol.CommandResult({
           command_id: "served-1",
-          accepted: true,
-          error: None,
-          current_revision: Some(8L),
+          accepted: false,
+          error: Some("invalid_command"),
+          current_revision: None,
         }),
       )
-      assert_eq(hub.current_seq(), 0L)
-      served.close()
-      board_wait_clients(hub, 0)
+      assert_eq(backend.current_seq(), 0L)
+      ws.close()
+      board_wait_clients(backend, 0)
+    })
+  })
+}
+
+///|
+async test "native close_server keeps the backend and reopens with fresh ws state" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let backend = @backend.BoardBackend::BoardBackend(now_ms=() => 1234L)
+      let server = NativeBoardWebServer::NativeBoardWebServer()
+      let opener : FakeBrowserOpener = { opened: [], }
+      let runtime = BoardRuntime::with_adapters(backend~, server~, opener~)
+      runtime.attach(group)
+      assert_true(runtime.backend().bootstrap_snapshot() is Ok(_))
+      let first = runtime.ensure_server().unwrap()
+      let first_url = board_native_url(runtime)
+      let ws = @websocket.connect(first_url)
+      defer ws.close()
+      board_test_hello(ws, 0L, has_board_snapshot=true)
+      board_wait_clients(backend, 1)
+      board_native_command(ws, "open-1", "board.task.create", 0L, {
+        "id": "t1",
+        "title": "task t1",
+        "description": "",
+        "priority": "normal",
+        "definition_of_done": [],
+        "dependencies": [],
+      })
+      guard board_test_frame(ws) is Event(created) else {
+        fail("expected the created event before the result")
+      }
+      assert_eq(created.seq, 1L)
+      assert_true(board_native_result(ws, "open-1").accepted)
+      ws.close()
+      board_wait_clients(backend, 0)
+      // close_server only tears the presentation down; the backend keeps
+      // serving headless commands and never loses its stream.
+      runtime.close_server()
+      assert_eq(runtime.status(), Stopped)
+      assert_false(server.is_alive())
+      let headless = backend.handle_command({
+        command_id: "headless-2",
+        name: "board.task.create",
+        expected_revision: 1L,
+        args: {
+          "id": "t2",
+          "title": "task t2",
+          "description": "",
+          "priority": "normal",
+          "definition_of_done": [],
+          "dependencies": [],
+        },
+      })
+      assert_eq(headless.accepted, true)
+      assert_eq(headless.current_revision, Some(2L))
+      assert_eq(backend.current_seq(), 2L)
+      // Reopening binds a fresh listener whose state is the committed one.
+      let second = runtime.ensure_server().unwrap()
+      assert_true(second.port != first.port)
+      let fresh = @websocket.connect(board_native_url(runtime))
+      defer fresh.close()
+      board_test_hello(fresh, 0L)
+      guard board_test_frame(fresh) is Snapshot(snapshot) else {
+        fail("the reopened listener must serve the committed state")
+      }
+      assert_eq(snapshot.last_seq, 2L)
+      assert_eq(snapshot.board_revision, 2L)
+      let board = board_native_section(snapshot.payload, "board")
+      assert_eq(
+        board_native_items(board_native_section(board, "tasks")).length(),
+        2,
+      )
+      runtime.close_server()
+      runtime.shutdown()
     })
   })
 }
