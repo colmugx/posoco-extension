@@ -59,12 +59,19 @@ fn update(
       match event {
         Opened =>
           (
-            model,
-            @websocket.send(
-              "board",
-              Text(@protocol.encode_client_frame(Hello(model.replica.hello()))),
-              failed=_ => emit(TransportFailed(generation)),
-            ),
+            {
+              ..model,
+              // An up-to-date baseline can reconnect with no replay frames.
+              // Opening a socket alone never establishes a fresh baseline.
+              connection: if model.replica.has_snapshot() {
+                Online
+              } else {
+                model.connection
+              },
+            },
+            @websocket.send("board", Text(hello_payload(model.replica)), failed=_ => {
+              emit(TransportFailed(generation))
+            }),
           )
         Closed(_) | Errored => reconnect(model, emit)
         Message(text) => {

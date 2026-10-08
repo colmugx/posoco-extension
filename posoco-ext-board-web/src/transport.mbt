@@ -24,6 +24,13 @@ fn connect(
 }
 
 ///|
+fn hello_payload(replica : @client.BoardReplica) -> String {
+  @protocol.encode_client_frame(Hello(replica.hello()))
+}
+
+///|
+/// Mount this browser-only application with Rabbita's `mount` entry point.
+/// The compiled `cmd/browser` entry demonstrates the DOM-dependent setup.
 pub fn app() -> @rabbita.App {
   let url = location_socket_url()
   @rabbita.new(() => {

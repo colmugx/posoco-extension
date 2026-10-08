@@ -1,4 +1,54 @@
 ///|
+test "opened sends baseline-aware Hello and empty replay settles reconnect" {
+  let empty = Model::empty(true)
+  let (opened, _) = update(empty, SocketEvent(0, Opened), test_emit, "unused")
+  assert_true(opened.connection is Connecting)
+  match @protocol.decode_client_frame(hello_payload(opened.replica)) {
+    Ok(Hello(hello)) => {
+      assert_eq(hello.last_seq, 0L)
+      assert_false(hello.has_board_snapshot)
+      assert_eq(hello.protocol_version, @protocol.protocol_version())
+    }
+    _ => fail("expected Hello")
+  }
+  let snapshot = @protocol.encode_server_frame(
+    Snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: 0L,
+      payload: {
+        "board": { "revision": 0, "tasks": [], "attempts": [] },
+        "events": [],
+      },
+    }),
+  )
+  let (online, _) = update(
+    opened,
+    SocketEvent(0, Message(snapshot)),
+    test_emit,
+    "unused",
+  )
+  let (waiting, _) = update(online, TransportFailed(0), test_emit, "unused")
+  let (retrying, _) = update(waiting, Retry(0), test_emit, "unused")
+  let (resumed, _) = update(
+    retrying,
+    SocketEvent(1, Opened),
+    test_emit,
+    "unused",
+  )
+  assert_true(resumed.connection is Online)
+  assert_true(resumed.replica.has_snapshot())
+  assert_eq(resumed.retry_attempt, 1)
+  match @protocol.decode_client_frame(hello_payload(resumed.replica)) {
+    Ok(Hello(hello)) => {
+      assert_eq(hello.last_seq, online.replica.last_seq())
+      assert_true(hello.has_board_snapshot)
+    }
+    _ => fail("expected baseline-aware Hello")
+  }
+}
+
+///|
 fn test_emit(_msg : Msg) -> @rabbita.Cmd {
   @rabbita.none
 }
