@@ -48,6 +48,13 @@ pub fn BoardExtension::runtime(self : BoardExtension) -> @runtime.BoardRuntime {
 }
 
 ///|
+/// The headless backend owned by the extension's runtime: commands,
+/// snapshots and subscriptions work without any server or browser.
+pub fn BoardExtension::backend(self : BoardExtension) -> @backend.BoardBackend {
+  self.runtime_.backend()
+}
+
+///|
 /// Bind Board-owned long-lived workers to the host's structured-concurrency
 /// scope. This is runtime ownership only; it does not bind an Agent.
 pub fn BoardExtension::attach(

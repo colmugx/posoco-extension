@@ -1,16 +1,16 @@
 ///|
-/// S3B2B1 runtime stream integration. The runtime is the only place where
+/// S3C0 backend stream integration. The backend is the only place where
 /// the durable coordinator and the telemetry hub meet: it installs a
 /// synchronous `on_commit` hook that projects every committed domain event
-/// into the shared hub, and it answers the coordinator's `stream_cursor`
+/// into the owned hub, and it answers the coordinator's `stream_cursor`
 /// with the live hub head, so every stream boundary is an actual hub
 /// position. The hub never learns about the coordinator and the
 /// coordinator never learns about the hub.
 
 ///|
-/// Commit hook installed on the runtime's coordinator: project every
+/// Commit hook installed on the backend's coordinator: project every
 /// committed event — kind, payload and committed revision, without scope —
-/// and publish it into the shared hub synchronously before the committing
+/// and publish it into the owned hub synchronously before the committing
 /// caller is answered. The hub mints the transport sequence; publishing
 /// never awaits and never fails.
 fn board_publish_commit(
@@ -45,8 +45,8 @@ let board_bootstrap_attempts : Int = 4
 /// at the boundary was evicted (or the boundary is zero with retained
 /// events): an invalid or fabricated snapshot is never composed; the
 /// bootstrap retries with a fresher boundary instead.
-fn BoardRuntime::build_composite(
-  self : BoardRuntime,
+fn BoardBackend::build_composite(
+  self : BoardBackend,
   stream : @coordinator.BoardStreamSnapshot,
 ) -> @protocol.BoardSnapshot? {
   let cursor = stream.stream_seq
@@ -75,10 +75,10 @@ fn BoardRuntime::build_composite(
 /// composites the committed board with the retained events of the answered
 /// boundary. Failures return a wire-safe resync reason: no fabricated
 /// snapshot, no store detail on the wire. Loading gates the bootstrap
-/// through `wait_ready`; telemetry and the `/board` control plane stay
-/// live meanwhile.
-pub async fn BoardRuntime::bootstrap_snapshot(
-  self : BoardRuntime,
+/// through `wait_ready`; telemetry and headless commands keep the rest of
+/// the backend live meanwhile.
+pub async fn BoardBackend::bootstrap_snapshot(
+  self : BoardBackend,
 ) -> Result[@protocol.BoardSnapshot, String] {
   match self.coordinator.wait_ready() {
     Ok(_) => ()

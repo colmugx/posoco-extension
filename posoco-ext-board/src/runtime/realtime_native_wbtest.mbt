@@ -27,11 +27,25 @@ async fn board_test_hello(
 }
 
 ///|
-async fn board_wait_clients(hub : BoardEventHub, count : Int) -> Unit {
+async fn board_wait_clients(
+  backend : @backend.BoardBackend,
+  count : Int,
+) -> Unit {
   @async.with_timeout(1000, () => {
-    while hub.subscriber_count() != count {
+    while backend.subscriber_count() != count {
       @async.sleep(1)
     }
+  })
+}
+
+///|
+/// Telemetry fixture: the only way tests mint stream events without a
+/// commit.
+fn board_backend_tick(
+  backend : @backend.BoardBackend,
+) -> @protocol.BoardWireEvent {
+  backend.publish_telemetry(board_revision=0L, kind="assistant.delta", payload={
+    "text": "[redacted]",
   })
 }
 
@@ -40,8 +54,6 @@ async test "native shared runtime hello live reconnect two three and command rej
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let runtime = default_board_runtime(8, client_queue_depth=2)
-      assert_eq(runtime.hub.capacity, 8)
-      assert_eq(runtime.hub.client_queue_depth, 2)
       runtime.attach(group)
       let endpoint = match runtime.ensure_server() {
         Ok(value) => value
@@ -81,7 +93,7 @@ async test "native shared runtime hello live reconnect two three and command rej
       )
       assert_eq(board_test_frame(ws), @protocol.Event(second))
       ws.close()
-      board_wait_clients(runtime.hub, 0)
+      board_wait_clients(runtime.backend(), 0)
       let third = runtime.publish_telemetry(
         board_revision=0L,
         kind="run.started",
@@ -114,7 +126,7 @@ async test "native shared runtime hello live reconnect two three and command rej
       assert_eq(runtime.current_seq(), 3L)
       assert_eq(runtime.event_history(), [first, second, third])
       runtime.shutdown()
-      assert_eq(runtime.hub.subscriber_count(), 0)
+      assert_eq(runtime.backend().subscriber_count(), 0)
     })
   })
 }
@@ -123,7 +135,10 @@ async test "native shared runtime hello live reconnect two three and command rej
 async test "native first command version cursor binary and oversized frames are rejected" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let server = NativeBoardWebServer()
+      let backend = @backend.BoardBackend::BoardBackend()
+      let server = NativeBoardWebServer::NativeBoardWebServer(
+        backend=Some(backend),
+      )
       let endpoint = match server.bind() {
         Ok(value) => value
         Err(_) => fail("bind failed")
@@ -162,8 +177,8 @@ async test "native first command version cursor binary and oversized frames are 
           fail("expected clear rejection")
         }
         assert_eq(actual, code)
-        assert_eq(server.hub.subscriber_count(), 0)
-        assert_eq(server.hub.current_seq(), 0L)
+        assert_eq(backend.subscriber_count(), 0)
+        assert_eq(backend.current_seq(), 0L)
         let closed = Some(ws.recv()) catch { _ => None }
         assert_true(closed is None)
       }
@@ -173,7 +188,7 @@ async test "native first command version cursor binary and oversized frames are 
       guard board_test_frame(binary) is Error(code="expected_text", ..) else {
         fail("binary Hello must be rejected")
       }
-      assert_eq(server.hub.subscriber_count(), 0)
+      assert_eq(backend.subscriber_count(), 0)
     })
   })
 }
@@ -182,12 +197,14 @@ async test "native first command version cursor binary and oversized frames are 
 async test "native retained snapshot security gates and connection cleanup" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let hub = BoardEventHub(capacity=2)
-      let server = NativeBoardWebServer(hub~)
+      let backend = @backend.BoardBackend::BoardBackend(event_buffer=2)
+      let server = NativeBoardWebServer::NativeBoardWebServer(
+        backend=Some(backend),
+      )
       let opener : FakeBrowserOpener = { opened: [], }
-      let runtime = BoardRuntime::with_adapters(hub~, server~, opener~)
+      let runtime = BoardRuntime::with_adapters(backend~, server~, opener~)
       runtime.attach(group)
-      assert_true(runtime.coordinator.wait_ready() is Ok(_))
+      assert_true(runtime.backend().bootstrap_snapshot() is Ok(_))
       let endpoint = match runtime.ensure_server() {
         Ok(value) => value
         Err(_) => fail("bind failed")
@@ -209,9 +226,9 @@ async test "native retained snapshot security gates and connection cleanup" {
         _ => None
       }
       assert_true(missing is None)
-      assert_eq(hub.subscriber_count(), 0)
+      assert_eq(backend.subscriber_count(), 0)
       for _ in 0..<4 {
-        let _ = hub_tick(hub)
+        let _ = board_backend_tick(backend)
       }
       for cursor in [0L, 1L, 4L, 99L] {
         let ws = @websocket.connect(url)
@@ -226,20 +243,20 @@ async test "native retained snapshot security gates and connection cleanup" {
         // composite: the committed board plus the retained event suffix.
         assert_eq(snapshot.payload, {
           "board": { "revision": Json::number(0), "tasks": [], "attempts": [] },
-          "events": hub.history().map(event => event.to_json()),
+          "events": backend.event_history().map(event => event.to_json()),
         })
         assert_false(snapshot.payload.stringify().contains(token))
         ws.close()
-        board_wait_clients(hub, 0)
+        board_wait_clients(backend, 0)
       }
       let current = @websocket.connect(url)
       defer current.close()
       board_test_hello(current, 4L, has_board_snapshot=true)
-      board_wait_clients(hub, 1)
-      let live = hub_tick(hub)
+      board_wait_clients(backend, 1)
+      let live = board_backend_tick(backend)
       assert_eq(board_test_frame(current), @protocol.Event(live))
       runtime.close_server()
-      board_wait_clients(hub, 0)
+      board_wait_clients(backend, 0)
       @async.with_timeout(1000, () => {
         while server.connections.length() != 0 {
           @async.sleep(1)
@@ -255,12 +272,14 @@ async test "native retained snapshot security gates and connection cleanup" {
 async test "native overflow sends resync closes and reset zero snapshots" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let hub = BoardEventHub(client_queue_depth=2)
-      let server = NativeBoardWebServer(hub~)
+      let backend = @backend.BoardBackend::BoardBackend(client_queue_depth=2)
+      let server = NativeBoardWebServer::NativeBoardWebServer(
+        backend=Some(backend),
+      )
       let opener : FakeBrowserOpener = { opened: [], }
-      let runtime = BoardRuntime::with_adapters(hub~, server~, opener~)
+      let runtime = BoardRuntime::with_adapters(backend~, server~, opener~)
       runtime.attach(group)
-      assert_true(runtime.coordinator.wait_ready() is Ok(_))
+      assert_true(runtime.backend().bootstrap_snapshot() is Ok(_))
       let endpoint = match runtime.ensure_server() {
         Ok(value) => value
         Err(_) => fail("bind failed")
@@ -277,9 +296,9 @@ async test "native overflow sends resync closes and reset zero snapshots" {
         fail("initial snapshot required before the live overflow burst")
       }
       assert_eq(initial_snapshot.last_seq, 0L)
-      board_wait_clients(hub, 1)
+      board_wait_clients(backend, 1)
       for _ in 0..<4 {
-        let _ = hub_tick(hub)
+        let _ = board_backend_tick(backend)
       }
       assert_eq(
         board_test_frame(ws),
@@ -287,7 +306,7 @@ async test "native overflow sends resync closes and reset zero snapshots" {
       )
       let closed = Some(ws.recv()) catch { _ => None }
       assert_true(closed is None)
-      board_wait_clients(hub, 0)
+      board_wait_clients(backend, 0)
       let reconnect = @websocket.connect(url)
       defer reconnect.close()
       board_test_hello(reconnect, 0L)
@@ -300,21 +319,56 @@ async test "native overflow sends resync closes and reset zero snapshots" {
       assert_eq(snapshot.board_revision, 0L)
       assert_eq(snapshot.payload, {
         "board": { "revision": Json::number(0), "tasks": [], "attempts": [] },
-        "events": hub.history().map(event => event.to_json()),
+        "events": backend.event_history().map(event => event.to_json()),
       })
       runtime.close_server()
-      board_wait_clients(hub, 0)
+      board_wait_clients(backend, 0)
       runtime.shutdown()
     })
   })
 }
 
 ///|
-async test "native overflow during provider await resyncs and never installs the snapshot" {
+/// Startup store whose load parks until released, so a test parks the
+/// backend's bootstrap at the durability boundary.
+priv struct GatedLoadStore {
+  entered : @aqueue.Queue[Unit]
+  release : @aqueue.Queue[Unit]
+}
+
+///|
+impl @store.BoardStore for GatedLoadStore with fn load(self) {
+  self.entered.put(())
+  self.release.get()
+  Ok({ snapshot: @store.empty_snapshot(), journal: [], })
+}
+
+///|
+impl @store.BoardStore for GatedLoadStore with fn persist(
+  _self,
+  _snapshot,
+  _events,
+) {
+  fail("empty startup must not persist")
+}
+
+///|
+async test "native overflow during bootstrap await resyncs and never installs the snapshot" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let hub = BoardEventHub(client_queue_depth=1)
-      let server = NativeBoardWebServer(hub~)
+      let store : GatedLoadStore = {
+        entered: @aqueue.Queue(kind=@aqueue.Blocking(1)),
+        release: @aqueue.Queue(kind=@aqueue.Blocking(1)),
+      }
+      let backend = @backend.BoardBackend::BoardBackend(
+        store~,
+        client_queue_depth=1,
+      )
+      let server = NativeBoardWebServer::NativeBoardWebServer(
+        backend=Some(backend),
+      )
+      backend.attach(group)
+      @async.with_timeout(1000, () => store.entered.get())
       let endpoint = match server.bind() {
         Ok(value) => value
         Err(_) => fail("bind failed")
@@ -324,36 +378,18 @@ async test "native overflow during provider await resyncs and never installs the
         let _ = server.run()
       })
       // One tick before connecting: Hello 0 plans SnapshotRequired.
-      let initial = hub_tick(hub)
-      let entered : @async.Queue[Unit] = @async.Queue(kind=@aqueue.Blocking(1))
-      let release : @async.Queue[Unit] = @async.Queue(kind=@aqueue.Blocking(1))
-      server.set_snapshot_provider(async fn() {
-        entered.put(())
-        release.get()
-        Ok({
-          protocol_version: @protocol.protocol_version(),
-          last_seq: 1L,
-          board_revision: 0L,
-          payload: {
-            "board": {
-              "revision": Json::number(0),
-              "tasks": [],
-              "attempts": [],
-            },
-            "events": [initial.to_json()],
-          },
-        })
-      })
+      let _ = board_backend_tick(backend)
       let token = board_query_param(server.browser_url().unwrap(), "token").unwrap()
       let ws = @websocket.connect(endpoint.ws_url() + "?token=" + token)
       defer ws.close()
       board_test_hello(ws, 0L)
-      @async.with_timeout(1000, () => entered.get())
-      // The provider is parked after registration: the depth-one mailbox
-      // overflows while the bootstrap is still awaited.
-      let _ = hub_tick(hub)
-      let _ = hub_tick(hub)
-      release.put(())
+      // Wait for registration, not just startup load: the snapshot await
+      // must be in flight before overflowing this connection's mailbox.
+      board_wait_clients(backend, 1)
+      // The depth-one mailbox overflows while the bootstrap is still awaited.
+      let _ = board_backend_tick(backend)
+      let _ = board_backend_tick(backend)
+      store.release.put(())
       assert_eq(
         board_test_frame(ws),
         @protocol.ResyncRequired(reason="client_queue_overflow", current_seq=3L),
@@ -361,7 +397,7 @@ async test "native overflow during provider await resyncs and never installs the
       // The connection closes and no snapshot frame is ever delivered.
       let closed = Some(ws.recv()) catch { _ => None }
       assert_true(closed is None)
-      board_wait_clients(hub, 0)
+      board_wait_clients(backend, 0)
     })
   })
 }
@@ -370,7 +406,10 @@ async test "native overflow during provider await resyncs and never installs the
 async test "native shutdown cancels a reader still waiting for Hello" {
   @async.with_timeout(2000, () => {
     @async.with_task_group(group => {
-      let server = NativeBoardWebServer()
+      let backend = @backend.BoardBackend::BoardBackend()
+      let server = NativeBoardWebServer::NativeBoardWebServer(
+        backend=Some(backend),
+      )
       let endpoint = match server.bind() {
         Ok(value) => value
         Err(_) => fail("bind failed")
@@ -389,7 +428,7 @@ async test "native shutdown cancels a reader still waiting for Hello" {
       while server.connections.length() != 0 {
         @async.sleep(1)
       }
-      assert_eq(server.hub.subscriber_count(), 0)
+      assert_eq(backend.subscriber_count(), 0)
       let closed = Some(ws.recv()) catch { _ => None }
       assert_true(closed is None)
     })
@@ -400,7 +439,10 @@ async test "native shutdown cancels a reader still waiting for Hello" {
 async test "native Hello deadline closes without subscription" {
   @async.with_timeout(7000, () => {
     @async.with_task_group(group => {
-      let server = NativeBoardWebServer()
+      let backend = @backend.BoardBackend::BoardBackend()
+      let server = NativeBoardWebServer::NativeBoardWebServer(
+        backend=Some(backend),
+      )
       let endpoint = match server.bind() {
         Ok(value) => value
         Err(_) => fail("bind failed")
@@ -415,7 +457,7 @@ async test "native Hello deadline closes without subscription" {
       guard board_test_frame(ws) is Error(code="hello_timeout", ..) else {
         fail("Hello must have a deadline")
       }
-      assert_eq(server.hub.subscriber_count(), 0)
+      assert_eq(backend.subscriber_count(), 0)
     })
   })
 }

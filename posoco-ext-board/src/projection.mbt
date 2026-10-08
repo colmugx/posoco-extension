@@ -133,12 +133,14 @@ pub impl @posoco.Observer for BoardExtension with fn on_event_at(
 ) -> Unit {
   match board_projection(event) {
     Some((kind, payload)) => {
-      let _ = self.runtime_.publish_telemetry(
-        board_revision=0L,
-        kind~,
-        scope=board_scope(scope),
-        payload~,
-      )
+      let _ = self
+        .backend()
+        .publish_telemetry(
+          board_revision=0L,
+          kind~,
+          scope=board_scope(scope),
+          payload~,
+        )
     }
     None => ()
   }

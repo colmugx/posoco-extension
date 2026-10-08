@@ -30,7 +30,11 @@ fn projection_scope(suffix : String) -> @posoco.EventScope {
 test "board projection all mappings preserve order seq and zero revision without IO" {
   let server : CommandFakeServer = { binds: 0, alive: false, }
   let opener : CommandFakeOpener = { urls: [], }
-  let runtime = @runtime.BoardRuntime::with_adapters(server~, opener~)
+  let runtime = @runtime.BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
   let board = BoardExtension::with_runtime(runtime~)
   let call = projection_call()
   let cases : Array[(@posoco.TurnEvent, String, Json)] = [

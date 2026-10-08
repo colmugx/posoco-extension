@@ -1,0 +1,23 @@
+import {
+  "colmugx/posoco-ext-board/coordinator",
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/protocol",
+  "colmugx/posoco-ext-board/store",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "colmugx/posoco-ext-board/protocol",
+  "colmugx/posoco-ext-board/store",
+  "moonbitlang/async",
+} for "test"
+
+import {
+  "moonbitlang/async/aqueue",
+} for "wbtest"
+
+// No transport imports and no per-target sources: the backend itself is
+// target-neutral and runs wherever its module dependencies run.
+
+supported_targets = "+native +js"

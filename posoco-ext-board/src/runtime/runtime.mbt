@@ -1,52 +1,34 @@
 ///|
-/// S1 runtime facade: telemetry remains independent from local control-plane
-/// lifecycle. Long-lived server work is owned by a Fuwaroid Supervisor bound
-/// to a host TaskGroup through attach(); the durable Board coordinator owns
-/// its actor and persistence Supervisor on the same host scope.
+/// S3C0 runtime facade: presentation lifecycle only. The headless
+/// `BoardBackend` privately owns the telemetry hub, the durable coordinator
+/// and the command clock; the runtime owns the local server, the browser
+/// opener and their supervised workers. Long-lived server work is owned by
+/// a Fuwaroid Supervisor bound to a host TaskGroup through attach(); the
+/// backend joins the same host scope.
 pub struct BoardRuntime {
-  hub : BoardEventHub
+  priv backend_ : @backend.BoardBackend
   server : &BoardWebServer
   opener : &BrowserOpener
-  coordinator : @coordinator.BoardCoordinator
-  now_ms : () -> Int64
-  gate : @async.Mutex
-  mut supervisor : @fuwaroid.Supervisor[Unit]?
-  mut server_task : @fuwaroid.SupervisedTask[Unit]?
-  mut server_status : BoardServerStatus
+  priv gate : @async.Mutex
+  priv mut supervisor : @fuwaroid.Supervisor[Unit]?
+  priv mut server_task : @fuwaroid.SupervisedTask[Unit]?
+  priv mut server_status : BoardServerStatus
 }
 
 ///|
-/// Adapter-injection constructor used by tests and future target backends.
-/// A telemetry-serving adapter must receive the same `hub` passed here. The
-/// default allocates an independent hub; it cannot discover a server's hub.
-/// The coordinator restores from `store` (default: an empty
-/// `MemoryBoardStore`), with `now_ms` supplying recovery and server-owned
-/// mutation timestamps (default: deterministic 0). Its `stream_cursor` reads
-/// the hub head on demand, and
-/// its `on_commit` hook publishes every committed event into that hub.
-/// Prefer `default_board_runtime` unless explicitly wiring server and
-/// runtime.
+/// Adapter-injection constructor: one explicitly built backend plus the
+/// presentation adapters. The runtime never inspects or replaces the
+/// backend; it installs it on the server through the `set_backend` seam
+/// before binding the control plane.
 pub fn BoardRuntime::with_adapters(
-  event_buffer? : Int = 4096,
-  hub? : BoardEventHub = BoardEventHub(capacity=event_buffer),
+  backend~ : @backend.BoardBackend,
   server~ : &BoardWebServer,
   opener~ : &BrowserOpener,
-  store? : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore(),
-  now_ms? : () -> Int64 = () => 0L,
 ) -> BoardRuntime {
   {
-    hub,
+    backend_: backend,
     server,
     opener,
-    coordinator: @coordinator.BoardCoordinator::BoardCoordinator(
-      store~,
-      now_ms~,
-      on_commit=(snapshot, events) => {
-        board_publish_commit(hub, snapshot, events)
-      },
-      stream_cursor=() => hub.current_seq(),
-    ),
-    now_ms,
     gate: @async.Mutex::Mutex(),
     supervisor: None,
     server_task: None,
@@ -55,8 +37,15 @@ pub fn BoardRuntime::with_adapters(
 }
 
 ///|
-/// Bind long-lived runtime workers to a host-owned structured-concurrency
-/// scope: the local server Supervisor and the single-writer Board domain
+/// The headless backend owned by this runtime: commands, snapshots and
+/// subscriptions work with no presentation adapter at all.
+pub fn BoardRuntime::backend(self : BoardRuntime) -> @backend.BoardBackend {
+  self.backend_
+}
+
+///|
+/// Bind long-lived workers to a host-owned structured-concurrency scope:
+/// the local server Supervisor and the backend's single-writer durable
 /// coordinator. Repeated attach is idempotent for both; no Agent or Posoco
 /// Tasks capability is attached.
 pub fn BoardRuntime::attach(
@@ -66,7 +55,7 @@ pub fn BoardRuntime::attach(
   if self.supervisor is None {
     self.supervisor = Some(@fuwaroid.Supervisor(group~))
   }
-  self.coordinator.attach(group~)
+  self.backend_.attach(group)
 }
 
 ///|
@@ -108,13 +97,9 @@ async fn BoardRuntime::ensure_server_locked(
       )
   }
   self.server_status = Starting
-  // The runtime is the server's authoritative snapshot source; the
-  // bootstrap awaits the durable coordinator, so it is installed as an
-  // async provider from this async start path.
-  self.server.set_snapshot_provider(async fn() { self.bootstrap_snapshot() })
-  self.server.set_command_handler(async fn(command) {
-    self.handle_command(command)
-  })
+  // The single presentation seam: the server answers snapshots, commands
+  // and stream frames through the owned backend.
+  self.server.set_backend(self.backend_)
   let endpoint = match self.server.bind() {
     Ok(value) => value
     Err(error) => {
@@ -185,8 +170,9 @@ async fn BoardRuntime::close_server_locked(self : BoardRuntime) -> Unit {
 }
 
 ///|
-/// Close the current listener. This is idempotent and does not close the
-/// Supervisor, so a later /board can bind a fresh random port.
+/// Close the current listener. This is idempotent, never shuts the backend
+/// down, and does not close the Supervisor, so a later /board can bind a
+/// fresh random port while headless service continues.
 pub async fn BoardRuntime::close_server(self : BoardRuntime) -> Unit {
   self.gate.acquire()
   defer self.gate.release()
@@ -194,15 +180,16 @@ pub async fn BoardRuntime::close_server(self : BoardRuntime) -> Unit {
 }
 
 ///|
-/// Final lifecycle teardown: close the listener, close coordinator
-/// admission and join its drained loop, then bounded-settle any remaining
-/// runtime workers. Idempotent. The whole cleanup is shielded from
-/// cancellation, mirroring the gate-protected server paths: a cancelled
-/// caller cannot leave a half-open listener or an unjoined coordinator.
+/// Final lifecycle teardown: close the presentation first, then the
+/// backend's coordinator admission and drained loop, then bounded-settle
+/// any remaining runtime workers. Idempotent. The whole cleanup is shielded
+/// from cancellation, mirroring the gate-protected server paths: a
+/// cancelled caller cannot leave a half-open listener or an unjoined
+/// coordinator.
 pub async fn BoardRuntime::shutdown(self : BoardRuntime) -> Unit {
   @async.protect_from_cancel(() => {
     self.close_server()
-    self.coordinator.shutdown()
+    self.backend_.shutdown()
     match self.supervisor {
       Some(supervisor) => {
         let _ = supervisor.shutdown(timeout_ms=5000)
@@ -229,6 +216,26 @@ pub fn BoardRuntime::status(self : BoardRuntime) -> BoardServerStatus {
 }
 
 ///|
+/// Compatibility delegates to the owned backend. Prefer `backend()` for new
+/// code; these keep the runtime facade usable without reaching for the
+/// backend first.
+
+///|
+pub async fn BoardRuntime::handle_command(
+  self : BoardRuntime,
+  wire : @protocol.BoardClientCommand,
+) -> @protocol.BoardCommandResult {
+  self.backend_.handle_command(wire)
+}
+
+///|
+pub async fn BoardRuntime::bootstrap_snapshot(
+  self : BoardRuntime,
+) -> Result[@protocol.BoardSnapshot, String] {
+  self.backend_.bootstrap_snapshot()
+}
+
+///|
 pub fn BoardRuntime::publish_telemetry(
   self : BoardRuntime,
   board_revision~ : Int64,
@@ -236,17 +243,17 @@ pub fn BoardRuntime::publish_telemetry(
   scope? : @protocol.BoardEventScope? = None,
   payload~ : Json,
 ) -> @protocol.BoardWireEvent {
-  self.hub.publish(board_revision~, kind~, scope~, payload~)
+  self.backend_.publish_telemetry(board_revision~, kind~, scope~, payload~)
 }
 
 ///|
 pub fn BoardRuntime::event_history(
   self : BoardRuntime,
 ) -> Array[@protocol.BoardWireEvent] {
-  self.hub.history()
+  self.backend_.event_history()
 }
 
 ///|
 pub fn BoardRuntime::current_seq(self : BoardRuntime) -> Int64 {
-  self.hub.current_seq()
+  self.backend_.current_seq()
 }

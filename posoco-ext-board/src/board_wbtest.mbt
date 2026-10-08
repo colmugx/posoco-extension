@@ -85,7 +85,11 @@ test "board config exposes localhost-safe defaults" {
 async test "board command opens reuses and closes one runtime" {
   let server : CommandFakeServer = { binds: 0, alive: false, }
   let opener : CommandFakeOpener = { urls: [], }
-  let runtime = @runtime.BoardRuntime::with_adapters(server~, opener~)
+  let runtime = @runtime.BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
   let board = BoardExtension::with_runtime(runtime~)
   @async.with_task_group(group => {
     board.attach(group)
@@ -116,7 +120,11 @@ async test "board command opens reuses and closes one runtime" {
 async test "board open fails clearly before runtime attach" {
   let server : CommandFakeServer = { binds: 0, alive: false, }
   let opener : CommandFakeOpener = { urls: [], }
-  let runtime = @runtime.BoardRuntime::with_adapters(server~, opener~)
+  let runtime = @runtime.BoardRuntime::with_adapters(
+    backend=@backend.BoardBackend::BoardBackend(),
+    server~,
+    opener~,
+  )
   let board = BoardExtension::with_runtime(runtime~)
   match board.invoke("board.open", Json::null()) {
     Failure(reason~) => assert_true(reason.contains("attach"))

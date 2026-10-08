@@ -61,10 +61,9 @@ pub fn BoardServerStatus::to_json(self : BoardServerStatus) -> Json {
 ///|
 /// Target seam for the local Board control plane. Implementations own the
 /// instance token and must never expose it through endpoint/status values.
-/// The snapshot provider awaits the durable coordinator and returns the
-/// composite wire snapshot, or a resync reason when no trustworthy snapshot
-/// can be produced; the runtime installs exactly one per server while
-/// starting the control plane.
+/// `set_backend` is the single seam to the headless backend: snapshots,
+/// commands and the live event stream all flow through the installed
+/// backend, and a server without one refuses to bind.
 pub(open) trait BoardWebServer {
   async fn bind(Self) -> Result[BoardEndpoint, String]
   async fn run(Self) -> Result[Unit, String]
@@ -72,38 +71,14 @@ pub(open) trait BoardWebServer {
   fn close(Self) -> Unit
   fn is_alive(Self) -> Bool
   fn last_error(Self) -> String?
-  /// Install the authoritative snapshot provider. Default: none — a server
-  /// without a provider answers snapshot-required subscriptions with an
-  /// explicit resync frame and closes, instead of fabricating a snapshot.
-  async fn set_snapshot_provider(
-    Self,
-    provider : async () -> Result[@protocol.BoardSnapshot, String],
-  ) -> Unit = _
-  /// Install the authoritative command handler. Default: none — a server
-  /// without a handler answers every `Command` with `accepted=false`
-  /// (`"unsupported_in_current_stage"`) and mutates nothing. Symmetric to
-  /// `set_snapshot_provider`: the runtime installs exactly one per server
-  /// while starting the control plane, and the returned result is answered
-  /// only on the issuing connection.
-  async fn set_command_handler(
-    Self,
-    handler : async (@protocol.BoardClientCommand) -> @protocol.BoardCommandResult,
-  ) -> Unit = _
+  /// Install the headless backend that owns snapshots, commands and the
+  /// event stream. Default: none — a server without a backend fails to
+  /// bind instead of serving an unauthoritative control plane.
+  fn set_backend(Self, backend : @backend.BoardBackend) -> Unit = _
 }
 
 ///|
-impl BoardWebServer with fn set_snapshot_provider(
-  _self,
-  _provider : async () -> Result[@protocol.BoardSnapshot, String],
-) -> Unit {
-  ()
-}
-
-///|
-impl BoardWebServer with fn set_command_handler(
-  _self,
-  _handler : async (@protocol.BoardClientCommand) -> @protocol.BoardCommandResult,
-) -> Unit {
+impl BoardWebServer with fn set_backend(_self, _backend : @backend.BoardBackend) -> Unit {
   ()
 }
 

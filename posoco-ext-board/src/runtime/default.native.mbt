@@ -1,32 +1,25 @@
 ///|
 pub struct NativeBoardWebServer {
-  hub : BoardEventHub
-  connections : Array[@async.Task[Unit]]
-  /// Authoritative snapshot source, installed by the runtime through the
-  /// `BoardWebServer` trait. `None` means snapshot-required subscriptions
-  /// receive an explicit resync instead of a snapshot.
-  mut snapshot_provider : (async () -> Result[@protocol.BoardSnapshot, String])?
-  /// Authoritative command handler, symmetric to `snapshot_provider` and
-  /// installed through the same trait. `None` means every `Command` still
-  /// receives `unsupported_in_current_stage` and nothing is ever mutated.
-  mut command_handler : (async (@protocol.BoardClientCommand) -> @protocol.BoardCommandResult)?
-  mut server : @http.Server?
-  mut endpoint : BoardEndpoint?
-  mut token : String?
-  mut alive : Bool
-  mut closing : Bool
-  mut error : String?
+  priv connections : Array[@async.Task[Unit]]
+  /// The single authoritative seam: snapshot bootstrap, command handling
+  /// and the live stream all come from the installed backend. `None` means
+  /// the server is only presentation plumbing and refuses to bind.
+  priv mut backend : @backend.BoardBackend?
+  priv mut server : @http.Server?
+  priv mut endpoint : BoardEndpoint?
+  priv mut token : String?
+  priv mut alive : Bool
+  priv mut closing : Bool
+  priv mut error : String?
 }
 
 ///|
 pub fn NativeBoardWebServer::NativeBoardWebServer(
-  hub? : BoardEventHub = BoardEventHub(),
+  backend? : @backend.BoardBackend? = None,
 ) -> NativeBoardWebServer {
   {
-    hub,
     connections: [],
-    snapshot_provider: None,
-    command_handler: None,
+    backend,
     server: None,
     endpoint: None,
     token: None,
@@ -277,9 +270,9 @@ async fn board_write_frame(
 ///|
 async fn board_client_sender(
   ws : @websocket.Conn,
-  client : BoardSubscription,
+  client : @backend.BoardSubscription,
 ) -> Unit {
-  board_send_subscription(client, frame => board_write_frame(ws, frame))
+  client.pump(frame => board_write_frame(ws, frame))
 }
 
 ///|
@@ -345,37 +338,32 @@ async fn NativeBoardWebServer::resync(
   ws : @websocket.Conn,
   reason : String,
 ) -> Unit {
-  board_write_frame(
-    ws,
-    @protocol.ResyncRequired(reason~, current_seq=self.hub.current_seq()),
-  ) catch {
+  let current_seq = match self.backend {
+    Some(backend) => backend.current_seq()
+    None => 0L
+  }
+  board_write_frame(ws, @protocol.ResyncRequired(reason~, current_seq~)) catch {
     _ => ()
   }
 }
 
 ///|
 /// Authoritative bootstrap of a `SnapshotRequired` subscription. The
-/// provider is awaited only after synchronous registration, so live events
+/// backend is awaited only after synchronous registration, so live events
 /// accumulate in the mailbox while the coordinator settles; the installed
 /// snapshot carries the boundary and the sender drops stale mailbox
 /// duplicates. Any failure sends one resync frame and closes: no snapshot
-/// is ever fabricated here. A mailbox overflow while the provider is
+/// is ever fabricated here. A mailbox overflow while the backend is
 /// awaited resyncs with `client_queue_overflow` before anything is
 /// installed or sent: the answered snapshot is already stale by the time it
 /// arrives.
 async fn NativeBoardWebServer::bootstrap_client(
   self : NativeBoardWebServer,
   ws : @websocket.Conn,
-  client : BoardSubscription,
+  client : @backend.BoardSubscription,
+  backend : @backend.BoardBackend,
 ) -> Bool {
-  let provider = match self.snapshot_provider {
-    Some(provider) => provider
-    None => {
-      self.resync(ws, "snapshot_unavailable")
-      return false
-    }
-  }
-  match provider() {
+  match backend.bootstrap_snapshot() {
     Ok(snapshot) => {
       // Live events queued during the provider await may have overflowed
       // the bounded mailbox. An overflowed bootstrap must never install or
@@ -399,6 +387,10 @@ async fn NativeBoardWebServer::serve_ws(
   self : NativeBoardWebServer,
   ws : @websocket.Conn,
 ) -> Unit {
+  let backend = match self.backend {
+    Some(backend) => backend
+    None => return
+  }
   let first = board_receive_hello(ws) catch { _ => return }
   let hello = match first {
     Ok(hello) => hello
@@ -411,10 +403,10 @@ async fn NativeBoardWebServer::serve_ws(
   }
   // Registration is synchronous; the authoritative bootstrap of a
   // snapshot-required plan is the only awaited step.
-  let client = self.hub.subscribe(hello.last_seq, hello.has_board_snapshot)
-  defer self.hub.unsubscribe(client)
+  let client = backend.subscribe(hello.last_seq, hello.has_board_snapshot)
+  defer backend.unsubscribe(client)
   if client.plan is SnapshotRequired {
-    if !(self.bootstrap_client(ws, client) catch { _ => false }) {
+    if !(self.bootstrap_client(ws, client, backend) catch { _ => false }) {
       return
     }
   }
@@ -425,30 +417,19 @@ async fn NativeBoardWebServer::serve_ws(
       for ;; {
         let raw = board_read_text(ws)
         let frame = match @protocol.decode_client_frame(raw) {
-          Ok(Command(command)) => {
-            // The installed handler owns the authoritative answer; without
-            // one the stage-neutral rejection stands. The result is
-            // enqueued only for this connection and never published into
-            // hub history.
-            let result = match self.command_handler {
-              Some(handler) => handler(command)
-              None =>
-                {
-                  command_id: command.command_id,
-                  accepted: false,
-                  error: Some("unsupported_in_current_stage"),
-                  current_revision: None,
-                }
-            }
-            @protocol.CommandResult(result)
-          }
+          Ok(Command(command)) =>
+            // The backend owns the authoritative answer; every committed
+            // event is already enqueued before the result frame is built.
+            // The result is enqueued only for this connection and never
+            // published into the retained stream.
+            @protocol.CommandResult(backend.handle_command(command))
           _ =>
             @protocol.Error(
               code="invalid_frame",
               message="Expected Command after Hello",
             )
         }
-        client.enqueue(frame, self.hub.current_seq())
+        backend.enqueue_local(client, frame)
       }
     },
   ]) catch {
@@ -541,6 +522,9 @@ async fn NativeBoardWebServer::handle_request(
 
 ///|
 pub impl BoardWebServer for NativeBoardWebServer with fn bind(self) {
+  if self.backend is None {
+    return Err("board backend not installed")
+  }
   match self.endpoint {
     Some(value) if self.alive => return Ok(value)
     _ => ()
@@ -637,19 +621,11 @@ pub impl BoardWebServer for NativeBoardWebServer with fn last_error(self) {
 }
 
 ///|
-pub impl BoardWebServer for NativeBoardWebServer with fn set_snapshot_provider(
+pub impl BoardWebServer for NativeBoardWebServer with fn set_backend(
   self,
-  provider,
-) {
-  self.snapshot_provider = Some(provider)
-}
-
-///|
-pub impl BoardWebServer for NativeBoardWebServer with fn set_command_handler(
-  self,
-  handler,
-) {
-  self.command_handler = Some(handler)
+  backend : @backend.BoardBackend,
+) -> Unit {
+  self.backend = Some(backend)
 }
 
 ///|
@@ -699,15 +675,15 @@ pub fn default_board_runtime(
   event_buffer : Int,
   client_queue_depth? : Int = 256,
 ) -> BoardRuntime {
-  let hub = BoardEventHub(capacity=event_buffer, client_queue_depth~)
-  let server = NativeBoardWebServer(hub~)
-  let opener = NativeBrowserOpener::NativeBrowserOpener()
-  let store : &@store.BoardStore = @store.FileBoardStore::FileBoardStore(
-    root=".",
+  let backend = @backend.BoardBackend::BoardBackend(
+    event_buffer~,
+    client_queue_depth~,
+    store=@store.FileBoardStore::FileBoardStore(root="."),
+    now_ms=() => @env.now().reinterpret_as_int64(),
   )
-  BoardRuntime::with_adapters(hub~, server~, opener~, store~, now_ms=() => {
-    @env.now().reinterpret_as_int64()
-  })
+  let server = NativeBoardWebServer::NativeBoardWebServer()
+  let opener = NativeBrowserOpener::NativeBrowserOpener()
+  BoardRuntime::with_adapters(backend~, server~, opener~)
 }
 
 ///|
@@ -718,8 +694,7 @@ pub extend NativeBoardWebServer with BoardWebServer::{
   close,
   is_alive,
   last_error,
-  set_snapshot_provider,
-  set_command_handler,
+  set_backend,
 }
 
 ///|

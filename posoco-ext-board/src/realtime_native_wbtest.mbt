@@ -2,10 +2,10 @@
 async test "native observer projection stays sanitized through live and retained reset" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let hub = @runtime.BoardEventHub(capacity=2)
-      let server = @runtime.NativeBoardWebServer(hub~)
+      let backend = @backend.BoardBackend::BoardBackend(event_buffer=2)
+      let server = @runtime.NativeBoardWebServer(backend=Some(backend))
       let runtime = @runtime.BoardRuntime::with_adapters(
-        hub~,
+        backend~,
         server~,
         opener=@runtime.NativeBrowserOpener(),
       )
@@ -80,7 +80,7 @@ async test "native observer projection stays sanitized through live and retained
       assert_false(raw.contains("PRIVATE_SENTINEL"))
       assert_eq(runtime.event_history().length(), 2)
       runtime.shutdown()
-      assert_eq(hub.subscriber_count(), 0)
+      assert_eq(backend.subscriber_count(), 0)
     })
   })
 }
