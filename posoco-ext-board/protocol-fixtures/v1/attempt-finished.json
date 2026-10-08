@@ -1,0 +1,24 @@
+{
+  "type": "event",
+  "seq": 5,
+  "board_revision": 5,
+  "kind": "board.attempt.finished",
+  "scope": null,
+  "payload": {
+    "attempt_id": "attempt-1",
+    "task_id": "task-1",
+    "attempt": {
+      "id": "attempt-1",
+      "task_id": "task-1",
+      "kind": "discuss",
+      "status": "succeeded",
+      "review": null,
+      "created_at_ms": 1100,
+      "started_at_ms": 1300,
+      "finished_at_ms": 1400,
+      "updated_at_ms": 1400
+    },
+    "outcome": "succeeded",
+    "at_ms": 1400
+  }
+}

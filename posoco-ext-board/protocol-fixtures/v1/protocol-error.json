@@ -1,0 +1,5 @@
+{
+  "type": "error",
+  "code": "hello_required",
+  "message": "First frame must be Hello"
+}

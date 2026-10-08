@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: headless backend and MoonBack standalone host
+## Current status: headless service, client replica and browser scaffold
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -65,6 +65,33 @@ imports participate in the target dependency graph even from native-only files. 
 directly and do not need the MoonBack standalone host or a browser opener. A web
 host or desktop host owns its own presentation lifecycle; a TUI standalone browser host keeps the existing
 `/board` workflow. No concrete host-product dependency is required.
+
+## Client contract and read-only browser scaffold
+
+`colmugx/posoco-ext-board/client` is a pure native/JS replica, independent of
+Board domain records and presentation frameworks. It strictly decodes the
+full wire task/attempt entities, validates composite snapshots and retained
+sequence suffixes, and consumes authoritative full-entity Board events.
+Snapshots replace rather than merge state; retained events are not replayed.
+Sequence gaps, invalid entities, unknown Board events and revision jumps
+invalidate the baseline. Telemetry advances the cursor without changing the
+Board projection; command results are connection-local settlements only.
+Detached getters and `copy()` support presentation without shared mutable state.
+
+Canonical JSON in `protocol-fixtures/v1` is shared contract material for
+MoonBit, future SvelteKit 3/Svelte 5, and desktop consumers. Those hosts should
+implement the same wire/reducer invariants, not import Rabbita. Native fixture
+tests validate every JSON file through the protocol codec and replica.
+
+The independent `posoco-ext-board-web` module provides a read-only seven-lane
+Rabbita **0.16.4** shell, built using Warren **0.4.4**. It imports only client
+and protocol packages. Browser WebSocket commands and capped reconnect delays
+belong to Rabbita; UI state is separate from the sole Board replica.
+See its README for the verified browser-only build command.
+
+This stage does **not** replace the native diagnostics page or integrate web
+assets into MoonBack. Native asset packaging, mutation UX, Cetas integration
+and Agent execution remain separate work.
 
 ## Host wiring
 

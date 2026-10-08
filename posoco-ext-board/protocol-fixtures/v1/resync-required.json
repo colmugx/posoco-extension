@@ -1,0 +1,5 @@
+{
+  "type": "resync_required",
+  "reason": "client_queue_overflow",
+  "current_seq": 7
+}

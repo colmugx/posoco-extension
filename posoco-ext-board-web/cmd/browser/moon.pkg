@@ -1,0 +1,7 @@
+import {
+  "colmugx/posoco-ext-board-web/src" @board_web,
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "executable")

@@ -1,0 +1,14 @@
+{
+  "type": "event",
+  "seq": 6,
+  "board_revision": 0,
+  "kind": "assistant.delta",
+  "scope": {
+    "session_id": "session-1",
+    "run_id": "run-1",
+    "turn_id": "turn-1"
+  },
+  "payload": {
+    "text": "Contract validation complete."
+  }
+}

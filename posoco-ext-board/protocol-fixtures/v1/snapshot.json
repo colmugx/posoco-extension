@@ -1,0 +1,93 @@
+{
+  "type": "snapshot",
+  "protocol_version": 1,
+  "last_seq": 2,
+  "board_revision": 2,
+  "payload": {
+    "board": {
+      "revision": 2,
+      "tasks": [
+        {
+          "id": "task-1",
+          "title": "Validate the Board contract",
+          "description": "Share wire fixtures across browser and desktop clients.",
+          "stage": "created",
+          "priority": "normal",
+          "definition_of_done": [
+            "Decode every v1 server frame",
+            "Apply the authoritative projection"
+          ],
+          "dependencies": [],
+          "created_at_ms": 1000,
+          "updated_at_ms": 1000,
+          "ready_since_ms": null
+        }
+      ],
+      "attempts": [
+        {
+          "id": "attempt-1",
+          "task_id": "task-1",
+          "kind": "discuss",
+          "status": "queued",
+          "review": null,
+          "created_at_ms": 1100,
+          "started_at_ms": null,
+          "finished_at_ms": null,
+          "updated_at_ms": 1100
+        }
+      ]
+    },
+    "events": [
+      {
+        "type": "event",
+        "seq": 1,
+        "board_revision": 1,
+        "kind": "board.task.created",
+        "scope": null,
+        "payload": {
+          "task_id": "task-1",
+          "task": {
+            "id": "task-1",
+            "title": "Validate the Board contract",
+            "description": "Share wire fixtures across browser and desktop clients.",
+            "stage": "created",
+            "priority": "normal",
+            "definition_of_done": [
+              "Decode every v1 server frame",
+              "Apply the authoritative projection"
+            ],
+            "dependencies": [],
+            "created_at_ms": 1000,
+            "updated_at_ms": 1000,
+            "ready_since_ms": null
+          },
+          "at_ms": 1000
+        }
+      },
+      {
+        "type": "event",
+        "seq": 2,
+        "board_revision": 2,
+        "kind": "board.attempt.queued",
+        "scope": null,
+        "payload": {
+          "attempt_id": "attempt-1",
+          "task_id": "task-1",
+          "attempt": {
+            "id": "attempt-1",
+            "task_id": "task-1",
+            "kind": "discuss",
+            "status": "queued",
+            "review": null,
+            "created_at_ms": 1100,
+            "started_at_ms": null,
+            "finished_at_ms": null,
+            "updated_at_ms": 1100
+          },
+          "kind": "discuss",
+          "at_ms": 1100
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "type": "event",
+  "seq": 1,
+  "board_revision": 1,
+  "kind": "board.task.created",
+  "scope": null,
+  "payload": {
+    "task_id": "task-1",
+    "task": {
+      "id": "task-1",
+      "title": "Validate the Board contract",
+      "description": "Share wire fixtures across browser and desktop clients.",
+      "stage": "created",
+      "priority": "normal",
+      "definition_of_done": [
+        "Decode every v1 server frame",
+        "Apply the authoritative projection"
+      ],
+      "dependencies": [],
+      "created_at_ms": 1000,
+      "updated_at_ms": 1000,
+      "ready_since_ms": null
+    },
+    "at_ms": 1000
+  }
+}

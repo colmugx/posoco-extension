@@ -6,6 +6,7 @@ members = [
   "./posoco-ext-bash",
   "./posoco-ext-board",
   "./posoco-ext-board-native",
+  "./posoco-ext-board-web",
   "./posoco-ext-context",
   "./posoco-ext-credentials",
   "./posoco-ext-deepseek",

@@ -1,0 +1,23 @@
+{
+  "type": "event",
+  "seq": 4,
+  "board_revision": 4,
+  "kind": "board.attempt.started",
+  "scope": null,
+  "payload": {
+    "attempt_id": "attempt-1",
+    "task_id": "task-1",
+    "attempt": {
+      "id": "attempt-1",
+      "task_id": "task-1",
+      "kind": "discuss",
+      "status": "running",
+      "review": null,
+      "created_at_ms": 1100,
+      "started_at_ms": 1300,
+      "finished_at_ms": null,
+      "updated_at_ms": 1300
+    },
+    "at_ms": 1300
+  }
+}
