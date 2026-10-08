@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: S3C0 headless backend and standalone presentation boundary
+## Current status: headless backend and MoonBack standalone host
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -38,8 +38,9 @@ and JS.
   persistence, commands, consistent snapshots, telemetry, history and subscriptions.
 - **BoardRuntime** = standalone presentation host composition: one backend,
   Web server, browser opener and gated server lifecycle.
-- **BoardWebServer** = presentation transport adapter: HTTP/WebSocket framing,
-  security gates and connection lifetime, not Board mutation semantics.
+- **BoardWebServer** = presentation transport contract, not Board mutation semantics.
+- **NativeBoardWebServer** = MoonBack-backed localhost adapter: routing, WebSocket
+  upgrades, connection ownership and graceful shutdown remain presentation-only.
 - **BrowserOpener** = standalone UX adapter, never part of the backend.
 
 Dependency arrows point from a consumer to its service:
@@ -54,11 +55,15 @@ protocol / domain / store / coordinator
             root extension
 ```
 
-`backend` does not depend on `runtime`, HTTP, WebSocket, socket or process
+`backend` does not depend on `runtime`, MoonBack, HTTP, WebSocket, socket or process
 packages. It owns no listener, browser process or standalone server status.
-Embedded hosts may consume `BoardBackend` directly and do not need to start or
-open the standalone Web presentation. A web host or desktop host owns its own
-presentation lifecycle; a TUI standalone browser host keeps the existing
+The independent `colmugx/posoco-ext-board-native` module owns the standalone
+adapter and depends on MoonBack **0.8.6**; `moonbitlang/async` remains at **0.22.4**.
+Neither this module nor its headless runtime imports MoonBack. This module
+boundary is intentional: MoonBack 0.8.6 has no JS implementation, and package
+imports participate in the target dependency graph even from native-only files. Embedded hosts consume `BoardBackend`
+directly and do not need the MoonBack standalone host or a browser opener. A web
+host or desktop host owns its own presentation lifecycle; a TUI standalone browser host keeps the existing
 `/board` workflow. No concrete host-product dependency is required.
 
 ## Host wiring
@@ -68,7 +73,8 @@ concurrency scope. Attach the extension to the host task group before invoking
 `/board`:
 
 ```mbt nocheck
-let board = @board.BoardExtension::BoardExtension()
+// Import colmugx/posoco-ext-board-native as @board_native in native hosts.
+let board = @board_native.board_extension()
 let agent = @posoco.Agent(
   exts=[board, model_ext, session_ext],
   config,
@@ -85,6 +91,13 @@ let agent = @posoco.Agent(
 `attach(group)` attaches durable backend workers and prepares the standalone
 server supervisor. It does **not** bind a listener or open a browser, bind an
 Agent or grant `Capability::Tasks`.
+
+The native factory preserves `/board` startup/open behaviour and supplies a
+`FileBoardStore` with Unix-epoch timestamps. Hosts previously constructing
+`@board.BoardExtension()` for standalone native use must switch to
+`@board_native.board_extension()` (or explicitly inject the native adapters).
+The core constructor now composes only a MemoryBoardStore-backed headless
+service with unsupported presentation adapters on both targets.
 
 For embedded use, construct and attach only the backend:
 
@@ -113,20 +126,24 @@ For custom native presentation adapters, inject one backend into the runtime:
 
 ```mbt nocheck
 let backend = @backend.BoardBackend(event_buffer=4096, client_queue_depth=256)
-let server = @runtime.NativeBoardWebServer()
+let server = @board_native.NativeBoardWebServer()
 let runtime = @runtime.BoardRuntime::with_adapters(
   backend~,
   server~,
-  opener=@runtime.NativeBrowserOpener(),
+  opener=@board_native.NativeBrowserOpener(),
 )
 ```
 
 `BoardRuntime::backend()` and `BoardExtension::backend()` expose the headless
 service without requiring callers to understand the standalone Web server.
-Before binding, the runtime installs the backend through the single
-`BoardWebServer::set_backend` seam. The native server refuses `bind()` with
-`"board backend not installed"` when no backend is installed; it never fabricates
-Board state.
+Before binding, the runtime installs the backend through the required
+`BoardWebServer::set_backend` contract: every adapter must explicitly implement
+it. The native server refuses `bind()` with `"board backend not installed"`
+before opening a listener when no backend is installed; it never fabricates
+Board state. Binding fixes the authoritative backend for that listener instance:
+`set_backend` while bound/running is ignored, so existing subscriptions and
+commands cannot silently switch to another stream. A stopped adapter can be
+bound again with a backend.
 
 ## Commands
 
@@ -141,7 +158,10 @@ The extension contributes three commands:
 
 Lifecycle startup does not open a browser. Final extension shutdown closes the
 standalone presentation first, then shuts down the backend and settles the
-remaining supervised host work.
+remaining supervised host work. MoonBack owns the listener and in-flight
+connection tasks inside the runtime's supervised server worker. Its explicit
+**1-second** stop timeout is below the outer **5-second** settle bound; closing
+an active WebSocket removes its subscription without stopping the backend.
 
 ## Wire protocol
 
@@ -466,8 +486,11 @@ scheduler.
 - `coordinator`: Fuwaroid single-writer owner of the committed Board state;
 - `backend`: target-neutral headless service, command/snapshot composition and
   authoritative stream ownership; no runtime or Web/process dependencies;
-- `runtime`: standalone server lifecycle and platform server/browser adapters,
-  consuming the backend through its narrow public API.
+- `runtime`: presentation contracts, standalone lifecycle composition and
+  headless defaults, consuming the backend through its narrow public API;
+- independent `posoco-ext-board-native` module: MoonBack localhost transport,
+  OS-entropy token, diagnostics HTML, browser opener and native factory.
 
-S3C0 changes ownership boundaries, not wire or durable mutation semantics.
-MoonBack migration, Rabbita/product UI and Agent execution remain out of scope.
+The backend split and MoonBack migration preserve wire and durable mutation
+semantics. Rabbita/Warren product UI, Cetas integration and Agent execution remain
+out of scope.

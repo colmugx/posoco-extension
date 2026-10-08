@@ -1,11 +1,15 @@
 ///|
 priv struct CommandFakeServer {
+  mut backend_installed : Bool
   mut binds : Int
   mut alive : Bool
 }
 
 ///|
 impl @runtime.BoardWebServer for CommandFakeServer with fn bind(self) {
+  if !self.backend_installed {
+    return Err("board backend not installed")
+  }
   self.binds += 1
   self.alive = true
   Ok({ host: "127.0.0.1", port: 19090, })
@@ -38,6 +42,14 @@ impl @runtime.BoardWebServer for CommandFakeServer with fn is_alive(self) {
 ///|
 impl @runtime.BoardWebServer for CommandFakeServer with fn last_error(_self) {
   None
+}
+
+///|
+impl @runtime.BoardWebServer for CommandFakeServer with fn set_backend(
+  self,
+  _backend : @backend.BoardBackend,
+) {
+  self.backend_installed = true
 }
 
 ///|
@@ -83,7 +95,11 @@ test "board config exposes localhost-safe defaults" {
 
 ///|
 async test "board command opens reuses and closes one runtime" {
-  let server : CommandFakeServer = { binds: 0, alive: false, }
+  let server : CommandFakeServer = {
+    backend_installed: false,
+    binds: 0,
+    alive: false,
+  }
   let opener : CommandFakeOpener = { urls: [], }
   let runtime = @runtime.BoardRuntime::with_adapters(
     backend=@backend.BoardBackend::BoardBackend(),
@@ -118,7 +134,11 @@ async test "board command opens reuses and closes one runtime" {
 
 ///|
 async test "board open fails clearly before runtime attach" {
-  let server : CommandFakeServer = { binds: 0, alive: false, }
+  let server : CommandFakeServer = {
+    backend_installed: false,
+    binds: 0,
+    alive: false,
+  }
   let opener : CommandFakeOpener = { urls: [], }
   let runtime = @runtime.BoardRuntime::with_adapters(
     backend=@backend.BoardBackend::BoardBackend(),

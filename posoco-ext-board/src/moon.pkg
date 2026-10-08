@@ -7,12 +7,4 @@ import {
   "moonbitlang/core/debug",
 }
 
-import {
-  "moonbitlang/async/websocket",
-} for "wbtest"
-
 supported_targets = "+native +js"
-
-options(
-  targets: { "realtime_native_wbtest.mbt": [ "native" ] },
-)

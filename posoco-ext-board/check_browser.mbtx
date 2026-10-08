@@ -414,7 +414,7 @@ fn check_live_gap(source : String) -> Unit raise {
 
 ///|
 fn main raise {
-  let file = read_text("posoco-ext-board/src/runtime/default.native.mbt")
+  let file = read_text("posoco-ext-board-native/src/diagnostics.mbt")
   let lines : Array[String] = []
   for line in file.split("\n") {
     if line.find("#|") is Some(index) {

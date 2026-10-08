@@ -8,12 +8,12 @@ pub fn UnsupportedBoardWebServer::UnsupportedBoardWebServer() -> UnsupportedBoar
 
 ///|
 pub impl BoardWebServer for UnsupportedBoardWebServer with fn bind(_self) {
-  Err("posoco-ext-board S1 local control plane is native-only")
+  Err("standalone Board presentation requires posoco-ext-board-native")
 }
 
 ///|
 pub impl BoardWebServer for UnsupportedBoardWebServer with fn run(_self) {
-  Err("posoco-ext-board S1 local control plane is native-only")
+  Err("standalone Board presentation requires posoco-ext-board-native")
 }
 
 ///|
@@ -37,17 +37,24 @@ pub impl BoardWebServer for UnsupportedBoardWebServer with fn last_error(_self) 
 }
 
 ///|
+pub impl BoardWebServer for UnsupportedBoardWebServer with fn set_backend(
+  _self,
+  _backend : @backend.BoardBackend,
+) -> Unit {
+  ()
+}
+
+///|
 pub struct UnsupportedBrowserOpener {}
 
 ///|
 pub impl BrowserOpener for UnsupportedBrowserOpener with fn open(_self, _url) {
-  Err("posoco-ext-board S1 browser opener is native-only")
+  Err("standalone Board browser opener requires posoco-ext-board-native")
 }
 
 ///|
-/// JS default runtime: an unsupported server and opener over a fully usable
-/// headless backend. The control plane and the file store are native-only;
-/// commands, snapshots and subscriptions are not.
+/// Headless default on both targets. Native standalone hosts compose the
+/// MoonBack adapter from `posoco-ext-board-native` instead.
 pub fn default_board_runtime(
   event_buffer : Int,
   client_queue_depth? : Int = 256,

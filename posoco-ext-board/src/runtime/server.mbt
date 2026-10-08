@@ -72,14 +72,10 @@ pub(open) trait BoardWebServer {
   fn is_alive(Self) -> Bool
   fn last_error(Self) -> String?
   /// Install the headless backend that owns snapshots, commands and the
-  /// event stream. Default: none — a server without a backend fails to
-  /// bind instead of serving an unauthoritative control plane.
-  fn set_backend(Self, backend : @backend.BoardBackend) -> Unit = _
-}
-
-///|
-impl BoardWebServer with fn set_backend(_self, _backend : @backend.BoardBackend) -> Unit {
-  ()
+  /// event stream. There is no default: every server must install it
+  /// explicitly, and a server without one refuses to bind instead of
+  /// serving an unauthoritative control plane.
+  fn set_backend(Self, backend : @backend.BoardBackend) -> Unit
 }
 
 ///|

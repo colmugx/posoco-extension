@@ -2,36 +2,11 @@ import {
   "colmugx/fuwaroid",
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/protocol",
-  "colmugx/posoco-ext-board/store",
   "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/async/process",
-  "moonbitlang/async/socket",
-  "moonbitlang/async/websocket",
   "moonbitlang/core/debug",
-  "moonbitlang/core/env",
-  "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/json",
 }
-
 import {
-  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/store",
   "moonbitlang/async/aqueue",
 } for "wbtest"
-
 supported_targets = "+native +js"
-
-warnings = "-unused_package"
-
-options(
-  "native-stub": [ "random_stub.c" ],
-  targets: {
-    "default.native.mbt": [ "native" ],
-    "default.js.mbt": [ "js" ],
-    "random.native.mbt": [ "native" ],
-    "server_native_wbtest.mbt": [ "native" ],
-    "realtime_native_wbtest.mbt": [ "native" ],
-    "commands_native_wbtest.mbt": [ "native" ],
-    "command_delivery_native_wbtest.mbt": [ "native" ],
-  },
-)
