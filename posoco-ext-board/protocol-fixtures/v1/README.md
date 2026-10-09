@@ -64,19 +64,22 @@ time and succeeded status. All timestamps are nonnegative integer milliseconds.
 
 ## Canonical task command examples
 
-These three client frames are independent examples, not part of the server
+These four client frames are independent examples, not part of the server
 reducer chain above:
 
 | File | Name | Expected revision |
 | --- | --- | --- |
 | `task-create-command.json` | `board.task.create` | 0 |
 | `task-update-command.json` | `board.task.update` | 1 |
-| `task-move-command.json` | `board.task.move` | 2 |
+| `task-set-dependencies-command.json` | `board.task.set_dependencies` | 2 |
+| `task-move-command.json` | `board.task.move` | 3 |
 
 Create includes all six required args and explicit task identity. Update shows
 all editable fields, including an empty `definition_of_done` array that clears
 it; omitted update fields remain unchanged and are never encoded as `null`.
-Move contains only `id` and `to`. Timestamp authority stays with the server.
+Set-dependencies replaces the complete dependency list with explicit task IDs; it
+does not encode graph validity in the client. Move contains only `id` and `to`.
+Timestamp authority stays with the server.
 
 Rabbita is one implementation of this client contract. SvelteKit 3 and Proton
 hosts implement the same names, schemas, and fixtures using their own adapters,
