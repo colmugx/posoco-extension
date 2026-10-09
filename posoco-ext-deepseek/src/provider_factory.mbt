@@ -140,11 +140,8 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
   }
   let model = match deepseek_setting_string(source, "model") {
     Some(value) => value
-    None =>
-      raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_deepseek",
-        detail="required setting is missing: model",
-      )
+    // Provider-owned default; the setting is optional and only pins priority.
+    None => "deepseek-flash"
   }
   let base_url_setting = match deepseek_setting_string(source, "base_url") {
     Some(value) => value
@@ -217,11 +214,8 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
   }
   let model = match deepseek_setting_string(source, "model") {
     Some(value) => value
-    None =>
-      raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_deepseek",
-        detail="required setting is missing: model",
-      )
+    // Provider-owned default; the setting is optional and only pins priority.
+    None => "deepseek-flash"
   }
   let base_setting = match deepseek_setting_string(source, "base_url") {
     Some(value) => value

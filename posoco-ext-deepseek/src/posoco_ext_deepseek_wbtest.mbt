@@ -1420,7 +1420,7 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
 }
 
 ///|
-test "ProviderFactory::build fails typed when settings omit model" {
+test "ProviderFactory::build composes the provider default without a model setting" {
   let provider = DeepSeekProvider()
   let factory : &@llm.ProviderFactory = provider
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
@@ -1428,28 +1428,36 @@ test "ProviderFactory::build fails typed when settings omit model" {
       Json::object(Map::from_array([("api_key", Json::string("sk-test"))])),
     ),
   )
-  let result = Ok(factory.build(source)) catch { err => Err(err) }
-  match result {
-    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
-      assert_true(detail.contains("required setting is missing: model"))
-    _ => fail("a missing model setting must be a typed composition failure")
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      let slots = catalog.slots()
+      assert_true(slots.length() == 1)
+      assert_eq(slots[0].model_id, "deepseek-flash")
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("a credential alone must compose the provider-owned default")
   }
 }
 
 ///|
-async test "DeepSeek refresh fails typed when settings omit model" {
+async test "DeepSeek refresh without a model setting reaches the models fetch" {
   let provider = DeepSeekProvider()
   let source = @llm.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
-      Json::object(Map::from_array([("api_key", Json::string("sk-test"))])),
+      Json::object(
+        Map::from_array([
+          ("api_key", Json::string("sk-test")),
+          ("base_url", Json::string("http://127.0.0.1:1")),
+        ]),
+      ),
     ),
     provider_credential=None,
   )
   let result = Ok(provider.refresh(source)) catch { err => Err(err) }
   match result {
     Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
-      assert_true(detail.contains("required setting is missing: model"))
-    _ => fail("a missing model setting must be a typed composition failure")
+      assert_true(detail.contains("model catalog refresh failed"))
+    _ => fail("refresh must reach the /models fetch without a model setting")
   }
 }
 

@@ -29,7 +29,7 @@ moon add colmugx/posoco-ext-deepseek
 
 let config = @deepseek.DeepSeekConfig(
   "sk-...",
-  model="deepseek-flash", // required — no default model id exists in code
+  model="deepseek-flash", // provider-owned default; may be omitted
 )
 let port = @deepseek.DeepSeekModelPort(config)
 let catalog = port.model_catalog()
@@ -78,11 +78,11 @@ verbatim and DeepSeek's server maps it itself (minimal/low→low,
 medium/high/xhigh→high, max/ultra→max). Request
 timeouts, non-2xx statuses, invalid
 UTF-8/JSON, and empty catalogs are all typed failures with no implicit
-fallback to a static model; the `model` setting is required — build and
-refresh raise a typed `CompositionError` when it is missing, so no model id
-is hardcoded as a fallback; the standard OpenAI envelope must also carry
-`object: "list"`, and the configured model id keeps priority in the refreshed
-result.
+fallback to a static model; the provider composes its own default
+`deepseek-flash` when no `model` setting is present — a credential alone
+yields a working catalog, and the optional setting only pins priority in the
+refreshed result. The standard OpenAI envelope must also carry
+`object: "list"`.
 
 ## Balance readings
 

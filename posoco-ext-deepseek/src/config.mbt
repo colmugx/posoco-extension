@@ -7,7 +7,9 @@ pub(all) struct DeepSeekConfig {
   api_key : String
   /// Base URL. Default: "https://api.deepseek.com".
   base_url : String
-  /// Model id used for chat, FIM, and prefix completion.
+  /// Model id used for chat, FIM, and prefix completion. Defaults to the
+  /// provider-owned `deepseek-flash`, so a credential alone composes a
+  /// working catalog without any host settings.
   model : String
   /// Endpoint path prefix, e.g. "/v1" when base_url is "http://host:port".
   endpoint_prefix : String
@@ -31,7 +33,7 @@ pub extend DeepSeekConfig with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 pub fn DeepSeekConfig::DeepSeekConfig(
   api_key : String,
-  model~ : String,
+  model? : String = "deepseek-flash",
   base_url? : String = "https://api.deepseek.com",
   endpoint_prefix? : String = "",
   reasoning_effort? : String = "high",
