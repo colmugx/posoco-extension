@@ -6,8 +6,12 @@ fn task_card(
 ) -> @html.Html {
   let replica = model.replica
   // Mutation controls are a convenience only: suggested targets mirror the
-  // Board stage FSM and the durable server stays authoritative.
-  let locked = !mutations_allowed(model) || model.editor is Some(_)
+  // Board stage FSM and the durable server stays authoritative. Opening the
+  // dependency editor parks them too; one editor at a time.
+  let locked = !mutations_allowed(model) ||
+    model.editor is Some(_) ||
+    model.dependency_editor is Some(_)
+  let selected = model.selected_task == Some(task.id)
   let moves = move_suggestions(task.stage).map(to => {
     @html.button(
       type_="button",
@@ -18,32 +22,50 @@ fn task_card(
       "→ \{stage_label(to)}",
     )
   })
-  @html.article(class="task-card", [
-    @html.div(class="task-topline", [
-      @html.span(class="priority", priority_label(task.priority)),
-      @html.span(class="entity-id", task.id),
-    ]),
-    @html.h3(task.title),
-    @html.p(class="description", task.description),
-    @html.p(
-      class="task-meta",
-      "\{task.dependencies.length()} dependencies · \{attempt_count(replica, task.id)} attempts",
-    ),
-    @html.p(class="attempt-status", attempt_indicator(replica, task.id)),
-    @html.div(
-      class="task-actions",
-      [
+  @html.article(
+    class=if selected { "task-card is-selected" } else { "task-card" },
+    attrs=@html.Attrs::build().on_click(_ => emit(TaskSelected(task.id))),
+    [
+      @html.div(class="task-topline", [
+        @html.span(class="priority", priority_label(task.priority)),
+        @html.span(class="entity-id", task.id),
+      ]),
+      // The full-width title button is the selection control: keyboard
+      // activation and assistive tech get real button semantics with an
+      // aria-pressed marker, and no control is nested inside another.
+      @html.h3([
         @html.button(
           type_="button",
-          class="task-action",
-          disabled=locked,
-          on_click=emit(EditOpened(task.id)),
-          "Edit",
+          class="task-select",
+          title="Inspect task",
+          attrs=@html.Attrs::build()
+            .aria_controls("task-inspector")
+            .aria_pressed(if selected { "true" } else { "false" }),
+          on_click=emit(TaskSelected(task.id)),
+          task.title,
         ),
-        ..moves,
-      ],
-    ),
-  ])
+      ]),
+      @html.p(class="description", task.description),
+      @html.p(
+        class="task-meta",
+        "\{task.dependencies.length()} dependencies · \{attempt_count(replica, task.id)} attempts",
+      ),
+      @html.p(class="attempt-status", attempt_indicator(replica, task.id)),
+      @html.div(
+        class="task-actions",
+        [
+          @html.button(
+            type_="button",
+            class="task-action",
+            disabled=locked,
+            on_click=emit(EditOpened(task.id)),
+            "Edit",
+          ),
+          ..moves,
+        ],
+      ),
+    ],
+  )
 }
 
 ///|
@@ -62,13 +84,15 @@ fn lane(
 
 ///|
 /// Every mutation control shares one disabled state: the shell only accepts
-/// input while the replica is authoritative, the connection is online and no
-/// command is in flight.
+/// input while the replica is authoritative, the connection is online, no
+/// command is in flight and no editor holds a draft.
 fn new_task_button(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   @html.button(
     type_="button",
     class="new-task",
-    disabled=!mutations_allowed(model) || model.editor is Some(_),
+    disabled=!mutations_allowed(model) ||
+      model.editor is Some(_) ||
+      model.dependency_editor is Some(_),
     on_click=emit(CreateOpened),
     "New task",
   )
@@ -232,7 +256,25 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     ),
     notice_region(model.notice),
     editor_panel(model, emit),
-    @html.div(empty),
-    @html.div(class="lanes", lanes().map(stage => lane(model, stage, emit))),
+    // Lanes and the inspector share one responsive body grid; the panel is
+    // a sibling of the lanes, never nested inside them.
+    @html.div(
+      class=if model.selected_task is Some(_) ||
+        model.dependency_editor is Some(_) {
+        "board-body has-inspector"
+      } else {
+        "board-body"
+      },
+      [
+        @html.div(class="board-main", [
+          @html.div(empty),
+          @html.div(
+            class="lanes",
+            lanes().map(stage => lane(model, stage, emit)),
+          ),
+        ]),
+        inspector_panel(model, emit),
+      ],
+    ),
   ])
 }

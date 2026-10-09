@@ -147,6 +147,10 @@ fn settle_command(
     let model = {
       ..model,
       editor: close_matching_editor(model.editor, pending.kind),
+      dependency_editor: settle_dependency_editor(
+        model.dependency_editor,
+        pending.kind,
+      ),
       notice: Some(
         notice(
           Success,

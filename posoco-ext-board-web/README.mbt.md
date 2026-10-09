@@ -2,9 +2,9 @@
 
 A Rabbita standalone browser shell for the Board wire contract. The shell is
 read-only until it holds an authoritative snapshot; it then gains the v1
-mutation surface: a New task editor, Edit cards, and per-card Move controls.
-Dependency editing, attempt controls, review controls and drag-and-drop do
-not exist in v1.
+mutation surface: a New task editor, Edit cards, per-card Move controls,
+and dependency editing in the task inspector. Attempt controls, review controls
+and drag-and-drop remain out of scope.
 
 - **Rabbita 0.16.4** owns rendering, named WebSocket commands, and delayed commands.
 - **Board client** owns the authoritative replica; no second task/attempt projection lives in the UI model.
@@ -53,7 +53,7 @@ Retries use Rabbita delayed commands: 250ms, 500ms, 1s, 2s, 4s, 8s, then a 10s c
 
 ## Mutations (v1)
 
-Submission requires the connection to be Online, the replica to hold an authoritative snapshot, no command in flight, and a trimmed non-empty title. The expected revision is read live at submit. Identifiers come from an injected UUID seam: the browser entry uses `crypto.randomUUID` and treats a missing or throwing API as a rejection — there is never a weak fallback. Command ids are `cmd-<uuid>` and task ids `task-<uuid>`; neither embeds tokens.
+Submission requires the connection to be Online, the replica to hold an authoritative snapshot, and no command in flight. Task creation and editing additionally require a trimmed non-empty title. The expected revision is read live at submit. Identifiers come from an injected UUID seam: the browser entry uses `crypto.randomUUID` and treats a missing or throwing API as a rejection — there is never a weak fallback. Command ids are `cmd-<uuid>` and task ids `task-<uuid>`; neither embeds tokens.
 
 The single pending record stores correlation only: command id, mutation kind and expected revision. The command payload is never retained, so nothing can be replayed or resent; a reconnect socket sends only Hello. Every send failure callback correlates both the connection generation and the command id, so a late callback can never clear a newer pending command.
 
@@ -65,6 +65,16 @@ Move suggestions mirror the Board v1 stage FSM — Created→Refining/Suspended,
 
 Every mutation control shares one disabled state: the shell accepts input only while the replica is authoritative, the connection is online and no command is in flight. Controls are semantic HTML with explicit label associations, explicit button types, and a live notice region that renders mapped safe text only — wire codes, store and protocol details never reach the UI.
 
+## Task inspector and dependencies
+
+Activate a card's title to inspect it. Selection stores only its task ID; every render resolves the task and its read-only attempt history from the current replica. The responsive panel shows description, stage, priority, definition of done, dependency titles and IDs, and the available task/attempt timestamps in UTC. Close clears selection. Baseline invalidation hides entity details without losing selection; a subsequent authoritative snapshot revalidates it and closes a missing task with a safe notice.
+
+Edit dependencies opens independent copies of the current relationship IDs. Labeled checkboxes exclude the task itself and prevent duplicate choices; a missing candidate remains visible by ID until explicitly removed. Clear all only changes the local draft; Save dependencies is the explicit durable action, including saving an empty set. The UI does not validate the DAG: the durable domain owns missing, self, duplicate and cycle rejection.
+
+Dependency editing shares the existing one-pending-command gate, secure UUID seam, typed `set_task_dependencies_command` builder, live revision and authenticated WebSocket transport. There is no second command queue, optimistic projection or automatic retry. Events update the replica before the correlated result settles; rejection and uncertain disconnects preserve the draft under the same reconciliation rules as task editing.
+
+A draft retains its opening dependency set. If an external authoritative update changes that set, saving is blocked until **Reload latest dependencies** explicitly replaces the draft, or the user discards it. Unrelated revision changes leave the draft intact and submission uses the latest revision. A draft survives switching or dismissing the inspector; **Return to draft** and **Discard draft** provide explicit navigation and disposal. Removing its target in an authoritative snapshot discards it with a notice. Only one editor is active at a time; other mutation controls are disabled while editing dependencies, and all draft mutation controls are disabled while a command is pending.
+
 ## View
 
 Seven lanes cover Created, Refining, Ready, Running, Review, Done, and Suspended. Cards show title, priority, ID, dependency/attempt counts, description preview, running/latest attempt status, and the v1 Edit/Move controls. The header shows connection status, Board revision, stream sequence, task count, and the New task entry. Loading and empty are distinct: until an authoritative snapshot arrives — and again after any invalidation, which discards every record — the board shows `Waiting for Board state`; only an authoritative empty board shows `No Board tasks yet`, so stale cards never survive a resync.
@@ -73,7 +83,7 @@ The view uses semantic HTML and a small Board-owned stylesheet.
 
 ## Cross-host contract
 
-This module is Rabbita's one browser client implementation. SvelteKit 3 and Proton-style desktop hosts implement the same wire schema and reducer invariants themselves; they neither frame this shell in an iframe nor import Rabbita or this MoonBit presentation. The canonical command names and argument schemas (`board.task.create`, `board.task.update`, `board.task.move`), the stable rejection codes, the `posoco-ext-board/protocol-fixtures/v1` fixtures, and the client enum wire spellings (`ClientBoardPriority::to_wire`, `ClientBoardStage::to_wire`) are the shared contract for those adapters. This module imports only the Board client/protocol surface, not backend, coordinator, store, native host, or MoonBack packages.
+This module is Rabbita's one browser client implementation. SvelteKit 3 and Proton-style desktop hosts implement the same wire schema and reducer invariants themselves; they neither frame this shell in an iframe nor import Rabbita or this MoonBit presentation. The canonical command names and argument schemas (`board.task.create`, `board.task.update`, `board.task.move`, `board.task.set_dependencies`), the stable rejection codes, the `posoco-ext-board/protocol-fixtures/v1` fixtures, and the client enum wire spellings (`ClientBoardPriority::to_wire`, `ClientBoardStage::to_wire`) are the shared contract for those adapters. This module imports only the Board client/protocol surface, not backend, coordinator, store, native host, or MoonBack packages.
 
 ## Validation
 
@@ -82,4 +92,4 @@ moon -C posoco-ext-board-web check --target js --output-json
 moon -C posoco-ext-board-web test src --target js --output-json
 ```
 
-Presentation, connection-policy and mutation tests are deterministic helper/update tests, not a new DOM harness. Native static/security and WebSocket tests verify the standalone integration separately. Dependency and attempt/review controls, Cetas/SvelteKit integration, Agent execution and scheduling remain out of scope.
+Presentation, connection-policy and mutation tests are deterministic helper/update tests, not a new DOM harness. Native static/security and WebSocket tests verify the standalone integration separately. Inspector and dependency tests cover detached drafts, external changes, safe rejections, event/result ordering and Hello-only reconnects. Attempt/review controls, Cetas/SvelteKit integration, Agent execution and scheduling remain out of scope.

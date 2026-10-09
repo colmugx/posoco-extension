@@ -24,6 +24,7 @@ priv struct PendingCommand {
 priv enum PendingKind {
   PendingCreate
   PendingEdit(task_id~ : String)
+  PendingDependencies(task_id~ : String)
   PendingMove(task_id~ : String, to~ : @client.ClientBoardStage)
 } derive(Eq)
 
@@ -70,6 +71,8 @@ priv struct Model {
   pending : PendingCommand?
   editor : Editor?
   notice : Notice?
+  selected_task : String?
+  dependency_editor : DependencyDraft?
 } derive(Eq)
 
 ///|
@@ -87,6 +90,16 @@ priv enum Msg {
   DefinitionOfDoneChanged(String)
   SubmitRequested
   MoveRequested(String, @client.ClientBoardStage)
+  TaskSelected(String)
+  InspectorClosed
+  DependenciesOpened
+  DependencyToggled(String, Bool)
+  DependencySelectionChanged(String)
+  DependenciesCleared
+  DependenciesRefreshed
+  DependenciesCancelled
+  DependenciesSubmitted
+  DependencyDraftReturned
 }
 
 ///|
@@ -109,6 +122,8 @@ fn Model::empty(available : Bool) -> Model {
     pending: None,
     editor: None,
     notice: None,
+    selected_task: None,
+    dependency_editor: None,
   }
 }
 

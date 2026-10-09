@@ -134,7 +134,10 @@ fn update(
                   "Waiting for Board snapshot"
                 },
               }
-              (close_missing_edit_target(model), @rabbita.none)
+              (
+                revalidate_inspector(close_missing_edit_target(model)),
+                @rabbita.none,
+              )
             }
             Duplicate => (model, @rabbita.none)
             CommandSettled(result) => settle_command(model, result, emit)
@@ -185,14 +188,18 @@ fn update(
       }
     }
     CreateOpened =>
-      if model.editor is Some(_) || !mutations_allowed(model) {
+      if model.editor is Some(_) ||
+        model.dependency_editor is Some(_) ||
+        !mutations_allowed(model) {
         (model, @rabbita.none)
       } else {
         ({ ..model, editor: Some(Editor::create()), }, @rabbita.none)
       }
     EditOpened(task_id) =>
       // One editor at a time; the authoritative record must exist.
-      if model.editor is Some(_) || !mutations_allowed(model) {
+      if model.editor is Some(_) ||
+        model.dependency_editor is Some(_) ||
+        !mutations_allowed(model) {
         (model, @rabbita.none)
       } else {
         match task_by_id(model.replica, task_id) {
@@ -252,7 +259,22 @@ fn update(
         Some(editor) => submit_editor(model, editor, emit, env)
         None => (model, @rabbita.none)
       }
-    MoveRequested(task_id, to) => submit_move(model, task_id, to, emit, env)
+    MoveRequested(task_id, to) =>
+      if model.dependency_editor is Some(_) {
+        (model, @rabbita.none)
+      } else {
+        submit_move(model, task_id, to, emit, env)
+      }
+    TaskSelected(_)
+    | InspectorClosed
+    | DependenciesOpened
+    | DependencyToggled(_, _)
+    | DependencySelectionChanged(_)
+    | DependenciesCleared
+    | DependenciesRefreshed
+    | DependenciesCancelled
+    | DependenciesSubmitted
+    | DependencyDraftReturned => update_inspector(model, msg, emit, env)
   }
 }
 
