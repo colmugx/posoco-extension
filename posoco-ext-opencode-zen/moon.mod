@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-opencode-zen"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.21.1",
+  "colmugx/posoco@0.22.0",
   "posoco/devkit@0.4.1",
   "posoco/ext-llm@0.2.0",
   "posoco/ext-oauth@0.1.0",
