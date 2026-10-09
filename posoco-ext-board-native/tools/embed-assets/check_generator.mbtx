@@ -121,6 +121,19 @@ async fn main {
   @fs.remove(dist + "/board.css")
   rejected(dist, out, "missing required asset")
   @fs.write_file(dist + "/board.css", b"css")
+  // Browser assets may never occupy the Board control-plane namespace.
+  for path in ["/health", "/ws", "/api"] {
+    @fs.write_file(dist + path, b"shadow")
+    rejected(dist, out, "reserved control-plane asset path: " + path)
+    @fs.remove(dist + path)
+  }
+  @fs.mkdir(dist + "/api")
+  for path in ["/api/bootstrap", "/api/future"] {
+    @fs.write_file(dist + path, b"shadow")
+    rejected(dist, out, "reserved control-plane asset path: " + path)
+    @fs.remove(dist + path)
+  }
+  @fs.rmdir(dist + "/api")
   @fs.symlink(target="dist/index.js", out + ".tmp")
   rejected(dist, out, "cannot create")
   assert_eq(@fs.read_file(dist + "/index.js").binary(), b"js")
@@ -128,6 +141,6 @@ async fn main {
   generate(dist, out).check()
   assert_false(@fs.exists(out + ".tmp"))
   println(
-    "Generator regressions passed: deterministic traversal, hidden/nested files, compiled binary and large literals, current/stale/missing check, symlink/root/FIFO rejection, required assets, exclusive atomic output.",
+    "Generator regressions passed: deterministic traversal, hidden/nested files, compiled binary and large literals, current/stale/missing check, symlink/root/FIFO rejection, required assets, reserved control-plane paths, exclusive atomic output.",
   )
 }

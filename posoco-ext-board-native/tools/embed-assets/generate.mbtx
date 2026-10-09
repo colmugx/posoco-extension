@@ -95,11 +95,26 @@ fn bytes_literal(bytes : Bytes) -> String {
 }
 
 ///|
-/// Check that every required asset exists and is nonempty. Returns the first
-/// violation as an error message, or `None` when the entries are valid.
+/// Reserve the Board control-plane namespace from browser assets. A frontend
+/// file must never be able to shadow health, WebSocket, or current/future API
+/// routes in the native MoonBack host.
+fn reserved_control_path(path : String) -> Bool {
+  path == "/health" ||
+  path == "/ws" ||
+  path == "/api" ||
+  path.has_prefix("/api/")
+}
+
+///|
+/// Check that every required asset exists and is nonempty, and reject any
+/// control-plane namespace collision. Returns the first violation as an error
+/// message, or `None` when the entries are valid.
 fn validate_assets(entries : Array[(String, Bytes)]) -> String? {
   let sizes : Map[String, Int] = Map([])
   for entry in entries {
+    if reserved_control_path(entry.0) {
+      return Some("reserved control-plane asset path: \{entry.0}")
+    }
     sizes[entry.0] = entry.1.length()
   }
   for url in required_assets {

@@ -20,6 +20,24 @@ test "embedded dashboard identity and manifest based public resource policy" {
   assert_false(public_paths.contains("/ws"))
   assert_true(public_paths.contains("/index.js"))
   assert_true(public_paths.contains("/board.css"))
+
+  // Defense in depth: even a hand-built malformed manifest cannot make
+  // control-plane paths public.
+  let collisions : Map[String, Bytes] = {
+    "/health": b"shadow",
+    "/ws": b"shadow",
+    "/api": b"shadow",
+    "/api/bootstrap": b"shadow",
+    "/api/future": b"shadow",
+    "/safe.js": b"safe",
+  }
+  let collision_public = board_public_asset_paths(collisions)
+  for path in ["/health", "/ws", "/api", "/api/bootstrap", "/api/future"] {
+    assert_true(board_control_path(path))
+    assert_false(collision_public.contains(path))
+  }
+  assert_false(board_control_path("/safe.js"))
+  assert_true(collision_public.contains("/safe.js"))
 }
 
 ///|
@@ -36,6 +54,57 @@ fn board_bytes_text(bytes : Bytes) -> String {
   @utf8.decode(bytes) catch {
     _ => ""
   }
+}
+
+///|
+async test "embedded static middleware cannot shadow control-plane routes" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let collisions : Map[String, Bytes] = {
+        "/health": b"asset-health",
+        "/ws": b"asset-ws",
+        "/api": b"asset-api",
+        "/api/bootstrap": b"asset-bootstrap",
+        "/api/future": b"asset-future",
+        "/safe.js": b"asset-safe",
+      }
+      let app = @moonback.App(ctx => {
+        ctx.add_middleware(board_static_assets(collisions))
+        ctx.get("/health", (_req, res) => res.send_text("route-health"))
+        ctx.get("/ws", (_req, res) => res.send_text("route-ws"))
+        ctx.get("/api", (_req, res) => res.send_text("route-api"))
+        ctx.get("/api/bootstrap", (_req, res) => {
+          res.send_text("route-bootstrap")
+        })
+        ctx.get("/api/future", (_req, res) => res.send_text("route-future"))
+      })
+      defer app.close()
+      let listener = @moonback.listen(host="127.0.0.1", port=0)
+      let endpoint : BoardEndpoint = {
+        host: "127.0.0.1",
+        port: listener.addr.port(),
+      }
+      group.spawn_bg(no_wait=true, allow_failure=true, () => {
+        app.serve(listener)
+      })
+      @async.sleep(10)
+
+      for (path, expected) in [
+        ("/health", "route-health"),
+        ("/ws", "route-ws"),
+        ("/api", "route-api"),
+        ("/api/bootstrap", "route-bootstrap"),
+        ("/api/future", "route-future"),
+      ] {
+        let (response, body) = board_http_raw(endpoint.base_url() + path)
+        assert_eq(response.code, 200)
+        assert_eq(board_bytes_text(body), expected)
+      }
+      let (asset, body) = board_http_raw(endpoint.base_url() + "/safe.js")
+      assert_eq(asset.code, 200)
+      assert_eq(body, b"asset-safe")
+    })
+  })
 }
 
 ///|
