@@ -1,0 +1,12 @@
+{
+  "type": "command",
+  "command_id": "cmd-deps-1",
+  "name": "board.task.set_dependencies",
+  "expected_revision": 2,
+  "args": {
+    "id": "task-1",
+    "dependencies": [
+      "task-2"
+    ]
+  }
+}
