@@ -124,6 +124,43 @@ pub fn update_task_command(
 }
 
 ///|
+/// Replace the complete dependency set for one task. The durable server owns
+/// existence, duplicate/self-edge and DAG-cycle validation; clients only send
+/// explicit task IDs against the current authoritative revision.
+///
+/// ```mbt check
+/// test {
+///   let wire = @client.set_task_dependencies_command(
+///     "cmd-deps",
+///     2L,
+///     id="task-1",
+///     dependencies=["task-2", "task-3"],
+///   )
+///   assert_eq(wire.name, "board.task.set_dependencies")
+///   assert_eq(wire.args, {
+///     "id": "task-1",
+///     "dependencies": ["task-2", "task-3"],
+///   })
+/// }
+/// ```
+pub fn set_task_dependencies_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+  dependencies~ : Array[String],
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.task.set_dependencies",
+    args: {
+      "id": id.to_json(),
+      "dependencies": dependencies.copy().to_json(),
+    },
+  }
+}
+
+///|
 /// Request a stage transition; the durable server remains authoritative.
 ///
 /// ```mbt check
