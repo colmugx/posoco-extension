@@ -26,7 +26,7 @@ S1 routes are:
 - `/health` — token-free liveness only;
 - `/api/bootstrap?token=...` — protocol/endpoint metadata, never the token;
 - `/ws?token=...` — authenticated WebSocket upgrade;
-- `/?token=...` — the embedded, read-only Rabbita Board dashboard;
+- `/?token=...` — the embedded Rabbita Board dashboard with task create/edit/move;
 - `/index.js`, `/board.css` and other actual embedded resources — public static
   application code behind the exact Host gate, never Board data or instance tokens.
 
@@ -71,7 +71,7 @@ directly and do not need the MoonBack standalone host or a browser opener. A web
 host or desktop host owns its own presentation lifecycle; a TUI standalone browser host keeps the existing
 `/board` workflow. No concrete host-product dependency is required.
 
-## Client contract and read-only standalone dashboard
+## Client contract and writable standalone dashboard
 
 `colmugx/posoco-ext-board/client` is a pure native/JS replica, independent of
 Board domain records and presentation frameworks. It strictly decodes the
@@ -86,10 +86,13 @@ Detached getters and `copy()` support presentation without shared mutable state.
 Canonical JSON in `protocol-fixtures/v1` is shared contract material for
 MoonBit, future SvelteKit 3/Svelte 5, and desktop consumers. Those hosts should
 implement the same wire/reducer invariants, not import Rabbita. Native fixture
-tests validate every JSON file through the protocol codec and replica.
+tests validate server frames through the codec/replica, and client command
+fixtures through the client codec, typed builders and strict server decoder.
+The client package also provides create/update/move command builders with
+centralized stage/priority spellings, detached args, and no backend/UI dependency.
 
-The independent `posoco-ext-board-web` module provides a read-only seven-lane
-Rabbita **0.16.4** shell, built using Warren **0.4.4**. It imports only client
+The independent `posoco-ext-board-web` module provides a seven-lane
+Rabbita **0.16.4** shell with task create/edit/move, built using Warren **0.4.4**. It imports only client
 and protocol packages. Browser WebSocket commands and capped reconnect delays
 belong to Rabbita; UI state is separate from the sole Board replica, which
 shows `Waiting for Board state` until an authoritative snapshot arrives and
@@ -101,7 +104,11 @@ page; consumers of that host need no Warren, Node or `dist/` checkout, and the
 legacy native diagnostics page is retired by that embedding work. SvelteKit 3
 and Proton-style desktop hosts implement the wire contract directly from
 `protocol-fixtures/v1`; they neither frame the web shell in an iframe nor
-import Rabbita. Mutation UX, Cetas integration and Agent execution remain
+import Rabbita. The UI sends task intents with the current authoritative revision,
+allows only one pending command, and never changes the projection optimistically.
+Command results only settle matching correlation IDs; disconnect-before-settlement
+clears the baseline and requests a snapshot without resending the command.
+Dependency/attempt/review UX, Cetas integration and Agent execution remain
 separate work.
 
 ## Host wiring
@@ -291,7 +298,7 @@ closes without a resync frame. Writes have a 1-second deadline. All connection
 exits unregister and close the mailbox; shutdown explicitly cancels local
 connection tasks. No connection task outlives its structured scope.
 
-The standalone browser implementation is now the read-only Rabbita dashboard,
+The standalone browser implementation is now the Rabbita task dashboard,
 not the retired handwritten diagnostics client. Its framework-neutral replica
 strictly validates snapshot suffixes and full entities, replaces authoritative
 snapshots, ignores duplicates and resets on gaps/resync. Known Board events
@@ -523,11 +530,12 @@ scheduler.
 - `runtime`: presentation contracts, standalone lifecycle composition and
   headless defaults, consuming the backend through its narrow public API;
 - `client`: framework-neutral authoritative replica and reducer invariants;
-- independent `posoco-ext-board-web` module: read-only Rabbita presentation,
+- independent `posoco-ext-board-web` module: Rabbita task presentation,
   built with Warren as a development tool;
 - independent `posoco-ext-board-native` module: MoonBack localhost transport,
   OS-entropy token, embedded static assets, browser opener and native factory.
 
 Embedded assets belong only to the optional native presentation. The headless
-backend and wire/durable mutation semantics remain unchanged. UI mutations,
-Cetas/SvelteKit or desktop integration, and Agent execution remain out of scope.
+backend and wire/durable mutation semantics remain unchanged. Dependency editing,
+attempt/review UI, Cetas/SvelteKit or desktop integration, and Agent execution
+remain out of scope.

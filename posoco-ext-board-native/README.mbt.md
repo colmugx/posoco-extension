@@ -6,7 +6,8 @@ Native-only MoonBack standalone presentation for `posoco-ext-board`.
 - `BoardRuntime` owns optional presentation composition and its Supervisor.
 - `NativeBoardWebServer` uses MoonBack 0.8.6 for routing, WebSocket upgrades,
   connection lifecycle, graceful shutdown and in-memory static assets.
-- `posoco-ext-board-web` supplies the embedded read-only Rabbita dashboard.
+- `posoco-ext-board-web` supplies the embedded Rabbita task dashboard; create,
+  edit, and move intents use the existing authenticated WebSocket commands.
 - `NativeBrowserOpener` remains a separate standalone UX adapter.
 
 This is a separate module because MoonBack 0.8.6 is not JS-compatible and the
@@ -92,5 +93,5 @@ Generator regression checks (including compiled byte round trips):
 moon -C posoco-ext-board-native run tools/embed-assets/check_generator.mbtx --target native --output-json
 ```
 
-No MoonBack DI, UI mutation controls, Cetas integration, Agent execution,
-scheduling or workflow dependency is introduced.
+No new HTTP mutation routes, MoonBack DI, dependency/attempt/review controls,
+Cetas integration, Agent execution, scheduling or workflow dependency is introduced.

@@ -1,0 +1,13 @@
+{
+  "type": "command",
+  "command_id": "cmd-update-1",
+  "name": "board.task.update",
+  "expected_revision": 1,
+  "args": {
+    "id": "task-1",
+    "title": "Validate the Board contract — v1",
+    "description": "Share wire fixtures across browser and desktop clients.",
+    "priority": "high",
+    "definition_of_done": []
+  }
+}

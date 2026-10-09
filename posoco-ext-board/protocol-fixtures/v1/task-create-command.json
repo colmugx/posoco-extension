@@ -1,0 +1,17 @@
+{
+  "type": "command",
+  "command_id": "cmd-create-1",
+  "name": "board.task.create",
+  "expected_revision": 0,
+  "args": {
+    "id": "task-1",
+    "title": "Validate the Board contract",
+    "description": "Share wire fixtures across browser and desktop clients.",
+    "priority": "normal",
+    "definition_of_done": [
+      "Decode every v1 server frame",
+      "Apply the authoritative projection"
+    ],
+    "dependencies": []
+  }
+}
