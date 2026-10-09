@@ -4,7 +4,7 @@ version = "0.1.0"
 readme = "README.mbt.md"
 license = "Apache-2.0"
 repository = "https://github.com/colmugx/posoco-extension"
-description = "Read-only Rabbita browser shell for the Board wire contract"
+description = "Rabbita Board dashboard with authoritative task mutation controls"
 preferred_target = "js"
 supported_targets = "js"
 

@@ -59,3 +59,51 @@ test "loading and empty presentation" {
   assert_eq(@src.empty_message(replica), Some("No Board tasks yet"))
 }
 ```
+
+Move suggestions mirror the Board v1 stage FSM as a UX convenience; the
+durable server stays authoritative and may still reject a suggested move.
+
+```moonbit check
+///|
+test "stage fsm suggestions" {
+  assert_true(
+    @src.move_suggestions(@client.Created) ==
+    [@client.Refining, @client.Suspended],
+  )
+  assert_true(
+    @src.move_suggestions(@client.Review) ==
+    [@client.Done, @client.Ready, @client.Refining, @client.Suspended],
+  )
+  assert_eq(@src.move_suggestions(@client.Done).length(), 1)
+}
+```
+
+Definition-of-done drafts split one entry per line: surrounding whitespace is
+dropped, empty lines are removed, and cleaned entries rejoin losslessly for
+editing.
+
+```moonbit check
+///|
+test "definition of done round trip" {
+  assert_eq(@src.definition_of_done_lines("Tests pass\n\n Review clean \n"), [
+    "Tests pass", "Review clean",
+  ])
+  assert_eq(
+    @src.definition_of_done_text(["Tests pass", "Review clean"]),
+    "Tests pass\nReview clean",
+  )
+  assert_eq(@src.definition_of_done_text([]), "")
+}
+```
+
+The editor priority select has a fixed option order and derives its wire
+values from the client's centralized `to_wire`, never from local spellings.
+
+```moonbit check
+///|
+test "priority options" {
+  assert_eq(@src.priorities().length(), 4)
+  assert_true(@src.priorities()[0] == @client.Low)
+  assert_true(@src.priorities()[3] == @client.Critical)
+}
+```

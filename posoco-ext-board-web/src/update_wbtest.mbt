@@ -1,7 +1,7 @@
 ///|
 test "opened sends baseline-aware Hello and empty replay settles reconnect" {
   let empty = Model::empty(true)
-  let (opened, _) = update(empty, SocketEvent(0, Opened), test_emit, "unused")
+  let (opened, _) = update(empty, SocketEvent(0, Opened), test_emit, test_env())
   assert_true(opened.connection is Connecting)
   match @protocol.decode_client_frame(hello_payload(opened.replica)) {
     Ok(Hello(hello)) => {
@@ -26,15 +26,15 @@ test "opened sends baseline-aware Hello and empty replay settles reconnect" {
     opened,
     SocketEvent(0, Message(snapshot)),
     test_emit,
-    "unused",
+    test_env(),
   )
-  let (waiting, _) = update(online, TransportFailed(0), test_emit, "unused")
-  let (retrying, _) = update(waiting, Retry(0), test_emit, "unused")
+  let (waiting, _) = update(online, TransportFailed(0), test_emit, test_env())
+  let (retrying, _) = update(waiting, Retry(0), test_emit, test_env())
   let (resumed, _) = update(
     retrying,
     SocketEvent(1, Opened),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_true(resumed.connection is Online)
   assert_true(resumed.replica.has_snapshot())
@@ -54,14 +54,102 @@ fn test_emit(_msg : Msg) -> @rabbita.Cmd {
 }
 
 ///|
+/// Fixed test identifier provider for the pure update tests.
+fn test_env() -> Env {
+  { url: "unused", uuid: () => Some("uuid-1"), }
+}
+
+///|
+/// Deterministic multi-identifier provider for correlation tests.
+fn counting_env() -> Env {
+  let counter = Ref(0)
+  {
+    url: "unused",
+    uuid: () => {
+      counter.val = counter.val + 1
+      Some("uuid-\{counter.val}")
+    },
+  }
+}
+
+///|
+fn missing_uuid_env() -> Env {
+  { url: "unused", uuid: () => None, }
+}
+
+///|
+fn snapshot_text(tasks : Json, revision : Int) -> String {
+  @protocol.encode_server_frame(
+    Snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: revision.to_int64(),
+      payload: {
+        "board": {
+          "revision": revision.to_json(),
+          "tasks": tasks,
+          "attempts": [],
+        },
+        "events": [],
+      },
+    }),
+  )
+}
+
+///|
+fn task_event_text(
+  id : String,
+  stage : String,
+  seq : Int,
+  revision : Int,
+) -> String {
+  @protocol.encode_server_frame(
+    Event({
+      seq: seq.to_int64(),
+      board_revision: revision.to_int64(),
+      kind: "board.task.stage_changed",
+      scope: None,
+      payload: { "task_id": id.to_json(), "task": carded_task_json(id, stage) },
+    }),
+  )
+}
+
+///|
+fn command_result_text(
+  command_id : String,
+  accepted : Bool,
+  error : String?,
+  current_revision : Int64?,
+) -> String {
+  @protocol.encode_server_frame(
+    CommandResult({ command_id, accepted, error, current_revision, }),
+  )
+}
+
+///|
+/// Seed a model that is online with one authoritative task at revision 1.
+fn seeded_online(task_id : String, stage : String) -> Model {
+  let model = Model::empty(true)
+  let (opened, _) = update(model, SocketEvent(0, Opened), test_emit, test_env())
+  let (online, _) = update(
+    opened,
+    SocketEvent(
+      0,
+      Message(snapshot_text(Json::array([carded_task_json(task_id, stage)]), 1)),
+    ),
+    test_emit,
+    test_env(),
+  )
+  online
+}
+
+///|
 test "reconnect is bounded single pending and old callbacks are ignored" {
   let original = Model::empty(true)
-  let (waiting, _) = update(
-    original,
-    TransportFailed(0),
-    test_emit,
-    "ws://board/ws?token=private",
-  )
+  let (waiting, _) = update(original, TransportFailed(0), test_emit, Env::{
+    url: "ws://board/ws?token=private",
+    uuid: () => Some("uuid-1"),
+  })
   assert_true(waiting.connection is Reconnecting)
   assert_true(waiting.retry_pending)
   assert_eq(waiting.retry_attempt, 1)
@@ -69,16 +157,16 @@ test "reconnect is bounded single pending and old callbacks are ignored" {
     waiting,
     SocketEvent(0, Errored),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_eq(duplicate.retry_attempt, 1)
-  let (next, _) = update(waiting, Retry(0), test_emit, "unused")
+  let (next, _) = update(waiting, Retry(0), test_emit, test_env())
   assert_eq(next.generation, 1)
   assert_false(next.retry_pending)
-  let (stale, _) = update(next, TransportFailed(0), test_emit, "unused")
+  let (stale, _) = update(next, TransportFailed(0), test_emit, test_env())
   assert_eq(stale.generation, 1)
   assert_false(stale.retry_pending)
-  let (late_retry, _) = update(next, Retry(0), test_emit, "unused")
+  let (late_retry, _) = update(next, Retry(0), test_emit, test_env())
   assert_eq(late_retry.generation, 1)
 }
 
@@ -100,7 +188,7 @@ test "snapshot resets backoff and replica updates do not mutate previous model" 
     original,
     SocketEvent(0, Message(text)),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_true(online.connection is Online)
   assert_eq(online.retry_attempt, 0)
@@ -111,7 +199,7 @@ test "snapshot resets backoff and replica updates do not mutate previous model" 
     online,
     SocketEvent(0, Message("{")),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_true(reconnecting.connection is Reconnecting)
   assert_false(reconnecting.replica.has_snapshot())
@@ -156,7 +244,7 @@ test "reconnect after invalidation drops stale cards and waits again" {
     model,
     SocketEvent(0, Message(text)),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_true(online.connection is Online)
   assert_eq(empty_message(online.replica), None)
@@ -172,7 +260,7 @@ test "reconnect after invalidation drops stale cards and waits again" {
       ),
     ),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_true(resyncing.connection is Reconnecting)
   assert_false(resyncing.replica.has_snapshot())
@@ -195,7 +283,7 @@ test "protocol error is terminal and ignores socket close or delayed retry" {
       ),
     ),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_true(terminal.connection is ProtocolError(_))
   assert_false(terminal.retry_pending)
@@ -204,11 +292,11 @@ test "protocol error is terminal and ignores socket close or delayed retry" {
     terminal,
     SocketEvent(0, Errored),
     test_emit,
-    "unused",
+    test_env(),
   )
   assert_true(closed.connection is ProtocolError(_))
   assert_false(closed.retry_pending)
-  let (retried, _) = update(closed, Retry(0), test_emit, "unused")
+  let (retried, _) = update(closed, Retry(0), test_emit, test_env())
   assert_true(retried.connection is ProtocolError(_))
   assert_eq(retried.generation, 0)
 }

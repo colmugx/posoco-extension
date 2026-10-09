@@ -27,6 +27,49 @@ pub fn priority_label(priority : @client.ClientBoardPriority) -> String {
 }
 
 ///|
+/// Fixed option order for the editor priority select. Wire spelling always
+/// comes from the client's centralized `to_wire`, never from this package.
+pub fn priorities() -> Array[@client.ClientBoardPriority] {
+  [Low, Normal, High, Critical]
+}
+
+///|
+/// Move suggestions are a UX convenience mirroring the Board v1 stage FSM;
+/// the durable server stays authoritative and may still reject a move. The
+/// table covers every stage so the view can render a control row for any
+/// card.
+pub fn move_suggestions(
+  stage : @client.ClientBoardStage,
+) -> Array[@client.ClientBoardStage] {
+  match stage {
+    Created => [Refining, Suspended]
+    Refining => [Ready, Suspended]
+    Ready => [Running, Refining, Suspended]
+    Running => [Review, Suspended]
+    Review => [Done, Ready, Refining, Suspended]
+    Done => [Refining]
+    Suspended => [Created, Refining, Ready]
+  }
+}
+
+///|
+/// Split a definition-of-done draft into entries: one entry per line with
+/// surrounding whitespace dropped and empty lines removed.
+pub fn definition_of_done_lines(text : String) -> Array[String] {
+  text
+  .split("\n")
+  .map(line => line.trim().to_owned())
+  .filter(line => line != "")
+  .collect()
+}
+
+///|
+/// Join definition-of-done entries back into the multi-line editor draft.
+pub fn definition_of_done_text(lines : Array[String]) -> String {
+  lines.join("\n")
+}
+
+///|
 pub fn tasks_in_lane(
   replica : @client.BoardReplica,
   stage : @client.ClientBoardStage,

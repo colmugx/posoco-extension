@@ -1,0 +1,10 @@
+{
+  "type": "command",
+  "command_id": "cmd-move-1",
+  "name": "board.task.move",
+  "expected_revision": 2,
+  "args": {
+    "id": "task-1",
+    "to": "refining"
+  }
+}

@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco-ext-board/client",
+  "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/protocol",
   "moonbitlang/async",
   "moonbitlang/async/fs",

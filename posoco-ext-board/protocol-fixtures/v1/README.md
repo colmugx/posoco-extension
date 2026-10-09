@@ -1,6 +1,6 @@
 # Board protocol v1 canonical fixtures
 
-These are real JSON **server frames**, not UI models. The wire codec in
+These are real JSON **server frames and client commands**, not UI models. The wire codec in
 `src/protocol/codec.mbt`, full-entity projection in `src/protocol/projection.mbt`,
 and composite bootstrap in `src/backend/bootstrap.mbt` define their shape.
 Future SvelteKit 3 and desktop clients consume this contract; it is not a
@@ -62,14 +62,38 @@ time and succeeded status. All timestamps are nonnegative integer milliseconds.
   The reducer reports its stable code (`hello_required`) as terminal; its message
   is not a reducer state update. Hosts stop/reconnect as appropriate.
 
+## Canonical task command examples
+
+These three client frames are independent examples, not part of the server
+reducer chain above:
+
+| File | Name | Expected revision |
+| --- | --- | --- |
+| `task-create-command.json` | `board.task.create` | 0 |
+| `task-update-command.json` | `board.task.update` | 1 |
+| `task-move-command.json` | `board.task.move` | 2 |
+
+Create includes all six required args and explicit task identity. Update shows
+all editable fields, including an empty `definition_of_done` array that clears
+it; omitted update fields remain unchanged and are never encoded as `null`.
+Move contains only `id` and `to`. Timestamp authority stays with the server.
+
+Rabbita is one implementation of this client contract. SvelteKit 3 and Proton
+hosts implement the same names, schemas, and fixtures using their own adapters,
+not by importing or framing the standalone UI. `command_id` is correlation only,
+not an idempotency key: do not automatically resend a mutation after disconnect,
+conflict, timeout, or uncertain delivery. Reconcile using snapshots/events.
+
 ## Native validation
 
-The separate `src/fixture_tests` package imports only the public protocol/client
-APIs plus native filesystem/environment test helpers. Production client imports
-remain protocol/JSON only. Tests decode every file with `decode_server_frame`,
-check frame and semantic-JSON codec round trips, reduce each fixture on an
-independent valid baseline, and exercise the complete chain through both
-`apply_frame` and `apply_text`.
+The separate `src/fixture_tests` package uses public protocol/client APIs,
+domain values for decoder assertions, and native filesystem/environment test
+helpers. Production client imports remain protocol/JSON only. Tests decode
+server fixtures with `decode_server_frame`, check semantic-JSON round trips,
+and reduce the chain through both `apply_frame` and `apply_text`. Command fixtures
+are decoded with `decode_client_frame` and strict `decode_board_command`, compared
+with the typed client builders, and checked against exact domain commands with
+an injected server timestamp.
 
 From the `posoco-ext-board` module directory:
 

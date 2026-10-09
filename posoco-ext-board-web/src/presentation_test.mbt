@@ -213,3 +213,53 @@ test "backoff caps and connection labels never disclose protocol details" {
     "Protocol error",
   )
 }
+
+///|
+test "move suggestions mirror the v1 stage fsm as ux only" {
+  let expectations : Array[
+    (@client.ClientBoardStage, Array[@client.ClientBoardStage]),
+  ] = [
+    (@client.Created, [@client.Refining, @client.Suspended]),
+    (@client.Refining, [@client.Ready, @client.Suspended]),
+    (@client.Ready, [@client.Running, @client.Refining, @client.Suspended]),
+    (@client.Running, [@client.Review, @client.Suspended]),
+    (
+      @client.Review,
+      [@client.Done, @client.Ready, @client.Refining, @client.Suspended],
+    ),
+    (@client.Done, [@client.Refining]),
+    (@client.Suspended, [@client.Created, @client.Refining, @client.Ready]),
+  ]
+  for pair in expectations {
+    let (stage, expected) = pair
+    assert_true(@src.move_suggestions(stage) == expected)
+  }
+  // Every lane is covered and no lane ever suggests itself.
+  for stage in @src.lanes() {
+    for target in @src.move_suggestions(stage) {
+      assert_false(target == stage)
+    }
+  }
+}
+
+///|
+test "definition of done lines trim drop empties and rejoin losslessly" {
+  assert_eq(@src.definition_of_done_lines("Tests pass\n\n  Review clean \n"), [
+    "Tests pass", "Review clean",
+  ])
+  assert_eq(@src.definition_of_done_lines(""), [])
+  assert_eq(@src.definition_of_done_lines("\n \n"), [])
+  assert_eq(@src.definition_of_done_text(["a", "b"]), "a\nb")
+  assert_eq(@src.definition_of_done_text([]), "")
+  let lines = ["Deploy", "Verify"]
+  assert_eq(
+    @src.definition_of_done_lines(@src.definition_of_done_text(lines)),
+    lines,
+  )
+}
+
+///|
+test "priority select options are fixed and wire derived" {
+  let expected = [@client.Low, @client.Normal, @client.High, @client.Critical]
+  assert_true(@src.priorities() == expected)
+}
