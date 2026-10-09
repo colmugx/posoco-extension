@@ -123,6 +123,7 @@ fn test_tools(
   parent_selection? : (() -> (String, String?))? = None,
   observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
   catalog? : @kind.KindCatalog = @kind.KindCatalog::builtin(),
+  auto_wakeup? : Bool = false,
 ) -> SubagentTools {
   SubagentTools::SubagentTools(
     catalog~,
@@ -132,6 +133,7 @@ fn test_tools(
     parent_effort=None,
     parent_selection~,
     observers~,
+    auto_wakeup~,
   )
 }
 
@@ -465,4 +467,219 @@ test "agent_schema_keeps_trust_defaults_and_resume_rules_explicit" {
   assert_true(
     resume_desc.contains("continue instead of spawning a fresh session"),
   )
+}
+
+// ---------------------------------------------------------------------------
+// Delivery-point ack: observe_deliveries emits `background_delivered` with
+// the task id exactly once per envelope; `background_terminal` keeps its
+// state/summary semantics.
+// ---------------------------------------------------------------------------
+
+///|
+/// Seed one undelivered background receipt, mirroring the spawn-acceptance
+/// bookkeeping (registry record + unobserved task id).
+fn seed_undelivered(
+  tools : SubagentTools,
+  task_id~ : String,
+  child_session~ : String,
+) -> Unit {
+  tools.registry[child_session] = BackgroundRecord::BackgroundRecord(
+    kind="coder",
+  )
+  tools.unobserved[task_id] = child_session
+}
+
+///|
+/// Data payloads of the extension's `Custom` events with one label.
+fn custom_payloads(
+  events : Array[@kit.SubagentEvent],
+  want~ : String,
+) -> Array[Json] {
+  let out : Array[Json] = []
+  for event in events {
+    match event.event {
+      @posoco.TurnEvent::Custom(source~, label~, data~) =>
+        if source == "posoco_ext_subagent" && label == want {
+          out.push(data)
+        }
+      _ => ()
+    }
+  }
+  out
+}
+
+///|
+fn outcome_envelope(task_id~ : String, detail~ : String) -> @posoco.Message {
+  @posoco.tk_user_msg(
+    "[posoco-task-outcome id=\{task_id}] extension=posoco_ext_subagent label=subagent-1: \{detail}",
+  )
+}
+
+///|
+test "observe_deliveries_acks_real_delivery_with_task_id_and_keeps_terminal" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let events : Array[@kit.SubagentEvent] = []
+  tools.subscribe(fn(event) { events.push(event) })
+  seed_undelivered(tools, task_id="task_1", child_session="subagent-1")
+  tools.observe_deliveries([
+    outcome_envelope(task_id="task_1", detail="child finished early"),
+  ])
+  // The ack carries the task id, exactly once, before the terminal.
+  let delivered = custom_payloads(events, want="background_delivered")
+  assert_eq(delivered.length(), 1)
+  guard delivered[0] is Json::Object(fields) else {
+    fail("delivered payload must be an object")
+  }
+  assert_eq(fields.get("task_id"), Some(Json::string("task_1")))
+  assert_eq(fields.get("child_session"), Some(Json::string("subagent-1")))
+  // Terminal semantics retained: authoritative state + summary.
+  let terminal = custom_payloads(events, want="background_terminal")
+  assert_eq(terminal.length(), 1)
+  guard terminal[0] is Json::Object(terminal_fields) else {
+    fail("terminal payload must be an object")
+  }
+  assert_eq(terminal_fields.get("state"), Some(Json::string("completed")))
+  assert_eq(
+    terminal_fields.get("summary"),
+    Some(Json::string("child finished early")),
+  )
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+}
+
+///|
+test "observe_deliveries_duplicate_scans_ack_once" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let events : Array[@kit.SubagentEvent] = []
+  tools.subscribe(fn(event) { events.push(event) })
+  seed_undelivered(tools, task_id="task_1", child_session="subagent-1")
+  let envelope = outcome_envelope(task_id="task_1", detail="done once")
+  tools.observe_deliveries([envelope])
+  // Re-delivery scans (replayed session, later turn) are no-ops.
+  tools.observe_deliveries([envelope])
+  tools.observe_deliveries([@posoco.tk_user_msg("plain follow-up")])
+  assert_eq(custom_payloads(events, want="background_delivered").length(), 1)
+  assert_eq(custom_payloads(events, want="background_terminal").length(), 1)
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+}
+
+///|
+test "observe_deliveries_acks_each_task_id_exactly_once" {
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer)
+  let events : Array[@kit.SubagentEvent] = []
+  tools.subscribe(fn(event) { events.push(event) })
+  seed_undelivered(tools, task_id="task_1", child_session="subagent-1")
+  seed_undelivered(tools, task_id="task_2", child_session="subagent-2")
+  tools.observe_deliveries([
+    outcome_envelope(task_id="task_1", detail="first done"),
+    outcome_envelope(task_id="task_2", detail="failed: exploded"),
+  ])
+  let delivered = custom_payloads(events, want="background_delivered")
+  assert_eq(delivered.length(), 2)
+  let ids : Array[String] = []
+  for data in delivered {
+    ids.push(json_string_field(data, "task_id"))
+  }
+  assert_eq(ids, ["task_1", "task_2"])
+  assert_eq(custom_payloads(events, want="background_terminal").length(), 2)
+  assert_eq(tools.background_children(), [
+    ("subagent-1", "completed"),
+    ("subagent-2", "failed"),
+  ])
+  // A second scan of both envelopes acks nothing new.
+  tools.observe_deliveries([
+    outcome_envelope(task_id="task_1", detail="first done"),
+    outcome_envelope(task_id="task_2", detail="failed: exploded"),
+  ])
+  assert_eq(delivered.length(), 2)
+}
+
+// ---------------------------------------------------------------------------
+// Automatic wakeup gating: observe_ready schedules one ordinary turn per
+// undelivered accepted task; everything else stays lazy.
+// ---------------------------------------------------------------------------
+
+///|
+priv struct WakeupRecorder {
+  requests : Array[(String, String)]
+}
+
+///|
+fn WakeupRecorder::WakeupRecorder() -> WakeupRecorder {
+  { requests: [], }
+}
+
+///|
+fn wakeup_recorder_port(recorder : WakeupRecorder) -> @posoco.WakeupPort {
+  @posoco.WakeupPort::from_request(request=fn(session, tag, _note) {
+    recorder.requests.push((session, tag))
+    Ok({ id: "ticket-1", session, tag, enqueued_at: 0L, })
+  })
+}
+
+///|
+fn outcome_ready_event(
+  task_id~ : String,
+  session~ : String,
+) -> @posoco.TurnEvent {
+  @posoco.TurnEvent::Custom(
+    source="posoco.tasks",
+    label="background_outcome_ready",
+    data=Json::object(
+      Map::from_array([
+        ("task_id", Json::string(task_id)),
+        ("session", Json::string(session)),
+      ]),
+    ),
+  )
+}
+
+///|
+test "observe_ready_requests_one_turn_for_undelivered_accepted_tasks" {
+  let recorder = WakeupRecorder::WakeupRecorder()
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer, auto_wakeup=true)
+  tools.wakeup = Some(wakeup_recorder_port(recorder))
+  seed_undelivered(tools, task_id="task_1", child_session="subagent-1")
+  tools.observe_ready(
+    outcome_ready_event(task_id="task_1", session="parent_bg"),
+  )
+  assert_eq(recorder.requests, [("parent_bg", BACKGROUND_WAKEUP_TAG)])
+  // Foreign receipts and malformed payloads never schedule a turn.
+  tools.observe_ready(outcome_ready_event(task_id="other", session="parent_bg"))
+  tools.observe_ready(outcome_ready_event(task_id="task_1", session=""))
+  tools.observe_ready(
+    @posoco.TurnEvent::Custom(
+      source="posoco.tasks",
+      label="background_spawned",
+      data=Json::object(Map::from_array([])),
+    ),
+  )
+  assert_eq(recorder.requests.length(), 1)
+}
+
+///|
+test "observe_ready_stays_lazy_without_policy_or_capability" {
+  let recorder = WakeupRecorder::WakeupRecorder()
+  // Default policy is off: no request even with the capability present.
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let policy_off = test_tools(composer=composer as &ChildComposer)
+  policy_off.wakeup = Some(wakeup_recorder_port(recorder))
+  seed_undelivered(policy_off, task_id="task_1", child_session="subagent-1")
+  policy_off.observe_ready(
+    outcome_ready_event(task_id="task_1", session="parent_bg"),
+  )
+  assert_eq(recorder.requests, [])
+  // Policy on but no composed capability (host without wakeup): lazy again.
+  let capable = test_tools(
+    composer=composer as &ChildComposer,
+    auto_wakeup=true,
+  )
+  seed_undelivered(capable, task_id="task_1", child_session="subagent-1")
+  capable.observe_ready(
+    outcome_ready_event(task_id="task_1", session="parent_bg"),
+  )
+  assert_eq(recorder.requests, [])
 }

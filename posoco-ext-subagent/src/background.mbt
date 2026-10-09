@@ -7,8 +7,9 @@
 /// extension's jobs are the declaration-only `background_exited` event at
 /// true task exit (hosts/observers learn a death immediately; the runner
 /// does no bookkeeping there), observation at the delivery point
-/// (`before_model`) plus the authoritative `background_terminal` event
-/// hosts listen for.
+/// (`before_model`) plus the `background_delivered` ack (task id, exactly
+/// once when the envelope enters model input) and the authoritative
+/// `background_terminal` event hosts listen for.
 
 ///|
 /// Registry entry state for one spawned child: `Running` from spawn until
@@ -261,9 +262,11 @@ impl @posoco.PipelineHook for SubagentTools with fn before_model(
 ///|
 /// Scan the model input for delivered background outcomes (ruling: terminal
 /// observation lives at the delivery point). For every still-unobserved
-/// receipt id, a matching `[posoco-task-outcome id=<id>]` envelope updates
+/// receipt id, a matching `[posoco-task-outcome id=<id>]` envelope emits the
+/// `background_delivered` ack (task id on the existing subscription channel,
+/// exactly once per task id — re-delivery scans are then no-ops), updates
 /// the registry record, fires the `background_terminal` subscription event,
-/// and leaves the unobserved set — re-delivery scans are then no-ops.
+/// and leaves the unobserved set.
 fn SubagentTools::observe_deliveries(
   self : SubagentTools,
   messages : Array[@posoco.Message],
@@ -283,6 +286,7 @@ fn SubagentTools::observe_deliveries(
         None => continue
       }
       self.unobserved.remove(id)
+      self.emit_delivered(task_id=id, child_session~)
       match parse_outcome_detail(text) {
         Some((state_word, summary)) =>
           self.record_terminal(child_session, state_word, summary)
@@ -290,6 +294,32 @@ fn SubagentTools::observe_deliveries(
       }
     }
   }
+}
+
+///|
+/// Delivery ack for one consumed outcome envelope: emitted by the first
+/// scan that saw the envelope in model input, keyed by task id so hosts can
+/// close their ready receipts. Independent of the terminal classification,
+/// which keeps its own gating in `record_terminal`.
+fn SubagentTools::emit_delivered(
+  self : SubagentTools,
+  task_id~ : String,
+  child_session~ : String,
+) -> Unit {
+  let kind = match self.registry.get(child_session) {
+    Some(record) => record.kind
+    None => ""
+  }
+  self.emit_custom(
+    child_session,
+    kind,
+    "background",
+    "background_delivered",
+    Json::object({
+      "task_id": Json::string(task_id),
+      "child_session": Json::string(child_session),
+    }),
+  )
 }
 
 ///|

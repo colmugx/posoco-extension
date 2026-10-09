@@ -917,7 +917,10 @@ test "openai codex-shaped sse corpus replays to tool calls" {
   let completion2 = acc2.to_completion()
   let tool_calls2 = completion2.tool_calls()
   assert_eq(tool_calls2.length(), 1)
-  assert_eq(tool_calls2[0].call_id.to_string(), "call_fixture000000000000000002")
+  assert_eq(
+    tool_calls2[0].call_id.to_string(),
+    "call_fixture000000000000000002",
+  )
   assert_eq(tool_calls2[0].name.to_string(), "read")
   assert_eq(
     tool_calls2[0].arguments.stringify(),
