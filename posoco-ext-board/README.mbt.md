@@ -311,6 +311,14 @@ ignored and protocol errors stop retries. Until a valid snapshot arrives, and
 after invalidation clears the projection, the UI shows `Waiting for Board state`.
 An authoritative empty Board shows `No Board tasks yet`.
 
+The task inspector selects by ID and reads current task details, dependencies
+and attempt history from the replica. Dependency editing uses detached local
+drafts and the public typed command builder. External dependency changes require
+an explicit reload before saving; the domain alone validates the DAG. Mutations
+share one pending correlation record and are never optimistically projected or
+automatically resent. Embedded hosts implement the same wire contract without
+depending on this Rabbita presentation.
+
 The old diagnostics page and its dedicated VM harness are removed. Pure client
 reducer and Rabbita update tests cover client protocol semantics; native HTTP
 static/security and existing WebSocket tests cover the standalone transport.

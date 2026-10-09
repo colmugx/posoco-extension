@@ -133,6 +133,12 @@ fn rejection_text(error : String?) -> String {
     Some("invalid_transition") =>
       "The board does not allow this change from the task's current stage."
     Some("invalid_input") => "The board rejected this change as invalid."
+    Some("dependency_not_found") =>
+      "A selected dependency no longer exists. Remove it or reload the latest dependencies."
+    Some("self_dependency") => "A task cannot depend on itself."
+    Some("duplicate_dependency") => "Select each dependency only once."
+    Some("dependency_cycle") =>
+      "These dependencies would create a cycle. Choose a different set."
     Some("board_initializing") | Some("board_unavailable") =>
       "The board is not ready to accept changes yet."
     Some("board_timeout") =>
@@ -149,6 +155,7 @@ fn accepted_text(kind : PendingKind) -> String {
   match kind {
     PendingCreate => "Task create saved."
     PendingEdit(..) => "Task update saved."
+    PendingDependencies(..) => "Task dependencies saved."
     PendingMove(..) => "Task move saved."
   }
 }
