@@ -134,13 +134,48 @@ fn board_security(
 }
 
 ///|
+/// Board control-plane paths are reserved from the embedded static namespace.
+/// Keep the whole `/api` namespace reserved for future authenticated HTTP APIs.
+fn board_control_path(path : String) -> Bool {
+  path == "/health" ||
+  path == "/ws" ||
+  path == "/api" ||
+  path.has_prefix("/api/")
+}
+
+///|
 /// Public static paths come from the actual embedded manifest. `/index.html`
-/// and `/` stay token-gated: the root document is the authenticated product
-/// page, not a public asset.
+/// and `/` stay token-gated, while control-plane paths are never public even
+/// if a malformed or hand-built asset map contains a collision.
 fn board_public_asset_paths(assets : Map[String, Bytes]) -> Set[String] {
   Set::from_iter(
-    assets.keys().filter(path => path != "/" && path != "/index.html"),
+    assets
+      .keys()
+      .filter(path =>
+        path != "/" && path != "/index.html" && !board_control_path(path)
+      ),
   )
+}
+
+///|
+/// Static resources must never shadow Board control-plane routes. The asset
+/// generator rejects these collisions too; this runtime guard is intentional
+/// defense in depth for hand-built or stale manifests.
+fn board_static_assets(assets : Map[String, Bytes]) -> @moonback.Middleware {
+  let resources = @static.from_assets(
+    assets,
+    rewrite_trailing_slash_index=true,
+  )
+  @moonback.Middleware(next => {
+    let serve = (resources.0)(next)
+    (req, res) => {
+      if board_control_path(req.path) {
+        next(req, res)
+      } else {
+        serve(req, res)
+      }
+    }
+  })
 }
 
 ///|
@@ -155,9 +190,7 @@ async fn NativeBoardWebServer::make_app(
       ctx.add_middleware(
         board_security(endpoint, token, board_public_asset_paths(assets)),
       )
-      ctx.add_middleware(
-        @static.from_assets(assets, rewrite_trailing_slash_index=true),
-      )
+      ctx.add_middleware(board_static_assets(assets))
       ctx.get("/health", (_req, res) => {
         res.send_json({ "ok": true, "service": "posoco-ext-board" })
       })
