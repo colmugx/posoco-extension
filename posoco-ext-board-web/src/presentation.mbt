@@ -76,8 +76,13 @@ pub fn attempt_indicator(
 }
 
 ///|
+/// Loading and empty are distinct: without an authoritative snapshot the
+/// board is unknown, not empty. Invalidation clears the records, so no
+/// stale cards survive a resync.
 pub fn empty_message(replica : @client.BoardReplica) -> String? {
-  if replica.tasks().is_empty() {
+  if !replica.has_snapshot() {
+    Some("Waiting for Board state")
+  } else if replica.tasks().is_empty() {
     Some("No Board tasks yet")
   } else {
     None

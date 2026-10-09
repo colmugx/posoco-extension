@@ -4,7 +4,7 @@
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
 
-## Current status: headless service, client replica and browser scaffold
+## Current status: headless service, client replica and embedded dashboard
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
 S1 adds the native localhost control plane and the user-facing Board commands.
@@ -26,7 +26,12 @@ S1 routes are:
 - `/health` — token-free liveness only;
 - `/api/bootstrap?token=...` — protocol/endpoint metadata, never the token;
 - `/ws?token=...` — authenticated WebSocket upgrade;
-- `/?token=...` — bounded text-only diagnostics, not a product UI.
+- `/?token=...` — the embedded, read-only Rabbita Board dashboard;
+- `/index.js`, `/board.css` and other actual embedded resources — public static
+  application code behind the exact Host gate, never Board data or instance tokens.
+
+`/` and `/index.html` remain token-protected. Unknown paths are not public
+assets: they require a token and then fall through to 404, without SPA fallback.
 
 The JavaScript target remains intentionally unsupported for the standalone
 server and browser opener. The headless backend is fully usable on both native
@@ -66,7 +71,7 @@ directly and do not need the MoonBack standalone host or a browser opener. A web
 host or desktop host owns its own presentation lifecycle; a TUI standalone browser host keeps the existing
 `/board` workflow. No concrete host-product dependency is required.
 
-## Client contract and read-only browser scaffold
+## Client contract and read-only standalone dashboard
 
 `colmugx/posoco-ext-board/client` is a pure native/JS replica, independent of
 Board domain records and presentation frameworks. It strictly decodes the
@@ -86,12 +91,18 @@ tests validate every JSON file through the protocol codec and replica.
 The independent `posoco-ext-board-web` module provides a read-only seven-lane
 Rabbita **0.16.4** shell, built using Warren **0.4.4**. It imports only client
 and protocol packages. Browser WebSocket commands and capped reconnect delays
-belong to Rabbita; UI state is separate from the sole Board replica.
-See its README for the verified browser-only build command.
+belong to Rabbita; UI state is separate from the sole Board replica, which
+shows `Waiting for Board state` until an authoritative snapshot arrives and
+`No Board tasks yet` only for an authoritative empty board. See its README
+for the verified browser-only build command.
 
-This stage does **not** replace the native diagnostics page or integrate web
-assets into MoonBack. Native asset packaging, mutation UX, Cetas integration
-and Agent execution remain separate work.
+The standalone native host embeds those Warren-built web assets as its product
+page; consumers of that host need no Warren, Node or `dist/` checkout, and the
+legacy native diagnostics page is retired by that embedding work. SvelteKit 3
+and Proton-style desktop hosts implement the wire contract directly from
+`protocol-fixtures/v1`; they neither frame the web shell in an iframe nor
+import Rabbita. Mutation UX, Cetas integration and Agent execution remain
+separate work.
 
 ## Host wiring
 
@@ -280,28 +291,24 @@ closes without a resync frame. Writes have a 1-second deadline. All connection
 exits unregister and close the mailbox; shutdown explicitly cancels local
 connection tasks. No connection task outlives its structured scope.
 
-The diagnostics page uses `textContent`, at most 100 lines of 512 characters,
-and only status/seq/kind/scope. It replaces snapshots, ignores duplicate events,
-resets on gaps/resync, stores only the cursor in `sessionStorage`, and reconnects
-with 250ms–10s backoff. An empty replay displays “connected; hello sent”; there
-is no fabricated snapshot or acknowledgement. Snapshot events must be a
-contiguous retained suffix ending exactly at `last_seq`; an empty snapshot is
-valid only at `last_seq=0`. Invalid snapshots reset the cursor and reconnect.
-`pagehide` closes and detaches the socket and clears the reconnect timer;
-persisted `pageshow` resumes once with the retained cursor. Late callbacks from
-the old socket are ignored, and a protocol-error stop remains terminal.
-The page is a passive observer: it never sends commands, so `command_result`
-frames — which are addressed only to the commanding connection — never arrive,
-and any unrecognized frame is ignored without advancing the cursor. It keeps
-its Board baseline across telemetry-only reconnects, and any `board.*` event
-invalidates that baseline, so the next reconnect Hello reports
-`has_board_snapshot=false` and receives a fresh authoritative snapshot. It is
-bounded text-only diagnostics, not a product UI.
-The server remains native-only; protocol, replay and mailbox tests also run on JS.
-Run the browser VM regressions from the extension workspace with
-`moon run --target js --output-json posoco-ext-board/check_browser.mbtx`.
-The `.mbtx` keeps lifecycle/snapshot test scenarios and assertions in MoonBit;
-Node VM bindings simulate DOM, sockets and timers without a browser or server.
+The standalone browser implementation is now the read-only Rabbita dashboard,
+not the retired handwritten diagnostics client. Its framework-neutral replica
+strictly validates snapshot suffixes and full entities, replaces authoritative
+snapshots, ignores duplicates and resets on gaps/resync. Known Board events
+update the projection; unknown Board events invalidate it. Telemetry only
+advances the cursor and command results never mutate Board state.
+
+A fresh document starts without cursor persistence or a Board baseline. Rabbita
+owns WebSocket commands and 250ms–10s reconnect backoff; stale callbacks are
+ignored and protocol errors stop retries. Until a valid snapshot arrives, and
+after invalidation clears the projection, the UI shows `Waiting for Board state`.
+An authoritative empty Board shows `No Board tasks yet`.
+
+The old diagnostics page and its dedicated VM harness are removed. Pure client
+reducer and Rabbita update tests cover client protocol semantics; native HTTP
+static/security and existing WebSocket tests cover the standalone transport.
+Protocol, backend replay and mailbox tests continue to run on native and JS.
+See the web/native module READMEs for build, embed, stale-check and test commands.
 
 ## Board domain and coordinator (S3A)
 
@@ -515,9 +522,12 @@ scheduler.
   authoritative stream ownership; no runtime or Web/process dependencies;
 - `runtime`: presentation contracts, standalone lifecycle composition and
   headless defaults, consuming the backend through its narrow public API;
+- `client`: framework-neutral authoritative replica and reducer invariants;
+- independent `posoco-ext-board-web` module: read-only Rabbita presentation,
+  built with Warren as a development tool;
 - independent `posoco-ext-board-native` module: MoonBack localhost transport,
-  OS-entropy token, diagnostics HTML, browser opener and native factory.
+  OS-entropy token, embedded static assets, browser opener and native factory.
 
-The backend split and MoonBack migration preserve wire and durable mutation
-semantics. Rabbita/Warren product UI, Cetas integration and Agent execution remain
-out of scope.
+Embedded assets belong only to the optional native presentation. The headless
+backend and wire/durable mutation semantics remain unchanged. UI mutations,
+Cetas/SvelteKit or desktop integration, and Agent execution remain out of scope.

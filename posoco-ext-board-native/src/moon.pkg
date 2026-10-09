@@ -11,6 +11,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/moonback",
+  "moonbitlang/moonback/middlewares/unstable_static" @static,
 }
 
 import {

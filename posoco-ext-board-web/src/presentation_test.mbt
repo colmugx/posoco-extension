@@ -37,7 +37,7 @@ fn attempt_json(
 ///|
 test "seven lanes labels grouping counts and empty state" {
   let replica = @client.BoardReplica::empty()
-  assert_eq(@src.empty_message(replica), Some("No Board tasks yet"))
+  assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
   assert_eq(@src.lanes().length(), 7)
   let stages = [
     "created", "refining", "ready", "running", "review", "done", "suspended",
@@ -66,6 +66,62 @@ test "seven lanes labels grouping counts and empty state" {
     assert_eq(@src.tasks_in_lane(replica, stage).length(), 1)
     assert_eq(@src.tasks_in_lane(replica, stage)[0].id, "task-" + i.to_string())
   }
+}
+
+///|
+test "initial connection waits for board state and renders no cards" {
+  let replica = @client.BoardReplica::empty()
+  assert_false(replica.has_snapshot())
+  assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
+  for stage in @src.lanes() {
+    assert_eq(@src.tasks_in_lane(replica, stage).length(), 0)
+  }
+}
+
+///|
+test "authoritative empty snapshot shows no board tasks yet" {
+  let replica = @client.BoardReplica::empty()
+  assert_true(
+    replica.apply_snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: 0L,
+      payload: {
+        "board": { "revision": 0, "tasks": [], "attempts": [] },
+        "events": [],
+      },
+    })
+    is @client.Applied,
+  )
+  assert_true(replica.has_snapshot())
+  assert_eq(@src.empty_message(replica), Some("No Board tasks yet"))
+}
+
+///|
+test "invalidation clears authoritative cards and waits again" {
+  let replica = @client.BoardReplica::empty()
+  assert_true(
+    replica.apply_snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: 1L,
+      payload: {
+        "board": {
+          "revision": 1,
+          "tasks": [task_json("t", "ready")],
+          "attempts": [],
+        },
+        "events": [],
+      },
+    })
+    is @client.Applied,
+  )
+  assert_eq(@src.empty_message(replica), None)
+  assert_eq(@src.tasks_in_lane(replica, @client.Ready).length(), 1)
+  assert_true(replica.apply_text("{") is @client.NeedsSnapshot(_))
+  assert_false(replica.has_snapshot())
+  assert_eq(@src.tasks_in_lane(replica, @client.Ready).length(), 0)
+  assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
 }
 
 ///|

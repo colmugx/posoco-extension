@@ -33,14 +33,29 @@ test "seven lanes and wire-independent labels" {
 }
 ```
 
-Empty replicas render a clear state without inventing tasks or attempts.
+Loading and empty are distinct states: a replica without an authoritative
+snapshot is unknown, not empty, and invalidation clears every record so no
+stale cards survive a resync.
 
 ```moonbit check
 ///|
-test "empty task and attempt presentation" {
+test "loading and empty presentation" {
   let replica = @client.BoardReplica::empty()
-  assert_eq(@src.empty_message(replica), Some("No Board tasks yet"))
+  assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
   assert_eq(@src.attempt_count(replica, "task-1"), 0)
   assert_eq(@src.attempt_indicator(replica, "task-1"), "No attempts")
+  assert_true(
+    replica.apply_snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: 0L,
+      payload: {
+        "board": { "revision": 0, "tasks": [], "attempts": [] },
+        "events": [],
+      },
+    })
+    is @client.Applied,
+  )
+  assert_eq(@src.empty_message(replica), Some("No Board tasks yet"))
 }
 ```
