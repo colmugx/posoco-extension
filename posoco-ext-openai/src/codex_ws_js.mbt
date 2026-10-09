@@ -1,16 +1,16 @@
 ///|
 /// JS-backend WebSocket transport. Only the Bun runtime declares support:
 /// Bun's WebSocket accepts handshake headers (Node's undici silently drops
-/// them, which would fail authentication). Every JS failure path resolves
-/// instead of throwing so the shared layer can fall back to SSE.
+/// them, which would fail authentication).
 ///
-/// Message framing: the JS side pipes each text message into a
-/// TransformStream followed by a newline separator (JSON never contains raw
-/// newlines), and the MoonBit side reads the stream line-wise.
+/// Message framing: the JS side keeps a per-connection queue of text frames;
+/// `next_text` drains one frame per call through a promise (resolved by the
+/// message handler, or with `None` on close/error/abort). WS message
+/// boundaries are preserved as-is — server frames may be pretty-printed
+/// multi-line JSON and must not be split.
 
 ///|
 priv struct WsTransport {
-  reader : @js_async.ReadableStream
   handle : Int
 }
 
@@ -35,31 +35,36 @@ extern "js" fn ws_js_open(
   #|     const registry = (globalThis.__posocoWs ||= { seq: 0, sockets: new Map() });
   #|     const socket = new WebSocket(url, { headers: JSON.parse(headersJson) });
   #|     const handle = ++registry.seq;
-  #|     const ts = new TransformStream();
-  #|     const entry = { socket, writer: null, opened: false, readable: ts.readable };
+  #|     const entry = { socket, queue: [], waiter: null, opened: false };
   #|     registry.sockets.set(handle, entry);
-  #|     socket.addEventListener("open", () => {
-  #|       entry.opened = true;
-  #|       entry.writer = ts.writable.getWriter();
-  #|       resolve(handle);
-  #|     });
   #|     socket.addEventListener("message", (event) => {
-  #|       if (entry.writer) {
-  #|         entry.writer
-  #|           .write(new TextEncoder().encode(String(event.data) + "\n"))
-  #|           .catch(() => {});
+  #|       const frame = String(event.data);
+  #|       if (entry.waiter) {
+  #|         const waiter = entry.waiter;
+  #|         entry.waiter = null;
+  #|         waiter.resolve(frame);
+  #|       } else {
+  #|         entry.queue.push(frame);
   #|       }
   #|     });
   #|     const finish = () => {
-  #|       if (entry.writer) {
-  #|         entry.writer.close().catch(() => {});
+  #|       if (entry.waiter) {
+  #|         const waiter = entry.waiter;
+  #|         entry.waiter = null;
+  #|         waiter.resolve(null);
   #|       }
-  #|       registry.sockets.delete(handle);
+  #|       entry.queue.length = 0;
   #|     };
+  #|     socket.addEventListener("open", () => {
+  #|       entry.opened = true;
+  #|       resolve(handle);
+  #|     });
   #|     socket.addEventListener("error", () => {
   #|       if (!entry.opened) {
   #|         registry.sockets.delete(handle);
   #|         resolve(-1);
+  #|       } else {
+  #|         finish();
   #|       }
   #|     });
   #|     socket.addEventListener("close", () => {
@@ -76,15 +81,20 @@ extern "js" fn ws_js_open(
   #| })
 
 ///|
-extern "js" fn ws_js_reader(handle : Int) -> @js_async.JsReadableStream =
-  #| (handle) => {
+/// Next text frame; `null` resolves on close/error (stream end). The abort
+/// signal is honored so a cancelled pump never waits on a silent socket.
+extern "js" fn ws_js_next(
+  handle : Int,
+  signal : @js_async.AbortSignal,
+) -> @js_async.Promise[String?] =
+  #| (handle, signal) => new Promise((resolve) => {
   #|   const registry = globalThis.__posocoWs;
   #|   const entry = registry && registry.sockets.get(handle);
-  #|   if (!entry) {
-  #|     return new ReadableStream({ start(c) { c.close(); } });
-  #|   }
-  #|   return entry.readable;
-  #| }
+  #|   if (!entry) return resolve(null);
+  #|   if (entry.queue.length > 0) return resolve(entry.queue.shift());
+  #|   entry.waiter = { resolve };
+  #|   signal.addEventListener("abort", () => resolve(null), { once: true });
+  #| })
 
 ///|
 extern "js" fn ws_js_send(handle : Int, text : String) -> Bool =
@@ -113,6 +123,16 @@ extern "js" fn ws_js_close(handle : Int) -> Unit =
   #| }
 
 ///|
+/// Serialize headers for the JS handshake (Bun's WebSocket `headers` option).
+fn codex_ws_headers_json(headers : @http.Headers) -> String {
+  let object : Map[String, Json] = Map::from_array([])
+  for key, value in headers {
+    object[key.to_string()] = Json::string(value)
+  }
+  Json::object(object).stringify()
+}
+
+///|
 async fn WsTransport::open(
   url : String,
   headers : @http.Headers,
@@ -126,10 +146,7 @@ async fn WsTransport::open(
   if handle < 0 {
     return Err("websocket handshake failed")
   }
-  Ok({
-    reader: @js_async.ReadableStream::from_js(ws_js_reader(handle)),
-    handle,
-  })
+  Ok({ handle, })
 }
 
 ///|
@@ -141,29 +158,22 @@ async fn WsTransport::send_text(
 }
 
 ///|
-/// Next event payload; `Ok(None)` = the connection ended (the JS side ends
-/// the transform stream on close/error, which surfaces as EOF here).
+/// Next event frame; `Ok(None)` = the connection ended. Whole frames only:
+/// pretty-printed multi-line JSON arrives intact.
 async fn WsTransport::next_text(
   self : WsTransport,
 ) -> Result[String?, String] noraise {
-  let text = self.reader.read_until("\n") catch {
-    err => return Err(err.to_string())
+  let controller = @js_async.AbortController::new()
+  let frame = @js_async.run_promise(fn(signal) {
+    ws_js_next(self.handle, signal)
+  }) catch {
+    _ => None
   }
-  Ok(text)
+  controller.abort()
+  Ok(frame)
 }
 
 ///|
 fn WsTransport::close(self : WsTransport) -> Unit {
-  self.reader.close()
   ws_js_close(self.handle)
-}
-
-///|
-/// Serialize headers for the JS handshake (Bun's WebSocket `headers` option).
-fn codex_ws_headers_json(headers : @http.Headers) -> String {
-  let object : Map[String, Json] = Map::from_array([])
-  for key, value in headers {
-    object[key.to_string()] = Json::string(value)
-  }
-  Json::object(object).stringify()
 }

@@ -262,3 +262,104 @@ pub impl @devkit.QuotaSource for CodexQuotaTracker with fn read(
 
 ///|
 pub extend CodexQuotaTracker with @posoco/devkit.QuotaSource::{read}
+
+///|
+/// Feed a `codex.rate_limits` WS event into the tracker. This is the
+/// WebSocket counterpart of the quota header capture: the event carries the
+/// same windows with `reset_at` as absolute unix seconds — the reset times
+/// the HTTP path used to read from response headers.
+fn codex_ws_capture_rate_limits(
+  payload : String,
+  tracker : CodexQuotaTracker,
+  fetched_at_ms~ : Int64,
+) -> Unit {
+  let json = @json.parse(payload) catch { _ => return }
+  guard json is Json::Object(fields) else { return }
+  match fields.get("type") {
+    Some(Json::String("codex.rate_limits")) => ()
+    _ => return
+  }
+  let readings : Array[@devkit.QuotaReading] = []
+  match fields.get("rate_limits") {
+    Some(Json::Object(windows)) => {
+      let slots : Array[(String, String)] = [
+        ("primary", "5h"),
+        ("secondary", "weekly"),
+      ]
+      for pair in slots {
+        let slot = pair.0
+        let fallback = pair.1
+        match windows.get(slot) {
+          Some(Json::Object(window)) => {
+            let used_percent = match window.get("used_percent") {
+              Some(Json::Number(value, ..)) => Some(value)
+              _ => None
+            }
+            let reset_at_ms = match window.get("reset_at") {
+              Some(Json::Number(value, ..)) =>
+                Some(value.to_int().to_int64() * 1000L)
+              _ => None
+            }
+            if used_percent is Some(_) || reset_at_ms is Some(_) {
+              let label = match window.get("window_minutes") {
+                Some(Json::Number(minutes, ..)) => {
+                  let m = minutes.to_int()
+                  if m == 300 {
+                    "5h"
+                  } else if m == 10080 {
+                    "weekly"
+                  } else {
+                    "\{fallback}(\{m}m)"
+                  }
+                }
+                _ => fallback
+              }
+              readings.push({
+                window: label,
+                used_percent,
+                amount: None,
+                available: None,
+                reset_at_ms,
+                fetched_at_ms,
+              })
+            }
+          }
+          _ => ()
+        }
+      }
+    }
+    _ => ()
+  }
+  match fields.get("credits") {
+    Some(Json::Object(credits)) => {
+      let available = match credits.get("has_credits") {
+        Some(Json::True) => Some(true)
+        Some(Json::False) => Some(false)
+        _ => None
+      }
+      let amount : (String, String)? = match credits.get("balance") {
+        Some(Json::String(raw)) =>
+          if raw.length() > 0 {
+            Some((raw, "credits"))
+          } else {
+            None
+          }
+        _ => None
+      }
+      if available is Some(_) || amount is Some(_) {
+        readings.push({
+          window: "balance",
+          used_percent: None,
+          amount,
+          available,
+          reset_at_ms: None,
+          fetched_at_ms,
+        })
+      }
+    }
+    _ => ()
+  }
+  if readings.length() > 0 {
+    tracker.capture_readings(readings)
+  }
+}

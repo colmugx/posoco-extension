@@ -118,6 +118,24 @@ fn codex_ws_body_rest(body : Json) -> Json {
 }
 
 ///|
+/// Wrap a request body into the WS wire frame: every message the backend
+/// accepts must declare `type: "response.create"`.
+fn codex_ws_frame(sent : Json) -> Json {
+  match sent {
+    Json::Object(fields) => {
+      let framed : Map[String, Json] = Map::from_array([
+        ("type", Json::string("response.create")),
+      ])
+      for key, value in fields {
+        framed[key] = value
+      }
+      Json::object(framed)
+    }
+    other => other
+  }
+}
+
+///|
 /// Decide incremental vs full for this request. A delta is allowed only when
 /// a completed response exists on the connection, every non-input field is
 /// unchanged, and the new input extends the previous input followed by the
@@ -249,7 +267,7 @@ async fn OpenAIModelPort::codex_ws_chat(
   // A fresh connection carries no server state, so its first request is
   // always the full body (the continuation guard sees no completed id).
   let sent = codex_ws_delta_request(body, session)
-  match session.transport.send_text(sent.stringify()) {
+  match session.transport.send_text(codex_ws_frame(sent).stringify()) {
     true => ()
     false => {
       codex_ws_drop_session(session_id)
@@ -268,7 +286,8 @@ async fn OpenAIModelPort::codex_ws_chat(
     _ => ()
   }
   session.last_body_rest = codex_ws_body_rest(body)
-  match codex_ws_pump(session_id, session, messages, on_chunk) {
+  match
+    codex_ws_pump(session_id, session, messages, self.quota_tracker, on_chunk) {
     Done(result) => Done(result)
     FallBack => {
       codex_ws_mark_session_fallback(session_id)
@@ -300,6 +319,32 @@ async fn codex_ws_open_session(
 }
 
 ///|
+/// Surface the full provider error payload on `type: "error"` frames. The
+/// shared kit raises a fixed-wording transport error for this event and
+/// drops the provider's message — the one thing a user needs to see.
+fn codex_ws_provider_error_if_any(payload : String) -> @posoco.ModelError? {
+  let json = @json.parse(payload) catch { _ => return None }
+  guard json is Json::Object(fields) else { return None }
+  match fields.get("type") {
+    Some(Json::String("error")) => ()
+    _ => return None
+  }
+  match fields.get("error") {
+    Some(Json::Object(err)) =>
+      match err.get("message") {
+        Some(Json::String(message)) if message.length() > 0 =>
+          Some(
+            @posoco.ModelError::Transport(
+              "OpenAI SSE terminal failure (stage=error, category=provider_error): \{message}",
+            ),
+          )
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 /// Read response events until completion. Any transport failure falls the
 /// session back to SSE; a failure after the first emitted chunk raises
 /// instead, so the caller never double-delivers. Kit-level model errors
@@ -308,6 +353,7 @@ async fn codex_ws_pump(
   session_id : String,
   session : WsSession,
   messages : Array[@posoco.Message],
+  quota_tracker : CodexQuotaTracker?,
   on_chunk : (@posoco.StreamChunk) -> Unit,
 ) -> WsChatOutcome raise @posoco.ModelError {
   errdefer codex_ws_drop_session(session_id)
@@ -339,28 +385,30 @@ async fn codex_ws_pump(
       Ok(Some(text)) => {
         let trimmed = text.trim().to_owned()
         if trimmed.length() > 0 {
+          match codex_ws_provider_error_if_any(trimmed) {
+            Some(err) => raise err
+            None => ()
+          }
+          // The WS counterpart of the quota header capture: reset times
+          // ride these events, not HTTP headers.
+          match quota_tracker {
+            Some(tracker) =>
+              codex_ws_capture_rate_limits(
+                trimmed,
+                tracker,
+                fetched_at_ms=@async.now(),
+              )
+            None => ()
+          }
           codex_ws_capture_output_item(trimmed, items)
           codex_ws_capture_response_id(trimmed, response_id)
-          // TODO(diagnosis): temporary wrap that surfaces the offending
-          // event's code points; revert to the plain call once the framing
-          // artifact is identified.
           done = @responses.process_responses_sse(
             provider="OpenAI",
             trimmed,
             acc,
             wrapped,
             state=sse_state,
-          ) catch {
-            err => {
-              let codes = StringBuilder()
-              for ch in trimmed {
-                codes.write_string("\{ch.to_int()} ")
-              }
-              raise @posoco.ModelError::ResponseParse(
-                "OpenAI WS event parse diagnosis (chars=\{trimmed.length()}, codes=[\{codes.to_string()}], event=\{trimmed}): \{err.to_string()}",
-              )
-            }
-          }
+          )
         }
       }
     }

@@ -104,7 +104,7 @@ test "codex ws delta only fires on exact continuation" {
       assert_eq(fields.get("input"), Some(Json::array([m2])))
       assert_eq(fields.get("model"), Some(Json::string("gpt-5")))
     }
-    other => fail("expected a delta object")
+    _ => fail("expected a delta object")
   }
   // Changed non-input property: full body.
   let other_rest = Json::object(
@@ -125,6 +125,21 @@ test "codex ws delta only fires on exact continuation" {
     codex_ws_delta_parts(extended, [m1], body_rest, "resp_1", [m2]),
     extended,
   )
+}
+
+///|
+test "codex ws provider error frames surface the server message" {
+  let frame = "{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-5' model is not supported\"}}"
+  match codex_ws_provider_error_if_any(frame) {
+    Some(@posoco.ModelError::Transport(message)) =>
+      assert_true(message.contains("The 'gpt-5' model is not supported"))
+    _ => fail("provider error frame must surface its message")
+  }
+  // Non-error frames pass through untouched.
+  assert_true(
+    codex_ws_provider_error_if_any("{\"type\":\"response.created\"}") is None,
+  )
+  assert_true(codex_ws_provider_error_if_any("not json") is None)
 }
 
 ///|
@@ -257,7 +272,6 @@ async test "codex ws loopback reuses the connection and sends the delta" {
       let config = ws_mock_config(mock.server.addr.port())
       let port_impl = OpenAIModelPort(config)
       let messages : Array[@posoco.Message] = []
-      let sink = fn(_chunk : @posoco.StreamChunk) { () }
       // Two turns over one cached connection; the mocked events advance the
       // continuation state (resp_1 then resp_2).
       let options : @posoco.ChatOptions = {
@@ -281,9 +295,11 @@ async test "codex ws loopback reuses the connection and sends the delta" {
       assert_eq(mock.frames.length(), 2)
       let frame1 = @json.parse(mock.frames[0]) catch { _ => abort("frame 1") }
       guard frame1 is Json::Object(f1) else { abort("frame 1 object") }
+      assert_eq(f1.get("type"), Some(Json::string("response.create")))
       assert_true(f1.get("previous_response_id") is None)
       let frame2 = @json.parse(mock.frames[1]) catch { _ => abort("frame 2") }
       guard frame2 is Json::Object(f2) else { abort("frame 2 object") }
+      assert_eq(f2.get("type"), Some(Json::string("response.create")))
       assert_true(f2.get("previous_response_id") is None)
       // Stop the server inside the task group so the spawned serve task
       // observes the flag and the group can join.
