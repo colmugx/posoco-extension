@@ -341,13 +341,26 @@ async fn codex_ws_pump(
         if trimmed.length() > 0 {
           codex_ws_capture_output_item(trimmed, items)
           codex_ws_capture_response_id(trimmed, response_id)
+          // TODO(diagnosis): temporary wrap that surfaces the offending
+          // event's code points; revert to the plain call once the framing
+          // artifact is identified.
           done = @responses.process_responses_sse(
             provider="OpenAI",
             trimmed,
             acc,
             wrapped,
             state=sse_state,
-          )
+          ) catch {
+            err => {
+              let codes = StringBuilder()
+              for ch in trimmed {
+                codes.write_string("\{ch.to_int()} ")
+              }
+              raise @posoco.ModelError::ResponseParse(
+                "OpenAI WS event parse diagnosis (chars=\{trimmed.length()}, codes=[\{codes.to_string()}], event=\{trimmed}): \{err.to_string()}",
+              )
+            }
+          }
         }
       }
     }
