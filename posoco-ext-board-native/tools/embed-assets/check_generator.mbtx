@@ -1,0 +1,133 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn generate(
+  dist : String,
+  out : String,
+  check? : Bool = false,
+) -> @shell.Output {
+  let args = [
+    "run", "tools/embed-assets/generate.mbtx", "--target", "native", "--output-json",
+    "--", dist, out,
+  ]
+  if check {
+    args.push("--check")
+  }
+  @shell.Cmd("moon", args).output()
+}
+
+///|
+async fn rejected(dist : String, out : String, reason : String) -> Unit {
+  let result = generate(dist, out)
+  assert_true(result.exit_code() != 0, msg="expected rejection: " + reason)
+  assert_true(
+    result.stdout().contains(reason),
+    msg=result.stdout() + result.stderr(),
+  )
+}
+
+///|
+async fn main {
+  let fixture = "tools/embed-assets/.fixture-" + @async.now().to_string()
+  @fs.mkdir(fixture, allow_exist=false)
+  defer @fs.rmdir(fixture, recursive=true)
+  let dist = fixture + "/dist"
+  let out = fixture + "/assets.mbt"
+  @fs.mkdir(dist)
+  @fs.mkdir(dist + "/assets")
+  @fs.write_file(dist + "/index.html", b"html")
+  @fs.write_file(dist + "/index.js", b"js")
+  @fs.write_file(dist + "/board.css", b"css")
+  @fs.write_file(dist + "/.hidden", b"\x00\"\\\xff")
+  @fs.write_file(
+    dist + "/assets/img.dat",
+    Bytes::makei(6000, i => (i % 256).to_byte()),
+  )
+  @fs.write_file(dist + "/aa.dat", Bytes::make(4096, b'a'))
+  @fs.write_file(dist + "/z.dat", Bytes::make(4097, b'z'))
+  generate(dist, out).check()
+  let first = @fs.read_file(out).binary()
+  let text = @utf8.decode(first)
+  assert_true(
+    text.find("\"/.hidden\"").unwrap() < text.find("\"/aa.dat\"").unwrap(),
+  )
+  assert_true(
+    text.find("\"/aa.dat\"").unwrap() <
+    text.find("\"/assets/img.dat\"").unwrap(),
+  )
+  assert_true(text.contains("\"/assets/img.dat\": [\n"))
+  assert_true(text.contains("\"/aa.dat\": b\""))
+  assert_true(text.contains("\"/z.dat\": [\n"))
+  generate(dist, out).check()
+  assert_eq(@fs.read_file(out).binary(), first)
+  let before = @fs.mtime(out)
+  generate(dist, out, check=true).check()
+  assert_eq(@fs.mtime(out), before)
+  assert_eq(@fs.read_file(out).binary(), first)
+  let verify = fixture + "/verify.mbtx"
+  @fs.write_file(
+    verify,
+    text +
+    "\n" +
+    (
+      #|fn main raise {
+      #|  let assets = web_assets()
+      #|  assert_eq(assets.length(), 7)
+      #|  assert_eq(assets["/index.html"], b"html")
+      #|  assert_eq(assets["/index.js"], b"js")
+      #|  assert_eq(assets["/board.css"], b"css")
+      #|  assert_eq(assets["/.hidden"], b"\x00\"\\\xff")
+      #|  assert_eq(assets["/assets/img.dat"], Bytes::makei(6000, i => (i % 256).to_byte()))
+      #|  assert_eq(assets["/aa.dat"], Bytes::make(4096, b'a'))
+      #|  assert_eq(assets["/z.dat"], Bytes::make(4097, b'z'))
+      #|}
+    ),
+  )
+  @shell.Cmd("moon", ["run", verify, "--target", "native", "--output-json"]).run()
+  @fs.write_file(out, b"stale marker")
+  let stale_mtime = @fs.mtime(out)
+  let stale = generate(dist, out, check=true)
+  assert_true(stale.exit_code() != 0)
+  assert_true(stale.stdout().contains("stale:"))
+  assert_eq(@fs.read_file(out).binary(), b"stale marker")
+  assert_eq(@fs.mtime(out), stale_mtime)
+  @fs.remove(out)
+  let missing = generate(dist, out, check=true)
+  assert_true(missing.exit_code() != 0)
+  assert_false(@fs.exists(out))
+  @fs.symlink(target="index.js", dist + "/link")
+  rejected(dist, out, "symlink")
+  @fs.remove(dist + "/link")
+  @fs.symlink(target="assets", dist + "/linked-dir")
+  rejected(dist, out, "symlink")
+  @fs.remove(dist + "/linked-dir")
+  @fs.symlink(target="dist", fixture + "/linked-root")
+  rejected(fixture + "/linked-root", out, "symlink")
+  @fs.remove(fixture + "/linked-root")
+  if @env.get_env_var("OS") != Some("Windows_NT") {
+    @shell.Cmd("mkfifo", [dist + "/pipe"]).run()
+    rejected(dist, out, "special file")
+    @fs.remove(dist + "/pipe")
+  }
+  @fs.write_file(dist + "/board.css", b"")
+  rejected(dist, out, "empty")
+  @fs.remove(dist + "/board.css")
+  rejected(dist, out, "missing required asset")
+  @fs.write_file(dist + "/board.css", b"css")
+  @fs.symlink(target="dist/index.js", out + ".tmp")
+  rejected(dist, out, "cannot create")
+  assert_eq(@fs.read_file(dist + "/index.js").binary(), b"js")
+  @fs.remove(out + ".tmp")
+  generate(dist, out).check()
+  assert_false(@fs.exists(out + ".tmp"))
+  println(
+    "Generator regressions passed: deterministic traversal, hidden/nested files, compiled binary and large literals, current/stale/missing check, symlink/root/FIFO rejection, required assets, exclusive atomic output.",
+  )
+}

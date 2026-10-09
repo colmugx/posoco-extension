@@ -97,17 +97,22 @@ fn board_response_headers() -> Map[String, String] {
 }
 
 ///|
-/// Security runs before MoonBack routing, including its 404/405 responses.
+/// Security runs before MoonBack routing and the static middleware, including
+/// their 404/405 responses. Only `/health` and manifest asset paths other than
+/// the root document are token-free.
 fn board_security(
   endpoint : BoardEndpoint,
   token : String,
+  public_assets : Set[String],
 ) -> @moonback.Middleware {
   @moonback.Middleware(next => {
     (req, res) => {
       if !board_request_host_ok(req, endpoint) ||
         (req.path == "/ws" && !board_request_origin_ok(req, endpoint)) {
         res.send_text("forbidden", status=403, headers=board_response_headers())
-      } else if req.path != "/health" && !board_request_token_ok(req, token) {
+      } else if req.path != "/health" &&
+        !public_assets.contains(req.path.to_owned()) &&
+        !board_request_token_ok(req, token) {
         res.send_text(
           "unauthorized",
           status=401,
@@ -129,17 +134,30 @@ fn board_security(
 }
 
 ///|
+/// Public static paths come from the actual embedded manifest. `/index.html`
+/// and `/` stay token-gated: the root document is the authenticated product
+/// page, not a public asset.
+fn board_public_asset_paths(assets : Map[String, Bytes]) -> Set[String] {
+  Set::from_iter(
+    assets.keys().filter(path => path != "/" && path != "/index.html"),
+  )
+}
+
+///|
 async fn NativeBoardWebServer::make_app(
   self : NativeBoardWebServer,
   endpoint : BoardEndpoint,
   token : String,
 ) -> @moonback.App {
+  let assets = web_assets()
   @moonback.App(
     ctx => {
-      ctx.add_middleware(board_security(endpoint, token))
-      ctx.get("/", (_req, res) => {
-        res.send_html(@moonback.Html::raw(board_placeholder_page()))
-      })
+      ctx.add_middleware(
+        board_security(endpoint, token, board_public_asset_paths(assets)),
+      )
+      ctx.add_middleware(
+        @static.from_assets(assets, rewrite_trailing_slash_index=true),
+      )
       ctx.get("/health", (_req, res) => {
         res.send_json({ "ok": true, "service": "posoco-ext-board" })
       })

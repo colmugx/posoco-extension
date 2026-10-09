@@ -119,6 +119,69 @@ test "snapshot resets backoff and replica updates do not mutate previous model" 
 }
 
 ///|
+fn carded_task_json(id : String, stage : String) -> Json {
+  {
+    "id": id.to_json(),
+    "title": ("Task " + id).to_json(),
+    "description": "Read-only task",
+    "stage": stage.to_json(),
+    "priority": "normal",
+    "definition_of_done": [],
+    "dependencies": [],
+    "created_at_ms": 1234,
+    "updated_at_ms": 1234,
+    "ready_since_ms": null,
+  }
+}
+
+///|
+test "reconnect after invalidation drops stale cards and waits again" {
+  let model = Model::empty(true)
+  let text = @protocol.encode_server_frame(
+    Snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: 1L,
+      payload: {
+        "board": {
+          "revision": 1,
+          "tasks": [carded_task_json("t", "ready")],
+          "attempts": [],
+        },
+        "events": [],
+      },
+    }),
+  )
+  let (online, _) = update(
+    model,
+    SocketEvent(0, Message(text)),
+    test_emit,
+    "unused",
+  )
+  assert_true(online.connection is Online)
+  assert_eq(empty_message(online.replica), None)
+  assert_eq(tasks_in_lane(online.replica, Ready).length(), 1)
+  let (resyncing, _) = update(
+    online,
+    SocketEvent(
+      0,
+      Message(
+        @protocol.encode_server_frame(
+          ResyncRequired(reason="client_queue_overflow", current_seq=0L),
+        ),
+      ),
+    ),
+    test_emit,
+    "unused",
+  )
+  assert_true(resyncing.connection is Reconnecting)
+  assert_false(resyncing.replica.has_snapshot())
+  assert_eq(resyncing.replica.tasks().length(), 0)
+  assert_eq(tasks_in_lane(resyncing.replica, Ready).length(), 0)
+  assert_eq(empty_message(resyncing.replica), Some("Waiting for Board state"))
+}
+
+///|
 test "protocol error is terminal and ignores socket close or delayed retry" {
   let original = Model::empty(true)
   let (terminal, _) = update(

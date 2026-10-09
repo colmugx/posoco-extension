@@ -1,0 +1,365 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+}
+
+///|
+/// Dist URL paths that must exist as nonempty assets. Extra dist files are
+/// allowed and embedded like any other asset.
+let required_assets : Array[String] = ["/board.css", "/index.html", "/index.js"]
+
+///|
+/// Assets above this size use a multiline byte literal instead of a single
+/// line, so generated sources keep short lines.
+let multiline_threshold : Int = 4096
+
+///|
+/// Bound generated lines; decimal bytes also keep large text segments compact.
+let literal_line_width : Int = 84
+
+///|
+let header =
+  #|// Generated from posoco-ext-board-web using Warren 0.4.4.
+  #|// Do not edit manually.
+  #|// Regenerate from the extension workspace root:
+  #|//   warren -C posoco-ext-board-web build --browser-entry cmd/browser --server-entry ""
+  #|//   moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json
+  #|//   moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- --check
+  #|
+
+///|
+/// Map dist-relative path components to the served URL path.
+fn url_path(components : Array[String]) -> String {
+  let out = StringBuilder()
+  for name in components {
+    out.write_string("/")
+    out.write_string(name)
+  }
+  out.to_string()
+}
+
+///|
+/// Escape one byte for the body of a MoonBit Bytes literal.
+fn byte_escape(byte : Byte) -> String {
+  match byte {
+    b'"' => "\\\""
+    b'\\' => "\\\\"
+    _ =>
+      if byte >= b'\x20' && byte <= b'\x7e' {
+        byte.to_char().to_string()
+      } else {
+        "\\x\{byte.to_hex()}"
+      }
+  }
+}
+
+///|
+/// Render bytes as an exact MoonBit Bytes literal: one `b"..."` line up to
+/// `multiline_threshold` bytes, then a multiline byte array literal above it.
+/// Both forms are raw byte-exact; there is no base64 or runtime concatenation.
+fn bytes_literal(bytes : Bytes) -> String {
+  guard bytes.length() > multiline_threshold else {
+    let out = StringBuilder()
+    out.write_string("b\"")
+    for byte in bytes {
+      out.write_string(byte_escape(byte))
+    }
+    out.write_string("\"")
+    return out.to_string()
+  }
+  let out = StringBuilder()
+  out.write_string("[\n")
+  let mut column = 0
+  for byte in bytes {
+    let item = byte.to_int().to_string() + ","
+    if column != 0 && column + 1 + item.length() > literal_line_width {
+      out.write_string("\n")
+      column = 0
+    }
+    if column == 0 {
+      out.write_string("      ")
+      column = 6
+    } else {
+      out.write_string(" ")
+      column += 1
+    }
+    out.write_string(item)
+    column += item.length()
+  }
+  out.write_string("\n")
+  out.write_string("    ]")
+  out.to_string()
+}
+
+///|
+/// Check that every required asset exists and is nonempty. Returns the first
+/// violation as an error message, or `None` when the entries are valid.
+fn validate_assets(entries : Array[(String, Bytes)]) -> String? {
+  let sizes : Map[String, Int] = Map([])
+  for entry in entries {
+    sizes[entry.0] = entry.1.length()
+  }
+  for url in required_assets {
+    match sizes.get(url) {
+      None => return Some("missing required asset: \{url}")
+      Some(0) => return Some("required asset is empty: \{url}")
+      Some(_) => ()
+    }
+  }
+  None
+}
+
+///|
+/// Lexicographic comparison by code units. `String::compare` orders shorter
+/// strings first, which is not URL byte order, so sorting is explicit.
+fn compare_urls(left : String, right : String) -> Int {
+  let shared = if left.length() < right.length() {
+    left.length()
+  } else {
+    right.length()
+  }
+  for i in 0..<shared {
+    let ordering = left[i].to_int() - right[i].to_int()
+    if ordering != 0 {
+      return ordering
+    }
+  }
+  left.length() - right.length()
+}
+
+///|
+/// Render the generated asset module: the provenance header, then a private
+/// `web_assets()` map literal with one entry per asset, sorted by URL path so
+/// repeated runs on the same dist render byte-identical output.
+fn render_assets(entries : Array[(String, Bytes)]) -> String {
+  let assets : Map[String, Bytes] = Map::from_array(entries)
+  let urls = assets.keys().to_array()
+  urls.sort_by(compare_urls)
+  let out = StringBuilder()
+  out.write_string(header)
+  out.write_string("\n///|\nfn web_assets() -> Map[String, Bytes] {\n  {\n")
+  for url in urls {
+    out.write_string("    \"")
+    out.write_string(url.escape(quote=false))
+    out.write_string("\": ")
+    out.write_string(bytes_literal(assets[url]))
+    out.write_string(",\n")
+  }
+  out.write_string("  }\n}\n")
+  out.to_string()
+}
+
+///|
+// Run from the native module root; positional input/output paths are optional.
+let default_dist : String = "../posoco-ext-board-web/dist"
+
+///|
+let default_out : String = "src/web_assets.generated.mbt"
+
+///|
+struct Config {
+  mut dist : String
+  mut out : String
+  mut check : Bool
+}
+
+///|
+suberror EmbedError {
+  EmbedError(String)
+}
+
+///|
+fn parse_args(args : Array[String]) -> Config raise EmbedError {
+  let config : Config = { dist: default_dist, out: default_out, check: false, }
+  let mut positional = 0
+  for arg in args {
+    match arg {
+      "--check" => config.check = true
+      _ => {
+        guard !arg.has_prefix("-") else {
+          raise EmbedError("unknown option \{arg}")
+        }
+        match positional {
+          0 => {
+            config.dist = arg
+            positional += 1
+          }
+          1 => {
+            config.out = arg
+            positional += 1
+          }
+          _ => raise EmbedError("unexpected argument \{arg}")
+        }
+      }
+    }
+  }
+  config
+}
+
+///|
+fn join(dir : String, name : String) -> String {
+  if dir.has_suffix("/") {
+    dir + name
+  } else {
+    dir + "/" + name
+  }
+}
+
+///|
+fn dirname(path : String) -> String {
+  match path.rev_find("/") {
+    Some(index) => if index == 0 { "/" } else { path[:index].to_owned() }
+    None => "."
+  }
+}
+
+///|
+/// Collect every regular file below `dir` as (URL path, content). Symlinks
+/// and special files abort the walk before anything is written.
+async fn collect(
+  dir : String,
+  prefix : Array[String],
+  entries : Array[(String, Bytes)],
+) -> Unit raise EmbedError {
+  let names = @fs.readdir(
+    dir,
+    include_hidden=true,
+    include_special=true,
+    sort=true,
+  ) catch {
+    err => raise EmbedError("cannot read directory \{dir}: \{Repr(err)}")
+  }
+  for name in names {
+    let path = join(dir, name)
+    let components = prefix.copy()
+    components.push(name)
+    let kind = @fs.kind(path, follow_symlink=false) catch {
+      err => raise EmbedError("cannot inspect \{path}: \{Repr(err)}")
+    }
+    match kind {
+      Regular => {
+        let bytes = @fs.read_file(path).binary() catch {
+          err => raise EmbedError("cannot read \{path}: \{Repr(err)}")
+        }
+        entries.push((url_path(components), bytes))
+      }
+      Directory => collect(path, components, entries)
+      SymLink => raise EmbedError("refusing to embed symlink \{path}")
+      other =>
+        raise EmbedError(
+          "refusing to embed special file \{Repr(other)} at \{path}",
+        )
+    }
+  }
+}
+
+///|
+/// Build the generated file text from a validated dist tree.
+fn render(entries : Array[(String, Bytes)]) -> String raise EmbedError {
+  match validate_assets(entries) {
+    Some(problem) => raise EmbedError(problem)
+    None => render_assets(entries)
+  }
+}
+
+///|
+/// Verify without writing: exit nonzero via EmbedError when the generated
+/// file is missing or differs from dist.
+async fn check(
+  config : Config,
+  content : String,
+  count : Int,
+) -> Unit raise EmbedError {
+  let existing = @fs.exists(config.out) catch { _ => false }
+  guard existing else {
+    raise EmbedError("stale: \{config.out} does not exist")
+  }
+  let current = @fs.read_file(config.out).binary() catch {
+    err => raise EmbedError("cannot read \{config.out}: \{Repr(err)}")
+  }
+  guard current == @utf8.encode(content) else {
+    raise EmbedError("stale: \{config.out} does not match dist; regenerate")
+  }
+  println("\{config.out} is up to date (\{count} assets)")
+}
+
+///|
+/// Write `content` to `config.out` atomically: temp file in the target
+/// directory, then rename over the previous file.
+async fn write_atomic(
+  config : Config,
+  content : String,
+  count : Int,
+) -> Unit raise EmbedError {
+  let parent = dirname(config.out)
+  let parent_exists = @fs.exists(parent) catch { _ => false }
+  if !parent_exists {
+    @fs.mkdir(parent, recursive=true, permission=0o755) catch {
+      err => raise EmbedError("cannot create \{parent}: \{Repr(err)}")
+    }
+  }
+  let tmp = config.out + ".tmp"
+  // Exclusive creation never follows a pre-existing temporary symlink.
+  let file = @fs.create(tmp, allow_existing=false, permission=0o644) catch {
+    err => raise EmbedError("cannot create \{tmp}: \{Repr(err)}")
+  }
+  defer {
+    file.close()
+    let remaining = @fs.exists(tmp) catch {
+      err =>
+        raise EmbedError("cannot inspect temporary file \{tmp}: \{Repr(err)}")
+    }
+    if remaining {
+      @fs.remove(tmp) catch {
+        err =>
+          raise EmbedError("cannot clean temporary file \{tmp}: \{Repr(err)}")
+      }
+    }
+  }
+  file.write(content) catch {
+    err => raise EmbedError("cannot write \{tmp}: \{Repr(err)}")
+  }
+  file.close()
+  @fs.rename(tmp, config.out, replace=true) catch {
+    err => raise EmbedError("cannot replace \{config.out}: \{Repr(err)}")
+  }
+  println("wrote \{config.out} (\{count} assets)")
+}
+
+///|
+async fn run(args : Array[String]) -> Unit raise EmbedError {
+  let config = parse_args(args)
+  let present = @fs.exists(config.dist) catch { _ => false }
+  guard present else {
+    raise EmbedError("dist directory not found: \{config.dist}")
+  }
+  let dist_kind = @fs.kind(config.dist, follow_symlink=false) catch {
+    err => raise EmbedError("cannot inspect \{config.dist}: \{Repr(err)}")
+  }
+  guard dist_kind is Directory else {
+    raise EmbedError(
+      "dist must be a real directory, not a symlink: \{config.dist}",
+    )
+  }
+  let entries : Array[(String, Bytes)] = []
+  collect(config.dist, [], entries)
+  let content = render(entries)
+  if config.check {
+    check(config, content, entries.length())
+  } else {
+    write_atomic(config, content, entries.length())
+  }
+}
+
+///|
+async fn main {
+  run(@env.args()[1:].to_owned()) catch {
+    EmbedError(message) => {
+      println("error: \{message}")
+      abort("embed-assets: failed")
+    }
+  }
+}
