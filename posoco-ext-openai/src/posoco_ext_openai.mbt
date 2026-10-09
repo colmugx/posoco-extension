@@ -453,6 +453,12 @@ fn openai_prepare_request_body(
     stream~,
   )
   guard body is Json::Object(fields) else { abort("request builder object") }
+  // The ChatGPT Codex backend keys prompt-cache affinity off the session id;
+  // state it in the body explicitly (codex's prompt_cache_key, and what the
+  // compact path already sends). Explicit caller fields keep priority.
+  if config.base_url == codex_oauth_api_base() {
+    fields["prompt_cache_key"] = Json::string(session_id)
+  }
   for entry in extra_fields {
     fields[entry.0] = entry.1
   }
@@ -564,7 +570,9 @@ async fn OpenAIModelPort::chat_stream(
     options,
     stream=true,
   )
+  let payload = codex_stream_body(self.config, body.stringify())
   let headers = build_headers(self.config, Some(session_id), true)
+  codex_apply_body_headers(headers, payload)
   let (origin, path_prefix) = split_openai_base_url(self.config.base_url)
   let client = @http.Client::Client(origin, headers~) catch {
     err =>
@@ -583,11 +591,21 @@ async fn OpenAIModelPort::chat_stream(
         "OpenAI transport failure (stage=send_request): " + err.to_string(),
       )
   }
-  client.write(body.stringify()) catch {
-    err =>
-      raise @posoco.ModelError::Transport(
-        "OpenAI transport failure (stage=write_body): " + err.to_string(),
-      )
+  match payload {
+    Compressed(bytes, _) =>
+      client.write(bytes) catch {
+        err =>
+          raise @posoco.ModelError::Transport(
+            "OpenAI transport failure (stage=write_body): " + err.to_string(),
+          )
+      }
+    Plain(text) =>
+      client.write(text) catch {
+        err =>
+          raise @posoco.ModelError::Transport(
+            "OpenAI transport failure (stage=write_body): " + err.to_string(),
+          )
+      }
   }
   client.flush() catch {
     err =>

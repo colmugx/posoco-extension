@@ -133,7 +133,9 @@ async fn OpenAIModelPort::compact_v2_stream(
   body : Json,
   session_id : String,
 ) -> Json raise @posoco.ModelError {
+  let payload = codex_stream_body(self.config, body.stringify())
   let headers = build_headers(self.config, Some(session_id), true)
+  codex_apply_body_headers(headers, payload)
   let (origin, prefix) = split_openai_base_url(self.config.base_url)
   let client = @http.Client::Client(origin, headers~) catch {
     _ =>
@@ -142,7 +144,12 @@ async fn OpenAIModelPort::compact_v2_stream(
       )
   }
   defer client.close()
-  let response = client.post(prefix + "/responses", body.stringify()) catch {
+  let response = try {
+    match payload {
+      Compressed(bytes, _) => client.post(prefix + "/responses", bytes)
+      Plain(text) => client.post(prefix + "/responses", text)
+    }
+  } catch {
     _ =>
       raise @posoco.ModelError::Transport(
         "OpenAI compact transport failure (stage=send_request)",

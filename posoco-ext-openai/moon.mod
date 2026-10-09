@@ -11,6 +11,7 @@ import {
   "posoco/devkit@0.4.1",
   "posoco/kit-chat-completions@0.1.0",
   "colmugx/posoco-kit-responses@0.1.0",
+  "moonbit-community/flate@0.3.0",
 }
 
 readme = "README.mbt.md"

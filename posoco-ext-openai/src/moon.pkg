@@ -18,6 +18,7 @@ import {
   "moonbitlang/x/codec/base64",
   "moonbitlang/x/crypto",
   "moonbitlang/x/uuid",
+  "moonbit-community/flate/gzip" @gzip,
 }
 
 warnings = "-unused_package"
@@ -27,9 +28,14 @@ options(
   targets: {
     "identity.js.mbt": [ "js" ],
     "identity.native.mbt": [ "native" ],
+    "compression.js.mbt": [ "js" ],
+    "compression.native.mbt": [ "native" ],
+    "compression_other.mbt": [ "wasm" ],
+    "compression_js_wbtest.mbt": [ "js" ],
+    "compression_native_wbtest.mbt": [ "native" ],
     "version_file_cache.native.mbt": [ "native" ],
     "version_file_cache.js.mbt": [ "js" ],
-    "version_file_cache_fallback.mbt": [ "wasm", "wasm-gc", "llvm" ],
+    "version_file_cache_fallback.mbt": [ "wasm" ],
     "version_file_cache_wbtest.mbt": [ "native" ],
     "version_file_cache_js_wbtest.mbt": [ "js" ],
     "posoco_ext_openai_wbtest.mbt": [ "native" ],

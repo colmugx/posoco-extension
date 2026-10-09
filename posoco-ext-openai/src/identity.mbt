@@ -78,14 +78,26 @@ fn identity_fallback_session_id() -> String {
 }
 
 ///|
-/// Official Codex CLI protocol header shape. `thread-id` is freshly minted
-/// per call and `x-client-request-id` shares its value; `x-codex-window-id`
-/// is the session id plus window 0; `Accept` follows `stream`.
+/// Deterministic per-session thread id: UUID v5 over the session id. The
+/// Codex backend keys cache affinity off the stable id family (codex keeps a
+/// stable thread id per conversation; pi keeps a stable session id), so the
+/// id must not be minted fresh per call.
+fn identity_session_thread_id(session_id : String) -> String {
+  let oid = b"\x6b\xa7\xb8\x12\x9d\xad\x11\xd1\x80\xb4\x00\xc0\x4f\xd4\x30\xc8"
+  let id = openai_uuid_v5(oid, @utf8.encode("thread:" + session_id))
+  (try! @uuid.from_bytes(id)).to_string()
+}
+
+///|
+/// Official Codex CLI protocol header shape. `thread-id` is derived from the
+/// session id (stable within a session) and `x-client-request-id` shares its
+/// value; `x-codex-window-id` is the session id plus window 0; `Accept`
+/// follows `stream`.
 fn codex_protocol_headers(
   session_id : String,
   stream : Bool,
 ) -> Map[String, String] {
-  let thread_id = identity_uuid_v4()
+  let thread_id = identity_session_thread_id(session_id)
   let accept = if stream { "text/event-stream" } else { "application/json" }
   Map::from_array([
     ("originator", identity_originator),

@@ -1446,8 +1446,13 @@ test "codex subscription headers carry the posoco identity in official shape" {
   let replayed = build_headers(config, Some("sess-1"), true)
   assert_eq(replayed.get("session-id"), Some("sess-1"))
   match (headers.get("thread-id"), replayed.get("thread-id")) {
+    (Some(first), Some(second)) => assert_eq(first, second)
+    _ => fail("thread-id must be stable within a session")
+  }
+  let other = build_headers(config, Some("sess-2"), true)
+  match (headers.get("thread-id"), other.get("thread-id")) {
     (Some(first), Some(second)) => assert_true(first != second)
-    _ => fail("thread-id must be minted per call")
+    _ => fail("different sessions must derive different thread ids")
   }
 }
 
