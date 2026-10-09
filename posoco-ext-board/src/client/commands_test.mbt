@@ -85,6 +85,37 @@ test "update command preserves absence and explicit empty DoD without null" {
 }
 
 ///|
+test "set dependencies command replaces the complete detached dependency list" {
+  let dependencies = ["task-2", "task-3"]
+  let command = @client.set_task_dependencies_command(
+    "cmd-deps",
+    9L,
+    id="task-1",
+    dependencies~,
+  )
+  dependencies[0] = "changed-draft"
+  assert_eq(command.command_id, "cmd-deps")
+  assert_eq(command.expected_revision, 9L)
+  assert_eq(command.name, "board.task.set_dependencies")
+  assert_eq(command.args, {
+    "id": "task-1",
+    "dependencies": ["task-2", "task-3"],
+  })
+  match command.args {
+    { "dependencies": Array(items), .. } =>
+      items[0] = "mutated-outgoing-frame"
+    _ => fail("dependency command must contain a dependency array")
+  }
+  assert_eq(dependencies, ["changed-draft", "task-3"])
+  assert_eq(
+    @protocol.decode_client_frame(
+      @protocol.encode_client_frame(@protocol.Command(command)),
+    ),
+    Ok(@protocol.Command(command)),
+  )
+}
+
+///|
 test "move command emits only id and to and does not validate the server FSM" {
   let command = @client.move_task_command(
     "cmd-move",
