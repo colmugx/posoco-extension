@@ -128,18 +128,41 @@ test "codex ws delta only fires on exact continuation" {
 }
 
 ///|
-test "codex ws provider error frames surface the server message" {
-  let frame = "{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-5' model is not supported\"}}"
-  match codex_ws_provider_error_if_any(frame) {
+test "quota reset remaining formats human-relative time" {
+  assert_eq(quota_format_remaining(-5L), "now")
+  assert_eq(quota_format_remaining(0L), "now")
+  assert_eq(quota_format_remaining(30_000L), "<1m")
+  assert_eq(quota_format_remaining(46L * 60_000L), "46m")
+  assert_eq(quota_format_remaining(2L * 3_600_000L), "2h")
+  assert_eq(quota_format_remaining(2L * 3_600_000L + 5L * 60_000L), "2h5m")
+}
+
+///|
+test "codex ws provider error frames classify like the http path" {
+  // Quota phrasing: the typed RateLimited the host's limit display and
+  // scheduled resume key on.
+  let limit_frame = "{\"type\":\"error\",\"status\":429,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The usage limit has been reached\"}}"
+  match codex_ws_provider_error_if_any(limit_frame, now_ms=1000000L) {
+    Some(@posoco.ModelError::RateLimited(info)) =>
+      // The frame names no window or timestamp, so reset_at_ms is None and
+      // the host's RateLimitGuard probe backoff schedules the resume — the
+      // designed handler for verdicts without a stated reset.
+      assert_true(info.message.contains("usage limit"))
+    _ => fail("usage-limit frame must classify as RateLimited")
+  }
+  // Non-quota provider errors keep the message visible as transport errors.
+  let model_frame = "{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-5' model is not supported\"}}"
+  match codex_ws_provider_error_if_any(model_frame, now_ms=1000000L) {
     Some(@posoco.ModelError::Transport(message)) =>
-      assert_true(message.contains("The 'gpt-5' model is not supported"))
-    _ => fail("provider error frame must surface its message")
+      assert_true(message.contains("not supported"))
+    _ => fail("model frame must surface its message")
   }
   // Non-error frames pass through untouched.
   assert_true(
-    codex_ws_provider_error_if_any("{\"type\":\"response.created\"}") is None,
+    codex_ws_provider_error_if_any("{\"type\":\"response.created\"}", now_ms=0L)
+    is None,
   )
-  assert_true(codex_ws_provider_error_if_any("not json") is None)
+  assert_true(codex_ws_provider_error_if_any("not json", now_ms=0L) is None)
 }
 
 ///|

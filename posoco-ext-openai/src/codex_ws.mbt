@@ -319,28 +319,48 @@ async fn codex_ws_open_session(
 }
 
 ///|
-/// Surface the full provider error payload on `type: "error"` frames. The
-/// shared kit raises a fixed-wording transport error for this event and
-/// drops the provider's message — the one thing a user needs to see.
-fn codex_ws_provider_error_if_any(payload : String) -> @posoco.ModelError? {
+/// Classify a `type: "error"` WS frame exactly like the HTTP path
+/// classifies a non-2xx response: the shared chatkit classifier turns quota
+/// phrasings into the typed `RateLimited` (reason, reset, provider code) so
+/// the host's limit display and scheduled resume work unchanged; anything
+/// else surfaces as a transport error carrying the provider's message.
+fn codex_ws_provider_error_if_any(
+  payload : String,
+  now_ms~ : Int64,
+) -> @posoco.ModelError? {
   let json = @json.parse(payload) catch { _ => return None }
   guard json is Json::Object(fields) else { return None }
   match fields.get("type") {
     Some(Json::String("error")) => ()
     _ => return None
   }
-  match fields.get("error") {
-    Some(Json::Object(err)) =>
-      match err.get("message") {
-        Some(Json::String(message)) if message.length() > 0 =>
-          Some(
-            @posoco.ModelError::Transport(
-              "OpenAI SSE terminal failure (stage=error, category=provider_error): \{message}",
-            ),
-          )
+  let status = match fields.get("status") {
+    Some(Json::Number(value, ..)) => value.to_int()
+    _ => 400
+  }
+  let body = match fields.get("error") {
+    Some(err) => Json::object(Map::from_array([("error", err)]))
+    _ => Json::object(fields)
+  }
+  let body_text = body.stringify()
+  match
+    @chatkit.classify_chat_completions_http_error(status, body_text, now_ms~) {
+    Some(err) => Some(err)
+    None =>
+      // Unclassified provider error: keep the message visible.
+      match fields.get("error") {
+        Some(Json::Object(err)) =>
+          match err.get("message") {
+            Some(Json::String(message)) if message.length() > 0 =>
+              Some(
+                @posoco.ModelError::Transport(
+                  "OpenAI SSE terminal failure (stage=error, category=provider_error, status=\{status}): \{message}",
+                ),
+              )
+            _ => None
+          }
         _ => None
       }
-    _ => None
   }
 }
 
@@ -385,7 +405,7 @@ async fn codex_ws_pump(
       Ok(Some(text)) => {
         let trimmed = text.trim().to_owned()
         if trimmed.length() > 0 {
-          match codex_ws_provider_error_if_any(trimmed) {
+          match codex_ws_provider_error_if_any(trimmed, now_ms=@async.now()) {
             Some(err) => raise err
             None => ()
           }
