@@ -102,8 +102,7 @@ test "set dependencies command replaces the complete detached dependency list" {
     "dependencies": ["task-2", "task-3"],
   })
   match command.args {
-    { "dependencies": Array(items), .. } =>
-      items[0] = "mutated-outgoing-frame"
+    { "dependencies": Array(items), .. } => items[0] = "mutated-outgoing-frame"
     _ => fail("dependency command must contain a dependency array")
   }
   assert_eq(dependencies, ["changed-draft", "task-3"])

@@ -5,8 +5,10 @@ import {
   "moonbitlang/async",
   "moonbitlang/core/debug",
 }
+
 import {
   "colmugx/posoco-ext-board/store",
   "moonbitlang/async/aqueue",
 } for "wbtest"
+
 supported_targets = "+native +js"

@@ -56,12 +56,9 @@ async test "canonical task command fixtures match client builders and strict ser
     ),
     (
       "task-set-dependencies-command",
-      @client.set_task_dependencies_command(
-        "cmd-deps-1",
-        2L,
-        id="task-1",
-        dependencies=["task-2"],
-      ),
+      @client.set_task_dependencies_command("cmd-deps-1", 2L, id="task-1", dependencies=[
+        "task-2",
+      ]),
       @domain.SetDependencies(
         id~,
         dependencies=[@domain.BoardTaskId("task-2")],

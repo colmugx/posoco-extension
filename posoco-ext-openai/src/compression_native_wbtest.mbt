@@ -29,9 +29,7 @@ test "api key endpoint never compresses" {
 
 ///|
 test "compressed payload declares its encoding, plain does not" {
-  let headers : @http.Headers = {
-    "Content-Type": "application/json",
-  }
+  let headers : @http.Headers = { "Content-Type": "application/json" }
   codex_apply_body_headers(headers, Compressed(b"xx", "gzip"))
   assert_eq(headers.get("Content-Encoding"), Some("gzip"))
   codex_apply_body_headers(headers, Plain("{}"))

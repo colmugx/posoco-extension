@@ -18,7 +18,7 @@ import {
   "moonbitlang/x/codec/base64",
   "moonbitlang/x/crypto",
   "moonbitlang/x/uuid",
-  "moonbit-community/flate/gzip" @gzip,
+  "moonbit-community/flate/gzip",
 }
 
 warnings = "-unused_package"

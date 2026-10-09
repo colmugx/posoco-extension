@@ -84,18 +84,17 @@ async test "embedded static middleware cannot shadow control-plane routes" {
         host: "127.0.0.1",
         port: listener.addr.port(),
       }
-      group.spawn_bg(no_wait=true, allow_failure=true, () => {
-        app.serve(listener)
-      })
+      group.spawn_bg(no_wait=true, allow_failure=true, () => app.serve(listener))
       @async.sleep(10)
 
-      for (path, expected) in [
-        ("/health", "route-health"),
-        ("/ws", "route-ws"),
-        ("/api", "route-api"),
-        ("/api/bootstrap", "route-bootstrap"),
-        ("/api/future", "route-future"),
-      ] {
+      for
+        (path, expected) in [
+          ("/health", "route-health"),
+          ("/ws", "route-ws"),
+          ("/api", "route-api"),
+          ("/api/bootstrap", "route-bootstrap"),
+          ("/api/future", "route-future"),
+        ] {
         let (response, body) = board_http_raw(endpoint.base_url() + path)
         assert_eq(response.code, 200)
         assert_eq(board_bytes_text(body), expected)

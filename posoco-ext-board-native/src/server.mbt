@@ -155,10 +155,10 @@ fn board_control_path(path : String) -> Bool {
 fn board_public_asset_paths(assets : Map[String, Bytes]) -> Set[String] {
   Set::from_iter(
     assets
-      .keys()
-      .filter(path =>
-        path != "/" && path != "/index.html" && !board_control_path(path)
-      ),
+    .keys()
+    .filter(path => {
+      path != "/" && path != "/index.html" && !board_control_path(path)
+    }),
   )
 }
 
@@ -167,10 +167,7 @@ fn board_public_asset_paths(assets : Map[String, Bytes]) -> Set[String] {
 /// generator rejects these collisions too; this runtime guard is intentional
 /// defense in depth for hand-built or stale manifests.
 fn board_static_assets(assets : Map[String, Bytes]) -> @moonback.Middleware {
-  let resources = @static.from_assets(
-    assets,
-    rewrite_trailing_slash_index=true,
-  )
+  let resources = @static.from_assets(assets, rewrite_trailing_slash_index=true)
   @moonback.Middleware(next => {
     let serve = (resources.0)(next)
     (req, res) => {

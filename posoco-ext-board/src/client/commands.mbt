@@ -137,10 +137,7 @@ pub fn update_task_command(
 ///     dependencies=["task-2", "task-3"],
 ///   )
 ///   assert_eq(wire.name, "board.task.set_dependencies")
-///   assert_eq(wire.args, {
-///     "id": "task-1",
-///     "dependencies": ["task-2", "task-3"],
-///   })
+///   assert_eq(wire.args, { "id": "task-1", "dependencies": ["task-2", "task-3"] })
 /// }
 /// ```
 pub fn set_task_dependencies_command(
@@ -153,10 +150,7 @@ pub fn set_task_dependencies_command(
     command_id,
     expected_revision,
     name: "board.task.set_dependencies",
-    args: {
-      "id": id.to_json(),
-      "dependencies": dependencies.copy().to_json(),
-    },
+    args: { "id": id.to_json(), "dependencies": dependencies.copy().to_json() },
   }
 }
 

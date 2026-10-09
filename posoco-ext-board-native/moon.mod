@@ -1,4 +1,5 @@
 name = "colmugx/posoco-ext-board-native"
+
 version = "0.1.0"
 
 import {
@@ -9,9 +10,15 @@ import {
 }
 
 readme = "README.mbt.md"
+
 license = "Apache-2.0"
+
 repository = "https://github.com/colmugx/posoco-extension"
+
 description = "MoonBack localhost presentation adapter for the headless Posoco Board"
+
 source = "src"
+
 preferred_target = "native"
+
 supported_targets = "native"
