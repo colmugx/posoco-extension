@@ -9,7 +9,9 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/http",
   "moonbitlang/async/io",
+  "moonbitlang/async/js_async",
   "moonbitlang/async/socket",
+  "moonbitlang/async/websocket",
   "moonbitlang/core/json",
   "moonbitlang/core/env",
   "moonbitlang/core/random",
@@ -21,7 +23,7 @@ import {
   "moonbit-community/flate/gzip",
 }
 
-warnings = "-unused_package"
+warnings = "-unused_package-unused_async-struct_never_constructed-unused_field"
 
 options(
   "native-stub": [ "identity_stub.c" ],
@@ -33,6 +35,10 @@ options(
     "compression_other.mbt": [ "wasm" ],
     "compression_js_wbtest.mbt": [ "js" ],
     "compression_native_wbtest.mbt": [ "native" ],
+    "codex_ws_native.mbt": [ "native" ],
+    "codex_ws_js.mbt": [ "js" ],
+    "codex_ws_other.mbt": [ "wasm" ],
+    "codex_ws_native_wbtest.mbt": [ "native" ],
     "version_file_cache.native.mbt": [ "native" ],
     "version_file_cache.js.mbt": [ "js" ],
     "version_file_cache_fallback.mbt": [ "wasm" ],

@@ -529,8 +529,24 @@ pub impl @posoco.ModelPort for OpenAIModelPort with fn chat(
   let session_id = scope.session_id.to_string()
   match stream {
     NoStream => self.chat_nonstream(session_id, messages_owned, tools, options)
-    Stream(on_chunk) =>
+    Stream(on_chunk) => {
+      // WebSocket transport for the Codex subscription endpoint, on by
+      // default wherever a transport exists. Anything unsupported or any
+      // transport failure lands here permanently falling back to the SSE
+      // stream below.
+      if codex_ws_supported() &&
+        self.config.base_url == codex_oauth_api_base() &&
+        !codex_ws_session_is_fallback(session_id) {
+        match
+          self.codex_ws_chat(
+            session_id, messages_owned, tools, options, on_chunk,
+          ) {
+          Done(result) => return result
+          FallBack => codex_ws_mark_session_fallback(session_id)
+        }
+      }
       self.chat_stream(session_id, messages_owned, tools, options, on_chunk)
+    }
   }
 }
 
