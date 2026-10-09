@@ -136,11 +136,16 @@ fn board_security(
 ///|
 /// Board control-plane paths are reserved from the embedded static namespace.
 /// Keep the whole `/api` namespace reserved for future authenticated HTTP APIs.
-fn board_control_path(path : String) -> Bool {
+fn board_control_path_view(path : StringView) -> Bool {
   path == "/health" ||
   path == "/ws" ||
   path == "/api" ||
   path.has_prefix("/api/")
+}
+
+///|
+fn board_control_path(path : String) -> Bool {
+  board_control_path_view(path[:])
 }
 
 ///|
@@ -169,7 +174,7 @@ fn board_static_assets(assets : Map[String, Bytes]) -> @moonback.Middleware {
   @moonback.Middleware(next => {
     let serve = (resources.0)(next)
     (req, res) => {
-      if board_control_path(req.path) {
+      if board_control_path_view(req.path) {
         next(req, res)
       } else {
         serve(req, res)
