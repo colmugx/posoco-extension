@@ -26,13 +26,19 @@ pub struct CacheBucket {
 pub struct Stats {
   bus : @devkit.EventBus?
   clock : () -> Int64
+  live_interval_ms : Int64
   mut round_started_ms : Int64?
   mut first_token_ms : Int64?
+  mut last_chunk_ms : Int64?
+  mut delta_chars : Int
+  mut streamed_output_tokens : Int?
+  mut chars_per_token : Double
+  mut last_live_ms : Int64?
   mut sum_tps : Double
   mut tps_rounds : Int
   cache_buckets : Map[String, CacheBucket]
 }
-pub fn Stats::Stats(bus? : @devkit.EventBus?, clock? : () -> Int64) -> Self
+pub fn Stats::Stats(bus? : @devkit.EventBus?, clock? : () -> Int64, live_interval_ms? : Int64) -> Self
 pub fn Stats::commands(Self) -> Array[@port.CommandDef]
 pub fn Stats::extension_id(Self) -> String
 pub async fn Stats::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError

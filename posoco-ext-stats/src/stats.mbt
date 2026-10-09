@@ -1,26 +1,42 @@
 ///|
 /// Speed and prompt-cache metrics derived purely from core turn events:
-/// `ttft` (round start → first streamed token), `tps` (output tokens over the
-/// span of the round that just committed), `avg` (the running per-round mean
-/// of `tps`), and `cache` (the process aggregate of per-session prompt-cache
-/// accounting). Everything publishes through the devkit status protocol
-/// (segments `ttft`/`tps`/`avg`/`cache`, priorities 50/60/70/80, source
-/// `posoco_ext_stats`); with `bus = None` the observer still maintains its
-/// state and publishes nowhere.
+/// `ttft` (round start → first streamed token, published the moment the
+/// first token arrives), `tps` (output tokens over the decode span — last
+/// delta chunk minus first delta chunk — so prefill, tool gaps, and the
+/// commit tail stay out of the denominator), `avg` (the running per-round
+/// mean of settled `tps`), and `cache` (the process aggregate of
+/// per-session prompt-cache accounting). During streaming the `tps` segment
+/// shows a live estimate (streamed chars over the calibrated chars-per-token
+/// ratio, prefixed `≈`), replaced by the exact rate when the round settles;
+/// a mid-stream `Usage` chunk makes the live rate exact early. Everything
+/// publishes through the devkit status protocol (segments `ttft`/`tps`/
+/// `avg`/`cache`, priorities 50/60/70/80, source `posoco_ext_stats`); with
+/// `bus = None` the observer still maintains its state and publishes
+/// nowhere.
 ///
 /// A "round" is one model response: `ModelResponseReceived` closes the round
-/// (computing metrics, then re-anchoring at the current time) so a tool loop
-/// measures one round per response without a fresh `TurnStarted`. Each round
-/// with usage also accumulates into a per-session bucket (keyed by the
-/// dispatched `EventScope` session id, falling back to a `"(no scope)"`
-/// process bucket). Cache reporting is tracked separately from generic usage:
-/// `cached_input_tokens=None` means unknown, while `Some(0)` is an explicit
-/// zero-hit report. The clock is injectable for deterministic tests.
+/// (settling metrics, then re-anchoring at the current time) so a tool loop
+/// measures one round per response without a fresh `TurnStarted`. Terminal
+/// tool events re-anchor the pending round at the last effect end, so the
+/// next round's `ttft` excludes tool-execution time; without a core
+/// "request dispatched" event that anchor is the closest observable bound.
+/// Each round with usage also accumulates into a per-session bucket (keyed
+/// by the dispatched `EventScope` session id, falling back to a `"(no
+/// scope)"` process bucket). Cache reporting is tracked separately from
+/// generic usage: `cached_input_tokens=None` means unknown, while `Some(0)`
+/// is an explicit zero-hit report. The clock is injectable for deterministic
+/// tests; `live_interval_ms` throttles live publishes (default 250ms).
 pub struct Stats {
   bus : @devkit.EventBus?
   clock : () -> Int64
+  live_interval_ms : Int64
   mut round_started_ms : Int64?
   mut first_token_ms : Int64?
+  mut last_chunk_ms : Int64?
+  mut delta_chars : Int
+  mut streamed_output_tokens : Int?
+  mut chars_per_token : Double
+  mut last_live_ms : Int64?
   mut sum_tps : Double
   mut tps_rounds : Int
   cache_buckets : Map[String, CacheBucket]
@@ -52,12 +68,19 @@ pub struct CacheBucket {
 pub fn Stats::Stats(
   bus? : @devkit.EventBus? = None,
   clock? : () -> Int64 = fn() { @async.now() },
+  live_interval_ms? : Int64 = 250,
 ) -> Stats {
   {
     bus,
     clock,
+    live_interval_ms,
     round_started_ms: None,
     first_token_ms: None,
+    last_chunk_ms: None,
+    delta_chars: 0,
+    streamed_output_tokens: None,
+    chars_per_token: 3.5,
+    last_live_ms: None,
     sum_tps: 0.0,
     tps_rounds: 0,
     cache_buckets: Map::from_array([]),
@@ -73,12 +96,17 @@ pub impl @posoco.Observer for Stats with fn on_event_at(
   match event {
     TurnStarted => {
       self.round_started_ms = Some((self.clock)())
-      self.first_token_ms = None
+      self.reset_round()
     }
-    StreamChunkReceived(chunk~) =>
-      match chunk {
-        TextDelta(_) | ReasoningDelta(_) => self.note_first_token()
-        _ => ()
+    StreamChunkReceived(chunk~) => self.note_chunk(chunk)
+    ToolCallSucceeded(..)
+    | ToolCallFailed(..)
+    | ToolCallRejected(..)
+    | ToolCallAbandoned(..) =>
+      // The pending round re-anchors at the last effect end so the next
+      // ttft excludes tool-execution time.
+      if self.first_token_ms is None {
+        self.round_started_ms = Some((self.clock)())
       }
     ModelResponseReceived(usage~, ..) => {
       match usage {
@@ -87,6 +115,7 @@ pub impl @posoco.Observer for Stats with fn on_event_at(
       }
       self.close_round(usage)
     }
+    TurnFailed(_) | TurnCompleted => self.reset_round()
     _ => ()
   }
 }
@@ -206,9 +235,131 @@ fn hit_rate_percent(sum_cached : Int, sum_input : Int) -> Double {
 }
 
 ///|
-fn Stats::note_first_token(self : Stats) -> Unit {
-  if self.round_started_ms is Some(_) && self.first_token_ms is None {
-    self.first_token_ms = Some((self.clock)())
+/// Reset the per-round live-tracking state. Round anchoring is owned by the
+/// callers (`TurnStarted`, round close, terminal tool events).
+fn Stats::reset_round(self : Stats) -> Unit {
+  self.first_token_ms = None
+  self.last_chunk_ms = None
+  self.delta_chars = 0
+  self.streamed_output_tokens = None
+  self.last_live_ms = None
+}
+
+///|
+/// Publish one status segment. No-op without a bus.
+fn Stats::publish_segment(
+  self : Stats,
+  segment~ : String,
+  priority~ : Int,
+  value~ : String,
+) -> Unit {
+  match self.bus {
+    Some(bus) =>
+      @devkit.publish_status_register(
+        bus,
+        source="posoco_ext_stats",
+        segment~,
+        priority~,
+        value~,
+      )
+    None => ()
+  }
+}
+
+///|
+/// Route one streamed chunk: delta chunks mark first/last token, accumulate
+/// chars, and attempt a throttled live publish; a `Usage` chunk with output
+/// tokens makes the live rate exact; `Finish` carries no rate signal.
+fn Stats::note_chunk(self : Stats, chunk : @posoco.StreamChunk) -> Unit {
+  match chunk {
+    TextDelta(token~) | ReasoningDelta(token~) =>
+      self.note_delta(token.length())
+    ToolCallDelta(arguments_delta~, ..) =>
+      match arguments_delta {
+        Some(args) => self.note_delta(args.length())
+        None => ()
+      }
+    Usage(output_tokens~, ..) =>
+      if output_tokens > 0 {
+        self.streamed_output_tokens = Some(output_tokens)
+        self.publish_live((self.clock)())
+      }
+    Finish(..) => ()
+  }
+}
+
+///|
+/// One delta chunk arrived; `chars` is its UTF-16 length. The clock is read
+/// once and reused for the first-token mark, the last-chunk mark, and the
+/// throttled live publish.
+fn Stats::note_delta(self : Stats, chars : Int) -> Unit {
+  let now = (self.clock)()
+  match (self.round_started_ms, self.first_token_ms) {
+    (Some(started), None) => {
+      self.first_token_ms = Some(now)
+      self.publish_segment(
+        segment="ttft",
+        priority=50,
+        value="\{now - started}ms",
+      )
+    }
+    _ => ()
+  }
+  self.last_chunk_ms = Some(now)
+  self.delta_chars += chars
+  self.publish_live(now)
+}
+
+///|
+/// Publish the live `tps` estimate. No publish before `live_interval_ms`
+/// has elapsed since the round's first token, and at most one per interval
+/// afterwards. The rate is cumulative since the first token: exact when a
+/// `Usage` chunk reported output tokens, else estimated from chars and
+/// marked `≈`.
+fn Stats::publish_live(self : Stats, now : Int64) -> Unit {
+  if self.bus is None {
+    return
+  }
+  let first = match self.first_token_ms {
+    Some(first) => first
+    None => return
+  }
+  let elapsed = now - first
+  if elapsed <= 0 || elapsed < self.live_interval_ms {
+    return
+  }
+  match self.last_live_ms {
+    Some(last) => if now - last < self.live_interval_ms { return }
+    None => ()
+  }
+  self.last_live_ms = Some(now)
+  let exact = self.streamed_output_tokens is Some(_)
+  let tokens : Double = match self.streamed_output_tokens {
+    Some(n) => n.to_double()
+    None => self.delta_chars.to_double() / self.chars_per_token
+  }
+  let rate = tokens * 1000.0 / elapsed.to_double()
+  let prefix : String = if exact { "" } else { "≈" }
+  self.publish_segment(
+    segment="tps",
+    priority=60,
+    value="\{prefix}\{fmt_one_decimal(rate)}/s",
+  )
+}
+
+///|
+/// Best available token count for settlement: a mid-stream `Usage` chunk
+/// when it reported output tokens, else the calibrated char estimate. The
+/// flag marks whether the value is exact.
+fn Stats::estimate_tokens(self : Stats) -> (Double, Bool)? {
+  match self.streamed_output_tokens {
+    Some(n) => Some((n.to_double(), true))
+    None =>
+      if self.delta_chars > 0 {
+        Some((self.delta_chars.to_double() / self.chars_per_token, false))
+      } else {
+        None
+      }
   }
 }
 
@@ -226,87 +377,98 @@ fn cache_status_value(totals : CacheTotals) -> String {
 ///|
 fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
   let now = (self.clock)()
-  let ttft_ms : Int64? = match (self.round_started_ms, self.first_token_ms) {
-    (Some(started), Some(first)) => Some(first - started)
-    _ => None
-  }
-  let span_ms : Int64? = match self.round_started_ms {
-    Some(started) => {
-      let span = now - started
-      if span >= 0 && span <= 2147483647 {
+  // Decode span: first → last delta chunk. Prefill, tool gaps, and the
+  // commit tail after the last chunk stay out of the denominator.
+  let decode_ms : Int64? = match (self.first_token_ms, self.last_chunk_ms) {
+    (Some(first), Some(last)) => {
+      let span = last - first
+      if span > 0 && span <= 2147483647 {
         Some(span)
       } else {
         None
       }
     }
-    None => None
+    _ => None
   }
-  let tps : Double? = match (usage, span_ms) {
-    (Some(usage), Some(span)) if span > 0 =>
-      match usage.output_tokens {
-        Some(out) => Some(out.to_double() * 1000.0 / span.to_double())
-        None => None
+  let tokens : (Double, Bool)? = match usage {
+    Some(u) =>
+      match u.output_tokens {
+        Some(n) =>
+          if n > 0 {
+            Some((n.to_double(), true))
+          } else {
+            self.estimate_tokens()
+          }
+        None => self.estimate_tokens()
       }
+    None => self.estimate_tokens()
+  }
+  let tps : (Double, Bool)? = match (tokens, decode_ms) {
+    (Some((t, exact)), Some(span)) =>
+      Some((t * 1000.0 / span.to_double(), exact))
     _ => None
   }
   match tps {
-    Some(rate) => {
+    Some((rate, _)) => {
       self.sum_tps += rate
       self.tps_rounds += 1
     }
     None => ()
   }
-  self.round_started_ms = Some(now)
-  self.first_token_ms = None
-  match self.bus {
-    Some(bus) => {
-      match ttft_ms {
-        Some(ms) =>
-          @devkit.publish_status_register(
-            bus,
-            source="posoco_ext_stats",
-            segment="ttft",
-            priority=50,
-            value="\{ms}ms",
-          )
-        None => ()
+  // Recalibrate the chars-per-token ratio only from exact output counts.
+  let exact_out : Int? = match usage {
+    Some(u) =>
+      match u.output_tokens {
+        Some(n) => if n > 0 { Some(n) } else { None }
+        None => None
       }
-      match tps {
-        Some(rate) =>
-          @devkit.publish_status_register(
-            bus,
-            source="posoco_ext_stats",
-            segment="tps",
-            priority=60,
-            value="\{fmt_one_decimal(rate)}/s",
-          )
-        None => ()
-      }
-      if self.tps_rounds > 0 {
-        @devkit.publish_status_register(
-          bus,
-          source="posoco_ext_stats",
-          segment="avg",
-          priority=70,
-          value="\{fmt_one_decimal(self.sum_tps / self.tps_rounds.to_double())}/s",
-        )
-      }
-      // Update the cache segment only when this response carried usage. The
-      // compact value uses cache-reporting rounds exclusively; a provider
-      // that omits `cached_input_tokens` is displayed as n/a, not as a miss.
-      match usage {
-        Some(_) => {
-          let totals = self.cache_totals()
-          @devkit.publish_status_register(
-            bus,
-            source="posoco_ext_stats",
-            segment="cache",
-            priority=80,
-            value=cache_status_value(totals),
-          )
+    None => None
+  }
+  match exact_out {
+    Some(out) =>
+      if self.delta_chars > 0 {
+        let ratio = self.delta_chars.to_double() / out.to_double()
+        self.chars_per_token = if ratio < 1.0 {
+          1.0
+        } else if ratio > 10.0 {
+          10.0
+        } else {
+          ratio
         }
-        None => ()
       }
+    None => ()
+  }
+  self.round_started_ms = Some(now)
+  self.reset_round()
+  match tps {
+    Some((rate, exact)) => {
+      let prefix : String = if exact { "" } else { "≈" }
+      self.publish_segment(
+        segment="tps",
+        priority=60,
+        value="\{prefix}\{fmt_one_decimal(rate)}/s",
+      )
+    }
+    None => ()
+  }
+  if self.tps_rounds > 0 {
+    self.publish_segment(
+      segment="avg",
+      priority=70,
+      value="\{fmt_one_decimal(self.sum_tps / self.tps_rounds.to_double())}/s",
+    )
+  }
+  // Update the cache segment only when this response carried usage. The
+  // compact value uses cache-reporting rounds exclusively; a provider
+  // that omits `cached_input_tokens` is displayed as n/a, not as a miss.
+  match usage {
+    Some(_) => {
+      let totals = self.cache_totals()
+      self.publish_segment(
+        segment="cache",
+        priority=80,
+        value=cache_status_value(totals),
+      )
     }
     None => ()
   }

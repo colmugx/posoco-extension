@@ -82,18 +82,82 @@ fn tk_response(usage : @posoco.Usage?) -> @posoco.TurnEvent {
 }
 
 ///|
-test "full round publishes ttft tps avg and cache with the pinned segments" {
+fn tk_delta(text : String) -> @posoco.TurnEvent {
+  @posoco.TurnEvent::StreamChunkReceived(
+    chunk=@posoco.StreamChunk::TextDelta(token=text),
+  )
+}
+
+///|
+fn tk_tool_call(id : String) -> @posoco.ToolCall {
+  @posoco.ToolCall::{
+    call_id: @posoco.CallId::unchecked(id),
+    name: @posoco.ToolName::unchecked("bash"),
+    arguments: Json::object(Map::from_array([])),
+  }
+}
+
+///|
+fn tk_tool_success(id : String) -> @posoco.TurnEvent {
+  @posoco.TurnEvent::ToolCallSucceeded(
+    call=tk_tool_call(id),
+    content="ok",
+    structured=None,
+    attachments=[],
+  )
+}
+
+///|
+/// Suppress live publishes: an interval no elapsed time can ever cross.
+let suppress_live : Int64 = 1000000000L
+
+///|
+/// Assert one captured bus event is a register op for `segment` with the
+/// pinned priority and value.
+fn assert_segment(
+  events : Array[@devkit.BusEvent],
+  index~ : Int,
+  segment~ : String,
+  priority~ : Int,
+  value~ : String,
+) -> Unit raise {
+  assert_eq(
+    @devkit.decode_status_op(events[index]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment~,
+        label=None,
+        priority~,
+        value=Some(value),
+        color=None,
+      ),
+    ),
+  )
+}
+
+///|
+test "full round publishes ttft at first token then tps avg and cache at close" {
   let bus = @devkit.EventBus()
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
-  let stats = Stats(bus=Some(bus), clock=stepped_clock([1000, 1300, 2200]))
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(
-    @posoco.TurnEvent::StreamChunkReceived(
-      chunk=@posoco.StreamChunk::TextDelta(token="Hel"),
-    ),
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1300, 2200, 2500]),
+    live_interval_ms=suppress_live,
   )
-  // 24 output tokens over the 1200ms round span -> 20.0 tokens/s.
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  // First token at 1300: ttft publishes immediately, before the round ends.
+  stats.on_event(tk_delta("Hel"))
+  assert_eq(capture.events.length(), 1)
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="ttft",
+    priority=50,
+    value="300ms",
+  )
+  stats.on_event(tk_delta("lo"))
+  // Close at 2500: decode span 2200-1300=900ms, 24 tokens -> 26.7/s.
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
@@ -101,55 +165,26 @@ test "full round publishes ttft tps avg and cache with the pinned segments" {
     ),
   )
   assert_eq(capture.events.length(), 4)
-  assert_eq(capture.events[0].source, "posoco_ext_stats")
-  assert_eq(capture.events[0].topic, "status")
-  assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="ttft",
-        label=None,
-        priority=50,
-        value=Some("300ms"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=1,
+    segment="tps",
+    priority=60,
+    value="26.7/s",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="tps",
-        label=None,
-        priority=60,
-        value=Some("20.0/s"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=2,
+    segment="avg",
+    priority=70,
+    value="26.7/s",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[2]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="avg",
-        label=None,
-        priority=70,
-        value=Some("20.0/s"),
-        color=None,
-      ),
-    ),
-  )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[3]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("n/a"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=3,
+    segment="cache",
+    priority=80,
+    value="n/a",
   )
 }
 
@@ -160,15 +195,13 @@ test "second round re-anchors and avg becomes the per-round mean" {
   bus.subscribe(capture)
   let stats = Stats(
     bus=Some(bus),
-    clock=stepped_clock([1000, 1300, 2200, 2700, 4000]),
+    clock=stepped_clock([1000, 1300, 2200, 2700, 3200, 4000, 4300]),
+    live_interval_ms=suppress_live,
   )
-  // Round one: ttft 300ms, 24 tokens over 1200ms -> 20.0/s, avg 20.0/s.
+  // Round one: ttft 300ms, decode 900ms, 24 tokens -> 26.7/s.
   stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(
-    @posoco.TurnEvent::StreamChunkReceived(
-      chunk=@posoco.StreamChunk::TextDelta(token="Hel"),
-    ),
-  )
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
@@ -176,12 +209,13 @@ test "second round re-anchors and avg becomes the per-round mean" {
     ),
   )
   // Round two without a fresh TurnStarted (tool loop): the re-anchor at
-  // 2200 makes ttft 500ms and the span 1800ms -> 13.3/s, avg 16.7/s.
+  // 2700 makes ttft 500ms; decode 4000-3200=800ms -> 30.0/s, avg 28.3/s.
   stats.on_event(
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ReasoningDelta(token="hmm"),
     ),
   )
+  stats.on_event(tk_delta("lo"))
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
@@ -189,85 +223,62 @@ test "second round re-anchors and avg becomes the per-round mean" {
     ),
   )
   assert_eq(capture.events.length(), 8)
-  assert_eq(
-    @devkit.decode_status_op(capture.events[3]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("n/a"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=3,
+    segment="cache",
+    priority=80,
+    value="n/a",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[4]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="ttft",
-        label=None,
-        priority=50,
-        value=Some("500ms"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=4,
+    segment="ttft",
+    priority=50,
+    value="500ms",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[5]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="tps",
-        label=None,
-        priority=60,
-        value=Some("13.3/s"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=5,
+    segment="tps",
+    priority=60,
+    value="30.0/s",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[6]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="avg",
-        label=None,
-        priority=70,
-        value=Some("16.7/s"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=6,
+    segment="avg",
+    priority=70,
+    value="28.3/s",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[7]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("n/a"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=7,
+    segment="cache",
+    priority=80,
+    value="n/a",
   )
 }
 
 ///|
-test "turn start and chunk events never publish" {
+test "chunk events publish ttft immediately and non-delta chunks stay silent" {
   let bus = @devkit.EventBus()
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
-  let stats = Stats(bus=Some(bus), clock=stepped_clock([1000, 1300]))
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(
-    @posoco.TurnEvent::StreamChunkReceived(
-      chunk=@posoco.StreamChunk::TextDelta(token="Hel"),
-    ),
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1300, 1400, 1500]),
+    live_interval_ms=suppress_live,
   )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_delta("Hel"))
+  // Later delta: first token already recorded, live publish suppressed.
   stats.on_event(
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ReasoningDelta(token="hmm"),
     ),
   )
+  // Argument-less tool-call delta: no clock read, no publish.
   stats.on_event(
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ToolCallDelta(
@@ -278,201 +289,198 @@ test "turn start and chunk events never publish" {
       ),
     ),
   )
+  // Usage and Finish chunks carry no first-token signal.
+  stats.on_event(
+    @posoco.TurnEvent::StreamChunkReceived(
+      chunk=@posoco.StreamChunk::Usage(
+        input_tokens=100,
+        output_tokens=2,
+        total_tokens=102,
+        cached_input_tokens=None,
+        uncached_input_tokens=None,
+      ),
+    ),
+  )
+  stats.on_event(
+    @posoco.TurnEvent::StreamChunkReceived(
+      chunk=@posoco.StreamChunk::Finish(reason="stop"),
+    ),
+  )
   stats.on_event(@posoco.TurnEvent::TurnCompleted)
-  assert_eq(capture.events.length(), 0)
+  assert_eq(capture.events.length(), 1)
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="ttft",
+    priority=50,
+    value="300ms",
+  )
 }
 
 ///|
-test "missing usage publishes ttft only but the round still re-anchors" {
+test "missing usage settles on the calibrated estimate and still re-anchors" {
   let bus = @devkit.EventBus()
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
   let stats = Stats(
     bus=Some(bus),
-    clock=stepped_clock([1000, 1300, 2200, 4000]),
+    clock=stepped_clock([1000, 1300, 2200, 2700, 3000, 3900, 4000]),
+    live_interval_ms=suppress_live,
   )
   stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(
-    @posoco.TurnEvent::StreamChunkReceived(
-      chunk=@posoco.StreamChunk::TextDelta(token="Hel"),
-    ),
-  )
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
+  // No usage at close: settle on the char estimate (5 chars / 3.5) over
+  // the 900ms decode span -> ~1.6/s, marked as an estimate.
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(message=tk_assistant(), usage=None),
   )
-  // The response without usage only published ttft; the re-anchor at 2200
-  // is proven by the next round measuring its span from there (1800ms).
+  // The re-anchor at 2700 is proven by round two's ttft of 300ms.
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
     ),
   )
-  assert_eq(capture.events.length(), 4)
-  assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="ttft",
-        label=None,
-        priority=50,
-        value=Some("300ms"),
-        color=None,
-      ),
-    ),
+  assert_eq(capture.events.length(), 7)
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="ttft",
+    priority=50,
+    value="300ms",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="tps",
-        label=None,
-        priority=60,
-        value=Some("13.3/s"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=1,
+    segment="tps",
+    priority=60,
+    value="≈1.6/s",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[2]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="avg",
-        label=None,
-        priority=70,
-        value=Some("13.3/s"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=2,
+    segment="avg",
+    priority=70,
+    value="1.6/s",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[3]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("n/a"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=3,
+    segment="ttft",
+    priority=50,
+    value="300ms",
+  )
+  assert_segment(
+    capture.events,
+    index=4,
+    segment="tps",
+    priority=60,
+    value="26.7/s",
+  )
+  assert_segment(
+    capture.events,
+    index=6,
+    segment="cache",
+    priority=80,
+    value="n/a",
   )
 }
 
 ///|
-test "zero span produces no tps but the round still re-anchors" {
+test "zero decode span produces no tps but the round still re-anchors" {
   let bus = @devkit.EventBus()
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
   let stats = Stats(
     bus=Some(bus),
-    clock=stepped_clock([1000, 1000, 1000, 3000]),
+    clock=stepped_clock([1000, 1300, 1300, 2000, 3000, 4000, 4100]),
+    live_interval_ms=suppress_live,
   )
   stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(
-    @posoco.TurnEvent::StreamChunkReceived(
-      chunk=@posoco.StreamChunk::TextDelta(token="Hel"),
-    ),
-  )
-  // Response in the same millisecond as round start: the zero span
-  // suppresses tps, and no tps round has accumulated yet (ttft is still
-  // published — it only needs both anchors).
+  stats.on_event(tk_delta("Hel"))
+  // Second delta lands in the same millisecond: the zero decode span
+  // suppresses tps at close, while ttft still published at the first token.
+  stats.on_event(tk_delta("lo"))
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
     ),
   )
-  // Re-anchor proven: the next round measures 2000ms -> 6.0 tokens/s.
+  // Re-anchor proven: round two decodes 4000-3000=1000ms -> 12.0 tokens/s.
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(12)),
     ),
   )
-  assert_eq(capture.events.length(), 5)
-  assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="ttft",
-        label=None,
-        priority=50,
-        value=Some("0ms"),
-        color=None,
-      ),
-    ),
+  assert_eq(capture.events.length(), 6)
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="ttft",
+    priority=50,
+    value="300ms",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("n/a"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=1,
+    segment="cache",
+    priority=80,
+    value="n/a",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[2]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="tps",
-        label=None,
-        priority=60,
-        value=Some("6.0/s"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=2,
+    segment="ttft",
+    priority=50,
+    value="1000ms",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[3]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="avg",
-        label=None,
-        priority=70,
-        value=Some("6.0/s"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=3,
+    segment="tps",
+    priority=60,
+    value="12.0/s",
   )
-  assert_eq(
-    @devkit.decode_status_op(capture.events[4]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="cache",
-        label=None,
-        priority=80,
-        value=Some("n/a"),
-        color=None,
-      ),
-    ),
+  assert_segment(
+    capture.events,
+    index=4,
+    segment="avg",
+    priority=70,
+    value="12.0/s",
+  )
+  assert_segment(
+    capture.events,
+    index=5,
+    segment="cache",
+    priority=80,
+    value="n/a",
   )
 }
 
 ///|
 test "stats with no bus is a silent no-op that still tracks rounds" {
-  let stats = Stats(clock=stepped_clock([1000, 1300, 2200, 2700, 4000]))
-  stats.on_event(@posoco.TurnEvent::TurnStarted)
-  stats.on_event(
-    @posoco.TurnEvent::StreamChunkReceived(
-      chunk=@posoco.StreamChunk::TextDelta(token="Hel"),
-    ),
+  let stats = Stats(
+    clock=stepped_clock([1000, 1300, 2200, 2700, 3000, 4000, 4100]),
+    live_interval_ms=suppress_live,
   )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
       usage=Some(tk_usage_out(24)),
     ),
   )
-  stats.on_event(
-    @posoco.TurnEvent::StreamChunkReceived(
-      chunk=@posoco.StreamChunk::TextDelta(token="lo"),
-    ),
-  )
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
   stats.on_event(
     @posoco.TurnEvent::ModelResponseReceived(
       message=tk_assistant(),
@@ -480,7 +488,7 @@ test "stats with no bus is a silent no-op that still tracks rounds" {
     ),
   )
   assert_eq(stats.tps_rounds, 2)
-  assert_eq(stats.round_started_ms, Some(4000L))
+  assert_eq(stats.round_started_ms, Some(4100L))
   assert_true(stats.first_token_ms is None)
   // Unscoped dispatch falls back to the "(no scope)" process bucket.
   match stats.cache_buckets.get("(no scope)") {
@@ -492,6 +500,236 @@ test "stats with no bus is a silent no-op that still tracks rounds" {
     }
     None => fail("expected the no-scope bucket")
   }
+}
+
+///|
+test "live tps throttles to the interval and tracks the estimate" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1300, 1400, 1500, 2000, 2300, 2600, 2700]),
+    live_interval_ms=250,
+  )
+  // Round one: calibrates 14 chars -> 4 tokens (ratio stays 3.5).
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_delta("Hello w"))
+  // 100ms after the first token: within the 250ms interval, no publish.
+  stats.on_event(tk_delta("orld hi"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(4)),
+    ),
+  )
+  // Round two: live estimates every >=250ms; settles to the exact rate.
+  stats.on_event(tk_delta("Hello w"))
+  stats.on_event(tk_delta("orld hi"))
+  stats.on_event(tk_delta("More text follows here!!"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(10)),
+    ),
+  )
+  // Round one: ttft(300) at first token, tps 40.0, avg 40.0, cache.
+  // Round two: ttft(500), live ≈13.3/s at 2300 (14 chars), live ≈18.1/s at
+  // 2600 (38 chars), settled 16.7/s over the 600ms decode span, avg 28.3/s,
+  // cache.
+  assert_eq(capture.events.length(), 10)
+  assert_segment(
+    capture.events,
+    index=4,
+    segment="ttft",
+    priority=50,
+    value="500ms",
+  )
+  assert_segment(
+    capture.events,
+    index=5,
+    segment="tps",
+    priority=60,
+    value="≈13.3/s",
+  )
+  assert_segment(
+    capture.events,
+    index=6,
+    segment="tps",
+    priority=60,
+    value="≈18.1/s",
+  )
+  assert_segment(
+    capture.events,
+    index=7,
+    segment="tps",
+    priority=60,
+    value="16.7/s",
+  )
+  assert_segment(
+    capture.events,
+    index=8,
+    segment="avg",
+    priority=70,
+    value="28.3/s",
+  )
+}
+
+///|
+test "decode span excludes prefill and the commit tail" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 5000, 5100, 7000]),
+    live_interval_ms=suppress_live,
+  )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  // Four seconds of prefill before the first token...
+  stats.on_event(tk_delta("Hel"))
+  // ...100ms of decoding, then almost two seconds of commit tail before
+  // the response event. The round-span formula would report 3.3/s; the
+  // decode span reports 200.0/s.
+  stats.on_event(tk_delta("lo"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(20)),
+    ),
+  )
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="ttft",
+    priority=50,
+    value="4000ms",
+  )
+  assert_segment(
+    capture.events,
+    index=1,
+    segment="tps",
+    priority=60,
+    value="200.0/s",
+  )
+}
+
+///|
+test "terminal tool events re-anchor the pending round" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1300, 1400, 1500, 5000, 5300, 5400, 5500]),
+    live_interval_ms=suppress_live,
+  )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(24)),
+    ),
+  )
+  // A tool runs for 3.5s after the round closed at 1500. Without the
+  // re-anchor, round two's ttft would be 3800ms.
+  stats.on_event(tk_tool_success("c1"))
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(24)),
+    ),
+  )
+  assert_segment(
+    capture.events,
+    index=4,
+    segment="ttft",
+    priority=50,
+    value="300ms",
+  )
+}
+
+///|
+test "mid-stream usage chunk makes the live rate exact" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1300, 1700, 1800, 1900]),
+    live_interval_ms=100,
+  )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_delta("Hello world, how are you doing ri"))
+  // 61 chars streamed over 400ms: estimated 17.4 tokens -> ≈43.6/s.
+  stats.on_event(tk_delta("ght now? Indeed, quite well."))
+  // The provider's usage chunk arrives: 18 exact tokens over 500ms -> 36.0/s.
+  stats.on_event(
+    @posoco.TurnEvent::StreamChunkReceived(
+      chunk=@posoco.StreamChunk::Usage(
+        input_tokens=100,
+        output_tokens=18,
+        total_tokens=118,
+        cached_input_tokens=None,
+        uncached_input_tokens=None,
+      ),
+    ),
+  )
+  // Settlement still uses the last delta chunk (400ms decode span): 45.0/s.
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(18)),
+    ),
+  )
+  assert_eq(capture.events.length(), 6)
+  assert_segment(
+    capture.events,
+    index=1,
+    segment="tps",
+    priority=60,
+    value="≈43.6/s",
+  )
+  assert_segment(
+    capture.events,
+    index=2,
+    segment="tps",
+    priority=60,
+    value="36.0/s",
+  )
+  assert_segment(
+    capture.events,
+    index=3,
+    segment="tps",
+    priority=60,
+    value="45.0/s",
+  )
+}
+
+///|
+test "non-streamed round publishes no speed segments but still counts cache" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 2000]),
+    live_interval_ms=suppress_live,
+  )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_response(Some(tk_usage_cache(Some(100), Some(50)))))
+  assert_eq(capture.events.length(), 1)
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="cache",
+    priority=80,
+    value="1/1·50.0%",
+  )
 }
 
 ///|
