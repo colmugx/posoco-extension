@@ -615,7 +615,7 @@ test "decode span excludes prefill and the commit tail" {
 }
 
 ///|
-test "terminal tool events re-anchor the pending round" {
+test "model request started re-anchors the pending round over tool time" {
   let bus = @devkit.EventBus()
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
@@ -633,9 +633,10 @@ test "terminal tool events re-anchor the pending round" {
       usage=Some(tk_usage_out(24)),
     ),
   )
-  // A tool runs for 3.5s after the round closed at 1500. Without the
-  // re-anchor, round two's ttft would be 3800ms.
+  // A tool runs for 3.5s after the round closed at 1500. Tool events no
+  // longer move the anchor; the next request's declaration does, at 5000.
   stats.on_event(tk_tool_success("c1"))
+  stats.on_event(@posoco.TurnEvent::ModelRequestStarted)
   stats.on_event(tk_delta("Hel"))
   stats.on_event(tk_delta("lo"))
   stats.on_event(

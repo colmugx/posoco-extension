@@ -16,10 +16,12 @@
 ///
 /// A "round" is one model response: `ModelResponseReceived` closes the round
 /// (settling metrics, then re-anchoring at the current time) so a tool loop
-/// measures one round per response without a fresh `TurnStarted`. Terminal
-/// tool events re-anchor the pending round at the last effect end, so the
-/// next round's `ttft` excludes tool-execution time; without a core
-/// "request dispatched" event that anchor is the closest observable bound.
+/// measures one round per response without a fresh `TurnStarted`.
+/// `ModelRequestStarted` re-anchors the pending round when the kernel
+/// declares the next model request, so each round's `ttft` measures from
+/// the true request start — tool-execution and inter-response time stay
+/// out. `TurnStarted` keeps the anchor only as a fallback for event
+/// streams that never declared a request.
 /// Each round with usage also accumulates into a per-session bucket (keyed
 /// by the dispatched `EventScope` session id, falling back to a `"(no
 /// scope)"` process bucket). Cache reporting is tracked separately from
@@ -98,16 +100,14 @@ pub impl @posoco.Observer for Stats with fn on_event_at(
       self.round_started_ms = Some((self.clock)())
       self.reset_round()
     }
+    ModelRequestStarted => {
+      // The exact per-step anchor: the kernel declared the next model
+      // request (after pre-model hooks, before the port executes it), so
+      // ttft no longer contains tool-execution or inter-response time.
+      self.round_started_ms = Some((self.clock)())
+      self.reset_round()
+    }
     StreamChunkReceived(chunk~) => self.note_chunk(chunk)
-    ToolCallSucceeded(..)
-    | ToolCallFailed(..)
-    | ToolCallRejected(..)
-    | ToolCallAbandoned(..) =>
-      // The pending round re-anchors at the last effect end so the next
-      // ttft excludes tool-execution time.
-      if self.first_token_ms is None {
-        self.round_started_ms = Some((self.clock)())
-      }
     ModelResponseReceived(usage~, ..) => {
       match usage {
         Some(u) => self.note_cache_usage(scope_key(scope), u)

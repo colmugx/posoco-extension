@@ -507,7 +507,10 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     // 0.18.0 turn events: the bridge projects its own protocol surface;
     // user-request lifecycle needs no ACP-side projection.
     | UserRequestStarted(..)
-    | UserRequestFinished(..) => ()
+    | UserRequestFinished(..)
+    // 0.22.0: the request-declaration anchor carries no ACP counterpart;
+    // per-step timing is a host concern.
+    | ModelRequestStarted => ()
   }
 }
 
