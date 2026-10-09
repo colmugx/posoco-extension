@@ -5,27 +5,22 @@ const NMEM_MEMORY_SEARCH_TIMEOUT_MS : Int = 30000
 
 ///|
 /// Render the server's `memory_search` reply as provider text: one
-/// `- [id] content` line per memory (id omitted when the server gives
-/// none), a non-JSON reply degrades to its trimmed raw text, and an empty
-/// page is a clean miss (`None` — no hits).
+/// `- [id] content` line per hit (id omitted when the server gives none,
+/// truncated previews point at their `reference_uri`), a non-JSON reply
+/// degrades to its trimmed raw text, and an empty page is a clean miss
+/// (`None` — no hits).
 fn search_reply_text(text : String) -> String? {
   match clean_json_object(text) {
     Some(fields) =>
-      match fields.get("memories") {
+      match fields.get("results") {
         Some(Json::Array(items)) => {
           let lines : Array[String] = []
           for item in items {
             match item {
               Json::Object(item_fields) =>
-                match item_fields.get("content") {
-                  Some(Json::String(content)) =>
-                    match item_fields.get("id") {
-                      Some(Json::String(id)) =>
-                        lines.push("- [\{id}] \{content}")
-                      _ => lines.push("- \{content}")
-                    }
-                  // An item without string content is unusable and skipped.
-                  _ => ()
+                match search_item_line(item_fields) {
+                  Some(line) => lines.push(line)
+                  None => ()
                 }
               _ => ()
             }
@@ -45,6 +40,27 @@ fn search_reply_text(text : String) -> String? {
         None
       }
   }
+}
+
+///|
+/// One `results` item as a `- [id] content` line. An item without string
+/// content is unusable (`None`); `content_truncated` with a `reference_uri`
+/// appends the deep-read pointer (the server bounds previews server-side).
+fn search_item_line(fields : Map[String, Json]) -> String? {
+  guard fields.get("content") is Some(Json::String(content)) else {
+    return None
+  }
+  let mut line = match fields.get("id") {
+    Some(Json::String(id)) => "- [\{id}] \{content}"
+    _ => "- \{content}"
+  }
+  if fields.get("content_truncated") is Some(Json::True) {
+    match fields.get("reference_uri") {
+      Some(Json::String(uri)) => line = line + " …[full: \{uri}]"
+      _ => ()
+    }
+  }
+  Some(line)
 }
 
 ///|
