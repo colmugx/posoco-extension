@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-kimi"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.21.0",
+  "colmugx/posoco@0.21.1",
   "posoco/devkit@0.4.1",
   "posoco/kit-chat-completions@0.1.0",
   "colmugx/posoco-kit-compact-summary@0.1.0",

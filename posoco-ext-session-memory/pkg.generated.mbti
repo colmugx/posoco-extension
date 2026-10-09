@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-session_memory"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct InMemorySessionStore {
+  mut store : Map[String, @types.Session]
+}
+pub fn InMemorySessionStore::new() -> Self
+pub fn InMemorySessionStore::session_ids(Self) -> Array[String]
+pub fn InMemorySessionStore::with_sessions(Map[String, @types.Session]) -> Self
+pub impl @port.SessionStore for InMemorySessionStore
+
+// Type aliases
+
+// Traits
+
