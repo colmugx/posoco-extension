@@ -24,6 +24,22 @@ priv struct WsSession {
   /// must extend `last_input ++ items` element-for-element before a delta is
   /// allowed.
   mut last_response_items : Array[Json]
+  /// Unix ms of the last proven liveness: a successful send or an arrived
+  /// frame. Stale entries are reconnected, never reused as-is.
+  mut last_activity_at_ms : Int64
+}
+
+///|
+/// A cached connection idle longer than this is presumed half-open (NAT/LB
+/// entries expire silently; the socket still reads OPEN locally). The floor
+/// of real-world idle windows (~60s NAT, ~100s edge tiers) sits well above
+/// it, so a false "stale" costs one cheap handshake while a missed one costs
+/// a hung turn.
+const WS_REUSE_MAX_IDLE_MS : Int64 = 30_000
+
+///|
+fn codex_ws_reuse_usable(last_activity_at_ms : Int64, now_ms : Int64) -> Bool {
+  now_ms - last_activity_at_ms <= WS_REUSE_MAX_IDLE_MS
 }
 
 ///|
@@ -254,7 +270,21 @@ async fn OpenAIModelPort::codex_ws_chat(
     stream=true,
   )
   let session = match codex_ws_sessions.val.get(session_id) {
-    Some(session) => session
+    Some(session) =>
+      // A long-idle cached connection is presumed half-open: reconnect
+      // instead of sending into a socket that would swallow the frame.
+      if codex_ws_reuse_usable(session.last_activity_at_ms, @async.now()) {
+        session
+      } else {
+        codex_ws_drop_session(session_id)
+        match codex_ws_open_session(self.config, session_id) {
+          Ok(fresh) => fresh
+          Err(_) => {
+            codex_ws_mark_session_fallback(session_id)
+            return FallBack
+          }
+        }
+      }
     None =>
       match codex_ws_open_session(self.config, session_id) {
         Ok(session) => session
@@ -268,7 +298,7 @@ async fn OpenAIModelPort::codex_ws_chat(
   // always the full body (the continuation guard sees no completed id).
   let sent = codex_ws_delta_request(body, session)
   match session.transport.send_text(codex_ws_frame(sent).stringify()) {
-    true => ()
+    true => session.last_activity_at_ms = @async.now()
     false => {
       codex_ws_drop_session(session_id)
       codex_ws_mark_session_fallback(session_id)
@@ -313,6 +343,7 @@ async fn codex_ws_open_session(
     last_body_rest: Json::object(Map::from_array([])),
     last_response_id: "",
     last_response_items: [],
+    last_activity_at_ms: @async.now(),
   }
   codex_ws_sessions.val[session_id] = session
   Ok(session)
@@ -403,6 +434,7 @@ async fn codex_ws_pump(
         return FallBack
       }
       Ok(Some(text)) => {
+        session.last_activity_at_ms = @async.now()
         let trimmed = text.trim().to_owned()
         if trimmed.length() > 0 {
           match codex_ws_provider_error_if_any(trimmed, now_ms=@async.now()) {

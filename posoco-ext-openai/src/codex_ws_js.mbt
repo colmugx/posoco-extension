@@ -42,6 +42,7 @@ extern "js" fn ws_js_open(
   #|       if (entry.waiter) {
   #|         const waiter = entry.waiter;
   #|         entry.waiter = null;
+  #|         if (waiter.timer) clearTimeout(waiter.timer);
   #|         waiter.resolve(frame);
   #|       } else {
   #|         entry.queue.push(frame);
@@ -81,19 +82,42 @@ extern "js" fn ws_js_open(
   #| })
 
 ///|
-/// Next text frame; `null` resolves on close/error (stream end). The abort
-/// signal is honored so a cancelled pump never waits on a silent socket.
+/// Two minutes without any frame — server frames or pings both refresh it —
+/// marks the connection dead. Long enough for slow first tokens, short
+/// enough that a silently dropped socket recovers into the SSE fallback.
+const WS_IDLE_TIMEOUT_MS : Int = 120_000
+
+///|
+/// Next text frame; `null` resolves on close/error (stream end) and `""` on
+/// idle timeout (a server frame is never empty, so the sentinel is
+/// unambiguous). The abort signal is honored so a cancelled pump never waits
+/// on a silent socket. The idle timeout is the dead-connection escape: a
+/// server that accepts frames but stops answering would otherwise hold the
+/// pump forever.
 extern "js" fn ws_js_next(
   handle : Int,
   signal : @js_async.AbortSignal,
+  idle_timeout_ms : Int,
 ) -> @js_async.Promise[String?] =
-  #| (handle, signal) => new Promise((resolve) => {
+  #| (handle, signal, idleTimeoutMs) => new Promise((resolve) => {
   #|   const registry = globalThis.__posocoWs;
   #|   const entry = registry && registry.sockets.get(handle);
   #|   if (!entry) return resolve(null);
   #|   if (entry.queue.length > 0) return resolve(entry.queue.shift());
-  #|   entry.waiter = { resolve };
-  #|   signal.addEventListener("abort", () => resolve(null), { once: true });
+  #|   let done = false;
+  #|   const finish = (value) => {
+  #|     if (done) return;
+  #|     done = true;
+  #|     if (value === "" && entry.waiter && entry.waiter.timer) clearTimeout(entry.waiter.timer);
+  #|     entry.waiter = null;
+  #|     resolve(value);
+  #|   };
+  #|   const timer = setTimeout(() => {
+  #|     try { entry.socket.close(); } catch {}
+  #|     finish("");
+  #|   }, idleTimeoutMs);
+  #|   entry.waiter = { resolve: finish, timer };
+  #|   signal.addEventListener("abort", () => finish(null), { once: true });
   #| })
 
 ///|
@@ -165,12 +189,17 @@ async fn WsTransport::next_text(
 ) -> Result[String?, String] noraise {
   let controller = @js_async.AbortController::new()
   let frame = @js_async.run_promise(fn(signal) {
-    ws_js_next(self.handle, signal)
+    ws_js_next(self.handle, signal, WS_IDLE_TIMEOUT_MS)
   }) catch {
     _ => None
   }
   controller.abort()
-  Ok(frame)
+  match frame {
+    // Idle-timeout sentinel: surface as a transport error so the pump's
+    // pre-emit path falls back to SSE instead of waiting forever.
+    Some("") => Err("websocket idle timeout")
+    other => Ok(other)
+  }
 }
 
 ///|

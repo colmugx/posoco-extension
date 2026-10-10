@@ -128,6 +128,21 @@ test "codex ws delta only fires on exact continuation" {
 }
 
 ///|
+test "codex ws reuse probe only trusts freshly active connections" {
+  // Fresh or slightly stale: reuse. Beyond the idle window: presumed
+  // half-open, reconnect instead. The window floor sits below real-world
+  // NAT/edge idle expiries by design.
+  let now = 1_000_000_000_000L
+  assert_true(codex_ws_reuse_usable(now, now))
+  assert_true(codex_ws_reuse_usable(now - 30_000L, now))
+  assert_true(codex_ws_reuse_usable(now - 29_999L, now))
+  assert_true(codex_ws_reuse_usable(now - 30_001L, now) == false)
+  assert_true(codex_ws_reuse_usable(now - 300_000L, now) == false)
+}
+
+///|
+
+///|
 test "codex ws provider error frames classify like the http path" {
   // Quota phrasing: the typed RateLimited the host's limit display and
   // scheduled resume key on.
