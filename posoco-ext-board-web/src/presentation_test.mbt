@@ -263,3 +263,63 @@ test "priority select options are fixed and wire derived" {
   let expected = [@client.Low, @client.Normal, @client.High, @client.Critical]
   assert_true(@src.priorities() == expected)
 }
+
+///|
+test "attempt kind and outcome options are fixed and wire-spelled centrally" {
+  assert_true(
+    @src.attempt_kinds() == [@client.Discuss, @client.Execute, @client.Review],
+  )
+  assert_true(
+    @src.attempt_outcomes() ==
+    [@client.Succeeded, @client.Failed, @client.Cancelled, @client.Interrupted],
+  )
+  assert_eq(@src.outcome_label(@client.Succeeded), "Succeeded")
+  assert_eq(@src.outcome_label(@client.Failed), "Failed")
+  assert_eq(@src.outcome_label(@client.Cancelled), "Cancelled")
+  assert_eq(@src.outcome_label(@client.Interrupted), "Interrupted")
+}
+
+///|
+test "manual lifecycle controls follow the authoritative attempt status" {
+  let statuses : Array[@client.ClientAttemptStatus] = [
+    @client.Queued,
+    @client.Running,
+    @client.Succeeded,
+    @client.Failed,
+    @client.Cancelled,
+    @client.Interrupted,
+  ]
+  for status in statuses {
+    assert_eq(@src.attempt_startable(status), status is @client.Queued)
+    assert_eq(@src.attempt_finishable(status), status is @client.Running)
+  }
+}
+
+///|
+test "queue attempt ids validate live against the authoritative replica" {
+  let replica = @client.BoardReplica::empty()
+  assert_true(
+    replica.apply_snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: 1L,
+      payload: {
+        "board": {
+          "revision": 1,
+          "tasks": [task_json("t", "ready")],
+          "attempts": [attempt_json("attempt-1", "t", "running", 1234)],
+        },
+        "events": [],
+      },
+    })
+    is @client.Applied,
+  )
+  assert_false(@src.queue_attempt_id_valid(replica, ""))
+  assert_false(@src.queue_attempt_id_valid(replica, "   "))
+  assert_false(@src.queue_attempt_id_valid(replica, "attempt-1"))
+  assert_true(@src.queue_attempt_id_valid(replica, "attempt-2"))
+  assert_true(@src.queue_attempt_id_valid(replica, " attempt-2 "))
+  let unknown = @client.BoardReplica::empty()
+  assert_false(@src.queue_attempt_id_valid(unknown, "attempt-2"))
+  assert_false(@src.queue_attempt_id_valid(unknown, ""))
+}

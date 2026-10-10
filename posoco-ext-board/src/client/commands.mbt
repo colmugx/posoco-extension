@@ -155,6 +155,136 @@ pub fn set_task_dependencies_command(
 }
 
 ///|
+/// Canonical v1 attempt kind spelling, shared by every attempt builder.
+///
+/// ```mbt check
+/// test {
+///   let kind : @client.ClientAttemptKind = @client.Execute
+///   assert_eq(kind.to_wire(), "execute")
+/// }
+/// ```
+pub fn ClientAttemptKind::to_wire(self : ClientAttemptKind) -> String {
+  match self {
+    Discuss => "discuss"
+    Execute => "execute"
+    Review => "review"
+  }
+}
+
+///|
+/// Canonical v1 terminal outcome spelling; `queued`/`running` statuses are
+/// never wire outcomes.
+///
+/// ```mbt check
+/// test {
+///   let outcome : @client.ClientAttemptOutcome = @client.Succeeded
+///   assert_eq(outcome.to_wire(), "succeeded")
+/// }
+/// ```
+pub fn ClientAttemptOutcome::to_wire(self : ClientAttemptOutcome) -> String {
+  match self {
+    Succeeded => "succeeded"
+    Failed => "failed"
+    Cancelled => "cancelled"
+    Interrupted => "interrupted"
+  }
+}
+
+///|
+/// Queue a new attempt against an explicit task. The attempt ID is
+/// client-provided and correlated by the server's duplicate rejection; the
+/// durable server owns task existence and kind semantics.
+///
+/// ```mbt check
+/// test {
+///   let wire = @client.queue_attempt_command(
+///     "cmd-queue",
+///     2L,
+///     id="attempt-1",
+///     task_id="task-1",
+///     kind=@client.Discuss,
+///   )
+///   assert_eq(wire.name, "board.attempt.queue")
+///   assert_eq(wire.args, {
+///     "id": "attempt-1",
+///     "task_id": "task-1",
+///     "kind": "discuss",
+///   })
+/// }
+/// ```
+pub fn queue_attempt_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+  task_id~ : String,
+  kind~ : ClientAttemptKind,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.attempt.queue",
+    args: {
+      "id": id.to_json(),
+      "task_id": task_id.to_json(),
+      "kind": kind.to_wire().to_json(),
+    },
+  }
+}
+
+///|
+/// Start one queued attempt; only the explicit attempt ID is sent.
+///
+/// ```mbt check
+/// test {
+///   let wire = @client.start_attempt_command("cmd-start", 3L, id="attempt-1")
+///   assert_eq(wire.name, "board.attempt.start")
+///   assert_eq(wire.args, { "id": "attempt-1" })
+/// }
+/// ```
+pub fn start_attempt_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.attempt.start",
+    args: { "id": id.to_json() },
+  }
+}
+
+///|
+/// Finish one running attempt with an explicit terminal outcome; the
+/// terminal choice is never inferred or defaulted by this builder.
+///
+/// ```mbt check
+/// test {
+///   let wire = @client.finish_attempt_command(
+///     "cmd-finish",
+///     4L,
+///     id="attempt-1",
+///     outcome=@client.Cancelled,
+///   )
+///   assert_eq(wire.name, "board.attempt.finish")
+///   assert_eq(wire.args, { "id": "attempt-1", "outcome": "cancelled" })
+/// }
+/// ```
+pub fn finish_attempt_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+  outcome~ : ClientAttemptOutcome,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.attempt.finish",
+    args: { "id": id.to_json(), "outcome": outcome.to_wire().to_json() },
+  }
+}
+
+///|
 /// Request a stage transition; the durable server remains authoritative.
 ///
 /// ```mbt check

@@ -69,6 +69,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .inspector .primary { border-color: #4e8a4e; }
 .attempt-row { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: grid; gap: 4px; }
 .attempt-line { display: flex; flex-wrap: wrap; gap: 6px; }
+.attempt-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.attempt-outcome { max-width: 180px; }
+.attempt-queue { border: 1px dashed var(--border); border-radius: 6px; padding: 10px 12px; display: grid; gap: 8px; }
 .attempt-when { margin: 0; color: var(--muted); font-size: 12px; }
 @media (prefers-color-scheme: dark) { :root { --surface: #202731; --background: #151a22; --text: #e7ebf2; --muted: #a8b4c5; --border: #364252; --accent: #8db2e8; } .notice-warning { color: #d8b25e; } .notice-error { color: #e08a8a; } .notice-success { color: #8fbf8f; } .inspector-warning { color: #d8b25e; } }
 @media (max-width: 900px) { .board-body.has-inspector { grid-template-columns: minmax(0, 1fr); } .inspector { position: static; max-height: none; grid-row: 1; } }

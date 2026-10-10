@@ -12,6 +12,13 @@ test "embedded dashboard identity and manifest based public resource policy" {
     assert_false(html.contains(retired))
     assert_false(@utf8.decode(assets["/index.js"]).contains(retired))
   }
+  let javascript = @utf8.decode(assets["/index.js"])
+  for
+    lifecycle in [
+      "board.attempt.queue", "board.attempt.start", "board.attempt.finish", "Choose an outcome…",
+    ] {
+    assert_true(javascript.contains(lifecycle))
+  }
   let public_paths = board_public_asset_paths(assets)
   assert_false(public_paths.contains("/"))
   assert_false(public_paths.contains("/index.html"))

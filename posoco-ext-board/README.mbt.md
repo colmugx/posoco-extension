@@ -88,8 +88,11 @@ MoonBit, future SvelteKit 3/Svelte 5, and desktop consumers. Those hosts should
 implement the same wire/reducer invariants, not import Rabbita. Native fixture
 tests validate server frames through the codec/replica, and client command
 fixtures through the client codec, typed builders and strict server decoder.
-The client package also provides create/update/move command builders with
-centralized stage/priority spellings, detached args, and no backend/UI dependency.
+The client package provides create/update/move/dependency and attempt
+queue/start/finish builders with centralized enum spellings, detached args,
+and no backend/UI dependency. `ClientAttemptOutcome` contains only the four
+terminal choices; timestamps stay server-owned. Canonical attempt command
+fixtures round-trip through the typed builders, wire codec and strict decoder.
 
 The independent `posoco-ext-board-web` module provides a seven-lane
 Rabbita **0.16.4** shell with task create/edit/move, built using Warren **0.4.4**. It imports only client
@@ -108,8 +111,11 @@ import Rabbita. The UI sends task intents with the current authoritative revisio
 allows only one pending command, and never changes the projection optimistically.
 Command results only settle matching correlation IDs; disconnect-before-settlement
 clears the baseline and requests a snapshot without resending the command.
-Dependency/attempt/review UX, Cetas integration and Agent execution remain
-separate work.
+The inspector supports dependency editing and manual attempt lifecycle controls
+(S3C4): independent attempt/command UUIDs, explicit finish outcomes, live ID/status
+guards and recovery-aware drafts all use this same pending/reconciliation path.
+These commands neither run an Agent nor couple attempt status to task stage.
+Review decisions, Cetas integration and Agent execution remain separate work.
 
 ## Host wiring
 
@@ -312,7 +318,9 @@ after invalidation clears the projection, the UI shows `Waiting for Board state`
 An authoritative empty Board shows `No Board tasks yet`.
 
 The task inspector selects by ID and reads current task details, dependencies
-and attempt history from the replica. Dependency editing uses detached local
+and attempt history from the replica. Manual queue/start/finish actions share the
+same gate; finish requires an explicit terminal choice and never implies Agent
+execution or a task-stage change. Dependency editing uses detached local
 drafts and the public typed command builder. External dependency changes require
 an explicit reload before saving; the domain alone validates the DAG. Mutations
 share one pending correlation record and are never optimistically projected or
@@ -544,6 +552,5 @@ scheduler.
   OS-entropy token, embedded static assets, browser opener and native factory.
 
 Embedded assets belong only to the optional native presentation. The headless
-backend and wire/durable mutation semantics remain unchanged. Dependency editing,
-attempt/review UI, Cetas/SvelteKit or desktop integration, and Agent execution
-remain out of scope.
+backend and wire/durable mutation semantics remain unchanged. Review-decision UI,
+Cetas/SvelteKit or desktop integration, and Agent execution remain out of scope.

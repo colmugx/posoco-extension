@@ -188,18 +188,14 @@ fn update(
       }
     }
     CreateOpened =>
-      if model.editor is Some(_) ||
-        model.dependency_editor is Some(_) ||
-        !mutations_allowed(model) {
+      if draft_open(model) || !mutations_allowed(model) {
         (model, @rabbita.none)
       } else {
         ({ ..model, editor: Some(Editor::create()), }, @rabbita.none)
       }
     EditOpened(task_id) =>
       // One editor at a time; the authoritative record must exist.
-      if model.editor is Some(_) ||
-        model.dependency_editor is Some(_) ||
-        !mutations_allowed(model) {
+      if draft_open(model) || !mutations_allowed(model) {
         (model, @rabbita.none)
       } else {
         match task_by_id(model.replica, task_id) {
@@ -260,7 +256,7 @@ fn update(
         None => (model, @rabbita.none)
       }
     MoveRequested(task_id, to) =>
-      if model.dependency_editor is Some(_) {
+      if draft_open(model) {
         (model, @rabbita.none)
       } else {
         submit_move(model, task_id, to, emit, env)
@@ -274,7 +270,17 @@ fn update(
     | DependenciesRefreshed
     | DependenciesCancelled
     | DependenciesSubmitted
-    | DependencyDraftReturned => update_inspector(model, msg, emit, env)
+    | DependencyDraftReturned
+    | AttemptQueueOpened
+    | AttemptQueueCancelled
+    | AttemptDraftReturned
+    | AttemptFinishOpened(_)
+    | AttemptFinishCancelled
+    | AttemptKindChanged(_)
+    | AttemptQueueSubmitted
+    | AttemptStartRequested(_)
+    | AttemptOutcomeChanged(_)
+    | AttemptFinishSubmitted => update_inspector(model, msg, emit, env)
   }
 }
 

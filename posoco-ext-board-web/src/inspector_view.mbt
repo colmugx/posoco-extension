@@ -1,13 +1,20 @@
 ///|
 fn inspector_panel(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  if model.selected_task is None && model.dependency_editor is None {
+  if model.selected_task is None &&
+    model.dependency_editor is None &&
+    model.attempt_draft is None &&
+    model.finish_draft is None {
     return @html.nothing
   }
   @html.aside(
     id="task-inspector",
     class="inspector",
     attrs=@html.Attrs::build().aria_label("Task inspector"),
-    [dependency_draft_banner(model, emit), inspector_body(model, emit)],
+    [
+      dependency_draft_banner(model, emit),
+      attempt_draft_banner(model, emit),
+      inspector_body(model, emit),
+    ],
   )
 }
 
@@ -118,7 +125,7 @@ fn task_details(
       @html.h3("Dependencies"),
       task_dependencies(model, task, draft, emit),
       @html.h3("Attempts"),
-      task_attempts(model),
+      task_attempts(model, emit),
     ],
   )
 }
@@ -189,9 +196,7 @@ fn task_dependencies(
           class="task-action",
           title="Edit this task's dependencies in a local draft",
           // Only one editor at a time, and only through the mutation gate.
-          disabled=model.editor is Some(_) ||
-            model.dependency_editor is Some(_) ||
-            !mutations_allowed(model),
+          disabled=draft_open(model) || !mutations_allowed(model),
           on_click=emit(DependenciesOpened),
           "Edit dependencies",
         ),
@@ -326,34 +331,156 @@ fn dependency_editor_panel(
 }
 
 ///|
-/// Read-only attempt history straight from the authoritative replica; no
-/// execution or management controls are offered here.
-fn task_attempts(model : Model) -> @html.Html {
+/// Authoritative attempt history plus manual lifecycle controls. The
+/// controls only send queue/start/finish commands through the shared
+/// single-pending gate; execution, retries and review decisions stay out.
+fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let attempts = inspector_attempts(model)
-  if attempts.is_empty() {
-    return @html.p(class="inspector-empty", "No attempts yet.")
+  let list = if attempts.is_empty() {
+    @html.p(class="inspector-empty", "No attempts yet.")
+  } else {
+    @html.ul(
+      class="attempt-list",
+      attempts.map(attempt => attempt_row(model, attempt, emit)),
+    )
   }
-  @html.ul(
-    class="attempt-list",
-    attempts.map(attempt => {
-      @html.li(class="attempt-row", [
-        @html.span(class="entity-id", attempt.id),
-        @html.div(class="attempt-line", [
-          @html.span(class="attempt-kind", attempt_kind_label(attempt.kind)),
-          @html.span(
-            class="attempt-state",
-            attempt_status_label(attempt.status),
+  @html.fragment([
+    @html.p(
+      class="inspector-status",
+      "Manual Board lifecycle only; these controls do not run an Agent or change task stage.",
+    ),
+    list,
+    attempt_queue_form(model, emit),
+    finish_form(model, emit),
+  ])
+}
+
+///|
+fn attempt_row(
+  model : Model,
+  attempt : @client.ClientAttempt,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  // Status validation is live: start renders for queued attempts and the
+  // explicit outcome choice for running ones; the durable server stays
+  // authoritative over every transition.
+  let locked = !attempt_controls_allowed(model)
+  let lifecycle = match attempt.status {
+    Queued =>
+      [
+        @html.button(
+          type_="button",
+          class="task-action attempt-control",
+          title="Record that this queued attempt has started; no Agent is launched",
+          disabled=locked,
+          on_click=emit(AttemptStartRequested(attempt.id)),
+          "Mark started",
+        ),
+      ]
+    Running =>
+      [
+        @html.button(
+          type_="button",
+          class="task-action attempt-control",
+          title="Choose how to finish this running attempt",
+          disabled=locked,
+          on_click=emit(AttemptFinishOpened(attempt.id)),
+          "Finish…",
+        ),
+      ]
+    Succeeded | Failed | Cancelled | Interrupted => []
+  }
+  @html.li(class="attempt-row", [
+    @html.span(class="entity-id", attempt.id),
+    @html.div(class="attempt-line", [
+      @html.span(class="attempt-kind", attempt_kind_label(attempt.kind)),
+      @html.span(class="attempt-state", attempt_status_label(attempt.status)),
+      match attempt.review {
+        Some(review) => @html.span(class="attempt-review", review_label(review))
+        None => @html.nothing
+      },
+    ]),
+    if lifecycle.is_empty() {
+      @html.nothing
+    } else {
+      @html.div(class="attempt-actions", lifecycle)
+    },
+    @html.p(class="attempt-when", attempt_times(attempt)),
+  ])
+}
+
+///|
+/// Local queue draft: an independently generated ID plus kind, validated
+/// live against the authoritative replica. Nothing here sends anything.
+fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  match model.attempt_draft {
+    None =>
+      @html.button(
+        type_="button",
+        class="task-action",
+        title="Queue a new attempt for this task",
+        disabled=!attempt_controls_allowed(model),
+        on_click=emit(AttemptQueueOpened),
+        "Queue attempt",
+      )
+    Some(draft) if model.selected_task == Some(draft.task_id) => {
+      let editable = attempt_draft_editable(model, draft)
+      @html.div(
+        class="attempt-queue",
+        attrs=@html.Attrs::build().aria_label("Queue attempt"),
+        [
+          @html.p(
+            class="inspector-status",
+            attrs=@html.Attrs::build().role("status").aria_live("polite"),
+            "Queue an attempt for task \{draft.task_id}.",
           ),
-          match attempt.review {
-            Some(review) =>
-              @html.span(class="attempt-review", review_label(review))
-            None => @html.nothing
+          @html.p(class="entity-id", "Attempt ID: \{draft.attempt_id}"),
+          if !queue_attempt_id_valid(model.replica, draft.attempt_id) {
+            @html.p(
+              class="inspector-warning",
+              "This attempt ID already exists. Discard this draft to queue a new attempt.",
+            )
+          } else {
+            @html.nothing
           },
-        ]),
-        @html.p(class="attempt-when", attempt_times(attempt)),
-      ])
-    }),
-  )
+          labeled_field(
+            "attempt-queue-kind",
+            "Kind",
+            @html.select(
+              id="attempt-queue-kind",
+              name="attempt_kind",
+              disabled=!editable,
+              on_change=value => emit(AttemptKindChanged(value)),
+              attempt_kinds().map(kind => {
+                @html.option(
+                  value=kind.to_wire(),
+                  selected=kind == draft.kind,
+                  attempt_kind_label(kind),
+                )
+              }),
+            ),
+          ),
+          @html.div(class="inspector-actions", [
+            @html.button(
+              type_="button",
+              class="task-action",
+              disabled=model.pending is Some(_),
+              on_click=emit(AttemptQueueCancelled),
+              "Cancel",
+            ),
+            @html.button(
+              type_="button",
+              class="task-action primary",
+              disabled=!attempt_queue_submit_allowed(model, draft),
+              on_click=emit(AttemptQueueSubmitted),
+              "Queue attempt",
+            ),
+          ]),
+        ],
+      )
+    }
+    Some(_) => @html.nothing
+  }
 }
 
 ///|
@@ -450,4 +577,100 @@ fn padded(value : Int64, width : Int) -> String {
     }
     zeros + digits
   }
+}
+
+///|
+fn attempt_draft_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let (task_id, cancel) = match (model.attempt_draft, model.finish_draft) {
+    (Some(draft), _) => (draft.task_id, AttemptQueueCancelled)
+    (_, Some(draft)) => (draft.task_id, AttemptFinishCancelled)
+    _ => return @html.nothing
+  }
+  if model.selected_task == Some(task_id) {
+    return @html.nothing
+  }
+  @html.div(class="inspector-banner", [
+    @html.p(
+      "Unsaved attempt draft for task \{task_id} is kept while you browse.",
+    ),
+    @html.div(class="inspector-actions", [
+      @html.button(
+        type_="button",
+        class="task-action",
+        on_click=emit(AttemptDraftReturned),
+        "Return to draft",
+      ),
+      @html.button(
+        type_="button",
+        class="task-action",
+        disabled=model.pending is Some(_),
+        on_click=emit(cancel),
+        "Discard draft",
+      ),
+    ]),
+  ])
+}
+
+///|
+fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  guard model.finish_draft is Some(draft) &&
+    model.selected_task == Some(draft.task_id) else {
+    return @html.nothing
+  }
+  let editable = finish_draft_editable(model, draft)
+  @html.section(
+    class="attempt-queue",
+    attrs=@html.Attrs::build().aria_label("Finish attempt"),
+    [
+      @html.p("Finish attempt \{draft.attempt_id}"),
+      if !editable && model.pending is None && mutations_allowed(model) {
+        @html.p(
+          class="inspector-warning",
+          "This attempt is no longer running. Discard this draft; no command was resent.",
+        )
+      } else {
+        @html.nothing
+      },
+      labeled_field(
+        "attempt-finish-outcome",
+        "Terminal outcome",
+        @html.select(
+          id="attempt-finish-outcome",
+          name="attempt_outcome",
+          disabled=!editable,
+          on_change=value => emit(AttemptOutcomeChanged(value)),
+          [
+            @html.option(
+              value="",
+              selected=draft.outcome is None,
+              "Choose an outcome…",
+            ),
+            ..attempt_outcomes().map(outcome => {
+              @html.option(
+                value=outcome.to_wire(),
+                selected=draft.outcome == Some(outcome),
+                outcome_label(outcome),
+              )
+            }),
+          ],
+        ),
+      ),
+      @html.div(class="inspector-actions", [
+        @html.button(
+          type_="button",
+          class="task-action",
+          disabled=model.pending is Some(_),
+          on_click=emit(AttemptFinishCancelled),
+          "Discard draft",
+        ),
+        @html.button(
+          type_="button",
+          class="task-action primary",
+          disabled=!finish_submit_allowed(model, draft),
+          on_click=emit(AttemptFinishSubmitted),
+          "Finish attempt",
+        ),
+      ]),
+    ],
+  )
 }

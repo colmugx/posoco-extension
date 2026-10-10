@@ -1,0 +1,11 @@
+{
+  "type": "command",
+  "command_id": "cmd-queue-1",
+  "name": "board.attempt.queue",
+  "expected_revision": 2,
+  "args": {
+    "id": "attempt-2",
+    "task_id": "task-1",
+    "kind": "execute"
+  }
+}
