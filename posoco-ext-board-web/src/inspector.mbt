@@ -30,14 +30,7 @@ fn inspector_attempts(model : Model) -> Array[@client.ClientAttempt] {
   let attempts = model.replica
     .attempts()
     .filter(attempt => attempt.task_id == task.id)
-  attempts.sort_by((left, right) => {
-    let created = left.created_at_ms.compare(right.created_at_ms)
-    if created == 0 {
-      left.id.compare(right.id)
-    } else {
-      created
-    }
-  })
+  attempts.sort_by(attempt_order)
   attempts
 }
 
@@ -49,7 +42,7 @@ fn dependency_candidates(
   if !model.replica.has_snapshot() {
     return []
   }
-  model.replica.tasks().filter(task => task.id != task_id)
+  ordered_tasks(model.replica).filter(task => task.id != task_id)
 }
 
 ///|

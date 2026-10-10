@@ -125,7 +125,7 @@ test "invalidation clears authoritative cards and waits again" {
 }
 
 ///|
-test "attempt events affect card indicator and running takes precedence" {
+test "attempt events affect card indicator and a running attempt is never naked" {
   let replica = @client.BoardReplica::empty()
   assert_true(
     replica.apply_snapshot({
@@ -161,7 +161,7 @@ test "attempt events affect card indicator and running takes precedence" {
     is @client.Applied,
   )
   assert_eq(@src.attempt_count(replica, "t"), 1)
-  assert_eq(@src.attempt_indicator(replica, "t"), "Running")
+  assert_eq(@src.attempt_indicator(replica, "t"), "Attempt: Running (manual)")
   assert_true(
     replica.apply_event({
       seq: 2L,
@@ -179,7 +179,7 @@ test "attempt events affect card indicator and running takes precedence" {
     is @client.Applied,
   )
   assert_eq(@src.attempt_count(replica, "t"), 1)
-  assert_eq(@src.attempt_indicator(replica, "t"), "Succeeded")
+  assert_eq(@src.attempt_indicator(replica, "t"), "Latest attempt: Succeeded")
   assert_true(
     replica.apply_event({
       seq: 3L,
@@ -196,7 +196,7 @@ test "attempt events affect card indicator and running takes precedence" {
     is @client.Applied,
   )
   assert_eq(@src.attempt_count(replica, "t"), 2)
-  assert_eq(@src.attempt_indicator(replica, "t"), "Running")
+  assert_eq(@src.attempt_indicator(replica, "t"), "Attempt: Running (manual)")
 }
 
 ///|

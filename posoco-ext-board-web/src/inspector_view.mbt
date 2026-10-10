@@ -110,10 +110,29 @@ fn task_details(
           type_="button",
           class="task-action",
           title="Close inspector",
+          attrs=@html.Attrs::build().aria_label("Close inspector"),
           on_click=emit(InspectorClosed),
           "Close",
         ),
       ]),
+      @html.nav(
+        class="inspector-nav",
+        attrs=@html.Attrs::build().aria_label("Inspector sections"),
+        inspector_sections().map(section => {
+          let (id, label) = section
+          @html.a(href="#" + id, escape=true, label)
+        }),
+      ),
+      match selection_filter_note(model) {
+        Some(message) =>
+          @html.p(
+            class="inspector-status",
+            attrs=@html.Attrs::build().role("status").aria_live("polite"),
+            message,
+          )
+        None => @html.nothing
+      },
+      @html.h3(id="inspector-task-details", "Task details"),
       task_fields(task),
       @html.h3("Description"),
       if task.description == "" {
@@ -123,9 +142,9 @@ fn task_details(
       },
       @html.h3("Definition of done"),
       task_dod(task),
-      @html.h3("Dependencies"),
+      @html.h3(id="inspector-dependencies", "Dependencies"),
       task_dependencies(model, task, draft, emit),
-      @html.h3("Attempts"),
+      @html.h3(id="inspector-attempts", "Attempts and reviews"),
       task_attempts(model, emit),
     ],
   )
@@ -137,7 +156,7 @@ fn task_fields(task : @client.ClientBoardTask) -> @html.Html {
   let rows = [
     @html.dt("ID"),
     @html.dd(task.id),
-    @html.dt("Stage"),
+    @html.dt("Task stage"),
     @html.dd(stage_label(task.stage)),
     @html.dt("Priority"),
     @html.dd(priority_label(task.priority)),
@@ -235,6 +254,7 @@ fn dependency_editor_panel(
         @html.div(class="inspector-conflict", [
           @html.p(
             class="inspector-warning",
+            attrs=@html.Attrs::build().role("status").aria_live("polite"),
             "Dependencies changed on the board while this draft was open. Reload the latest dependencies before saving, or discard the draft.",
           ),
           @html.button(
@@ -348,7 +368,10 @@ fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   @html.fragment([
     @html.p(
       class="inspector-status",
-      "Manual Board lifecycle only; these controls do not run an Agent or change task stage.",
+      // Names all four manual notions so statuses are never confused: these
+      // controls move attempt status and record review decisions only —
+      // never a task stage and never an Agent run.
+      "Manual Board lifecycle only: these controls change attempt status and record review decisions. They never run an Agent and never change a task's stage.",
     ),
     list,
     attempt_queue_form(model, emit),
@@ -436,10 +459,12 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       @html.button(
         type_="button",
         class="task-action",
-        title="Queue a new attempt for this task",
+        title="Open a local queue draft for this task",
         disabled=!attempt_controls_allowed(model),
         on_click=emit(AttemptQueueOpened),
-        "Queue attempt",
+        // The ellipsis separates the opener from the submit button of the
+        // same name inside the draft, so no two controls read as one.
+        "Queue attempt…",
       )
     Some(draft) if model.selected_task == Some(draft.task_id) => {
       let editable = attempt_draft_editable(model, draft)
@@ -456,6 +481,7 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           if !queue_attempt_id_valid(model.replica, draft.attempt_id) {
             @html.p(
               class="inspector-warning",
+              attrs=@html.Attrs::build().role("status").aria_live("polite"),
               "This attempt ID already exists. Discard this draft to queue a new attempt.",
             )
           } else {
@@ -612,26 +638,32 @@ fn attempt_draft_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html 
   if model.selected_task == Some(task_id) {
     return @html.nothing
   }
-  @html.div(class="inspector-banner", [
-    @html.p(
-      "Unsaved \{label} draft for task \{task_id} is kept while you browse.",
-    ),
-    @html.div(class="inspector-actions", [
-      @html.button(
-        type_="button",
-        class="task-action",
-        on_click=emit(return_msg),
-        "Return to draft",
+  @html.div(
+    class="inspector-banner",
+    // The banner appears while another task is inspected; announcing it
+    // keeps the kept draft discoverable without hunting for it.
+    attrs=@html.Attrs::build().role("status").aria_live("polite"),
+    [
+      @html.p(
+        "Unsaved \{label} draft for task \{task_id} is kept while you browse.",
       ),
-      @html.button(
-        type_="button",
-        class="task-action",
-        disabled=model.pending is Some(_),
-        on_click=emit(cancel),
-        "Discard draft",
-      ),
-    ]),
-  ])
+      @html.div(class="inspector-actions", [
+        @html.button(
+          type_="button",
+          class="task-action",
+          on_click=emit(return_msg),
+          "Return to draft",
+        ),
+        @html.button(
+          type_="button",
+          class="task-action",
+          disabled=model.pending is Some(_),
+          on_click=emit(cancel),
+          "Discard draft",
+        ),
+      ]),
+    ],
+  )
 }
 
 ///|
@@ -656,6 +688,7 @@ fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       if !editable && model.pending is None && mutations_allowed(model) {
         @html.p(
           class="inspector-warning",
+          attrs=@html.Attrs::build().role("status").aria_live("polite"),
           "This attempt is no longer running. Discard this draft; no command was resent.",
         )
       } else {
@@ -749,6 +782,7 @@ fn review_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       if !editable && model.pending is None && mutations_allowed(model) {
         @html.p(
           class="inspector-warning",
+          attrs=@html.Attrs::build().role("status").aria_live("polite"),
           "This attempt can no longer record a review decision. Discard this draft; no command was sent.",
         )
       } else {

@@ -1,4 +1,6 @@
 ///|
+/// Reconnect states the baseline explicitly: an ordinary disconnect keeps it
+/// (the Hello replays on connect), invalidation or a first connect does not.
 fn reconnect(model : Model, emit : @rabbita.Emit[Msg]) -> (Model, @rabbita.Cmd) {
   if model.retry_pending ||
     model.connection is ProtocolError(_) ||
@@ -6,17 +8,33 @@ fn reconnect(model : Model, emit : @rabbita.Emit[Msg]) -> (Model, @rabbita.Cmd) 
     return (model, @rabbita.none)
   }
   let delay = retry_delay(model.retry_attempt)
+  let baseline = if model.replica.has_snapshot() {
+    Retained
+  } else if model.baseline is AwaitingFirst {
+    AwaitingFirst
+  } else {
+    Invalidated
+  }
+  let last_status = match baseline {
+    Retained =>
+      "Reconnecting; the retained Board baseline stays and replays on reconnect"
+    AwaitingFirst =>
+      "Reconnecting; waiting for the first authoritative snapshot"
+    Invalidated | Confirmed =>
+      "Reconnecting; the stale Board baseline was discarded for a fresh snapshot"
+  }
   (
     {
       ..model,
       connection: Reconnecting,
+      baseline,
       retry_attempt: if model.retry_attempt < 6 {
         model.retry_attempt + 1
       } else {
         6
       },
       retry_pending: true,
-      last_status: "Reconnecting to authoritative Board state",
+      last_status,
     },
     @rabbita.batch([
       @websocket.close("board"),
@@ -77,22 +95,39 @@ fn update(
         return (model, @rabbita.none)
       }
       match event {
-        Opened =>
+        Opened => {
+          // An up-to-date baseline can reconnect with no replay frames.
+          // Opening a socket alone never establishes a fresh baseline, so the
+          // connection is only Online when a baseline is retained, and the
+          // status explains that the idle open may stay silent.
+          let retained = model.replica.has_snapshot()
+          let last_status = if retained {
+            "Board baseline retained; the open connection replays only missed changes"
+          } else if model.baseline is Invalidated {
+            "Waiting for a fresh authoritative snapshot"
+          } else {
+            "Waiting for the first authoritative snapshot"
+          }
           (
             {
               ..model,
-              // An up-to-date baseline can reconnect with no replay frames.
-              // Opening a socket alone never establishes a fresh baseline.
-              connection: if model.replica.has_snapshot() {
+              connection: if retained {
                 Online
               } else {
                 model.connection
               },
+              baseline: if retained {
+                Retained
+              } else {
+                model.baseline
+              },
+              last_status,
             },
             @websocket.send("board", Text(hello_payload(model.replica)), failed=_ => {
               emit(TransportFailed(generation))
             }),
           )
+        }
         Closed(_) | Errored =>
           // With a command in flight the baseline is unconfirmed and the
           // replica is dropped; an ordinary disconnect preserves it and the
@@ -123,6 +158,11 @@ fn update(
                 } else {
                   model.connection
                 },
+                baseline: if model.replica.has_snapshot() {
+                  Confirmed
+                } else {
+                  model.baseline
+                },
                 retry_attempt: if snapshot {
                   0
                 } else {
@@ -130,8 +170,10 @@ fn update(
                 },
                 last_status: if model.replica.has_snapshot() {
                   "Authoritative Board state"
+                } else if model.baseline is Invalidated {
+                  "Waiting for a fresh authoritative snapshot"
                 } else {
-                  "Waiting for Board snapshot"
+                  "Waiting for the first authoritative snapshot"
                 },
               }
               (
@@ -261,6 +303,40 @@ fn update(
       } else {
         submit_move(model, task_id, to, emit, env)
       }
+    // Local view filters: they only change how the replica renders and never
+    // touch the authoritative state, the selection or any draft.
+    FilterQueryChanged(value) =>
+      (
+        { ..model, task_filter: { ..model.task_filter, query: value, }, },
+        @rabbita.none,
+      )
+    FilterPriorityChanged(value) =>
+      (
+        {
+          ..model,
+          task_filter: {
+            ..model.task_filter,
+            priority: filter_priority_from_wire(
+              value,
+              model.task_filter.priority,
+            ),
+          },
+        },
+        @rabbita.none,
+      )
+    FilterStageChanged(value) =>
+      (
+        {
+          ..model,
+          task_filter: {
+            ..model.task_filter,
+            stage: filter_stage_from_wire(value, model.task_filter.stage),
+          },
+        },
+        @rabbita.none,
+      )
+    FiltersCleared =>
+      ({ ..model, task_filter: TaskFilter::none(), }, @rabbita.none)
     TaskSelected(_)
     | InspectorClosed
     | DependenciesOpened
