@@ -21,29 +21,6 @@ fn is_quota_segment(reading : @devkit.QuotaReading) -> Bool {
 }
 
 ///|
-/// Human remaining time for a reset instant: minutes under an hour, then
-/// hours+minutes. Non-positive (already passed) reads as `now`.
-fn quota_format_remaining(remaining_ms : Int64) -> String {
-  if remaining_ms <= 0 {
-    return "now"
-  }
-  let total_minutes = (remaining_ms / 60000L).to_int()
-  if total_minutes < 1 {
-    return "<1m"
-  }
-  if total_minutes < 60 {
-    return "\{total_minutes}m"
-  }
-  let hours = total_minutes / 60
-  let minutes = total_minutes % 60
-  if minutes == 0 {
-    "\{hours}h"
-  } else {
-    "\{hours}h\{minutes}m"
-  }
-}
-
-///|
 /// Provider-stated percentages render without trailing `.0` noise.
 fn format_quota_percent(value : Double) -> String {
   if value >= 0.0 && value == value.floor() && value < 1000000000.0 {
@@ -158,18 +135,6 @@ fn CodexQuotaStatus::publish_if_changed(self : CodexQuotaStatus) -> Unit {
         Some(percent) => {
           // codex CLI speaks in remaining quota: used 45% renders "55% left".
           let left = 100.0 - percent
-          let mut value = format_quota_percent(left) + "% left"
-          match reading.reset_at_ms {
-            Some(reset_at_ms) => {
-              let remaining = reset_at_ms - @async.now()
-              if remaining > 0 {
-                value = value +
-                  " · resets in " +
-                  quota_format_remaining(remaining)
-              }
-            }
-            None => ()
-          }
           match quota_color_role(left) {
             Some(role) =>
               @devkit.publish_status_register(
@@ -177,7 +142,7 @@ fn CodexQuotaStatus::publish_if_changed(self : CodexQuotaStatus) -> Unit {
                 source="posoco_ext_openai",
                 segment=reading.window,
                 priority=45,
-                value~,
+                value=format_quota_percent(left) + "% left",
                 color=role,
               )
             None =>
@@ -186,7 +151,7 @@ fn CodexQuotaStatus::publish_if_changed(self : CodexQuotaStatus) -> Unit {
                 source="posoco_ext_openai",
                 segment=reading.window,
                 priority=45,
-                value~,
+                value=format_quota_percent(left) + "% left",
               )
           }
         }

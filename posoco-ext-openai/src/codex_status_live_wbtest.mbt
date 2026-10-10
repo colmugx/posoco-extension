@@ -13,7 +13,7 @@
 fn live_status_usage_body() -> String {
   "{\"rate_limit\":{" +
   "\"primary_window\":{\"used_percent\":41.5,\"limit_window_seconds\":18000,\"reset_at\":1777936568}," +
-  "\"secondary_window\":{\"used_percent\":87.5,\"limit_window_seconds\":604800,\"reset_after_seconds\":7260}}" +
+  "\"secondary_window\":{\"used_percent\":87.5,\"limit_window_seconds\":604800,\"reset_after_seconds\":120}}" +
   "}"
 }
 
@@ -192,18 +192,10 @@ async test "codex /status pulls live usage and the statusbar shows the same valu
     Some("Bearer " + codex_test_access_token()),
   )
   assert_eq(transport.headers[0].get("chatgpt-account-id"), Some("acct-live"))
-  // The statusbar segments carry the same fresh values; the weekly window's
-  // reset_after anchors a relative reset rendering (5h's reset instant is in
-  // the fixture past, so its value stays reset-free).
+  // The statusbar segments carry the same fresh values.
   let ops = codex_status_ops(recorder)
   assert_true(has_live_register(ops, segment="5h", value="58.5% left"))
-  assert_true(
-    has_live_register(
-      ops,
-      segment="weekly",
-      value="12.5% left · resets in 2h1m",
-    ),
-  )
+  assert_true(has_live_register(ops, segment="weekly", value="12.5% left"))
   live_status_registry_reset()
 }
 

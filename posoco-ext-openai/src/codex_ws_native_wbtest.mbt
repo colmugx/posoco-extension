@@ -128,16 +128,6 @@ test "codex ws delta only fires on exact continuation" {
 }
 
 ///|
-test "quota reset remaining formats human-relative time" {
-  assert_eq(quota_format_remaining(-5L), "now")
-  assert_eq(quota_format_remaining(0L), "now")
-  assert_eq(quota_format_remaining(30_000L), "<1m")
-  assert_eq(quota_format_remaining(46L * 60_000L), "46m")
-  assert_eq(quota_format_remaining(2L * 3_600_000L), "2h")
-  assert_eq(quota_format_remaining(2L * 3_600_000L + 5L * 60_000L), "2h5m")
-}
-
-///|
 test "codex ws provider error frames classify like the http path" {
   // Quota phrasing: the typed RateLimited the host's limit display and
   // scheduled resume key on.
