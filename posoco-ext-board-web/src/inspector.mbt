@@ -107,10 +107,16 @@ fn revalidate_inspector(model : Model) -> Model {
       task_by_id(model.replica, draft.task_id) is None ||
       attempt_by_id(model.replica, draft.attempt_id) is None
     )
+  let review_missing = model.review_draft is Some(draft) &&
+    (
+      task_by_id(model.replica, draft.task_id) is None ||
+      attempt_by_id(model.replica, draft.attempt_id) is None
+    )
   if selected_missing ||
     draft_missing ||
     attempt_draft_missing ||
-    finish_missing {
+    finish_missing ||
+    review_missing {
     {
       ..model,
       selected_task: if selected_missing {
@@ -132,6 +138,11 @@ fn revalidate_inspector(model : Model) -> Model {
         None
       } else {
         model.finish_draft
+      },
+      review_draft: if review_missing {
+        None
+      } else {
+        model.review_draft
       },
       notice: Some(
         notice(Warning, "The inspected task or draft target no longer exists."),
@@ -202,13 +213,14 @@ fn attempt_queue_submit_allowed(model : Model, draft : AttemptDraft) -> Bool {
 }
 
 ///|
-/// Manual start/finish controls share one disabled state with every other
-/// editor: no command in flight and no open editor or draft.
+/// Manual start/finish/review controls share one disabled state with every
+/// other editor: no command in flight and no open editor or draft.
 fn draft_open(model : Model) -> Bool {
   model.editor is Some(_) ||
   model.dependency_editor is Some(_) ||
   model.attempt_draft is Some(_) ||
-  model.finish_draft is Some(_)
+  model.finish_draft is Some(_) ||
+  model.review_draft is Some(_)
 }
 
 ///|
@@ -229,4 +241,36 @@ fn finish_draft_editable(model : Model, draft : FinishDraft) -> Bool {
 ///|
 fn finish_submit_allowed(model : Model, draft : FinishDraft) -> Bool {
   finish_draft_editable(model, draft) && draft.outcome is Some(_)
+}
+
+///|
+fn finish_review_warning(attempt : @client.ClientAttempt) -> String? {
+  if finish_review_pending(attempt) {
+    Some(
+      "Finishing now will leave this review without a recorded decision. A decision cannot be recorded after the attempt finishes.",
+    )
+  } else {
+    None
+  }
+}
+
+///|
+/// Live review draft validation against the authoritative replica: the
+/// inspected task and attempt must still exist and the attempt must remain
+/// inside the record window — a Running Review attempt still Pending. An
+/// external decision or finish therefore disables submission live.
+fn review_draft_editable(model : Model, draft : ReviewDraft) -> Bool {
+  mutations_allowed(model) &&
+  model.selected_task == Some(draft.task_id) &&
+  task_by_id(model.replica, draft.task_id) is Some(_) &&
+  attempt_by_id(model.replica, draft.attempt_id) is Some(attempt) &&
+  attempt.task_id == draft.task_id &&
+  review_recordable(attempt)
+}
+
+///|
+/// Recording always requires an explicit decision: the placeholder is the
+/// only no-decision state and submission stays disabled until one is chosen.
+fn review_submit_allowed(model : Model, draft : ReviewDraft) -> Bool {
+  review_draft_editable(model, draft) && draft.decision is Some(_)
 }

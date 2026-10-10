@@ -64,7 +64,7 @@ time and succeeded status. All timestamps are nonnegative integer milliseconds.
 
 ## Canonical task and attempt command examples
 
-These seven client frames are independent examples, not part of the server
+These nine client frames are independent examples, not part of the server
 reducer chain above:
 
 | File | Name | Expected revision |
@@ -76,6 +76,8 @@ reducer chain above:
 | `attempt-queue-command.json` | `board.attempt.queue` | 2 |
 | `attempt-start-command.json` | `board.attempt.start` | 3 |
 | `attempt-finish-command.json` | `board.attempt.finish` | 4 |
+| `review-approved-command.json` | `board.review.record` | 5 |
+| `review-changes-requested-command.json` | `board.review.record` | 5 |
 
 Create includes all six required args and explicit task identity. Update shows
 all editable fields, including an empty `definition_of_done` array that clears
@@ -86,7 +88,18 @@ The three attempt commands form one independent queued→started→finished
 progression for a second attempt: queue carries the explicit attempt ID, task ID
 and kind; start carries only the attempt ID; finish carries the attempt ID plus
 an explicit terminal outcome — the terminal choice is never omitted or defaulted.
-Timestamp authority stays with the server.
+The two review commands record one terminal decision on a third, independent
+Review attempt: the args allowlist is exactly `id` and `decision`, and the
+decision is one of `approved` or `changes_requested`.
+
+`pending` is deliberately not a recordable decision. A review attempt is
+implicitly `pending` while it runs, so `pending` appears only in attempt
+records, never in a command. Timestamp authority stays with the server: the
+`board.review.record` schema has no time field, and a client-sent `at_ms` is an
+unknown field. The strict server decode rejects every deviation as
+`invalid_arguments` — `decision: "pending"`, unknown decision strings, `null`,
+extra fields and client timestamps — while the frame envelope itself stays
+transport-valid.
 
 Rabbita is one implementation of this client contract. SvelteKit 3 and Proton
 hosts implement the same names, schemas, and fixtures using their own adapters,

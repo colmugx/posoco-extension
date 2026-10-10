@@ -152,6 +152,57 @@ fn update_inspector(
       ({ ..model, finish_draft: Some({ ..draft, outcome, }), }, @rabbita.none)
     }
     AttemptFinishSubmitted => submit_attempt_finish(model, emit, env)
+    ReviewOpened(attempt_id) => {
+      // Same admission gate as finish: one draft, an online authoritative
+      // replica, the inspected task, and the attempt inside the record
+      // window — a Running Review attempt still Pending.
+      guard attempt_controls_allowed(model) &&
+        attempt_by_id(model.replica, attempt_id) is Some(attempt) &&
+        model.selected_task == Some(attempt.task_id) &&
+        task_by_id(model.replica, attempt.task_id) is Some(_) &&
+        review_recordable(attempt) else {
+        return (model, @rabbita.none)
+      }
+      (
+        {
+          ..model,
+          review_draft: Some({
+            task_id: attempt.task_id,
+            attempt_id,
+            decision: None,
+          }),
+        },
+        @rabbita.none,
+      )
+    }
+    ReviewCancelled =>
+      if model.pending is Some(_) {
+        (model, @rabbita.none)
+      } else {
+        ({ ..model, review_draft: None, }, @rabbita.none)
+      }
+    ReviewDecisionChanged(value) => {
+      guard model.review_draft is Some(draft) &&
+        review_draft_editable(model, draft) else {
+        return (model, @rabbita.none)
+      }
+      let decision = if value == "" {
+        None
+      } else {
+        guard review_decision_from_wire(value) is Some(decision) else {
+          return (model, @rabbita.none)
+        }
+        Some(decision)
+      }
+      ({ ..model, review_draft: Some({ ..draft, decision, }), }, @rabbita.none)
+    }
+    ReviewDraftReturned =>
+      match model.review_draft {
+        Some(draft) =>
+          ({ ..model, selected_task: Some(draft.task_id), }, @rabbita.none)
+        None => (model, @rabbita.none)
+      }
+    ReviewSubmitted => submit_review(model, emit, env)
     _ => (model, @rabbita.none)
   }
 }
@@ -327,6 +378,33 @@ fn submit_attempt_finish(
       outcome,
     ),
     PendingAttemptFinish(attempt_id=draft.attempt_id),
+    emit,
+  )
+}
+
+///|
+/// Record one explicit Approved/Changes-requested decision on a running
+/// Review attempt that is still Pending. The decision never changes the
+/// attempt status or the task stage; the durable server stays authoritative
+/// and re-checks the window, so a stale draft is quietly refused here and
+/// mapped safely if the server still rejects it.
+fn submit_review(
+  model : Model,
+  emit : @rabbita.Emit[Msg],
+  env : Env,
+) -> (Model, @rabbita.Cmd) {
+  guard model.review_draft is Some(draft) &&
+    review_submit_allowed(model, draft) &&
+    draft.decision is Some(decision) else {
+    return (model, @rabbita.none)
+  }
+  guard (env.uuid)() is Some(uuid) && uuid != "" else {
+    return (missing_uuid_notice(model), @rabbita.none)
+  }
+  dispatch_command(
+    model,
+    review_command(uuid, model.replica.revision(), draft.attempt_id, decision),
+    PendingReview(attempt_id=draft.attempt_id),
     emit,
   )
 }

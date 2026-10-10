@@ -3,8 +3,9 @@
 A Rabbita standalone browser shell for the Board wire contract. The shell is
 read-only until it holds an authoritative snapshot; it then gains the v1
 mutation surface: a New task editor, Edit cards, per-card Move controls,
-dependency editing, and manual attempt queue/start/finish controls in the task
-inspector. Review decisions, Agent execution and drag-and-drop remain out of scope.
+dependency editing, manual attempt queue/start/finish controls and Review
+decision recording in the task inspector. Agent execution and drag-and-drop
+remain out of scope.
 
 - **Rabbita 0.16.4** owns rendering, named WebSocket commands, and delayed commands.
 - **Board client** owns the authoritative replica; no second task/attempt projection lives in the UI model.
@@ -89,9 +90,9 @@ Running and opens a target-ID draft with **no default outcome**. Explicitly
 choose Succeeded, Failed, Cancelled or Interrupted before **Finish attempt**.
 Both update and submit resolve the current task/attempt IDs and status from the
 replica, never from cached entity records or a captured render. Queue/start/finish
-do not move a task, execute an Agent, schedule work or record review decisions.
-Review-kind attempts use the existing domain semantics; their decision is displayed
-read-only.
+do not move a task, execute an Agent or schedule work. Review decisions are
+recorded through their own control (below); finishing a review attempt never
+records one.
 
 Attempt drafts survive browsing, inspector dismissal and reconciliation. Return
 or discard them explicitly using the draft banner. A replacement snapshot closes
@@ -107,6 +108,46 @@ closes only its producing draft; ordinary rejection preserves it, revision
 conflict refreshes, and uncertainty follows the reported authoritative revision.
 The pending record retains correlation, not a command to replay.
 
+## Review decisions (S3C5)
+
+A Running Review attempt whose decision is still pending offers
+**Record review decision**. It opens an ID-only draft: the target attempt's ID
+plus a decision select that starts explicitly empty (**Choose a decision…**) —
+there is no default and submission stays disabled until **Approve** or
+**Request changes** is chosen. The form resolves the current attempt status and
+review decision from the live replica and carries an always-visible irreversibility
+notice (a recorded decision cannot be changed or cleared) and states that
+recording never changes the attempt status or the task stage; finishing
+remains a separate command.
+
+**Record decision** sends `board.review.record` with only the attempt ID and
+the decision spelled by `ClientRecordableReviewDecision::to_wire`
+(`approved` / `changes_requested`); `pending` is never a wire decision. The
+command uses a fresh `cmd-<uuid>` and the live authoritative revision through
+the shared single-pending dispatch. Eligibility mirrors the domain exactly:
+only a Review-kind attempt that is Running with `review: pending` accepts a
+decision, and it can be recorded once — an attempt that is queued, finished,
+of another kind, or already decided renders no record control.
+
+The draft survives browsing, inspector dismissal and the reconciliation
+resync, with the same **Return to draft** / **Discard draft** banner as the
+other drafts. Live revalidation keeps it honest without stale rendering: an
+external authoritative decision or an external finish disables submission in
+place (the draft stays visible with a warning, nothing is resent), while a
+replacement snapshot whose target task or attempt vanished closes the draft
+with a safe notice. Rejections map stable codes to fixed phrasing —
+`invalid_review_transition` reads "The board does not allow this review
+decision from the attempt's current state." — keep the draft, and never
+retry; revision conflicts and stale reported revisions force the same
+Hello-only snapshot resync as every other mutation.
+
+Finishing a Running Review attempt that still has a pending decision shows a
+warning that a decision cannot be recorded after the attempt finishes, but
+never blocks the finish: recording and finishing are independent commands. An accepted
+review result closes only its producing draft; the settlement, uncertainty,
+persistence and disconnect rules are exactly the shared mutation rules
+described above.
+
 ## View
 
 Seven lanes cover Created, Refining, Ready, Running, Review, Done, and Suspended. Cards show title, priority, ID, dependency/attempt counts, description preview, running/latest attempt status, and the v1 Edit/Move controls. The header shows connection status, Board revision, stream sequence, task count, and the New task entry. Loading and empty are distinct: until an authoritative snapshot arrives — and again after any invalidation, which discards every record — the board shows `Waiting for Board state`; only an authoritative empty board shows `No Board tasks yet`, so stale cards never survive a resync.
@@ -117,7 +158,7 @@ the inspector selection through the surrounding card's click handler.
 
 ## Cross-host contract
 
-This module is Rabbita's one browser client implementation. SvelteKit 3 and Proton-style desktop hosts implement the same wire schema and reducer invariants themselves; they neither frame this shell in an iframe nor import Rabbita or this MoonBit presentation. The canonical command names and argument schemas (`board.task.create`, `board.task.update`, `board.task.move`, `board.task.set_dependencies`, `board.attempt.queue`, `board.attempt.start`, `board.attempt.finish`), the stable rejection codes, the `posoco-ext-board/protocol-fixtures/v1` fixtures, and the client enum wire spellings (`ClientBoardPriority::to_wire`, `ClientBoardStage::to_wire`, `ClientAttemptKind::to_wire`, `ClientAttemptOutcome::to_wire`) are the shared contract for those adapters. This module imports only the Board client/protocol surface, not backend, coordinator, store, native host, or MoonBack packages.
+This module is Rabbita's one browser client implementation. SvelteKit 3 and Proton-style desktop hosts implement the same wire schema and reducer invariants themselves; they neither frame this shell in an iframe nor import Rabbita or this MoonBit presentation. The canonical command names and argument schemas (`board.task.create`, `board.task.update`, `board.task.move`, `board.task.set_dependencies`, `board.attempt.queue`, `board.attempt.start`, `board.attempt.finish`, `board.review.record`), the stable rejection codes, the `posoco-ext-board/protocol-fixtures/v1` fixtures, and the client enum wire spellings (`ClientBoardPriority::to_wire`, `ClientBoardStage::to_wire`, `ClientAttemptKind::to_wire`, `ClientAttemptOutcome::to_wire`, `ClientRecordableReviewDecision::to_wire`) are the shared contract for those adapters. This module imports only the Board client/protocol surface, not backend, coordinator, store, native host, or MoonBack packages.
 
 ## Validation
 
@@ -126,4 +167,4 @@ moon -C posoco-ext-board-web check src cmd/browser --target js --output-json
 moon -C posoco-ext-board-web test src --target js --output-json
 ```
 
-Presentation, connection-policy and mutation tests are deterministic helper/update tests, not a new DOM harness. Native static/security and WebSocket tests verify the standalone integration separately. Inspector and dependency tests cover detached drafts, external changes, safe rejections, event/result ordering and Hello-only reconnects. Lifecycle tests additionally pin UUID independence, every terminal choice, shared draft/pending guards, stale IDs/statuses, recovered Interrupted state and safe delivery failures. The card action callback regression verifies propagation stops before emission, without importing Rabbita internals. Review decisions, Cetas/SvelteKit integration, Agent execution and scheduling remain out of scope.
+Presentation, connection-policy and mutation tests are deterministic helper/update tests, not a new DOM harness. Native static/security and WebSocket tests verify the standalone integration separately. Inspector and dependency tests cover detached drafts, external changes, safe rejections, event/result ordering and Hello-only reconnects. Lifecycle tests additionally pin UUID independence, every terminal choice, shared draft/pending guards, stale IDs/statuses, recovered Interrupted state and safe delivery failures. Review tests pin the record window (Review + Running + pending only), the ID-only no-default draft, event-before-result ordering with the live revision, external decision/finish disablement, correlation/generation checks, conflicts, uncertainty/persistence, Hello-only pending disconnects and the one shared pending slot. The card action callback regression verifies propagation stops before emission, without importing Rabbita internals. Cetas/SvelteKit integration, Agent execution and scheduling remain out of scope.

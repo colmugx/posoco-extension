@@ -191,6 +191,26 @@ pub fn ClientAttemptOutcome::to_wire(self : ClientAttemptOutcome) -> String {
 }
 
 ///|
+/// Canonical v1 recordable review spelling. `pending` is deliberately not a
+/// wire decision: it is the implicit state when a review attempt starts
+/// running, so only the two terminal decisions convert.
+///
+/// ```mbt check
+/// test {
+///   let decision : @client.ClientRecordableReviewDecision = @client.Approved
+///   assert_eq(decision.to_wire(), "approved")
+/// }
+/// ```
+pub fn ClientRecordableReviewDecision::to_wire(
+  self : ClientRecordableReviewDecision,
+) -> String {
+  match self {
+    Approved => "approved"
+    ChangesRequested => "changes_requested"
+  }
+}
+
+///|
 /// Queue a new attempt against an explicit task. The attempt ID is
 /// client-provided and correlated by the server's duplicate rejection; the
 /// durable server owns task existence and kind semantics.
@@ -281,6 +301,38 @@ pub fn finish_attempt_command(
     expected_revision,
     name: "board.attempt.finish",
     args: { "id": id.to_json(), "outcome": outcome.to_wire().to_json() },
+  }
+}
+
+///|
+/// Record one terminal review decision on a running Review attempt; the
+/// decision type has no Pending case, so `pending` can never be encoded.
+/// Only the explicit attempt ID and decision are sent; timestamps and
+/// semantic validation belong to the server.
+///
+/// ```mbt check
+/// test {
+///   let wire = @client.record_review_command(
+///     "cmd-review",
+///     5L,
+///     id="attempt-1",
+///     decision=@client.ChangesRequested,
+///   )
+///   assert_eq(wire.name, "board.review.record")
+///   assert_eq(wire.args, { "id": "attempt-1", "decision": "changes_requested" })
+/// }
+/// ```
+pub fn record_review_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+  decision~ : ClientRecordableReviewDecision,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.review.record",
+    args: { "id": id.to_json(), "decision": decision.to_wire().to_json() },
   }
 }
 

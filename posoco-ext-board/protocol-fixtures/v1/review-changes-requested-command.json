@@ -1,0 +1,10 @@
+{
+  "type": "command",
+  "command_id": "cmd-review-2",
+  "name": "board.review.record",
+  "expected_revision": 5,
+  "args": {
+    "id": "attempt-3",
+    "decision": "changes_requested"
+  }
+}

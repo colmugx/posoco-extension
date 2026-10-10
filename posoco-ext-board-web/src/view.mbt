@@ -293,7 +293,8 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       class=if model.selected_task is Some(_) ||
         model.dependency_editor is Some(_) ||
         model.attempt_draft is Some(_) ||
-        model.finish_draft is Some(_) {
+        model.finish_draft is Some(_) ||
+        model.review_draft is Some(_) {
         "board-body has-inspector"
       } else {
         "board-body"

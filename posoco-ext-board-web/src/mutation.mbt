@@ -129,6 +129,24 @@ fn queue_attempt_command(
 }
 
 ///|
+/// Build the review command from the ID-only draft. The decision rides the
+/// recordable client enum, so `pending` can never be encoded; the durable
+/// server decides whether the attempt may still receive it.
+fn review_command(
+  uuid : String,
+  revision : Int64,
+  attempt_id : String,
+  decision : @client.ClientRecordableReviewDecision,
+) -> @protocol.BoardClientCommand {
+  @client.record_review_command(
+    "cmd-" + uuid,
+    revision,
+    id=attempt_id,
+    decision~,
+  )
+}
+
+///|
 fn start_attempt_command(
   uuid : String,
   revision : Int64,
@@ -169,6 +187,16 @@ fn attempt_outcome_from_wire(value : String) -> @client.ClientAttemptOutcome? {
 }
 
 ///|
+/// Resolve a select value back to a recordable review decision by comparing
+/// against the centralized `to_wire` spellings; unknown values keep the
+/// current draft and an empty value clears it back to no decision.
+fn review_decision_from_wire(
+  value : String,
+) -> @client.ClientRecordableReviewDecision? {
+  review_decisions().filter(decision => decision.to_wire() == value).get(0)
+}
+
+///|
 /// Resolve a select value back to a priority by comparing against the
 /// centralized `to_wire` spellings; unknown values keep the current draft.
 fn priority_from_wire(value : String) -> @client.ClientBoardPriority? {
@@ -193,6 +221,8 @@ fn rejection_text(error : String?) -> String {
     Some("attempt_not_found") => "That attempt no longer exists."
     Some("invalid_attempt_transition") =>
       "The board does not allow this change from the attempt's current status."
+    Some("invalid_review_transition") =>
+      "The board does not allow this review decision from the attempt's current state."
     Some("duplicate_attempt") => "An attempt with that ID already exists."
     Some("dependency_not_found") =>
       "A selected dependency no longer exists. Remove it or reload the latest dependencies."
@@ -221,6 +251,7 @@ fn accepted_text(kind : PendingKind) -> String {
     PendingAttemptQueue(..) => "Attempt queued."
     PendingAttemptStart(..) => "Attempt start saved."
     PendingAttemptFinish(..) => "Attempt finish saved."
+    PendingReview(..) => "Review decision saved."
   }
 }
 
@@ -270,6 +301,20 @@ fn settle_finish_draft(
   match (draft, kind) {
     (Some(draft), PendingAttemptFinish(attempt_id~)) if draft.attempt_id ==
       attempt_id => None
+    _ => draft
+  }
+}
+
+///|
+/// An accepted correlated review closes only the draft that produced it;
+/// every other pending kind leaves the review draft untouched.
+fn settle_review_draft(
+  draft : ReviewDraft?,
+  kind : PendingKind,
+) -> ReviewDraft? {
+  match (draft, kind) {
+    (Some(draft), PendingReview(attempt_id~)) if draft.attempt_id == attempt_id =>
+      None
     _ => draft
   }
 }

@@ -268,3 +268,40 @@ test "finish attempt command requires an explicit terminal outcome" {
     )
   }
 }
+
+///|
+test "recordable review decision vocabulary has no pending wire case" {
+  let decisions : Array[(@client.ClientRecordableReviewDecision, String)] = [
+    (@client.Approved, "approved"),
+    (@client.ChangesRequested, "changes_requested"),
+  ]
+  for (value, wire) in decisions {
+    assert_eq(value.to_wire(), wire)
+  }
+}
+
+///|
+test "record review command emits only the attempt id and terminal decision" {
+  let decisions : Array[(@client.ClientRecordableReviewDecision, String)] = [
+    (@client.Approved, "approved"),
+    (@client.ChangesRequested, "changes_requested"),
+  ]
+  for (decision, wire) in decisions {
+    let command = @client.record_review_command(
+      "cmd-review",
+      5L,
+      id="attempt-1",
+      decision~,
+    )
+    assert_eq(command.command_id, "cmd-review")
+    assert_eq(command.expected_revision, 5L)
+    assert_eq(command.name, "board.review.record")
+    assert_eq(command.args, { "id": "attempt-1", "decision": wire })
+    assert_eq(
+      @protocol.decode_client_frame(
+        @protocol.encode_client_frame(@protocol.Command(command)),
+      ),
+      Ok(@protocol.Command(command)),
+    )
+  }
+}

@@ -47,6 +47,43 @@ pub fn attempt_outcomes() -> Array[@client.ClientAttemptOutcome] {
 }
 
 ///|
+/// Fixed option order for the record-review decision select. Pending is
+/// deliberately absent: it is the implicit state while a review attempt
+/// runs, so only the two terminal decisions can be recorded.
+pub fn review_decisions() -> Array[@client.ClientRecordableReviewDecision] {
+  [Approved, ChangesRequested]
+}
+
+///|
+pub fn review_decision_label(
+  decision : @client.ClientRecordableReviewDecision,
+) -> String {
+  match decision {
+    Approved => "Approve"
+    ChangesRequested => "Request changes"
+  }
+}
+
+///|
+/// Live eligibility for recording a review decision, mirroring the domain
+/// window exactly: only a Review attempt that is Running and still Pending
+/// accepts a decision. Recording never changes the attempt status.
+pub fn review_recordable(attempt : @client.ClientAttempt) -> Bool {
+  attempt.kind is Review &&
+  attempt.status is Running &&
+  attempt.review is Some(Pending)
+}
+
+///|
+/// A Running Review attempt without a recorded decision warns on Finish but
+/// never blocks it: recording stays a separate explicit command.
+pub fn finish_review_pending(attempt : @client.ClientAttempt) -> Bool {
+  attempt.status is Running &&
+  attempt.kind is Review &&
+  attempt.review is Some(Pending)
+}
+
+///|
 pub fn outcome_label(outcome : @client.ClientAttemptOutcome) -> String {
   match outcome {
     Succeeded => "Succeeded"

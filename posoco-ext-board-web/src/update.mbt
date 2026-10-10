@@ -280,7 +280,12 @@ fn update(
     | AttemptQueueSubmitted
     | AttemptStartRequested(_)
     | AttemptOutcomeChanged(_)
-    | AttemptFinishSubmitted => update_inspector(model, msg, emit, env)
+    | AttemptFinishSubmitted
+    | ReviewOpened(_)
+    | ReviewCancelled
+    | ReviewDecisionChanged(_)
+    | ReviewDraftReturned
+    | ReviewSubmitted => update_inspector(model, msg, emit, env)
   }
 }
 

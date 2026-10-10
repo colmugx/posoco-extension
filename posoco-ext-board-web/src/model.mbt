@@ -29,6 +29,7 @@ priv enum PendingKind {
   PendingAttemptQueue(task_id~ : String, attempt_id~ : String)
   PendingAttemptStart(attempt_id~ : String)
   PendingAttemptFinish(attempt_id~ : String)
+  PendingReview(attempt_id~ : String)
 } derive(Eq)
 
 ///|
@@ -56,6 +57,16 @@ priv struct FinishDraft {
   task_id : String
   attempt_id : String
   outcome : @client.ClientAttemptOutcome?
+} derive(Eq)
+
+///|
+/// Local review draft holding only the target attempt's identity. The
+/// decision starts explicitly absent: submission is impossible until the
+/// user picks Approved or Changes requested, and opening it sends nothing.
+priv struct ReviewDraft {
+  task_id : String
+  attempt_id : String
+  decision : @client.ClientRecordableReviewDecision?
 } derive(Eq)
 
 ///|
@@ -94,6 +105,7 @@ priv struct Model {
   dependency_editor : DependencyDraft?
   attempt_draft : AttemptDraft?
   finish_draft : FinishDraft?
+  review_draft : ReviewDraft?
 } derive(Eq)
 
 ///|
@@ -131,6 +143,11 @@ priv enum Msg {
   AttemptStartRequested(String)
   AttemptOutcomeChanged(String)
   AttemptFinishSubmitted
+  ReviewOpened(String)
+  ReviewCancelled
+  ReviewDecisionChanged(String)
+  ReviewDraftReturned
+  ReviewSubmitted
 }
 
 ///|
@@ -157,6 +174,7 @@ fn Model::empty(available : Bool) -> Model {
     dependency_editor: None,
     attempt_draft: None,
     finish_draft: None,
+    review_draft: None,
   }
 }
 
