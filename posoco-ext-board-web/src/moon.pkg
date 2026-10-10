@@ -3,6 +3,7 @@ import {
   "colmugx/posoco-ext-board/protocol",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/websocket",
 }
 

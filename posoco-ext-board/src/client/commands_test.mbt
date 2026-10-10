@@ -179,3 +179,92 @@ test "command array inputs and separate commands never share mutable JSON arrays
   })
   assert_eq(dod, ["Changed draft"])
 }
+
+///|
+test "attempt enum encodings are the canonical kind and outcome vocabulary" {
+  let kinds : Array[(@client.ClientAttemptKind, String)] = [
+    (@client.Discuss, "discuss"),
+    (@client.Execute, "execute"),
+    (@client.Review, "review"),
+  ]
+  for (value, wire) in kinds {
+    assert_eq(value.to_wire(), wire)
+  }
+  let outcomes : Array[(@client.ClientAttemptOutcome, String)] = [
+    (@client.Succeeded, "succeeded"),
+    (@client.Failed, "failed"),
+    (@client.Cancelled, "cancelled"),
+    (@client.Interrupted, "interrupted"),
+  ]
+  for (value, wire) in outcomes {
+    assert_eq(value.to_wire(), wire)
+  }
+}
+
+///|
+test "queue attempt command emits explicit id task and kind with revision" {
+  let command = @client.queue_attempt_command(
+    "cmd-queue",
+    2L,
+    id="attempt-next",
+    task_id="task-1",
+    kind=@client.Execute,
+  )
+  assert_eq(command.command_id, "cmd-queue")
+  assert_eq(command.expected_revision, 2L)
+  assert_eq(command.name, "board.attempt.queue")
+  assert_eq(command.args, {
+    "id": "attempt-next",
+    "task_id": "task-1",
+    "kind": "execute",
+  })
+  assert_eq(
+    @protocol.decode_client_frame(
+      @protocol.encode_client_frame(@protocol.Command(command)),
+    ),
+    Ok(@protocol.Command(command)),
+  )
+}
+
+///|
+test "start attempt command emits only the attempt id" {
+  let command = @client.start_attempt_command("cmd-start", 3L, id="attempt-1")
+  assert_eq(command.command_id, "cmd-start")
+  assert_eq(command.expected_revision, 3L)
+  assert_eq(command.name, "board.attempt.start")
+  assert_eq(command.args, { "id": "attempt-1" })
+  assert_eq(
+    @protocol.decode_client_frame(
+      @protocol.encode_client_frame(@protocol.Command(command)),
+    ),
+    Ok(@protocol.Command(command)),
+  )
+}
+
+///|
+test "finish attempt command requires an explicit terminal outcome" {
+  let outcomes : Array[(@client.ClientAttemptOutcome, String)] = [
+    (@client.Succeeded, "succeeded"),
+    (@client.Failed, "failed"),
+    (@client.Cancelled, "cancelled"),
+    (@client.Interrupted, "interrupted"),
+  ]
+  for (outcome, wire) in outcomes {
+    let command = @client.finish_attempt_command(
+      "cmd-finish",
+      4L,
+      id="attempt-1",
+      outcome~,
+    )
+    assert_eq(command.command_id, "cmd-finish")
+    assert_eq(command.expected_revision, 4L)
+    assert_eq(command.name, "board.attempt.finish")
+    assert_eq(command.args, { "id": "attempt-1", "outcome": wire })
+    assert_eq(
+      @protocol.decode_client_frame(
+        @protocol.encode_client_frame(@protocol.Command(command)),
+      ),
+      Ok(@protocol.Command(command)),
+    )
+  }
+}

@@ -26,6 +26,9 @@ priv enum PendingKind {
   PendingEdit(task_id~ : String)
   PendingDependencies(task_id~ : String)
   PendingMove(task_id~ : String, to~ : @client.ClientBoardStage)
+  PendingAttemptQueue(task_id~ : String, attempt_id~ : String)
+  PendingAttemptStart(attempt_id~ : String)
+  PendingAttemptFinish(attempt_id~ : String)
 } derive(Eq)
 
 ///|
@@ -37,6 +40,22 @@ priv struct Editor {
   description : String
   priority : @client.ClientBoardPriority
   definition_of_done : String
+} derive(Eq)
+
+///|
+/// Local queue draft with an independently generated attempt identity.
+/// Opening it sends nothing; submit generates a separate command UUID.
+priv struct AttemptDraft {
+  task_id : String
+  attempt_id : String
+  kind : @client.ClientAttemptKind
+} derive(Eq)
+
+///|
+priv struct FinishDraft {
+  task_id : String
+  attempt_id : String
+  outcome : @client.ClientAttemptOutcome?
 } derive(Eq)
 
 ///|
@@ -73,6 +92,8 @@ priv struct Model {
   notice : Notice?
   selected_task : String?
   dependency_editor : DependencyDraft?
+  attempt_draft : AttemptDraft?
+  finish_draft : FinishDraft?
 } derive(Eq)
 
 ///|
@@ -100,6 +121,16 @@ priv enum Msg {
   DependenciesCancelled
   DependenciesSubmitted
   DependencyDraftReturned
+  AttemptQueueOpened
+  AttemptQueueCancelled
+  AttemptDraftReturned
+  AttemptFinishOpened(String)
+  AttemptFinishCancelled
+  AttemptKindChanged(String)
+  AttemptQueueSubmitted
+  AttemptStartRequested(String)
+  AttemptOutcomeChanged(String)
+  AttemptFinishSubmitted
 }
 
 ///|
@@ -124,6 +155,8 @@ fn Model::empty(available : Bool) -> Model {
     notice: None,
     selected_task: None,
     dependency_editor: None,
+    attempt_draft: None,
+    finish_draft: None,
   }
 }
 

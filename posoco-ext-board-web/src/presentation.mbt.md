@@ -1,4 +1,4 @@
-# Read-only Board presentation helpers
+# Board presentation helpers
 
 These checked examples exercise the deterministic view helpers without a DOM.
 The browser entry mounts `app()`; Warren validates that DOM-dependent entry.
@@ -105,5 +105,28 @@ test "priority options" {
   assert_eq(@src.priorities().length(), 4)
   assert_true(@src.priorities()[0] == @client.Low)
   assert_true(@src.priorities()[3] == @client.Critical)
+}
+```
+
+Manual lifecycle controls only offer actions from authoritative status. The
+server validates transitions; these helpers never execute work.
+
+```moonbit check
+///|
+test "manual attempt options and authoritative status affordances" {
+  assert_eq(@src.attempt_kinds().map(kind => kind.to_wire()), [
+    "discuss", "execute", "review",
+  ])
+  assert_eq(@src.attempt_outcomes().map(outcome => outcome.to_wire()), [
+    "succeeded", "failed", "cancelled", "interrupted",
+  ])
+  assert_eq(@src.outcome_label(@client.Interrupted), "Interrupted")
+  assert_true(@src.attempt_startable(@client.Queued))
+  assert_false(@src.attempt_startable(@client.Running))
+  assert_true(@src.attempt_finishable(@client.Running))
+  assert_false(@src.attempt_finishable(@client.Succeeded))
+  assert_false(
+    @src.queue_attempt_id_valid(@client.BoardReplica::empty(), "attempt-1"),
+  )
 }
 ```

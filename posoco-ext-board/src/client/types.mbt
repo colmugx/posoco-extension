@@ -48,6 +48,18 @@ pub(all) enum ClientAttemptStatus {
 pub extend ClientAttemptStatus with Eq::{equal, not_equal}
 
 ///|
+/// Terminal outcome a caller explicitly requests for a running attempt.
+pub(all) enum ClientAttemptOutcome {
+  Succeeded
+  Failed
+  Cancelled
+  Interrupted
+} derive(Eq)
+
+///|
+pub extend ClientAttemptOutcome with Eq::{equal, not_equal}
+
+///|
 /// Absence is Option::None, not an additional review enum case.
 pub(all) enum ClientReviewDecision {
   Pending

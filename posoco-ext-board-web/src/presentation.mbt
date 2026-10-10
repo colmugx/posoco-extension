@@ -34,6 +34,56 @@ pub fn priorities() -> Array[@client.ClientBoardPriority] {
 }
 
 ///|
+/// Fixed option order for the queue-attempt kind select.
+pub fn attempt_kinds() -> Array[@client.ClientAttemptKind] {
+  [Discuss, Execute, Review]
+}
+
+///|
+/// Fixed option order for the finish-attempt outcome select; every entry is
+/// an explicit terminal choice the user must see before finishing.
+pub fn attempt_outcomes() -> Array[@client.ClientAttemptOutcome] {
+  [Succeeded, Failed, Cancelled, Interrupted]
+}
+
+///|
+pub fn outcome_label(outcome : @client.ClientAttemptOutcome) -> String {
+  match outcome {
+    Succeeded => "Succeeded"
+    Failed => "Failed"
+    Cancelled => "Cancelled"
+    Interrupted => "Interrupted"
+  }
+}
+
+///|
+/// Live status validation: only a queued attempt offers manual start.
+pub fn attempt_startable(status : @client.ClientAttemptStatus) -> Bool {
+  status is Queued
+}
+
+///|
+/// Live status validation: only a running attempt offers manual finish, and
+/// finishing always requires an explicit terminal outcome choice.
+pub fn attempt_finishable(status : @client.ClientAttemptStatus) -> Bool {
+  status is Running
+}
+
+///|
+/// Live attempt-ID draft validation against the authoritative replica: the
+/// trimmed identifier must be non-empty and unused by any attempt. This is
+/// a UX convenience only; the durable server owns duplicates and existence.
+pub fn queue_attempt_id_valid(
+  replica : @client.BoardReplica,
+  raw_id : String,
+) -> Bool {
+  let id = raw_id.trim().to_owned()
+  replica.has_snapshot() &&
+  id != "" &&
+  !replica.attempts().any(attempt => attempt.id == id)
+}
+
+///|
 /// Move suggestions are a UX convenience mirroring the Board v1 stage FSM;
 /// the durable server stays authoritative and may still reject a move. The
 /// table covers every stage so the view can render a control row for any

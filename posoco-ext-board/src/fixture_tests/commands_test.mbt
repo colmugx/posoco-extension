@@ -1,5 +1,5 @@
 ///|
-async test "canonical task command fixtures match client builders and strict server schema" {
+async test "canonical task and attempt command fixtures match client builders and strict server schema" {
   let directory = fixture_directory()
   let description = "Share wire fixtures across browser and desktop clients."
   let dod = [
@@ -75,6 +75,47 @@ async test "canonical task command fixtures match client builders and strict ser
         to=@client.Refining,
       ),
       @domain.MoveTask(id~, to=@domain.Refining, at_ms~, expected_revision=2L),
+    ),
+    (
+      "attempt-queue-command",
+      @client.queue_attempt_command(
+        "cmd-queue-1",
+        2L,
+        id="attempt-2",
+        task_id="task-1",
+        kind=@client.Execute,
+      ),
+      @domain.QueueAttempt(
+        id=@domain.AttemptId("attempt-2"),
+        task=id,
+        kind=@domain.Execute,
+        at_ms~,
+        expected_revision=2L,
+      ),
+    ),
+    (
+      "attempt-start-command",
+      @client.start_attempt_command("cmd-start-1", 3L, id="attempt-2"),
+      @domain.StartAttempt(
+        id=@domain.AttemptId("attempt-2"),
+        at_ms~,
+        expected_revision=3L,
+      ),
+    ),
+    (
+      "attempt-finish-command",
+      @client.finish_attempt_command(
+        "cmd-finish-1",
+        4L,
+        id="attempt-2",
+        outcome=@client.Succeeded,
+      ),
+      @domain.FinishAttempt(
+        id=@domain.AttemptId("attempt-2"),
+        outcome=@domain.Succeeded,
+        at_ms~,
+        expected_revision=4L,
+      ),
     ),
   ]
   for (name, built, typed) in cases {

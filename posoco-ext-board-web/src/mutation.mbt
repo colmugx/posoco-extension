@@ -113,6 +113,62 @@ fn move_command(
 }
 
 ///|
+/// Keep the draft's attempt identity separate from this submission's command UUID.
+fn queue_attempt_command(
+  uuid : String,
+  revision : Int64,
+  draft : AttemptDraft,
+) -> @protocol.BoardClientCommand {
+  @client.queue_attempt_command(
+    "cmd-" + uuid,
+    revision,
+    id=draft.attempt_id.trim().to_owned(),
+    task_id=draft.task_id,
+    kind=draft.kind,
+  )
+}
+
+///|
+fn start_attempt_command(
+  uuid : String,
+  revision : Int64,
+  attempt_id : String,
+) -> @protocol.BoardClientCommand {
+  @client.start_attempt_command("cmd-" + uuid, revision, id=attempt_id)
+}
+
+///|
+/// The terminal outcome rides the client enum from the explicit draft
+/// selection; nothing here defaults or infers it.
+fn finish_attempt_command(
+  uuid : String,
+  revision : Int64,
+  attempt_id : String,
+  outcome : @client.ClientAttemptOutcome,
+) -> @protocol.BoardClientCommand {
+  @client.finish_attempt_command(
+    "cmd-" + uuid,
+    revision,
+    id=attempt_id,
+    outcome~,
+  )
+}
+
+///|
+/// Resolve a select value back to an attempt kind by comparing against the
+/// centralized `to_wire` spellings; unknown values keep the current draft.
+fn attempt_kind_from_wire(value : String) -> @client.ClientAttemptKind? {
+  attempt_kinds().filter(kind => kind.to_wire() == value).get(0)
+}
+
+///|
+/// Resolve a select value back to a terminal outcome; unknown values keep
+/// the current selection.
+fn attempt_outcome_from_wire(value : String) -> @client.ClientAttemptOutcome? {
+  attempt_outcomes().filter(outcome => outcome.to_wire() == value).get(0)
+}
+
+///|
 /// Resolve a select value back to a priority by comparing against the
 /// centralized `to_wire` spellings; unknown values keep the current draft.
 fn priority_from_wire(value : String) -> @client.ClientBoardPriority? {
@@ -132,7 +188,12 @@ fn rejection_text(error : String?) -> String {
     Some("task_not_found") => "That task no longer exists on the board."
     Some("invalid_transition") =>
       "The board does not allow this change from the task's current stage."
-    Some("invalid_input") => "The board rejected this change as invalid."
+    Some("invalid_input") | Some("invalid_arguments") =>
+      "The board rejected this change as invalid."
+    Some("attempt_not_found") => "That attempt no longer exists."
+    Some("invalid_attempt_transition") =>
+      "The board does not allow this change from the attempt's current status."
+    Some("duplicate_attempt") => "An attempt with that ID already exists."
     Some("dependency_not_found") =>
       "A selected dependency no longer exists. Remove it or reload the latest dependencies."
     Some("self_dependency") => "A task cannot depend on itself."
@@ -157,6 +218,9 @@ fn accepted_text(kind : PendingKind) -> String {
     PendingEdit(..) => "Task update saved."
     PendingDependencies(..) => "Task dependencies saved."
     PendingMove(..) => "Task move saved."
+    PendingAttemptQueue(..) => "Attempt queued."
+    PendingAttemptStart(..) => "Attempt start saved."
+    PendingAttemptFinish(..) => "Attempt finish saved."
   }
 }
 
@@ -180,6 +244,33 @@ fn close_matching_editor(editor : Editor?, kind : PendingKind) -> Editor? {
         _ => Some(editor)
       }
     _ => editor
+  }
+}
+
+///|
+/// An accepted correlated queue closes only the draft that produced it;
+/// start and finish leave queue drafts untouched.
+fn settle_attempt_draft(
+  draft : AttemptDraft?,
+  kind : PendingKind,
+) -> AttemptDraft? {
+  match (draft, kind) {
+    (Some(draft), PendingAttemptQueue(task_id~, attempt_id~)) if draft.task_id ==
+      task_id &&
+      draft.attempt_id.trim().to_owned() == attempt_id => None
+    _ => draft
+  }
+}
+
+///|
+fn settle_finish_draft(
+  draft : FinishDraft?,
+  kind : PendingKind,
+) -> FinishDraft? {
+  match (draft, kind) {
+    (Some(draft), PendingAttemptFinish(attempt_id~)) if draft.attempt_id ==
+      attempt_id => None
+    _ => draft
   }
 }
 

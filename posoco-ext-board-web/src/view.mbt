@@ -1,4 +1,38 @@
 ///|
+/// One card action button. Card actions stop click propagation: activating
+/// Edit or a suggested move must not also trigger the card's
+/// select-to-inspect handler on the surrounding article.
+fn card_action(
+  msg : Msg,
+  emit : @rabbita.Emit[Msg],
+  class~ : String,
+  title~ : String,
+  disabled~ : Bool,
+  label~ : String,
+) -> @html.Html {
+  @html.button(
+    type_="button",
+    class~,
+    title~,
+    disabled~,
+    attrs=@html.Attrs::build().on_click(event => {
+      card_action_click(event, msg, emit)
+    }),
+    label,
+  )
+}
+
+///|
+fn card_action_click(
+  event : @dom.MouseEvent,
+  msg : Msg,
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
+  event.stop_propagation()
+  emit(msg)
+}
+
+///|
 fn task_card(
   model : Model,
   task : @client.ClientBoardTask,
@@ -8,18 +42,16 @@ fn task_card(
   // Mutation controls are a convenience only: suggested targets mirror the
   // Board stage FSM and the durable server stays authoritative. Opening the
   // dependency editor parks them too; one editor at a time.
-  let locked = !mutations_allowed(model) ||
-    model.editor is Some(_) ||
-    model.dependency_editor is Some(_)
+  let locked = !mutations_allowed(model) || draft_open(model)
   let selected = model.selected_task == Some(task.id)
   let moves = move_suggestions(task.stage).map(to => {
-    @html.button(
-      type_="button",
+    card_action(
+      MoveRequested(task.id, to),
+      emit,
       class="task-action move",
       title="Move to \{stage_label(to)}",
       disabled=locked,
-      on_click=emit(MoveRequested(task.id, to)),
-      "→ \{stage_label(to)}",
+      label="→ \{stage_label(to)}",
     )
   })
   @html.article(
@@ -54,12 +86,13 @@ fn task_card(
       @html.div(
         class="task-actions",
         [
-          @html.button(
-            type_="button",
+          card_action(
+            EditOpened(task.id),
+            emit,
             class="task-action",
+            title="Edit this task",
             disabled=locked,
-            on_click=emit(EditOpened(task.id)),
-            "Edit",
+            label="Edit",
           ),
           ..moves,
         ],
@@ -90,9 +123,7 @@ fn new_task_button(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   @html.button(
     type_="button",
     class="new-task",
-    disabled=!mutations_allowed(model) ||
-      model.editor is Some(_) ||
-      model.dependency_editor is Some(_),
+    disabled=!mutations_allowed(model) || draft_open(model),
     on_click=emit(CreateOpened),
     "New task",
   )
@@ -247,7 +278,7 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       class="status",
       attrs=@html.Attrs::build().role("status").aria_live("polite"),
       if model.pending is Some(_) {
-        "Saving task change; waiting for authoritative confirmation."
+        "Saving change; waiting for authoritative confirmation."
       } else if !replica.has_snapshot() {
         "Waiting for authoritative Board state"
       } else {
@@ -260,7 +291,9 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     // a sibling of the lanes, never nested inside them.
     @html.div(
       class=if model.selected_task is Some(_) ||
-        model.dependency_editor is Some(_) {
+        model.dependency_editor is Some(_) ||
+        model.attempt_draft is Some(_) ||
+        model.finish_draft is Some(_) {
         "board-body has-inspector"
       } else {
         "board-body"

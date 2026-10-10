@@ -1,0 +1,9 @@
+{
+  "type": "command",
+  "command_id": "cmd-start-1",
+  "name": "board.attempt.start",
+  "expected_revision": 3,
+  "args": {
+    "id": "attempt-2"
+  }
+}

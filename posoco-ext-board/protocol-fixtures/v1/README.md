@@ -62,9 +62,9 @@ time and succeeded status. All timestamps are nonnegative integer milliseconds.
   The reducer reports its stable code (`hello_required`) as terminal; its message
   is not a reducer state update. Hosts stop/reconnect as appropriate.
 
-## Canonical task command examples
+## Canonical task and attempt command examples
 
-These four client frames are independent examples, not part of the server
+These seven client frames are independent examples, not part of the server
 reducer chain above:
 
 | File | Name | Expected revision |
@@ -72,13 +72,20 @@ reducer chain above:
 | `task-create-command.json` | `board.task.create` | 0 |
 | `task-update-command.json` | `board.task.update` | 1 |
 | `task-set-dependencies-command.json` | `board.task.set_dependencies` | 2 |
-| `task-move-command.json` | `board.task.move` | 3 |
+| `task-move-command.json` | `board.task.move` | 2 |
+| `attempt-queue-command.json` | `board.attempt.queue` | 2 |
+| `attempt-start-command.json` | `board.attempt.start` | 3 |
+| `attempt-finish-command.json` | `board.attempt.finish` | 4 |
 
 Create includes all six required args and explicit task identity. Update shows
 all editable fields, including an empty `definition_of_done` array that clears
 it; omitted update fields remain unchanged and are never encoded as `null`.
 Set-dependencies replaces the complete dependency list with explicit task IDs; it
 does not encode graph validity in the client. Move contains only `id` and `to`.
+The three attempt commands form one independent queued→started→finished
+progression for a second attempt: queue carries the explicit attempt ID, task ID
+and kind; start carries only the attempt ID; finish carries the attempt ID plus
+an explicit terminal outcome — the terminal choice is never omitted or defaulted.
 Timestamp authority stays with the server.
 
 Rabbita is one implementation of this client contract. SvelteKit 3 and Proton

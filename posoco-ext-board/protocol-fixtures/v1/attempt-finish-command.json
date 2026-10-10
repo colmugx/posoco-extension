@@ -1,0 +1,10 @@
+{
+  "type": "command",
+  "command_id": "cmd-finish-1",
+  "name": "board.attempt.finish",
+  "expected_revision": 4,
+  "args": {
+    "id": "attempt-2",
+    "outcome": "succeeded"
+  }
+}

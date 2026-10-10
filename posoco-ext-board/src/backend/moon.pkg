@@ -8,6 +8,7 @@ import {
 }
 
 import {
+  "colmugx/posoco-ext-board/client",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/store",
   "moonbitlang/async",
