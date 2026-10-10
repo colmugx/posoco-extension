@@ -35,7 +35,8 @@ fn target_is_writable(path : String, config : PlanModeConfig) -> Bool {
 /// While Planning/ReadyForApproval the gate is a WRITE BLOCK, not an
 /// allow-list. Deferred gateway calls are classified by the inner tool
 /// name (`LazyTools::unwrap_call`): meta tools pass, the enter/exit pair
-/// passes, shell tools pass read-only commands only, write tools pass only
+/// passes, shell tools pass everything except the mutating denylist
+/// (shell_gate.mbt), write tools pass only
 /// `writable_extensions` targets (workspace confinement is the write
 /// tools' own anchoring, not this gate), and every other tool passes
 /// through — the permission lattice governs it, and a user's just-given
@@ -62,15 +63,15 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
     return @posoco.ToolDecision::Approve(call~)
   }
   if self.config.shell_tools.contains(name) {
-    let read_only = match shell_command_of(effective) {
-      Some(cmd) => shell_command_is_read_only(cmd)
+    let allowed = match shell_command_of(effective) {
+      Some(cmd) => shell_command_is_allowed(cmd)
       None => false
     }
-    if read_only {
+    if allowed {
       return @posoco.ToolDecision::Approve(call~)
     }
     return @posoco.ToolDecision::Reject(
-      reason="plan mode: '\{name}' command is not read-only. Read-only commands (ls, cat, grep, git status, find, …) are allowed while planning; other commands need the user's approval or the plan accepted first. Call '\{self.config.exit_tool_name}' when the plan is ready.",
+      reason="plan mode: '\{name}' command would modify the workspace (denylist: rm, mv, git commit/push, sed -i, …). While planning only known-mutating commands are blocked — investigation commands run freely. Call '\{self.config.exit_tool_name}' when the plan is ready.",
     )
   }
   if self.config.write_tools.contains(name) {
@@ -108,7 +109,7 @@ fn build_plan_prompt(config : PlanModeConfig) -> String {
   let shell_line = if config.shell_tools.length() == 0 {
     ""
   } else {
-    "Shell tools (\{config.shell_tools.join(", ")}) accept read-only commands with no questions (ls, cat, grep, git status, find); other commands may prompt the user for approval."
+    "Shell tools (\{config.shell_tools.join(", ")}) run every command except known-mutating ones (rm, mv, git commit/push, sed -i, …); those are blocked while planning, everything else runs without questions."
   }
   let write_line = if config.write_tools.length() == 0 {
     ""
@@ -117,7 +118,7 @@ fn build_plan_prompt(config : PlanModeConfig) -> String {
   }
   let lines = [
     "[PLAN MODE]",
-    "You are in plan mode — a research posture. Investigate the request as deeply as it takes: read code, run read-only commands, follow references. Do NOT modify anything except \{config.writable_extensions.join(", ")} files in the workspace.",
+    "You are in plan mode — a research posture. Investigate the request as deeply as it takes: read code, run shell commands that do not modify the workspace, follow references. Do NOT modify anything except \{config.writable_extensions.join(", ")} files in the workspace.",
     "Every conclusion must be accurate and traceable: cite the evidence for each claim (file path and line, command output), verify assumptions before relying on them, and mark anything you could not verify as an explicit assumption.",
     "Only writes are gated: research, search, and other investigation tools stay usable.",
     shell_line,

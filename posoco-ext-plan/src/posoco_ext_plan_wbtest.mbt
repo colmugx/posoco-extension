@@ -140,26 +140,27 @@ async test "before_tool target gate is off unless write tools are configured" {
 }
 
 ///|
-async test "before_tool admits read-only shell commands while planning" {
+async test "before_tool admits non-mutating shell commands while planning" {
   let plan = tk_plan()
   plan.start()
-  // Read-only investigation commands pass through the shell gate.
-  let read_only = [
-    "ls -la", "find . -name '*.mbt' | head -20", "grep -rn 'plan' docs", "git status && git diff --stat",
-    "git log --oneline -5",
+  // Investigation commands pass through the shell denylist gate.
+  let investigate = [
+    "ls -la", "find . -name '*.mbt' | head -20", "grep -rn 'plan' docs", "git fetch origin",
+    "git -C ext status --short", "git worktree list", "git status && git diff --stat",
+    "moon check --output-json",
   ]
-  for cmd in read_only {
+  for cmd in investigate {
     match plan.before_tool(bash_call(cmd)) {
       @posoco.ToolDecision::Approve(..) => ()
       other => fail("expected Approve for '\{cmd}', got \{other}")
     }
   }
-  // Mutating commands are rejected with read-only steering.
+  // Mutating commands are rejected with steering feedback.
   for cmd in ["rm -rf build", "npm install", "git push", "cat a > b"] {
     match plan.before_tool(bash_call(cmd)) {
       @posoco.ToolDecision::Reject(reason~) => {
         assert_true(reason.contains("plan mode"))
-        assert_true(reason.contains("read-only"))
+        assert_true(reason.contains("mutating"))
       }
       other => fail("expected Reject for '\{cmd}', got \{other}")
     }

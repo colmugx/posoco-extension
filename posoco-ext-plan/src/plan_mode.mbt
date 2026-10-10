@@ -2,8 +2,8 @@
 /// posoco_ext_plan — Plan mode extension for Posoco.
 ///
 /// The model investigates and produces a plan under the gates documented
-/// on `PlanModeConfig` (read-only shell, Markdown-only writes anywhere in
-/// the workspace), then submits it via `exit_plan_mode`. Approval UX is
+/// on `PlanModeConfig` (non-mutating shell via a denylist, Markdown-only
+/// writes anywhere in the workspace), then submits it via `exit_plan_mode`. Approval UX is
 /// product content (`PlanReviewSource` — Accept / Revise(feedback) /
 /// Dismiss — or the `plan.approve` / `plan.reject` / `plan.dismiss`
 /// commands).
@@ -54,13 +54,14 @@ pub extend PlanStatus with Show::{to_string, output}
 
 ///|
 /// Plan-mode gate configuration: a WRITE BLOCK, not an allow-list. While
-/// planning, `shell_tools` are gated per invocation (read-only commands
-/// only) and `write_tools` are gated by target (`writable_extensions`
-/// only); every other tool passes through to the permission lattice.
+/// planning, `shell_tools` are gated per invocation (known-mutating
+/// commands are rejected) and `write_tools` are gated by target
+/// (`writable_extensions` only); every other tool passes through to the
+/// permission lattice.
 pub(all) struct PlanModeConfig {
   /// Shell-like tool names gated per invocation: the call passes when its
-  /// `cmd` classifies read-only per this package's read-only classifier
-  /// (shell_readonly.mbt). Empty disables per-invocation shell gating.
+  /// `cmd` does not match this package's mutating denylist
+  /// (shell_gate.mbt). Empty disables per-invocation shell gating.
   shell_tools : Array[String]
   /// Write-class tool names gated by TARGET: the call passes only when its
   /// `path` ends with one of `writable_extensions`. Workspace confinement is

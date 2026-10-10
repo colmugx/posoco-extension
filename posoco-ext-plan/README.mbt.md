@@ -2,12 +2,13 @@
 
 Plan mode extension for [Posoco](https://mooncakes.io/docs/colmugx/posoco).
 
-While plan mode is active the agent may only run read-only tools: every other
-tool call is rejected by `Hook::before_tool` and the rejection reason is fed
-back to the model (on posoco's non-terminal hook rejection it returns as a
-`NotExecuted(RejectedByHook)` tool result, so the model steers to read-only
+While plan mode is active the agent is steered away from changes: mutating
+tool calls are rejected by `Hook::before_tool` and the rejection reason is
+fed back to the model (on posoco's non-terminal hook rejection it returns as
+a `NotExecuted(RejectedByHook)` tool result, so the model steers to
 investigation instead of the turn dying). Shell-like tools are gated per
-invocation — `ls -la` or `git status` pass, `rm` does not. A per-turn
+invocation against a denylist — `git fetch` or `curl` pass, `rm` and
+`git commit` do not. A per-turn
 `<plan-context>` user message injected by `PipelineHook::before_model`
 carries the current mode guidance — plan mode as a research posture: every
 conclusion must be accurate and traceable — and the model submits its
@@ -25,7 +26,7 @@ status value:
 
 | Port | Contribution |
 |------|--------------|
-| `Hook` | Rejects non-allowed tools while `Planning` / `ReadyForApproval`; admits read-only shell commands; injects per-turn plan reminders via `before_model` |
+| `Hook` | Rejects writes and denylisted mutating shell commands while `Planning` / `ReadyForApproval`; injects per-turn plan reminders via `before_model` |
 | `ToolProvider` | `exit_plan_mode(plan)` + optional `enter_plan_mode()` |
 | `CommandPort` | `plan` (toggle), `plan.approve`, `plan.reject <feedback>`, `plan.dismiss` |
 
@@ -115,14 +116,11 @@ plan.set_session_name(session_id) // e.g. at session start
 let plan = PlanMode(
   config=PlanModeConfig::{
     ..PlanModeConfig::default(),
-    // Exact names or `prefix*` patterns (e.g. read-only inspection tools
-    // surfaced by an MCP bridge):
-    allowed_tools: ["read", "glob", "grep", "browser_*"],
-    // Per-invocation shell gating: read-only commands pass with no questions
-    // (ls, cat, grep, git status, find, …); anything else is steering
-    // feedback — and still runs when the user approves it at a permission ask
-    // (ApproveAfterConsent outranks this gate). Set to [] to reject shell
-    // tools by name instead.
+    // Per-invocation shell gating: every command runs while planning except
+    // the mutating denylist (rm, mv, git commit/push, sed -i, …) — steering
+    // feedback, and a blocked command still runs when the user approves it
+    // at a permission ask (ApproveAfterConsent outranks this gate). Set to
+    // [] to pass shell tools through ungated.
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
     // Write tools gated by TARGET: Markdown (.md) anywhere in the
     // workspace passes ungated (research notes, draft plans — workspace
@@ -164,19 +162,19 @@ let plan = PlanMode(
   per-turn plan reminders, the tools, and the commands.
 - The gate reads tool arguments by convention: shell gating reads the
   `cmd` string field, write-target gating reads `path` or `file_path`.
-  Tools whose arguments use other field names fall through to the
-  conservative rejection — name them in `allowed_tools` explicitly if they
-  must stay usable while planning.
-- Configure `allowed_tools` with your product's read-only tool names
-  (e.g. `read`, `glob`, `grep`); entries may end with `*` to match a prefix.
-  The enter tool is allowed only when advertised (`allow_model_entry`); the
-  exit tool is always allowed.
-- Shell classification comes from the plan extension's own read-only policy
-  table (`src/shell_readonly.mbt`, copied from posoco-devkit in 2026-09 and
-  free to diverge from other extensions' copies) — a deliberately conservative
-  steering heuristic (flags are not analyzed, quotes are not parsed, unknown
-  commands classify as mutating), not a security boundary. Pair it with a
-  permission gate when something must actually be enforced.
+  Shell tools whose arguments use other field names fall through to
+  rejection — make them follow the `cmd` convention if they must stay
+  usable while planning.
+- The enter tool is allowed only when advertised (`allow_model_entry`);
+  the exit tool is always allowed.
+- Shell classification comes from the plan extension's own denylist
+  (`src/shell_gate.mbt`, diverged in 2026-10 from the read-only allowlist
+  still used by posoco-ext-permission: plan mode only steers — unknown
+  commands are allowed, known mutations are blocked — while the permission
+  gate keeps a conservative allowlist for inspection auto-approval) — a
+  coarse steering heuristic (quotes are not parsed, flag values are not
+  analyzed), not a security boundary. Pair it with a permission gate when
+  something must actually be enforced.
 - Plan mode and permission gating are peer gates that compose through
   posoco's hook-chain rules (a user's just-given consent outranks this
   gate's rejection): plan mode bounds WHAT the agent may do before a plan
