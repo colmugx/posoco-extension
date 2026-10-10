@@ -165,11 +165,200 @@ pub fn tasks_in_lane(
 }
 
 ///|
+/// Deterministic attempt order: created_at_ms ascending with the ID as the
+/// tie-break, shared by the inspector history and the card indicator.
+fn attempt_order(
+  left : @client.ClientAttempt,
+  right : @client.ClientAttempt,
+) -> Int {
+  let created = left.created_at_ms.compare(right.created_at_ms)
+  if created == 0 {
+    left.id.compare(right.id)
+  } else {
+    created
+  }
+}
+
+///|
+/// The replica's tasks in deterministic created_at_ms ascending order with
+/// the ID as the tie-break; the replica's own array is detached, so sorting
+/// it never leaks into a previous model.
+///
+/// ```mbt check
+/// test {
+///   assert_eq(@src.ordered_tasks(@client.BoardReplica::empty()).length(), 0)
+/// }
+/// ```
+pub fn ordered_tasks(
+  replica : @client.BoardReplica,
+) -> Array[@client.ClientBoardTask] {
+  let tasks = replica.tasks()
+  tasks.sort_by((left, right) => {
+    let created = left.created_at_ms.compare(right.created_at_ms)
+    if created == 0 {
+      left.id.compare(right.id)
+    } else {
+      created
+    }
+  })
+  tasks
+}
+
+///|
+fn task_filter_active(filter : TaskFilter) -> Bool {
+  filter.query.trim() != "" ||
+  filter.priority is Some(_) ||
+  filter.stage is Some(_)
+}
+
+///|
+/// Browser `String.prototype.toLowerCase`. MoonBit's `to_lower` converts
+/// ASCII only; this module is JS-only, so one tiny FFI keeps title, ID and
+/// description matching case-insensitive for Unicode text without a new
+/// dependency.
+extern "js" fn lowercased(value : String) -> String =
+  #|value => value.toLowerCase()
+
+///|
+/// Case-insensitive substring match over title, ID and description, combined
+/// with exact priority and stage choices. A blank query matches everything.
+fn task_matches_filter(
+  task : @client.ClientBoardTask,
+  filter : TaskFilter,
+) -> Bool {
+  let query = lowercased(filter.query.trim().to_owned())
+  if query != "" &&
+    !lowercased(task.title).contains(query) &&
+    !lowercased(task.id).contains(query) &&
+    !lowercased(task.description).contains(query) {
+    return false
+  }
+  match filter.priority {
+    Some(priority) if task.priority != priority => return false
+    _ => ()
+  }
+  match filter.stage {
+    Some(stage) if task.stage != stage => return false
+    _ => ()
+  }
+  true
+}
+
+///|
+/// Visible tasks: the deterministic created order with every filter applied.
+fn visible_tasks(
+  replica : @client.BoardReplica,
+  filter : TaskFilter,
+) -> Array[@client.ClientBoardTask] {
+  ordered_tasks(replica).filter(task => task_matches_filter(task, filter))
+}
+
+///|
+fn visible_lane_tasks(
+  replica : @client.BoardReplica,
+  stage : @client.ClientBoardStage,
+  filter : TaskFilter,
+) -> Array[@client.ClientBoardTask] {
+  visible_tasks(replica, filter).filter(task => task.stage == stage)
+}
+
+///|
+/// True only when an authoritative board has tasks but the active filter
+/// hides them all — distinct from an unknown board and an empty board.
+fn filters_hide_all(
+  replica : @client.BoardReplica,
+  filter : TaskFilter,
+) -> Bool {
+  replica.has_snapshot() &&
+  !replica.tasks().is_empty() &&
+  task_filter_active(filter) &&
+  visible_tasks(replica, filter).is_empty()
+}
+
+///|
+fn task_count_summary(
+  replica : @client.BoardReplica,
+  filter : TaskFilter,
+) -> String {
+  let total = replica.tasks().length()
+  if task_filter_active(filter) {
+    "\{visible_tasks(replica, filter).length()} of \{total} tasks"
+  } else {
+    "\{total} tasks"
+  }
+}
+
+///|
+fn lane_count_summary(
+  replica : @client.BoardReplica,
+  stage : @client.ClientBoardStage,
+  filter : TaskFilter,
+) -> String {
+  let total = tasks_in_lane(replica, stage).length()
+  if task_filter_active(filter) {
+    "\{visible_lane_tasks(replica, stage, filter).length()} of \{total}"
+  } else {
+    "\{total}"
+  }
+}
+
+///|
+/// Resolve a filter select value to a priority: the empty value clears,
+/// unknown values keep the current choice.
+fn filter_priority_from_wire(
+  value : String,
+  current : @client.ClientBoardPriority?,
+) -> @client.ClientBoardPriority? {
+  if value == "" {
+    None
+  } else {
+    match priority_from_wire(value) {
+      Some(priority) => Some(priority)
+      None => current
+    }
+  }
+}
+
+///|
+/// Resolve a filter select value to a stage: the empty value clears, unknown
+/// values keep the current choice.
+fn filter_stage_from_wire(
+  value : String,
+  current : @client.ClientBoardStage?,
+) -> @client.ClientBoardStage? {
+  if value == "" {
+    None
+  } else {
+    match lanes().filter(stage => stage.to_wire() == value).get(0) {
+      Some(stage) => Some(stage)
+      None => current
+    }
+  }
+}
+
+///|
+/// The header status line. An in-flight command outranks everything because
+/// it is the only state the user can act on; otherwise the connection and
+/// baseline transitions own the text.
+fn status_text(model : Model) -> String {
+  if model.pending is Some(_) {
+    "Saving change; waiting for authoritative confirmation."
+  } else {
+    model.last_status
+  }
+}
+
+///|
 pub fn attempt_count(replica : @client.BoardReplica, task_id : String) -> Int {
   replica.attempts().filter(attempt => attempt.task_id == task_id).length()
 }
 
 ///|
+/// The card's attempt summary never shows a naked status word: "Running"
+/// would read as the task's stage or an Agent run, so a running attempt says
+/// so explicitly and any other state is prefixed as the latest attempt. The
+/// latest attempt is the last in the deterministic created order with the ID
+/// tie-break; a running attempt on the task always outranks it.
 pub fn attempt_indicator(
   replica : @client.BoardReplica,
   task_id : String,
@@ -177,32 +366,26 @@ pub fn attempt_indicator(
   let attempts = replica
     .attempts()
     .filter(attempt => attempt.task_id == task_id)
-  for attempt in attempts {
-    if attempt.status is Running {
-      return "Running"
-    }
+  if attempts.any(attempt => attempt.status is Running) {
+    return "Attempt: Running (manual)"
   }
-  let mut latest : @client.ClientAttempt? = None
-  for attempt in attempts {
-    match latest {
-      None => latest = Some(attempt)
-      Some(previous) if attempt.updated_at_ms >= previous.updated_at_ms =>
-        latest = Some(attempt)
-      _ => ()
-    }
-  }
-  match latest {
+  match latest_attempt(attempts) {
     None => "No attempts"
-    Some(attempt) =>
-      match attempt.status {
-        Queued => "Queued"
-        Running => "Running"
-        Succeeded => "Succeeded"
-        Failed => "Failed"
-        Cancelled => "Cancelled"
-        Interrupted => "Interrupted"
-      }
+    Some(attempt) => "Latest attempt: \{attempt_status_label(attempt.status)}"
   }
+}
+
+///|
+/// Last entry of the deterministic created order: greatest created_at_ms,
+/// greatest ID on ties.
+fn latest_attempt(
+  attempts : Array[@client.ClientAttempt],
+) -> @client.ClientAttempt? {
+  if attempts.is_empty() {
+    return None
+  }
+  attempts.sort_by(attempt_order)
+  attempts.get(attempts.length() - 1)
 }
 
 ///|

@@ -108,11 +108,18 @@ fn lane(
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
   let replica = model.replica
-  let tasks = tasks_in_lane(replica, stage)
-  @html.section(class="lane", [
-    @html.h2("\{stage_label(stage)} · \{tasks.length()}"),
-    @html.div(class="cards", tasks.map(task => task_card(model, task, emit))),
-  ])
+  let tasks = visible_lane_tasks(replica, stage, model.task_filter)
+  @html.section(
+    class="lane",
+    attrs=@html.Attrs::build().aria_labelledby("lane-\{stage.to_wire()}"),
+    [
+      @html.h2(
+        id="lane-\{stage.to_wire()}",
+        "\{stage_label(stage)} · \{lane_count_summary(replica, stage, model.task_filter)}",
+      ),
+      @html.div(class="cards", tasks.map(task => task_card(model, task, emit))),
+    ],
+  )
 }
 
 ///|
@@ -258,11 +265,106 @@ fn editor_panel(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
+/// Local, view-only task filters. They render from the authoritative replica
+/// and never send anything or touch the selection, drafts or pending state.
+fn filter_bar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let filter = model.task_filter
+  let priority_options = [
+    @html.option(value="", selected=filter.priority is None, "All priorities"),
+    ..priorities().map(priority => {
+      @html.option(
+        value=priority.to_wire(),
+        selected=filter.priority == Some(priority),
+        priority_label(priority),
+      )
+    }),
+  ]
+  let stage_options = [
+    @html.option(value="", selected=filter.stage is None, "All stages"),
+    ..lanes().map(stage => {
+      @html.option(
+        value=stage.to_wire(),
+        selected=filter.stage == Some(stage),
+        stage_label(stage),
+      )
+    }),
+  ]
+  @html.div(
+    class="filter-bar",
+    attrs=@html.Attrs::build().role("search").aria_label("Filter board tasks"),
+    [
+      labeled_field(
+        "task-filter-query",
+        "Filter tasks",
+        @html.input(
+          input_type=Search,
+          id="task-filter-query",
+          name="task_filter_query",
+          placeholder="Title, ID, or description",
+          value=filter.query,
+          on_input=value => emit(FilterQueryChanged(value)),
+        ),
+      ),
+      labeled_field(
+        "task-filter-priority",
+        "Priority",
+        @html.select(
+          id="task-filter-priority",
+          name="task_filter_priority",
+          on_change=value => emit(FilterPriorityChanged(value)),
+          priority_options,
+        ),
+      ),
+      labeled_field(
+        "task-filter-stage",
+        "Stage",
+        @html.select(
+          id="task-filter-stage",
+          name="task_filter_stage",
+          on_change=value => emit(FilterStageChanged(value)),
+          stage_options,
+        ),
+      ),
+      if task_filter_active(filter) {
+        @html.button(
+          type_="button",
+          class="task-action",
+          title="Show every task again",
+          on_click=emit(FiltersCleared),
+          "Clear filters",
+        )
+      } else {
+        @html.nothing
+      },
+    ],
+  )
+}
+
+///|
 fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let replica = model.replica
+  let filter = model.task_filter
+  // Unknown board, empty board and a filter that hides every task are three
+  // distinct states; only the last one offers an escape hatch.
   let empty = match empty_message(replica) {
     Some(message) => [@html.p(class="empty-state", message)]
-    None => []
+    None =>
+      if filters_hide_all(replica, filter) {
+        [
+          @html.div(class="empty-state", [
+            @html.p("No tasks match the current filters."),
+            @html.button(
+              type_="button",
+              class="task-action",
+              title="Show every task again",
+              on_click=emit(FiltersCleared),
+              "Clear filters",
+            ),
+          ]),
+        ]
+      } else {
+        []
+      }
   }
   @html.main_(class="board-shell", [
     @html.header(class="board-header", [
@@ -270,21 +372,21 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       @html.span(class="connection", connection_label(model.connection)),
       @html.p(
         class="board-meta",
-        "Revision \{replica.revision()} · Stream \{replica.last_seq()} · \{replica.tasks().length()} tasks",
+        "Revision \{replica.revision()} · Stream \{replica.last_seq()} · \{task_count_summary(replica, filter)}",
       ),
       new_task_button(model, emit),
     ]),
+    @html.p(class="lifecycle-note", manual_lifecycle_note()),
+    filter_bar(model, emit),
     @html.p(
       class="status",
       attrs=@html.Attrs::build().role("status").aria_live("polite"),
-      if model.pending is Some(_) {
-        "Saving change; waiting for authoritative confirmation."
-      } else if !replica.has_snapshot() {
-        "Waiting for authoritative Board state"
-      } else {
-        model.last_status
-      },
+      status_text(model),
     ),
+    match mutation_availability_note(model) {
+      Some(message) => @html.p(class="status", message)
+      None => @html.nothing
+    },
     notice_region(model.notice),
     editor_panel(model, emit),
     // Lanes and the inspector share one responsive body grid; the panel is

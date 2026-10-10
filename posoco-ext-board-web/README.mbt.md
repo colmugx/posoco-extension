@@ -66,6 +66,58 @@ Move suggestions mirror the Board v1 stage FSM — Created→Refining/Suspended,
 
 Every mutation control shares one disabled state: the shell accepts input only while the replica is authoritative, the connection is online and no command is in flight. Controls are semantic HTML with explicit label associations, explicit button types, and a live notice region that renders mapped safe text only — wire codes, store and protocol details never reach the UI.
 
+## Local task filters (S3C6)
+
+The header exposes one local, view-only filter surface: a case-insensitive
+query matched against each task's title, ID and description (Unicode-aware
+via one small JS `toLowerCase` FFI), plus exact Priority and Stage choices.
+Filters never send anything and never touch the replica, the selection, any
+draft or the pending record; they only change what the lanes render.
+
+Cards and lane contents render in a deterministic `created_at_ms` ascending
+order with the task ID breaking ties, independent of replica insertion order.
+The header and each lane report `visible of total` counts while a filter is
+active. Three empty states stay distinct: an unknown board shows `Waiting for
+Board state`, an authoritative empty board shows `No Board tasks yet`, and an
+active filter that hides every task shows `No tasks match the current filters`
+with a **Clear filters** escape hatch (also in the filter bar whenever it is
+active). A selected task hidden by a filter stays selected and the inspector
+keeps resolving it by ID; drafts keep their targets the same way. An external
+authoritative update re-applies the current filters to the new membership
+without touching the selection.
+
+## Operational status (S3C6)
+
+The `role="status"` line and the connection chip distinguish every
+operational phase with mapped safe text only:
+
+- **First load** — `Waiting for Board snapshot`, then `Waiting for the first
+  authoritative snapshot` once the socket opens.
+- **Reconnect on a retained baseline** — an ordinary disconnect keeps the
+  replica, so reconnecting reads `Reconnecting; the retained Board baseline
+  stays and replays on reconnect`. The chip stays `Reconnecting` until the
+  socket actually opens: a prior baseline alone never labels a disconnected
+  retry `Online`. When the socket opens the chip becomes `Online` and the
+  status explains the correct idle-open semantics — `Board baseline retained;
+  the open connection replays only missed changes` — because an up-to-date
+  baseline may legitimately replay nothing.
+- **Invalidated baseline** — a dropped in-flight command, a stale reported
+  revision or a resync request discards the replica and reconnects for a
+  fresh snapshot: `Reconnecting; the stale Board baseline was discarded for a
+  fresh snapshot`, and the open socket still reads `Waiting for a fresh
+  authoritative snapshot` until the snapshot arrives.
+- **Pending command** — `Saving change; waiting for authoritative
+  confirmation.` outranks every other status while a command is in flight.
+- **Uncertain command** — the existing mapped durability notices are
+  unchanged and the baseline status is kept when the reported revision still
+  matches.
+- **Terminal errors** — `Board protocol error; automatic reconnect stopped`
+  with wire codes never surfaced.
+
+Reconnect boundedness, one-pending, generation correlation and Hello-only
+(no-replay) behavior are exactly the invariants described above; the status
+text only makes each state observable.
+
 ## Task inspector and dependencies
 
 Activate a card's title to inspect it. Selection stores only its task ID; every render resolves the task and its read-only attempt history from the current replica. The responsive panel shows description, stage, priority, definition of done, dependency titles and IDs, and the available task/attempt timestamps in UTC. Close clears selection. Baseline invalidation hides entity details without losing selection; a subsequent authoritative snapshot revalidates it and closes a missing task with a safe notice.
@@ -150,11 +202,25 @@ described above.
 
 ## View
 
-Seven lanes cover Created, Refining, Ready, Running, Review, Done, and Suspended. Cards show title, priority, ID, dependency/attempt counts, description preview, running/latest attempt status, and the v1 Edit/Move controls. The header shows connection status, Board revision, stream sequence, task count, and the New task entry. Loading and empty are distinct: until an authoritative snapshot arrives — and again after any invalidation, which discards every record — the board shows `Waiting for Board state`; only an authoritative empty board shows `No Board tasks yet`, so stale cards never survive a resync.
+Seven lanes cover Created, Refining, Ready, Running, Review, Done, and Suspended, labelled and referenced by ID for assistive tech. Cards show title, priority, ID, dependency/attempt counts, description preview, running/latest attempt status, and the v1 Edit/Move controls, in the deterministic created order described above. The card's attempt summary is never a naked status word: a running attempt reads `Attempt: Running (manual)` (not the task's stage or an Agent run), any other state reads `Latest attempt: <status>` chosen by the same deterministic created order with the ID tie-break, and a task without attempts reads `No attempts`. The header shows connection status, Board revision, stream sequence, the task count (visible of total while filtered), the filter bar, and the New task entry. Loading and empty are distinct: until an authoritative snapshot arrives — and again after any invalidation, which discards every record — the board shows `Waiting for Board state`; only an authoritative empty board shows `No Board tasks yet`, so stale cards never survive a resync.
 
 The view uses semantic HTML and a small Board-owned stylesheet. Card Edit/Move
 clicks stop propagation before emitting their action, so they do not also switch
-the inspector selection through the surrounding card's click handler.
+the inspector selection through the surrounding card's click handler. Draft
+banners and inspector warnings are live regions, the inspector close control
+carries an explicit accessible name, and the queue-attempt opener is spelled
+`Queue attempt…` so no two controls read as the same mutation.
+
+The shell explicitly states that Agent execution is not connected. Task Done does
+not verify execution success, and Review Approved does not finish an attempt.
+Mutation availability explains the single pending slot and distinguishes retained
+reconnect references from a live authoritative connection. Terminal protocol errors
+require user action rather than endless retries.
+
+Inspector section links navigate to task details, dependencies, and attempts/reviews
+without changing selection or sending commands. A selected task hidden by a filter
+remains inspectable, with an explicit notice; its drafts remain intact. Long content
+wraps, focus indicators remain visible, and narrow-screen forms use readable inputs.
 
 ## Cross-host contract
 
@@ -167,4 +233,4 @@ moon -C posoco-ext-board-web check src cmd/browser --target js --output-json
 moon -C posoco-ext-board-web test src --target js --output-json
 ```
 
-Presentation, connection-policy and mutation tests are deterministic helper/update tests, not a new DOM harness. Native static/security and WebSocket tests verify the standalone integration separately. Inspector and dependency tests cover detached drafts, external changes, safe rejections, event/result ordering and Hello-only reconnects. Lifecycle tests additionally pin UUID independence, every terminal choice, shared draft/pending guards, stale IDs/statuses, recovered Interrupted state and safe delivery failures. Review tests pin the record window (Review + Running + pending only), the ID-only no-default draft, event-before-result ordering with the live revision, external decision/finish disablement, correlation/generation checks, conflicts, uncertainty/persistence, Hello-only pending disconnects and the one shared pending slot. The card action callback regression verifies propagation stops before emission, without importing Rabbita internals. Cetas/SvelteKit integration, Agent execution and scheduling remain out of scope.
+Presentation, connection-policy and mutation tests are deterministic helper/update tests, not a new DOM harness. Native static/security and WebSocket tests verify the standalone integration separately. Inspector and dependency tests cover detached drafts, external changes, safe rejections, event/result ordering and Hello-only reconnects. Lifecycle tests additionally pin UUID independence, every terminal choice, shared draft/pending guards, stale IDs/statuses, recovered Interrupted state and safe delivery failures. Review tests pin the record window (Review + Running + pending only), the ID-only no-default draft, event-before-result ordering with the live revision, external decision/finish disablement, correlation/generation checks, conflicts, uncertainty/persistence, Hello-only pending disconnects and the one shared pending slot. The card action callback regression verifies propagation stops before emission, without importing Rabbita internals. Filter tests pin case-insensitive title/ID/description matching, priority/stage combination, the deterministic created order with ID ties, visible/total summaries, the no-match versus unknown versus empty distinction, and full isolation of selection, drafts, pending record and replica under every filter change. Operational status tests pin the first-snapshot, retained-baseline (never `Online` while disconnected, with the idle-open explanation) and invalidated-baseline phrasing, pending precedence, safe terminal text, and the never-naked, tie-broken attempt indicator. Cetas/SvelteKit integration, Agent execution and scheduling remain out of scope.

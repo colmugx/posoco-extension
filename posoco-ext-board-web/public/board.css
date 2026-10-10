@@ -3,11 +3,22 @@
 body { margin: 0; background: var(--background); color: var(--text); }
 .board-shell { padding: 24px; max-width: 1800px; margin: auto; }
 .board-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 16px; margin: 12px 0; }
+.filter-bar .field { flex: 1 1 220px; max-width: 360px; }
+.filter-bar .task-action { flex: 0 0 auto; }
 h1 { margin: 0; font-size: 28px; }
 .board-meta { margin: 0; color: var(--muted); }
 .connection, .priority { border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
-.status { color: var(--muted); }
-.empty-state { padding: 20px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; }
+.status, .lifecycle-note { color: var(--muted); }
+.lifecycle-note { font-size: 13px; max-width: 90ch; }
+.inspector-nav { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 12px 0; }
+.inspector-nav a { color: var(--accent); font-size: 13px; }
+.inspector h3[id] { scroll-margin-top: 16px; }
+.inspector-details > p { white-space: pre-wrap; }
+.inspector-head h2, .inspector-fields dd { min-width: 0; overflow-wrap: anywhere; }
+.inspector-head button { flex-shrink: 0; }
+.empty-state { padding: 20px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; display: grid; gap: 8px; justify-items: center; }
+.empty-state p { margin: 0; }
 .lanes { display: grid; grid-template-columns: repeat(7, minmax(230px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 16px; }
 .lane { min-width: 0; }
 h2 { font-size: 14px; margin: 12px 0; }
@@ -53,7 +64,7 @@ h3 { margin: 12px 0 8px; font-size: 16px; }
 .task-select { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-size: 16px; font-weight: 600; text-align: left; cursor: pointer; border-radius: 4px; }
 .task-select:hover { text-decoration: underline; }
 .task-card.is-selected { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .inspector-banner, .inspector-warning { border: 1px solid #b58a2c; border-radius: 6px; padding: 10px 12px; font-size: 13px; }
 .inspector-banner { margin: 0 0 12px; display: grid; gap: 8px; }
 .inspector-banner p, .inspector-warning { margin: 0; }
@@ -76,4 +87,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .attempt-when { margin: 0; color: var(--muted); font-size: 12px; }
 @media (prefers-color-scheme: dark) { :root { --surface: #202731; --background: #151a22; --text: #e7ebf2; --muted: #a8b4c5; --border: #364252; --accent: #8db2e8; } .notice-warning { color: #d8b25e; } .notice-error { color: #e08a8a; } .notice-success { color: #8fbf8f; } .inspector-warning { color: #d8b25e; } }
 @media (max-width: 900px) { .board-body.has-inspector { grid-template-columns: minmax(0, 1fr); } .inspector { position: static; max-height: none; grid-row: 1; } }
+/* Avoid focus zoom on phone inputs without disabling browser zoom. */
+@media (pointer: coarse) { .field input, .field select, .field textarea { font-size: 16px; } }
 @media (max-width: 600px) { .board-shell { padding: 16px; } .board-header { gap: 8px 16px; } .board-meta { flex-basis: 100%; } .editor-grid { grid-template-columns: 1fr; } }

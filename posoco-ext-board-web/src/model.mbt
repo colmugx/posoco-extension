@@ -11,6 +11,26 @@ pub(all) enum ConnectionState {
 pub extend ConnectionState with Eq::{equal, not_equal}
 
 ///|
+/// Which authoritative baseline the replica holds, so operational status can
+/// distinguish a first snapshot, a reconnect on a retained baseline and an
+/// invalidated baseline that needs a fresh snapshot.
+priv enum BaselineState {
+  AwaitingFirst
+  Confirmed
+  Retained
+  Invalidated
+} derive(Eq)
+
+///|
+/// Pure local view filter. It never sends anything and never touches the
+/// replica, the selection or any draft.
+priv struct TaskFilter {
+  query : String
+  priority : @client.ClientBoardPriority?
+  stage : @client.ClientBoardStage?
+} derive(Eq)
+
+///|
 /// Correlation record for the single in-flight mutation. It retains the
 /// command id, the mutation kind and the expected revision; the command
 /// payload itself is never stored, so a reconnect cannot resend it.
@@ -94,6 +114,7 @@ priv struct Notice {
 priv struct Model {
   replica : @client.BoardReplica
   connection : ConnectionState
+  baseline : BaselineState
   retry_attempt : Int
   generation : Int
   retry_pending : Bool
@@ -106,6 +127,7 @@ priv struct Model {
   attempt_draft : AttemptDraft?
   finish_draft : FinishDraft?
   review_draft : ReviewDraft?
+  task_filter : TaskFilter
 } derive(Eq)
 
 ///|
@@ -148,6 +170,15 @@ priv enum Msg {
   ReviewDecisionChanged(String)
   ReviewDraftReturned
   ReviewSubmitted
+  FilterQueryChanged(String)
+  FilterPriorityChanged(String)
+  FilterStageChanged(String)
+  FiltersCleared
+}
+
+///|
+fn TaskFilter::none() -> TaskFilter {
+  { query: "", priority: None, stage: None, }
 }
 
 ///|
@@ -159,6 +190,7 @@ fn Model::empty(available : Bool) -> Model {
     } else {
       Offline
     },
+    baseline: AwaitingFirst,
     retry_attempt: 0,
     generation: 0,
     retry_pending: false,
@@ -175,6 +207,7 @@ fn Model::empty(available : Bool) -> Model {
     attempt_draft: None,
     finish_draft: None,
     review_draft: None,
+    task_filter: TaskFilter::none(),
   }
 }
 
