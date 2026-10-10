@@ -16,6 +16,7 @@ test "embedded dashboard identity and manifest based public resource policy" {
   for
     lifecycle in [
       "board.attempt.queue", "board.attempt.start", "board.attempt.finish", "Choose an outcome…",
+      "board.review.record", "Record review decision",
     ] {
     assert_true(javascript.contains(lifecycle))
   }

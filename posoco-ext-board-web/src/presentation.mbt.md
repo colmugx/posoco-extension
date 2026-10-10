@@ -130,3 +130,21 @@ test "manual attempt options and authoritative status affordances" {
   )
 }
 ```
+
+Recording a review decision offers only the two terminal choices; `pending`
+is the implicit running state and never a wire decision. Eligibility mirrors
+the domain exactly, and a Running Review attempt without a decision only
+warns on Finish.
+
+```moonbit check
+///|
+test "review decision options and finish warning predicate" {
+  assert_eq(@src.review_decisions().map(decision => decision.to_wire()), [
+    "approved", "changes_requested",
+  ])
+  assert_eq(
+    @src.review_decision_label(@client.ChangesRequested),
+    "Request changes",
+  )
+}
+```

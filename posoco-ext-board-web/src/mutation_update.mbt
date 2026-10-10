@@ -153,6 +153,7 @@ fn settle_command(
       ),
       attempt_draft: settle_attempt_draft(model.attempt_draft, pending.kind),
       finish_draft: settle_finish_draft(model.finish_draft, pending.kind),
+      review_draft: settle_review_draft(model.review_draft, pending.kind),
       notice: Some(
         notice(
           Success,

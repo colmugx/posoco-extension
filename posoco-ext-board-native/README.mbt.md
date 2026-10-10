@@ -6,10 +6,11 @@ Native-only MoonBack standalone presentation for `posoco-ext-board`.
 - `BoardRuntime` owns optional presentation composition and its Supervisor.
 - `NativeBoardWebServer` uses MoonBack 0.8.6 for routing, WebSocket upgrades,
   connection lifecycle, graceful shutdown and in-memory static assets.
-- `posoco-ext-board-web` supplies the embedded Rabbita task dashboard; create,
-  edit, move, dependency and manual attempt queue/start/finish intents use the
-  existing authenticated WebSocket commands. Attempts do not execute an Agent
-  or record a review decision.
+- `posoco-ext-board-web` supplies the embedded Rabbita task dashboard; task,
+  dependency, manual attempt lifecycle and explicit review decision intents use
+  the existing authenticated WebSocket commands. Recording Approved or
+  ChangesRequested is separate from finishing an attempt or moving a task;
+  none of these controls executes an Agent.
 - `NativeBrowserOpener` remains a separate standalone UX adapter.
 
 This is a separate module because MoonBack 0.8.6 is not JS-compatible and the
@@ -95,7 +96,10 @@ Generator regression checks (including compiled byte round trips):
 moon -C posoco-ext-board-native run tools/embed-assets/check_generator.mbtx --target native --output-json
 ```
 
-S3C4 regenerates the product assets with the manual attempt lifecycle controls;
-no native transport, authentication or backend semantics change. There are no
-new HTTP mutation routes, MoonBack DI, review-decision controls, Cetas integration,
-Agent execution, scheduling or workflow dependencies.
+The embedded dashboard includes manual attempt lifecycle and one-shot review
+decision controls. Review decisions are eligible only for Running Review attempts
+with a Pending decision, and are observed through authoritative events rather
+than optimistic UI updates. Finishing a Pending Review warns that its decision
+can no longer be recorded afterwards. No native transport, authentication or
+backend semantics change; there are no new HTTP mutation routes, Cetas
+integration, Agent execution, scheduling or workflow dependencies.

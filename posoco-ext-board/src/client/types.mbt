@@ -71,6 +71,18 @@ pub(all) enum ClientReviewDecision {
 pub extend ClientReviewDecision with Eq::{equal, not_equal}
 
 ///|
+/// Decision a caller can explicitly record. Pending is deliberately not a
+/// case: it is the implicit state when a review attempt starts running, so
+/// it never appears in a wire command.
+pub(all) enum ClientRecordableReviewDecision {
+  Approved
+  ChangesRequested
+} derive(Eq)
+
+///|
+pub extend ClientRecordableReviewDecision with Eq::{equal, not_equal}
+
+///|
 /// Read-only record. Arrays returned by the replica are detached.
 pub struct ClientBoardTask {
   id : String

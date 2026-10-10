@@ -117,6 +117,36 @@ async test "canonical task and attempt command fixtures match client builders an
         expected_revision=4L,
       ),
     ),
+    (
+      "review-approved-command",
+      @client.record_review_command(
+        "cmd-review-1",
+        5L,
+        id="attempt-3",
+        decision=@client.Approved,
+      ),
+      @domain.RecordReview(
+        id=@domain.AttemptId("attempt-3"),
+        decision=@domain.Approved,
+        at_ms~,
+        expected_revision=5L,
+      ),
+    ),
+    (
+      "review-changes-requested-command",
+      @client.record_review_command(
+        "cmd-review-2",
+        5L,
+        id="attempt-3",
+        decision=@client.ChangesRequested,
+      ),
+      @domain.RecordReview(
+        id=@domain.AttemptId("attempt-3"),
+        decision=@domain.ChangesRequested,
+        at_ms~,
+        expected_revision=5L,
+      ),
+    ),
   ]
   for (name, built, typed) in cases {
     let raw = fixture_text(directory, name)
@@ -129,5 +159,54 @@ async test "canonical task and attempt command fixtures match client builders an
     let encoded = @protocol.encode_client_frame(Command(wire))
     assert_eq(@json.parse(encoded), @json.parse(raw))
     assert_eq(@protocol.decode_client_frame(encoded), Ok(Command(wire)))
+  }
+}
+
+///|
+async test "review record schema rejects pending, unknown, null, extra fields and client timestamps" {
+  let directory = fixture_directory()
+  let raw = fixture_text(directory, "review-approved-command")
+  let frame = match @protocol.decode_client_frame(raw) {
+    Ok(Command(command)) => command
+    _ =>
+      fail("Invalid canonical client command fixture: review-approved-command")
+  }
+  let at_ms = 1234L
+  let rejections : Array[(String, Json)] = [
+    ("pending", { "id": "attempt-3", "decision": "pending" }),
+    ("unknown", { "id": "attempt-3", "decision": "blocked" }),
+    ("null", { "id": "attempt-3", "decision": Json::null() }),
+    (
+      "extra",
+      { "id": "attempt-3", "decision": "approved", "reviewed_by": "alice" },
+    ),
+    ("timestamp", { "id": "attempt-3", "decision": "approved", "at_ms": 1500 }),
+    ("revision", { "id": "attempt-3", "decision": "approved", "revision": 5 }),
+    (
+      "expected revision",
+      { "id": "attempt-3", "decision": "approved", "expected_revision": 5 },
+    ),
+  ]
+  for (label, args) in rejections {
+    let wire = { ..frame, args, }
+    // The frame envelope stays valid; only the strict schema rejects it.
+    assert_eq(
+      @protocol.decode_client_frame(
+        @protocol.encode_client_frame(Command(wire)),
+      ),
+      Ok(Command(wire)),
+    )
+    assert_true(
+      match @protocol.decode_board_command(wire, at_ms) {
+        Err(
+          @protocol.InvalidArguments(
+            command_id="cmd-review-1",
+            name="board.review.record",
+            ..
+          )
+        ) => true
+        _ => fail("Expected InvalidArguments for the \{label} review variant")
+      },
+    )
   }
 }

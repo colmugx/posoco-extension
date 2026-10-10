@@ -115,7 +115,11 @@ The inspector supports dependency editing and manual attempt lifecycle controls
 (S3C4): independent attempt/command UUIDs, explicit finish outcomes, live ID/status
 guards and recovery-aware drafts all use this same pending/reconciliation path.
 These commands neither run an Agent nor couple attempt status to task stage.
-Review decisions, Cetas integration and Agent execution remain separate work.
+The inspector also records Approved or ChangesRequested once for a Running
+Review attempt whose decision is Pending. The typed command-side decision has
+no Pending case. A decision changes neither attempt status nor task stage, and
+finishing a Pending Review warns that recording afterwards is impossible.
+Cetas integration, automated reviews and Agent execution remain separate work.
 
 ## Host wiring
 
@@ -552,5 +556,6 @@ scheduler.
   OS-entropy token, embedded static assets, browser opener and native factory.
 
 Embedded assets belong only to the optional native presentation. The headless
-backend and wire/durable mutation semantics remain unchanged. Review-decision UI,
-Cetas/SvelteKit or desktop integration, and Agent execution remain out of scope.
+backend and wire/durable mutation semantics remain unchanged. Review reversal,
+automation, Cetas/SvelteKit or desktop integration, and Agent execution remain
+out of scope.

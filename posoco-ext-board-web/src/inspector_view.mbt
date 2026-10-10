@@ -3,7 +3,8 @@ fn inspector_panel(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   if model.selected_task is None &&
     model.dependency_editor is None &&
     model.attempt_draft is None &&
-    model.finish_draft is None {
+    model.finish_draft is None &&
+    model.review_draft is None {
     return @html.nothing
   }
   @html.aside(
@@ -332,8 +333,8 @@ fn dependency_editor_panel(
 
 ///|
 /// Authoritative attempt history plus manual lifecycle controls. The
-/// controls only send queue/start/finish commands through the shared
-/// single-pending gate; execution, retries and review decisions stay out.
+/// controls only send queue/start/finish/review commands through the shared
+/// single-pending gate; execution and retries stay out.
 fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let attempts = inspector_attempts(model)
   let list = if attempts.is_empty() {
@@ -351,6 +352,7 @@ fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     ),
     list,
     attempt_queue_form(model, emit),
+    review_form(model, emit),
     finish_form(model, emit),
   ])
 }
@@ -361,7 +363,8 @@ fn attempt_row(
   attempt : @client.ClientAttempt,
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
-  // Status validation is live: start renders for queued attempts and the
+  // Status validation is live: start renders for queued attempts, review
+  // recording only for a running Review attempt still pending, and the
   // explicit outcome choice for running ones; the durable server stays
   // authoritative over every transition.
   let locked = !attempt_controls_allowed(model)
@@ -377,8 +380,21 @@ fn attempt_row(
           "Mark started",
         ),
       ]
-    Running =>
-      [
+    Running => {
+      let actions : Array[@html.Html] = []
+      if review_recordable(attempt) {
+        actions.push(
+          @html.button(
+            type_="button",
+            class="task-action attempt-control",
+            title="Record Approved or Changes requested; the attempt keeps running and the decision cannot be changed",
+            disabled=locked,
+            on_click=emit(ReviewOpened(attempt.id)),
+            "Record review decision",
+          ),
+        )
+      }
+      actions.push(
         @html.button(
           type_="button",
           class="task-action attempt-control",
@@ -387,7 +403,9 @@ fn attempt_row(
           on_click=emit(AttemptFinishOpened(attempt.id)),
           "Finish…",
         ),
-      ]
+      )
+      actions
+    }
     Succeeded | Failed | Cancelled | Interrupted => []
   }
   @html.li(class="attempt-row", [
@@ -581,9 +599,14 @@ fn padded(value : Int64, width : Int) -> String {
 
 ///|
 fn attempt_draft_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  let (task_id, cancel) = match (model.attempt_draft, model.finish_draft) {
-    (Some(draft), _) => (draft.task_id, AttemptQueueCancelled)
-    (_, Some(draft)) => (draft.task_id, AttemptFinishCancelled)
+  let (task_id, label, return_msg, cancel) = match
+    (model.attempt_draft, model.finish_draft, model.review_draft) {
+    (Some(draft), _, _) =>
+      (draft.task_id, "attempt", AttemptDraftReturned, AttemptQueueCancelled)
+    (_, Some(draft), _) =>
+      (draft.task_id, "attempt", AttemptDraftReturned, AttemptFinishCancelled)
+    (_, _, Some(draft)) =>
+      (draft.task_id, "review", ReviewDraftReturned, ReviewCancelled)
     _ => return @html.nothing
   }
   if model.selected_task == Some(task_id) {
@@ -591,13 +614,13 @@ fn attempt_draft_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html 
   }
   @html.div(class="inspector-banner", [
     @html.p(
-      "Unsaved attempt draft for task \{task_id} is kept while you browse.",
+      "Unsaved \{label} draft for task \{task_id} is kept while you browse.",
     ),
     @html.div(class="inspector-actions", [
       @html.button(
         type_="button",
         class="task-action",
-        on_click=emit(AttemptDraftReturned),
+        on_click=emit(return_msg),
         "Return to draft",
       ),
       @html.button(
@@ -623,6 +646,13 @@ fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     attrs=@html.Attrs::build().aria_label("Finish attempt"),
     [
       @html.p("Finish attempt \{draft.attempt_id}"),
+      // A running Review attempt without a recorded decision warns but
+      // never blocks: finishing and recording stay independent commands.
+      match attempt_by_id(model.replica, draft.attempt_id) {
+        Some(attempt) if finish_review_warning(attempt) is Some(warning) =>
+          @html.p(class="inspector-warning", warning)
+        _ => @html.nothing
+      },
       if !editable && model.pending is None && mutations_allowed(model) {
         @html.p(
           class="inspector-warning",
@@ -669,6 +699,103 @@ fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           disabled=!finish_submit_allowed(model, draft),
           on_click=emit(AttemptFinishSubmitted),
           "Finish attempt",
+        ),
+      ]),
+    ],
+  )
+}
+
+///|
+/// Local review draft: only the target attempt's ID plus an explicit
+/// decision that starts absent. Nothing here sends anything; submission is
+/// a separate explicit action through the shared single-pending gate. The
+/// recorded decision is final on the server, so the irreversibility notice
+/// stays visible while the draft is open.
+fn review_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  guard model.review_draft is Some(draft) &&
+    model.selected_task == Some(draft.task_id) else {
+    return @html.nothing
+  }
+  let editable = review_draft_editable(model, draft)
+  @html.section(
+    class="attempt-queue",
+    attrs=@html.Attrs::build().aria_label("Record review decision"),
+    [
+      @html.p("Record review decision for attempt \{draft.attempt_id}"),
+      match attempt_by_id(model.replica, draft.attempt_id) {
+        Some(attempt) =>
+          @html.dl(class="inspector-fields", [
+            @html.dt("Current attempt status"),
+            @html.dd(attempt_status_label(attempt.status)),
+            @html.dt("Current review decision"),
+            @html.dd(
+              match attempt.review {
+                Some(decision) => review_label(decision)
+                None => "No review decision"
+              },
+            ),
+          ])
+        None =>
+          @html.p(
+            class="inspector-empty",
+            "Waiting for authoritative attempt state.",
+          )
+      },
+      @html.p(
+        class="inspector-status",
+        attrs=@html.Attrs::build().role("status").aria_live("polite"),
+        "Recording never changes the attempt status or the task stage.",
+      ),
+      if !editable && model.pending is None && mutations_allowed(model) {
+        @html.p(
+          class="inspector-warning",
+          "This attempt can no longer record a review decision. Discard this draft; no command was sent.",
+        )
+      } else {
+        @html.nothing
+      },
+      labeled_field(
+        "review-record-decision",
+        "Decision",
+        @html.select(
+          id="review-record-decision",
+          name="review_decision",
+          disabled=!editable,
+          on_change=value => emit(ReviewDecisionChanged(value)),
+          [
+            @html.option(
+              value="",
+              selected=draft.decision is None,
+              "Choose a decision…",
+            ),
+            ..review_decisions().map(decision => {
+              @html.option(
+                value=decision.to_wire(),
+                selected=draft.decision == Some(decision),
+                review_decision_label(decision),
+              )
+            }),
+          ],
+        ),
+      ),
+      @html.p(
+        class="inspector-status",
+        "A recorded decision is final; it cannot be changed or cleared.",
+      ),
+      @html.div(class="inspector-actions", [
+        @html.button(
+          type_="button",
+          class="task-action",
+          disabled=model.pending is Some(_),
+          on_click=emit(ReviewCancelled),
+          "Discard draft",
+        ),
+        @html.button(
+          type_="button",
+          class="task-action primary",
+          disabled=!review_submit_allowed(model, draft),
+          on_click=emit(ReviewSubmitted),
+          "Record decision",
         ),
       ]),
     ],
