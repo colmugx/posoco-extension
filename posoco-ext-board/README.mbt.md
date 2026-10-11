@@ -7,7 +7,11 @@ The historical S3 inventory (`docs/S4A-readiness.md`) records the starting seams
 S4A adds an opt-in trusted-headless `execution` package: explicit admission,
 actual Agent scope correlation, owned cancellation and durable Attempt settlement.
 See [`docs/S4A-execution.md`](docs/S4A-execution.md) for composition, failure windows
-and limitations. No browser execution action or automatic scheduler is installed.
+and limitations. S4B adds the optional `orchestration` package: a pure deterministic
+planner and explicit host-driven dispatch through that same execution owner.
+See [`docs/S4B-orchestration.md`](docs/S4B-orchestration.md) for dependency policy,
+input authorization, revision revalidation and conservative recovery. No browser
+execution action or automatic scheduling loop is installed.
 
 ## Current status: headless service, client replica and embedded dashboard
 
