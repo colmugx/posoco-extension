@@ -1,14 +1,7 @@
-// js (bun) target: scanning through node:fs sync APIs, pattern matching
-// through Bun.Glob. All synchronous; no Promise bridging. node:fs members
-// are bound with `#module` and injected into the inline-JS envelopes as
-// values (pattern follows posoco-ext-workspace fs_port.js.mbt /
-// moonbitlang/x/fs/fs_js.mbt); throwing node calls cross the FFI as JSON
-// string envelopes (see docs/questions.md 2026-08-19). Bun.Glob's `match`
-// never throws for a valid pattern, so it stays a plain pass-through
-// extern.
+// js target: node:fs sync scanning with JSON-string envelopes; matching uses the
+// shared `@devkit.glob_match` engine, so js and native semantics cannot drift.
 
 ///|
-/// Opaque node Stats handle; only the inline-JS envelope touches it.
 #external
 priv type FsStats
 
@@ -44,20 +37,6 @@ extern "js" fn js_stat_envelope(
   #| }
 
 ///|
-/// Bun.Glob matcher (opaque).
-#external
-priv type BunGlob
-
-///|
-extern "js" fn bun_glob_new(pattern : String) -> BunGlob =
-  #| (pattern) => new Bun.Glob(pattern)
-
-///|
-extern "js" fn BunGlob::match_(self : BunGlob, path : String) -> Bool =
-  #| (glob, path) => glob.match(path)
-
-///|
-/// Decode the readdir envelope; None means the directory could not be read.
 fn js_readdir_entries(path : String) -> Array[String]? {
   let envelope : Json = @json.parse(js_readdir_envelope(fs_readdir_sync, path)) catch {
     _ => return None
@@ -88,8 +67,6 @@ priv struct JsStat {
 }
 
 ///|
-/// Decode the stat envelope; None means the stat failed or the envelope is
-/// malformed.
 fn js_stat(path : String) -> JsStat? {
   let envelope : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
     _ => return None
@@ -130,7 +107,7 @@ fn js_path_join(dir : String, entry : String) -> String {
 /// names the way the native scanner does — as results and as traversal
 /// targets. Directories are never returned.
 fn js_scan_dir(
-  glob : BunGlob,
+  pattern : String,
   ignores : Array[String],
   dir : String,
   rel : String,
@@ -155,8 +132,8 @@ fn js_scan_dir(
     match js_stat(entry_full) {
       Some(stat) =>
         if stat.dir {
-          js_scan_dir(glob, ignores, entry_full, entry_rel, out)
-        } else if glob.match_(entry_rel) {
+          js_scan_dir(pattern, ignores, entry_full, entry_rel, out)
+        } else if @devkit.glob_match(pattern, entry_rel) {
           out.push((stat.mtime_ms, entry_rel))
         }
       // A failed stat means the entry vanished or is unreadable; skip it
@@ -179,10 +156,9 @@ impl GlobScanner for JsGlobScanner with fn scan(
   pattern : String,
   base : String,
 ) -> Array[String] {
-  let glob = bun_glob_new(pattern)
   let normalized = if base == "" { "." } else { base }
   let found : Array[(Double, String)] = []
-  js_scan_dir(glob, self.ignores, normalized, "", found)
+  js_scan_dir(pattern, self.ignores, normalized, "", found)
   found.sort_by((a, b) => {
     let (a_ms, a_path) = a
     let (b_ms, b_path) = b
@@ -210,9 +186,8 @@ pub impl @posoco.ToolProvider for GlobTools with fn list_tools(
 }
 
 ///|
-/// Execute the `glob` tool on js. Business logic lives in the shared
-/// `execute_glob_impl`; this method only supplies the walker + Bun.Glob
-/// matcher.
+/// Execute the `glob` tool on js; business logic lives in the shared
+/// `execute_glob_impl`, this method only supplies the walker + matcher.
 pub impl @posoco.ToolProvider for GlobTools with fn execute(
   self : GlobTools,
   ctx : @posoco.ToolCallContext,

@@ -749,6 +749,12 @@ fn first_present(containers : Array[Json], keys : Array[String]) -> Json? {
 /// 6. the named quota-window length ("5-hour usage limit") — an upper bound
 ///    on the true reset time
 ///
+/// Non-429 bodies classify only when their status is 403 (Kimi's coding
+/// plan) — callers whose status is a non-authoritative mirror, such as a
+/// WebSocket event frame echoing an HTTP status, pass
+/// `phrase_gate_all_statuses=true` to let the quota phrasing alone confirm
+/// the verdict for every status.
+///
 /// Lookup covers both the nested `error` object and the top level. When the
 /// body is not JSON at all, only paths 4-6 apply against the raw text.
 pub fn classify_chat_completions_http_error(
@@ -756,6 +762,7 @@ pub fn classify_chat_completions_http_error(
   body_text : String,
   default_tz_offset_minutes? : Int = 0,
   retry_after_header? : String? = None,
+  phrase_gate_all_statuses? : Bool = false,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {
   let body : Json = @json.parse(body_text) catch { _ => Json::null() }
@@ -787,13 +794,16 @@ pub fn classify_chat_completions_http_error(
   if status != 429 {
     // Kimi's coding plan answers quota exhaustion with 403; every other
     // non-429 (auth failures, provider bugs) keeps the caller's Transport
-    // path unless the body itself reads as a quota verdict.
+    // path unless the body itself reads as a quota verdict. Callers whose
+    // status is a non-authoritative mirror open the phrasing gate for every
+    // status.
     let code_carries_quota = match provider_code {
       Some(code) => body_carries_quota_verdict(code)
       None => false
     }
-    if status != 403 ||
-      !(body_carries_quota_verdict(message) || code_carries_quota) {
+    let carries_quota_verdict = body_carries_quota_verdict(message) ||
+      code_carries_quota
+    if (!phrase_gate_all_statuses && status != 403) || !carries_quota_verdict {
       return None
     }
   }

@@ -1,54 +1,63 @@
 ///|
-/// callback_server.js.mbt — CallbackServer via Bun.serve (js target).
-///
-/// Bun.serve returns a server with .stop(). The fetch handler extracts
-/// the `code` and `state` query params from the redirect URL.
+/// CallbackServer via node:http (#module injection). MoonBit structs are plain JS
+/// objects on this backend, so the request handler mutates fields directly.
 
 ///|
-/// Bun's opaque server handle.
+/// Opaque node:http server handle.
 #external
-pub type BunServer
+pub type NodeServer
 
 ///|
-/// Start a Bun HTTP server on localhost:port. When a request arrives with
-/// a `code` query param, it is written into the server struct's `code`/
-/// `state` fields via a MoonBit callback bridge.
-extern "js" fn bun_serve(
+/// Value-passing shape for the request handler built inside the wrapper.
+#external
+priv type NodeHttpHandler
+
+///|
+#module("node:http")
+extern "js" fn http_create_server(handler : NodeHttpHandler) -> NodeServer = "createServer"
+
+///|
+/// Start a localhost HTTP server on `port`; a request carrying a `code` query param
+/// is written straight into the server struct's `code`/`state` fields (plain JS objects).
+extern "js" fn node_serve(
+  create_server : (NodeHttpHandler) -> NodeServer,
   port : Int,
   server_obj : JsCallbackServer,
-) -> BunServer =
-  #| (port, serverObj) => Bun.serve({
-  #|   port: port,
-  #|   fetch(req) {
-  #|     const url = new URL(req.url);
+) -> NodeServer =
+  #| (createServer, port, serverObj) => {
+  #|   const server = createServer((req, res) => {
+  #|     const url = new URL(req.url ?? "/", "http://localhost:" + port);
   #|     const code = url.searchParams.get("code");
   #|     if (code) {
   #|       serverObj.code = code;
   #|       serverObj.state = url.searchParams.get("state") ?? "";
-  #|       return new Response(
-  #|         "<html><body><h2>Login successful</h2><p>You can close this tab.</p></body></html>",
-  #|         { headers: { "Content-Type": "text/html" } }
-  #|       );
+  #|       res.writeHead(200, { "Content-Type": "text/html" });
+  #|       res.end("<html><body><h2>Login successful</h2><p>You can close this tab.</p></body></html>");
+  #|       return;
   #|     }
   #|     const error = url.searchParams.get("error");
   #|     if (error) {
-  #|       return new Response("Login failed: " + error, { status: 400 });
+  #|       res.writeHead(400, { "Content-Type": "text/plain" });
+  #|       res.end("Login failed: " + error);
+  #|       return;
   #|     }
-  #|     return new Response("Not found", { status: 404 });
-  #|   }
-  #| })
+  #|     res.writeHead(404, { "Content-Type": "text/plain" });
+  #|     res.end("Not found");
+  #|   });
+  #|   server.listen(port);
+  #|   return server;
+  #| }
 
 ///|
-extern "js" fn BunServer::stop(self : BunServer) -> Unit =
-  #| (server) => server.stop()
+extern "js" fn NodeServer::stop(self : NodeServer) -> Unit =
+  #| (server) => { try { server.close() } catch {} }
 
 ///|
-/// JS-target callback server. The `code`/`state` fields are written by the
-/// Bun.serve fetch handler (directly mutated from JS via extern).
+/// The `code`/`state` fields are written directly by the node:http request handler.
 pub(all) struct JsCallbackServer {
   mut code : String
   mut state : String
-  mut bun_server : BunServer?
+  mut node_server : NodeServer?
 }
 
 ///|
@@ -60,8 +69,8 @@ pub impl CallbackServer for JsCallbackServer with fn start(
   self : JsCallbackServer,
   port : Int,
 ) -> Unit raise OAuthError {
-  let srv = bun_serve(port, self)
-  self.bun_server = Some(srv)
+  let srv = node_serve(http_create_server, port, self)
+  self.node_server = Some(srv)
 }
 
 ///|
@@ -86,19 +95,18 @@ pub impl CallbackServer for JsCallbackServer with fn wait_callback(
 pub impl CallbackServer for JsCallbackServer with fn stop(
   self : JsCallbackServer,
 ) -> Unit {
-  match self.bun_server {
+  match self.node_server {
     Some(s) => {
-      BunServer::stop(s)
-      self.bun_server = None
+      NodeServer::stop(s)
+      self.node_server = None
     }
     None => ()
   }
 }
 
 ///|
-/// Factory: create a js CallbackServer.
 pub fn create_callback_server() -> JsCallbackServer {
-  { code: "", state: "", bun_server: None, }
+  { code: "", state: "", node_server: None, }
 }
 
 ///|

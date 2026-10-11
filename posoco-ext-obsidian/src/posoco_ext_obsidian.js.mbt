@@ -1,39 +1,62 @@
 ///|
-// js (bun) adapter: run the CLI through `Bun.spawn`. Bun is a global under
-// bun, so the externs need no require/import. `@js_async.Promise::wait`
-// returns the fulfilled value and raises on rejection.
+#external
+priv type NodeSpawnOptions
 
 ///|
 #external
-priv type BunProc
+priv type CliProc
 
 ///|
-/// Spawn the Obsidian CLI with piped stdout+stderr. Synchronous in bun;
-/// args cross the FFI as a JSON array string.
-extern "js" fn bun_spawn_obsidian(
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> CliProc = "spawn"
+
+///|
+/// Spawn the Obsidian CLI with piped stdout+stderr; args cross the FFI as a JSON
+/// array string.
+extern "js" fn node_spawn_obsidian(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> CliProc,
   cli_path : String,
   args_json : String,
-) -> BunProc =
-  #| (cli_path, args_json) => Bun.spawn({ cmd: [cli_path, ...JSON.parse(args_json)], stdout: "pipe", stderr: "pipe" })
+) -> CliProc =
+  #| (spawn, cli_path, args_json) => {
+  #|   const proc = spawn(cli_path, [...JSON.parse(args_json)], { stdio: ["ignore", "pipe", "pipe"] })
+  #|   const drain = (stream) => stream
+  #|     ? new Promise((resolve) => {
+  #|         let text = ""
+  #|         const finish = () => resolve(text)
+  #|         stream.setEncoding("utf8")
+  #|         stream.on("data", (chunk) => { text += chunk })
+  #|         stream.on("end", finish)
+  #|         stream.on("close", finish)
+  #|         stream.on("error", finish)
+  #|       })
+  #|     : Promise.resolve("")
+  #|   const exited = new Promise((resolve) => {
+  #|     proc.on("close", (code) => resolve(code ?? -1))
+  #|     proc.on("error", () => resolve(-1))
+  #|   })
+  #|   return { proc, exited, stdoutText: drain(proc.stdout), stderrText: drain(proc.stderr) }
+  #| }
 
 ///|
-/// `Subprocess.prototype.exited` — Promise<number> (exit code).
-extern "js" fn BunProc::exit_code(self : BunProc) -> @js_async.Promise[Int] =
-  #| (proc) => proc.exited
+extern "js" fn CliProc::exit_code(self : CliProc) -> @js_async.Promise[Int] =
+  #| (handle) => handle.exited
 
 ///|
-/// Drain stdout as UTF-8 string via `new Response(stream).text()`.
-extern "js" fn BunProc::stdout_text(
-  self : BunProc,
+extern "js" fn CliProc::stdout_text(
+  self : CliProc,
 ) -> @js_async.Promise[String] =
-  #| (proc) => new Response(proc.stdout).text()
+  #| (handle) => handle.stdoutText
 
 ///|
-/// Drain stderr as UTF-8 string.
-extern "js" fn BunProc::stderr_text(
-  self : BunProc,
+extern "js" fn CliProc::stderr_text(
+  self : CliProc,
 ) -> @js_async.Promise[String] =
-  #| (proc) => new Response(proc.stderr).text()
+  #| (handle) => handle.stderrText
 
 ///|
 priv struct JsCliIo {}
@@ -49,7 +72,7 @@ impl CliIo for JsCliIo with fn run(
     json_args.push(Json::string(a))
   }
   let args_json = Json::array(json_args).stringify()
-  let proc = bun_spawn_obsidian(cli_path, args_json)
+  let proc = node_spawn_obsidian(cp_spawn, cli_path, args_json)
   let exit_code = proc.exit_code().wait() catch {
       _ =>
         raise @posoco.RuntimeError::InvocationFailed(

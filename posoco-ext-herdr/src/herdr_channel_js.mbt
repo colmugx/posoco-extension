@@ -1,21 +1,51 @@
 ///|
-// js (bun) backend: one Bun.spawn per `run`, both streams piped, exit and
-// drains awaited as a single JSON envelope (astgrep pattern). The extern
-// only touches Bun when invoked — the moon js test runner is Node, so
-// js-target tests must stay on fakes.
+// js backend: one node:child_process spawn per `run`, both streams piped, exit and
+// drains awaited as a single JSON envelope. The extern only loads node modules when
+// invoked — the moon js test runner is Node, so js-target tests must stay on fakes.
+
+///|
+#external
+priv type NodeSpawnOptions
+
+///|
+#external
+priv type NodeProc
+
+///|
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> NodeProc = "spawn"
 
 ///|
 extern "js" fn herdr_js_spawn_envelope(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> NodeProc,
   cmd : FixedArray[String],
 ) -> @js_async.Promise[String] =
-  #| async (cmd) => {
-  #|   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
+  #| async (spawn, cmd) => {
+  #|   const proc = spawn(cmd[0], cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] })
+  #|   const drain = (stream) => stream
+  #|     ? new Promise((resolve) => {
+  #|         let text = ""
+  #|         const finish = () => resolve(text)
+  #|         stream.setEncoding("utf8")
+  #|         stream.on("data", (chunk) => { text += chunk })
+  #|         stream.on("end", finish)
+  #|         stream.on("close", finish)
+  #|         stream.on("error", finish)
+  #|       })
+  #|     : Promise.resolve("")
   #|   const [exitCode, stdout, stderr] = await Promise.all([
-  #|     proc.exited,
-  #|     new Response(proc.stdout).text(),
-  #|     new Response(proc.stderr).text(),
-  #|   ]);
-  #|   return JSON.stringify({ ok: true, exitCode, stdout, stderr });
+  #|     new Promise((resolve) => {
+  #|       proc.on("close", (code) => resolve(code ?? -1))
+  #|       proc.on("error", () => resolve(-1))
+  #|     }),
+  #|     drain(proc.stdout),
+  #|     drain(proc.stderr),
+  #|   ])
+  #|   return JSON.stringify({ ok: true, exitCode, stdout, stderr })
   #| }
 
 ///|
@@ -26,11 +56,9 @@ priv struct JsSpawnResult {
 }
 
 ///|
-/// Await the spawn envelope. `noraise`: a rejected promise (e.g. missing
-/// binary) or a bad payload degrades to a nonzero exit, never a raise.
 async fn herdr_js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
   let json : Json = @json.parse(
-    herdr_js_spawn_envelope(FixedArray::from_array(cmd)).wait(),
+    herdr_js_spawn_envelope(cp_spawn, FixedArray::from_array(cmd)).wait(),
   ) catch {
     _ =>
       return {

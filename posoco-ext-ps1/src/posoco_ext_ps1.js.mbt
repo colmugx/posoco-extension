@@ -1,46 +1,64 @@
 ///|
-// Bun is a global under bun: `extern "js" fn ... = #| () => Bun.xxx()` works
-// without require/import. Deliberately do NOT use `node:child_process` — the
-// target runtime is bun.
-//
-// `@js_async.Promise::wait` returns the fulfilled value directly and raises on
-// rejection; catch rejections with try/catch.
+#external
+priv type NodeSpawnOptions
 
 ///|
 #external
-priv type BunProc
+priv type ShellProc
 
 ///|
-/// Spawn `<exe> -NoProfile -NonInteractive -Command <cmd>` with piped
-/// stdout+stderr. Synchronous in bun. An empty `cwd` inherits the bun process
-/// working directory. The command string is passed verbatim — all quoting and
-/// parsing belongs to PowerShell, not the spawn layer.
-extern "js" fn bun_spawn_powershell(
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> ShellProc = "spawn"
+
+///|
+/// Spawn `<exe> -NoProfile -NonInteractive -Command <cmd>` with piped stdout+stderr;
+/// empty `cwd` inherits the process working directory, and the command string is
+/// passed verbatim (quoting belongs to PowerShell).
+extern "js" fn node_spawn_powershell(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> ShellProc,
   exe : String,
   cmd : String,
   cwd : String,
-) -> BunProc =
-  #| (exe, cmd, cwd) => Bun.spawn({ cmd: [exe, "-NoProfile", "-NonInteractive", "-Command", cmd], stdout: "pipe", stderr: "pipe", ...(cwd ? { cwd } : {}) })
+) -> ShellProc =
+  #| (spawn, exe, cmd, cwd) => {
+  #|   const proc = spawn(exe, ["-NoProfile", "-NonInteractive", "-Command", cmd], { stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) })
+  #|   const drain = (stream) => stream
+  #|     ? new Promise((resolve) => {
+  #|         let text = ""
+  #|         const finish = () => resolve(text)
+  #|         stream.setEncoding("utf8")
+  #|         stream.on("data", (chunk) => { text += chunk })
+  #|         stream.on("end", finish)
+  #|         stream.on("close", finish)
+  #|         stream.on("error", finish)
+  #|       })
+  #|     : Promise.resolve("")
+  #|   const exited = new Promise((resolve) => {
+  #|     proc.on("close", (code) => resolve(code ?? -1))
+  #|     proc.on("error", () => resolve(-1))
+  #|   })
+  #|   return { proc, exited, stdoutText: drain(proc.stdout), stderrText: drain(proc.stderr) }
+  #| }
 
 ///|
-/// `Subprocess.prototype.exited` — Promise<number> (exit code).
-extern "js" fn BunProc::exit_code(self : BunProc) -> @js_async.Promise[Int] =
-  #| (proc) => proc.exited
+extern "js" fn ShellProc::exit_code(self : ShellProc) -> @js_async.Promise[Int] =
+  #| (handle) => handle.exited
 
 ///|
-/// Drain stdout as UTF-8 string via `new Response(stream).text()`.
-/// Response is a global Web API available in bun; works on any ReadableStream.
-extern "js" fn BunProc::stdout_text(
-  self : BunProc,
+extern "js" fn ShellProc::stdout_text(
+  self : ShellProc,
 ) -> @js_async.Promise[String] =
-  #| (proc) => new Response(proc.stdout).text()
+  #| (handle) => handle.stdoutText
 
 ///|
-/// Drain stderr as UTF-8 string.
-extern "js" fn BunProc::stderr_text(
-  self : BunProc,
+extern "js" fn ShellProc::stderr_text(
+  self : ShellProc,
 ) -> @js_async.Promise[String] =
-  #| (proc) => new Response(proc.stderr).text()
+  #| (handle) => handle.stderrText
 
 ///|
 pub impl @posoco.ToolProvider for PowerShellTools with fn list_tools(
@@ -62,7 +80,7 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
     Some(anchor) => anchor.root
     None => ""
   }
-  let proc = bun_spawn_powershell(self.exe, cmd, cwd)
+  let proc = node_spawn_powershell(cp_spawn, self.exe, cmd, cwd)
   let exit_code = proc.exit_code().wait() catch {
       _ =>
         raise @posoco.RuntimeError::InvocationFailed(

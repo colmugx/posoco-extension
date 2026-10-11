@@ -1,0 +1,73 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board-web/src"
+
+import {
+  "colmugx/posoco-ext-board/client",
+  "moonbit-community/rabbita",
+}
+
+// Values
+pub fn app() -> @rabbita.App
+
+pub fn attempt_count(@client.BoardReplica, String) -> Int
+
+pub fn attempt_finishable(@client.ClientAttemptStatus) -> Bool
+
+pub fn attempt_indicator(@client.BoardReplica, String) -> String
+
+pub fn attempt_kinds() -> Array[@client.ClientAttemptKind]
+
+pub fn attempt_outcomes() -> Array[@client.ClientAttemptOutcome]
+
+pub fn attempt_startable(@client.ClientAttemptStatus) -> Bool
+
+pub fn connection_label(ConnectionState) -> String
+
+pub fn definition_of_done_lines(String) -> Array[String]
+
+pub fn definition_of_done_text(Array[String]) -> String
+
+pub fn empty_message(@client.BoardReplica) -> String?
+
+pub fn finish_review_pending(@client.ClientAttempt) -> Bool
+
+pub fn lanes() -> Array[@client.ClientBoardStage]
+
+pub fn move_suggestions(@client.ClientBoardStage) -> Array[@client.ClientBoardStage]
+
+pub fn outcome_label(@client.ClientAttemptOutcome) -> String
+
+pub fn priorities() -> Array[@client.ClientBoardPriority]
+
+pub fn priority_label(@client.ClientBoardPriority) -> String
+
+pub fn queue_attempt_id_valid(@client.BoardReplica, String) -> Bool
+
+pub fn retry_delay(Int) -> Int
+
+pub fn review_decision_label(@client.ClientRecordableReviewDecision) -> String
+
+pub fn review_decisions() -> Array[@client.ClientRecordableReviewDecision]
+
+pub fn review_recordable(@client.ClientAttempt) -> Bool
+
+pub fn stage_label(@client.ClientBoardStage) -> String
+
+pub fn tasks_in_lane(@client.BoardReplica, @client.ClientBoardStage) -> Array[@client.ClientBoardTask]
+
+// Errors
+
+// Types and methods
+pub(all) enum ConnectionState {
+  Connecting
+  Online
+  Reconnecting
+  Offline
+  ProtocolError(String)
+} derive(Eq)
+pub fn ConnectionState::equal(Self, Self) -> Bool
+pub fn ConnectionState::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

@@ -10,7 +10,7 @@ import {
 // Values
 pub fn cached_input_tokens_from_usage(Map[String, Json]) -> Int?
 
-pub fn classify_chat_completions_http_error(Int, String, default_tz_offset_minutes? : Int, retry_after_header? : String?, now_ms~ : Int64) -> @error.ModelError?
+pub fn classify_chat_completions_http_error(Int, String, default_tz_offset_minutes? : Int, retry_after_header? : String?, phrase_gate_all_statuses? : Bool, now_ms~ : Int64) -> @error.ModelError?
 
 pub fn derive_prompt_cache_key(String) -> String
 

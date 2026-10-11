@@ -1,6 +1,6 @@
 ///|
-/// js (bun) face of the execution edge: the extern
-/// probe/env primitives, the Bun Runner (argv, merge, decode flag), the
+/// js face of the execution edge: the extern
+/// probe/env primitives, the node runner (argv, merge, decode flag), the
 /// extern-side budget (kill verified via pgrep), and the full live pipeline
 /// (gated on MBTX_LIVE=1 AND a present ~/.moon/bin, like the native live
 /// smokes). The runner tests run only tmpdir fixture binaries — no real
@@ -16,8 +16,8 @@ fn js_wbtest_live_enabled() -> Bool {
 fn js_wbtest_toolchain_present() -> Bool {
   let home = js_env_raw("HOME")
   home != "" &&
-  js_which_in("moon", "\{home}/.moon/bin") != "" &&
-  js_which_in("moonrun", "\{home}/.moon/bin") != ""
+  js_which_in(fs_access_sync, "moon", "\{home}/.moon/bin") != "" &&
+  js_which_in(fs_access_sync, "moonrun", "\{home}/.moon/bin") != ""
 }
 
 ///|
@@ -51,7 +51,14 @@ extern "js" fn js_wbtest_set_env(name : String, value : String) -> Unit =
   #| (name, value) => { if (value === "") { delete process.env[name]; } else { process.env[name] = value; } }
 
 ///|
+#module("node:fs")
+extern "js" fn fs_chmod_sync(path : String, mode : Int) -> Unit = "chmodSync"
+
+///|
 /// Fresh temp dir populated with executable `#!/bin/sh` fixture scripts.
+/// `#module`-bound values pass through arity-adapted wrappers, so options
+/// beyond the declared signature are dropped — the exec bit is applied with
+/// an explicit chmodSync instead of a writeFileSync mode option.
 fn js_wbtest_fixture_dir(scripts : Array[(String, String)]) -> String raise {
   let fields = match
     js_envelope_fields(js_mktmpdir_envelope(fs_mkdtemp_sync, "mbtx-js-test-")) {
@@ -64,10 +71,12 @@ fn js_wbtest_fixture_dir(scripts : Array[(String, String)]) -> String raise {
   let dir = js_fields_str(fields, "dir")
   for script in scripts {
     let (name, body) = script
-    let error = js_wbtest_write_exec(fs_write_file_sync, "\{dir}/\{name}", body)
+    let path = "\{dir}/\{name}"
+    let error = js_wbtest_write_exec(fs_write_file_sync, path, body)
     if error != "" {
       fail("mbtx js tests: could not write fixture \{name}: \{error}")
     }
+    fs_chmod_sync(path, 0o755)
   }
   dir
 }
@@ -102,10 +111,10 @@ test "which probe resolves executables inside one directory" {
   let dir = js_wbtest_fixture_dir([("probe-yes", "#!/bin/sh\nexit 0\n")])
   let plain = dir + "/probe-plain"
   let _ = js_write_file_envelope(fs_write_file_sync, plain, "not executable")
-  assert_true(js_which_in("probe-yes", dir) != "")
+  assert_true(js_which_in(fs_access_sync, "probe-yes", dir) != "")
   // Mere existence is not enough: the probe requires the exec bit.
-  assert_true(js_which_in("probe-plain", dir) == "")
-  assert_true(js_which_in("mbtx-no-such-binary-xyz", dir) == "")
+  assert_true(js_which_in(fs_access_sync, "probe-plain", dir) == "")
+  assert_true(js_which_in(fs_access_sync, "mbtx-no-such-binary-xyz", dir) == "")
 }
 
 ///|
@@ -206,7 +215,7 @@ async test "js raises the typed toolchain failure when nothing is usable" {
 }
 
 ///|
-async test "js live: toolchain resolves through Bun.which" {
+async test "js live: toolchain resolves through the PATH probe" {
   // MBTX_LIVE=1 gate: probes the real host toolchain.
   if !js_wbtest_live_enabled() {
     println("mbtx js live: set MBTX_LIVE=1 to run; skipping")

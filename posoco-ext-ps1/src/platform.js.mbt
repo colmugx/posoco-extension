@@ -1,8 +1,5 @@
 ///|
-// `process` and `Bun` are globals under bun and need no import. node:os for
-// the optional platform-detail probe is bound with `#module` and injected
-// into the wrapper as a value (pattern follows posoco-ext-workspace
-// fs_port.js.mbt / moonbitlang/x/fs/fs_js.mbt).
+// js backend: node:os/node:fs via #module injection (`process` is a global).
 
 ///|
 extern "js" fn ps1_platform_is_windows() -> Bool =
@@ -25,21 +22,41 @@ fn ps1_platform_detail() -> String {
 }
 
 ///|
-/// Absolute path of `name` on PATH, or "" when not found.
-extern "js" fn bun_which(name : String) -> String =
-  #| (name) => Bun.which(name) ?? ""
+#module("node:fs")
+extern "js" fn fs_exists_sync(path : String) -> Bool = "existsSync"
+
+///|
+extern "js" fn node_which(exists : (String) -> Bool, name : String) -> String =
+  #| (exists, name) => {
+  #|   if (name.includes("/") || name.includes("\\")) {
+  #|     try { return exists(name) ? name : "" } catch { return "" }
+  #|   }
+  #|   const isWin = process.platform === "win32"
+  #|   const dirs = (process.env.PATH ?? "").split(isWin ? ";" : ":").filter(Boolean)
+  #|   const exts = isWin
+  #|     ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";")
+  #|     : []
+  #|   const candidates = [name, ...exts.map((ext) => name + ext)]
+  #|   for (const dir of dirs) {
+  #|     const base = dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + (isWin ? "\\" : "/")
+  #|     for (const candidate of candidates) {
+  #|       try { if (exists(base + candidate)) return base + candidate } catch {}
+  #|     }
+  #|   }
+  #|   return ""
+  #| }
 
 ///|
 /// Resolve the executable: keep `exe` when it is on PATH; when the default
 /// "pwsh" is missing, fall back to "powershell" (Windows PowerShell 5.1) so
 /// stock Windows works out of the box.
 fn resolve_exe(exe : String) -> String {
-  if bun_which(exe) != "" {
+  if node_which(fs_exists_sync, exe) != "" {
     exe
   } else if exe == "pwsh" {
-    let fallback = bun_which("powershell")
+    let fallback = node_which(fs_exists_sync, "powershell")
     if fallback != "" {
-      fallback
+      "powershell"
     } else {
       exe
     }

@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board-native"
+
+import {
+  "colmugx/posoco-ext-board",
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/runtime",
+}
+
+// Values
+pub fn board_extension(config? : @posoco-ext-board.BoardConfig) -> @posoco-ext-board.BoardExtension
+
+pub fn default_board_runtime(Int, client_queue_depth? : Int) -> @runtime.BoardRuntime
+
+// Errors
+
+// Types and methods
+pub struct NativeBoardWebServer {
+  // private fields
+}
+pub fn NativeBoardWebServer::NativeBoardWebServer(backend? : @backend.BoardBackend?) -> Self
+pub async fn NativeBoardWebServer::bind(Self) -> Result[@runtime.BoardEndpoint, String]
+pub fn NativeBoardWebServer::browser_url(Self) -> String?
+pub fn NativeBoardWebServer::close(Self) -> Unit
+pub fn NativeBoardWebServer::is_alive(Self) -> Bool
+pub fn NativeBoardWebServer::last_error(Self) -> String?
+pub async fn NativeBoardWebServer::run(Self) -> Result[Unit, String]
+pub fn NativeBoardWebServer::set_backend(Self, @backend.BoardBackend) -> Unit
+pub impl @runtime.BoardWebServer for NativeBoardWebServer
+
+pub struct NativeBrowserOpener {
+}
+pub fn NativeBrowserOpener::NativeBrowserOpener() -> Self
+pub async fn NativeBrowserOpener::open(Self, String) -> Result[Unit, String]
+pub impl @runtime.BrowserOpener for NativeBrowserOpener
+
+// Type aliases
+
+// Traits

@@ -5,8 +5,8 @@
 /// matching a glob-like pattern, sorted by modification time (newest
 /// first). Supports `*` (any chars in one segment) and `**` (recursive).
 /// Hidden entries and `ignores` directories are pruned. On native, scanning
-/// uses `@fs.walk` + a MoonBit glob-matching engine; on js (bun), scanning
-/// delegates to `Bun.Glob`. On wasm-gc, the tool is not listed and
+/// uses `@fs.walk`; on js, node:fs sync APIs. Both share the same
+/// `@devkit.glob_match` engine. On wasm-gc, the tool is not listed and
 /// execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct GlobTools {
   // Resolves the scan base against the workspace root; None leaves the base
@@ -37,10 +37,10 @@ const GLOB_BYTE_CAP = 40_000
 ///|
 /// High-level glob search boundary.
 ///
-/// Native implements this with `@fs.walk` + a MoonBit glob-matching engine;
-/// js delegates matching to Bun.Glob. Both return file paths only, sorted
-/// newest-first; the shared `execute_glob_impl` applies the limit and
-/// formats the result identically regardless of engine.
+/// Native implements this with `@fs.walk`; js with node:fs sync APIs. Both
+/// match through the shared `@devkit.glob_match` engine. Both return file
+/// paths only, sorted newest-first; the shared `execute_glob_impl` applies
+/// the limit and formats the result identically regardless of engine.
 priv trait GlobScanner {
   /// Scan `base` for file paths matching `pattern`, newest first. Raise on
   /// IO failure of the base itself; per-entry failures are skipped.

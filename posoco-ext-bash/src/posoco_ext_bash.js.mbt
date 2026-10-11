@@ -1,56 +1,85 @@
 ///|
-// Bun is a global under bun: `extern "js" fn ... = #| () => Bun.xxx()` works
-// without require/import. Deliberately do NOT use `node:child_process` — the
-// target runtime is bun.
-//
-// `@js_async.Promise::wait` returns the fulfilled value directly and raises on
-// rejection; catch rejections with try/catch.
+// js backend: node:child_process via #module injection. `@js_async.Promise::wait`
+// returns the fulfilled value and raises on rejection — catch with try/catch.
 
 ///|
 #external
-priv type BunProc
+priv type NodeSpawnOptions
 
 ///|
-/// Spawn `sh -c <cmd>` with piped stdout+stderr. Synchronous in bun.
-/// An empty `cwd` inherits the bun process working directory.
-extern "js" fn bun_spawn_shell(cmd : String, cwd : String) -> BunProc =
-  #| (cmd, cwd) => Bun.spawn({ cmd: ["sh", "-c", cmd], stdout: "pipe", stderr: "pipe", ...(cwd ? { cwd } : {}) })
+#external
+priv type ShellProc
 
 ///|
-/// `Subprocess.prototype.exited` — Promise<number> (exit code).
-extern "js" fn BunProc::exit_code(self : BunProc) -> @js_async.Promise[Int] =
-  #| (proc) => proc.exited
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> ShellProc = "spawn"
 
 ///|
-/// Drain stdout as UTF-8 string via `new Response(stream).text()`.
-/// Response is a global Web API available in bun; works on any ReadableStream.
-extern "js" fn BunProc::stdout_text(
-  self : BunProc,
+/// Spawn `sh -c <cmd>` with piped stdout+stderr; empty `cwd` inherits the process
+/// working directory. Exit and drain promises attach at spawn time: node streams
+/// never re-fire `end` for late listeners, and the flow reads output after awaiting exit.
+extern "js" fn node_spawn_shell(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> ShellProc,
+  cmd : String,
+  cwd : String,
+) -> ShellProc =
+  #| (spawn, cmd, cwd) => {
+  #|   const proc = spawn("sh", ["-c", cmd], { stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) })
+  #|   const drain = (stream) => stream
+  #|     ? new Promise((resolve) => {
+  #|         let text = ""
+  #|         const finish = () => resolve(text)
+  #|         stream.setEncoding("utf8")
+  #|         stream.on("data", (chunk) => { text += chunk })
+  #|         stream.on("end", finish)
+  #|         stream.on("close", finish)
+  #|         stream.on("error", finish)
+  #|       })
+  #|     : Promise.resolve("")
+  #|   const exited = new Promise((resolve) => {
+  #|     proc.on("close", (code) => resolve(code ?? -1))
+  #|     proc.on("error", () => resolve(-1))
+  #|   })
+  #|   return { proc, exited, stdoutText: drain(proc.stdout), stderrText: drain(proc.stderr) }
+  #| }
+
+///|
+/// Memoized exit-code promise, attached at spawn. A death by signal or a
+/// failed spawn resolves -1.
+extern "js" fn ShellProc::exit_code(self : ShellProc) -> @js_async.Promise[Int] =
+  #| (handle) => handle.exited
+
+///|
+/// The drain promise started at spawn, so reading after exit still returns the
+/// full buffered output.
+extern "js" fn ShellProc::stdout_text(
+  self : ShellProc,
 ) -> @js_async.Promise[String] =
-  #| (proc) => new Response(proc.stdout).text()
+  #| (handle) => handle.stdoutText
 
 ///|
-/// Drain stderr as UTF-8 string.
-extern "js" fn BunProc::stderr_text(
-  self : BunProc,
+extern "js" fn ShellProc::stderr_text(
+  self : ShellProc,
 ) -> @js_async.Promise[String] =
-  #| (proc) => new Response(proc.stderr).text()
+  #| (handle) => handle.stderrText
 
 ///|
-/// Kill the child with the named signal ("SIGTERM" / "SIGKILL" / ...).
-extern "js" fn BunProc::kill(self : BunProc, signal : String) -> Unit =
-  #| (proc, signal) => { try { proc.kill(signal) } catch {} }
+extern "js" fn ShellProc::kill(self : ShellProc, signal : String) -> Unit =
+  #| (handle, signal) => { try { handle.proc.kill(signal) } catch {} }
 
 ///|
-/// Kill the child with bun's default signal (SIGTERM).
-extern "js" fn BunProc::kill_default(self : BunProc) -> Unit =
-  #| (proc) => { try { proc.kill() } catch {} }
+extern "js" fn ShellProc::kill_default(self : ShellProc) -> Unit =
+  #| (handle) => { try { handle.proc.kill() } catch {} }
 
 ///|
-/// JS child handle: the bun subprocess. `exited` marks a settled `exited`
-/// promise so unwind cleanup can skip an already-dead child.
+/// JS child handle; `exited` marks a settled exit promise so unwind cleanup
+/// can skip an already-dead child.
 struct ShellChildHandle {
-  proc : BunProc
+  proc : ShellProc
   mut exited : Bool
 }
 
@@ -64,9 +93,8 @@ async fn shell_child_await_exit(
   handle : ShellChildHandle,
   timeout_ms : Int,
 ) -> Bool {
-  // `proc.exited` is a memoized promise; waiting it again from the
-  // cancellation path is safe and resolves once the signalled child dies
-  // (a killed child resolves with null / rejects — both mean "exited").
+  // The exit promise is memoized; waiting it again from the cancellation
+  // path is safe and resolves once the signalled child dies.
   let outcome : Int? = @async.with_timeout_opt(timeout_ms, async fn() {
     handle.proc.exit_code().wait() catch {
       _ => -1
@@ -109,7 +137,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     Some(anchor) => anchor.root
     None => ""
   }
-  let proc = bun_spawn_shell(cmd, cwd)
+  let proc = node_spawn_shell(cp_spawn, cmd, cwd)
   let handle : ShellChildHandle = { proc, exited: false, }
   let key = ctx.effect_id.to_int()
   self.in_flight[key] = handle

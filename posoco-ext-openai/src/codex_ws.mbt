@@ -354,7 +354,10 @@ async fn codex_ws_open_session(
 /// classifies a non-2xx response: the shared chatkit classifier turns quota
 /// phrasings into the typed `RateLimited` (reason, reset, provider code) so
 /// the host's limit display and scheduled resume work unchanged; anything
-/// else surfaces as a transport error carrying the provider's message.
+/// else surfaces as a transport error carrying the provider's message. The
+/// frame's `status` field only mirrors an HTTP status, so the quota phrasing
+/// — not the mirror — confirms the verdict; the official client accepts
+/// `status_code` as the field-name alias.
 fn codex_ws_provider_error_if_any(
   payload : String,
   now_ms~ : Int64,
@@ -367,7 +370,11 @@ fn codex_ws_provider_error_if_any(
   }
   let status = match fields.get("status") {
     Some(Json::Number(value, ..)) => value.to_int()
-    _ => 400
+    _ =>
+      match fields.get("status_code") {
+        Some(Json::Number(value, ..)) => value.to_int()
+        _ => 400
+      }
   }
   let body = match fields.get("error") {
     Some(err) => Json::object(Map::from_array([("error", err)]))
@@ -375,7 +382,12 @@ fn codex_ws_provider_error_if_any(
   }
   let body_text = body.stringify()
   match
-    @chatkit.classify_chat_completions_http_error(status, body_text, now_ms~) {
+    @chatkit.classify_chat_completions_http_error(
+      status,
+      body_text,
+      now_ms~,
+      phrase_gate_all_statuses=true,
+    ) {
     Some(err) => Some(err)
     None =>
       // Unclassified provider error: keep the message visible.

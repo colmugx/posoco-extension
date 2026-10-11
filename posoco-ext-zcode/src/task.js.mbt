@@ -1,13 +1,26 @@
 ///|
-/// js (bun) backend of the task seam. The whole session loop — Bun.spawn,
-/// line-delimited JSON-RPC, reverse-request policy, event reduction,
-/// teardown — lives in ONE JS driver (`zcode_js_session`). It
-/// always resolves, never rejects: every failure is caught inside and
-/// returned as a JSON-string envelope, per the documented js FFI boundary
-/// (docs/questions.md 2026-08-19: pure-value pass-through, Promise bridging
-/// via @js_async.Promise::wait, try/catch + JSON envelope for anything that
-/// can throw). No cross-language streaming: JS does the protocol, MoonBit
-/// assembles ZcodeTaskResult from the final envelope.
+/// js backend of the task seam: the whole session loop — node:child_process spawn,
+/// line-delimited JSON-RPC, reverse-request policy, event reduction, teardown —
+/// lives in ONE JS driver (`zcode_js_session`) that always resolves, never rejects:
+/// every failure is caught inside and returned as a JSON-string envelope. No
+/// cross-language streaming: JS does the protocol, MoonBit assembles
+/// ZcodeTaskResult from the final envelope.
+
+///|
+#external
+priv type NodeSpawnOptions
+
+///|
+#external
+priv type NodeProc
+
+///|
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> NodeProc = "spawn"
 
 ///|
 /// Full session driver. Request JSON: {cmd, args, cwd, timeoutMs, workspace,
@@ -16,9 +29,10 @@
 /// {"ok":false,"error":{kind: spawn_failed|rpc|model_config|protocol|timeout|
 /// process_died, detail, code?, message?}}.
 extern "js" fn zcode_js_session(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> NodeProc,
   request_json : String,
 ) -> @js_async.Promise[String] =
-  #| async (requestJson) => {
+  #| async (spawn, requestJson) => {
   #|   const req = JSON.parse(requestJson);
   #|   const g = globalThis;
   #|   if (!g.__zcodeProcs) { g.__zcodeProcs = new Map(); }
@@ -49,39 +63,59 @@ extern "js" fn zcode_js_session(
   #|     const t = setTimeout(() => { try { p.kill(); } catch (e) {} }, 5000);
   #|     if (t.unref) { t.unref(); }
   #|   };
+  #|   let spawnError = null;
   #|   try {
-  #|     proc = Bun.spawn({
-  #|       cmd: [req.cmd].concat(req.args),
-  #|       stdin: "pipe",
-  #|       stdout: "pipe",
-  #|       stderr: "inherit",
-  #|       ...(req.cwd ? { cwd: req.cwd } : {}),
-  #|     });
+  #|     // npm-installed CLIs are .cmd shims on Windows, which Node refuses to
+  #|     // spawn directly (CVE-2024-27980) — route those through cmd.exe.
+  #|     const shim = process.platform === "win32" && !/\.(exe|com)$/i.test(req.cmd);
+  #|     proc = shim
+  #|       ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", req.cmd, ...req.args], {
+  #|           stdio: ["pipe", "pipe", "inherit"],
+  #|           ...(req.cwd ? { cwd: req.cwd } : {}),
+  #|         })
+  #|       : spawn(req.cmd, req.args, {
+  #|           stdio: ["pipe", "pipe", "inherit"],
+  #|           ...(req.cwd ? { cwd: req.cwd } : {}),
+  #|         });
+  #|     proc.on("error", (e) => { spawnError = e; });
   #|     g.__zcodeProcs.set(handle, proc);
   #|   } catch (e) {
   #|     return fail("spawn_failed", "zcode: cannot spawn app-server: " + detail(e));
   #|   }
+  #|   // Line queue over the node stdout stream: chunks append to a buffer,
+  #|   // complete lines move to a queue, and a waiting readLine() is woken by
+  #|   // the notify callback. Stream `close` (not just `end`) also fires for
+  #|   // destroyed streams, so a failed spawn cannot hang the reader.
   #|   let lineBuf = "";
-  #|   const lineDec = new TextDecoder();
-  #|   let lineReader = null;
-  #|   async function readLine() {
+  #|   const lines = [];
+  #|   let notify = null;
+  #|   let streamDone = false;
+  #|   const wake = () => { const n = notify; notify = null; if (n) { n(); } };
+  #|   proc.stdout.setEncoding("utf8");
+  #|   proc.stdout.on("data", (chunk) => {
+  #|     lineBuf += chunk;
   #|     for (;;) {
   #|       const at = lineBuf.indexOf("\n");
-  #|       if (at >= 0) {
-  #|         const line = lineBuf.slice(0, at);
-  #|         lineBuf = lineBuf.slice(at + 1);
-  #|         if (line.length > 0) { return line; }
-  #|         continue;
-  #|       }
-  #|       if (!lineReader) { lineReader = proc.stdout.getReader(); }
-  #|       const chunk = await lineReader.read();
-  #|       if (chunk.done) {
+  #|       if (at < 0) { break; }
+  #|       const line = lineBuf.slice(0, at);
+  #|       lineBuf = lineBuf.slice(at + 1);
+  #|       if (line.length > 0) { lines.push(line); }
+  #|     }
+  #|     wake();
+  #|   });
+  #|   proc.stdout.on("close", () => { streamDone = true; wake(); });
+  #|   proc.stdout.on("error", () => { streamDone = true; wake(); });
+  #|   async function readLine() {
+  #|     for (;;) {
+  #|       if (lines.length > 0) { return lines.shift(); }
+  #|       if (streamDone) {
+  #|         if (spawnError) { throw { zkind: "spawn", zdetail: detail(spawnError) }; }
   #|         const rest = lineBuf;
   #|         lineBuf = "";
   #|         if (rest.length > 0) { return rest; }
   #|         return "";
   #|       }
-  #|       lineBuf += lineDec.decode(chunk.value, { stream: true });
+  #|       await new Promise((resolve) => { notify = resolve; });
   #|     }
   #|   }
   #|   function send(obj) { proc.stdin.write(JSON.stringify(obj) + "\n"); }
@@ -215,6 +249,7 @@ extern "js" fn zcode_js_session(
   #|     finish();
   #|     if (e && e.zkind === "timeout") { return fail("timeout", "zcode: delegation exceeded the wall clock"); }
   #|     if (e && e.zkind === "died") { return fail("process_died", e.zdetail || ""); }
+  #|     if (e && e.zkind === "spawn") { return fail("spawn_failed", "zcode: cannot spawn app-server: " + (e.zdetail || "")); }
   #|     return fail("process_died", detail(e));
   #|   }
   #|   finish();
@@ -269,10 +304,7 @@ fn zcode_js_env_opt(key : String) -> String? {
 }
 
 ///|
-/// node:fs members bound with `#module` and injected into the inline-JS
-/// wrappers as values (pattern follows posoco-ext-workspace fs_port.js.mbt /
-/// moonbitlang/x/fs/fs_js.mbt). existsSync never throws and returns false
-/// for missing paths — the sync counterpart of the old Bun.file().exists().
+/// existsSync never throws and returns false for missing paths.
 #module("node:fs")
 extern "js" fn fs_exists_sync(path : String) -> Bool = "existsSync"
 
@@ -334,7 +366,6 @@ extern "js" fn zcode_js_readdir_raw(
   #| (readdir, path) => { try { return JSON.stringify(readdir(path)); } catch (e) { return ""; } }
 
 ///|
-/// Default cwd for the tool seam: the real current directory.
 fn zcode_cwd_default() -> String {
   let real = zcode_js_realpath(fs_realpath_sync, ".")
   if real == "" {
@@ -488,7 +519,7 @@ async fn zcode_session_run(
       ("mode", Json::string(mode)),
     ]),
   )
-  let raw = zcode_js_session(request.stringify()).wait() catch {
+  let raw = zcode_js_session(cp_spawn, request.stringify()).wait() catch {
     e => raise ZcodeProcessDied(detail="zcode js driver failed: \{e}")
   }
   let envelope = @json.parse(raw) catch {

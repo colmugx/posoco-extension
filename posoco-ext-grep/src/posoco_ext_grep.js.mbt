@@ -1,38 +1,79 @@
-// js (bun) target: engine ladder for content search.
-//
-// Tier 1 — ripgrep when a *real* rg is found: PATH via Bun.which, then the
-// common Homebrew prefixes. Candidates are validated by spawning
-// `rg --version` and checking the banner, so a grep shim on PATH (observed
-// in the wild) is rejected rather than failing on rg-only flags.
-// Tier 2 — an in-process walker over node:fs with the same semantics as the
-// native engine (literal match, hidden/ignore pruning, binary skip). The
-// walker's node:fs members are bound with `#module` and injected into the
-// inline-JS envelopes as values (pattern follows posoco-ext-workspace
-// fs_port.js.mbt / moonbitlang/x/fs/fs_js.mbt).
-//
-// Pinned rg semantics for cross-target parity with the walker:
-// --no-ignore + explicit --glob excludes for the ignore list (no .gitignore
-// reading), hidden entries skipped (rg default), -F literal matching.
-// Spawns are async and drained via Response(...).text(), bridged with
-// @js_async. The spawn result crosses the FFI as one JSON string envelope
-// (see docs/questions.md 2026-08-19).
+// js target: engine ladder — banner-validated ripgrep when found (a shim only
+// costs one wasted spawn), else the in-process node:fs walker; rg flags are
+// pinned for parity with the walker (--no-ignore, --glob excludes, hidden skip,
+// -F literals).
 
 ///|
-extern "js" fn bun_which(name : String) -> String =
-  #| (name) => Bun.which(name) ?? ""
+#module("node:fs")
+extern "js" fn fs_exists_sync(path : String) -> Bool = "existsSync"
+
+///|
+/// Absolute path of `name` on PATH, or "" when not found. node has no
+/// built-in which; walk PATH (plus PATHEXT on Windows — the filesystem is
+/// case-insensitive there, so ".EXE" candidates match ".exe" files).
+extern "js" fn node_which(exists : (String) -> Bool, name : String) -> String =
+  #| (exists, name) => {
+  #|   if (name.includes("/") || name.includes("\\")) {
+  #|     try { return exists(name) ? name : "" } catch { return "" }
+  #|   }
+  #|   const isWin = process.platform === "win32"
+  #|   const dirs = (process.env.PATH ?? "").split(isWin ? ";" : ":").filter(Boolean)
+  #|   const exts = isWin
+  #|     ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";")
+  #|     : []
+  #|   const candidates = [name, ...exts.map((ext) => name + ext)]
+  #|   for (const dir of dirs) {
+  #|     const base = dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + (isWin ? "\\" : "/")
+  #|     for (const candidate of candidates) {
+  #|       try { if (exists(base + candidate)) return base + candidate } catch {}
+  #|     }
+  #|   }
+  #|   return ""
+  #| }
+
+///|
+#external
+priv type NodeSpawnOptions
+
+///|
+#external
+priv type NodeProc
+
+///|
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> NodeProc = "spawn"
 
 ///|
 extern "js" fn js_spawn_envelope(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> NodeProc,
   cmd : FixedArray[String],
 ) -> @js_async.Promise[String] =
-  #| async (cmd) => {
-  #|   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
+  #| async (spawn, cmd) => {
+  #|   const proc = spawn(cmd[0], cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] })
+  #|   const drain = (stream) => stream
+  #|     ? new Promise((resolve) => {
+  #|         let text = ""
+  #|         const finish = () => resolve(text)
+  #|         stream.setEncoding("utf8")
+  #|         stream.on("data", (chunk) => { text += chunk })
+  #|         stream.on("end", finish)
+  #|         stream.on("close", finish)
+  #|         stream.on("error", finish)
+  #|       })
+  #|     : Promise.resolve("")
   #|   const [exitCode, stdout, stderr] = await Promise.all([
-  #|     proc.exited,
-  #|     new Response(proc.stdout).text(),
-  #|     new Response(proc.stderr).text(),
-  #|   ]);
-  #|   return JSON.stringify({ ok: true, exitCode, stdout, stderr });
+  #|     new Promise((resolve) => {
+  #|       proc.on("close", (code) => resolve(code ?? -1))
+  #|       proc.on("error", () => resolve(-1))
+  #|     }),
+  #|     drain(proc.stdout),
+  #|     drain(proc.stderr),
+  #|   ])
+  #|   return JSON.stringify({ ok: true, exitCode, stdout, stderr })
   #| }
 
 ///|
@@ -43,11 +84,9 @@ priv struct JsSpawnResult {
 }
 
 ///|
-/// Await the spawn envelope. `noraise`: both the JSON parse and the promise
-/// rejection are caught here, so callers see a plain envelope value.
 async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
   let json : Json = @json.parse(
-    js_spawn_envelope(FixedArray::from_array(cmd)).wait(),
+    js_spawn_envelope(cp_spawn, FixedArray::from_array(cmd)).wait(),
   ) catch {
     _ =>
       return {
@@ -83,7 +122,7 @@ async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
 ///|
 fn rg_candidates() -> Array[String] {
   let candidates : Array[String] = []
-  let on_path = bun_which("rg")
+  let on_path = node_which(fs_exists_sync, "rg")
   if on_path != "" {
     candidates.push(on_path)
   }
@@ -220,9 +259,7 @@ impl GrepSearcher for JsRgSearcher with fn search(
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // Tier 2: in-process walker over node:fs (mirrors the native engine).
-// ──────────────────────────────────────────────────────────────────────────
 
 ///|
 /// Opaque node Stats handle; only the inline-JS envelope touches it.
@@ -274,8 +311,6 @@ extern "js" fn js_read_file_envelope(
   #| }
 
 ///|
-/// Decode a `{ok, entries}` envelope; None means the directory could not be
-/// read.
 fn js_readdir_entries(path : String) -> Array[String]? {
   let envelope : Json = @json.parse(js_readdir_envelope(fs_readdir_sync, path)) catch {
     _ => return None
@@ -300,7 +335,6 @@ fn js_readdir_entries(path : String) -> Array[String]? {
 }
 
 ///|
-/// Decode a `{ok, dir}` envelope; None means the stat failed.
 fn js_is_directory(path : String) -> Bool? {
   let envelope : Json = @json.parse(js_stat_envelope(fs_stat_sync, path)) catch {
     _ => return None
@@ -317,7 +351,6 @@ fn js_is_directory(path : String) -> Bool? {
 }
 
 ///|
-/// Decode a `{ok, text}` envelope; None means the read failed.
 fn js_read_file_text(path : String) -> String? {
   let envelope : Json = @json.parse(
     js_read_file_envelope(fs_read_text_sync, path),

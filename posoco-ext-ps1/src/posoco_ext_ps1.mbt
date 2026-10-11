@@ -9,7 +9,7 @@
 /// the child inherits the host process working directory.
 ///
 /// On native and wasm, executes via `@process.collect_output_merged`.
-/// On js (bun), executes via `Bun.spawn`. On wasm-gc, the tool is not listed and
+/// On js, executes via node:child_process (runs under both bun and node). On wasm-gc, the tool is not listed and
 /// execute raises `RuntimeError::InvocationFailed`.
 pub(all) struct PowerShellTools {
   exe : String

@@ -104,6 +104,41 @@ test "classify: non-429 without quota phrasing returns None" {
 }
 
 ///|
+test "classify: phrase gate opt-in covers mirrored-status transports" {
+  let body = "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The usage limit has been reached\"}}"
+  // Default: a 400 stays the caller's Transport path (HTTP callers keep
+  // their existing behavior).
+  debug_inspect(
+    classify_chat_completions_http_error(400, body, now_ms=0L),
+    content="None",
+  )
+  // Opt-in: the quota phrasing confirms the verdict for any status, because
+  // the status is only a mirror (WS event frames).
+  let err = classify_chat_completions_http_error(
+    400,
+    body,
+    phrase_gate_all_statuses=true,
+    now_ms=0L,
+  )
+  guard err is Some(@posoco.ModelError::RateLimited(info)) else {
+    fail("expected RateLimited")
+  }
+  inspect(info.message, content="The usage limit has been reached")
+  // No timestamp or window anywhere: no schedulable reset.
+  debug_inspect(info.reset_at_ms, content="None")
+  // The flag never classifies non-quota phrasing.
+  debug_inspect(
+    classify_chat_completions_http_error(
+      400,
+      "{\"error\":{\"message\":\"Invalid API key\"}}",
+      phrase_gate_all_statuses=true,
+      now_ms=0L,
+    ),
+    content="None",
+  )
+}
+
+///|
 test "classify: kimi 403 quota verdict schedules at window upper bound" {
   let body = "{\"error\":{\"message\":\"You've reached your 5-hour usage limit. Your quota will reset when the current 5-hour window ends. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota\",\"type\":\"auth_error\"}}"
   let err = classify_chat_completions_http_error(403, body, now_ms=1000000L)

@@ -1,30 +1,79 @@
-// js (bun) target: spawn ast-grep through the Bun process envelope.
-//
-// Candidates: `ast-grep` and `sg` on PATH (via Bun.which), then the common
-// Homebrew prefixes, deduplicated. Each candidate is validated by spawning
-// `--version` and checking the banner, so a look-alike shim on PATH is
-// rejected (rg parity). Unlike the grep extension there is NO in-process
-// fallback: when no real ast-grep is found, execute raises
-// InvocationFailed with the install hint. The spawn result crosses the FFI
-// as one JSON string envelope (see docs/questions.md 2026-08-19).
+// js target: ast-grep through the node:child_process envelope, banner-validated
+// candidates (a look-alike shim only costs one wasted spawn); unlike grep there is
+// NO in-process fallback — no real binary raises InvocationFailed with the install hint.
 
 ///|
-extern "js" fn bun_which(name : String) -> String =
-  #| (name) => Bun.which(name) ?? ""
+#module("node:fs")
+extern "js" fn fs_exists_sync(path : String) -> Bool = "existsSync"
+
+///|
+extern "js" fn node_which(exists : (String) -> Bool, name : String) -> String =
+  #| (exists, name) => {
+  #|   if (name.includes("/") || name.includes("\\")) {
+  #|     try { return exists(name) ? name : "" } catch { return "" }
+  #|   }
+  #|   const isWin = process.platform === "win32"
+  #|   const dirs = (process.env.PATH ?? "").split(isWin ? ";" : ":").filter(Boolean)
+  #|   const exts = isWin
+  #|     ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";")
+  #|     : []
+  #|   const candidates = [name, ...exts.map((ext) => name + ext)]
+  #|   for (const dir of dirs) {
+  #|     const base = dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + (isWin ? "\\" : "/")
+  #|     for (const candidate of candidates) {
+  #|       try { if (exists(base + candidate)) return base + candidate } catch {}
+  #|     }
+  #|   }
+  #|   return ""
+  #| }
+
+///|
+#external
+priv type NodeSpawnOptions
+
+///|
+#external
+priv type NodeProc
+
+///|
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> NodeProc = "spawn"
 
 ///|
 /// Spawn with piped streams and await exit + both drains concurrently.
+/// The drain resolves with partial text when a stream is destroyed without
+/// `end` (killed child, failed spawn) — `close` on the stream is the
+/// reliable terminator.
 extern "js" fn js_spawn_envelope(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> NodeProc,
   cmd : FixedArray[String],
 ) -> @js_async.Promise[String] =
-  #| async (cmd) => {
-  #|   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
+  #| async (spawn, cmd) => {
+  #|   const proc = spawn(cmd[0], cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] })
+  #|   const drain = (stream) => stream
+  #|     ? new Promise((resolve) => {
+  #|         let text = ""
+  #|         const finish = () => resolve(text)
+  #|         stream.setEncoding("utf8")
+  #|         stream.on("data", (chunk) => { text += chunk })
+  #|         stream.on("end", finish)
+  #|         stream.on("close", finish)
+  #|         stream.on("error", finish)
+  #|       })
+  #|     : Promise.resolve("")
   #|   const [exitCode, stdout, stderr] = await Promise.all([
-  #|     proc.exited,
-  #|     new Response(proc.stdout).text(),
-  #|     new Response(proc.stderr).text(),
-  #|   ]);
-  #|   return JSON.stringify({ ok: true, exitCode, stdout, stderr });
+  #|     new Promise((resolve) => {
+  #|       proc.on("close", (code) => resolve(code ?? -1))
+  #|       proc.on("error", () => resolve(-1))
+  #|     }),
+  #|     drain(proc.stdout),
+  #|     drain(proc.stderr),
+  #|   ])
+  #|   return JSON.stringify({ ok: true, exitCode, stdout, stderr })
   #| }
 
 ///|
@@ -40,7 +89,7 @@ priv struct JsSpawnResult {
 /// missing binary lands here as a nonzero exit).
 async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
   let json : Json = @json.parse(
-    js_spawn_envelope(FixedArray::from_array(cmd)).wait(),
+    js_spawn_envelope(cp_spawn, FixedArray::from_array(cmd)).wait(),
   ) catch {
     _ =>
       return {
@@ -79,7 +128,7 @@ async fn js_spawn_result(cmd : Array[String]) -> JsSpawnResult noraise {
 fn astgrep_js_candidates() -> Array[String] {
   let candidates : Array[String] = []
   for name in ["ast-grep", "sg"] {
-    let on_path = bun_which(name)
+    let on_path = node_which(fs_exists_sync, name)
     if on_path != "" && !candidates.contains(on_path) {
       candidates.push(on_path)
     }

@@ -1,18 +1,15 @@
-// js (bun) backend: env reads use the node `process` global (the same object
-// Bun.env aliases); Bun.spawn launches detached and returns immediately, so
-// reports are genuinely non-blocking. The target runtime is bun — do not use
-// node:child_process.
+// js backend: env reads use the `process` global; the report spawn (herdr_channel_js.mbt)
+// is detached and unref'd so reports are genuinely non-blocking.
 
 ///|
-// Pure value pass-through only — an Option never crosses the JS FFI here.
-// MoonBit None is encoded as JS undefined, so a `?? null` fallback would
-// decode as Some(null) and disable the env gate entirely. Blank means missing.
-extern "js" fn bun_env_get(name : String) -> String =
+// Pure value pass-through: an Option never crosses the JS FFI (None is JS undefined,
+// so a `?? null` fallback would decode as Some(null) and disable the env gate).
+extern "js" fn node_env_get(name : String) -> String =
   #| (name) => process.env[name] ?? ""
 
 ///|
 fn herdr_env(name : String) -> String? {
-  let raw = bun_env_get(name)
+  let raw = node_env_get(name)
   if raw == "" {
     None
   } else {
@@ -21,22 +18,23 @@ fn herdr_env(name : String) -> String? {
 }
 
 ///|
-// The JS-side catch mirrors the native side's ignored system() status:
-// presence telemetry must never fail Agent composition.
-extern "js" fn bun_spawn_detached(
+// JS-side catch mirrors the native side's ignored system() status: presence
+// telemetry must never fail Agent composition.
+extern "js" fn node_spawn_detached(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> NodeProc,
   bin : String,
   args : FixedArray[String],
 ) -> Unit =
-  #| (bin, args) => {
+  #| (spawn, bin, args) => {
   #|   try {
-  #|     Bun.spawn({ cmd: [bin, ...args], stdout: "ignore", stderr: "ignore", stdin: "ignore" })
+  #|     const child = spawn(bin, args, { detached: true, stdio: "ignore" })
+  #|     child.unref()
   #|   } catch (_) {}
   #| }
 
 ///|
-/// Construct from the herdr environment without reporting anything. Used by
-/// exit paths that never own an Agent (composition failure) yet must drop
-/// the authority detect() will have registered.
+/// Build from the herdr environment without reporting; for exit paths that never
+/// own an Agent (composition failure) yet must drop the authority detect() registered.
 pub fn HerdrReporter::from_env() -> HerdrReporter? {
   match
     herdr_gate(
@@ -61,5 +59,5 @@ pub fn HerdrReporter::detect() -> HerdrReporter? {
 
 ///|
 fn herdr_spawn_report(bin : String, args : Array[String]) -> Unit {
-  bun_spawn_detached(bin, FixedArray::from_array(args))
+  node_spawn_detached(cp_spawn, bin, FixedArray::from_array(args))
 }

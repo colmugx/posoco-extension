@@ -1,56 +1,83 @@
-// js (bun) execution face for the shared pipeline. Process spawning goes
-// through Bun globals (Bun.spawn / Bun.which — never node:child_process);
-// env reads use the node `process` global; file IO goes through node:fs sync
-// APIs bound with `#module` and injected into the inline-JS envelopes as
-// values (pattern follows posoco-ext-workspace fs_port.js.mbt /
-// moonbitlang/x/fs/fs_js.mbt). Everything throwing crosses the FFI as a
-// JSON string envelope decoded with @json on the MoonBit side
-// (docs/questions.md 2026-08-19: `-> T raise` externs are runtime-broken and
-// `T?`/Error mappings are not used; empty-string sentinels stand in for
-// "missing"; the `require` fallback recorded there is retired).
+// js execution face for the shared pipeline: node:child_process + node:fs via #module
+// injection, env reads via the `process` global; anything throwing crosses the FFI as
+// a JSON string envelope decoded with @json (empty-string sentinels stand in for
+// "missing").
 //
-// The stage budget is enforced HERE, extern-side: on js the pipeline's
-// @async timing layer cannot kill a child it does not own, so the spawn
-// helper races `proc.exited` against a setTimeout that kills the child and
-// resolves a `timed_out` outcome. The runner raises the package-local
-// `MbtxBudgetExpired` marker for it, which `timed_stage` classifies into
-// the same "timed out" business error as on native/wasm.
+// The stage budget is enforced HERE, extern-side: the spawn helper races the child's
+// exit against a setTimeout that kills it and resolves `timed_out`, raised as the
+// package-local `MbtxBudgetExpired` marker that `timed_stage` classifies as a timeout.
 
 ///|
 extern "js" fn js_env_raw(name : String) -> String =
   #| (name) => process.env[name] ?? ""
 
 ///|
-/// `Bun.which` checks executability (not mere existence) within exactly the
-/// given PATH entry — the js counterpart of `@fs.can_execute`. It is
-/// synchronous and never throws, so a plain value passthrough is safe.
-extern "js" fn js_which_in(name : String, dir : String) -> String =
-  #| (name, dir) => Bun.which(name, { PATH: dir }) ?? ""
+#module("node:fs")
+extern "js" fn fs_access_sync(path : String, mode : Int) -> Unit = "accessSync"
 
 ///|
-/// One timed subprocess: literal argv (no shell anywhere), piped
-/// stdout+stderr, merged result envelope. `cwd` "" inherits the process
-/// working directory. A budget expiry kills the child (SIGTERM), waits up
-/// to 1s for the pipes to drain, and reports `timed_out` with no output
-/// (timed-out stages report no output on native either).
+/// Executable `name` within exactly the given directory (js counterpart of
+/// `@fs.can_execute`): accessSync(X_OK) is executability on POSIX and mere
+/// existence on Windows, where PATHEXT candidates cover the shims.
+extern "js" fn js_which_in(
+  access : (String, Int) -> Unit,
+  name : String,
+  dir : String,
+) -> String =
+  #| (access, name, dir) => {
+  #|   const isWin = process.platform === "win32"
+  #|   const exts = isWin ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";") : []
+  #|   const candidates = [name, ...exts.map((ext) => name + ext)]
+  #|   const base = dir === ""
+  #|     ? ""
+  #|     : dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + (isWin ? "\\" : "/")
+  #|   for (const candidate of candidates) {
+  #|     const path = base + candidate
+  #|     try {
+  #|       access(path, 1) // fs.constants.X_OK
+  #|       return path
+  #|     } catch {}
+  #|   }
+  #|   return ""
+  #| }
+
+///|
+/// One timed subprocess: literal argv (no shell), piped stdout+stderr, merged
+/// result envelope; `cwd` "" inherits the process working directory. A budget
+/// expiry kills the child (SIGTERM), waits up to 1s for the pipes to drain, and
+/// reports `timed_out` with no output (native reports no output on timeout either).
 extern "js" fn js_runner_envelope(
+  spawn : (String, FixedArray[String], NodeSpawnOptions) -> NodeProc,
   cmd : String,
   args : FixedArray[String],
   cwd : String,
   timeout_ms : Int,
 ) -> @js_async.Promise[String] =
-  #| async (cmd, args, cwd, timeout_ms) => {
+  #| async (spawn, cmd, args, cwd, timeout_ms) => {
   #|   let proc;
   #|   try {
-  #|     proc = Bun.spawn({ cmd: [cmd, ...args], stdout: "pipe", stderr: "pipe", ...(cwd ? { cwd } : {}) });
+  #|     proc = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) });
   #|   } catch (e) {
   #|     return JSON.stringify({ ok: false, timed_out: false, code: 0, stdout: "", stderr: "", message: String(e) });
   #|   }
+  #|   const drain = (stream) => stream
+  #|     ? new Promise((resolve) => {
+  #|         let text = ""
+  #|         const finish = () => resolve(text)
+  #|         stream.setEncoding("utf8")
+  #|         stream.on("data", (chunk) => { text += chunk })
+  #|         stream.on("end", finish)
+  #|         stream.on("close", finish)
+  #|         stream.on("error", finish)
+  #|       })
+  #|     : Promise.resolve("")
+  #|   const stdout_p = drain(proc.stdout)
+  #|   const stderr_p = drain(proc.stderr)
+  #|   const exited = new Promise((resolve) => {
+  #|     proc.on("close", (code) => resolve({ timed_out: false, code: code ?? 0, wait_error: "" }))
+  #|     proc.on("error", (err) => resolve({ timed_out: false, code: 0, wait_error: String(err) }))
+  #|   })
   #|   let timer = null;
-  #|   const exited = proc.exited.then(
-  #|     (code) => ({ timed_out: false, code, wait_error: "" }),
-  #|     (err) => ({ timed_out: false, code: 0, wait_error: String(err) })
-  #|   );
   #|   const budget = new Promise((resolve) => {
   #|     timer = setTimeout(() => resolve({ timed_out: true, code: 0, wait_error: "" }), timeout_ms);
   #|   });
@@ -59,18 +86,29 @@ extern "js" fn js_runner_envelope(
   #|   if (outcome.timed_out) {
   #|     try { proc.kill(); } catch (kill_err) {}
   #|     const grace = new Promise((resolve) => setTimeout(() => resolve(null), 1000));
-  #|     const drain = (async () => {
-  #|       const stdout = await new Response(proc.stdout).text().catch(() => "");
-  #|       const stderr = await new Response(proc.stderr).text().catch(() => "");
-  #|       return { stdout, stderr };
-  #|     })();
-  #|     await Promise.race([drain, grace]);
+  #|     await Promise.race([Promise.all([stdout_p, stderr_p]), grace]);
   #|     return JSON.stringify({ ok: true, timed_out: true, code: 0, stdout: "", stderr: "", message: "" });
   #|   }
-  #|   const stdout = await new Response(proc.stdout).text().catch(() => "");
-  #|   const stderr = await new Response(proc.stderr).text().catch(() => "");
+  #|   const stdout = await stdout_p;
+  #|   const stderr = await stderr_p;
   #|   return JSON.stringify({ ok: outcome.wait_error === "", timed_out: false, code: outcome.code, stdout, stderr, message: outcome.wait_error });
   #| }
+
+///|
+#external
+priv type NodeSpawnOptions
+
+///|
+#external
+priv type NodeProc
+
+///|
+#module("node:child_process")
+extern "js" fn cp_spawn(
+  file : String,
+  args : FixedArray[String],
+  options : NodeSpawnOptions,
+) -> NodeProc = "spawn"
 
 ///|
 #module("node:fs")
@@ -81,9 +119,8 @@ extern "js" fn fs_mkdtemp_sync(prefix : String) -> String = "mkdtempSync"
 extern "js" fn fs_write_file_sync(path : String, content : String) -> Unit = "writeFileSync"
 
 ///|
-/// rmSync's 2nd argument is a JS options object, so the declared 2nd
-/// parameter is only a value-passing shape; the envelope builds
-/// `{ recursive: true, force: true }` on the JS side.
+/// rmSync's 2nd argument is a JS options object, so the declared parameter is
+/// only a value-passing shape; the envelope builds `{ recursive: true, force: true }`.
 #module("node:fs")
 extern "js" fn fs_rm_sync(path : String, recursive : Bool) -> Unit = "rmSync"
 
@@ -216,11 +253,10 @@ fn js_merge_output(stdout : String, stderr : String) -> String {
 }
 
 ///|
-/// The production Runner on js: one timed Bun subprocess. Spawn failures
-/// propagate as generic errors (timed_stage adds the stage context); the
-/// budget expiry raises the `MbtxBudgetExpired` marker, which timed_stage
-/// classifies with the timeout family — the child was already killed
-/// extern-side.
+/// The production Runner on js: one timed subprocess. Spawn failures propagate as
+/// generic errors (timed_stage adds the stage context); the budget expiry raises the
+/// `MbtxBudgetExpired` marker, which timed_stage classifies with the timeout family —
+/// the child was already killed extern-side.
 priv struct JsRunner {}
 
 ///|
@@ -236,6 +272,7 @@ impl Runner for JsRunner with fn run(
     None => ""
   }
   let envelope = js_runner_envelope(
+    cp_spawn,
     cmd,
     FixedArray::from_array(args),
     cwd_arg,
@@ -248,8 +285,6 @@ impl Runner for JsRunner with fn run(
     raise Failure::Failure(result.message)
   }
   if result.timed_out {
-    // Classified by timed_stage into the stage's "timed out" content; the
-    // child has already been killed extern-side.
     raise MbtxBudgetExpired::Expired
   }
   // Response.text() never yields invalid UTF-8 (replacement chars), so the
@@ -365,5 +400,6 @@ async fn MbtxTools::ensure_toolchain(
 /// the native edge's call shape; pragma: no js await points.)
 #warnings("-unused_async")
 async fn toolchain_dir_usable(bin_dir : String) -> Bool noraise {
-  js_which_in("moon", bin_dir) != "" && js_which_in("moonrun", bin_dir) != ""
+  js_which_in(fs_access_sync, "moon", bin_dir) != "" &&
+  js_which_in(fs_access_sync, "moonrun", bin_dir) != ""
 }

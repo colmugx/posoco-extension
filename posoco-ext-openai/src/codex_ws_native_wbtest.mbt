@@ -141,19 +141,27 @@ test "codex ws reuse probe only trusts freshly active connections" {
 }
 
 ///|
-
-///|
 test "codex ws provider error frames classify like the http path" {
-  // Quota phrasing: the typed RateLimited the host's limit display and
-  // scheduled resume key on.
-  let limit_frame = "{\"type\":\"error\",\"status\":429,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The usage limit has been reached\"}}"
+  // The production usage-limit frame (observed live): a mirrored status
+  // that is not 429, `invalid_request_error` typing, and a quota-verdict
+  // message — the phrasing, not the status mirror, confirms RateLimited.
+  let limit_frame = "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The usage limit has been reached\"}}"
   match codex_ws_provider_error_if_any(limit_frame, now_ms=1000000L) {
-    Some(@posoco.ModelError::RateLimited(info)) =>
+    Some(@posoco.ModelError::RateLimited(info)) => {
       // The frame names no window or timestamp, so reset_at_ms is None and
       // the host's RateLimitGuard probe backoff schedules the resume — the
       // designed handler for verdicts without a stated reset.
       assert_true(info.message.contains("usage limit"))
-    _ => fail("usage-limit frame must classify as RateLimited")
+      assert_true(info.reset_at_ms is None)
+    }
+    _ => fail("observed usage-limit frame must classify as RateLimited")
+  }
+  // A resets_at-carrying frame schedules the exact recovery instant.
+  let reset_frame = "{\"type\":\"error\",\"status_code\":429,\"error\":{\"type\":\"usage_limit_reached\",\"message\":\"The usage limit has been reached\",\"resets_at\":1738888888}}"
+  match codex_ws_provider_error_if_any(reset_frame, now_ms=1000000L) {
+    Some(@posoco.ModelError::RateLimited(info)) =>
+      assert_eq(info.reset_at_ms, Some(1738888888000L))
+    _ => fail("status_code-aliased frame must classify as RateLimited")
   }
   // Non-quota provider errors keep the message visible as transport errors.
   let model_frame = "{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-5' model is not supported\"}}"

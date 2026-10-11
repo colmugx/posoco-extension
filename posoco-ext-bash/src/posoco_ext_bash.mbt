@@ -6,7 +6,7 @@
 /// inherits the host process working directory (legacy behavior).
 ///
 /// On native and wasm, executes via `@process.collect_output_merged("sh", ...)`.
-/// On js (bun), executes via `Bun.spawn`. On wasm-gc, the tool is not
+/// On js, executes via node:child_process (runs under both bun and node). On wasm-gc, the tool is not
 /// listed and execute raises `RuntimeError::InvocationFailed`.
 ///
 /// The provider is also `ToolCancellable`: `bash` spawns register their
