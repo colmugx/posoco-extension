@@ -121,6 +121,8 @@ pub(all) enum OrchestrationError {
   BoardUnavailable
   Closed
   Busy
+  InvalidDispatch
+  AdmissionStopped
   ResolutionFailed
   InputUnavailable
   AuthorizationRejected

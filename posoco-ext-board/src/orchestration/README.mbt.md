@@ -65,3 +65,24 @@ async test "headless orchestration composition does not start execution" {
 Use a durable identity journal for durable hosts; memory storage above is
 explicitly ephemeral. See [S4B orchestration](../../docs/S4B-orchestration.md) for
 policy, authorization, cancellation and recovery requirements.
+
+## Optional dispatch scope, guard and timeout ceiling
+
+`plan`, `status` and `dispatch_next` accept an optional `task_scope :
+Array[String]`. It is detached from the caller's array once per call; a present
+scope authorizes only its listed Task IDs (an empty scope authorizes nothing),
+while an omitted scope plans every Task exactly as S4B did. The pure planner
+still sees the full snapshot, so dependencies outside the scope keep gating
+scoped tasks, and out-of-scope rows are filtered from `eligible` and `blocked`
+before first-candidate selection and stale revalidation.
+
+`dispatch_next` also accepts `admission_guard : () -> Bool` (default true) and
+`execution_timeout_ms : Int`. The guard is rechecked before resolution, after
+resolution, at the owner's protected reservation and at the actual model gate;
+a false result before admission is the safe `AdmissionStopped` error with no
+reservation and no effect, and a false result at the model gate prevents
+provider effects on the already admitted exact run. A nonpositive ceiling is
+the safe `InvalidDispatch` error before any effect; otherwise it caps the
+resolver timeout and bounds runs that supply none. `board_state()` returns the
+same owner's detached authoritative snapshot for runner start scope validation.
+All defaults preserve S4B behavior unchanged.
