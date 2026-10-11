@@ -3,9 +3,11 @@
 `posoco-ext-board` is the browser-native orchestration surface for Posoco. It
 is intentionally **not** a second Agent runtime: Posoco continues to own model
 calls, tool execution, session state, cancellation and Agent task governance.
-The S4A operational-readiness inventory (`docs/S4A-readiness.md`) records which
-seams exist today and which execution concerns — run/attempt correlation,
-cancellation, settlement, crash reconciliation, scheduling — remain unowned.
+The historical S3 inventory (`docs/S4A-readiness.md`) records the starting seams.
+S4A adds an opt-in trusted-headless `execution` package: explicit admission,
+actual Agent scope correlation, owned cancellation and durable Attempt settlement.
+See [`docs/S4A-execution.md`](docs/S4A-execution.md) for composition, failure windows
+and limitations. No browser execution action or automatic scheduler is installed.
 
 ## Current status: headless service, client replica and embedded dashboard
 

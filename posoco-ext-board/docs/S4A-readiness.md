@@ -1,5 +1,11 @@
 # S4A readiness: execution integration seams
 
+This is the historical **S3C6** inventory, not the current execution design.
+S4A's implemented opt-in owner, actual Posoco driver, separate identity journal
+and conservative recovery policy are documented in [S4A-execution.md](S4A-execution.md).
+The "Not yet available" list below describes the S3 baseline; scheduling,
+shared-Agent adoption and automatic crash reconciliation remain deferred.
+
 This is a technical inventory, not an execution design. S3C6 adds no execution
 owner, scheduler, persistence format or protocol field. Board paths below are
 relative to `posoco-ext-board/`; core references were checked against the pinned

@@ -1,0 +1,22 @@
+import {
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco/kernel",
+  "moonbitlang/core/debug",
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async/aqueue",
+  "colmugx/posoco-ext-board/store",
+  "colmugx/posoco-ext-board/runtime",
+} for "test"
+
+import {
+  "moonbitlang/async/aqueue",
+  "colmugx/posoco-ext-board/store",
+} for "wbtest"
+
+supported_targets = "+native+js"
