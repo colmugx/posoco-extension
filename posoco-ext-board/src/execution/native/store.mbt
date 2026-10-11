@@ -67,6 +67,12 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn load
       defer lock.close()
       lock.write("board-execution-journal-v1\n")
       lock.sync()
+      // Lock ownership protects against duplicate external execution.
+      // Persist the new directory entry before admitting any work; syncing
+      // only the lock inode cannot guarantee its name survives power loss.
+      let directory = @fs.open(self.directory, mode=ReadOnly)
+      defer directory.close()
+      directory.sync()
     }
     let path = self.directory + "/executions.json"
     let names = @fs.readdir(
