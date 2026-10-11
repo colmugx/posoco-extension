@@ -6,7 +6,7 @@ struct OrchResolver {
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
   block : Bool
-  timeout_ms : Int?
+  mut timeout_ms : Int?
 }
 
 ///|
@@ -57,6 +57,7 @@ struct OrchAdapter {
   mut calls : Int
   mut effects : Int
   mut available : Bool
+  mut seen_timeout : Int?
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
   before_gate : @aqueue.Queue[Unit]
@@ -74,6 +75,7 @@ fn orch_adapter(
     calls: 0,
     effects: 0,
     available: true,
+    seen_timeout: None,
     entered: @aqueue.Queue(kind=Unbounded),
     release: @aqueue.Queue(kind=Unbounded),
     before_gate: @aqueue.Queue(kind=Unbounded),
@@ -95,6 +97,7 @@ impl @execution.BoardExecutionAdapter for OrchAdapter with fn run(
   start,
 ) {
   self.calls += 1
+  self.seen_timeout = request.timeout_ms
   self.before_gate.put(())
   if self.delay_gate {
     self.gate_release.get()

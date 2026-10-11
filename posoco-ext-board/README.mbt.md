@@ -559,12 +559,18 @@ scheduler.
 - `runtime`: presentation contracts, standalone lifecycle composition and
   headless defaults, consuming the backend through its narrow public API;
 - `client`: framework-neutral authoritative replica and reducer invariants;
+- `execution`: optional S4A owned Agent execution and separate identity journal;
+- `orchestration`: S4B pure planner and trusted-host one-shot scoped admission;
+- `workflow`: S4C opt-in, bounded in-process sequential runner; see
+  [authorization, control and recovery](docs/S4C-sequential-runner.md);
 - independent `posoco-ext-board-web` module: Rabbita task presentation,
   built with Warren as a development tool;
 - independent `posoco-ext-board-native` module: MoonBack localhost transport,
   OS-entropy token, embedded static assets, browser opener and native factory.
 
 Embedded assets belong only to the optional native presentation. The headless
-backend and wire/durable mutation semantics remain unchanged. Review reversal,
-automation, Cetas/SvelteKit or desktop integration, and Agent execution remain
-out of scope.
+backend and wire/durable mutation semantics remain unchanged. The standalone UI
+still manages lifecycle manually; host execution/workflow authorization is
+separate and never comes from its browser capability token. Review reversal,
+Task/Review automation, Cetas/SvelteKit or desktop integration, parallel execution
+and crash-resumable workflows remain out of scope.
