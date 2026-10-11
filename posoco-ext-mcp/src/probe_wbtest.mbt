@@ -51,6 +51,7 @@ fn probe_test_bridge_with_configs(
     group: None,
     activated: false,
     catalog_revision: 0,
+    closing: false,
     startup_failures: [],
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),
@@ -125,6 +126,7 @@ async test "reconnect_server_without_attach_fails_honestly" {
     group: None,
     activated: true,
     catalog_revision: 0,
+    closing: false,
     startup_failures: [],
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),
@@ -165,6 +167,10 @@ async test "start_probes_returns_before_connections_settle" {
     assert_eq(bridge.startup_failures[0].0, "bogus")
     // A failed probe never bumps the revision.
     assert_eq(bridge.catalog_revision, 0)
+    // Close before the group exits: the default [3s, 15s, 60s] retry
+    // schedule is still pending, and only the closing flag keeps the drain
+    // from waiting it out.
+    bridge.close()
   })
 }
 
@@ -243,4 +249,28 @@ async test "scrub_startup_failures_removes_only_named_server" {
   bridge.scrub_startup_failures("a")
   assert_eq(bridge.startup_failures.length(), 1)
   assert_eq(bridge.startup_failures[0].0, "b")
+}
+
+///|
+/// A `close()` during the startup-probe retry schedule stops the background
+/// retry promptly: the backoff sleeps are sliced and the closing flag makes
+/// the retry return before the schedule exhausts, so the host's task group
+/// (and agent shutdown behind it) never waits out the remaining backoff.
+async test "close_interrupts_pending_probe_retries" {
+  let t0 = @async.now()
+  @async.with_task_group(group => {
+    let bridge = probe_test_bridge_with_configs(mode=LoadMode::Lazy, [
+      probe_test_config("dead"),
+    ])
+    bridge.attach(group)
+    // The stdio command does not exist: the first probe fails on spawn,
+    // then the retry sleeps on a 30s injected backoff.
+    bridge.start_probes(backoff_ms=[30_000])
+    @async.sleep(200)
+    assert_true(bridge.startup_failures.length() >= 1)
+    bridge.close()
+  })
+  // Draining the group joins the background retry: without the closing
+  // check this blocks the full 30s backoff, sliced checks cut it to ~250ms.
+  assert_true(@async.now() - t0 < 5_000)
 }

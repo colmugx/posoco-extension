@@ -560,6 +560,7 @@ fn registry_test_bridge(
     group: None,
     activated: true,
     catalog_revision: 0,
+    closing: false,
     startup_failures: [],
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),

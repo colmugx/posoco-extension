@@ -422,6 +422,7 @@ fn bridge_with_mode(mode : LoadMode) -> MCPToolBridge {
     group: None,
     activated: false,
     catalog_revision: 0,
+    closing: false,
     startup_failures: [],
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),

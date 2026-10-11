@@ -556,6 +556,9 @@ pub(all) struct MCPToolBridge {
   /// Change signal for the runtime-seam catalog source. Bumped once per
   /// activation and per successful refresh, so prompt boundaries re-read.
   mut catalog_revision : Int
+  /// Set by `close()`: background probe retries check it between backoff
+  /// slices so a closed bridge never holds the host's task group open.
+  mut closing : Bool
   /// (server, sanitized reason) for servers that failed activation.
   startup_failures : Array[(String, String)]
   /// Runtime-injected http auth tokens; take precedence over static tokens
@@ -578,6 +581,7 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
     group: None,
     activated: false,
     catalog_revision: 0,
+    closing: false,
     startup_failures: [],
     server_tokens: Map::from_array([]),
     auth_challenges: Map::from_array([]),
@@ -614,6 +618,7 @@ pub async fn MCPToolBridge::discover(
         group: None,
         activated: false,
         catalog_revision: 0,
+        closing: false,
         startup_failures: [],
         server_tokens: Map::from_array([]),
         auth_challenges: Map::from_array([]),
@@ -684,10 +689,37 @@ pub fn MCPToolBridge::start_probes(
 }
 
 ///|
+/// Sleep for `total_ms` in short slices, returning true (early exit) once
+/// the bridge has closed. The slicing bounds how long a background retry
+/// can outlive `close()` and hold the host's task group open.
+async fn MCPToolBridge::sleep_backoff_or_close(
+  self : MCPToolBridge,
+  total_ms : Int,
+) -> Bool {
+  let slice_ms = 250
+  let mut waited = 0
+  while waited < total_ms {
+    let step = if total_ms - waited < slice_ms {
+      total_ms - waited
+    } else {
+      slice_ms
+    }
+    @async.sleep(step)
+    waited = waited + step
+    if self.closing {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Bounded background retry for one failed startup probe (`start_probes`
 /// only; `activate` is unchanged). Every failed attempt records its entry;
 /// a retry success bumps the catalog revision and scrubs this server's
-/// entries; exhausting the schedule leaves exactly one final entry.
+/// entries; exhausting the schedule leaves exactly one final entry. A close
+/// during the schedule stops the retry silently — a closed bridge's failure
+/// list is moot and its task group must drain immediately.
 async fn MCPToolBridge::retry_startup_probe(
   self : MCPToolBridge,
   config : MCPServerConfig,
@@ -697,7 +729,9 @@ async fn MCPToolBridge::retry_startup_probe(
   let mut last_message = first_message
   self.startup_failures.push((config.name, last_message))
   for backoff in backoff_ms {
-    @async.sleep(backoff)
+    if self.sleep_backoff_or_close(backoff) {
+      return
+    }
     match self.group {
       Some(group) =>
         match self.connect_with_group(config, group) {
@@ -1227,6 +1261,9 @@ pub async fn MCPToolBridge::refresh_tools(
 /// terminated, so teardown proceeds with nothing retried and nothing masked. Async since mcp 0.15: the
 /// underlying client close performs I/O and cannot block the caller.
 pub async fn MCPToolBridge::close(self : MCPToolBridge) -> Unit {
+  // Flag first: background probe retries observe it between backoff slices
+  // and stop, so a closed bridge never pins the host's task group.
+  self.closing = true
   for conn in self.connections {
     match conn.client {
       Some(client) => client.close()
