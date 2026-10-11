@@ -157,9 +157,16 @@ fn eligible(
 ///|
 /// Atomic in-process admission reserves before the first await. Durable identity
 /// history rejects reuse even after completion; command IDs are not dedup keys.
+/// Optional reservation_revision rejects stale selection before journalling.
+/// A trusted, synchronous admission_guard receives detached state at reservation
+/// and at the actual model gate. It must be side-effect-free; rejection before
+/// the gate prevents provider effects but may leave a reserved identity unresolved.
+/// Defaults preserve S4A's explicit queued-Execute admission policy.
 pub async fn BoardExecutionOwner::execute(
   self : BoardExecutionOwner,
   request : BoardExecutionRequest,
+  admission_guard? : (@domain.BoardStateSnapshot) -> Bool = _ => true,
+  reservation_revision? : Int64,
 ) -> Result[BoardExecutionHandle, BoardExecutionError] {
   if self.closed {
     return Err(Closed)
@@ -194,7 +201,9 @@ pub async fn BoardExecutionOwner::execute(
       Ok(snapshot) => snapshot
       Err(_) => return Err(NotReady)
     }
-    if !eligible(snapshot, request) {
+    if (reservation_revision is Some(revision) && revision != snapshot.revision) ||
+      !eligible(snapshot, request) ||
+      !admission_guard(snapshot.copy_detached()) {
       return Err(IneligibleAttempt)
     }
     let owned : OwnedExecution = {
@@ -225,7 +234,7 @@ pub async fn BoardExecutionOwner::execute(
       None => return Err(NotReady)
     }
     self.active = Some(owned)
-    let task = group.spawn(() => self.drive(owned, request))
+    let task = group.spawn(() => self.drive(owned, request, admission_guard))
     self.worker = Some(task)
     Ok({ execution_id_: request.execution_id, task, })
   })
@@ -278,6 +287,7 @@ async fn BoardExecutionOwner::start(
   self : BoardExecutionOwner,
   owned : OwnedExecution,
   scope : BoardExecutionRun,
+  admission_guard : (@domain.BoardStateSnapshot) -> Bool,
 ) -> Bool {
   if owned.gate_called ||
     self.closed ||
@@ -297,7 +307,8 @@ async fn BoardExecutionOwner::start(
       Ok(value) => value
       Err(_) => return false
     }
-    if !snapshot.attempts.any(attempt => {
+    if !admission_guard(snapshot.copy_detached()) ||
+      !snapshot.attempts.any(attempt => {
         attempt.id.value == owned.binding.attempt_id &&
         attempt.task_id.value == owned.binding.task_id &&
         attempt.kind is Execute &&
@@ -342,6 +353,7 @@ async fn BoardExecutionOwner::drive(
   self : BoardExecutionOwner,
   owned : OwnedExecution,
   request : BoardExecutionRequest,
+  admission_guard : (@domain.BoardStateSnapshot) -> Bool,
 ) -> BoardExecutionBinding {
   // Cancellation bypasses catch in async 0.22; handle_cancellation confirms
   // the driver's structured lifetime has unwound before durable settlement.
@@ -355,9 +367,14 @@ async fn BoardExecutionOwner::drive(
           match request.timeout_ms {
             Some(timeout) =>
               @async.with_timeout(timeout, () => {
-                self.adapter.run(request, scope => self.start(owned, scope))
+                self.adapter.run(request, scope => {
+                  self.start(owned, scope, admission_guard)
+                })
               })
-            None => self.adapter.run(request, scope => self.start(owned, scope))
+            None =>
+              self.adapter.run(request, scope => {
+                self.start(owned, scope, admission_guard)
+              })
           }
         } catch {
           @async.TimeoutError => TimedOut

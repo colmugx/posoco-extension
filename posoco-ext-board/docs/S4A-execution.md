@@ -61,7 +61,13 @@ closed rather than degrading durability. JS hosts may provide another durable
 V1 permits **one active execution per owner/Board namespace**. A synchronous
 admission latch covers concurrent callers before any await. Backend and adapter
 must be ready, the Task must exist, and its Attempt must be **Execute + Queued**.
-Task stage is irrelevant. Already manually started Attempts are not adopted.
+Task stage is irrelevant to the default S4A policy. Already manually started
+Attempts are not adopted. S4B adds optional `reservation_revision` and a trusted
+side-effect-free `admission_guard` to `execute`: the revision is checked before
+reservation, and the guard receives detached Board state at reservation and again
+at the actual model gate before durable Start/provider effects. Defaults preserve
+S4A behavior. Guard rejection after reservation may leave an unresolved identity;
+see [S4B policy and recovery](S4B-orchestration.md).
 
 The version-1 journal stores only identity, actual scope, phase and outcome:
 
