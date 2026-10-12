@@ -165,6 +165,9 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
     base_url~,
     endpoint_prefix~,
     reasoning_effort=effort,
+    context_window=source.context_window_setting(
+      manifest_id="posoco_ext_deepseek",
+    ),
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
@@ -190,7 +193,9 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
   // without needing a credential snapshot.
   let pricing_borrowed : &@devkit.PricingSource = DeepSeekPricingSource::{ }
   @devkit.pricing_registry_register("deepseek", pricing_borrowed)
-  @llm.ProviderBuildResult::Ready(catalog)
+  @llm.ProviderBuildResult::Ready(
+    catalog.with_cached_context_windows(source.cached_models),
+  )
 }
 
 ///|
@@ -243,6 +248,9 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
     base_url~,
     endpoint_prefix~,
     reasoning_effort=requested_effort,
+    context_window=source.context_window_setting(
+      manifest_id="posoco_ext_deepseek",
+    ),
   )
   let models = fetch_deepseek_models(
     config.base_url,

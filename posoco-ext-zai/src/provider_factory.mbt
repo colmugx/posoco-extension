@@ -166,7 +166,9 @@ pub impl @llm.ProviderFactory for ZaiProvider with fn build(
         None =>
           zai_model_catalog(config, self.ctx, zai_catalog_identity(), api_key)
       }
-      @llm.ProviderBuildResult::Ready(catalog)
+      @llm.ProviderBuildResult::Ready(
+        catalog.with_cached_context_windows(source.cached_models),
+      )
     }
     None => @llm.ProviderBuildResult::Unconfigured
   }
@@ -187,6 +189,12 @@ pub fn zai_setting_context_window(
         raise @posoco.CompositionError::ManifestSchemaError(
           manifest_id~,
           detail="setting must be a whole number: context_window",
+        )
+      }
+      if value > 2147483647.0 {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id~,
+          detail="context_window exceeds Int range",
         )
       }
       let window = value.to_int()

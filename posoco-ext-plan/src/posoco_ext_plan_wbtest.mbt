@@ -1,6 +1,9 @@
 ///|
 fn tk_plan() -> PlanMode {
-  PlanMode(config=PlanModeConfig::default())
+  PlanMode(
+    config=PlanModeConfig::default(),
+    anchor=Some(@devkit.WorkspaceAnchor::WorkspaceAnchor("/work")),
+  )
 }
 
 ///|
@@ -87,14 +90,16 @@ fn plan_reminder_count(messages : Array[@kernel.Message]) -> Int {
 async test "before_tool gates write tools by target while planning" {
   let plan = tk_plan()
   plan.start()
-  // Markdown passes anywhere in the workspace — research notes and draft
-  // plans are part of planning.
+  // Workspace .md (relative to the anchor) and /tmp scratch pass.
   for
     target in [
       ("write", "docs/research/notes.md"),
       ("edit", "src/scratch/plan-draft.md"),
       ("edit", "./x.md"),
       ("apply_patch", "PLAN.md"),
+      ("write", "/tmp/notes.md"),
+      ("edit", "/tmp/scratch/x"),
+      ("edit", "/tmp/../work/notes.md"),
     ] {
     let (tool, path) = target
     match plan.before_tool(write_call(tool, path)) {
@@ -102,20 +107,23 @@ async test "before_tool gates write tools by target while planning" {
       other => fail("expected Approve for '\{tool} \{path}', got \{other}")
     }
   }
-  // Every non-Markdown target is a precise rejection: wrong extension or no
-  // target at all.
+  // Every other target is a precise rejection: wrong extension, outside
+  // the workspace (absolute), or a `..` escape past the anchor.
   for
     target in [
       ("write", "src/main.rs"),
       ("edit", "docs/build.sh"),
       ("write", "package.json"),
       ("apply_patch", "docs/styles.css"),
+      ("write", "/etc/x.md"),
+      ("write", "/work/../secret.md"),
     ] {
     let (tool, path) = target
     match plan.before_tool(write_call(tool, path)) {
       @posoco.ToolDecision::Reject(reason~) => {
         assert_true(reason.contains("plan mode"))
         assert_true(reason.contains(".md"))
+        assert_true(reason.contains("/tmp"))
       }
       other => fail("expected Reject for '\{tool} \{path}', got \{other}")
     }
@@ -123,6 +131,23 @@ async test "before_tool gates write tools by target while planning" {
   match plan.before_tool(tk_call("write")) {
     @posoco.ToolDecision::Reject(..) => ()
     other => fail("expected Reject for write without path, got \{other}")
+  }
+}
+
+///|
+async test "write gate falls back to writable roots without an anchor" {
+  let plan = PlanMode(config=PlanModeConfig::default())
+  plan.start()
+  match plan.before_tool(write_call("write", "/tmp/scratch.md")) {
+    @posoco.ToolDecision::Approve(..) => ()
+    other => fail("expected Approve for /tmp scratch, got \{other}")
+  }
+  // Without an anchor the workspace cannot be proven, so even .md there
+  // is rejected.
+  match plan.before_tool(write_call("write", "docs/notes.md")) {
+    @posoco.ToolDecision::Reject(..) => ()
+    other =>
+      fail("expected Reject for unprovable workspace target, got \{other}")
   }
 }
 
@@ -160,7 +185,7 @@ async test "before_tool admits non-mutating shell commands while planning" {
     match plan.before_tool(bash_call(cmd)) {
       @posoco.ToolDecision::Reject(reason~) => {
         assert_true(reason.contains("plan mode"))
-        assert_true(reason.contains("mutating"))
+        assert_true(reason.contains("/tmp"))
       }
       other => fail("expected Reject for '\{cmd}', got \{other}")
     }
@@ -183,6 +208,28 @@ async test "before_tool shell gate is off unless the name is configured" {
     @posoco.ToolDecision::Approve(..) => ()
     other =>
       fail("expected Approve for bash with empty shell_tools, got \{other}")
+  }
+}
+
+///|
+async test "before_tool shell gate admits writes into the writable areas" {
+  let plan = tk_plan()
+  plan.start()
+  for
+    cmd in [
+      "moon test --output-json > /tmp/test.log", "grep -rn 'plan' docs 2>/dev/null",
+      "touch /tmp/probe", "echo investigating > notes.md",
+    ] {
+    match plan.before_tool(bash_call(cmd)) {
+      @posoco.ToolDecision::Approve(..) => ()
+      other => fail("expected Approve for '\{cmd}', got \{other}")
+    }
+  }
+  for cmd in ["ls > out.txt", "cp a /tmp/b", "git init /tmp/repo"] {
+    match plan.before_tool(bash_call(cmd)) {
+      @posoco.ToolDecision::Reject(..) => ()
+      other => fail("expected Reject for '\{cmd}', got \{other}")
+    }
   }
 }
 

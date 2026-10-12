@@ -492,6 +492,7 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
       self.ingest_model_response(message, usage, event)
     StreamChunkReceived(chunk~) => self.ingest_stream_chunk(chunk, event)
     TurnFailed(message) => self.last_failure = Some(message)
+    ContextStateUpdated(state~) => self.context_window = state.window_tokens
     TurnCompleted
     | ToolCallApproved(..)
     | ToolCallStarted(..)
@@ -502,7 +503,6 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | Custom(..)
     | CompactStarted(..)
     | CompactFinished(..)
-    | ContextStateUpdated(..)
     | OperationFinalized(..)
     // 0.18.0 turn events: the bridge projects its own protocol surface;
     // user-request lifecycle needs no ACP-side projection.

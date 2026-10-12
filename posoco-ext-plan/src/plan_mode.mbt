@@ -2,8 +2,9 @@
 /// posoco_ext_plan — Plan mode extension for Posoco.
 ///
 /// The model investigates and produces a plan under the gates documented
-/// on `PlanModeConfig` (non-mutating shell via a denylist, Markdown-only
-/// writes anywhere in the workspace), then submits it via `exit_plan_mode`. Approval UX is
+/// on `PlanModeConfig` (non-mutating shell via a denylist; writes confined
+/// to workspace `writable_extensions` files and `writable_roots` such as
+/// /tmp), then submits it via `exit_plan_mode`. Approval UX is
 /// product content (`PlanReviewSource` — Accept / Revise(feedback) /
 /// Dismiss — or the `plan.approve` / `plan.reject` / `plan.dismiss`
 /// commands).
@@ -54,23 +55,31 @@ pub extend PlanStatus with Show::{to_string, output}
 
 ///|
 /// Plan-mode gate configuration: a WRITE BLOCK, not an allow-list. While
-/// planning, `shell_tools` are gated per invocation (known-mutating
-/// commands are rejected) and `write_tools` are gated by target
-/// (`writable_extensions` only); every other tool passes through to the
-/// permission lattice.
+/// planning, `shell_tools` are gated per invocation (commands that could
+/// write outside the writable areas are rejected) and `write_tools` are
+/// gated by target; every other tool passes through to the permission
+/// lattice.
+///
+/// A target is writable iff it is under one of `writable_roots`
+/// (absolute, lexically confined — /tmp scratch space) or inside the
+/// workspace with a `writable_extensions` suffix (workspace containment
+/// needs an injected `WorkspaceAnchor`; without one only `writable_roots`
+/// count).
 pub(all) struct PlanModeConfig {
   /// Shell-like tool names gated per invocation: the call passes when its
-  /// `cmd` does not match this package's mutating denylist
-  /// (shell_gate.mbt). Empty disables per-invocation shell gating.
+  /// `cmd` cannot write outside the writable areas (shell_gate.mbt).
+  /// Empty disables per-invocation shell gating.
   shell_tools : Array[String]
-  /// Write-class tool names gated by TARGET: the call passes only when its
-  /// `path` ends with one of `writable_extensions`. Workspace confinement is
-  /// NOT re-checked here — the write tools' own anchoring already confines
-  /// them to the workspace. Empty disables the target gate.
+  /// Write-class tool names gated by TARGET: the call passes only for
+  /// writable targets (see the struct docs). Empty disables the target
+  /// gate.
   write_tools : Array[String]
-  /// File extensions writable while planning (default `.md` only — notes
-  /// and draft plans anywhere in the workspace).
+  /// File extensions writable inside the workspace while planning
+  /// (default `.md` only — notes and draft plans).
   writable_extensions : Array[String]
+  /// Absolute directories writable while planning regardless of
+  /// extension or workspace (default `["/tmp"]` — scratch output).
+  writable_roots : Array[String]
   /// Name of the tool the model calls to submit a plan for approval.
   exit_tool_name : String
   /// Whether the model may enter plan mode on its own through the
@@ -94,6 +103,7 @@ pub fn PlanModeConfig::default() -> PlanModeConfig {
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
     write_tools: ["write", "edit", "apply_patch"],
     writable_extensions: [".md"],
+    writable_roots: ["/tmp"],
     exit_tool_name: "exit_plan_mode",
     allow_model_entry: false,
     enter_tool_name: "enter_plan_mode",
@@ -116,6 +126,10 @@ pub(all) struct PlanMode {
   /// Optional workspace filesystem for plan-file persistence (see
   /// `plan_file.mbt`); without it planning stays in-memory.
   fs : &@workspace.WorkspaceFs?
+  /// Optional workspace anchor: lets the write gate prove a target is
+  /// inside the workspace (workspace-`.md` writes). Without it only
+  /// `writable_roots` targets pass.
+  anchor : @devkit.WorkspaceAnchor?
   /// Session label for plan file names; set at construction or per session
   /// via `set_session_name` (hosts that mint session ids later).
   mut session_name : String
@@ -166,6 +180,7 @@ pub fn PlanMode::PlanMode(
   review? : &PlanReviewSource? = None,
   bus? : @devkit.EventBus? = None,
   fs? : &@workspace.WorkspaceFs? = None,
+  anchor? : @devkit.WorkspaceAnchor? = None,
   session_name? : String = "",
 ) -> PlanMode {
   // Report the enter/exit tools on the `tool_exemptions` bus topic so a
@@ -188,6 +203,7 @@ pub fn PlanMode::PlanMode(
     review,
     bus,
     fs,
+    anchor,
     session_name,
     draft: "",
     draft_recorded: 0,

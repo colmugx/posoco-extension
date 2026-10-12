@@ -19,6 +19,7 @@ fn RouterModelPort::slot_catalog_json(
 ) -> Json {
   let entries : Array[Json] = []
   for slot in self.list_slots() {
+    let window = self.context_window_reading(slot)
     let effort_values : Array[Json] = []
     for effort in slot.thinking_efforts {
       effort_values.push(Json::string(effort))
@@ -41,13 +42,9 @@ fn RouterModelPort::slot_catalog_json(
         },
       ),
       ("thinking_efforts", Json::array(effort_values)),
-      (
-        "context_window",
-        match slot.context_window {
-          Some(value) => Json::number(value.to_double())
-          None => Json::null()
-        },
-      ),
+      ("context_window", Json::number(window.tokens.to_double())),
+      ("context_window_source", Json::string(window.source)),
+      ("context_window_stale", Json::boolean(window.stale)),
       ("capabilities", Json::array(capability_values)),
       (
         "default_effort",
@@ -325,6 +322,9 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
   id : String,
   args : Json,
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
+  if id == "model" || id == "status" {
+    self.refresh_model_metadata()
+  }
   match id {
     "model" =>
       match model_command_selection(args) {
@@ -513,7 +513,13 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
         ui_hint=Some(@posoco.UiHint::None),
       )
     }
-    "login" => self.invoke_login(args)
+    "login" => {
+      let result = self.invoke_login(args)
+      if result is @posoco.CommandOutcome::Success(..) {
+        self.refresh_model_metadata()
+      }
+      result
+    }
     other => raise @posoco.CommandError::NotFound(other)
   }
 }

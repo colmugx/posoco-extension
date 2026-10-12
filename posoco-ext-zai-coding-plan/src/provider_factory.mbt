@@ -121,7 +121,7 @@ pub impl @llm.ProviderFactory for ZaiCodingPlanProvider with fn build(
       @llm.ProviderBuildResult::Ready(
         @zai.zai_model_catalog(config, self.ctx, identity, api_key, capabilities=[
           "chat", "streaming", "api_key", "coding_plan",
-        ]),
+        ]).with_cached_context_windows(source.cached_models),
       )
     }
     None => @llm.ProviderBuildResult::Unconfigured

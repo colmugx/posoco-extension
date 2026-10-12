@@ -16,6 +16,9 @@ pub(all) struct ModelSlot {
   /// Provider-declared context capacity, when the discovery endpoint reports
   /// one.  Hosts treat this as opaque metadata; it never drives selection.
   context_window : Int?
+  context_window_source : String
+  /// Serving-provider key in models.dev; an empty key opts out of lookup.
+  metadata_provider_id : String?
   /// Provider-declared capability identifiers for this model slot.
   capabilities : Array[String]
   /// Provider-declared default effort, if the model exposes thinking levels.
@@ -44,6 +47,8 @@ pub fn ModelSlot::ModelSlot(
   api_key? : &ApiKeyFactory? = None,
   thinking_efforts? : Array[String] = [],
   context_window? : Int? = None,
+  context_window_source? : String = "provider",
+  metadata_provider_id? : String? = None,
   capabilities? : Array[String] = [],
   default_effort? : String? = None,
   display_group? : String? = None,
@@ -61,6 +66,8 @@ pub fn ModelSlot::ModelSlot(
     api_key,
     thinking_efforts,
     context_window,
+    context_window_source,
+    metadata_provider_id,
     capabilities,
     default_effort,
     display_group,

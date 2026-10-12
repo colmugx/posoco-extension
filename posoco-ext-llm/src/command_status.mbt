@@ -68,12 +68,12 @@ fn RouterModelPort::status_report(
         None => "default"
       }
   }
-  let context = match slot {
-    Some(slot) =>
-      match slot.context_window {
-        Some(n) => "\{n} tokens"
-        None => "unknown"
-      }
+  let window = slot.map(slot => self.context_window_reading(slot))
+  let context = match window {
+    Some(reading) if reading.source == "fallback" =>
+      "500000 tokens (fallback, unverified)"
+    Some(reading) =>
+      "\{reading.tokens} tokens (\{reading.source}\{if reading.stale { ", stale" } else { "" }})"
     None => "unknown"
   }
   let efforts = match slot {
@@ -167,14 +167,26 @@ fn RouterModelPort::status_report(
       ("effort", Json::string(effort)),
       (
         "context_window",
-        match slot {
-          Some(slot) =>
-            match slot.context_window {
-              Some(n) => Json::number(n.to_double())
-              None => Json::null()
-            }
+        match window {
+          Some(reading) => Json::number(reading.tokens.to_double())
           None => Json::null()
         },
+      ),
+      (
+        "context_window_source",
+        match window {
+          Some(reading) => Json::string(reading.source)
+          None => Json::null()
+        },
+      ),
+      (
+        "context_window_stale",
+        Json::boolean(
+          match window {
+            Some(reading) => reading.stale
+            None => false
+          },
+        ),
       ),
       ("reasoning_efforts", Json::array(effort_values)),
       ("pending", Json::boolean(!configured)),
