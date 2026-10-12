@@ -10,7 +10,7 @@ pub fn ExtContext::default() -> ExtContext {
 
 ///|
 pub fn ExtContext::ExtContext(
-  logger? : &Logger = NoopLogger::{ },
+  logger~ : &Logger = NoopLogger::{ },
 ) -> ExtContext {
   { logger, }
 }
@@ -27,7 +27,7 @@ fn ExtContext::log_at(
   source~ : String,
   code~ : String,
   message~ : String,
-  data? : Json? = None,
+  data~ : Json? = None,
 ) -> Unit {
   self.log({ level, source, code, message, data, })
 }
@@ -38,7 +38,7 @@ pub fn ExtContext::debug(
   source~ : String,
   code~ : String,
   message~ : String,
-  data? : Json? = None,
+  data~ : Json? = None,
 ) -> Unit {
   self.log_at(Debug, source~, code~, message~, data~)
 }
@@ -49,7 +49,7 @@ pub fn ExtContext::info(
   source~ : String,
   code~ : String,
   message~ : String,
-  data? : Json? = None,
+  data~ : Json? = None,
 ) -> Unit {
   self.log_at(Info, source~, code~, message~, data~)
 }
@@ -60,7 +60,7 @@ pub fn ExtContext::warn(
   source~ : String,
   code~ : String,
   message~ : String,
-  data? : Json? = None,
+  data~ : Json? = None,
 ) -> Unit {
   self.log_at(Warn, source~, code~, message~, data~)
 }
@@ -71,7 +71,7 @@ pub fn ExtContext::error(
   source~ : String,
   code~ : String,
   message~ : String,
-  data? : Json? = None,
+  data~ : Json? = None,
 ) -> Unit {
   self.log_at(Error, source~, code~, message~, data~)
 }

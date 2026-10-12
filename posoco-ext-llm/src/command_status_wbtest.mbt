@@ -64,7 +64,7 @@ fn status_test_slot() -> ModelSlot {
 
 ///|
 fn status_test_router(
-  bus? : @devkit.EventBus? = None,
+  bus~ : @devkit.EventBus? = None,
 ) -> RouterModelPort raise @posoco.CompositionError {
   RouterModelPort(slots=[status_test_slot()], bus~)
 }
@@ -359,7 +359,7 @@ async test "status command skips balance readings that state nothing" {
 /// Scripted quota source for the status invoke test.
 struct StatusQuotaSource {
   result : Result[Array[@devkit.QuotaReading], String]
-  mut calls : Int
+  mut calls : Int32
 }
 
 ///|

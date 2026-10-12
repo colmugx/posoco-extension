@@ -14,7 +14,7 @@
 /// counts reads so tests can prove whether the pick intercept fired.
 struct PickMetricsSource {
   result : Result[Array[@devkit.MetricsPoint], String]
-  mut reads : Int
+  mut reads : Int32
 }
 
 ///|
@@ -33,7 +33,7 @@ fn pick_point(
   effort : String,
   iq : Double,
   cost : Double,
-  total : Int,
+  total : Int32,
   tokens : Double?,
   minutes : Double?,
 ) -> @devkit.MetricsPoint {
@@ -49,8 +49,8 @@ fn pick_attempt_point(
   effort : String,
   iq : Double,
   cost : Double,
-  passed : Int,
-  total : Int,
+  passed : Int32,
+  total : Int32,
   tokens : Double?,
   minutes : Double?,
 ) -> @devkit.MetricsPoint {
@@ -159,7 +159,7 @@ fn pick_picked_fields(structured : Json?) -> Map[String, Json] raise {
 /// Fields of the candidate at `index` in a pick structured payload.
 fn pick_candidate_fields(
   structured : Json?,
-  index : Int,
+  index : Int32,
 ) -> Map[String, Json] raise {
   match structured {
     Some(Json::Object(fields)) =>
@@ -180,7 +180,7 @@ fn pick_candidate_fields(
 }
 
 ///|
-fn pick_candidates_length(structured : Json?) -> Int raise {
+fn pick_candidates_length(structured : Json?) -> Int32 raise {
   match structured {
     Some(Json::Object(fields)) =>
       match fields.get("candidates") {

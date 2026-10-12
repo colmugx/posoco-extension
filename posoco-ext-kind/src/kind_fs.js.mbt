@@ -135,7 +135,7 @@ impl KindFs for JsKindFs with fn read_text(_self, path : String) -> String {
 pub async fn KindCatalog::load(
   home~ : String,
   cwd~ : String,
-  extra? : Array[KindSpec] = [],
+  extra~ : Array[KindSpec] = [],
 ) -> KindCatalog {
   load_with_io(JsKindFs::{ }, home~, cwd~, extra~)
 }

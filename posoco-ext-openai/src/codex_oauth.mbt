@@ -42,7 +42,7 @@ fn codex_form_encode(value : String) -> String {
 }
 
 ///|
-fn codex_hex_upper(value : Int) -> String {
+fn codex_hex_upper(value : Int32) -> String {
   if value < 10 {
     value.to_string()
   } else {
@@ -53,8 +53,8 @@ fn codex_hex_upper(value : Int) -> String {
 ///|
 fn ensure_codex_http_success(
   stage : String,
-  status : Int,
-  body_chars? : Int? = None,
+  status : Int32,
+  body_chars~ : Int32? = None,
 ) -> Unit raise @oauth.OAuthError {
   if status < 200 || status >= 300 {
     let body_summary = match body_chars {
@@ -81,7 +81,7 @@ pub(all) struct CodexOAuth {
 
 ///|
 pub fn CodexOAuth::CodexOAuth(
-  transport? : &@oauth.OAuthHttpTransport? = None,
+  transport~ : &@oauth.OAuthHttpTransport? = None,
 ) -> CodexOAuth {
   CodexOAuth::{ transport, }
 }
@@ -227,7 +227,7 @@ fn parse_token_response(
 
 ///|
 /// Strict token lifetime parser shared by initial exchange and refresh.
-fn parse_codex_positive_integer(value : Double) -> Int? {
+fn parse_codex_positive_integer(value : Double) -> Int32? {
   if value.is_nan() || value.is_inf() || value <= 0.0 {
     return None
   }

@@ -57,7 +57,7 @@ pub struct CodexQuotaStatus {
   priv mut active_provider : String?
   /// This registration's tracker subscription token — the only handle that
   /// unsubscribes it, so shutdown never detaches a coexisting publisher.
-  priv mut token : Int?
+  priv mut token : Int32?
 }
 
 ///|
@@ -67,8 +67,8 @@ pub struct CodexQuotaStatus {
 /// When a bus is given, the publisher subscribes to it immediately so the
 /// router's provider events can drive window visibility.
 pub fn CodexQuotaStatus::CodexQuotaStatus(
-  bus? : @devkit.EventBus? = None,
-  tracker? : CodexQuotaTracker? = None,
+  bus~ : @devkit.EventBus? = None,
+  tracker~ : CodexQuotaTracker? = None,
 ) -> CodexQuotaStatus {
   let status : CodexQuotaStatus = {
     tracker: match tracker {

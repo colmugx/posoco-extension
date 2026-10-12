@@ -10,10 +10,10 @@ priv enum CompactReply {
   LatestV2Route
   /// Full HTTP response after an optional delay.
   Respond(
-    status~ : Int,
+    status~ : Int32,
     body~ : String,
     headers~ : Array[(String, String)],
-    delay_ms~ : Int
+    delay_ms~ : Int32
   )
   /// Send a response head only and never deliver the body — the client stays
   /// parked in its body read.
@@ -22,7 +22,7 @@ priv enum CompactReply {
   /// for the status line.
   Hang
   /// Send a head and a body fragment, then close mid-body.
-  RespondTruncated(status~ : Int, partial~ : String)
+  RespondTruncated(status~ : Int32, partial~ : String)
   /// Complete HTTP framing around an SSE body that ends before the terminal
   /// marker: the client sees a clean EOF, and the connection stays open so
   /// the parked server read observes the client's resource close.
@@ -36,7 +36,7 @@ struct CompactLoopback {
   replies : Array[CompactReply]
   requests : Array[@http.Request]
   bodies : Array[String]
-  mut next_reply : Int
+  mut next_reply : Int32
   mut client_disconnected : Bool
   mut stopping : Bool
 }

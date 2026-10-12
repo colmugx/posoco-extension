@@ -20,7 +20,7 @@ fn codex_release_discovery_url() -> String {
 /// `/releases/latest` document measures 362,240 bytes because GitHub embeds
 /// the release assets array, so the bound sits at 1 MiB — above the real
 /// payload, far below unbounded.
-let codex_release_max_body_chars : Int = 1048576
+let codex_release_max_body_chars : Int32 = 1048576
 
 ///|
 /// A client version is exactly three non-empty all-digit components joined by

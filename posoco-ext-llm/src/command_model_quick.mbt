@@ -13,7 +13,7 @@ let quick_pick_keyword : String = "quick-pick"
 ///|
 /// Per-source read deadline; tasks run concurrently so command latency is
 /// bounded by one timeout.
-let quick_pick_source_timeout_ms : Int = 2500
+let quick_pick_source_timeout_ms : Int32 = 2500
 
 ///|
 /// Distinct provider ids behind the current slots, in first-seen slot order.

@@ -42,7 +42,7 @@ impl KindFs for NativeKindFs with fn read_text(_self, path : String) -> String {
 pub async fn KindCatalog::load(
   home~ : String,
   cwd~ : String,
-  extra? : Array[KindSpec] = [],
+  extra~ : Array[KindSpec] = [],
 ) -> KindCatalog {
   load_with_io(NativeKindFs::{ }, home~, cwd~, extra~)
 }

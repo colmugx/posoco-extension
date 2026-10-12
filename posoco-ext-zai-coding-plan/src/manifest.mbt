@@ -8,7 +8,7 @@ pub(all) struct ZaiCodingPlanModelPort {
 ///|
 pub fn ZaiCodingPlanModelPort::ZaiCodingPlanModelPort(
   config : @zai.ZaiConfig,
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> ZaiCodingPlanModelPort {
   { inner: @zai.ZaiModelPort(config, ctx~), }
 }

@@ -7,7 +7,7 @@
 /// wasm/failed-probe fallback, not for credential backends.
 
 ///|
-fn oauth_random_bytes(n : Int) -> Bytes {
+fn oauth_random_bytes(n : Int32) -> Bytes {
   if n <= 0 {
     return Bytes::new(0)
   }
@@ -27,7 +27,7 @@ fn generate_state() -> String {
 
 ///|
 /// Time-seeded LCG fallback for wasm and failed entropy probes.
-fn lcg_random_bytes(n : Int) -> Bytes {
+fn lcg_random_bytes(n : Int32) -> Bytes {
   let mut state = @async.now()
   let buf : Array[Byte] = []
   for _ in 0..<n {
@@ -41,6 +41,6 @@ fn lcg_random_bytes(n : Int) -> Bytes {
 /// Wasm probe: no OS entropy source on this target; the empty result selects
 /// the LCG fallback.
 #cfg(not(any(target="native", target="js")))
-fn oauth_random_bytes_probe(_n : Int) -> Bytes {
+fn oauth_random_bytes_probe(_n : Int32) -> Bytes {
   Bytes::new(0)
 }

@@ -18,7 +18,7 @@ priv struct SpawnArgs {
   instructions : String?
   context_files : Bool
   resume_id : String?
-  timeout_ms : Int?
+  timeout_ms : Int32?
   background : Bool
 }
 
@@ -78,7 +78,7 @@ fn opt_bool(
 fn opt_int(
   fields : Map[String, Json],
   key : String,
-) -> Int? raise SpawnArgError {
+) -> Int32? raise SpawnArgError {
   match fields.get(key) {
     None => None
     Some(Json::Number(value, ..)) => {

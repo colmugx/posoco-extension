@@ -13,13 +13,13 @@
 /// degrade to bare metadata.
 priv enum OpenRouterErrorBody {
   BodyText(String)
-  BodyBytesInvalidUtf8(Int)
+  BodyBytesInvalidUtf8(Int32)
   BodyReadFailed
   BodyUnavailable
 }
 
 ///|
-let openrouter_error_body_cap : Int = 2048
+let openrouter_error_body_cap : Int32 = 2048
 
 ///|
 /// Char-wise copy keeps the cut on a Unicode boundary (String slicing can
@@ -69,9 +69,9 @@ fn openrouter_error_type(body_text : String) -> String? {
 /// is preferred over the bare HTTP code as the failure's identity.
 fn format_openrouter_http_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body : OpenRouterErrorBody,
-  error_type? : String? = None,
+  error_type~ : String? = None,
 ) -> String {
   let detail = match body {
     BodyText(text) => "body=\{cap_openrouter_error_body(text)}"
@@ -93,16 +93,16 @@ fn format_openrouter_http_error(
 /// "top up credits" instead of a generic retry loop.
 fn format_openrouter_payment_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body : OpenRouterErrorBody,
-  error_type? : String? = None,
+  error_type~ : String? = None,
 ) -> String {
   format_openrouter_http_error(stage, status, body, error_type~) +
   ", category=payment_required (insufficient credits; add credits at https://openrouter.ai/credits)"
 }
 
 ///|
-fn is_openrouter_http_success(status : Int) -> Bool {
+fn is_openrouter_http_success(status : Int32) -> Bool {
   status >= 200 && status < 300
 }
 
@@ -144,11 +144,11 @@ fn openrouter_epoch_seconds_ms(value : String) -> Int64? {
 /// - every other non-2xx is Transport with the formatted body.
 fn classify_openrouter_http_status(
   stage : String,
-  status : Int,
+  status : Int32,
   body : OpenRouterErrorBody,
   now_ms~ : Int64,
-  retry_after_header? : String? = None,
-  rate_limit_reset_header? : String? = None,
+  retry_after_header~ : String? = None,
+  rate_limit_reset_header~ : String? = None,
 ) -> @posoco.ModelError? {
   if is_openrouter_http_success(status) {
     return None

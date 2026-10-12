@@ -43,7 +43,7 @@ let pick_time_penalty_per_10min : Double = 0.5
 ///|
 /// Minimum benchmark sample count a metrics point must carry; tiny samples
 /// must not win on noise.
-let pick_min_total : Int = 30
+let pick_min_total : Int32 = 30
 
 ///|
 /// The slice of slot metadata pick eligibility needs: which provider owns
@@ -177,7 +177,7 @@ fn pick_score(point : @devkit.MetricsPoint) -> Double {
 ///|
 /// Deterministic pick order: score descending, then cheaper cost first,
 /// then model name ascending.
-fn pick_order(a : PickCandidate, b : PickCandidate) -> Int {
+fn pick_order(a : PickCandidate, b : PickCandidate) -> Int32 {
   let score_a = pick_score(a.point)
   let score_b = pick_score(b.point)
   if score_a != score_b {

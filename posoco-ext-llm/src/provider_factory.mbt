@@ -40,12 +40,12 @@ pub(all) struct ProviderConfigSource {
 
 ///|
 pub fn ProviderConfigSource::ProviderConfigSource(
-  settings? : Json? = None,
-  provider_credential? : @oauth.ProviderCredential? = None,
-  credential? : @oauth.Credential? = None,
-  api_key_credential? : @oauth.ApiKeyCredential? = None,
-  cached_models? : Json? = None,
-  credential_store? : &@oauth.ProviderCredentialStore? = None,
+  settings~ : Json? = None,
+  provider_credential~ : @oauth.ProviderCredential? = None,
+  credential~ : @oauth.Credential? = None,
+  api_key_credential~ : @oauth.ApiKeyCredential? = None,
+  cached_models~ : Json? = None,
+  credential_store~ : &@oauth.ProviderCredentialStore? = None,
 ) -> ProviderConfigSource {
   {
     settings,

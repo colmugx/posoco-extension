@@ -65,7 +65,7 @@ impl GlobScanner for NativeGlobScanner with fn scan(
 /// Sort paths by mtime descending; ties fall back to path ascending.
 /// A failed stat sinks the entry to the end.
 async fn sort_newest_first(paths : Array[String]) -> Unit noraise {
-  let stamps : Array[(Int64, Int, String)] = []
+  let stamps : Array[(Int64, Int32, String)] = []
   for path in paths {
     let (s, ns) = @fs.mtime(path) catch { _ => (0L, 0) }
     stamps.push((s, ns, path))

@@ -62,16 +62,16 @@ pub(all) struct RouterModelPort {
 /// callers never see a partially populated routing table.
 pub fn RouterModelPort::RouterModelPort(
   slots~ : Array[ModelSlot],
-  default_slot_id? : String = "",
-  allow_missing_default? : Bool = false,
-  bus? : @devkit.EventBus? = None,
-  model_metadata? : ModelMetadata? = None,
-  provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
-  cred_store? : &@oauth.CredentialStore? = None,
-  auth_interaction? : &@oauth.AuthInteraction? = None,
-  api_key_store? : &@oauth.ApiKeyStore? = None,
-  auth_prompt? : &@oauth.AuthPromptInteraction? = None,
-  extra_quota_sources? : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
+  default_slot_id~ : String = "",
+  allow_missing_default~ : Bool = false,
+  bus~ : @devkit.EventBus? = None,
+  model_metadata~ : ModelMetadata? = None,
+  provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
+  cred_store~ : &@oauth.CredentialStore? = None,
+  auth_interaction~ : &@oauth.AuthInteraction? = None,
+  api_key_store~ : &@oauth.ApiKeyStore? = None,
+  auth_prompt~ : &@oauth.AuthPromptInteraction? = None,
+  extra_quota_sources~ : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
 ) -> RouterModelPort raise @posoco.CompositionError {
   if slots.is_empty() {
     raise @posoco.CompositionError::EmptyPort("posoco_ext_llm.slots")
@@ -143,17 +143,17 @@ pub fn RouterModelPort::RouterModelPort(
 /// catalogs and lets `new` perform the final collision check.
 pub fn RouterModelPort::from_catalogs(
   catalogs : Array[ProviderModelCatalog],
-  default_slot_id? : String = "",
-  allow_missing_default? : Bool = false,
-  bus? : @devkit.EventBus? = None,
-  model_metadata? : ModelMetadata? = None,
-  provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
-  cred_store? : &@oauth.CredentialStore? = None,
-  auth_interaction? : &@oauth.AuthInteraction? = None,
-  api_key_store? : &@oauth.ApiKeyStore? = None,
-  auth_prompt? : &@oauth.AuthPromptInteraction? = None,
-  extra_quota_sources? : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
-  transient_retry? : TransientRetryPolicy? = Some(
+  default_slot_id~ : String = "",
+  allow_missing_default~ : Bool = false,
+  bus~ : @devkit.EventBus? = None,
+  model_metadata~ : ModelMetadata? = None,
+  provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
+  cred_store~ : &@oauth.CredentialStore? = None,
+  auth_interaction~ : &@oauth.AuthInteraction? = None,
+  api_key_store~ : &@oauth.ApiKeyStore? = None,
+  auth_prompt~ : &@oauth.AuthPromptInteraction? = None,
+  extra_quota_sources~ : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
+  transient_retry~ : TransientRetryPolicy? = Some(
     TransientRetryPolicy::default(),
   ),
 ) -> RouterModelPort raise @posoco.CompositionError {
@@ -424,7 +424,7 @@ fn current_user_text(messages : ArrayView[@posoco.Message]) -> String? {
 }
 
 ///|
-fn highest_probability_index(probabilities : Array[Double]) -> Int? {
+fn highest_probability_index(probabilities : Array[Double]) -> Int32? {
   if probabilities.is_empty() {
     return None
   }
@@ -444,7 +444,7 @@ fn highest_probability_index(probabilities : Array[Double]) -> Int? {
 async fn RouterModelPort::decision_slot_for_chat(
   self : RouterModelPort,
   messages : ArrayView[@posoco.Message],
-  tool_count : Int,
+  tool_count : Int32,
 ) -> ModelSlot? noraise {
   if self.active_effort is Some(_) {
     return None

@@ -23,9 +23,9 @@ priv struct ResolvedToolchain {
 /// usable one.
 #warnings("-unused_value")
 fn resolve_toolchain(
-  bin_override? : String? = None,
-  path_env? : String? = None,
-  home_dir? : String? = None,
+  bin_override~ : String? = None,
+  path_env~ : String? = None,
+  home_dir~ : String? = None,
 ) -> ResolvedToolchain? {
   let candidates = toolchain_candidates(bin_override~, path_env~, home_dir~)
   if candidates.length() == 0 {
@@ -39,9 +39,9 @@ fn resolve_toolchain(
 /// directory), then each PATH entry in order (":"-separated POSIX PATH;
 /// empty entries are skipped), then `<home>/.moon/bin` last.
 fn toolchain_candidates(
-  bin_override? : String? = None,
-  path_env? : String? = None,
-  home_dir? : String? = None,
+  bin_override~ : String? = None,
+  path_env~ : String? = None,
+  home_dir~ : String? = None,
 ) -> Array[String] {
   let candidates : Array[String] = []
   match bin_override {

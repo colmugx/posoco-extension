@@ -13,7 +13,7 @@ pub(all) struct OpenAIConfig {
   /// Context capacity reported by Codex model discovery, in tokens. `None`
   /// = unknown (API-key discovery reports no window); auto-compact stays
   /// off rather than guessing.
-  context_window : Int?
+  context_window : Int32?
   use_responses_lite : Bool
 }
 
@@ -96,7 +96,7 @@ pub(all) struct OpenAIModelPort {
 ///|
 pub fn OpenAIModelPort::OpenAIModelPort(
   config : OpenAIConfig,
-  quota_tracker? : CodexQuotaTracker? = None,
+  quota_tracker~ : CodexQuotaTracker? = None,
 ) -> OpenAIModelPort {
   { config, quota_tracker, }
 }
@@ -107,9 +107,9 @@ pub fn OpenAIModelPort::OpenAIModelPort(
 /// bounded, whitespace-collapsed excerpt may cross it — the full provider
 /// payload never does.
 priv enum OpenAIErrorBodySummary {
-  BodyChars(Int)
-  BodyBytesUtf8(Int)
-  BodyBytesInvalidUtf8(Int)
+  BodyChars(Int32)
+  BodyBytesUtf8(Int32)
+  BodyBytesInvalidUtf8(Int32)
   BodyReadFailed
   BodyUnavailable
 }
@@ -118,8 +118,8 @@ priv enum OpenAIErrorBodySummary {
 /// Pure non-2xx body classification. Callers pass only lengths and decode
 /// success, so provider payloads cannot cross this boundary.
 fn classify_openai_error_body(
-  byte_length : Int,
-  decoded_chars : Int?,
+  byte_length : Int32,
+  decoded_chars : Int32?,
 ) -> OpenAIErrorBodySummary {
   match decoded_chars {
     Some(chars) => BodyChars(chars)
@@ -147,7 +147,7 @@ async fn read_error_body_summary(
 /// Pure bounded error-body excerpt: trim, collapse every whitespace run
 /// (including newlines) to single spaces, and hard-cap at `limit` chars.
 /// Returns `None` when nothing usable remains.
-fn bounded_error_excerpt(text : String, limit? : Int = 240) -> String? {
+fn bounded_error_excerpt(text : String, limit~ : Int32 = 240) -> String? {
   let buf = StringBuilder()
   let mut written = 0
   let mut pending_space = false
@@ -179,9 +179,9 @@ fn bounded_error_excerpt(text : String, limit? : Int = 240) -> String? {
 /// — only the size/category summary and a whitespace-collapsed excerpt pass.
 fn format_openai_http_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body_summary : OpenAIErrorBodySummary,
-  excerpt? : String? = None,
+  excerpt~ : String? = None,
 ) -> String {
   let summary = http_error_body_summary_text(body_summary)
   let excerpt_field = match excerpt {
@@ -192,7 +192,7 @@ fn format_openai_http_error(
 }
 
 ///|
-fn is_openai_http_success(status : Int) -> Bool {
+fn is_openai_http_success(status : Int32) -> Bool {
   status >= 200 && status < 300
 }
 
@@ -203,9 +203,9 @@ fn is_openai_http_success(status : Int) -> Bool {
 /// body was decodable — a bounded body excerpt.
 fn classify_openai_http_status(
   stage : String,
-  status : Int,
+  status : Int32,
   body_summary : OpenAIErrorBodySummary,
-  excerpt? : String? = None,
+  excerpt~ : String? = None,
 ) -> @posoco.ModelError? {
   if is_openai_http_success(status) {
     None
@@ -225,7 +225,7 @@ fn classify_openai_http_status(
 /// can record the verdict and schedule resume. Any other status returns
 /// None and keeps the generic HTTP-status path.
 fn openai_quota_verdict(
-  status : Int,
+  status : Int32,
   body_text : String?,
   retry_after : String?,
   now_ms~ : Int64,
@@ -370,8 +370,8 @@ fn build_request_body(
   options : @posoco.ChatOptions,
   model : String,
   reasoning_effort : String?,
-  instructions? : String = "",
-  stream? : Bool = false,
+  instructions~ : String = "",
+  stream~ : Bool = false,
 ) -> Json {
   let fields : Array[(String, Json)] = [
     ("model", Json::string(model)),
@@ -440,8 +440,8 @@ fn openai_prepare_request_body(
   instructions : Array[String],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
-  stream? : Bool = false,
-  extra_fields? : Array[(String, Json)] = [],
+  stream~ : Bool = false,
+  extra_fields~ : Array[(String, Json)] = [],
 ) -> Json {
   let body = build_request_body(
     input_items,
@@ -480,7 +480,7 @@ fn openai_prepare_request(
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
-  stream? : Bool = false,
+  stream~ : Bool = false,
 ) -> Json raise @posoco.ModelError {
   let input = openai_encode_window_items(messages)
   let (history, instructions) = split_openai_base_instructions(input)
@@ -780,7 +780,7 @@ async fn openai_post_json(
   path : String,
   body : Json,
   session_id : String?,
-  quota_tracker? : CodexQuotaTracker? = None,
+  quota_tracker~ : CodexQuotaTracker? = None,
 ) -> Json raise @posoco.ModelError {
   let headers = build_headers(config, session_id, false)
   let (origin, path_prefix) = split_openai_base_url(config.base_url)
@@ -831,7 +831,7 @@ async fn openai_post_json(
   }
   if !is_openai_http_success(response.code) {
     let body_text : String? = Some(body_data.text()) catch { _ => None }
-    let decoded_chars : Int? = match body_text {
+    let decoded_chars : Int32? = match body_text {
       Some(text) => Some(text.length())
       None => None
     }

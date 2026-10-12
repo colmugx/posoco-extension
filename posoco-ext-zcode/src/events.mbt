@@ -1,8 +1,8 @@
 ///|
 pub(all) struct ZcodeUsage {
-  input_tokens : Int
-  output_tokens : Int
-  total_tokens : Int
+  input_tokens : Int32
+  output_tokens : Int32
+  total_tokens : Int32
 } derive(Eq, Debug)
 
 ///|

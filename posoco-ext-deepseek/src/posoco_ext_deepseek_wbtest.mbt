@@ -1642,7 +1642,7 @@ fn ds_auto_fixture() -> Array[@posoco.Message] {
 
 ///|
 fn dsc_scope(
-  pressure? : @posoco.ContextPressure? = None,
+  pressure~ : @posoco.ContextPressure? = None,
 ) -> @posoco.InvocationScope {
   {
     session_id: @posoco.SessionId::unchecked("session"),

@@ -182,7 +182,7 @@ fn int_field(
   entry : Map[String, Json],
   key : String,
   server : String,
-) -> Result[Int?, String] {
+) -> Result[Int32?, String] {
   match entry.get(key) {
     None => Ok(None)
     Some(Json::Number(value, ..)) =>

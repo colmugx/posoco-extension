@@ -12,15 +12,15 @@ test "wf skeleton" {
 priv struct FakeHttpIo {
   replies : Array[HttpReply]
   urls : Array[String]
-  mut calls : Int
-  delay_ms : Int
+  mut calls : Int32
+  delay_ms : Int32
 }
 
 ///|
 impl HttpIo for FakeHttpIo with fn fetch(
   self : FakeHttpIo,
   url : String,
-  _max_bytes : Int,
+  _max_bytes : Int32,
 ) -> HttpReply raise @posoco.RuntimeError {
   self.calls = self.calls + 1
   self.urls.push(url)
@@ -41,9 +41,9 @@ impl HttpIo for FakeHttpIo with fn fetch(
 /// so tests can assert how many fetches ran and which URLs were requested.
 fn wf_tools(
   replies : Array[HttpReply],
-  max_chars? : Int = 24_000,
-  timeout_ms? : Int = 30_000,
-  delay_ms? : Int = 0,
+  max_chars~ : Int32 = 24_000,
+  timeout_ms~ : Int32 = 30_000,
+  delay_ms~ : Int32 = 0,
 ) -> (WebFetchTools, FakeHttpIo) {
   let io : FakeHttpIo = { replies, urls: [], calls: 0, delay_ms, }
   let tools = WebFetchTools::WebFetchTools(
@@ -55,7 +55,7 @@ fn wf_tools(
 }
 
 ///|
-fn wf_call(url : String, offset? : Int) -> @posoco.ToolCall {
+fn wf_call(url : String, offset? : Int32) -> @posoco.ToolCall {
   let fields : Array[(String, Json)] = [("url", Json::string(url))]
   match offset {
     Some(o) => fields.push(("offset", Json::number(o.to_double())))
@@ -91,7 +91,7 @@ async fn try_wf(
 }
 
 ///|
-fn try_args(args : Json) -> Result[(ParsedUrl, Int?), @posoco.RuntimeError] {
+fn try_args(args : Json) -> Result[(ParsedUrl, Int32?), @posoco.RuntimeError] {
   Ok(extract_fetch_args(args)) catch {
     error => Err(error)
   }

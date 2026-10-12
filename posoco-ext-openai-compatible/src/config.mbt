@@ -22,7 +22,7 @@ pub(all) struct OpenAICompatibleConfig {
   /// Declared context capacity of `model`, in tokens (settings
   /// `models[].context_window`). `None` = undeclared; auto-compact stays off
   /// for this model rather than guessing a window.
-  context_window : Int?
+  context_window : Int32?
   /// Declared auto-compact trigger point as a fraction of the context window,
   /// in (0, 1] (settings `models[].compact_threshold`). `None` = the
   /// host/core default (0.88) applies.
@@ -52,13 +52,13 @@ pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(
   api_key : String,
   base_url~ : String,
   model~ : String,
-  endpoint_prefix? : String = "",
-  reasoning_effort? : String? = None,
-  thinking_efforts? : Array[String] = [],
-  context_window? : Int? = None,
-  compact_threshold? : Double? = None,
-  supports_images? : Bool = false,
-  send_prompt_cache_key? : Bool = false,
+  endpoint_prefix~ : String = "",
+  reasoning_effort~ : String? = None,
+  thinking_efforts~ : Array[String] = [],
+  context_window~ : Int32? = None,
+  compact_threshold~ : Double? = None,
+  supports_images~ : Bool = false,
+  send_prompt_cache_key~ : Bool = false,
 ) -> OpenAICompatibleConfig {
   {
     api_key,

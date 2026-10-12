@@ -4,9 +4,9 @@
 /// `end < total` means truncation. `end` doubles as the next page's offset.
 priv struct PageSlice {
   body : String
-  offset : Int
-  end : Int
-  total : Int
+  offset : Int32
+  end : Int32
+  total : Int32
   truncated : Bool
 }
 
@@ -14,7 +14,11 @@ priv struct PageSlice {
 /// Character-safe slicing: offsets and lengths count Unicode scalars (via
 /// `for c in s`), so slicing never tears a surrogate pair. Returns None when
 /// offset < 0 or offset >= total. Negative max_chars is treated as 0.
-fn slice_chars(content : String, offset : Int, max_chars : Int) -> PageSlice? {
+fn slice_chars(
+  content : String,
+  offset : Int32,
+  max_chars : Int32,
+) -> PageSlice? {
   if offset < 0 {
     return None
   }
@@ -74,20 +78,20 @@ fn format_redirect(_original : String, target : String) -> String {
 
 ///|
 priv enum ErrKind {
-  HttpError(status~ : Int, reason~ : String, url~ : String)
-  TooLarge(bytes~ : Int, url~ : String)
-  TimedOut(ms~ : Int, url~ : String)
+  HttpError(status~ : Int32, reason~ : String, url~ : String)
+  TooLarge(bytes~ : Int32, url~ : String)
+  TimedOut(ms~ : Int32, url~ : String)
   UnsupportedType(ct~ : String, url~ : String)
   HostBlocked(host~ : String, reason~ : String)
-  TooManyRedirects(hops~ : Int, url~ : String)
+  TooManyRedirects(hops~ : Int32, url~ : String)
   Transport(msg~ : String, url~ : String)
-  OffsetPastEnd(offset~ : Int, total~ : Int, url~ : String)
+  OffsetPastEnd(offset~ : Int32, total~ : Int32, url~ : String)
 }
 
 ///|
 /// Recovery advice bucket for an HTTP status. 404/403/5xx get specific hints;
 /// every other status falls into the generic "check the URL" bucket.
-fn http_advice(status : Int) -> String {
+fn http_advice(status : Int32) -> String {
   if status == 404 {
     "the page may have moved; try the site index or a search"
   } else if status == 403 {
@@ -121,14 +125,14 @@ fn format_error(kind : ErrKind) -> String {
 fn structured_json(
   url_requested~ : String,
   url_final~ : String,
-  status~ : Int,
+  status~ : Int32,
   content_type~ : String,
-  bytes_fetched~ : Int,
-  chars_total~ : Int,
-  chars_returned~ : Int,
-  offset~ : Int,
+  bytes_fetched~ : Int32,
+  chars_total~ : Int32,
+  chars_returned~ : Int32,
+  offset~ : Int32,
   truncated~ : Bool,
-  elapsed_ms~ : Int,
+  elapsed_ms~ : Int32,
   cached~ : Bool,
 ) -> Json {
   Json::object(

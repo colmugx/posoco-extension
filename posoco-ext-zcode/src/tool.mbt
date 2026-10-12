@@ -21,7 +21,7 @@ const ZCODE_RESULT_CHAR_CAP = 32_000
 const ZCODE_RESULT_HEAD_CHARS = 4_000
 
 ///|
-fn zcode_char_count(text : String) -> Int {
+fn zcode_char_count(text : String) -> Int32 {
   let mut count = 0
   for _ in text {
     count += 1
@@ -30,7 +30,7 @@ fn zcode_char_count(text : String) -> Int {
 }
 
 ///|
-fn zcode_take_chars(text : String, limit : Int) -> String {
+fn zcode_take_chars(text : String, limit : Int32) -> String {
   let chars : Array[Char] = []
   let mut count = 0
   for ch in text {
@@ -44,7 +44,7 @@ fn zcode_take_chars(text : String, limit : Int) -> String {
 }
 
 ///|
-fn zcode_tail_chars(text : String, total : Int, limit : Int) -> String {
+fn zcode_tail_chars(text : String, total : Int32, limit : Int32) -> String {
   let skip = total - limit
   let chars : Array[Char] = []
   let mut index = 0
@@ -104,8 +104,8 @@ pub(all) struct ZcodeTools {
 
 ///|
 pub fn zcode_tools(
-  config? : ZcodeConfig = zcode_config(),
-  run? : (async (ZcodeTaskArgs) -> String)? = None,
+  config~ : ZcodeConfig = zcode_config(),
+  run~ : (async (ZcodeTaskArgs) -> String)? = None,
 ) -> ZcodeTools {
   let runner : async (ZcodeTaskArgs) -> String = match run {
     Some(f) => f
@@ -338,7 +338,7 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn list_tools(
 /// RuntimeError::InvocationFailed, with a repair hint for model-config.
 fn zcode_runtime_error(
   error : ZcodeError,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> @posoco.RuntimeError {
   let message = match error {
     ZcodeTimeout => "zcode: delegation exceeded the \{timeout_ms}ms wall clock"

@@ -98,7 +98,7 @@ let hard_max_skill_location_chars = 32768
 let hard_max_resource_warning_chars = 512
 
 ///|
-fn is_unsafe_control_code(code : Int) -> Bool {
+fn is_unsafe_control_code(code : Int32) -> Bool {
   code < 32 ||
   code == 127 ||
   (code >= 128 && code <= 159) ||
@@ -134,7 +134,7 @@ fn runtime_skill_name_is_safe(value : String) -> Bool {
 /// Return at most `max_scalars` Unicode scalar values without slicing a String
 /// at an arbitrary UTF-16 code-unit offset. MoonBit String slicing requires a
 /// scalar boundary; direct `value[:N]` can abort when N splits a surrogate pair.
-fn unicode_scalar_prefix(value : String, max_scalars : Int) -> String {
+fn unicode_scalar_prefix(value : String, max_scalars : Int32) -> String {
   if max_scalars <= 0 {
     return ""
   }
@@ -153,7 +153,7 @@ fn unicode_scalar_prefix(value : String, max_scalars : Int) -> String {
 ///|
 /// Produce a bounded human-readable preview. If the input exceeds the scalar
 /// budget, reserve the final scalar for an ellipsis.
-fn unicode_scalar_preview(value : String, max_scalars : Int) -> String {
+fn unicode_scalar_preview(value : String, max_scalars : Int32) -> String {
   if max_scalars <= 0 {
     return ""
   }
@@ -209,11 +209,11 @@ pub fn SkillDescriptor::SkillDescriptor(
   skill_md_path~ : String,
   skill_dir~ : String,
   scope~ : SkillScope,
-  license? : String? = None,
-  compatibility? : String? = None,
-  allowed_tools? : String? = None,
-  metadata? : Map[String, String] = Map([]),
-  body? : String? = None,
+  license~ : String? = None,
+  compatibility~ : String? = None,
+  allowed_tools~ : String? = None,
+  metadata~ : Map[String, String] = Map([]),
+  body~ : String? = None,
 ) -> SkillDescriptor {
   {
     name,
@@ -483,14 +483,14 @@ pub(all) struct SkillDiscoveryOptions {
   /// Maximum number of directory entries inspected across skill roots. This
   /// bounds pathological roots even though WorkspaceFs::readdir still
   /// materializes each individual directory listing.
-  max_candidates : Int
+  max_candidates : Int32
   /// Maximum number of collision-resolved skills retained in the runtime
   /// catalog. This separately bounds startup prompt/tool-schema growth.
-  max_skills : Int
+  max_skills : Int32
   /// Maximum characters accepted for one SKILL.md during metadata discovery.
   /// WorkspaceFs currently reads whole UTF-8 files, so this is an acceptance
   /// limit rather than a partial-I/O limit.
-  max_skill_file_chars : Int
+  max_skill_file_chars : Int32
 }
 
 ///|
@@ -537,7 +537,7 @@ pub fn SkillDiscoveryOptions::validate(
 pub(all) struct SkillsConfig {
   /// Maximum characters contributed by the generic catalog prompt. Zero
   /// disables the generic catalog body without disabling tools.
-  catalog_max_chars : Int
+  catalog_max_chars : Int32
   /// If false, Skills contributes tools only. Product hosts can render the
   /// catalog through their own SystemPromptContributor (for example an XML
   /// envelope) without duplicate prompt disclosure.
@@ -545,26 +545,26 @@ pub(all) struct SkillsConfig {
   activate_tool_name : String
   read_resource_tool_name : String
   /// Maximum total SKILL.md characters accepted during activation.
-  max_activation_file_chars : Int
+  max_activation_file_chars : Int32
   /// Maximum instruction-body characters returned by activation.
-  max_instruction_chars : Int
+  max_instruction_chars : Int32
   /// Maximum number of resource files listed during activation. Zero means
   /// activation does not enumerate resource files.
-  max_resource_entries : Int
+  max_resource_entries : Int32
   /// Maximum aggregate characters of model-visible resource paths emitted by
   /// one activation listing. Zero disables automatic resource enumeration.
-  max_resource_listing_chars : Int
+  max_resource_listing_chars : Int32
   /// Maximum detailed resource-walker warnings included in one activation.
   /// Additional warnings are counted but not copied into model context.
-  max_resource_warnings : Int
+  max_resource_warnings : Int32
   /// Maximum directory nesting traversed while listing bundled resources.
   /// Zero means only files directly under the skill directory are listed.
-  max_resource_depth : Int
+  max_resource_depth : Int32
   /// Maximum filesystem entries inspected while building one activation's
   /// resource listing. This bounds wide/mostly-empty directory trees.
-  max_resource_nodes : Int
+  max_resource_nodes : Int32
   /// Maximum characters returned by one resource-read tool call.
-  max_resource_chars : Int
+  max_resource_chars : Int32
 }
 
 ///|

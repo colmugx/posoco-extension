@@ -4,7 +4,7 @@ struct FakeFs {
   dirs : Map[String, Array[String]]
   realpaths : Map[String, String]
   realpath_sequences : Map[String, Array[String]]
-  realpath_calls : Map[String, Int]
+  realpath_calls : Map[String, Int32]
   reads : Array[String]
   readdirs : Array[String]
 }
@@ -217,7 +217,7 @@ fn descriptor(
   name : String,
   description : String,
   dir : String,
-  scope? : SkillScope = SkillScope::Repository,
+  scope~ : SkillScope = SkillScope::Repository,
 ) -> SkillDescriptor {
   SkillDescriptor::SkillDescriptor(
     name~,
@@ -237,7 +237,7 @@ fn catalog_of(skills : Array[SkillDescriptor]) -> SkillCatalog {
 fn must_skills(
   fs : FakeFs,
   catalog : SkillCatalog,
-  config? : SkillsConfig = SkillsConfig::default(),
+  config~ : SkillsConfig = SkillsConfig::default(),
 ) -> Skills {
   Skills::from_catalog(fs, catalog~, config~).unwrap()
 }
@@ -256,7 +256,7 @@ fn has_diagnostic(
 }
 
 ///|
-fn repeat_text(ch : String, count : Int) -> String {
+fn repeat_text(ch : String, count : Int32) -> String {
   let b = StringBuilder()
   let mut i = 0
   while i < count {
@@ -1526,7 +1526,7 @@ test "runtime validation bounds canonical skill locations" {
 ///|
 test "resource warning details have an independent model-visible hard ceiling" {
   let warnings : Array[String] = []
-  let omitted : Ref[Int] = { val: 0, }
+  let omitted : Ref[Int32] = { val: 0, }
   record_listing_warning(
     warnings,
     omitted,

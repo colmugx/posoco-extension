@@ -14,7 +14,7 @@ pub(all) suberror ZcodeError {
   /// Wire decode failure or missing required protocol field.
   ZcodeProtocol(detail~ : String)
   /// The app-server answered a request with an error response.
-  ZcodeRpc(code~ : Int, message~ : String)
+  ZcodeRpc(code~ : Int32, message~ : String)
   /// Server message contains "Model config is missing" — the pushed provider
   /// registry was rejected; check ~/.zcode/v2 credentials.
   ZcodeModelConfig(detail~ : String)

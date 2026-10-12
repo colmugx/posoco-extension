@@ -136,7 +136,7 @@ pub(all) struct PlanMode {
   /// Accumulated planning narrative and how many assistant messages it
   /// already covers (see `record_draft_delta`).
   mut draft : String
-  mut draft_recorded : Int
+  mut draft_recorded : Int32
   mut status : PlanStatus
   /// Last status processed by `before_model`. Tracks transitions to `Off` so
   /// a one-time exit reminder is emitted only on the first turn after leaving
@@ -176,12 +176,12 @@ pub(all) struct PlanMode {
 /// }
 /// ```
 pub fn PlanMode::PlanMode(
-  config? : PlanModeConfig = PlanModeConfig::default(),
-  review? : &PlanReviewSource? = None,
-  bus? : @devkit.EventBus? = None,
-  fs? : &@workspace.WorkspaceFs? = None,
-  anchor? : @devkit.WorkspaceAnchor? = None,
-  session_name? : String = "",
+  config~ : PlanModeConfig = PlanModeConfig::default(),
+  review~ : &PlanReviewSource? = None,
+  bus~ : @devkit.EventBus? = None,
+  fs~ : &@workspace.WorkspaceFs? = None,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
+  session_name~ : String = "",
 ) -> PlanMode {
   // Report the enter/exit tools on the `tool_exemptions` bus topic so a
   // subscribed permission gate lets them bypass its approval asks — their

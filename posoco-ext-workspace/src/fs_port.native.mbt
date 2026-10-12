@@ -76,7 +76,7 @@ pub impl WorkspaceFs for NativeWorkspaceFs with fn write_file(
 ///|
 /// Names are candidates only: exclusive creation establishes ownership even
 /// across processes and in the presence of stale files or symlinks.
-let atomic_write_counter : Ref[Int] = { val: 0, }
+let atomic_write_counter : Ref[Int32] = { val: 0, }
 
 ///|
 fn atomic_write_candidate(path : String) -> String {
@@ -90,8 +90,8 @@ fn atomic_write_candidate(path : String) -> String {
 async fn native_write_file_atomic(
   path : String,
   content : String,
-  next_candidate? : (String) -> String = atomic_write_candidate,
-  write? : async (@fs.File, String) -> Unit = async fn(file, text) {
+  next_candidate~ : (String) -> String = atomic_write_candidate,
+  write~ : async (@fs.File, String) -> Unit = async fn(file, text) {
     file.write(text)
   },
 ) -> Unit raise WorkspaceFsError {

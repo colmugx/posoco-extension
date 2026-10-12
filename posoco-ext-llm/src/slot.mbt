@@ -15,7 +15,7 @@ pub(all) struct ModelSlot {
   thinking_efforts : Array[String]
   /// Provider-declared context capacity, when the discovery endpoint reports
   /// one.  Hosts treat this as opaque metadata; it never drives selection.
-  context_window : Int?
+  context_window : Int32?
   context_window_source : String
   /// Serving-provider key in models.dev; an empty key opts out of lookup.
   metadata_provider_id : String?
@@ -43,18 +43,18 @@ pub fn ModelSlot::ModelSlot(
   provider_id~ : String,
   model_id~ : String,
   port~ : &@posoco.ModelPort,
-  oauth? : &@oauth.OAuthProvider? = None,
-  api_key? : &ApiKeyFactory? = None,
-  thinking_efforts? : Array[String] = [],
-  context_window? : Int? = None,
-  context_window_source? : String = "provider",
-  metadata_provider_id? : String? = None,
-  capabilities? : Array[String] = [],
-  default_effort? : String? = None,
-  display_group? : String? = None,
-  rebuild_on_credential? : ((@oauth.Credential) -> ModelSlot)? = None,
-  rebuild_on_api_key? : ((@oauth.ApiKeyCredential) -> ModelSlot)? = None,
-  rebuild_on_effort? : ((String) -> ModelSlot)? = None,
+  oauth~ : &@oauth.OAuthProvider? = None,
+  api_key~ : &ApiKeyFactory? = None,
+  thinking_efforts~ : Array[String] = [],
+  context_window~ : Int32? = None,
+  context_window_source~ : String = "provider",
+  metadata_provider_id~ : String? = None,
+  capabilities~ : Array[String] = [],
+  default_effort~ : String? = None,
+  display_group~ : String? = None,
+  rebuild_on_credential~ : ((@oauth.Credential) -> ModelSlot)? = None,
+  rebuild_on_api_key~ : ((@oauth.ApiKeyCredential) -> ModelSlot)? = None,
+  rebuild_on_effort~ : ((String) -> ModelSlot)? = None,
 ) -> ModelSlot {
   {
     id,

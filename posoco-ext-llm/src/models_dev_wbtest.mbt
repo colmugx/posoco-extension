@@ -1,6 +1,6 @@
 ///|
 priv struct MetadataTestTransport {
-  mut calls : Int
+  mut calls : Int32
   mut payload : Json
   mut broken : Bool
 }
@@ -20,7 +20,7 @@ impl ModelMetadataTransport for MetadataTestTransport with fn fetch(
 ///|
 priv struct MetadataTestStore {
   mut value : Json?
-  mut writes : Int
+  mut writes : Int32
   mut broken : Bool
 }
 
@@ -266,7 +266,7 @@ async test "router effective window reaches provider_config and status" {
 
 ///|
 priv struct BlockingMetadataTransport {
-  mut calls : Int
+  mut calls : Int32
 }
 
 ///|
@@ -306,10 +306,10 @@ async test "models.dev cancellation releases refresh gate and allows retry" {
 
 ///|
 priv struct WindowPolicyTestPort {
-  occupancy : Int
-  rounds : Int
-  mut calls : Int
-  windows : Array[Int?]
+  occupancy : Int32
+  rounds : Int32
+  mut calls : Int32
+  windows : Array[Int32?]
 }
 
 ///|
@@ -405,9 +405,9 @@ impl @posoco.Extension for WindowPolicyTestExtension with fn manifest(
 ///|
 async fn exercise_window_policy(
   metadata : ModelMetadata?,
-  occupancy : Int,
-  rounds : Int,
-) -> Array[Int?] {
+  occupancy : Int32,
+  rounds : Int32,
+) -> Array[Int32?] {
   let port = WindowPolicyTestPort::{ occupancy, rounds, calls: 0, windows: [], }
   let router = RouterModelPort(
     slots=[
@@ -451,4 +451,74 @@ async test "Agent auto compact uses models.dev and fallback rather than cumulati
   assert_eq(exercise_window_policy(None, 410000, 1), [Some(500000)])
   assert_eq(exercise_window_policy(Some(metadata), 500000, 2), [])
   assert_eq(exercise_window_policy(None, 250000, 2), [])
+}
+
+///|
+async test "metadata warnings only describe the active fallback model once" {
+  let transport = MetadataTestTransport::{
+    calls: 0,
+    payload: metadata_fixture(),
+    broken: false,
+  }
+  let warnings : Array[String] = []
+  let metadata = ModelMetadata(transport~, warn=fn(message) {
+    warnings.push(message)
+  })
+  let slots = ["deepseek-flash", "unknown-a", "unknown-b", "unknown-c"].map(model => {
+    ModelSlot(
+      id="deepseek/" + model,
+      label=model,
+      provider_id="deepseek",
+      model_id=model,
+      port=RouterTestPort::{ reasoning_effort_values: [], },
+    )
+  })
+  let router = RouterModelPort(slots~, model_metadata=Some(metadata))
+  router.refresh_model_metadata()
+  assert_eq(warnings.length(), 0)
+  router.switch_slot("deepseek/unknown-a")
+  router.refresh_model_metadata()
+  router.refresh_model_metadata()
+  assert_eq(warnings.length(), 1)
+  assert_true(warnings[0].contains("deepseek/unknown-a"))
+  assert_true(warnings[0].contains("500000"))
+  assert_true(warnings[0].contains("overflow"))
+  router.switch_slot("deepseek/unknown-b")
+  router.refresh_model_metadata()
+  assert_eq(warnings.length(), 2)
+  router.switch_slot("deepseek/unknown-a")
+  router.refresh_model_metadata()
+  assert_eq(warnings.length(), 2)
+}
+
+///|
+async test "partial metadata responses back off and repeated diagnostics do not spam" {
+  let transport = MetadataTestTransport::{
+    calls: 0,
+    payload: metadata_fixture(),
+    broken: false,
+  }
+  let warnings : Array[String] = []
+  let metadata = ModelMetadata(transport~, warn=fn(message) {
+    warnings.push(message)
+  })
+  metadata.refresh(["deepseek", "missing-a", "missing-b"], now=1000L)
+  assert_eq(transport.calls, 1)
+  assert_eq(warnings.length(), 1)
+  assert_true(warnings[0].contains("missing-a, missing-b"))
+  metadata.refresh(["deepseek", "missing-a", "missing-b"], now=2000L)
+  assert_eq(transport.calls, 1)
+  metadata.refresh(["deepseek", "missing-a", "missing-b"], now=62000L)
+  assert_eq(transport.calls, 2)
+  assert_eq(warnings.length(), 1)
+  transport.broken = true
+  metadata.refresh(["missing-a"], now=123000L)
+  assert_eq(warnings.length(), 2)
+  metadata.refresh(["missing-a"], now=184000L)
+  assert_eq(transport.calls, 4)
+  assert_eq(warnings.length(), 2)
+  assert_true(warnings[1].contains("offline"))
+  transport.broken = false
+  metadata.refresh(["zai"], now=245000L)
+  assert_eq(metadata.lookup("zai", "glm-5.3", now=245000L).tokens, 200000)
 }

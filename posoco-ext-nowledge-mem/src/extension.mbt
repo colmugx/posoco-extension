@@ -1,6 +1,6 @@
 ///|
 /// Flusher poll interval, matching upstream THREAD_SYNC_DEBOUNCE_MS = 750.
-const NMEM_FLUSHER_INTERVAL_MS : Int = 750
+const NMEM_FLUSHER_INTERVAL_MS : Int32 = 750
 
 ///|
 /// Minimum spacing between mid-turn drains (ms): `before_tool` drains only
@@ -62,7 +62,7 @@ pub struct NowledgeMem {
   transport : &NmemTransport
   mcp : &NmemMcp
   platform : &NmemPlatform
-  mut timeout_ms : Int
+  mut timeout_ms : Int32
   /// Wall-clock ms (`@async.now`, Int64) of the last drain — start, turn
   /// end, or a `before_tool` throttle hit — gating the mid-turn drain
   /// cadence.
@@ -111,7 +111,7 @@ pub fn NowledgeMem::NowledgeMem(
   transport~ : &NmemTransport,
   mcp~ : &NmemMcp,
   platform~ : &NmemPlatform,
-  expose_delete_tool? : Bool = false,
+  expose_delete_tool~ : Bool = false,
 ) -> NowledgeMem {
   {
     config: None,

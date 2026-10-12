@@ -20,12 +20,12 @@ priv struct FakeAcpClient {
 
 ///|
 fn FakeAcpClient::FakeAcpClient(
-  reply? : @acp.RequestPermissionResponse = {
+  reply~ : @acp.RequestPermissionResponse = {
     outcome: Selected({ option_id: ACP_ALLOW_ONCE, meta: Omitted, }),
     meta: Omitted,
   },
-  fail_permission? : Bool = false,
-  elicit_reply? : @acp.ElicitationCreateResult = {
+  fail_permission~ : Bool = false,
+  elicit_reply~ : @acp.ElicitationCreateResult = {
     action: Accept,
     content: Omitted,
     meta: Omitted,
@@ -90,8 +90,8 @@ fn fake_acp_context(client : FakeAcpClient) -> @acp.AgentContext {
 ///|
 fn tk_call(
   name : String,
-  id? : String = "call-1",
-  arguments? : Json = Json::object({}),
+  id~ : String = "call-1",
+  arguments~ : Json = Json::object({}),
 ) -> @posoco.ToolCall {
   {
     call_id: @posoco.CallId::unchecked(id),
@@ -102,10 +102,10 @@ fn tk_call(
 
 ///|
 fn tk_assistant(
-  content? : Array[@posoco.Content] = [],
-  tool_calls? : Array[@posoco.ToolCall] = [],
-  reasoning? : String = "",
-  finish? : @posoco.FinishReason = Stop,
+  content~ : Array[@posoco.Content] = [],
+  tool_calls~ : Array[@posoco.ToolCall] = [],
+  reasoning~ : String = "",
+  finish~ : @posoco.FinishReason = Stop,
 ) -> @posoco.Message {
   let reasoning_value : @posoco.Reasoning? = if reasoning == "" {
     None
@@ -121,7 +121,7 @@ fn tk_assistant(
 }
 
 ///|
-fn tk_usage(total : Int) -> @posoco.Usage {
+fn tk_usage(total : Int32) -> @posoco.Usage {
   {
     input_tokens: Some(total - 1),
     output_tokens: Some(1),
@@ -915,7 +915,7 @@ async test "pump forwards projection-time meta without re-deriving it" {
 /// Approval ask fixture: the parsed shape PermissionPolicy hands the bridge.
 fn tk_approval(
   name : String,
-  id? : String = "call-1",
+  id~ : String = "call-1",
 ) -> @permission.ApprovalRequest {
   {
     tool_name: name,

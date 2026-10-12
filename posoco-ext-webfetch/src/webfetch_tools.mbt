@@ -4,12 +4,12 @@
 /// redirect target instead). `bytes_read` counts body bytes before decode.
 /// `truncated` marks a body read that filled `max_bytes` without reaching EOF.
 pub(all) struct HttpReply {
-  status : Int
+  status : Int32
   reason : String
   content_type : String
   location : String?
   body : String
-  bytes_read : Int
+  bytes_read : Int32
   truncated : Bool
 }
 
@@ -18,7 +18,7 @@ pub(all) struct HttpReply {
 /// body stream stops at `max_bytes`. Implementations must return a reply for
 /// every HTTP status; only transport/decoding failures raise.
 pub(open) trait HttpIo {
-  async fn fetch(self : Self, url : String, max_bytes : Int) -> HttpReply raise @posoco.RuntimeError
+  async fn fetch(self : Self, url : String, max_bytes : Int32) -> HttpReply raise @posoco.RuntimeError
 }
 
 ///|
@@ -32,9 +32,9 @@ pub(open) trait HttpIo {
 /// memoizes converted documents per requested URL; the default cache runs
 /// on a constant-zero clock, so its TTL never expires.
 pub struct WebFetchTools {
-  timeout_ms : Int
-  max_chars : Int
-  byte_cap : Int
+  timeout_ms : Int32
+  max_chars : Int32
+  byte_cap : Int32
   cache : DocCache
   io : &HttpIo?
 }
@@ -42,11 +42,11 @@ pub struct WebFetchTools {
 ///|
 /// Canonical constructor. Use this everywhere to avoid cross-target naming drift.
 pub fn WebFetchTools::WebFetchTools(
-  timeout_ms? : Int = 30_000,
-  max_chars? : Int = 24_000,
-  byte_cap? : Int = 5_242_880,
+  timeout_ms~ : Int32 = 30_000,
+  max_chars~ : Int32 = 24_000,
+  byte_cap~ : Int32 = 5_242_880,
   cache? : DocCache,
-  io? : &HttpIo? = None,
+  io~ : &HttpIo? = None,
 ) -> WebFetchTools {
   let cache : DocCache = match cache {
     Some(c) => c

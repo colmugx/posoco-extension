@@ -28,7 +28,7 @@ pub impl @posoco.SessionStore for Memoh with fn save(
 pub impl @posoco.SessionStore for Memoh with fn append_messages(
   _self : Memoh,
   _id : String,
-  _from_index : Int,
+  _from_index : Int32,
   _messages : ArrayView[@posoco.Message],
 ) -> Unit raise @posoco.SessionError {
   ()
@@ -40,7 +40,7 @@ pub impl @posoco.SessionStore for Memoh with fn append_messages(
 pub impl @posoco.SessionStore for Memoh with fn truncate(
   _self : Memoh,
   _id : String,
-  _from_index : Int,
+  _from_index : Int32,
 ) -> Unit raise @posoco.SessionError {
   ()
 }

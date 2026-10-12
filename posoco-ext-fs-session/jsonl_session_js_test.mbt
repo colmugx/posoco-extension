@@ -12,7 +12,7 @@ extern "js" fn js_bun_available() -> Bool =
   #| () => typeof Bun !== "undefined"
 
 ///|
-extern "js" fn js_now_ms() -> Int =
+extern "js" fn js_now_ms() -> Int32 =
   #| () => Date.now()
 
 ///|

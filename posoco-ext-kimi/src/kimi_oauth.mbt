@@ -20,9 +20,9 @@ pub(all) struct KimiOAuth {
 
 ///|
 pub fn KimiOAuth::KimiOAuth(
-  transport? : &@oauth.OAuthHttpTransport? = None,
-  device_id? : String = "",
-  identity? : KimiIdentity? = None,
+  transport~ : &@oauth.OAuthHttpTransport? = None,
+  device_id~ : String = "",
+  identity~ : KimiIdentity? = None,
 ) -> KimiOAuth {
   {
     transport,
@@ -218,7 +218,7 @@ pub impl @oauth.OAuthProvider for KimiOAuth with fn refresh(
 ///|
 /// Token lifetimes must be finite positive integers; fractional values are
 /// rejected.
-fn parse_kimi_positive_integer(value : Double) -> Int? {
+fn parse_kimi_positive_integer(value : Double) -> Int32? {
   if value.is_nan() || value.is_inf() || value <= 0.0 {
     return None
   }

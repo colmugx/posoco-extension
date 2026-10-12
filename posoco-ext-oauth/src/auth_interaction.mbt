@@ -64,7 +64,7 @@ pub(all) struct AuthPromptOption {
 pub fn AuthPromptOption::AuthPromptOption(
   id~ : String,
   label~ : String,
-  description? : String? = None,
+  description~ : String? = None,
 ) -> AuthPromptOption {
   { id, label, description, }
 }

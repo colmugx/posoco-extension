@@ -176,7 +176,7 @@ pub fn zai_model_catalog_from_ids(
   ctx : @devkit.ExtContext,
   identity : ZaiCatalogIdentity,
   api_key : &@llm.ApiKeyFactory,
-  capabilities? : Array[String] = ["chat", "streaming", "api_key"],
+  capabilities~ : Array[String] = ["chat", "streaming", "api_key"],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   if ids.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
@@ -214,7 +214,7 @@ pub fn zai_model_catalog(
   ctx : @devkit.ExtContext,
   identity : ZaiCatalogIdentity,
   api_key : &@llm.ApiKeyFactory,
-  capabilities? : Array[String] = ["chat", "streaming", "api_key"],
+  capabilities~ : Array[String] = ["chat", "streaming", "api_key"],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   let ids : Array[String] = []
   for info in zai_models() {

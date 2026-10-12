@@ -16,7 +16,7 @@ impl Eq for ConnHealth with fn equal(self, other) {
 
 ///|
 /// See `Eq for ConnHealth` above: same rationale, Int-token instantiation.
-impl Eq for ConnReply[Int] with fn equal(self, other) {
+impl Eq for ConnReply[Int32] with fn equal(self, other) {
   match (self, other) {
     (Permit(a), Permit(b)) =>
       a.client == b.client && a.generation == b.generation
@@ -162,7 +162,9 @@ test "catalog_plan_builds_complete_reverse_map" {
 ///|
 test "catalog_collision_does_not_mutate_previous_snapshot" {
   let previous_tools = [catalog_test_tool("legacy__read")]
-  let previous_route : Map[String, Int] = Map::from_array([("legacy__read", 0)])
+  let previous_route : Map[String, Int32] = Map::from_array([
+    ("legacy__read", 0),
+  ])
   let ambiguous_name = "alpha__beta__gamma"
   let left = convert_tool_def(catalog_test_mcp_tool("beta__gamma"), "alpha")
   let right = convert_tool_def(catalog_test_mcp_tool("gamma"), "alpha__beta")
@@ -201,7 +203,9 @@ test "catalog_plan_rejects_incomplete_refresh" {
 ///|
 test "refresh_fetch_failure_preserves_previous_catalog" {
   let previous_tools = [catalog_test_tool("legacy__read")]
-  let previous_route : Map[String, Int] = Map::from_array([("legacy__read", 0)])
+  let previous_route : Map[String, Int32] = Map::from_array([
+    ("legacy__read", 0),
+  ])
   let fetches : Array[Result[CatalogEntry, String]] = [
     Ok(CatalogEntry::{
       connection_index: 0,
@@ -443,8 +447,8 @@ fn http_auth_token(t : @transport.HttpClientTransport) -> String {
 
 ///|
 fn http_params_test_transport(
-  auth_token? : String = "",
-  extra_headers? : Array[(String, String)] = [],
+  auth_token~ : String = "",
+  extra_headers~ : Array[(String, String)] = [],
 ) -> @transport.AnyTransport {
   @transport.AnyTransport::HttpClient(
     @transport.HttpClientTransport::HttpClientTransport(
@@ -550,7 +554,7 @@ fn registry_test_conn(
 ///|
 fn registry_test_bridge(
   conns : Array[MCPServerConn],
-  routes : Array[(String, Int)],
+  routes : Array[(String, Int32)],
 ) -> MCPToolBridge {
   {
     connections: conns,
@@ -637,7 +641,7 @@ test "retire_slot_clears_routes_and_keeps_slot_identity" {
 /// Observation cell for the defer unwinding probe.
 priv struct DeferProbe {
   mut deferred_ran : Bool
-  mut value_at_defer : Int
+  mut value_at_defer : Int32
   mut mut_capture_saw_latest : Bool
 }
 

@@ -1,7 +1,7 @@
 ///|
 /// Timeout for one port `search` (the `memory_search` MCP call) — off the
 /// model-call path, so it uses the full tool budget.
-const NMEM_MEMORY_SEARCH_TIMEOUT_MS : Int = 30000
+const NMEM_MEMORY_SEARCH_TIMEOUT_MS : Int32 = 30000
 
 ///|
 /// Render the server's `memory_search` reply as provider text: one
@@ -74,7 +74,7 @@ fn search_item_line(fields : Map[String, Json]) -> String? {
 pub impl @posoco.MemoryPort for NowledgeMem with fn search(
   self : NowledgeMem,
   query~ : String,
-  top_k? : Int,
+  top_k? : Int32,
 ) -> String? raise @posoco.MemoryError {
   if !self.attached || self.config is None {
     return None

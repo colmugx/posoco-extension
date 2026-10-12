@@ -202,7 +202,7 @@ fn RouterModelPort::rebuild_oauth_slots(
   self : RouterModelPort,
   provider_id : String,
   credential : @oauth.Credential,
-) -> Int {
+) -> Int32 {
   let replacements : Array[(String, ModelSlot)] = []
   for id in self.slot_order {
     match self.slots.get(id) {
@@ -232,7 +232,7 @@ fn RouterModelPort::rebuild_api_key_slots(
   self : RouterModelPort,
   provider_id : String,
   credential : @oauth.ApiKeyCredential,
-) -> Int {
+) -> Int32 {
   let replacements : Array[(String, ModelSlot)] = []
   for id in self.slot_order {
     match self.slots.get(id) {

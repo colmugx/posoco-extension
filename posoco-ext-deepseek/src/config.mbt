@@ -21,7 +21,7 @@ pub(all) struct DeepSeekConfig {
   /// Token budget ceiling reported to the host so auto-compact can size
   /// itself. None leaves auto-compact disabled — an unknown window is never
   /// guessed (the /models endpoint carries no context length).
-  context_window : Int?
+  context_window : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -33,11 +33,11 @@ pub extend DeepSeekConfig with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 pub fn DeepSeekConfig::DeepSeekConfig(
   api_key : String,
-  model? : String = "deepseek-flash",
-  base_url? : String = "https://api.deepseek.com",
-  endpoint_prefix? : String = "",
-  reasoning_effort? : String = "high",
-  context_window? : Int? = None,
+  model~ : String = "deepseek-flash",
+  base_url~ : String = "https://api.deepseek.com",
+  endpoint_prefix~ : String = "",
+  reasoning_effort~ : String = "high",
+  context_window~ : Int32? = None,
 ) -> DeepSeekConfig {
   if reasoning_effort != "" &&
     !deepseek_reasoning_efforts().contains(reasoning_effort) {
@@ -91,7 +91,7 @@ pub(all) struct DeepSeekModelPort {
 ///|
 pub fn DeepSeekModelPort::DeepSeekModelPort(
   config : DeepSeekConfig,
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> DeepSeekModelPort {
   { config, ctx, }
 }

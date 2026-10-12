@@ -44,7 +44,7 @@ fn tk_tool_not_executed(name : String) -> @posoco.Message {
 
 ///|
 /// "abcd" repeated n times: exactly 4n chars = exactly n estimated tokens.
-fn tk_big_tokens(n : Int) -> String {
+fn tk_big_tokens(n : Int32) -> String {
   let sb = StringBuilder()
   for _ in 0..<n {
     sb.write_string("abcd")
@@ -57,7 +57,7 @@ fn tk_big_tokens(n : Int) -> String {
 /// equals `expected`, keeping call id and tool name from `name`.
 fn tk_assert_cleared(
   messages : Array[@posoco.Message],
-  index : Int,
+  index : Int32,
   name : String,
   expected : String,
 ) -> Unit raise {

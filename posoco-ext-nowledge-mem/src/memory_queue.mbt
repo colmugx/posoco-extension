@@ -22,7 +22,7 @@
 ///|
 /// Timeout for one queued write-back (`memory_add` / `memory_delete`) during
 /// drain.
-const NMEM_MEMORY_OP_TIMEOUT_MS : Int = 30000
+const NMEM_MEMORY_OP_TIMEOUT_MS : Int32 = 30000
 
 ///|
 /// Prefix marking a store ticket whose write-back has not been acknowledged
@@ -50,7 +50,7 @@ pub extend MemoryOp with @moonbitlang/core/debug.Debug::{to_repr}
 pub(all) struct MemoryState {
   queue : Array[MemoryOp]
   mut last_error : String?
-  mut next_pending : Int
+  mut next_pending : Int32
 }
 
 ///|

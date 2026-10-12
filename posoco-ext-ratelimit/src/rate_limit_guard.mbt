@@ -10,27 +10,27 @@ pub struct RateLimitGuard {
   priv resume_note : String
   priv policy : RecoveryPolicy
   priv now_ms : () -> Int64
-  priv sleep_ms : async (Int) -> Unit
+  priv sleep_ms : async (Int32) -> Unit
   priv trace : (String) -> Unit
   priv status_sink : DevkitStatusSink
-  priv shutdown_timeout_ms : Int
+  priv shutdown_timeout_ms : Int32
 }
 
 ///|
 /// Compatibility-friendly constructor. poll_interval_ms is accepted so 0.3
 /// callers still compile, but event-driven scheduling no longer polls.
 pub fn RateLimitGuard::RateLimitGuard(
-  resume_note? : String = "continue",
-  margin_ms? : Int64 = 0,
-  max_attempts? : Int = 3,
-  poll_interval_ms? : Int = 500,
-  probe_interval_ms? : Int64 = 900000,
-  max_probe_interval_ms? : Int64 = 3600000,
-  shutdown_timeout_ms? : Int = 5000,
-  now_ms? : () -> Int64 = fn() { @async.now() },
-  sleep_ms? : async (Int) -> Unit = async fn(ms : Int) { @async.sleep(ms) },
-  trace? : (String) -> Unit = fn(_ : String) { () },
-  bus? : @devkit.EventBus? = None,
+  resume_note~ : String = "continue",
+  margin_ms~ : Int64 = 0,
+  max_attempts~ : Int32 = 3,
+  poll_interval_ms~ : Int32 = 500,
+  probe_interval_ms~ : Int64 = 900000,
+  max_probe_interval_ms~ : Int64 = 3600000,
+  shutdown_timeout_ms~ : Int32 = 5000,
+  now_ms~ : () -> Int64 = fn() { @async.now() },
+  sleep_ms~ : async (Int32) -> Unit = async fn(ms : Int32) { @async.sleep(ms) },
+  trace~ : (String) -> Unit = fn(_ : String) { () },
+  bus~ : @devkit.EventBus? = None,
 ) -> RateLimitGuard {
   ignore(poll_interval_ms)
   {
@@ -186,7 +186,7 @@ pub async fn RateLimitGuard::shutdown(self : RateLimitGuard) -> Unit {
 
 ///|
 /// Whether needle starts at at in text.
-fn starts_at(text : String, at : Int, needle : String) -> Bool {
+fn starts_at(text : String, at : Int32, needle : String) -> Bool {
   if at + needle.length() > text.length() {
     return false
   }

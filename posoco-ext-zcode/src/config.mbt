@@ -11,7 +11,7 @@ pub(all) struct ZcodeConfig {
   /// Default permission mode; never default to yolo.
   default_mode : String
   /// Wall-clock ceiling per delegation.
-  timeout_ms : Int
+  timeout_ms : Int32
 }
 
 ///|
@@ -436,7 +436,7 @@ pub fn zcode_resolve_command(
 /// read/list capability — the .desktop and symlink tiers live in
 /// `zcode_probe_paths` for hosts that can read (the backend pre-probes do).
 pub async fn zcode_ext_if_detected(
-  config? : ZcodeConfig = zcode_config(),
+  config~ : ZcodeConfig = zcode_config(),
   env~ : (String) -> String?,
   exists~ : async (String) -> Bool,
 ) -> ZcodeExt? {

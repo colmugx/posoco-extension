@@ -6,13 +6,13 @@
 priv struct ParsedUrl {
   scheme : String // lowercase "http" | "https"
   host : String // lowercase; IPv6 literal without brackets
-  port : Int // explicit port or scheme default
+  port : Int32 // explicit port or scheme default
   path : String // starts with "/" (default "/")
   query : String // without '?', "" if none
 }
 
 ///|
-fn default_port(scheme : String) -> Int {
+fn default_port(scheme : String) -> Int32 {
   if scheme == "https" {
     443
   } else {
@@ -21,7 +21,7 @@ fn default_port(scheme : String) -> Int {
 }
 
 ///|
-fn parse_port(digits : String) -> Int? {
+fn parse_port(digits : String) -> Int32? {
   if digits.length() == 0 || digits.length() > 5 {
     return None
   }
@@ -108,7 +108,7 @@ fn parse_url(s : String) -> ParsedUrl? {
   if authority.contains("@") {
     return None // userinfo rejected
   }
-  let host_port : (String, Int) = if authority.has_prefix("[") {
+  let host_port : (String, Int32) = if authority.has_prefix("[") {
     // IPv6 literal: [addr] with optional ":port" after ']'
     guard authority.find("]") is Some(close) else { return None }
     let inner : String = authority[1:close].to_owned()

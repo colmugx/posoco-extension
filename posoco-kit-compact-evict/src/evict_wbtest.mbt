@@ -61,7 +61,7 @@ fn tk_tool(name : String, content : String) -> @posoco.Message {
 
 ///|
 /// "abcd" repeated n times: exactly 4n chars = exactly n estimated tokens.
-fn tk_big_tokens(n : Int) -> String {
+fn tk_big_tokens(n : Int32) -> String {
   let sb = StringBuilder()
   for _ in 0..<n {
     sb.write_string("abcd")

@@ -25,8 +25,8 @@ pub(all) struct CodexModelInfo {
   supported_reasoning_levels : Array[CodexReasoningLevel]
   visibility : String
   supported_in_api : Bool
-  priority : Int
-  context_window : Int?
+  priority : Int32
+  context_window : Int32?
   use_responses_lite : Bool
 }
 
@@ -34,7 +34,7 @@ pub(all) struct CodexModelInfo {
 /// Public GET seam for explicit model refresh.  Provider extensions own the
 /// endpoint and headers; tests can inject a fake without opening a socket.
 pub(all) struct OpenAIModelsHttpResponse {
-  status : Int
+  status : Int32
   body : String
 }
 
@@ -46,7 +46,7 @@ pub(all) struct OpenAICachedModel {
   model_id : String
   thinking_efforts : Array[String]
   default_effort : String?
-  context_window : Int?
+  context_window : Int32?
   image_in : Bool
   use_responses_lite : Bool
 }
@@ -91,7 +91,7 @@ fn parse_cached_openai_models(records : Json?) -> Array[OpenAICachedModel]? {
       Some(Json::Null) | None => None
       _ => return None
     }
-    let context_window : Int? = match fields.get("context_window") {
+    let context_window : Int32? = match fields.get("context_window") {
       Some(Json::Number(value, ..)) => Some(value.to_int())
       Some(Json::Null) | None => None
       _ => return None
@@ -138,7 +138,7 @@ pub fn openai_codex_models_client_version() -> String {
 }
 
 ///|
-let openai_models_timeout_ms : Int = 5000
+let openai_models_timeout_ms : Int32 = 5000
 
 ///|
 /// Deliberate /tmp diagnostic (no home plumbing): every Codex `/models` body
@@ -229,7 +229,7 @@ fn codex_models_url(base_url : String, client_version : String) -> String {
 fn parse_positive_integer(
   value : Json,
   field : String,
-) -> Int raise @posoco.ModelError {
+) -> Int32 raise @posoco.ModelError {
   match value {
     Json::Number(number, ..) => {
       if number.is_nan() || number.is_inf() || number <= 0.0 {
@@ -256,7 +256,7 @@ fn parse_positive_integer(
 fn parse_optional_positive_integer(
   fields : Map[String, Json],
   key : String,
-) -> Int? raise @posoco.ModelError {
+) -> Int32? raise @posoco.ModelError {
   match fields.get(key) {
     None | Some(Json::Null) => None
     Some(value) => Some(parse_positive_integer(value, key))
@@ -519,7 +519,7 @@ pub fn parse_codex_models(
 /// Every other failure keeps the original `ModelError` untouched so public
 /// error strings stay stable.
 priv suberror ModelsFetchError {
-  HttpStatus(status~ : Int, body_chars~ : Int)
+  HttpStatus(status~ : Int32, body_chars~ : Int32)
   Upstream(@posoco.ModelError)
 }
 
@@ -544,7 +544,7 @@ async fn fetch_models_json_with_transport(
   transport : &OpenAIModelsHttpTransport,
   url : String,
   headers : Map[String, String],
-  dump_path? : String? = None,
+  dump_path~ : String? = None,
 ) -> Json raise ModelsFetchError {
   let response = transport.get(url, headers) catch {
     err => raise ModelsFetchError::Upstream(err)
@@ -577,7 +577,7 @@ async fn fetch_models_with_transport(
   transport : &OpenAIModelsHttpTransport,
   url : String,
   headers : Map[String, String],
-  dump_path? : String? = None,
+  dump_path~ : String? = None,
 ) -> Json raise @posoco.ModelError {
   fetch_models_json_with_transport(transport, url, headers, dump_path~) catch {
     err => raise err.to_model_error()
@@ -685,7 +685,7 @@ pub async fn fetch_codex_models(
   base_url : String,
   access_token : String,
   account_id : String,
-  client_version? : String = openai_codex_models_client_version(),
+  client_version~ : String = openai_codex_models_client_version(),
 ) -> Array[CodexModelInfo] raise @posoco.ModelError {
   let transport_impl = DefaultOpenAIModelsHttpTransport::DefaultOpenAIModelsHttpTransport()
   let transport : &OpenAIModelsHttpTransport = transport_impl

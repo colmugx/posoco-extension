@@ -8,7 +8,7 @@
 ///|
 fn parsed_manifest(
   id : String,
-  exts? : Array[String] = [],
+  exts~ : Array[String] = [],
 ) -> ProfileManifest raise Failure {
   match parse_profile_manifest(manifest_json(id, exts~)) {
     Ok(m) => m
@@ -19,7 +19,7 @@ fn parsed_manifest(
 ///|
 /// A tool call as the model issued it. A non-empty `inner` renders the
 /// lazytools gateway envelope (`tool_execute` + `tool` argument).
-fn usage_call(name~ : String, inner? : String = "") -> @posoco.ToolCall {
+fn usage_call(name~ : String, inner~ : String = "") -> @posoco.ToolCall {
   let arguments : Json = if inner == "" {
     Json::object(Map::from_array([]))
   } else {

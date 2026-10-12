@@ -15,10 +15,10 @@
 /// walk and the head range. Anchored re-summarization from the latest
 /// summary is left to the progressive stage.
 pub(all) struct CutPoint {
-  head_end : Int
-  kept_from : Int
+  head_end : Int32
+  kept_from : Int32
   is_split_turn : Bool
-  turn_start_index : Int
+  turn_start_index : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -51,8 +51,8 @@ pub extend CutPoint with @moonbitlang/core/debug.Debug::{to_repr}
 /// summarize.
 pub fn select_cut(
   messages : Array[@posoco.Message],
-  keep_recent_tokens : Int,
-  protect_prefix? : Int = 0,
+  keep_recent_tokens : Int32,
+  protect_prefix~ : Int32 = 0,
 ) -> CutPoint {
   let n = messages.length()
   let prefix = if protect_prefix < 0 {
@@ -108,8 +108,8 @@ pub fn select_cut(
 /// messages are never boundaries.
 fn is_safe_boundary(
   messages : Array[@posoco.Message],
-  k : Int,
-  prefix : Int,
+  k : Int32,
+  prefix : Int32,
 ) -> Bool {
   if k < prefix || k >= messages.length() {
     return false
@@ -135,9 +135,9 @@ fn is_safe_boundary(
 /// head with an assistant when no user input precedes it).
 fn turn_start_of(
   messages : Array[@posoco.Message],
-  k : Int,
-  prefix : Int,
-) -> Int {
+  k : Int32,
+  prefix : Int32,
+) -> Int32 {
   match messages[k] {
     UserMessage(..) => return k
     _ => ()
@@ -154,7 +154,11 @@ fn turn_start_of(
 
 ///|
 /// Index one past the last message of the turn starting at `t`.
-fn turn_end_of(messages : Array[@posoco.Message], t : Int, n : Int) -> Int {
+fn turn_end_of(
+  messages : Array[@posoco.Message],
+  t : Int32,
+  n : Int32,
+) -> Int32 {
   let mut j = t + 1
   while j < n {
     match messages[j] {
@@ -166,7 +170,7 @@ fn turn_end_of(messages : Array[@posoco.Message], t : Int, n : Int) -> Int {
 }
 
 ///|
-fn estimate_message_tokens(message : @posoco.Message) -> Int {
+fn estimate_message_tokens(message : @posoco.Message) -> Int32 {
   match message {
     SystemMessage(content~) => content_tokens(content)
     UserMessage(content~) => content_tokens(content)
@@ -192,7 +196,7 @@ fn estimate_message_tokens(message : @posoco.Message) -> Int {
 }
 
 ///|
-fn content_tokens(content : Array[@posoco.Content]) -> Int {
+fn content_tokens(content : Array[@posoco.Content]) -> Int32 {
   let mut total = 0
   for block in content {
     match block {

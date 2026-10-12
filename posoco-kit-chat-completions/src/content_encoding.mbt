@@ -55,7 +55,7 @@ pub fn image_placeholder(media_type : String, data : String) -> String {
 ///   image downgraded to an explicit placeholder (never a silent drop).
 pub fn encode_chat_message_content(
   blocks : Array[@posoco.Content],
-  supports_images? : Bool = false,
+  supports_images~ : Bool = false,
 ) -> EncodedChatContent {
   let has_image = blocks.exists(fn(b) { b is @posoco.Content::Image(..) })
   if !has_image {

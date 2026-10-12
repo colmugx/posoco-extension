@@ -28,7 +28,7 @@ pub fn relative_to_base(base : String, sub : String) -> String {
 ///|
 /// Truncate `s` to at most `cap` characters, cutting at a char boundary.
 /// Empty strings and short strings pass through unchanged.
-pub fn truncate_chars(s : String, cap : Int) -> String {
+pub fn truncate_chars(s : String, cap : Int32) -> String {
   if s.length() <= cap {
     return s
   }

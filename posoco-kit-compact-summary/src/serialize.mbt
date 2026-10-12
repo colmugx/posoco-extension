@@ -24,7 +24,7 @@ const SUMMARY_TOOL_ARG_STRING_CHARS = 600
 const SUMMARY_TOOL_ARGS_CHARS = 2000
 
 ///|
-fn char_count(text : String) -> Int {
+fn char_count(text : String) -> Int32 {
   let mut count = 0
   for _ in text {
     count += 1
@@ -33,7 +33,7 @@ fn char_count(text : String) -> Int {
 }
 
 ///|
-fn tail_chars(text : String, total_chars : Int, limit : Int) -> String {
+fn tail_chars(text : String, total_chars : Int32, limit : Int32) -> String {
   if limit <= 0 {
     return ""
   }
@@ -50,7 +50,7 @@ fn tail_chars(text : String, total_chars : Int, limit : Int) -> String {
 }
 
 ///|
-fn clamp_inline(text : String, limit : Int) -> String {
+fn clamp_inline(text : String, limit : Int32) -> String {
   if limit <= 0 {
     return text
   }
@@ -107,7 +107,7 @@ fn render_tool_args(arguments : Json) -> String {
 ///|
 pub fn serialize_for_summary(
   messages : Array[@posoco.Message],
-  tool_output_char_limit? : Int = 2000,
+  tool_output_char_limit~ : Int32 = 2000,
 ) -> String {
   let blocks : Array[String] = []
   for message in messages {
@@ -117,7 +117,7 @@ pub fn serialize_for_summary(
 }
 
 ///|
-fn render_message(message : @posoco.Message, limit : Int) -> String {
+fn render_message(message : @posoco.Message, limit : Int32) -> String {
   match message {
     SystemMessage(content~) => "[System]: " + render_content(content)
     UserMessage(content~) => "[User]: " + render_content(content)
@@ -173,7 +173,7 @@ fn render_content(content : Array[@posoco.Content]) -> String {
 /// Cut tool output to `limit` chars with a `"\n[truncated]"` suffix.
 /// `limit <= 0` disables truncation. Cutting counts chars (not UTF-16 code
 /// units) so a surrogate pair is never split.
-fn clamp_tool_output(text : String, limit : Int) -> String {
+fn clamp_tool_output(text : String, limit : Int32) -> String {
   if limit > 0 && text.length() > limit {
     take_chars(text, limit) + "\n[truncated]"
   } else {
@@ -182,7 +182,7 @@ fn clamp_tool_output(text : String, limit : Int) -> String {
 }
 
 ///|
-fn take_chars(text : String, limit : Int) -> String {
+fn take_chars(text : String, limit : Int32) -> String {
   let chars : Array[Char] = []
   let mut taken = 0
   for ch in text {

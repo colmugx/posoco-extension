@@ -64,7 +64,7 @@ pub fn validate_stream_tool_calls(
 pub(all) struct SseStreamState {
   items : Array[Json]
   mut summary : String
-  tool_slots : Map[Int, Int]
+  tool_slots : Map[Int32, Int32]
 }
 
 ///|
@@ -76,7 +76,10 @@ pub fn SseStreamState::SseStreamState() -> SseStreamState {
 /// Compact slot for one wire output index, allocating the next slot on first
 /// sight. Added events arrive before their deltas, so allocation order
 /// follows the stream.
-fn SseStreamState::tool_slot(self : SseStreamState, wire_index : Int) -> Int {
+fn SseStreamState::tool_slot(
+  self : SseStreamState,
+  wire_index : Int32,
+) -> Int32 {
   match self.tool_slots.get(wire_index) {
     Some(slot) => slot
     None => {
@@ -95,7 +98,7 @@ pub fn process_responses_sse(
   data : String,
   acc : @posoco.StreamAccumulator,
   on_chunk : (@posoco.StreamChunk) -> Unit,
-  state? : SseStreamState = SseStreamState::SseStreamState(),
+  state~ : SseStreamState = SseStreamState::SseStreamState(),
 ) -> Bool raise @posoco.ModelError {
   let event_json : Json = @json.parse(data) catch {
     _ =>
@@ -450,7 +453,7 @@ fn extract_sse_int_field(
   provider : String,
   json : Json,
   field : String,
-) -> Int raise @posoco.ModelError {
+) -> Int32 raise @posoco.ModelError {
   match json {
     Json::Object(map) =>
       match map.get(field) {
@@ -477,7 +480,7 @@ fn extract_sse_int_field(
 fn extract_sse_output_item(
   provider : String,
   json : Json,
-) -> (Int, String, String)? raise @posoco.ModelError {
+) -> (Int32, String, String)? raise @posoco.ModelError {
   match json {
     Json::Object(map) =>
       match map.get("item") {

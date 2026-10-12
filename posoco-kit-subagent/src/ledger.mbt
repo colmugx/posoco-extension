@@ -7,7 +7,7 @@
 /// enforced separately from this budget ledger.
 pub(all) struct SpawnLedger {
   /// Maximum acquisitions; `remaining` reaches 0 here.
-  limit : Int
+  limit : Int32
   /// Acquisition-ordered audit record; duplicate labels appear once per
   /// acquire.
   labels : Array[String]
@@ -18,7 +18,7 @@ pub extend SpawnLedger with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Fresh ledger with the given spawn budget (default: 64).
-pub fn SpawnLedger::SpawnLedger(limit? : Int = 64) -> SpawnLedger {
+pub fn SpawnLedger::SpawnLedger(limit~ : Int32 = 64) -> SpawnLedger {
   { limit, labels: [], }
 }
 
@@ -46,7 +46,7 @@ pub fn SpawnLedger::acquired(self : SpawnLedger) -> Array[String] {
 
 ///|
 /// Units still available before `try_acquire` starts refusing.
-pub fn SpawnLedger::remaining(self : SpawnLedger) -> Int {
+pub fn SpawnLedger::remaining(self : SpawnLedger) -> Int32 {
   self.limit - self.labels.length()
 }
 

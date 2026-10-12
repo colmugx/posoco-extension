@@ -6,7 +6,7 @@ priv struct PendingSkillDir {
   /// directory I/O proceeds through this path so a validated symlink is not
   /// followed again after the containment check.
   canonical_path : String
-  depth : Int
+  depth : Int32
 }
 
 ///|
@@ -14,14 +14,14 @@ priv struct SkillResourceListing {
   files : Array[String]
   truncated : Bool
   warnings : Array[String]
-  warnings_omitted : Int
+  warnings_omitted : Int32
 }
 
 ///|
 fn record_listing_warning(
   warnings : Array[String],
-  omitted : Ref[Int],
-  limit : Int,
+  omitted : Ref[Int32],
+  limit : Int32,
   message : String,
 ) -> Unit {
   if warnings.length() < limit {
@@ -164,7 +164,7 @@ async fn Skills::list_resources(
 ) -> SkillResourceListing noraise {
   let files : Array[String] = []
   let warnings : Array[String] = []
-  let warnings_omitted : Ref[Int] = { val: 0, }
+  let warnings_omitted : Ref[Int32] = { val: 0, }
   if self.config.max_resource_entries == 0 ||
     self.config.max_resource_listing_chars == 0 {
     return { files, truncated: false, warnings, warnings_omitted: 0, }

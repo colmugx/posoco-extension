@@ -3,7 +3,7 @@
 /// 7373 bytes; original-detail file references use the 10,000-patch bound.
 /// This adapter has no image decoder; inline original-detail references use
 /// the same upstream unavailable/decode-failed fallback, not payload length.
-fn compact_content_tokens(part : Json) -> Int {
+fn compact_content_tokens(part : Json) -> Int32 {
   match compact_part_text(part) {
     Some(text) => compact_approx_tokens(text)
     None =>
@@ -22,7 +22,7 @@ fn compact_content_tokens(part : Json) -> Int {
 }
 
 ///|
-fn compact_message_content_tokens(item : Json) -> Int {
+fn compact_message_content_tokens(item : Json) -> Int32 {
   let mut tokens = 0
   for part in compact_message_parts(item) {
     tokens += compact_content_tokens(part)
@@ -49,7 +49,7 @@ fn compact_image_open(text : String) -> Bool {
 ///|
 /// compact_remote_v2_images.rs: later parts of a boundary message first;
 /// images and immediately adjacent harness labels are indivisible.
-fn compact_truncate_image_message(item : Json, budget : Int) -> Json? {
+fn compact_truncate_image_message(item : Json, budget : Int32) -> Json? {
   guard json_deep_copy(item) is Json::Object(fields) else { return None }
   let content = compact_message_parts(Json::object(fields))
   let reversed : Array[Json] = []

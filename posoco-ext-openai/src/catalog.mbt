@@ -32,13 +32,13 @@ fn openai_catalog_slot(
   config : OpenAIConfig,
   oauth : &@oauth.OAuthProvider,
   api_key : &@llm.ApiKeyFactory,
-  label? : String? = None,
-  thinking_efforts? : Array[String] = [],
-  context_window? : Int? = None,
-  context_window_source? : String = "provider",
-  capabilities? : Array[String] = [],
-  default_effort? : String? = None,
-  quota_tracker? : CodexQuotaTracker? = None,
+  label~ : String? = None,
+  thinking_efforts~ : Array[String] = [],
+  context_window~ : Int32? = None,
+  context_window_source~ : String = "provider",
+  capabilities~ : Array[String] = [],
+  default_effort~ : String? = None,
+  quota_tracker~ : CodexQuotaTracker? = None,
 ) -> @llm.ModelSlot {
   // Every slot port shares the factory port's quota tracker so switching
   // models (or rebuilding a slot on credential/effort change) never drops

@@ -141,16 +141,16 @@ pub(all) struct CodexQuotaTracker {
   /// each registration received. Coexisting publishers (several agents or
   /// buses over one process tracker) each keep their own token, so no
   /// registration can clobber or detach another.
-  priv listeners : Map[Int, () -> Unit]
+  priv listeners : Map[Int32, () -> Unit]
 }
 
 ///|
 /// Monotonic source of subscription tokens; one process, one counter.
-let codex_quota_listener_seq : Ref[Int] = Ref::{ val: 0, }
+let codex_quota_listener_seq : Ref[Int32] = Ref::{ val: 0, }
 
 ///|
 pub fn CodexQuotaTracker::CodexQuotaTracker(
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> CodexQuotaTracker {
   { latest: None, now_ms, listeners: Map::from_array([]), }
 }
@@ -162,7 +162,7 @@ pub fn CodexQuotaTracker::CodexQuotaTracker(
 fn CodexQuotaTracker::subscribe(
   self : CodexQuotaTracker,
   notify~ : () -> Unit,
-) -> Int {
+) -> Int32 {
   codex_quota_listener_seq.val += 1
   let token = codex_quota_listener_seq.val
   self.listeners[token] = notify
@@ -174,7 +174,7 @@ fn CodexQuotaTracker::subscribe(
 /// token that is gone or never existed.
 fn CodexQuotaTracker::unsubscribe(
   self : CodexQuotaTracker,
-  token : Int,
+  token : Int32,
 ) -> Unit {
   ignore(self.listeners.remove(token))
 }

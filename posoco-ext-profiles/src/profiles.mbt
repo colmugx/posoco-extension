@@ -48,14 +48,14 @@ pub struct Profiles {
   priv bus : @devkit.EventBus?
   priv store : &ProfileStore?
   priv session_store : &@posoco.SessionStore?
-  priv summarizer : ((Array[(String, Int)]) -> (String, String))?
+  priv summarizer : ((Array[(String, Int32)]) -> (String, String))?
   /// Composed UiPort, wired once at `on_compose`. Composition wiring,
   /// not activation state.
   priv mut ui : &@posoco.UiPort?
   /// Per-session tool usage counters: session_id → tool name → count. The
   /// input to `/profile save`. Together with `catalog` this is the ONLY
   /// mutable state; there is deliberately no activated-set field.
-  priv usage : Map[String, Map[String, Int]]
+  priv usage : Map[String, Map[String, Int32]]
 }
 
 ///|
@@ -69,10 +69,10 @@ pub fn Profiles::build(
   defer_set~ : Array[String],
   captured_prompts~ : Map[String, String],
   attribution~ : Map[String, String],
-  bus? : @devkit.EventBus? = None,
-  store? : &ProfileStore? = None,
-  session_store? : &@posoco.SessionStore? = None,
-  summarizer? : ((Array[(String, Int)]) -> (String, String))? = None,
+  bus~ : @devkit.EventBus? = None,
+  store~ : &ProfileStore? = None,
+  session_store~ : &@posoco.SessionStore? = None,
+  summarizer~ : ((Array[(String, Int32)]) -> (String, String))? = None,
 ) -> Profiles {
   let deferred = defer_set.copy()
   let catalog : Array[ProfileEntry] = []

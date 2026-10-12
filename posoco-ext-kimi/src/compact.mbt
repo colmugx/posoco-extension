@@ -1,7 +1,7 @@
 ///|
 /// Index of the message that starts the preserved tail: the second
 /// user/assistant message counting from the end.
-fn kimi_tail_start(messages : Array[@posoco.Message]) -> Int? {
+fn kimi_tail_start(messages : Array[@posoco.Message]) -> Int32? {
   let mut seen = 0
   let mut i = messages.length() - 1
   while i >= 0 {

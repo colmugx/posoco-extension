@@ -11,26 +11,26 @@
 /// `exitStatus` appears once `exit_after_polls` polls have happened.
 priv struct FakeTerminalHost {
   snapshots : Array[String]
-  exit_after_polls : Int
+  exit_after_polls : Int32
   exit_code : UInt64
   signal_exit : Bool
   fail_create : @acp.AgentContextError?
-  fail_output_from_poll : Int
+  fail_output_from_poll : Int32
   create_params : Array[@acp.TerminalCreateParams]
-  mut output_polls : Int
-  mut kills : Int
-  mut releases : Int
-  mut waits : Int
+  mut output_polls : Int32
+  mut kills : Int32
+  mut releases : Int32
+  mut waits : Int32
 }
 
 ///|
 fn FakeTerminalHost::FakeTerminalHost(
-  snapshots? : Array[String] = [""],
-  exit_after_polls? : Int = 1,
-  exit_code? : UInt64 = 0UL,
-  signal_exit? : Bool = false,
-  fail_create? : @acp.AgentContextError? = None,
-  fail_output_from_poll? : Int = 0,
+  snapshots~ : Array[String] = [""],
+  exit_after_polls~ : Int32 = 1,
+  exit_code~ : UInt64 = 0UL,
+  signal_exit~ : Bool = false,
+  fail_create~ : @acp.AgentContextError? = None,
+  fail_output_from_poll~ : Int32 = 0,
 ) -> FakeTerminalHost {
   {
     snapshots,

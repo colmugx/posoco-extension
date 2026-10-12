@@ -5,7 +5,7 @@
 // success read as an error. The trait below is the only seam; everything
 // else in this file is pure and shared across targets.
 priv trait HerdrCli {
-  async fn run(self : Self, argv : Array[String]) -> (Int, String, String) raise @posoco.RuntimeError
+  async fn run(self : Self, argv : Array[String]) -> (Int32, String, String) raise @posoco.RuntimeError
 }
 
 ///|
@@ -49,7 +49,7 @@ let herdr_ready_regex : String = "[❯➜$#%]"
 /// settle delay before typing, which also closes the race. Kept below the
 /// background path's +5000 ms core-timeout margin so the graceful protocol
 /// timeout still wins even for tiny delegation timeouts.
-let herdr_ready_timeout_ms : Int = 4000
+let herdr_ready_timeout_ms : Int32 = 4000
 
 ///|
 fn herdr_split_argv(
@@ -96,7 +96,7 @@ fn herdr_ready_argv(bin : String, new_pane : String) -> Array[String] {
 fn herdr_wait_argv(
   bin : String,
   new_pane : String,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Array[String] {
   [
     bin,
@@ -275,7 +275,7 @@ fn parse_pane_text(text : String) -> HerdrPaneResult {
 ///|
 /// `wait-output` timeout shape: exit 1 with an error envelope whose code is
 /// "timeout" on stderr.
-fn is_timeout_error(exit : Int, stderr : String) -> Bool {
+fn is_timeout_error(exit : Int32, stderr : String) -> Bool {
   exit == 1 && stderr.contains("\"code\":\"timeout\"")
 }
 

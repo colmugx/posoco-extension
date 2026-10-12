@@ -583,7 +583,7 @@ fn e2e_fixture_config(
   script : String,
   name~ : String,
   resilience~ : Bool,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> MCPServerConfig {
   let env : Map[String, String] = if resilience {
     Map::from_array([("MCP_FIXTURE_RESILIENCE", "1")])

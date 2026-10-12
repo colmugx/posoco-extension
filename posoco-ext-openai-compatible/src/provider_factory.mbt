@@ -18,7 +18,7 @@ pub(all) struct OpenAICompatibleProvider {
 ///|
 pub fn OpenAICompatibleProvider::OpenAICompatibleProvider(
   provider_id : String,
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenAICompatibleProvider {
   { provider_id, ctx, prompt_cache_key_rejection_state: Ref(false), }
 }
@@ -252,7 +252,7 @@ pub impl @llm.ProviderFactory for OpenAICompatibleProvider with fn credential_id
 ///|
 priv struct OaiCompatModelEntry {
   model : String
-  context_window : Int?
+  context_window : Int32?
   compact_threshold : Double?
   declared_efforts : Array[String]
   fixed_effort : String?
@@ -419,11 +419,11 @@ fn oai_compat_config_from_selection(
   model~ : String,
   endpoint_prefix~ : String,
   declared_efforts~ : Array[String],
-  fixed_effort? : String? = None,
-  context_window? : Int? = None,
-  compact_threshold? : Double? = None,
-  supports_images? : Bool = false,
-  send_prompt_cache_key? : Bool = false,
+  fixed_effort~ : String? = None,
+  context_window~ : Int32? = None,
+  compact_threshold~ : Double? = None,
+  supports_images~ : Bool = false,
+  send_prompt_cache_key~ : Bool = false,
 ) -> OpenAICompatibleConfig raise @posoco.CompositionError {
   match fixed_effort {
     Some(fixed) =>

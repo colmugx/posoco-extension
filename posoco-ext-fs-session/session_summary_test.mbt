@@ -152,7 +152,7 @@ async test "io[native]: summary of a missing file is empty" {
 }
 
 ///|
-fn repeat_decade(times : Int) -> String {
+fn repeat_decade(times : Int32) -> String {
   let decade = "甲乙丙丁戊己庚辛壬癸"
   let buf = StringBuilder()
   let mut i = 0

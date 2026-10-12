@@ -29,9 +29,10 @@ impl ModelMetadataTransport for HttpModelMetadataTransport with fn fetch(
 
 ///|
 pub struct ModelMetadata {
-  priv entries : Map[String, Map[String, Int]]
+  priv entries : Map[String, Map[String, Int32]]
   priv fetched_at : Map[String, Int64]
   priv warned_fallbacks : Map[String, Bool]
+  priv warned_diagnostics : Map[String, Bool]
   priv gate : @async.Mutex
   priv transport : &ModelMetadataTransport
   priv store : &ModelMetadataStore?
@@ -42,20 +43,32 @@ pub struct ModelMetadata {
 
 ///|
 pub fn ModelMetadata::ModelMetadata(
-  transport? : &ModelMetadataTransport = HttpModelMetadataTransport::{ },
-  store? : &ModelMetadataStore? = None,
-  warn? : async (String) -> Unit noraise = fn(_ : String) { () },
+  transport~ : &ModelMetadataTransport = HttpModelMetadataTransport::{ },
+  store~ : &ModelMetadataStore? = None,
+  warn~ : async (String) -> Unit noraise = fn(_ : String) { () },
 ) -> ModelMetadata {
   {
     entries: Map::from_array([]),
     fetched_at: Map::from_array([]),
     warned_fallbacks: Map::from_array([]),
+    warned_diagnostics: Map::from_array([]),
     gate: @async.Mutex(),
     transport,
     store,
     loaded: false,
     failed_at: None,
     warn,
+  }
+}
+
+///|
+async fn ModelMetadata::warn_once(
+  self : ModelMetadata,
+  message : String,
+) -> Unit noraise {
+  if !self.warned_diagnostics.contains(message) {
+    self.warned_diagnostics[message] = true
+    (self.warn)(message)
   }
 }
 
@@ -80,7 +93,7 @@ async fn ModelMetadata::report_fallback(
 fn models_dev_windows(
   payload : Json,
   provider_id : String,
-) -> Map[String, Int]? {
+) -> Map[String, Int32]? {
   guard payload is Json::Object(providers) else { return None }
   guard providers.get(provider_id) is Some(Json::Object(provider)) else {
     return None
@@ -88,7 +101,7 @@ fn models_dev_windows(
   guard provider.get("models") is Some(Json::Object(models)) else {
     return None
   }
-  let result : Map[String, Int] = Map::from_array([])
+  let result : Map[String, Int32] = Map::from_array([])
   for id, model in models {
     if model is Json::Object(fields) &&
       fields.get("limit") is Some(Json::Object(limits)) {
@@ -105,7 +118,7 @@ pub fn ModelMetadata::lookup(
   self : ModelMetadata,
   provider_id : String,
   model_id : String,
-  now? : Int64 = @async.now(),
+  now~ : Int64 = @async.now(),
 ) -> ContextWindowReading {
   match self.entries.get(provider_id) {
     Some(models) =>
@@ -132,7 +145,7 @@ fn ModelMetadata::restore(self : ModelMetadata, payload : Json) -> Unit raise {
     root.get("providers") is Some(Json::Object(providers)) else {
     fail("models.dev cache has an invalid schema")
   }
-  let entries : Map[String, Map[String, Int]] = Map::from_array([])
+  let entries : Map[String, Map[String, Int32]] = Map::from_array([])
   let times : Map[String, Int64] = Map::from_array([])
   for id, record in providers {
     guard record is Json::Object(fields) &&
@@ -144,7 +157,7 @@ fn ModelMetadata::restore(self : ModelMetadata, payload : Json) -> Unit raise {
     if time < 0L {
       fail("models.dev cache timestamp is invalid")
     }
-    let windows : Map[String, Int] = Map::from_array([])
+    let windows : Map[String, Int32] = Map::from_array([])
     for model_id, value in models {
       guard context_window_integer(Some(value)) is Some(window) else {
         fail("models.dev cache window is invalid")
@@ -182,7 +195,7 @@ fn ModelMetadata::cache_json(self : ModelMetadata) -> Json {
 pub async fn ModelMetadata::refresh(
   self : ModelMetadata,
   provider_ids : Array[String],
-  now? : Int64 = @async.now(),
+  now~ : Int64 = @async.now(),
 ) -> Unit noraise {
   self.gate.acquire()
   defer self.gate.release()
@@ -194,7 +207,8 @@ pub async fn ModelMetadata::refresh(
             self.restore(payload)
           }
         } catch {
-          err => (self.warn)("models.dev cache read failed: " + err.to_string())
+          err =>
+            self.warn_once("models.dev cache read failed: " + err.to_string())
         }
       None => ()
     }
@@ -219,16 +233,17 @@ pub async fn ModelMetadata::refresh(
   let payload = self.transport.fetch() catch {
     err => {
       self.failed_at = Some(now)
-      (self.warn)("models.dev refresh failed: " + err.to_string())
+      self.warn_once("models.dev refresh failed: " + err.to_string())
       return
     }
   }
   guard payload is Json::Object(_) else {
     self.failed_at = Some(now)
-    (self.warn)("models.dev refresh failed: root must be an object")
+    self.warn_once("models.dev refresh failed: root must be an object")
     return
   }
   let mut changed = false
+  let missing : Array[String] = []
   for id in needed {
     match models_dev_windows(payload, id) {
       Some(windows) if !windows.is_empty() => {
@@ -236,19 +251,26 @@ pub async fn ModelMetadata::refresh(
         self.fetched_at[id] = now
         changed = true
       }
-      _ =>
-        (self.warn)(
-          "models.dev has no valid context windows for provider " + id,
-        )
+      _ => {
+        missing.push(id)
+        self.failed_at = Some(now)
+      }
     }
   }
-  self.failed_at = if changed { None } else { Some(now) }
+  if !missing.is_empty() {
+    self.warn_once(
+      "models.dev has no valid context windows for providers: " +
+      missing.join(", "),
+    )
+  } else {
+    self.failed_at = None
+  }
   if changed {
     match self.store {
       Some(store) =>
         store.write(self.cache_json()) catch {
           err =>
-            (self.warn)("models.dev cache write failed: " + err.to_string())
+            self.warn_once("models.dev cache write failed: " + err.to_string())
         }
       None => ()
     }

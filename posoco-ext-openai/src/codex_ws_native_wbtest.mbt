@@ -283,7 +283,7 @@ async fn WsMock::serve(self : WsMock) -> Unit {
 }
 
 ///|
-fn ws_mock_config(port : Int) -> OpenAIConfig {
+fn ws_mock_config(port : Int32) -> OpenAIConfig {
   OpenAIConfig::with_base_url(
     codex_test_access_token(),
     "gpt-5",

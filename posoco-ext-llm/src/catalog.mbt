@@ -16,7 +16,7 @@ pub(all) struct ProviderModelCatalog {
 pub fn ProviderModelCatalog::ProviderModelCatalog(
   provider_id~ : String,
   slots~ : Array[ModelSlot],
-  capabilities? : Array[String] = [],
+  capabilities~ : Array[String] = [],
 ) -> ProviderModelCatalog raise @posoco.CompositionError {
   if provider_id.length() == 0 {
     raise @posoco.CompositionError::ManifestSchemaError(

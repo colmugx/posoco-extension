@@ -154,7 +154,7 @@ pub async fn fetch_codex_usage_with_transport(
   codex_api_base : String,
   access_token : String,
   account_id : String,
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> Result[Array[@devkit.QuotaReading], String] {
   if account_id.length() == 0 {
     return Err("Codex usage request requires chatgpt-account-id metadata")
@@ -202,12 +202,12 @@ pub(all) struct CodexUsageQuotaSource {
 
 ///|
 pub fn CodexUsageQuotaSource::CodexUsageQuotaSource(
-  transport? : &OpenAIModelsHttpTransport? = None,
-  api_base? : String = codex_oauth_api_base(),
+  transport~ : &OpenAIModelsHttpTransport? = None,
+  api_base~ : String = codex_oauth_api_base(),
   access_token~ : String,
   account_id~ : String,
-  tracker? : CodexQuotaTracker? = None,
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  tracker~ : CodexQuotaTracker? = None,
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> CodexUsageQuotaSource {
   { transport, api_base, access_token, account_id, tracker, now_ms, }
 }

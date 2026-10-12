@@ -38,7 +38,7 @@ fn all_hex(s : String) -> Bool {
 }
 
 ///|
-fn digits_val(s : String) -> Int {
+fn digits_val(s : String) -> Int32 {
   let mut v = 0
   for i in 0..<s.length() {
     v = v * 10 + (s[i].to_int() - 48)
@@ -51,7 +51,7 @@ fn digits_val(s : String) -> Int {
 /// zeros. Alternate inet_aton spellings (hex 0x7f000001, octal 0177.0.0.1,
 /// short 127.1, integer 2130706433) deliberately do not parse as IPv4
 /// here; check_host blocks them separately.
-fn ipv4_parts(h : String) -> (Int, Int, Int, Int)? {
+fn ipv4_parts(h : String) -> (Int32, Int32, Int32, Int32)? {
   let parts = split_char(h, 46)
   if parts.length() != 4 {
     return None
@@ -79,7 +79,7 @@ fn ipv4_parts(h : String) -> (Int, Int, Int, Int)? {
 
 ///|
 /// Range classification of an IPv4 address; None means public.
-fn ipv4_reason(a : Int, b : Int) -> String? {
+fn ipv4_reason(a : Int32, b : Int32) -> String? {
   if a == 127 {
     Some("loopback address")
   } else if a == 10 {

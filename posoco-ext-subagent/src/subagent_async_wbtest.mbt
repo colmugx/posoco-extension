@@ -46,10 +46,10 @@ async test "agent_happy_path_returns_child_result_with_footer" {
 
 ///|
 priv struct ConcurrencyProbeModel {
-  entered : @async.Queue[Int]
+  entered : @async.Queue[Int32]
   release : @async.Queue[Unit]
-  mut active : Int
-  mut peak : Int
+  mut active : Int32
+  mut peak : Int32
 }
 
 ///|
@@ -157,7 +157,7 @@ async test "global_concurrency_caps_parallel_child_lifetimes" {
 priv struct SelectiveFailComposer {
   inner : FakeComposer
   fail_task : String
-  mut failures : Int
+  mut failures : Int32
 }
 
 ///|
@@ -912,14 +912,14 @@ async test "missing_task_reports_error" {
 ///|
 priv struct BgParentModel {
   agent_arguments : Json
-  mid_sleep_ms : Int
-  mut calls : Int
+  mid_sleep_ms : Int32
+  mut calls : Int32
 }
 
 ///|
 fn BgParentModel::BgParentModel(
   agent_arguments~ : Json,
-  mid_sleep_ms~ : Int,
+  mid_sleep_ms~ : Int32,
 ) -> BgParentModel {
   { agent_arguments, mid_sleep_ms, calls: 0, }
 }

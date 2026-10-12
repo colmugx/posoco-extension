@@ -18,13 +18,13 @@ pub struct ShellTools {
   /// Live shell children keyed by effect id. Entries whose execute path
   /// already completed are dropped; unwind-only cleanup may leave a stale
   /// exited entry, pruned by the next cancel.
-  in_flight : Map[Int, ShellChildHandle]
+  in_flight : Map[Int32, ShellChildHandle]
 }
 
 ///|
 /// Canonical constructor. Use this everywhere.
 pub fn ShellTools::ShellTools(
-  anchor? : @devkit.WorkspaceAnchor? = None,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
 ) -> ShellTools {
   ShellTools::{ anchor, in_flight: Map::from_array([]), }
 }
@@ -33,7 +33,7 @@ pub fn ShellTools::ShellTools(
 /// Grace window between the interrupt signal and the hard kill, matching
 /// the native spawn's `graceful_cancel` timeout so both escalation paths
 /// agree.
-let shell_cancel_grace_ms : Int = 2000
+let shell_cancel_grace_ms : Int32 = 2000
 
 ///|
 /// Terminate a registered shell child: signal, wait out the grace period,
@@ -44,7 +44,7 @@ pub impl @posoco.ToolCancellable for ShellTools with fn cancel(
   effect_id : @kernel.EffectId,
   _reason : @kernel.CancelReason,
 ) -> @kernel.CancelDisposition {
-  let stale : Array[Int] = []
+  let stale : Array[Int32] = []
   for key, handle in self.in_flight {
     if handle.exited {
       stale.push(key)
@@ -79,7 +79,7 @@ const BASH_OUTPUT_CHAR_CAP = 32_768
 const BASH_OUTPUT_HEAD_CHARS = 4_096
 
 ///|
-fn bash_char_count(text : String) -> Int {
+fn bash_char_count(text : String) -> Int32 {
   let mut count = 0
   for _ in text {
     count += 1
@@ -88,7 +88,7 @@ fn bash_char_count(text : String) -> Int {
 }
 
 ///|
-fn bash_take_chars(text : String, limit : Int) -> String {
+fn bash_take_chars(text : String, limit : Int32) -> String {
   let chars : Array[Char] = []
   let mut taken = 0
   for ch in text {
@@ -102,7 +102,7 @@ fn bash_take_chars(text : String, limit : Int) -> String {
 }
 
 ///|
-fn bash_tail_chars(text : String, total_chars : Int, limit : Int) -> String {
+fn bash_tail_chars(text : String, total_chars : Int32, limit : Int32) -> String {
   if limit <= 0 {
     return ""
   }
@@ -123,7 +123,7 @@ fn bash_tail_chars(text : String, total_chars : Int, limit : Int) -> String {
 /// - successful short output is unchanged;
 /// - non-zero exits expose the exit code once;
 /// - long output is bounded to BASH_OUTPUT_CHAR_CAP with head+tail context.
-fn bash_model_output(content : String, exit_code : Int) -> String {
+fn bash_model_output(content : String, exit_code : Int32) -> String {
   let raw = if exit_code == 0 {
     content
   } else if content == "" {

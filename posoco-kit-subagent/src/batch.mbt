@@ -26,7 +26,7 @@ pub(all) struct BatchItem {
   /// Execution lifetime the coordinator requests from the Agent.
   mode : @posoco.TaskMode
   /// Per-item timeout in milliseconds (positive).
-  timeout_ms : Int
+  timeout_ms : Int32
   /// True when continuing an existing child session.
   resuming : Bool
 } derive(Eq, @debug.Debug)
@@ -41,7 +41,7 @@ pub extend BatchItem with @moonbitlang/core/debug.Debug::{to_repr}
 /// Batch planning failures; messages are model-facing.
 pub(all) suberror BatchPlanError {
   ItemsEmpty
-  TooManyItems(limit~ : Int)
+  TooManyItems(limit~ : Int32)
   DuplicateKey(key~ : String)
   InvalidTimeout(key~ : String)
 } derive(Eq, @debug.Debug)
@@ -58,7 +58,7 @@ pub extend BatchPlanError with @moonbitlang/core/debug.Debug::{to_repr}
 pub(all) struct BatchPlan {
   items : Array[BatchItem]
   /// Maximum concurrently admitted items (>= 1).
-  wave_cap : Int
+  wave_cap : Int32
 } derive(@debug.Debug)
 
 ///|
@@ -173,10 +173,10 @@ pub fn BatchState::is_settled(self : BatchState) -> Bool {
 /// it re-interprets nothing about core cancellation.
 pub(all) struct BatchResult {
   terminals : Map[String, TerminalState]
-  completed : Int
-  failed : Int
-  timed_out : Int
-  cancelled : Int
+  completed : Int32
+  failed : Int32
+  timed_out : Int32
+  cancelled : Int32
 } derive(@debug.Debug)
 
 ///|

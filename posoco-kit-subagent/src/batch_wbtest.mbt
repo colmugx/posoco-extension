@@ -1,5 +1,5 @@
 ///|
-fn batch_item(key~ : String, timeout_ms? : Int = 60000) -> BatchItem {
+fn batch_item(key~ : String, timeout_ms~ : Int32 = 60000) -> BatchItem {
   {
     key,
     child_session_id: key,
@@ -16,7 +16,7 @@ fn batch_item(key~ : String, timeout_ms? : Int = 60000) -> BatchItem {
 }
 
 ///|
-fn batch_receipt(id~ : String, label? : String = "") -> @posoco.TaskReceipt {
+fn batch_receipt(id~ : String, label~ : String = "") -> @posoco.TaskReceipt {
   {
     id,
     session_id: "parent-session",

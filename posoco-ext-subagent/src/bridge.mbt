@@ -10,9 +10,9 @@ priv struct BridgeObserver {
   kind : String
   parent_call : String
   callbacks : Array[(@kit.SubagentEvent) -> Unit]
-  mut turns : Int
-  mut input_tokens : Int
-  mut output_tokens : Int
+  mut turns : Int32
+  mut input_tokens : Int32
+  mut output_tokens : Int32
 }
 
 ///|

@@ -2,7 +2,7 @@
 /// Cap on one recalled context payload (upstream MAX_CONTEXT_CHARS = 20_000)
 /// — applies to the passively injected working memory and to the
 /// `read_context_bundle` tool body alike.
-const NMEM_MAX_CONTEXT_CHARS : Int = 20000
+const NMEM_MAX_CONTEXT_CHARS : Int32 = 20000
 
 ///|
 /// Truncation tail note appended when a payload exceeds the cap (host label

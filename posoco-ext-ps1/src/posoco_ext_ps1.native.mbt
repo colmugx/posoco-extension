@@ -55,7 +55,7 @@ pub impl @posoco.ToolProvider for PowerShellTools with fn execute(
 
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
-fn ps1_decode_failure(_exit_code : Int) -> String {
+fn ps1_decode_failure(_exit_code : Int32) -> String {
   "powershell: invalid UTF-8"
 }
 

@@ -1,7 +1,7 @@
 ///|
 /// Extension over the test fakes with scripted MCP replies.
 fn mem_ext(
-  script? : Map[String, FakeMcpEntry] = Map::from_array([]),
+  script~ : Map[String, FakeMcpEntry] = Map::from_array([]),
 ) -> NowledgeMem {
   nmem_ext(mcp=FakeNmemMcp::FakeNmemMcp(script~))
 }

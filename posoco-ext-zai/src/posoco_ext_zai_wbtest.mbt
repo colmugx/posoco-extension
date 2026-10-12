@@ -263,7 +263,7 @@ test "factory: only the configured slot carries the declared window" {
 struct ScriptedPrompts {
   answers : Array[String]
   log : Array[String]
-  mut index : Int
+  mut index : Int32
 }
 
 ///|

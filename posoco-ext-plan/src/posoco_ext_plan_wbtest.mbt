@@ -75,7 +75,7 @@ fn text_of(msg : @kernel.Message) -> String? {
 }
 
 ///|
-fn plan_reminder_count(messages : Array[@kernel.Message]) -> Int {
+fn plan_reminder_count(messages : Array[@kernel.Message]) -> Int32 {
   let mut count = 0
   for msg in messages {
     match text_of(msg) {
@@ -669,7 +669,7 @@ test "extension manifest wires the three port views" {
 /// ScriptedReview — records asks, returns a fixed verdict.
 struct ScriptedReview {
   decision : PlanReviewDecision
-  mut asked : Int
+  mut asked : Int32
 }
 
 ///|
@@ -687,7 +687,7 @@ impl PlanReviewSource for ScriptedReview with fn review(
 struct RecordingReview {
   mut seen_name : String
   mut seen_plan : String
-  mut asked : Int
+  mut asked : Int32
 }
 
 ///|
@@ -704,7 +704,7 @@ impl PlanReviewSource for RecordingReview with fn review(
 ///|
 /// FailingReview — simulates a host review surface that errors out.
 struct FailingReview {
-  mut asked : Int
+  mut asked : Int32
 }
 
 ///|

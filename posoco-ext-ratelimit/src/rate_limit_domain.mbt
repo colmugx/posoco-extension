@@ -3,7 +3,7 @@
 /// belong here; the runtime is only a serialized owner of this state.
 priv struct RecoveryPolicy {
   margin_ms : Int64
-  max_attempts : Int
+  max_attempts : Int32
   probe_interval_ms : Int64
   max_probe_interval_ms : Int64
 }
@@ -21,7 +21,7 @@ priv enum RecoverySchedule {
 fn RecoveryPolicy::schedule(
   self : RecoveryPolicy,
   reset_at_ms : Int64?,
-  attempt : Int,
+  attempt : Int32,
   now_ms : Int64,
 ) -> RecoverySchedule {
   if attempt > self.max_attempts {
@@ -50,7 +50,7 @@ priv struct RecoveryEntry {
   encountered_at_ms : Int64
   reset_at_ms : Int64?
   resume_at_ms : Int64
-  attempts : Int
+  attempts : Int32
   provider_code : String?
   window_label : String?
   mut recovery_ready : Bool
@@ -61,8 +61,8 @@ priv struct RecoveryEntry {
 /// late completions structural no-ops.
 priv struct RecoveryTicket {
   session_id : String
-  epoch : Int
-  attempt : Int
+  epoch : Int32
+  attempt : Int32
 } derive(Eq)
 
 ///|
@@ -73,7 +73,7 @@ pub(all) struct RateLimitPending {
   encountered_at_ms : Int64
   reset_at_ms : Int64?
   resume_at_ms : Int64
-  attempts : Int
+  attempts : Int32
   provider_code : String?
 } derive(Eq, Debug)
 
@@ -125,7 +125,7 @@ fn recovery_status(pending : Array[RecoveryEntry]) -> RecoveryStatus? {
 fn find_recovery_index(
   pending : Array[RecoveryEntry],
   session_id : String,
-) -> Int? {
+) -> Int32? {
   for i in 0..<pending.length() {
     if pending[i].session_id == session_id {
       return Some(i)

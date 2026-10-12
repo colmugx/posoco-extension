@@ -12,7 +12,7 @@
 ///|
 fn encode_message(
   msg : @posoco.Message,
-  supports_images? : Bool = false,
+  supports_images~ : Bool = false,
 ) -> Json {
   let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
     msg {
@@ -184,6 +184,6 @@ fn is_digit_code(code : UInt16) -> Bool {
 }
 
 ///|
-fn digit_value(code : UInt16) -> Int {
+fn digit_value(code : UInt16) -> Int32 {
   (code - '0').to_int()
 }

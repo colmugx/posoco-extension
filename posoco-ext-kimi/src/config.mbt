@@ -34,7 +34,7 @@ pub(all) struct KimiConfig {
   thinking_efforts : Array[String]
   identity_headers : Map[String, String]
   /// Context capacity in tokens; `None` = unknown.
-  context_window : Int?
+  context_window : Int32?
   /// Sends `prompt_cache_key` (derived from the session id).
   send_prompt_cache_key : Bool
 } derive(Eq, Debug)
@@ -48,14 +48,14 @@ pub extend KimiConfig with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 pub fn KimiConfig::KimiConfig(
   api_key : String,
-  model? : String = "kimi-k3",
-  base_url? : String = "https://api.moonshot.ai/v1",
-  endpoint_prefix? : String = "",
-  reasoning_effort? : String = "high",
-  thinking_efforts? : Array[String]? = None,
-  identity_headers? : Map[String, String] = Map::from_array([]),
-  context_window? : Int? = None,
-  send_prompt_cache_key? : Bool = true,
+  model~ : String = "kimi-k3",
+  base_url~ : String = "https://api.moonshot.ai/v1",
+  endpoint_prefix~ : String = "",
+  reasoning_effort~ : String = "high",
+  thinking_efforts~ : Array[String]? = None,
+  identity_headers~ : Map[String, String] = Map::from_array([]),
+  context_window~ : Int32? = None,
+  send_prompt_cache_key~ : Bool = true,
 ) -> KimiConfig {
   match kimi_model_policy_error(model) {
     Some(message) => abort("posoco-ext-kimi: " + message)
@@ -121,10 +121,10 @@ pub fn KimiConfig::with_reasoning_effort(
 pub fn KimiConfig::from_oauth_credential(
   credential : @oauth.Credential,
   model : String,
-  endpoint_prefix? : String = "",
-  reasoning_effort? : String = "high",
-  thinking_efforts? : Array[String]? = None,
-  identity_headers? : Map[String, String] = Map::from_array([]),
+  endpoint_prefix~ : String = "",
+  reasoning_effort~ : String = "high",
+  thinking_efforts~ : Array[String]? = None,
+  identity_headers~ : Map[String, String] = Map::from_array([]),
 ) -> KimiConfig {
   KimiConfig(
     credential.access_token,
@@ -151,7 +151,7 @@ pub(all) struct KimiModelPort {
 ///|
 pub fn KimiModelPort::KimiModelPort(
   config : KimiConfig,
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> KimiModelPort {
   {
     config,

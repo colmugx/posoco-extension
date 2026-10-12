@@ -43,7 +43,7 @@ extern "js" fn node_spawn_obsidian(
   #| }
 
 ///|
-extern "js" fn CliProc::exit_code(self : CliProc) -> @js_async.Promise[Int] =
+extern "js" fn CliProc::exit_code(self : CliProc) -> @js_async.Promise[Int32] =
   #| (handle) => handle.exited
 
 ///|

@@ -19,8 +19,8 @@ pub(all) struct PowerShellTools {
 ///|
 /// Canonical constructor. Use this everywhere.
 pub fn PowerShellTools::PowerShellTools(
-  exe? : String = "pwsh",
-  anchor? : @devkit.WorkspaceAnchor? = None,
+  exe~ : String = "pwsh",
+  anchor~ : @devkit.WorkspaceAnchor? = None,
 ) -> PowerShellTools {
   PowerShellTools::{ exe: resolve_exe(exe), anchor, }
 }
@@ -32,7 +32,7 @@ const PS1_OUTPUT_CHAR_CAP = 32_768
 const PS1_OUTPUT_HEAD_CHARS = 4_096
 
 ///|
-fn ps1_char_count(text : String) -> Int {
+fn ps1_char_count(text : String) -> Int32 {
   let mut count = 0
   for _ in text {
     count += 1
@@ -41,7 +41,7 @@ fn ps1_char_count(text : String) -> Int {
 }
 
 ///|
-fn ps1_take_chars(text : String, limit : Int) -> String {
+fn ps1_take_chars(text : String, limit : Int32) -> String {
   let chars : Array[Char] = []
   let mut taken = 0
   for ch in text {
@@ -55,7 +55,7 @@ fn ps1_take_chars(text : String, limit : Int) -> String {
 }
 
 ///|
-fn ps1_tail_chars(text : String, total_chars : Int, limit : Int) -> String {
+fn ps1_tail_chars(text : String, total_chars : Int32, limit : Int32) -> String {
   if limit <= 0 {
     return ""
   }
@@ -74,7 +74,7 @@ fn ps1_tail_chars(text : String, total_chars : Int, limit : Int) -> String {
 ///|
 /// Bound model-visible shell output while preserving command context and the
 /// end-of-log diagnostics where PowerShell failures usually land.
-fn ps1_model_output(content : String, exit_code : Int) -> String {
+fn ps1_model_output(content : String, exit_code : Int32) -> String {
   let raw = if exit_code == 0 {
     content
   } else if content == "" {

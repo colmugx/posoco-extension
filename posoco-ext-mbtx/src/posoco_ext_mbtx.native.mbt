@@ -20,8 +20,8 @@ impl Runner for ProcessRunner with fn run(
   cmd : String,
   args : Array[String],
   cwd : String?,
-  _budget_ms : Int,
-) -> (Int, String, Bool) {
+  _budget_ms : Int32,
+) -> (Int32, String, Bool) {
   let (exit_code, output) = match cwd {
     Some(dir) => @process.collect_output_merged(cmd, args, cwd=dir)
     None => @process.collect_output_merged(cmd, args)

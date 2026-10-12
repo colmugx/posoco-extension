@@ -209,7 +209,7 @@ fn is_plan_reminder(msg : @kernel.Message) -> Bool {
 }
 
 ///|
-fn find_plan_reminder(messages : Array[@kernel.Message]) -> Int? {
+fn find_plan_reminder(messages : Array[@kernel.Message]) -> Int32? {
   for i, msg in messages {
     if is_plan_reminder(msg) {
       return Some(i)

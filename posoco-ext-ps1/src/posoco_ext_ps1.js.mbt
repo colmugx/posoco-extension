@@ -45,7 +45,9 @@ extern "js" fn node_spawn_powershell(
   #| }
 
 ///|
-extern "js" fn ShellProc::exit_code(self : ShellProc) -> @js_async.Promise[Int] =
+extern "js" fn ShellProc::exit_code(
+  self : ShellProc,
+) -> @js_async.Promise[Int32] =
   #| (handle) => handle.exited
 
 ///|

@@ -16,13 +16,13 @@ fn http_config(name : String) -> MCPServerConfig {
 
 ///|
 fn test_conn_stats(
-  tools? : Int = 2,
-  health? : ConnHealth = Fresh,
-  generation? : Int = 0,
-  in_flight? : Int = 0,
-  accepted? : Int64 = 3L,
-  processed? : Int64 = 3L,
-  abandoned? : Int64 = 0L,
+  tools~ : Int32 = 2,
+  health~ : ConnHealth = Fresh,
+  generation~ : Int32 = 0,
+  in_flight~ : Int32 = 0,
+  accepted~ : Int64 = 3L,
+  processed~ : Int64 = 3L,
+  abandoned~ : Int64 = 0L,
 ) -> McpConnStats {
   { tools, health, generation, in_flight, accepted, processed, abandoned, }
 }

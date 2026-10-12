@@ -1,5 +1,5 @@
 ///|
-fn repeat_text(unit : String, count : Int) -> String {
+fn repeat_text(unit : String, count : Int32) -> String {
   let builder = StringBuilder()
   for _i in 0..<count {
     builder.write_string(unit)

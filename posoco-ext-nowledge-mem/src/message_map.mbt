@@ -1,13 +1,13 @@
 ///|
 /// Max characters per synced message (upstream MAX_MESSAGE_CHARS = 20_000).
-const NMEM_MAX_MESSAGE_CHARS : Int = 20000
+const NMEM_MAX_MESSAGE_CHARS : Int32 = 20000
 
 ///|
 /// First `limit` UTF-16 code units of `text`, shortened by one when the cut
 /// would split a surrogate pair (string slicing raises at surrogate
 /// boundaries; upstream JS simply splits the pair, which MoonBit strings
 /// cannot represent).
-fn take_prefix(text : String, limit : Int) -> String {
+fn take_prefix(text : String, limit : Int32) -> String {
   if text.length() <= limit {
     text
   } else {
@@ -161,7 +161,7 @@ fn build_thread_message(
   raw_content : String,
   config~ : NmemConfig,
   session_id~ : String,
-  index~ : Int,
+  index~ : Int32,
 ) -> NmemThreadMessage? {
   let trimmed = raw_content.trim().to_owned()
   if trimmed == "" {

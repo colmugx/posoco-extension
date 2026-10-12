@@ -9,7 +9,7 @@
 /// corrected arguments.
 fn extract_fetch_args(
   args : Json,
-) -> (ParsedUrl, Int?) raise @posoco.RuntimeError {
+) -> (ParsedUrl, Int32?) raise @posoco.RuntimeError {
   match args {
     Object(obj) => {
       let url = match obj.get("url") {
@@ -69,7 +69,7 @@ priv enum FetchLoop {
 /// failures come back as ErrKind for the caller to format.
 async fn follow_redirects(
   io : &HttpIo,
-  byte_cap : Int,
+  byte_cap : Int32,
   requested : ParsedUrl,
 ) -> Result[FetchLoop, ErrKind] raise @posoco.RuntimeError {
   let req_url = requested.to_url_string()
@@ -165,7 +165,7 @@ fn url_title(final_url : String) -> String {
     Some(i) => final_url[:i].to_owned()
     None => final_url
   }
-  let start : Int = match u.find("://") {
+  let start : Int32 = match u.find("://") {
     Some(i) => i + 3
     None => 0
   }
@@ -196,7 +196,7 @@ fn url_title(final_url : String) -> String {
 
 ///|
 /// Scalar-char count (same counting rule as slice_chars' totals).
-fn count_chars(s : String) -> Int {
+fn count_chars(s : String) -> Int32 {
   let mut n = 0
   for _ in s {
     n = n + 1
@@ -218,8 +218,8 @@ fn reported_error(kind : ErrKind) -> @posoco.ToolOutcome {
 fn serve_cached(
   doc : CachedDoc,
   req_url : String,
-  offset : Int,
-  max_chars : Int,
+  offset : Int32,
+  max_chars : Int32,
 ) -> @posoco.ToolOutcome {
   match slice_chars(doc.content, offset, max_chars) {
     None =>

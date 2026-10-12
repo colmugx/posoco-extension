@@ -10,7 +10,7 @@ fn build_fim_request_body(
   config : DeepSeekConfig,
   prefix : String,
   suffix : String?,
-  max_tokens : Int,
+  max_tokens : Int32,
 ) -> Json {
   let body_map : Map[String, Json] = {
     "model": Json::string(config.model),
@@ -121,7 +121,7 @@ pub async fn DeepSeekModelPort::fim_completion(
   self : DeepSeekModelPort,
   prefix : String,
   suffix : String?,
-  max_tokens? : Int = 128,
+  max_tokens~ : Int32 = 128,
 ) -> String raise @posoco.ModelError {
   let body = build_fim_request_body(self.config, prefix, suffix, max_tokens)
   let headers = build_headers(self.config)

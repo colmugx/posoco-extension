@@ -11,7 +11,7 @@
 
 ///|
 priv struct WsTransport {
-  handle : Int
+  handle : Int32
 }
 
 ///|
@@ -29,7 +29,7 @@ extern "js" fn ws_js_runtime_supported() -> Bool =
 extern "js" fn ws_js_open(
   url : String,
   headers_json : String,
-) -> @js_async.Promise[Int] =
+) -> @js_async.Promise[Int32] =
   #| (url, headersJson) => new Promise((resolve) => {
   #|   try {
   #|     const registry = (globalThis.__posocoWs ||= { seq: 0, sockets: new Map() });
@@ -85,7 +85,7 @@ extern "js" fn ws_js_open(
 /// Two minutes without any frame — server frames or pings both refresh it —
 /// marks the connection dead. Long enough for slow first tokens, short
 /// enough that a silently dropped socket recovers into the SSE fallback.
-const WS_IDLE_TIMEOUT_MS : Int = 120_000
+const WS_IDLE_TIMEOUT_MS : Int32 = 120_000
 
 ///|
 /// Next text frame; `null` resolves on close/error (stream end) and `""` on
@@ -95,9 +95,9 @@ const WS_IDLE_TIMEOUT_MS : Int = 120_000
 /// server that accepts frames but stops answering would otherwise hold the
 /// pump forever.
 extern "js" fn ws_js_next(
-  handle : Int,
+  handle : Int32,
   signal : @js_async.AbortSignal,
-  idle_timeout_ms : Int,
+  idle_timeout_ms : Int32,
 ) -> @js_async.Promise[String?] =
   #| (handle, signal, idleTimeoutMs) => new Promise((resolve) => {
   #|   const registry = globalThis.__posocoWs;
@@ -121,7 +121,7 @@ extern "js" fn ws_js_next(
   #| })
 
 ///|
-extern "js" fn ws_js_send(handle : Int, text : String) -> Bool =
+extern "js" fn ws_js_send(handle : Int32, text : String) -> Bool =
   #| (handle, text) => {
   #|   try {
   #|     const registry = globalThis.__posocoWs;
@@ -135,7 +135,7 @@ extern "js" fn ws_js_send(handle : Int, text : String) -> Bool =
   #| }
 
 ///|
-extern "js" fn ws_js_close(handle : Int) -> Unit =
+extern "js" fn ws_js_close(handle : Int32) -> Unit =
   #| (handle) => {
   #|   try {
   #|     const registry = globalThis.__posocoWs;

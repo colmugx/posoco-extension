@@ -52,7 +52,7 @@ fn format_status_percent(value : Double) -> String {
 /// CommandPort impl in command_model.mbt wraps it into a CommandOutcome.
 fn RouterModelPort::status_report(
   self : RouterModelPort,
-  readings? : Array[@devkit.QuotaReading] = [],
+  readings~ : Array[@devkit.QuotaReading] = [],
 ) -> (String, Json) {
   let slot = self.active_slot_opt()
   let effort = match self.active_effort() {

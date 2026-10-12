@@ -46,13 +46,13 @@ pub(all) struct ObsidianConfig {
 
 ///|
 pub fn ObsidianConfig::ObsidianConfig(
-  cli_path? : String = "obsidian",
-  vault? : String? = None,
-  read_paths? : Array[String] = [],
-  read_only? : Bool = true,
-  write_paths? : Array[String] = [],
-  allow_delete? : Bool = false,
-  cli_eval_enabled? : Bool = false,
+  cli_path~ : String = "obsidian",
+  vault~ : String? = None,
+  read_paths~ : Array[String] = [],
+  read_only~ : Bool = true,
+  write_paths~ : Array[String] = [],
+  allow_delete~ : Bool = false,
+  cli_eval_enabled~ : Bool = false,
 ) -> ObsidianConfig {
   {
     cli_path,
@@ -67,8 +67,8 @@ pub fn ObsidianConfig::ObsidianConfig(
 
 ///|
 pub fn ObsidianTools::new(
-  config? : ObsidianConfig = ObsidianConfig::ObsidianConfig(),
-  freshness? : @devkit.FreshnessGuard = @devkit.FreshnessGuard::FreshnessGuard(),
+  config~ : ObsidianConfig = ObsidianConfig::ObsidianConfig(),
+  freshness~ : @devkit.FreshnessGuard = @devkit.FreshnessGuard::FreshnessGuard(),
 ) -> ObsidianTools {
   { config, freshness, ui: None, }
 }

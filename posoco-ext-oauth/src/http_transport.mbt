@@ -26,13 +26,13 @@ pub fn OAuthHttpRequest::OAuthHttpRequest(
 
 ///|
 pub(all) struct OAuthHttpResponse {
-  status : Int
+  status : Int32
   body : String
 }
 
 ///|
 pub fn OAuthHttpResponse::OAuthHttpResponse(
-  status~ : Int,
+  status~ : Int32,
   body~ : String,
 ) -> OAuthHttpResponse {
   { status, body, }

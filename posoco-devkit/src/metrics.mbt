@@ -14,8 +14,8 @@ pub(all) struct MetricsPoint {
   effort : String
   iq : Double
   cost_usd : Double
-  passed : Int
-  total : Int
+  passed : Int32
+  total : Int32
   /// The source's average total tokens per run (feed field
   /// `average_total_tokens`); present only when the source stated it.
   tokens : Double?

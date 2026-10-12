@@ -32,8 +32,8 @@ pub(all) struct ReadTools {
 /// not participate in freshness tracking.
 pub fn ReadTools::ReadTools(
   freshness? : @devkit.FreshnessGuard,
-  anchor? : @devkit.WorkspaceAnchor? = None,
-  fs? : &@workspace.WorkspaceFs? = None,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
+  fs~ : &@workspace.WorkspaceFs? = None,
 ) -> ReadTools {
   ReadTools::{ freshness, anchor, fs, }
 }
@@ -56,7 +56,7 @@ const READ_BYTE_CAP = 40_000
 /// every line in the file so callers can render "N more lines" footers.
 priv struct LinePage {
   lines : Array[String]
-  total_lines : Int
+  total_lines : Int32
   total_bytes : Int64
 }
 
@@ -75,14 +75,14 @@ priv trait FsIo {
 
   /// Return the 0-based window `[skip, skip+take)` of lines. Adaptors must
   /// count every line in the file (streaming on native) even past the window.
-  async fn read_lines(self : Self, path : String, skip : Int, take : Int) -> LinePage raise @posoco.RuntimeError
+  async fn read_lines(self : Self, path : String, skip : Int32, take : Int32) -> LinePage raise @posoco.RuntimeError
 
   /// Whole-file base64 payload for image attachments (native reads bytes;
   /// js reads through the host). Raise = IO error.
   async fn read_image_base64(self : Self, path : String) -> String raise @posoco.RuntimeError
 
   /// Return the last `take` lines of the file (tail window).
-  async fn read_last_lines(self : Self, path : String, take : Int) -> LinePage raise @posoco.RuntimeError
+  async fn read_last_lines(self : Self, path : String, take : Int32) -> LinePage raise @posoco.RuntimeError
 }
 
 ///|
@@ -129,8 +129,8 @@ async fn delegated_read_page(
 impl FsIo for DelegatedFsIo with fn read_lines(
   self,
   path : String,
-  skip : Int,
-  take : Int,
+  skip : Int32,
+  take : Int32,
 ) -> LinePage {
   let page = delegated_read_page(self.fs, path)
   let window : Array[String] = []
@@ -150,7 +150,7 @@ impl FsIo for DelegatedFsIo with fn read_lines(
 impl FsIo for DelegatedFsIo with fn read_last_lines(
   self,
   path : String,
-  take : Int,
+  take : Int32,
 ) -> LinePage {
   let page = delegated_read_page(self.fs, path)
   let take_eff = if take < page.total_lines { take } else { page.total_lines }
@@ -169,7 +169,7 @@ impl FsIo for DelegatedFsIo with fn read_image_base64(self, path : String) -> St
 ///|
 /// Inline image cap, mirroring the cetas-js attachment limit: larger images
 /// bloat both the request and the session JSONL; ask for a crop/downscale.
-const READ_IMAGE_MAX_BYTES : Int = 5 * 1024 * 1024
+const READ_IMAGE_MAX_BYTES : Int32 = 5 * 1024 * 1024
 
 ///|
 /// Image extensions the read tool attaches for vision (`None` = not an
@@ -230,7 +230,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
 /// `execute_read_impl` so those messages live next to the paging logic.
 fn extract_read_args(
   args : Json,
-) -> (String, Int?, Int?) raise @posoco.RuntimeError {
+) -> (String, Int32?, Int32?) raise @posoco.RuntimeError {
   match args {
     Object(obj) => {
       let path = match obj.get("path") {
@@ -367,7 +367,7 @@ fn split_file_lines(text : String) -> Array[String] {
 
 ///|
 /// Truncate `s` to at most `cap` characters, cutting at a char boundary.
-fn truncate_chars(s : String, cap : Int) -> String {
+fn truncate_chars(s : String, cap : Int32) -> String {
   if s.length() <= cap {
     return s
   }
@@ -392,9 +392,9 @@ fn truncate_chars(s : String, cap : Int) -> String {
 /// `cap_bytes` plus one final line.
 fn format_read_page(
   lines : Array[String],
-  start_line : Int,
-  cap_bytes : Int,
-) -> (String, Int, Bool) {
+  start_line : Int32,
+  cap_bytes : Int32,
+) -> (String, Int32, Bool) {
   let out = StringBuilder()
   let mut returned = 0
   let mut bytes = 0

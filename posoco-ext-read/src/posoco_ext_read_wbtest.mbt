@@ -142,8 +142,8 @@ test "read_sanitize_path_is_bounded_and_single_line" {
 #cfg(target="native")
 fn read_call_args(
   path : String,
-  offset? : Int,
-  limit? : Int,
+  offset? : Int32,
+  limit? : Int32,
 ) -> @posoco.ToolCall {
   let args : Map[String, Json] = Map::from_array([("path", Json::string(path))])
   match offset {
@@ -501,7 +501,7 @@ priv struct FakeDelegatedFs {
 #cfg(target="native")
 fn FakeDelegatedFs::FakeDelegatedFs(
   buffer~ : String,
-  present? : Bool = true,
+  present~ : Bool = true,
 ) -> FakeDelegatedFs {
   { buffer, present, reads: [], }
 }

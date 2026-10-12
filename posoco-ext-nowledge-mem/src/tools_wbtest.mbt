@@ -23,9 +23,9 @@ fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
 /// Extension over echo transport with a scripted MCP client, an optional
 /// space-scoped config, and the delete-tool toggle.
 fn tool_ext(
-  mcp? : FakeNmemMcp = FakeNmemMcp::FakeNmemMcp(),
-  expose_delete_tool? : Bool = false,
-  space? : String? = None,
+  mcp~ : FakeNmemMcp = FakeNmemMcp::FakeNmemMcp(),
+  expose_delete_tool~ : Bool = false,
+  space~ : String? = None,
 ) -> NowledgeMem {
   let ext = NowledgeMem(
     source_app="posoco",

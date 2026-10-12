@@ -2,13 +2,13 @@
 /// Default thread sync timeout in milliseconds (upstream
 /// DEFAULT_THREAD_SYNC_TIMEOUT_MS = 120_000), overridable through
 /// NMEM_SYNC_TIMEOUT_MS via resolve_thread_sync_timeout_ms.
-pub const DEFAULT_THREAD_SYNC_TIMEOUT_MS : Int = 120_000
+pub const DEFAULT_THREAD_SYNC_TIMEOUT_MS : Int32 = 120_000
 
 ///|
-const NMEM_MIN_THREAD_SYNC_TIMEOUT_MS : Int = 1_000
+const NMEM_MIN_THREAD_SYNC_TIMEOUT_MS : Int32 = 1_000
 
 ///|
-const NMEM_MAX_THREAD_SYNC_TIMEOUT_MS : Int = 1_800_000
+const NMEM_MAX_THREAD_SYNC_TIMEOUT_MS : Int32 = 1_800_000
 
 ///|
 const NMEM_SAFE_INTEGER_MAX_AS_DOUBLE : Double = 9007199254740991.0
@@ -18,7 +18,7 @@ const NMEM_SAFE_INTEGER_MAX_AS_DOUBLE : Double = 9007199254740991.0
 /// blank, non-numeric, non-integral, or non-positive input yields the
 /// default; everything else is clamped into [1s, 30min]. Parsing goes through
 /// Double so exponent forms like "1e3" behave like upstream's Number().
-pub fn resolve_thread_sync_timeout_ms(raw : String?) -> Int {
+pub fn resolve_thread_sync_timeout_ms(raw : String?) -> Int32 {
   let trimmed = match raw {
     Some(text) => text.trim().to_owned()
     None => return DEFAULT_THREAD_SYNC_TIMEOUT_MS
@@ -113,13 +113,13 @@ pub fn build_sync_request(
 /// error message).
 priv struct NmemPostOutcome {
   ok : Bool
-  status : Int
+  status : Int32
   body : Json
   failure : String?
 }
 
 ///|
-fn http_status_ok(status : Int) -> Bool {
+fn http_status_ok(status : Int32) -> Bool {
   status >= 200 && status <= 299
 }
 
@@ -133,7 +133,7 @@ async fn nmem_post(
   config : NmemConfig,
   path : String,
   body : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> NmemPostOutcome {
   let primary = config.api_url + path
   let urls : Array[String] = [primary]
@@ -191,7 +191,7 @@ fn thread_sync_failed_error(outcome : NmemPostOutcome) -> String {
 fn append_body(
   messages : Array[NmemThreadMessage],
   idempotency_key : String,
-  expected_remote_count : Int?,
+  expected_remote_count : Int32?,
 ) -> Json {
   let fields : Map[String, Json] = {
     "messages": Json::array(messages.map(m => m.to_wire_json())),
@@ -222,7 +222,7 @@ pub async fn flush_once(
   transport : &NmemTransport,
   request : SyncRequest,
   state : LaneState,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> LaneState {
   let delta = select_acked_delta(request.messages, state.acknowledged)
   if delta.messages.length() == 0 {
@@ -237,7 +237,7 @@ pub async fn flush_once(
       request.body,
       timeout_ms~,
     )
-    let create_remote_count : Int? = if is_thread_create_ack(
+    let create_remote_count : Int32? = if is_thread_create_ack(
         create_result.body,
         request.thread_id,
       ) {
@@ -274,7 +274,7 @@ pub async fn flush_once(
     created = true
   }
   let mut checkpointed = state.acknowledged is Some(_) && !delta.reset
-  let expected_remote_count : Int? = if checkpointed {
+  let expected_remote_count : Int32? = if checkpointed {
     match state.acknowledged {
       Some(acked) => Some(acked.remote_count)
       None => None
@@ -350,7 +350,7 @@ pub async fn flush_once(
       pending: None,
     }
   }
-  let remote_count : Int? = if recreated {
+  let remote_count : Int32? = if recreated {
     // The persistence gate above already verified the create ack shape.
     thread_create_remote_count(result.body)
   } else {
@@ -432,7 +432,7 @@ pub fn SyncEngine::lane_state(
 pub async fn SyncEngine::drain_once(
   self : SyncEngine,
   transport : &NmemTransport,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Unit {
   let dirty : Array[String] = []
   for lane_key, lane in self.lanes {
@@ -464,8 +464,8 @@ pub async fn SyncEngine::drain_once(
 pub async fn SyncEngine::flusher_loop(
   self : SyncEngine,
   transport : &NmemTransport,
-  interval_ms~ : Int,
-  timeout_ms~ : Int,
+  interval_ms~ : Int32,
+  timeout_ms~ : Int32,
 ) -> Unit {
   while !self.stopped {
     self.drain_once(transport, timeout_ms~)

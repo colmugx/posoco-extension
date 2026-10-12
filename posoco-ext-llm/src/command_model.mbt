@@ -14,8 +14,8 @@
 /// pricing map is given or the provider has none.
 fn RouterModelPort::slot_catalog_json(
   self : RouterModelPort,
-  quota? : Map[String, Array[@devkit.QuotaReading]]? = None,
-  pricing? : Map[String, @devkit.PricingPhase]? = None,
+  quota~ : Map[String, Array[@devkit.QuotaReading]]? = None,
+  pricing~ : Map[String, @devkit.PricingPhase]? = None,
 ) -> Json {
   let entries : Array[Json] = []
   for slot in self.list_slots() {

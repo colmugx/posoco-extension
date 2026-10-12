@@ -1,6 +1,6 @@
 ///|
 pub(all) struct ContextWindowReading {
-  tokens : Int
+  tokens : Int32
   source : String
   stale : Bool
 } derive(Eq, Debug)
@@ -12,7 +12,7 @@ pub extend ContextWindowReading with Eq::{equal, not_equal}
 pub extend ContextWindowReading with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-fn positive_window(value : Int?) -> Int? {
+fn positive_window(value : Int32?) -> Int32? {
   match value {
     Some(n) if n > 0 => Some(n)
     _ => None
@@ -20,7 +20,7 @@ fn positive_window(value : Int?) -> Int? {
 }
 
 ///|
-pub fn context_window_integer(value : Json?) -> Int? {
+pub fn context_window_integer(value : Json?) -> Int32? {
   match value {
     Some(Json::Number(n, ..)) if n > 0.0 && n <= 2147483647.0 => {
       let integer = n.to_int()
@@ -39,7 +39,7 @@ pub fn context_window_integer(value : Json?) -> Int? {
 pub fn ProviderConfigSource::context_window_setting(
   self : ProviderConfigSource,
   manifest_id~ : String,
-) -> Int? raise @posoco.CompositionError {
+) -> Int32? raise @posoco.CompositionError {
   match self.setting("context_window") {
     None => None
     Some(value) =>
@@ -61,7 +61,7 @@ pub fn cached_provider_context_window(
   records : Json?,
   model_id : String,
   metadata_provider_id? : String,
-) -> Int? {
+) -> Int32? {
   guard records is Some(Json::Array(items)) else { return None }
   for item in items {
     if item is Json::Object(fields) &&
@@ -135,10 +135,9 @@ pub async fn RouterModelPort::refresh_model_metadata(
         }
       }
       metadata.refresh(providers)
-      for slot in self.list_slots() {
-        if self.context_window_reading(slot).source == "fallback" {
-          metadata.report_fallback(slot.provider_id, slot.model_id)
-        }
+      if self.active_slot_opt() is Some(slot) &&
+        self.context_window_reading(slot).source == "fallback" {
+        metadata.report_fallback(slot.provider_id, slot.model_id)
       }
     }
     None => ()

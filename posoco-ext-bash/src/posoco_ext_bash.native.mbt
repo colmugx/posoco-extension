@@ -16,9 +16,9 @@ fn shell_child_interrupt(handle : ShellChildHandle) -> Unit {
 ///|
 async fn shell_child_await_exit(
   handle : ShellChildHandle,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Bool {
-  let outcome : Int? = @async.with_timeout_opt(timeout_ms, async fn() {
+  let outcome : Int32? = @async.with_timeout_opt(timeout_ms, async fn() {
     handle.proc.wait() catch {
       _ => -1
     }
@@ -76,7 +76,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   }
   let (reader, writer) = pipes
   let key = ctx.effect_id.to_int()
-  let attempted : Result[(Int, String, Bool), Error] = Ok(
+  let attempted : Result[(Int32, String, Bool), Error] = Ok(
     @async.with_task_group(async fn(group) {
       defer reader.close()
       let proc = @process.spawn(
@@ -130,7 +130,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
 
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
-fn bash_decode_failure(_exit_code : Int) -> String {
+fn bash_decode_failure(_exit_code : Int32) -> String {
   "bash: invalid UTF-8"
 }
 

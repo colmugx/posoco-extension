@@ -4,7 +4,7 @@
 /// non-JSON error page still reaches the status-based predicates in acks.mbt
 /// instead of failing the request outright.
 pub(all) struct NmemResponse {
-  status : Int
+  status : Int32
   body : Json
 } derive(Debug)
 
@@ -21,7 +21,7 @@ pub(open) trait NmemTransport {
     url : String,
     headers : Map[String, String],
     body : Json,
-    timeout_ms~ : Int,
+    timeout_ms~ : Int32,
   ) -> Result[NmemResponse, String]
 }
 
@@ -156,7 +156,7 @@ fn authority_valid(authority : StringView) -> Bool {
     return false
   }
   match port {
-    Some(port) => port.length() > 0 && port.all(fn(c) { c is ('0'..='9') })
+    Some(port) => port.length() > 0 && port.all(fn(c) { c is ('0'..<='9') })
     None => true
   }
 }
@@ -172,7 +172,7 @@ pub impl NmemTransport for HttpNmemTransport with fn post_json(
   url : String,
   headers : Map[String, String],
   body : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[NmemResponse, String] {
   guard split_url(url) is Some((origin, path)) else {
     return Err("nmem transport failure (stage=split_url): invalid url: " + url)

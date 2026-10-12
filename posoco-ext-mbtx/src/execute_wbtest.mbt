@@ -17,14 +17,14 @@ priv struct MbtxRunRecord {
 ///|
 priv struct MbtxFakeRunner {
   // scripted (exit_code, output, decoded_ok) consumed by call index
-  replies : Array[(Int, String, Bool)]
+  replies : Array[(Int32, String, Bool)]
   calls : Array[MbtxRunRecord]
   // when set, run() sleeps this long before replying to the moonrun call
   // (drives the pipeline's RUN wall-clock timeout without delaying BUILD)
-  mut moonrun_sleep_ms : Int?
+  mut moonrun_sleep_ms : Int32?
   // when set, run() sleeps this long before replying to a cmd-tool call
   // (drives the cmd path's wall-clock timeout)
-  mut cmd_sleep_ms : Int?
+  mut cmd_sleep_ms : Int32?
   // when true, the BUILD reply embeds the snippet path from that call's
   // argv (as a real compiler would), exercising the tmp-path rewrite
   mut echo_snippet_in_diagnostic : Bool
@@ -33,7 +33,9 @@ priv struct MbtxFakeRunner {
 }
 
 ///|
-fn MbtxFakeRunner::new(replies : Array[(Int, String, Bool)]) -> MbtxFakeRunner {
+fn MbtxFakeRunner::new(
+  replies : Array[(Int32, String, Bool)],
+) -> MbtxFakeRunner {
   {
     replies,
     calls: [],
@@ -50,8 +52,8 @@ impl Runner for MbtxFakeRunner with fn run(
   cmd : String,
   args : Array[String],
   cwd : String?,
-  _budget_ms : Int,
-) -> (Int, String, Bool) {
+  _budget_ms : Int32,
+) -> (Int32, String, Bool) {
   self.calls.push({ cmd, args, cwd, })
   if cmd.has_suffix("moonrun") {
     match self.moonrun_sleep_ms {
@@ -90,10 +92,10 @@ impl Runner for MbtxFakeRunner with fn run(
       }
     }
     let diagnostic = "Error [4040]: at \{snippet}:1:5: variable `x` is not defined"
-    let reply : (Int, String, Bool) = (exit, diagnostic, decoded)
+    let reply : (Int32, String, Bool) = (exit, diagnostic, decoded)
     reply
   } else {
-    let reply : (Int, String, Bool) = (exit, output, decoded)
+    let reply : (Int32, String, Bool) = (exit, output, decoded)
     reply
   }
 }
@@ -103,9 +105,9 @@ impl Runner for MbtxFakeRunner with fn run(
 /// execute never touches the host environment.
 fn mbtx_fake_tools(
   runner~ : &Runner,
-  anchor? : @devkit.WorkspaceAnchor? = None,
-  run_timeout_ms? : Int = 120_000,
-  escalation? : Bool = false,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
+  run_timeout_ms~ : Int32 = 120_000,
+  escalation~ : Bool = false,
 ) -> MbtxTools {
   let tools = MbtxTools::with_runner(
     runner~,
@@ -324,7 +326,7 @@ async test "undecodable run output is reported as invalid_utf8" {
 fn cmd_call(
   id~ : String,
   program~ : String,
-  args? : Array[Json] = [],
+  args~ : Array[Json] = [],
 ) -> @posoco.ToolCall {
   {
     call_id: @posoco.CallId::unchecked(id),

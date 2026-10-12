@@ -6,7 +6,7 @@
 /// Render a goal-harness body as a trusted `<goal-context>` envelope.
 fn goal_envelope(
   kind~ : String,
-  attrs? : Array[(String, String)] = [],
+  attrs~ : Array[(String, String)] = [],
   content~ : String,
 ) -> String {
   @devkit.context_envelope(ns="goal", kind~, trust=true, attrs~, content~)
@@ -59,13 +59,13 @@ pub fn build_charter(
 /// Per-turn recitation: plan snapshot, next step, and a cycling continue
 /// instruction, with turn/tokens budget attrs on the envelope.
 pub fn build_progress(
-  turn~ : Int,
-  max_turns~ : Int,
-  total_tokens~ : Int,
-  max_total_tokens~ : Int,
+  turn~ : Int32,
+  max_turns~ : Int32,
+  total_tokens~ : Int32,
+  max_total_tokens~ : Int32,
   plan_snapshot~ : String,
   next_step~ : String?,
-  variant~ : Int,
+  variant~ : Int32,
 ) -> String {
   let turn_attr = if max_turns > 0 { "\{turn}/\{max_turns}" } else { "\{turn}" }
   let attrs : Array[(String, String)] = [("turn", turn_attr)]
@@ -83,7 +83,7 @@ pub fn build_progress(
 ///|
 /// Deterministic continue instruction cycling on variant mod 3; every
 /// variant ends with the same verify-then-update sentence.
-pub fn continue_instruction(variant : Int) -> String {
+pub fn continue_instruction(variant : Int32) -> String {
   let opening = match variant % 3 {
     0 => "Continue working toward the goal."
     1 => "Take the smallest step that makes the NEXT STEP item done."

@@ -168,7 +168,7 @@ fn flag_denied(cmd : String, words : Array[String]) -> Bool {
 /// Scans every word, so global flags before the subcommand
 /// (`git -C elsewhere push`) cannot smuggle a mutation past.
 /// `git worktree` is denied except `git worktree list`.
-fn git_words_denied(words : Array[String], start~ : Int) -> Bool {
+fn git_words_denied(words : Array[String], start~ : Int32) -> Bool {
   let mut i = start
   while i < words.length() {
     let word = words[i]
@@ -294,7 +294,7 @@ fn redirects_denied(
 /// short forms like `-rf`) carry no path.
 fn args_confined(
   words : Array[String],
-  start~ : Int,
+  start~ : Int32,
   writable~ : (String) -> Bool,
 ) -> Bool {
   for i in start..<words.length() {

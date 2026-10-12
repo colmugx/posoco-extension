@@ -9,7 +9,7 @@ const NMEM_CONTEXT_NS : String = "nmem"
 ///|
 /// Timeout for the one-shot session-inbound working-memory read — it sits on
 /// the model-call path, so it fails faster than the tool budget.
-const NMEM_INBOUND_READ_TIMEOUT_MS : Int = 5000
+const NMEM_INBOUND_READ_TIMEOUT_MS : Int32 = 5000
 
 ///|
 /// Working-memory payload as an inbound body: a clean JSON object honours

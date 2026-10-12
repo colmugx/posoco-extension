@@ -32,7 +32,7 @@ pub fn context_envelope(
   kind~ : String,
   trust~ : Bool,
   source? : String,
-  attrs? : Array[(String, String)] = [],
+  attrs~ : Array[(String, String)] = [],
   content~ : String,
 ) -> String {
   let trust_str = if trust { "true" } else { "false" }

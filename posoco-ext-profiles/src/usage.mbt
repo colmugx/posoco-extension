@@ -46,7 +46,7 @@ pub impl @posoco.Observer for Profiles with fn on_event_at(
         let per_session = match self.usage.get(session_id) {
           Some(map) => map
           None => {
-            let map : Map[String, Int] = Map::from_array([])
+            let map : Map[String, Int32] = Map::from_array([])
             self.usage[session_id] = map
             map
           }
@@ -72,8 +72,8 @@ pub extend Profiles with @posoco.Observer::{on_event}
 pub fn Profiles::session_usage(
   self : Profiles,
   session_id : String,
-) -> Array[(String, Int)] {
-  let per_ext : Map[String, Int] = Map::from_array([])
+) -> Array[(String, Int32)] {
+  let per_ext : Map[String, Int32] = Map::from_array([])
   match self.usage.get(session_id) {
     Some(tools) =>
       for name, count in tools {
@@ -88,7 +88,7 @@ pub fn Profiles::session_usage(
       }
     None => ()
   }
-  let pairs : Array[(String, Int)] = []
+  let pairs : Array[(String, Int32)] = []
   for ext_id, count in per_ext {
     pairs.push((ext_id, count))
   }

@@ -29,7 +29,7 @@ pub(all) struct KimiIdentity {
 ///|
 pub fn kimi_default_headers(
   device_id? : String,
-  identity? : KimiIdentity? = None,
+  identity~ : KimiIdentity? = None,
 ) -> Map[String, String] {
   let id = match device_id {
     Some(value) => value
@@ -61,7 +61,7 @@ pub fn kimi_user_agent() -> String {
 }
 
 ///|
-fn kimi_ascii_header(value : String, fallback? : String = "unknown") -> String {
+fn kimi_ascii_header(value : String, fallback~ : String = "unknown") -> String {
   let buf = StringBuilder()
   for ch in value {
     let code = ch.to_int()

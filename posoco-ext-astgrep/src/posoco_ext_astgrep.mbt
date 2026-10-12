@@ -19,7 +19,7 @@ pub(all) struct AstGrepTools {
 ///|
 /// Canonical constructor.
 pub fn AstGrepTools::AstGrepTools(
-  anchor? : @devkit.WorkspaceAnchor? = None,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
 ) -> AstGrepTools {
   AstGrepTools::{ anchor, }
 }
@@ -47,7 +47,7 @@ priv struct AstGrepQuery {
   lang : String?
   path : String?
   glob : String?
-  max_matches : Int
+  max_matches : Int32
 }
 
 ///|
@@ -55,7 +55,7 @@ priv struct AstGrepQuery {
 /// probe winner), returning `(exit_code, stdout, stderr)`. Backends
 /// implement only this; probe + argv + rendering stay in the shared impl.
 priv trait AstGrepSpawn {
-  async fn spawn(self : Self, argv : Array[String]) -> (Int, String, String) raise @posoco.RuntimeError
+  async fn spawn(self : Self, argv : Array[String]) -> (Int32, String, String) raise @posoco.RuntimeError
 }
 
 ///|
@@ -193,12 +193,12 @@ fn missing_binary_error(candidates : Array[String]) -> String {
 /// the model-facing contract uses one-based lines like the read/grep tools.
 priv struct AstGrepMatch {
   file : String
-  line : Int
+  line : Int32
   text : String
 }
 
 ///|
-fn astgrep_structured(count : Int, returned : Int) -> Json {
+fn astgrep_structured(count : Int32, returned : Int32) -> Json {
   Json::object(
     Map::from_array([
       ("summary", Json::string("\{count} matches")),
@@ -241,8 +241,8 @@ fn astgrep_excerpt(text : String) -> String {
 /// cap. Returns body, shown count, and total parsed match count.
 fn astgrep_render_stream(
   stdout : String,
-  max_matches : Int,
-) -> (String, Int, Int)? {
+  max_matches : Int32,
+) -> (String, Int32, Int32)? {
   let matches : Array[AstGrepMatch] = []
   for view in stdout.split("\n") {
     if view == "" {
@@ -285,7 +285,7 @@ fn astgrep_render_stream(
 }
 
 ///|
-fn astgrep_bounded_raw(text : String, limit : Int) -> String {
+fn astgrep_bounded_raw(text : String, limit : Int32) -> String {
   let clipped = @devkit.truncate_chars(text, limit)
   if clipped == text {
     clipped
@@ -300,11 +300,11 @@ fn astgrep_bounded_raw(text : String, limit : Int) -> String {
 /// and excerpts. Unexpected JSON falls back to bounded raw output rather than
 /// failing a valid search. Errors are independently capped.
 fn render_astgrep_result(
-  exit_code : Int,
+  exit_code : Int32,
   stdout : String,
   stderr : String,
   base : String,
-  max_matches : Int,
+  max_matches : Int32,
 ) -> @posoco.ToolOutcome {
   if exit_code == 0 {
     if stdout == "" {

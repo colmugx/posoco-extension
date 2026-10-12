@@ -3,8 +3,8 @@
 /// and records every argv it was handed, so the delegate flow runs without a
 /// real herdr CLI.
 priv struct FakeHerdrCli {
-  results : Array[(Int, String, String)]
-  mut index : Int
+  results : Array[(Int32, String, String)]
+  mut index : Int32
   received : Array[Array[String]]
 }
 
@@ -12,7 +12,7 @@ priv struct FakeHerdrCli {
 impl HerdrCli for FakeHerdrCli with fn run(
   self : FakeHerdrCli,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   self.received.push(argv)
   let result = self.results[self.index]
   self.index += 1
@@ -23,9 +23,9 @@ impl HerdrCli for FakeHerdrCli with fn run(
 /// Fake channel that delays every run so concurrent delegates can be held
 /// mid-flight; results cycle so four parallel flows share one script.
 priv struct SlowHerdrCli {
-  delay_ms : Int
-  results : Array[(Int, String, String)]
-  mut index : Int
+  delay_ms : Int32
+  results : Array[(Int32, String, String)]
+  mut index : Int32
   received : Array[Array[String]]
 }
 
@@ -33,7 +33,7 @@ priv struct SlowHerdrCli {
 impl HerdrCli for SlowHerdrCli with fn run(
   self : SlowHerdrCli,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   @async.sleep(self.delay_ms)
   self.received.push(argv)
   let result = self.results[self.index]
@@ -69,8 +69,8 @@ fn delegate_task_call(task : String) -> @posoco.ToolCall {
 
 ///|
 fn test_delegate(
-  background_run? : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
-  parent_yolo? : (() -> Bool)? = None,
+  background_run~ : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
+  parent_yolo~ : (() -> Bool)? = None,
 ) -> HerdrDelegate {
   HerdrDelegate::HerdrDelegate(
     pane="1-1",
@@ -83,12 +83,12 @@ fn test_delegate(
 }
 
 ///|
-fn split_ok() -> (Int, String, String) {
+fn split_ok() -> (Int32, String, String) {
   (0, "{\"result\":{\"pane\":{\"pane_id\":\"1-3\"}}}", "")
 }
 
 ///|
-fn happy_script(session : String) -> Array[(Int, String, String)] {
+fn happy_script(session : String) -> Array[(Int32, String, String)] {
   [
     split_ok(),
     // Readiness barrier: prompt wait-output, outcome ignored.

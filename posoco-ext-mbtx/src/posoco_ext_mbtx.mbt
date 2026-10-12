@@ -14,8 +14,8 @@ priv trait Runner {
     cmd : String,
     args : Array[String],
     cwd : String?,
-    budget_ms : Int,
-  ) -> (Int, String, Bool)
+    budget_ms : Int32,
+  ) -> (Int32, String, Bool)
 }
 
 ///|
@@ -40,7 +40,7 @@ pub struct MbtxTools {
   /// `allowlist_without` (by program name) plus `allowlist_extra`.
   allowlist : Array[SpawnRule]
   /// Wall-clock budget for the run stage; default 120s.
-  run_timeout_ms : Int
+  run_timeout_ms : Int32
   /// When true, the `escalated` argument is accepted (runs the call once
   /// without the sandbox policy; gated per-call by the approval layer).
   escalation : Bool
@@ -85,13 +85,13 @@ let default_allowlist : Array[SpawnRule] = [
 ///|
 /// Canonical constructor. Use this everywhere.
 pub fn MbtxTools::MbtxTools(
-  anchor? : @devkit.WorkspaceAnchor? = None,
-  allowlist_extra? : Array[SpawnRule] = [],
-  allowlist_without? : Array[String] = [],
-  run_timeout_ms? : Int = 120_000,
-  escalation? : Bool = false,
-  toolchain_bin? : String? = None,
-  bus? : @devkit.EventBus? = None,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
+  allowlist_extra~ : Array[SpawnRule] = [],
+  allowlist_without~ : Array[String] = [],
+  run_timeout_ms~ : Int32 = 120_000,
+  escalation~ : Bool = false,
+  toolchain_bin~ : String? = None,
+  bus~ : @devkit.EventBus? = None,
 ) -> MbtxTools {
   let tools = MbtxTools::{
     anchor,
@@ -120,11 +120,11 @@ pub fn MbtxTools::MbtxTools(
 #warnings("-unused_value")
 fn MbtxTools::with_runner(
   runner~ : &Runner,
-  anchor? : @devkit.WorkspaceAnchor? = None,
-  run_timeout_ms? : Int = 120_000,
-  escalation? : Bool = false,
-  allowlist_extra? : Array[SpawnRule] = [],
-  allowlist_without? : Array[String] = [],
+  anchor~ : @devkit.WorkspaceAnchor? = None,
+  run_timeout_ms~ : Int32 = 120_000,
+  escalation~ : Bool = false,
+  allowlist_extra~ : Array[SpawnRule] = [],
+  allowlist_without~ : Array[String] = [],
 ) -> MbtxTools {
   {
     anchor,

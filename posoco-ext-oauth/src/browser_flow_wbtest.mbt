@@ -38,7 +38,7 @@ pub impl AuthInteraction for RecordingAuthInteraction with fn is_cancelled(
 /// Bounded pause between poll attempts. Cancellation no longer surfaces as
 /// an error from `@async.sleep`; the race above re-checks
 /// `is_cancelled`/`is_being_cancelled` instead of relying on this helper.
-async fn sleep_ms(ms : Int) -> Unit noraise {
+async fn sleep_ms(ms : Int32) -> Unit noraise {
   @async.sleep(ms)
 }
 
@@ -47,21 +47,21 @@ async fn sleep_ms(ms : Int) -> Unit noraise {
 /// the state from the notified authorize URL with `delivered_code`); blocking
 /// until stopped (lets the paste path win); immediate raise.
 struct FakeCallbackServer {
-  fail_ports : Array[Int]
-  started_ports : Array[Int]
+  fail_ports : Array[Int32]
+  started_ports : Array[Int32]
   interaction : RecordingAuthInteraction
   delivered : (String, String)?
   delivered_code : String
   block_until_stopped : Bool
   raise_immediately : Bool
-  wait_delay_ms : Int
-  mut stop_count : Int
+  wait_delay_ms : Int32
+  mut stop_count : Int32
 }
 
 ///|
 pub impl CallbackServer for FakeCallbackServer with fn start(
   self : FakeCallbackServer,
-  port : Int,
+  port : Int32,
 ) -> Unit raise OAuthError {
   self.started_ports.push(port)
   for p in self.fail_ports {
@@ -120,8 +120,8 @@ pub impl CallbackServer for FakeCallbackServer with fn stop(
 struct ScriptedPromptInteraction {
   inputs : Array[String]
   echo_url_code : String
-  delay_ms : Int
-  mut index : Int
+  delay_ms : Int32
+  mut index : Int32
 }
 
 ///|
@@ -180,7 +180,7 @@ pub extend BrowserFlowTransport with OAuthHttpTransport::{post, get}
 ///|
 fn flow_config(
   extra : Array[(String, String)],
-  fallback : Int?,
+  fallback : Int32?,
 ) -> PkceFlowConfig {
   {
     client_id: "client-id",
