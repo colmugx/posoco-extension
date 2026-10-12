@@ -23,6 +23,12 @@ fn scan(message : @posoco.Message) -> TurnVerdict {
 }
 
 ///|
+/// System message whose whole content is one Text part.
+fn sys(text : String) -> @posoco.Message {
+  @posoco.Message::SystemMessage(content=[@posoco.Content::Text(text)])
+}
+
+///|
 test "exact marker line signals completion" {
   debug_inspect(
     scan(asst("working\n<goal-complete/>")),
@@ -105,7 +111,7 @@ test "scan is message-shape agnostic" {
     content="BlockedClaimed(reason=\"need a key\")",
   )
   debug_inspect(
-    scan(@posoco.tk_system_msg("all good\n<goal-complete/>")),
+    scan(sys("all good\n<goal-complete/>")),
     content="CompletionClaimed",
   )
 }
@@ -135,7 +141,7 @@ test "mixed content array contributes only Text parts" {
 
 ///|
 test "text_of_message variants" {
-  inspect(text_of_message(@posoco.tk_system_msg("sys")), content="sys")
+  inspect(text_of_message(sys("sys")), content="sys")
   inspect(
     text_of_message(
       @posoco.Message::ToolMessage(

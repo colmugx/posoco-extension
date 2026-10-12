@@ -69,7 +69,7 @@ test "system_prompt: multiple documents render as parallel elements" {
   let c = ContextPromptContributor(bundle~, ns="posoco")
   let rendered = c.system_prompt()
   let parts = rendered.split("<posoco-context ")
-  assert_eq(parts.length() - 1, 3)
+  assert_eq(parts.count() - 1, 3)
   let global_pos = match rendered.find("<posoco-context ") {
     Some(i) => i
     None => -1
