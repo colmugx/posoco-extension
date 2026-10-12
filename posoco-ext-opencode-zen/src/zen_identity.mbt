@@ -42,7 +42,7 @@ fn zen_request_headers() -> Map[String, String] {
 /// opaque routing identifiers expected by the Zen gateway; it is not intended
 /// as a cryptographic identifier.
 fn zen_random_uuid_v4() -> String {
-  let rng = @random.Rand::new()
+  let rng = @random.Rand()
   let bytes : Array[Byte] = []
   for _i in 0..<16 {
     bytes.push(rng.uint(limit=256).to_byte())

@@ -80,7 +80,7 @@ fn kimi_ascii_header(value : String, fallback~ : String = "unknown") -> String {
 ///|
 /// Process-RNG v4 UUID; not cryptographically hardened.
 fn kimi_random_uuid_v4() -> String {
-  let rng = @random.Rand::new()
+  let rng = @random.Rand()
   // 16 random bytes; version (byte 6) and variant (byte 8) are patched after.
   let bytes : Array[Byte] = []
   for _i in 0..<16 {
