@@ -377,6 +377,18 @@ async fn SubagentTools::spawn(
         structured=None,
       )
   }
+  // Interactive face: the child may ask its parent a question (`ask_question`
+  // in its tool face). Interactive children always run as Agent-owned
+  // background tasks so the spawning tool call can hand control back to the
+  // parent model when the first question lands — a wave is never held
+  // hostage by a parked ask. Detection is face-precise: the host default
+  // face includes ask_question; an explicit whitelist decides for itself.
+  // (Computed after the budget gate: face resolution needs the kind
+  // whitelist, so a misconfigured host may burn one budget unit on refusal.)
+  let interactive = match tools {
+    Some(names) => list_contains(names, "ask_question")
+    None => true
+  }
   let (parent_slot, parent_effort) = match self.parent_selection {
     Some(current) => current()
     None => (self.parent_slot, self.parent_effort)
@@ -464,9 +476,14 @@ async fn SubagentTools::spawn(
   // The configured global cap is a lifetime semaphore, not a refusal gate:
   // excess parallel calls wait FIFO and still consume only their one spawn
   // budget unit. Once acquired, the slot belongs to this child until its
-  // foreground run returns or its Agent-owned background task actually exits.
+  // foreground run returns or its Agent-owned background task actually
+  // exits. After a successful task submit the ownership transfers to the
+  // child's runner (its own errdefer releases exactly once on every exit);
+  // an interactive wave-cancel then re-raises through this frame without
+  // double-releasing here.
+  let mut slot_transferred = false
   self.global_slots.acquire()
-  errdefer self.global_slots.release()
+  errdefer (if !slot_transferred { self.global_slots.release() })
   let child = self.composer.compose(spec) catch {
     ComposerError::Failed(reason) => {
       self.global_slots.release()
@@ -478,15 +495,39 @@ async fn SubagentTools::spawn(
   self.registry[spec.session_id] = BackgroundRecord::BackgroundRecord(
     kind=spec.kind_name,
   )
-  if args.background {
-    // The precondition gate above bound both values; this is unreachable.
+  if args.background || interactive {
+    // The early gate bound both values for background spawns; interactive
+    // spawns refused there lack the composed scope here instead (face
+    // resolution needs the kind whitelist, so the check cannot run earlier).
     let tasks = match capability {
       Some(tasks) => tasks
-      None => abort("background capability was validated at the gate")
+      None =>
+        match self.tasks {
+          Some(tasks) => tasks
+          None => {
+            self.global_slots.release()
+            self.registry.remove(spec.session_id)
+            return @posoco.ToolOutcome::ToolReportedError(
+              content="interactive children require the composed task capability — compose the agent with the posoco_ext_subagent manifest (requires Tasks) and run the host under Agent::run_scoped",
+              structured=None,
+            )
+          }
+        }
     }
     let session_id_target = match parent_session {
       Some(session) => session
-      None => abort("background parent session was validated at the gate")
+      None =>
+        match self.session {
+          Some(session) => session
+          None => {
+            self.global_slots.release()
+            self.registry.remove(spec.session_id)
+            return @posoco.ToolOutcome::ToolReportedError(
+              content="interactive children require a known parent session — no scoped turn event has been observed yet, so the child's question and result would have nowhere to go",
+              structured=None,
+            )
+          }
+        }
     }
     let user_message : @posoco.Message = @posoco.Message::UserMessage(content=[
       @posoco.Content::Text(spec.task),
@@ -557,6 +598,13 @@ async fn SubagentTools::spawn(
       Ok(handle) => {
         let receipt = handle.receipt()
         self.unobserved[receipt.id] = spec.session_id
+        // Slot ownership transfers to the child's runner at submit.
+        slot_transferred = true
+        if !args.background {
+          // Interactive foreground: hand control back on the first question
+          // instead of returning an acceptance receipt.
+          return self.race_interactive(handle, bridge, spec, call)
+        }
         self.emit_custom(
           spec.session_id,
           spec.kind_name,
@@ -658,6 +706,13 @@ pub impl @posoco.ToolProvider for SubagentTools with fn execute(
   ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let name = ctx.name.to_string()
+  if name == "answer_question" {
+    return self.answer({
+      call_id: ctx.call_id,
+      name: ctx.name,
+      arguments: ctx.arguments,
+    })
+  }
   if name != "agent" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_subagent: unknown tool '\{name}'",
@@ -668,5 +723,298 @@ pub impl @posoco.ToolProvider for SubagentTools with fn execute(
       raise @posoco.RuntimeError::InvocationFailed(
         "agent tool: \{error.to_string()}",
       )
+  }
+}
+
+///|
+/// Outcome of the interactive spawn race: the child's first question, or
+/// its terminal before any question landed.
+priv enum InteractiveOutcome {
+  Asked(QuestionInfo)
+  Terminal(@posoco.TaskOutcome)
+}
+
+///|
+/// Race the interactive child's first question against its terminal. The
+/// child runs as an Agent-owned background task; the spawning tool call
+/// returns either the waiting_reply receipt (control back to the parent
+/// model — the wave is never blocked by the parked ask) or the terminal
+/// outcome in-wave (the later background envelope is an idempotent repeat:
+/// `record_terminal` is a no-op once the registry is `Done`).
+///
+/// Wave cancellation reaching the race kills the child task and closes its
+/// asks before propagating: control must not return while a question hangs.
+#warnings("-fragile_catch_all")
+async fn SubagentTools::race_interactive(
+  self : SubagentTools,
+  handle : @posoco.TaskHandle,
+  bridge : BridgeObserver,
+  spec : ChildSpec,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolOutcome {
+  let armed = self.question.arm(spec.session_id)
+  let raced : InteractiveOutcome = @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => {
+      let info = armed.wait()
+      group.return_immediately(InteractiveOutcome::Asked(info))
+    })
+    InteractiveOutcome::Terminal(handle.wait())
+  }) catch {
+    error => {
+      if @async.is_being_cancelled() {
+        handle.cancel()
+        self.question.reject_child(spec.session_id)
+      }
+      raise error
+    }
+  }
+  match raced {
+    InteractiveOutcome::Terminal(outcome) => {
+      let state : @kit.TerminalState = match outcome.status {
+        @posoco.TaskStatus::Completed(..) => @kit.TerminalState::Completed
+        @posoco.TaskStatus::Failed(reason~) =>
+          @kit.TerminalState::Failed(reason~)
+        @posoco.TaskStatus::TimedOut => @kit.TerminalState::TimedOut
+        @posoco.TaskStatus::Cancelled(_) => @kit.TerminalState::Cancelled
+      }
+      let text = match outcome.status {
+        @posoco.TaskStatus::Completed(message~) => assistant_text(message)
+        _ => ""
+      }
+      self.finish(bridge, spec, state, text)
+    }
+    InteractiveOutcome::Asked(info) => {
+      match self.registry.get(spec.session_id) {
+        Some(record) => record.state = WaitingReply(info.id)
+        None => ()
+      }
+      let (type_word, options_json, options_note) = match info.req {
+        @posoco.UiRequest::Input(..) => ("input", Json::null(), "")
+        @posoco.UiRequest::Confirm(..) => ("confirm", Json::null(), "")
+        @posoco.UiRequest::Select(options~, ..) => {
+          let items : Array[Json] = []
+          for option in options {
+            items.push(Json::string(option))
+          }
+          ("select", Json::array(items), "options: \{options.join(" | ")}\n")
+        }
+      }
+      let prompt = request_prompt(info.req)
+      self.emit_custom(
+        spec.session_id,
+        spec.kind_name,
+        call.call_id.to_string(),
+        "question_asked",
+        Json::object({
+          "question_id": Json::string(info.id),
+          "child_session": Json::string(spec.session_id),
+          "kind": Json::string(spec.kind_name),
+          "question": Json::string(prompt),
+          "type": Json::string(type_word),
+        }),
+      )
+      let structured : Json = {
+        "status": Json::string("waiting_reply"),
+        "question_id": Json::string(info.id),
+        "child_session": Json::string(spec.session_id),
+        "kind": Json::string(spec.kind_name),
+        "question": Json::string(prompt),
+        "type": Json::string(type_word),
+        "options": options_json,
+      }
+      @posoco.ToolOutcome::Success(
+        content="status: waiting_reply\nsubagent asked a question and is waiting (NOT finished)\nchild_session: \{spec.session_id}\nkind: \{spec.kind_name}\nquestion: \{prompt}\ntype: \{type_word}\n\{options_note}answer with answer_question(question_id=\"\{info.id}\"); after answering, the child continues and its final result arrives as a follow-up turn",
+        structured=Some(structured),
+      )
+    }
+  }
+}
+
+///|
+/// Parsed `answer_question` arguments; at most one answer field is present.
+priv struct AnswerArgs {
+  question_id : String
+  text : String?
+  confirm : Bool?
+  index : Int32?
+}
+
+///|
+fn parse_answer_args(arguments : Json) -> AnswerArgs raise SpawnArgError {
+  let fields = match arguments {
+    Json::Object(fields) => fields
+    _ =>
+      raise SpawnArgError::Invalid(
+        "answer_question: arguments must be a JSON object",
+      )
+  }
+  let question_id = match fields.get("question_id") {
+    Some(Json::String(value)) =>
+      if value.trim().is_empty() {
+        raise SpawnArgError::Invalid(
+          "answer_question: 'question_id' must be a non-empty string",
+        )
+      } else {
+        value
+      }
+    Some(_) =>
+      raise SpawnArgError::Invalid(
+        "answer_question: 'question_id' must be a string",
+      )
+    None =>
+      raise SpawnArgError::Invalid(
+        "answer_question: missing required 'question_id' argument",
+      )
+  }
+  let text = match fields.get("text") {
+    None => None
+    Some(Json::String(value)) => Some(value)
+    Some(_) =>
+      raise SpawnArgError::Invalid("answer_question: 'text' must be a string")
+  }
+  let confirm = match fields.get("confirm") {
+    None => None
+    Some(Json::True) => Some(true)
+    Some(Json::False) => Some(false)
+    Some(_) =>
+      raise SpawnArgError::Invalid(
+        "answer_question: 'confirm' must be a boolean",
+      )
+  }
+  let index = match fields.get("index") {
+    None => None
+    Some(Json::Number(value, ..)) => {
+      let whole = value.to_int()
+      if value != whole.to_double() {
+        raise SpawnArgError::Invalid(
+          "answer_question: 'index' must be an integer",
+        )
+      }
+      Some(whole)
+    }
+    Some(_) =>
+      raise SpawnArgError::Invalid(
+        "answer_question: 'index' must be an integer",
+      )
+  }
+  let provided = [text is Some(_), confirm is Some(_), index is Some(_)]
+    .filter(fn(present) { present })
+    .length()
+  if provided != 1 {
+    raise SpawnArgError::Invalid(
+      "answer_question: provide exactly one answer field — 'text' for input questions, 'confirm' for confirm questions, 'index' for select questions",
+    )
+  }
+  { question_id, text, confirm, index, }
+}
+
+///|
+/// The `answer_question` tool: submit the parent agent's answer for one
+/// pending child question. Validation failures are recoverable errors the
+/// model can read and fix; a successful answer only acknowledges — the
+/// child continues asynchronously and its terminal arrives as a follow-up
+/// turn.
+fn SubagentTools::answer(
+  self : SubagentTools,
+  call : @posoco.ToolCall,
+) -> @posoco.ToolOutcome {
+  let args = parse_answer_args(call.arguments) catch {
+    SpawnArgError::Invalid(message) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content=message,
+        structured=None,
+      )
+  }
+  let info = match self.question.lookup(args.question_id) {
+    QuestionLookup::Open(info) => info
+    QuestionLookup::Resolved(reason) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="question '\{args.question_id}' \{reason} — it cannot be answered again",
+        structured=None,
+      )
+    QuestionLookup::Unknown =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="unknown question id '\{args.question_id}' — this parent has no such pending question",
+        structured=None,
+      )
+  }
+  let expected = fn(word : String) -> String {
+    "question '\{args.question_id}' is type \{word}"
+  }
+  let response : @posoco.UiResponse = match info.req {
+    @posoco.UiRequest::Input(..) =>
+      match args.text {
+        Some(text) => @posoco.UiResponse::Text(text)
+        None =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="\{expected("input")} — provide 'text'",
+            structured=None,
+          )
+      }
+    @posoco.UiRequest::Confirm(..) =>
+      match args.confirm {
+        Some(true) => @posoco.UiResponse::Yes
+        Some(false) => @posoco.UiResponse::No
+        None =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="\{expected("confirm")} — provide 'confirm' (boolean)",
+            structured=None,
+          )
+      }
+    @posoco.UiRequest::Select(options~, ..) =>
+      match args.index {
+        Some(index) =>
+          if index < 0 || index >= options.length() {
+            return @posoco.ToolOutcome::ToolReportedError(
+              content="index \{index} is out of range — \{expected("select")} with \{options.length()} options (0..\{options.length() - 1})",
+              structured=None,
+            )
+          } else {
+            @posoco.UiResponse::Selected(index)
+          }
+        None =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="\{expected("select")} — provide 'index' (zero-based)",
+            structured=None,
+          )
+      }
+  }
+  match self.question.resolve(args.question_id, response) {
+    Err(reason) =>
+      @posoco.ToolOutcome::ToolReportedError(content=reason, structured=None)
+    Ok(_) => {
+      match self.registry.get(info.child_session) {
+        Some(record) =>
+          match record.state {
+            WaitingReply(id) if id == args.question_id => record.state = Running
+            _ => ()
+          }
+        None => ()
+      }
+      let kind = match self.registry.get(info.child_session) {
+        Some(record) => record.kind
+        None => ""
+      }
+      self.emit_custom(
+        info.child_session,
+        kind,
+        call.call_id.to_string(),
+        "question_answered",
+        Json::object({
+          "question_id": Json::string(args.question_id),
+          "child_session": Json::string(info.child_session),
+        }),
+      )
+      @posoco.ToolOutcome::Success(
+        content="answer accepted for question \{args.question_id} — the child continues; its final result arrives as a follow-up turn",
+        structured=Some(
+          Json::object({
+            "question_id": Json::string(args.question_id),
+            "child_session": Json::string(info.child_session),
+            "answered": Json::boolean(true),
+          }),
+        ),
+      )
+    }
   }
 }

@@ -537,25 +537,31 @@ async test "tools_absent_uses_kind_whitelist" {
 
 ///|
 async test "unbound_kind_face_inherits_default_as_none" {
+  // Face None (host default, includes ask_question) is interactive, so the
+  // spawn rides the composed task capability: drive it through a real
+  // parent Agent instead of a bare provider call.
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(
     composer=composer as &ChildComposer,
     catalog=catalog_with_bound_kind(),
   )
-  let outcome = @posoco.ToolProvider::execute(
-    tools,
-    test_ctx(
-      agent_call(
-        args_object([
-          ("task", Json::string("t")),
-          ("kind", Json::string("loose")),
-        ]),
-      ),
-    ),
+  let model = BgParentModel::BgParentModel(
+    agent_arguments=args_object([
+      ("task", Json::string("t")),
+      ("kind", Json::string("loose")),
+    ]),
+    mid_sleep_ms=0,
   )
-  assert_true(outcome is @posoco.ToolOutcome::Success(_))
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  let _ = parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_face")
+    ()
+  })
   assert_true(composer.specs[0].tools is None)
-  // Explicit args.tools on an inheriting kind are kept as-is.
+  // Explicit args.tools on an inheriting kind are kept as-is (and a face
+  // without ask_question stays on the synchronous path, so a bare provider
+  // call still works).
   let narrowed = @posoco.ToolProvider::execute(
     tools,
     test_ctx(
@@ -988,7 +994,10 @@ fn build_parent_agent(
     config=@posoco.tk_config(),
     runtime=@runtime.PortRuntime(
       model~,
-      tools=Map::from_array([("agent", tools as &@posoco.ToolProvider)]),
+      tools=Map::from_array([
+        ("agent", tools as &@posoco.ToolProvider),
+        ("answer_question", tools as &@posoco.ToolProvider),
+      ]),
     ),
   )
 }
@@ -1502,4 +1511,694 @@ async test "background_timeout_exits_cancelled_then_records_timed_out" {
   }
   assert_eq(exited_state, "cancelled")
   assert_eq(terminal_state, "timed_out")
+}
+
+// ---------------------------------------------------------------------------
+// Stage C end-to-end: interactive children that ask their parent a question
+// through the question broker. The fake composer injects an `ask_parent`
+// tool that parks on the shared broker's channel — exactly the shape a real
+// cetas-js child's `ask_question_child` face has — and a scene parent model
+// replays the parent side (spawn → waiting_reply receipt → answer → ack).
+// ---------------------------------------------------------------------------
+
+///|
+/// Child-side ask tool bound to one child session: one ask per run, the
+/// answer recorded for assertions.
+priv struct AskParentTool {
+  child_session : String
+  channel : ParentQuestionChannel
+  req : @posoco.UiRequest
+  /// Parking delay before the ask registers (cancellation-race tests).
+  ask_delay_ms : Int32
+  answers : Array[String]
+}
+
+///|
+impl @posoco.ToolProvider for AskParentTool with fn list_tools(
+  _self : AskParentTool,
+) -> Array[@posoco.ToolDef] {
+  [
+    @posoco.ToolDef::{
+      name: @posoco.ToolName::unchecked("ask_parent"),
+      description: "test tool: ask the parent agent one question",
+      input_schema: Json::object(Map::from_array([])),
+      owner: @posoco.OwnerId::unchecked("wbtest"),
+      policy: @posoco.ExecutionPolicy::Exclusive,
+      provenance: None,
+    },
+  ]
+}
+
+///|
+impl @posoco.ToolProvider for AskParentTool with fn execute(
+  self : AskParentTool,
+  ctx : @posoco.ToolCallContext,
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  if ctx.name.to_string() != "ask_parent" {
+    raise @posoco.RuntimeError::UnknownTool("ask_parent: unknown tool")
+  }
+  if self.ask_delay_ms > 0 {
+    @async.sleep(self.ask_delay_ms)
+  }
+  let response = self.channel.ask(
+    child_session=self.child_session,
+    origin_call=ctx.call_id.to_string(),
+    req=self.req,
+  ) catch {
+    QuestionError::TimedOut => {
+      self.answers.push("\{self.child_session}=timeout")
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="answer timed out",
+        structured=None,
+      )
+    }
+    QuestionError::Cancelled => {
+      self.answers.push("\{self.child_session}=cancelled")
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="cancelled",
+        structured=None,
+      )
+    }
+    QuestionError::Unsupported(detail) => {
+      self.answers.push("\{self.child_session}=unsupported")
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="unsupported: \{detail}",
+        structured=None,
+      )
+    }
+    QuestionError::Io(detail) => {
+      self.answers.push("\{self.child_session}=io")
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="io: \{detail}",
+        structured=None,
+      )
+    }
+  }
+  let text = match response {
+    @posoco.UiResponse::Text(text) => text
+    @posoco.UiResponse::Yes => "yes"
+    @posoco.UiResponse::No => "no"
+    @posoco.UiResponse::Selected(index) => "sel:\{index}"
+    @posoco.UiResponse::Cancelled => "cancelled-response"
+  }
+  self.answers.push("\{self.child_session}=\{text}")
+  @posoco.ToolOutcome::Success(content=text, structured=None)
+}
+
+///|
+/// Composer whose children ask one question then finish — but only when
+/// their face is interactive; a face without ask_question gets a plain
+/// completing child, mirroring the host-glue binding rule.
+priv struct AskingComposer {
+  channel : ParentQuestionChannel
+  req : @posoco.UiRequest
+  finish_text : String
+  ask_delay_ms : Int32
+  answers : Array[String]
+  specs : Array[ChildSpec]
+}
+
+///|
+fn AskingComposer::AskingComposer(
+  channel~ : ParentQuestionChannel,
+  req~ : @posoco.UiRequest,
+  finish_text~ : String,
+  ask_delay_ms~ : Int32 = 0,
+) -> AskingComposer {
+  { channel, req, finish_text, ask_delay_ms, answers: [], specs: [], }
+}
+
+///|
+impl ChildComposer for AskingComposer with fn compose(
+  self : AskingComposer,
+  spec : ChildSpec,
+) -> @posoco.Agent raise ComposerError {
+  self.specs.push(spec)
+  let asks = match spec.tools {
+    Some(names) => list_contains(names, "ask_question")
+    None => true
+  }
+  let observers : Array[&@posoco.Observer] = []
+  for observer in spec.observers {
+    observers.push(observer)
+  }
+  let exts : Array[&@posoco.Extension] = []
+  if asks {
+    let model = @posoco.ScriptedModel([
+      @posoco.ScriptedModelStep::Respond(
+        @posoco.tk_tool_call_response(
+          "ask_parent",
+          "child-ask",
+          Json::object(Map::from_array([])),
+        ),
+      ),
+      @posoco.ScriptedModelStep::Respond(
+        @posoco.tk_stop_response(self.finish_text),
+      ),
+    ])
+    exts.push(
+      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+    )
+    exts.push(
+      @posoco.tk_ext(id="ask", tools=[
+        {
+          child_session: spec.session_id,
+          channel: self.channel,
+          req: self.req,
+          ask_delay_ms: self.ask_delay_ms,
+          answers: self.answers,
+        }
+        as &@posoco.ToolProvider,
+      ]),
+    )
+  } else {
+    let model = @posoco.ScriptedModel([
+      @posoco.ScriptedModelStep::Respond(
+        @posoco.tk_stop_response(self.finish_text),
+      ),
+    ])
+    exts.push(
+      @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
+    )
+  }
+  exts.push(
+    @posoco.tk_ext(
+      id="io",
+      sessions=[
+        @posoco.RecordingSessionStore::RecordingSessionStore()
+        as &@posoco.SessionStore,
+      ],
+      observers~,
+    ),
+  )
+  @posoco.Agent(exts~, config=@posoco.tk_config()) catch {
+    error => raise ComposerError::Failed("child compose failed: \{error}")
+  }
+}
+
+///|
+/// Full-text projection for scene assertions: user/system/assistant text
+/// blocks plus tool outcomes (the receipt under test rides a ToolMessage).
+fn scene_input_text(messages : ArrayView[@posoco.Message]) -> String {
+  let parts : Array[String] = []
+  for message in messages {
+    match message {
+      @posoco.Message::UserMessage(content~) =>
+        for block in content {
+          match block {
+            @posoco.Content::Text(text) => parts.push(text)
+            @posoco.Content::Image(..) => ()
+          }
+        }
+      @posoco.Message::ToolMessage(outcome~, ..) =>
+        match outcome {
+          @posoco.ToolOutcome::Success(content~, ..) => parts.push(content)
+          @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+            parts.push(content)
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  parts.join("\n")
+}
+
+///|
+/// Parent model that replays scripted responses in order and records what
+/// each chat call saw: the model input text and the live child-registry
+/// projection.
+priv struct SceneParentModel {
+  steps : Array[@posoco.ModelCallResult]
+  children : () -> Array[(String, String)]
+  mut calls : Int32
+  inputs : Array[String]
+  states : Array[Array[(String, String)]]
+}
+
+///|
+fn SceneParentModel::SceneParentModel(
+  steps~ : Array[@posoco.ModelCallResult],
+  children~ : () -> Array[(String, String)],
+) -> SceneParentModel {
+  { steps, children, calls: 0, inputs: [], states: [], }
+}
+
+///|
+impl @posoco.ModelPort for SceneParentModel with fn chat(
+  self : SceneParentModel,
+  _scope : @posoco.InvocationScope,
+  messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  self.inputs.push(scene_input_text(messages))
+  self.states.push((self.children)())
+  self.calls = self.calls + 1
+  if self.calls <= self.steps.length() {
+    self.steps[self.calls - 1]
+  } else {
+    @posoco.tk_stop_response("parent step \{self.calls}")
+  }
+}
+
+///|
+impl @posoco.ModelPort for SceneParentModel with fn compact(
+  _self : SceneParentModel,
+  _scope : @posoco.InvocationScope,
+  _messages : ArrayView[@posoco.Message],
+  _tools : Array[@posoco.ToolDef],
+  _options : @posoco.ChatOptions,
+  _trigger : @posoco.CompactTrigger,
+) -> @posoco.CompactResult raise @posoco.ModelError {
+  raise @posoco.ModelError::ResponseParse(
+    "SceneParentModel does not implement compact",
+  )
+}
+
+///|
+impl @posoco.ModelPort for SceneParentModel with fn provider_config(
+  _self : SceneParentModel,
+) -> @posoco.ProviderConfig {
+  @posoco.ProviderConfig::empty()
+}
+
+///|
+fn answer_call(pairs : Array[(String, Json)]) -> @posoco.ToolCall {
+  {
+    call_id: @posoco.CallId::unchecked("answer-test"),
+    name: @posoco.ToolName::unchecked("answer_question"),
+    arguments: args_object(pairs),
+  }
+}
+
+///|
+fn two_agent_wave(
+  first_task : String,
+  second_task : String,
+) -> @posoco.ModelCallResult {
+  let calls : Array[@posoco.ToolCall] = [
+    {
+      call_id: @posoco.CallId::unchecked("wave-a"),
+      name: @posoco.ToolName::unchecked("agent"),
+      arguments: args_object([
+        ("task", Json::string(first_task)),
+        ("kind", Json::string("loose")),
+      ]),
+    },
+    {
+      call_id: @posoco.CallId::unchecked("wave-b"),
+      name: @posoco.ToolName::unchecked("agent"),
+      arguments: args_object([
+        ("task", Json::string(second_task)),
+        ("kind", Json::string("loose")),
+      ]),
+    },
+  ]
+  @posoco.ModelCallResult::{
+    completion: @posoco.Completion::Completion(
+      content=[],
+      tool_calls=calls,
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::ToolCalls,
+      usage=None,
+    ),
+    processed_messages: [],
+  }
+}
+
+///|
+async test "interactive_child_roundtrip_input_question" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=5000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="which file?", default=None),
+    finish_text="task complete",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      @posoco.tk_tool_call_response(
+        "agent",
+        "spawn-1",
+        args_object([
+          ("task", Json::string("find the file")),
+          ("kind", Json::string("loose")),
+        ]),
+      ),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-1",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("src/lib/agent.mbt")),
+        ]),
+      ),
+      @posoco.tk_stop_response("parent done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_scene")
+    @async.sleep(50)
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_scene")
+    ()
+  })
+  // The receipt reached the parent model before any answer existed.
+  assert_true(model.inputs.length() >= 2)
+  assert_true(model.inputs[1].contains("waiting_reply"))
+  assert_true(model.inputs[1].contains("which file?"))
+  assert_true(model.inputs[1].contains("answer_question"))
+  assert_eq(model.states[1], [("subagent-1", "waiting_reply")])
+  // The answer reached the child in its original session.
+  assert_eq(composer.answers, ["subagent-1=src/lib/agent.mbt"])
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+  assert_true(model.inputs[model.inputs.length() - 1].contains("task complete"))
+}
+
+///|
+async test "interactive_child_select_validation_and_double_answer" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=5000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Select(
+      prompt="pick one",
+      options=["alpha", "beta"],
+      default=None,
+    ),
+    finish_text="picked",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      @posoco.tk_tool_call_response(
+        "agent",
+        "spawn-1",
+        args_object([
+          ("task", Json::string("pick")),
+          ("kind", Json::string("loose")),
+        ]),
+      ),
+      // Out-of-range select answer: recoverable error, child keeps waiting.
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-oob",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("index", Json::number(5.0)),
+        ]),
+      ),
+      // Type mismatch: text field against a select question.
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-mismatch",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("neither")),
+        ]),
+      ),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-ok",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("index", Json::number(1.0)),
+        ]),
+      ),
+      // Duplicate answer: explicitly rejected.
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-dupe",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("index", Json::number(0.0)),
+        ]),
+      ),
+      @posoco.tk_stop_response("parent done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_select")
+    @async.sleep(50)
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_select")
+    ()
+  })
+  assert_true(model.inputs[2].contains("out of range"))
+  assert_true(model.inputs[3].contains("is type select"))
+  assert_eq(composer.answers, ["subagent-1=sel:1"])
+  assert_true(model.inputs[5].contains("already answered"))
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+}
+
+///|
+/// The deadlock regression: two interactive children in ONE parallel wave
+/// both ask; both receipts must return before any answer exists, and the
+/// answers must not cross.
+async test "two_interactive_children_same_wave_no_deadlock" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=5000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="need a fact", default=None),
+    finish_text="done with the fact",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      two_agent_wave("first task", "second task"),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-1",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("fact-one")),
+        ]),
+      ),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-2",
+        args_object([
+          ("question_id", Json::string("question-2")),
+          ("text", Json::string("fact-two")),
+        ]),
+      ),
+      @posoco.tk_stop_response("parent done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_wave")
+    @async.sleep(50)
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_wave")
+    ()
+  })
+  // Both receipts came back in the same wave, each carrying its own id.
+  assert_true(model.inputs[1].contains("question-1"))
+  assert_true(model.inputs[1].contains("question-2"))
+  assert_eq(model.states[1], [
+    ("subagent-1", "waiting_reply"),
+    ("subagent-2", "waiting_reply"),
+  ])
+  // Answers routed to the asking child, not crossed.
+  let sorted_answers = composer.answers.copy()
+  sorted_answers.sort()
+  assert_eq(sorted_answers, ["subagent-1=fact-one", "subagent-2=fact-two"])
+  let children = tools.background_children()
+  children.sort()
+  assert_eq(children, [("subagent-1", "completed"), ("subagent-2", "completed")])
+}
+
+///|
+async test "interactive_child_answer_deadline_times_out" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=40L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="blocked?", default=None),
+    finish_text="proceeded without the answer",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      @posoco.tk_tool_call_response(
+        "agent",
+        "spawn-1",
+        args_object([
+          ("task", Json::string("t")),
+          ("kind", Json::string("loose")),
+        ]),
+      ),
+      // Parent never answers; the next step is a plain stop.
+      @posoco.tk_stop_response("parent shrugs"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_timeout")
+    // The deadline fires while the scope (and the child task) is alive.
+    @async.sleep(120)
+    // A late answer is explicitly refused.
+    let late = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        answer_call([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("too late")),
+        ]),
+      ),
+    )
+    match late {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+        assert_true(content.contains("expired"))
+      _ => fail("expected late answer to be refused")
+    }
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_timeout")
+    ()
+  })
+  // The child saw the deadline, not a hang; it finished on its own.
+  assert_eq(composer.answers, ["subagent-1=timeout"])
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+}
+
+///|
+async test "interactive_wave_cancel_kills_child_and_closes_question" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=60000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="stalling?", default=None),
+    finish_text="never reached",
+    ask_delay_ms=40,
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[@posoco.tk_stop_response("parent done")],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  let scope : @posoco.EventScope = {
+    session_id: @posoco.SessionId::unchecked("parent_cancel"),
+    run_id: @posoco.RunId::unchecked("run-1"),
+    turn_id: @posoco.TurnId::unchecked("turn-1"),
+  }
+  @posoco.Observer::on_event_at(
+    tools,
+    Some(scope),
+    @posoco.TurnEvent::TurnStarted,
+  )
+  parent.run_scoped(async fn(agent) {
+    // Part 1: wave cancellation reaches the race while it is still armed
+    // (the child's ask has not registered yet). The spawn coroutine must
+    // die, the child task must be killed with it.
+    @async.with_task_group(group => {
+      let task = group.spawn(async fn() {
+        @posoco.ToolProvider::execute(
+          tools,
+          test_ctx(
+            agent_call(
+              args_object([
+                ("task", Json::string("will be cancelled")),
+                ("kind", Json::string("loose")),
+              ]),
+            ),
+          ),
+        )
+      })
+      // 10ms: compose + submit done, ask still delayed (40ms).
+      @async.sleep(10)
+      task.cancel()
+      let cancelled : Bool = try {
+        ignore(task.wait())
+        false
+      } catch {
+        _ => true
+      }
+      assert_true(cancelled)
+    })
+    @async.sleep(80)
+    // Part 2: a live parked question closed by reject: the child's ask
+    // wakes with a typed cancellation and the child finishes on its own.
+    let receipt = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("asks then gets rejected")),
+            ("kind", Json::string("loose")),
+          ]),
+        ),
+      ),
+    )
+    assert_true(receipt is @posoco.ToolOutcome::Success(_))
+    tools.question.reject_child("subagent-2")
+    @async.sleep(50)
+    assert_eq(composer.answers, ["subagent-2=cancelled"])
+    // The closed question cannot be answered afterwards.
+    let late = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        answer_call([
+          ("question_id", Json::string("question-2")),
+          ("text", Json::string("nope")),
+        ]),
+      ),
+    )
+    assert_true(late is @posoco.ToolOutcome::ToolReportedError(_))
+    // Part 3: the spawn machinery is reusable — a non-interactive child
+    // completes synchronously on the same tool provider.
+    let again = @posoco.ToolProvider::execute(
+      tools,
+      test_ctx(
+        agent_call(
+          args_object([
+            ("task", Json::string("plain work")),
+            ("kind", Json::string("loose")),
+            ("tools", Json::array([Json::string("grep")])),
+          ]),
+        ),
+      ),
+    )
+    assert_true(again is @posoco.ToolOutcome::Success(_))
+    // One ordinary turn delivers the cancelled children's envelopes.
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_cancel")
+    ()
+  })
+  let children = tools.background_children()
+  assert_eq(children.length(), 3)
+  assert_true(
+    children.contains(("subagent-1", "cancelled")) ||
+    children.contains(("subagent-1", "running")),
+  )
+  assert_true(
+    children.contains(("subagent-2", "cancelled")) ||
+    children.contains(("subagent-2", "completed")),
+  )
+  assert_true(children.contains(("subagent-3", "completed")))
 }

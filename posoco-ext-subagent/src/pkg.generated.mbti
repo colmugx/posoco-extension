@@ -9,6 +9,7 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -17,6 +18,16 @@ import {
 pub(all) suberror ComposerError {
   Failed(String)
 }
+
+pub(all) suberror QuestionError {
+  Unsupported(String)
+  Cancelled
+  TimedOut
+  Io(String)
+} derive(Eq, @debug.Debug)
+pub fn QuestionError::equal(Self, Self) -> Bool
+pub fn QuestionError::not_equal(Self, Self) -> Bool
+pub fn QuestionError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub(all) struct ChildSpec {
@@ -34,6 +45,25 @@ pub(all) struct ChildSpec {
   observers : Array[&@port.Observer]
 }
 
+pub struct ParentQuestionChannel {
+  // private fields
+}
+pub async fn ParentQuestionChannel::ask(Self, child_session~ : String, origin_call~ : String, req~ : @port.UiRequest) -> @port.UiResponse raise QuestionError
+
+pub struct QuestionBroker {
+  // private fields
+}
+pub fn QuestionBroker::QuestionBroker(answer_timeout_ms? : Int64) -> Self
+pub fn QuestionBroker::channel(Self) -> ParentQuestionChannel
+
+pub(all) struct QuestionInfo {
+  id : String
+  child_session : String
+  origin_call : String
+  req : @port.UiRequest
+} derive(@debug.Debug)
+pub fn QuestionInfo::to_repr(Self) -> @debug.Repr
+
 pub(all) struct SubagentTools {
   catalog : @posoco-ext-kind.KindCatalog
   config : @posoco-kit-subagent.SubagentConfig
@@ -50,7 +80,7 @@ pub(all) struct SubagentTools {
   mut session : String?
   // private fields
 }
-pub fn SubagentTools::SubagentTools(catalog~ : @posoco-ext-kind.KindCatalog, config~ : @posoco-kit-subagent.SubagentConfig, composer~ : &ChildComposer, parent_slot~ : String, parent_effort? : String?, parent_selection? : (() -> (String, String?))?, observers? : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit], auto_wakeup? : Bool) -> Self
+pub fn SubagentTools::SubagentTools(catalog~ : @posoco-ext-kind.KindCatalog, config~ : @posoco-kit-subagent.SubagentConfig, composer~ : &ChildComposer, parent_slot~ : String, parent_effort? : String?, parent_selection? : (() -> (String, String?))?, observers? : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit], auto_wakeup? : Bool, question? : QuestionBroker?) -> Self
 pub fn SubagentTools::background_children(Self) -> Array[(String, String)]
 pub async fn SubagentTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
 pub async fn SubagentTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError

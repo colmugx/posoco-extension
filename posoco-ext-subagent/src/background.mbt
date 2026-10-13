@@ -15,11 +15,14 @@
 /// Registry entry state for one spawned child: `Running` from spawn until
 /// the delivery-point observation records the state word and the final
 /// summary text (foreground and background alike — both advertise the id in
-/// their footer). The summary is read back by hosts/tests through the
+/// their footer). `WaitingReply` marks an interactive child parked on a
+/// parent answer: not terminal, and the wait must not surface as a
+/// completion. The summary is read back by hosts/tests through the
 /// registry itself.
 #warnings("-unused_field")
 priv enum BackgroundRecordState {
   Running
+  WaitingReply(String)
   Done(String, String)
 }
 
@@ -47,8 +50,8 @@ pub fn SubagentTools::subscribe(
 
 ///|
 /// Snapshot of every registered child (foreground and background spawns):
-/// session id + state word ("running" / "completed" / "failed" /
-/// "timed_out" / "cancelled"), in spawn order.
+/// session id + state word ("running" / "waiting_reply" / "completed" /
+/// "failed" / "timed_out" / "cancelled"), in spawn order.
 pub fn SubagentTools::background_children(
   self : SubagentTools,
 ) -> Array[(String, String)] {
@@ -56,6 +59,7 @@ pub fn SubagentTools::background_children(
   for id, record in self.registry {
     let word = match record.state {
       Running => "running"
+      WaitingReply(_) => "waiting_reply"
       Done(word, _) => word
     }
     out.push((id, word))
@@ -139,9 +143,11 @@ impl @posoco.Lifecycle for SubagentTools with fn on_compose(
 
 ///|
 impl @posoco.Lifecycle for SubagentTools with fn on_shutdown(
-  _self : SubagentTools,
+  self : SubagentTools,
 ) {
-  ()
+  // Waits end as cancellations, never as hangs; children themselves die
+  // with the Agent-owned task scope.
+  self.question.reject_all()
 }
 
 ///|
@@ -250,12 +256,87 @@ fn SubagentTools::observe_ready(
 ///|
 /// Delivery-point observation, not injection: core delivers each background
 /// terminal as a user message in the session's next ordinary turn; the
-/// model input is scanned here first and returned unchanged.
+/// model input is scanned here first and returned unchanged. Queued
+/// subagent questions are the exception — they have no core delivery
+/// channel, so they are appended here (each id exactly once).
 impl @posoco.PipelineHook for SubagentTools with fn before_model(
   self : SubagentTools,
   messages : Array[@posoco.Message],
 ) -> Array[@posoco.Message] raise @posoco.HookAbort {
   self.observe_deliveries(messages)
+  self.inject_queued_questions(messages)
+}
+
+///|
+/// Text projection of one `UiRequest` prompt; every variant carries one.
+fn request_prompt(req : @posoco.UiRequest) -> String {
+  match req {
+    @posoco.UiRequest::Input(prompt~, ..) => prompt
+    @posoco.UiRequest::Confirm(prompt~) => prompt
+    @posoco.UiRequest::Select(prompt~, ..) => prompt
+  }
+}
+
+///|
+/// One queued question's envelope line: everything the parent model needs
+/// to answer without any other lookup.
+fn question_envelope(info : QuestionInfo, kind : String) -> String {
+  let type_note = match info.req {
+    @posoco.UiRequest::Input(..) => "input"
+    @posoco.UiRequest::Confirm(..) => "confirm"
+    @posoco.UiRequest::Select(options~, ..) =>
+      "select options: \{options.join(" | ")}"
+  }
+  let kind_note = if kind == "" { "" } else { " kind=\{kind}" }
+  "[subagent-question id=\{info.id} child=\{info.child_session}\{kind_note}] (\{type_note}): \{request_prompt(info.req)} — answer with answer_question(question_id=\"\{info.id}\")"
+}
+
+///|
+/// Append one synthetic user message carrying every un-injected question
+/// envelope, and announce each on the subscription channel (parent_call is
+/// the background label: these asks arrive outside any live agent-tool
+/// call). Exactly-once per question id — the drain is the delivery.
+fn SubagentTools::inject_queued_questions(
+  self : SubagentTools,
+  messages : Array[@posoco.Message],
+) -> Array[@posoco.Message] {
+  let queued = self.question.take_queued()
+  if queued.is_empty() {
+    return messages
+  }
+  let lines : Array[String] = []
+  for info in queued {
+    let kind = match self.registry.get(info.child_session) {
+      Some(record) => record.kind
+      None => ""
+    }
+    lines.push(question_envelope(info, kind))
+    self.emit_custom(
+      info.child_session,
+      kind,
+      "background",
+      "question_asked",
+      Json::object({
+        "question_id": Json::string(info.id),
+        "child_session": Json::string(info.child_session),
+        "question": Json::string(request_prompt(info.req)),
+        "type": Json::string(
+          match info.req {
+            @posoco.UiRequest::Input(..) => "input"
+            @posoco.UiRequest::Confirm(..) => "confirm"
+            @posoco.UiRequest::Select(..) => "select"
+          },
+        ),
+      }),
+    )
+  }
+  messages.push(
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text(
+        "A subagent asked you a question while you were busy or away:\n\{lines.join("\n")}",
+      ),
+    ]),
+  )
   messages
 }
 
@@ -324,8 +405,9 @@ fn SubagentTools::emit_delivered(
 
 ///|
 /// Registry update at the delivery point: only a record that exists and is
-/// still `Running` transitions to `Done` (idempotent against re-delivery
-/// scans), and the terminal event fires exactly once per child.
+/// not yet `Done` transitions (idempotent against re-delivery scans), the
+/// terminal event fires exactly once per child, and every parked question
+/// of the child is closed — a terminal child has no live asks.
 fn SubagentTools::record_terminal(
   self : SubagentTools,
   child_session : String,
@@ -337,9 +419,10 @@ fn SubagentTools::record_terminal(
     None => return
   }
   match record.state {
-    Running => ()
     Done(_) => return
+    Running | WaitingReply(_) => ()
   }
+  self.question.drop_child(child_session)
   record.state = Done(state_word, summary)
   self.emit_custom(
     child_session,

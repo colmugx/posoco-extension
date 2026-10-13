@@ -124,6 +124,7 @@ fn test_tools(
   observers~ : Array[(@kit.SubagentEvent) -> Unit] = [],
   catalog~ : @kind.KindCatalog = @kind.KindCatalog::builtin(),
   auto_wakeup~ : Bool = false,
+  question~ : QuestionBroker? = None,
 ) -> SubagentTools {
   SubagentTools::SubagentTools(
     catalog~,
@@ -134,6 +135,7 @@ fn test_tools(
     parent_selection~,
     observers~,
     auto_wakeup~,
+    question~,
   )
 }
 
@@ -339,7 +341,7 @@ test "list_tools_declares_agent_schema_and_description" {
   let composer = FakeComposer::FakeComposer(response_text="x")
   let tools = test_tools(composer=composer as &ChildComposer)
   let defs = @posoco.ToolProvider::list_tools(tools)
-  assert_eq(defs.length(), 1)
+  assert_eq(defs.length(), 2)
   let def = defs[0]
   assert_eq(def.name.to_string(), "agent")
   assert_true(def.policy is @posoco.ExecutionPolicy::Parallel)
@@ -348,6 +350,7 @@ test "list_tools_declares_agent_schema_and_description" {
   assert_true(def.description.contains("instruction slot"))
   assert_true(def.description.contains("NEVER copy task content"))
   assert_true(def.description.contains("default 30 minutes"))
+  assert_true(def.description.contains("waiting_reply"))
   assert_true(def.description.contains("background=true"))
   assert_true(def.description.contains("acceptance receipt"))
   assert_true(def.description.contains("follow-up turn"))
@@ -369,6 +372,21 @@ test "list_tools_declares_agent_schema_and_description" {
       assert_true(properties.contains("resume"))
     }
     _ => fail("schema must be a JSON object")
+  }
+  let answer_def = defs[1]
+  assert_eq(answer_def.name.to_string(), "answer_question")
+  assert_true(answer_def.policy is @posoco.ExecutionPolicy::Sequential)
+  assert_true(answer_def.description.contains("waiting_reply receipt"))
+  match answer_def.input_schema {
+    Json::Object(fields) => {
+      let required = match fields.get("required") {
+        Some(Json::Array(items)) => items
+        _ => fail("answer schema must declare a required array")
+      }
+      assert_eq(required.length(), 1)
+      assert_eq(required[0], Json::string("question_id"))
+    }
+    _ => fail("answer schema must be a JSON object")
   }
 }
 
