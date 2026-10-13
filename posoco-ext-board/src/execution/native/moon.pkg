@@ -7,6 +7,7 @@ import {
 import {
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/store",
+  "moonbitlang/async/aqueue",
   "colmugx/posoco",
   "colmugx/posoco/kernel",
 } for "test"

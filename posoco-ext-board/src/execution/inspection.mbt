@@ -1,5 +1,7 @@
 ///|
-/// Point-in-time owner facts, not a reservation or termination confirmation.
+/// Point-in-time detached owner facts, not a reservation or termination
+/// confirmation. `active` keeps the first occupied slot's binding for
+/// single-slot compatibility; `active_bindings` lists every occupied slot.
 pub(all) struct BoardExecutionOwnerStatus {
   attached : Bool
   closed : Bool
@@ -7,6 +9,9 @@ pub(all) struct BoardExecutionOwnerStatus {
   host_available : Bool
   unresolved : Bool
   active : BoardExecutionBinding?
+  capacity : Int32
+  active_bindings : Array[BoardExecutionBinding]
+  available_slots : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -26,13 +31,32 @@ pub(all) struct BoardExecutionOwnerStatus {
 pub fn BoardExecutionOwner::status(
   self : BoardExecutionOwner,
 ) -> BoardExecutionOwnerStatus {
+  let actives : Array[BoardExecutionBinding] = []
+  for slot in self.slots {
+    match slot.execution {
+      Some(owned) => actives.push(owned.binding)
+      None => ()
+    }
+  }
   {
     attached: self.loaded,
     closed: self.closed,
     admission_busy: self.busy,
-    host_available: self.adapter.ready(),
+    host_available: self.slots.any(slot => {
+      slot.execution is None && slot.adapter.ready()
+    }) ||
+    self.slots.all(slot => slot.execution is Some(_)),
     unresolved: self.poisoned,
-    active: self.active.map(owned => owned.binding),
+    active: actives.get(0),
+    capacity: self.slots.length(),
+    active_bindings: actives,
+    available_slots: if self.poisoned || self.closed {
+      0
+    } else {
+      self.slots
+      .filter(slot => slot.execution is None && slot.adapter.ready())
+      .length()
+    },
   }
 }
 

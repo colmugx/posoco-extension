@@ -86,3 +86,34 @@ the safe `InvalidDispatch` error before any effect; otherwise it caps the
 resolver timeout and bounds runs that supply none. `board_state()` returns the
 same owner's detached authoritative snapshot for runner start scope validation.
 All defaults preserve S4B behavior unchanged.
+
+## Parallel owner capacity (S4D)
+
+`BoardExecutionOwner::with_slots` supplies several drivers; the facade plans
+against their live capacity. A plan blocks globally with `ExecutionActive` only
+when the owner reports no free slot; a Task whose identity is currently active
+is suppressed individually while independent Tasks stay admissible, and
+historical Attempt IDs still block as `IdentityAlreadyUsed`. The model gate
+revalidates only the pinned candidate and its scope on a fresh snapshot with
+the pure planner, so a run's own reserved binding never blocks it.
+`status().admission_enabled` additionally requires a free slot; policy,
+readiness and the serialized facade/owner gates still apply. A fixed wave selects its
+ordered distinct candidates once and pins each one:
+
+```mbt check
+///|
+test {
+  let candidate : @orchestration.ExecutionCandidate = {
+    task_id: "task",
+    attempt_id: "attempt",
+  }
+  // Fresh admission per candidate: dispatch_next(task_scope=[candidate.task_id],
+  // candidate=candidate) admits exactly this Task/Attempt or returns a fresh
+  // StalePlan before any effect.
+  assert_eq(candidate.task_id, "task")
+}
+```
+
+`dispatch_next(candidate?=…, …)` requires that pinned candidate to remain the
+first eligible one at planning and again after resolution; a rival Attempt
+queued mid-wave can never silently replace it.
