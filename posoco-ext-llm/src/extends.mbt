@@ -12,3 +12,15 @@ pub extend RouterModelPort with @posoco.ModelPort::{provider_config}
 
 ///|
 pub extend RouterModelPort with @posoco.Lifecycle::{on_compose}
+
+///|
+/// Manager-control surface, dot-callable on the concrete router. The trait
+/// form of `select_effort` stays unpromoted: the name belongs to the
+/// inherent two-argument `RouterModelPort::select_effort`, so effort control
+/// rides the `&ModelManagerControl` reference instead.
+pub extend RouterModelPort with @modelmgmt.ModelManagerControl::{
+  manager_id,
+  list_models,
+  active_selection,
+  select_model,
+}
