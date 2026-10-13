@@ -15,6 +15,9 @@ async fn copy_public(source : String, target : String) -> Unit {
       include_special=true,
       sort=true,
     ) {
+    if name == "." || name == ".." {
+      continue
+    }
     let from = source + "/" + name
     let to = target + "/" + name
     match @fs.kind(from, follow_symlink=false) {
