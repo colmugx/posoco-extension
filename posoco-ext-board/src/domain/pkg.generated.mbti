@@ -1,0 +1,214 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/domain"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Attempt {
+  id : AttemptId
+  task_id : BoardTaskId
+  kind : AttemptKind
+  status : AttemptStatus
+  review : ReviewDecision?
+  created_at_ms : Int64
+  started_at_ms : Int64?
+  finished_at_ms : Int64?
+  updated_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn Attempt::copy_detached(Self) -> Self
+pub fn Attempt::equal(Self, Self) -> Bool
+pub fn Attempt::from_record(id~ : AttemptId, task_id~ : BoardTaskId, kind~ : AttemptKind, status~ : AttemptStatus, review~ : ReviewDecision?, created_at_ms~ : Int64, started_at_ms~ : Int64?, finished_at_ms~ : Int64?, updated_at_ms~ : Int64) -> Self
+pub fn Attempt::not_equal(Self, Self) -> Bool
+pub fn Attempt::to_repr(Self) -> @debug.Repr
+
+pub struct AttemptId {
+  value : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn AttemptId::AttemptId(String) -> Self
+pub fn AttemptId::equal(Self, Self) -> Bool
+pub fn AttemptId::hash(Self) -> Int
+pub fn AttemptId::hash_combine(Self, Hasher) -> Unit
+pub fn AttemptId::not_equal(Self, Self) -> Bool
+pub fn AttemptId::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AttemptKind {
+  Discuss
+  Execute
+  Review
+} derive(Eq, @debug.Debug)
+pub fn AttemptKind::equal(Self, Self) -> Bool
+pub fn AttemptKind::not_equal(Self, Self) -> Bool
+pub fn AttemptKind::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AttemptOutcome {
+  Succeeded
+  Failed
+  Cancelled
+  Interrupted
+} derive(Eq, @debug.Debug)
+pub fn AttemptOutcome::equal(Self, Self) -> Bool
+pub fn AttemptOutcome::not_equal(Self, Self) -> Bool
+pub fn AttemptOutcome::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AttemptStatus {
+  Queued
+  Running
+  Succeeded
+  Failed
+  Cancelled
+  Interrupted
+} derive(Eq, @debug.Debug)
+pub fn AttemptStatus::equal(Self, Self) -> Bool
+pub fn AttemptStatus::not_equal(Self, Self) -> Bool
+pub fn AttemptStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) enum BoardCommand {
+  CreateTask(id~ : BoardTaskId, title~ : String, description~ : String, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], at_ms~ : Int64, expected_revision~ : Int64)
+  UpdateTask(id~ : BoardTaskId, title~ : String?, description~ : String?, priority~ : BoardPriority?, definition_of_done~ : Array[String]?, at_ms~ : Int64, expected_revision~ : Int64)
+  SetDependencies(id~ : BoardTaskId, dependencies~ : Array[BoardTaskId], at_ms~ : Int64, expected_revision~ : Int64)
+  MoveTask(id~ : BoardTaskId, to~ : BoardStage, at_ms~ : Int64, expected_revision~ : Int64)
+  QueueAttempt(id~ : AttemptId, task~ : BoardTaskId, kind~ : AttemptKind, at_ms~ : Int64, expected_revision~ : Int64)
+  StartAttempt(id~ : AttemptId, at_ms~ : Int64, expected_revision~ : Int64)
+  FinishAttempt(id~ : AttemptId, outcome~ : AttemptOutcome, at_ms~ : Int64, expected_revision~ : Int64)
+  RecordReview(id~ : AttemptId, decision~ : ReviewDecision, at_ms~ : Int64, expected_revision~ : Int64)
+} derive(Eq, @debug.Debug)
+pub fn BoardCommand::copy_detached(Self) -> Self
+pub fn BoardCommand::equal(Self, Self) -> Bool
+pub fn BoardCommand::not_equal(Self, Self) -> Bool
+pub fn BoardCommand::to_repr(Self) -> @debug.Repr
+
+pub struct BoardDomain {
+}
+pub fn BoardDomain::BoardDomain() -> Self
+pub fn BoardDomain::propose(BoardState, BoardCommand) -> Result[BoardProposal, BoardError]
+
+pub(all) enum BoardError {
+  RevisionConflict(expected~ : Int64, actual~ : Int64)
+  TaskMissing(task~ : BoardTaskId)
+  AttemptMissing(attempt~ : AttemptId)
+  InvalidTransition(from~ : BoardStage, to~ : BoardStage)
+  InvalidAttemptTransition(attempt~ : AttemptId, from~ : AttemptStatus, to~ : AttemptStatus)
+  InvalidReviewTransition(attempt~ : AttemptId, current~ : ReviewDecision?, requested~ : ReviewDecision)
+  DependencyMissing(task~ : BoardTaskId, dependency~ : BoardTaskId)
+  SelfDependency(task~ : BoardTaskId)
+  DuplicateDependency(task~ : BoardTaskId, dependency~ : BoardTaskId)
+  DependencyCycle(cycle~ : Array[BoardTaskId])
+  DuplicateTask(task~ : BoardTaskId)
+  DuplicateAttempt(attempt~ : AttemptId)
+  InvalidInput(reason~ : String)
+} derive(Eq, @debug.Debug)
+pub fn BoardError::equal(Self, Self) -> Bool
+pub fn BoardError::not_equal(Self, Self) -> Bool
+pub fn BoardError::to_repr(Self) -> @debug.Repr
+
+pub(all) enum BoardEvent {
+  TaskCreated(id~ : BoardTaskId, at_ms~ : Int64)
+  TaskUpdated(id~ : BoardTaskId, at_ms~ : Int64)
+  DependenciesSet(id~ : BoardTaskId, dependencies~ : Array[BoardTaskId], at_ms~ : Int64)
+  TaskStageChanged(id~ : BoardTaskId, from~ : BoardStage, to~ : BoardStage, at_ms~ : Int64)
+  AttemptQueued(id~ : AttemptId, task_id~ : BoardTaskId, kind~ : AttemptKind, at_ms~ : Int64)
+  AttemptStarted(id~ : AttemptId, task_id~ : BoardTaskId, at_ms~ : Int64)
+  AttemptFinished(id~ : AttemptId, task_id~ : BoardTaskId, outcome~ : AttemptOutcome, at_ms~ : Int64)
+  ReviewRecorded(id~ : AttemptId, task_id~ : BoardTaskId, decision~ : ReviewDecision, at_ms~ : Int64)
+} derive(Eq, @debug.Debug)
+pub fn BoardEvent::equal(Self, Self) -> Bool
+pub fn BoardEvent::not_equal(Self, Self) -> Bool
+pub fn BoardEvent::to_repr(Self) -> @debug.Repr
+
+pub(all) enum BoardPriority {
+  Low
+  Normal
+  High
+  Critical
+} derive(Eq, @debug.Debug)
+pub fn BoardPriority::equal(Self, Self) -> Bool
+pub fn BoardPriority::not_equal(Self, Self) -> Bool
+pub fn BoardPriority::rank(Self) -> Int
+pub fn BoardPriority::to_repr(Self) -> @debug.Repr
+
+pub(all) struct BoardProposal {
+  next_state : BoardState
+  events : Array[BoardEvent]
+}
+
+pub(all) enum BoardStage {
+  Created
+  Refining
+  Ready
+  Running
+  Review
+  Done
+  Suspended
+} derive(Eq, @debug.Debug)
+pub fn BoardStage::equal(Self, Self) -> Bool
+pub fn BoardStage::not_equal(Self, Self) -> Bool
+pub fn BoardStage::to_repr(Self) -> @debug.Repr
+
+pub struct BoardState {
+  // private fields
+}
+pub fn BoardState::BoardState() -> Self
+pub fn BoardState::attempt(Self, AttemptId) -> Attempt?
+pub fn BoardState::attempts(Self) -> Array[Attempt]
+pub fn BoardState::from_snapshot(BoardStateSnapshot) -> Result[Self, BoardError]
+pub fn BoardState::revision(Self) -> Int64
+pub fn BoardState::snapshot(Self) -> BoardStateSnapshot
+pub fn BoardState::task(Self, BoardTaskId) -> BoardTask?
+pub fn BoardState::tasks(Self) -> Array[BoardTask]
+
+pub(all) struct BoardStateSnapshot {
+  revision : Int64
+  tasks : Array[BoardTask]
+  attempts : Array[Attempt]
+} derive(Eq, @debug.Debug)
+pub fn BoardStateSnapshot::copy_detached(Self) -> Self
+pub fn BoardStateSnapshot::equal(Self, Self) -> Bool
+pub fn BoardStateSnapshot::not_equal(Self, Self) -> Bool
+pub fn BoardStateSnapshot::to_repr(Self) -> @debug.Repr
+
+pub struct BoardTask {
+  id : BoardTaskId
+  title : String
+  description : String
+  stage : BoardStage
+  priority : BoardPriority
+  definition_of_done : Array[String]
+  dependencies : Array[BoardTaskId]
+  created_at_ms : Int64
+  updated_at_ms : Int64
+  ready_since_ms : Int64?
+} derive(Eq, @debug.Debug)
+pub fn BoardTask::copy_detached(Self) -> Self
+pub fn BoardTask::equal(Self, Self) -> Bool
+pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?) -> Self
+pub fn BoardTask::not_equal(Self, Self) -> Bool
+pub fn BoardTask::to_repr(Self) -> @debug.Repr
+
+pub struct BoardTaskId {
+  value : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn BoardTaskId::BoardTaskId(String) -> Self
+pub fn BoardTaskId::equal(Self, Self) -> Bool
+pub fn BoardTaskId::hash(Self) -> Int
+pub fn BoardTaskId::hash_combine(Self, Hasher) -> Unit
+pub fn BoardTaskId::not_equal(Self, Self) -> Bool
+pub fn BoardTaskId::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ReviewDecision {
+  Pending
+  Approved
+  ChangesRequested
+} derive(Eq, @debug.Debug)
+pub fn ReviewDecision::equal(Self, Self) -> Bool
+pub fn ReviewDecision::not_equal(Self, Self) -> Bool
+pub fn ReviewDecision::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

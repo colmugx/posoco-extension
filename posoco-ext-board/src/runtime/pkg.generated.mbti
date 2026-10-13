@@ -1,0 +1,90 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/runtime"
+
+import {
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/protocol",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn default_board_runtime(Int, client_queue_depth? : Int) -> BoardRuntime
+
+// Errors
+
+// Types and methods
+pub(all) struct BoardEndpoint {
+  host : String
+  port : Int
+} derive(Eq, @debug.Debug)
+pub fn BoardEndpoint::base_url(Self) -> String
+pub fn BoardEndpoint::equal(Self, Self) -> Bool
+pub fn BoardEndpoint::not_equal(Self, Self) -> Bool
+pub fn BoardEndpoint::to_repr(Self) -> @debug.Repr
+pub fn BoardEndpoint::ws_url(Self) -> String
+
+pub struct BoardRuntime {
+  server : &BoardWebServer
+  opener : &BrowserOpener
+  // private fields
+}
+pub fn BoardRuntime::attach(Self, @async.TaskGroup[Unit]) -> Unit
+pub fn BoardRuntime::backend(Self) -> @backend.BoardBackend
+pub async fn BoardRuntime::bootstrap_snapshot(Self) -> Result[@protocol.BoardSnapshot, String]
+pub async fn BoardRuntime::close_server(Self) -> Unit
+pub fn BoardRuntime::current_seq(Self) -> Int64
+pub async fn BoardRuntime::ensure_server(Self) -> Result[BoardEndpoint, String]
+pub fn BoardRuntime::event_history(Self) -> Array[@protocol.BoardWireEvent]
+pub async fn BoardRuntime::handle_command(Self, @protocol.BoardClientCommand) -> @protocol.BoardCommandResult
+pub async fn BoardRuntime::open_board(Self) -> Result[BoardEndpoint, String]
+pub fn BoardRuntime::publish_telemetry(Self, board_revision~ : Int64, kind~ : String, scope? : @protocol.BoardEventScope?, payload~ : Json) -> @protocol.BoardWireEvent
+pub async fn BoardRuntime::shutdown(Self) -> Unit
+pub fn BoardRuntime::status(Self) -> BoardServerStatus
+pub fn BoardRuntime::with_adapters(backend~ : @backend.BoardBackend, server~ : &BoardWebServer, opener~ : &BrowserOpener) -> Self
+
+pub(all) enum BoardServerStatus {
+  Stopped
+  Starting
+  Running(BoardEndpoint)
+  Stopping
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub fn BoardServerStatus::equal(Self, Self) -> Bool
+pub fn BoardServerStatus::not_equal(Self, Self) -> Bool
+pub fn BoardServerStatus::to_json(Self) -> Json
+pub fn BoardServerStatus::to_repr(Self) -> @debug.Repr
+
+pub struct UnsupportedBoardWebServer {
+}
+pub fn UnsupportedBoardWebServer::UnsupportedBoardWebServer() -> Self
+pub async fn UnsupportedBoardWebServer::bind(Self) -> Result[BoardEndpoint, String]
+pub fn UnsupportedBoardWebServer::browser_url(Self) -> String?
+pub fn UnsupportedBoardWebServer::close(Self) -> Unit
+pub fn UnsupportedBoardWebServer::is_alive(Self) -> Bool
+pub fn UnsupportedBoardWebServer::last_error(Self) -> String?
+pub async fn UnsupportedBoardWebServer::run(Self) -> Result[Unit, String]
+pub fn UnsupportedBoardWebServer::set_backend(Self, @backend.BoardBackend) -> Unit
+pub impl BoardWebServer for UnsupportedBoardWebServer
+
+pub struct UnsupportedBrowserOpener {
+}
+pub async fn UnsupportedBrowserOpener::open(Self, String) -> Result[Unit, String]
+pub impl BrowserOpener for UnsupportedBrowserOpener
+
+// Type aliases
+
+// Traits
+pub(open) trait BoardWebServer {
+  async fn bind(Self) -> Result[BoardEndpoint, String]
+  async fn run(Self) -> Result[Unit, String]
+  fn browser_url(Self) -> String?
+  fn close(Self) -> Unit
+  fn is_alive(Self) -> Bool
+  fn last_error(Self) -> String?
+  fn set_backend(Self, @backend.BoardBackend) -> Unit
+}
+
+pub(open) trait BrowserOpener {
+  async fn open(Self, String) -> Result[Unit, String]
+}

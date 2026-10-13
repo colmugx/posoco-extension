@@ -1,0 +1,100 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/store"
+
+import {
+  "colmugx/posoco-ext-board/domain",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode_event(String) -> Result[@domain.BoardEvent, BoardStoreError]
+
+pub fn decode_journal(String) -> Result[Array[JournalRecord], BoardStoreError]
+
+pub fn decode_journal_record(String) -> Result[JournalRecord, BoardStoreError]
+
+pub fn decode_snapshot(String) -> Result[@domain.BoardStateSnapshot, BoardStoreError]
+
+pub fn empty_snapshot() -> @domain.BoardStateSnapshot
+
+pub fn encode_event(@domain.BoardEvent) -> Result[String, BoardStoreError]
+
+pub fn encode_journal_record(JournalRecord) -> Result[String, BoardStoreError]
+
+pub fn encode_snapshot(@domain.BoardStateSnapshot) -> Result[String, BoardStoreError]
+
+pub async fn load_recover_persist(&BoardStore, at_ms~ : Int64) -> Result[BoardRecovery, BoardStoreError]
+
+pub fn recover_snapshot(@domain.BoardStateSnapshot, at_ms~ : Int64) -> Result[BoardRecovery, BoardStoreError]
+
+// Errors
+
+// Types and methods
+pub(all) struct BoardLoad {
+  snapshot : @domain.BoardStateSnapshot
+  journal : Array[JournalRecord]
+} derive(Eq, @debug.Debug)
+pub fn BoardLoad::equal(Self, Self) -> Bool
+pub fn BoardLoad::not_equal(Self, Self) -> Bool
+pub fn BoardLoad::to_repr(Self) -> @debug.Repr
+
+pub(all) struct BoardRecovery {
+  changed : Bool
+  snapshot : @domain.BoardStateSnapshot
+  events : Array[@domain.BoardEvent]
+}
+
+pub(all) enum BoardStoreError {
+  InvalidData(String)
+  Io(String)
+  Injected(StoreFailureStage)
+  DurabilityUncertain(String)
+} derive(Eq, @debug.Debug)
+pub fn BoardStoreError::equal(Self, Self) -> Bool
+pub fn BoardStoreError::not_equal(Self, Self) -> Bool
+pub fn BoardStoreError::to_repr(Self) -> @debug.Repr
+
+pub struct FileBoardStore {
+  // private fields
+}
+pub fn FileBoardStore::FileBoardStore(root? : String, fail_at? : StoreFailureStage?) -> Self
+pub async fn FileBoardStore::load(Self) -> Result[BoardLoad, BoardStoreError]
+pub async fn FileBoardStore::persist(Self, @domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Result[Unit, BoardStoreError]
+pub impl BoardStore for FileBoardStore
+
+pub(all) struct JournalRecord {
+  schema_version : Int
+  revision : Int64
+  event : @domain.BoardEvent
+} derive(Eq, @debug.Debug)
+pub fn JournalRecord::equal(Self, Self) -> Bool
+pub fn JournalRecord::not_equal(Self, Self) -> Bool
+pub fn JournalRecord::to_repr(Self) -> @debug.Repr
+
+pub struct MemoryBoardStore {
+  // private fields
+}
+pub fn MemoryBoardStore::MemoryBoardStore() -> Self
+pub async fn MemoryBoardStore::load(Self) -> Result[BoardLoad, BoardStoreError]
+pub async fn MemoryBoardStore::persist(Self, @domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Result[Unit, BoardStoreError]
+pub impl BoardStore for MemoryBoardStore
+
+pub(all) enum StoreFailureStage {
+  TempWrite
+  TempFsync
+  JournalAppend
+  JournalFsync
+  Rename
+  DirectoryFsync
+} derive(Eq, @debug.Debug)
+pub fn StoreFailureStage::equal(Self, Self) -> Bool
+pub fn StoreFailureStage::not_equal(Self, Self) -> Bool
+pub fn StoreFailureStage::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
+pub(open) trait BoardStore {
+  async fn load(Self) -> Result[BoardLoad, BoardStoreError]
+  async fn persist(Self, @domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Result[Unit, BoardStoreError]
+}

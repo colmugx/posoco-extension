@@ -1,0 +1,129 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/workflow"
+
+import {
+  "colmugx/posoco-ext-board/execution",
+  "colmugx/posoco-ext-board/orchestration",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct SequentialWorkflowRunner {
+  // private fields
+}
+pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(orchestrator~ : @orchestration.BoardOrchestrator, group~ : @async.TaskGroup[Unit], now_ms? : () -> Int64) -> Self
+pub fn SequentialWorkflowRunner::cancel(Self) -> Unit
+pub fn SequentialWorkflowRunner::pause(Self) -> Bool
+pub fn SequentialWorkflowRunner::resume_workflow(Self) -> Bool
+pub async fn SequentialWorkflowRunner::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn SequentialWorkflowRunner::start(Self, WorkflowRunSpec) -> Result[Unit, WorkflowError]
+pub fn SequentialWorkflowRunner::status(Self) -> WorkflowStatus
+pub fn SequentialWorkflowRunner::stop_after_current(Self) -> Bool
+pub async fn SequentialWorkflowRunner::wait(Self) -> WorkflowStatus
+
+pub(all) enum WorkflowError {
+  InvalidSpec
+  InvalidScope
+  DuplicateRunIdentity
+  AlreadyRunning
+  Closed
+  UnresolvedOwner
+  BoardUnavailable
+  StartCancelled
+} derive(Eq, @debug.Debug)
+pub fn WorkflowError::equal(Self, Self) -> Bool
+pub fn WorkflowError::not_equal(Self, Self) -> Bool
+pub fn WorkflowError::to_repr(Self) -> @debug.Repr
+
+pub(all) enum WorkflowFailurePolicy {
+  StopOnFailure
+  ContinueOnConfirmedFailure
+} derive(Eq, @debug.Debug)
+pub fn WorkflowFailurePolicy::equal(Self, Self) -> Bool
+pub fn WorkflowFailurePolicy::not_equal(Self, Self) -> Bool
+pub fn WorkflowFailurePolicy::to_repr(Self) -> @debug.Repr
+
+pub(all) enum WorkflowPhase {
+  Idle
+  Running
+  Pausing
+  Paused
+  Stopping
+  Stopped
+  Completed
+  Failed
+  Unresolved
+} derive(Eq, @debug.Debug)
+pub fn WorkflowPhase::equal(Self, Self) -> Bool
+pub fn WorkflowPhase::not_equal(Self, Self) -> Bool
+pub fn WorkflowPhase::to_repr(Self) -> @debug.Repr
+
+pub(all) struct WorkflowRunSpec {
+  run_id : String
+  scope : WorkflowScope
+  max_executions : Int
+  max_elapsed_ms : Int
+  execution_timeout_ms : Int
+  failure_policy : WorkflowFailurePolicy
+} derive(Eq, @debug.Debug)
+pub fn WorkflowRunSpec::WorkflowRunSpec(run_id~ : String, scope~ : WorkflowScope, max_executions~ : Int, max_elapsed_ms~ : Int, execution_timeout_ms~ : Int, failure_policy? : WorkflowFailurePolicy) -> Self
+pub fn WorkflowRunSpec::equal(Self, Self) -> Bool
+pub fn WorkflowRunSpec::not_equal(Self, Self) -> Bool
+pub fn WorkflowRunSpec::to_repr(Self) -> @debug.Repr
+pub fn WorkflowRunSpec::validate(Self) -> Bool
+
+pub(all) enum WorkflowScope {
+  Selected(Array[String])
+  AllEligibleAtStart
+} derive(Eq, @debug.Debug)
+pub fn WorkflowScope::equal(Self, Self) -> Bool
+pub fn WorkflowScope::not_equal(Self, Self) -> Bool
+pub fn WorkflowScope::to_repr(Self) -> @debug.Repr
+
+pub(all) struct WorkflowStatus {
+  run_id : String?
+  phase : WorkflowPhase
+  admitted : Int
+  succeeded : Int
+  failed : Int
+  cancelled : Int
+  remaining_executions : Int
+  started_at_ms : Int64?
+  elapsed_ms : Int64
+  remaining_ms : Int64
+  current : @orchestration.ExecutionCandidate?
+  execution_id : String?
+  board_revision : Int64?
+  reason : WorkflowStopReason?
+} derive(Eq, @debug.Debug)
+pub fn WorkflowStatus::equal(Self, Self) -> Bool
+pub fn WorkflowStatus::not_equal(Self, Self) -> Bool
+pub fn WorkflowStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) enum WorkflowStopReason {
+  NoEligibleWork
+  OrchestrationBlocked(@orchestration.ExecutionBlockReason)
+  ExecutionBudgetReached
+  InsufficientTime
+  DeadlineReached
+  StopRequested
+  CancelRequested
+  HostShutdown
+  ExecutionFailed(@execution.BoardExecutionOutcome)
+  AdmissionRejected(@orchestration.OrchestrationError)
+  UnconfirmedSettlement
+  StalePlanLimit
+  UnexpectedFailure
+} derive(Eq, @debug.Debug)
+pub fn WorkflowStopReason::equal(Self, Self) -> Bool
+pub fn WorkflowStopReason::not_equal(Self, Self) -> Bool
+pub fn WorkflowStopReason::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
