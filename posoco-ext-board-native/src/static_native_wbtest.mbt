@@ -308,7 +308,7 @@ async test "unknown resources 404 with a token while health stays public and gat
       assert_eq(@json.parse(board_bytes_text(api_body)), {
         "protocol_version": 1,
         "host": "127.0.0.1",
-        "port": endpoint.port.to_json(),
+        "port": Json(endpoint.port),
         "ws_path": "/ws",
       })
       // The embedded page never leaks the instance secret either.

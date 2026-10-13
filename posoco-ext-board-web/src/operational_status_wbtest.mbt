@@ -5,15 +5,15 @@ fn status_attempt_json(
   created_at_ms : Int32,
 ) -> Json {
   {
-    "id": id.to_json(),
-    "task_id": "t".to_json(),
-    "kind": "execute".to_json(),
-    "status": status.to_json(),
+    "id": Json(id),
+    "task_id": Json("t"),
+    "kind": Json("execute"),
+    "status": Json(status),
     "review": null,
-    "created_at_ms": created_at_ms.to_json(),
+    "created_at_ms": Json(created_at_ms),
     "started_at_ms": null,
     "finished_at_ms": null,
-    "updated_at_ms": created_at_ms.to_json(),
+    "updated_at_ms": Json(created_at_ms),
   }
 }
 

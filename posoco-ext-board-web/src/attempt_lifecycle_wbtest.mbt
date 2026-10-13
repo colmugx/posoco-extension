@@ -5,10 +5,10 @@ fn lifecycle_attempt(
   task_id~ : String = "t",
 ) -> Json {
   {
-    "id": id.to_json(),
-    "task_id": task_id.to_json(),
+    "id": Json(id),
+    "task_id": Json(task_id),
     "kind": "execute",
-    "status": status.to_json(),
+    "status": Json(status),
     "review": null,
     "created_at_ms": 10,
     "started_at_ms": if status == "queued" {
@@ -65,7 +65,7 @@ fn lifecycle_event(
         "board.attempt.finished"
       },
       payload: {
-        "attempt_id": id.to_json(),
+        "attempt_id": Json(id),
         "task_id": "t",
         "attempt": lifecycle_attempt(status, id~),
       },

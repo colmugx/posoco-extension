@@ -67,14 +67,14 @@ async test "review decisions persist full authoritative entities independently f
       assert_eq(event.payload, {
         "attempt_id": "a",
         "task_id": "t",
-        "decision": decision.to_wire().to_json(),
+        "decision": Json(decision.to_wire()),
         "at_ms": 1234,
         "attempt": {
           "id": "a",
           "task_id": "t",
           "kind": "review",
           "status": "running",
-          "review": decision.to_wire().to_json(),
+          "review": Json(decision.to_wire()),
           "created_at_ms": 100,
           "started_at_ms": 100,
           "finished_at_ms": Json::null(),

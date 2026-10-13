@@ -232,14 +232,14 @@ pub fn encode_server_frame(frame : BoardServerFrame) -> String {
     ResyncRequired(reason~, current_seq~) =>
       Json::object({
         "type": "resync_required",
-        "reason": reason.to_json(),
+        "reason": Json(reason),
         "current_seq": Json::number(current_seq.to_double()),
       }).stringify()
     Error(code~, message~) =>
       Json::object({
         "type": "error",
-        "code": code.to_json(),
-        "message": message.to_json(),
+        "code": Json(code),
+        "message": Json(message),
       }).stringify()
   }
 }

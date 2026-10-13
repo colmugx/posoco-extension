@@ -198,9 +198,9 @@ async fn NativeBoardWebServer::make_app(
       })
       ctx.get("/api/bootstrap", (_req, res) => {
         res.send_json({
-          "protocol_version": @protocol.protocol_version().to_json(),
-          "host": endpoint.host.to_json(),
-          "port": endpoint.port.to_json(),
+          "protocol_version": Json(@protocol.protocol_version()),
+          "host": Json(endpoint.host),
+          "port": Json(endpoint.port),
           "ws_path": "/ws",
         })
       })

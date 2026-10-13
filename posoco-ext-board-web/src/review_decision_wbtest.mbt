@@ -9,14 +9,14 @@ fn review_attempt_json(
   kind~ : String = "review",
 ) -> Json {
   {
-    "id": id.to_json(),
-    "task_id": task_id.to_json(),
-    "kind": kind.to_json(),
-    "status": status.to_json(),
+    "id": Json(id),
+    "task_id": Json(task_id),
+    "kind": Json(kind),
+    "status": Json(status),
     "review": if review == "" {
       Json::null()
     } else {
-      review.to_json()
+      Json(review)
     },
     "created_at_ms": 10,
     "started_at_ms": if status == "queued" {
@@ -76,10 +76,10 @@ fn review_recorded_event(
       scope: None,
       kind: "board.review.recorded",
       payload: {
-        "attempt_id": id.to_json(),
+        "attempt_id": Json(id),
         "task_id": "t",
         "attempt": review_attempt_json(status, review, id~),
-        "decision": decision.to_json(),
+        "decision": Json(decision),
         "at_ms": 55,
       },
     }),

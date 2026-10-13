@@ -35,6 +35,8 @@ pub fn lanes() -> Array[@client.ClientBoardStage]
 
 pub fn move_suggestions(@client.ClientBoardStage) -> Array[@client.ClientBoardStage]
 
+pub fn ordered_tasks(@client.BoardReplica) -> Array[@client.ClientBoardTask]
+
 pub fn outcome_label(@client.ClientAttemptOutcome) -> String
 
 pub fn priorities() -> Array[@client.ClientBoardPriority]

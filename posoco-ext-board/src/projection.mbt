@@ -56,7 +56,7 @@ fn board_tool(call : @posoco.ToolCall, preview : String) -> Json {
 ///|
 fn board_count(count : Int32?) -> Json {
   match count {
-    Some(value) => value.to_json()
+    Some(value) => Json(value)
     None => Json::null()
   }
 }

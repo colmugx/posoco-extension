@@ -1,10 +1,10 @@
 ///|
 fn task_json(id : String, stage : String) -> Json {
   {
-    "id": id.to_json(),
-    "title": ("Task " + id).to_json(),
+    "id": Json(id),
+    "title": Json(("Task " + id)),
     "description": "Read-only task",
-    "stage": stage.to_json(),
+    "stage": Json(stage),
     "priority": "normal",
     "definition_of_done": [],
     "dependencies": [],
@@ -22,15 +22,15 @@ fn attempt_json(
   at_ms : Int32,
 ) -> Json {
   {
-    "id": id.to_json(),
-    "task_id": task_id.to_json(),
+    "id": Json(id),
+    "task_id": Json(task_id),
     "kind": "execute",
-    "status": status.to_json(),
+    "status": Json(status),
     "review": null,
     "created_at_ms": 1234,
     "started_at_ms": 1234,
     "finished_at_ms": null,
-    "updated_at_ms": at_ms.to_json(),
+    "updated_at_ms": Json(at_ms),
   }
 }
 

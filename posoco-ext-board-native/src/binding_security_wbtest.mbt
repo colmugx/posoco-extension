@@ -79,7 +79,7 @@ async test "MoonBack HTTP gates headers and metadata retain the localhost contra
       assert_eq(@json.parse(bootstrap_body.text()), {
         "protocol_version": 1,
         "host": "127.0.0.1",
-        "port": endpoint.port.to_json(),
+        "port": Json(endpoint.port),
         "ws_path": "/ws",
       })
     })

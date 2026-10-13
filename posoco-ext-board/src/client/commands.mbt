@@ -73,12 +73,12 @@ pub fn create_task_command(
     expected_revision,
     name: "board.task.create",
     args: {
-      "id": id.to_json(),
-      "title": title.to_json(),
-      "description": description.to_json(),
-      "priority": priority.to_wire().to_json(),
-      "definition_of_done": definition_of_done.copy().to_json(),
-      "dependencies": dependencies.copy().to_json(),
+      "id": Json(id),
+      "title": Json(title),
+      "description": Json(description),
+      "priority": Json(priority.to_wire()),
+      "definition_of_done": Json(definition_of_done.copy()),
+      "dependencies": Json(dependencies.copy()),
     },
   }
 }
@@ -102,18 +102,18 @@ pub fn update_task_command(
   priority? : ClientBoardPriority,
   definition_of_done? : Array[String],
 ) -> @protocol.BoardClientCommand {
-  let fields : Map[String, Json] = { "id": id.to_json() }
+  let fields : Map[String, Json] = { "id": Json(id) }
   if title is Some(value) {
-    fields["title"] = value.to_json()
+    fields["title"] = Json(value)
   }
   if description is Some(value) {
-    fields["description"] = value.to_json()
+    fields["description"] = Json(value)
   }
   if priority is Some(value) {
-    fields["priority"] = value.to_wire().to_json()
+    fields["priority"] = Json(value.to_wire())
   }
   if definition_of_done is Some(value) {
-    fields["definition_of_done"] = value.copy().to_json()
+    fields["definition_of_done"] = Json(value.copy())
   }
   {
     command_id,
@@ -150,7 +150,7 @@ pub fn set_task_dependencies_command(
     command_id,
     expected_revision,
     name: "board.task.set_dependencies",
-    args: { "id": id.to_json(), "dependencies": dependencies.copy().to_json() },
+    args: { "id": Json(id), "dependencies": Json(dependencies.copy()) },
   }
 }
 
@@ -244,9 +244,9 @@ pub fn queue_attempt_command(
     expected_revision,
     name: "board.attempt.queue",
     args: {
-      "id": id.to_json(),
-      "task_id": task_id.to_json(),
-      "kind": kind.to_wire().to_json(),
+      "id": Json(id),
+      "task_id": Json(task_id),
+      "kind": Json(kind.to_wire()),
     },
   }
 }
@@ -270,7 +270,7 @@ pub fn start_attempt_command(
     command_id,
     expected_revision,
     name: "board.attempt.start",
-    args: { "id": id.to_json() },
+    args: { "id": Json(id) },
   }
 }
 
@@ -300,7 +300,7 @@ pub fn finish_attempt_command(
     command_id,
     expected_revision,
     name: "board.attempt.finish",
-    args: { "id": id.to_json(), "outcome": outcome.to_wire().to_json() },
+    args: { "id": Json(id), "outcome": Json(outcome.to_wire()) },
   }
 }
 
@@ -332,7 +332,7 @@ pub fn record_review_command(
     command_id,
     expected_revision,
     name: "board.review.record",
-    args: { "id": id.to_json(), "decision": decision.to_wire().to_json() },
+    args: { "id": Json(id), "decision": Json(decision.to_wire()) },
   }
 }
 
@@ -360,6 +360,6 @@ pub fn move_task_command(
     command_id,
     expected_revision,
     name: "board.task.move",
-    args: { "id": id.to_json(), "to": to.to_wire().to_json() },
+    args: { "id": Json(id), "to": Json(to.to_wire()) },
   }
 }

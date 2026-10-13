@@ -72,13 +72,11 @@ test "strip_namespace_empty_server" {
 
 ///|
 test "convert_tool_def_namespaces_and_preserves_fields" {
-  let mcp_def = @types.ToolDefinition::{
-    name: "search",
-    description: "Search for items",
-    input_schema: Json::object(
-      Map::from_array([("query", Json::string("string"))]),
-    ),
-  }
+  let mcp_def = @types.ToolDefinition::new(
+    "search",
+    Json::object(Map::from_array([("query", Json::string("string"))])),
+    description="Search for items",
+  )
   let posoco_def = convert_tool_def(mcp_def, "filesystem")
   assert_eq(posoco_def.name.to_string(), "filesystem__search")
   assert_eq(posoco_def.description, "Search for items")
@@ -88,8 +86,8 @@ test "convert_tool_def_namespaces_and_preserves_fields" {
 ///|
 test "convert_content_to_string_text_only" {
   let items = [
-    @types.ContentItem::Text("hello"),
-    @types.ContentItem::Text("world"),
+    @types.ContentBlock::text("hello"),
+    @types.ContentBlock::text("world"),
   ]
   let result = convert_content_to_string(items)
   assert_eq(result, "hello\nworld")
@@ -97,23 +95,38 @@ test "convert_content_to_string_text_only" {
 
 ///|
 test "convert_content_to_string_single_text" {
-  let items = [@types.ContentItem::Text("hello")]
+  let items = [@types.ContentBlock::text("hello")]
   let result = convert_content_to_string(items)
   assert_eq(result, "hello")
 }
 
 ///|
 test "convert_content_to_string_empty" {
-  let items : Array[@types.ContentItem] = []
+  let items : Array[@types.ContentBlock] = []
   let result = convert_content_to_string(items)
   assert_eq(result, "")
 }
 
 ///|
 test "convert_content_to_string_resource_link" {
-  let items = [@types.ContentItem::ResourceLink("file:///config.json")]
+  let items = [
+    @types.ContentBlock::resource_link(
+      "file:///config.json",
+      name="config.json",
+    ),
+  ]
   let result = convert_content_to_string(items)
   assert_eq(result, "[Resource: file:///config.json]")
+}
+
+///|
+test "convert_content_to_string_audio_and_unknown" {
+  let items = [
+    @types.ContentBlock::audio("0101", mime_type="audio/wav"),
+    @types.ContentBlock::Unknown(Json::number(1)),
+  ]
+  let result = convert_content_to_string(items)
+  assert_eq(result, "[Audio: audio/wav, 4 chars]\n[Unknown content]")
 }
 
 ///|
@@ -130,11 +143,11 @@ fn catalog_test_tool(name : String) -> @posoco.ToolDef {
 
 ///|
 fn catalog_test_mcp_tool(name : String) -> @types.ToolDefinition {
-  @types.ToolDefinition::{
+  @types.ToolDefinition::new(
     name,
-    description: "test tool",
-    input_schema: Json::object(Map::from_array([])),
-  }
+    Json::object(Map::from_array([])),
+    description="test tool",
+  )
 }
 
 ///|
@@ -739,11 +752,7 @@ test "http_connect_params_preserves_injected_header_order" {
 test "convert_tool_def_preserves_external_description" {
   let long = "prefix-" + "x".repeat(1200) + "-critical-tail"
   let def = convert_tool_def(
-    @types.ToolDefinition::{
-      name: "search",
-      description: long,
-      input_schema: Json::object({}),
-    },
+    @types.ToolDefinition::new("search", Json::object({}), description=long),
     "srv",
   )
   assert_eq(def.description, long)
