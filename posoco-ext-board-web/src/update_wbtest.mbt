@@ -85,11 +85,7 @@ fn snapshot_text(tasks : Json, revision : Int32) -> String {
       last_seq: 0L,
       board_revision: revision.to_int64(),
       payload: {
-        "board": {
-          "revision": Json(revision),
-          "tasks": tasks,
-          "attempts": [],
-        },
+        "board": { "revision": Json(revision), "tasks": tasks, "attempts": [] },
         "events": [],
       },
     }),
@@ -210,7 +206,7 @@ test "snapshot resets backoff and replica updates do not mutate previous model" 
 fn carded_task_json(id : String, stage : String) -> Json {
   {
     "id": Json(id),
-    "title": Json(("Task " + id)),
+    "title": Json("Task " + id),
     "description": "Read-only task",
     "stage": Json(stage),
     "priority": "normal",

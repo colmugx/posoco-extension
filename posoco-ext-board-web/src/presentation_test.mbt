@@ -2,7 +2,7 @@
 fn task_json(id : String, stage : String) -> Json {
   {
     "id": Json(id),
-    "title": Json(("Task " + id)),
+    "title": Json("Task " + id),
     "description": "Read-only task",
     "stage": Json(stage),
     "priority": "normal",

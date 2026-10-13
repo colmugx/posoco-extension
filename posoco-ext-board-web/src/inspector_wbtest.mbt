@@ -2,7 +2,7 @@
 fn dependency_task_json(id : String, dependencies : Array[String]) -> Json {
   {
     "id": Json(id),
-    "title": Json(("Title " + id)),
+    "title": Json("Title " + id),
     "description": "Task details",
     "stage": "ready",
     "priority": "high",
