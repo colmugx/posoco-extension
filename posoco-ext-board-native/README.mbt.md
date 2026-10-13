@@ -99,7 +99,12 @@ Generator regression checks (including compiled byte round trips):
 
 ```bash
 moon -C posoco-ext-board-native run tools/embed-assets/check_generator.mbtx --target native --output-json
+moon -C posoco-ext-board-native --target-dir _build/assets-build-regression-driver run tools/embed-assets/check_build.mbtx --target native --output-json
 ```
+
+The build regression uses a temporary source-only workspace and checks missing
+output generation, CSS invalidation, freshness, archive inclusion and cache
+exclusion. It does not modify working frontend sources.
 
 The embedded dashboard includes manual attempt lifecycle and one-shot review
 decision controls. Review decisions are eligible only for Running Review attempts
