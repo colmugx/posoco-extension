@@ -119,3 +119,24 @@ test "ask_question_schema_uses_enum_for_prompt_type" {
   assert_true(schema.contains("\"confirm\""))
   assert_true(schema.contains("\"select\""))
 }
+
+///|
+test "ask_question_parent_face_names_tool_ask_question_child" {
+  let endpoint = ScriptedEndpoint(response=@posoco.UiResponse::Text("ok"))
+  let tools = AskQuestionTools::for_parent(
+    endpoint=endpoint as &QuestionEndpoint,
+  )
+  let defs = @posoco.ToolProvider::list_tools(tools)
+  assert_eq(defs.length(), 1)
+  assert_eq(defs[0].name.to_string(), "ask_question_child")
+  assert_true(defs[0].description.contains("parent agent"))
+  assert_true(defs[0].policy is @posoco.ExecutionPolicy::Exclusive)
+  let manifest = tools.manifest()
+  assert_eq(manifest.requires, [])
+  assert_true(
+    @posoco.SystemPromptContributor::system_prompt(tools).contains(
+      "ask_question_child",
+    ),
+  )
+  assert_eq(defs[0].input_schema.stringify().contains("parent agent"), true)
+}

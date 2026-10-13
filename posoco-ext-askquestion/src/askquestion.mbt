@@ -1,29 +1,51 @@
 ///|
+/// Who answers this face's questions. Decides the tool name, description,
+/// and routing: `Human` keeps the composed UiPort path (`ask_question`),
+/// `ParentAgent` routes through the injected endpoint (`ask_question_child`).
+pub enum QuestionAudience {
+  Human
+  ParentAgent
+}
+
+///|
 /// Interactive ask_question tool backed by Posoco's composed UiPort. The
 /// port is captured from the CompositionView at composition time (manifest
 /// declares `requires: [Capability::Ui]`), so requests ride the aggregated
-/// port — never a host-provided raw contributor reference.
-pub(all) struct AskQuestionTools {
+/// port — never a host-provided raw contributor reference. The parent face
+/// (`for_parent`) answers through an injected `QuestionEndpoint` instead.
+pub struct AskQuestionTools {
   mut ui : &@posoco.UiPort?
+  audience : QuestionAudience
+  endpoint : &QuestionEndpoint?
 }
 
 ///|
-/// Construct an ask-question extension. The composed UI is wired during
+/// Construct the human-facing extension. The composed UI is wired during
 /// composition; constructing without a host that contributes a UiPort makes
 /// every ask_question report "ui unavailable".
 pub fn AskQuestionTools::AskQuestionTools() -> AskQuestionTools {
-  { ui: None, }
+  { ui: None, audience: Human, endpoint: None, }
 }
 
 ///|
-fn ask_question_schema() -> Json {
+/// Construct the parent-facing variant for subagent compositions: the tool
+/// is named `ask_question_child` and every question is answered by the
+/// parent agent that spawned the session, through `endpoint`.
+pub fn AskQuestionTools::for_parent(
+  endpoint~ : &QuestionEndpoint,
+) -> AskQuestionTools {
+  { ui: None, audience: ParentAgent, endpoint: Some(endpoint), }
+}
+
+///|
+fn ask_question_schema(answerer~ : String = "the user") -> Json {
   Json::object({
     "type": Json::string("object"),
     "properties": Json::object({
       "question": Json::object({
         "type": Json::string("string"),
         "description": Json::string(
-          "One focused question to present to the user",
+          "One focused question to present to \{answerer}",
         ),
       }),
       "type": Json::object({
@@ -56,13 +78,14 @@ fn ask_question_schema() -> Json {
 fn string_field(
   fields : Map[String, Json],
   key : String,
+  tool~ : String = "ask_question",
 ) -> String? raise @posoco.RuntimeError {
   match fields.get(key) {
     None => None
     Some(Json::String(value)) => Some(value)
     Some(_) =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: '" + key + "' must be a string",
+        "\{tool}: '" + key + "' must be a string",
       )
   }
 }
@@ -70,6 +93,7 @@ fn string_field(
 ///|
 fn options_field(
   fields : Map[String, Json],
+  tool~ : String = "ask_question",
 ) -> Array[String] raise @posoco.RuntimeError {
   match fields.get("options") {
     None => []
@@ -80,7 +104,7 @@ fn options_field(
           Json::String(option) => options.push(option)
           _ =>
             raise @posoco.RuntimeError::UnknownTool(
-              "ask_question: option must be a string",
+              "\{tool}: option must be a string",
             )
         }
       }
@@ -88,7 +112,7 @@ fn options_field(
     }
     Some(_) =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: 'options' must be string[]",
+        "\{tool}: 'options' must be string[]",
       )
   }
 }
@@ -96,13 +120,14 @@ fn options_field(
 ///|
 fn default_index_field(
   fields : Map[String, Json],
+  tool~ : String = "ask_question",
 ) -> Int32? raise @posoco.RuntimeError {
   match fields.get("default_index") {
     None => None
     Some(Json::Number(value, ..)) => Some(value.to_int())
     Some(_) =>
       raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: 'default_index' must be an integer",
+        "\{tool}: 'default_index' must be an integer",
       )
   }
 }
@@ -117,24 +142,23 @@ priv struct AskSpec {
 }
 
 ///|
-fn parse_ask_spec(arguments : Json) -> AskSpec raise @posoco.RuntimeError {
+fn parse_ask_spec(
+  arguments : Json,
+  tool~ : String = "ask_question",
+) -> AskSpec raise @posoco.RuntimeError {
+  let bad = fn(message : String) -> @posoco.RuntimeError {
+    @posoco.RuntimeError::UnknownTool("\{tool}: \{message}")
+  }
   let fields = match arguments {
     Json::Object(fields) => fields
-    _ =>
-      raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: arguments must be an object",
-      )
+    _ => raise bad("arguments must be an object")
   }
   let question = match string_field(fields, "question") {
     Some(value) if value.trim() != "" => value
-    Some(_) =>
-      raise @posoco.RuntimeError::UnknownTool("ask_question: empty 'question'")
-    None =>
-      raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: missing 'question'",
-      )
+    Some(_) => raise bad("empty 'question'")
+    None => raise bad("missing 'question'")
   }
-  let options = options_field(fields)
+  let options = options_field(fields, tool~)
   let requested_type = string_field(fields, "type")
   let prompt_type = match requested_type {
     Some(value) => value
@@ -143,20 +167,16 @@ fn parse_ask_spec(arguments : Json) -> AskSpec raise @posoco.RuntimeError {
   if prompt_type != "input" &&
     prompt_type != "confirm" &&
     prompt_type != "select" {
-    raise @posoco.RuntimeError::UnknownTool("ask_question: invalid 'type'")
+    raise bad("invalid 'type'")
   }
-  let default_index = default_index_field(fields)
+  let default_index = default_index_field(fields, tool~)
   if prompt_type == "select" {
     if options.is_empty() {
-      raise @posoco.RuntimeError::UnknownTool(
-        "ask_question: select requires options",
-      )
+      raise bad("select requires options")
     }
     match default_index {
       Some(index) if index < 0 || index >= options.length() =>
-        raise @posoco.RuntimeError::UnknownTool(
-          "ask_question: default_index out of bounds",
-        )
+        raise bad("default_index out of bounds")
       _ => ()
     }
   }
@@ -164,7 +184,7 @@ fn parse_ask_spec(arguments : Json) -> AskSpec raise @posoco.RuntimeError {
     question,
     prompt_type,
     options,
-    default_text: string_field(fields, "default"),
+    default_text: string_field(fields, "default", tool~),
     default_index,
   }
 }
@@ -248,14 +268,35 @@ fn response_outcome(
 }
 
 ///|
+/// Human-face description, unchanged from the original tool contract.
+const HUMAN_ASK_DESCRIPTION : String = "Ask exactly one focused user question only when a user decision or missing fact blocks progress. Do not ask for information available tools can discover. If known choices exist, prefer type=select with concise options; use type=confirm for yes/no; otherwise use type=input."
+
+///|
+/// Parent-face description: same interaction contract, different answerer.
+const PARENT_ASK_DESCRIPTION : String = "This is ask_question for a subagent session: the answer comes from the parent agent that spawned this session, not from a human user. Use it exactly as ask_question — ask exactly one focused question only when a decision or missing fact blocks progress. Do not ask for information available tools can discover. If known choices exist, prefer type=select with concise options; use type=confirm for yes/no; otherwise use type=input."
+
+///|
+const PARENT_ANSWERER : String = "the parent agent that spawned this session"
+
+///|
+fn AskQuestionTools::face(self : AskQuestionTools) -> (String, String, String) {
+  match self.audience {
+    Human => ("ask_question", HUMAN_ASK_DESCRIPTION, "the user")
+    ParentAgent =>
+      ("ask_question_child", PARENT_ASK_DESCRIPTION, PARENT_ANSWERER)
+  }
+}
+
+///|
 pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
-  _self : AskQuestionTools,
+  self : AskQuestionTools,
 ) -> Array[@posoco.ToolDef] {
+  let (name, description, answerer) = self.face()
   [
     @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("ask_question"),
-      description: "Ask exactly one focused user question only when a user decision or missing fact blocks progress. Do not ask for information available tools can discover. If known choices exist, prefer type=select with concise options; use type=confirm for yes/no; otherwise use type=input.",
-      input_schema: ask_question_schema(),
+      name: @posoco.ToolName::unchecked(name),
+      description,
+      input_schema: ask_question_schema(answerer~),
       owner: @posoco.OwnerId::unchecked("posoco_ext_askquestion"),
       policy: @posoco.ExecutionPolicy::Exclusive,
       provenance: Some("posoco_ext_askquestion"),
@@ -268,49 +309,90 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
   self : AskQuestionTools,
   ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let (tool_name, _, _) = self.face()
   let name = ctx.name.to_string()
-  if name != "ask_question" {
+  if name != tool_name {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_askquestion: unknown tool '" + name + "'",
     )
   }
-  let spec = parse_ask_spec(ctx.arguments)
-  let ui = match self.ui {
-    Some(ui) => ui
-    None =>
-      return @posoco.ToolOutcome::ToolReportedError(
-        content="ui unavailable",
-        structured=None,
-      )
-  }
-  let response = ui.request(spec.request()) catch {
-    @posoco.UiError::Unsupported(detail~) =>
-      return @posoco.ToolOutcome::ToolReportedError(
-        content="ui unavailable: " + detail,
-        structured=None,
-      )
-    @posoco.UiError::Cancelled =>
-      return @posoco.ToolOutcome::ToolReportedError(
-        content="cancelled",
-        structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
-      )
-    @posoco.UiError::InvalidRequest(detail~) =>
-      raise @posoco.RuntimeError::InvocationFailed(
-        "ask_question: invalid UI: " + detail,
-      )
-    @posoco.UiError::IoFailure(detail~) =>
-      raise @posoco.RuntimeError::InvocationFailed(
-        "ask_question: UI: " + detail,
-      )
+  let spec = parse_ask_spec(ctx.arguments, tool=tool_name)
+  let response : @posoco.UiResponse = match self.audience {
+    Human => {
+      let ui = match self.ui {
+        Some(ui) => ui
+        None =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="ui unavailable",
+            structured=None,
+          )
+      }
+      ui.request(spec.request()) catch {
+        @posoco.UiError::Unsupported(detail~) =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="ui unavailable: " + detail,
+            structured=None,
+          )
+        @posoco.UiError::Cancelled =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="cancelled",
+            structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
+          )
+        @posoco.UiError::InvalidRequest(detail~) =>
+          raise @posoco.RuntimeError::InvocationFailed(
+            "\{tool_name}: invalid UI: " + detail,
+          )
+        @posoco.UiError::IoFailure(detail~) =>
+          raise @posoco.RuntimeError::InvocationFailed(
+            "\{tool_name}: UI: " + detail,
+          )
+      }
+    }
+    ParentAgent => {
+      let endpoint = match self.endpoint {
+        Some(endpoint) => endpoint
+        None =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="question endpoint unavailable",
+            structured=None,
+          )
+      }
+      endpoint.request(origin_call=ctx.call_id.to_string(), req=spec.request()) catch {
+        QuestionError::Unsupported(detail) =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="endpoint unavailable: " + detail,
+            structured=None,
+          )
+        QuestionError::Cancelled =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="cancelled",
+            structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
+          )
+        QuestionError::TimedOut =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="answer timed out",
+            structured=Some(Json::object({ "timed_out": Json::boolean(true) })),
+          )
+        QuestionError::Io(detail) =>
+          raise @posoco.RuntimeError::InvocationFailed(
+            "\{tool_name}: endpoint: " + detail,
+          )
+      }
+    }
   }
   response_outcome(spec, response)
 }
 
 ///|
 pub impl @posoco.SystemPromptContributor for AskQuestionTools with fn system_prompt(
-  _self : AskQuestionTools,
+  self : AskQuestionTools,
 ) -> String {
-  "Use ask_question only when a user decision or missing fact blocks progress. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
+  match self.audience {
+    Human =>
+      "Use ask_question only when a user decision or missing fact blocks progress. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
+    ParentAgent =>
+      "Use ask_question_child only when a decision or missing fact blocks progress. The parent agent that spawned this session answers — never a human user. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
+  }
 }
 
 ///|
@@ -324,9 +406,13 @@ pub impl @posoco.Extension for AskQuestionTools with fn extension_id(
 pub impl @posoco.Extension for AskQuestionTools with fn manifest(
   self : AskQuestionTools,
 ) -> @posoco.ExtensionManifest {
+  let requires : Array[@posoco.Capability] = match self.audience {
+    Human => [@posoco.Capability::Ui]
+    ParentAgent => []
+  }
   @posoco.ExtensionManifest(
     id="posoco_ext_askquestion",
-    requires=[@posoco.Capability::Ui],
+    requires~,
     lifecycle=[self],
     tools=[self],
   )
@@ -337,7 +423,9 @@ pub impl @posoco.Lifecycle for AskQuestionTools with fn on_compose(
   self : AskQuestionTools,
   view : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
-  self.ui = view.ui()
+  if self.audience is Human {
+    self.ui = view.ui()
+  }
 }
 
 ///|

@@ -5,19 +5,32 @@ import {
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "moonbitlang/core/debug",
 }
 
 // Values
 
 // Errors
+pub(all) suberror QuestionError {
+  Unsupported(String)
+  Cancelled
+  TimedOut
+  Io(String)
+} derive(Eq, @debug.Debug)
+pub fn QuestionError::equal(Self, Self) -> Bool
+pub fn QuestionError::not_equal(Self, Self) -> Bool
+pub fn QuestionError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
-pub(all) struct AskQuestionTools {
+pub struct AskQuestionTools {
   mut ui : &@port.UiPort?
+  audience : QuestionAudience
+  endpoint : &QuestionEndpoint?
 }
 pub fn AskQuestionTools::AskQuestionTools() -> Self
 pub async fn AskQuestionTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn AskQuestionTools::extension_id(Self) -> String
+pub fn AskQuestionTools::for_parent(endpoint~ : &QuestionEndpoint) -> Self
 pub fn AskQuestionTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn AskQuestionTools::manifest(Self) -> @port.ExtensionManifest
 pub fn AskQuestionTools::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
@@ -29,6 +42,14 @@ pub impl @port.Lifecycle for AskQuestionTools
 pub impl @port.SystemPromptContributor for AskQuestionTools
 pub impl @port.ToolProvider for AskQuestionTools
 
+pub enum QuestionAudience {
+  Human
+  ParentAgent
+}
+
 // Type aliases
 
 // Traits
+pub(open) trait QuestionEndpoint {
+  async fn request(Self, origin_call~ : String, req~ : @port.UiRequest) -> @port.UiResponse raise QuestionError
+}
