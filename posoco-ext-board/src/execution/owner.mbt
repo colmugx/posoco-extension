@@ -8,6 +8,15 @@ priv struct OwnedExecution {
 }
 
 ///|
+/// One isolated driver with at most one owned execution at a time. A slot is
+/// freed only after its driver terminated and settlement was attempted.
+priv struct ExecutionSlot {
+  adapter : &BoardExecutionAdapter
+  mut execution : OwnedExecution?
+  mut worker : @async.Task[BoardExecutionBinding]?
+}
+
+///|
 pub struct BoardExecutionHandle {
   priv execution_id_ : String
   priv task : @async.Task[BoardExecutionBinding]
@@ -32,24 +41,51 @@ pub async fn BoardExecutionHandle::wait(
 ///|
 /// Opt-in trusted-host owner, separate from presentation and BoardBackend.
 /// One owner and one journal per Board namespace; multi-process ownership is
-/// not supported. The host must shut this down before shutting down the backend.
+/// not supported. Slots run isolated drivers concurrently, but every protected
+/// journal section — reservation, scoped model gate + BoardStart + Running,
+/// Finished + BoardFinish + Settled — serializes on one shared owner mutex.
+/// The host must shut this down before shutting down the backend.
 pub struct BoardExecutionOwner {
   priv backend : @backend.BoardBackend
-  priv adapter : &BoardExecutionAdapter
   priv store : &BoardExecutionStore
+  priv mutex : @async.Mutex
   priv mut group : @async.TaskGroup[Unit]?
   priv mut records_ : Array[BoardExecutionBinding]
   priv mut loaded : Bool
   priv mut closed : Bool
   priv mut busy : Bool
   priv mut poisoned : Bool
-  priv mut active : OwnedExecution?
-  priv mut worker : @async.Task[BoardExecutionBinding]?
+  priv slots : Array[ExecutionSlot]
 }
 
 ///|
-/// Store is explicit: durable hosts must provide durable journal storage.
-/// Memory storage is only suitable for ephemeral/test Boards.
+fn owner_with(
+  backend~ : @backend.BoardBackend,
+  store~ : &BoardExecutionStore,
+  adapters~ : Array[&BoardExecutionAdapter],
+) -> BoardExecutionOwner {
+  let slots : Array[ExecutionSlot] = []
+  for adapter in adapters {
+    slots.push({ adapter, execution: None, worker: None, })
+  }
+  {
+    backend,
+    store,
+    mutex: @async.Mutex::Mutex(),
+    group: None,
+    records_: [],
+    loaded: false,
+    closed: false,
+    busy: false,
+    poisoned: false,
+    slots,
+  }
+}
+
+///|
+/// Single-slot owner over one explicit driver. Store is explicit: durable
+/// hosts must provide durable journal storage. Memory storage is only
+/// suitable for ephemeral/test Boards.
 ///
 /// ```mbt check
 /// test {
@@ -59,6 +95,7 @@ pub struct BoardExecutionOwner {
 ///     store=@execution.MemoryBoardExecutionStore(),
 ///   )
 ///   assert_eq(owner.bindings().length(), 0)
+///   assert_eq(owner.status().capacity, 1)
 /// }
 /// ```
 pub fn BoardExecutionOwner::BoardExecutionOwner(
@@ -66,19 +103,44 @@ pub fn BoardExecutionOwner::BoardExecutionOwner(
   adapter~ : &BoardExecutionAdapter,
   store~ : &BoardExecutionStore,
 ) -> BoardExecutionOwner {
-  {
-    backend,
-    adapter,
-    store,
-    group: None,
-    records_: [],
-    loaded: false,
-    closed: false,
-    busy: false,
-    poisoned: false,
-    active: None,
-    worker: None,
+  owner_with(backend~, store~, adapters=[adapter])
+}
+
+///|
+/// Multi-slot owner over ONE store/journal. The factory is called exactly
+/// once per slot index (0..<max_concurrency, bounded to 1..=8) and must
+/// return an isolated driver that no other slot or host component shares.
+/// Admission, global identity uniqueness, unresolved poisoning, exact-identity
+/// cancellation and shutdown semantics match the single-slot owner.
+///
+/// ```mbt check
+/// test {
+///   let owner = @execution.BoardExecutionOwner::with_slots(
+///     backend=@backend.BoardBackend(),
+///     store=@execution.MemoryBoardExecutionStore(),
+///     adapter_factory=_ => {
+///       @execution.PosocoBoardExecutionAdapter(extensions=() => [])
+///     },
+///     max_concurrency=2,
+///   ).unwrap()
+///   assert_eq(owner.status().capacity, 2)
+///   assert_eq(owner.status().available_slots, 2)
+/// }
+/// ```
+pub fn BoardExecutionOwner::with_slots(
+  backend~ : @backend.BoardBackend,
+  store~ : &BoardExecutionStore,
+  adapter_factory~ : (Int32) -> &BoardExecutionAdapter,
+  max_concurrency~ : Int32 = 1,
+) -> Result[BoardExecutionOwner, BoardExecutionError] {
+  if max_concurrency < 1 || max_concurrency > 8 {
+    return Err(InvalidRequest)
   }
+  let adapters : Array[&BoardExecutionAdapter] = []
+  for slot in 0..<max_concurrency {
+    adapters.push(adapter_factory(slot))
+  }
+  Ok(owner_with(backend~, store~, adapters~))
 }
 
 ///|
@@ -155,6 +217,16 @@ fn eligible(
 }
 
 ///|
+fn BoardExecutionOwner::free_slot(self : BoardExecutionOwner) -> ExecutionSlot? {
+  for slot in self.slots {
+    if slot.execution is None && slot.adapter.ready() {
+      return Some(slot)
+    }
+  }
+  None
+}
+
+///|
 /// Atomic in-process admission reserves before the first await. Durable identity
 /// history rejects reuse even after completion; command IDs are not dedup keys.
 /// Optional reservation_revision rejects stale selection before journalling.
@@ -162,41 +234,63 @@ fn eligible(
 /// and at the actual model gate. It must be side-effect-free; rejection before
 /// the gate prevents provider effects but may leave a reserved identity unresolved.
 /// Defaults preserve S4A's explicit queued-Execute admission policy.
+/// Reservations serialize on the shared owner mutex: an active execution on the
+/// same Task, any reused attempt/execution/session identity, and any unresolved
+/// record are rejected globally across slots.
 pub async fn BoardExecutionOwner::execute(
   self : BoardExecutionOwner,
   request : BoardExecutionRequest,
-  admission_guard? : (@domain.BoardStateSnapshot) -> Bool = _ => true,
+  admission_guard~ : (@domain.BoardStateSnapshot) -> Bool = _ => true,
   reservation_revision? : Int64,
 ) -> Result[BoardExecutionHandle, BoardExecutionError] {
   if self.closed {
     return Err(Closed)
   }
-  if self.busy || self.active is Some(_) {
+  if self.busy {
     return Err(Busy)
-  }
-  if !self.loaded || self.poisoned || !self.adapter.ready() {
-    return Err(NotReady)
-  }
-  if !valid_identity(request.task_id) ||
-    !valid_identity(request.attempt_id) ||
-    !valid_identity(request.execution_id) ||
-    !valid_identity(request.session_id) ||
-    request.input.trim().is_empty() ||
-    (request.timeout_ms is Some(timeout) && timeout <= 0) {
-    return Err(InvalidRequest)
-  }
-  if self.records_.any(record => {
-      record.execution_id == request.execution_id ||
-      record.attempt_id == request.attempt_id ||
-      record.session_id == request.session_id
-    }) {
-    return Err(DuplicateIdentity)
   }
   self.busy = true
   defer {
     self.busy = false
   }
+  self.mutex.acquire()
+  defer self.mutex.release()
   @async.protect_from_cancel(() => {
+    if self.closed {
+      return Err(Closed)
+    }
+    if self.slots.all(slot => slot.execution is Some(_)) {
+      return Err(Busy)
+    }
+    if !self.loaded || self.poisoned {
+      return Err(NotReady)
+    }
+    let slot = match self.free_slot() {
+      Some(slot) => slot
+      None => return Err(NotReady)
+    }
+    if !valid_identity(request.task_id) ||
+      !valid_identity(request.attempt_id) ||
+      !valid_identity(request.execution_id) ||
+      !valid_identity(request.session_id) ||
+      request.input.trim().is_empty() ||
+      (request.timeout_ms is Some(timeout) && timeout <= 0) {
+      return Err(InvalidRequest)
+    }
+    let same_active_task = self.slots.any(occupied => {
+      match occupied.execution {
+        Some(active) => active.binding.task_id == request.task_id
+        None => false
+      }
+    })
+    if same_active_task ||
+      self.records_.any(record => {
+        record.execution_id == request.execution_id ||
+        record.attempt_id == request.attempt_id ||
+        record.session_id == request.session_id
+      }) {
+      return Err(DuplicateIdentity)
+    }
     let snapshot = match self.backend.state() {
       Ok(snapshot) => snapshot
       Err(_) => return Err(NotReady)
@@ -233,9 +327,11 @@ pub async fn BoardExecutionOwner::execute(
       Some(group) => group
       None => return Err(NotReady)
     }
-    self.active = Some(owned)
-    let task = group.spawn(() => self.drive(owned, request, admission_guard))
-    self.worker = Some(task)
+    slot.execution = Some(owned)
+    let task = group.spawn(() => {
+      self.drive(owned, request, admission_guard, slot)
+    })
+    slot.worker = Some(task)
     Ok({ execution_id_: request.execution_id, task, })
   })
 }
@@ -299,6 +395,13 @@ async fn BoardExecutionOwner::start(
   }
   owned.gate_called = true
   @async.protect_from_cancel(() => {
+    self.mutex.acquire()
+    defer self.mutex.release()
+    // Another slot may have poisoned or closed the owner while this driver
+    // waited for the shared journal section.
+    if self.closed || self.poisoned {
+      return false
+    }
     // Correlation reaches storage before Start or any model/tool execution.
     if !self.record(owned, { ..owned.binding, run: Some(scope), }) {
       return false
@@ -354,6 +457,7 @@ async fn BoardExecutionOwner::drive(
   owned : OwnedExecution,
   request : BoardExecutionRequest,
   admission_guard : (@domain.BoardStateSnapshot) -> Bool,
+  slot : ExecutionSlot,
 ) -> BoardExecutionBinding {
   // Cancellation bypasses catch in async 0.22; handle_cancellation confirms
   // the driver's structured lifetime has unwound before durable settlement.
@@ -367,12 +471,12 @@ async fn BoardExecutionOwner::drive(
           match request.timeout_ms {
             Some(timeout) =>
               @async.with_timeout(timeout, () => {
-                self.adapter.run(request, scope => {
+                slot.adapter.run(request, scope => {
                   self.start(owned, scope, admission_guard)
                 })
               })
             None =>
-              self.adapter.run(request, scope => {
+              slot.adapter.run(request, scope => {
                 self.start(owned, scope, admission_guard)
               })
           }
@@ -387,7 +491,8 @@ async fn BoardExecutionOwner::drive(
   }
   @async.protect_from_cancel(() => {
     self.finish(owned, outcome)
-    self.active = None
+    slot.execution = None
+    slot.worker = None
     owned.binding
   })
 }
@@ -408,6 +513,8 @@ async fn BoardExecutionOwner::finish(
   owned : OwnedExecution,
   outcome : BoardExecutionOutcome,
 ) -> Unit {
+  self.mutex.acquire()
+  defer self.mutex.release()
   if !owned.started || self.poisoned {
     ignore(
       self.record(owned, {
@@ -460,65 +567,79 @@ async fn BoardExecutionOwner::finish(
 }
 
 ///|
-/// Request cancellation only for this owner's exact active identity. Completion
-/// is confirmed by handle.wait, not by this acknowledgement. Repeat is harmless.
+/// Request cancellation only for this owner's exact active identity on its own
+/// slot. Completion is confirmed by handle.wait, not by this acknowledgement.
+/// Repeat is harmless.
 pub fn BoardExecutionOwner::cancel(
   self : BoardExecutionOwner,
   execution_id : String,
 ) -> Result[Unit, BoardExecutionError] {
-  match (self.active, self.worker) {
-    (Some(owned), Some(task)) if owned.binding.execution_id == execution_id => {
-      owned.cancel_requested = true
-      if owned.entered {
-        task.cancel()
-      }
-      Ok(())
+  for slot in self.slots {
+    match (slot.execution, slot.worker) {
+      (Some(owned), Some(task)) =>
+        if owned.binding.execution_id == execution_id {
+          owned.cancel_requested = true
+          if owned.entered {
+            task.cancel()
+          }
+          return Ok(())
+        }
+      _ => ()
     }
-    _ =>
-      if self.records_.any(record => {
-          record.execution_id == execution_id && record.outcome is Some(_)
-        }) {
-        Ok(())
-      } else {
-        Err(WrongExecution)
-      }
+  }
+  if self.records_.any(record => {
+      record.execution_id == execution_id && record.outcome is Some(_)
+    }) {
+    Ok(())
+  } else {
+    Err(WrongExecution)
   }
 }
 
 ///|
-/// Stop admission then cancel/join the owned worker within the host's budget.
-/// False means cleanup is unconfirmed; ownership is retained and admission stays
-/// closed. The enclosing host TaskGroup still owns eventual cleanup.
+/// Stop admission then cancel/join every owned worker within the host's budget.
+/// The timeout bounds the whole join, not each slot. False means cleanup is
+/// unconfirmed; ownership is retained and admission stays closed. The enclosing
+/// host TaskGroup still owns eventual cleanup.
 pub async fn BoardExecutionOwner::shutdown(
   self : BoardExecutionOwner,
-  timeout_ms? : Int = 4000,
+  timeout_ms~ : Int32 = 4000,
 ) -> Bool {
   self.closed = true
   @async.protect_from_cancel(() => {
-    // A completed previous worker cannot stand in for admission/load I/O.
-    // The host must await the in-flight caller before releasing its journal.
-    if self.busy {
+    let workers : Array[@async.Task[BoardExecutionBinding]] = []
+    for slot in self.slots {
+      match slot.worker {
+        Some(task) => {
+          match slot.execution {
+            Some(owned) => {
+              owned.cancel_requested = true
+              if owned.entered {
+                task.cancel()
+              }
+            }
+            None => ()
+          }
+          workers.push(task)
+        }
+        None => ()
+      }
+    }
+    // Withdraw every occupied run even while a reservation is blocked on I/O.
+    // Joining these workers cannot stand in for joining that admission caller.
+    if self.busy || timeout_ms <= 0 {
       return false
     }
-    match self.worker {
-      None => true
-      Some(task) => {
-        match self.active {
-          Some(owned) => {
-            owned.cancel_requested = true
-            if owned.entered {
-              task.cancel()
-            }
-          }
-          None => ()
-        }
-        @async.with_timeout(timeout_ms, () => {
-          ignore(task.wait())
-          true
-        }) catch {
-          _ => false
-        }
+    if workers.is_empty() {
+      return true
+    }
+    @async.with_timeout(timeout_ms, () => {
+      for task in workers {
+        ignore(task.wait())
       }
+      true
+    }) catch {
+      _ => false
     }
   })
 }

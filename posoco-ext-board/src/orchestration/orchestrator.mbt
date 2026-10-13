@@ -1,6 +1,8 @@
 ///|
 /// Explicit dispatcher, not a background loop. All external effects and identity
-/// persistence remain owned by the supplied single S4A owner.
+/// persistence remain owned by the supplied owner, whether it is a single-slot
+/// (S4A) or capacity-bounded multi-slot (S4D) owner. This facade still
+/// serializes its own admission: one dispatch in flight at a time.
 pub struct BoardOrchestrator {
   priv owner : @execution.BoardExecutionOwner
   priv policy : ExecutionPolicy
@@ -16,7 +18,7 @@ pub struct BoardOrchestrator {
 pub fn BoardOrchestrator::BoardOrchestrator(
   owner~ : @execution.BoardExecutionOwner,
   resolver~ : &BoardExecutionInputResolver,
-  policy? : ExecutionPolicy = ExecutionPolicy(),
+  policy~ : ExecutionPolicy = ExecutionPolicy(),
 ) -> BoardOrchestrator {
   { owner, policy, resolver, busy: false, closed: false, }
 }
@@ -67,13 +69,17 @@ fn BoardOrchestrator::plan_state(
   if !status.host_available {
     global.push(HostUnavailable)
   }
-  if status.active is Some(_) {
+  // S4D: parallel owner capacity replaces the single-run global block. The
+  // plan only blocks globally when every slot is occupied; runs for tasks with
+  // an active binding are suppressed so independent tasks stay admissible.
+  if status.active is Some(_) && status.available_slots <= 0 {
     global.push(ExecutionActive)
   }
   if status.admission_busy || (include_dispatch_busy && self.busy) {
     global.push(AdmissionInProgress)
   }
   let history = self.owner.bindings()
+  let active_tasks = status.active_bindings.map(binding => binding.task_id)
   let eligible : Array[ExecutionCandidate] = []
   let blocked = plan.blocked.map(row => {
     let reasons = row.reasons.copy()
@@ -82,6 +88,9 @@ fn BoardOrchestrator::plan_state(
   })
   for candidate in plan.eligible {
     let reasons = global.copy()
+    if active_tasks.contains(candidate.task_id) {
+      reasons.push(ExecutionActive)
+    }
     if history.any(binding => binding.attempt_id == candidate.attempt_id) {
       reasons.push(IdentityAlreadyUsed)
     }
@@ -122,7 +131,7 @@ fn scope_filter(
 ///|
 /// The effective request timeout is the resolver timeout capped to the caller
 /// ceiling; a ceiling alone also bounds a resolver that supplies no timeout.
-fn capped_timeout(resolver_ms : Int?, ceiling_ms : Int?) -> Int? {
+fn capped_timeout(resolver_ms : Int32?, ceiling_ms : Int32?) -> Int32? {
   match ceiling_ms {
     None => resolver_ms
     Some(cap) =>
@@ -153,7 +162,8 @@ pub async fn BoardOrchestrator::plan(
 /// Read-only operational status; active is actual owner metadata, never inferred
 /// from a Task stage. Prompts and provider output are absent. An omitted
 /// `task_scope` plans every Task (S4B); a present one detaches from the
-/// caller's array and authorizes only its Task IDs.
+/// caller's array and authorizes only its Task IDs. With an S4D multi-slot
+/// owner, `admission_enabled` is true while a free slot remains.
 pub async fn BoardOrchestrator::status(
   self : BoardOrchestrator,
   task_scope? : Array[String],
@@ -172,7 +182,7 @@ pub async fn BoardOrchestrator::status(
         !owner.admission_busy &&
         owner.host_available &&
         !owner.unresolved &&
-        owner.active is None,
+        owner.available_slots > 0,
         dispatch_busy: self.busy,
         owner,
         plan: self.plan_state(state, true, owner, scope),
@@ -212,12 +222,25 @@ pub async fn BoardOrchestrator::board_state(
 /// gate. A false result before admission returns AdmissionStopped with no
 /// reservation and no effect; a false result at the model gate prevents
 /// provider effects on the already admitted exact run.
+///
+/// An optional `candidate` pins the exact Task/Attempt a wave runner selected:
+/// it must still be the first eligible candidate at planning and again after
+/// resolution, otherwise the result is a fresh StalePlan with no reservation or
+/// execution effect. Initial pin mismatch also skips input resolution. A queued
+/// rival Attempt can never silently replace it. With an
+/// S4D multi-slot owner each call admits one independent Task up to the
+/// owner's capacity; the owner's reservation rejections still apply.
+/// `on_admitted` synchronously hands off the exact owned handle before the
+/// cancellation checkpoint. It must not execute work or throw; bounded runners
+/// use it to retain ownership/count admission even if caller delivery cancels.
 pub async fn BoardOrchestrator::dispatch_next(
   self : BoardOrchestrator,
+  candidate? : ExecutionCandidate,
   planning_revision? : Int64,
   task_scope? : Array[String],
-  admission_guard? : () -> Bool = () => true,
-  execution_timeout_ms? : Int,
+  admission_guard~ : () -> Bool = () => true,
+  execution_timeout_ms? : Int32,
+  on_admitted~ : (@execution.BoardExecutionHandle) -> Unit = _ => (),
 ) -> Result[ExecutionDispatch, OrchestrationError] {
   if execution_timeout_ms is Some(ms) && ms <= 0 {
     return Err(InvalidDispatch)
@@ -249,9 +272,20 @@ pub async fn BoardOrchestrator::dispatch_next(
     if planning_revision is Some(revision) && revision != initial.revision {
       return Ok(StalePlan(initial))
     }
-    let candidate = match initial.eligible.get(0) {
-      Some(candidate) => candidate
-      None => return Ok(Blocked(initial))
+    // A pinned candidate must still lead the plan; a different first candidate
+    // (for example a rival Attempt queued mid-wave) is never silently admitted.
+    let candidate = match candidate {
+      Some(expected) => {
+        if initial.eligible.get(0) != Some(expected) {
+          return Ok(StalePlan(initial))
+        }
+        expected
+      }
+      None =>
+        match initial.eligible.get(0) {
+          Some(first) => first
+          None => return Ok(Blocked(initial))
+        }
     }
     let resolution = self.resolver.resolve(candidate) catch {
       _ => return Err(ResolutionFailed)
@@ -285,12 +319,20 @@ pub async fn BoardOrchestrator::dispatch_next(
     }
     match
       self.owner.execute(request, reservation_revision=fresh.revision, admission_guard=snapshot => {
-        // Recheck the caller guard at the actual scoped model gate, before
-        // durable Start. After Start, dependency changes do not cause implicit
+        // Recheck the caller guard, the pinned candidate's scope membership
+        // and the pure planner on the fresh snapshot at the actual scoped
+        // model gate, before durable Start. Active bindings are deliberately
+        // not consulted here: this run's own reserved binding must not block
+        // it. After Start, dependency changes do not cause implicit
         // cancellation. The owner invokes this guard at its protected
         // reservation and again at the gate, both before provider effects.
         let authorized = admission_guard()
+        let in_scope = match scope {
+          None => true
+          Some(ids) => ids.contains(candidate.task_id)
+        }
         let selected = authorized &&
+          in_scope &&
           !self.closed &&
           plan_execution(snapshot, self.policy, [
             {
@@ -321,6 +363,7 @@ pub async fn BoardOrchestrator::dispatch_next(
       Err(error) => Err(OwnerRejected(error))
       Ok(handle) => {
         admitted = Some(handle)
+        on_admitted(handle)
         // Deliver pending caller cancellation after the protected reservation,
         // but only once we hold the exact handle needed to cancel/join it.
         @async.pause()
@@ -365,7 +408,7 @@ pub fn BoardOrchestrator::cancel_active(
 /// operation before releasing the journal or shutting down BoardBackend.
 pub async fn BoardOrchestrator::shutdown(
   self : BoardOrchestrator,
-  timeout_ms? : Int = 4000,
+  timeout_ms~ : Int32 = 4000,
 ) -> Bool {
   self.closed = true
   let joined = self.owner.shutdown(timeout_ms~)
