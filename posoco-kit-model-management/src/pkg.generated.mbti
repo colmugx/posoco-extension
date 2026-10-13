@@ -1,0 +1,54 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-model-management"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror ModelManagerError {
+  UnknownModel(String)
+  UnsupportedEffort(String)
+  EffortNotApplicable(String)
+} derive(@debug.Debug)
+pub fn ModelManagerError::output(Self, &Logger) -> Unit
+pub fn ModelManagerError::to_repr(Self) -> @debug.Repr
+pub fn ModelManagerError::to_string(Self) -> String
+pub impl Show for ModelManagerError
+
+// Types and methods
+pub(all) struct ManagerModelInfo {
+  model_id : String
+  label : String
+  provider_id : String
+  context_window : Int?
+  capabilities : Array[String]
+  efforts : Array[String]
+  default_effort : String?
+  display_group : String?
+} derive(Eq, @debug.Debug)
+pub fn ManagerModelInfo::equal(Self, Self) -> Bool
+pub fn ManagerModelInfo::not_equal(Self, Self) -> Bool
+pub fn ManagerModelInfo::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ManagerSelection {
+  model_id : String
+  effort : String?
+  pending : Bool
+} derive(Eq, @debug.Debug)
+pub fn ManagerSelection::equal(Self, Self) -> Bool
+pub fn ManagerSelection::not_equal(Self, Self) -> Bool
+pub fn ManagerSelection::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
+pub(open) trait ModelManagerControl {
+  fn manager_id(Self) -> String
+  fn list_models(Self) -> Array[ManagerModelInfo]
+  fn active_selection(Self) -> ManagerSelection
+  fn select_model(Self, String) -> Unit raise ModelManagerError
+  fn select_effort(Self, String) -> Unit raise ModelManagerError
+}
