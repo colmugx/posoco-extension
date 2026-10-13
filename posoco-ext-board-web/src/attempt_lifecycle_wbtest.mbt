@@ -1,8 +1,8 @@
 ///|
 fn lifecycle_attempt(
   status : String,
-  id? : String = "a",
-  task_id? : String = "t",
+  id~ : String = "a",
+  task_id~ : String = "t",
 ) -> Json {
   {
     "id": id.to_json(),
@@ -48,9 +48,9 @@ fn lifecycle_model(status : String) -> Model {
 ///|
 fn lifecycle_event(
   status : String,
-  seq? : Int64 = 1L,
-  revision? : Int64 = 2L,
-  id? : String = "a",
+  seq~ : Int64 = 1L,
+  revision~ : Int64 = 2L,
+  id~ : String = "a",
 ) -> String {
   @protocol.encode_server_frame(
     Event({

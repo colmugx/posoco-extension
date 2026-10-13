@@ -4,8 +4,8 @@
 /// runtime binds, opens, closes and settles exactly once.
 priv struct FakeBoardServer {
   mut backend_installed : Bool
-  mut binds : Int
-  mut closes : Int
+  mut binds : Int32
+  mut closes : Int32
   mut alive : Bool
   mut browser : String?
 }
@@ -244,7 +244,7 @@ async test "server start requires host task-group ownership" {
 /// settle_server_task bounded wait is long enough to park in deterministically.
 priv struct SlowStopServer {
   mut backend_installed : Bool
-  mut closes : Int
+  mut closes : Int32
   mut alive : Bool
 }
 

@@ -12,7 +12,7 @@ priv struct GatedPersistStore {
 
 ///|
 fn GatedPersistStore::GatedPersistStore(
-  durable? : @domain.BoardStateSnapshot = @store.empty_snapshot(),
+  durable~ : @domain.BoardStateSnapshot = @store.empty_snapshot(),
 ) -> GatedPersistStore {
   {
     entered: @aqueue.Queue(kind=@aqueue.Blocking(1)),

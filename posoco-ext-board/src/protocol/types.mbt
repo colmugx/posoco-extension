@@ -1,7 +1,7 @@
 ///|
 pub(all) struct BoardHello {
   last_seq : Int64
-  protocol_version : Int
+  protocol_version : Int32
   /// True only when this live client context still owns an authoritative
   /// Board projection corresponding to last_seq. A persisted cursor alone
   /// is not a Board baseline.
@@ -77,7 +77,7 @@ pub extend BoardWireEvent with @moonbitlang/core/debug.Debug::{to_repr}
 /// Board projection once the domain stage lands; transport sequencing stays
 /// separate through `last_seq` and `board_revision`.
 pub(all) struct BoardSnapshot {
-  protocol_version : Int
+  protocol_version : Int32
   last_seq : Int64
   board_revision : Int64
   payload : Json
@@ -153,7 +153,7 @@ pub fn BoardCommandDecodeError::code(self : BoardCommandDecodeError) -> String {
 pub(all) enum BoardProtocolError {
   InvalidJson(String)
   InvalidFrame(String)
-  UnsupportedVersion(expected~ : Int, got~ : Int)
+  UnsupportedVersion(expected~ : Int32, got~ : Int32)
 } derive(Eq, Debug)
 
 ///|

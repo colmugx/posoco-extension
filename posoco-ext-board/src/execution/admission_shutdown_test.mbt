@@ -1,7 +1,7 @@
 ///|
 struct GatedJournal {
   inner : @execution.MemoryBoardExecutionStore
-  mut writes : Int
+  mut writes : Int32
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
 }

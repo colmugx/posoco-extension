@@ -17,8 +17,8 @@ fn dependency_task_json(id : String, dependencies : Array[String]) -> Json {
 ///|
 fn inspector_snapshot(
   tasks : Array[Json],
-  attempts? : Array[Json] = [],
-  revision? : Int64 = 1L,
+  attempts~ : Array[Json] = [],
+  revision~ : Int64 = 1L,
 ) -> String {
   @protocol.encode_server_frame(
     Snapshot({
@@ -56,8 +56,8 @@ fn inspector_model() -> Model {
 ///|
 fn dependency_event(
   dependencies : Array[String],
-  seq? : Int64 = 1L,
-  revision? : Int64 = 2L,
+  seq~ : Int64 = 1L,
+  revision~ : Int64 = 2L,
 ) -> String {
   @protocol.encode_server_frame(
     Event({

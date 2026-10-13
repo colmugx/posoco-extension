@@ -1,18 +1,18 @@
 ///|
-fn projection_id(value? : String = "t1") -> @domain.BoardTaskId {
+fn projection_id(value~ : String = "t1") -> @domain.BoardTaskId {
   @domain.BoardTaskId::BoardTaskId(value)
 }
 
 ///|
-fn projection_attempt_id(value? : String = "a1") -> @domain.AttemptId {
+fn projection_attempt_id(value~ : String = "a1") -> @domain.AttemptId {
   @domain.AttemptId::AttemptId(value)
 }
 
 ///|
 fn projection_task(
-  stage? : @domain.BoardStage = @domain.Ready,
-  ready_since_ms? : Int64? = Some(15L),
-  dependencies? : Array[@domain.BoardTaskId] = [
+  stage~ : @domain.BoardStage = @domain.Ready,
+  ready_since_ms~ : Int64? = Some(15L),
+  dependencies~ : Array[@domain.BoardTaskId] = [
     projection_id(value="t2"),
     projection_id(value="t3"),
   ],
@@ -49,12 +49,12 @@ fn projection_task_t2() -> @domain.BoardTask {
 
 ///|
 fn projection_attempt(
-  kind? : @domain.AttemptKind = @domain.Execute,
-  status? : @domain.AttemptStatus = @domain.Queued,
-  review? : @domain.ReviewDecision? = None,
-  started_at_ms? : Int64? = None,
-  finished_at_ms? : Int64? = None,
-  updated_at_ms? : Int64 = 25L,
+  kind~ : @domain.AttemptKind = @domain.Execute,
+  status~ : @domain.AttemptStatus = @domain.Queued,
+  review~ : @domain.ReviewDecision? = None,
+  started_at_ms~ : Int64? = None,
+  finished_at_ms~ : Int64? = None,
+  updated_at_ms~ : Int64 = 25L,
 ) -> @domain.Attempt {
   @domain.Attempt::from_record(
     id=projection_attempt_id(),
@@ -71,9 +71,9 @@ fn projection_attempt(
 
 ///|
 fn projection_snapshot(
-  revision? : Int64 = 7L,
-  tasks? : Array[@domain.BoardTask] = [],
-  attempts? : Array[@domain.Attempt] = [],
+  revision~ : Int64 = 7L,
+  tasks~ : Array[@domain.BoardTask] = [],
+  attempts~ : Array[@domain.Attempt] = [],
 ) -> @domain.BoardStateSnapshot {
   { revision, tasks, attempts, }
 }
@@ -145,7 +145,7 @@ fn expected_attempt(
   review~ : Json,
   started_at_ms~ : Json,
   finished_at_ms~ : Json,
-  updated_at_ms~ : Int,
+  updated_at_ms~ : Int32,
 ) -> Json {
   {
     "id": "a1",

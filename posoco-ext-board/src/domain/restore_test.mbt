@@ -55,11 +55,11 @@ fn restore_seed() -> @domain.BoardState {
 ///|
 fn restored_task(
   id~ : String,
-  title? : String = "task",
-  created_at_ms? : Int64 = 1L,
-  updated_at_ms? : Int64 = 1L,
-  definition_of_done? : Array[String] = [],
-  dependencies? : Array[@domain.BoardTaskId] = [],
+  title~ : String = "task",
+  created_at_ms~ : Int64 = 1L,
+  updated_at_ms~ : Int64 = 1L,
+  definition_of_done~ : Array[String] = [],
+  dependencies~ : Array[@domain.BoardTaskId] = [],
 ) -> @domain.BoardTask {
   @domain.BoardTask::from_record(
     id=@domain.BoardTaskId(id),
@@ -79,8 +79,8 @@ fn restored_task(
 fn restored_attempt(
   id~ : String,
   task~ : String,
-  created_at_ms? : Int64 = 1L,
-  updated_at_ms? : Int64 = 1L,
+  created_at_ms~ : Int64 = 1L,
+  updated_at_ms~ : Int64 = 1L,
 ) -> @domain.Attempt {
   @domain.Attempt::from_record(
     id=@domain.AttemptId(id),
@@ -97,9 +97,9 @@ fn restored_attempt(
 
 ///|
 fn restored_snapshot(
-  revision? : Int64 = 0L,
+  revision~ : Int64 = 0L,
   tasks~ : Array[@domain.BoardTask],
-  attempts? : Array[@domain.Attempt] = [],
+  attempts~ : Array[@domain.Attempt] = [],
 ) -> @domain.BoardStateSnapshot {
   { revision, tasks, attempts, }
 }

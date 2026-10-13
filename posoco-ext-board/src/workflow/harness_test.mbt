@@ -12,7 +12,7 @@ struct FakeClock {
 }
 
 ///|
-fn fake_clock(now? : Int64 = 0L) -> FakeClock {
+fn fake_clock(now~ : Int64 = 0L) -> FakeClock {
   { now_ms: now, }
 }
 
@@ -25,14 +25,14 @@ fn fake_clock(now? : Int64 = 0L) -> FakeClock {
 struct ScriptedResolver {
   available : Array[String]
   denied : Array[String]
-  mut seq : Int
+  mut seq : Int32
   execution_ids : Array[String]
   session_ids : Array[String]
   inputs : Array[String]
   resolved_attempts : Array[String]
   mut stale_backend : @backend.BoardBackend?
-  mut stale_left : Int
-  mut delay_ms : Int
+  mut stale_left : Int32
+  mut delay_ms : Int32
 }
 
 ///|
@@ -112,7 +112,7 @@ impl @orchestration.BoardExecutionInputResolver for ScriptedResolver with fn res
 /// owner settles as an unconfirmed (Unresolved) journal record.
 struct ScriptedAdapter {
   ready_ : Bool
-  mut failures_left : Int
+  mut failures_left : Int32
   outcome : @execution.BoardExecutionOutcome
   hold : Bool
   call_gate : Bool
@@ -120,17 +120,17 @@ struct ScriptedAdapter {
   release : @aqueue.Queue[Unit]
   requests : Array[@execution.BoardExecutionRequest]
   run_order : Array[String]
-  mut runs : Int
-  mut active : Int
-  mut max_active : Int
+  mut runs : Int32
+  mut active : Int32
+  mut max_active : Int32
 }
 
 ///|
 fn scripted_adapter(
-  hold? : Bool = false,
-  failures? : Int = 0,
-  call_gate? : Bool = true,
-  outcome? : @execution.BoardExecutionOutcome = @execution.Completed,
+  hold~ : Bool = false,
+  failures~ : Int32 = 0,
+  call_gate~ : Bool = true,
+  outcome~ : @execution.BoardExecutionOutcome = @execution.Completed,
 ) -> ScriptedAdapter {
   {
     ready_: true,
@@ -212,7 +212,7 @@ async fn workflow_command(
 async fn workflow_task(
   backend : @backend.BoardBackend,
   id : String,
-  attempts? : Int = 1,
+  attempts~ : Int32 = 1,
 ) -> Unit {
   workflow_command(backend, "board.task.create", {
     "id": id,
@@ -274,11 +274,11 @@ struct WorkflowHarness {
 async fn workflow_harness(
   group : @async.TaskGroup[Unit],
   tasks~ : Array[String],
-  adapter? : ScriptedAdapter = scripted_adapter(),
-  clock? : FakeClock = fake_clock(),
-  resolver? : ScriptedResolver? = None,
-  store? : &@execution.BoardExecutionStore = @execution.MemoryBoardExecutionStore(),
-  policy_enabled? : Bool = true,
+  adapter~ : ScriptedAdapter = scripted_adapter(),
+  clock~ : FakeClock = fake_clock(),
+  resolver~ : ScriptedResolver? = None,
+  store~ : &@execution.BoardExecutionStore = @execution.MemoryBoardExecutionStore(),
+  policy_enabled~ : Bool = true,
 ) -> WorkflowHarness {
   let backend = workflow_board(group, tasks~)
   let available : Array[String] = []
@@ -306,12 +306,12 @@ async fn workflow_harness(
 /// Explicit run specification with valid defaults; tests override one field
 /// at a time.
 fn workflow_spec(
-  run_id? : String = "run-1",
-  scope? : @workflow.WorkflowScope = @workflow.AllEligibleAtStart,
-  max_executions? : Int = 10,
-  max_elapsed_ms? : Int = 60000,
-  execution_timeout_ms? : Int = 30000,
-  failure_policy? : @workflow.WorkflowFailurePolicy = @workflow.StopOnFailure,
+  run_id~ : String = "run-1",
+  scope~ : @workflow.WorkflowScope = @workflow.AllEligibleAtStart,
+  max_executions~ : Int32 = 10,
+  max_elapsed_ms~ : Int32 = 60000,
+  execution_timeout_ms~ : Int32 = 30000,
+  failure_policy~ : @workflow.WorkflowFailurePolicy = @workflow.StopOnFailure,
 ) -> @workflow.WorkflowRunSpec {
   {
     run_id,

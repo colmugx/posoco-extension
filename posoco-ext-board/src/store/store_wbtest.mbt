@@ -840,7 +840,7 @@ test "from domain snapshot converts every field and detaches arrays" {
 ///|
 fn journal_line(
   event : @domain.BoardEvent,
-  revision? : Int64 = 17L,
+  revision~ : Int64 = 17L,
 ) -> Result[String, BoardStoreError] {
   encode_journal_record({ schema_version: 1, revision, event, })
 }

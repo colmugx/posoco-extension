@@ -1,16 +1,16 @@
 ///|
 struct OrchResolver {
-  mut calls : Int
+  mut calls : Int32
   mut hint : @orchestration.ExecutionInputStatus
   mut resolution : @orchestration.ExecutionInputResolution?
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
   block : Bool
-  mut timeout_ms : Int?
+  mut timeout_ms : Int32?
 }
 
 ///|
-fn orch_resolver(block? : Bool = false) -> OrchResolver {
+fn orch_resolver(block~ : Bool = false) -> OrchResolver {
   {
     calls: 0,
     hint: @orchestration.Available,
@@ -54,10 +54,10 @@ impl @orchestration.BoardExecutionInputResolver for OrchResolver with fn resolve
 
 ///|
 struct OrchAdapter {
-  mut calls : Int
-  mut effects : Int
+  mut calls : Int32
+  mut effects : Int32
   mut available : Bool
-  mut seen_timeout : Int?
+  mut seen_timeout : Int32?
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
   before_gate : @aqueue.Queue[Unit]
@@ -68,8 +68,8 @@ struct OrchAdapter {
 
 ///|
 fn orch_adapter(
-  block? : Bool = false,
-  delay_gate? : Bool = false,
+  block~ : Bool = false,
+  delay_gate~ : Bool = false,
 ) -> OrchAdapter {
   {
     calls: 0,
@@ -136,7 +136,7 @@ async fn orch_command(
 ///|
 async fn orch_board(
   group : @async.TaskGroup[Unit],
-  store? : &@store.BoardStore = @store.MemoryBoardStore(),
+  store~ : &@store.BoardStore = @store.MemoryBoardStore(),
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store~, now_ms=() => 1234L)
   backend.attach(group)
@@ -188,19 +188,19 @@ fn orch_handle(
 ///|
 struct OrchJournal {
   mut records : Array[@execution.BoardExecutionBinding]
-  mut writes : Int
-  fail_at : Int
+  mut writes : Int32
+  fail_at : Int32
   visible_failure : Bool
-  hold_at : Int
+  hold_at : Int32
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
 }
 
 ///|
 fn orch_journal(
-  fail_at? : Int = -1,
-  visible_failure? : Bool = false,
-  hold_at? : Int = -1,
+  fail_at~ : Int32 = -1,
+  visible_failure~ : Bool = false,
+  hold_at~ : Int32 = -1,
 ) -> OrchJournal {
   {
     records: [],

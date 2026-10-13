@@ -4,9 +4,9 @@
 fn review_attempt_json(
   status : String,
   review : String,
-  id? : String = "a",
-  task_id? : String = "t",
-  kind? : String = "review",
+  id~ : String = "a",
+  task_id~ : String = "t",
+  kind~ : String = "review",
 ) -> Json {
   {
     "id": id.to_json(),
@@ -39,7 +39,7 @@ fn review_attempt_json(
 fn review_model(
   status : String,
   review : String,
-  kind? : String = "review",
+  kind~ : String = "review",
 ) -> Model {
   let replica = @client.BoardReplica::empty()
   guard replica.apply_text(
@@ -62,12 +62,12 @@ fn review_model(
 ///|
 /// One authoritative `board.review.recorded` event replacing the attempt.
 fn review_recorded_event(
-  decision? : String = "approved",
-  review? : String = "approved",
-  status? : String = "running",
-  seq? : Int64 = 1L,
-  revision? : Int64 = 2L,
-  id? : String = "a",
+  decision~ : String = "approved",
+  review~ : String = "approved",
+  status~ : String = "running",
+  seq~ : Int64 = 1L,
+  revision~ : Int64 = 2L,
+  id~ : String = "a",
 ) -> String {
   @protocol.encode_server_frame(
     Event({

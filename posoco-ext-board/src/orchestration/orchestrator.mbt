@@ -16,7 +16,7 @@ pub struct BoardOrchestrator {
 pub fn BoardOrchestrator::BoardOrchestrator(
   owner~ : @execution.BoardExecutionOwner,
   resolver~ : &BoardExecutionInputResolver,
-  policy? : ExecutionPolicy = ExecutionPolicy(),
+  policy~ : ExecutionPolicy = ExecutionPolicy(),
 ) -> BoardOrchestrator {
   { owner, policy, resolver, busy: false, closed: false, }
 }
@@ -122,7 +122,7 @@ fn scope_filter(
 ///|
 /// The effective request timeout is the resolver timeout capped to the caller
 /// ceiling; a ceiling alone also bounds a resolver that supplies no timeout.
-fn capped_timeout(resolver_ms : Int?, ceiling_ms : Int?) -> Int? {
+fn capped_timeout(resolver_ms : Int32?, ceiling_ms : Int32?) -> Int32? {
   match ceiling_ms {
     None => resolver_ms
     Some(cap) =>
@@ -216,8 +216,8 @@ pub async fn BoardOrchestrator::dispatch_next(
   self : BoardOrchestrator,
   planning_revision? : Int64,
   task_scope? : Array[String],
-  admission_guard? : () -> Bool = () => true,
-  execution_timeout_ms? : Int,
+  admission_guard~ : () -> Bool = () => true,
+  execution_timeout_ms? : Int32,
 ) -> Result[ExecutionDispatch, OrchestrationError] {
   if execution_timeout_ms is Some(ms) && ms <= 0 {
     return Err(InvalidDispatch)
@@ -365,7 +365,7 @@ pub fn BoardOrchestrator::cancel_active(
 /// operation before releasing the journal or shutting down BoardBackend.
 pub async fn BoardOrchestrator::shutdown(
   self : BoardOrchestrator,
-  timeout_ms? : Int = 4000,
+  timeout_ms~ : Int32 = 4000,
 ) -> Bool {
   self.closed = true
   let joined = self.owner.shutdown(timeout_ms~)

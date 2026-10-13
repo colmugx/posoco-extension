@@ -1,5 +1,5 @@
 ///|
-async fn board_http_get(url : String) -> (Int, String) {
+async fn board_http_get(url : String) -> (Int32, String) {
   let (response, body) = @http.get(url)
   (response.code, body.text())
 }

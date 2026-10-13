@@ -1,6 +1,6 @@
 ///|
 struct WithdrawalProbe {
-  mut inspections : Int
+  mut inspections : Int32
 }
 
 ///|

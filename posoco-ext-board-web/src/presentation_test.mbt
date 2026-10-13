@@ -19,7 +19,7 @@ fn attempt_json(
   id : String,
   task_id : String,
   status : String,
-  at_ms : Int,
+  at_ms : Int32,
 ) -> Json {
   {
     "id": id.to_json(),

@@ -51,7 +51,7 @@ fn required_int64(
 fn required_int(
   fields : Map[String, Json],
   key : String,
-) -> Result[Int, BoardProtocolError] {
+) -> Result[Int32, BoardProtocolError] {
   match required_int64(fields, key) {
     Ok(value) if value <= 2147483647L => Ok(value.to_int())
     Ok(_) => Err(InvalidFrame("field '\{key}' exceeds integer range"))

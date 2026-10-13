@@ -170,7 +170,7 @@ pub fn tasks_in_lane(
 fn attempt_order(
   left : @client.ClientAttempt,
   right : @client.ClientAttempt,
-) -> Int {
+) -> Int32 {
   let created = left.created_at_ms.compare(right.created_at_ms)
   if created == 0 {
     left.id.compare(right.id)
@@ -349,7 +349,7 @@ fn status_text(model : Model) -> String {
 }
 
 ///|
-pub fn attempt_count(replica : @client.BoardReplica, task_id : String) -> Int {
+pub fn attempt_count(replica : @client.BoardReplica, task_id : String) -> Int32 {
   replica.attempts().filter(attempt => attempt.task_id == task_id).length()
 }
 

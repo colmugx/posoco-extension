@@ -1,7 +1,7 @@
 ///|
 struct RealAgentProbe {
-  mut calls : Int
-  mut stopped : Int
+  mut calls : Int32
+  mut stopped : Int32
   scopes : Array[(String, String)]
   fail : Bool
   block : Bool
@@ -82,9 +82,9 @@ impl @posoco.ModelPort for RealAgentProbe with fn compact(
 
 ///|
 fn probe(
-  fail? : Bool = false,
-  block? : Bool = false,
-  check? : (async (String, String) -> Unit)? = None,
+  fail~ : Bool = false,
+  block~ : Bool = false,
+  check~ : (async (String, String) -> Unit)? = None,
 ) -> RealAgentProbe {
   {
     calls: 0,
@@ -100,7 +100,7 @@ fn probe(
 ///|
 async fn prepared_board(
   group : @async.TaskGroup[Unit],
-  store? : &@store.BoardStore = @store.MemoryBoardStore(),
+  store~ : &@store.BoardStore = @store.MemoryBoardStore(),
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store~, now_ms=() => 1234L)
   backend.attach(group)
@@ -130,7 +130,7 @@ async fn prepared_board(
 }
 
 ///|
-fn request(timeout? : Int? = None) -> @execution.BoardExecutionRequest {
+fn request(timeout~ : Int32? = None) -> @execution.BoardExecutionRequest {
   {
     task_id: "task",
     attempt_id: "attempt",

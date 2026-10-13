@@ -13,7 +13,7 @@ async fn board_test_frame(ws : @websocket.Conn) -> @protocol.BoardServerFrame {
 async fn board_test_hello(
   ws : @websocket.Conn,
   cursor : Int64,
-  has_board_snapshot? : Bool = false,
+  has_board_snapshot~ : Bool = false,
 ) -> Unit {
   ws.send_text(
     @protocol.encode_client_frame(
@@ -29,7 +29,7 @@ async fn board_test_hello(
 ///|
 async fn board_wait_clients(
   backend : @backend.BoardBackend,
-  count : Int,
+  count : Int32,
 ) -> Unit {
   @async.with_timeout(1000, () => {
     while backend.subscriber_count() != count {

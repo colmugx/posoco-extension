@@ -15,14 +15,14 @@ fn[T : Eq] assert_eq_eq(
 
 ///|
 fn wire_task(
-  id? : String = "t1",
-  stage? : String = "created",
-  priority? : String = "normal",
-  dod? : Array[Json] = ["unit tests"],
-  deps? : Array[Json] = [],
-  created? : Json = Json::number(1000),
-  updated? : Json = Json::number(2000),
-  ready? : Json = Json::null(),
+  id~ : String = "t1",
+  stage~ : String = "created",
+  priority~ : String = "normal",
+  dod~ : Array[Json] = ["unit tests"],
+  deps~ : Array[Json] = [],
+  created~ : Json = Json::number(1000),
+  updated~ : Json = Json::number(2000),
+  ready~ : Json = Json::null(),
 ) -> Json {
   Json::object({
     "id": Json::string(id),
@@ -40,13 +40,13 @@ fn wire_task(
 
 ///|
 fn wire_attempt(
-  id? : String = "a1",
-  task_id? : String = "t1",
-  kind? : String = "execute",
-  status? : String = "queued",
-  review? : Json = Json::null(),
-  started? : Json = Json::null(),
-  finished? : Json = Json::null(),
+  id~ : String = "a1",
+  task_id~ : String = "t1",
+  kind~ : String = "execute",
+  status~ : String = "queued",
+  review~ : Json = Json::null(),
+  started~ : Json = Json::null(),
+  finished~ : Json = Json::null(),
 ) -> Json {
   Json::object({
     "id": Json::string(id),
@@ -62,7 +62,7 @@ fn wire_attempt(
 }
 
 ///|
-fn task_payload(task? : Json = wire_task(), task_id? : String = "t1") -> Json {
+fn task_payload(task~ : Json = wire_task(), task_id~ : String = "t1") -> Json {
   Json::object({
     "task_id": Json::string(task_id),
     "task": task,
@@ -72,9 +72,9 @@ fn task_payload(task? : Json = wire_task(), task_id? : String = "t1") -> Json {
 
 ///|
 fn attempt_payload(
-  attempt? : Json = wire_attempt(),
-  attempt_id? : String = "a1",
-  task_id? : String = "t1",
+  attempt~ : Json = wire_attempt(),
+  attempt_id~ : String = "a1",
+  task_id~ : String = "t1",
 ) -> Json {
   Json::object({
     "attempt_id": Json::string(attempt_id),
@@ -87,9 +87,9 @@ fn attempt_payload(
 fn task_event(
   seq~ : Int64,
   revision~ : Int64,
-  kind? : String = "board.task.created",
-  task? : Json = wire_task(),
-  task_id? : String = "t1",
+  kind~ : String = "board.task.created",
+  task~ : Json = wire_task(),
+  task_id~ : String = "t1",
 ) -> @protocol.BoardWireEvent {
   {
     seq,
@@ -104,10 +104,10 @@ fn task_event(
 fn attempt_event(
   seq~ : Int64,
   revision~ : Int64,
-  kind? : String = "board.attempt.queued",
-  attempt? : Json = wire_attempt(),
-  attempt_id? : String = "a1",
-  task_id? : String = "t1",
+  kind~ : String = "board.attempt.queued",
+  attempt~ : Json = wire_attempt(),
+  attempt_id~ : String = "a1",
+  task_id~ : String = "t1",
 ) -> @protocol.BoardWireEvent {
   {
     seq,
@@ -138,9 +138,9 @@ fn suffix_event(
 fn snapshot_frame(
   revision~ : Int64,
   last_seq~ : Int64,
-  tasks? : Array[Json] = [],
-  attempts? : Array[Json] = [],
-  events? : Array[Json] = [],
+  tasks~ : Array[Json] = [],
+  attempts~ : Array[Json] = [],
+  events~ : Array[Json] = [],
 ) -> @protocol.BoardSnapshot {
   {
     protocol_version: @protocol.protocol_version(),
@@ -159,9 +159,9 @@ fn snapshot_frame(
 
 ///|
 fn seeded(
-  revision? : Int64 = 1L,
-  last_seq? : Int64 = 1L,
-  suffix? : Array[Json] = [
+  revision~ : Int64 = 1L,
+  last_seq~ : Int64 = 1L,
+  suffix~ : Array[Json] = [
     suffix_event(
       seq=1L,
       revision=1L,

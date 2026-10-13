@@ -25,10 +25,10 @@ pub struct BoardBackend {
 /// }
 /// ```
 pub fn BoardBackend::BoardBackend(
-  event_buffer? : Int = 4096,
-  client_queue_depth? : Int = 256,
-  store? : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore(),
-  now_ms? : () -> Int64 = () => 0L,
+  event_buffer~ : Int32 = 4096,
+  client_queue_depth~ : Int32 = 256,
+  store~ : &@store.BoardStore = @store.MemoryBoardStore::MemoryBoardStore(),
+  now_ms~ : () -> Int64 = () => 0L,
 ) -> BoardBackend {
   let hub = BoardEventHub(capacity=event_buffer, client_queue_depth~)
   {
@@ -118,7 +118,7 @@ pub fn BoardBackend::publish_telemetry(
   self : BoardBackend,
   board_revision~ : Int64,
   kind~ : String,
-  scope? : @protocol.BoardEventScope? = None,
+  scope~ : @protocol.BoardEventScope? = None,
   payload~ : Json,
 ) -> @protocol.BoardWireEvent {
   self.hub.publish(board_revision~, kind~, scope~, payload~)
@@ -126,6 +126,6 @@ pub fn BoardBackend::publish_telemetry(
 
 ///|
 /// Number of live subscriptions, for tests and host diagnostics.
-pub fn BoardBackend::subscriber_count(self : BoardBackend) -> Int {
+pub fn BoardBackend::subscriber_count(self : BoardBackend) -> Int32 {
   self.hub.subscriber_count()
 }

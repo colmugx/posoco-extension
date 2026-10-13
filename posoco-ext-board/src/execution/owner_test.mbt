@@ -1,8 +1,8 @@
 ///|
 struct ScriptedJournal {
   mut records : Array[@execution.BoardExecutionBinding]
-  mut writes : Int
-  fail_write : Int
+  mut writes : Int32
+  fail_write : Int32
   visible_failure : Bool
 }
 
@@ -29,16 +29,16 @@ impl @execution.BoardExecutionStore for ScriptedJournal with fn persist(
 
 ///|
 fn journal(
-  fail_write? : Int = -1,
-  visible_failure? : Bool = false,
+  fail_write~ : Int32 = -1,
+  visible_failure~ : Bool = false,
 ) -> ScriptedJournal {
   { records: [], writes: 0, fail_write, visible_failure, }
 }
 
 ///|
 struct ControlledAdapter {
-  mut calls : Int
-  mut effects : Int
+  mut calls : Int32
+  mut effects : Int32
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
   block : Bool
@@ -50,11 +50,11 @@ struct ControlledAdapter {
 
 ///|
 fn controlled(
-  block? : Bool = false,
-  wrong_scope? : Bool = false,
-  repeat_gate? : Bool = false,
-  available? : Bool = true,
-  outcome? : @execution.BoardExecutionOutcome = @execution.Completed,
+  block~ : Bool = false,
+  wrong_scope~ : Bool = false,
+  repeat_gate~ : Bool = false,
+  available~ : Bool = true,
+  outcome~ : @execution.BoardExecutionOutcome = @execution.Completed,
 ) -> ControlledAdapter {
   {
     calls: 0,
@@ -358,7 +358,7 @@ struct FailingBoardStorage {
   inner : @store.MemoryBoardStore
   mut fail : Bool
   uncertain : Bool
-  mut failures : Int
+  mut failures : Int32
 }
 
 ///|

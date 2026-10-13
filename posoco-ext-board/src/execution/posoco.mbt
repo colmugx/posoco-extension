@@ -23,8 +23,8 @@ pub struct PosocoBoardExecutionAdapter {
 /// ```
 pub fn PosocoBoardExecutionAdapter::PosocoBoardExecutionAdapter(
   extensions~ : () -> Array[&@posoco.Extension],
-  config? : @posoco.AgentConfig = @posoco.agent_config(),
-  available? : () -> Bool = () => true,
+  config~ : @posoco.AgentConfig = @posoco.agent_config(),
+  available~ : () -> Bool = () => true,
 ) -> PosocoBoardExecutionAdapter {
   { extensions, config, available, active: false, }
 }

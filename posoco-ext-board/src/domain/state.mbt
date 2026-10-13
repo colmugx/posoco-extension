@@ -65,7 +65,7 @@ pub fn BoardState::snapshot(self : BoardState) -> BoardStateSnapshot {
 
 ///|
 /// Deterministic listing order; ids make the order total.
-fn compare_task_order(a : BoardTask, b : BoardTask) -> Int {
+fn compare_task_order(a : BoardTask, b : BoardTask) -> Int32 {
   let rank = b.priority.rank() - a.priority.rank()
   if rank != 0 {
     return rank
@@ -77,7 +77,7 @@ fn compare_task_order(a : BoardTask, b : BoardTask) -> Int {
 }
 
 ///|
-fn compare_attempt_order(a : Attempt, b : Attempt) -> Int {
+fn compare_attempt_order(a : Attempt, b : Attempt) -> Int32 {
   if a.created_at_ms != b.created_at_ms {
     return if a.created_at_ms < b.created_at_ms { -1 } else { 1 }
   }

@@ -5,7 +5,7 @@ fn filter_task_json(
   description : String,
   stage : String,
   priority : String,
-  created_at_ms : Int,
+  created_at_ms : Int32,
 ) -> Json {
   {
     "id": id.to_json(),

@@ -3,7 +3,7 @@
 /// never crosses this value boundary.
 pub(all) struct BoardEndpoint {
   host : String
-  port : Int
+  port : Int32
 } derive(Eq, Debug)
 
 ///|

@@ -52,7 +52,7 @@ test "embedded dashboard identity and manifest based public resource policy" {
 ///|
 async fn board_http_raw(
   url : String,
-  meth? : @http.RequestMethod = Get,
+  meth~ : @http.RequestMethod = Get,
 ) -> (@http.Response, Bytes) {
   let (response, body) = @http.request(url, meth, {}, b"")
   (response, body.binary())

@@ -2,7 +2,7 @@
 fn status_attempt_json(
   id : String,
   status : String,
-  created_at_ms : Int,
+  created_at_ms : Int32,
 ) -> Json {
   {
     "id": id.to_json(),

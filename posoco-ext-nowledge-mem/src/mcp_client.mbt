@@ -187,7 +187,7 @@ fn call_result_text(result : @client.CallToolResult) -> String {
   let parts : Array[String] = []
   for item in result.content {
     match item {
-      @types.ContentItem::Text(text) => parts.push(text)
+      @types.ContentBlock::Text(text, ..) => parts.push(text)
       _ => ()
     }
   }
@@ -233,7 +233,10 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
         )
       }
     }
-    Ok({ is_error: result.is_error, text: call_result_text(result), })
+    Ok({
+      is_error: result.is_error.unwrap_or(false),
+      text: call_result_text(result),
+    })
   }) catch {
     @async.TimeoutError => {
       self.drop_connection()

@@ -115,7 +115,7 @@ fn convert_tool_def(
     name: @posoco.ToolName::unchecked(
       namespaced_tool_name(server_name, mcp_tool.name),
     ),
-    description: mcp_tool.description,
+    description: mcp_tool.description.unwrap_or(""),
     input_schema: sanitize_tool_schema(mcp_tool.input_schema),
     owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
     policy: @posoco.ExecutionPolicy::Parallel,
@@ -124,22 +124,24 @@ fn convert_tool_def(
 }
 
 ///|
-/// Convert MCP ContentItem array to a plain text string.
-fn convert_content_to_string(items : Array[@types.ContentItem]) -> String {
+/// Convert MCP ContentBlock array to a plain text string.
+fn convert_content_to_string(items : Array[@types.ContentBlock]) -> String {
   items
   .map(fn(item) {
     match item {
-      @types.ContentItem::Text(t) => t
-      @types.ContentItem::Image(data, mime_type~) =>
+      @types.ContentBlock::Text(t, ..) => t
+      @types.ContentBlock::Image(data, mime_type~, ..) =>
         "[Image: \{mime_type}, \{data.length()} chars]"
-      @types.ContentItem::ResourceLink(uri) => "[Resource: \{uri}]"
-      @types.ContentItem::EmbeddedResource(content) =>
-        match content {
-          @types.EmbeddedResourceContent::Text(t, uri~, ..) =>
-            "[Resource \{uri}]: \{t}"
-          @types.EmbeddedResourceContent::Blob(b, uri~, ..) =>
-            "[Resource \{uri}]: [blob \{b.length()} chars]"
+      @types.ContentBlock::Audio(data, mime_type~, ..) =>
+        "[Audio: \{mime_type}, \{data.length()} chars]"
+      @types.ContentBlock::ResourceLink(data, ..) => "[Resource: \{data.uri}]"
+      @types.ContentBlock::EmbeddedResource(contents, ..) =>
+        match contents.data {
+          @types.ResourceData::Text(t) => "[Resource \{contents.uri}]: \{t}"
+          @types.ResourceData::Blob(b) =>
+            "[Resource \{contents.uri}]: [blob \{b.length()} chars]"
         }
+      @types.ContentBlock::Unknown(_) => "[Unknown content]"
     }
   })
   .join("\n")
@@ -1586,17 +1588,18 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
       // report. Only the typed failure surfaces here.
       raise mcp_call_failure(failure, original_name)
   }
+  let is_error = result.is_error.unwrap_or(false)
   let raw = convert_content_to_string(result.content)
   let (content, truncated) = mcp_model_text(
     raw,
-    if result.is_error {
+    if is_error {
       MCP_ERROR_OUTPUT_CHARS
     } else {
       MCP_SUCCESS_OUTPUT_CHARS
     },
   )
   let structured = mcp_outcome_structured(truncated)
-  if result.is_error {
+  if is_error {
     @posoco.ToolOutcome::ToolReportedError(content~, structured~)
   } else {
     @posoco.ToolOutcome::Success(content~, structured~)

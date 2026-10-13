@@ -165,7 +165,7 @@ fn eligible(
 pub async fn BoardExecutionOwner::execute(
   self : BoardExecutionOwner,
   request : BoardExecutionRequest,
-  admission_guard? : (@domain.BoardStateSnapshot) -> Bool = _ => true,
+  admission_guard~ : (@domain.BoardStateSnapshot) -> Bool = _ => true,
   reservation_revision? : Int64,
 ) -> Result[BoardExecutionHandle, BoardExecutionError] {
   if self.closed {
@@ -491,7 +491,7 @@ pub fn BoardExecutionOwner::cancel(
 /// closed. The enclosing host TaskGroup still owns eventual cleanup.
 pub async fn BoardExecutionOwner::shutdown(
   self : BoardExecutionOwner,
-  timeout_ms? : Int = 4000,
+  timeout_ms~ : Int32 = 4000,
 ) -> Bool {
   self.closed = true
   @async.protect_from_cancel(() => {

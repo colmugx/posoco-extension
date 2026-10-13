@@ -115,7 +115,7 @@ test "recovery leaves every non-running stage and status unchanged and detached"
 priv struct RejectingStore {
   failure : BoardStoreError
   fail_load : Bool
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|

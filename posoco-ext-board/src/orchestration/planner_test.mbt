@@ -4,10 +4,10 @@
 /// ties stay legal snapshot input.
 fn planner_task(
   id~ : String,
-  stage? : @domain.BoardStage = @domain.Ready,
-  priority? : @domain.BoardPriority = @domain.Normal,
-  created_at_ms? : Int64 = 1L,
-  dependencies? : Array[@domain.BoardTaskId] = [],
+  stage~ : @domain.BoardStage = @domain.Ready,
+  priority~ : @domain.BoardPriority = @domain.Normal,
+  created_at_ms~ : Int64 = 1L,
+  dependencies~ : Array[@domain.BoardTaskId] = [],
 ) -> @domain.BoardTask {
   @domain.BoardTask::from_record(
     id=@domain.BoardTaskId(id),
@@ -27,9 +27,9 @@ fn planner_task(
 fn planner_attempt(
   id~ : String,
   task~ : String,
-  kind? : @domain.AttemptKind = @domain.Execute,
-  status? : @domain.AttemptStatus = @domain.Queued,
-  created_at_ms? : Int64 = 1L,
+  kind~ : @domain.AttemptKind = @domain.Execute,
+  status~ : @domain.AttemptStatus = @domain.Queued,
+  created_at_ms~ : Int64 = 1L,
 ) -> @domain.Attempt {
   @domain.Attempt::from_record(
     id=@domain.AttemptId(id),
@@ -46,9 +46,9 @@ fn planner_attempt(
 
 ///|
 fn planner_snapshot(
-  revision? : Int64 = 0L,
-  tasks? : Array[@domain.BoardTask] = [],
-  attempts? : Array[@domain.Attempt] = [],
+  revision~ : Int64 = 0L,
+  tasks~ : Array[@domain.BoardTask] = [],
+  attempts~ : Array[@domain.Attempt] = [],
 ) -> @domain.BoardStateSnapshot {
   { revision, tasks, attempts, }
 }
@@ -82,8 +82,8 @@ fn missing_input(
 /// minimal admissible row sharing one id.
 fn admissible_row(
   id~ : String,
-  priority? : @domain.BoardPriority = @domain.Normal,
-  created_at_ms? : Int64 = 1L,
+  priority~ : @domain.BoardPriority = @domain.Normal,
+  created_at_ms~ : Int64 = 1L,
 ) -> (
   @domain.BoardTask,
   @domain.Attempt,
@@ -101,10 +101,10 @@ fn admissible_row(
 /// Plans with admission enabled and no input metadata unless overridden.
 fn plan_of(
   snapshot : @domain.BoardStateSnapshot,
-  policy? : @orchestration.ExecutionPolicy = @orchestration.ExecutionPolicy(
+  policy~ : @orchestration.ExecutionPolicy = @orchestration.ExecutionPolicy(
     enabled=true,
   ),
-  inputs? : Array[@orchestration.ExecutionInputAvailability] = [],
+  inputs~ : Array[@orchestration.ExecutionInputAvailability] = [],
 ) -> @orchestration.ExecutionPlan {
   @orchestration.plan_execution(snapshot, policy, inputs)
 }
@@ -124,7 +124,7 @@ fn apply(
 fn propose_created(
   state : @domain.BoardState,
   id~ : String,
-  dependencies? : Array[@domain.BoardTaskId] = [],
+  dependencies~ : Array[@domain.BoardTaskId] = [],
 ) -> @domain.BoardState {
   apply(
     state,

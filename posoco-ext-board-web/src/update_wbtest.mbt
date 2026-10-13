@@ -78,7 +78,7 @@ fn missing_uuid_env() -> Env {
 }
 
 ///|
-fn snapshot_text(tasks : Json, revision : Int) -> String {
+fn snapshot_text(tasks : Json, revision : Int32) -> String {
   @protocol.encode_server_frame(
     Snapshot({
       protocol_version: 1,
@@ -100,8 +100,8 @@ fn snapshot_text(tasks : Json, revision : Int) -> String {
 fn task_event_text(
   id : String,
   stage : String,
-  seq : Int,
-  revision : Int,
+  seq : Int32,
+  revision : Int32,
 ) -> String {
   @protocol.encode_server_frame(
     Event({

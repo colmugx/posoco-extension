@@ -11,7 +11,7 @@ async fn board_run_opener(
   command : String,
   args : Array[String],
 ) -> Result[Unit, String] {
-  let result : Result[Int, Error] = Ok(
+  let result : Result[Int32, Error] = Ok(
     @process.run(command, args.clamped_view(), no_console_window=true),
   ) catch {
     error => Err(error)

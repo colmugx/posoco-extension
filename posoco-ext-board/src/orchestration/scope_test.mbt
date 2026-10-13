@@ -4,8 +4,8 @@
 async fn orch_queued_task(
   backend : @backend.BoardBackend,
   id~ : String,
-  priority? : String = "normal",
-  dependency? : String = "",
+  priority~ : String = "normal",
+  dependency~ : String = "",
 ) -> Unit {
   let dependencies : Json = if dependency == "" { [] } else { [dependency] }
   orch_command(backend, "board.task.create", {
