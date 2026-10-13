@@ -231,6 +231,9 @@ async fn collect(
     err => raise EmbedError("cannot read directory \{dir}: \{Repr(err)}")
   }
   for name in names {
+    if name == "." || name == ".." {
+      continue
+    }
     let path = join(dir, name)
     let components = prefix.copy()
     components.push(name)
