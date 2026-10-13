@@ -12,22 +12,14 @@ import {
 let required_assets : Array[String] = ["/board.css", "/index.html", "/index.js"]
 
 ///|
-/// Assets above this size use a multiline byte literal instead of a single
-/// line, so generated sources keep short lines.
-let multiline_threshold : Int = 4096
-
-///|
-/// Bound generated lines; decimal bytes also keep large text segments compact.
-let literal_line_width : Int = 84
+/// Bound literal columns and top-level source segments without decimal arrays.
+let literal_chunk_size : Int32 = 128
 
 ///|
 let header =
-  #|// Generated from posoco-ext-board-web using Warren 0.4.4.
-  #|// Do not edit manually.
-  #|// Regenerate from the extension workspace root:
-  #|//   warren -C posoco-ext-board-web build --browser-entry cmd/browser --server-entry ""
-  #|//   moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json
-  #|//   moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- --check
+  #|// Generated browser build product; do not edit or commit.
+  #|// Build: moon -C posoco-ext-board-native --target-dir _build/assets-builder run tools/embed-assets/build.mbtx --target native --output-json
+  #|// Check: moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- _build/browser-assets-dist --check
   #|
 
 ///|
@@ -57,40 +49,14 @@ fn byte_escape(byte : Byte) -> String {
 }
 
 ///|
-/// Render bytes as an exact MoonBit Bytes literal: one `b"..."` line up to
-/// `multiline_threshold` bytes, then a multiline byte array literal above it.
-/// Both forms are raw byte-exact; there is no base64 or runtime concatenation.
+/// Render a bounded raw-byte literal, including non-UTF8 content.
 fn bytes_literal(bytes : Bytes) -> String {
-  guard bytes.length() > multiline_threshold else {
-    let out = StringBuilder()
-    out.write_string("b\"")
-    for byte in bytes {
-      out.write_string(byte_escape(byte))
-    }
-    out.write_string("\"")
-    return out.to_string()
-  }
   let out = StringBuilder()
-  out.write_string("[\n")
-  let mut column = 0
+  out.write_string("b\"")
   for byte in bytes {
-    let item = byte.to_int().to_string() + ","
-    if column != 0 && column + 1 + item.length() > literal_line_width {
-      out.write_string("\n")
-      column = 0
-    }
-    if column == 0 {
-      out.write_string("      ")
-      column = 6
-    } else {
-      out.write_string(" ")
-      column += 1
-    }
-    out.write_string(item)
-    column += item.length()
+    out.write_string(byte_escape(byte))
   }
-  out.write_string("\n")
-  out.write_string("    ]")
+  out.write_string("\"")
   out.to_string()
 }
 
@@ -110,7 +76,7 @@ fn reserved_control_path(path : String) -> Bool {
 /// control-plane namespace collision. Returns the first violation as an error
 /// message, or `None` when the entries are valid.
 fn validate_assets(entries : Array[(String, Bytes)]) -> String? {
-  let sizes : Map[String, Int] = Map([])
+  let sizes : Map[String, Int32] = Map([])
   for entry in entries {
     if reserved_control_path(entry.0) {
       return Some("reserved control-plane asset path: \{entry.0}")
@@ -130,7 +96,7 @@ fn validate_assets(entries : Array[(String, Bytes)]) -> String? {
 ///|
 /// Lexicographic comparison by code units. `String::compare` orders shorter
 /// strings first, which is not URL byte order, so sorting is explicit.
-fn compare_urls(left : String, right : String) -> Int {
+fn compare_urls(left : String, right : String) -> Int32 {
   let shared = if left.length() < right.length() {
     left.length()
   } else {
@@ -155,13 +121,30 @@ fn render_assets(entries : Array[(String, Bytes)]) -> String {
   urls.sort_by(compare_urls)
   let out = StringBuilder()
   out.write_string(header)
+  for index, url in urls {
+    let bytes = assets[url]
+    out.write_string("\n///|\nfn web_asset_\{index}() -> Bytes {\n")
+    if bytes.is_empty() {
+      out.write_string("  b\"\"\n}\n")
+      continue
+    }
+    out.write_string("  let chunks : Array[Bytes] = [\n")
+    for start = 0; start < bytes.length(); start = start + literal_chunk_size {
+      let end = (start + literal_chunk_size).min(bytes.length())
+      out.write_string(
+        "    " + bytes_literal(bytes[start:end].to_owned()) + ",\n",
+      )
+    }
+    out.write_string("  ]\n")
+    out.write_string(
+      "  Bytes::makei(\{bytes.length()}, i => chunks[i / \{literal_chunk_size}][i % \{literal_chunk_size}])\n}\n",
+    )
+  }
   out.write_string("\n///|\nfn web_assets() -> Map[String, Bytes] {\n  {\n")
-  for url in urls {
-    out.write_string("    \"")
-    out.write_string(url.escape(quote=false))
-    out.write_string("\": ")
-    out.write_string(bytes_literal(assets[url]))
-    out.write_string(",\n")
+  for index, url in urls {
+    out.write_string(
+      "    \"" + url.escape(quote=false) + "\": web_asset_\{index}(),\n",
+    )
   }
   out.write_string("  }\n}\n")
   out.to_string()
@@ -169,7 +152,7 @@ fn render_assets(entries : Array[(String, Bytes)]) -> String {
 
 ///|
 // Run from the native module root; positional input/output paths are optional.
-let default_dist : String = "../posoco-ext-board-web/dist"
+let default_dist : String = "_build/browser-assets-dist"
 
 ///|
 let default_out : String = "src/web_assets.generated.mbt"
@@ -286,7 +269,7 @@ fn render(entries : Array[(String, Bytes)]) -> String raise EmbedError {
 async fn check(
   config : Config,
   content : String,
-  count : Int,
+  count : Int32,
 ) -> Unit raise EmbedError {
   let existing = @fs.exists(config.out) catch { _ => false }
   guard existing else {
@@ -307,7 +290,7 @@ async fn check(
 async fn write_atomic(
   config : Config,
   content : String,
-  count : Int,
+  count : Int32,
 ) -> Unit raise EmbedError {
   let parent = dirname(config.out)
   let parent_exists = @fs.exists(parent) catch { _ => false }

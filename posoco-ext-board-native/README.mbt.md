@@ -66,29 +66,34 @@ Its stop timeout is 1 second, below BoardRuntime's 5-second settle bound.
 `board.close` closes active sockets and subscriptions, not BoardBackend;
 headless mutations remain usable and reopen snapshots show their committed state.
 
-## Regenerate embedded assets
+## Build embedded assets
 
 From the extension workspace:
 
 ```bash
-moon install moonbit-community/warren@0.4.4
-warren -C posoco-ext-board-web build --browser-entry cmd/browser --server-entry ""
-moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json
-moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- --check
+moon -C posoco-ext-board-native --target-dir _build/assets-builder run tools/embed-assets/build.mbtx --target native --output-json
+moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- _build/browser-assets-dist --check
 ```
 
-The generator consumes only Warren's official `dist/` output. It includes hidden
-and nested regular files, rejects symlinks/special files, sorts URL paths and
-preserves raw bytes using compile-time literals. It atomically replaces
-`src/web_assets.generated.mbt`; `--check` is read-only and fails on stale or
-missing output. Optional positional arguments select an input directory and
-output file, relative to the native module. Required HTML, JS and CSS must be
-nonempty, while additional resources are embedded automatically.
+The builder compiles the existing browser entry directly with Moon, copies public
+resources, and embeds the result. It needs neither Warren nor Node/Bun. Nested
+compiler and generator invocations use separate build directories rather than
+the caller's workspace build lock.
 
-Commit the generated source, not `dist/`. Ordinary downstream builds need no
-Warren, Node/Bun, filesystem asset directory or browser build. Assets are served
-directly from memory with MoonBack's `unstable_static.from_assets`, not decoded
-from base64 or written to temporary files at startup.
+Generated resources are build products, not Git source. The module's `.gitignore`
+excludes `src/web_assets.generated.mbt`; `.moonignore` includes it in release
+archives so downstream dependencies need no browser build or executable hook.
+The package's development rule generates missing resources before native checks,
+builds and tests. Package authors must build resources before packaging; inspect
+`moon package --list` to verify the generated module is included.
+
+The generator includes hidden and nested regular files, rejects symlinks/special
+files and control-plane paths, sorts URL paths, and preserves raw bytes using
+bounded literals instead of giant decimal arrays. It atomically replaces the
+output; `--check` is read-only and fails on stale or missing output. Optional
+positional arguments select input/output paths relative to the native module.
+Required HTML, JS and CSS must be nonempty. MoonBack serves assets from memory,
+without a runtime filesystem directory, base64 decoding or temporary files.
 
 Generator regression checks (including compiled byte round trips):
 
