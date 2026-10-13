@@ -40,6 +40,12 @@ async test {
 }
 ```
 
+Hosts that need bounded parallelism construct the same owner over one journal
+with `BoardExecutionOwner::with_slots(max_concurrency=1..=8)` and an isolated
+driver factory; slots run concurrently between the shared serialized journal
+sections and keep every admission, uniqueness, cancellation and shutdown rule
+above.
+
 See `docs/S4A-execution.md` in the module for actual Posoco APIs, journal phases,
 one-shot settlement, cancellation confirmation, failure windows and operator
 recovery. `Unresolved` is not permission to retry; no mutation or execution is

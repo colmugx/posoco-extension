@@ -26,3 +26,52 @@ supported_targets = "native"
 options(
   "native-stub": [ "random_stub.c" ],
 )
+
+rule(
+  name: "embed-assets",
+  command: "moon --target-dir _build/assets-builder run tools/embed-assets/build.mbtx --target native --output-json",
+)
+
+dev_build(
+  rule: "embed-assets",
+  input: [
+    "../tools/embed-assets",
+    "../tools/embed-assets/build.mbtx",
+    "../tools/embed-assets/generate.mbtx",
+    "../../posoco-ext-board-web/moon.mod",
+    "../../posoco-ext-board-web/public",
+    "../../posoco-ext-board-web/public/index.html",
+    "../../posoco-ext-board-web/public/board.css",
+    "../../posoco-ext-board-web/cmd/browser",
+    "../../posoco-ext-board-web/cmd/browser/main.mbt",
+    "../../posoco-ext-board-web/cmd/browser/moon.pkg",
+    "../../posoco-ext-board-web/src",
+    "../../posoco-ext-board-web/src/moon.pkg",
+    "../../posoco-ext-board-web/src/inspector.mbt",
+    "../../posoco-ext-board-web/src/inspector_update.mbt",
+    "../../posoco-ext-board-web/src/inspector_view.mbt",
+    "../../posoco-ext-board-web/src/model.mbt",
+    "../../posoco-ext-board-web/src/mutation.mbt",
+    "../../posoco-ext-board-web/src/mutation_update.mbt",
+    "../../posoco-ext-board-web/src/operational.mbt",
+    "../../posoco-ext-board-web/src/presentation.mbt",
+    "../../posoco-ext-board-web/src/transport.mbt",
+    "../../posoco-ext-board-web/src/update.mbt",
+    "../../posoco-ext-board-web/src/view.mbt",
+    "../../posoco-ext-board/moon.mod",
+    "../../posoco-ext-board/src/client",
+    "../../posoco-ext-board/src/client/moon.pkg",
+    "../../posoco-ext-board/src/client/commands.mbt",
+    "../../posoco-ext-board/src/client/decode.mbt",
+    "../../posoco-ext-board/src/client/replica.mbt",
+    "../../posoco-ext-board/src/client/types.mbt",
+    "../../posoco-ext-board/src/protocol",
+    "../../posoco-ext-board/src/protocol/moon.pkg",
+    "../../posoco-ext-board/src/protocol/codec.mbt",
+    "../../posoco-ext-board/src/protocol/command_decoder.mbt",
+    "../../posoco-ext-board/src/protocol/projection.mbt",
+    "../../posoco-ext-board/src/protocol/types.mbt",
+    "../../posoco-ext-board/src/protocol/version.mbt",
+  ],
+  output: "web_assets.generated.mbt",
+)

@@ -19,3 +19,7 @@ keywords = [ "posoco", "board", "orchestration", "realtime" ]
 description = "Browser-native orchestration surface for Posoco"
 
 source = "src"
+
+preferred_target = "native"
+
+supported_targets = "+native+js"

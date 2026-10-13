@@ -1,0 +1,94 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn copy_sources(source : String, target : String) -> Unit {
+  @fs.mkdir(target, recursive=true, allow_exist=true)
+  for
+    name in @fs.readdir(
+      source,
+      include_hidden=true,
+      include_special=true,
+      sort=true,
+    ) {
+    if name == "." ||
+      name == ".." ||
+      name == "_build" ||
+      name == ".mooncakes" ||
+      name == ".git" ||
+      name == "web_assets.generated.mbt" {
+      continue
+    }
+    let from = source + "/" + name
+    let to = target + "/" + name
+    match @fs.kind(from, follow_symlink=false) {
+      Directory => copy_sources(from, to)
+      Regular => @fs.write_file(to, @fs.read_file(from).binary())
+      SymLink => ()
+      _ => fail("Unexpected special file in source fixture")
+    }
+  }
+}
+
+///|
+async fn check_native(root : String) -> Unit {
+  @shell.Cmd("moon", [
+    "-C", root, "check", "posoco-ext-board-native/src", "--target", "native", "--output-json",
+  ]).run()
+}
+
+///|
+async fn main {
+  let root = "../board-assets-regression-" + @async.now().to_string()
+  @fs.mkdir(root, recursive=true, allow_exist=false)
+  defer @fs.rmdir(root, recursive=true)
+  for
+    module_name in [
+      "posoco-ext-board", "posoco-ext-board-native", "posoco-ext-board-web",
+    ] {
+    copy_sources("../" + module_name, root + "/" + module_name)
+  }
+  @fs.write_file(
+    root + "/moon.work",
+    "members = [\"./posoco-ext-board-native\", \"./posoco-ext-board\", \"./posoco-ext-board-web\"]\n",
+  )
+  let native = root + "/posoco-ext-board-native"
+  let generated = native + "/src/web_assets.generated.mbt"
+  assert_false(@fs.exists(generated))
+  check_native(root)
+  assert_true(@fs.exists(generated))
+  let first = @fs.read_file(generated).binary()
+  let css = root + "/posoco-ext-board-web/public/board.css"
+  let changed = @fs.read_file(css).binary() +
+    b"\n/* incremental-resource-regression */\n"
+  @fs.write_file(css, changed)
+  check_native(root)
+  assert_eq(
+    @fs.read_file(native + "/_build/browser-assets-dist/board.css").binary(),
+    changed,
+  )
+  assert_true(@fs.read_file(generated).binary() != first)
+  @shell.Cmd("moon", [
+    "-C", native, "run", "tools/embed-assets/generate.mbtx", "--target", "native",
+    "--output-json", "--", "--check",
+  ]).run()
+  let packaged = @shell.Cmd("moon", ["-C", native, "package", "--list"]).output()
+  if packaged.exit_code() != 0 {
+    println(packaged.stdout())
+    println(packaged.stderr())
+  }
+  packaged.check()
+  let files = (packaged.stdout() + packaged.stderr()).split("\n").to_array()
+  assert_true(
+    files.any(line => line.trim() == "src/web_assets.generated.mbt"),
+    msg=packaged.stdout() + packaged.stderr(),
+  )
+  assert_false(files.any(line => line.has_prefix("_build/")))
+  println(
+    "Resource build regressions passed: clean source build, incremental CSS, freshness, release inclusion, cache exclusion.",
+  )
+}
