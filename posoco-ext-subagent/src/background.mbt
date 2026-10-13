@@ -30,12 +30,18 @@ priv enum BackgroundRecordState {
 priv struct BackgroundRecord {
   /// Kind preset the child was spawned with (subscription event payload).
   kind : String
+  /// Parent session that spawned this child: a queued question wakes the
+  /// spawning session, never whichever session happens to run last.
+  session : String
   mut state : BackgroundRecordState
 }
 
 ///|
-fn BackgroundRecord::BackgroundRecord(kind~ : String) -> BackgroundRecord {
-  { kind, state: Running, }
+fn BackgroundRecord::BackgroundRecord(
+  kind~ : String,
+  session~ : String = "",
+) -> BackgroundRecord {
+  { kind, session, state: Running, }
 }
 
 ///|
@@ -218,6 +224,56 @@ fn json_string_field(data : Json, key : String) -> String {
 /// off nothing here runs and lazy delivery is preserved; a rejected request
 /// (in practice only `ScopeInactive` after shutdown) also falls back to lazy
 /// delivery.
+
+///|
+/// Coalescing key for question-side wakeup requests: one stable tag per
+/// parent session, mirroring the background-outcome tag above.
+const QUESTION_WAKEUP_TAG = "subagent-question"
+
+///|
+const QUESTION_WAKEUP_NOTE = "a subagent asked you a question; its [subagent-question] envelope is queued for your next turn's model input"
+
+///|
+/// Broker hook tail for every question that lands in the injection queue
+/// (no live spawning-tool race carries it in-wave — a background child's
+/// ask, or a later ask from an already-receipted interactive child).
+/// Registry projects to `WaitingReply`; then, under the §10 auto-wakeup
+/// policy, one ordinary turn is requested for the session that spawned the
+/// child. Synchronous admission only (safe from task bodies, where the
+/// asking child runs); a rejected or policy-off request falls back to lazy
+/// injection on the parent's next ordinary turn.
+fn SubagentTools::handle_question_queued(
+  self : SubagentTools,
+  info : QuestionInfo,
+) -> Unit {
+  match self.registry.get(info.child_session) {
+    Some(record) =>
+      if record.state is Running {
+        record.state = WaitingReply(info.id)
+      }
+    None => ()
+  }
+  if !self.auto_wakeup {
+    return
+  }
+  let wakeup = match self.wakeup {
+    Some(wakeup) => wakeup
+    None => return
+  }
+  let session = match self.registry.get(info.child_session) {
+    Some(record) if record.session != "" => record.session
+    _ =>
+      match self.session {
+        Some(session) => session
+        None => return
+      }
+  }
+  ignore(
+    wakeup.request(session~, tag=QUESTION_WAKEUP_TAG, note=QUESTION_WAKEUP_NOTE),
+  )
+}
+
+///|
 fn SubagentTools::observe_ready(
   self : SubagentTools,
   event : @posoco.TurnEvent,

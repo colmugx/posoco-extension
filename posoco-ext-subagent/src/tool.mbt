@@ -83,7 +83,7 @@ pub fn SubagentTools::SubagentTools(
   } else {
     config.limits.global_concurrency
   }
-  {
+  let tools : SubagentTools = {
     catalog,
     config,
     composer,
@@ -108,6 +108,11 @@ pub fn SubagentTools::SubagentTools(
         )
     },
   }
+  // Queued questions (background asks, later interactive asks) project the
+  // registry and — under the auto-wakeup policy — schedule one ordinary
+  // turn for the spawning parent session.
+  tools.question.on_queued(fn(info) { tools.handle_question_queued(info) })
+  tools
 }
 
 ///|

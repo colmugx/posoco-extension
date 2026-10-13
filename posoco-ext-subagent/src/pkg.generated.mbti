@@ -55,6 +55,7 @@ pub struct QuestionBroker {
 }
 pub fn QuestionBroker::QuestionBroker(answer_timeout_ms? : Int64) -> Self
 pub fn QuestionBroker::channel(Self) -> ParentQuestionChannel
+pub fn QuestionBroker::on_queued(Self, (QuestionInfo) -> Unit) -> Unit
 
 pub(all) struct QuestionInfo {
   id : String

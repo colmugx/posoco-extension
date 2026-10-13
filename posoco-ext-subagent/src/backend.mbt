@@ -490,10 +490,21 @@ async fn SubagentTools::spawn(
       return terminal_for(bridge, spec, @kit.TerminalState::Failed(reason~), "")
     }
   }
-  // Registered at spawn: both paths advertise the id in their
-  // result footer, and `resume` accepts exactly these ids.
+  // Registered at spawn with the spawning parent session (a later queued
+  // question wakes that session, never whichever runs last): both paths
+  // advertise the id in their result footer, and `resume` accepts exactly
+  // these ids.
+  let spawn_session = match parent_session {
+    Some(session) => session
+    None =>
+      match self.session {
+        Some(session) => session
+        None => ""
+      }
+  }
   self.registry[spec.session_id] = BackgroundRecord::BackgroundRecord(
     kind=spec.kind_name,
+    session=spawn_session,
   )
   if args.background || interactive {
     // The early gate bound both values for background spawns; interactive
@@ -517,16 +528,15 @@ async fn SubagentTools::spawn(
     let session_id_target = match parent_session {
       Some(session) => session
       None =>
-        match self.session {
-          Some(session) => session
-          None => {
-            self.global_slots.release()
-            self.registry.remove(spec.session_id)
-            return @posoco.ToolOutcome::ToolReportedError(
-              content="interactive children require a known parent session — no scoped turn event has been observed yet, so the child's question and result would have nowhere to go",
-              structured=None,
-            )
-          }
+        if spawn_session == "" {
+          self.global_slots.release()
+          self.registry.remove(spec.session_id)
+          return @posoco.ToolOutcome::ToolReportedError(
+            content="interactive children require a known parent session — no scoped turn event has been observed yet, so the child's question and result would have nowhere to go",
+            structured=None,
+          )
+        } else {
+          spawn_session
         }
     }
     let user_message : @posoco.Message = @posoco.Message::UserMessage(content=[
@@ -753,20 +763,28 @@ async fn SubagentTools::race_interactive(
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome {
   let armed = self.question.arm(spec.session_id)
-  let raced : InteractiveOutcome = @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, () => {
-      let info = armed.wait()
-      group.return_immediately(InteractiveOutcome::Asked(info))
+  // Cancellation is not an error in the async runtime: it surfaces as
+  // `None` here, and the cleanup below is the only place the child task
+  // and its parked asks are closed on a cancelled race.
+  let raced : InteractiveOutcome? = @async.handle_cancellation(async fn() {
+    @async.with_task_group(group => {
+      group.spawn_bg(no_wait=true, () => {
+        let info = armed.wait()
+        group.return_immediately(InteractiveOutcome::Asked(info))
+      })
+      InteractiveOutcome::Terminal(handle.wait())
     })
-    InteractiveOutcome::Terminal(handle.wait())
-  }) catch {
-    error => {
-      if @async.is_being_cancelled() {
-        handle.cancel()
-        self.question.reject_child(spec.session_id)
-      }
-      raise error
+  })
+  let raced : InteractiveOutcome = match raced {
+    None => {
+      handle.cancel()
+      self.question.reject_child(spec.session_id)
+      // The pending cancellation reasserts itself at this pause; the abort
+      // marks the impossible no-cancellation-after-None case.
+      @async.pause()
+      abort("cancellation vanished after interactive race cleanup")
     }
+    Some(outcome) => outcome
   }
   match raced {
     InteractiveOutcome::Terminal(outcome) => {

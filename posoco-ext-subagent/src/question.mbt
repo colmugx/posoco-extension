@@ -80,6 +80,7 @@ pub struct QuestionBroker {
   priv pending : Map[String, PendingQuestion]
   priv armed : Map[String, ArmedWaiter]
   priv mut queued : Array[QuestionInfo]
+  priv queued_hooks : Array[(QuestionInfo) -> Unit]
 }
 
 ///|
@@ -92,6 +93,7 @@ pub fn QuestionBroker::QuestionBroker(
     pending: Map::from_array([]),
     armed: Map::from_array([]),
     queued: [],
+    queued_hooks: [],
   }
 }
 
@@ -105,6 +107,28 @@ pub struct ParentQuestionChannel {
 ///|
 pub fn QuestionBroker::channel(self : QuestionBroker) -> ParentQuestionChannel {
   { broker: self, }
+}
+
+///|
+/// Subscribe to every question that lands in the injection queue (no live
+/// spawning-tool race carries it in-wave). Hooks run synchronously inside
+/// the asking child's task body and must not raise; the subagent tools use
+/// this to project the registry and schedule a wakeup turn.
+pub fn QuestionBroker::on_queued(
+  self : QuestionBroker,
+  cb : (QuestionInfo) -> Unit,
+) -> Unit {
+  self.queued_hooks.push(cb)
+}
+
+///|
+fn QuestionBroker::fire_queued(
+  self : QuestionBroker,
+  info : QuestionInfo,
+) -> Unit {
+  for cb in self.queued_hooks {
+    cb(info)
+  }
 }
 
 ///|
@@ -130,13 +154,20 @@ fn QuestionBroker::register(
     Some(waiter) =>
       match waiter.info {
         None => {
+          // Live race: the receipt carries this question in-wave; no hook.
           waiter.info = Some(info)
           waiter.cell.release()
           self.armed.remove(child_session)
         }
-        Some(_) => self.queued.push(info)
+        Some(_) => {
+          self.queued.push(info)
+          self.fire_queued(info)
+        }
       }
-    None => self.queued.push(info)
+    None => {
+      self.queued.push(info)
+      self.fire_queued(info)
+    }
   }
   info
 }
@@ -168,7 +199,9 @@ async fn ArmedWaiter::wait(self : ArmedWaiter) -> QuestionInfo {
 
 ///|
 /// Park one ask until answered, expired, or cancelled. Cancellation of the
-/// asking coroutine withdraws the question so no late answer can land.
+/// asking coroutine withdraws the question so no late answer can land;
+/// cancellation is never converted into a normal return — `pause()`
+/// re-raises the pending cancellation after the sync cleanup.
 pub async fn ParentQuestionChannel::ask(
   self : ParentQuestionChannel,
   child_session~ : String,
@@ -177,56 +210,57 @@ pub async fn ParentQuestionChannel::ask(
 ) -> @posoco.UiResponse raise QuestionError {
   let broker = self.broker
   let info = broker.register(child_session, origin_call, req)
-  let response : @posoco.UiResponse = @async.with_cancellation_handler(
-    async fn() {
-      let wait : async () -> @posoco.UiResponse = async fn() {
-        let entry = match broker.pending.get(info.id) {
-          Some(entry) => entry
-          None => raise QuestionError::Cancelled
-        }
-        entry.cell.acquire()
-        match entry.outcome {
-          Some(AskOutcome::Answered(response)) => response
-          Some(AskOutcome::TimedOut) => raise QuestionError::TimedOut
-          Some(AskOutcome::Cancelled) | None => raise QuestionError::Cancelled
-        }
+  // `handle_cancellation` erases the closure's typed raise, so the typed
+  // errors are re-mapped here; cancellation never flows through this catch
+  // (it surfaces as `None` below).
+  let outcome : @posoco.UiResponse? = @async.handle_cancellation(async fn() {
+    let wait : async () -> @posoco.UiResponse = async fn() {
+      let entry = match broker.pending.get(info.id) {
+        Some(entry) => entry
+        None => raise QuestionError::Cancelled
       }
-      if broker.answer_timeout_ms > 0L {
-        @async.with_timeout(broker.answer_timeout_ms.to_int(), wait) catch {
-          error =>
-            if error is @async.TimeoutError {
-              // An answer may have landed before the timer won.
-              broker.expire(info.id)
-              match broker.lookup_outcome(info.id) {
-                Some(AskOutcome::Answered(response)) => response
-                _ => raise QuestionError::TimedOut
-              }
-            } else {
-              raise error
+      entry.cell.acquire()
+      match entry.outcome {
+        Some(AskOutcome::Answered(response)) => response
+        Some(AskOutcome::TimedOut) => raise QuestionError::TimedOut
+        Some(AskOutcome::Cancelled) | None => raise QuestionError::Cancelled
+      }
+    }
+    if broker.answer_timeout_ms > 0L {
+      @async.with_timeout(broker.answer_timeout_ms.to_int(), wait) catch {
+        error =>
+          if error is @async.TimeoutError {
+            // An answer may have landed before the timer won.
+            broker.expire(info.id)
+            match broker.lookup_outcome(info.id) {
+              Some(AskOutcome::Answered(response)) => response
+              _ => raise QuestionError::TimedOut
             }
-        }
-      } else {
-        wait()
+          } else {
+            raise error
+          }
       }
-    },
-    handler=async fn() { broker.withdraw(info.id) },
-  ) catch {
+    } else {
+      wait()
+    }
+  }) catch {
     QuestionError::Unsupported(detail) =>
       raise QuestionError::Unsupported(detail)
     QuestionError::Cancelled => raise QuestionError::Cancelled
     QuestionError::TimedOut => raise QuestionError::TimedOut
     QuestionError::Io(detail) => raise QuestionError::Io(detail)
-    error =>
-      if @async.is_cancellation_error(error) {
-        // Re-raise the genuine cancellation through the typed channel; if
-        // nothing is pending the ask is over either way.
-        @async.pause()
-        raise QuestionError::Cancelled
-      } else {
-        raise QuestionError::Io(error.to_string())
-      }
+    error => raise QuestionError::Io(error.to_string())
   }
-  response
+  match outcome {
+    Some(response) => response
+    None => {
+      broker.withdraw(info.id)
+      // The pending cancellation reasserts itself here; the typed error
+      // below is only reachable if nothing is pending after cleanup.
+      @async.pause()
+      raise QuestionError::Cancelled
+    }
+  }
 }
 
 ///|

@@ -1614,6 +1614,8 @@ priv struct AskingComposer {
   req : @posoco.UiRequest
   finish_text : String
   ask_delay_ms : Int32
+  /// How many times the child asks before finishing.
+  asks : Int32
   answers : Array[String]
   specs : Array[ChildSpec]
 }
@@ -1624,8 +1626,9 @@ fn AskingComposer::AskingComposer(
   req~ : @posoco.UiRequest,
   finish_text~ : String,
   ask_delay_ms~ : Int32 = 0,
+  asks~ : Int32 = 1,
 ) -> AskingComposer {
-  { channel, req, finish_text, ask_delay_ms, answers: [], specs: [], }
+  { channel, req, finish_text, ask_delay_ms, asks, answers: [], specs: [], }
 }
 
 ///|
@@ -1644,18 +1647,24 @@ impl ChildComposer for AskingComposer with fn compose(
   }
   let exts : Array[&@posoco.Extension] = []
   if asks {
-    let model = @posoco.ScriptedModel([
-      @posoco.ScriptedModelStep::Respond(
-        @posoco.tk_tool_call_response(
-          "ask_parent",
-          "child-ask",
-          Json::object(Map::from_array([])),
+    let steps : Array[@posoco.ScriptedModelStep] = []
+    for i in 0..<self.asks {
+      steps.push(
+        @posoco.ScriptedModelStep::Respond(
+          @posoco.tk_tool_call_response(
+            "ask_parent",
+            "child-ask-\{i + 1}",
+            Json::object(Map::from_array([])),
+          ),
         ),
-      ),
+      )
+    }
+    steps.push(
       @posoco.ScriptedModelStep::Respond(
         @posoco.tk_stop_response(self.finish_text),
       ),
-    ])
+    )
+    let model = @posoco.ScriptedModel(steps)
     exts.push(
       @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
     )
@@ -2192,13 +2201,229 @@ async test "interactive_wave_cancel_kills_child_and_closes_question" {
   })
   let children = tools.background_children()
   assert_eq(children.length(), 3)
-  assert_true(
-    children.contains(("subagent-1", "cancelled")) ||
-    children.contains(("subagent-1", "running")),
-  )
+  // With the cancellation cleanup live, the cancelled race's child dies and
+  // delivers its cancelled envelope on the ordinary turn above — no
+  // tolerant "running" fallback anymore.
+  assert_true(children.contains(("subagent-1", "cancelled")))
   assert_true(
     children.contains(("subagent-2", "cancelled")) ||
     children.contains(("subagent-2", "completed")),
   )
   assert_true(children.contains(("subagent-3", "completed")))
+}
+
+///|
+/// Acceptance 4 (lazy half): a background child's question lands in the
+/// injection queue, surfaces as a [subagent-question] envelope on the
+/// parent's next ordinary turn, and the answer continues the child in its
+/// original session.
+async test "background_child_question_roundtrip_lazy_injection" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=5000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="need a fact", default=None),
+    finish_text="done with the fact",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      @posoco.tk_tool_call_response(
+        "agent",
+        "spawn-bg",
+        args_object([
+          ("task", Json::string("work then ask")),
+          ("kind", Json::string("loose")),
+          ("background", Json::boolean(true)),
+        ]),
+      ),
+      @posoco.tk_stop_response("turn one done"),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-1",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("fact-from-envelope")),
+        ]),
+      ),
+      @posoco.tk_stop_response("turn two done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_bg_ask")
+    @async.sleep(60)
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_bg_ask")
+    @async.sleep(60)
+    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg_ask")
+    ()
+  })
+  // Turn two's first chat saw the injected envelope (not the tool receipt:
+  // background asks never ride a wave).
+  assert_true(model.inputs[2].contains("[subagent-question"))
+  assert_true(model.inputs[2].contains("need a fact"))
+  assert_true(model.inputs[2].contains("question-1"))
+  assert_eq(model.states[2], [("subagent-1", "waiting_reply")])
+  assert_eq(composer.answers, ["subagent-1=fact-from-envelope"])
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
+  assert_true(
+    model.inputs[model.inputs.length() - 1].contains("done with the fact"),
+  )
+}
+
+///|
+/// Acceptance 5 (background variant): two background children both queue
+/// questions; one turn carries both envelopes; answers do not cross.
+async test "two_background_children_questions_do_not_cross" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=5000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="need a fact", default=None),
+    finish_text="done",
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      @posoco.tk_tool_call_response(
+        "agent",
+        "spawn-a",
+        args_object([
+          ("task", Json::string("first worker")),
+          ("kind", Json::string("loose")),
+          ("background", Json::boolean(true)),
+        ]),
+      ),
+      @posoco.tk_tool_call_response(
+        "agent",
+        "spawn-b",
+        args_object([
+          ("task", Json::string("second worker")),
+          ("kind", Json::string("loose")),
+          ("background", Json::boolean(true)),
+        ]),
+      ),
+      @posoco.tk_stop_response("turn one done"),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-1",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("fact-one")),
+        ]),
+      ),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-2",
+        args_object([
+          ("question_id", Json::string("question-2")),
+          ("text", Json::string("fact-two")),
+        ]),
+      ),
+      @posoco.tk_stop_response("turn two done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_bg_two")
+    @async.sleep(80)
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_bg_two")
+    @async.sleep(80)
+    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_bg_two")
+    ()
+  })
+  // One injected message carried both envelopes before any answer existed.
+  assert_true(model.inputs[3].contains("question-1"))
+  assert_true(model.inputs[3].contains("question-2"))
+  let sorted_answers = composer.answers.copy()
+  sorted_answers.sort()
+  assert_eq(sorted_answers, ["subagent-1=fact-one", "subagent-2=fact-two"])
+  let children = tools.background_children()
+  assert_eq(children, [("subagent-1", "completed"), ("subagent-2", "completed")])
+}
+
+///|
+/// The M2-deferred case: an interactive child's SECOND question (asked
+/// after its first was answered and the parent's turn ended) has no live
+/// race to carry it — it flows through the injection queue like a
+/// background ask.
+async test "interactive_child_second_question_flows_through_queue" {
+  let broker = QuestionBroker::QuestionBroker(answer_timeout_ms=5000L)
+  let composer = AskingComposer::AskingComposer(
+    channel=broker.channel(),
+    req=@posoco.UiRequest::Input(prompt="later?", default=None),
+    finish_text="all answered",
+    ask_delay_ms=400,
+    asks=2,
+  )
+  let tools = test_tools(
+    composer=composer as &ChildComposer,
+    catalog=catalog_with_bound_kind(),
+    question=Some(broker),
+  )
+  let model = SceneParentModel::SceneParentModel(
+    steps=[
+      @posoco.tk_tool_call_response(
+        "agent",
+        "spawn-1",
+        args_object([
+          ("task", Json::string("two questions")),
+          ("kind", Json::string("loose")),
+        ]),
+      ),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-1",
+        args_object([
+          ("question_id", Json::string("question-1")),
+          ("text", Json::string("first-answer")),
+        ]),
+      ),
+      @posoco.tk_stop_response("turn one done"),
+      @posoco.tk_tool_call_response(
+        "answer_question",
+        "answer-2",
+        args_object([
+          ("question_id", Json::string("question-2")),
+          ("text", Json::string("second-answer")),
+        ]),
+      ),
+      @posoco.tk_stop_response("turn two done"),
+    ],
+    children=fn() { tools.background_children() },
+  )
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let parent = build_parent_agent(tools, model as &@posoco.ModelPort, store)
+  parent.run_scoped(async fn(agent) {
+    let _ = agent.run_turn(@posoco.tk_user_msg("go"), "parent_second_q")
+    // Turn one ends around the first answer (~400ms); the child's second
+    // ask registers ~400ms later, safely after the turn and before the
+    // next driven turn below — the second question queues with the parent
+    // idle.
+    @async.sleep(900)
+    let _ = agent.run_turn(@posoco.tk_user_msg("next"), "parent_second_q")
+    @async.sleep(60)
+    let _ = agent.run_turn(@posoco.tk_user_msg("again"), "parent_second_q")
+    ()
+  })
+  // The first question rode the in-wave receipt...
+  assert_true(model.inputs[1].contains("status: waiting_reply"))
+  assert_true(model.inputs[1].contains("question-1"))
+  // ...the second arrived as an injected envelope on a later turn.
+  assert_true(model.inputs[3].contains("[subagent-question"))
+  assert_true(model.inputs[3].contains("question-2"))
+  assert_eq(composer.answers, [
+    "subagent-1=first-answer", "subagent-1=second-answer",
+  ])
+  assert_eq(tools.background_children(), [("subagent-1", "completed")])
 }

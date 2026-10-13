@@ -701,3 +701,117 @@ test "observe_ready_stays_lazy_without_policy_or_capability" {
   )
   assert_eq(recorder.requests, [])
 }
+
+///|
+/// Seed one registered child with a recorded spawning session, mirroring the
+/// spawn-time registry insert (question-side wakeup targets that session).
+fn seed_registered_child(
+  tools : SubagentTools,
+  child_session~ : String,
+  session~ : String,
+) -> Unit {
+  tools.registry[child_session] = BackgroundRecord::BackgroundRecord(
+    kind="coder",
+    session~,
+  )
+}
+
+///|
+test "queued_question_requests_wakeup_for_spawning_session" {
+  let recorder = WakeupRecorder::WakeupRecorder()
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer, auto_wakeup=true)
+  tools.wakeup = Some(wakeup_recorder_port(recorder))
+  seed_registered_child(tools, child_session="subagent-1", session="parent_bg")
+  ignore(
+    tools.question.register(
+      "subagent-1",
+      "call-1",
+      @posoco.UiRequest::Input(prompt="blocked?", default=None),
+    ),
+  )
+  assert_eq(recorder.requests, [("parent_bg", QUESTION_WAKEUP_TAG)])
+  match tools.registry.get("subagent-1") {
+    Some(record) => assert_true(record.state is WaitingReply("question-1"))
+    None => fail("child must stay registered")
+  }
+}
+
+///|
+test "armed_race_question_never_requests_wakeup" {
+  let recorder = WakeupRecorder::WakeupRecorder()
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  let tools = test_tools(composer=composer as &ChildComposer, auto_wakeup=true)
+  tools.wakeup = Some(wakeup_recorder_port(recorder))
+  seed_registered_child(tools, child_session="subagent-1", session="parent_bg")
+  ignore(tools.question.arm("subagent-1"))
+  ignore(
+    tools.question.register(
+      "subagent-1",
+      "call-1",
+      @posoco.UiRequest::Input(prompt="in-wave?", default=None),
+    ),
+  )
+  // The live spawning-tool race carries this question in its receipt: no
+  // queue, no wakeup, registry projection stays with the race.
+  assert_eq(recorder.requests, [])
+  match tools.registry.get("subagent-1") {
+    Some(record) => assert_true(record.state is Running)
+    None => fail("child must stay registered")
+  }
+}
+
+///|
+test "queued_question_wakeup_gates_and_fallbacks" {
+  let recorder = WakeupRecorder::WakeupRecorder()
+  let composer = FakeComposer::FakeComposer(response_text="x")
+  // Policy off: the registry still projects WaitingReply, but no request.
+  let policy_off = test_tools(composer=composer as &ChildComposer)
+  policy_off.wakeup = Some(wakeup_recorder_port(recorder))
+  seed_registered_child(policy_off, child_session="subagent-1", session="p1")
+  ignore(
+    policy_off.question.register(
+      "subagent-1",
+      "call-1",
+      @posoco.UiRequest::Input(prompt="q?", default=None),
+    ),
+  )
+  assert_eq(recorder.requests, [])
+  match policy_off.registry.get("subagent-1") {
+    Some(record) => assert_true(record.state is WaitingReply("question-1"))
+    None => fail("child must stay registered")
+  }
+  // Policy on but no composed wakeup capability: lazy injection.
+  let capability_less = test_tools(
+    composer=composer as &ChildComposer,
+    auto_wakeup=true,
+  )
+  seed_registered_child(
+    capability_less,
+    child_session="subagent-2",
+    session="p2",
+  )
+  ignore(
+    capability_less.question.register(
+      "subagent-2",
+      "call-2",
+      @posoco.UiRequest::Input(prompt="q?", default=None),
+    ),
+  )
+  assert_eq(recorder.requests, [])
+  // No known session at all (record empty, no scoped event seen): skip.
+  let session_less = test_tools(
+    composer=composer as &ChildComposer,
+    auto_wakeup=true,
+  )
+  session_less.wakeup = Some(wakeup_recorder_port(recorder))
+  seed_registered_child(session_less, child_session="subagent-3", session="")
+  ignore(
+    session_less.question.register(
+      "subagent-3",
+      "call-3",
+      @posoco.UiRequest::Input(prompt="q?", default=None),
+    ),
+  )
+  assert_eq(recorder.requests, [])
+}
