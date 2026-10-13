@@ -78,7 +78,7 @@ fn missing_uuid_env() -> Env {
 }
 
 ///|
-fn snapshot_text(tasks : Json, revision : Int) -> String {
+fn snapshot_text(tasks : Json, revision : Int32) -> String {
   @protocol.encode_server_frame(
     Snapshot({
       protocol_version: 1,
@@ -86,7 +86,7 @@ fn snapshot_text(tasks : Json, revision : Int) -> String {
       board_revision: revision.to_int64(),
       payload: {
         "board": {
-          "revision": revision.to_json(),
+          "revision": Json(revision),
           "tasks": tasks,
           "attempts": [],
         },
@@ -100,8 +100,8 @@ fn snapshot_text(tasks : Json, revision : Int) -> String {
 fn task_event_text(
   id : String,
   stage : String,
-  seq : Int,
-  revision : Int,
+  seq : Int32,
+  revision : Int32,
 ) -> String {
   @protocol.encode_server_frame(
     Event({
@@ -109,7 +109,7 @@ fn task_event_text(
       board_revision: revision.to_int64(),
       kind: "board.task.stage_changed",
       scope: None,
-      payload: { "task_id": id.to_json(), "task": carded_task_json(id, stage) },
+      payload: { "task_id": Json(id), "task": carded_task_json(id, stage) },
     }),
   )
 }
@@ -209,10 +209,10 @@ test "snapshot resets backoff and replica updates do not mutate previous model" 
 ///|
 fn carded_task_json(id : String, stage : String) -> Json {
   {
-    "id": id.to_json(),
-    "title": ("Task " + id).to_json(),
+    "id": Json(id),
+    "title": Json(("Task " + id)),
     "description": "Read-only task",
-    "stage": stage.to_json(),
+    "stage": Json(stage),
     "priority": "normal",
     "definition_of_done": [],
     "dependencies": [],

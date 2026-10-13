@@ -8,8 +8,8 @@ pub struct CachedDoc {
   content_type : String
   url_requested : String
   url_final : String
-  status : Int
-  bytes_fetched : Int
+  status : Int32
+  bytes_fetched : Int32
   retrieved_ms : Int64
 }
 
@@ -19,7 +19,7 @@ pub struct CachedDoc {
 /// recent key at the tail; a `get` hit refreshes recency.
 pub struct DocCache {
   ttl_ms : Int64
-  cap : Int
+  cap : Int32
   now_ms : () -> Int64
   entries : Map[String, CachedDoc]
   order : Array[String]
@@ -30,9 +30,9 @@ pub struct DocCache {
 /// host layer injects the real clock (`@async.now()` or similar) at
 /// construction. An entry expires once its age reaches `ttl_ms`.
 pub fn DocCache::DocCache(
-  ttl_ms? : Int64 = 900_000L,
-  cap? : Int = 50,
-  now_ms? : () -> Int64 = fn() { 0L },
+  ttl_ms~ : Int64 = 900_000L,
+  cap~ : Int32 = 50,
+  now_ms~ : () -> Int64 = fn() { 0L },
 ) -> DocCache {
   { ttl_ms, cap, now_ms, entries: Map::from_array([]), order: [], }
 }

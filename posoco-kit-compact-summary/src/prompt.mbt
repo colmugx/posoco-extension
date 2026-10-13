@@ -12,8 +12,8 @@
 pub fn build_summary_prompt(
   template : SummaryTemplate,
   conversation_text : String,
-  previous_summary? : String? = None,
-  custom_instruction? : String? = None,
+  previous_summary~ : String? = None,
+  custom_instruction~ : String? = None,
 ) -> Array[@posoco.Message] {
   let mut user = "<conversation>\n" +
     conversation_text +

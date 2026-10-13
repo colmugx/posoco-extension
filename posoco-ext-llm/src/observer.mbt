@@ -57,7 +57,7 @@ fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
 
 ///|
 /// Compact token count: raw below 1K, one-decimal K/M above.
-fn fmt_ctx_tokens(n : Int) -> String {
+fn fmt_ctx_tokens(n : Int32) -> String {
   if n >= 1000000 {
     "\{fmt_ctx_one_decimal(n.to_double() / 1000000.0)}M"
   } else if n >= 1000 {
@@ -80,11 +80,11 @@ fn fmt_ctx_one_decimal(value : Double) -> String {
 /// as measured. An absent or untrusted reading renders `?` — never zero.
 fn ctx_segment_value(
   source : @types.ContextReadingSource,
-  measured : Int?,
-  estimated_added : Int,
-  window : Int?,
+  measured : Int32?,
+  estimated_added : Int32,
+  window : Int32?,
 ) -> String {
-  let total : Int? = match measured {
+  let total : Int32? = match measured {
     Some(m) =>
       if source is @types.Unknown {
         None

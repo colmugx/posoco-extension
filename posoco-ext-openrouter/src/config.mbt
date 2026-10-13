@@ -31,7 +31,7 @@ pub(all) struct OpenRouterConfig {
   thinking_efforts : Array[String]
   /// Declared context capacity of `model`, in tokens. `None` = undeclared;
   /// auto-compact stays off for this model rather than guessing a window.
-  context_window : Int?
+  context_window : Int32?
   /// Declared auto-compact trigger point as a fraction of the context window,
   /// in (0, 1]. `None` = the host/core default (0.88) applies.
   compact_threshold : Double?
@@ -63,16 +63,16 @@ pub extend OpenRouterConfig with @moonbitlang/core/debug.Debug::{to_repr}
 pub fn OpenRouterConfig::OpenRouterConfig(
   api_key : String,
   model~ : String,
-  base_url? : String = "https://openrouter.ai/api/v1",
-  thinking? : Bool = false,
-  reasoning_effort? : String? = None,
-  thinking_efforts? : Array[String] = [],
-  context_window? : Int? = None,
-  compact_threshold? : Double? = None,
-  http_referer? : String? = None,
-  title? : String? = None,
-  supports_images? : Bool = false,
-  send_prompt_cache_key? : Bool = false,
+  base_url~ : String = "https://openrouter.ai/api/v1",
+  thinking~ : Bool = false,
+  reasoning_effort~ : String? = None,
+  thinking_efforts~ : Array[String] = [],
+  context_window~ : Int32? = None,
+  compact_threshold~ : Double? = None,
+  http_referer~ : String? = None,
+  title~ : String? = None,
+  supports_images~ : Bool = false,
+  send_prompt_cache_key~ : Bool = false,
 ) -> OpenRouterConfig {
   {
     api_key,

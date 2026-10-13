@@ -24,7 +24,7 @@ pub(all) struct WriteTools {
 /// Canonical constructor. Use this everywhere.
 pub fn WriteTools::WriteTools(
   freshness? : @devkit.FreshnessGuard,
-  anchor? : @devkit.WorkspaceAnchor? = None,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
 ) -> WriteTools {
   WriteTools::{ freshness, anchor, }
 }

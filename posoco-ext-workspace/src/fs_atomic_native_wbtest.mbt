@@ -1,5 +1,5 @@
 ///|
-extern "C" fn workspace_test_file_mode(fd : @types.Fd) -> Int = "cetas_workspace_test_file_mode"
+extern "C" fn workspace_test_file_mode(fd : @types.Fd) -> Int32 = "cetas_workspace_test_file_mode"
 
 ///|
 async fn with_atomic_test_dir(body : async (String) -> Unit) -> Unit {

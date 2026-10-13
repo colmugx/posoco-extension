@@ -240,7 +240,7 @@ pub fn BoardRuntime::publish_telemetry(
   self : BoardRuntime,
   board_revision~ : Int64,
   kind~ : String,
-  scope? : @protocol.BoardEventScope? = None,
+  scope~ : @protocol.BoardEventScope? = None,
   payload~ : Json,
 ) -> @protocol.BoardWireEvent {
   self.backend_.publish_telemetry(board_revision~, kind~, scope~, payload~)

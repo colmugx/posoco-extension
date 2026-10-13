@@ -1191,15 +1191,15 @@ fn zen_truncated_error() -> @posoco.ModelError {
 /// the summary text (an empty stop completion would fail the compact with
 /// the typed empty-summary error instead).
 struct ZenSummaryModelPort {
-  calls : Ref[Int]
-  failures_left : Ref[Int]
+  calls : Ref[Int32]
+  failures_left : Ref[Int32]
   error : @posoco.ModelError
   summary : String
 }
 
 ///|
 fn ZenSummaryModelPort::ZenSummaryModelPort(
-  failures : Int,
+  failures : Int32,
   error : @posoco.ModelError,
   summary : String,
 ) -> ZenSummaryModelPort {

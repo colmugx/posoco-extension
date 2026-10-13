@@ -71,7 +71,7 @@ pub fn scan_final_message(
   for line in text_of_message(message).split("\n") {
     lines.push(line.trim().to_owned())
   }
-  let mut last_signal_index : Int? = None
+  let mut last_signal_index : Int32? = None
   let mut last_is_completion = false
   for i, line in lines {
     if line == completion_marker {

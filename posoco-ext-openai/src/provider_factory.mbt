@@ -14,9 +14,9 @@ pub(all) struct OpenAIProvider {
 
 ///|
 pub fn OpenAIProvider::OpenAIProvider(
-  transport? : &OpenAIModelsHttpTransport? = None,
-  oauth_transport? : &@oauth.OAuthHttpTransport? = None,
-  cache_dir? : String? = None,
+  transport~ : &OpenAIModelsHttpTransport? = None,
+  oauth_transport~ : &@oauth.OAuthHttpTransport? = None,
+  cache_dir~ : String? = None,
 ) -> OpenAIProvider {
   OpenAIProvider::{
     models_transport: transport,

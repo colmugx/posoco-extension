@@ -21,8 +21,8 @@ priv struct FakeComposer {
 ///|
 fn FakeComposer::FakeComposer(
   response_text~ : String,
-  slow_model? : &@posoco.ModelPort? = None,
-  fail_with? : String? = None,
+  slow_model~ : &@posoco.ModelPort? = None,
+  fail_with~ : String? = None,
 ) -> FakeComposer {
   {
     response_text,
@@ -76,11 +76,11 @@ impl ChildComposer for FakeComposer with fn compose(
 /// ModelPort fake that never answers in time: sleeps far longer than any
 /// test spawn timeout, then returns a stop response nobody will read.
 priv struct SlowModel {
-  delay_ms : Int
+  delay_ms : Int32
 }
 
 ///|
-fn SlowModel::SlowModel(delay_ms~ : Int) -> SlowModel {
+fn SlowModel::SlowModel(delay_ms~ : Int32) -> SlowModel {
   { delay_ms, }
 }
 
@@ -119,11 +119,11 @@ impl @posoco.ModelPort for SlowModel with fn provider_config(_self : SlowModel) 
 ///|
 fn test_tools(
   composer~ : &ChildComposer,
-  config? : @kit.SubagentConfig = @kit.SubagentConfig::defaults(),
-  parent_selection? : (() -> (String, String?))? = None,
-  observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
-  catalog? : @kind.KindCatalog = @kind.KindCatalog::builtin(),
-  auto_wakeup? : Bool = false,
+  config~ : @kit.SubagentConfig = @kit.SubagentConfig::defaults(),
+  parent_selection~ : (() -> (String, String?))? = None,
+  observers~ : Array[(@kit.SubagentEvent) -> Unit] = [],
+  catalog~ : @kind.KindCatalog = @kind.KindCatalog::builtin(),
+  auto_wakeup~ : Bool = false,
 ) -> SubagentTools {
   SubagentTools::SubagentTools(
     catalog~,
@@ -181,7 +181,7 @@ fn catalog_with_bound_kind() -> @kind.KindCatalog {
 /// default effort).
 fn config_with_default(
   model~ : String,
-  effort? : String? = None,
+  effort~ : String? = None,
 ) -> @kit.SubagentConfig {
   {
     default_model: Some(model),
@@ -230,13 +230,13 @@ test "list_tools_description_advertises_configured_default_model" {
 }
 
 ///|
-fn config_with_spawn_budget(budget : Int) -> @kit.SubagentConfig {
+fn config_with_spawn_budget(budget : Int32) -> @kit.SubagentConfig {
   let base = @kit.SubagentConfig::defaults()
   { ..base, limits: { ..base.limits, spawn_budget: budget, }, }
 }
 
 ///|
-fn config_with_global_concurrency(limit : Int) -> @kit.SubagentConfig {
+fn config_with_global_concurrency(limit : Int32) -> @kit.SubagentConfig {
   let base = @kit.SubagentConfig::defaults()
   {
     ..base,

@@ -20,7 +20,7 @@ fn gate_build_agent(
 ///|
 /// Stop response reporting `total` tokens (split evenly input/output) so the
 /// Observer accumulates usage.
-fn gate_usage_step(text : String, total : Int) -> @posoco.ScriptedModelStep {
+fn gate_usage_step(text : String, total : Int32) -> @posoco.ScriptedModelStep {
   let usage : @posoco.Usage = {
     input_tokens: Some(total / 2),
     output_tokens: Some(total / 2),
@@ -61,7 +61,10 @@ fn gate_plan_args() -> Json {
 
 ///|
 /// Concatenated text of every message in one recorded model-call input.
-fn gate_model_input_text(model : @posoco.ScriptedModel, index : Int) -> String {
+fn gate_model_input_text(
+  model : @posoco.ScriptedModel,
+  index : Int32,
+) -> String {
   let parts : Array[String] = []
   for msg in model.received_messages[index] {
     parts.push(text_of_message(msg))

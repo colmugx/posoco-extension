@@ -6,7 +6,7 @@
 ///|
 struct TimedPollTransport {
   responses : Array[OAuthHttpResponse]
-  mut next : Int
+  mut next : Int32
   post_times : Array[Int64]
 }
 

@@ -52,12 +52,12 @@ pub fn Capability::read_write() -> Capability {
 /// Bounded-work limits. Frozen defaults from the adapter reliability
 /// contract; configurable per-policy.
 pub(all) struct WorkspaceLimits {
-  max_read_bytes : Int
-  max_walk_depth : Int
-  max_walk_entries : Int
-  max_results : Int // glob/grep/find/ls result count
-  max_matches_per_file : Int // grep
-  max_line_width : Int // grep line truncation
+  max_read_bytes : Int32
+  max_walk_depth : Int32
+  max_walk_entries : Int32
+  max_results : Int32 // glob/grep/find/ls result count
+  max_matches_per_file : Int32 // grep
+  max_line_width : Int32 // grep line truncation
 } derive(Debug)
 
 ///|
@@ -127,14 +127,14 @@ pub extend WorkspacePolicy with @moonbitlang/core/debug.Debug::{to_repr}
 /// Raises if cwd is not inside root.
 pub fn WorkspacePolicy::checked(
   root~ : String,
-  default_cwd? : String = "",
-  capability? : Capability = Capability::read_write(),
-  symlink? : SymlinkPolicy = FollowIfInsideRoot,
-  ignore_patterns? : Array[String] = [
+  default_cwd~ : String = "",
+  capability~ : Capability = Capability::read_write(),
+  symlink~ : SymlinkPolicy = FollowIfInsideRoot,
+  ignore_patterns~ : Array[String] = [
     "node_modules", ".git", ".hg", ".svn", "_build", "target",
   ],
-  limits? : WorkspaceLimits = WorkspaceLimits::defaults(),
-  allow_create_parent? : Bool = false,
+  limits~ : WorkspaceLimits = WorkspaceLimits::defaults(),
+  allow_create_parent~ : Bool = false,
 ) -> Result[WorkspacePolicy, String] {
   let cwd = if default_cwd == "" { root } else { default_cwd }
   // Lexical check: cwd must start with root.
@@ -231,9 +231,9 @@ pub fn glob_match(pattern : String, text : String) -> Bool {
 ///|
 fn glob_match_segments(
   p : Array[StringView],
-  pi : Int,
+  pi : Int32,
   t : Array[StringView],
-  ti : Int,
+  ti : Int32,
 ) -> Bool {
   if pi >= p.length() {
     return ti >= t.length()
@@ -268,9 +268,9 @@ fn segment_match(pat : StringView, seg : StringView) -> Bool {
 ///|
 fn wildcard_match(
   pat : Array[Char],
-  pi : Int,
+  pi : Int32,
   seg : Array[Char],
-  si : Int,
+  si : Int32,
 ) -> Bool {
   if pi >= pat.length() {
     return si >= seg.length()

@@ -69,7 +69,7 @@ extern "js" fn js_read_base64_envelope(
 
 ///|
 priv struct JsStatInfo {
-  size : Int
+  size : Int32
   ms : Double
   is_dir : Bool
 }
@@ -173,8 +173,8 @@ fn js_read_page(
 impl FsIo for JsFsIo with fn read_lines(
   _self,
   path : String,
-  skip : Int,
-  take : Int,
+  skip : Int32,
+  take : Int32,
 ) -> LinePage {
   let (lines, total_bytes) = js_read_page(path)
   let total = lines.length()
@@ -188,7 +188,7 @@ impl FsIo for JsFsIo with fn read_lines(
 }
 
 ///|
-impl FsIo for JsFsIo with fn read_last_lines(_self, path : String, take : Int) -> LinePage {
+impl FsIo for JsFsIo with fn read_last_lines(_self, path : String, take : Int32) -> LinePage {
   let (lines, total_bytes) = js_read_page(path)
   let total = lines.length()
   let take_eff = if take < total { take } else { total }

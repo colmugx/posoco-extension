@@ -42,6 +42,8 @@ fn deepseek_catalog_slot(
     api_key=Some(api_key),
     thinking_efforts=slot_efforts,
     default_effort~,
+    context_window=config.context_window,
+    context_window_source="configured",
     rebuild_on_api_key=Some(fn(credential) {
       let rebuilt_config = DeepSeekConfig(
         credential.secret,
@@ -49,6 +51,7 @@ fn deepseek_catalog_slot(
         base_url=config.base_url,
         endpoint_prefix=config.endpoint_prefix,
         reasoning_effort=config.reasoning_effort,
+        context_window=config.context_window,
       )
       deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     }),
@@ -74,6 +77,11 @@ fn deepseek_catalog_slot_from_info(
     base_url=base_config.base_url,
     endpoint_prefix=base_config.endpoint_prefix,
     reasoning_effort=base_config.reasoning_effort,
+    context_window=if info.id == base_config.model {
+      base_config.context_window
+    } else {
+      None
+    },
   )
   deepseek_catalog_slot(config, ctx, api_key)
 }

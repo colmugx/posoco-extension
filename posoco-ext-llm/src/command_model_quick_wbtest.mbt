@@ -3,7 +3,7 @@
 /// every read and counts the calls.
 struct QuickPickQuotaSource {
   result : Result[Array[@devkit.QuotaReading], String]
-  mut calls : Int
+  mut calls : Int32
 }
 
 ///|

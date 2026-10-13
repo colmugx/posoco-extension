@@ -68,7 +68,7 @@ pub extend TodoItem with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Upper bound on list length accepted by `todo_write`.
-pub const MAX_TODOS : Int = 50
+pub const MAX_TODOS : Int32 = 50
 
 ///|
 fn status_marker(status : TodoStatus) -> String {
@@ -80,7 +80,7 @@ fn status_marker(status : TodoStatus) -> String {
 }
 
 ///|
-fn count_status(items : Array[TodoItem], status : TodoStatus) -> Int {
+fn count_status(items : Array[TodoItem], status : TodoStatus) -> Int32 {
   items.iter().filter(item => item.status == status).count()
 }
 
@@ -125,7 +125,7 @@ fn summary_line(items : Array[TodoItem]) -> String {
 /// Structured payload carried by tool results and command outcomes. The
 /// reserved `summary` field holds the one-line row text a UI shows; `items`
 /// mirrors the list for machine-readable observers.
-fn structured_state(items : Array[TodoItem], revision : Int) -> Json {
+fn structured_state(items : Array[TodoItem], revision : Int32) -> Json {
   Json::object(
     Map::from_array([
       ("summary", Json::string(summary_line(items))),
@@ -161,7 +161,7 @@ pub struct TodoList {
   /// NoopUiPort so pre-compose writes and headless hosts are silent no-ops.
   priv mut ui : &@posoco.UiPort
   priv mut entries : Array[TodoItem]
-  priv mut rev : Int
+  priv mut rev : Int32
 }
 
 ///|
@@ -215,7 +215,7 @@ pub fn TodoList::items(self : TodoList) -> Array[TodoItem] {
 ///|
 /// Monotonic write counter: bumps once per accepted `todo_write`, never on
 /// rejected or read-only calls.
-pub fn TodoList::revision(self : TodoList) -> Int {
+pub fn TodoList::revision(self : TodoList) -> Int32 {
   self.rev
 }
 

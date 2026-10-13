@@ -7,7 +7,7 @@
 priv struct FakeCli {
   calls : Array[String]
   results : Array[CliResult]
-  mut next : Int
+  mut next : Int32
 }
 
 ///|
@@ -37,7 +37,7 @@ fn ok_result(output : String) -> CliResult {
 
 ///|
 /// `obsidian file` metadata body for freshness stamps (ms epochs).
-fn file_meta(size : Int, modified_ms : String) -> String {
+fn file_meta(size : Int32, modified_ms : String) -> String {
   "path\tnotes/x.md\nname\tx\nextension\tmd\nsize\t\{size}\ncreated\t1788014579751\nmodified\t\{modified_ms}\n"
 }
 
@@ -84,7 +84,7 @@ fn b(key : String, value : Bool) -> (String, Json) {
 }
 
 ///|
-fn i(key : String, value : Int) -> (String, Json) {
+fn i(key : String, value : Int32) -> (String, Json) {
   (key, Json::number(value.to_double()))
 }
 

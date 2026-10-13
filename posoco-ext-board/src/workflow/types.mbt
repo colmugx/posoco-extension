@@ -18,9 +18,9 @@ pub(all) enum WorkflowFailurePolicy {
 pub(all) struct WorkflowRunSpec {
   run_id : String
   scope : WorkflowScope
-  max_executions : Int
-  max_elapsed_ms : Int
-  execution_timeout_ms : Int
+  max_executions : Int32
+  max_elapsed_ms : Int32
+  execution_timeout_ms : Int32
   failure_policy : WorkflowFailurePolicy
 } derive(Eq, Debug)
 
@@ -44,10 +44,10 @@ pub(all) struct WorkflowRunSpec {
 pub fn WorkflowRunSpec::WorkflowRunSpec(
   run_id~ : String,
   scope~ : WorkflowScope,
-  max_executions~ : Int,
-  max_elapsed_ms~ : Int,
-  execution_timeout_ms~ : Int,
-  failure_policy? : WorkflowFailurePolicy = StopOnFailure,
+  max_executions~ : Int32,
+  max_elapsed_ms~ : Int32,
+  execution_timeout_ms~ : Int32,
+  failure_policy~ : WorkflowFailurePolicy = StopOnFailure,
 ) -> WorkflowRunSpec {
   {
     run_id,
@@ -111,11 +111,11 @@ pub(all) enum WorkflowError {
 pub(all) struct WorkflowStatus {
   run_id : String?
   phase : WorkflowPhase
-  admitted : Int
-  succeeded : Int
-  failed : Int
-  cancelled : Int
-  remaining_executions : Int
+  admitted : Int32
+  succeeded : Int32
+  failed : Int32
+  cancelled : Int32
+  remaining_executions : Int32
   started_at_ms : Int64?
   elapsed_ms : Int64
   remaining_ms : Int64

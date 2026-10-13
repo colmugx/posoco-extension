@@ -7,7 +7,7 @@
 /// shape hosts already render.
 
 ///|
-fn openai_now_epoch_secs() -> Int {
+fn openai_now_epoch_secs() -> Int32 {
   (@async.now() / 1000L).to_int()
 }
 

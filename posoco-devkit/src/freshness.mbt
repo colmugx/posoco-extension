@@ -9,7 +9,7 @@
 /// in bytes.
 pub(all) struct FileStamp {
   mtime_s : Int64
-  mtime_ns : Int
+  mtime_ns : Int32
   size : Int64
 } derive(Eq, Debug)
 

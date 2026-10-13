@@ -94,7 +94,7 @@ pub fn ServerMetadata::ServerMetadata(
   token_endpoint~ : String,
   device_authorization_endpoint? : String,
   registration_endpoint? : String,
-  scopes_supported? : Array[String] = [],
+  scopes_supported~ : Array[String] = [],
 ) -> ServerMetadata {
   {
     authorization_endpoint,

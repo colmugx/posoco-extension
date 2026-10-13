@@ -6,7 +6,7 @@ pub(all) struct BoardExecutionRequest {
   execution_id : String
   session_id : String
   input : String
-  timeout_ms : Int?
+  timeout_ms : Int32?
 }
 
 ///|

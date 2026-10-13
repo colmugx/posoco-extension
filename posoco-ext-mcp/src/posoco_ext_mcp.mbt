@@ -85,7 +85,7 @@ const MCP_SUCCESS_OUTPUT_CHARS = 40_000
 const MCP_ERROR_OUTPUT_CHARS = 8_000
 
 ///|
-fn mcp_model_text(text : String, limit : Int) -> (String, Bool) {
+fn mcp_model_text(text : String, limit : Int32) -> (String, Bool) {
   let clipped = @devkit.truncate_chars(text, limit)
   if clipped == text {
     (clipped, false)
@@ -115,7 +115,7 @@ fn convert_tool_def(
     name: @posoco.ToolName::unchecked(
       namespaced_tool_name(server_name, mcp_tool.name),
     ),
-    description: mcp_tool.description,
+    description: mcp_tool.description.unwrap_or(""),
     input_schema: sanitize_tool_schema(mcp_tool.input_schema),
     owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
     policy: @posoco.ExecutionPolicy::Parallel,
@@ -124,22 +124,24 @@ fn convert_tool_def(
 }
 
 ///|
-/// Convert MCP ContentItem array to a plain text string.
-fn convert_content_to_string(items : Array[@types.ContentItem]) -> String {
+/// Convert MCP ContentBlock array to a plain text string.
+fn convert_content_to_string(items : Array[@types.ContentBlock]) -> String {
   items
   .map(fn(item) {
     match item {
-      @types.ContentItem::Text(t) => t
-      @types.ContentItem::Image(data, mime_type~) =>
+      @types.ContentBlock::Text(t, ..) => t
+      @types.ContentBlock::Image(data, mime_type~, ..) =>
         "[Image: \{mime_type}, \{data.length()} chars]"
-      @types.ContentItem::ResourceLink(uri) => "[Resource: \{uri}]"
-      @types.ContentItem::EmbeddedResource(content) =>
-        match content {
-          @types.EmbeddedResourceContent::Text(t, uri~, ..) =>
-            "[Resource \{uri}]: \{t}"
-          @types.EmbeddedResourceContent::Blob(b, uri~, ..) =>
-            "[Resource \{uri}]: [blob \{b.length()} chars]"
+      @types.ContentBlock::Audio(data, mime_type~, ..) =>
+        "[Audio: \{mime_type}, \{data.length()} chars]"
+      @types.ContentBlock::ResourceLink(data, ..) => "[Resource: \{data.uri}]"
+      @types.ContentBlock::EmbeddedResource(contents, ..) =>
+        match contents.data {
+          @types.ResourceData::Text(t) => "[Resource \{contents.uri}]: \{t}"
+          @types.ResourceData::Blob(b) =>
+            "[Resource \{contents.uri}]: [blob \{b.length()} chars]"
         }
+      @types.ContentBlock::Unknown(_) => "[Unknown content]"
     }
   })
   .join("\n")
@@ -170,12 +172,12 @@ pub(all) struct MCPServerConfig {
   /// Deadline in milliseconds for one tools/call, tools/list, and the http
   /// connect probe (stdio's era probe keeps the SDK's internal 3000ms).
   /// 0 disables the deadline.
-  timeout_ms : Int
+  timeout_ms : Int32
   /// Reactive reconnects consumed per execute failure after a wire-level
   /// break or a timeout; 0 disables the retry. Independent of this knob, a
   /// connection whose call timed out is force-reconnected before its next
   /// use (stale-response safety).
-  max_reconnects : Int
+  max_reconnects : Int32
 }
 
 ///|
@@ -185,9 +187,9 @@ pub fn MCPServerConfig::MCPServerConfig(
   name~ : String,
   transport~ : @transport.AnyTransport,
   auth~ : ServerAuth,
-  era? : @client.ProtocolEra = @client.ProtocolEra::Auto,
-  timeout_ms? : Int = 30_000,
-  max_reconnects? : Int = 1,
+  era~ : @client.ProtocolEra = @client.ProtocolEra::Auto,
+  timeout_ms~ : Int32 = 30_000,
+  max_reconnects~ : Int32 = 1,
 ) -> MCPServerConfig {
   { name, transport, auth, era, timeout_ms, max_reconnects, }
 }
@@ -211,7 +213,7 @@ struct MCPServerConn {
   /// The config this connection was built from; the handshake target for
   /// `reconnect_one`.
   config : MCPServerConfig
-  mut epoch : Int
+  mut epoch : Int32
   _server_info : @types.ServerInfo?
 }
 
@@ -219,7 +221,7 @@ struct MCPServerConn {
 /// A complete candidate catalog for one connection. Refresh builds all of
 /// these before it is allowed to mutate bridge state.
 priv struct CatalogEntry {
-  connection_index : Int
+  connection_index : Int32
   tools : Array[@posoco.ToolDef]
 }
 
@@ -228,7 +230,7 @@ priv struct CatalogEntry {
 /// order, so committing the plan cannot discover a late validation failure.
 priv struct CatalogPlan {
   entries : Array[CatalogEntry]
-  tool_to_conn : Map[String, Int]
+  tool_to_conn : Map[String, Int32]
 }
 
 ///|
@@ -238,12 +240,12 @@ priv struct CatalogPlan {
 /// `gamma`.
 fn plan_catalog(
   entries : Array[CatalogEntry],
-  expected_connections : Int,
+  expected_connections : Int32,
 ) -> Result[CatalogPlan, String] {
   if entries.length() != expected_connections {
     return Err("MCP catalog is incomplete")
   }
-  let route : Map[String, Int] = Map::from_array([])
+  let route : Map[String, Int32] = Map::from_array([])
   for index, entry in entries {
     if entry.connection_index != index {
       return Err("MCP catalog connection order is invalid")
@@ -267,7 +269,7 @@ fn plan_catalog(
 /// no live-state writes.
 fn replace_catalog(
   entries : Array[CatalogEntry],
-  expected_connections : Int,
+  expected_connections : Int32,
   commit : (CatalogPlan) -> Unit,
 ) -> Result[Unit, String] {
   match plan_catalog(entries, expected_connections) {
@@ -285,7 +287,7 @@ fn replace_catalog(
 /// commit callback is never reached.
 fn replace_catalog_from_fetches(
   fetches : Array[Result[CatalogEntry, String]],
-  expected_connections : Int,
+  expected_connections : Int32,
   commit : (CatalogPlan) -> Unit,
 ) -> Result[Unit, String] {
   let entries : Array[CatalogEntry] = []
@@ -300,7 +302,7 @@ fn replace_catalog_from_fetches(
 
 ///|
 priv enum ListToolsFailure {
-  TimedOut(Int)
+  TimedOut(Int32)
   Failed
 }
 
@@ -313,8 +315,8 @@ async fn MCPToolBridge::fetch_tools(
   self : MCPToolBridge,
   server : String,
   client : @client.MCPClient,
-  timeout_ms : Int,
-  record_challenges? : Bool = true,
+  timeout_ms : Int32,
+  record_challenges~ : Bool = true,
 ) -> Result[Array[@posoco.ToolDef], ListToolsFailure] {
   let attempt = async fn() {
     match client.list_tools() {
@@ -353,7 +355,7 @@ async fn MCPToolBridge::fetch_tools(
 /// every wire-level break as `TransportFailure`.
 async fn call_tool_attempt(
   client : @client.MCPClient,
-  timeout_ms : Int,
+  timeout_ms : Int32,
   tool_name : String,
   args_str : String,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
@@ -386,7 +388,7 @@ async fn call_tool_attempt(
 priv enum MCPCallFailure {
   TransportFailure
   RemoteFailure
-  TimedOut(Int)
+  TimedOut(Int32)
 }
 
 ///|
@@ -470,7 +472,10 @@ fn MCPToolBridge::commit_catalog(
 /// connection (not retired). Every read that happens after an await goes
 /// through this — plus the name check in `live_slot_for` — so a stale index
 /// can never reach a neighbor slot.
-fn MCPToolBridge::live_slot(self : MCPToolBridge, idx : Int) -> MCPServerConn? {
+fn MCPToolBridge::live_slot(
+  self : MCPToolBridge,
+  idx : Int32,
+) -> MCPServerConn? {
   if idx >= self.connections.length() {
     return None
   }
@@ -487,7 +492,7 @@ fn MCPToolBridge::live_slot(self : MCPToolBridge, idx : Int) -> MCPServerConn? {
 /// slot whose content changed under it.
 fn MCPToolBridge::live_slot_for(
   self : MCPToolBridge,
-  idx : Int,
+  idx : Int32,
   server : String,
 ) -> MCPServerConn? {
   match self.live_slot(idx) {
@@ -506,7 +511,7 @@ fn MCPToolBridge::live_slot_for(
 /// in-flight readers re-validating an index can never land on a neighbor,
 /// and a slot that is never refilled degrades to "that server's tools are
 /// absent".
-fn MCPToolBridge::retire_slot(self : MCPToolBridge, slot : Int) -> Unit {
+fn MCPToolBridge::retire_slot(self : MCPToolBridge, slot : Int32) -> Unit {
   if slot >= self.connections.length() {
     return
   }
@@ -519,7 +524,7 @@ fn MCPToolBridge::retire_slot(self : MCPToolBridge, slot : Int) -> Unit {
   conn.actor = None
   conn.cached_tools = []
   conn.epoch = conn.epoch + 1
-  let routes : Map[String, Int] = Map::from_array([])
+  let routes : Map[String, Int32] = Map::from_array([])
   for i, live in self.connections {
     if live.client is None {
       continue
@@ -542,7 +547,7 @@ fn MCPToolBridge::retire_slot(self : MCPToolBridge, slot : Int) -> Unit {
 /// `on_start` activation remains the fallback for hosts that never call it.
 pub(all) struct MCPToolBridge {
   mut connections : Array[MCPServerConn]
-  mut tool_to_conn : Map[String, Int]
+  mut tool_to_conn : Map[String, Int32]
   /// Activation posture chosen at discovery time; never changes after.
   mode : LoadMode
   /// Discovered-but-not-yet-connected server configs (mcp.json path).
@@ -555,7 +560,7 @@ pub(all) struct MCPToolBridge {
   mut activated : Bool
   /// Change signal for the runtime-seam catalog source. Bumped once per
   /// activation and per successful refresh, so prompt boundaries re-read.
-  mut catalog_revision : Int
+  mut catalog_revision : Int32
   /// Set by `close()`: background probe retries check it between backoff
   /// slices so a closed bridge never holds the host's task group open.
   mut closing : Bool
@@ -600,7 +605,7 @@ pub fn MCPToolBridge::MCPToolBridge() -> MCPToolBridge {
 pub async fn MCPToolBridge::discover(
   cwd~ : String,
   user_mcp_json~ : String,
-  mode? : LoadMode = LoadMode::Eager,
+  mode~ : LoadMode = LoadMode::Eager,
 ) -> Result[MCPToolBridge, String] noraise {
   match discover_mcp_servers(cwd, user_mcp_json) {
     Ok(pending) => {
@@ -644,7 +649,7 @@ pub fn MCPToolBridge::attach(
 /// Startup-probe retry schedule: after the first failure a probe retries up
 /// to 3 times, sleeping between attempts (tests may inject a shorter
 /// schedule through `start_probes`' optional parameter).
-let probe_retry_backoff_ms : Array[Int] = [3_000, 15_000, 60_000]
+let probe_retry_backoff_ms : Array[Int32] = [3_000, 15_000, 60_000]
 
 ///|
 /// Composition-time probe entry: claim every discovered server and connect
@@ -659,7 +664,7 @@ let probe_retry_backoff_ms : Array[Int] = [3_000, 15_000, 60_000]
 /// hook, which stays the activation path for hosts that never call this.
 pub fn MCPToolBridge::start_probes(
   self : MCPToolBridge,
-  backoff_ms? : Array[Int] = probe_retry_backoff_ms,
+  backoff_ms~ : Array[Int32] = probe_retry_backoff_ms,
 ) -> Unit {
   let claimed : Array[MCPServerConfig] = []
   for config in self.pending {
@@ -694,7 +699,7 @@ pub fn MCPToolBridge::start_probes(
 /// can outlive `close()` and hold the host's task group open.
 async fn MCPToolBridge::sleep_backoff_or_close(
   self : MCPToolBridge,
-  total_ms : Int,
+  total_ms : Int32,
 ) -> Bool {
   let slice_ms = 250
   let mut waited = 0
@@ -724,7 +729,7 @@ async fn MCPToolBridge::retry_startup_probe(
   self : MCPToolBridge,
   config : MCPServerConfig,
   first_message : String,
-  backoff_ms : Array[Int],
+  backoff_ms : Array[Int32],
 ) -> Unit {
   let mut last_message = first_message
   self.startup_failures.push((config.name, last_message))
@@ -997,9 +1002,9 @@ fn MCPToolBridge::commit_connection(
   config : MCPServerConfig,
   client : @client.MCPClient,
   tools : Array[@posoco.ToolDef],
-  idx : Int,
+  idx : Int32,
   group~ : @async.TaskGroup[Unit],
-  expect_epoch~ : Int,
+  expect_epoch~ : Int32,
 ) -> Result[Unit, String] {
   // The slot may have vanished while the caller was suspended (e.g. close()
   // cleared the registry): fail honestly instead of writing a shifted index.
@@ -1066,8 +1071,8 @@ fn MCPToolBridge::commit_reconnect_fill(
   self : MCPToolBridge,
   client : @client.MCPClient,
   tools : Array[@posoco.ToolDef],
-  idx : Int,
-  expect_epoch~ : Int,
+  idx : Int32,
+  expect_epoch~ : Int32,
 ) -> Result[Unit, String] {
   if idx >= self.connections.length() {
     return Err("MCP connection is no longer present")
@@ -1108,7 +1113,7 @@ async fn MCPToolBridge::fetch_admitted(
   actor : ConnActor[@client.MCPClient],
   permit : ConnPermit[@client.MCPClient],
   server : String,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Result[Array[@posoco.ToolDef], String] {
   let mut outcome : CallOutcome = CallOutcome::TransportFail
   defer {
@@ -1143,10 +1148,10 @@ async fn MCPToolBridge::fetch_admitted(
 /// reactively retries a failed fetch (unchanged).
 async fn MCPToolBridge::refresh_fetch_one(
   self : MCPToolBridge,
-  conn_idx : Int,
+  conn_idx : Int32,
   actor : ConnActor[@client.MCPClient],
   server : String,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Result[Array[@posoco.ToolDef], String] {
   let admission_failed = list_tools_failure_message(
     "MCP refresh list_tools failed",
@@ -1156,7 +1161,7 @@ async fn MCPToolBridge::refresh_fetch_one(
   // (permit, deadline it was admitted under): a forced reconnect re-reads
   // the deadline from the slot after the await — the config may have been
   // replaced by a concurrent refill.
-  let admitted : (ConnPermit[@client.MCPClient], Int) = match
+  let admitted : (ConnPermit[@client.MCPClient], Int32) = match
     conn_actor_acquire(actor, conn_ask_timeout(timeout_ms)) {
     Err(_) => return Err(admission_failed)
     Ok(Permit(permit)) => (permit, timeout_ms)
@@ -1417,7 +1422,7 @@ pub async fn MCPToolBridge::reconnect_server(
 /// its duplicate after a normal completion is a structural no-op.
 async fn MCPToolBridge::reconnect_one(
   self : MCPToolBridge,
-  conn_idx : Int,
+  conn_idx : Int32,
 ) -> Result[Unit, String] {
   if conn_idx >= self.connections.length() {
     return Err("MCP connection is no longer present")
@@ -1583,17 +1588,18 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
       // report. Only the typed failure surfaces here.
       raise mcp_call_failure(failure, original_name)
   }
+  let is_error = result.is_error.unwrap_or(false)
   let raw = convert_content_to_string(result.content)
   let (content, truncated) = mcp_model_text(
     raw,
-    if result.is_error {
+    if is_error {
       MCP_ERROR_OUTPUT_CHARS
     } else {
       MCP_SUCCESS_OUTPUT_CHARS
     },
   )
   let structured = mcp_outcome_structured(truncated)
-  if result.is_error {
+  if is_error {
     @posoco.ToolOutcome::ToolReportedError(content~, structured~)
   } else {
     @posoco.ToolOutcome::Success(content~, structured~)
@@ -1604,7 +1610,7 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
 /// The ask deadline for actor arbitration: the connection's own `timeout_ms`
 /// when one is configured, else a large constant (0 means "no deadline", so
 /// the admission ask must not use it literally).
-fn conn_ask_timeout(timeout_ms : Int) -> Int {
+fn conn_ask_timeout(timeout_ms : Int32) -> Int32 {
   if timeout_ms > 0 {
     timeout_ms
   } else {
@@ -1621,7 +1627,7 @@ fn conn_ask_timeout(timeout_ms : Int) -> Int {
 /// already maps that to `stage=transport`.
 async fn conn_actor_acquire(
   actor : ConnActor[@client.MCPClient],
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Result[ConnReply[@client.MCPClient], MCPCallFailure] {
   let reply : Result[ConnReply[@client.MCPClient], @fuwaroid.AskFailure] = actor.acquire(
     timeout_ms~,
@@ -1651,7 +1657,7 @@ async fn conn_actor_acquire(
 async fn call_under_permit(
   actor : ConnActor[@client.MCPClient],
   permit : ConnPermit[@client.MCPClient],
-  timeout_ms : Int,
+  timeout_ms : Int32,
   tool_name : String,
   args_str : String,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
@@ -1689,7 +1695,7 @@ async fn call_under_permit(
 /// server this call started on.
 async fn MCPToolBridge::invoke_mcp_tool(
   self : MCPToolBridge,
-  conn_idx : Int,
+  conn_idx : Int32,
   tool_name : String,
   args_str : String,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {

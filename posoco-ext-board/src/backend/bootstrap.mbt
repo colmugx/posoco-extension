@@ -35,7 +35,7 @@ fn board_publish_commit(
 /// Bounded bootstrap attempts. Each attempt takes a fresh boundary, so a
 /// burst that evicted the previous suffix converges instead of looping on
 /// the same stale position.
-let board_bootstrap_attempts : Int = 4
+let board_bootstrap_attempts : Int32 = 4
 
 ///|
 /// Composite snapshot for the stream boundary the coordinator answered:

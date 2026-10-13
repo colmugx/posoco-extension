@@ -4,7 +4,7 @@
 /// ZCODE_EXT_LIVE gate (live_wbtest.mbt).
 
 ///|
-fn background_call(args? : Array[(String, Json)] = []) -> @posoco.ToolCall {
+fn background_call(args~ : Array[(String, Json)] = []) -> @posoco.ToolCall {
   @posoco.ToolCall::{
     call_id: @posoco.CallId::unchecked("zcode-test"),
     name: @posoco.ToolName::unchecked("zcode"),
@@ -128,7 +128,7 @@ test "background with session_id is refused at parse" {
 ///|
 async test "background receipt accepted and outcome delivered next turn" {
   let summary = "delegated!\n\nsession_id: sess_child"
-  let runs : Ref[Int] = Ref(0)
+  let runs : Ref[Int32] = Ref(0)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_tool_call_response(
@@ -194,7 +194,7 @@ async test "background receipt accepted and outcome delivered next turn" {
 /// classified timed out, never completed with the garbage text.
 async test "background timeout survives cancellation masked as a return" {
   let summary = "masked garbage"
-  let runs : Ref[Int] = Ref(0)
+  let runs : Ref[Int32] = Ref(0)
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_tool_call_response(

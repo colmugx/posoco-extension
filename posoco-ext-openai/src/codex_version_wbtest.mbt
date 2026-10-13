@@ -10,8 +10,8 @@
 /// Build a GitHub `/releases/latest`-shaped body with a pinned tag and flags.
 fn codex_release_body(
   tag : String,
-  draft? : Bool = false,
-  prerelease? : Bool = false,
+  draft~ : Bool = false,
+  prerelease~ : Bool = false,
 ) -> String {
   "{\"url\":\"https://api.github.com/repos/openai/codex/releases/1\"," +
   "\"tag_name\":\"" +
@@ -32,7 +32,7 @@ struct CodexVersionProbeTransport {
   log : Array[String]
   header_log : Array[Map[String, String]]
   responses : Array[OpenAIModelsHttpResponse]
-  mut calls : Int
+  mut calls : Int32
 }
 
 ///|
@@ -86,7 +86,7 @@ struct RecordingVersionCache {
 ///|
 fn RecordingVersionCache::RecordingVersionCache(
   log : Array[String],
-  raw? : String? = None,
+  raw~ : String? = None,
 ) -> RecordingVersionCache {
   { log, raw, }
 }

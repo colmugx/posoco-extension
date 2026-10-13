@@ -17,8 +17,8 @@ fn decoder_attempt_id(value : String) -> @domain.AttemptId {
 fn decoder_wire(
   name : String,
   args : Json,
-  command_id? : String = "c-1",
-  expected_revision? : Int64 = 7L,
+  command_id~ : String = "c-1",
+  expected_revision~ : Int64 = 7L,
 ) -> BoardClientCommand {
   { command_id, name, expected_revision, args, }
 }
@@ -86,7 +86,7 @@ fn decoder_create_args(exclude : String) -> Json raise {
 fn decoder_ok(
   wire : BoardClientCommand,
   expected : @domain.BoardCommand,
-  at_ms? : Int64 = 1000L,
+  at_ms~ : Int64 = 1000L,
 ) -> Unit raise {
   assert_eq(decode_board_command(wire, at_ms), Ok(expected))
 }
@@ -96,7 +96,7 @@ fn decoder_ok(
 /// non-empty reason and the stable invalid_arguments wire code.
 fn decoder_args_error(
   wire : BoardClientCommand,
-  at_ms? : Int64 = 1000L,
+  at_ms~ : Int64 = 1000L,
 ) -> Unit raise {
   match decode_board_command(wire, at_ms) {
     Err(InvalidArguments(command_id~, name~, reason~)) => {
@@ -118,7 +118,7 @@ fn decoder_args_error(
 /// that correlation id is empty, with the stable invalid_command code.
 fn decoder_command_error(
   wire : BoardClientCommand,
-  at_ms? : Int64 = 1000L,
+  at_ms~ : Int64 = 1000L,
 ) -> Unit raise {
   match decode_board_command(wire, at_ms) {
     Err(InvalidCommand(command_id~, reason~)) => {

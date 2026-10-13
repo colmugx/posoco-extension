@@ -35,12 +35,12 @@ pub struct Stats {
   mut round_started_ms : Int64?
   mut first_token_ms : Int64?
   mut last_chunk_ms : Int64?
-  mut delta_chars : Int
-  mut streamed_output_tokens : Int?
+  mut delta_chars : Int32
+  mut streamed_output_tokens : Int32?
   mut chars_per_token : Double
   mut last_live_ms : Int64?
   mut sum_tps : Double
-  mut tps_rounds : Int
+  mut tps_rounds : Int32
   cache_buckets : Map[String, CacheBucket]
 }
 
@@ -51,26 +51,26 @@ pub struct Stats {
 /// unknown cache telemetry from being treated as zero hits.
 pub struct CacheBucket {
   /// Rounds whose `ModelResponseReceived` carried a `Usage`.
-  mut requests : Int
+  mut requests : Int32
   /// Rounds whose usage explicitly reported `cached_input_tokens` (including 0).
-  mut cache_reported_requests : Int
+  mut cache_reported_requests : Int32
   /// Rounds whose usage reported `cached_input_tokens > 0`.
-  mut hit_requests : Int
+  mut hit_requests : Int32
   /// Sum of all reported `input_tokens` (usage accounting).
-  mut sum_input : Int
+  mut sum_input : Int32
   /// Sum of reported input tokens only on cache-reporting rounds.
-  mut sum_cache_input : Int
+  mut sum_cache_input : Int32
   /// Sum of reported `output_tokens`.
-  mut sum_output : Int
+  mut sum_output : Int32
   /// Sum of reported `cached_input_tokens`.
-  mut sum_cached : Int
+  mut sum_cached : Int32
 }
 
 ///|
 pub fn Stats::Stats(
-  bus? : @devkit.EventBus? = None,
-  clock? : () -> Int64 = fn() { @async.now() },
-  live_interval_ms? : Int64 = 250,
+  bus~ : @devkit.EventBus? = None,
+  clock~ : () -> Int64 = fn() { @async.now() },
+  live_interval_ms~ : Int64 = 250,
 ) -> Stats {
   {
     bus,
@@ -190,13 +190,13 @@ fn Stats::cache_bucket(self : Stats, key : String) -> CacheBucket {
 
 ///|
 priv struct CacheTotals {
-  requests : Int
-  cache_reported_requests : Int
-  hit_requests : Int
-  sum_input : Int
-  sum_cache_input : Int
-  sum_output : Int
-  sum_cached : Int
+  requests : Int32
+  cache_reported_requests : Int32
+  hit_requests : Int32
+  sum_input : Int32
+  sum_cache_input : Int32
+  sum_output : Int32
+  sum_cached : Int32
 }
 
 ///|
@@ -230,7 +230,7 @@ fn Stats::cache_totals(self : Stats) -> CacheTotals {
 
 ///|
 /// Callers must ensure the denominator is > 0.
-fn hit_rate_percent(sum_cached : Int, sum_input : Int) -> Double {
+fn hit_rate_percent(sum_cached : Int32, sum_input : Int32) -> Double {
   sum_cached.to_double() * 100.0 / sum_input.to_double()
 }
 
@@ -250,7 +250,7 @@ fn Stats::reset_round(self : Stats) -> Unit {
 fn Stats::publish_segment(
   self : Stats,
   segment~ : String,
-  priority~ : Int,
+  priority~ : Int32,
   value~ : String,
 ) -> Unit {
   match self.bus {
@@ -292,7 +292,7 @@ fn Stats::note_chunk(self : Stats, chunk : @posoco.StreamChunk) -> Unit {
 /// One delta chunk arrived; `chars` is its UTF-16 length. The clock is read
 /// once and reused for the first-token mark, the last-chunk mark, and the
 /// throttled live publish.
-fn Stats::note_delta(self : Stats, chars : Int) -> Unit {
+fn Stats::note_delta(self : Stats, chars : Int32) -> Unit {
   let now = (self.clock)()
   match (self.round_started_ms, self.first_token_ms) {
     (Some(started), None) => {
@@ -416,7 +416,7 @@ fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
     None => ()
   }
   // Recalibrate the chars-per-token ratio only from exact output counts.
-  let exact_out : Int? = match usage {
+  let exact_out : Int32? = match usage {
     Some(u) =>
       match u.output_tokens {
         Some(n) => if n > 0 { Some(n) } else { None }
@@ -482,7 +482,7 @@ fn fmt_one_decimal(value : Double) -> String {
 
 ///|
 /// Compact honest token count: raw below 1K, one-decimal K/M above.
-fn fmt_tokens(n : Int) -> String {
+fn fmt_tokens(n : Int32) -> String {
   if n >= 1000000 {
     "\{fmt_one_decimal(n.to_double() / 1000000.0)}M"
   } else if n >= 1000 {
@@ -544,11 +544,11 @@ pub impl @posoco.CommandPort for Stats with fn commands(_self : Stats) -> Array[
 /// stay visible as `requests` but never masquerade as misses.
 fn doctor_line(
   label : String,
-  hit_requests : Int,
-  cache_reported_requests : Int,
-  requests : Int,
-  sum_cached : Int,
-  sum_cache_input : Int,
+  hit_requests : Int32,
+  cache_reported_requests : Int32,
+  requests : Int32,
+  sum_cached : Int32,
+  sum_cache_input : Int32,
 ) -> String {
   if cache_reported_requests == 0 {
     return "\{label}: cache metrics not reported·\{requests} usage requests"
@@ -702,13 +702,13 @@ fn Stats::cache_doctor_report(self : Stats) -> @posoco.CommandOutcome {
 /// token rates cover only rounds that explicitly reported cache telemetry.
 fn usage_line(
   label : String,
-  requests : Int,
-  sum_input : Int,
-  sum_output : Int,
-  cache_reported_requests : Int,
-  hit_requests : Int,
-  sum_cached : Int,
-  sum_cache_input : Int,
+  requests : Int32,
+  sum_input : Int32,
+  sum_output : Int32,
+  cache_reported_requests : Int32,
+  hit_requests : Int32,
+  sum_cached : Int32,
+  sum_cache_input : Int32,
 ) -> String {
   let head = "\{label}: \{requests} requests · in \{fmt_tokens(sum_input)} · out \{fmt_tokens(sum_output)}"
   if cache_reported_requests == 0 {

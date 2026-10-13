@@ -23,7 +23,7 @@ pub(all) struct EditTools {
 /// Canonical constructor. Use this everywhere.
 pub fn EditTools::EditTools(
   freshness? : @devkit.FreshnessGuard,
-  anchor? : @devkit.WorkspaceAnchor? = None,
+  anchor~ : @devkit.WorkspaceAnchor? = None,
 ) -> EditTools {
   EditTools::{ freshness, anchor, }
 }
@@ -223,8 +223,8 @@ fn replace_first(text : String, old : String, new : String) -> String {
 ///|
 /// All non-overlapping occurrences of `needle` in `content`, as
 /// `(absolute char offset, 1-based line number)` pairs, in order.
-fn find_occurrences(content : String, needle : String) -> Array[(Int, Int)] {
-  let matches : Array[(Int, Int)] = []
+fn find_occurrences(content : String, needle : String) -> Array[(Int32, Int32)] {
+  let matches : Array[(Int32, Int32)] = []
   if needle.length() == 0 {
     return matches
   }
@@ -280,7 +280,7 @@ fn strip_line_numbers_block(text : String) -> String? {
 
 ///|
 /// Render "line(s) 3, 17, 42" from match lines, capped at five entries.
-fn describe_match_lines(lines : Array[Int]) -> String {
+fn describe_match_lines(lines : Array[Int32]) -> String {
   let shown = if lines.length() > 5 { lines[0:5] } else { lines[:] }
   let rendered = [ for l in shown => "\{l}" ].join(", ")
   if lines.length() > 5 {

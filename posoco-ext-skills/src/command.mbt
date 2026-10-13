@@ -37,7 +37,7 @@ fn scope_label(scope : SkillScope) -> String {
 }
 
 ///|
-fn count_scope(skills : Array[SkillDescriptor], scope : String) -> Int {
+fn count_scope(skills : Array[SkillDescriptor], scope : String) -> Int32 {
   let mut count = 0
   for skill in skills {
     if scope_label(skill.scope) == scope {

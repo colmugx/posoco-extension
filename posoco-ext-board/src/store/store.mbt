@@ -57,7 +57,7 @@ fn copy_snapshot(
 ///|
 /// Audit metadata, not a replay instruction or independently allocated revision.
 pub(all) struct JournalRecord {
-  schema_version : Int
+  schema_version : Int32
   revision : Int64
   event : @domain.BoardEvent
 } derive(Eq, Debug)

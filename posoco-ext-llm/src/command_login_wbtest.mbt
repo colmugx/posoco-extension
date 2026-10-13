@@ -183,7 +183,7 @@ fn login_test_credential() -> @oauth.Credential {
 ///|
 fn login_test_slot(
   oauth : &@oauth.OAuthProvider,
-  rebuild? : ((@oauth.Credential) -> ModelSlot)? = None,
+  rebuild~ : ((@oauth.Credential) -> ModelSlot)? = None,
 ) -> ModelSlot {
   let port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: ["before-login"],

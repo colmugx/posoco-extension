@@ -609,7 +609,7 @@ fn utc_timestamp(ms : Int64) -> String {
 }
 
 ///|
-fn padded(value : Int64, width : Int) -> String {
+fn padded(value : Int64, width : Int32) -> String {
   let digits = value.to_string()
   let pad = width - digits.length()
   if pad <= 0 {

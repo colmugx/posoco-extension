@@ -44,7 +44,7 @@ fn build_compact_v2_request(
 
 ///|
 priv struct CompactV2Stream {
-  mut compaction_count : Int
+  mut compaction_count : Int32
   mut item : Json?
 }
 

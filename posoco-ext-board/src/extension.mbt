@@ -6,7 +6,7 @@ pub struct BoardExtension {
 
 ///|
 pub fn BoardExtension::BoardExtension(
-  config? : BoardConfig = BoardConfig::BoardConfig(),
+  config~ : BoardConfig = BoardConfig::BoardConfig(),
 ) -> BoardExtension {
   if config.bind_host != "127.0.0.1" {
     abort(
@@ -27,7 +27,7 @@ pub fn BoardExtension::BoardExtension(
 /// loopback-only security contract as the default implementation.
 pub fn BoardExtension::with_runtime(
   runtime~ : @runtime.BoardRuntime,
-  config? : BoardConfig = BoardConfig::BoardConfig(),
+  config~ : BoardConfig = BoardConfig::BoardConfig(),
 ) -> BoardExtension {
   if config.bind_host != "127.0.0.1" {
     abort(

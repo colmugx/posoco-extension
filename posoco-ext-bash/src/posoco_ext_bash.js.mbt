@@ -50,7 +50,9 @@ extern "js" fn node_spawn_shell(
 ///|
 /// Memoized exit-code promise, attached at spawn. A death by signal or a
 /// failed spawn resolves -1.
-extern "js" fn ShellProc::exit_code(self : ShellProc) -> @js_async.Promise[Int] =
+extern "js" fn ShellProc::exit_code(
+  self : ShellProc,
+) -> @js_async.Promise[Int32] =
   #| (handle) => handle.exited
 
 ///|
@@ -91,11 +93,11 @@ fn shell_child_interrupt(handle : ShellChildHandle) -> Unit {
 ///|
 async fn shell_child_await_exit(
   handle : ShellChildHandle,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Bool {
   // The exit promise is memoized; waiting it again from the cancellation
   // path is safe and resolves once the signalled child dies.
-  let outcome : Int? = @async.with_timeout_opt(timeout_ms, async fn() {
+  let outcome : Int32? = @async.with_timeout_opt(timeout_ms, async fn() {
     handle.proc.exit_code().wait() catch {
       _ => -1
     }
@@ -150,7 +152,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   // hang until the child exits on its own. With the controller, the
   // suspension unwinds on cancellation and the deferred kill above runs.
   let wait_controller = @js_async.AbortController::new()
-  let waited : Result[Int, Error] = Ok(
+  let waited : Result[Int32, Error] = Ok(
     proc.exit_code().wait(abort_controller=wait_controller),
   ) catch {
     error => Err(error)

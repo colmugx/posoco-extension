@@ -45,15 +45,15 @@ priv enum ConnDeny {
 /// the caller must stamp on its eventual `EndCall`.
 priv struct ConnPermit[ClientT] {
   client : ClientT
-  generation : Int
+  generation : Int32
 }
 
 ///|
 /// Read-only folded view (Inspect reply; close/join and status display).
 priv struct ConnView {
   health : ConnHealth
-  generation : Int
-  in_flight : Int
+  generation : Int32
+  in_flight : Int32
 }
 
 ///|
@@ -70,8 +70,8 @@ priv enum ConnQuery {
 /// carries the replacement client, installed only when `ok` is true and
 /// the generation matches the reconnecting one.
 priv enum ConnCmd[ClientT] {
-  EndCall(generation~ : Int, outcome~ : CallOutcome)
-  EndReconnect(generation~ : Int, ok~ : Bool, client~ : ClientT?)
+  EndCall(generation~ : Int32, outcome~ : CallOutcome)
+  EndReconnect(generation~ : Int32, ok~ : Bool, client~ : ClientT?)
 }
 
 ///|
@@ -83,7 +83,7 @@ priv enum ConnCmd[ClientT] {
 priv enum ConnReply[ClientT] {
   Permit(ConnPermit[ClientT])
   Denied(ConnDeny)
-  Granted(generation~ : Int)
+  Granted(generation~ : Int32)
   Busy
   View(ConnView)
 }
@@ -92,9 +92,9 @@ priv enum ConnReply[ClientT] {
 /// Actor-owned fold state. All mutation happens inside the handlers.
 priv struct ConnState[ClientT] {
   mut client : ClientT
-  mut generation : Int
+  mut generation : Int32
   mut health : ConnHealth
-  mut in_flight : Int
+  mut in_flight : Int32
 }
 
 ///|
@@ -226,7 +226,7 @@ fn[ClientT] ConnActor::start(
 /// Ask for one call admission.
 async fn[ClientT] ConnActor::acquire(
   self : ConnActor[ClientT],
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[ConnReply[ClientT], @fuwaroid.AskFailure] {
   self.actor.ask(Acquire, timeout_ms~)
 }
@@ -235,7 +235,7 @@ async fn[ClientT] ConnActor::acquire(
 /// Ask for exclusive ownership of one reconnect.
 async fn[ClientT] ConnActor::begin_reconnect(
   self : ConnActor[ClientT],
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[ConnReply[ClientT], @fuwaroid.AskFailure] {
   self.actor.ask(BeginReconnect, timeout_ms~)
 }
@@ -244,7 +244,7 @@ async fn[ClientT] ConnActor::begin_reconnect(
 /// Ask for the read-only folded view.
 async fn[ClientT] ConnActor::inspect(
   self : ConnActor[ClientT],
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[ConnReply[ClientT], @fuwaroid.AskFailure] {
   self.actor.ask(Inspect, timeout_ms~)
 }
@@ -254,7 +254,7 @@ async fn[ClientT] ConnActor::inspect(
 /// generation.
 fn[ClientT] ConnActor::end_call(
   self : ConnActor[ClientT],
-  generation~ : Int,
+  generation~ : Int32,
   outcome~ : CallOutcome,
 ) -> Result[Unit, @fuwaroid.SendRefusal] {
   self.actor.tell(EndCall(generation~, outcome~))
@@ -265,7 +265,7 @@ fn[ClientT] ConnActor::end_call(
 /// on success.
 fn[ClientT] ConnActor::end_reconnect(
   self : ConnActor[ClientT],
-  generation~ : Int,
+  generation~ : Int32,
   ok~ : Bool,
   client~ : ClientT?,
 ) -> Result[Unit, @fuwaroid.SendRefusal] {

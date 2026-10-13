@@ -7,7 +7,7 @@
 pub(all) struct Credential {
   access_token : String
   refresh_token : String
-  expires_at : Int // epoch seconds; 0 = never expires
+  expires_at : Int32 // epoch seconds; 0 = never expires
   token_type : String // usually "Bearer"
   metadata : Map[String, String]
 }
@@ -16,16 +16,16 @@ pub(all) struct Credential {
 pub fn Credential::Credential(
   access_token~ : String,
   refresh_token~ : String,
-  expires_at~ : Int,
-  token_type? : String = "Bearer",
-  metadata? : Map[String, String] = Map([]),
+  expires_at~ : Int32,
+  token_type~ : String = "Bearer",
+  metadata~ : Map[String, String] = Map([]),
 ) -> Credential {
   { access_token, refresh_token, expires_at, token_type, metadata, }
 }
 
 ///|
 /// Check if the access token is expired (with a 60-second safety margin).
-pub fn Credential::is_expired(self : Credential, now_epoch : Int) -> Bool {
+pub fn Credential::is_expired(self : Credential, now_epoch : Int32) -> Bool {
   if self.expires_at == 0 {
     false
   } else {
@@ -134,7 +134,7 @@ pub(all) struct ApiKeyCredential {
 ///|
 pub fn ApiKeyCredential::ApiKeyCredential(
   secret~ : String,
-  metadata? : Map[String, String] = Map([]),
+  metadata~ : Map[String, String] = Map([]),
 ) -> ApiKeyCredential {
   { secret, metadata, }
 }

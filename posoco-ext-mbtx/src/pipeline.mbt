@@ -22,11 +22,11 @@ priv suberror MbtxBudgetExpired {
 ///|
 /// Wall-clock budget for the BUILD stage (a single-file compile; anything
 /// past 10s is treated as a stuck toolchain, not a slow program).
-let mbtx_build_timeout_ms : Int = 10_000
+let mbtx_build_timeout_ms : Int32 = 10_000
 
 ///|
 /// Cap on model-visible RUN output (and BUILD diagnostics): 64KB, tail kept.
-let mbtx_max_output_chars : Int = 65536
+let mbtx_max_output_chars : Int32 = 65536
 
 ///|
 #cfg(any(target="native", target="wasm", target="js"))
@@ -194,14 +194,14 @@ async fn MbtxTools::run_in_tmpdir(
 /// the call reports an error either way.
 async fn MbtxTools::timed_stage(
   self : MbtxTools,
-  budget_ms : Int,
+  budget_ms : Int32,
   cmd : String,
   args : Array[String],
   cwd : String?,
   timeout_content~ : String,
   failure_prefix~ : String,
-) -> Result[(Int, String, Bool), String] raise @posoco.RuntimeError {
-  let settled : Result[(Int, String, Bool), Error] = Ok(
+) -> Result[(Int32, String, Bool), String] raise @posoco.RuntimeError {
+  let settled : Result[(Int32, String, Bool), Error] = Ok(
     @async.with_timeout(budget_ms, () => {
       self.runner.run(cmd, args, cwd, budget_ms)
     }),

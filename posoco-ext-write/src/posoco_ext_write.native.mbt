@@ -3,7 +3,7 @@ priv struct NativeFsIo {}
 
 ///|
 /// Process-local counter for sibling temp-file names (workspace-ext pattern).
-let write_tmp_counter : Ref[Int] = { val: 0, }
+let write_tmp_counter : Ref[Int32] = { val: 0, }
 
 ///|
 /// `@fs.exists` returns false for a missing file; a raise means a real IO

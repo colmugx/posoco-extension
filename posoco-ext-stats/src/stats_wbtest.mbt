@@ -44,7 +44,7 @@ fn tk_assistant() -> @posoco.Message {
 }
 
 ///|
-fn tk_usage_out(output : Int) -> @posoco.Usage {
+fn tk_usage_out(output : Int32) -> @posoco.Usage {
   {
     input_tokens: Some(100),
     output_tokens: Some(output),
@@ -57,7 +57,7 @@ fn tk_usage_out(output : Int) -> @posoco.Usage {
 ///|
 /// Usage with no output tokens so speed metrics stay silent and only the
 /// cache accounting moves.
-fn tk_usage_cache(input : Int?, cached : Int?) -> @posoco.Usage {
+fn tk_usage_cache(input : Int32?, cached : Int32?) -> @posoco.Usage {
   {
     input_tokens: input,
     output_tokens: None,
@@ -116,9 +116,9 @@ let suppress_live : Int64 = 1000000000L
 /// pinned priority and value.
 fn assert_segment(
   events : Array[@devkit.BusEvent],
-  index~ : Int,
+  index~ : Int32,
   segment~ : String,
-  priority~ : Int,
+  priority~ : Int32,
   value~ : String,
 ) -> Unit raise {
   assert_eq(
@@ -1022,7 +1022,11 @@ async test "cache_doctor unknown id raises NotFound" {
 }
 
 ///|
-fn tk_usage_full(input : Int?, cached : Int?, output : Int?) -> @posoco.Usage {
+fn tk_usage_full(
+  input : Int32?,
+  cached : Int32?,
+  output : Int32?,
+) -> @posoco.Usage {
   {
     input_tokens: input,
     output_tokens: output,

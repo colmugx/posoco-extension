@@ -2,17 +2,17 @@
 /// Port of compact_remote_v2.rs's ordinary 64k retention with image budget.
 /// Cetas has no client-authored developer or AgentMessage metadata: do not
 /// invent it from SystemMessage/assistant/tool text.
-let compact_retained_message_token_budget : Int = 64_000
+let compact_retained_message_token_budget : Int32 = 64_000
 
 ///|
-fn compact_approx_tokens(text : String) -> Int {
+fn compact_approx_tokens(text : String) -> Int32 {
   (@utf8.encode(text).length() + 3) / 4
 }
 
 ///|
 /// utils/string/truncate.rs: UTF-8-safe prefix/suffix, with the official
 /// removed-token marker (the marker itself is not subtracted from budget).
-fn compact_truncate_text(text : String, tokens : Int) -> String {
+fn compact_truncate_text(text : String, tokens : Int32) -> String {
   let bytes = @utf8.encode(text)
   let budget = tokens * 4
   if bytes.length() <= budget {
@@ -69,7 +69,7 @@ fn compact_part_text(part : Json) -> String? {
 }
 
 ///|
-fn compact_message_text_tokens(item : Json) -> Int {
+fn compact_message_text_tokens(item : Json) -> Int32 {
   let mut count = 0
   for part in compact_message_parts(item) {
     match compact_part_text(part) {
@@ -127,7 +127,7 @@ fn compact_retained_user(item : Json) -> Bool {
 }
 
 ///|
-fn compact_truncate_message(item : Json, budget : Int) -> Json? {
+fn compact_truncate_message(item : Json, budget : Int32) -> Json? {
   guard json_deep_copy(item) is Json::Object(fields) else { return None }
   let kept : Array[Json] = []
   let mut remaining = budget
@@ -165,7 +165,7 @@ fn compact_truncate_message(item : Json, budget : Int) -> Json? {
 ///|
 fn compact_v2_retained_history(
   history : Array[Json],
-  budget? : Int = compact_retained_message_token_budget,
+  budget~ : Int32 = compact_retained_message_token_budget,
 ) -> Array[Json] {
   let groups : Array[(Json, Json?)] = []
   let mut i = 0

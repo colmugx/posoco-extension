@@ -16,7 +16,7 @@ pub struct HerdrDelegate {
   // In-flight delegate count; the single-threaded event loop makes the plain
   // counter safe under parallel tool waves (subagent ledger precedent).
   // Background delegations hold a slot for their whole async run.
-  mut active : Int
+  mut active : Int32
   /// The Agent-owned task capability, captured at on_compose from the
   /// Capability::Tasks the manifest requires; None before composition.
   mut tasks : @posoco.Tasks?
@@ -40,8 +40,8 @@ pub fn HerdrDelegate::HerdrDelegate(
   bin~ : String,
   run_bin~ : String,
   cwd~ : String,
-  background_run? : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
-  parent_yolo? : (() -> Bool)? = None,
+  background_run~ : (async (HerdrDelegate) -> @posoco.ToolOutcome)? = None,
+  parent_yolo~ : (() -> Bool)? = None,
 ) -> HerdrDelegate {
   {
     pane,
@@ -57,10 +57,10 @@ pub fn HerdrDelegate::HerdrDelegate(
 }
 
 ///|
-let herdr_delegate_limit : Int = 4
+let herdr_delegate_limit : Int32 = 4
 
 ///|
-let herdr_default_timeout_ms : Int = 1800000
+let herdr_default_timeout_ms : Int32 = 1800000
 
 ///|
 /// Shared composition gate for targets with environment access: the
@@ -73,7 +73,7 @@ fn herdr_delegate_gate(
   bin : String?,
   run_bin : String?,
   cwd : String,
-  parent_yolo? : (() -> Bool)? = None,
+  parent_yolo~ : (() -> Bool)? = None,
 ) -> HerdrDelegate? {
   match herdr_gate(marker, pane, bin) {
     Some(cfg) => {
@@ -204,7 +204,7 @@ priv struct HerdrDelegateArgs {
   model : String?
   effort : String?
   session : String?
-  timeout_ms : Int
+  timeout_ms : Int32
   direction : String
   close_pane : Bool
   background : Bool

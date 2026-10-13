@@ -2,7 +2,7 @@
 pub(all) struct KimiModelInfo {
   id : String
   display_name : String
-  context_window : Int
+  context_window : Int32
   thinking_efforts : Array[String]
   default_effort : String?
   capabilities : Array[String]
@@ -12,7 +12,7 @@ pub(all) struct KimiModelInfo {
 fn kimi_positive_int(
   value : Json,
   field : String,
-) -> Int raise @posoco.ModelError {
+) -> Int32 raise @posoco.ModelError {
   match value {
     Json::Number(number, ..) => {
       if number.is_nan() || number.is_inf() || number <= 0.0 {
@@ -356,8 +356,8 @@ fn kimi_models_url(base_url : String, endpoint_prefix : String) -> String {
 pub async fn fetch_kimi_models(
   base_url : String,
   access_token : String,
-  endpoint_prefix? : String = "",
-  identity_headers? : Map[String, String] = Map::from_array([]),
+  endpoint_prefix~ : String = "",
+  identity_headers~ : Map[String, String] = Map::from_array([]),
 ) -> Array[KimiModelInfo] raise @posoco.ModelError {
   let headers : @http.Headers = Map([])
   for k, v in identity_headers {

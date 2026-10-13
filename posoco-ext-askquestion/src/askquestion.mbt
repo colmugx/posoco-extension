@@ -96,7 +96,7 @@ fn options_field(
 ///|
 fn default_index_field(
   fields : Map[String, Json],
-) -> Int? raise @posoco.RuntimeError {
+) -> Int32? raise @posoco.RuntimeError {
   match fields.get("default_index") {
     None => None
     Some(Json::Number(value, ..)) => Some(value.to_int())
@@ -113,7 +113,7 @@ priv struct AskSpec {
   prompt_type : String
   options : Array[String]
   default_text : String?
-  default_index : Int?
+  default_index : Int32?
 }
 
 ///|

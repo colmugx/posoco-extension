@@ -53,7 +53,7 @@ impl OpenAIModelsHttpTransport for LiveUsageTransport with fn get(
 }
 
 ///|
-fn LiveUsageTransport::usage_calls(self : LiveUsageTransport) -> Int {
+fn LiveUsageTransport::usage_calls(self : LiveUsageTransport) -> Int32 {
   let mut count = 0
   for url in self.urls {
     if url.contains("/wham/usage") {

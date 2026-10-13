@@ -14,7 +14,7 @@
 fn turn_end_agent(
   ext : NowledgeMem,
   model : @posoco.ScriptedModel,
-  tools? : Array[&@posoco.ToolProvider] = [],
+  tools~ : Array[&@posoco.ToolProvider] = [],
 ) -> @posoco.Agent raise {
   @posoco.Agent(
     exts=[
@@ -193,7 +193,7 @@ async test "turn_end: queued memory write drains before run_turn returns" {
 /// wedged server; creates answer instantly so turn 1 can establish the lane.
 priv struct HangingAppendTransport {
   requests : Array[(String, Json)]
-  mut hang_ms : Int
+  mut hang_ms : Int32
 }
 
 ///|
@@ -207,7 +207,7 @@ impl NmemTransport for HangingAppendTransport with fn post_json(
   url : String,
   _headers : Map[String, String],
   body : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[NmemResponse, String] {
   ignore(timeout_ms)
   self.requests.push((url, body))
@@ -288,7 +288,7 @@ async test "turn_end: drain timeout is bounded and stays silent" {
 priv struct LoggingEchoTransport {
   requests : Array[(String, Json)]
   log : Array[String]
-  mut remote_total : Int
+  mut remote_total : Int32
 }
 
 ///|
@@ -304,7 +304,7 @@ impl NmemTransport for LoggingEchoTransport with fn post_json(
   url : String,
   _headers : Map[String, String],
   body : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[NmemResponse, String] {
   ignore(timeout_ms)
   self.requests.push((url, body))

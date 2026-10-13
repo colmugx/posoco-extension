@@ -31,8 +31,8 @@ fn astgrep_call_fields(fields : Array[(String, Json)]) -> @posoco.ToolCall {
 /// and records every argv it was handed, so the shared impl can be tested
 /// without an ast-grep binary on the machine.
 priv struct FakeAstGrepSpawn {
-  results : Array[(Int, String, String)]
-  mut index : Int
+  results : Array[(Int32, String, String)]
+  mut index : Int32
   received : Array[Array[String]]
 }
 
@@ -40,7 +40,7 @@ priv struct FakeAstGrepSpawn {
 impl AstGrepSpawn for FakeAstGrepSpawn with fn spawn(
   self : FakeAstGrepSpawn,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   self.received.push(argv)
   let result = self.results[self.index]
   self.index += 1

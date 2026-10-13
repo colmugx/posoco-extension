@@ -20,9 +20,9 @@ fn copy_workspace(workspace : WorkspaceSnapshot) -> WorkspaceSnapshot {
 ///|
 pub fn HandoffWorkspaceState::HandoffWorkspaceState(
   root : String,
-  branch? : String? = None,
-  head? : String? = None,
-  changes? : Array[WorkspaceChange] = [],
+  branch~ : String? = None,
+  head~ : String? = None,
+  changes~ : Array[WorkspaceChange] = [],
 ) -> HandoffWorkspaceState {
   { workspace: { root, branch, head, changes: changes.copy(), }, }
 }

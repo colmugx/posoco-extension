@@ -23,7 +23,7 @@ fn reset_segment(window_label : String?) -> String {
 }
 
 ///|
-fn civil_from_days(z : Int64) -> (Int64, Int, Int) {
+fn civil_from_days(z : Int64) -> (Int64, Int32, Int32) {
   let z = z + 719468L
   let era = if z >= 0L { z / 146097L } else { (z - 146096L) / 146097L }
   let doe = z - era * 146097L

@@ -8,10 +8,10 @@
 
 ///|
 /// z.ai is UTC+8 native; flush times without an explicit offset are +08:00.
-const ZAI_DEFAULT_TZ_OFFSET_MINUTES : Int = 480
+const ZAI_DEFAULT_TZ_OFFSET_MINUTES : Int32 = 480
 
 ///|
-fn is_zai_http_success(status : Int) -> Bool {
+fn is_zai_http_success(status : Int32) -> Bool {
   status >= 200 && status < 300
 }
 
@@ -34,7 +34,7 @@ async fn read_error_body_text(client : @http.Client) -> String? {
 /// verdict.
 fn classify_zai_http_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body_text : String,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {

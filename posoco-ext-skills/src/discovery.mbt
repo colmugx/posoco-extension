@@ -102,7 +102,7 @@ pub fn SkillDiscovery::SkillDiscovery(
   fs : &@workspace.WorkspaceFs,
   cwd~ : String,
   home~ : String,
-  options? : SkillDiscoveryOptions = SkillDiscoveryOptions::default(),
+  options~ : SkillDiscoveryOptions = SkillDiscoveryOptions::default(),
 ) -> SkillDiscovery {
   { fs, cwd, home, options: options.snapshot(), }
 }
@@ -176,7 +176,7 @@ async fn SkillDiscovery::scan_root(
   winners : Map[String, SkillDescriptor],
   ordered : Array[SkillDescriptor],
   diagnostics : Array[SkillDiagnostic],
-  candidate_count : Ref[Int],
+  candidate_count : Ref[Int32],
   candidate_limit_reported : Ref[Bool],
   catalog_limit_reported : Ref[Bool],
 ) -> Unit noraise {
@@ -542,7 +542,7 @@ pub async fn SkillDiscovery::discover(
   }
   let seen_paths : Map[String, Unit] = Map([])
   let winners : Map[String, SkillDescriptor] = Map([])
-  let candidate_count : Ref[Int] = { val: 0, }
+  let candidate_count : Ref[Int32] = { val: 0, }
   let candidate_limit_reported : Ref[Bool] = { val: false, }
   let catalog_limit_reported : Ref[Bool] = { val: false, }
   if self.options.include_repository {

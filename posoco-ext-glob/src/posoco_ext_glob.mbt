@@ -20,8 +20,8 @@ pub(all) struct GlobTools {
 ///|
 /// Canonical constructor. Use this everywhere.
 pub fn GlobTools::GlobTools(
-  anchor? : @devkit.WorkspaceAnchor? = None,
-  ignores? : Array[String] = @devkit.default_ignore_patterns(),
+  anchor~ : @devkit.WorkspaceAnchor? = None,
+  ignores~ : Array[String] = @devkit.default_ignore_patterns(),
 ) -> GlobTools {
   GlobTools::{ anchor, ignores, }
 }
@@ -83,7 +83,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
 /// defaults to "."; `limit` defaults to 100 and must be positive.
 fn extract_glob_args(
   args : Json,
-) -> (String, String, Int) raise @posoco.RuntimeError {
+) -> (String, String, Int32) raise @posoco.RuntimeError {
   match args {
     Object(obj) => {
       let p = match obj.get("pattern") {
@@ -127,7 +127,7 @@ fn extract_glob_args(
 }
 
 ///|
-fn glob_summary(count : Int) -> String {
+fn glob_summary(count : Int32) -> String {
   if count == 0 {
     "no files"
   } else {
@@ -139,7 +139,7 @@ fn glob_summary(count : Int) -> String {
 /// Structured payload for observers/UIs; never sent to the model. Carries
 /// the reserved `summary` field plus the total file count and truncation
 /// flag.
-fn glob_structured(count : Int, truncated : Bool) -> Json {
+fn glob_structured(count : Int32, truncated : Bool) -> Json {
   Json::object(
     Map::from_array([
       ("summary", Json::string(glob_summary(count))),

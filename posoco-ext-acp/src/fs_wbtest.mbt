@@ -16,7 +16,7 @@ priv struct FakeFsHost {
 }
 
 ///|
-fn FakeFsHost::FakeFsHost(content? : String = "host file body") -> FakeFsHost {
+fn FakeFsHost::FakeFsHost(content~ : String = "host file body") -> FakeFsHost {
   { reads: [], writes: [], content, fail: None, }
 }
 

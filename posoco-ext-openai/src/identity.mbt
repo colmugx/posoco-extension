@@ -34,7 +34,7 @@ fn identity_user_agent_now() -> String {
 /// patched so the textual shape matches `crypto.randomUUID()`. Not
 /// cryptographically hardened.
 fn identity_uuid_v4() -> String {
-  let rng = @random.Rand::new()
+  let rng = @random.Rand()
   let bytes : Array[Byte] = []
   for _i in 0..<16 {
     bytes.push(rng.uint(limit=256).to_byte())

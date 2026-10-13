@@ -173,8 +173,8 @@ async test "headless telemetry and commits share one ordered sequence" {
 /// instead of timing, with an uncertain persist that leaves the attempted
 /// snapshot reloadable.
 priv struct HeadlessScriptStore {
-  mut fail_persists : Int
-  mut uncertain_persists : Int
+  mut fail_persists : Int32
+  mut uncertain_persists : Int32
   mut landed : @store.BoardLoad?
 }
 

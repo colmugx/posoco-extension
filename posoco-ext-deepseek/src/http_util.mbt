@@ -8,8 +8,8 @@
 /// Redacted non-2xx body metadata. Keeping this as an ADT prevents the raw
 /// provider body from crossing the HTTP-error formatting boundary.
 priv enum DeepSeekErrorBodySummary {
-  BodyBytesUtf8(Int)
-  BodyBytesInvalidUtf8(Int)
+  BodyBytesUtf8(Int32)
+  BodyBytesInvalidUtf8(Int32)
   BodyReadFailed
   BodyUnavailable
 }
@@ -18,7 +18,7 @@ priv enum DeepSeekErrorBodySummary {
 /// Format an HTTP failure from redacted metadata.
 fn format_deepseek_http_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body_summary : DeepSeekErrorBodySummary,
 ) -> String {
   let summary = match body_summary {
@@ -32,7 +32,7 @@ fn format_deepseek_http_error(
 }
 
 ///|
-fn is_deepseek_http_success(status : Int) -> Bool {
+fn is_deepseek_http_success(status : Int32) -> Bool {
   status >= 200 && status < 300
 }
 
@@ -41,7 +41,7 @@ fn is_deepseek_http_success(status : Int) -> Bool {
 /// provider payload can never cross into the observable error message.
 fn classify_deepseek_http_status(
   stage : String,
-  status : Int,
+  status : Int32,
   body_summary : DeepSeekErrorBodySummary,
 ) -> @posoco.ModelError? {
   if is_deepseek_http_success(status) {

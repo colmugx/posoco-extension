@@ -2,17 +2,17 @@
 /// Inner fake whose `chat`/`compact` fail with `error` until
 /// `failures_left` is exhausted, then succeed. Counters record every call.
 struct FakeModelPort {
-  chat_calls : Ref[Int]
-  compact_calls : Ref[Int]
+  chat_calls : Ref[Int32]
+  compact_calls : Ref[Int32]
   compact_tools : Array[Array[@posoco.ToolDef]]
-  chat_failures_left : Ref[Int]
-  compact_failures_left : Ref[Int]
+  chat_failures_left : Ref[Int32]
+  compact_failures_left : Ref[Int32]
   error : @posoco.ModelError
 }
 
 ///|
 fn FakeModelPort::FakeModelPort(
-  chat_failures : Int,
+  chat_failures : Int32,
   error : @posoco.ModelError,
 ) -> FakeModelPort {
   FakeModelPort::{
@@ -28,7 +28,7 @@ fn FakeModelPort::FakeModelPort(
 ///|
 fn FakeModelPort::with_compact_failures(
   self : FakeModelPort,
-  failures : Int,
+  failures : Int32,
 ) -> FakeModelPort {
   self.compact_failures_left.val = failures
   self

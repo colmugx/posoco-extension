@@ -303,9 +303,9 @@ impl @devkit.BusSubscriber for StatusCapture with fn on_bus_event(
 
 ///|
 fn router_test_usage(
-  input~ : Int?,
-  output~ : Int?,
-  cached~ : Int?,
+  input~ : Int32?,
+  output~ : Int32?,
+  cached~ : Int32?,
 ) -> @posoco.Usage {
   {
     input_tokens: input,
@@ -338,9 +338,9 @@ fn router_test_scope(session : String) -> @posoco.EventScope {
 ///|
 fn router_test_ctx_state(
   session~ : String,
-  measured~ : Int?,
-  estimated~ : Int,
-  window~ : Int?,
+  measured~ : Int32?,
+  estimated~ : Int32,
+  window~ : Int32?,
   source~ : @types.ContextReadingSource,
 ) -> @types.ContextState {
   {
@@ -895,7 +895,7 @@ pub impl @posoco.ModelPort for RouterChatTestPort with fn provider_config(
 /// read and counts the calls so tests can pin pull counts.
 struct RouterQuotaSource {
   result : Result[Array[@devkit.QuotaReading], String]
-  mut calls : Int
+  mut calls : Int32
 }
 
 ///|

@@ -70,7 +70,7 @@ async test "before_model appends one delimited pi-tools block to the system mess
   inspect(system.contains("Guidelines:"), content="true")
   // Duplicate and blank guidelines collapse; the bullet appears exactly once.
   inspect(
-    system.split("- Prefer multi-query research.").length() - 1,
+    system.split("- Prefer multi-query research.").count() - 1,
     content="1",
   )
   inspect(system.contains("</pi-tools>"), content="true")

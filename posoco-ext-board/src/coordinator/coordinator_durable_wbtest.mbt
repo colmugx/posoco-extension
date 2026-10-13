@@ -49,7 +49,7 @@ priv struct ScriptedBoardStore {
   /// every load without a scripted override returns it.
   mut durable : @domain.BoardStateSnapshot
   journal : Array[@store.JournalRecord]
-  mut persist_attempts : Int
+  mut persist_attempts : Int32
   committed_writes : Array[PersistedWrite]
 }
 
@@ -145,7 +145,7 @@ impl @store.BoardStore for ScriptedBoardStore with fn persist(
 ///|
 fn scripted_coordinator(
   store : ScriptedBoardStore,
-  now_ms? : () -> Int64 = () => 0L,
+  now_ms~ : () -> Int64 = () => 0L,
 ) -> BoardCoordinator {
   BoardCoordinator(store~, now_ms~)
 }
@@ -155,9 +155,9 @@ fn task_record(
   id : String,
   stage : @domain.BoardStage,
   updated_at_ms : Int64,
-  ready_since_ms? : Int64? = None,
-  created_at_ms? : Int64 = 1L,
-  definition_of_done? : Array[String] = [],
+  ready_since_ms~ : Int64? = None,
+  created_at_ms~ : Int64 = 1L,
+  definition_of_done~ : Array[String] = [],
 ) -> @domain.BoardTask {
   @domain.BoardTask::from_record(
     id=cid(id),
@@ -178,7 +178,7 @@ fn attempt_record(
   id : String,
   task : String,
   status : @domain.AttemptStatus,
-  finished_at_ms? : Int64? = None,
+  finished_at_ms~ : Int64? = None,
 ) -> @domain.Attempt {
   @domain.Attempt::from_record(
     id=caid(id),
@@ -929,7 +929,7 @@ async test "concurrent shutdown and submissions stay safe" {
   @async.with_task_group(group => {
     let store = ScriptedBoardStore::new()
     let coordinator = ready_scripted(group, store)
-    let results : Array[Int] = @async.all([
+    let results : Array[Int32] = @async.all([
       () => {
         let outcome = coordinator.submit(command=c_create("t1", 0L))
         if outcome is Ok(_) {

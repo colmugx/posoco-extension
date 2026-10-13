@@ -13,14 +13,14 @@ extern "js" fn js_env_raw(name : String) -> String =
 
 ///|
 #module("node:fs")
-extern "js" fn fs_access_sync(path : String, mode : Int) -> Unit = "accessSync"
+extern "js" fn fs_access_sync(path : String, mode : Int32) -> Unit = "accessSync"
 
 ///|
 /// Executable `name` within exactly the given directory (js counterpart of
 /// `@fs.can_execute`): accessSync(X_OK) is executability on POSIX and mere
 /// existence on Windows, where PATHEXT candidates cover the shims.
 extern "js" fn js_which_in(
-  access : (String, Int) -> Unit,
+  access : (String, Int32) -> Unit,
   name : String,
   dir : String,
 ) -> String =
@@ -51,7 +51,7 @@ extern "js" fn js_runner_envelope(
   cmd : String,
   args : FixedArray[String],
   cwd : String,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> @js_async.Promise[String] =
   #| async (spawn, cmd, args, cwd, timeout_ms) => {
   #|   let proc;
@@ -179,7 +179,7 @@ extern "js" fn js_realpath_envelope(
 priv struct JsStageResult {
   ok : Bool
   timed_out : Bool
-  code : Int
+  code : Int32
   stdout : String
   stderr : String
   message : String
@@ -265,8 +265,8 @@ impl Runner for JsRunner with fn run(
   cmd : String,
   args : Array[String],
   cwd : String?,
-  budget_ms : Int,
-) -> (Int, String, Bool) {
+  budget_ms : Int32,
+) -> (Int32, String, Bool) {
   let cwd_arg = match cwd {
     Some(dir) => dir
     None => ""

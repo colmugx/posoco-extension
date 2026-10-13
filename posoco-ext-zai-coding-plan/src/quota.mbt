@@ -123,7 +123,7 @@ pub fn parse_zai_coding_plan_quota(
 pub async fn fetch_zai_coding_plan_quota(
   base_url : String,
   api_key : String,
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> Result[Array[@devkit.QuotaReading], String] {
   let headers : @http.Headers = {
     "Authorization": api_key,
@@ -164,9 +164,9 @@ pub(all) struct ZaiCodingPlanQuotaSource {
 
 ///|
 pub fn ZaiCodingPlanQuotaSource::ZaiCodingPlanQuotaSource(
-  base_url? : String = "https://api.z.ai",
+  base_url~ : String = "https://api.z.ai",
   api_key~ : String,
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> ZaiCodingPlanQuotaSource {
   { base_url, api_key, now_ms, }
 }

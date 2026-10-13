@@ -14,6 +14,7 @@ pub(all) struct RouterModelPort {
   /// Devkit status bus for the model/ctx/cache status segments; `None`
   /// disables publication entirely.
   bus : @devkit.EventBus?
+  model_metadata : ModelMetadata?
   /// Latest core-projected context state per session id; the `ctx` status
   /// segment renders the entry of the session an event is scoped to.
   context_states : Map[String, @types.ContextState]
@@ -61,15 +62,16 @@ pub(all) struct RouterModelPort {
 /// callers never see a partially populated routing table.
 pub fn RouterModelPort::RouterModelPort(
   slots~ : Array[ModelSlot],
-  default_slot_id? : String = "",
-  allow_missing_default? : Bool = false,
-  bus? : @devkit.EventBus? = None,
-  provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
-  cred_store? : &@oauth.CredentialStore? = None,
-  auth_interaction? : &@oauth.AuthInteraction? = None,
-  api_key_store? : &@oauth.ApiKeyStore? = None,
-  auth_prompt? : &@oauth.AuthPromptInteraction? = None,
-  extra_quota_sources? : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
+  default_slot_id~ : String = "",
+  allow_missing_default~ : Bool = false,
+  bus~ : @devkit.EventBus? = None,
+  model_metadata~ : ModelMetadata? = None,
+  provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
+  cred_store~ : &@oauth.CredentialStore? = None,
+  auth_interaction~ : &@oauth.AuthInteraction? = None,
+  api_key_store~ : &@oauth.ApiKeyStore? = None,
+  auth_prompt~ : &@oauth.AuthPromptInteraction? = None,
+  extra_quota_sources~ : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
 ) -> RouterModelPort raise @posoco.CompositionError {
   if slots.is_empty() {
     raise @posoco.CompositionError::EmptyPort("posoco_ext_llm.slots")
@@ -111,6 +113,7 @@ pub fn RouterModelPort::RouterModelPort(
     active_id,
     active_effort: None,
     bus,
+    model_metadata,
     context_states: Map::from_array([]),
     provider_credential_store,
     cred_store,
@@ -140,16 +143,17 @@ pub fn RouterModelPort::RouterModelPort(
 /// catalogs and lets `new` perform the final collision check.
 pub fn RouterModelPort::from_catalogs(
   catalogs : Array[ProviderModelCatalog],
-  default_slot_id? : String = "",
-  allow_missing_default? : Bool = false,
-  bus? : @devkit.EventBus? = None,
-  provider_credential_store? : &@oauth.ProviderCredentialStore? = None,
-  cred_store? : &@oauth.CredentialStore? = None,
-  auth_interaction? : &@oauth.AuthInteraction? = None,
-  api_key_store? : &@oauth.ApiKeyStore? = None,
-  auth_prompt? : &@oauth.AuthPromptInteraction? = None,
-  extra_quota_sources? : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
-  transient_retry? : TransientRetryPolicy? = Some(
+  default_slot_id~ : String = "",
+  allow_missing_default~ : Bool = false,
+  bus~ : @devkit.EventBus? = None,
+  model_metadata~ : ModelMetadata? = None,
+  provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
+  cred_store~ : &@oauth.CredentialStore? = None,
+  auth_interaction~ : &@oauth.AuthInteraction? = None,
+  api_key_store~ : &@oauth.ApiKeyStore? = None,
+  auth_prompt~ : &@oauth.AuthPromptInteraction? = None,
+  extra_quota_sources~ : Map[String, &@devkit.QuotaSource] = Map::from_array([]),
+  transient_retry~ : TransientRetryPolicy? = Some(
     TransientRetryPolicy::default(),
   ),
 ) -> RouterModelPort raise @posoco.CompositionError {
@@ -173,6 +177,7 @@ pub fn RouterModelPort::from_catalogs(
     default_slot_id~,
     allow_missing_default~,
     bus~,
+    model_metadata~,
     provider_credential_store~,
     cred_store~,
     auth_interaction~,
@@ -419,7 +424,7 @@ fn current_user_text(messages : ArrayView[@posoco.Message]) -> String? {
 }
 
 ///|
-fn highest_probability_index(probabilities : Array[Double]) -> Int? {
+fn highest_probability_index(probabilities : Array[Double]) -> Int32? {
   if probabilities.is_empty() {
     return None
   }
@@ -439,7 +444,7 @@ fn highest_probability_index(probabilities : Array[Double]) -> Int? {
 async fn RouterModelPort::decision_slot_for_chat(
   self : RouterModelPort,
   messages : ArrayView[@posoco.Message],
-  tool_count : Int,
+  tool_count : Int32,
 ) -> ModelSlot? noraise {
   if self.active_effort is Some(_) {
     return None
@@ -546,7 +551,13 @@ pub impl @posoco.ModelPort for RouterModelPort with fn provider_config(
   self : RouterModelPort,
 ) -> @posoco.ProviderConfig {
   match self.active_slot_opt() {
-    Some(slot) => slot.port.provider_config()
+    Some(slot) => {
+      let config = slot.port.provider_config()
+      {
+        ..config,
+        context_window: Some(self.context_window_reading(slot).tokens),
+      }
+    }
     // A pending default reports no capabilities: auto-compact stays off and
     // effort resets instead of fabricating facts for a slot that is absent.
     None => @posoco.ProviderConfig::empty()

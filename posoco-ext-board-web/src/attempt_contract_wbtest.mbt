@@ -15,7 +15,7 @@ test "queue submits each canonical kind without inserting a local attempt" {
     assert_eq(expected.args, {
       "id": "attempt-uuid-1",
       "task_id": "t",
-      "kind": kind.to_json(),
+      "kind": Json(kind),
     })
     assert_eq(
       Repr(sent).to_string(),

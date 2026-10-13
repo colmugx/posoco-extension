@@ -2,11 +2,11 @@
 /// Numeric bundle of subagent-config.json. Defaults live
 /// in `SubagentConfig::defaults`.
 pub(all) struct SubagentLimits {
-  swarm_items : Int
-  concurrency : Int
-  global_concurrency : Int
-  timeout_ms : Int
-  spawn_budget : Int
+  swarm_items : Int32
+  concurrency : Int32
+  global_concurrency : Int32
+  timeout_ms : Int32
+  spawn_budget : Int32
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -119,8 +119,8 @@ pub fn parse_subagent_config(
 fn limits_int(
   fields : Map[String, Json],
   key : String,
-  fallback : Int,
-) -> Int raise SubagentConfigError {
+  fallback : Int32,
+) -> Int32 raise SubagentConfigError {
   match fields.get(key) {
     None => fallback
     Some(Number(value, ..)) => {

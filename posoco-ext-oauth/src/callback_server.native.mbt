@@ -20,7 +20,7 @@ pub fn NativeCallbackServer::NativeCallbackServer() -> NativeCallbackServer {
 #warnings("-unused_value")
 pub impl CallbackServer for NativeCallbackServer with fn start(
   self : NativeCallbackServer,
-  port : Int,
+  port : Int32,
 ) -> Unit raise OAuthError {
   let addr = @socket.Addr::resolve("127.0.0.1", port~) catch {
     err => raise OAuthError::HttpError("resolve: " + err.to_string())

@@ -246,7 +246,7 @@ test "Memoh Tools is required and must use HTTP" {
 ///|
 struct TkApprovalSource {
   decision : @permission.ApprovalDecision
-  mut asks : Int
+  mut asks : Int32
 }
 
 ///|

@@ -41,14 +41,14 @@ pub(open) trait NmemMcp {
   /// before `configure` fail with a clear message instead of guessing a
   /// server address.
   fn configure(Self, url~ : String, auth_token~ : String?, name~ : String) -> Unit
-  async fn call_tool(Self, tool : String, args : Json, timeout_ms~ : Int) -> Result[
+  async fn call_tool(Self, tool : String, args : Json, timeout_ms~ : Int32) -> Result[
     McpCallOutcome,
     NmemCallError,
   ]
   /// Connectivity probe: ensure the connection, `list_tools`, and report the
   /// server identity plus tool count (the `nmem_status` / `/memory status`
   /// surface).
-  async fn probe(Self, timeout_ms~ : Int) -> Result[String, String]
+  async fn probe(Self, timeout_ms~ : Int32) -> Result[String, String]
   async fn shutdown(Self) -> Unit
 }
 
@@ -187,7 +187,7 @@ fn call_result_text(result : @client.CallToolResult) -> String {
   let parts : Array[String] = []
   for item in result.content {
     match item {
-      @types.ContentItem::Text(text) => parts.push(text)
+      @types.ContentBlock::Text(text, ..) => parts.push(text)
       _ => ()
     }
   }
@@ -199,7 +199,7 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
   self : LazyNmemMcp,
   tool : String,
   args : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[McpCallOutcome, NmemCallError] {
   @async.with_timeout(timeout_ms, () => {
     let connected = self.ensure_connected() catch {
@@ -233,7 +233,10 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
         )
       }
     }
-    Ok({ is_error: result.is_error, text: call_result_text(result), })
+    Ok({
+      is_error: result.is_error.unwrap_or(false),
+      text: call_result_text(result),
+    })
   }) catch {
     @async.TimeoutError => {
       self.drop_connection()
@@ -259,7 +262,7 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
 ///|
 pub impl NmemMcp for LazyNmemMcp with fn probe(
   self : LazyNmemMcp,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[String, String] {
   @async.with_timeout(timeout_ms, () => {
     let connected = self.ensure_connected() catch {

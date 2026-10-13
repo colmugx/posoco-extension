@@ -9,7 +9,7 @@
 fn cw_compose_agent(
   model : @posoco.ScriptedModel,
   goal : GoalRunner,
-  observers? : Array[&@posoco.Observer] = [],
+  observers~ : Array[&@posoco.Observer] = [],
 ) -> @posoco.Agent {
   @posoco.Agent(
     exts=[
@@ -79,7 +79,7 @@ fn cw_plan_item(title : String, status : String) -> Json {
 
 ///|
 /// Concatenated text of every message in one recorded model-call input.
-fn cw_call_text(model : @posoco.ScriptedModel, call_index : Int) -> String {
+fn cw_call_text(model : @posoco.ScriptedModel, call_index : Int32) -> String {
   if model.received_messages.length() <= call_index {
     abort("model call \{call_index} was never made")
   }
@@ -95,7 +95,7 @@ fn cw_call_text(model : @posoco.ScriptedModel, call_index : Int) -> String {
 /// model call.
 fn cw_latest_input_text(
   model : @posoco.ScriptedModel,
-  call_index : Int,
+  call_index : Int32,
 ) -> String {
   if model.received_messages.length() <= call_index {
     abort("model call \{call_index} was never made")

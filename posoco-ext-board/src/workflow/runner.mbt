@@ -21,10 +21,10 @@ pub struct SequentialWorkflowRunner {
   priv mut deadline_expired : Bool
   priv mut cancel_requested : Bool
   priv mut stop_requested : Bool
-  priv mut admitted : Int
-  priv mut succeeded : Int
-  priv mut failed : Int
-  priv mut cancelled : Int
+  priv mut admitted : Int32
+  priv mut succeeded : Int32
+  priv mut failed : Int32
+  priv mut cancelled : Int32
   priv mut started_at : Int64?
   priv mut elapsed : Int64
   priv mut current : @orchestration.ExecutionCandidate?
@@ -39,7 +39,7 @@ pub struct SequentialWorkflowRunner {
 pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(
   orchestrator~ : @orchestration.BoardOrchestrator,
   group~ : @async.TaskGroup[Unit],
-  now_ms? : () -> Int64 = @async.now,
+  now_ms~ : () -> Int64 = @async.now,
 ) -> SequentialWorkflowRunner {
   {
     orchestrator,
@@ -586,7 +586,7 @@ async fn SequentialWorkflowRunner::run_loop(
 /// retain the host scope and journal lock; repeat after cleanup, never release.
 pub async fn SequentialWorkflowRunner::shutdown(
   self : SequentialWorkflowRunner,
-  timeout_ms? : Int = 4000,
+  timeout_ms~ : Int32 = 4000,
 ) -> Bool {
   self.closed = true
   self.cancel()

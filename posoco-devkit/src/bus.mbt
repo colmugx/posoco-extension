@@ -69,7 +69,7 @@ pub fn EventBus::EventBus() -> EventBus {
 
 ///|
 /// Number of live subscribers (observable for tests and diagnostics).
-pub fn EventBus::subscriber_count(self : EventBus) -> Int {
+pub fn EventBus::subscriber_count(self : EventBus) -> Int32 {
   self.subscribers.length()
 }
 

@@ -52,7 +52,7 @@ test "embedded dashboard identity and manifest based public resource policy" {
 ///|
 async fn board_http_raw(
   url : String,
-  meth? : @http.RequestMethod = Get,
+  meth~ : @http.RequestMethod = Get,
 ) -> (@http.Response, Bytes) {
   let (response, body) = @http.request(url, meth, {}, b"")
   (response, body.binary())
@@ -308,7 +308,7 @@ async test "unknown resources 404 with a token while health stays public and gat
       assert_eq(@json.parse(board_bytes_text(api_body)), {
         "protocol_version": 1,
         "host": "127.0.0.1",
-        "port": endpoint.port.to_json(),
+        "port": Json(endpoint.port),
         "ws_path": "/ws",
       })
       // The embedded page never leaks the instance secret either.

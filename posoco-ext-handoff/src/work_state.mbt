@@ -29,7 +29,7 @@ fn copy_work(work : WorkSnapshot) -> WorkSnapshot {
 
 ///|
 pub fn HandoffWorkState::HandoffWorkState(
-  initial? : WorkSnapshot = WorkSnapshot::empty(),
+  initial~ : WorkSnapshot = WorkSnapshot::empty(),
 ) -> HandoffWorkState {
   { work: copy_work(initial), }
 }

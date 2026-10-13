@@ -25,7 +25,7 @@ fn arg_bool(args : Json, key : String) -> Bool {
 }
 
 ///|
-fn arg_int(args : Json, key : String) -> Int? {
+fn arg_int(args : Json, key : String) -> Int32? {
   match args {
     Json::Object(map) => json_int(map.get(key))
     _ => None
@@ -39,7 +39,7 @@ const OBS_MODEL_OUTPUT_CHARS = 40_000
 const OBS_MODEL_ERROR_CHARS = 4_000
 
 ///|
-fn obs_model_text(text : String, limit : Int) -> String {
+fn obs_model_text(text : String, limit : Int32) -> String {
   let clipped = @devkit.truncate_chars(text, limit)
   if clipped == text {
     clipped
@@ -528,8 +528,8 @@ async fn ObsidianTools::exec_patch_property(
 
 ///|
 priv enum LocateResult {
-  Found(Int)
-  Ambiguous(Array[Int])
+  Found(Int32)
+  Ambiguous(Array[Int32])
   NotFound(Array[String])
 }
 
@@ -538,7 +538,7 @@ fn locate_heading(
   entries : Array[OutlineEntry],
   target : String,
 ) -> LocateResult {
-  let hits : Array[Int] = []
+  let hits : Array[Int32] = []
   let names : Array[String] = []
   for e in entries {
     if !names.contains(e.heading) {
@@ -561,10 +561,10 @@ fn locate_heading(
 /// level <= `level` (EOF otherwise).
 fn section_end(
   entries : Array[OutlineEntry],
-  start_line : Int,
-  level : Int,
-  total_lines : Int,
-) -> Int {
+  start_line : Int32,
+  level : Int32,
+  total_lines : Int32,
+) -> Int32 {
   let mut end = total_lines
   for e in entries {
     if e.line > start_line && e.level <= level {
@@ -692,7 +692,7 @@ async fn ObsidianTools::exec_patch_section(
 }
 
 ///|
-fn first_level_of(entries : Array[OutlineEntry], line : Int) -> Int {
+fn first_level_of(entries : Array[OutlineEntry], line : Int32) -> Int32 {
   for e in entries {
     if e.line == line {
       return e.level

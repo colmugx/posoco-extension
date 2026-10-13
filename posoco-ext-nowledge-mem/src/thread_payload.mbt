@@ -4,7 +4,7 @@ const NMEM_TOOL_VERSION : String = "posoco-ext-nowledge-mem/0.1.0"
 
 ///|
 /// Title is capped at the first 120 characters of the first user message.
-const NMEM_TITLE_MAX_CHARS : Int = 120
+const NMEM_TITLE_MAX_CHARS : Int32 = 120
 
 ///|
 /// Thread id for a session: "{source_app}-{session_id}", lowercased, with

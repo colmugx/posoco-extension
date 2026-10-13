@@ -1,5 +1,5 @@
 ///|
-fn task_order(a : @domain.BoardTask, b : @domain.BoardTask) -> Int {
+fn task_order(a : @domain.BoardTask, b : @domain.BoardTask) -> Int32 {
   let priority = b.priority.rank() - a.priority.rank()
   if priority != 0 {
     priority
@@ -13,7 +13,7 @@ fn task_order(a : @domain.BoardTask, b : @domain.BoardTask) -> Int {
 }
 
 ///|
-fn attempt_order(a : @domain.Attempt, b : @domain.Attempt) -> Int {
+fn attempt_order(a : @domain.Attempt, b : @domain.Attempt) -> Int32 {
   if a.created_at_ms < b.created_at_ms {
     -1
   } else if a.created_at_ms > b.created_at_ms {

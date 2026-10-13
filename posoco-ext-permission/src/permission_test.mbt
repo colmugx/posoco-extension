@@ -31,8 +31,8 @@ fn test_call_cmd(name : String, cmd : String) -> @posoco.ToolCall {
 /// A call shaped like the mbtx tool: a `source` payload plus, by default,
 /// `"escalated": true`. `escalated=false` leaves the field out entirely.
 fn test_call_mbtx(
-  call_id? : String = "call-1",
-  escalated? : Bool = true,
+  call_id~ : String = "call-1",
+  escalated~ : Bool = true,
 ) -> @posoco.ToolCall {
   let args : Array[(String, Json)] = [
     ("source", Json::string("fn main { println(\"hi\") }")),
@@ -57,7 +57,7 @@ fn user_message(text : String) -> @kernel.Message {
 /// Scripted approval source: returns a fixed decision, records every ask.
 struct ScriptedApproval {
   decision : @posoco-ext-permission.ApprovalDecision
-  mut asked : Int
+  mut asked : Int32
 }
 
 ///|
@@ -1250,7 +1250,7 @@ async test "read-only mode asks for escalated mbtx instead of auto-rejecting" {
 ///|
 struct RecordingApproval {
   decision : @posoco-ext-permission.ApprovalDecision
-  mut asked : Int
+  mut asked : Int32
   categories : Array[String]
 }
 

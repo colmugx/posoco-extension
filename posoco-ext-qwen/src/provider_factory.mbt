@@ -5,7 +5,7 @@ pub(all) struct QwenProvider {
 
 ///|
 pub fn QwenProvider::QwenProvider(
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> QwenProvider {
   { ctx, }
 }
@@ -54,7 +54,7 @@ fn qwen_setting_bool(
 ///|
 fn qwen_setting_context_window(
   source : @llm.ProviderConfigSource,
-) -> Int? raise @posoco.CompositionError {
+) -> Int32? raise @posoco.CompositionError {
   match source.setting("context_window") {
     None => None
     Some(Json::Number(value, ..)) => {

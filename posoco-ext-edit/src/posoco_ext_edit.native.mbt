@@ -3,7 +3,7 @@ priv struct NativeFsIo {}
 
 ///|
 /// Process-local counter for sibling temp-file names (workspace-ext pattern).
-let edit_tmp_counter : Ref[Int] = { val: 0, }
+let edit_tmp_counter : Ref[Int32] = { val: 0, }
 
 ///|
 impl FsIo for NativeFsIo with fn exists(_self, path : String) -> Bool {

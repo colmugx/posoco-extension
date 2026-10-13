@@ -14,7 +14,7 @@
 ///|
 pub(all) struct OpenRouterModelInfo {
   id : String
-  context_length : Int?
+  context_length : Int32?
   reasoning_supported : Bool
   supported_efforts : Array[String]
   default_effort : String?
@@ -280,8 +280,8 @@ pub fn openrouter_model_catalog(
   models : Array[OpenRouterModelInfo],
   preferred_id : String,
   api_key_factory : &@llm.ApiKeyFactory,
-  http_referer? : String? = None,
-  title? : String? = None,
+  http_referer~ : String? = None,
+  title~ : String? = None,
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   if models.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(

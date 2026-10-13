@@ -14,8 +14,8 @@
 ///|
 /// The folded view via the Inspect query.
 async fn conn_actor_view(
-  actor : ConnActor[Int],
-  timeout_ms? : Int = 10_000,
+  actor : ConnActor[Int32],
+  timeout_ms~ : Int32 = 10_000,
 ) -> ConnView {
   let reply = actor.inspect(timeout_ms~)
   guard reply is Ok(View(view)) else {
@@ -26,10 +26,10 @@ async fn conn_actor_view(
 
 ///|
 async fn conn_view_is(
-  actor : ConnActor[Int],
+  actor : ConnActor[Int32],
   health~ : ConnHealth,
-  generation~ : Int,
-  in_flight~ : Int,
+  generation~ : Int32,
+  in_flight~ : Int32,
 ) -> Bool {
   let view = conn_actor_view(actor)
   view.health == health &&
@@ -40,8 +40,8 @@ async fn conn_view_is(
 ///|
 /// True when the ask answered with exactly this reply.
 fn conn_reply_is(
-  got : Result[ConnReply[Int], @fuwaroid.AskFailure],
-  want : ConnReply[Int],
+  got : Result[ConnReply[Int32], @fuwaroid.AskFailure],
+  want : ConnReply[Int32],
 ) -> Bool {
   match got {
     Ok(reply) => reply == want
@@ -51,14 +51,14 @@ fn conn_reply_is(
 
 ///|
 /// The permit reply for one client/generation pair.
-fn conn_permit_reply(client : Int, generation : Int) -> ConnReply[Int] {
+fn conn_permit_reply(client : Int32, generation : Int32) -> ConnReply[Int32] {
   Permit({ client, generation, })
 }
 
 ///|
 /// True when the ask never entered the mailbox because it is closed.
 fn conn_ask_refused_closed(
-  got : Result[ConnReply[Int], @fuwaroid.AskFailure],
+  got : Result[ConnReply[Int32], @fuwaroid.AskFailure],
 ) -> Bool {
   match got {
     Err(

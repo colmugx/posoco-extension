@@ -15,8 +15,8 @@
 /// the model gate, and can fail or hold until released for timeout and
 /// cancellation scenarios.
 struct RealOrchestrationModel {
-  mut calls : Int
-  mut stopped : Int
+  mut calls : Int32
+  mut stopped : Int32
   scopes : Array[(String, String)]
   inputs : Array[String]
   fail : Bool
@@ -28,8 +28,8 @@ struct RealOrchestrationModel {
 
 ///|
 fn real_model(
-  fail? : Bool = false,
-  hold? : Bool = false,
+  fail~ : Bool = false,
+  hold~ : Bool = false,
 ) -> RealOrchestrationModel {
   {
     calls: 0,
@@ -146,8 +146,8 @@ impl @posoco.ModelPort for RealOrchestrationModel with fn compact(
 /// explicit ephemeral input and an optional host timeout.
 struct RealHostResolver {
   available : Array[String]
-  timeout_ms : Int?
-  mut seq : Int
+  timeout_ms : Int32?
+  mut seq : Int32
   execution_ids : Array[String]
   session_ids : Array[String]
   inputs : Array[String]
@@ -156,7 +156,7 @@ struct RealHostResolver {
 ///|
 fn real_resolver(
   available~ : Array[String],
-  timeout_ms? : Int? = None,
+  timeout_ms~ : Int32? = None,
 ) -> RealHostResolver {
   {
     available,
@@ -206,7 +206,7 @@ impl @orchestration.BoardExecutionInputResolver for RealHostResolver with fn res
 /// execution or session identity.
 async fn real_ready_board(
   group : @async.TaskGroup[Unit],
-  attempts? : Int = 1,
+  attempts~ : Int32 = 1,
 ) -> @backend.BoardBackend {
   let backend = @backend.BoardBackend(store=@store.MemoryBoardStore(), now_ms=() => {
     1234L

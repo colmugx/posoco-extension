@@ -5,7 +5,7 @@
 
 ///|
 /// Upper bound for any single allowlisted diagnostic value.
-let compact_error_meta_max_chars : Int = 96
+let compact_error_meta_max_chars : Int32 = 96
 
 ///|
 /// Only plainly printable provider metadata may enter compact diagnostics:
@@ -114,7 +114,7 @@ fn http_error_body_summary_text(summary : OpenAIErrorBodySummary) -> String {
 /// The adapter's aggregate bound leaves room for core's error wrappers under
 /// the 512-character display limit; core need not parse or reorder fields.
 fn format_compact_http_error(
-  status : Int,
+  status : Int32,
   body_summary : OpenAIErrorBodySummary,
   body_text : String?,
   request_id_header : String?,

@@ -6,8 +6,8 @@
 /// verdicts never retry here — they belong to the rate-limit resume domain.
 pub(all) struct TransientRetryPolicy {
   /// Retries granted after the first failure (total attempts = 1 + this).
-  max_retries : Int
-  initial_delay_ms : Int
+  max_retries : Int32
+  initial_delay_ms : Int32
 } derive(Debug)
 
 ///|

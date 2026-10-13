@@ -80,14 +80,14 @@ fn ds_compact_checkpoint_text(summary : String) -> String {
 
 ///|
 /// ceil(chars / 4) — the same conservative estimate the compact kits use.
-fn ds_compact_estimate_chars(chars : Int) -> Int {
+fn ds_compact_estimate_chars(chars : Int32) -> Int32 {
   (chars + 3) / 4
 }
 
 ///|
 /// Visible character count of one message (text content; tool-call name and
 /// JSON arguments for assistants; the outcome payload for tool results).
-fn ds_compact_message_chars(message : @posoco.Message) -> Int {
+fn ds_compact_message_chars(message : @posoco.Message) -> Int32 {
   let mut total = 0
   match message {
     SystemMessage(content~) | UserMessage(content~) =>
@@ -136,7 +136,7 @@ fn ds_compact_message_chars(message : @posoco.Message) -> Int {
 /// never split. The window size is unknown here (never guessed), so the
 /// parity default is 20k tokens. Returns None when even the first user
 /// message is inside the budget (nothing to summarize).
-fn ds_compact_tail_start(messages : Array[@posoco.Message]) -> Int? {
+fn ds_compact_tail_start(messages : Array[@posoco.Message]) -> Int32? {
   let mut running = 0
   let mut i = messages.length() - 1
   let mut candidate = -1
@@ -268,7 +268,7 @@ async fn DeepSeekModelPort::ds_compact_completion(
 ///|
 /// The Auto-tier escalation line, as a percentage of the context window:
 /// eviction alone is considered enough only below it.
-const DS_AUTO_ESCALATION_PERCENT : Int = 75
+const DS_AUTO_ESCALATION_PERCENT : Int32 = 75
 
 ///|
 /// Plan for one Auto compact: evict old tool pairs, summarize, or both.
@@ -288,8 +288,8 @@ priv enum DS_AutoPlan {
 /// single per-run auto-compact budget is spent on real relief.
 fn ds_auto_plan(
   evicted : @evict.EvictResult,
-  window : Int?,
-  exact : (Int, Int, Int)?,
+  window : Int32?,
+  exact : (Int32, Int32, Int32)?,
 ) -> DS_AutoPlan {
   if evicted.evicted_tool_calls == 0 {
     return SummarizeOnly
@@ -391,7 +391,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
         Some(pressure) => pressure.window_tokens
         None => self.config.context_window
       }
-      let exact : (Int, Int, Int)? = match scope.pressure {
+      let exact : (Int32, Int32, Int32)? = match scope.pressure {
         Some(pressure) =>
           match (pressure.window_tokens, pressure.occupancy_tokens) {
             (Some(w), Some(o)) =>

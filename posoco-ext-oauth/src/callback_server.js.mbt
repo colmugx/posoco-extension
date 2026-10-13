@@ -21,7 +21,7 @@ extern "js" fn http_create_server(handler : NodeHttpHandler) -> NodeServer = "cr
 /// is written straight into the server struct's `code`/`state` fields (plain JS objects).
 extern "js" fn node_serve(
   create_server : (NodeHttpHandler) -> NodeServer,
-  port : Int,
+  port : Int32,
   server_obj : JsCallbackServer,
 ) -> NodeServer =
   #| (createServer, port, serverObj) => {
@@ -67,7 +67,7 @@ pub(all) struct JsCallbackServer {
 #warnings("-unused_value")
 pub impl CallbackServer for JsCallbackServer with fn start(
   self : JsCallbackServer,
-  port : Int,
+  port : Int32,
 ) -> Unit raise OAuthError {
   let srv = node_serve(http_create_server, port, self)
   self.node_server = Some(srv)

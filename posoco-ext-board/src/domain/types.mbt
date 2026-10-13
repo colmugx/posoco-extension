@@ -35,7 +35,7 @@ pub extend BoardPriority with Eq::{equal, not_equal}
 pub extend BoardPriority with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-pub fn BoardPriority::rank(self : BoardPriority) -> Int {
+pub fn BoardPriority::rank(self : BoardPriority) -> Int32 {
   match self {
     Low => 0
     Normal => 1

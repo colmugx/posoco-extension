@@ -114,7 +114,7 @@ pub(all) struct ZaiConfig {
   endpoint_prefix : String
   reasoning_effort : String
   thinking_efforts : Array[String]
-  context_window : Int?
+  context_window : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -126,12 +126,12 @@ pub extend ZaiConfig with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 pub fn ZaiConfig::ZaiConfig(
   api_key : String,
-  model? : String = "glm-5.3",
-  base_url? : String = "https://api.z.ai",
-  endpoint_prefix? : String = "/api/paas/v4",
-  reasoning_effort? : String = "",
-  thinking_efforts? : Array[String] = ["low", "high", "max"],
-  context_window? : Int? = None,
+  model~ : String = "glm-5.3",
+  base_url~ : String = "https://api.z.ai",
+  endpoint_prefix~ : String = "/api/paas/v4",
+  reasoning_effort~ : String = "",
+  thinking_efforts~ : Array[String] = ["low", "high", "max"],
+  context_window~ : Int32? = None,
 ) -> ZaiConfig {
   if !thinking_efforts.is_empty() &&
     reasoning_effort != "" &&
@@ -159,7 +159,7 @@ pub fn ZaiConfig::for_model(
   model : String,
   base_url~ : String,
   endpoint_prefix~ : String,
-  context_window? : Int? = None,
+  context_window~ : Int32? = None,
 ) -> ZaiConfig {
   match zai_model_info(model) {
     Some(info) => {
@@ -196,7 +196,7 @@ pub fn ZaiConfig::for_model(
 pub fn ZaiConfig::with_reasoning_effort(
   self : ZaiConfig,
   effort : String,
-  manifest_id? : String = "posoco_ext_zai",
+  manifest_id~ : String = "posoco_ext_zai",
 ) -> ZaiConfig raise @posoco.CompositionError {
   if effort == "off" {
     return { ..self, reasoning_effort: "", }
@@ -219,7 +219,7 @@ pub(all) struct ZaiModelPort {
 ///|
 pub fn ZaiModelPort::ZaiModelPort(
   config : ZaiConfig,
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> ZaiModelPort {
   { config, ctx, }
 }

@@ -50,7 +50,7 @@ extern "js" fn herdr_js_spawn_envelope(
 
 ///|
 priv struct JsSpawnResult {
-  exit_code : Int
+  exit_code : Int32
   stdout : String
   stderr : String
 }
@@ -98,7 +98,7 @@ priv struct JsHerdrCli {}
 impl HerdrCli for JsHerdrCli with fn run(
   _self : JsHerdrCli,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   let result = herdr_js_spawn_result(argv)
   (result.exit_code, result.stdout, result.stderr)
 }

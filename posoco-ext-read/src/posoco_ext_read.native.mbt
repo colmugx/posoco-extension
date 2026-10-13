@@ -45,8 +45,8 @@ impl FsIo for NativeFsIo with fn stat(_self, path : String) -> @devkit.FileStamp
 /// `decode` stage, matching the whole-file reader it replaces.
 async fn native_read_lines(
   path : String,
-  skip : Int,
-  take : Int,
+  skip : Int32,
+  take : Int32,
 ) -> LinePage raise @posoco.RuntimeError {
   let file = @fs.open(path, mode=@fs.Mode::ReadOnly) catch {
     error => raise read_failure("read", path, error.to_string())
@@ -122,8 +122,8 @@ impl FsIo for NativeFsIo with fn read_image_base64(_self, path : String) -> Stri
 impl FsIo for NativeFsIo with fn read_lines(
   _self,
   path : String,
-  skip : Int,
-  take : Int,
+  skip : Int32,
+  take : Int32,
 ) -> LinePage {
   native_read_lines(path, skip, take)
 }
@@ -134,7 +134,7 @@ impl FsIo for NativeFsIo with fn read_lines(
 impl FsIo for NativeFsIo with fn read_last_lines(
   _self,
   path : String,
-  take : Int,
+  take : Int32,
 ) -> LinePage {
   let counted = native_read_lines(path, 0, 0)
   let take_eff = if take < counted.total_lines {

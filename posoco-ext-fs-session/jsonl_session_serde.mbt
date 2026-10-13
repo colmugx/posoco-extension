@@ -493,7 +493,7 @@ pub fn jsonl_session_path(root_dir : String, id : String) -> String {
 pub fn companion_path(
   root_dir : String,
   id : String,
-  ext? : String = "host.json",
+  ext~ : String = "host.json",
 ) -> String {
   "\{root_dir}/\{id}.\{ext}"
 }

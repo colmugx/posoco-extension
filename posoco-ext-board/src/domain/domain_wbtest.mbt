@@ -12,9 +12,9 @@ fn aid(s : String) -> AttemptId {
 fn create_cmd(
   id : String,
   rev : Int64,
-  at? : Int64 = 1000L,
-  deps? : Array[BoardTaskId] = [],
-  dod? : Array[String] = [],
+  at~ : Int64 = 1000L,
+  deps~ : Array[BoardTaskId] = [],
+  dod~ : Array[String] = [],
 ) -> BoardCommand {
   CreateTask(
     id=tid(id),
@@ -33,7 +33,7 @@ fn move_cmd(
   id : String,
   rev : Int64,
   to : BoardStage,
-  at? : Int64 = 2000L,
+  at~ : Int64 = 2000L,
 ) -> BoardCommand {
   MoveTask(id=tid(id), to~, at_ms=at, expected_revision=rev)
 }

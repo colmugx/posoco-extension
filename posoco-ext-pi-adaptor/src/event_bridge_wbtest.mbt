@@ -50,7 +50,7 @@ let wbtest_family : Array[String] = [
 ]
 
 ///|
-fn wbtest_count(captured : Array[String], name : String) -> Int {
+fn wbtest_count(captured : Array[String], name : String) -> Int32 {
   captured.filter(fn(entry) { entry.contains(name + "|") }).length()
 }
 

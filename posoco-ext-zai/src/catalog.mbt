@@ -54,6 +54,20 @@ fn zai_catalog_slot(
     thinking_efforts=slot_efforts,
     default_effort~,
     context_window=config.context_window,
+    context_window_source="configured",
+    metadata_provider_id=Some(
+      if config.base_url == "https://open.bigmodel.cn" {
+        if identity.provider_id == "zai-coding-plan" {
+          "zhipuai-coding-plan"
+        } else {
+          "zhipuai"
+        }
+      } else if config.base_url == "https://api.z.ai" {
+        identity.provider_id
+      } else {
+        ""
+      },
+    ),
     capabilities=if zai_supports_images(config.model) {
       ["image_in"]
     } else {
@@ -162,7 +176,7 @@ pub fn zai_model_catalog_from_ids(
   ctx : @devkit.ExtContext,
   identity : ZaiCatalogIdentity,
   api_key : &@llm.ApiKeyFactory,
-  capabilities? : Array[String] = ["chat", "streaming", "api_key"],
+  capabilities~ : Array[String] = ["chat", "streaming", "api_key"],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   if ids.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
@@ -200,7 +214,7 @@ pub fn zai_model_catalog(
   ctx : @devkit.ExtContext,
   identity : ZaiCatalogIdentity,
   api_key : &@llm.ApiKeyFactory,
-  capabilities? : Array[String] = ["chat", "streaming", "api_key"],
+  capabilities~ : Array[String] = ["chat", "streaming", "api_key"],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   let ids : Array[String] = []
   for info in zai_models() {

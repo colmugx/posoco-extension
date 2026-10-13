@@ -159,7 +159,7 @@ fn parse_cached_deepseek_models(records : Json?) -> Array[DeepSeekModelInfo]? {
 pub async fn fetch_deepseek_models(
   base_url : String,
   api_key : String,
-  endpoint_prefix? : String = "",
+  endpoint_prefix~ : String = "",
 ) -> Array[DeepSeekModelInfo] raise @posoco.ModelError {
   let headers : @http.Headers = {
     "Authorization": "Bearer " + api_key,

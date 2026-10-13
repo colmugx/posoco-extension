@@ -1,7 +1,7 @@
 ///|
 priv struct ScriptedUi {
   response : @posoco.UiResponse
-  mut request_count : Int
+  mut request_count : Int32
   mut last_request : @posoco.UiRequest?
 }
 

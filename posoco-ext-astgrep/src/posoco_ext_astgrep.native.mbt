@@ -32,7 +32,7 @@ fn native_astgrep_candidates() -> Array[String] {
 impl AstGrepSpawn for NativeAstGrepSpawn with fn spawn(
   self : NativeAstGrepSpawn,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   let bin = match self.bin {
     Some(bin) => bin
     None => {

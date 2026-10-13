@@ -88,16 +88,16 @@ pub struct AcpBridge {
   // projection time with (triggering event, projected update).
   meta_decorator : ((@posoco.TurnEvent, @acp.SessionUpdate) -> Json?)?
   // Host-declared model context window; `None` keeps UsageUpdate.size at 0.
-  priv mut context_window : Int?
+  priv mut context_window : Int32?
   // Self-collected per-turn state (via Observer events). `message_seq` and
   // `used_tokens` persist across prompts (unique ids, session-cumulative
   // usage); everything below them is reset per turn or per attach.
-  mut message_seq : Int
+  mut message_seq : Int32
   mut current_text_id : String?
   mut current_thought_id : String?
   mut text_streamed : Bool
   mut thought_streamed : Bool
-  mut used_tokens : Int
+  mut used_tokens : Int32
   mut last_finish : @posoco.FinishReason?
   mut last_failure : String?
 }
@@ -118,8 +118,8 @@ pub struct AcpBridge {
 /// (the host did not provide one). `used` stays session-cumulative either
 /// way.
 pub fn AcpBridge::AcpBridge(
-  meta? : ((@posoco.TurnEvent, @acp.SessionUpdate) -> Json?)? = None,
-  context_window? : Int? = None,
+  meta~ : ((@posoco.TurnEvent, @acp.SessionUpdate) -> Json?)? = None,
+  context_window~ : Int32? = None,
 ) -> AcpBridge {
   {
     queue: @aqueue.Queue(kind=Unbounded),
@@ -147,7 +147,7 @@ pub fn AcpBridge::AcpBridge(
 /// message ids, queue state, or the ACP session binding.
 pub fn AcpBridge::set_context_window(
   self : AcpBridge,
-  context_window : Int?,
+  context_window : Int32?,
 ) -> Unit {
   self.context_window = context_window
 }
@@ -220,7 +220,7 @@ pub fn AcpBridge::close(self : AcpBridge) -> Unit {
 /// number of updates sent. A detached bridge sends nothing; a send failure
 /// stops the drain early (a dead ACP connection fails every subsequent send
 /// too) and leaves the unsent items queued.
-pub async fn AcpBridge::flush(self : AcpBridge) -> Int noraise {
+pub async fn AcpBridge::flush(self : AcpBridge) -> Int32 noraise {
   match (self.context, self.session_id) {
     (Some(context), Some(session_id)) => {
       let mut sent = 0
@@ -492,6 +492,7 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
       self.ingest_model_response(message, usage, event)
     StreamChunkReceived(chunk~) => self.ingest_stream_chunk(chunk, event)
     TurnFailed(message) => self.last_failure = Some(message)
+    ContextStateUpdated(state~) => self.context_window = state.window_tokens
     TurnCompleted
     | ToolCallApproved(..)
     | ToolCallStarted(..)
@@ -502,7 +503,6 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | Custom(..)
     | CompactStarted(..)
     | CompactFinished(..)
-    | ContextStateUpdated(..)
     | OperationFinalized(..)
     // 0.18.0 turn events: the bridge projects its own protocol surface;
     // user-request lifecycle needs no ACP-side projection.

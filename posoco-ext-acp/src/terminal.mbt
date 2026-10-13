@@ -29,7 +29,7 @@ const TERMINAL_POLL_INTERVAL_MS = 25
 /// output received so far.
 pub(all) suberror AcpTerminalError {
   HostCallFailed(method_name~ : String, cause~ : @acp.AgentContextError)
-  TerminalTimedOut(timeout_ms~ : Int, partial_output~ : String)
+  TerminalTimedOut(timeout_ms~ : Int32, partial_output~ : String)
   TerminalCancelled(partial_output~ : String)
 } derive(Eq, Debug)
 
@@ -43,7 +43,7 @@ pub extend AcpTerminalError with @moonbitlang/core/debug.Debug::{to_repr}
 /// Outcome of a completed run: the process exit code (absent when the
 /// command died by signal) and the output captured when it exited.
 pub(all) struct AcpTerminalResult {
-  exit_code : Int?
+  exit_code : Int32?
   output : String
 } derive(Eq, Debug)
 
@@ -75,7 +75,7 @@ pub fn AcpTerminal::AcpTerminal(
 /// context error; the other two carry the partial output received so far.
 priv enum TerminalRunFailure {
   HostFailure(@acp.AgentContextError)
-  TimedOut(Int, String)
+  TimedOut(Int32, String)
   CancelledRun(String)
 }
 
@@ -83,7 +83,7 @@ priv enum TerminalRunFailure {
 /// Exit facts gathered once the command has exited.
 priv struct TerminalExitRun {
   output : String
-  exit_code : Int?
+  exit_code : Int32?
 }
 
 ///|
@@ -166,7 +166,7 @@ async fn terminal_poll_once(
 /// Sleep one poll interval. Cancellation interrupts the sleep and is
 /// absorbed by `terminal_drive`'s `handle_cancellation`.
 async fn terminal_sleep(
-  pause_ms : Int,
+  pause_ms : Int32,
 ) -> Result[Unit, TerminalRunFailure] noraise {
   Ok(@async.sleep(pause_ms))
 }
@@ -175,7 +175,7 @@ async fn terminal_sleep(
 /// Park until the next poll, bounded by the overall deadline.
 async fn terminal_park(
   started : Int64,
-  timeout_ms : Int?,
+  timeout_ms : Int32?,
   seen : Ref[String],
 ) -> Result[Unit, TerminalRunFailure] noraise {
   match timeout_ms {
@@ -207,7 +207,7 @@ async fn terminal_drive(
   session_id : String,
   terminal_id : String,
   on_output : ((String) -> Unit)?,
-  timeout_ms : Int?,
+  timeout_ms : Int32?,
 ) -> Result[TerminalExitRun, TerminalRunFailure] noraise {
   let seen : Ref[String] = { val: "", }
   let started = @async.now()
@@ -394,7 +394,7 @@ pub async fn AcpTerminal::run(
   command : String,
   cwd~ : String,
   on_output? : (String) -> Unit,
-  timeout_ms? : Int,
+  timeout_ms? : Int32,
 ) -> AcpTerminalResult raise AcpTerminalError {
   let create_params : @acp.TerminalCreateParams = {
     session_id: self.session_id,

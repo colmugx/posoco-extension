@@ -13,7 +13,7 @@
 /// provider that owns it.
 priv struct LazyEntry {
   def : @posoco.ToolDef
-  provider : Int
+  provider : Int32
 }
 
 ///|
@@ -83,7 +83,7 @@ impl @posoco.PipelineHook for StableLazyToolsHook with fn before_model(
 pub struct LazyTools {
   priv providers : Array[&@posoco.ToolProvider]
   priv entries : Array[LazyEntry]
-  priv by_name : Map[String, Int]
+  priv by_name : Map[String, Int32]
   /// Recently executed deferred tools, most recent last, deduplicated,
   /// bounded by RECENT_TOOLS_CAP. This state is used only by the explicit
   /// legacy Observer/PipelineHook views; normal manifest composition uses the
@@ -130,7 +130,7 @@ pub fn LazyTools::build(
   providers~ : Array[&@posoco.ToolProvider],
 ) -> Result[LazyTools, String] {
   let entries : Array[LazyEntry] = []
-  let by_name : Map[String, Int] = Map::from_array([])
+  let by_name : Map[String, Int32] = Map::from_array([])
   for i, provider in providers {
     for def in provider.list_tools() {
       let name = def.name.to_string()
@@ -172,7 +172,7 @@ pub fn LazyTools::build(
 
 ///|
 /// Number of deferred tools hidden behind the gateway.
-pub fn LazyTools::deferred_count(self : LazyTools) -> Int {
+pub fn LazyTools::deferred_count(self : LazyTools) -> Int32 {
   self.entries.length()
 }
 

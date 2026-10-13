@@ -22,7 +22,7 @@ fn encode_window_input(messages : Array[@posoco.Message]) -> Array[Json] raise {
 ///|
 fn compact_test_anchor(
   payload : Json,
-  content? : Array[@posoco.Content] = [],
+  content~ : Array[@posoco.Content] = [],
 ) -> @posoco.Message {
   @posoco.Message::AssistantMessage(
     content~,

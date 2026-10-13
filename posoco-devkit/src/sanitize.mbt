@@ -3,7 +3,7 @@
 /// Truncates at `limit` chars (default 160), appending `...` when truncated.
 /// Every control character (newlines, tabs, escape sequences, DEL, …) is
 /// replaced with a space so the result cannot forge terminal output.
-pub fn sanitize_path(path : String, limit? : Int = 160) -> String {
+pub fn sanitize_path(path : String, limit~ : Int32 = 160) -> String {
   let builder = StringBuilder()
   let mut count = 0
   for ch in path {
@@ -25,6 +25,6 @@ pub fn sanitize_path(path : String, limit? : Int = 160) -> String {
 ///|
 /// Same as `sanitize_path` with a shorter default limit (120) suitable for
 /// diagnostic labels such as tool/server names in MCP.
-pub fn sanitize_label(label : String, limit? : Int = 120) -> String {
+pub fn sanitize_label(label : String, limit~ : Int32 = 120) -> String {
   sanitize_path(label, limit~)
 }

@@ -5,6 +5,9 @@ import {
   "posoco/ext-oauth" @oauth,
   "posoco/kit-chat-completions" @chatkit,
   "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
   "moonbitlang/core/debug",
 }
 
@@ -17,6 +20,7 @@ options(
     // Production code compiles on every backend. Only the white-box tests are
     // native-only because they exercise async login/refresh paths.
     "router_wbtest.mbt": [ "native" ],
+    "models_dev_wbtest.mbt": [ "native" ],
     "transient_retry_wbtest.mbt": [ "native" ],
     "command_model_wbtest.mbt": [ "native" ],
     "command_model_pick_wbtest.mbt": [ "native" ],

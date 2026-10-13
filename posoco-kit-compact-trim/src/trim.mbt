@@ -24,7 +24,7 @@ pub extend TrimError with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// ceil(chars / 4) without floating point.
-fn ceil_div4(chars : Int) -> Int {
+fn ceil_div4(chars : Int32) -> Int32 {
   (chars + 3) / 4
 }
 
@@ -35,7 +35,7 @@ fn ceil_div4(chars : Int) -> Int {
 /// would otherwise dominate the estimate. String length is counted in
 /// UTF-16 code units (the String::length unit), a good-enough "visible
 /// character" approximation for a 4-chars-per-token heuristic.
-fn content_chars(content : Array[@posoco.Content]) -> Int {
+fn content_chars(content : Array[@posoco.Content]) -> Int32 {
   let mut total = 0
   for block in content {
     match block {
@@ -53,7 +53,7 @@ fn content_chars(content : Array[@posoco.Content]) -> Int {
 /// - Tool: the outcome's textual payload (success/error content, runtime
 ///   failure message, or the not-executed reason rendered as string).
 /// Assistant `reasoning` is not visible transcript content and is not counted.
-fn message_chars(message : @posoco.Message) -> Int {
+fn message_chars(message : @posoco.Message) -> Int32 {
   let mut total = 0
   match message {
     SystemMessage(content~) => total += content_chars(content)
@@ -90,7 +90,7 @@ fn message_chars(message : @posoco.Message) -> Int {
 /// contributes ceil(its visible chars / 4), and the total is the sum of
 /// those per-message values (additive, so cut-point arithmetic and the
 /// strict-shrink check measure the same quantity).
-pub fn estimate_tokens(messages : Array[@posoco.Message]) -> Int {
+pub fn estimate_tokens(messages : Array[@posoco.Message]) -> Int32 {
   let mut total = 0
   for message in messages {
     total += ceil_div4(message_chars(message))
@@ -117,7 +117,7 @@ pub fn estimate_tokens(messages : Array[@posoco.Message]) -> Int {
 /// trim is returned as `Ok` — real progress beats giving up.
 pub fn trim_fallback(
   messages : Array[@posoco.Message],
-  target_tokens : Int,
+  target_tokens : Int32,
 ) -> Result[@posoco.CompactResult, TrimError] {
   if messages.is_empty() {
     return Err(TrimError::EmptyInput)
@@ -137,7 +137,7 @@ pub fn trim_fallback(
     }
   }
   // prefix[i] = estimated tokens of messages[0..i]; prefix[n] == input_tokens.
-  let prefix : Array[Int] = Array::make(n + 1, 0)
+  let prefix : Array[Int32] = Array::make(n + 1, 0)
   for i in 0..<n {
     prefix[i + 1] = prefix[i] + ceil_div4(message_chars(messages[i]))
   }
@@ -146,7 +146,7 @@ pub fn trim_fallback(
   // Smallest legal cut (first UserMessage after the system prefix) whose
   // kept total fits the budget. Kept tokens for a cut at i:
   // head_tokens + (total - prefix[i]).
-  let mut fit_cut : Int? = None
+  let mut fit_cut : Int32? = None
   let mut i = sys_end
   while i < n {
     if messages[i] is UserMessage(..) {
@@ -157,7 +157,7 @@ pub fn trim_fallback(
     }
     i += 1
   }
-  let cut : Int? = match fit_cut {
+  let cut : Int32? = match fit_cut {
     Some(c) => Some(c)
     None =>
       // Budget unreachable with any legal cut. Take the maximal trim
@@ -193,8 +193,8 @@ pub fn trim_fallback(
 ///|
 /// Index of the last UserMessage at or after `start` — the maximal legal
 /// cut point (keep only the system prefix and the final round).
-fn last_user_cut(messages : Array[@posoco.Message], start : Int) -> Int? {
-  let mut last : Int? = None
+fn last_user_cut(messages : Array[@posoco.Message], start : Int32) -> Int32? {
+  let mut last : Int32? = None
   for i in start..<messages.length() {
     if messages[i] is UserMessage(..) {
       last = Some(i)

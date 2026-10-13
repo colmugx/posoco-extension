@@ -9,7 +9,7 @@ priv struct HtmlDoc {
 }
 
 ///|
-let html_max_depth : Int = 200
+let html_max_depth : Int32 = 200
 
 ///|
 /// Emitter state: `at_line_start`/`pending_space` keep inline whitespace
@@ -25,7 +25,7 @@ priv struct Emit {
   mut li_fresh : Bool
   mut first_h1 : String
   list_ordered : Array[Bool]
-  list_counters : Array[Int]
+  list_counters : Array[Int32]
 }
 
 ///|
@@ -125,7 +125,12 @@ fn Emit::fork(self : Emit) -> Emit {
 }
 
 ///|
-fn Emit::walk(self : Emit, doc : @html.Document, i : Int, depth : Int) -> Unit {
+fn Emit::walk(
+  self : Emit,
+  doc : @html.Document,
+  i : Int32,
+  depth : Int32,
+) -> Unit {
   if depth > html_max_depth {
     self.inline_text(doc.get_text_content(i))
     return
@@ -141,9 +146,9 @@ fn Emit::walk(self : Emit, doc : @html.Document, i : Int, depth : Int) -> Unit {
 fn Emit::walk_element(
   self : Emit,
   doc : @html.Document,
-  i : Int,
+  i : Int32,
   tag : String,
-  depth : Int,
+  depth : Int32,
 ) -> Unit {
   match tag {
     "script"
@@ -233,9 +238,9 @@ fn Emit::walk_element(
 fn Emit::render_heading(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
-  level : Int,
+  i : Int32,
+  depth : Int32,
+  level : Int32,
 ) -> Unit {
   if level == 1 && self.first_h1.length() == 0 {
     self.first_h1 = collapse_ws(doc.get_text_content(i))
@@ -255,8 +260,8 @@ fn Emit::render_heading(
 fn Emit::render_p(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
 ) -> Unit {
   let level = self.list_ordered.length()
   if level == 0 {
@@ -286,8 +291,8 @@ fn Emit::render_p(
 fn Emit::render_list(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
   ordered : Bool,
 ) -> Unit {
   if self.list_ordered.length() == 0 {
@@ -313,8 +318,8 @@ fn Emit::render_list(
 fn Emit::render_li(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
 ) -> Unit {
   let level = self.list_ordered.length()
   if level == 0 {
@@ -345,8 +350,8 @@ fn Emit::render_li(
 fn Emit::render_emphasis(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
   marker : String,
 ) -> Unit {
   let sub = self.fork()
@@ -360,7 +365,7 @@ fn Emit::render_emphasis(
 }
 
 ///|
-fn Emit::render_code_span(self : Emit, doc : @html.Document, i : Int) -> Unit {
+fn Emit::render_code_span(self : Emit, doc : @html.Document, i : Int32) -> Unit {
   let raw = doc.get_text_content(i)
   if raw.trim().length() == 0 {
     return
@@ -379,8 +384,8 @@ fn Emit::render_code_span(self : Emit, doc : @html.Document, i : Int) -> Unit {
 fn Emit::render_pre(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
 ) -> Unit {
   let buf = StringBuilder()
   collect_raw_text(doc, i, depth, buf)
@@ -408,8 +413,8 @@ fn Emit::render_pre(
 fn Emit::render_quote(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
 ) -> Unit {
   let sub = self.fork()
   for c in doc.get_children(i) {
@@ -435,8 +440,8 @@ fn Emit::render_quote(
 fn Emit::render_link(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
 ) -> Unit {
   let sub = self.fork()
   for c in doc.get_children(i) {
@@ -468,7 +473,7 @@ fn Emit::render_link(
 }
 
 ///|
-fn Emit::render_img(self : Emit, doc : @html.Document, i : Int) -> Unit {
+fn Emit::render_img(self : Emit, doc : @html.Document, i : Int32) -> Unit {
   match doc.get_attribute(i, "alt") {
     Some(alt) => {
       let a = collapse_ws(alt)
@@ -484,8 +489,8 @@ fn Emit::render_img(self : Emit, doc : @html.Document, i : Int) -> Unit {
 fn Emit::render_table(
   self : Emit,
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
 ) -> Unit {
   for c in doc.get_children(i) {
     if doc.get_tag_name(c) == Some("caption") {
@@ -494,7 +499,7 @@ fn Emit::render_table(
       self.close_block()
     }
   }
-  let rows : Array[Int] = []
+  let rows : Array[Int32] = []
   collect_table_rows(doc, i, depth, rows)
   let mut header = -1
   for k, r in rows {
@@ -526,8 +531,8 @@ fn Emit::render_table(
 fn Emit::write_table_row(
   self : Emit,
   doc : @html.Document,
-  cells : Array[Int],
-  depth : Int,
+  cells : Array[Int32],
+  depth : Int32,
 ) -> Unit {
   let b = StringBuilder()
   b.write_char('|')
@@ -550,8 +555,8 @@ fn Emit::write_table_row(
 fn Emit::render_cell(
   self : Emit,
   doc : @html.Document,
-  cell : Int,
-  depth : Int,
+  cell : Int32,
+  depth : Int32,
 ) -> String {
   let sub = self.fork()
   for c in doc.get_children(cell) {
@@ -573,8 +578,8 @@ fn Emit::render_cell(
 ///|
 fn collect_raw_text(
   doc : @html.Document,
-  i : Int,
-  depth : Int,
+  i : Int32,
+  depth : Int32,
   buf : StringBuilder,
 ) -> Unit {
   if depth > html_max_depth {
@@ -595,9 +600,9 @@ fn collect_raw_text(
 ///|
 fn collect_table_rows(
   doc : @html.Document,
-  i : Int,
-  depth : Int,
-  rows : Array[Int],
+  i : Int32,
+  depth : Int32,
+  rows : Array[Int32],
 ) -> Unit {
   if depth > html_max_depth {
     return
@@ -613,8 +618,8 @@ fn collect_table_rows(
 }
 
 ///|
-fn table_cells(doc : @html.Document, row : Int) -> Array[Int] {
-  let cells : Array[Int] = []
+fn table_cells(doc : @html.Document, row : Int32) -> Array[Int32] {
+  let cells : Array[Int32] = []
   for c in doc.get_children(row) {
     match doc.get_tag_name(c) {
       Some("th") | Some("td") => cells.push(c)
@@ -625,7 +630,7 @@ fn table_cells(doc : @html.Document, row : Int) -> Array[Int] {
 }
 
 ///|
-fn find_code_language(doc : @html.Document, pre : Int) -> String? {
+fn find_code_language(doc : @html.Document, pre : Int32) -> String? {
   match class_lang(doc.get_attribute(pre, "class")) {
     Some(l) => Some(l)
     None => {
@@ -790,7 +795,7 @@ fn escape_url(s : String) -> String {
 }
 
 ///|
-fn max_backtick_run(s : String) -> Int {
+fn max_backtick_run(s : String) -> Int32 {
   let mut best = 0
   let mut cur = 0
   for i in 0..<s.length() {
@@ -807,7 +812,7 @@ fn max_backtick_run(s : String) -> Int {
 }
 
 ///|
-fn repeat_char(c : Char, n : Int) -> String {
+fn repeat_char(c : Char, n : Int32) -> String {
   let b = StringBuilder()
   for _t in 0..<n {
     b.write_char(c)
@@ -883,7 +888,7 @@ fn html_to_markdown(html : String, base~ : String) -> HtmlDoc {
     list_ordered: [],
     list_counters: [],
   }
-  let root : Int = if doc.body_element >= 0 {
+  let root : Int32 = if doc.body_element >= 0 {
     doc.body_element
   } else {
     doc.document_element

@@ -2,7 +2,7 @@
 /// Minimal local QuotaSource for tests: plays back scripted results in order.
 struct ScriptedQuotaSource {
   results : Array[Result[Array[QuotaReading], String]]
-  mut calls : Int
+  mut calls : Int32
 }
 
 ///|

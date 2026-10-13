@@ -49,9 +49,9 @@ fn catalog_description_preview(value : String) -> String {
 /// is quoted and explicitly treated as untrusted metadata until activation.
 pub fn SkillCatalog::render_prompt_body(
   self : SkillCatalog,
-  max_chars~ : Int,
-  activate_tool_name? : String = "activate_skill",
-  read_resource_tool_name? : String = "read_skill_resource",
+  max_chars~ : Int32,
+  activate_tool_name~ : String = "activate_skill",
+  read_resource_tool_name~ : String = "read_skill_resource",
 ) -> String {
   if self.skills.is_empty() || max_chars <= 0 {
     return ""

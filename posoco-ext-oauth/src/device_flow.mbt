@@ -25,7 +25,7 @@ pub fn DeviceFlowConfig::DeviceFlowConfig(
   client_id~ : String,
   device_auth_endpoint~ : String,
   token_endpoint~ : String,
-  scope? : String = "",
+  scope~ : String = "",
 ) -> DeviceFlowConfig {
   {
     client_id,
@@ -60,8 +60,8 @@ pub(all) struct DeviceAuthResponse {
   user_code : String
   verification_uri : String
   verification_uri_complete : String? // URI with user_code embedded
-  expires_in : Int // seconds until device_code expires
-  interval : Int // minimum poll interval in seconds
+  expires_in : Int32 // seconds until device_code expires
+  interval : Int32 // minimum poll interval in seconds
 }
 
 ///|
@@ -129,7 +129,7 @@ fn parse_device_auth_response(json : Json) -> DeviceAuthResponse? {
 ///|
 /// Parse only finite, strictly positive integer JSON numbers.  Truncating a
 /// fractional expiry/interval would silently alter provider timing semantics.
-fn parse_positive_integer(value : Double) -> Int? {
+fn parse_positive_integer(value : Double) -> Int32? {
   if value.is_nan() || value.is_inf() || value <= 0.0 {
     return None
   }
@@ -227,7 +227,7 @@ async fn request_device_code(
 /// than failures; terminal statuses remain typed OAuth errors.
 priv enum PollTokenResult {
   Pending
-  SlowDown(Int) // server interval, or 0 when omitted
+  SlowDown(Int32) // server interval, or 0 when omitted
   Complete(Credential)
   Failed(OAuthError)
 }

@@ -176,7 +176,7 @@ pub fn parse_kimi_usage(
 async fn fetch_kimi_usage(
   base_url : String,
   access_token : String,
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> Result[Array[@devkit.QuotaReading], String] {
   let headers : @http.Headers = {
     "Authorization": "Bearer " + access_token,
@@ -218,8 +218,8 @@ pub(all) struct KimiUsageSource {
 ///|
 pub fn KimiUsageSource::KimiUsageSource(
   access_token~ : String,
-  base_url? : String = kimi_oauth_api_base(),
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  base_url~ : String = kimi_oauth_api_base(),
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> KimiUsageSource {
   { access_token, base_url, now_ms, }
 }

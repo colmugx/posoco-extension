@@ -2,7 +2,7 @@
 /// Heuristic token estimate shared by the compact kits: ceil(chars / 4).
 /// This is a cheap approximation of real tokenizers — good enough for
 /// budget decisions, not for billing.
-pub fn estimate_tokens(text : String) -> Int {
+pub fn estimate_tokens(text : String) -> Int32 {
   (text.length() + 3) / 4
 }
 
@@ -22,8 +22,8 @@ pub extend PruneAction with Eq::{not_equal, equal}
 /// cleared. On `Noop` both counts are zero.
 pub(all) struct PruneResult {
   messages : Array[@posoco.Message]
-  pruned_tokens : Int
-  pruned_count : Int
+  pruned_tokens : Int32
+  pruned_count : Int32
   action : PruneAction
 } derive(Eq)
 
@@ -44,7 +44,7 @@ fn copy_messages(messages : Array[@posoco.Message]) -> Array[@posoco.Message] {
 /// Start of the protected window: the index of the second-to-last user
 /// message from the end. With fewer than two user turns everything is
 /// protected, so the function returns 0.
-fn recent_two_turn_start(messages : Array[@posoco.Message]) -> Int {
+fn recent_two_turn_start(messages : Array[@posoco.Message]) -> Int32 {
   let mut seen = 0
   for i = messages.length() - 1; i >= 0; i = i - 1 {
     match messages[i] {
@@ -91,15 +91,15 @@ fn completed_tool_output(message : @posoco.Message) -> (String, String)? {
 /// mutated.
 pub fn prune_tool_outputs(
   messages : Array[@posoco.Message],
-  protect_tokens? : Int = 40000,
-  min_gain? : Int = 20000,
-  placeholder? : String = "[Old tool result content cleared]",
-  protected_tools? : Array[String] = [],
+  protect_tokens~ : Int32 = 40000,
+  min_gain~ : Int32 = 20000,
+  placeholder~ : String = "[Old tool result content cleared]",
+  protected_tools~ : Array[String] = [],
 ) -> PruneResult {
   let protected_from = recent_two_turn_start(messages)
   let mut spent = 0
   // Prunable (index, original estimate) pairs, newest first.
-  let prunable : Array[(Int, Int)] = []
+  let prunable : Array[(Int32, Int32)] = []
   for i = messages.length() - 1; i >= 0; i = i - 1 {
     if i < protected_from {
       match completed_tool_output(messages[i]) {
@@ -124,7 +124,7 @@ pub fn prune_tool_outputs(
       action: Noop,
     }
   } else {
-    let targets : Map[Int, Int] = Map::from_array(prunable)
+    let targets : Map[Int32, Int32] = Map::from_array(prunable)
     let out : Array[@posoco.Message] = []
     let mut cleared_tokens = 0
     let mut cleared_count = 0

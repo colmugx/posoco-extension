@@ -2,7 +2,7 @@
 /// ——— Test helpers ———
 
 ///|
-fn manifest_json(id : String, exts? : Array[String] = []) -> Json {
+fn manifest_json(id : String, exts~ : Array[String] = []) -> Json {
   Json::object(
     Map::from_array([
       ("id", Json::string(id)),
@@ -27,7 +27,7 @@ fn user_msg(text : String) -> @posoco.Message {
 }
 
 ///|
-fn activation_msg(id : String, manual? : String = "") -> @posoco.Message {
+fn activation_msg(id : String, manual~ : String = "") -> @posoco.Message {
   user_msg(activation_header(id) + "\n\n" + manual)
 }
 

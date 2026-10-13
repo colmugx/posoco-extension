@@ -173,7 +173,7 @@ test "parse intelligence metrics skips a point with no model key" {
 ///|
 priv struct FakeMetricsTransport {
   mut url : String
-  status : Int
+  status : Int32
   body : String
   fail_get : Bool
 }

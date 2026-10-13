@@ -21,8 +21,8 @@ pub(all) struct GrepTools {
 ///|
 /// Canonical constructor.
 pub fn GrepTools::GrepTools(
-  anchor? : @devkit.WorkspaceAnchor? = None,
-  ignores? : Array[String] = @devkit.default_ignore_patterns(),
+  anchor~ : @devkit.WorkspaceAnchor? = None,
+  ignores~ : Array[String] = @devkit.default_ignore_patterns(),
 ) -> GrepTools {
   GrepTools::{ anchor, ignores, }
 }
@@ -40,7 +40,7 @@ priv enum GrepOutputMode {
 /// 1-indexed `line`, raw line text.
 priv struct GrepMatch {
   path : String
-  line : Int
+  line : Int32
   content : String
 }
 
@@ -153,7 +153,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
 /// defaults to "." and `file_glob` to "" (no filter).
 fn extract_grep_args(
   args : Json,
-) -> (String, String, String, GrepOutputMode, Bool, Int) raise @posoco.RuntimeError {
+) -> (String, String, String, GrepOutputMode, Bool, Int32) raise @posoco.RuntimeError {
   match args {
     Object(obj) => {
       let p = match obj.get("pattern") {
@@ -254,8 +254,8 @@ fn render_match_line(m : GrepMatch) -> String {
 /// markers count toward the budget.
 fn render_content_body(
   matches : Array[GrepMatch],
-  max_matches : Int,
-) -> (String, Int, Bool) {
+  max_matches : Int32,
+) -> (String, Int32, Bool) {
   let out = StringBuilder()
   let mut shown = 0
   let mut bytes = 0
@@ -308,15 +308,15 @@ fn distinct_paths(matches : Array[GrepMatch]) -> Array[String] {
 
 ///|
 /// Match count per distinct path in first-appearance order.
-fn match_counts(matches : Array[GrepMatch]) -> Array[(String, Int)] {
-  let counts : Map[String, Int] = Map::from_array([])
+fn match_counts(matches : Array[GrepMatch]) -> Array[(String, Int32)] {
+  let counts : Map[String, Int32] = Map::from_array([])
   for m in matches {
     counts[m.path] = match counts.get(m.path) {
       Some(n) => n + 1
       None => 1
     }
   }
-  let entries : Array[(String, Int)] = []
+  let entries : Array[(String, Int32)] = []
   for path, n in counts {
     entries.push((path, n))
   }
@@ -324,7 +324,7 @@ fn match_counts(matches : Array[GrepMatch]) -> Array[(String, Int)] {
 }
 
 ///|
-fn grep_summary(count : Int, noun : String) -> String {
+fn grep_summary(count : Int32, noun : String) -> String {
   if count == 0 {
     "no matches"
   } else {
@@ -335,7 +335,7 @@ fn grep_summary(count : Int, noun : String) -> String {
 ///|
 /// Structured payload for observers/UIs; never sent to the model. Carries
 /// the reserved `summary` field plus the total count and truncation flag.
-fn grep_structured(count : Int, noun : String, truncated : Bool) -> Json {
+fn grep_structured(count : Int32, noun : String, truncated : Bool) -> Json {
   Json::object(
     Map::from_array([
       ("summary", Json::string(grep_summary(count, noun))),
@@ -353,8 +353,8 @@ fn grep_result_text(
   mode : GrepOutputMode,
   matches : Array[GrepMatch],
   _pattern : String,
-  max_matches : Int,
-) -> (String, Int, Bool) {
+  max_matches : Int32,
+) -> (String, Int32, Bool) {
   if matches.length() == 0 {
     return ("(no matches)", 0, false)
   }

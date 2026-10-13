@@ -4,7 +4,7 @@
 /// of "x" so char counts are exact.
 
 ///|
-fn tx(n : Int) -> String {
+fn tx(n : Int32) -> String {
   let buf = StringBuilder()
   for _ in 0..<n {
     buf.write_string("x")
@@ -13,12 +13,12 @@ fn tx(n : Int) -> String {
 }
 
 ///|
-fn tw_system(chars : Int) -> @posoco.Message {
+fn tw_system(chars : Int32) -> @posoco.Message {
   @posoco.Message::SystemMessage(content=[@posoco.Content::Text(tx(chars))])
 }
 
 ///|
-fn tw_user(chars : Int) -> @posoco.Message {
+fn tw_user(chars : Int32) -> @posoco.Message {
   @posoco.Message::UserMessage(content=[@posoco.Content::Text(tx(chars))])
 }
 
@@ -30,7 +30,7 @@ fn tw_user_image(media_type : String) -> @posoco.Message {
 }
 
 ///|
-fn tw_assistant(chars : Int) -> @posoco.Message {
+fn tw_assistant(chars : Int32) -> @posoco.Message {
   let no_reasoning : @posoco.Reasoning? = None
   @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text(tx(chars))],
@@ -58,7 +58,7 @@ fn tw_assistant_call(name : String) -> @posoco.Message {
 }
 
 ///|
-fn tw_tool(chars : Int) -> @posoco.Message {
+fn tw_tool(chars : Int32) -> @posoco.Message {
   @posoco.Message::ToolMessage(
     call_id=@posoco.CallId::unchecked("call-1"),
     tool_name=@posoco.ToolName::unchecked("bash"),

@@ -37,7 +37,7 @@
 /// generic compatible adapter maps missing fields to None.
 pub fn process_chat_completions_sse(
   provider~ : String,
-  usage_fields_required? : Bool = false,
+  usage_fields_required~ : Bool = false,
   data : String,
   acc : @posoco.StreamAccumulator,
   on_chunk : (@posoco.StreamChunk) -> Unit,
@@ -342,7 +342,7 @@ pub fn process_chat_completions_sse(
 ///   `cache_read_input_tokens`
 /// An endpoint reporting some yet-unknown spelling also reads None — the
 /// consumer degrades to "no cache facts", never a fabricated rate.
-pub fn uncached_input_tokens_from_usage(usage : Map[String, Json]) -> Int? {
+pub fn uncached_input_tokens_from_usage(usage : Map[String, Json]) -> Int32? {
   match usage.get("prompt_cache_miss_tokens") {
     Some(Json::Number(n, ..)) => Some(n.to_int())
     _ => None
@@ -350,7 +350,7 @@ pub fn uncached_input_tokens_from_usage(usage : Map[String, Json]) -> Int? {
 }
 
 ///|
-pub fn cached_input_tokens_from_usage(usage : Map[String, Json]) -> Int? {
+pub fn cached_input_tokens_from_usage(usage : Map[String, Json]) -> Int32? {
   let spelling = match usage.get("prompt_tokens_details") {
     Some(Json::Object(details)) => details.get("cached_tokens")
     _ => None

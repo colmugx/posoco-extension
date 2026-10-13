@@ -82,13 +82,13 @@ extern "js" fn js_mkdir_recursive_envelope(
 
 ///|
 /// `Date.now()` — unique-enough temp suffix component.
-extern "js" fn js_now_ms() -> Int =
+extern "js" fn js_now_ms() -> Int32 =
   #| () => Date.now()
 
 ///|
 /// Decoded stat envelope (write/edit never need the directory flag).
 priv struct JsStatInfo {
-  size : Int
+  size : Int32
   ms : Double
 }
 

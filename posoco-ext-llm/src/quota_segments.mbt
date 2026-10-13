@@ -25,7 +25,7 @@ let quota_failure_backoff_ms : Int64 = 300000L
 ///|
 /// Bar placement of the router's quota segments (same slot as the codex
 /// windows; provider scoping keeps the two publishers mutually exclusive).
-let quota_segment_priority : Int = 45
+let quota_segment_priority : Int32 = 45
 
 ///|
 /// Local coloring heuristic over provider-stated numbers (color is a UI

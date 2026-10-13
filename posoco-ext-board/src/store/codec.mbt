@@ -394,7 +394,7 @@ fn validate_references(
       seen[dep.value] = true
     }
   }
-  let colors : Map[String, Int] = Map::from_array([])
+  let colors : Map[String, Int32] = Map::from_array([])
   fn visit(id : String) -> Unit raise CodecError {
     match colors.get(id) {
       Some(1) => bad("dependency cycle")

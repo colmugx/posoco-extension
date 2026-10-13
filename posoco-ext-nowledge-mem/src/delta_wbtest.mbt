@@ -13,12 +13,12 @@ fn delta_msg(
 
 ///|
 fn lane_config(
-  api_url? : String = "http://127.0.0.1:14242",
-  mcp_url? : String = "http://127.0.0.1:14242/mcp",
-  api_key? : String? = None,
-  space? : String? = None,
-  agent_id? : String? = None,
-  host_agent_id? : String? = None,
+  api_url~ : String = "http://127.0.0.1:14242",
+  mcp_url~ : String = "http://127.0.0.1:14242/mcp",
+  api_key~ : String? = None,
+  space~ : String? = None,
+  agent_id~ : String? = None,
+  host_agent_id~ : String? = None,
 ) -> NmemConfig {
   {
     api_url,

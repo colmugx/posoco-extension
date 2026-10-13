@@ -15,7 +15,7 @@
 ///   - js: Bun.serve via extern "js"
 pub(open) trait CallbackServer {
   /// Start listening on localhost:port.
-  async fn start(self : Self, port : Int) -> Unit raise OAuthError
+  async fn start(self : Self, port : Int32) -> Unit raise OAuthError
 
   /// Block until the callback arrives. Returns (code, state) from the OAuth
   /// redirect query. Raises ExpiredToken on timeout (default 5 minutes).
@@ -32,7 +32,7 @@ pub(all) struct PkceFlowConfig {
   authorize_url : String // e.g. "https://auth.openai.com/oauth/authorize"
   token_url : String // e.g. "https://auth.openai.com/oauth/token"
   redirect_uri : String // e.g. "http://localhost:1455/auth/callback"
-  callback_port : Int // e.g. 1455
+  callback_port : Int32 // e.g. 1455
   scope : String // e.g. "openid profile email offline_access"
   /// Provider-specific authorize-URL params (e.g. Codex's originator /
   /// codex_cli_simplified_flow), appended url-encoded in array order.
@@ -40,7 +40,7 @@ pub(all) struct PkceFlowConfig {
   /// Port to retry the callback bind when callback_port is occupied. The
   /// redirect_uri port segment is rewritten to the port actually bound so the
   /// authorize URL and token exchange stay identical.
-  fallback_port : Int?
+  fallback_port : Int32?
 }
 
 ///|
@@ -112,7 +112,7 @@ pub async fn run_pkce_browser_flow(
 async fn start_callback_server(
   config : PkceFlowConfig,
   server : &CallbackServer,
-) -> Int raise OAuthError {
+) -> Int32 raise OAuthError {
   let primary = Ok(server.start(config.callback_port)) catch { err => Err(err) }
   match primary {
     Ok(_) => config.callback_port
@@ -137,8 +137,8 @@ async fn start_callback_server(
 /// Swap the port segment of redirect_uri when the fallback port won.
 fn rewrite_redirect_port(
   redirect_uri : String,
-  from_port : Int,
-  to_port : Int,
+  from_port : Int32,
+  to_port : Int32,
 ) -> String {
   if from_port == to_port {
     return redirect_uri
@@ -400,7 +400,7 @@ fn url_encode(s : String) -> String {
 }
 
 ///|
-fn int_to_hex_upper(n : Int) -> String {
+fn int_to_hex_upper(n : Int32) -> String {
   if n < 10 {
     n.to_string()
   } else {

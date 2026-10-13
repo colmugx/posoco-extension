@@ -175,7 +175,7 @@ fn restored_dependency_cycle(
   tasks : Map[BoardTaskId, BoardTask],
   order : Array[BoardTaskId],
 ) -> Array[BoardTaskId]? {
-  let colors : Map[BoardTaskId, Int] = Map::from_array([])
+  let colors : Map[BoardTaskId, Int32] = Map::from_array([])
   let path : Array[BoardTaskId] = []
   fn visit(id : BoardTaskId) -> Array[BoardTaskId]? {
     match colors.get(id) {

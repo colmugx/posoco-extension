@@ -78,7 +78,7 @@ async test "cancel before worker entry cannot strand the runner in Stopping" {
 struct HoldingWorkflowJournal {
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
-  mut writes : Int
+  mut writes : Int32
 }
 
 ///|
@@ -132,7 +132,7 @@ async test "unconfirmed reservation IO prevents successful shutdown or further a
 struct GatePausedWorkflowAdapter {
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
-  mut effects : Int
+  mut effects : Int32
 }
 
 ///|

@@ -166,9 +166,9 @@ pub(all) struct PermissionPolicy {
 /// fire-and-forget.
 pub fn PermissionPolicy::PermissionPolicy(
   mode : PermissionMode,
-  approval? : &ApprovalSource? = None,
-  bus? : @devkit.EventBus? = None,
-  workspace? : @devkit.WorkspaceAnchor? = None,
+  approval~ : &ApprovalSource? = None,
+  bus~ : @devkit.EventBus? = None,
+  workspace~ : @devkit.WorkspaceAnchor? = None,
 ) -> PermissionPolicy {
   let policy : PermissionPolicy = {
     mode,
@@ -510,7 +510,7 @@ fn mode_reminder_message(text : String) -> @kernel.Message {
 }
 
 ///|
-fn find_mode_reminder(messages : Array[@kernel.Message]) -> Int? {
+fn find_mode_reminder(messages : Array[@kernel.Message]) -> Int32? {
   for i, msg in messages {
     match msg {
       @kernel.Message::UserMessage(content~) =>

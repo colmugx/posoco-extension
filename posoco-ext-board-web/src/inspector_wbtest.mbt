@@ -1,13 +1,13 @@
 ///|
 fn dependency_task_json(id : String, dependencies : Array[String]) -> Json {
   {
-    "id": id.to_json(),
-    "title": ("Title " + id).to_json(),
+    "id": Json(id),
+    "title": Json(("Title " + id)),
     "description": "Task details",
     "stage": "ready",
     "priority": "high",
     "definition_of_done": ["Tests pass"],
-    "dependencies": dependencies.to_json(),
+    "dependencies": Json(dependencies),
     "created_at_ms": 10,
     "updated_at_ms": 20,
     "ready_since_ms": 11,
@@ -17,8 +17,8 @@ fn dependency_task_json(id : String, dependencies : Array[String]) -> Json {
 ///|
 fn inspector_snapshot(
   tasks : Array[Json],
-  attempts? : Array[Json] = [],
-  revision? : Int64 = 1L,
+  attempts~ : Array[Json] = [],
+  revision~ : Int64 = 1L,
 ) -> String {
   @protocol.encode_server_frame(
     Snapshot({
@@ -27,9 +27,9 @@ fn inspector_snapshot(
       board_revision: revision,
       payload: {
         "board": {
-          "revision": revision.to_double().to_json(),
-          "tasks": tasks.to_json(),
-          "attempts": attempts.to_json(),
+          "revision": Json(revision.to_double()),
+          "tasks": Json(tasks),
+          "attempts": Json(attempts),
         },
         "events": [],
       },
@@ -56,8 +56,8 @@ fn inspector_model() -> Model {
 ///|
 fn dependency_event(
   dependencies : Array[String],
-  seq? : Int64 = 1L,
-  revision? : Int64 = 2L,
+  seq~ : Int64 = 1L,
+  revision~ : Int64 = 2L,
 ) -> String {
   @protocol.encode_server_frame(
     Event({

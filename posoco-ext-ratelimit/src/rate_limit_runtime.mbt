@@ -12,7 +12,7 @@ priv enum RecoveryCommand {
   )
   TurnFailed(session_id~ : String)
   TurnCompleted(session_id~ : String)
-  TimerFired(epoch~ : Int, deadline~ : Int64)
+  TimerFired(epoch~ : Int32, deadline~ : Int64)
   Poll(now_ms~ : Int64)
   ResumeCompleted(ticket~ : RecoveryTicket)
   ResumeFailed(ticket~ : RecoveryTicket, error~ : String)
@@ -35,8 +35,8 @@ priv enum RecoveryReply {
 ///|
 priv struct RecoveryState {
   mut pending : Array[RecoveryEntry]
-  attempts : Map[String, Int]
-  mut epoch : Int
+  attempts : Map[String, Int32]
+  mut epoch : Int32
   mut inflight : RecoveryTicket?
   mut stopped : Bool
 }
@@ -45,7 +45,7 @@ priv struct RecoveryState {
 priv struct RuntimeEffects {
   supervisor : @fuwaroid.Supervisor[Unit]
   now_ms : () -> Int64
-  sleep_ms : async (Int) -> Unit
+  sleep_ms : async (Int32) -> Unit
   execute_resume : async (String) -> Unit
   trace : (String) -> Unit
   publish_status : (RecoveryStatus?) -> Unit
@@ -58,7 +58,7 @@ priv struct RateLimitRuntime {
 }
 
 ///|
-fn delay_ms(deadline : Int64, now_ms : Int64) -> Int {
+fn delay_ms(deadline : Int64, now_ms : Int64) -> Int32 {
   let delta = deadline - now_ms
   if delta <= 0L {
     1
@@ -76,7 +76,7 @@ fn delay_ms(deadline : Int64, now_ms : Int64) -> Int {
 fn spawn_timer(
   ctx : @fuwaroid.Ctx[RecoveryCommand, RecoveryQuery, RecoveryReply],
   effects : RuntimeEffects,
-  epoch : Int,
+  epoch : Int32,
   deadline : Int64,
 ) -> Unit {
   let address = ctx.address
@@ -349,7 +349,7 @@ fn RateLimitRuntime::start(
   group~ : @async.TaskGroup[Unit],
   policy~ : RecoveryPolicy,
   now_ms~ : () -> Int64,
-  sleep_ms~ : async (Int) -> Unit,
+  sleep_ms~ : async (Int32) -> Unit,
   execute_resume~ : async (String) -> Unit,
   trace~ : (String) -> Unit,
   publish_status~ : (RecoveryStatus?) -> Unit,
@@ -417,7 +417,7 @@ async fn RateLimitRuntime::barrier(self : RateLimitRuntime) -> Unit {
 ///|
 async fn RateLimitRuntime::shutdown(
   self : RateLimitRuntime,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Unit {
   self.tell(Stop)
   self.actor.close()

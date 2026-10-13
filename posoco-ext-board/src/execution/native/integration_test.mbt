@@ -1,7 +1,7 @@
 ///|
 struct JournalModel {
   journal : @native.FileBoardExecutionStore
-  mut calls : Int
+  mut calls : Int32
 }
 
 ///|

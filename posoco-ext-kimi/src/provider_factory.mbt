@@ -14,8 +14,8 @@ pub(all) struct KimiProvider {
 
 ///|
 pub fn KimiProvider::KimiProvider(
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
-  device_id? : String = "",
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
+  device_id~ : String = "",
 ) -> KimiProvider {
   { ctx, device_id, }
 }

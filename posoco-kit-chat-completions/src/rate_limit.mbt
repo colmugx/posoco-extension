@@ -22,7 +22,7 @@
 ///|
 /// Days from civil date (Howard Hinnant's algorithm); pure integer math so
 /// timezone-free timestamps convert without a datetime dependency.
-fn days_from_civil(y : Int, m : Int, d : Int) -> Int64 {
+fn days_from_civil(y : Int32, m : Int32, d : Int32) -> Int64 {
   let yy = if m <= 2 { y - 1 } else { y }
   let era = if yy >= 0 { yy / 400 } else { (yy - 399) / 400 }
   let yoe = yy - era * 400
@@ -34,13 +34,13 @@ fn days_from_civil(y : Int, m : Int, d : Int) -> Int64 {
 
 ///|
 fn civil_to_epoch_ms(
-  y : Int,
-  m : Int,
-  d : Int,
-  hh : Int,
-  mm : Int,
-  ss : Int,
-  tz_offset_minutes : Int,
+  y : Int32,
+  m : Int32,
+  d : Int32,
+  hh : Int32,
+  mm : Int32,
+  ss : Int32,
+  tz_offset_minutes : Int32,
 ) -> Int64? {
   if m < 1 ||
     m > 12 ||
@@ -69,12 +69,12 @@ fn is_digit_code(code : UInt16) -> Bool {
 }
 
 ///|
-fn digit_value(code : UInt16) -> Int {
+fn digit_value(code : UInt16) -> Int32 {
   (code - '0').to_int()
 }
 
 ///|
-fn scan_digits(text : String, i : Int, count : Int) -> (Int, Int)? {
+fn scan_digits(text : String, i : Int32, count : Int32) -> (Int32, Int32)? {
   if i < 0 || i + count > text.length() {
     return None
   }
@@ -94,7 +94,7 @@ fn scan_digits(text : String, i : Int, count : Int) -> (Int, Int)? {
 /// for the UTC marker): `Z`, `+08:00`, `-0800`, `+8`, `UTC+8`, `UTC+08:00`,
 /// optionally wrapped in parentheses — z.ai emits `(UTC+8)` / `(UTC+08:00)`
 /// directly after the seconds. Returns (offset_minutes, index after).
-fn scan_tz_offset(text : String, i : Int) -> (Int, Int)? {
+fn scan_tz_offset(text : String, i : Int32) -> (Int32, Int32)? {
   let n = text.length()
   let mut j = i
   while j < n && text[j] == ' ' {
@@ -160,7 +160,7 @@ fn scan_tz_offset(text : String, i : Int) -> (Int, Int)? {
 }
 
 ///|
-fn match_month_prefix(text : String, i : Int) -> Int? {
+fn match_month_prefix(text : String, i : Int32) -> Int32? {
   if i + 3 > text.length() {
     return None
   }
@@ -215,7 +215,7 @@ fn match_month_prefix(text : String, i : Int) -> Int? {
 
 ///|
 /// `YYYY-MM-DD[T ]HH:MM:SS[.fff]` plus optional timezone suffix.
-fn try_iso_at(text : String, i : Int, default_tz : Int) -> (Int64, Int)? {
+fn try_iso_at(text : String, i : Int32, default_tz : Int32) -> (Int64, Int32)? {
   let n = text.length()
   if i + 19 > n {
     return None
@@ -274,9 +274,9 @@ fn try_iso_at(text : String, i : Int, default_tz : Int) -> (Int64, Int)? {
 /// `Aug 13, 2026 at 15:52` / `… at 3:45pm` (Codex message style).
 fn parse_english_date_at(
   text : String,
-  i : Int,
-  default_tz : Int,
-) -> (Int64, Int)? {
+  i : Int32,
+  default_tz : Int32,
+) -> (Int64, Int32)? {
   let n = text.length()
   let month = match match_month_prefix(text, i) {
     Some(m) => m
@@ -373,9 +373,9 @@ fn parse_english_date_at(
 ///|
 fn try_parse_absolute_at(
   text : String,
-  i : Int,
-  default_tz : Int,
-) -> (Int64, Int)? {
+  i : Int32,
+  default_tz : Int32,
+) -> (Int64, Int32)? {
   match try_iso_at(text, i, default_tz) {
     Some(result) => Some(result)
     None => parse_english_date_at(text, i, default_tz)
@@ -383,7 +383,7 @@ fn try_parse_absolute_at(
 }
 
 ///|
-fn scan_relative_group(text : String, j : Int) -> (Int64, Int)? {
+fn scan_relative_group(text : String, j : Int32) -> (Int64, Int32)? {
   let n = text.length()
   if j >= n || !is_digit_code(text[j]) {
     return None
@@ -505,7 +505,7 @@ fn parse_retry_after_value(value : String, now_ms~ : Int64) -> Int64? {
 /// UTC). Returns epoch milliseconds.
 pub fn parse_reset_timestamp(
   text : String,
-  default_tz_offset_minutes? : Int = 0,
+  default_tz_offset_minutes~ : Int32 = 0,
   now_ms~ : Int64,
 ) -> Int64? {
   let n = text.length()
@@ -536,7 +536,7 @@ fn lower_code(code : UInt16) -> UInt16 {
 
 ///|
 /// Case-insensitive ASCII keyword match at `i`.
-fn keyword_starts_at(text : String, i : Int, keyword : String) -> Bool {
+fn keyword_starts_at(text : String, i : Int32, keyword : String) -> Bool {
   if i < 0 || i + keyword.length() > text.length() {
     return false
   }
@@ -758,11 +758,11 @@ fn first_present(containers : Array[Json], keys : Array[String]) -> Json? {
 /// Lookup covers both the nested `error` object and the top level. When the
 /// body is not JSON at all, only paths 4-6 apply against the raw text.
 pub fn classify_chat_completions_http_error(
-  status : Int,
+  status : Int32,
   body_text : String,
-  default_tz_offset_minutes? : Int = 0,
-  retry_after_header? : String? = None,
-  phrase_gate_all_statuses? : Bool = false,
+  default_tz_offset_minutes~ : Int32 = 0,
+  retry_after_header~ : String? = None,
+  phrase_gate_all_statuses~ : Bool = false,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {
   let body : Json = @json.parse(body_text) catch { _ => Json::null() }

@@ -53,7 +53,7 @@ test "reset formatting remains UTC and deterministic" {
 ///|
 async test "hook events mutate only actor-owned recovery state" {
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { 49000L }, sleep_ms=async fn(
-    _ms : Int,
+    _ms : Int32,
   ) {
     @async.sleep(60000)
   })
@@ -87,7 +87,7 @@ async test "hook events mutate only actor-owned recovery state" {
 ///|
 async test "cancel_pending invalidates actor schedule" {
   let guard_ext = RateLimitGuard(now_ms=fn() { 1000L }, sleep_ms=async fn(
-    _ms : Int,
+    _ms : Int32,
   ) {
     @async.sleep(60000)
   })
@@ -171,9 +171,9 @@ async test "429 failed turn auto-resumes through supervised event timer" {
 /// A slow model lets the test observe the single-inflight invariant without
 /// relying on a Semaphore implementation detail.
 struct DelayedModel {
-  delay_ms : Int
-  mut started : Int
-  mut finished : Int
+  delay_ms : Int32
+  mut started : Int32
+  mut finished : Int32
 }
 
 ///|
@@ -220,7 +220,7 @@ async test "simultaneous due sessions serialize resume execution" {
   let now = Ref(1000L)
   let model : DelayedModel = { delay_ms: 100, started: 0, finished: 0, }
   let guard_ext = RateLimitGuard(margin_ms=0, now_ms=fn() { now.val }, sleep_ms=async fn(
-    _ms : Int,
+    _ms : Int32,
   ) {
     @async.sleep(60000)
   })

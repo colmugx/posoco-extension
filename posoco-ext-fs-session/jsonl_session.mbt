@@ -14,7 +14,7 @@ pub(all) struct JsonlSessionStore {
 ///|
 pub fn JsonlSessionStore::JsonlSessionStore(
   root_dir : String,
-  bus? : @devkit.EventBus? = None,
+  bus~ : @devkit.EventBus? = None,
 ) -> JsonlSessionStore {
   { root_dir, bus, current_id: None, }
 }
@@ -171,7 +171,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
 pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   self,
   id : String,
-  from_index : Int,
+  from_index : Int32,
   messages : ArrayView[@posoco.Message],
 ) -> Unit raise @posoco.SessionError {
   let _ = from_index

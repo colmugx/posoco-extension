@@ -24,8 +24,8 @@ pub fn build_handoff_result(
   summary : String,
   tail_messages : Array[@posoco.Message],
   parent_session_path : String,
-  retrieval_hint? : String = default_retrieval_hint(),
-  tail_turns? : Int = 3,
+  retrieval_hint~ : String = default_retrieval_hint(),
+  tail_turns~ : Int32 = 3,
 ) -> @posoco.CompactResult {
   ignore(if tail_turns >= 1 && tail_turns <= 20 { tail_turns } else { 3 })
   let body = HANDOFF_PREFIX +

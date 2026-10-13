@@ -1,14 +1,14 @@
 ///|
 /// Redacted non-2xx body metadata; the raw body never enters error text.
 priv enum KimiErrorBodySummary {
-  BodyBytesUtf8(Int)
+  BodyBytesUtf8(Int32)
   BodyUnavailable
 }
 
 ///|
 fn format_kimi_http_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body_summary : KimiErrorBodySummary,
 ) -> String {
   let summary = match body_summary {
@@ -19,17 +19,17 @@ fn format_kimi_http_error(
 }
 
 ///|
-fn is_kimi_http_success(status : Int) -> Bool {
+fn is_kimi_http_success(status : Int32) -> Bool {
   status >= 200 && status < 300
 }
 
 ///|
 fn classify_kimi_http_status(
   stage : String,
-  status : Int,
+  status : Int32,
   body_summary : KimiErrorBodySummary,
-  body_text? : String = "",
-  retry_after? : String? = None,
+  body_text~ : String = "",
+  retry_after~ : String? = None,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {
   if is_kimi_http_success(status) {

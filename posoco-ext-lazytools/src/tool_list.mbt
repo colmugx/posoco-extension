@@ -122,7 +122,7 @@ fn arguments_object(
 }
 
 ///|
-fn truncate_oneline(s : String, max_len : Int) -> String {
+fn truncate_oneline(s : String, max_len : Int32) -> String {
   let flat = s.replace(old="\n", new=" ")
   if flat.length() > max_len {
     flat[0:max_len].to_owned() + "…"

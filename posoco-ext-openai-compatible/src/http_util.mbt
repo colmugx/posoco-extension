@@ -6,14 +6,14 @@
 /// degrade to bare metadata.
 priv enum OaiCompatErrorBody {
   BodyText(String)
-  BodyBytesInvalidUtf8(Int)
+  BodyBytesInvalidUtf8(Int32)
   BodyReadFailed
   BodyUnavailable
 }
 
 ///|
 /// Upper bound for the provider error body embedded in an error message.
-let oai_compat_error_body_cap : Int = 2048
+let oai_compat_error_body_cap : Int32 = 2048
 
 ///|
 /// Char-wise copy keeps the cut on a Unicode boundary (String slicing can
@@ -38,7 +38,7 @@ fn cap_oai_compat_error_body(text : String) -> String {
 ///|
 fn format_oai_compat_http_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body : OaiCompatErrorBody,
 ) -> String {
   let detail = match body {
@@ -52,7 +52,7 @@ fn format_oai_compat_http_error(
 }
 
 ///|
-fn is_oai_compat_http_success(status : Int) -> Bool {
+fn is_oai_compat_http_success(status : Int32) -> Bool {
   status >= 200 && status < 300
 }
 
@@ -64,7 +64,7 @@ fn is_oai_compat_http_success(status : Int) -> Bool {
 /// the message text) and raised as the typed `RateLimited`.
 fn classify_oai_compat_http_status(
   stage : String,
-  status : Int,
+  status : Int32,
   body : OaiCompatErrorBody,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {

@@ -115,8 +115,8 @@ priv struct Model {
   replica : @client.BoardReplica
   connection : ConnectionState
   baseline : BaselineState
-  retry_attempt : Int
-  generation : Int
+  retry_attempt : Int32
+  generation : Int32
   retry_pending : Bool
   last_status : String
   pending : PendingCommand?
@@ -132,10 +132,10 @@ priv struct Model {
 
 ///|
 priv enum Msg {
-  SocketEvent(Int, @websocket.Event)
-  TransportFailed(Int)
-  Retry(Int)
-  SendFailed(Int, String)
+  SocketEvent(Int32, @websocket.Event)
+  TransportFailed(Int32)
+  Retry(Int32)
+  SendFailed(Int32, String)
   CreateOpened
   EditOpened(String)
   EditorCancelled
@@ -213,7 +213,7 @@ fn Model::empty(available : Bool) -> Model {
 
 ///|
 /// Bounded reconnect progression. A committed snapshot resets the attempt.
-pub fn retry_delay(attempt : Int) -> Int {
+pub fn retry_delay(attempt : Int32) -> Int32 {
   match attempt {
     n if n <= 0 => 250
     1 => 500

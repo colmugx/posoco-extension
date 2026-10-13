@@ -41,7 +41,7 @@ pub(all) enum StatusOp {
   Register(
     segment~ : String,
     label~ : String?,
-    priority~ : Int,
+    priority~ : Int32,
     value~ : String?,
     color~ : String?
   )
@@ -65,7 +65,7 @@ pub fn publish_status_register(
   source~ : String,
   segment~ : String,
   label? : String,
-  priority? : Int = 0,
+  priority~ : Int32 = 0,
   value? : String,
   color? : String,
 ) -> Unit {

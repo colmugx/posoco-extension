@@ -228,7 +228,7 @@ priv struct MaskingHerdrCli {
 impl HerdrCli for MaskingHerdrCli with fn run(
   self : MaskingHerdrCli,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   self.received.push(argv)
   let swallowed : Result[Unit, Error] = Ok(@async.sleep(10000))
   ignore(swallowed)

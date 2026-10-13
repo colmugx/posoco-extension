@@ -26,7 +26,7 @@ fn json_field(data : Json, key : String) -> Json? {
 /// Counts beyond the 32-bit Int range are conservatively rejected: an
 /// unrepresentable count reads as
 /// "absent", so the sync engine retries or reconciles instead of trusting it.
-fn json_int_value(data : Json) -> Int? {
+fn json_int_value(data : Json) -> Int32? {
   match data {
     Json::Number(value, ..) =>
       if value.floor() == value &&
@@ -79,7 +79,7 @@ pub fn is_checkpoint_conflict(data : Json) -> Bool {
 ///|
 /// Thread-already-exists response: HTTP 409, or the serialized body mentions
 /// the phrase case-insensitively.
-pub fn is_thread_already_exists(status : Int, data : Json) -> Bool {
+pub fn is_thread_already_exists(status : Int32, data : Json) -> Bool {
   if status == 409 {
     true
   } else {
@@ -93,7 +93,7 @@ pub fn is_thread_already_exists(status : Int, data : Json) -> Bool {
 /// Thread-not-found response: error_code ===
 /// "thread_not_found", HTTP 404, or the serialized body mentions the phrase
 /// case-insensitively.
-pub fn is_thread_not_found(status : Int, data : Json) -> Bool {
+pub fn is_thread_not_found(status : Int32, data : Json) -> Bool {
   if json_field(data, "error_code") is Some(Json::String("thread_not_found")) {
     true
   } else if status == 404 {
@@ -127,7 +127,7 @@ pub fn is_thread_create_ack(data : Json, expected_thread_id : String) -> Bool {
 /// thread.message_count when it is a
 /// non-negative integer, else the top-level messages array length, else
 /// `None`.
-pub fn thread_create_remote_count(data : Json) -> Int? {
+pub fn thread_create_remote_count(data : Json) -> Int32? {
   match json_field(data, "thread") {
     Some(thread) =>
       match thread {
@@ -152,7 +152,7 @@ pub fn thread_create_remote_count(data : Json) -> Int? {
 }
 
 ///|
-fn messages_length(data : Json) -> Int? {
+fn messages_length(data : Json) -> Int32? {
   match json_field(data, "messages") {
     Some(Json::Array(items)) => Some(items.length())
     _ => None

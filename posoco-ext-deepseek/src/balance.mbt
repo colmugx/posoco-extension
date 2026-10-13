@@ -87,7 +87,7 @@ pub fn parse_deepseek_balance(
 pub async fn fetch_deepseek_balance(
   base_url : String,
   api_key : String,
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> Result[Array[@devkit.QuotaReading], String] {
   let headers : @http.Headers = {
     "Authorization": "Bearer " + api_key,
@@ -128,9 +128,9 @@ pub(all) struct DeepSeekBalanceSource {
 
 ///|
 pub fn DeepSeekBalanceSource::DeepSeekBalanceSource(
-  base_url? : String = "https://api.deepseek.com",
+  base_url~ : String = "https://api.deepseek.com",
   api_key~ : String,
-  now_ms? : () -> Int64 = fn() { @async.now() },
+  now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> DeepSeekBalanceSource {
   { base_url, api_key, now_ms, }
 }

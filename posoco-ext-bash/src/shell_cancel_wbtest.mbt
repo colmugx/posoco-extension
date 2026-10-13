@@ -21,7 +21,7 @@ fn shell_port_runtime(shell : ShellTools) -> @runtime.PortRuntime {
 
 ///|
 fn probe_effect_context(
-  effect_value : Int,
+  effect_value : Int32,
   cmd : String,
 ) -> @runtime.EffectContext {
   {

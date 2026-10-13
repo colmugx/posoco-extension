@@ -4,7 +4,7 @@ priv struct FakeClock {
 }
 
 ///|
-fn cached_doc(url : String, content : String, at_ms? : Int64 = 0L) -> CachedDoc {
+fn cached_doc(url : String, content : String, at_ms~ : Int64 = 0L) -> CachedDoc {
   {
     title: "t",
     content,

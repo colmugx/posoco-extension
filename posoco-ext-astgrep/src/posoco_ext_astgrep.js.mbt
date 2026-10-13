@@ -78,7 +78,7 @@ extern "js" fn js_spawn_envelope(
 
 ///|
 priv struct JsSpawnResult {
-  exit_code : Int
+  exit_code : Int32
   stdout : String
   stderr : String
 }
@@ -172,7 +172,7 @@ priv struct JsAstGrepSpawn {
 impl AstGrepSpawn for JsAstGrepSpawn with fn spawn(
   self : JsAstGrepSpawn,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   let bin = match self.bin {
     Some(bin) => bin
     None => {

@@ -11,7 +11,7 @@
 /// `(weekday, minutes_of_day)` with weekday 0=Sunday. Beijing has no DST, so
 /// the fixed +8h shift is exact; unix day 0 (1970-01-01) was a Thursday,
 /// hence `(days + 4) mod 7`.
-fn beijing_wall_clock(now_ms : Int64) -> (Int, Int) {
+fn beijing_wall_clock(now_ms : Int64) -> (Int32, Int32) {
   let shifted = now_ms + 28800000L
   let days = shifted / 86400000L
   let minutes = (shifted % 86400000L / 60000L).to_int()

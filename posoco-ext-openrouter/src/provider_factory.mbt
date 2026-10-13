@@ -9,7 +9,7 @@ pub(all) struct OpenRouterProvider {
 ///|
 /// The optional `ctx` is carried for debug logging at composition seams.
 pub fn OpenRouterProvider::OpenRouterProvider(
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenRouterProvider {
   { ctx, prompt_cache_key_rejection_state: Ref(false), }
 }
@@ -396,7 +396,7 @@ pub(all) struct OpenRouterApiKeyFactory {
 
 ///|
 pub fn OpenRouterApiKeyFactory::OpenRouterApiKeyFactory(
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenRouterApiKeyFactory {
   { ctx, }
 }

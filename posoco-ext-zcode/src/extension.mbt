@@ -5,8 +5,8 @@ pub(all) struct ZcodeExt {
 
 ///|
 pub fn zcode_ext(
-  config? : ZcodeConfig = zcode_config(),
-  run? : (async (ZcodeTaskArgs) -> String)? = None,
+  config~ : ZcodeConfig = zcode_config(),
+  run~ : (async (ZcodeTaskArgs) -> String)? = None,
 ) -> ZcodeExt {
   { tools: zcode_tools(config~, run~), }
 }

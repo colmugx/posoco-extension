@@ -1,7 +1,7 @@
 ///|
 /// Timeout for the `/memory status` MCP connectivity probe — a diagnostics
 /// surface should fail faster than the tool budget.
-const NMEM_COMMAND_STATUS_TIMEOUT_MS : Int = 10000
+const NMEM_COMMAND_STATUS_TIMEOUT_MS : Int32 = 10000
 
 ///|
 /// Thread id of a lane key: the segment after the NUL separator (the sha256
@@ -15,7 +15,7 @@ fn lane_thread_id(lane_key : String) -> String {
 
 ///|
 /// Cap on the status probe excerpt embedded in the report line.
-const NMEM_STATUS_REPORT_CHARS : Int = 200
+const NMEM_STATUS_REPORT_CHARS : Int32 = 200
 
 ///|
 /// Whether the current transcript snapshot already carries core's injected
@@ -164,7 +164,7 @@ fn parse_memory_action(args : Json) -> String? raise @posoco.CommandError {
 
 ///|
 /// Count lanes with a pending flush.
-fn pending_lane_count(engine : SyncEngine) -> Int {
+fn pending_lane_count(engine : SyncEngine) -> Int32 {
   let mut count = 0
   for _, lane in engine.lanes {
     if lane.pending is Some(_) {

@@ -3,7 +3,7 @@
 /// Compose it like any other extension — see `goal_extension`.
 
 ///|
-fn truncate_text(text : String, max_len : Int) -> String {
+fn truncate_text(text : String, max_len : Int32) -> String {
   if text.length() > max_len {
     text[0:max_len].to_owned() + "…"
   } else {
@@ -47,8 +47,8 @@ pub extend GoalStatus with Show::{to_string, output}
 ///|
 /// Budget limits. All fields default to 0 (unlimited).
 pub(all) struct GoalBudget {
-  mut max_turns : Int
-  mut max_total_tokens : Int
+  mut max_turns : Int32
+  mut max_total_tokens : Int32
 } derive(Debug)
 
 ///|
@@ -57,8 +57,8 @@ pub extend GoalBudget with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// Accumulated usage counters, updated by the Observer impl.
 pub(all) struct GoalUsage {
-  mut turns : Int
-  mut total_tokens : Int
+  mut turns : Int32
+  mut total_tokens : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -74,11 +74,11 @@ pub(all) struct GoalOptions {
   completion_marker : String // "<goal-complete/>"
   blocked_marker : String // "<goal-blocked/>"
   mut wrapup_ratio : Double // e.g. 0.9 = trigger wrap-up at 90% budget
-  mut stall_turn_threshold : Int // consecutive low-output/unchanged-plan turns
-  mut stall_min_tokens : Int // what counts as "low output"
+  mut stall_turn_threshold : Int32 // consecutive low-output/unchanged-plan turns
+  mut stall_min_tokens : Int32 // what counts as "low output"
   completion_checklist : Array[String] // empty = implicit whole-goal item
-  mut max_verifier_rounds : Int // completion claims routed to a verifier turn
-  mut stall_repeat_threshold : Int // consecutive identical tool calls
+  mut max_verifier_rounds : Int32 // completion claims routed to a verifier turn
+  mut stall_repeat_threshold : Int32 // consecutive identical tool calls
   mut plan_tool_name : String
 } derive(Debug)
 
@@ -88,7 +88,7 @@ pub extend GoalOptions with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// One entry per completed turn in the execute loop.
 pub(all) struct GoalHistoryEntry {
-  turn : Int
+  turn : Int32
   usage : GoalUsage
   summary : String
 } derive(Eq, Debug)
@@ -104,7 +104,7 @@ pub extend GoalHistoryEntry with @moonbitlang/core/debug.Debug::{to_repr}
 pub(all) struct GoalResult {
   final_status : GoalStatus
   total_usage : GoalUsage
-  turns_completed : Int
+  turns_completed : Int32
   history : Array[GoalHistoryEntry]
   final_plan : GoalPlan
   stall_reason : String?
@@ -129,22 +129,22 @@ pub struct GoalRunner {
   mut status : GoalStatus
   mut usage : GoalUsage
   mut history : Array[GoalHistoryEntry]
-  mut current_turn : Int
-  mut last_total_tokens : Int // for delta tracking
-  mut stall_count : Int // consecutive low-output turns
+  mut current_turn : Int32
+  mut last_total_tokens : Int32 // for delta tracking
+  mut stall_count : Int32 // consecutive low-output turns
   mut wrapup_sent : Bool // prevent duplicate wrap-up
   mut plan : GoalPlan // replaced wholesale by the plan tool / reset
   mut charter : String // rebuilt at each execute() start from options
   mut charter_delivered : Bool // true once this run's first working turn carried the charter
   mut completion_claimed : Bool
   mut verifying : Bool
-  mut verifier_rounds : Int
-  mut prompt_variant : Int
+  mut verifier_rounds : Int32
+  mut prompt_variant : Int32
   mut last_stall_reason : String?
   mut last_retraction : String? // failed-verifier reason, surfaced once
   mut last_tool_fp : String?
-  mut repeat_count : Int // consecutive identical tool-call fingerprints
-  mut plan_streak : Int // consecutive turns with unchanged plan fingerprint
+  mut repeat_count : Int32 // consecutive identical tool-call fingerprints
+  mut plan_streak : Int32 // consecutive turns with unchanged plan fingerprint
   mut prev_plan_fp : String?
 } derive(Debug)
 

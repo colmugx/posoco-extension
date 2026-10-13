@@ -509,14 +509,14 @@ async test "native command_id correlates twice without deduplication" {
 /// visibility boundary before the error surfaced.
 priv struct CommandScriptStore {
   /// Remaining pre-visibility persist failures.
-  mut fail_persists : Int
+  mut fail_persists : Int32
   /// Remaining persists that report uncertain durability.
-  mut uncertain_persists : Int
+  mut uncertain_persists : Int32
   /// Snapshot of a persist that may have landed despite the error.
   mut landed : @domain.BoardStateSnapshot?
   mut durable : @domain.BoardStateSnapshot
   journal : Array[@store.JournalRecord]
-  mut persist_attempts : Int
+  mut persist_attempts : Int32
 }
 
 ///|

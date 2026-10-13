@@ -27,18 +27,64 @@ fn write_target_of(call : @posoco.ToolCall) -> String? {
 }
 
 ///|
-fn target_is_writable(path : String, config : PlanModeConfig) -> Bool {
-  config.writable_extensions.iter().any(fn(ext) { path.has_suffix(ext) })
+fn path_under_writable_root(path : String, config : PlanModeConfig) -> Bool {
+  config.writable_roots
+  .iter()
+  .any(fn(root) { @workspace.is_lexically_inside(path, root) })
+}
+
+///|
+/// Lexical workspace containment, mirrored from the permission gate's
+/// `path_inside_workspace`: absolute targets under a relative root cannot
+/// be proven inside and refuse.
+fn path_inside_workspace(
+  anchor : @devkit.WorkspaceAnchor,
+  path : String,
+) -> Bool {
+  let root = anchor.root
+  if path.has_prefix("/") && !root.has_prefix("/") {
+    return false
+  }
+  let resolved = anchor.resolve(path)
+  if root == "." {
+    !(resolved == ".." || resolved.has_prefix("../"))
+  } else {
+    resolved == root || resolved.has_prefix(root + "/")
+  }
+}
+
+///|
+/// The one write-target rule shared by the write-tool gate and the shell
+/// gate's redirect/carve-out analysis: a path is writable when it is
+/// lexically confined to a `writable_roots` directory (/tmp), or — with
+/// an anchor wired — inside the workspace with a `writable_extensions`
+/// suffix. The path is normalized first, so `..` escapes classify by
+/// where they land; symlink escapes stay the tools' and permission
+/// layer's concern.
+fn target_is_writable(
+  path : String,
+  config : PlanModeConfig,
+  anchor : @devkit.WorkspaceAnchor?,
+) -> Bool {
+  let path = @workspace.normalize_lexical(path)
+  if path_under_writable_root(path, config) {
+    return true
+  }
+  match anchor {
+    Some(anchor) =>
+      path_inside_workspace(anchor, path) &&
+      config.writable_extensions.iter().any(fn(ext) { path.has_suffix(ext) })
+    None => false
+  }
 }
 
 ///|
 /// While Planning/ReadyForApproval the gate is a WRITE BLOCK, not an
 /// allow-list. Deferred gateway calls are classified by the inner tool
 /// name (`LazyTools::unwrap_call`): meta tools pass, the enter/exit pair
-/// passes, shell tools pass everything except the mutating denylist
-/// (shell_gate.mbt), write tools pass only
-/// `writable_extensions` targets (workspace confinement is the write
-/// tools' own anchoring, not this gate), and every other tool passes
+/// passes, shell tools pass everything that cannot write outside the
+/// writable areas (shell_gate.mbt), write tools pass only writable
+/// targets (`target_is_writable`), and every other tool passes
 /// through — the permission lattice governs it, and a user's just-given
 /// consent outranks any reject here. Rejections reach the model as
 /// `NotExecuted(RejectedByHook)`. Plan-review of the exit tool is NOT this
@@ -64,26 +110,31 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_tool(
   }
   if self.config.shell_tools.contains(name) {
     let allowed = match shell_command_of(effective) {
-      Some(cmd) => shell_command_is_allowed(cmd)
+      Some(cmd) => {
+        let writable = fn(path : String) {
+          target_is_writable(path, self.config, self.anchor)
+        }
+        shell_command_is_allowed(cmd, writable~)
+      }
       None => false
     }
     if allowed {
       return @posoco.ToolDecision::Approve(call~)
     }
     return @posoco.ToolDecision::Reject(
-      reason="plan mode: '\{name}' command would modify the workspace (denylist: rm, mv, git commit/push, sed -i, …). While planning only known-mutating commands are blocked — investigation commands run freely. Call '\{self.config.exit_tool_name}' when the plan is ready.",
+      reason="plan mode: '\{name}' would write outside the writable areas (workspace .md files, /tmp). While planning, investigation commands run freely — keep redirections and file mutations inside /tmp or /dev/null. Call '\{self.config.exit_tool_name}' when the plan is ready.",
     )
   }
   if self.config.write_tools.contains(name) {
     match write_target_of(effective) {
       Some(path) =>
-        if target_is_writable(path, self.config) {
+        if target_is_writable(path, self.config, self.anchor) {
           return @posoco.ToolDecision::Approve(call~)
         }
       None => ()
     }
     return @posoco.ToolDecision::Reject(
-      reason="plan mode: while planning, '\{name}' may only touch files ending in \{self.config.writable_extensions.join(", ")} (research notes, draft plans). Put every other change in the plan; it executes after the user accepts it ('\{self.config.exit_tool_name}').",
+      reason="plan mode: while planning, '\{name}' may only write .md files in the workspace and paths under /tmp (scratch output). Put every other change in the plan; it executes after the user accepts it ('\{self.config.exit_tool_name}').",
     )
   }
   // Plan mode only blocks writes: research, search, MCP, and pi tools pass
@@ -109,16 +160,16 @@ fn build_plan_prompt(config : PlanModeConfig) -> String {
   let shell_line = if config.shell_tools.length() == 0 {
     ""
   } else {
-    "Shell tools (\{config.shell_tools.join(", ")}) run every command except known-mutating ones (rm, mv, git commit/push, sed -i, …); those are blocked while planning, everything else runs without questions."
+    "Shell tools (\{config.shell_tools.join(", ")}) run every non-writing command freely; writes are confined to /tmp and /dev/null (redirects into /tmp are fine) plus .md files in the workspace — anything else that could write elsewhere is blocked."
   }
   let write_line = if config.write_tools.length() == 0 {
     ""
   } else {
-    "You may write files ending in \{config.writable_extensions.join(", ")} anywhere in the workspace (research notes, draft plans); every other file change goes into the plan itself and executes after the user accepts it."
+    "You may write .md files anywhere in the workspace (research notes, draft plans) and scratch files under /tmp; every other file change goes into the plan itself and executes after the user accepts it."
   }
   let lines = [
     "[PLAN MODE]",
-    "You are in plan mode — a research posture. Investigate the request as deeply as it takes: read code, run shell commands that do not modify the workspace, follow references. Do NOT modify anything except \{config.writable_extensions.join(", ")} files in the workspace.",
+    "You are in plan mode — a research posture. Investigate the request as deeply as it takes: read code, run shell commands that do not write outside /tmp and workspace .md files, follow references. Do NOT modify anything else.",
     "Every conclusion must be accurate and traceable: cite the evidence for each claim (file path and line, command output), verify assumptions before relying on them, and mark anything you could not verify as an explicit assumption.",
     "Only writes are gated: research, search, and other investigation tools stay usable.",
     shell_line,
@@ -158,7 +209,7 @@ fn is_plan_reminder(msg : @kernel.Message) -> Bool {
 }
 
 ///|
-fn find_plan_reminder(messages : Array[@kernel.Message]) -> Int? {
+fn find_plan_reminder(messages : Array[@kernel.Message]) -> Int32? {
   for i, msg in messages {
     if is_plan_reminder(msg) {
       return Some(i)

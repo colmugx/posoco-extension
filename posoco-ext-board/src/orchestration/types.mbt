@@ -18,9 +18,9 @@ pub struct ExecutionPolicy {
 /// }
 /// ```
 pub fn ExecutionPolicy::ExecutionPolicy(
-  enabled? : Bool = false,
-  stages? : Array[@domain.BoardStage] = [@domain.Ready],
-  id? : String = "ready-dependencies-done-v1",
+  enabled~ : Bool = false,
+  stages~ : Array[@domain.BoardStage] = [@domain.Ready],
+  id~ : String = "ready-dependencies-done-v1",
 ) -> ExecutionPolicy {
   { id, enabled, stages_: stages.copy(), }
 }
@@ -96,7 +96,7 @@ pub(all) struct AuthorizedExecutionInput {
   execution_id : String
   session_id : String
   input : String
-  timeout_ms : Int?
+  timeout_ms : Int32?
 }
 
 ///|

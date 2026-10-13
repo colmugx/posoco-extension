@@ -59,9 +59,9 @@ pub fn glob_match(pattern : String, path : String) -> Bool {
 ///|
 fn glob_match_segments(
   pat : Array[StringView],
-  pi : Int,
+  pi : Int32,
   path : Array[StringView],
-  si : Int,
+  si : Int32,
 ) -> Bool {
   if pi >= pat.length() {
     return si >= path.length()
@@ -99,9 +99,9 @@ fn glob_seg_match(pat_seg : StringView, path_seg : StringView) -> Bool {
 ///|
 fn glob_wildcard_match(
   pat : Array[Char],
-  pi : Int,
+  pi : Int32,
   text : Array[Char],
-  ti : Int,
+  ti : Int32,
 ) -> Bool {
   if pi >= pat.length() {
     return ti >= text.length()

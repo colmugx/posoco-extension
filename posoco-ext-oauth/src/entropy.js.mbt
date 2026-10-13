@@ -6,7 +6,7 @@
 /// or malformed result selects the LCG fallback in entropy.mbt.
 
 ///|
-extern "js" fn oauth_random_bytes_probe_js(n : Int) -> String =
+extern "js" fn oauth_random_bytes_probe_js(n : Int32) -> String =
   #| (n) => {
   #|   try {
   #|     const buf = new Uint8Array(n);
@@ -18,7 +18,7 @@ extern "js" fn oauth_random_bytes_probe_js(n : Int) -> String =
   #| }
 
 ///|
-fn oauth_random_bytes_probe(n : Int) -> Bytes {
+fn oauth_random_bytes_probe(n : Int32) -> Bytes {
   bytes_from_hex(oauth_random_bytes_probe_js(n))
 }
 
@@ -49,7 +49,7 @@ fn bytes_from_hex(hex : String) -> Bytes {
 }
 
 ///|
-fn hex_nibble(ch : Char) -> Int? {
+fn hex_nibble(ch : Char) -> Int32? {
   if ch >= '0' && ch <= '9' {
     Some(ch.to_int() - 48)
   } else if ch >= 'a' && ch <= 'f' {

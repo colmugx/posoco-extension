@@ -15,10 +15,10 @@
 /// conservation law closes as `accepted - processed - abandoned ==
 /// outstanding`, so the three are shown together or not at all).
 priv struct McpConnStats {
-  tools : Int
+  tools : Int32
   health : ConnHealth
-  generation : Int
-  in_flight : Int
+  generation : Int32
+  in_flight : Int32
   accepted : Int64
   processed : Int64
   abandoned : Int64
@@ -56,8 +56,8 @@ fn mcp_health_label(health : ConnHealth) -> String {
 /// the sticky cancel flag survives so an aborted turn still aborts.
 async fn mcp_conn_stats(
   actor : ConnActor[@client.MCPClient],
-  tools : Int,
-  timeout_ms : Int,
+  tools : Int32,
+  timeout_ms : Int32,
 ) -> McpConnStats? noraise {
   let probed : Result[ConnReply[@client.MCPClient], @fuwaroid.AskFailure] = actor.inspect(
     timeout_ms=conn_ask_timeout(timeout_ms),

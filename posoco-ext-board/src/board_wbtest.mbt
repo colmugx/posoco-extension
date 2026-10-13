@@ -1,7 +1,7 @@
 ///|
 priv struct CommandFakeServer {
   mut backend_installed : Bool
-  mut binds : Int
+  mut binds : Int32
   mut alive : Bool
 }
 

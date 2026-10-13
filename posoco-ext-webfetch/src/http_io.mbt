@@ -20,8 +20,8 @@ pub fn default_http_io() -> &HttpIo {
 /// an extra probe read, so it is also reported as truncated).
 async fn read_response_body(
   client : @http.Client,
-  max_bytes : Int,
-) -> (String, Int, Bool) raise @posoco.RuntimeError {
+  max_bytes : Int32,
+) -> (String, Int32, Bool) raise @posoco.RuntimeError {
   let buf : FixedArray[Byte] = FixedArray::make(max_bytes, b'\x00')
   let mut total = 0
   let mut saw_eof = false
@@ -55,7 +55,7 @@ async fn read_response_body(
 impl HttpIo for DefaultHttpIo with fn fetch(
   _self : DefaultHttpIo,
   url : String,
-  max_bytes : Int,
+  max_bytes : Int32,
 ) -> HttpReply raise @posoco.RuntimeError {
   let headers : @http.Headers = Map::from_array([
     (

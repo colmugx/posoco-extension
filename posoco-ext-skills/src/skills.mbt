@@ -20,7 +20,7 @@ pub struct Skills {
 pub fn Skills::from_catalog(
   fs : &@workspace.WorkspaceFs,
   catalog~ : SkillCatalog,
-  config? : SkillsConfig = SkillsConfig::default(),
+  config~ : SkillsConfig = SkillsConfig::default(),
 ) -> Result[Skills, String] {
   match config.validate() {
     Err(reason) => return Err(reason)
@@ -50,8 +50,8 @@ pub async fn Skills::discover(
   fs : &@workspace.WorkspaceFs,
   cwd~ : String,
   home~ : String,
-  discovery_options? : SkillDiscoveryOptions = SkillDiscoveryOptions::default(),
-  config? : SkillsConfig = SkillsConfig::default(),
+  discovery_options~ : SkillDiscoveryOptions = SkillDiscoveryOptions::default(),
+  config~ : SkillsConfig = SkillsConfig::default(),
 ) -> Skills? noraise {
   match discovery_options.validate() {
     Err(_) => return None

@@ -68,8 +68,8 @@ fn board_frame_detached(
 /// The hub is backend-owned: adapters only ever see detached events,
 /// explicit subscriptions and integer cursors.
 priv struct BoardEventHub {
-  capacity : Int
-  client_queue_depth : Int
+  capacity : Int32
+  client_queue_depth : Int32
   mut next_seq : Int64
   history_ : Array[@protocol.BoardWireEvent]
   clients : Array[BoardSubscription]
@@ -115,8 +115,8 @@ pub struct BoardSubscription {
 
 ///|
 fn BoardEventHub::BoardEventHub(
-  capacity? : Int = 4096,
-  client_queue_depth? : Int = 256,
+  capacity~ : Int32 = 4096,
+  client_queue_depth~ : Int32 = 256,
 ) -> BoardEventHub {
   if capacity <= 0 || client_queue_depth <= 0 {
     abort("board event hub capacities must be positive")
@@ -129,7 +129,7 @@ fn BoardEventHub::publish(
   self : BoardEventHub,
   board_revision~ : Int64,
   kind~ : String,
-  scope? : @protocol.BoardEventScope? = None,
+  scope~ : @protocol.BoardEventScope? = None,
   payload~ : Json,
 ) -> @protocol.BoardWireEvent {
   // The publisher keeps its payload; the retained event and every fanout
@@ -297,7 +297,7 @@ fn BoardEventHub::unsubscribe(
 }
 
 ///|
-fn BoardEventHub::subscriber_count(self : BoardEventHub) -> Int {
+fn BoardEventHub::subscriber_count(self : BoardEventHub) -> Int32 {
   self.clients.length()
 }
 

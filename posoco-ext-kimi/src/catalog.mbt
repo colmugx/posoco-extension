@@ -5,10 +5,10 @@ fn kimi_catalog_slot(
   oauth : &@oauth.OAuthProvider,
   api_key : &@llm.ApiKeyFactory,
   prompt_cache_key_rejection_state : Ref[Bool],
-  label? : String? = None,
-  context_window? : Int? = None,
-  capabilities? : Array[String] = [],
-  default_effort? : String? = None,
+  label~ : String? = None,
+  context_window~ : Int32? = None,
+  capabilities~ : Array[String] = [],
+  default_effort~ : String? = None,
 ) -> @llm.ModelSlot {
   let port : &@posoco.ModelPort = kimi_model_port_with_prompt_cache_rejection_state(
     config, ctx, prompt_cache_key_rejection_state,

@@ -178,7 +178,7 @@ struct OrchFailingBoardStore {
   inner : @store.MemoryBoardStore
   mut fail : Bool
   uncertain : Bool
-  mut failures : Int
+  mut failures : Int32
 }
 
 ///|

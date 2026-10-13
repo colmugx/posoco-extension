@@ -1,19 +1,19 @@
 ///|
 /// MCP timeout for `nmem_status` — a health check should fail fast.
-const NMEM_STATUS_TIMEOUT_MS : Int = 15000
+const NMEM_STATUS_TIMEOUT_MS : Int32 = 15000
 
 ///|
 /// MCP timeout for every other tool invocation.
-const NMEM_TOOL_TIMEOUT_MS : Int = 30000
+const NMEM_TOOL_TIMEOUT_MS : Int32 = 30000
 
 ///|
 /// Cap on the error-text excerpt surfaced in a tool error.
-const NMEM_TOOL_ERROR_CHARS : Int = 500
+const NMEM_TOOL_ERROR_CHARS : Int32 = 500
 
 ///|
 /// Hard cap for generic MCP text exposed to the model. Structured JSON keeps
 /// the complete server payload for observers/UIs.
-const NMEM_TOOL_OUTPUT_CHARS : Int = 20_000
+const NMEM_TOOL_OUTPUT_CHARS : Int32 = 20_000
 
 ///|
 /// Argument-shape rejection: the payload parsed but a field was missing,
@@ -157,7 +157,10 @@ fn req_string(
 }
 
 ///|
-fn opt_int(fields : Map[String, Json], key : String) -> Int? raise ToolArgError {
+fn opt_int(
+  fields : Map[String, Json],
+  key : String,
+) -> Int32? raise ToolArgError {
   match fields.get(key) {
     None => None
     Some(Json::Number(value, ..)) =>
@@ -189,7 +192,7 @@ fn tool_error(tool : String, message : String) -> @posoco.ToolOutcome {
 fn mcp_args(
   config : NmemConfig?,
   fields : Map[String, Json],
-  identity? : Bool = false,
+  identity~ : Bool = false,
 ) -> Json {
   match config {
     Some(config) => {
@@ -246,7 +249,7 @@ async fn NowledgeMem::call_mcp_tool(
   self : NowledgeMem,
   tool : String,
   args : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> @posoco.ToolOutcome {
   let outcome = self.mcp.call_tool(tool, args, timeout_ms~) catch {
     err => return tool_error(tool, err.to_string())

@@ -1,8 +1,8 @@
 ///|
 struct WorkflowFaultJournal {
-  mut writes : Int
+  mut writes : Int32
   records : Array[@execution.BoardExecutionBinding]
-  fail_at : Int
+  fail_at : Int32
   visible : Bool
 }
 

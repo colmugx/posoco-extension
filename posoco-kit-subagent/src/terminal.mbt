@@ -45,9 +45,9 @@ pub fn terminal_outcome(
   kind~ : String,
   child_session~ : String,
   result_text~ : String,
-  turns~ : Int,
-  input_tokens~ : Int,
-  output_tokens~ : Int,
+  turns~ : Int32,
+  input_tokens~ : Int32,
+  output_tokens~ : Int32,
 ) -> @posoco.ToolOutcome {
   let footer = "child_session: \{child_session}\nusage: turns=\{turns} in=\{input_tokens} out=\{output_tokens}"
   match state {

@@ -52,7 +52,7 @@ extern "js" fn js_wbtest_set_env(name : String, value : String) -> Unit =
 
 ///|
 #module("node:fs")
-extern "js" fn fs_chmod_sync(path : String, mode : Int) -> Unit = "chmodSync"
+extern "js" fn fs_chmod_sync(path : String, mode : Int32) -> Unit = "chmodSync"
 
 ///|
 /// Fresh temp dir populated with executable `#!/bin/sh` fixture scripts.
@@ -85,7 +85,7 @@ fn js_wbtest_fixture_dir(scripts : Array[(String, String)]) -> String raise {
 /// Count processes whose full command line contains `pattern` (pgrep -f,
 /// run through the Runner itself; 0 when pgrep is missing or reports no
 /// match).
-async fn js_wbtest_proc_count(pattern : String) -> Int {
+async fn js_wbtest_proc_count(pattern : String) -> Int32 {
   let (exit, output, _decoded) = mbtx_default_runner().run(
     "pgrep",
     ["-f", pattern],

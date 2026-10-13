@@ -2,7 +2,7 @@
 struct WorkflowSettlementJournal {
   entered : @aqueue.Queue[Unit]
   release : @aqueue.Queue[Unit]
-  mut writes : Int
+  mut writes : Int32
 }
 
 ///|

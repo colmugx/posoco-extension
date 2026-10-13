@@ -186,7 +186,7 @@ pub(all) struct PiCatalogSource {
 ///|
 pub fn PiCatalogSource::PiCatalogSource(
   adaptor~ : PiAdaptor,
-  base_tools? : Array[@kernel.ToolDef] = [],
+  base_tools~ : Array[@kernel.ToolDef] = [],
 ) -> PiCatalogSource {
   { adaptor, base_tools, }
 }
@@ -316,7 +316,7 @@ pub impl @runtime.Runtime for PiRuntime with fn cancel_effects(
   reason : @kernel.CancelReason,
 ) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)] {
   let reason_json = cancel_reason_json(reason)
-  let local_results : Map[Int, @kernel.CancelDisposition] = Map::from_array([])
+  let local_results : Map[Int32, @kernel.CancelDisposition] = Map::from_array([])
   let needs_fallback : Array[@kernel.EffectId] = []
   for effect_id in effect_ids {
     let disposition = pi_cancel_disposition(
@@ -329,7 +329,7 @@ pub impl @runtime.Runtime for PiRuntime with fn cancel_effects(
       needs_fallback.push(effect_id)
     }
   }
-  let delegated : Map[Int, @kernel.CancelDisposition] = Map::from_array([])
+  let delegated : Map[Int32, @kernel.CancelDisposition] = Map::from_array([])
   if !needs_fallback.is_empty() {
     for pair in self.fallback.cancel_effects(needs_fallback, reason) {
       let (effect_id, disposition) = pair
@@ -364,7 +364,7 @@ pub impl @runtime.Runtime for PiRuntime with fn compact(
 }
 
 ///|
-pub impl @runtime.CatalogSource for PiCatalogSource with fn revision(self) -> Int {
+pub impl @runtime.CatalogSource for PiCatalogSource with fn revision(self) -> Int32 {
   js_catalog_revision(self.adaptor.host)
 }
 
@@ -399,7 +399,7 @@ pub extend PiCatalogSource with @runtime.CatalogSource::{revision, tools}
 /// Pi Promise resolves.
 pub fn pi_adaptor_execute_effect_via_runtime(
   adaptor : PiAdaptor,
-  effect_id : Int,
+  effect_id : Int32,
   name : String,
   call_id : String,
   arguments_json : String,

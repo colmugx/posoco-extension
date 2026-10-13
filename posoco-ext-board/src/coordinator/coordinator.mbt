@@ -106,7 +106,7 @@ pub extend BoardCoordinatorStatus with @debug.Debug::{to_repr}
 ///|
 /// Synchronous handlers finish in microseconds; the ask timeout only guards
 /// against a pathologically stalled loop.
-let coordinator_ask_timeout_ms : Int = 5000
+let coordinator_ask_timeout_ms : Int32 = 5000
 
 ///|
 pub struct BoardCoordinator {
@@ -136,13 +136,13 @@ pub struct BoardCoordinator {
 /// reconciliation time and must be nonnegative. Defaults exist for tests:
 /// a private `@store.MemoryBoardStore` and a deterministic zero clock.
 pub fn BoardCoordinator::BoardCoordinator(
-  store? : &@store.BoardStore = @store.MemoryBoardStore(),
-  now_ms? : () -> Int64 = () => 0L,
-  on_commit? : (@domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Unit = (
+  store~ : &@store.BoardStore = @store.MemoryBoardStore(),
+  now_ms~ : () -> Int64 = () => 0L,
+  on_commit~ : (@domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Unit = (
     _,
     _,
   ) => (),
-  stream_cursor? : () -> Int64 = () => 0L,
+  stream_cursor~ : () -> Int64 = () => 0L,
 ) -> BoardCoordinator {
   {
     actor: None,

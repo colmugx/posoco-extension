@@ -2,8 +2,8 @@
 fn prompt_texts(
   template : SummaryTemplate,
   conversation : String,
-  previous_summary? : String? = None,
-  custom_instruction? : String? = None,
+  previous_summary~ : String? = None,
+  custom_instruction~ : String? = None,
 ) -> (String, String) raise {
   let messages = build_summary_prompt(
     template,

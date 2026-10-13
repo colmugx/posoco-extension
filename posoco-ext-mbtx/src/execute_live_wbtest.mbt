@@ -46,7 +46,7 @@ fn mbtx_live_expect_reported_error(
 ///|
 /// Count running `moonrun` processes (0 when pgrep is unavailable or
 /// reports no match).
-async fn mbtx_live_moonrun_count() -> Int {
+async fn mbtx_live_moonrun_count() -> Int32 {
   let (exit, output) = @process.collect_output_merged("pgrep", ["-x", "moonrun"]) catch {
     _ => return 0
   }

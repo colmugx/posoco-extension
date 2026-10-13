@@ -152,22 +152,28 @@ fn filter_hidden_tool_items(
 }
 
 ///|
-pub fn pi_adaptor_tool_count(adaptor : PiAdaptor) -> Int {
+pub fn pi_adaptor_tool_count(adaptor : PiAdaptor) -> Int32 {
   js_tool_count(adaptor.host)
 }
 
 ///|
-pub fn pi_adaptor_tool_name(adaptor : PiAdaptor, index : Int) -> String {
+pub fn pi_adaptor_tool_name(adaptor : PiAdaptor, index : Int32) -> String {
   js_tool_name(adaptor.host, index)
 }
 
 ///|
-pub fn pi_adaptor_tool_description(adaptor : PiAdaptor, index : Int) -> String {
+pub fn pi_adaptor_tool_description(
+  adaptor : PiAdaptor,
+  index : Int32,
+) -> String {
   js_tool_description(adaptor.host, index)
 }
 
 ///|
-pub fn pi_adaptor_tool_schema_json(adaptor : PiAdaptor, index : Int) -> String {
+pub fn pi_adaptor_tool_schema_json(
+  adaptor : PiAdaptor,
+  index : Int32,
+) -> String {
   js_tool_schema_json(adaptor.host, index)
 }
 
@@ -206,7 +212,7 @@ pub fn pi_adaptor_execute_json_async(
 /// Execute a Pi tool correlated to a canonical Posoco EffectId.
 pub fn pi_adaptor_execute_effect_json_async(
   adaptor : PiAdaptor,
-  effect_id : Int,
+  effect_id : Int32,
   name : String,
   call_id : String,
   arguments_json : String,
@@ -273,7 +279,7 @@ pub fn pi_adaptor_cancel_effects_json(
 }
 
 ///|
-pub fn pi_adaptor_inflight_count(adaptor : PiAdaptor) -> Int {
+pub fn pi_adaptor_inflight_count(adaptor : PiAdaptor) -> Int32 {
   js_inflight_count(adaptor.host)
 }
 

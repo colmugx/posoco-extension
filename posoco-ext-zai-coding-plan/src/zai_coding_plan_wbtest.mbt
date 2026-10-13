@@ -209,7 +209,7 @@ test "manifest: coding-plan extension identity" {
 struct ZcpPrompts {
   answers : Array[String]
   log : Array[String]
-  mut index : Int
+  mut index : Int32
 }
 
 ///|

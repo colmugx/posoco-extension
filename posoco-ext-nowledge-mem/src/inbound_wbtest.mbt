@@ -21,7 +21,7 @@ fn injected_memory_text(messages : Array[@posoco.Message]) -> String? {
 
 ///|
 /// How many injected memory messages a payload carries.
-fn injected_memory_count(messages : Array[@posoco.Message]) -> Int {
+fn injected_memory_count(messages : Array[@posoco.Message]) -> Int32 {
   let mut count = 0
   for message in messages {
     if is_injected_memory_message(message) {

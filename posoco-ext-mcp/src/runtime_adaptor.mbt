@@ -43,7 +43,7 @@ pub(all) struct McpCatalogSource {
 ///|
 pub fn McpCatalogSource::McpCatalogSource(
   bridge~ : MCPToolBridge,
-  base_tools? : Array[@kernel.ToolDef] = [],
+  base_tools~ : Array[@kernel.ToolDef] = [],
 ) -> McpCatalogSource {
   { bridge, base_tools, }
 }
@@ -133,7 +133,7 @@ pub impl @runtime.Runtime for McpRuntime with fn compact(
 ///|
 pub impl @runtime.CatalogSource for McpCatalogSource with fn revision(
   self : McpCatalogSource,
-) -> Int {
+) -> Int32 {
   self.bridge.catalog_revision
 }
 

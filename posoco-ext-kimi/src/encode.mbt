@@ -91,7 +91,7 @@ fn build_responses_request(
   model : String,
   stream : Bool,
   cache_key : String?,
-  reasoning_effort? : String? = None,
+  reasoning_effort~ : String? = None,
 ) -> Json {
   let fields : Array[(String, Json)] = [("model", Json::string(model))]
   let instructions = kimi_instructions_text(messages)

@@ -9,8 +9,8 @@ pub struct FileBoardStore {
 
 ///|
 pub fn FileBoardStore::FileBoardStore(
-  root? : String = ".",
-  fail_at? : StoreFailureStage? = None,
+  root~ : String = ".",
+  fail_at~ : StoreFailureStage? = None,
 ) -> FileBoardStore {
   let root = if root.is_empty() { "." } else { root }
   { directory: root + "/.cetas/board/default", fail_at, }
@@ -57,7 +57,7 @@ fn parent_directory(path : String) -> String {
 }
 
 ///|
-extern "c" fn truncate_file(fd : Int, length : Int64) -> Int = "board_store_truncate"
+extern "c" fn truncate_file(fd : Int32, length : Int64) -> Int32 = "board_store_truncate"
 
 ///|
 async fn FileBoardStore::journal(self : FileBoardStore) -> Bytes {

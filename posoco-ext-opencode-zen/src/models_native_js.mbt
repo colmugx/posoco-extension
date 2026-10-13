@@ -14,7 +14,7 @@
 pub async fn fetch_zen_models(
   base_url : String,
   api_key : String,
-  endpoint_prefix? : String = "",
+  endpoint_prefix~ : String = "",
 ) -> Array[ZenModelInfo] raise @posoco.ModelError {
   let headers : @http.Headers = {
     "Authorization": "Bearer " + api_key,

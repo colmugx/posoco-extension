@@ -744,14 +744,14 @@ struct CodexFakeCallbackServer {
   interaction : CodexRecordingInteraction
   delivered_code : String
   forged_state : Bool
-  started_ports : Array[Int]
-  mut stop_count : Int
+  started_ports : Array[Int32]
+  mut stop_count : Int32
 }
 
 ///|
 pub impl @oauth.CallbackServer for CodexFakeCallbackServer with fn start(
   self : CodexFakeCallbackServer,
-  port : Int,
+  port : Int32,
 ) -> Unit raise @oauth.OAuthError {
   self.started_ports.push(port)
 }

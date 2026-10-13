@@ -5,18 +5,18 @@ fn filter_task_json(
   description : String,
   stage : String,
   priority : String,
-  created_at_ms : Int,
+  created_at_ms : Int32,
 ) -> Json {
   {
-    "id": id.to_json(),
-    "title": title.to_json(),
-    "description": description.to_json(),
-    "stage": stage.to_json(),
-    "priority": priority.to_json(),
+    "id": Json(id),
+    "title": Json(title),
+    "description": Json(description),
+    "stage": Json(stage),
+    "priority": Json(priority),
     "definition_of_done": [],
     "dependencies": [],
-    "created_at_ms": created_at_ms.to_json(),
-    "updated_at_ms": created_at_ms.to_json(),
+    "created_at_ms": Json(created_at_ms),
+    "updated_at_ms": Json(created_at_ms),
     "ready_since_ms": null,
   }
 }

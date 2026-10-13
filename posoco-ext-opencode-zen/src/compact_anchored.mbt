@@ -19,7 +19,7 @@ fn zen_anchored_compact_port(inner : &@posoco.ModelPort) -> &@posoco.ModelPort {
 /// where usable is the model window minus a 20k compaction reserve. Without
 /// a known window the budget falls back to the 15k ceiling (a window is
 /// never guessed).
-fn zen_keep_recent_tokens(context_window : Int?) -> Int {
+fn zen_keep_recent_tokens(context_window : Int32?) -> Int32 {
   let usable = match context_window {
     Some(w) if w > 20_000 => w - 20_000
     _ => return 15_000

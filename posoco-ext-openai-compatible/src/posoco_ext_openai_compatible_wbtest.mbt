@@ -824,8 +824,8 @@ test "process_oai_compat_sse tolerates explicit nulls in tool-call continuation 
 /// Helper: a fully-configured settings source without a `reasoning_efforts`
 /// declaration, optionally carrying a fixed singular `reasoning_effort`.
 fn undeclared_effort_settings_source(
-  reasoning_effort? : String = "",
-  reasoning_efforts? : Json = Json::null(),
+  reasoning_effort~ : String = "",
+  reasoning_efforts~ : Json = Json::null(),
 ) -> @llm.ProviderConfigSource {
   let fields : Array[(String, Json)] = [
     ("api_key", Json::string("sk-test")),

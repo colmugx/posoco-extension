@@ -21,7 +21,7 @@ pub(all) struct SegmentInfo {
   segment : String
   owner : String
   label : String?
-  priority : Int
+  priority : Int32
   value : String?
   color : String?
 } derive(Debug, Eq)
@@ -38,10 +38,10 @@ pub extend SegmentInfo with @moonbitlang/core/debug.Debug::{to_repr}
 priv struct SegmentEntry {
   owner : String
   label : String?
-  priority : Int
+  priority : Int32
   mut value : String?
   color : String?
-  first_seen : Int
+  first_seen : Int32
 }
 
 ///|
@@ -70,14 +70,14 @@ pub struct StatusBar {
   /// then — applied changes stay silent instead of rendering nowhere.
   priv mut ui : &@posoco.UiPort?
   priv registry : Map[String, SegmentEntry]
-  priv mut counter : Int
+  priv mut counter : Int32
 }
 
 ///|
 /// Compose a status bar bridge. When a bus is given, the bar subscribes to
 /// it immediately; render intents start flowing only after the composed UI
 /// arrives at `on_compose`.
-pub fn StatusBar::StatusBar(bus? : @devkit.EventBus? = None) -> StatusBar {
+pub fn StatusBar::StatusBar(bus~ : @devkit.EventBus? = None) -> StatusBar {
   let bar : StatusBar = { ui: None, registry: Map::from_array([]), counter: 0, }
   match bus {
     Some(bus) => bus.subscribe(bar as &@devkit.BusSubscriber)
@@ -87,7 +87,7 @@ pub fn StatusBar::StatusBar(bus? : @devkit.EventBus? = None) -> StatusBar {
 }
 
 ///|
-fn StatusBar::next_seen(self : StatusBar) -> Int {
+fn StatusBar::next_seen(self : StatusBar) -> Int32 {
   self.counter += 1
   self.counter
 }
@@ -103,7 +103,7 @@ fn StatusBar::apply_register(
   source : String,
   segment : String,
   label : String?,
-  priority : Int,
+  priority : Int32,
   value : String?,
   color : String?,
 ) -> Bool {

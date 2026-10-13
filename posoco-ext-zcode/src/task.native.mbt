@@ -18,7 +18,7 @@ priv struct ZcodeConn {
   writer : @io.BufferedWriter[@process.WriteToProcess]
   raw_writer : @process.WriteToProcess
   write_lock : @async.Mutex
-  mut next_id : Int
+  mut next_id : Int32
   /// Summary of the last denied `interaction/requestPermission`; set by the
   /// reader task, read after the turn ends.
   mut denial : String?

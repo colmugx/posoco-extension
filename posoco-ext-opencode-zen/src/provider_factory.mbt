@@ -12,7 +12,7 @@ pub(all) struct OpenCodeZenProvider {
 /// (device id, telemetry) that the wire layer may consult; it is opaque to
 /// this adapter and threaded straight into the reused port.
 pub fn OpenCodeZenProvider::OpenCodeZenProvider(
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> OpenCodeZenProvider {
   { ctx, }
 }

@@ -56,8 +56,8 @@ pub impl BrowserOpener for UnsupportedBrowserOpener with fn open(_self, _url) {
 /// Headless default on both targets. Native standalone hosts compose the
 /// MoonBack adapter from `posoco-ext-board-native` instead.
 pub fn default_board_runtime(
-  event_buffer : Int,
-  client_queue_depth? : Int = 256,
+  event_buffer : Int32,
+  client_queue_depth~ : Int32 = 256,
 ) -> BoardRuntime {
   let backend = @backend.BoardBackend::BoardBackend(
     event_buffer~,

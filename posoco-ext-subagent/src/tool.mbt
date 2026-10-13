@@ -29,7 +29,7 @@ pub(all) struct SubagentTools {
   /// Agent-owned task actually exits, not merely until the receipt returns.
   priv global_slots : @async.Semaphore
   /// Foreground session-id minter (`subagent-<n>`).
-  mut counter : Int
+  mut counter : Int32
   /// The Agent-owned task capability, captured at `on_compose` from the
   /// `Capability::Tasks` the manifest requires. `None` before composition;
   /// submits also need the host to run the Agent under `run_scoped`.
@@ -68,10 +68,10 @@ pub fn SubagentTools::SubagentTools(
   config~ : @kit.SubagentConfig,
   composer~ : &ChildComposer,
   parent_slot~ : String,
-  parent_effort? : String? = None,
-  parent_selection? : (() -> (String, String?))? = None,
-  observers? : Array[(@kit.SubagentEvent) -> Unit] = [],
-  auto_wakeup? : Bool = false,
+  parent_effort~ : String? = None,
+  parent_selection~ : (() -> (String, String?))? = None,
+  observers~ : Array[(@kit.SubagentEvent) -> Unit] = [],
+  auto_wakeup~ : Bool = false,
 ) -> SubagentTools {
   let global_concurrency = if config.limits.global_concurrency < 1 {
     1

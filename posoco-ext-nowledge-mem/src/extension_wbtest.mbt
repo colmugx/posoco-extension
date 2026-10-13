@@ -10,8 +10,8 @@ priv struct FakePlatform {
 
 ///|
 fn FakePlatform::FakePlatform(
-  home_files? : Map[String, String] = Map::from_array([]),
-  write_error? : String? = None,
+  home_files~ : Map[String, String] = Map::from_array([]),
+  write_error~ : String? = None,
 ) -> FakePlatform {
   { home_files, home_reads: [], writes: [], write_error, }
 }
@@ -73,14 +73,14 @@ priv struct FakeNmemMcp {
   probe_result : Result[String, String]
   mut configured : (String, String?, String)?
   calls : Array[(String, String)]
-  mut probes : Int
-  mut shutdowns : Int
+  mut probes : Int32
+  mut shutdowns : Int32
 }
 
 ///|
 fn FakeNmemMcp::FakeNmemMcp(
-  script? : Map[String, FakeMcpEntry] = Map::from_array([]),
-  probe_result? : Result[String, String] = Ok("nowledge-mem 0.10.72, 64 tools"),
+  script~ : Map[String, FakeMcpEntry] = Map::from_array([]),
+  probe_result~ : Result[String, String] = Ok("nowledge-mem 0.10.72, 64 tools"),
 ) -> FakeNmemMcp {
   {
     script,
@@ -107,7 +107,7 @@ impl NmemMcp for FakeNmemMcp with fn call_tool(
   self : FakeNmemMcp,
   tool : String,
   args : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[McpCallOutcome, NmemCallError] {
   ignore(timeout_ms)
   self.calls.push((tool, args.stringify()))
@@ -122,7 +122,7 @@ impl NmemMcp for FakeNmemMcp with fn call_tool(
 ///|
 impl NmemMcp for FakeNmemMcp with fn probe(
   self : FakeNmemMcp,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[String, String] {
   ignore(timeout_ms)
   self.probes = self.probes + 1
@@ -137,13 +137,13 @@ impl NmemMcp for FakeNmemMcp with fn shutdown(self : FakeNmemMcp) -> Unit {
 ///|
 /// Parsed arguments of recorded call `index` (the fake stores the args as
 /// JSON text; tests read fields instead of matching on key order).
-fn recorded_args(fake : FakeNmemMcp, index : Int) -> Json {
+fn recorded_args(fake : FakeNmemMcp, index : Int32) -> Json {
   j(fake.calls[index].1)
 }
 
 ///|
 /// How many calls went to one tool.
-fn call_count(fake : FakeNmemMcp, tool : String) -> Int {
+fn call_count(fake : FakeNmemMcp, tool : String) -> Int32 {
   let mut count = 0
   for call in fake.calls {
     if call.0 == tool {
@@ -157,9 +157,9 @@ fn call_count(fake : FakeNmemMcp, tool : String) -> Int {
 /// Extension over the test fakes: echo transport, scripted MCP, scripted
 /// home files.
 fn nmem_ext(
-  transport? : &NmemTransport = EchoNmemTransport::EchoNmemTransport(),
-  mcp? : &NmemMcp = FakeNmemMcp::FakeNmemMcp(),
-  platform? : &NmemPlatform = FakePlatform::FakePlatform(),
+  transport~ : &NmemTransport = EchoNmemTransport::EchoNmemTransport(),
+  mcp~ : &NmemMcp = FakeNmemMcp::FakeNmemMcp(),
+  platform~ : &NmemPlatform = FakePlatform::FakePlatform(),
 ) -> NowledgeMem {
   NowledgeMem(source_app="posoco", transport~, mcp~, platform~)
 }
@@ -171,7 +171,7 @@ fn nmem_ext(
 /// any env-derived source_app because the ack follows the request.
 priv struct EchoNmemTransport {
   requests : Array[(String, Json)]
-  mut remote_total : Int
+  mut remote_total : Int32
 }
 
 ///|
@@ -209,7 +209,7 @@ impl NmemTransport for EchoNmemTransport with fn post_json(
   url : String,
   _headers : Map[String, String],
   body : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[NmemResponse, String] {
   ignore(timeout_ms)
   self.requests.push((url, body))

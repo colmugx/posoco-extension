@@ -51,7 +51,7 @@ fn required_int64(
 fn required_int(
   fields : Map[String, Json],
   key : String,
-) -> Result[Int, BoardProtocolError] {
+) -> Result[Int32, BoardProtocolError] {
   match required_int64(fields, key) {
     Ok(value) if value <= 2147483647L => Ok(value.to_int())
     Ok(_) => Err(InvalidFrame("field '\{key}' exceeds integer range"))
@@ -232,14 +232,14 @@ pub fn encode_server_frame(frame : BoardServerFrame) -> String {
     ResyncRequired(reason~, current_seq~) =>
       Json::object({
         "type": "resync_required",
-        "reason": reason.to_json(),
+        "reason": Json(reason),
         "current_seq": Json::number(current_seq.to_double()),
       }).stringify()
     Error(code~, message~) =>
       Json::object({
         "type": "error",
-        "code": code.to_json(),
-        "message": message.to_json(),
+        "code": Json(code),
+        "message": Json(message),
       }).stringify()
   }
 }

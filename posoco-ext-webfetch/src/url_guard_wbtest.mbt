@@ -52,7 +52,7 @@ fn same_origin_str(a : String, b : String) -> String {
 }
 
 ///|
-fn repeat_a(n : Int) -> String {
+fn repeat_a(n : Int32) -> String {
   let b = StringBuilder()
   let mut i = 0
   while i < n {

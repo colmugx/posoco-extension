@@ -8,7 +8,7 @@ pub struct PiEventObserver {
   host : JsPiHost
   mut run_active : Bool
   /// pi turnIndex: 0-based per agent run, advanced after each turn_end.
-  mut turn_index : Int
+  mut turn_index : Int32
   mut message_started : Bool
   mut text_started : Bool
   mut thinking_started : Bool

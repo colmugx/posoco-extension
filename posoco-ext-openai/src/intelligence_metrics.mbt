@@ -52,7 +52,7 @@ fn intelligence_metrics_point_number(
 fn intelligence_metrics_point_integer(
   fields : Map[String, Json],
   key : String,
-) -> Result[Int?, String] {
+) -> Result[Int32?, String] {
   match fields.get(key) {
     Some(Json::Number(number, ..)) => {
       if number.is_nan() || number.is_inf() {

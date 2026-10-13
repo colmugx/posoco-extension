@@ -36,7 +36,7 @@ fn browser_uuid() -> String? {
 ///|
 fn connect(
   url : String,
-  generation : Int,
+  generation : Int32,
   emit : @rabbita.Emit[Msg],
 ) -> @rabbita.Cmd {
   @websocket.connect(
@@ -64,7 +64,7 @@ fn command_payload(command : @protocol.BoardClientCommand) -> String {
 /// correlates both the connection generation and the command id, so a late
 /// failure can never clear a newer pending command.
 fn send_command(
-  generation : Int,
+  generation : Int32,
   command : @protocol.BoardClientCommand,
   emit : @rabbita.Emit[Msg],
 ) -> @rabbita.Cmd {

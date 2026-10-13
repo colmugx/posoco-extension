@@ -10,7 +10,7 @@ priv struct NativeHerdrCli {}
 impl HerdrCli for NativeHerdrCli with fn run(
   _self : NativeHerdrCli,
   argv : Array[String],
-) -> (Int, String, String) raise @posoco.RuntimeError {
+) -> (Int32, String, String) raise @posoco.RuntimeError {
   let (exit_code, out, err) = @process.collect_output(argv[0], argv) catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(

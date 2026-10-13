@@ -15,8 +15,8 @@
 /// the exact input that reached the model, and can fail or hold until
 /// released for failure, cancellation and pause scenarios.
 struct WorkflowRealModel {
-  mut calls : Int
-  mut stopped : Int
+  mut calls : Int32
+  mut stopped : Int32
   mut settled_before_next : () -> Bool
   scopes : Array[(String, String)]
   inputs : Array[String]
@@ -28,8 +28,8 @@ struct WorkflowRealModel {
 
 ///|
 fn workflow_real_model(
-  fail? : Bool = false,
-  hold? : Bool = false,
+  fail~ : Bool = false,
+  hold~ : Bool = false,
 ) -> WorkflowRealModel {
   {
     calls: 0,

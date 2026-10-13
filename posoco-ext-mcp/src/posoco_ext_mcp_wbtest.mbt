@@ -16,7 +16,7 @@ impl Eq for ConnHealth with fn equal(self, other) {
 
 ///|
 /// See `Eq for ConnHealth` above: same rationale, Int-token instantiation.
-impl Eq for ConnReply[Int] with fn equal(self, other) {
+impl Eq for ConnReply[Int32] with fn equal(self, other) {
   match (self, other) {
     (Permit(a), Permit(b)) =>
       a.client == b.client && a.generation == b.generation
@@ -72,13 +72,11 @@ test "strip_namespace_empty_server" {
 
 ///|
 test "convert_tool_def_namespaces_and_preserves_fields" {
-  let mcp_def = @types.ToolDefinition::{
-    name: "search",
-    description: "Search for items",
-    input_schema: Json::object(
-      Map::from_array([("query", Json::string("string"))]),
-    ),
-  }
+  let mcp_def = @types.ToolDefinition::new(
+    "search",
+    Json::object(Map::from_array([("query", Json::string("string"))])),
+    description="Search for items",
+  )
   let posoco_def = convert_tool_def(mcp_def, "filesystem")
   assert_eq(posoco_def.name.to_string(), "filesystem__search")
   assert_eq(posoco_def.description, "Search for items")
@@ -88,8 +86,8 @@ test "convert_tool_def_namespaces_and_preserves_fields" {
 ///|
 test "convert_content_to_string_text_only" {
   let items = [
-    @types.ContentItem::Text("hello"),
-    @types.ContentItem::Text("world"),
+    @types.ContentBlock::text("hello"),
+    @types.ContentBlock::text("world"),
   ]
   let result = convert_content_to_string(items)
   assert_eq(result, "hello\nworld")
@@ -97,23 +95,38 @@ test "convert_content_to_string_text_only" {
 
 ///|
 test "convert_content_to_string_single_text" {
-  let items = [@types.ContentItem::Text("hello")]
+  let items = [@types.ContentBlock::text("hello")]
   let result = convert_content_to_string(items)
   assert_eq(result, "hello")
 }
 
 ///|
 test "convert_content_to_string_empty" {
-  let items : Array[@types.ContentItem] = []
+  let items : Array[@types.ContentBlock] = []
   let result = convert_content_to_string(items)
   assert_eq(result, "")
 }
 
 ///|
 test "convert_content_to_string_resource_link" {
-  let items = [@types.ContentItem::ResourceLink("file:///config.json")]
+  let items = [
+    @types.ContentBlock::resource_link(
+      "file:///config.json",
+      name="config.json",
+    ),
+  ]
   let result = convert_content_to_string(items)
   assert_eq(result, "[Resource: file:///config.json]")
+}
+
+///|
+test "convert_content_to_string_audio_and_unknown" {
+  let items = [
+    @types.ContentBlock::audio("0101", mime_type="audio/wav"),
+    @types.ContentBlock::Unknown(Json::number(1)),
+  ]
+  let result = convert_content_to_string(items)
+  assert_eq(result, "[Audio: audio/wav, 4 chars]\n[Unknown content]")
 }
 
 ///|
@@ -130,11 +143,11 @@ fn catalog_test_tool(name : String) -> @posoco.ToolDef {
 
 ///|
 fn catalog_test_mcp_tool(name : String) -> @types.ToolDefinition {
-  @types.ToolDefinition::{
+  @types.ToolDefinition::new(
     name,
-    description: "test tool",
-    input_schema: Json::object(Map::from_array([])),
-  }
+    Json::object(Map::from_array([])),
+    description="test tool",
+  )
 }
 
 ///|
@@ -162,7 +175,9 @@ test "catalog_plan_builds_complete_reverse_map" {
 ///|
 test "catalog_collision_does_not_mutate_previous_snapshot" {
   let previous_tools = [catalog_test_tool("legacy__read")]
-  let previous_route : Map[String, Int] = Map::from_array([("legacy__read", 0)])
+  let previous_route : Map[String, Int32] = Map::from_array([
+    ("legacy__read", 0),
+  ])
   let ambiguous_name = "alpha__beta__gamma"
   let left = convert_tool_def(catalog_test_mcp_tool("beta__gamma"), "alpha")
   let right = convert_tool_def(catalog_test_mcp_tool("gamma"), "alpha__beta")
@@ -201,7 +216,9 @@ test "catalog_plan_rejects_incomplete_refresh" {
 ///|
 test "refresh_fetch_failure_preserves_previous_catalog" {
   let previous_tools = [catalog_test_tool("legacy__read")]
-  let previous_route : Map[String, Int] = Map::from_array([("legacy__read", 0)])
+  let previous_route : Map[String, Int32] = Map::from_array([
+    ("legacy__read", 0),
+  ])
   let fetches : Array[Result[CatalogEntry, String]] = [
     Ok(CatalogEntry::{
       connection_index: 0,
@@ -443,8 +460,8 @@ fn http_auth_token(t : @transport.HttpClientTransport) -> String {
 
 ///|
 fn http_params_test_transport(
-  auth_token? : String = "",
-  extra_headers? : Array[(String, String)] = [],
+  auth_token~ : String = "",
+  extra_headers~ : Array[(String, String)] = [],
 ) -> @transport.AnyTransport {
   @transport.AnyTransport::HttpClient(
     @transport.HttpClientTransport::HttpClientTransport(
@@ -550,7 +567,7 @@ fn registry_test_conn(
 ///|
 fn registry_test_bridge(
   conns : Array[MCPServerConn],
-  routes : Array[(String, Int)],
+  routes : Array[(String, Int32)],
 ) -> MCPToolBridge {
   {
     connections: conns,
@@ -637,7 +654,7 @@ test "retire_slot_clears_routes_and_keeps_slot_identity" {
 /// Observation cell for the defer unwinding probe.
 priv struct DeferProbe {
   mut deferred_ran : Bool
-  mut value_at_defer : Int
+  mut value_at_defer : Int32
   mut mut_capture_saw_latest : Bool
 }
 
@@ -735,11 +752,7 @@ test "http_connect_params_preserves_injected_header_order" {
 test "convert_tool_def_preserves_external_description" {
   let long = "prefix-" + "x".repeat(1200) + "-critical-tail"
   let def = convert_tool_def(
-    @types.ToolDefinition::{
-      name: "search",
-      description: long,
-      input_schema: Json::object({}),
-    },
+    @types.ToolDefinition::new("search", Json::object({}), description=long),
     "srv",
   )
   assert_eq(def.description, long)

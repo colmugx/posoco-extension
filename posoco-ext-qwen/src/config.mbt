@@ -56,7 +56,7 @@ pub(all) struct QwenConfig {
   emit_preserve_thinking : Bool
   tool_stream : Bool
   supports_images : Bool
-  context_window : Int?
+  context_window : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -69,14 +69,14 @@ pub extend QwenConfig with @moonbitlang/core/debug.Debug::{to_repr}
 pub fn QwenConfig::QwenConfig(
   api_key : String,
   base_url~ : String,
-  model? : String = "qwen3.8-max",
-  endpoint_prefix? : String = "",
-  reasoning_effort? : String? = None,
-  enable_thinking? : Bool? = None,
-  preserve_thinking? : Bool? = None,
-  tool_stream? : Bool? = None,
-  supports_images? : Bool? = None,
-  context_window? : Int? = None,
+  model~ : String = "qwen3.8-max",
+  endpoint_prefix~ : String = "",
+  reasoning_effort~ : String? = None,
+  enable_thinking~ : Bool? = None,
+  preserve_thinking~ : Bool? = None,
+  tool_stream~ : Bool? = None,
+  supports_images~ : Bool? = None,
+  context_window~ : Int32? = None,
 ) -> QwenConfig {
   if reasoning_effort is Some(_) && enable_thinking is Some(_) {
     abort(
@@ -223,7 +223,7 @@ pub(all) struct QwenModelPort {
 ///|
 pub fn QwenModelPort::QwenModelPort(
   config : QwenConfig,
-  ctx? : @devkit.ExtContext = @devkit.ExtContext::default(),
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> QwenModelPort {
   { config, ctx, }
 }

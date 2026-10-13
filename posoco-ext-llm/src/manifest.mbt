@@ -52,6 +52,13 @@ pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
 pub extend RouterModelPort with @posoco.Lifecycle::{on_shutdown, on_start}
 
 ///|
+pub impl @posoco.Lifecycle for RouterModelPort with fn on_start(
+  self : RouterModelPort,
+) -> Unit {
+  self.refresh_model_metadata()
+}
+
+///|
 /// Nothing to release: the router holds no resources beyond its slots.
 pub impl @posoco.Lifecycle for RouterModelPort with fn on_shutdown(
   self : RouterModelPort,

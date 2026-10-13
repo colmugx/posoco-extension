@@ -16,7 +16,7 @@ using @runtime {
 /// }
 /// ```
 pub fn board_extension(
-  config? : @board.BoardConfig = @board.BoardConfig(),
+  config~ : @board.BoardConfig = @board.BoardConfig(),
 ) -> @board.BoardExtension {
   @board.BoardExtension::with_runtime(
     config~,

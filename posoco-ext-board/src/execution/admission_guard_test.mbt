@@ -22,7 +22,7 @@ async test "optional reservation revision and policy guards reject before journa
     assert_eq(storage.writes, 0)
     assert_true(owner.bindings().is_empty())
     assert_eq(adapter.calls, 0)
-    let observed : Array[(Int, Int)] = []
+    let observed : Array[(Int32, Int32)] = []
     let handle = owner
       .execute(request(), reservation_revision=revision, admission_guard=snapshot => {
         observed.push((snapshot.tasks.length(), snapshot.attempts.length()))

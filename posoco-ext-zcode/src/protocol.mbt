@@ -1,7 +1,7 @@
 ///|
 /// Server-side error object of a response: `{code, message, data?}`.
 pub(all) struct ZcodeRpcError {
-  code : Int
+  code : Int32
   message : String
   data : Json?
 } derive(Eq, Debug)
@@ -167,7 +167,7 @@ fn json_field_string(j : Json, key : String) -> String? {
 
 ///|
 /// Missing or non-numeric fields read as 0 (usage accounting tolerates it).
-fn json_field_int(j : Json, key : String) -> Int {
+fn json_field_int(j : Json, key : String) -> Int32 {
   match json_field(j, key) {
     Some(Json::Number(n, ..)) => n.to_int()
     _ => 0

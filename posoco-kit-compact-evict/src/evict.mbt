@@ -14,7 +14,7 @@
 /// Heuristic token estimate shared by the compact kits: ceil(chars / 4).
 /// Cheap approximation of real tokenizers — good enough for budget
 /// decisions, not for billing.
-pub fn estimate_tokens(text : String) -> Int {
+pub fn estimate_tokens(text : String) -> Int32 {
   (text.length() + 3) / 4
 }
 
@@ -25,8 +25,8 @@ pub fn estimate_tokens(text : String) -> Int {
 /// nothing was removable and `messages` is a verbatim copy.
 pub(all) struct EvictResult {
   messages : Array[@posoco.Message]
-  evicted_tool_calls : Int
-  evicted_tokens : Int
+  evicted_tool_calls : Int32
+  evicted_tokens : Int32
 } derive(Eq)
 
 ///|
@@ -36,7 +36,10 @@ pub extend EvictResult with Eq::{not_equal, equal}
 /// Start of the protected window: the index of the `turns`-th most recent
 /// UserMessage counted from the end. With fewer user turns everything is
 /// protected, so the function returns 0.
-fn protected_turn_start(messages : Array[@posoco.Message], turns : Int) -> Int {
+fn protected_turn_start(
+  messages : Array[@posoco.Message],
+  turns : Int32,
+) -> Int32 {
   let mut seen = 0
   for i = messages.length() - 1; i >= 0; i = i - 1 {
     match messages[i] {
@@ -53,7 +56,7 @@ fn protected_turn_start(messages : Array[@posoco.Message], turns : Int) -> Int {
 }
 
 ///|
-fn content_tokens(content : Array[@posoco.Content]) -> Int {
+fn content_tokens(content : Array[@posoco.Content]) -> Int32 {
   let mut total = 0
   for block in content {
     match block {
@@ -65,12 +68,12 @@ fn content_tokens(content : Array[@posoco.Content]) -> Int {
 }
 
 ///|
-fn tool_call_tokens(call : @posoco.ToolCall) -> Int {
+fn tool_call_tokens(call : @posoco.ToolCall) -> Int32 {
   estimate_tokens(call.name.to_string() + call.arguments.stringify())
 }
 
 ///|
-fn reasoning_tokens(reasoning : @posoco.Reasoning?) -> Int {
+fn reasoning_tokens(reasoning : @posoco.Reasoning?) -> Int32 {
   match reasoning {
     Some(r) => estimate_tokens(r.content)
     None => 0
@@ -78,7 +81,7 @@ fn reasoning_tokens(reasoning : @posoco.Reasoning?) -> Int {
 }
 
 ///|
-fn outcome_tokens(outcome : @posoco.ToolOutcome) -> Int {
+fn outcome_tokens(outcome : @posoco.ToolOutcome) -> Int32 {
   match outcome {
     Success(content~, ..) => estimate_tokens(content)
     SuccessWithAttachments(content~, attachments~, ..) => {
@@ -113,7 +116,7 @@ fn outcome_tokens(outcome : @posoco.ToolOutcome) -> Int {
 /// array is never mutated; the result is always a fresh array.
 pub fn evict_old_tool_results(
   messages : Array[@posoco.Message],
-  protect_user_turns? : Int = 3,
+  protect_user_turns~ : Int32 = 3,
 ) -> EvictResult {
   let turns = if protect_user_turns < 1 { 1 } else { protect_user_turns }
   let boundary = protected_turn_start(messages, turns)
@@ -167,7 +170,7 @@ pub fn evict_old_tool_results(
 /// Estimated tokens of a whole message — the eviction counterpart of the
 /// summary kit's per-message estimate, for adapters projecting post-evict
 /// occupancy.
-fn estimate_message_tokens(message : @posoco.Message) -> Int {
+fn estimate_message_tokens(message : @posoco.Message) -> Int32 {
   match message {
     SystemMessage(content~) => content_tokens(content)
     UserMessage(content~) => content_tokens(content)
@@ -183,7 +186,7 @@ fn estimate_message_tokens(message : @posoco.Message) -> Int {
 }
 
 ///|
-pub fn estimate_transcript_tokens(messages : Array[@posoco.Message]) -> Int {
+pub fn estimate_transcript_tokens(messages : Array[@posoco.Message]) -> Int32 {
   let mut total = 0
   for message in messages {
     total += estimate_message_tokens(message)

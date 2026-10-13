@@ -1,5 +1,5 @@
 ///|
-fn is_qwen_http_success(status : Int) -> Bool {
+fn is_qwen_http_success(status : Int32) -> Bool {
   status >= 200 && status < 300
 }
 
@@ -13,7 +13,7 @@ async fn read_qwen_error_body(client : @http.Client) -> String? {
 ///|
 fn classify_qwen_http_error(
   stage : String,
-  status : Int,
+  status : Int32,
   body_text : String,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {

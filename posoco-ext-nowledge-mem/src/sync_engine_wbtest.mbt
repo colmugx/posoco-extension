@@ -2,7 +2,7 @@
 /// One scripted transport outcome: a decoded response or a request-level
 /// failure.
 enum ScriptedReply {
-  Reply(Int, Json)
+  Reply(Int32, Json)
   Fail(String)
 }
 
@@ -13,7 +13,7 @@ enum ScriptedReply {
 /// requests.
 struct FakeNmemTransport {
   script : Array[ScriptedReply]
-  mut next : Int
+  mut next : Int32
   requests : Array[(String, Json)]
 }
 
@@ -30,7 +30,7 @@ impl NmemTransport for FakeNmemTransport with fn post_json(
   url : String,
   _headers : Map[String, String],
   body : Json,
-  timeout_ms~ : Int,
+  timeout_ms~ : Int32,
 ) -> Result[NmemResponse, String] {
   ignore(timeout_ms)
   self.requests.push((url, body))
@@ -55,12 +55,12 @@ fn fresh_lane() -> LaneState {
 /// Assemble a SyncRequest directly (tests control messages and config without
 /// going through build_sync_request).
 fn sync_request(
-  messages? : Array[NmemThreadMessage] = [
+  messages~ : Array[NmemThreadMessage] = [
     delta_msg(User, "hello", "e0"),
     delta_msg(Assistant, "hi there", "e1"),
   ],
-  config? : NmemConfig = lane_config(),
-  session_id? : String = "s1",
+  config~ : NmemConfig = lane_config(),
+  session_id~ : String = "s1",
 ) -> SyncRequest {
   let tid = thread_id(config.source_app, session_id)
   {
@@ -83,7 +83,10 @@ fn sync_request(
 
 ///|
 /// AckedCursor covering the first `upto` entries of `messages`.
-fn cursor_over(messages : Array[NmemThreadMessage], upto : Int) -> AckedCursor {
+fn cursor_over(
+  messages : Array[NmemThreadMessage],
+  upto : Int32,
+) -> AckedCursor {
   {
     count: upto,
     remote_count: upto,

@@ -11,8 +11,8 @@ fn openrouter_model_catalog_with_cache_policy(
   api_key_factory : &@llm.ApiKeyFactory,
   prompt_cache_key_rejection_state : Ref[Bool],
   send_prompt_cache_key : Bool,
-  http_referer? : String? = None,
-  title? : String? = None,
+  http_referer~ : String? = None,
+  title~ : String? = None,
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   if models.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(

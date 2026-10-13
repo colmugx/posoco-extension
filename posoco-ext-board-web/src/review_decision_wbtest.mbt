@@ -4,19 +4,19 @@
 fn review_attempt_json(
   status : String,
   review : String,
-  id? : String = "a",
-  task_id? : String = "t",
-  kind? : String = "review",
+  id~ : String = "a",
+  task_id~ : String = "t",
+  kind~ : String = "review",
 ) -> Json {
   {
-    "id": id.to_json(),
-    "task_id": task_id.to_json(),
-    "kind": kind.to_json(),
-    "status": status.to_json(),
+    "id": Json(id),
+    "task_id": Json(task_id),
+    "kind": Json(kind),
+    "status": Json(status),
     "review": if review == "" {
       Json::null()
     } else {
-      review.to_json()
+      Json(review)
     },
     "created_at_ms": 10,
     "started_at_ms": if status == "queued" {
@@ -39,7 +39,7 @@ fn review_attempt_json(
 fn review_model(
   status : String,
   review : String,
-  kind? : String = "review",
+  kind~ : String = "review",
 ) -> Model {
   let replica = @client.BoardReplica::empty()
   guard replica.apply_text(
@@ -62,12 +62,12 @@ fn review_model(
 ///|
 /// One authoritative `board.review.recorded` event replacing the attempt.
 fn review_recorded_event(
-  decision? : String = "approved",
-  review? : String = "approved",
-  status? : String = "running",
-  seq? : Int64 = 1L,
-  revision? : Int64 = 2L,
-  id? : String = "a",
+  decision~ : String = "approved",
+  review~ : String = "approved",
+  status~ : String = "running",
+  seq~ : Int64 = 1L,
+  revision~ : Int64 = 2L,
+  id~ : String = "a",
 ) -> String {
   @protocol.encode_server_frame(
     Event({
@@ -76,10 +76,10 @@ fn review_recorded_event(
       scope: None,
       kind: "board.review.recorded",
       payload: {
-        "attempt_id": id.to_json(),
+        "attempt_id": Json(id),
         "task_id": "t",
         "attempt": review_attempt_json(status, review, id~),
-        "decision": decision.to_json(),
+        "decision": Json(decision),
         "at_ms": 55,
       },
     }),

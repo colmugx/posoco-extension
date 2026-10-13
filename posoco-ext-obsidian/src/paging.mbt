@@ -11,7 +11,7 @@ fn json_str(j : Json?) -> String? {
 }
 
 ///|
-fn json_int(j : Json?) -> Int? {
+fn json_int(j : Json?) -> Int32? {
   match j {
     Some(Json::Number(n, ..)) => Some(n.to_int())
     _ => None
@@ -72,10 +72,10 @@ fn parse_file_meta(output : String) -> @devkit.FileStamp? {
 
 ///|
 pub(all) struct OutlineEntry {
-  level : Int
+  level : Int32
   heading : String
   /// 1-based line in the full file text (frontmatter included).
-  line : Int
+  line : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -115,7 +115,7 @@ fn parse_outline_json(output : String) -> Array[OutlineEntry] {
 ///|
 pub(all) struct SearchHit {
   file : String
-  line : Int
+  line : Int32
   text : String
 } derive(Debug)
 
@@ -176,8 +176,8 @@ const OBS_BYTE_CAP = 40_000
 /// continuation footer.
 fn format_page(
   lines : ArrayView[String],
-  first_line : Int,
-  total_lines : Int,
+  first_line : Int32,
+  total_lines : Int32,
 ) -> String {
   let sb = StringBuilder()
   let mut bytes = 0

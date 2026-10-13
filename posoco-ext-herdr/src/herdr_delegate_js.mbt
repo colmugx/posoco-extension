@@ -6,7 +6,7 @@
 ///|
 pub fn HerdrDelegate::detect(
   cwd~ : String,
-  parent_yolo? : (() -> Bool)? = None,
+  parent_yolo~ : (() -> Bool)? = None,
 ) -> HerdrDelegate? {
   herdr_delegate_gate(
     herdr_env("HERDR_ENV"),

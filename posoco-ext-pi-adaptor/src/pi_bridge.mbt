@@ -427,19 +427,19 @@ extern "js" fn js_host_set_project_trusted(
   #| (host, trusted) => { host.state.projectTrusted = trusted }
 
 ///|
-extern "js" fn js_tool_count(host : JsPiHost) -> Int =
+extern "js" fn js_tool_count(host : JsPiHost) -> Int32 =
   #| (host) => host.state.tools.length
 
 ///|
-extern "js" fn js_tool_name(host : JsPiHost, index : Int) -> String =
+extern "js" fn js_tool_name(host : JsPiHost, index : Int32) -> String =
   #| (host, index) => host.state.tools[index]?.name ?? ""
 
 ///|
-extern "js" fn js_tool_description(host : JsPiHost, index : Int) -> String =
+extern "js" fn js_tool_description(host : JsPiHost, index : Int32) -> String =
   #| (host, index) => host.state.tools[index]?.description ?? ""
 
 ///|
-extern "js" fn js_tool_schema_json(host : JsPiHost, index : Int) -> String =
+extern "js" fn js_tool_schema_json(host : JsPiHost, index : Int32) -> String =
   #| (host, index) => JSON.stringify(host.state.tools[index]?.parameters ?? { type: "object", properties: {} })
 
 ///|
@@ -540,7 +540,7 @@ extern "js" fn js_execute_async(
 /// Effect-correlated execution used by the public Posoco Runtime seam.
 extern "js" fn js_execute_effect_async(
   host : JsPiHost,
-  effect_id : Int,
+  effect_id : Int32,
   name : String,
   call_id : String,
   arguments_json : String,
@@ -686,7 +686,7 @@ extern "js" fn js_cancel_effects_json(
   #| }
 
 ///|
-extern "js" fn js_inflight_count(host : JsPiHost) -> Int =
+extern "js" fn js_inflight_count(host : JsPiHost) -> Int32 =
   #| (host) => host.state.inflight.size
 
 ///|
@@ -721,16 +721,16 @@ extern "js" fn JsToolResult::details_json(self : JsToolResult) -> String =
 
 ///|
 /// Current monotonic Pi tool catalog revision.
-extern "js" fn js_catalog_revision(host : JsPiHost) -> Int =
+extern "js" fn js_catalog_revision(host : JsPiHost) -> Int32 =
   #| (host) => host.state.catalogVersion
 
 ///|
 /// Cancel one effect and encode its canonical disposition as 0/1/2.
 extern "js" fn js_cancel_effect_code(
   host : JsPiHost,
-  effect_id : Int,
+  effect_id : Int32,
   reason_json : String,
-) -> Int =
+) -> Int32 =
   #| (host, effectId, reasonJson) => {
   #|   const key = String(effectId);
   #|   const token = host.state.effects.get(key);

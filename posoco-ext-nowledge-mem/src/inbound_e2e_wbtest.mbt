@@ -1,6 +1,6 @@
 ///|
 /// How many read_working_memory calls the MCP fake saw.
-fn wm_read_call_count(mcp : FakeNmemMcp) -> Int {
+fn wm_read_call_count(mcp : FakeNmemMcp) -> Int32 {
   call_count(mcp, "read_working_memory")
 }
 

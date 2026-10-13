@@ -22,7 +22,7 @@ impl BusSubscriber for RecordingSubscriber with fn on_bus_event(
 }
 
 ///|
-fn bus_event(source : String, topic? : String = "status") -> BusEvent {
+fn bus_event(source : String, topic~ : String = "status") -> BusEvent {
   { source, topic, data: Json::null(), }
 }
 
