@@ -42,7 +42,7 @@ fn tk_call_with_args(
   arguments : Json,
 ) -> @posoco.ToolCallContext {
   {
-    effect_id: @kernel.EffectId::{ value: 1, },
+    effect_id: { value: 1, },
     call_id: @posoco.CallId::unchecked("call_1"),
     name: @posoco.ToolName::unchecked(name),
     arguments,
