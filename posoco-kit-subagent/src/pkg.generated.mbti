@@ -131,6 +131,7 @@ pub(all) struct SubagentLimits {
   global_concurrency : Int
   timeout_ms : Int
   spawn_budget : Int
+  answer_timeout_ms : Int64
 } derive(Eq, @debug.Debug)
 pub fn SubagentLimits::equal(Self, Self) -> Bool
 pub fn SubagentLimits::not_equal(Self, Self) -> Bool

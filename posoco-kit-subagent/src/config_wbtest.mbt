@@ -24,6 +24,7 @@ fn sample_config() -> SubagentConfig {
       global_concurrency: 10,
       timeout_ms: 60000,
       spawn_budget: 32,
+      answer_timeout_ms: 60000L,
     },
   }
 }
@@ -42,6 +43,22 @@ test "defaults_match_design_9_2_numbers" {
   assert_eq(config.limits.global_concurrency, 20)
   assert_eq(config.limits.timeout_ms, 1800000)
   assert_eq(config.limits.spawn_budget, 64)
+  assert_eq(config.limits.answer_timeout_ms, 600000L)
+}
+
+///|
+test "parse_answer_timeout_ms_overrides_default" {
+  let config = parse_subagent_config(
+    "{\"limits\": {\"answer_timeout_ms\": 120000}}",
+  )
+  assert_eq(config.limits.answer_timeout_ms, 120000L)
+  assert_eq(config.limits.timeout_ms, 1800000)
+}
+
+///|
+test "parse_rejects_fractional_answer_timeout_ms" {
+  let reason = config_error("{\"limits\": {\"answer_timeout_ms\": 1.5}}")
+  assert_true(reason.contains("answer_timeout_ms"))
 }
 
 ///|
@@ -58,7 +75,7 @@ test "parse_full_config" {
   let text =
     #|{"default_model": "zai/glm-5.3",
     #|"default_effort": "medium",
-    #|"limits": {"swarm_items": 8, "concurrency": 2, "global_concurrency": 10, "timeout_ms": 60000, "spawn_budget": 32}}
+    #|"limits": {"swarm_items": 8, "concurrency": 2, "global_concurrency": 10, "timeout_ms": 60000, "spawn_budget": 32, "answer_timeout_ms": 60000}}
   assert_eq(parse_subagent_config(text), sample_config())
 }
 

@@ -7,6 +7,10 @@ pub(all) struct SubagentLimits {
   global_concurrency : Int32
   timeout_ms : Int32
   spawn_budget : Int32
+  /// Upper bound on how long a child's question may wait for the parent
+  /// agent's answer. `0` disables the deadline (the wait still ends on
+  /// cancel/shutdown). Int64: waits are configured in minutes, not turns.
+  answer_timeout_ms : Int64
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -45,7 +49,7 @@ pub(all) suberror SubagentConfigError {
 ///|
 /// Conservative defaults: no default model (inherit the parent), swarm items
 /// 16, group concurrency 4, global concurrency 20, timeout 30 minutes,
-/// spawn budget 64.
+/// spawn budget 64, answer deadline 10 minutes.
 pub fn SubagentConfig::defaults() -> SubagentConfig {
   {
     default_model: None,
@@ -56,6 +60,7 @@ pub fn SubagentConfig::defaults() -> SubagentConfig {
       global_concurrency: 20,
       timeout_ms: 1800000,
       spawn_budget: 64,
+      answer_timeout_ms: 600000L,
     },
   }
 }
@@ -138,6 +143,29 @@ fn limits_int(
 }
 
 ///|
+/// Int64 variant for wait-style limits.
+fn limits_int64(
+  fields : Map[String, Json],
+  key : String,
+  fallback : Int64,
+) -> Int64 raise SubagentConfigError {
+  match fields.get(key) {
+    None => fallback
+    Some(Number(value, ..)) => {
+      let whole = value.to_int64()
+      if value != whole.to_double() {
+        raise SubagentConfigError::Malformed(
+          "'limits.\{key}' must be an integer",
+        )
+      }
+      whole
+    }
+    Some(_) =>
+      raise SubagentConfigError::Malformed("'limits.\{key}' must be a number")
+  }
+}
+
+///|
 fn parse_limits(
   fields : Map[String, Json],
 ) -> SubagentLimits raise SubagentConfigError {
@@ -152,5 +180,10 @@ fn parse_limits(
     ),
     timeout_ms: limits_int(fields, "timeout_ms", base.timeout_ms),
     spawn_budget: limits_int(fields, "spawn_budget", base.spawn_budget),
+    answer_timeout_ms: limits_int64(
+      fields,
+      "answer_timeout_ms",
+      base.answer_timeout_ms,
+    ),
   }
 }
