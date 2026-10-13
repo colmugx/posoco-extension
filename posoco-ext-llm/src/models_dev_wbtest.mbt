@@ -492,6 +492,32 @@ async test "metadata warnings only describe the active fallback model once" {
 }
 
 ///|
+async test "empty metadata provider key opts out of models.dev refresh" {
+  let transport = MetadataTestTransport::{
+    calls: 0,
+    payload: metadata_fixture(),
+    broken: false,
+  }
+  let metadata = ModelMetadata(transport~)
+  let slot = ModelSlot(
+    id="relay/ghost-model",
+    label="relay",
+    provider_id="relay",
+    model_id="ghost-model",
+    port=RouterTestPort::{ reasoning_effort_values: [], },
+    metadata_provider_id=Some(""),
+  )
+  let router = RouterModelPort(slots=[slot], model_metadata=Some(metadata))
+  router.refresh_model_metadata()
+  assert_eq(transport.calls, 0)
+  assert_eq(router.context_window_reading(router.list_slots()[0]), {
+    tokens: 500_000,
+    source: "fallback",
+    stale: false,
+  })
+}
+
+///|
 async test "partial metadata responses back off and repeated diagnostics do not spam" {
   let transport = MetadataTestTransport::{
     calls: 0,
