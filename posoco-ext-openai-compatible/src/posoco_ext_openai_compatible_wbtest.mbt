@@ -663,6 +663,24 @@ fn effort_settings_source(
 }
 
 ///|
+test "custom provider slots opt out of models.dev lookup" {
+  let provider = OpenAICompatibleProvider("qwen")
+  let factory : &@llm.ProviderFactory = provider
+  let source = effort_settings_source(
+    "high",
+    Json::array([Json::string("low"), Json::string("high")]),
+  )
+  match factory.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) =>
+      for slot in catalog.slots() {
+        assert_eq(slot.metadata_provider_id, Some(""))
+      }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected Ready catalog with full settings")
+  }
+}
+
+///|
 test "ProviderFactory::build advertises declared efforts with an implicit off and the custom display group" {
   let provider = OpenAICompatibleProvider("qwen")
   let factory : &@llm.ProviderFactory = provider

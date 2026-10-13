@@ -204,6 +204,9 @@ fn oai_compat_catalog_slot(
     api_key=Some(api_key),
     thinking_efforts=slot_efforts,
     context_window=config.context_window,
+    // Custom providers are user-autonomous settings state: the empty key opts
+    // this slot out of every models.dev refresh and lookup.
+    metadata_provider_id=Some(""),
     capabilities~,
     default_effort~,
     display_group=Some("custom"),
