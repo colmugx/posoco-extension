@@ -60,8 +60,14 @@ pub fn attach_cache_control(
   let wire = cache_control.to_wire()
   match block {
     Json::Object(fields) => {
-      fields["cache_control"] = wire
-      Json::object(fields)
+      // Do not mutate the caller's block (Json objects can share a Map).
+      let copied : Map[String, Json] = Map::from_array([])
+      for entry in fields {
+        let (key, value) = entry
+        copied[key] = value
+      }
+      copied["cache_control"] = wire
+      Json::object(copied)
     }
     _ =>
       raise @posoco.ModelError::RequestBuild(
