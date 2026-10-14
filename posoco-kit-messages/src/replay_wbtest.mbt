@@ -140,9 +140,8 @@ test "editing the assistant turn invalidates stale replay state" {
 }
 
 ///|
-test "foreign and malformed replay state is rejected or safely skipped" {
-  // Foreign codec state inside an assistant message: not ours to replay,
-  // skipped (its own codec owns it), visible text still encodes.
+test "foreign and malformed replay state is rejected explicitly" {
+  // Foreign codec state must not be silently discarded.
   let foreign = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("visible")],
     tool_calls=[],
@@ -152,9 +151,12 @@ test "foreign and malformed replay state is rejected or safely skipped" {
     }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let wire = jget(message_to_wire(foreign)[0], key="content")
-  assert_eq(jlen(wire), 1)
-  assert_eq(jget(jat(wire, index=0), key="type"), "text")
+  let foreign_result = Ok(message_to_wire(foreign)) catch { error => Err(error) }
+  match foreign_result {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("foreign_replay"))
+    _ => fail("expected explicit foreign-replay rejection")
+  }
   // Our codec tag with malformed body: loud typed error, never silent loss.
   let corrupt = @posoco.Message::AssistantMessage(
     content=[@posoco.Content::Text("visible")],
