@@ -111,7 +111,8 @@ test "streaming text splits across many events into a correct completion" {
   )
   assert_true(done)
   assert_eq(acc.text(), "Hello world")
-  assert_eq(chunks.length(), 4)
+  assert_eq(chunks.length(), 5)
+  // Three text deltas + terminal Finish + final Usage.
   // The Usage chunk appears exactly once despite the cumulative snapshots.
   let mut usage_chunks = 0
   for chunk in chunks {
@@ -395,6 +396,10 @@ test "unknown events are ignored and do not complete the stream" {
         "index": 0,
         "delta": { "type": "text_delta", "text": "a" },
       }),
+      ev(name="content_block_stop", data={
+        "type": "content_block_stop",
+        "index": 0,
+      }),
       ev(name="message_delta", data={
         "type": "message_delta",
         "delta": { "stop_reason": "end_turn" },
@@ -584,6 +589,40 @@ test "malformed block lifecycles are rejected" {
   // Events after message_stop.
   let closed = MessagesSseState::MessagesSseState()
   let acc2 = @posoco.StreamAccumulator::StreamAccumulator()
+  // message_stop without a started message is invalid, not a terminal.
+  let early_stop = Ok(process_messages_event(
+    provider="test",
+    data=({ "type": "message_stop" } : Json).stringify(),
+    acc=acc2,
+    on_chunk={ _ => () },
+    state=closed,
+  )) catch { error => Err(error) }
+  match early_stop {
+    Err(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("incomplete_message"))
+    _ => fail("expected incomplete-message rejection")
+  }
+  // An independent complete zero-content message can close normally.
+  let _ = process_messages_event(
+    provider="test",
+    data=({
+      "type": "message_start",
+      "message": { "type": "message", "id": "m", "model": "m", "role": "assistant" },
+    } : Json).stringify(),
+    acc=acc2,
+    on_chunk={ _ => () },
+    state=closed,
+  )
+  let _ = process_messages_event(
+    provider="test",
+    data=({
+      "type": "message_delta",
+      "delta": { "stop_reason": "end_turn" },
+    } : Json).stringify(),
+    acc=acc2,
+    on_chunk={ _ => () },
+    state=closed,
+  )
   let _ = process_messages_event(
     provider="test",
     data=({ "type": "message_stop" } : Json).stringify(),
@@ -745,6 +784,10 @@ test "independent decoder instances are fully isolated" {
       "type": "content_block_delta",
       "index": 0,
       "delta": { "type": "text_delta", "text": "a" },
+    }),
+    ev(name="content_block_stop", data={
+      "type": "content_block_stop",
+      "index": 0,
     }),
     ev(name="message_delta", data={
       "type": "message_delta",
