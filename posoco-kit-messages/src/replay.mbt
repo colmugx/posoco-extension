@@ -171,18 +171,19 @@ pub fn build_replay_envelope(
   content~ : Array[@posoco.Content],
   tool_calls~ : Array[@posoco.ToolCall],
   blocks~ : Array[Json],
+  full_blocks~ : Array[Json]? = None,
 ) -> Json {
-  Json::object({
-    "codec": Json::string(CODEC_TAG),
-    "version": Json::number(CODEC_VERSION.to_double()),
-    "fingerprint": Json::string(
-      assistant_fingerprint(
-        content~,
-        tool_calls~,
-      ),
-    ),
-    "blocks": Json::array(blocks.copy()),
-  })
+  let fields : Array[(String, Json)] = [
+    ("codec", Json::string(CODEC_TAG)),
+    ("version", Json::number(CODEC_VERSION.to_double())),
+    ("fingerprint", Json::string(assistant_fingerprint(content~, tool_calls~))),
+    ("blocks", Json::array(blocks.copy())),
+  ]
+  match full_blocks {
+    Some(all) => fields.push(("full_blocks", Json::array(all.copy())))
+    None => ()
+  }
+  Json::object(Map::from_array(fields))
 }
 
 ///|
@@ -250,7 +251,50 @@ pub fn parse_replay_envelope(
   for block in blocks {
     ignore(validated_replay_block(provider~, block))
   }
-  blocks
+  // New captures preserve ALL assistant blocks in wire order. The original
+  // canonical visible content, tool calls and opaque blocks must match the
+  // stored sequence before it can be emitted verbatim again.
+  match fields.get("full_blocks") {
+    Some(Json::Array(all)) => {
+      let visible : Array[@posoco.Content] = []
+      let calls : Array[@posoco.ToolCall] = []
+      let replay : Array[Json] = []
+      for block in all {
+        match decode_content_block(provider~, block) {
+          DecodedBlock::Text(text) =>
+            if text != "" {
+              visible.push(@posoco.Content::Text(text))
+            }
+          DecodedBlock::ToolCall(call) => calls.push(call)
+          DecodedBlock::Replay(opaque) => replay.push(opaque)
+        }
+      }
+      if visible != content || calls != tool_calls || replay != blocks {
+        raise @posoco.ModelError::ResponseParse(
+          "\{provider} replay validation failure (stage=full_blocks, category=stale)",
+        )
+      }
+      all
+    }
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "\{provider} replay validation failure (stage=full_blocks, category=wrong_type)",
+      )
+    None => blocks
+  }
+}
+
+///|
+/// Whether this envelope contains a complete original wire block sequence.
+/// Old envelopes contain only opaque replay blocks and use the historical
+/// thinking-first reconstruction for backwards compatibility.
+pub fn is_complete_messages_replay_envelope(raw : Json) -> Bool {
+  match raw {
+    Json::Object(fields) =>
+      fields.get("codec") == Some(Json::string(CODEC_TAG)) &&
+      fields.get("full_blocks") is Some(Json::Array(_))
+    _ => false
+  }
 }
 
 ///|
