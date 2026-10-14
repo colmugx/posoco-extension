@@ -105,7 +105,7 @@ fn models_dev_windows(
   for id, model in models {
     if model is Json::Object(fields) &&
       fields.get("limit") is Some(Json::Object(limits)) {
-      if context_window_integer(limits.get("context")) is Some(window) {
+      if @provider.context_window_integer(limits.get("context")) is Some(window) {
         result[id] = window
       }
     }
@@ -159,7 +159,7 @@ fn ModelMetadata::restore(self : ModelMetadata, payload : Json) -> Unit raise {
     }
     let windows : Map[String, Int32] = Map::from_array([])
     for model_id, value in models {
-      guard context_window_integer(Some(value)) is Some(window) else {
+      guard @provider.context_window_integer(Some(value)) is Some(window) else {
         fail("models.dev cache window is invalid")
       }
       windows[model_id] = window

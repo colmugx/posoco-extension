@@ -3,6 +3,7 @@ package "posoco/ext-llm"
 
 import {
   "colmugx/posoco-kit-model-management",
+  "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -13,24 +14,11 @@ import {
 }
 
 // Values
-pub fn cached_provider_context_window(Json?, String, metadata_provider_id? : String) -> Int?
-
-pub fn context_window_integer(Json?) -> Int?
-
 pub fn transient_retry_port(inner~ : &@port.ModelPort, policy~ : TransientRetryPolicy) -> &@port.ModelPort
 
 // Errors
 
 // Types and methods
-pub(all) enum AuthMethod {
-  ApiKey
-  OAuth
-} derive(Eq, @debug.Debug)
-pub fn AuthMethod::equal(Self, Self) -> Bool
-pub fn AuthMethod::not_equal(Self, Self) -> Bool
-pub fn AuthMethod::to_id(Self) -> String
-pub fn AuthMethod::to_repr(Self) -> @debug.Repr
-
 pub(all) struct ContextWindowReading {
   tokens : Int
   source : String
@@ -47,60 +35,8 @@ pub fn ModelMetadata::ModelMetadata(transport? : &ModelMetadataTransport, store?
 pub fn ModelMetadata::lookup(Self, String, String, now? : Int64) -> ContextWindowReading
 pub async fn ModelMetadata::refresh(Self, Array[String], now? : Int64) -> Unit noraise
 
-pub(all) struct ModelSlot {
-  id : String
-  label : String
-  provider_id : String
-  model_id : String
-  port : &@port.ModelPort
-  oauth : &@ext-oauth.OAuthProvider?
-  api_key : &ApiKeyFactory?
-  thinking_efforts : Array[String]
-  context_window : Int?
-  context_window_source : String
-  metadata_provider_id : String?
-  capabilities : Array[String]
-  default_effort : String?
-  display_group : String?
-  rebuild_on_credential : ((@ext-oauth.Credential) -> ModelSlot)?
-  rebuild_on_api_key : ((@ext-oauth.ApiKeyCredential) -> ModelSlot)?
-  rebuild_on_effort : ((String) -> ModelSlot)?
-}
-pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int?, context_window_source? : String, metadata_provider_id? : String?, capabilities? : Array[String], default_effort? : String?, display_group? : String?, rebuild_on_credential? : ((@ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
-
-pub(all) enum ProviderBuildResult {
-  Ready(ProviderModelCatalog)
-  Unconfigured
-}
-
-pub(all) struct ProviderConfigSource {
-  settings : Json?
-  provider_credential : @ext-oauth.ProviderCredential?
-  credential : @ext-oauth.Credential?
-  api_key_credential : @ext-oauth.ApiKeyCredential?
-  cached_models : Json?
-  credential_store : &@ext-oauth.ProviderCredentialStore?
-}
-pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @ext-oauth.ProviderCredential?, credential? : @ext-oauth.Credential?, api_key_credential? : @ext-oauth.ApiKeyCredential?, cached_models? : Json?, credential_store? : &@ext-oauth.ProviderCredentialStore?) -> Self
-pub fn ProviderConfigSource::context_window_setting(Self, manifest_id~ : String) -> Int? raise @error.CompositionError
-pub fn ProviderConfigSource::effective_credential(Self, String) -> @ext-oauth.ProviderCredential? raise @error.CompositionError
-pub fn ProviderConfigSource::has_settings(Self) -> Bool
-pub fn ProviderConfigSource::setting(Self, String) -> Json? raise @error.CompositionError
-
-pub(all) struct ProviderModelCatalog {
-  provider_id : String
-  slots : Array[ModelSlot]
-  capabilities : Array[String]
-}
-pub fn ProviderModelCatalog::ProviderModelCatalog(provider_id~ : String, slots~ : Array[ModelSlot], capabilities? : Array[String]) -> Self raise @error.CompositionError
-pub fn ProviderModelCatalog::auth_methods(Self) -> Array[AuthMethod]
-pub fn ProviderModelCatalog::capabilities(Self) -> Array[String]
-pub fn ProviderModelCatalog::provider_id(Self) -> String
-pub fn ProviderModelCatalog::slots(Self) -> Array[ModelSlot]
-pub fn ProviderModelCatalog::with_cached_context_windows(Self, Json?) -> Self
-
 pub(all) struct RouterModelPort {
-  slots : Map[String, ModelSlot]
+  slots : Map[String, @posoco-kit-provider.ModelSlot]
   slot_order : Array[String]
   mut active_id : String
   mut active_effort : String?
@@ -117,24 +53,24 @@ pub(all) struct RouterModelPort {
   extra_quota_sources : Map[String, &@devkit.QuotaSource]
   // private fields
 }
-pub fn RouterModelPort::RouterModelPort(slots~ : Array[ModelSlot], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource]) -> Self raise @error.CompositionError
+pub fn RouterModelPort::RouterModelPort(slots~ : Array[@posoco-kit-provider.ModelSlot], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource]) -> Self raise @error.CompositionError
 pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_selection(Self) -> @posoco-kit-model-management.ManagerSelection
 pub fn RouterModelPort::active_slot_id(Self) -> String
 pub async fn RouterModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub fn RouterModelPort::commands(Self) -> Array[@port.CommandDef]
 pub async fn RouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
-pub fn RouterModelPort::context_window_reading(Self, ModelSlot) -> ContextWindowReading
+pub fn RouterModelPort::context_window_reading(Self, @posoco-kit-provider.ModelSlot) -> ContextWindowReading
 pub fn RouterModelPort::current_model_id(Self) -> String
 pub fn RouterModelPort::current_provider_id(Self) -> String
 pub fn RouterModelPort::extension_id(Self) -> String
-pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource], transient_retry? : TransientRetryPolicy?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::from_catalogs(Array[@posoco-kit-provider.ProviderModelCatalog], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource], transient_retry? : TransientRetryPolicy?) -> Self raise @error.CompositionError
 pub async fn RouterModelPort::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn RouterModelPort::list_auth_capabilities(Self) -> Json
 pub fn RouterModelPort::list_models(Self) -> Array[@posoco-kit-model-management.ManagerModelInfo]
 pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
-pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
+pub fn RouterModelPort::list_slots(Self) -> Array[@posoco-kit-provider.ModelSlot]
 pub fn RouterModelPort::manager_id(Self) -> String
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn RouterModelPort::on_bus_event(Self, @devkit.BusEvent) -> Unit
@@ -145,7 +81,7 @@ pub async fn RouterModelPort::on_shutdown(Self) -> Unit
 pub async fn RouterModelPort::on_start(Self) -> Unit
 pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub async fn RouterModelPort::refresh_model_metadata(Self) -> Unit noraise
-pub fn RouterModelPort::replace_provider_slots(Self, String, Array[ModelSlot]) -> Unit raise @error.CompositionError
+pub fn RouterModelPort::replace_provider_slots(Self, String, Array[@posoco-kit-provider.ModelSlot]) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError
 pub fn RouterModelPort::select_model(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
 pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
@@ -171,14 +107,25 @@ pub fn TransientRetryPolicy::default() -> Self
 pub fn TransientRetryPolicy::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub using @posoco-kit-provider {type AuthMethod}
+
+pub using @posoco-kit-provider {type ModelSlot}
+
+pub using @posoco-kit-provider {type ProviderBuildResult}
+
+pub using @posoco-kit-provider {type ProviderConfigSource}
+
+pub using @posoco-kit-provider {type ProviderModelCatalog}
+
+pub using @posoco-kit-provider {trait ApiKeyFactory}
+
+pub using @posoco-kit-provider {trait OAuthFactory}
+
+pub using @posoco-kit-provider {trait ProviderFactory}
+
+pub using @posoco-kit-provider {trait RefreshableProviderFactory}
 
 // Traits
-pub(open) trait ApiKeyFactory {
-  fn provider_id(Self) -> String
-  fn credential_id(Self) -> String
-  async fn login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
-}
-
 pub(open) trait ModelMetadataStore {
   async fn read(Self) -> Json?
   async fn write(Self, Json) -> Unit
@@ -186,21 +133,4 @@ pub(open) trait ModelMetadataStore {
 
 pub(open) trait ModelMetadataTransport {
   async fn fetch(Self) -> Json
-}
-
-pub(open) trait OAuthFactory {
-  fn provider_id(Self) -> String
-  fn credential_id(Self) -> String
-  async fn login(Self, &@ext-oauth.AuthInteraction) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
-}
-
-pub(open) trait ProviderFactory {
-  fn provider_id(Self) -> String
-  fn credential_id(Self) -> String
-  fn build(Self, ProviderConfigSource) -> ProviderBuildResult raise @error.CompositionError
-}
-
-pub(open) trait RefreshableProviderFactory {
-  fn provider_id(Self) -> String
-  async fn refresh(Self, ProviderConfigSource) -> ProviderBuildResult raise @error.CompositionError
 }

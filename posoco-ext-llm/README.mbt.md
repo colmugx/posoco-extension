@@ -150,6 +150,16 @@ Provider adapters and catalogs live in separate extensions, one per provider;
 each catalog advertises only the capabilities that provider supports (for
 example chat/streaming/reasoning only for a provider without FIM support).
 
+The provider construction contracts themselves (`ProviderFactory`,
+`RefreshableProviderFactory`, `OAuthFactory`, `ApiKeyFactory`,
+`ProviderConfigSource`, `ProviderBuildResult`, `ModelSlot`,
+`ProviderModelCatalog`, `AuthMethod`) are canonically owned by
+`colmugx/posoco-kit-provider`, so a peer Model Manager can consume
+provider-built catalogs without this extension. This package re-exports the
+canonical types under their historical `@llm` names with `pub using` —
+`@llm.ModelSlot` and the kit's `ModelSlot` are the same type — and remains
+the local Model Manager that turns provider catalogs into routing state.
+
 Providers with authenticated model discovery may additionally implement the
 optional async `RefreshableProviderFactory` seam. Hosts invoke it explicitly
 (for example at startup or immediately after login); normal catalog composition

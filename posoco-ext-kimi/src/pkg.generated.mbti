@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-kimi"
 
 import {
+  "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -9,7 +10,6 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
   "posoco/devkit",
-  "posoco/ext-llm",
   "posoco/ext-oauth",
 }
 
@@ -77,8 +77,8 @@ pub async fn KimiModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kerne
 pub async fn KimiModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn KimiModelPort::extension_id(Self) -> String
 pub fn KimiModelPort::manifest(Self) -> @port.ExtensionManifest
-pub fn KimiModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn KimiModelPort::model_catalog_from_models(Self, Array[KimiModelInfo]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn KimiModelPort::model_catalog(Self) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn KimiModelPort::model_catalog_from_models(Self, Array[KimiModelInfo]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 pub fn KimiModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.Extension for KimiModelPort
 pub impl @port.ModelPort for KimiModelPort
@@ -100,15 +100,15 @@ pub(all) struct KimiProvider {
   device_id : String
 }
 pub fn KimiProvider::KimiProvider(ctx? : @devkit.ExtContext, device_id? : String) -> Self
-pub fn KimiProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn KimiProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub fn KimiProvider::credential_id(Self) -> String
 pub async fn KimiProvider::login(Self, &@ext-oauth.AuthInteraction) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
 pub fn KimiProvider::provider_id(Self) -> String
-pub async fn KimiProvider::refresh(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
-pub impl @ext-llm.ApiKeyFactory for KimiProvider
-pub impl @ext-llm.OAuthFactory for KimiProvider
-pub impl @ext-llm.ProviderFactory for KimiProvider
-pub impl @ext-llm.RefreshableProviderFactory for KimiProvider
+pub async fn KimiProvider::refresh(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
+pub impl @posoco-kit-provider.ApiKeyFactory for KimiProvider
+pub impl @posoco-kit-provider.OAuthFactory for KimiProvider
+pub impl @posoco-kit-provider.ProviderFactory for KimiProvider
+pub impl @posoco-kit-provider.RefreshableProviderFactory for KimiProvider
 
 pub(all) struct KimiUsageSource {
   access_token : String
