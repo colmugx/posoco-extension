@@ -266,10 +266,28 @@ pub fn parse_replay_envelope(
               visible.push(@posoco.Content::Text(text))
             }
           DecodedBlock::ToolCall(call) => calls.push(call)
-          DecodedBlock::Replay(opaque) => replay.push(opaque)
+          DecodedBlock::Replay(raw_block) => replay.push(raw_block)
         }
       }
-      if visible != content || calls != tool_calls || replay != blocks {
+      let canonical_text = StringBuilder()
+      let replay_text = StringBuilder()
+      for item in content {
+        match item {
+          @posoco.Content::Text(value) => canonical_text.write_string(value)
+          @posoco.Content::Image(..) =>
+            raise @posoco.ModelError::ResponseParse(
+              "\{provider} replay validation failure (stage=full_blocks, category=unsupported_image)",
+            )
+        }
+      }
+      for item in visible {
+        match item {
+          @posoco.Content::Text(value) => replay_text.write_string(value)
+          @posoco.Content::Image(..) => ()
+        }
+      }
+      if replay_text.to_string() != canonical_text.to_string() ||
+        calls != tool_calls || replay != blocks {
         raise @posoco.ModelError::ResponseParse(
           "\{provider} replay validation failure (stage=full_blocks, category=stale)",
         )
