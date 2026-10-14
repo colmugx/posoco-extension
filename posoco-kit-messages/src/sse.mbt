@@ -43,7 +43,7 @@ pub struct SseDecoder {
 
 ///|
 pub fn SseDecoder::SseDecoder() -> SseDecoder {
-  { buf: StringBuilder(), data_lines: [], event_name: None }
+  { buf: StringBuilder(), data_lines: [], event_name: None, }
 }
 
 ///|
@@ -66,10 +66,7 @@ fn SseDecoder::complete_event(self : SseDecoder) -> SseEvent? {
     }
     joined.write_string(line)
   }
-  let event : SseEvent = {
-    name: self.event_name,
-    data: joined.to_string(),
-  }
+  let event : SseEvent = { name: self.event_name, data: joined.to_string(), }
   self.reset_event()
   Some(event)
 }
@@ -299,17 +296,19 @@ fn MessagesSseState::merge_usage(
       self.cache_creation_split = Some({
         ephemeral_5m_input_tokens: match part.ephemeral_5m_input_tokens {
           Some(n) => Some(n)
-          None => match prior {
-            Some(prev) => prev.ephemeral_5m_input_tokens
-            None => None
-          }
+          None =>
+            match prior {
+              Some(prev) => prev.ephemeral_5m_input_tokens
+              None => None
+            }
         },
         ephemeral_1h_input_tokens: match part.ephemeral_1h_input_tokens {
           Some(n) => Some(n)
-          None => match prior {
-            Some(prev) => prev.ephemeral_1h_input_tokens
-            None => None
-          }
+          None =>
+            match prior {
+              Some(prev) => prev.ephemeral_1h_input_tokens
+              None => None
+            }
         },
       })
     }
@@ -326,46 +325,43 @@ fn MessagesSseState::merge_usage(
     fields,
     key="cache_creation_input_tokens",
   )
-  let read = snapshot_counter(
-    provider~,
-    fields,
-    key="cache_read_input_tokens",
-  )
-  if input is None &&
-    output is None &&
-    creation is None &&
-    read is None {
+  let read = snapshot_counter(provider~, fields, key="cache_read_input_tokens")
+  if input is None && output is None && creation is None && read is None {
     return
   }
   let previous = self.usage
   self.usage = Some({
     input_tokens: match input {
       Some(n) => Some(n)
-      None => match previous {
-        Some(prev) => prev.input_tokens
-        None => None
-      }
+      None =>
+        match previous {
+          Some(prev) => prev.input_tokens
+          None => None
+        }
     },
     output_tokens: match output {
       Some(n) => Some(n)
-      None => match previous {
-        Some(prev) => prev.output_tokens
-        None => None
-      }
+      None =>
+        match previous {
+          Some(prev) => prev.output_tokens
+          None => None
+        }
     },
     cache_creation: match creation {
       Some(n) => Some(n)
-      None => match previous {
-        Some(prev) => prev.cache_creation
-        None => None
-      }
+      None =>
+        match previous {
+          Some(prev) => prev.cache_creation
+          None => None
+        }
     },
     cache_read: match read {
       Some(n) => Some(n)
-      None => match previous {
-        Some(prev) => prev.cache_read
-        None => None
-      }
+      None =>
+        match previous {
+          Some(prev) => prev.cache_read
+          None => None
+        }
     },
   })
 }
@@ -375,9 +371,7 @@ fn MessagesSseState::merge_usage(
 /// counters are both known. Partial readings are withheld (`None`) rather
 /// than zero-filled — the canonical completion keeps its canonical usage
 /// only when the projection is mathematically complete.
-fn MessagesSseState::native_usage(
-  self : MessagesSseState,
-) -> MessagesUsage? {
+fn MessagesSseState::native_usage(self : MessagesSseState) -> MessagesUsage? {
   match self.usage {
     Some(snapshot) =>
       match (snapshot.input_tokens, snapshot.output_tokens) {
@@ -406,11 +400,12 @@ fn MessagesSseState::emit_usage(
   match self.native_usage() {
     Some(native) => {
       let canonical = native.to_canonical()
-      match (
-        canonical.input_tokens,
-        canonical.output_tokens,
-        canonical.total_tokens,
-      ) {
+      match
+        (
+          canonical.input_tokens,
+          canonical.output_tokens,
+          canonical.total_tokens,
+        ) {
         (Some(input), Some(output), Some(total)) => {
           let chunk = @posoco.StreamChunk::Usage(
             input_tokens=input,
@@ -430,9 +425,13 @@ fn MessagesSseState::emit_usage(
 }
 
 ///|
-fn event_index(provider~ : String, fields : Map[String, Json]) -> Int32 raise @posoco.ModelError {
+fn event_index(
+  provider~ : String,
+  fields : Map[String, Json],
+) -> Int32 raise @posoco.ModelError {
   match fields.get("index") {
-    Some(Json::Number(n, ..)) if n >= 0.0 && n <= 2147483647.0 && n == n.floor() => n.to_int()
+    Some(Json::Number(n, ..)) if n >= 0.0 && n <= 2147483647.0 && n == n.floor() =>
+      n.to_int()
     Some(Json::Number(_)) | Some(_) | None =>
       raise @posoco.ModelError::ResponseParse(
         "\{provider} SSE parse failure (stage=index, category=invalid)",
@@ -605,7 +604,7 @@ pub fn process_messages_event(
           on_chunk(chunk)
           acc.push(chunk)
         }
-        "redacted_thinking" => {
+        "redacted_thinking" =>
           // Arrives complete; validated and captured verbatim into replay
           // state, never surfaced as text.
           match block.get("data") {
@@ -622,7 +621,6 @@ pub fn process_messages_event(
                 "\{provider} SSE parse failure (stage=replay.redacted, category=invalid)",
               )
           }
-        }
         // text / thinking: content arrives via deltas.
         _ => ()
       }
@@ -995,10 +993,7 @@ pub fn messages_stream_result(
         ),
       ),
     })
-    {
-      ..completion,
-      message: { ..message, reasoning, },
-    }
+    { ..completion, message: { ..message, reasoning, }, }
   }
   {
     completion,

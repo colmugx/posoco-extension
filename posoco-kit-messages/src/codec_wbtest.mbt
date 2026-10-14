@@ -13,7 +13,7 @@ fn jget(v : Json, key~ : String) -> Json {
 }
 
 ///|
-fn jat(v : Json, index~ : Int) -> Json {
+fn jat(v : Json, index~ : Int32) -> Json {
   guard v.item(index) is Some(out) else {
     abort("test fixture: missing index \{index}")
   }
@@ -21,7 +21,7 @@ fn jat(v : Json, index~ : Int) -> Json {
 }
 
 ///|
-fn jlen(v : Json) -> Int {
+fn jlen(v : Json) -> Int32 {
   v.as_array().unwrap_or([]).length()
 }
 
@@ -46,37 +46,25 @@ test "text-only single-turn request and response" {
       @posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")]),
     ),
   )
-  assert_eq(
-    body,
-    {
-      "model": "test-model",
-      "max_tokens": 1024,
-      "messages": [
-        { "role": "user", "content": [{ "type": "text", "text": "hi" }] },
-      ],
-    },
-  )
-  let result = parse_response(
-    provider="test",
-    {
-      "id": "msg_01",
-      "type": "message",
-      "role": "assistant",
-      "model": "test-model",
-      "content": [{ "type": "text", "text": "hello" }],
-      "stop_reason": "end_turn",
-      "stop_sequence": None,
-      "usage": { "input_tokens": 10, "output_tokens": 5 },
-    },
-  )
-  assert_eq(
-    result.completion.message.content,
-    [@posoco.Content::Text("hello")],
-  )
-  assert_eq(
-    result.completion.message.finish_reason,
-    @posoco.FinishReason::Stop,
-  )
+  assert_eq(body, {
+    "model": "test-model",
+    "max_tokens": 1024,
+    "messages": [
+      { "role": "user", "content": [{ "type": "text", "text": "hi" }] },
+    ],
+  })
+  let result = parse_response(provider="test", {
+    "id": "msg_01",
+    "type": "message",
+    "role": "assistant",
+    "model": "test-model",
+    "content": [{ "type": "text", "text": "hello" }],
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 10, "output_tokens": 5 },
+  })
+  assert_eq(result.completion.message.content, [@posoco.Content::Text("hello")])
+  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
   assert_eq(result.stop_reason, "end_turn")
   assert_eq(result.response_id, "msg_01")
   assert_eq(result.model, "test-model")
@@ -117,26 +105,23 @@ test "multi-turn conversation with top-level system and tools" {
     messages=wire,
     tools=[tool_to_wire(tool=codec_tool(name="read"))],
   )
-  assert_eq(
-    body,
-    {
-      "model": "m",
-      "max_tokens": 100,
-      "system": [{ "type": "text", "text": "be terse" }],
-      "messages": [
-        { "role": "user", "content": [{ "type": "text", "text": "q1" }] },
-        { "role": "assistant", "content": [{ "type": "text", "text": "a1" }] },
-        { "role": "user", "content": [{ "type": "text", "text": "q2" }] },
-      ],
-      "tools": [
-        {
-          "name": "read",
-          "description": "test tool read",
-          "input_schema": { "type": "object" },
-        },
-      ],
-    },
-  )
+  assert_eq(body, {
+    "model": "m",
+    "max_tokens": 100,
+    "system": [{ "type": "text", "text": "be terse" }],
+    "messages": [
+      { "role": "user", "content": [{ "type": "text", "text": "q1" }] },
+      { "role": "assistant", "content": [{ "type": "text", "text": "a1" }] },
+      { "role": "user", "content": [{ "type": "text", "text": "q2" }] },
+    ],
+    "tools": [
+      {
+        "name": "read",
+        "description": "test tool read",
+        "input_schema": { "type": "object" },
+      },
+    ],
+  })
 }
 
 ///|
@@ -151,7 +136,7 @@ test "multiple tool definitions and tool_choice" {
     messages=message_to_wire(
       @posoco.Message::UserMessage(content=[@posoco.Content::Text("go")]),
     ),
-    tools=tools,
+    tools~,
     options=MessagesRequestOptions::MessagesRequestOptions(
       tool_choice=Some(MessagesToolChoice::Tool(name="a")),
       stop_sequences=["END", "STOP"],
@@ -186,19 +171,17 @@ test "assistant tool_use followed by correlated tool_result with is_error" {
   // The tool result rides a user message with the original id; no `tool`
   // role is ever fabricated.
   assert_eq(jget(wire_tool[0], key="role"), "user")
-  assert_eq(
-    jat(jget(wire_assistant[0], key="content"), index=0),
-    {
-      "type": "tool_use",
-      "id": "toolu_01",
-      "name": "weather",
-      "input": { "city": "Paris" },
-    },
-  )
-  assert_eq(
-    jat(jget(wire_tool[0], key="content"), index=0),
-    { "type": "tool_result", "tool_use_id": "toolu_01", "content": "22C" },
-  )
+  assert_eq(jat(jget(wire_assistant[0], key="content"), index=0), {
+    "type": "tool_use",
+    "id": "toolu_01",
+    "name": "weather",
+    "input": { "city": "Paris" },
+  })
+  assert_eq(jat(jget(wire_tool[0], key="content"), index=0), {
+    "type": "tool_result",
+    "tool_use_id": "toolu_01",
+    "content": "22C",
+  })
   let tool_err = @posoco.Message::ToolMessage(
     call_id=@posoco.CallId::unchecked("toolu_01"),
     tool_name=@posoco.ToolName::unchecked("weather"),
@@ -207,18 +190,12 @@ test "assistant tool_use followed by correlated tool_result with is_error" {
       structured=None,
     ),
   )
-  assert_eq(
-    jat(
-      jget(message_to_wire(tool_err)[0], key="content"),
-      index=0,
-    ),
-    {
-      "type": "tool_result",
-      "tool_use_id": "toolu_01",
-      "content": "city not found",
-      "is_error": true,
-    },
-  )
+  assert_eq(jat(jget(message_to_wire(tool_err)[0], key="content"), index=0), {
+    "type": "tool_result",
+    "tool_use_id": "toolu_01",
+    "content": "city not found",
+    "is_error": true,
+  })
   let runtime_fail = @posoco.Message::ToolMessage(
     call_id=@posoco.CallId::unchecked("toolu_01"),
     tool_name=@posoco.ToolName::unchecked("weather"),
@@ -229,10 +206,7 @@ test "assistant tool_use followed by correlated tool_result with is_error" {
   )
   assert_eq(
     jget(
-      jat(
-        jget(message_to_wire(runtime_fail)[0], key="content"),
-        index=0,
-      ),
+      jat(jget(message_to_wire(runtime_fail)[0], key="content"), index=0),
       key="is_error",
     ),
     true,
@@ -273,17 +247,14 @@ test "image input, url images, and tool-result attachments" {
     @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
   ])
   let content = jget(message_to_wire(user)[0], key="content")
-  assert_eq(
-    jat(content, index=1),
-    {
-      "type": "image",
-      "source": {
-        "type": "base64",
-        "media_type": "image/png",
-        "data": "aGVsbG8=",
-      },
+  assert_eq(jat(content, index=1), {
+    "type": "image",
+    "source": {
+      "type": "base64",
+      "media_type": "image/png",
+      "data": "aGVsbG8=",
     },
-  )
+  })
   let by_url = @posoco.Message::UserMessage(content=[
     @posoco.Content::Image(
       media_type="image/jpeg",
@@ -292,10 +263,7 @@ test "image input, url images, and tool-result attachments" {
   ])
   assert_eq(
     jget(
-      jat(
-        jget(message_to_wire(by_url)[0], key="content"),
-        index=0,
-      ),
+      jat(jget(message_to_wire(by_url)[0], key="content"), index=0),
       key="source",
     ),
     { "type": "url", "url": "https://example.invalid/pic.jpg" },
@@ -306,16 +274,11 @@ test "image input, url images, and tool-result attachments" {
     outcome=@posoco.ToolOutcome::SuccessWithAttachments(
       content="captured",
       structured=None,
-      attachments=[
-        @posoco.Content::Image(media_type="image/png", data="aGk="),
-      ],
+      attachments=[@posoco.Content::Image(media_type="image/png", data="aGk=")],
     ),
   )
   let blocks = jget(
-    jat(
-      jget(message_to_wire(attachment_turn)[0], key="content"),
-      index=0,
-    ),
+    jat(jget(message_to_wire(attachment_turn)[0], key="content"), index=0),
     key="content",
   )
   assert_eq(jlen(blocks), 2)
@@ -338,36 +301,32 @@ test "image input, url images, and tool-result attachments" {
 
 ///|
 test "non-streaming mixed thinking, text, and tool blocks in original order" {
-  let result = parse_response(
-    provider="test",
-    {
-      "id": "msg_02",
-      "type": "message",
-      "role": "assistant",
-      "model": "m",
-      "content": [
-        {
-          "type": "thinking",
-          "thinking": "I should check the weather.",
-          "signature": "sig-abc",
-        },
-        { "type": "text", "text": "Let me check." },
-        {
-          "type": "tool_use",
-          "id": "toolu_9",
-          "name": "weather",
-          "input": { "city": "Oslo" },
-        },
-      ],
-      "stop_reason": "tool_use",
-      "stop_sequence": None,
-      "usage": { "input_tokens": 20, "output_tokens": 30 },
-    },
-  )
-  assert_eq(
-    result.completion.message.content,
-    [@posoco.Content::Text("Let me check.")],
-  )
+  let result = parse_response(provider="test", {
+    "id": "msg_02",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": "I should check the weather.",
+        "signature": "sig-abc",
+      },
+      { "type": "text", "text": "Let me check." },
+      {
+        "type": "tool_use",
+        "id": "toolu_9",
+        "name": "weather",
+        "input": { "city": "Oslo" },
+      },
+    ],
+    "stop_reason": "tool_use",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 20, "output_tokens": 30 },
+  })
+  assert_eq(result.completion.message.content, [
+    @posoco.Content::Text("Let me check."),
+  ])
   assert_eq(result.completion.message.tool_calls.length(), 1)
   assert_eq(
     result.completion.message.tool_calls[0].call_id.to_string(),
@@ -386,10 +345,7 @@ test "non-streaming mixed thinking, text, and tool blocks in original order" {
     reasoning=result.completion.message.reasoning,
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
-  let replayed = jget(
-    message_to_wire(assistant)[0],
-    key="content",
-  )
+  let replayed = jget(message_to_wire(assistant)[0], key="content")
   assert_eq(jget(jat(replayed, index=0), key="type"), "thinking")
   assert_eq(jget(jat(replayed, index=0), key="signature"), "sig-abc")
   assert_eq(jget(jat(replayed, index=1), key="type"), "text")
@@ -399,18 +355,9 @@ test "non-streaming mixed thinking, text, and tool blocks in original order" {
 ///|
 test "stop reason mapping preserves unknown values" {
   assert_eq(map_stop_reason(reason="end_turn"), @posoco.FinishReason::Stop)
-  assert_eq(
-    map_stop_reason(reason="stop_sequence"),
-    @posoco.FinishReason::Stop,
-  )
-  assert_eq(
-    map_stop_reason(reason="tool_use"),
-    @posoco.FinishReason::ToolCalls,
-  )
-  assert_eq(
-    map_stop_reason(reason="max_tokens"),
-    @posoco.FinishReason::Length,
-  )
+  assert_eq(map_stop_reason(reason="stop_sequence"), @posoco.FinishReason::Stop)
+  assert_eq(map_stop_reason(reason="tool_use"), @posoco.FinishReason::ToolCalls)
+  assert_eq(map_stop_reason(reason="max_tokens"), @posoco.FinishReason::Length)
   assert_eq(
     map_stop_reason(reason="pause_turn"),
     @posoco.FinishReason::Other("pause_turn"),
@@ -421,26 +368,23 @@ test "stop reason mapping preserves unknown values" {
   )
   // Length-truncated tool_use does NOT become ToolCalls: the reducer must
   // not execute partial calls.
-  let result = parse_response(
-    provider="test",
-    {
-      "id": "msg_03",
-      "type": "message",
-      "role": "assistant",
-      "model": "m",
-      "content": [
-        {
-          "type": "tool_use",
-          "id": "toolu_trunc",
-          "name": "f",
-          "input": { "partial": true },
-        },
-      ],
-      "stop_reason": "max_tokens",
-      "stop_sequence": None,
-      "usage": { "input_tokens": 1, "output_tokens": 1 },
-    },
-  )
+  let result = parse_response(provider="test", {
+    "id": "msg_03",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_trunc",
+        "name": "f",
+        "input": { "partial": true },
+      },
+    ],
+    "stop_reason": "max_tokens",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 1, "output_tokens": 1 },
+  })
   assert_eq(
     result.completion.message.finish_reason,
     @posoco.FinishReason::Length,
@@ -449,15 +393,12 @@ test "stop reason mapping preserves unknown values" {
 
 ///|
 test "prompt caching usage converts explicitly" {
-  let usage = parse_messages_usage(
-    provider="test",
-    {
-      "input_tokens": 100,
-      "output_tokens": 50,
-      "cache_creation_input_tokens": 200,
-      "cache_read_input_tokens": 1000,
-    },
-  )
+  let usage = parse_messages_usage(provider="test", {
+    "input_tokens": 100,
+    "output_tokens": 50,
+    "cache_creation_input_tokens": 200,
+    "cache_read_input_tokens": 1000,
+  })
   assert_eq(usage.prompt_total(), 1300)
   let canonical = usage.to_canonical()
   assert_eq(canonical.input_tokens, Some(1300))
@@ -468,31 +409,28 @@ test "prompt caching usage converts explicitly" {
   // Miss portion = wire input + cache creation (never read).
   assert_eq(canonical.uncached_input_tokens, Some(300))
   // Without cache dimensions nothing is invented.
-  let plain = parse_messages_usage(
-    provider="test",
-    { "input_tokens": 7, "output_tokens": 3 },
-  ).to_canonical()
+  let plain = parse_messages_usage(provider="test", {
+    "input_tokens": 7,
+    "output_tokens": 3,
+  }).to_canonical()
   assert_eq(plain.input_tokens, Some(7))
   assert_eq(plain.cached_input_tokens, None)
   assert_eq(plain.uncached_input_tokens, None)
   assert_eq(plain.total_tokens, Some(10))
   // Explicit nulls mean "not reported", same as absent.
-  let nulled = parse_messages_usage(
-    provider="test",
-    {
-      "input_tokens": 7,
-      "output_tokens": 3,
-      "cache_creation_input_tokens": None,
-      "cache_read_input_tokens": None,
-    },
-  ).to_canonical()
+  let nulled = parse_messages_usage(provider="test", {
+    "input_tokens": 7,
+    "output_tokens": 3,
+    "cache_creation_input_tokens": None,
+    "cache_read_input_tokens": None,
+  }).to_canonical()
   assert_eq(nulled.cached_input_tokens, None)
   // Malformed counters are rejected, never zero-filled.
   let bad = Ok(
-    parse_messages_usage(
-      provider="test",
-      { "input_tokens": -1, "output_tokens": 1 },
-    ),
+    parse_messages_usage(provider="test", {
+      "input_tokens": -1,
+      "output_tokens": 1,
+    }),
   ) catch {
     error => Err(error)
   }
@@ -501,10 +439,9 @@ test "prompt caching usage converts explicitly" {
       assert_true(message.contains("out_of_range"))
     _ => fail("expected negative usage rejection")
   }
-  let partial = Ok(parse_messages_usage(
-    provider="test",
-    { "output_tokens": 1 },
-  )) catch {
+  let partial = Ok(
+    parse_messages_usage(provider="test", { "output_tokens": 1 }),
+  ) catch {
     error => Err(error)
   }
   match partial {
@@ -594,19 +531,18 @@ test "encode validation failures are typed and local" {
           messages=message_to_wire(
             @posoco.Message::UserMessage(content=[@posoco.Content::Text("q")]),
           ),
-          options=MessagesRequestOptions::MessagesRequestOptions(
-            stop_sequences=["1", "2", "3", "4", "5"],
-          ),
+          options=MessagesRequestOptions::MessagesRequestOptions(stop_sequences=[
+            "1", "2", "3", "4", "5",
+          ]),
         ),
       )
     },
     // cache_control ttl is validated locally.
     fn() {
       ignore(
-        attach_cache_control(
-          { "type": "text", "text": "x" },
-          cache_control={ ttl: Some("9h") },
-        ),
+        attach_cache_control({ "type": "text", "text": "x" }, cache_control={
+          ttl: Some("9h"),
+        }),
       )
     },
   ]
@@ -621,52 +557,46 @@ test "encode validation failures are typed and local" {
   // Positive placements still work: system tail, tool definition.
   let cached_system = system_to_wire(
     content=[@posoco.Content::Text("s")],
-    cache_control=Some({ ttl: Some("1h") }),
+    cache_control=Some({ ttl: Some("1h"), }),
   )
-  assert_eq(
-    jget(jat(cached_system, index=0), key="cache_control"),
-    { "type": "ephemeral", "ttl": "1h" },
-  )
+  assert_eq(jget(jat(cached_system, index=0), key="cache_control"), {
+    "type": "ephemeral",
+    "ttl": "1h",
+  })
   let cached_tool = tool_to_wire(
     tool=codec_tool(name="t"),
-    cache_control=Some({ ttl: None }),
+    cache_control=Some({ ttl: None, }),
   )
   assert_eq(jget(cached_tool, key="cache_control"), { "type": "ephemeral" })
 }
 
 ///|
 test "opaque top-level response fields pass through, malformed shapes reject" {
-  let result = parse_response(
-    provider="test",
-    {
-      "id": "msg_x",
-      "type": "message",
-      "role": "assistant",
-      "model": "m",
-      "content": [],
-      "stop_reason": "end_turn",
-      "stop_sequence": None,
-      "usage": { "input_tokens": 1, "output_tokens": 1 },
-      "container": { "seed": 1 },
-      "context_management": "future",
-    },
-  )
+  let result = parse_response(provider="test", {
+    "id": "msg_x",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [],
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 1, "output_tokens": 1 },
+    "container": { "seed": 1 },
+    "context_management": "future",
+  })
   assert_eq(result.extensions.length(), 2)
   // Malformed content blocks are typed errors with bounded detail.
   let bad = Ok(
-    parse_response(
-      provider="test",
-      {
-        "id": "msg_y",
-        "type": "message",
-        "role": "assistant",
-        "model": "m",
-        "content": [{ "type": "tool_use", "id": "", "name": "f", "input": {} }],
-        "stop_reason": "end_turn",
-        "stop_sequence": None,
-        "usage": { "input_tokens": 1, "output_tokens": 1 },
-      },
-    ),
+    parse_response(provider="test", {
+      "id": "msg_y",
+      "type": "message",
+      "role": "assistant",
+      "model": "m",
+      "content": [{ "type": "tool_use", "id": "", "name": "f", "input": {} }],
+      "stop_reason": "end_turn",
+      "stop_sequence": None,
+      "usage": { "input_tokens": 1, "output_tokens": 1 },
+    }),
   ) catch {
     error => Err(error)
   }
@@ -677,21 +607,26 @@ test "opaque top-level response fields pass through, malformed shapes reject" {
   }
 }
 
-
 ///|
 /// An opaque extra field must never shadow request fields validated by the kit.
 test "extra_top_level cannot override model or messages" {
-  let result = Ok(encode_request(
-    model="test",
-    max_tokens=128,
-    messages=[Json::object({
-      "role": Json::string("user"),
-      "content": Json::string("hi"),
-    })],
-    options=MessagesRequestOptions::MessagesRequestOptions(
-      extra_top_level=[("model", Json::string("injected"))],
+  let result = Ok(
+    encode_request(
+      model="test",
+      max_tokens=128,
+      messages=[
+        Json::object({
+          "role": Json::string("user"),
+          "content": Json::string("hi"),
+        }),
+      ],
+      options=MessagesRequestOptions::MessagesRequestOptions(extra_top_level=[
+        ("model", Json::string("injected")),
+      ]),
     ),
-  )) catch { error => Err(error) }
+  ) catch {
+    error => Err(error)
+  }
   match result {
     Err(@posoco.ModelError::RequestBuild(_)) => ()
     _ => fail("expected reserved field rejection")
@@ -716,21 +651,23 @@ test "request encoder refuses foreign reasoning state" {
   }
 }
 
-
 ///|
 test "manual thinking budget must fit max_tokens and adaptive is a wire variant" {
-  let messages : Array[Json] = [{
-    "role": "user",
-    "content": [{ "type": "text", "text": "Hi" }],
-  }]
-  let bad = Ok(encode_request(
-    model="m",
-    max_tokens=1024,
-    messages~,
-    options=MessagesRequestOptions::MessagesRequestOptions(
-      thinking=Some(ThinkingConfig::Enabled(budget_tokens=1024)),
+  let messages : Array[Json] = [
+    { "role": "user", "content": [{ "type": "text", "text": "Hi" }] },
+  ]
+  let bad = Ok(
+    encode_request(
+      model="m",
+      max_tokens=1024,
+      messages~,
+      options=MessagesRequestOptions::MessagesRequestOptions(
+        thinking=Some(ThinkingConfig::Enabled(budget_tokens=1024)),
+      ),
     ),
-  )) catch { error => Err(error) }
+  ) catch {
+    error => Err(error)
+  }
   match bad {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("thinking_budget"))
@@ -755,7 +692,9 @@ test "messages usage rejects 32-bit arithmetic overflow" {
     cache_creation_input_tokens: Some(1),
     cache_read_input_tokens: None,
   }
-  let bad_input = Ok(input_overflow.prompt_total()) catch { error => Err(error) }
+  let bad_input = Ok(input_overflow.prompt_total()) catch {
+    error => Err(error)
+  }
   match bad_input {
     Err(@posoco.ModelError::ResponseParse(message)) =>
       assert_true(message.contains("overflow"))
@@ -767,7 +706,9 @@ test "messages usage rejects 32-bit arithmetic overflow" {
     cache_creation_input_tokens: None,
     cache_read_input_tokens: None,
   }
-  let bad_total = Ok(total_overflow.to_canonical()) catch { error => Err(error) }
+  let bad_total = Ok(total_overflow.to_canonical()) catch {
+    error => Err(error)
+  }
   match bad_total {
     Err(@posoco.ModelError::ResponseParse(message)) =>
       assert_true(message.contains("overflow"))

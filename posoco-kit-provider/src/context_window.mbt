@@ -11,7 +11,6 @@ fn positive_window(value : Int32?) -> Int32? {
   }
 }
 
-
 ///|
 pub fn context_window_integer(value : Json?) -> Int32? {
   match value {
@@ -26,7 +25,6 @@ pub fn context_window_integer(value : Json?) -> Int32? {
     _ => None
   }
 }
-
 
 ///|
 /// Only discovery facts can be restored as provider metadata. Derived windows
@@ -57,7 +55,6 @@ pub fn cached_provider_context_window(
   None
 }
 
-
 ///|
 fn restore_slot_window(slot : ModelSlot, records : Json?) -> ModelSlot {
   if positive_window(slot.context_window) is Some(_) ||
@@ -87,7 +84,6 @@ fn restore_slot_window(slot : ModelSlot, records : Json?) -> ModelSlot {
     }),
   }
 }
-
 
 ///|
 pub fn ProviderModelCatalog::with_cached_context_windows(

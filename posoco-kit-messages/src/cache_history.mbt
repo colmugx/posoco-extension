@@ -14,11 +14,11 @@
 /// belong to the provider).
 pub fn mark_messages_stable_history_checkpoints(
   body : Json,
-  stable_messages~ : Int,
+  stable_messages~ : Int32,
   ttl~ : String = "5m",
   reserve_automatic_slot~ : Bool = true,
 ) -> Json raise @posoco.ModelError {
-  let cc : CacheControl = { ttl: Some(ttl) }
+  let cc : CacheControl = { ttl: Some(ttl), }
   ignore(cc.to_wire())
   guard body is Json::Object(root) else {
     raise @posoco.ModelError::RequestBuild(
@@ -41,10 +41,10 @@ pub fn mark_messages_stable_history_checkpoints(
     return body
   }
   // (message index, block index, native position) for eligible USER blocks.
-  let choices : Array[(Int, Int, Int)] = []
+  let choices : Array[(Int32, Int32, Int32)] = []
   let mut position = 0
   let mut last_mark_position = 0
-  let mut last_candidate : (Int, Int, Int)? = None
+  let mut last_candidate : (Int32, Int32, Int32)? = None
   for message_idx in 0..<stable_messages {
     guard messages[message_idx] is Json::Object(message) else {
       raise @posoco.ModelError::RequestBuild(
@@ -64,7 +64,8 @@ pub fn mark_messages_stable_history_checkpoints(
               }
             _ => ""
           }
-          if !((kind == "tool_use" || kind == "tool_result") && kind == prior_kind) {
+          if !((kind == "tool_use" || kind == "tool_result") &&
+            kind == prior_kind) {
             position += 1
           }
           prior_kind = kind

@@ -43,21 +43,26 @@ fn optional_cache_counter(
 }
 
 ///|
-pub fn parse_messages_cache_creation(usage : Json) -> MessagesCacheCreation raise @posoco.ModelError {
+pub fn parse_messages_cache_creation(
+  usage : Json,
+) -> MessagesCacheCreation raise @posoco.ModelError {
   guard usage is Json::Object(fields) else {
     raise @posoco.ModelError::ResponseParse(
       "messages usage must be an object (stage=usage, category=shape)",
     )
   }
   match fields.get("cache_creation") {
-    Some(Json::Object(data)) => {
-      ephemeral_5m_input_tokens: optional_cache_counter(data, "ephemeral_5m_input_tokens"),
-      ephemeral_1h_input_tokens: optional_cache_counter(data, "ephemeral_1h_input_tokens"),
-    }
-    None | Some(Json::Null) => {
-      ephemeral_5m_input_tokens: None,
-      ephemeral_1h_input_tokens: None,
-    }
+    Some(Json::Object(data)) =>
+      {
+        ephemeral_5m_input_tokens: optional_cache_counter(
+          data, "ephemeral_5m_input_tokens",
+        ),
+        ephemeral_1h_input_tokens: optional_cache_counter(
+          data, "ephemeral_1h_input_tokens",
+        ),
+      }
+    None | Some(Json::Null) =>
+      { ephemeral_5m_input_tokens: None, ephemeral_1h_input_tokens: None, }
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "messages cache_creation must be an object (stage=usage.cache_creation, category=shape)",
@@ -94,44 +99,70 @@ pub fn analyze_messages_cache_economics(
     Some(n) if total > 0 => Some(n.to_double() / total.to_double())
     _ => None
   }
-  let valid_rates =
-    rates.ordinary_input >= 0.0 && rates.cache_read >= 0.0 &&
-    rates.cache_write_5m >= 0.0 && rates.cache_write_1h >= 0.0 &&
-    rates.ordinary_input < 1.0e100 && rates.cache_read < 1.0e100 &&
-    rates.cache_write_5m < 1.0e100 && rates.cache_write_1h < 1.0e100
+  let valid_rates = rates.ordinary_input >= 0.0 &&
+    rates.cache_read >= 0.0 &&
+    rates.cache_write_5m >= 0.0 &&
+    rates.cache_write_1h >= 0.0 &&
+    rates.ordinary_input < 1.0e100 &&
+    rates.cache_read < 1.0e100 &&
+    rates.cache_write_5m < 1.0e100 &&
+    rates.cache_write_1h < 1.0e100
   if !valid_rates {
     raise @posoco.ModelError::RequestBuild(
       "messages cache economics needs nonnegative finite rates (stage=economics, category=rates)",
     )
   }
-  let split_valid = match (creation.ephemeral_5m_input_tokens, creation.ephemeral_1h_input_tokens, cache_write) {
-    (Some(a), Some(b), Some(n)) => {
-      if a <= 2147483647 - b { a + b == n } else { false }
-    }
+  let split_valid = match
+    (
+      creation.ephemeral_5m_input_tokens,
+      creation.ephemeral_1h_input_tokens,
+      cache_write,
+    ) {
+    (Some(a), Some(b), Some(n)) =>
+      if a <= 2147483647 - b {
+        a + b == n
+      } else {
+        false
+      }
     (Some(a), None, Some(n)) => a == n
     (None, Some(b), Some(n)) => b == n
     (None, None, Some(n)) => n == 0
-    (_, _, None) => creation.ephemeral_5m_input_tokens is None && creation.ephemeral_1h_input_tokens is None
+    (_, _, None) =>
+      creation.ephemeral_5m_input_tokens is None &&
+      creation.ephemeral_1h_input_tokens is None
   }
-  if !split_valid && (creation.ephemeral_5m_input_tokens is Some(_) || creation.ephemeral_1h_input_tokens is Some(_)) {
+  if !split_valid &&
+    (
+      creation.ephemeral_5m_input_tokens is Some(_) ||
+      creation.ephemeral_1h_input_tokens is Some(_)
+    ) {
     raise @posoco.ModelError::ResponseParse(
       "messages cache TTL write counters disagree (stage=economics, category=cache_creation)",
     )
   }
   let costs_known = match (read, cache_write) {
     (Some(_), Some(0)) => true
-    (Some(_), Some(_)) => split_valid && (
-      creation.ephemeral_5m_input_tokens is Some(_) ||
-      creation.ephemeral_1h_input_tokens is Some(_)
-    )
+    (Some(_), Some(_)) =>
+      split_valid &&
+      (
+        creation.ephemeral_5m_input_tokens is Some(_) ||
+        creation.ephemeral_1h_input_tokens is Some(_)
+      )
     _ => false
   }
   let baseline = total.to_double() * rates.ordinary_input
   let actual = if costs_known {
     let reads = read.unwrap_or(0).to_double() * rates.cache_read
-    let five = creation.ephemeral_5m_input_tokens.unwrap_or(0).to_double() * rates.cache_write_5m
-    let hour = creation.ephemeral_1h_input_tokens.unwrap_or(0).to_double() * rates.cache_write_1h
-    Some(usage.input_tokens.to_double() * rates.ordinary_input + reads + five + hour)
+    let five = creation.ephemeral_5m_input_tokens.unwrap_or(0).to_double() *
+      rates.cache_write_5m
+    let hour = creation.ephemeral_1h_input_tokens.unwrap_or(0).to_double() *
+      rates.cache_write_1h
+    Some(
+      usage.input_tokens.to_double() * rates.ordinary_input +
+      reads +
+      five +
+      hour,
+    )
   } else {
     None
   }
@@ -149,7 +180,6 @@ pub fn analyze_messages_cache_economics(
   }
 }
 
-
 ///|
 /// Convenience over the native MessagesResult produced by either the
 /// non-streaming decoder or the SSE state machine. Missing usage is an
@@ -161,14 +191,16 @@ pub fn MessagesResult::cache_economics(
 ) -> MessagesCacheEconomics? raise @posoco.ModelError {
   match result.usage {
     Some(native) =>
-      Some(analyze_messages_cache_economics(
-        native,
-        result.cache_creation.unwrap_or({
-          ephemeral_5m_input_tokens: None,
-          ephemeral_1h_input_tokens: None,
-        }),
-        rates,
-      ))
+      Some(
+        analyze_messages_cache_economics(
+          native,
+          result.cache_creation.unwrap_or({
+            ephemeral_5m_input_tokens: None,
+            ephemeral_1h_input_tokens: None,
+          }),
+          rates,
+        ),
+      )
     None => None
   }
 }

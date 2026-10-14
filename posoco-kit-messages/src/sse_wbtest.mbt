@@ -36,13 +36,13 @@ fn feed_sse(
   let mut done = false
   for event in decoder.push(text) {
     if process_messages_event(
-      provider="test",
-      event_name=event.name,
-      data=event.data,
-      acc~,
-      on_chunk={ chunk => chunks.push(chunk) },
-      state~,
-    ) {
+        provider="test",
+        event_name=event.name,
+        data=event.data,
+        acc~,
+        on_chunk=chunk => chunks.push(chunk),
+        state~,
+      ) {
       done = true
     }
   }
@@ -52,22 +52,19 @@ fn feed_sse(
 
 ///|
 fn message_start(id~ : String, input~ : Int32) -> String {
-  ev(
-    name="message_start",
-    data={
-      "type": "message_start",
-      "message": {
-        "id": id,
-        "type": "message",
-        "role": "assistant",
-        "model": "m",
-        "content": [],
-        "stop_reason": None,
-        "stop_sequence": None,
-        "usage": { "input_tokens": input, "output_tokens": 1 },
-      },
+  ev(name="message_start", data={
+    "type": "message_start",
+    "message": {
+      "id": id,
+      "type": "message",
+      "role": "assistant",
+      "model": "m",
+      "content": [],
+      "stop_reason": None,
+      "stop_sequence": None,
+      "usage": { "input_tokens": input, "output_tokens": 1 },
     },
-  )
+  })
 }
 
 ///|
@@ -123,14 +120,10 @@ test "streaming text splits across many events into a correct completion" {
   }
   assert_eq(usage_chunks, 1)
   let result = messages_stream_result(provider="test", acc~, state~)
-  assert_eq(
-    result.completion.message.content,
-    [@posoco.Content::Text("Hello world")],
-  )
-  assert_eq(
-    result.completion.message.finish_reason,
-    @posoco.FinishReason::Stop,
-  )
+  assert_eq(result.completion.message.content, [
+    @posoco.Content::Text("Hello world"),
+  ])
+  assert_eq(result.completion.message.finish_reason, @posoco.FinishReason::Stop)
   assert_eq(result.response_id, "msg_s1")
   let usage = result.usage.unwrap_or({
     input_tokens: 0,
@@ -478,7 +471,7 @@ test "malformed json and invalid indices are rejected with bounded detail" {
       provider="test",
       data="{not json",
       acc=@posoco.StreamAccumulator::StreamAccumulator(),
-      on_chunk={ _ => () },
+      on_chunk=_ => (),
     ),
   ) catch {
     error => Err(error)
@@ -494,13 +487,14 @@ test "malformed json and invalid indices are rejected with bounded detail" {
   let bad_index = Ok(
     process_messages_event(
       provider="test",
-      data=({
-        "type": "content_block_start",
-        "index": -1,
-        "content_block": { "type": "text", "text": "" },
-      } : Json).stringify(),
+      data=(
+        {
+          "type": "content_block_start",
+          "index": -1,
+          "content_block": { "type": "text", "text": "" },
+        } : Json).stringify(),
       acc=@posoco.StreamAccumulator::StreamAccumulator(),
-      on_chunk={ _ => () },
+      on_chunk=_ => (),
     ),
   ) catch {
     error => Err(error)
@@ -520,13 +514,14 @@ test "malformed block lifecycles are rejected" {
   let early = Ok(
     process_messages_event(
       provider="test",
-      data=({
-        "type": "content_block_start",
-        "index": 0,
-        "content_block": { "type": "text", "text": "" },
-      } : Json).stringify(),
+      data=(
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": { "type": "text", "text": "" },
+        } : Json).stringify(),
       acc~,
-      on_chunk={ _ => () },
+      on_chunk=_ => (),
       state~,
     ),
   ) catch {
@@ -540,7 +535,8 @@ test "malformed block lifecycles are rejected" {
   // Happy prefix, then a duplicate stop.
   let _ = process_messages_event(
     provider="test",
-    data=({
+    data=(
+      {
         "type": "message_start",
         "message": {
           "id": "m",
@@ -550,25 +546,26 @@ test "malformed block lifecycles are rejected" {
         },
       } : Json).stringify(),
     acc~,
-    on_chunk={ _ => () },
+    on_chunk=_ => (),
     state~,
   )
   let _ = process_messages_event(
     provider="test",
-    data=({
+    data=(
+      {
         "type": "content_block_start",
         "index": 0,
         "content_block": { "type": "text", "text": "" },
       } : Json).stringify(),
     acc~,
-    on_chunk={ _ => () },
+    on_chunk=_ => (),
     state~,
   )
   let _ = process_messages_event(
     provider="test",
     data=({ "type": "content_block_stop", "index": 0 } : Json).stringify(),
     acc~,
-    on_chunk={ _ => () },
+    on_chunk=_ => (),
     state~,
   )
   let double_stop = Ok(
@@ -576,7 +573,7 @@ test "malformed block lifecycles are rejected" {
       provider="test",
       data=({ "type": "content_block_stop", "index": 0 } : Json).stringify(),
       acc~,
-      on_chunk={ _ => () },
+      on_chunk=_ => (),
       state~,
     ),
   ) catch {
@@ -591,13 +588,17 @@ test "malformed block lifecycles are rejected" {
   let closed = MessagesSseState::MessagesSseState()
   let acc2 = @posoco.StreamAccumulator::StreamAccumulator()
   // message_stop without a started message is invalid, not a terminal.
-  let early_stop = Ok(process_messages_event(
-    provider="test",
-    data=({ "type": "message_stop" } : Json).stringify(),
-    acc=acc2,
-    on_chunk={ _ => () },
-    state=closed,
-  )) catch { error => Err(error) }
+  let early_stop = Ok(
+    process_messages_event(
+      provider="test",
+      data=({ "type": "message_stop" } : Json).stringify(),
+      acc=acc2,
+      on_chunk=_ => (),
+      state=closed,
+    ),
+  ) catch {
+    error => Err(error)
+  }
   match early_stop {
     Err(@posoco.ModelError::ResponseParse(message)) =>
       assert_true(message.contains("incomplete_message"))
@@ -606,29 +607,33 @@ test "malformed block lifecycles are rejected" {
   // An independent complete zero-content message can close normally.
   let _ = process_messages_event(
     provider="test",
-    data=({
-      "type": "message_start",
-      "message": { "type": "message", "id": "m", "model": "m", "role": "assistant" },
-    } : Json).stringify(),
+    data=(
+      {
+        "type": "message_start",
+        "message": {
+          "type": "message",
+          "id": "m",
+          "model": "m",
+          "role": "assistant",
+        },
+      } : Json).stringify(),
     acc=acc2,
-    on_chunk={ _ => () },
+    on_chunk=_ => (),
     state=closed,
   )
   let _ = process_messages_event(
     provider="test",
-    data=({
-      "type": "message_delta",
-      "delta": { "stop_reason": "end_turn" },
-    } : Json).stringify(),
+    data=(
+      { "type": "message_delta", "delta": { "stop_reason": "end_turn" } } : Json).stringify(),
     acc=acc2,
-    on_chunk={ _ => () },
+    on_chunk=_ => (),
     state=closed,
   )
   let _ = process_messages_event(
     provider="test",
     data=({ "type": "message_stop" } : Json).stringify(),
     acc=acc2,
-    on_chunk={ _ => () },
+    on_chunk=_ => (),
     state=closed,
   )
   let after = Ok(
@@ -636,7 +641,7 @@ test "malformed block lifecycles are rejected" {
       provider="test",
       data=({ "type": "ping" } : Json).stringify(),
       acc=acc2,
-      on_chunk={ _ => () },
+      on_chunk=_ => (),
       state=closed,
     ),
   ) catch {
@@ -648,11 +653,13 @@ test "malformed block lifecycles are rejected" {
     _ => fail("expected post-stop rejection")
   }
   // Assembling before the terminal event is a typed error.
-  let premature = Ok(messages_stream_result(
-    provider="test",
-    acc=@posoco.StreamAccumulator::StreamAccumulator(),
-    state=MessagesSseState::MessagesSseState(),
-  )) catch {
+  let premature = Ok(
+    messages_stream_result(
+      provider="test",
+      acc=@posoco.StreamAccumulator::StreamAccumulator(),
+      state=MessagesSseState::MessagesSseState(),
+    ),
+  ) catch {
     error => Err(error)
   }
   match premature {
@@ -706,43 +713,44 @@ test "cumulative usage snapshots replace per dimension, never sum" {
   let state = MessagesSseState::MessagesSseState()
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let mut done = false
-  for event in SseDecoder::SseDecoder().push(
-    sse([
-      message_start(id="msg_u", input=100),
-      ev(name="content_block_start", data={
-        "type": "content_block_start",
-        "index": 0,
-        "content_block": { "type": "text", "text": "" },
-      }),
-      ev(name="content_block_stop", data={
-        "type": "content_block_stop",
-        "index": 0,
-      }),
-      ev(name="message_delta", data={
-        "type": "message_delta",
-        "delta": { "stop_reason": "end_turn" },
-        "usage": { "output_tokens": 5 },
-      }),
-      ev(name="message_delta", data={
-        "type": "message_delta",
-        "delta": { "stop_reason": "end_turn" },
-        "usage": {
-          "output_tokens": 9,
-          "cache_read_input_tokens": 80,
-          "cache_creation_input_tokens": 7,
-        },
-      }),
-      ev(name="message_stop", data={ "type": "message_stop" }),
-    ]),
-  ) {
-    if process_messages_event(
-      provider="test",
-      event_name=event.name,
-      data=event.data,
-      acc~,
-      on_chunk={ _ => () },
-      state~,
+  for
+    event in SseDecoder::SseDecoder().push(
+      sse([
+        message_start(id="msg_u", input=100),
+        ev(name="content_block_start", data={
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": { "type": "text", "text": "" },
+        }),
+        ev(name="content_block_stop", data={
+          "type": "content_block_stop",
+          "index": 0,
+        }),
+        ev(name="message_delta", data={
+          "type": "message_delta",
+          "delta": { "stop_reason": "end_turn" },
+          "usage": { "output_tokens": 5 },
+        }),
+        ev(name="message_delta", data={
+          "type": "message_delta",
+          "delta": { "stop_reason": "end_turn" },
+          "usage": {
+            "output_tokens": 9,
+            "cache_read_input_tokens": 80,
+            "cache_creation_input_tokens": 7,
+          },
+        }),
+        ev(name="message_stop", data={ "type": "message_stop" }),
+      ]),
     ) {
+    if process_messages_event(
+        provider="test",
+        event_name=event.name,
+        data=event.data,
+        acc~,
+        on_chunk=_ => (),
+        state~,
+      ) {
       done = true
     }
   }
@@ -798,8 +806,8 @@ test "independent decoder instances are fully isolated" {
   ])
   let acc_a = @posoco.StreamAccumulator::StreamAccumulator()
   let acc_b = @posoco.StreamAccumulator::StreamAccumulator()
-  let (done_a, chunks_a, state_a) = feed_sse(text=text, acc=acc_a)
-  let (done_b, chunks_b, state_b) = feed_sse(text=text, acc=acc_b)
+  let (done_a, chunks_a, state_a) = feed_sse(text~, acc=acc_a)
+  let (done_b, chunks_b, state_b) = feed_sse(text~, acc=acc_b)
   assert_true(done_a)
   assert_true(done_b)
   assert_eq(chunks_a, chunks_b)
@@ -814,28 +822,31 @@ test "independent decoder instances are fully isolated" {
   assert_eq(partial.push("ng\"}\n\n").length(), 1)
 }
 
-
 ///|
 /// An unknown delta on an otherwise known text block must not silently erase
 /// semantics. Only unknown *event names* are ignorable.
 test "unknown semantic deltas fail instead of losing content" {
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
-  let result = Ok(feed_sse(
-    text=sse([
-      message_start(id="msg_unknown_delta", input=1),
-      ev(name="content_block_start", data={
-        "type": "content_block_start",
-        "index": 0,
-        "content_block": { "type": "text", "text": "" },
-      }),
-      ev(name="content_block_delta", data={
-        "type": "content_block_delta",
-        "index": 0,
-        "delta": { "type": "future_semantic_delta", "payload": "invisible" },
-      }),
-    ]),
-    acc~,
-  )) catch { error => Err(error) }
+  let result = Ok(
+    feed_sse(
+      text=sse([
+        message_start(id="msg_unknown_delta", input=1),
+        ev(name="content_block_start", data={
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": { "type": "text", "text": "" },
+        }),
+        ev(name="content_block_delta", data={
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": { "type": "future_semantic_delta", "payload": "invisible" },
+        }),
+      ]),
+      acc~,
+    ),
+  ) catch {
+    error => Err(error)
+  }
   match result {
     Err(@posoco.ModelError::ResponseParse(message)) =>
       assert_true(message.contains("unsupported"))

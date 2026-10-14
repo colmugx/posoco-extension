@@ -32,7 +32,9 @@ pub extend CacheControl with Eq::{not_equal, equal}
 
 ///|
 /// Render the cache_control wire object.
-pub fn CacheControl::to_wire(self : CacheControl) -> Json raise @posoco.ModelError {
+pub fn CacheControl::to_wire(
+  self : CacheControl,
+) -> Json raise @posoco.ModelError {
   let fields : Array[(String, Json)] = [("type", Json::string("ephemeral"))]
   match self.ttl {
     Some(ttl) =>
@@ -175,24 +177,24 @@ pub(all) struct MessagesRequestOptions {
   cache_capabilities : MessagesCacheCapabilities
   stable_prefix : MessagesStablePrefix?
   stable_prefix_ttl : String
-  stable_history_messages : Int?
+  stable_history_messages : Int32?
   stable_history_ttl : String
 } derive(Debug)
 
 ///|
 pub fn MessagesRequestOptions::MessagesRequestOptions(
-  temperature? : Double? = None,
-  stop_sequences? : Array[String] = [],
-  tool_choice? : MessagesToolChoice? = None,
-  thinking? : ThinkingConfig? = None,
-  metadata? : Json? = None,
-  extra_top_level? : Array[(String, Json)] = [],
-  cache_mode? : MessagesCacheMode = CacheUnchanged,
-  cache_capabilities? : MessagesCacheCapabilities = MessagesCacheCapabilities::native(),
-  stable_prefix? : MessagesStablePrefix? = None,
-  stable_prefix_ttl? : String = "5m",
-  stable_history_messages? : Int? = None,
-  stable_history_ttl? : String = "5m",
+  temperature~ : Double? = None,
+  stop_sequences~ : Array[String] = [],
+  tool_choice~ : MessagesToolChoice? = None,
+  thinking~ : ThinkingConfig? = None,
+  metadata~ : Json? = None,
+  extra_top_level~ : Array[(String, Json)] = [],
+  cache_mode~ : MessagesCacheMode = CacheUnchanged,
+  cache_capabilities~ : MessagesCacheCapabilities = MessagesCacheCapabilities::native(),
+  stable_prefix~ : MessagesStablePrefix? = None,
+  stable_prefix_ttl~ : String = "5m",
+  stable_history_messages~ : Int32? = None,
+  stable_history_ttl~ : String = "5m",
 ) -> MessagesRequestOptions {
   {
     temperature,
@@ -224,10 +226,7 @@ fn supported_image_media_type(media_type : String) -> Bool {
 fn user_content_block(c : @posoco.Content) -> Json raise @posoco.ModelError {
   match c {
     @posoco.Content::Text(text) =>
-      Json::object({
-        "type": Json::string("text"),
-        "text": Json::string(text),
-      })
+      Json::object({ "type": Json::string("text"), "text": Json::string(text) })
     @posoco.Content::Image(media_type~, data~) =>
       if !supported_image_media_type(media_type) {
         raise @posoco.ModelError::RequestBuild(
@@ -280,7 +279,10 @@ fn tool_result_content(
     let blocks : Array[Json] = []
     if text != "" {
       blocks.push(
-        Json::object({ "type": Json::string("text"), "text": Json::string(text) }),
+        Json::object({
+          "type": Json::string("text"),
+          "text": Json::string(text),
+        }),
       )
     }
     push_content_blocks(out=blocks, content=attachments)
@@ -331,7 +333,9 @@ fn tool_result_block(
 /// - `AssistantMessage` replays thinking-family state first (from this
 ///   kit's `Reasoning.raw` envelope, fingerprint-verified), then visible
 ///   text, then `tool_use` blocks — the protocol's required ordering.
-pub fn message_to_wire(msg : @posoco.Message) -> Array[Json] raise @posoco.ModelError {
+pub fn message_to_wire(
+  msg : @posoco.Message,
+) -> Array[Json] raise @posoco.ModelError {
   match msg {
     @posoco.Message::SystemMessage(..) =>
       raise @posoco.ModelError::RequestBuild(
@@ -365,12 +369,13 @@ pub fn message_to_wire(msg : @posoco.Message) -> Array[Json] raise @posoco.Model
           match reasoning.raw {
             Some(raw) =>
               if is_messages_replay_envelope(Some(raw)) {
-                for block in parse_replay_envelope(
-                      provider="messages",
-                      raw,
-                      content~,
-                      tool_calls~,
-                    ) {
+                for
+                  block in parse_replay_envelope(
+                    provider="messages",
+                    raw,
+                    content~,
+                    tool_calls~,
+                  ) {
                   blocks.push(block)
                 }
                 has_full_replay = is_complete_messages_replay_envelope(raw)
@@ -387,14 +392,14 @@ pub fn message_to_wire(msg : @posoco.Message) -> Array[Json] raise @posoco.Model
         for block in content {
           match block {
             @posoco.Content::Text(text) =>
-            if text != "" {
-              blocks.push(
-                Json::object({
-                  "type": Json::string("text"),
-                  "text": Json::string(text),
-                }),
-              )
-            }
+              if text != "" {
+                blocks.push(
+                  Json::object({
+                    "type": Json::string("text"),
+                    "text": Json::string(text),
+                  }),
+                )
+              }
             @posoco.Content::Image(..) =>
               raise @posoco.ModelError::RequestBuild(
                 "messages assistant content cannot carry images (stage=encode, category=assistant_image)",
@@ -616,10 +621,9 @@ pub fn encode_request(
     None => ()
   }
   if !options.stop_sequences.is_empty() {
-    fields.push((
-      "stop_sequences",
-      Json::array(options.stop_sequences.map(Json::string)),
-    ))
+    fields.push(
+      ("stop_sequences", Json::array(options.stop_sequences.map(Json::string))),
+    )
   }
   match options.temperature {
     Some(t) => fields.push(("temperature", Json::number(t)))
@@ -641,10 +645,9 @@ pub fn encode_request(
       )
     }
     if [
-      "model", "max_tokens", "system", "messages", "tools", "tool_choice",
-      "stop_sequences", "temperature", "thinking", "metadata",
-      "cache_control",
-    ].contains(name) {
+        "model", "max_tokens", "system", "messages", "tools", "tool_choice", "stop_sequences",
+        "temperature", "thinking", "metadata", "cache_control",
+      ].contains(name) {
       raise @posoco.ModelError::RequestBuild(
         "messages extra_top_level cannot override core fields (stage=encode, category=reserved)",
       )
@@ -654,9 +657,7 @@ pub fn encode_request(
   let plain = Json::object(Map::from_array(fields))
   let marked = match options.stable_prefix {
     Some(scope) =>
-      mark_messages_stable_prefix(
-        plain, scope, ttl=options.stable_prefix_ttl,
-      )
+      mark_messages_stable_prefix(plain, scope, ttl=options.stable_prefix_ttl)
     None => plain
   }
   let reserve_auto = match options.cache_mode {

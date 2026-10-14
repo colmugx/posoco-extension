@@ -5,7 +5,9 @@ fn cache_body() -> Json {
     "max_tokens": 2048,
     "tools": [{ "name": "read", "description": "read", "input_schema": {} }],
     "system": [{ "type": "text", "text": "stable system" }],
-    "messages": [{ "role": "user", "content": [{ "type": "text", "text": "hello" }] }],
+    "messages": [
+      { "role": "user", "content": [{ "type": "text", "text": "hello" }] },
+    ],
   }
 }
 
@@ -21,11 +23,14 @@ test "automatic Messages cache uses top-level cache_control" {
 
 ///|
 test "cache gateway capability mismatch fails loudly" {
-  let bad = Ok(apply_messages_cache_policy(
-    cache_body(),
-    CacheAutomatic5m,
-    capabilities={ automatic: false, one_hour: false },
-  )) catch { error => Err(error) }
+  let bad = Ok(
+    apply_messages_cache_policy(cache_body(), CacheAutomatic5m, capabilities={
+      automatic: false,
+      one_hour: false,
+    }),
+  ) catch {
+    error => Err(error)
+  }
   match bad {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("capability"))
@@ -66,17 +71,17 @@ test "cache economics prices actual native 5m writes and hits" {
     ephemeral_5m_input_tokens: Some(200),
     ephemeral_1h_input_tokens: Some(0),
   }
-  let result = analyze_messages_cache_economics(
-    usage,
-    creation,
-    { ordinary_input: 1.0, cache_read: 0.1, cache_write_5m: 1.25, cache_write_1h: 2.0 },
-  )
+  let result = analyze_messages_cache_economics(usage, creation, {
+    ordinary_input: 1.0,
+    cache_read: 0.1,
+    cache_write_5m: 1.25,
+    cache_write_1h: 2.0,
+  })
   assert_eq(result.input_tokens, 1000)
   assert_eq(result.cache_hit_ratio, Some(0.7))
   assert_eq(result.effective_input_cost, Some(420.0))
   assert_eq(result.net_savings, Some(580.0))
 }
-
 
 ///|
 test "stable system and automatic cache combine in correct prefix order" {
@@ -104,13 +109,21 @@ test "stable prefix marker and automatic caching are request options" {
     ),
   )
   assert_eq(jget(jget(body, key="cache_control"), key="type"), "ephemeral")
-  assert_eq(jget(jget(jat(jget(body, key="system"), index=0), key="cache_control"), key="type"), "ephemeral")
+  assert_eq(
+    jget(
+      jget(jat(jget(body, key="system"), index=0), key="cache_control"),
+      key="type",
+    ),
+    "ephemeral",
+  )
 }
 
 ///|
 test "cache TTL order refuses one-hour automatic after five-minute explicit" {
   let body = mark_messages_stable_prefix(cache_body(), StableSystem)
-  let value = Ok(apply_messages_cache_policy(body, CacheAutomatic1h)) catch { error => Err(error) }
+  let value = Ok(apply_messages_cache_policy(body, CacheAutomatic1h)) catch {
+    error => Err(error)
+  }
   match value {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("ttl_order"))
@@ -139,59 +152,62 @@ test "cache economics does not invent TTL distribution" {
   }
   let result = analyze_messages_cache_economics(
     usage,
-    { ephemeral_5m_input_tokens: None, ephemeral_1h_input_tokens: None },
-    { ordinary_input: 1.0, cache_read: 0.1, cache_write_5m: 1.25, cache_write_1h: 2.0 },
+    { ephemeral_5m_input_tokens: None, ephemeral_1h_input_tokens: None, },
+    {
+      ordinary_input: 1.0,
+      cache_read: 0.1,
+      cache_write_5m: 1.25,
+      cache_write_1h: 2.0,
+    },
   )
   assert_eq(result.effective_input_cost, None)
   assert_eq(result.net_savings, None)
   assert_eq(result.cache_hit_ratio, Some(0.5))
 }
 
-
 ///|
 test "nonstreaming Messages result retains native 5m and 1h cache-write split" {
-  let result = parse_response(
-    provider="test",
-    {
-      "id": "msg_cached",
-      "type": "message",
-      "role": "assistant",
-      "model": "m",
-      "content": [{ "type": "text", "text": "Done" }],
-      "stop_reason": "end_turn",
-      "stop_sequence": None,
-      "usage": {
-        "input_tokens": 100,
-        "output_tokens": 20,
-        "cache_creation_input_tokens": 300,
-        "cache_read_input_tokens": 600,
-        "cache_creation": {
-          "ephemeral_5m_input_tokens": 100,
-          "ephemeral_1h_input_tokens": 200,
-        },
+  let result = parse_response(provider="test", {
+    "id": "msg_cached",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [{ "type": "text", "text": "Done" }],
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "usage": {
+      "input_tokens": 100,
+      "output_tokens": 20,
+      "cache_creation_input_tokens": 300,
+      "cache_read_input_tokens": 600,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 100,
+        "ephemeral_1h_input_tokens": 200,
       },
     },
-  )
+  })
   let split = result.cache_creation.unwrap_or({
     ephemeral_5m_input_tokens: None,
     ephemeral_1h_input_tokens: None,
   })
   assert_eq(split.ephemeral_5m_input_tokens, Some(100))
   assert_eq(split.ephemeral_1h_input_tokens, Some(200))
-  let economics = result.cache_economics({
-    ordinary_input: 1.0,
-    cache_read: 0.1,
-    cache_write_5m: 1.25,
-    cache_write_1h: 2.0,
-  }).unwrap_or({
-    input_tokens: 0,
-    cache_read_tokens: None,
-    cache_write_tokens: None,
-    cache_hit_ratio: None,
-    effective_input_cost: None,
-    uncached_input_cost: None,
-    net_savings: None,
-  })
+  let economics = result
+    .cache_economics({
+      ordinary_input: 1.0,
+      cache_read: 0.1,
+      cache_write_5m: 1.25,
+      cache_write_1h: 2.0,
+    })
+    .unwrap_or({
+      input_tokens: 0,
+      cache_read_tokens: None,
+      cache_write_tokens: None,
+      cache_hit_ratio: None,
+      effective_input_cost: None,
+      uncached_input_cost: None,
+      net_savings: None,
+    })
   assert_eq(economics.input_tokens, 1000)
   assert_eq(economics.effective_input_cost, Some(685.0))
   assert_eq(economics.net_savings, Some(315.0))
@@ -212,7 +228,9 @@ test "too many native explicit breakpoints are rejected" {
     "max_tokens": 100,
     "messages": [{ "role": "user", "content": marks }],
   }
-  let rejected = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch { error => Err(error) }
+  let rejected = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch {
+    error => Err(error)
+  }
   match rejected {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("breakpoints"))
@@ -225,15 +243,27 @@ test "explicit cache TTL must be 1h before 5m" {
   let body : Json = {
     "model": "m",
     "max_tokens": 100,
-    "messages": [{
-      "role": "user",
-      "content": [
-        { "type": "text", "text": "first", "cache_control": { "type": "ephemeral" } },
-        { "type": "text", "text": "second", "cache_control": { "type": "ephemeral", "ttl": "1h" } },
-      ],
-    }],
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "first",
+            "cache_control": { "type": "ephemeral" },
+          },
+          {
+            "type": "text",
+            "text": "second",
+            "cache_control": { "type": "ephemeral", "ttl": "1h" },
+          },
+        ],
+      },
+    ],
   }
-  let rejected = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch { error => Err(error) }
+  let rejected = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch {
+    error => Err(error)
+  }
   match rejected {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("ttl_order"))
@@ -256,7 +286,6 @@ test "cache lookback risk is diagnostic not a false cache hit" {
   assert_true(layout.lookback_risk)
   assert_eq(layout.blocks_since_last_explicit, 21)
 }
-
 
 ///|
 test "native lookback counts consecutive tool batches as one position" {
@@ -283,16 +312,22 @@ test "empty text block cannot be used as an explicit breakpoint" {
   let body : Json = {
     "model": "m",
     "max_tokens": 1024,
-    "messages": [{
-      "role": "user",
-      "content": [{
-        "type": "text",
-        "text": "",
-        "cache_control": { "type": "ephemeral" },
-      }],
-    }],
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "",
+            "cache_control": { "type": "ephemeral" },
+          },
+        ],
+      },
+    ],
   }
-  let failure = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch { e => Err(e) }
+  let failure = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch {
+    e => Err(e)
+  }
   match failure {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("placement"))
@@ -300,20 +335,21 @@ test "empty text block cannot be used as an explicit breakpoint" {
   }
 }
 
-
 ///|
 test "stable-history lookback inserts only safe user checkpoints" {
   let messages : Array[Json] = []
   for i in 0..<28 {
-    messages.push(Json::object({
-      "role": Json::string("user"),
-      "content": Json::array([
-        Json::object({
-          "type": Json::string("text"),
-          "text": Json::string("stable-\{i}"),
-        }),
-      ]),
-    }))
+    messages.push(
+      Json::object({
+        "role": Json::string("user"),
+        "content": Json::array([
+          Json::object({
+            "type": Json::string("text"),
+            "text": Json::string("stable-\{i}"),
+          }),
+        ]),
+      }),
+    )
   }
   messages.push({
     "role": "user",
@@ -333,40 +369,48 @@ test "stable-history lookback inserts only safe user checkpoints" {
   assert_eq(jget(jget(request, key="cache_control"), key="type"), "ephemeral")
   let output = jget(request, key="messages")
   let earlier = jget(jat(output, index=17), key="content")
-  assert_eq(jget(jget(jat(earlier, index=0), key="cache_control"), key="type"), "ephemeral")
+  assert_eq(
+    jget(jget(jat(earlier, index=0), key="cache_control"), key="type"),
+    "ephemeral",
+  )
   let latest = jget(jat(output, index=28), key="content")
   assert_eq(jat(latest, index=0).value("cache_control"), None)
   // The caller's original canonical messages were never rewritten.
-  assert_eq(jat(jget(messages[17], key="content"), index=0).value("cache_control"), None)
+  assert_eq(
+    jat(jget(messages[17], key="content"), index=0).value("cache_control"),
+    None,
+  )
 }
 
 ///|
 test "history checkpoint budget fails rather than dropping stable positions" {
   let msgs : Array[Json] = []
   for i in 0..<110 {
-    msgs.push(Json::object({
-      "role": Json::string("user"),
-      "content": Json::array([Json::object({
-        "type": Json::string("text"),
-        "text": Json::string("stable-\{i}"),
-      })]),
-    }))
+    msgs.push(
+      Json::object({
+        "role": Json::string("user"),
+        "content": Json::array([
+          Json::object({
+            "type": Json::string("text"),
+            "text": Json::string("stable-\{i}"),
+          }),
+        ]),
+      }),
+    )
   }
-  let request : Json = {
-    "model": "m",
-    "max_tokens": 2048,
-    "messages": msgs,
+  let request : Json = { "model": "m", "max_tokens": 2048, "messages": msgs }
+  let outcome = Ok(
+    mark_messages_stable_history_checkpoints(request, stable_messages=110),
+  ) catch {
+    error => Err(error)
   }
-  let outcome = Ok(mark_messages_stable_history_checkpoints(
-    request, stable_messages=110,
-  )) catch { error => Err(error) }
   match outcome {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("breakpoints"))
-    _ => fail("expected explicit rejection when checkpoint capacity is exceeded")
+    _ =>
+      fail("expected explicit rejection when checkpoint capacity is exceeded")
   }
 }
-
 
 ///|
 test "existing automatic caching is validated even when request is unchanged" {
@@ -374,14 +418,20 @@ test "existing automatic caching is validated even when request is unchanged" {
     "model": "m",
     "max_tokens": 1024,
     "cache_control": { "type": "ephemeral", "ttl": "1h" },
-    "messages": [{ "role": "user", "content": [{ "type": "text", "text": "Hello" }] }],
+    "messages": [
+      { "role": "user", "content": [{ "type": "text", "text": "Hello" }] },
+    ],
   }
   let unchanged = apply_messages_cache_policy(request, CacheUnchanged)
   assert_eq(unchanged, request)
-  let unavailable = Ok(apply_messages_cache_policy(
-    request, CacheUnchanged,
-    capabilities={ automatic: false, one_hour: false },
-  )) catch { error => Err(error) }
+  let unavailable = Ok(
+    apply_messages_cache_policy(request, CacheUnchanged, capabilities={
+      automatic: false,
+      one_hour: false,
+    }),
+  ) catch {
+    error => Err(error)
+  }
   match unavailable {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("capability"))

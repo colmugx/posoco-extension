@@ -554,17 +554,26 @@ async test "partial metadata responses back off and repeated diagnostics do not 
 /// canonical decoding implementation moves to posoco-kit-provider.
 test "legacy context-window helper entry points remain available" {
   let json = Some(Json::number(128000.0))
-  assert_eq(context_window_integer(json), @provider.context_window_integer(json))
-  let records = Some(Json::array([
-    Json::object({
-      "model_id": Json::string("m"),
-      "context_window": Json::number(128000.0),
-      "context_window_source": Json::string("provider"),
-    }),
-  ]))
+  assert_eq(
+    context_window_integer(json),
+    @provider.context_window_integer(json),
+  )
+  let records = Some(
+    Json::array([
+      Json::object({
+        "model_id": Json::string("m"),
+        "context_window": Json::number(128000.0),
+        "context_window_source": Json::string("provider"),
+      }),
+    ]),
+  )
   assert_eq(cached_provider_context_window(records, "m"), Some(128000))
   assert_eq(
     cached_provider_context_window(records, "m", metadata_provider_id="p"),
-    @provider.cached_provider_context_window(records, "m", metadata_provider_id="p"),
+    @provider.cached_provider_context_window(
+      records,
+      "m",
+      metadata_provider_id="p",
+    ),
   )
 }

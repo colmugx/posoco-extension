@@ -38,7 +38,9 @@ pub fn cached_provider_context_window(
   match metadata_provider_id {
     Some(id) =>
       @provider.cached_provider_context_window(
-        records, model_id, metadata_provider_id=id,
+        records,
+        model_id,
+        metadata_provider_id=id,
       )
     None => @provider.cached_provider_context_window(records, model_id)
   }

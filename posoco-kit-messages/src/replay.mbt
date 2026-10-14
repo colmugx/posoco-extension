@@ -287,7 +287,8 @@ pub fn parse_replay_envelope(
         }
       }
       if replay_text.to_string() != canonical_text.to_string() ||
-        calls != tool_calls || replay != blocks {
+        calls != tool_calls ||
+        replay != blocks {
         raise @posoco.ModelError::ResponseParse(
           "\{provider} replay validation failure (stage=full_blocks, category=stale)",
         )

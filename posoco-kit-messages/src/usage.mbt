@@ -36,7 +36,9 @@ pub extend MessagesUsage with @moonbitlang/core/debug.Debug::{to_repr}
 /// The billed prompt total: wire `input_tokens` plus every cache dimension
 /// the endpoint actually reported. Absent cache dimensions contribute
 /// nothing; no counter is fabricated.
-pub fn MessagesUsage::prompt_total(self : MessagesUsage) -> Int32 raise @posoco.ModelError {
+pub fn MessagesUsage::prompt_total(
+  self : MessagesUsage,
+) -> Int32 raise @posoco.ModelError {
   let mut total = self.input_tokens
   match self.cache_creation_input_tokens {
     Some(n) => {
@@ -77,14 +79,17 @@ pub fn MessagesUsage::prompt_total(self : MessagesUsage) -> Int32 raise @posoco.
 ///   `cache_creation_input_tokens` (the non-read portion), reported only
 ///   when at least one cache dimension was reported; otherwise `None` —
 ///   the miss portion of an unreported cache dimension is never guessed.
-pub fn MessagesUsage::to_canonical(self : MessagesUsage) -> @posoco.Usage raise @posoco.ModelError {
+pub fn MessagesUsage::to_canonical(
+  self : MessagesUsage,
+) -> @posoco.Usage raise @posoco.ModelError {
   let input_total = self.prompt_total()
   if input_total > 2147483647 - self.output_tokens {
     raise @posoco.ModelError::ResponseParse(
       "messages usage parse failure (stage=total_tokens, category=overflow)",
     )
   }
-  let cache_reported = self.cache_creation_input_tokens is Some(_) || self.cache_read_input_tokens is Some(_)
+  let cache_reported = self.cache_creation_input_tokens is Some(_) ||
+    self.cache_read_input_tokens is Some(_)
   {
     input_tokens: Some(input_total),
     output_tokens: Some(self.output_tokens),
@@ -93,10 +98,9 @@ pub fn MessagesUsage::to_canonical(self : MessagesUsage) -> @posoco.Usage raise 
     uncached_input_tokens: if cache_reported {
       let mut miss = self.input_tokens
       match self.cache_creation_input_tokens {
-        Some(n) => {
+        Some(n) =>
           // Already proved by prompt_total() that this addition fits.
           miss += n
-        }
         None => ()
       }
       Some(miss)

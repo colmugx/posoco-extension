@@ -32,21 +32,23 @@ pub(all) struct MessagesCacheCapabilities {
 pub extend MessagesCacheCapabilities with Eq::{equal, not_equal}
 
 ///|
-pub extend MessagesCacheCapabilities with @moonbitlang/core/debug.Debug::{to_repr}
+pub extend MessagesCacheCapabilities with @moonbitlang/core/debug.Debug::{
+  to_repr,
+}
 
 ///|
 pub fn MessagesCacheCapabilities::native() -> MessagesCacheCapabilities {
-  { automatic: true, one_hour: true }
+  { automatic: true, one_hour: true, }
 }
 
 ///|
 priv struct CacheMarkScan {
-  mut explicit_count : Int
+  mut explicit_count : Int32
   mut seen_five_minute : Bool
   mut last_cacheable_ttl : String?
   mut last_cacheable_kind : String
-  mut content_blocks : Int
-  mut latest_explicit_block : Int
+  mut content_blocks : Int32
+  mut latest_explicit_block : Int32
   mut has_one_hour : Bool
   mut previous_position_kind : String
 }
@@ -136,7 +138,9 @@ fn inspect_cache_block(
 }
 
 ///|
-fn inspect_messages_cache(body : Json) -> CacheMarkScan raise @posoco.ModelError {
+fn inspect_messages_cache(
+  body : Json,
+) -> CacheMarkScan raise @posoco.ModelError {
   guard body is Json::Object(root) else {
     raise @posoco.ModelError::RequestBuild(
       "messages cache request must be an object (stage=cache, category=body)",
@@ -158,7 +162,8 @@ fn inspect_messages_cache(body : Json) -> CacheMarkScan raise @posoco.ModelError
     Some(Json::Array(blocks)) =>
       for block in blocks {
         let cacheable = match block {
-          Json::Object(fields) => fields.get("type") == Some(Json::string("text"))
+          Json::Object(fields) =>
+            fields.get("type") == Some(Json::string("text"))
           _ => false
         }
         inspect_cache_block(scan, block, "system", cacheable)
@@ -186,10 +191,13 @@ fn inspect_messages_cache(body : Json) -> CacheMarkScan raise @posoco.ModelError
                 Json::Object(fields) =>
                   match fields.get("type") {
                     Some(Json::String("text")) =>
-                      ("text", match fields.get("text") {
-                        Some(Json::String(text)) => text != ""
-                        _ => false
-                      })
+                      (
+                        "text",
+                        match fields.get("text") {
+                          Some(Json::String(text)) => text != ""
+                          _ => false
+                        },
+                      )
                     Some(Json::String("image")) => ("image", true)
                     Some(Json::String("tool_result")) => ("tool_result", true)
                     Some(Json::String("tool_use")) => ("tool_use", true)
@@ -292,7 +300,8 @@ pub fn apply_messages_cache_policy(
   match ttl {
     None => body
     Some(requested_ttl) => {
-      if !capabilities.automatic || (requested_ttl == "1h" && !capabilities.one_hour) {
+      if !capabilities.automatic ||
+        (requested_ttl == "1h" && !capabilities.one_hour) {
         raise @posoco.ModelError::RequestBuild(
           "messages endpoint cannot preserve automatic cache policy (stage=cache, category=capability)",
         )
@@ -345,9 +354,9 @@ pub fn apply_messages_cache_policy(
 /// outside the kit's view. Use a stable explicit checkpoint when a caller
 /// KNOWS that more than 20 cacheable blocks will arrive between reuse points.
 pub(all) struct MessagesCacheLayout {
-  explicit_breakpoints : Int
-  scanned_blocks : Int
-  blocks_since_last_explicit : Int
+  explicit_breakpoints : Int32
+  scanned_blocks : Int32
+  blocks_since_last_explicit : Int32
   lookback_risk : Bool
 } derive(Eq, Debug)
 
@@ -358,7 +367,9 @@ pub extend MessagesCacheLayout with Eq::{equal, not_equal}
 pub extend MessagesCacheLayout with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-pub fn inspect_messages_cache_layout(body : Json) -> MessagesCacheLayout raise @posoco.ModelError {
+pub fn inspect_messages_cache_layout(
+  body : Json,
+) -> MessagesCacheLayout raise @posoco.ModelError {
   let scan = inspect_messages_cache(body)
   let distance = scan.content_blocks - scan.latest_explicit_block
   {
@@ -381,14 +392,16 @@ pub(all) struct MessagesCachePrefixComparison {
   history_is_prefix : Bool
   request_settings_stable : Bool
   prefix_reusable : Bool
-  suffix_message_count : Int
+  suffix_message_count : Int32
 } derive(Eq, Debug)
 
 ///|
 pub extend MessagesCachePrefixComparison with Eq::{equal, not_equal}
 
 ///|
-pub extend MessagesCachePrefixComparison with @moonbitlang/core/debug.Debug::{to_repr}
+pub extend MessagesCachePrefixComparison with @moonbitlang/core/debug.Debug::{
+  to_repr,
+}
 
 ///|
 pub fn compare_messages_cache_prefix(
@@ -422,7 +435,11 @@ pub fn compare_messages_cache_prefix(
   let mut settings_stable = true
   // These request-level settings may affect provider cache matching.
   // Never label a prefix reusable after a known cache-relevant change.
-  for key in ["thinking", "output_config", "tool_choice", "temperature", "top_p", "top_k", "stop_sequences"] {
+  for
+    key in [
+      "thinking", "output_config", "tool_choice", "temperature", "top_p", "top_k",
+      "stop_sequences",
+    ] {
     if a.get(key) != b.get(key) {
       settings_stable = false
     }
@@ -433,7 +450,15 @@ pub fn compare_messages_cache_prefix(
     system_stable,
     history_is_prefix: is_prefix,
     request_settings_stable: settings_stable,
-    prefix_reusable: model_stable && tools_stable && system_stable && is_prefix && settings_stable,
-    suffix_message_count: if is_prefix { pb.length() - pa.length() } else { 0 },
+    prefix_reusable: model_stable &&
+    tools_stable &&
+    system_stable &&
+    is_prefix &&
+    settings_stable,
+    suffix_message_count: if is_prefix {
+      pb.length() - pa.length()
+    } else {
+      0
+    },
   }
 }

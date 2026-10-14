@@ -17,7 +17,9 @@
 /// - `max_tokens`    -> Length
 /// - anything else   -> `Other(raw)` — unknown values are preserved, never
 ///    collapsed into Stop.
-pub fn map_stop_reason(reason~ : String) -> @posoco.FinishReason raise @posoco.ModelError {
+pub fn map_stop_reason(
+  reason~ : String,
+) -> @posoco.FinishReason raise @posoco.ModelError {
   match reason {
     "end_turn" | "stop_sequence" => Stop
     "tool_use" => ToolCalls
@@ -54,14 +56,7 @@ pub extend MessagesResult with Debug::{to_repr}
 /// `MessagesResult.extensions` verbatim.
 fn known_top_level_field(name : String) -> Bool {
   [
-    "id",
-    "type",
-    "role",
-    "model",
-    "content",
-    "stop_reason",
-    "stop_sequence",
-    "usage",
+    "id", "type", "role", "model", "content", "stop_reason", "stop_sequence", "usage",
   ].contains(name)
 }
 
@@ -150,12 +145,8 @@ fn decode_content_block(
           )
       }
     "tool_use" => {
-      let id = match wire_string_field(
-          provider~,
-          fields,
-          key="id",
-          required=true,
-        ) {
+      let id = match
+        wire_string_field(provider~, fields, key="id", required=true) {
         Some(id) =>
           if id == "" {
             raise @posoco.ModelError::ResponseParse(
@@ -169,12 +160,8 @@ fn decode_content_block(
             "\{provider} response parse failure (stage=tool.id, category=missing)",
           )
       }
-      let name = match wire_string_field(
-          provider~,
-          fields,
-          key="name",
-          required=true,
-        ) {
+      let name = match
+        wire_string_field(provider~, fields, key="name", required=true) {
         Some(name) =>
           if name == "" {
             raise @posoco.ModelError::ResponseParse(
@@ -242,16 +229,13 @@ pub fn parse_response(
         "\{provider} response parse failure (stage=role, category=missing)",
       )
   }
-  let response_id = match wire_string_field(
-      provider~,
-      fields,
-      key="id",
-      required=true,
-    ) {
+  let response_id = match
+    wire_string_field(provider~, fields, key="id", required=true) {
     Some(id) => id
     None => ""
   }
-  let model = match wire_string_field(provider~, fields, key="model", required=true) {
+  let model = match
+    wire_string_field(provider~, fields, key="model", required=true) {
     Some(model) => model
     None => ""
   }
@@ -296,12 +280,8 @@ pub fn parse_response(
       }
     }
   }
-  let raw_stop_reason = match wire_string_field(
-      provider~,
-      fields,
-      key="stop_reason",
-      required=true,
-    ) {
+  let raw_stop_reason = match
+    wire_string_field(provider~, fields, key="stop_reason", required=true) {
     Some(reason) => reason
     None => ""
   }
@@ -314,7 +294,12 @@ pub fn parse_response(
   )
   let usage = match fields.get("usage") {
     Some(Json::Object(_)) =>
-      Some(parse_messages_usage(provider~, fields.get("usage").unwrap_or(Json::null())))
+      Some(
+        parse_messages_usage(
+          provider~,
+          fields.get("usage").unwrap_or(Json::null()),
+        ),
+      )
     Some(Json::Null) | None => None
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
@@ -323,7 +308,11 @@ pub fn parse_response(
   }
   let cache_creation = match fields.get("usage") {
     Some(Json::Object(_)) =>
-      Some(parse_messages_cache_creation(fields.get("usage").unwrap_or(Json::null())))
+      Some(
+        parse_messages_cache_creation(
+          fields.get("usage").unwrap_or(Json::null()),
+        ),
+      )
     _ => None
   }
   let extensions : Array[(String, Json)] = []

@@ -22,7 +22,7 @@ pub fn mark_messages_stable_prefix(
   prefix : MessagesStablePrefix,
   ttl~ : String = "5m",
 ) -> Json raise @posoco.ModelError {
-  let cc : CacheControl = { ttl: Some(ttl) }
+  let cc : CacheControl = { ttl: Some(ttl), }
   let marker = cc.to_wire()
   guard body is Json::Object(fields) else {
     raise @posoco.ModelError::RequestBuild(

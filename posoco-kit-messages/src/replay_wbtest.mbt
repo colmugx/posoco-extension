@@ -55,7 +55,10 @@ test "signed thinking captures into the envelope and replays verbatim" {
   )
   let blocks = jget(message_to_wire(assistant)[0], key="content")
   assert_eq(jget(jat(blocks, index=0), key="type"), "thinking")
-  assert_eq(jget(jat(blocks, index=0), key="thinking"), "Need weather for two cities.")
+  assert_eq(
+    jget(jat(blocks, index=0), key="thinking"),
+    "Need weather for two cities.",
+  )
   assert_eq(jget(jat(blocks, index=0), key="signature"), "sig-enc-1")
   assert_eq(jget(jat(blocks, index=1), key="type"), "text")
   assert_eq(jget(jat(blocks, index=1), key="text"), "Checking both.")
@@ -65,27 +68,21 @@ test "signed thinking captures into the envelope and replays verbatim" {
 
 ///|
 test "redacted thinking replays as opaque state, never as text" {
-  let result = parse_response(
-    provider="t",
-    {
-      "id": "msg_red",
-      "type": "message",
-      "role": "assistant",
-      "model": "m",
-      "content": [
-        { "type": "redacted_thinking", "data": "ZW5jcnlwdGVk" },
-        { "type": "text", "text": "Done." },
-      ],
-      "stop_reason": "end_turn",
-      "stop_sequence": None,
-      "usage": { "input_tokens": 1, "output_tokens": 1 },
-    },
-  )
+  let result = parse_response(provider="t", {
+    "id": "msg_red",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [
+      { "type": "redacted_thinking", "data": "ZW5jcnlwdGVk" },
+      { "type": "text", "text": "Done." },
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 1, "output_tokens": 1 },
+  })
   // The redacted payload does not surface in canonical content.
-  assert_eq(
-    result.completion.message.content,
-    [@posoco.Content::Text("Done.")],
-  )
+  assert_eq(result.completion.message.content, [@posoco.Content::Text("Done.")])
   let assistant = @posoco.Message::AssistantMessage(
     content=result.completion.message.content,
     tool_calls=result.completion.message.tool_calls,
@@ -151,7 +148,9 @@ test "foreign and malformed replay state is rejected explicitly" {
     }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let foreign_result = Ok(message_to_wire(foreign)) catch { error => Err(error) }
+  let foreign_result = Ok(message_to_wire(foreign)) catch {
+    error => Err(error)
+  }
   match foreign_result {
     Err(@posoco.ModelError::RequestBuild(message)) =>
       assert_true(message.contains("foreign_replay"))
@@ -199,19 +198,16 @@ test "foreign and malformed replay state is rejected explicitly" {
 ///|
 test "empty thinking block with no signature is a capture-time error" {
   let bad = Ok(
-    parse_response(
-      provider="t",
-      {
-        "id": "msg_bad",
-        "type": "message",
-        "role": "assistant",
-        "model": "m",
-        "content": [{ "type": "thinking", "thinking": "", "signature": "" }],
-        "stop_reason": "end_turn",
-        "stop_sequence": None,
-        "usage": { "input_tokens": 1, "output_tokens": 1 },
-      },
-    ),
+    parse_response(provider="t", {
+      "id": "msg_bad",
+      "type": "message",
+      "role": "assistant",
+      "model": "m",
+      "content": [{ "type": "thinking", "thinking": "", "signature": "" }],
+      "stop_reason": "end_turn",
+      "stop_sequence": None,
+      "usage": { "input_tokens": 1, "output_tokens": 1 },
+    }),
   ) catch {
     error => Err(error)
   }
@@ -221,47 +217,39 @@ test "empty thinking block with no signature is a capture-time error" {
     _ => fail("expected empty thinking rejection")
   }
   // A signed thinking block with empty text is still valuable replay state.
-  let signed_only = parse_response(
-    provider="t",
-    {
-      "id": "msg_sig",
-      "type": "message",
-      "role": "assistant",
-      "model": "m",
-      "content": [
-        { "type": "thinking", "thinking": "", "signature": "sig-only" },
-      ],
-      "stop_reason": "end_turn",
-      "stop_sequence": None,
-      "usage": { "input_tokens": 1, "output_tokens": 1 },
-    },
-  )
+  let signed_only = parse_response(provider="t", {
+    "id": "msg_sig",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [{ "type": "thinking", "thinking": "", "signature": "sig-only" }],
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 1, "output_tokens": 1 },
+  })
   assert_true(signed_only.completion.message.reasoning is Some(_))
 }
 
 ///|
 test "opaque future assistant blocks ride the envelope for continuity" {
-  let result = parse_response(
-    provider="t",
-    {
-      "id": "msg_fut",
-      "type": "message",
-      "role": "assistant",
-      "model": "m",
-      "content": [
-        { "type": "text", "text": "answer" },
-        {
-          "type": "server_tool_use",
-          "id": "srvtool_1",
-          "name": "web_search",
-          "input": { "q": "x" },
-        },
-      ],
-      "stop_reason": "end_turn",
-      "stop_sequence": None,
-      "usage": { "input_tokens": 1, "output_tokens": 1 },
-    },
-  )
+  let result = parse_response(provider="t", {
+    "id": "msg_fut",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [
+      { "type": "text", "text": "answer" },
+      {
+        "type": "server_tool_use",
+        "id": "srvtool_1",
+        "name": "web_search",
+        "input": { "q": "x" },
+      },
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 1, "output_tokens": 1 },
+  })
   let assistant = @posoco.Message::AssistantMessage(
     content=result.completion.message.content,
     tool_calls=result.completion.message.tool_calls,
@@ -273,7 +261,6 @@ test "opaque future assistant blocks ride the envelope for continuity" {
   assert_eq(jget(jat(blocks, index=1), key="type"), "server_tool_use")
   assert_eq(jget(jat(blocks, index=1), key="id"), "srvtool_1")
 }
-
 
 ///|
 /// Replaying a signed assistant turn must preserve thinking and tool_use at
