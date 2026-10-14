@@ -33,6 +33,8 @@ pub fn is_messages_replay_envelope(Json?) -> Bool
 
 pub fn map_stop_reason(reason~ : String) -> @kernel.FinishReason raise @error.ModelError
 
+pub fn mark_messages_stable_history_checkpoints(Json, stable_messages~ : Int, ttl? : String, reserve_automatic_slot? : Bool) -> Json raise @error.ModelError
+
 pub fn mark_messages_stable_prefix(Json, MessagesStablePrefix, ttl? : String) -> Json raise @error.ModelError
 
 pub fn message_to_wire(@kernel.Message) -> Array[Json] raise @error.ModelError
@@ -146,8 +148,10 @@ pub(all) struct MessagesRequestOptions {
   cache_capabilities : MessagesCacheCapabilities
   stable_prefix : MessagesStablePrefix?
   stable_prefix_ttl : String
+  stable_history_messages : Int?
+  stable_history_ttl : String
 } derive(@debug.Debug)
-pub fn MessagesRequestOptions::MessagesRequestOptions(temperature? : Double?, stop_sequences? : Array[String], tool_choice? : MessagesToolChoice?, thinking? : ThinkingConfig?, metadata? : Json?, extra_top_level? : Array[(String, Json)], cache_mode? : MessagesCacheMode, cache_capabilities? : MessagesCacheCapabilities, stable_prefix? : MessagesStablePrefix?, stable_prefix_ttl? : String) -> Self
+pub fn MessagesRequestOptions::MessagesRequestOptions(temperature? : Double?, stop_sequences? : Array[String], tool_choice? : MessagesToolChoice?, thinking? : ThinkingConfig?, metadata? : Json?, extra_top_level? : Array[(String, Json)], cache_mode? : MessagesCacheMode, cache_capabilities? : MessagesCacheCapabilities, stable_prefix? : MessagesStablePrefix?, stable_prefix_ttl? : String, stable_history_messages? : Int?, stable_history_ttl? : String) -> Self
 
 pub(all) struct MessagesResult {
   completion : @kernel.Completion
