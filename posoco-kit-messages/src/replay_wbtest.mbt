@@ -271,3 +271,39 @@ test "opaque future assistant blocks ride the envelope for continuity" {
   assert_eq(jget(jat(blocks, index=1), key="type"), "server_tool_use")
   assert_eq(jget(jat(blocks, index=1), key="id"), "srvtool_1")
 }
+
+
+///|
+/// Replaying a signed assistant turn must preserve thinking and tool_use at
+/// their ORIGINAL positions, rather than moving all thinking blocks first.
+test "ordered replay keeps thinking interspersed with visible and tool blocks" {
+  let result = parse_response(provider="test", {
+    "id": "msg_order",
+    "type": "message",
+    "role": "assistant",
+    "model": "m",
+    "content": [
+      { "type": "text", "text": "First" },
+      { "type": "thinking", "thinking": "A", "signature": "sig-A" },
+      { "type": "tool_use", "id": "call-a", "name": "lookup", "input": {} },
+      { "type": "text", "text": "Second" },
+      { "type": "redacted_thinking", "data": "opaque-secret" },
+    ],
+    "stop_reason": "tool_use",
+    "stop_sequence": None,
+    "usage": { "input_tokens": 1, "output_tokens": 2 },
+  })
+  let assistant = @posoco.Message::AssistantMessage(
+    content=result.completion.message.content,
+    tool_calls=result.completion.message.tool_calls,
+    reasoning=result.completion.message.reasoning,
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
+  let blocks = jget(message_to_wire(assistant)[0], key="content")
+  assert_eq(jget(jat(blocks, index=0), key="type"), "text")
+  assert_eq(jget(jat(blocks, index=1), key="type"), "thinking")
+  assert_eq(jget(jat(blocks, index=2), key="type"), "tool_use")
+  assert_eq(jget(jat(blocks, index=3), key="type"), "text")
+  assert_eq(jget(jat(blocks, index=4), key="type"), "redacted_thinking")
+  assert_eq(jget(jat(blocks, index=4), key="data"), "opaque-secret")
+}
