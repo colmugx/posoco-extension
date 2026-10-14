@@ -45,7 +45,7 @@ fn kimi_reset_at_ms(
   for key in ["resetTime", "reset_at", "resetAt"] {
     match kimi_usage_string(fields, key) {
       Some(text) =>
-        match @chatkit.parse_reset_timestamp(text, now_ms=fetched_at_ms) {
+        match @ratelimit.parse_reset_timestamp(text, now_ms=fetched_at_ms) {
           Some(ms) => return Some(ms)
           None => ()
         }

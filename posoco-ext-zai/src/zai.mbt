@@ -123,9 +123,14 @@ fn split_system(
 /// Uniform GLM-on-Messages posture: thinking is always enabled without a
 /// budget (the endpoint scales thinking through its own effort control) and
 /// the effort rides as the platform's top-level `reasoning_effort` field.
+/// `stream` is the protocol's top-level SSE switch — streaming requests MUST
+/// set it or the endpoint answers with one buffered JSON object, and
+/// non-streaming requests MUST NOT (a buffered `stream: true` call is a
+/// protocol violation).
 fn build_request_options(
   config : ZaiConfig,
   options : @posoco.ChatOptions,
+  stream~ : Bool = false,
 ) -> @messages.MessagesRequestOptions raise @posoco.ModelError {
   let temperature : Double? = match options.temperature {
     Some(t) =>
@@ -138,14 +143,16 @@ fn build_request_options(
       }
     None => None
   }
-
+  let extra : Array[(String, Json)] = [
+    ("reasoning_effort", Json::string(config.reasoning_effort)),
+  ]
+  if stream {
+    extra.push(("stream", Json::boolean(true)))
+  }
   @messages.MessagesRequestOptions::MessagesRequestOptions(
     temperature~,
     thinking=Some(@messages.ThinkingConfig::Enabled(budget_tokens=None)),
-    extra_top_level=[
-      ("reasoning_effort", Json::string(config.reasoning_effort)),
-      ("stream", Json::boolean(true)),
-    ],
+    extra_top_level=extra,
   )
 }
 
@@ -155,6 +162,7 @@ fn build_messages_request(
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
+  stream~ : Bool = false,
 ) -> Json raise @posoco.ModelError {
   let (system, transcript) = split_system(
     shape_for_model(messages, config.model),
@@ -183,7 +191,7 @@ fn build_messages_request(
     system=system_json,
     messages=wire_messages,
     tools=wire_tools,
-    options=build_request_options(config, options),
+    options=build_request_options(config, options, stream~),
   )
 }
 
@@ -197,7 +205,14 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let messages_owned = messages.to_owned()
-  let body = build_messages_request(self.config, messages_owned, tools, options)
+  let streaming = stream is Stream(_)
+  let body = build_messages_request(
+    self.config,
+    messages_owned,
+    tools,
+    options,
+    stream=streaming,
+  )
   match stream {
     NoStream => {
       let (response, body_data) = @http.post(

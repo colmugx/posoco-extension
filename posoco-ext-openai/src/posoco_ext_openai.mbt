@@ -233,7 +233,7 @@ fn openai_quota_verdict(
   if status != 429 {
     return None
   }
-  @chatkit.classify_chat_completions_http_error(
+  @ratelimit.classify_rate_limit_error(
     status,
     match body_text {
       Some(text) => text

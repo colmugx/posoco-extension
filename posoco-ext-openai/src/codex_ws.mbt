@@ -382,7 +382,7 @@ fn codex_ws_provider_error_if_any(
   }
   let body_text = body.stringify()
   match
-    @chatkit.classify_chat_completions_http_error(
+    @ratelimit.classify_rate_limit_error(
       status,
       body_text,
       now_ms~,

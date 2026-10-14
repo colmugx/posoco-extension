@@ -86,7 +86,7 @@ test "parse_reset_timestamp: unparseable text yields None" {
 ///|
 test "classify: non-429 without quota phrasing returns None" {
   debug_inspect(
-    classify_chat_completions_http_error(
+    classify_rate_limit_error(
       500,
       "{\"error\":{\"message\":\"boom\"}}",
       now_ms=0L,
@@ -94,7 +94,7 @@ test "classify: non-429 without quota phrasing returns None" {
     content="None",
   )
   debug_inspect(
-    classify_chat_completions_http_error(
+    classify_rate_limit_error(
       403,
       "{\"error\":{\"message\":\"Invalid API key\",\"type\":\"auth_error\"}}",
       now_ms=0L,
@@ -108,13 +108,10 @@ test "classify: phrase gate opt-in covers mirrored-status transports" {
   let body = "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The usage limit has been reached\"}}"
   // Default: a 400 stays the caller's Transport path (HTTP callers keep
   // their existing behavior).
-  debug_inspect(
-    classify_chat_completions_http_error(400, body, now_ms=0L),
-    content="None",
-  )
+  debug_inspect(classify_rate_limit_error(400, body, now_ms=0L), content="None")
   // Opt-in: the quota phrasing confirms the verdict for any status, because
   // the status is only a mirror (WS event frames).
-  let err = classify_chat_completions_http_error(
+  let err = classify_rate_limit_error(
     400,
     body,
     phrase_gate_all_statuses=true,
@@ -128,7 +125,7 @@ test "classify: phrase gate opt-in covers mirrored-status transports" {
   debug_inspect(info.reset_at_ms, content="None")
   // The flag never classifies non-quota phrasing.
   debug_inspect(
-    classify_chat_completions_http_error(
+    classify_rate_limit_error(
       400,
       "{\"error\":{\"message\":\"Invalid API key\"}}",
       phrase_gate_all_statuses=true,
@@ -141,7 +138,7 @@ test "classify: phrase gate opt-in covers mirrored-status transports" {
 ///|
 test "classify: kimi 403 quota verdict schedules at window upper bound" {
   let body = "{\"error\":{\"message\":\"You've reached your 5-hour usage limit. Your quota will reset when the current 5-hour window ends. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota\",\"type\":\"auth_error\"}}"
-  let err = classify_chat_completions_http_error(403, body, now_ms=1000000L)
+  let err = classify_rate_limit_error(403, body, now_ms=1000000L)
   guard err is Some(@posoco.ModelError::RateLimited(info)) else {
     fail("expected RateLimited")
   }
@@ -154,7 +151,7 @@ test "classify: kimi 403 quota verdict schedules at window upper bound" {
 
 ///|
 test "classify: 403 plain-text quota body classifies" {
-  let err = classify_chat_completions_http_error(
+  let err = classify_rate_limit_error(
     403,
     "You've reached your 5-hour usage limit",
     now_ms=0L,
@@ -192,7 +189,7 @@ test "parse_window_reset: named quota-window shapes" {
 ///|
 test "classify: codex structured body" {
   let body = "{\"error\":{\"type\":\"usage_limit_reached\",\"message\":\"The usage limit has been reached\",\"plan_type\":\"plus\",\"resets_at\":1778839243,\"resets_in_seconds\":756}}"
-  let err = classify_chat_completions_http_error(429, body, now_ms=1000L)
+  let err = classify_rate_limit_error(429, body, now_ms=1000L)
   guard err is Some(@posoco.ModelError::RateLimited(info)) else {
     fail("expected RateLimited")
   }
@@ -205,7 +202,7 @@ test "classify: codex structured body" {
 ///|
 test "classify: zai flush time in message text" {
   let body = "{\"error\":{\"code\":\"1308\",\"message\":\"Usage limit reached for 5 hour(s). Your limit will reset at 2026-08-21 15:04:16\"}}"
-  let err = classify_chat_completions_http_error(
+  let err = classify_rate_limit_error(
     429,
     body,
     default_tz_offset_minutes=480,
@@ -221,7 +218,7 @@ test "classify: zai flush time in message text" {
 ///|
 test "classify: numeric zai code is rendered as string" {
   let body = "{\"error\":{\"code\":1302,\"message\":\"Rate limit reached for requests\"}}"
-  let err = classify_chat_completions_http_error(429, body, now_ms=0L)
+  let err = classify_rate_limit_error(429, body, now_ms=0L)
   guard err is Some(@posoco.ModelError::RateLimited(info)) else {
     fail("expected RateLimited")
   }
@@ -232,7 +229,7 @@ test "classify: numeric zai code is rendered as string" {
 
 ///|
 test "classify: retry_after fallback and non-JSON body" {
-  let retry = classify_chat_completions_http_error(
+  let retry = classify_rate_limit_error(
     429,
     "{\"error\":{\"message\":\"slow down\",\"retry_after\":30}}",
     now_ms=0L,
@@ -242,11 +239,7 @@ test "classify: retry_after fallback and non-JSON body" {
   }
   debug_inspect(info.reset_at_ms, content="Some(30000)")
   // A non-JSON body still classifies as a rate-limit verdict, message only.
-  let raw = classify_chat_completions_http_error(
-    429,
-    "plain gateway throttle",
-    now_ms=0L,
-  )
+  let raw = classify_rate_limit_error(429, "plain gateway throttle", now_ms=0L)
   guard raw is Some(@posoco.ModelError::RateLimited(raw_info)) else {
     fail("expected RateLimited")
   }

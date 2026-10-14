@@ -76,7 +76,7 @@ fn classify_zen_http_status(
       BodyText(text) => text
       _ => ""
     }
-    let verdict = @chatkit.classify_chat_completions_http_error(
+    let verdict = @ratelimit.classify_rate_limit_error(
       status,
       body_text,
       now_ms~,

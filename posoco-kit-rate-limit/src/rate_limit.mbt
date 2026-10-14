@@ -1,6 +1,7 @@
 ///|
-/// Shared quota-verdict classification for OpenAI Chat Completions–style
-/// providers.
+/// Shared quota-verdict classification for provider HTTP errors, protocol
+/// neutral: the body shape is what matters, not the wire dialect on the
+/// request.
 ///
 /// Coding-plan providers answer quota exhaustion with a throttling verdict,
 /// but both the HTTP status and the reset hint's carrier differ per provider:
@@ -757,7 +758,7 @@ fn first_present(containers : Array[Json], keys : Array[String]) -> Json? {
 ///
 /// Lookup covers both the nested `error` object and the top level. When the
 /// body is not JSON at all, only paths 4-6 apply against the raw text.
-pub fn classify_chat_completions_http_error(
+pub fn classify_rate_limit_error(
   status : Int32,
   body_text : String,
   default_tz_offset_minutes~ : Int32 = 0,

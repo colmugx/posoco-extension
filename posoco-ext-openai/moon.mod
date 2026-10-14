@@ -9,6 +9,7 @@ import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/x@0.5.5",
   "posoco/devkit@0.4.1",
+  "colmugx/posoco-kit-rate-limit@0.1.0",
   "posoco/kit-chat-completions@0.1.0",
   "colmugx/posoco-kit-responses@0.1.0",
   "moonbit-community/flate@0.3.0",

@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "posoco/devkit",
+  "colmugx/posoco-kit-rate-limit" @ratelimit,
   "posoco/kit-chat-completions" @chatkit,
   "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,

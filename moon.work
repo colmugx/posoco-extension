@@ -62,6 +62,7 @@ members = [
   "./posoco-kit-model-management",
   "./posoco-kit-paseo",
   "./posoco-kit-provider",
+  "./posoco-kit-rate-limit",
   "./posoco-kit-responses",
   "./posoco-kit-subagent",
   "./posoco-ext-zcode",

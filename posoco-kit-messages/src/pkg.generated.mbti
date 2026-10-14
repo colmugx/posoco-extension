@@ -225,7 +225,7 @@ pub fn StreamTermination::not_equal(Self, Self) -> Bool
 pub fn StreamTermination::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ThinkingConfig {
-  Enabled(budget_tokens~ : Int)
+  Enabled(budget_tokens~ : Int?)
   Adaptive
   BetweenTools
   Disabled

@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-rate-limit"
+
+import {
+  "colmugx/posoco/error",
+}
+
+// Values
+pub fn classify_rate_limit_error(Int, String, default_tz_offset_minutes? : Int, retry_after_header? : String?, phrase_gate_all_statuses? : Bool, now_ms~ : Int64) -> @error.ModelError?
+
+pub fn parse_reset_timestamp(String, default_tz_offset_minutes? : Int, now_ms~ : Int64) -> Int64?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

@@ -119,10 +119,12 @@ fn MessagesToolChoice::to_wire(
 }
 
 ///|
-/// Extended-thinking configuration. `budget_tokens` must be at least 1024
-/// per the protocol.
+/// Extended-thinking configuration. A present `budget_tokens` must be at
+/// least 1024 and below `max_tokens` per the protocol; `Enabled(None)` emits
+/// `{"type":"enabled"}` without a budget — the budget-free enabled dialect
+/// used by endpoints that scale thinking through their own effort controls.
 pub(all) enum ThinkingConfig {
-  Enabled(budget_tokens~ : Int32)
+  Enabled(budget_tokens~ : Int32?)
   Adaptive
   BetweenTools
   Disabled
@@ -140,15 +142,19 @@ fn ThinkingConfig::to_wire(
 ) -> Json raise @posoco.ModelError {
   match self {
     Enabled(budget_tokens~) =>
-      if budget_tokens < 1024 {
-        raise @posoco.ModelError::RequestBuild(
-          "messages thinking budget_tokens must be >= 1024 (stage=encode, category=thinking)",
-        )
-      } else {
-        Json::object({
-          "type": Json::string("enabled"),
-          "budget_tokens": Json::number(budget_tokens.to_double()),
-        })
+      match budget_tokens {
+        Some(budget) =>
+          if budget < 1024 {
+            raise @posoco.ModelError::RequestBuild(
+              "messages thinking budget_tokens must be >= 1024 (stage=encode, category=thinking)",
+            )
+          } else {
+            Json::object({
+              "type": Json::string("enabled"),
+              "budget_tokens": Json::number(budget.to_double()),
+            })
+          }
+        None => Json::object({ "type": Json::string("enabled") })
       }
     Adaptive => Json::object({ "type": Json::string("adaptive") })
     BetweenTools => Json::object({ "type": Json::string("between_tools") })
@@ -567,29 +573,35 @@ pub fn encode_request(
     )
   }
   match options.thinking {
-    Some(Enabled(budget_tokens~)) => {
-      if budget_tokens >= max_tokens {
-        raise @posoco.ModelError::RequestBuild(
-          "messages thinking budget_tokens must be smaller than max_tokens (stage=encode, category=thinking_budget)",
-        )
+    // Budget-gated checks are the budgeted-dialect contract; the budget-free
+    // enabled dialect carries no budget to validate against.
+    Some(Enabled(budget_tokens~)) =>
+      match budget_tokens {
+        Some(budget) => {
+          if budget >= max_tokens {
+            raise @posoco.ModelError::RequestBuild(
+              "messages thinking budget_tokens must be smaller than max_tokens (stage=encode, category=thinking_budget)",
+            )
+          }
+          let bad_temperature = match options.temperature {
+            Some(t) => t != 1.0
+            None => false
+          }
+          if bad_temperature {
+            raise @posoco.ModelError::RequestBuild(
+              "messages thinking requires temperature 1.0 or unset (stage=encode, category=temperature)",
+            )
+          }
+          match options.tool_choice {
+            Some(Any) | Some(Tool(..)) =>
+              raise @posoco.ModelError::RequestBuild(
+                "messages thinking is incompatible with a forced tool_choice (stage=encode, category=tool_choice)",
+              )
+            Some(Auto) | Some(Forbid) | None => ()
+          }
+        }
+        None => ()
       }
-      let bad_temperature = match options.temperature {
-        Some(t) => t != 1.0
-        None => false
-      }
-      if bad_temperature {
-        raise @posoco.ModelError::RequestBuild(
-          "messages thinking requires temperature 1.0 or unset (stage=encode, category=temperature)",
-        )
-      }
-      match options.tool_choice {
-        Some(Any) | Some(Tool(..)) =>
-          raise @posoco.ModelError::RequestBuild(
-            "messages thinking is incompatible with a forced tool_choice (stage=encode, category=tool_choice)",
-          )
-        Some(Auto) | Some(Forbid) | None => ()
-      }
-    }
     Some(Adaptive) | Some(BetweenTools) | Some(Disabled) | None => ()
   }
   if options.stop_sequences.length() > 4 {

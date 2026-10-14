@@ -166,7 +166,7 @@ fn classify_openrouter_http_status(
     )
   }
   if status == 429 {
-    let verdict = @chatkit.classify_chat_completions_http_error(
+    let verdict = @ratelimit.classify_rate_limit_error(
       status,
       body_text,
       retry_after_header~,

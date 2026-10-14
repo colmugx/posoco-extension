@@ -34,3 +34,38 @@ pub fn is_prompt_cache_key_rejection(body_text : String) -> Bool {
   case_insensitive_contains(body_text, "unsupported parameter") &&
   case_insensitive_contains(body_text, "prompt_cache_key")
 }
+
+///|
+fn lower_code(code : UInt16) -> UInt16 {
+  if code >= 'A' && code <= 'Z' {
+    code - 'A' + 'a'
+  } else {
+    code
+  }
+}
+
+///|
+fn keyword_starts_at(text : String, i : Int32, keyword : String) -> Bool {
+  if i < 0 || i + keyword.length() > text.length() {
+    return false
+  }
+  for k in 0..<keyword.length() {
+    if lower_code(text[i + k]) != keyword[k] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn case_insensitive_contains(text : String, keyword : String) -> Bool {
+  let n = text.length()
+  let mut i = 0
+  while i + keyword.length() <= n {
+    if keyword_starts_at(text, i, keyword) {
+      return true
+    }
+    i += 1
+  }
+  false
+}

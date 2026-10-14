@@ -36,7 +36,7 @@ fn classify_kimi_http_status(
     return None
   }
   if status == 429 || status == 403 {
-    let verdict = @chatkit.classify_chat_completions_http_error(
+    let verdict = @ratelimit.classify_rate_limit_error(
       status,
       body_text,
       retry_after_header=retry_after,

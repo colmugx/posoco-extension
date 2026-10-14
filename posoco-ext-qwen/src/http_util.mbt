@@ -21,11 +21,7 @@ fn classify_qwen_http_error(
     return None
   }
   if status == 429 {
-    return @chatkit.classify_chat_completions_http_error(
-      status,
-      body_text,
-      now_ms~,
-    )
+    return @ratelimit.classify_rate_limit_error(status, body_text, now_ms~)
   }
   Some(
     @posoco.ModelError::Transport(

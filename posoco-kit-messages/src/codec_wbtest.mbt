@@ -486,7 +486,7 @@ test "encode validation failures are typed and local" {
           ),
           options=MessagesRequestOptions::MessagesRequestOptions(
             tool_choice=Some(MessagesToolChoice::Any),
-            thinking=Some(ThinkingConfig::Enabled(budget_tokens=2048)),
+            thinking=Some(ThinkingConfig::Enabled(budget_tokens=Some(2048))),
           ),
         ),
       )
@@ -502,7 +502,7 @@ test "encode validation failures are typed and local" {
           ),
           options=MessagesRequestOptions::MessagesRequestOptions(
             temperature=Some(0.7),
-            thinking=Some(ThinkingConfig::Enabled(budget_tokens=2048)),
+            thinking=Some(ThinkingConfig::Enabled(budget_tokens=Some(2048))),
           ),
         ),
       )
@@ -517,7 +517,7 @@ test "encode validation failures are typed and local" {
             @posoco.Message::UserMessage(content=[@posoco.Content::Text("q")]),
           ),
           options=MessagesRequestOptions::MessagesRequestOptions(
-            thinking=Some(ThinkingConfig::Enabled(budget_tokens=512)),
+            thinking=Some(ThinkingConfig::Enabled(budget_tokens=Some(512))),
           ),
         ),
       )
@@ -662,7 +662,7 @@ test "manual thinking budget must fit max_tokens and adaptive is a wire variant"
       max_tokens=1024,
       messages~,
       options=MessagesRequestOptions::MessagesRequestOptions(
-        thinking=Some(ThinkingConfig::Enabled(budget_tokens=1024)),
+        thinking=Some(ThinkingConfig::Enabled(budget_tokens=Some(1024))),
       ),
     ),
   ) catch {
@@ -682,6 +682,31 @@ test "manual thinking budget must fit max_tokens and adaptive is a wire variant"
     ),
   )
   assert_eq(jget(jget(adaptive, key="thinking"), key="type"), "adaptive")
+}
+
+///|
+test "budget-free enabled emits the bare enabled dialect and skips budget checks" {
+  let messages : Array[Json] = [
+    { "role": "user", "content": [{ "type": "text", "text": "Hi" }] },
+  ]
+  // No budget_tokens on the wire, and none of the budgeted validations
+  // (budget < max_tokens, temperature 1.0, forced tool_choice) apply.
+  let body = encode_request(
+    model="m",
+    max_tokens=1024,
+    messages~,
+    options=MessagesRequestOptions::MessagesRequestOptions(
+      temperature=Some(0.7),
+      tool_choice=Some(MessagesToolChoice::Any),
+      thinking=Some(ThinkingConfig::Enabled(budget_tokens=None)),
+    ),
+  )
+  let thinking = jget(body, key="thinking")
+  assert_eq(jget(thinking, key="type"), "enabled")
+  match thinking {
+    Object(fields) => assert_false(fields.contains("budget_tokens"))
+    _ => fail("thinking must be an object")
+  }
 }
 
 ///|
