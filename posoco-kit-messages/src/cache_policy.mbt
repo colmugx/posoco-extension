@@ -48,6 +48,7 @@ priv struct CacheMarkScan {
   mut content_blocks : Int
   mut latest_explicit_block : Int
   mut has_one_hour : Bool
+  mut previous_position_kind : String
 }
 
 ///|
@@ -60,6 +61,7 @@ fn CacheMarkScan::new() -> CacheMarkScan {
     content_blocks: 0,
     latest_explicit_block: 0,
     has_one_hour: false,
+    previous_position_kind: "",
   }
 }
 
@@ -92,7 +94,13 @@ fn inspect_cache_block(
   kind : String,
   cacheable : Bool,
 ) -> Unit raise @posoco.ModelError {
-  scan.content_blocks += 1
+  // Native lookback counts a consecutive batch of tool_use or
+  // tool_result blocks in one message as ONE position.
+  if !((kind == "tool_use" || kind == "tool_result") &&
+    scan.previous_position_kind == kind) {
+    scan.content_blocks += 1
+  }
+  scan.previous_position_kind = kind
   if cacheable {
     scan.last_cacheable_kind = kind
     scan.last_cacheable_ttl = None
@@ -165,6 +173,7 @@ fn inspect_messages_cache(body : Json) -> CacheMarkScan raise @posoco.ModelError
   match root.get("messages") {
     Some(Json::Array(messages)) =>
       for message in messages {
+        scan.previous_position_kind = ""
         guard message is Json::Object(msg) else {
           raise @posoco.ModelError::RequestBuild(
             "messages message must be an object (stage=cache, category=message)",
@@ -173,15 +182,22 @@ fn inspect_messages_cache(body : Json) -> CacheMarkScan raise @posoco.ModelError
         match msg.get("content") {
           Some(Json::Array(blocks)) =>
             for block in blocks {
-              let cacheable = match block {
+              let (kind, cacheable) = match block {
                 Json::Object(fields) =>
                   match fields.get("type") {
-                    Some(Json::String("text" | "image" | "tool_result" | "tool_use")) => true
-                    _ => false
+                    Some(Json::String("text")) =>
+                      ("text", match fields.get("text") {
+                        Some(Json::String(text)) => text != ""
+                        _ => false
+                      })
+                    Some(Json::String("image")) => ("image", true)
+                    Some(Json::String("tool_result")) => ("tool_result", true)
+                    Some(Json::String("tool_use")) => ("tool_use", true)
+                    _ => ("unknown", false)
                   }
-                _ => false
+                _ => ("unknown", false)
               }
-              inspect_cache_block(scan, block, "message", cacheable)
+              inspect_cache_block(scan, block, kind, cacheable)
             }
           Some(Json::String(_)) => scan.content_blocks += 1
           _ =>
