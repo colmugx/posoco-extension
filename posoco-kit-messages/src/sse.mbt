@@ -193,6 +193,7 @@ pub(all) struct MessagesSseState {
   priv mut response_id : String
   priv mut model : String
   priv mut usage : UsageSnapshot?
+  priv mut cache_creation_split : MessagesCacheCreation?
   priv mut stop_reason : String
   priv mut stop_sequence : String?
 } derive(Debug)
@@ -210,6 +211,7 @@ pub fn MessagesSseState::MessagesSseState() -> MessagesSseState {
     response_id: "",
     model: "",
     usage: None,
+    cache_creation_split: None,
     stop_reason: "",
     stop_sequence: None,
   }
@@ -288,6 +290,33 @@ fn MessagesSseState::merge_usage(
     _ =>
       raise @posoco.ModelError::ResponseParse(
         "\{provider} usage parse failure (stage=usage, category=not_object)",
+      )
+  }
+  match fields.get("cache_creation") {
+    Some(Json::Object(_)) => {
+      let part = parse_messages_cache_creation(usage)
+      let prior = self.cache_creation_split
+      self.cache_creation_split = Some({
+        ephemeral_5m_input_tokens: match part.ephemeral_5m_input_tokens {
+          Some(n) => Some(n)
+          None => match prior {
+            Some(prev) => prev.ephemeral_5m_input_tokens
+            None => None
+          }
+        },
+        ephemeral_1h_input_tokens: match part.ephemeral_1h_input_tokens {
+          Some(n) => Some(n)
+          None => match prior {
+            Some(prev) => prev.ephemeral_1h_input_tokens
+            None => None
+          }
+        },
+      })
+    }
+    Some(Json::Null) | None => ()
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "\{provider} usage parse failure (stage=cache_creation, category=wrong_type)",
       )
   }
   let input = snapshot_counter(provider~, fields, key="input_tokens")
@@ -978,6 +1007,7 @@ pub fn messages_stream_result(
     response_id: state.response_id,
     model: state.model,
     usage: state.native_usage(),
+    cache_creation: state.cache_creation_split,
     extensions: [],
   }
 }
