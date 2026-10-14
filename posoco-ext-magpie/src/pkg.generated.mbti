@@ -1,0 +1,133 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-magpie"
+
+import {
+  "colmugx/posoco-kit-model-management",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const DEFAULT_CONNECT_TIMEOUT_MS : Int = 5000
+
+pub const DEFAULT_GATEWAY_URL : String = "http://127.0.0.1:3425"
+
+pub const LOCAL_APP_TOKEN : String = "magpie-posoco"
+
+pub const MANAGER_ID : String = "magpie"
+
+pub fn decode_catalog(String) -> MagpieCatalogReport raise MagpieGatewayError
+
+pub fn effective_token(MagpieConfig) -> String?
+
+pub fn gateway_headers(String) -> Map[String, String]
+
+pub fn gateway_url(MagpieConfig, String) -> String
+
+pub fn is_loopback_url(String) -> Bool
+
+pub fn parse_hello(String) -> MagpieIdentity raise MagpieGatewayError
+
+// Errors
+pub(all) suberror MagpieGatewayError {
+  InvalidConfig(String)
+  Disabled
+  NotConfigured(String)
+  Offline(String)
+  AuthenticationFailed(String)
+  WrongIdentity(String)
+  InvalidResponse(String)
+} derive(@debug.Debug)
+pub fn MagpieGatewayError::output(Self, &Logger) -> Unit
+pub fn MagpieGatewayError::to_repr(Self) -> @debug.Repr
+pub fn MagpieGatewayError::to_string(Self) -> String
+pub impl Show for MagpieGatewayError
+
+// Types and methods
+pub struct HttpMagpieTransport {
+  // private fields
+}
+pub fn HttpMagpieTransport::HttpMagpieTransport(timeout_ms? : Int) -> Self
+
+pub(all) struct MagpieCatalogEntry {
+  info : @posoco-kit-model-management.ManagerModelInfo
+  raw : Json
+} derive(@debug.Debug)
+pub fn MagpieCatalogEntry::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieCatalogReport {
+  entries : Array[MagpieCatalogEntry]
+  duplicates : Array[String]
+} derive(@debug.Debug)
+
+pub struct MagpieConfig {
+  base_url : String
+  credential : String?
+  connect_timeout_ms : Int
+  enabled : Bool
+  selected_model : String?
+  selected_effort : String?
+} derive(Eq)
+pub fn MagpieConfig::MagpieConfig(base_url? : String, credential? : String?, connect_timeout_ms? : Int, enabled? : Bool, selected_model? : String?, selected_effort? : String?) -> Self raise MagpieGatewayError
+pub fn MagpieConfig::equal(Self, Self) -> Bool
+pub fn MagpieConfig::not_equal(Self, Self) -> Bool
+pub fn MagpieConfig::output(Self, &Logger) -> Unit
+pub fn MagpieConfig::to_string(Self) -> String
+pub impl Show for MagpieConfig
+pub impl @debug.Debug for MagpieConfig
+
+pub(all) enum MagpieConnectionStatus {
+  NotConfigured
+  Disabled
+  Offline(String)
+  AuthFailed(String)
+  InvalidGateway(String)
+  EmptyCatalog
+  Connected(String?)
+} derive(Eq, @debug.Debug)
+pub fn MagpieConnectionStatus::connected(Self) -> Bool
+pub fn MagpieConnectionStatus::describe(Self) -> String
+pub fn MagpieConnectionStatus::equal(Self, Self) -> Bool
+pub fn MagpieConnectionStatus::not_equal(Self, Self) -> Bool
+pub fn MagpieConnectionStatus::output(Self, &Logger) -> Unit
+pub fn MagpieConnectionStatus::to_repr(Self) -> @debug.Repr
+pub fn MagpieConnectionStatus::to_string(Self) -> String
+pub impl Show for MagpieConnectionStatus
+
+pub(all) struct MagpieIdentity {
+  name : String
+  version : String?
+} derive(Eq, @debug.Debug)
+pub fn MagpieIdentity::equal(Self, Self) -> Bool
+pub fn MagpieIdentity::not_equal(Self, Self) -> Bool
+pub fn MagpieIdentity::to_repr(Self) -> @debug.Repr
+
+pub struct MagpieManager {
+  // private fields
+}
+pub fn MagpieManager::MagpieManager(config~ : MagpieConfig, transport? : &MagpieTransport) -> Self
+pub fn MagpieManager::active_selection(Self) -> @posoco-kit-model-management.ManagerSelection
+pub fn MagpieManager::connection_status(Self) -> MagpieConnectionStatus
+pub fn MagpieManager::last_refresh_report(Self) -> MagpieRefreshOutcome?
+pub fn MagpieManager::list_models(Self) -> Array[@posoco-kit-model-management.ManagerModelInfo]
+pub fn MagpieManager::manager_id(Self) -> String
+pub async fn MagpieManager::refresh(Self) -> MagpieRefreshOutcome raise MagpieGatewayError
+pub fn MagpieManager::select_effort(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
+pub fn MagpieManager::select_model(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
+pub impl @posoco-kit-model-management.ModelManagerControl for MagpieManager
+
+pub(all) struct MagpieRefreshOutcome {
+  total : Int
+  added : Int
+  removed : Int
+  duplicates : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn MagpieRefreshOutcome::equal(Self, Self) -> Bool
+pub fn MagpieRefreshOutcome::not_equal(Self, Self) -> Bool
+pub fn MagpieRefreshOutcome::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
+pub(open) trait MagpieTransport {
+  async fn get(Self, String, Map[String, String]) -> (Int, String) raise MagpieGatewayError
+}
