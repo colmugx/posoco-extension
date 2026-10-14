@@ -42,6 +42,7 @@ pub(all) struct MessagesResult {
   response_id : String
   model : String
   usage : MessagesUsage?
+  cache_creation : MessagesCacheCreation?
   extensions : Array[(String, Json)]
 } derive(Debug)
 
@@ -320,6 +321,11 @@ pub fn parse_response(
         "\{provider} response parse failure (stage=usage, category=wrong_type)",
       )
   }
+  let cache_creation = match fields.get("usage") {
+    Some(Json::Object(_)) =>
+      Some(parse_messages_cache_creation(fields.get("usage").unwrap_or(Json::null())))
+    _ => None
+  }
   let extensions : Array[(String, Json)] = []
   for entry in fields {
     let (name, value) = entry
@@ -359,6 +365,7 @@ pub fn parse_response(
     response_id,
     model,
     usage,
+    cache_creation,
     extensions,
   }
 }
