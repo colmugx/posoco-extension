@@ -1,0 +1,150 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/orchestration"
+
+import {
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/execution",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn plan_execution(@domain.BoardStateSnapshot, ExecutionPolicy, Array[ExecutionInputAvailability]) -> ExecutionPlan
+
+// Errors
+
+// Types and methods
+pub(all) struct AuthorizedExecutionInput {
+  execution_id : String
+  session_id : String
+  input : String
+  timeout_ms : Int?
+}
+
+pub(all) struct BlockedExecution {
+  task_id : String
+  attempt_id : String?
+  reasons : Array[ExecutionBlockReason]
+} derive(Eq, @debug.Debug)
+pub fn BlockedExecution::equal(Self, Self) -> Bool
+pub fn BlockedExecution::not_equal(Self, Self) -> Bool
+pub fn BlockedExecution::to_repr(Self) -> @debug.Repr
+
+pub struct BoardOrchestrator {
+  // private fields
+}
+pub fn BoardOrchestrator::BoardOrchestrator(owner~ : @execution.BoardExecutionOwner, resolver~ : &BoardExecutionInputResolver, policy? : ExecutionPolicy) -> Self
+pub async fn BoardOrchestrator::board_state(Self) -> Result[@domain.BoardStateSnapshot, OrchestrationError]
+pub fn BoardOrchestrator::cancel_active(Self, String) -> Result[Unit, @execution.BoardExecutionError]
+pub async fn BoardOrchestrator::dispatch_next(Self, candidate? : ExecutionCandidate, planning_revision? : Int64, task_scope? : Array[String], admission_guard? : () -> Bool, execution_timeout_ms? : Int, on_admitted? : (@execution.BoardExecutionHandle) -> Unit) -> Result[ExecutionDispatch, OrchestrationError]
+pub fn BoardOrchestrator::owner_status(Self) -> @execution.BoardExecutionOwnerStatus
+pub async fn BoardOrchestrator::plan(Self, task_scope? : Array[String]) -> Result[ExecutionPlan, OrchestrationError]
+pub async fn BoardOrchestrator::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn BoardOrchestrator::status(Self, task_scope? : Array[String]) -> Result[OrchestrationStatus, OrchestrationError]
+
+pub(all) enum ExecutionBlockReason {
+  AdmissionDisabled
+  TaskStageIneligible
+  MissingDependency(String)
+  DependencyNotDone(String)
+  NoQueuedExecuteAttempt
+  MissingExecutionInput
+  AuthorizationDenied
+  IdentityAlreadyUsed
+  ExecutionActive
+  AdmissionInProgress
+  UnresolvedExecution
+  HostUnavailable
+  OwnerNotAttached
+  OwnerClosed
+} derive(Eq, @debug.Debug)
+pub fn ExecutionBlockReason::equal(Self, Self) -> Bool
+pub fn ExecutionBlockReason::not_equal(Self, Self) -> Bool
+pub fn ExecutionBlockReason::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ExecutionCandidate {
+  task_id : String
+  attempt_id : String
+} derive(Eq, @debug.Debug)
+pub fn ExecutionCandidate::equal(Self, Self) -> Bool
+pub fn ExecutionCandidate::not_equal(Self, Self) -> Bool
+pub fn ExecutionCandidate::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ExecutionDispatch {
+  Admitted(@execution.BoardExecutionHandle)
+  Blocked(ExecutionPlan)
+  StalePlan(ExecutionPlan)
+}
+
+pub(all) struct ExecutionInputAvailability {
+  task_id : String
+  attempt_id : String
+  status : ExecutionInputStatus
+} derive(Eq, @debug.Debug)
+pub fn ExecutionInputAvailability::equal(Self, Self) -> Bool
+pub fn ExecutionInputAvailability::not_equal(Self, Self) -> Bool
+pub fn ExecutionInputAvailability::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ExecutionInputResolution {
+  Authorized(AuthorizedExecutionInput)
+  InputMissing
+  NotAuthorized
+}
+
+pub(all) enum ExecutionInputStatus {
+  Available
+  Missing
+  Denied
+} derive(Eq, @debug.Debug)
+pub fn ExecutionInputStatus::equal(Self, Self) -> Bool
+pub fn ExecutionInputStatus::not_equal(Self, Self) -> Bool
+pub fn ExecutionInputStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ExecutionPlan {
+  revision : Int64
+  policy_id : String
+  eligible : Array[ExecutionCandidate]
+  blocked : Array[BlockedExecution]
+} derive(Eq, @debug.Debug)
+pub fn ExecutionPlan::equal(Self, Self) -> Bool
+pub fn ExecutionPlan::not_equal(Self, Self) -> Bool
+pub fn ExecutionPlan::to_repr(Self) -> @debug.Repr
+
+pub struct ExecutionPolicy {
+  id : String
+  enabled : Bool
+  // private fields
+}
+pub fn ExecutionPolicy::ExecutionPolicy(enabled? : Bool, stages? : Array[@domain.BoardStage], id? : String) -> Self
+pub fn ExecutionPolicy::stages(Self) -> Array[@domain.BoardStage]
+
+pub(all) enum OrchestrationError {
+  BoardUnavailable
+  Closed
+  Busy
+  InvalidDispatch
+  AdmissionStopped
+  ResolutionFailed
+  InputUnavailable
+  AuthorizationRejected
+  OwnerRejected(@execution.BoardExecutionError)
+  DispatchCancelled(cleanup_confirmed~ : Bool)
+} derive(Eq, @debug.Debug)
+pub fn OrchestrationError::equal(Self, Self) -> Bool
+pub fn OrchestrationError::not_equal(Self, Self) -> Bool
+pub fn OrchestrationError::to_repr(Self) -> @debug.Repr
+
+pub(all) struct OrchestrationStatus {
+  policy_enabled : Bool
+  admission_enabled : Bool
+  dispatch_busy : Bool
+  owner : @execution.BoardExecutionOwnerStatus
+  plan : ExecutionPlan
+}
+
+// Type aliases
+
+// Traits
+pub(open) trait BoardExecutionInputResolver {
+  fn availability(Self, ExecutionCandidate) -> ExecutionInputStatus
+  async fn resolve(Self, ExecutionCandidate) -> ExecutionInputResolution
+}

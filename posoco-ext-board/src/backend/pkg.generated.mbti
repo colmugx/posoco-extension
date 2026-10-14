@@ -1,0 +1,56 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/backend"
+
+import {
+  "colmugx/posoco-ext-board/coordinator",
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/protocol",
+  "colmugx/posoco-ext-board/store",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct BoardBackend {
+  // private fields
+}
+pub fn BoardBackend::BoardBackend(event_buffer? : Int, client_queue_depth? : Int, store? : &@store.BoardStore, now_ms? : () -> Int64) -> Self
+pub fn BoardBackend::attach(Self, @async.TaskGroup[Unit]) -> Unit
+pub async fn BoardBackend::bootstrap_snapshot(Self) -> Result[@protocol.BoardSnapshot, String]
+pub fn BoardBackend::current_seq(Self) -> Int64
+pub fn BoardBackend::enqueue_local(Self, BoardSubscription, @protocol.BoardServerFrame) -> Unit
+pub fn BoardBackend::event_history(Self) -> Array[@protocol.BoardWireEvent]
+pub async fn BoardBackend::handle_command(Self, @protocol.BoardClientCommand) -> @protocol.BoardCommandResult
+pub fn BoardBackend::publish_telemetry(Self, board_revision~ : Int64, kind~ : String, scope? : @protocol.BoardEventScope?, payload~ : Json) -> @protocol.BoardWireEvent
+pub async fn BoardBackend::shutdown(Self) -> Unit
+pub async fn BoardBackend::state(Self) -> Result[@domain.BoardStateSnapshot, @coordinator.BoardCoordinatorError]
+pub fn BoardBackend::subscribe(Self, Int64, Bool) -> BoardSubscription
+pub fn BoardBackend::subscriber_count(Self) -> Int
+pub fn BoardBackend::unsubscribe(Self, BoardSubscription) -> Unit
+
+pub struct BoardSubscription {
+  plan : BoardSubscriptionPlan
+  // private fields
+}
+pub fn BoardSubscription::initial(Self) -> Array[@protocol.BoardServerFrame]
+pub fn BoardSubscription::install_snapshot(Self, @protocol.BoardSnapshot) -> Unit
+pub async fn BoardSubscription::next(Self) -> @protocol.BoardServerFrame
+pub async fn BoardSubscription::pump(Self, async (@protocol.BoardServerFrame) -> Unit) -> Unit
+pub fn BoardSubscription::resync_required(Self) -> @protocol.BoardServerFrame?
+
+pub(all) enum BoardSubscriptionPlan {
+  Live
+  Replay(Array[@protocol.BoardWireEvent])
+  SnapshotRequired
+} derive(Eq, @debug.Debug)
+pub fn BoardSubscriptionPlan::equal(Self, Self) -> Bool
+pub fn BoardSubscriptionPlan::not_equal(Self, Self) -> Bool
+pub fn BoardSubscriptionPlan::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

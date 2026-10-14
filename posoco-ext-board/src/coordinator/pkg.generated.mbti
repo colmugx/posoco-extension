@@ -1,0 +1,79 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/coordinator"
+
+import {
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/store",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct BoardCoordinator {
+  // private fields
+}
+pub fn BoardCoordinator::BoardCoordinator(store? : &@store.BoardStore, now_ms? : () -> Int64, on_commit? : (@domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Unit, stream_cursor? : () -> Int64) -> Self
+pub fn BoardCoordinator::attach(Self, group~ : @async.TaskGroup[Unit]) -> Unit
+pub async fn BoardCoordinator::attempt(Self, id~ : @domain.AttemptId) -> Result[@domain.Attempt?, BoardCoordinatorError]
+pub async fn BoardCoordinator::attempts(Self) -> Result[Array[@domain.Attempt], BoardCoordinatorError]
+pub async fn BoardCoordinator::revision(Self) -> Result[Int64, BoardCoordinatorError]
+pub async fn BoardCoordinator::shutdown(Self) -> Unit
+pub async fn BoardCoordinator::snapshot(Self) -> Result[@domain.BoardStateSnapshot, BoardCoordinatorError]
+pub fn BoardCoordinator::status(Self) -> BoardCoordinatorStatus
+pub fn BoardCoordinator::stream_cursor(Self) -> Int64
+pub async fn BoardCoordinator::stream_snapshot(Self) -> Result[BoardStreamSnapshot, BoardCoordinatorError]
+pub async fn BoardCoordinator::submit(Self, command~ : @domain.BoardCommand) -> Result[Array[@domain.BoardEvent], BoardCoordinatorError]
+pub async fn BoardCoordinator::task(Self, id~ : @domain.BoardTaskId) -> Result[@domain.BoardTask?, BoardCoordinatorError]
+pub async fn BoardCoordinator::tasks(Self) -> Result[Array[@domain.BoardTask], BoardCoordinatorError]
+pub async fn BoardCoordinator::wait_ready(Self) -> Result[Unit, BoardCoordinatorError]
+
+pub(all) enum BoardCoordinatorError {
+  NotAttached
+  Closed
+  TimedOut
+  Rejected(@domain.BoardError)
+  Initializing
+  PersistFailed(@store.BoardStoreError)
+  DurabilityUncertain(String)
+  RestoreFailed(BoardRestoreError)
+} derive(Eq, @debug.Debug)
+pub fn BoardCoordinatorError::equal(Self, Self) -> Bool
+pub fn BoardCoordinatorError::not_equal(Self, Self) -> Bool
+pub fn BoardCoordinatorError::to_repr(Self) -> @debug.Repr
+
+pub(all) enum BoardCoordinatorStatus {
+  Detached
+  Loading
+  Ready
+  Reconciling
+  Failed
+  Stopping
+  Stopped
+} derive(Eq, @debug.Debug)
+pub fn BoardCoordinatorStatus::equal(Self, Self) -> Bool
+pub fn BoardCoordinatorStatus::not_equal(Self, Self) -> Bool
+pub fn BoardCoordinatorStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) enum BoardRestoreError {
+  Store(@store.BoardStoreError)
+  Domain(@domain.BoardError)
+} derive(Eq, @debug.Debug)
+pub fn BoardRestoreError::equal(Self, Self) -> Bool
+pub fn BoardRestoreError::not_equal(Self, Self) -> Bool
+pub fn BoardRestoreError::to_repr(Self) -> @debug.Repr
+
+pub(all) struct BoardStreamSnapshot {
+  board_snapshot : @domain.BoardStateSnapshot
+  stream_seq : Int64
+} derive(Eq, @debug.Debug)
+pub fn BoardStreamSnapshot::equal(Self, Self) -> Bool
+pub fn BoardStreamSnapshot::not_equal(Self, Self) -> Bool
+pub fn BoardStreamSnapshot::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,149 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/execution"
+
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco/port",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode_execution_journal(String) -> Result[Array[BoardExecutionBinding], BoardExecutionError]
+
+pub fn encode_execution_journal(Array[BoardExecutionBinding]) -> Result[String, BoardExecutionError]
+
+// Errors
+
+// Types and methods
+pub(all) struct BoardExecutionBinding {
+  task_id : String
+  attempt_id : String
+  execution_id : String
+  session_id : String
+  run : BoardExecutionRun?
+  phase : BoardExecutionPhase
+  outcome : BoardExecutionOutcome?
+} derive(Eq, @debug.Debug)
+pub fn BoardExecutionBinding::equal(Self, Self) -> Bool
+pub fn BoardExecutionBinding::not_equal(Self, Self) -> Bool
+pub fn BoardExecutionBinding::to_repr(Self) -> @debug.Repr
+
+pub(all) enum BoardExecutionError {
+  NotReady
+  Closed
+  Busy
+  InvalidRequest
+  IneligibleAttempt
+  DuplicateIdentity
+  StoreUnavailable
+  WrongExecution
+} derive(Eq, @debug.Debug)
+pub fn BoardExecutionError::equal(Self, Self) -> Bool
+pub fn BoardExecutionError::not_equal(Self, Self) -> Bool
+pub fn BoardExecutionError::to_repr(Self) -> @debug.Repr
+
+pub struct BoardExecutionHandle {
+  // private fields
+}
+pub fn BoardExecutionHandle::execution_id(Self) -> String
+pub async fn BoardExecutionHandle::wait(Self) -> BoardExecutionBinding
+
+pub(all) enum BoardExecutionOutcome {
+  Completed
+  Failed
+  Cancelled
+  TimedOut
+  Interrupted
+} derive(Eq, @debug.Debug)
+pub fn BoardExecutionOutcome::equal(Self, Self) -> Bool
+pub fn BoardExecutionOutcome::not_equal(Self, Self) -> Bool
+pub fn BoardExecutionOutcome::to_repr(Self) -> @debug.Repr
+
+pub struct BoardExecutionOwner {
+  // private fields
+}
+pub fn BoardExecutionOwner::BoardExecutionOwner(backend~ : @backend.BoardBackend, adapter~ : &BoardExecutionAdapter, store~ : &BoardExecutionStore) -> Self
+pub async fn BoardExecutionOwner::attach(Self, @async.TaskGroup[Unit]) -> Result[Unit, BoardExecutionError]
+pub fn BoardExecutionOwner::bindings(Self) -> Array[BoardExecutionBinding]
+pub async fn BoardExecutionOwner::board_state(Self) -> Result[@domain.BoardStateSnapshot, BoardExecutionError]
+pub fn BoardExecutionOwner::cancel(Self, String) -> Result[Unit, BoardExecutionError]
+pub async fn BoardExecutionOwner::execute(Self, BoardExecutionRequest, admission_guard? : (@domain.BoardStateSnapshot) -> Bool, reservation_revision? : Int64) -> Result[BoardExecutionHandle, BoardExecutionError]
+pub async fn BoardExecutionOwner::shutdown(Self, timeout_ms? : Int) -> Bool
+pub fn BoardExecutionOwner::status(Self) -> BoardExecutionOwnerStatus
+pub fn BoardExecutionOwner::with_slots(backend~ : @backend.BoardBackend, store~ : &BoardExecutionStore, adapter_factory~ : (Int) -> &BoardExecutionAdapter, max_concurrency? : Int) -> Result[Self, BoardExecutionError]
+
+pub(all) struct BoardExecutionOwnerStatus {
+  attached : Bool
+  closed : Bool
+  admission_busy : Bool
+  host_available : Bool
+  unresolved : Bool
+  active : BoardExecutionBinding?
+  capacity : Int
+  active_bindings : Array[BoardExecutionBinding]
+  available_slots : Int
+} derive(Eq, @debug.Debug)
+pub fn BoardExecutionOwnerStatus::equal(Self, Self) -> Bool
+pub fn BoardExecutionOwnerStatus::not_equal(Self, Self) -> Bool
+pub fn BoardExecutionOwnerStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) enum BoardExecutionPhase {
+  Reserved
+  Running
+  Finished
+  Settled
+  Unresolved
+} derive(Eq, @debug.Debug)
+pub fn BoardExecutionPhase::equal(Self, Self) -> Bool
+pub fn BoardExecutionPhase::not_equal(Self, Self) -> Bool
+pub fn BoardExecutionPhase::to_repr(Self) -> @debug.Repr
+
+pub(all) struct BoardExecutionRequest {
+  task_id : String
+  attempt_id : String
+  execution_id : String
+  session_id : String
+  input : String
+  timeout_ms : Int?
+}
+
+pub(all) struct BoardExecutionRun {
+  session_id : String
+  run_id : String
+  turn_id : String
+} derive(Eq, @debug.Debug)
+pub fn BoardExecutionRun::equal(Self, Self) -> Bool
+pub fn BoardExecutionRun::not_equal(Self, Self) -> Bool
+pub fn BoardExecutionRun::to_repr(Self) -> @debug.Repr
+
+pub struct MemoryBoardExecutionStore {
+  // private fields
+}
+pub fn MemoryBoardExecutionStore::MemoryBoardExecutionStore() -> Self
+pub async fn MemoryBoardExecutionStore::load(Self) -> Result[Array[BoardExecutionBinding], BoardExecutionError]
+pub async fn MemoryBoardExecutionStore::persist(Self, Array[BoardExecutionBinding]) -> Result[Unit, BoardExecutionError]
+pub impl BoardExecutionStore for MemoryBoardExecutionStore
+
+pub struct PosocoBoardExecutionAdapter {
+  // private fields
+}
+pub fn PosocoBoardExecutionAdapter::PosocoBoardExecutionAdapter(extensions~ : () -> Array[&@port.Extension], config? : @posoco.AgentConfig, available? : () -> Bool) -> Self
+pub fn PosocoBoardExecutionAdapter::ready(Self) -> Bool
+pub async fn PosocoBoardExecutionAdapter::run(Self, BoardExecutionRequest, async (BoardExecutionRun) -> Bool) -> BoardExecutionOutcome
+pub impl BoardExecutionAdapter for PosocoBoardExecutionAdapter
+
+// Type aliases
+
+// Traits
+pub(open) trait BoardExecutionAdapter {
+  fn ready(Self) -> Bool
+  async fn run(Self, BoardExecutionRequest, async (BoardExecutionRun) -> Bool) -> BoardExecutionOutcome
+}
+
+pub(open) trait BoardExecutionStore {
+  async fn load(Self) -> Result[Array[BoardExecutionBinding], BoardExecutionError]
+  async fn persist(Self, Array[BoardExecutionBinding]) -> Result[Unit, BoardExecutionError]
+}

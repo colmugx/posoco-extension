@@ -542,10 +542,11 @@ These ids and lifecycles must never be treated as interchangeable.
 
 ## Concurrency policy
 
-Board v1 will allow at most one active Agent run at a time. This is an
-attribution correctness constraint, not a permanent UI limitation. S1 does not
-run Agents yet, so the local control plane introduces no second execution
-scheduler.
+Execution defaults to one active Agent run per Board namespace. S4D allows a
+trusted host to opt into 1–8 isolated internal slots under **one** execution owner
+and exclusive identity journal. Agent scopes remain explicit; durable journal
+transitions serialize even when Agents overlap. The browser does not authorize
+execution. See [bounded parallel workflows](docs/S4D-parallel-workflow.md).
 
 ## Packages
 
@@ -563,6 +564,8 @@ scheduler.
 - `orchestration`: S4B pure planner and trusted-host one-shot scoped admission;
 - `workflow`: S4C opt-in, bounded in-process sequential runner; see
   [authorization, control and recovery](docs/S4C-sequential-runner.md);
+- `parallel`: S4D opt-in bounded waves, isolated owner slots and confirmed
+  settlement barriers; see [ownership and limits](docs/S4D-parallel-workflow.md);
 - independent `posoco-ext-board-web` module: Rabbita task presentation,
   built with Warren as a development tool;
 - independent `posoco-ext-board-native` module: MoonBack localhost transport,
@@ -572,5 +575,5 @@ Embedded assets belong only to the optional native presentation. The headless
 backend and wire/durable mutation semantics remain unchanged. The standalone UI
 still manages lifecycle manually; host execution/workflow authorization is
 separate and never comes from its browser capability token. Review reversal,
-Task/Review automation, Cetas/SvelteKit or desktop integration, parallel execution
-and crash-resumable workflows remain out of scope.
+Task/Review automation, Cetas/SvelteKit or desktop integration, distributed
+parallel execution and crash-resumable workflows remain out of scope.

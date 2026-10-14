@@ -11,7 +11,7 @@ import {
 async fn generate(
   dist : String,
   out : String,
-  check? : Bool = false,
+  check~ : Bool = false,
 ) -> @shell.Output {
   let args = [
     "run", "tools/embed-assets/generate.mbtx", "--target", "native", "--output-json",
@@ -31,6 +31,240 @@ async fn rejected(dist : String, out : String, reason : String) -> Unit {
     result.stdout().contains(reason),
     msg=result.stdout() + result.stderr(),
   )
+}
+
+///|
+/// Byte chunk size of the generated `b"..."` literals; mirrors
+/// `literal_chunk_size` in generate.mbtx.
+let chunk_size : Int32 = 128
+
+///|
+/// Bounded literal columns: one escaped byte spans at most `\xNN` (4
+/// columns), plus the `    b"` prefix and the `",` suffix.
+let max_literal_line : Int32 = chunk_size * 4 + 8
+
+///|
+/// Occurrences of `needle` in `text`; the needles below never overlap
+/// themselves, so non-overlapping counting is exact.
+fn count_occurrences(text : String, needle : String) -> Int32 {
+  let mut count = 0
+  let mut from = 0
+  while from + needle.length() <= text.length() {
+    match text[from:].find(needle) {
+      Some(offset) => {
+        count += 1
+        from += offset + needle.length()
+      }
+      None => break
+    }
+  }
+  count
+}
+
+///|
+/// True for a decimal byte-array line, the retired large-asset
+/// representation: only digits, commas, and spaces, with at least one digit.
+fn is_decimal_array_line(line : StringView) -> Bool {
+  let mut digits = false
+  for ch in line {
+    let code = ch.to_int()
+    if code >= 0x30 && code <= 0x39 {
+      digits = true
+    } else if code != 0x2c && code != 0x20 {
+      return false
+    }
+  }
+  digits
+}
+
+///|
+/// The generator emits lowercase `\xNN` escapes only (see `Byte::to_hex`).
+fn is_lower_hex(code : Int32) -> Bool {
+  (code >= 0x30 && code <= 0x39) || (code >= 0x61 && code <= 0x66)
+}
+
+///|
+fn parse_digits(view : StringView) -> Int32? {
+  guard view.length() > 0 else { return None }
+  let mut value = 0
+  for ch in view {
+    let code = ch.to_int()
+    guard code >= 0x30 && code <= 0x39 else { return None }
+    value = value * 10 + (code - 0x30)
+  }
+  Some(value)
+}
+
+///|
+/// Parse the chunk reassembly line
+/// `  Bytes::makei(<length>, i => chunks[i / <size>][i % <size>])`.
+fn parse_makei(line : String) -> (Int32, Int32)? {
+  let rest = match line.strip_prefix("  Bytes::makei(") {
+    Some(rest) => rest
+    None => return None
+  }
+  let middle = ", i => chunks[i / "
+  let at = match rest.find(middle) {
+    Some(at) => at
+    None => return None
+  }
+  let length = match parse_digits(rest[:at]) {
+    Some(length) => length
+    None => return None
+  }
+  let tail = rest[at + middle.length():]
+  let at2 = match tail.find("][i % ") {
+    Some(at2) => at2
+    None => return None
+  }
+  let divisor = match parse_digits(tail[:at2]) {
+    Some(divisor) => divisor
+    None => return None
+  }
+  let tail2 = tail[at2 + "][i % ".length():]
+  let at3 = match tail2.find("])") {
+    Some(at3) => at3
+    None => return None
+  }
+  let modulo = match parse_digits(tail2[:at3]) {
+    Some(modulo) => modulo
+    None => return None
+  }
+  if tail2[at3 + 2:].length() != 0 || divisor != modulo {
+    return None
+  }
+  Some((length, divisor))
+}
+
+///|
+/// Byte count of one `b"..."` literal body, rejecting anything the generator
+/// never emits: raw control characters, uppercase or unknown escapes.
+fn decoded_length(body : Array[Char]) -> Int32? {
+  let mut index = 0
+  let mut count = 0
+  while index < body.length() {
+    let code = body[index].to_int()
+    if code == 0x5c {
+      // Backslash: `\"`, `\\`, or `\xNN`.
+      guard index + 1 < body.length() else { return None }
+      let escape = body[index + 1].to_int()
+      if escape == 0x78 {
+        guard index + 3 < body.length() else { return None }
+        guard is_lower_hex(body[index + 2].to_int()) &&
+          is_lower_hex(body[index + 3].to_int()) else {
+          return None
+        }
+        index += 4
+      } else if escape == 0x22 || escape == 0x5c {
+        index += 2
+      } else {
+        return None
+      }
+      count += 1
+    } else {
+      // The generator writes printable ASCII verbatim.
+      guard code >= 0x20 && code <= 0x7e else { return None }
+      index += 1
+      count += 1
+    }
+  }
+  Some(count)
+}
+
+///|
+/// Assert the chunked-literal representation of the generated module: every
+/// asset renders as `b"..."` chunks of at most `chunk_size` bytes reassembled
+/// by `Bytes::makei`, and no decimal byte array or unbounded literal column
+/// ever appears.
+fn assert_chunked_literals(text : String) -> Unit raise {
+  let fn_prefix = "fn web_asset_"
+  let chunk_prefix = "    b\""
+  let makei_prefix = "  Bytes::makei("
+  let mut functions = 0
+  let mut open = false
+  let mut chunk_lengths : Array[Int32] = []
+  for view in text.split("\n") {
+    let line = view.to_owned()
+    assert_true(
+      line.length() <= max_literal_line,
+      msg="unbounded literal column: \{line}",
+    )
+    assert_true(
+      !is_decimal_array_line(view),
+      msg="decimal byte arrays are gone; expected chunked b literals: \{line}",
+    )
+    if line.has_prefix(fn_prefix) {
+      functions += 1
+      assert_true(!open, msg="nested web_asset function: \{line}")
+      assert_true(
+        chunk_lengths.is_empty(),
+        msg="chunked asset fn without Bytes::makei reassembly",
+      )
+      open = true
+    } else if line.has_prefix(chunk_prefix) {
+      assert_true(open, msg="chunk literal outside web_asset fn: \{line}")
+      assert_true(
+        line.has_suffix("\",") && line.length() >= chunk_prefix.length() + 2,
+        msg="malformed chunk literal: \{line}",
+      )
+      let body = line[chunk_prefix.length():line.length() - 2].to_array()
+      match decoded_length(body) {
+        Some(length) => chunk_lengths.push(length)
+        None =>
+          assert_true(false, msg="chunk literal is not byte-exact: \{line}")
+      }
+    } else if line.has_prefix(makei_prefix) {
+      assert_true(open, msg="Bytes::makei outside web_asset fn: \{line}")
+      match parse_makei(line) {
+        Some((length, divisor)) => {
+          assert_eq(
+            divisor,
+            chunk_size,
+            msg="chunk size must stay \{chunk_size} bytes: \{line}",
+          )
+          assert_eq(
+            (length + divisor - 1) / divisor,
+            chunk_lengths.length(),
+            msg="chunk count mismatch for \{length} bytes: \{line}",
+          )
+          let last = chunk_lengths.length() - 1
+          for index, decoded in chunk_lengths {
+            if index < last {
+              assert_eq(
+                decoded,
+                divisor,
+                msg="full chunks must be \{divisor} bytes, got \{decoded}",
+              )
+            } else {
+              assert_true(
+                decoded >= 1 && decoded <= divisor,
+                msg="tail chunk must be 1..\{divisor} bytes, got \{decoded}",
+              )
+            }
+          }
+          let mut total = 0
+          for decoded in chunk_lengths {
+            total += decoded
+          }
+          assert_eq(
+            total,
+            length,
+            msg="chunks must reassemble the declared byte count: \{line}",
+          )
+        }
+        None =>
+          assert_true(false, msg="malformed Bytes::makei reassembly: \{line}")
+      }
+      chunk_lengths = []
+      open = false
+    } else if line.has_prefix("  b\"\"") {
+      // Empty assets render one empty literal instead of chunks.
+      assert_true(open, msg="empty literal outside web_asset fn: \{line}")
+      open = false
+    }
+  }
+  assert_true(!open, msg="chunked asset fn without Bytes::makei reassembly")
+  assert_eq(functions, 7, msg="one web_asset fn per fixture asset")
 }
 
 ///|
@@ -62,9 +296,16 @@ async fn main {
     text.find("\"/aa.dat\"").unwrap() <
     text.find("\"/assets/img.dat\"").unwrap(),
   )
-  assert_true(text.contains("\"/assets/img.dat\": [\n"))
-  assert_true(text.contains("\"/aa.dat\": b\""))
-  assert_true(text.contains("\"/z.dat\": [\n"))
+  // Representation: the map delegates to one chunked-literal fn per asset.
+  assert_true(text.contains("\"/assets/img.dat\": web_asset_"))
+  assert_true(text.contains("\"/aa.dat\": web_asset_"))
+  assert_true(text.contains("\"/z.dat\": web_asset_"))
+  assert_eq(count_occurrences(text, "fn web_asset_"), 7)
+  assert_eq(count_occurrences(text, "let chunks : Array[Bytes] = ["), 7)
+  assert_eq(count_occurrences(text, "\": web_asset_"), 7)
+  // 6000 -> 47 chunks, 4096 -> 32, 4097 -> 33, and one per small asset.
+  assert_eq(count_occurrences(text, "\n    b\""), 116)
+  assert_chunked_literals(text)
   generate(dist, out).check()
   assert_eq(@fs.read_file(out).binary(), first)
   let before = @fs.mtime(out)
@@ -141,6 +382,6 @@ async fn main {
   generate(dist, out).check()
   assert_false(@fs.exists(out + ".tmp"))
   println(
-    "Generator regressions passed: deterministic traversal, hidden/nested files, compiled binary and large literals, current/stale/missing check, symlink/root/FIFO rejection, required assets, reserved control-plane paths, exclusive atomic output.",
+    "Generator regressions passed: deterministic traversal, hidden/nested files, 128-byte chunked b literals with bounded columns and no decimal arrays, byte-exact roundtrip including non-UTF8, current/stale/missing check, symlink/root/FIFO rejection, required assets, reserved control-plane paths, exclusive atomic output.",
   )
 }

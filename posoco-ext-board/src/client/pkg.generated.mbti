@@ -1,0 +1,174 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/client"
+
+import {
+  "colmugx/posoco-ext-board/protocol",
+}
+
+// Values
+pub fn create_task_command(String, Int64, id~ : String, title~ : String, description~ : String, priority~ : ClientBoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[String]) -> @protocol.BoardClientCommand
+
+pub fn decode_board_snapshot(@protocol.BoardSnapshot) -> Result[DecodedBoardSnapshot, ClientError]
+
+pub fn finish_attempt_command(String, Int64, id~ : String, outcome~ : ClientAttemptOutcome) -> @protocol.BoardClientCommand
+
+pub fn move_task_command(String, Int64, id~ : String, to~ : ClientBoardStage) -> @protocol.BoardClientCommand
+
+pub fn queue_attempt_command(String, Int64, id~ : String, task_id~ : String, kind~ : ClientAttemptKind) -> @protocol.BoardClientCommand
+
+pub fn record_review_command(String, Int64, id~ : String, decision~ : ClientRecordableReviewDecision) -> @protocol.BoardClientCommand
+
+pub fn set_task_dependencies_command(String, Int64, id~ : String, dependencies~ : Array[String]) -> @protocol.BoardClientCommand
+
+pub fn start_attempt_command(String, Int64, id~ : String) -> @protocol.BoardClientCommand
+
+pub fn update_task_command(String, Int64, id~ : String, title? : String, description? : String, priority? : ClientBoardPriority, definition_of_done? : Array[String]) -> @protocol.BoardClientCommand
+
+// Errors
+
+// Types and methods
+pub(all) enum ApplyOutcome {
+  Applied
+  Duplicate
+  CommandSettled(@protocol.BoardCommandResult)
+  NeedsSnapshot(String)
+  TerminalProtocolError(String)
+} derive(Eq)
+pub fn ApplyOutcome::equal(Self, Self) -> Bool
+pub fn ApplyOutcome::not_equal(Self, Self) -> Bool
+
+pub struct BoardReplica {
+  // private fields
+} derive(Eq)
+pub fn BoardReplica::apply_event(Self, @protocol.BoardWireEvent) -> ApplyOutcome
+pub fn BoardReplica::apply_frame(Self, @protocol.BoardServerFrame) -> ApplyOutcome
+pub fn BoardReplica::apply_snapshot(Self, @protocol.BoardSnapshot) -> ApplyOutcome
+pub fn BoardReplica::apply_text(Self, String) -> ApplyOutcome
+pub fn BoardReplica::attempts(Self) -> Array[ClientAttempt]
+pub fn BoardReplica::copy(Self) -> Self
+pub fn BoardReplica::empty() -> Self
+pub fn BoardReplica::equal(Self, Self) -> Bool
+pub fn BoardReplica::has_snapshot(Self) -> Bool
+pub fn BoardReplica::hello(Self) -> @protocol.BoardHello
+pub fn BoardReplica::last_seq(Self) -> Int64
+pub fn BoardReplica::not_equal(Self, Self) -> Bool
+pub fn BoardReplica::revision(Self) -> Int64
+pub fn BoardReplica::tasks(Self) -> Array[ClientBoardTask]
+
+pub struct ClientAttempt {
+  id : String
+  task_id : String
+  kind : ClientAttemptKind
+  status : ClientAttemptStatus
+  review : ClientReviewDecision?
+  created_at_ms : Int64
+  started_at_ms : Int64?
+  finished_at_ms : Int64?
+  updated_at_ms : Int64
+} derive(Eq)
+pub fn ClientAttempt::equal(Self, Self) -> Bool
+pub fn ClientAttempt::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientAttemptKind {
+  Discuss
+  Execute
+  Review
+} derive(Eq)
+pub fn ClientAttemptKind::equal(Self, Self) -> Bool
+pub fn ClientAttemptKind::not_equal(Self, Self) -> Bool
+pub fn ClientAttemptKind::to_wire(Self) -> String
+
+pub(all) enum ClientAttemptOutcome {
+  Succeeded
+  Failed
+  Cancelled
+  Interrupted
+} derive(Eq)
+pub fn ClientAttemptOutcome::equal(Self, Self) -> Bool
+pub fn ClientAttemptOutcome::not_equal(Self, Self) -> Bool
+pub fn ClientAttemptOutcome::to_wire(Self) -> String
+
+pub(all) enum ClientAttemptStatus {
+  Queued
+  Running
+  Succeeded
+  Failed
+  Cancelled
+  Interrupted
+} derive(Eq)
+pub fn ClientAttemptStatus::equal(Self, Self) -> Bool
+pub fn ClientAttemptStatus::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientBoardPriority {
+  Low
+  Normal
+  High
+  Critical
+} derive(Eq)
+pub fn ClientBoardPriority::equal(Self, Self) -> Bool
+pub fn ClientBoardPriority::not_equal(Self, Self) -> Bool
+pub fn ClientBoardPriority::to_wire(Self) -> String
+
+pub(all) enum ClientBoardStage {
+  Created
+  Refining
+  Ready
+  Running
+  Review
+  Done
+  Suspended
+} derive(Eq)
+pub fn ClientBoardStage::equal(Self, Self) -> Bool
+pub fn ClientBoardStage::not_equal(Self, Self) -> Bool
+pub fn ClientBoardStage::to_wire(Self) -> String
+
+pub struct ClientBoardTask {
+  id : String
+  title : String
+  description : String
+  stage : ClientBoardStage
+  priority : ClientBoardPriority
+  definition_of_done : Array[String]
+  dependencies : Array[String]
+  created_at_ms : Int64
+  updated_at_ms : Int64
+  ready_since_ms : Int64?
+} derive(Eq)
+pub fn ClientBoardTask::equal(Self, Self) -> Bool
+pub fn ClientBoardTask::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientError {
+  InvalidData(String)
+  UnsupportedProtocolVersion
+} derive(Eq)
+pub fn ClientError::equal(Self, Self) -> Bool
+pub fn ClientError::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientRecordableReviewDecision {
+  Approved
+  ChangesRequested
+} derive(Eq)
+pub fn ClientRecordableReviewDecision::equal(Self, Self) -> Bool
+pub fn ClientRecordableReviewDecision::not_equal(Self, Self) -> Bool
+pub fn ClientRecordableReviewDecision::to_wire(Self) -> String
+
+pub(all) enum ClientReviewDecision {
+  Pending
+  Approved
+  ChangesRequested
+} derive(Eq)
+pub fn ClientReviewDecision::equal(Self, Self) -> Bool
+pub fn ClientReviewDecision::not_equal(Self, Self) -> Bool
+
+pub struct DecodedBoardSnapshot {
+  revision : Int64
+  last_seq : Int64
+  tasks : Array[ClientBoardTask]
+  attempts : Array[ClientAttempt]
+} derive(Eq)
+pub fn DecodedBoardSnapshot::equal(Self, Self) -> Bool
+pub fn DecodedBoardSnapshot::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

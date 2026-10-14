@@ -1,0 +1,51 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn copy_public(source : String, target : String) -> Unit {
+  @fs.mkdir(target, recursive=true, allow_exist=true)
+  for
+    name in @fs.readdir(
+      source,
+      include_hidden=true,
+      include_special=true,
+      sort=true,
+    ) {
+    if name == "." || name == ".." {
+      continue
+    }
+    let from = source + "/" + name
+    let to = target + "/" + name
+    match @fs.kind(from, follow_symlink=false) {
+      Directory => copy_public(from, to)
+      Regular => @fs.write_file(to, @fs.read_file(from).binary())
+      _ => fail("Browser public assets must be regular files or directories")
+    }
+  }
+}
+
+///|
+async fn main {
+  // Separate the nested browser compiler from the caller's workspace build lock.
+  let browser_build = "../_build/board-browser-assets"
+  @shell.Cmd("moon", [
+    "-C", "../posoco-ext-board-web", "--target-dir", browser_build, "build", "cmd/browser",
+    "--target", "js", "--release", "--output-json",
+  ]).run()
+  let dist = "_build/browser-assets-dist"
+  if @fs.exists(dist) {
+    @fs.rmdir(dist, recursive=true)
+  }
+  copy_public("../posoco-ext-board-web/public", dist)
+  let js = browser_build +
+    "/js/release/build/colmugx/posoco-ext-board-web/cmd/browser/browser.js"
+  @fs.write_file(dist + "/index.js", @fs.read_file(js).binary())
+  @shell.Cmd("moon", [
+    "--target-dir", "_build/assets-generator", "run", "tools/embed-assets/generate.mbtx",
+    "--target", "native", "--output-json", "--", dist,
+  ]).run()
+}

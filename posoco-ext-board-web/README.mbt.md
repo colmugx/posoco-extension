@@ -33,14 +33,19 @@ Without a Board instance token the shell stays Offline. A live connection requir
 
 ### Embedded-asset regen workflow
 
-The standalone native host embeds these Warren-built assets as its product page; consumers of that host need no Warren, no Node and no `dist/` checkout. Regeneration is always the Warren 0.4.4 build above followed by the native embed generator:
+The native host's resource builder compiles this browser entry directly with Moon
+and copies public resources; it does not invoke Warren or require Node/Bun:
 
 ```bash
-moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json
-moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- --check
+moon -C posoco-ext-board-native --target-dir _build/assets-builder run tools/embed-assets/build.mbtx --target native --output-json
+moon -C posoco-ext-board-native run tools/embed-assets/generate.mbtx --target native --output-json -- _build/browser-assets-dist --check
 ```
 
-Commit the generated `posoco-ext-board-native/src/web_assets.generated.mbt`, not `dist/`. MoonBack serves these bytes directly from memory; its static resources do not contain the instance token. The root page remains token-gated, while actual manifest subresources are public behind the exact Host gate. The handwritten diagnostics page has been removed. See the native module README for generator regression checks.
+Do not commit `dist/` or `web_assets.generated.mbt`. Native development builds
+generate the embedded module; release archives carry it for downstream consumers.
+MoonBack serves bytes from memory. The root remains token-gated, while manifest
+subresources are public behind the exact Host gate. See the native module README
+for packaging and generator checks.
 
 ## Contract
 
