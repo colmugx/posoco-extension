@@ -1,0 +1,25 @@
+name: messages protocol tests
+
+on:
+  pull_request:
+    paths:
+      - 'posoco-kit-messages/**'
+      - '.github/workflows/pr-messages-test.yml'
+
+jobs:
+  messages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon update
+      - name: Native messages tests
+        run: moon test --target native -p colmugx/posoco-kit-messages
+      - name: JS messages tests
+        run: moon test --target js -p colmugx/posoco-kit-messages
+      - name: Wasm messages tests
+        run: moon test --target wasm -p colmugx/posoco-kit-messages
