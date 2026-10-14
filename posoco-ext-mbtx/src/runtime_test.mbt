@@ -3,6 +3,7 @@ fn test_runtime() -> @posoco-ext-mbtx.Runtime {
   @posoco-ext-mbtx.Runtime(
     sdk_source_root="src",
     async_source_root="../.mooncakes/moonbitlang/async",
+    fuwaroid_source_root="../.mooncakes/colmugx/fuwaroid",
   )
 }
 

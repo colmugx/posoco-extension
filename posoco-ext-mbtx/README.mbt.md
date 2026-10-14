@@ -13,6 +13,12 @@ exemptions and sandbox escalation APIs are gone.
   artifacts, and launches a short-lived Wasm guest for each invocation.
 - A bounded, versioned, bidirectional JSON protocol over stdio.
 - A guest SDK with `Context`, injectable `ToolClient`, structured `Outcome` and logs.
+- A guest stdio bridge whose request ids, pending registrations, reply
+  settlement and closing state are owned by one private single-writer registry
+  (`colmugx/fuwaroid@0.3.1`). Frame writes, waiter waits and all other I/O stay
+  on ordinary structured tasks outside that registry loop; send refusals, a
+  stopped registry and unknown or duplicate replies fail the invocation
+  explicitly instead of dropping or stranding a waiter.
 - Native and Node-compatible JS host adapters, including cancellable I/O,
   terminate/hard-kill/reap, and scoped temporary-workspace cleanup.
 
@@ -33,11 +39,13 @@ otherwise permitted tool request returns `ToolInvocationUnavailable`.
 | `colmugx/posoco-ext-mbtx` | Host runtime, build/cache, process lifecycle, invocation bridge |
 | `colmugx/posoco-ext-mbtx/protocol` | Framing, messages, structured outcomes and host protocol state machine |
 | `colmugx/posoco-ext-mbtx/sdk` | Guest-facing Context and injectable ToolClient/LogSink |
-| `colmugx/posoco-ext-mbtx/sdk/stdio` | Guest stdio transport and `serve` |
+| `colmugx/posoco-ext-mbtx/sdk/stdio` | Guest stdio transport, `serve` and the single-writer request registry |
 
-The SDK does not depend on Posoco, its Kernel, or the host runtime. The current
-wire protocol number is 1, but the ABI remains experimental until the real
-Posoco adapter has been integrated and verified.
+The SDK does not depend on Posoco, its Kernel, or the host runtime. The guest
+bridge's only dependency beyond `moonbitlang/async` is the single-writer
+registry library `colmugx/fuwaroid`, which the host snapshots like the async
+sources. The current wire protocol number is 1, but the ABI remains
+experimental until the real Posoco adapter has been integrated and verified.
 
 ## Guest program
 
@@ -73,10 +81,11 @@ is a protocol error, never an implicit successful result.
 
 ## Host lifecycle
 
-The host provisions trusted SDK sources and the already-installed
-`moonbitlang/async@0.22.4` source tree. There is no installation or dependency
-download during an invocation. `moon` and `moonrun` must be available to the host;
-explicit executable paths can be supplied to the constructor.
+The host provisions trusted SDK sources and source snapshots of the
+already-installed `moonbitlang/async@0.22.4` and `colmugx/fuwaroid@0.3.1`.
+There is no installation or dependency download during an invocation. `moon`
+and `moonrun` must be available to the host; explicit executable paths can be
+supplied to the constructor.
 
 Illustrative host code (the paths are relative to this module in the workspace):
 
@@ -84,6 +93,7 @@ Illustrative host code (the paths are relative to this module in the workspace):
 let runtime = @mbtx.Runtime(
   sdk_source_root="src",
   async_source_root="../.mooncakes/moonbitlang/async",
+  fuwaroid_source_root="../.mooncakes/colmugx/fuwaroid",
 )
 let artifact = runtime.build(source)
 let result = runtime.run(artifact, input, invocation_id="operation-1")
@@ -104,11 +114,12 @@ and can be retried with `close()`.
 
 ## Build/cache contract
 
-The builder creates a host-owned workspace containing the program, SDK and a
-snapshot of the prepared async dependency. It invokes `moon run --build-only`
-with `--frozen --target wasm --output-json`; it never runs the guest during build.
-The toolchain and provisioned SDK/dependency roots are trusted host inputs, not
-paths supplied by the guest.
+The builder creates a host-owned workspace containing the program, SDK and
+snapshots of the prepared `moonbitlang/async` and `colmugx/fuwaroid`
+dependencies, resolved as workspace members. It invokes `moon run --build-only`
+with `--frozen --target wasm --output-json`; it never runs the guest during
+build and the guest never downloads dependencies. The toolchain and provisioned
+SDK/dependency roots are trusted host inputs, not paths supplied by the guest.
 
 Cache lookup compares an exact content descriptor, not a collision-prone hash:
 program, SDK sources/manifests, dependency sources/manifests, reported MoonBit
@@ -186,11 +197,12 @@ distinct from an absent `structured` field.
 From the workspace root:
 
 ```bash
-moon -C external/cetas/extension/posoco-ext-mbtx check --target native --output-json
-moon -C external/cetas/extension/posoco-ext-mbtx check --target js --output-json
-moon -C external/cetas/extension/posoco-ext-mbtx check --target wasm --output-json
-moon -C external/cetas/extension/posoco-ext-mbtx test --target native -p colmugx/posoco-ext-mbtx -p colmugx/posoco-ext-mbtx/protocol -p colmugx/posoco-ext-mbtx/sdk --output-json
+moon -C external/cetas/extension/posoco-ext-mbtx check src src/protocol src/sdk src/sdk/stdio --target native --output-json
+moon -C external/cetas/extension/posoco-ext-mbtx check src src/protocol src/sdk src/sdk/stdio --target js --output-json
+moon -C external/cetas/extension/posoco-ext-mbtx check src/protocol src/sdk src/sdk/stdio --target wasm --output-json
+moon -C external/cetas/extension/posoco-ext-mbtx test --target native -p colmugx/posoco-ext-mbtx -p colmugx/posoco-ext-mbtx/protocol -p colmugx/posoco-ext-mbtx/sdk -p colmugx/posoco-ext-mbtx/sdk/stdio --output-json
 moon -C external/cetas/extension/posoco-ext-mbtx test --target js -p colmugx/posoco-ext-mbtx -p colmugx/posoco-ext-mbtx/protocol -p colmugx/posoco-ext-mbtx/sdk --output-json
+moon -C external/cetas/extension/posoco-ext-mbtx test --target wasm -p colmugx/posoco-ext-mbtx/sdk/stdio --output-json
 ```
 
 The runtime tests compile and run actual guests. The tool bridge tests use fakes

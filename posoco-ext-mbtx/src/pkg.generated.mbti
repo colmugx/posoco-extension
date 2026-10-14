@@ -41,7 +41,7 @@ pub(all) struct InvocationResult {
 pub struct Runtime {
   // private fields
 }
-pub fn Runtime::Runtime(sdk_source_root~ : String, async_source_root~ : String, moon? : String, moonrun? : String) -> Self
+pub fn Runtime::Runtime(sdk_source_root~ : String, async_source_root~ : String, fuwaroid_source_root~ : String, moon? : String, moonrun? : String) -> Self
 pub async fn Runtime::build(Self, String, timeout_ms? : Int) -> Artifact
 pub fn Runtime::cancel(Self, String) -> Bool
 pub async fn Runtime::clear_cache(Self) -> Unit

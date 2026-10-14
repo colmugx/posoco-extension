@@ -59,6 +59,84 @@ async test "concurrent guest requests remain correlated and are constrained by c
 }
 
 ///|
+/// Test double that completes calls in the reverse order they were made, so
+/// host replies reach the guest out of request order.
+struct ReversedInvoker {
+  calls : Array[String]
+}
+
+///|
+impl @posoco-ext-mbtx.ToolInvoker for ReversedInvoker with fn invoke(
+  self,
+  name,
+  arguments,
+) {
+  self.calls.push(name)
+  if arguments is { "value": 1, .. } {
+    @async.sleep(90)
+  }
+  if arguments is { "value": 2, .. } {
+    @async.sleep(40)
+  }
+  @protocol.Success(content=name, structured=Some(arguments))
+}
+
+///|
+async test "concurrent out-of-order replies stay correlated per request" {
+  let runtime = test_runtime()
+  @async.with_task_group(group => {
+    group.add_defer(() => @async.protect_from_cancel(() => runtime.close()))
+    let source =
+      #|async fn run(ctx : @sdk.Context, _input : Json) -> @sdk.Outcome {
+      #|  let results = @async.all([
+      #|    () => ctx.call("read", {"value": 1}),
+      #|    () => ctx.call("read", {"value": 2}),
+      #|    () => ctx.call("read", {"value": 3}),
+      #|  ])
+      #|  match (results[0], results[1], results[2]) {
+      #|    (@sdk.Outcome::Success(structured=Some(a), ..),
+      #|     @sdk.Outcome::Success(structured=Some(b), ..),
+      #|     @sdk.Outcome::Success(structured=Some(c), ..)) =>
+      #|      @sdk.Outcome::Success(
+      #|        content="joined",
+      #|        structured=Some({"first": a, "second": b, "third": c}),
+      #|      )
+      #|    _ =>
+      #|      @sdk.Outcome::Failure(
+      #|        code="Unexpected",
+      #|        content="unexpected outcomes",
+      #|        structured=None,
+      #|      )
+      #|  }
+      #|}
+    let invoker = ReversedInvoker::{ calls: [], }
+    let artifact = runtime.build(source)
+    let result = runtime.run(
+      artifact,
+      {},
+      invocation_id="reversed",
+      tools=["read"],
+      invoker~,
+    )
+    assert_eq(
+      result.outcome,
+      @protocol.Success(
+        content="joined",
+        structured=Some({
+          "first": { "value": 1 },
+          "second": { "value": 2 },
+          "third": { "value": 3 },
+        }),
+      ),
+    )
+    assert_eq(invoker.calls.length(), 3)
+  }) catch {
+    @posoco-ext-mbtx.RuntimeError::BuildFailed(message) => fail(message)
+    error => raise error
+  }
+}
+
+///|
 async test "missing Posoco capability is an explicit outcome, not a provider bypass" {
   let runtime = test_runtime()
   @async.with_task_group(group => {

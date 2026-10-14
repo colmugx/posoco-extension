@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco-ext-mbtx/protocol",
   "colmugx/posoco-ext-mbtx/sdk",
+  "colmugx/fuwaroid",
   "moonbitlang/async",
   "moonbitlang/async/aqueue",
   "moonbitlang/async/stdio" @system_stdio,

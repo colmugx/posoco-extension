@@ -54,6 +54,7 @@ pub fn Artifact::identity(self : Artifact) -> String {
 pub struct Runtime {
   priv sdk_source_root : String
   priv async_source_root : String
+  priv fuwaroid_source_root : String
   priv moon : String
   priv moonrun : String
   priv cache : Map[String, Artifact]
@@ -67,12 +68,14 @@ pub struct Runtime {
 pub fn Runtime::Runtime(
   sdk_source_root~ : String,
   async_source_root~ : String,
+  fuwaroid_source_root~ : String,
   moon~ : String = "moon",
   moonrun~ : String = "moonrun",
 ) -> Runtime {
   {
     sdk_source_root,
     async_source_root,
+    fuwaroid_source_root,
     moon,
     moonrun,
     cache: Map([]),

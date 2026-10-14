@@ -110,3 +110,52 @@ async test "output and child call budgets fail closed without disabling later in
     error => raise error
   }
 }
+
+///|
+/// A guest that abandons an in-flight request must not hang the invocation,
+/// must not receive a fabricated call outcome, and must release the request
+/// registration it leaves behind. Whether the request frame already reached
+/// the host is a scheduling race: once it did, the host protocol rejects the
+/// final result as pending; if it did not, the invocation is legitimately
+/// clean. Both exits must be prompt and explicit.
+async test "an abandoned in-flight request exits promptly without a fabricated outcome" {
+  let runtime = test_runtime()
+  @async.with_task_group(group => {
+    group.add_defer(() => @async.protect_from_cancel(() => runtime.close()))
+    let source =
+      #|async fn run(ctx : @sdk.Context, _input : Json) -> @sdk.Outcome {
+      #|  @async.with_task_group(inner => {
+      #|    inner.spawn_bg(no_wait=true, () => ignore(ctx.call("read", {})))
+      #|    @async.sleep(50)
+      #|    @protocol.Success(content="abandoned", structured=None)
+      #|  })
+      #|}
+    let artifact = runtime.build(source)
+    let abandoned_started = @async.now()
+    try
+      runtime.run(artifact, {}, invocation_id="abandoned", tools=["read"], invoker=BlockingInvoker::{
+        entered: @aqueue.Queue(kind=Blocking(1)),
+        settled: false,
+      })
+    catch {
+      @posoco-ext-mbtx.RuntimeError::ProtocolFailure(reason) => {
+        assert_true(reason.contains("pending"))
+        assert_true(@async.now() - abandoned_started < 30000L)
+      }
+      error => raise error
+    } noraise {
+      result => {
+        assert_true(
+          result.outcome is @protocol.Success(content="abandoned", ..),
+        )
+        assert_true(@async.now() - abandoned_started < 30000L)
+      }
+    }
+    let recovery = runtime.build(compute_source)
+    let result = runtime.run(recovery, {}, invocation_id="after-abandon")
+    assert_true(result.outcome is @protocol.Success(..))
+  }) catch {
+    @posoco-ext-mbtx.RuntimeError::BuildFailed(message) => fail(message)
+    error => raise error
+  }
+}

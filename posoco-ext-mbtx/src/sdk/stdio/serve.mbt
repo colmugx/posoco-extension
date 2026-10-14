@@ -1,10 +1,9 @@
 ///|
 priv struct Bridge {
+  registry : @fuwaroid.Fuwaroid[RegistryCmd, RegistryQuery, RegistryReply]
   writer : @async.Mutex
   slots : @async.Semaphore
-  pending : Map[Int32, @aqueue.Queue[@protocol.Outcome]]
   max_frame_bytes : Int32
-  mut next_id : Int32
 }
 
 ///|
@@ -19,24 +18,56 @@ async fn Bridge::send(self : Bridge, message : @protocol.Message) -> Unit {
 }
 
 ///|
+async fn Bridge::query(self : Bridge, query : RegistryQuery) -> RegistryReply {
+  match self.registry.ask(query, timeout_ms=registry_timeout_ms) {
+    Ok(Refused(reason)) => raise Failure::Failure(reason)
+    Ok(reply) => reply
+    Err(failure) =>
+      raise Failure::Failure(
+        registry_ask_failure("request registry query failed", failure),
+      )
+  }
+}
+
+///|
 impl @sdk.ToolClient for Bridge with fn call(self, name, arguments) {
   self.slots.acquire()
   defer self.slots.release()
-  if self.next_id == 2147483647 {
-    raise Failure::Failure("request id exhausted")
+  // The shield keeps registration and cleanup adjacent: once the registry
+  // admitted a request, the release below is always installed, so no
+  // cancellation between the two can orphan a registration.
+  let admitted = @async.protect_from_cancel(() => self.query(Acquire))
+  match admitted {
+    Admitted(id, waiter) => {
+      defer (match self.registry.tell(Release(id~)) {
+        Ok(_) => ()
+        // Scope cancellation may stop the registry before its callers.
+        Err(MailboxClosed) => ()
+        Err(MailboxFull) =>
+          raise Failure::Failure("request registry rejected request cleanup")
+      })
+      self.send(@protocol.Request(id~, name~, arguments~))
+      waiter.get()
+    }
+    _ => raise Failure::Failure("unexpected request registry admission reply")
   }
-  let id = self.next_id
-  self.next_id += 1
-  let waiter = @aqueue.Queue(kind=Blocking(1))
-  self.pending[id] = waiter
-  defer self.pending.remove(id)
-  self.send(@protocol.Request(id~, name~, arguments~))
-  waiter.get()
 }
 
 ///|
 impl @sdk.LogSink for Bridge with fn log(self, level, content) {
   self.send(@protocol.Log(level~, content~))
+}
+
+///|
+async fn Bridge::settle(
+  self : Bridge,
+  id : Int32,
+  outcome : @protocol.Outcome,
+) -> Unit {
+  match self.query(Settle(id~, outcome~)) {
+    Acked => ()
+    _ => raise Failure::Failure("unexpected request registry settlement reply")
+  }
 }
 
 ///|
@@ -71,15 +102,7 @@ async fn Bridge::receive_replies(self : Bridge) -> Unit {
     }
     for frame in decoder.feed(chunk) {
       match @protocol.Message::from_json(frame) {
-        Reply(id~, outcome~) => {
-          let waiter = match self.pending.get(id) {
-            Some(waiter) => waiter
-            None => raise Failure::Failure("unknown or settled reply id")
-          }
-          // Remove before waking the caller, so a duplicate cannot be accepted.
-          self.pending.remove(id)
-          waiter.put(outcome)
-        }
+        Reply(id~, outcome~) => self.settle(id, outcome)
         Cancel(reason~) =>
           raise Failure::Failure("host cancelled invocation: " + reason)
         _ => raise Failure::Failure("invalid host message during invocation")
@@ -104,20 +127,30 @@ pub async fn serve(
       (input, tools, max_pending, max_frame_bytes)
     _ => raise Failure::Failure("expected invocation after hello")
   }
-  let bridge = Bridge::{
-    writer: @async.Mutex(),
-    slots: @async.Semaphore(max_pending),
-    pending: Map([]),
-    max_frame_bytes,
-    next_id: 1,
-  }
-  let ctx = @sdk.Context(tools=bridge, allowed=tools, logs=bridge)
-  defer ctx.close()
   @async.with_task_group(group => {
+    // Request registration, id allocation, reply settlement and the closed
+    // state all fold through one private single-writer loop, so no request
+    // map is shared between the reader and the callers. The loop never
+    // awaits: I/O and waiter waits stay on the group's own tasks.
+    let registry = @fuwaroid.Fuwaroid::spawn(
+      group~,
+      init=Registry::{ pending: Map([]), next_id: 1, closed: false, },
+      on_cmd=registry_on_cmd,
+      on_query=registry_on_query,
+    )
+    let bridge = Bridge::{
+      registry,
+      writer: @async.Mutex(),
+      slots: @async.Semaphore(max_pending),
+      max_frame_bytes,
+    }
+    let ctx = @sdk.Context(tools=bridge, allowed=tools, logs=bridge)
+    defer ctx.close()
     group.spawn_bg(no_wait=true, () => bridge.receive_replies())
     let outcome = handler(ctx, input)
-    if !bridge.pending.is_empty() {
-      raise Failure::Failure("handler returned with pending requests")
+    match bridge.query(Finish) {
+      Acked => ()
+      _ => raise Failure::Failure("unexpected request registry finish reply")
     }
     ctx.close()
     bridge.send(@protocol.Result(outcome~))

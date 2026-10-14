@@ -1,7 +1,10 @@
 ///|
+/// Trusted SDK sources staged into every guest workspace. Registry additions
+/// must be listed here or the guest build cannot resolve its imports.
 let sdk_files : Array[String] = [
   "protocol/framing.mbt", "protocol/messages.mbt", "protocol/session.mbt", "protocol/moon.pkg",
-  "sdk/context.mbt", "sdk/moon.pkg", "sdk/stdio/serve.mbt", "sdk/stdio/moon.pkg",
+  "sdk/context.mbt", "sdk/moon.pkg", "sdk/stdio/registry.mbt", "sdk/stdio/serve.mbt",
+  "sdk/stdio/moon.pkg",
 ]
 
 ///|
@@ -90,13 +93,19 @@ pub async fn Runtime::build(
       )
     }
     dependency_snapshot(self.async_source_root, "async/", files)
+    // The guest must never download dependencies: the trusted fuwaroid
+    // sources are snapshotted next to async and resolved as workspace
+    // members under `--frozen`.
+    dependency_snapshot(self.fuwaroid_source_root, "fuwaroid/", files)
     let main = source + "\n///|\nasync fn main { @mbtx.serve(run) }\n"
-    let mod = "name = \"colmugx/posoco-ext-mbtx\"\nversion = \"0.0.0\"\nsource = \"src\"\nimport { \"moonbitlang/async@0.22.4\" }\n"
+    let mod = "name = \"colmugx/posoco-ext-mbtx\"\nversion = \"0.0.0\"\nsource = \"src\"\nimport { \"moonbitlang/async@0.22.4\", \"colmugx/fuwaroid@0.3.1\" }\n"
     let pkg = "import { \"colmugx/posoco-ext-mbtx/sdk/stdio\" @mbtx, \"colmugx/posoco-ext-mbtx/sdk\", \"colmugx/posoco-ext-mbtx/protocol\", \"moonbitlang/async\", \"moonbitlang/core/json\" }\nsupported_targets = \"wasm\"\noptions(\"is-main\": true)\n"
     files.push(("guest/moon.mod", mod))
     files.push(("guest/src/cmd/main/moon.pkg", pkg))
     files.push(("guest/src/cmd/main/main.mbt", main))
-    files.push(("moon.work", "members = [\"./guest\", \"./async\"]\n"))
+    files.push(
+      ("moon.work", "members = [\"./guest\", \"./async\", \"./fuwaroid\"]\n"),
+    )
     // Exact content keys deliberately avoid hash collisions, including dependency inputs.
     let descriptor : Json = {
       "files": Json(files),
