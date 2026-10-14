@@ -409,7 +409,8 @@ test "unknown events are ignored and do not complete the stream" {
     acc~,
   )
   assert_true(done)
-  assert_eq(chunks.length(), 2)
+  // TextDelta, Finish and final cumulative Usage are all emitted.
+  assert_eq(chunks.length(), 3)
   assert_eq(state.response_id, "msg_f")
 }
 
