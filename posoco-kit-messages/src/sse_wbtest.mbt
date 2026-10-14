@@ -813,3 +813,32 @@ test "independent decoder instances are fully isolated" {
   assert_eq(fresh.push("ng\"}\n\n").length(), 0)
   assert_eq(partial.push("ng\"}\n\n").length(), 1)
 }
+
+
+///|
+/// An unknown delta on an otherwise known text block must not silently erase
+/// semantics. Only unknown *event names* are ignorable.
+test "unknown semantic deltas fail instead of losing content" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let result = Ok(feed_sse(
+    text=sse([
+      message_start(id="msg_unknown_delta", input=1),
+      ev(name="content_block_start", data={
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": { "type": "text", "text": "" },
+      }),
+      ev(name="content_block_delta", data={
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": { "type": "future_semantic_delta", "payload": "invisible" },
+      }),
+    ]),
+    acc~,
+  )) catch { error => Err(error) }
+  match result {
+    Err(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("unsupported"))
+    _ => fail("expected unsupported delta rejection")
+  }
+}
