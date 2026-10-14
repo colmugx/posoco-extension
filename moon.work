@@ -21,6 +21,7 @@ members = [
   "./posoco-ext-kimi",
   "./posoco-ext-lazytools",
   "./posoco-ext-llm",
+  "./posoco-ext-magpie",
   "./posoco-ext-mbtx",
   "./posoco-ext-mcp",
   "./posoco-ext-memoh",
