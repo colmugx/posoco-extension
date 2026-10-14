@@ -2,13 +2,13 @@
 package "colmugx/posoco-ext-qwen"
 
 import {
+  "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
   "posoco/devkit",
-  "posoco/ext-llm",
   "posoco/ext-oauth",
 }
 
@@ -45,7 +45,7 @@ pub async fn QwenModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kerne
 pub async fn QwenModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn QwenModelPort::extension_id(Self) -> String
 pub fn QwenModelPort::manifest(Self) -> @port.ExtensionManifest
-pub fn QwenModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn QwenModelPort::model_catalog(Self) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 pub fn QwenModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.Extension for QwenModelPort
 pub impl @port.ModelPort for QwenModelPort
@@ -54,12 +54,12 @@ pub(all) struct QwenProvider {
   ctx : @devkit.ExtContext
 }
 pub fn QwenProvider::QwenProvider(ctx? : @devkit.ExtContext) -> Self
-pub fn QwenProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn QwenProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub fn QwenProvider::credential_id(Self) -> String
 pub async fn QwenProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
 pub fn QwenProvider::provider_id(Self) -> String
-pub impl @ext-llm.ApiKeyFactory for QwenProvider
-pub impl @ext-llm.ProviderFactory for QwenProvider
+pub impl @posoco-kit-provider.ApiKeyFactory for QwenProvider
+pub impl @posoco-kit-provider.ProviderFactory for QwenProvider
 
 // Type aliases
 

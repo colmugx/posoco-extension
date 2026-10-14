@@ -2,13 +2,13 @@
 package "colmugx/posoco-ext-zai"
 
 import {
+  "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/core/debug",
   "posoco/devkit",
-  "posoco/ext-llm",
   "posoco/ext-oauth",
 }
 
@@ -21,13 +21,13 @@ pub fn parse_zai_models(Json) -> Array[String] raise @error.ModelError
 
 pub fn zai_endpoint_parts(String, String) -> (String, String)
 
-pub fn zai_model_catalog(ZaiConfig, @devkit.ExtContext, ZaiCatalogIdentity, &@ext-llm.ApiKeyFactory, capabilities? : Array[String]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn zai_model_catalog(ZaiConfig, @devkit.ExtContext, ZaiCatalogIdentity, &@posoco-kit-provider.ApiKeyFactory, capabilities? : Array[String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
-pub fn zai_model_catalog_from_ids(Array[String], ZaiConfig, @devkit.ExtContext, ZaiCatalogIdentity, &@ext-llm.ApiKeyFactory, capabilities? : Array[String]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn zai_model_catalog_from_ids(Array[String], ZaiConfig, @devkit.ExtContext, ZaiCatalogIdentity, &@posoco-kit-provider.ApiKeyFactory, capabilities? : Array[String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
 pub fn zai_platform_endpoint(String) -> (String, String)?
 
-pub fn zai_setting_context_window(@ext-llm.ProviderConfigSource, manifest_id~ : String) -> Int? raise @error.CompositionError
+pub fn zai_setting_context_window(@posoco-kit-provider.ProviderConfigSource, manifest_id~ : String) -> Int? raise @error.CompositionError
 
 // Errors
 
@@ -65,7 +65,7 @@ pub async fn ZaiModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel
 pub async fn ZaiModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn ZaiModelPort::extension_id(Self) -> String
 pub fn ZaiModelPort::manifest(Self) -> @port.ExtensionManifest
-pub fn ZaiModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn ZaiModelPort::model_catalog(Self) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 pub fn ZaiModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.Extension for ZaiModelPort
 pub impl @port.ModelPort for ZaiModelPort
@@ -74,14 +74,14 @@ pub(all) struct ZaiProvider {
   ctx : @devkit.ExtContext
 }
 pub fn ZaiProvider::ZaiProvider(ctx? : @devkit.ExtContext) -> Self
-pub fn ZaiProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn ZaiProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub fn ZaiProvider::credential_id(Self) -> String
 pub async fn ZaiProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
 pub fn ZaiProvider::provider_id(Self) -> String
-pub async fn ZaiProvider::refresh(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
-pub impl @ext-llm.ApiKeyFactory for ZaiProvider
-pub impl @ext-llm.ProviderFactory for ZaiProvider
-pub impl @ext-llm.RefreshableProviderFactory for ZaiProvider
+pub async fn ZaiProvider::refresh(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
+pub impl @posoco-kit-provider.ApiKeyFactory for ZaiProvider
+pub impl @posoco-kit-provider.ProviderFactory for ZaiProvider
+pub impl @posoco-kit-provider.RefreshableProviderFactory for ZaiProvider
 
 // Type aliases
 

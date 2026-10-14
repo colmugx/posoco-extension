@@ -3,12 +3,12 @@ package "colmugx/posoco-ext-zai-coding-plan"
 
 import {
   "colmugx/posoco-ext-zai",
+  "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "posoco/devkit",
-  "posoco/ext-llm",
   "posoco/ext-oauth",
 }
 
@@ -40,13 +40,13 @@ pub(all) struct ZaiCodingPlanProvider {
   ctx : @devkit.ExtContext
 }
 pub fn ZaiCodingPlanProvider::ZaiCodingPlanProvider(ctx? : @devkit.ExtContext) -> Self
-pub fn ZaiCodingPlanProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn ZaiCodingPlanProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub fn ZaiCodingPlanProvider::credential_id(Self) -> String
 pub async fn ZaiCodingPlanProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
 pub fn ZaiCodingPlanProvider::provider_id(Self) -> String
-pub fn ZaiCodingPlanProvider::quota_source(Self, @ext-llm.ProviderConfigSource) -> ZaiCodingPlanQuotaSource? raise @error.CompositionError
-pub impl @ext-llm.ApiKeyFactory for ZaiCodingPlanProvider
-pub impl @ext-llm.ProviderFactory for ZaiCodingPlanProvider
+pub fn ZaiCodingPlanProvider::quota_source(Self, @posoco-kit-provider.ProviderConfigSource) -> ZaiCodingPlanQuotaSource? raise @error.CompositionError
+pub impl @posoco-kit-provider.ApiKeyFactory for ZaiCodingPlanProvider
+pub impl @posoco-kit-provider.ProviderFactory for ZaiCodingPlanProvider
 
 pub(all) struct ZaiCodingPlanQuotaSource {
   base_url : String

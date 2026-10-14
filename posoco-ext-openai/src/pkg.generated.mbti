@@ -2,13 +2,13 @@
 package "colmugx/posoco-ext-openai"
 
 import {
+  "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
   "moonbitlang/async/http",
   "posoco/devkit",
-  "posoco/ext-llm",
   "posoco/ext-oauth",
 }
 
@@ -163,10 +163,10 @@ pub(all) struct OpenAIModelPort {
 pub fn OpenAIModelPort::OpenAIModelPort(OpenAIConfig, quota_tracker? : CodexQuotaTracker?) -> Self
 pub async fn OpenAIModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub async fn OpenAIModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
-pub fn OpenAIModelPort::model_catalog(Self) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAIModelPort::model_catalog_from_cached_models(Self, Array[OpenAICachedModel], chatgpt_mode~ : Bool) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
-pub fn OpenAIModelPort::model_catalog_from_codex_models(Self, Array[CodexModelInfo]) -> @ext-llm.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog(Self) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog_from_api_models(Self, Array[OpenAIModelInfo]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog_from_cached_models(Self, Array[OpenAICachedModel], chatgpt_mode~ : Bool) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn OpenAIModelPort::model_catalog_from_codex_models(Self, Array[CodexModelInfo]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 pub fn OpenAIModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenAIModelPort
 
@@ -182,15 +182,15 @@ pub(all) struct OpenAIProvider {
   // private fields
 }
 pub fn OpenAIProvider::OpenAIProvider(transport? : &OpenAIModelsHttpTransport?, oauth_transport? : &@ext-oauth.OAuthHttpTransport?, cache_dir? : String?) -> Self
-pub fn OpenAIProvider::build(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
+pub fn OpenAIProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub fn OpenAIProvider::credential_id(Self) -> String
 pub async fn OpenAIProvider::login(Self, &@ext-oauth.AuthInteraction) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
 pub fn OpenAIProvider::provider_id(Self) -> String
-pub async fn OpenAIProvider::refresh(Self, @ext-llm.ProviderConfigSource) -> @ext-llm.ProviderBuildResult raise @error.CompositionError
-pub impl @ext-llm.ApiKeyFactory for OpenAIProvider
-pub impl @ext-llm.OAuthFactory for OpenAIProvider
-pub impl @ext-llm.ProviderFactory for OpenAIProvider
-pub impl @ext-llm.RefreshableProviderFactory for OpenAIProvider
+pub async fn OpenAIProvider::refresh(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
+pub impl @posoco-kit-provider.ApiKeyFactory for OpenAIProvider
+pub impl @posoco-kit-provider.OAuthFactory for OpenAIProvider
+pub impl @posoco-kit-provider.ProviderFactory for OpenAIProvider
+pub impl @posoco-kit-provider.RefreshableProviderFactory for OpenAIProvider
 
 // Type aliases
 

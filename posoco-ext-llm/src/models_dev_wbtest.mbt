@@ -71,10 +71,10 @@ test "context windows reject invalid and derived discovery records" {
       Json::number(2147483648.0),
       Json::string("100000"),
     ] {
-    assert_eq(context_window_integer(Some(value)), None)
+    assert_eq(@provider.context_window_integer(Some(value)), None)
   }
   assert_eq(
-    context_window_integer(Some(Json::number(2147483647.0))),
+    @provider.context_window_integer(Some(Json::number(2147483647.0))),
     Some(2147483647),
   )
   let records : Json = [
@@ -96,11 +96,11 @@ test "context windows reject invalid and derived discovery records" {
     },
   ]
   assert_eq(
-    cached_provider_context_window(Some(records), "known"),
+    @provider.cached_provider_context_window(Some(records), "known"),
     Some(120000),
   )
   for id in ["fallback", "configured", "derived", "missing"] {
-    assert_eq(cached_provider_context_window(Some(records), id), None)
+    assert_eq(@provider.cached_provider_context_window(Some(records), id), None)
   }
 }
 
