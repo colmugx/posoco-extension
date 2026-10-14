@@ -334,6 +334,7 @@ pub fn parse_response(
           content~,
           tool_calls~,
           blocks=replay_blocks,
+          full_blocks=Some(content_blocks),
         ),
       ),
     })
