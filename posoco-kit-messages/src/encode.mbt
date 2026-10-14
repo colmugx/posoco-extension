@@ -115,6 +115,8 @@ fn MessagesToolChoice::to_wire(
 /// per the protocol.
 pub(all) enum ThinkingConfig {
   Enabled(budget_tokens~ : Int32)
+  Adaptive
+  BetweenTools
   Disabled
 } derive(Eq, Debug)
 
@@ -140,6 +142,8 @@ fn ThinkingConfig::to_wire(
           "budget_tokens": Json::number(budget_tokens.to_double()),
         })
       }
+    Adaptive => Json::object({ "type": Json::string("adaptive") })
+    BetweenTools => Json::object({ "type": Json::string("between_tools") })
     Disabled => Json::object({ "type": Json::string("disabled") })
   }
 }
@@ -534,7 +538,12 @@ pub fn encode_request(
     )
   }
   match options.thinking {
-    Some(Enabled(..)) => {
+    Some(Enabled(budget_tokens~)) => {
+      if budget_tokens >= max_tokens {
+        raise @posoco.ModelError::RequestBuild(
+          "messages thinking budget_tokens must be smaller than max_tokens (stage=encode, category=thinking_budget)",
+        )
+      }
       let bad_temperature = match options.temperature {
         Some(t) => t != 1.0
         None => false
@@ -552,7 +561,7 @@ pub fn encode_request(
         Some(Auto) | Some(Forbid) | None => ()
       }
     }
-    Some(Disabled) | None => ()
+    Some(Adaptive) | Some(BetweenTools) | Some(Disabled) | None => ()
   }
   if options.stop_sequences.length() > 4 {
     raise @posoco.ModelError::RequestBuild(
