@@ -1,28 +1,22 @@
 import {
-  "colmugx/posoco",
-  "posoco/devkit",
+  "colmugx/posoco-ext-mbtx/protocol",
   "moonbitlang/async",
+  "moonbitlang/async/aqueue",
   "moonbitlang/async/fs",
   "moonbitlang/async/js_async",
   "moonbitlang/async/process",
-  "moonbitlang/core/env",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
 }
-
-import {
-  "moonbitlang/async",
-  "colmugx/posoco/kernel",
-} for "wbtest"
 
 options(
   targets: {
-    "posoco_ext_mbtx.native.mbt": [ "native", "wasm" ],
-    "posoco_ext_mbtx.js.mbt": [ "js" ],
-    "posoco_ext_mbtx_wbtest.mbt": [ "native", "wasm" ],
-    "policy_wbtest.mbt": [ "native", "wasm" ],
-    "toolchain_wbtest.mbt": [ "native", "wasm" ],
-    "execute_wbtest.mbt": [ "native", "wasm" ],
-    "execute_live_wbtest.mbt": [ "native", "wasm" ],
-    "js_runner_wbtest.mbt": [ "js" ],
+    "process.native.mbt": [ "native" ],
+    "process.js.mbt": [ "js" ],
+    "filesystem.native.mbt": [ "native" ],
+    "filesystem.js.mbt": [ "js" ],
+    "runtime_test.mbt": [ "native", "js" ],
   },
 )
+
+supported_targets = "native + js"

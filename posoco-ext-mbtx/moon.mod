@@ -12,8 +12,10 @@ readme = "README.mbt.md"
 
 license = "Apache-2.0"
 
-keywords = [ "posoco", "mbtx", "moonbit", "script", "sandboxed", "tool" ]
+keywords = [ "posoco", "mbtx", "moonbit", "code-mode", "guest-runtime", "sdk" ]
 
-description = "Posoco MoonBit script tool extension - compiles and sandbox-runs single-file .mbtx programs under a moonrun policy as a unified ToolProvider"
+description = "MoonBit guest runtime, protocol and SDK for Posoco Code Mode; scoped tool invocation integration pending"
 
 source = "src"
+
+preferred_target = "native"

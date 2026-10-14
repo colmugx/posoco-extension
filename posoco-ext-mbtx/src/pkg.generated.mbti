@@ -2,43 +2,56 @@
 package "colmugx/posoco-ext-mbtx"
 
 import {
-  "colmugx/posoco/error",
-  "colmugx/posoco/kernel",
-  "colmugx/posoco/port",
-  "posoco/devkit",
+  "colmugx/posoco-ext-mbtx/protocol",
+  "moonbitlang/core/debug",
 }
 
 // Values
-pub fn mbtx_extension() -> MbtxTools
 
 // Errors
+pub suberror RuntimeError {
+  BuildFailed(String)
+  ProtocolFailure(String)
+  GuestFailure(String)
+  TimedOut(String)
+  Cancelled
+  Closed
+  Invalid(String)
+} derive(@debug.Debug)
+pub fn RuntimeError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
-pub struct MbtxTools {
-  anchor : @devkit.WorkspaceAnchor?
-  allowlist : Array[SpawnRule]
-  run_timeout_ms : Int
-  escalation : Bool
-  toolchain_bin : String?
-  bus : @devkit.EventBus?
-  mut resolved : String?
+pub struct Artifact {
   // private fields
 }
-pub fn MbtxTools::MbtxTools(anchor? : @devkit.WorkspaceAnchor?, allowlist_extra? : Array[SpawnRule], allowlist_without? : Array[String], run_timeout_ms? : Int, escalation? : Bool, toolchain_bin? : String?, bus? : @devkit.EventBus?) -> Self
-pub async fn MbtxTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
-pub fn MbtxTools::extension_id(Self) -> String
-pub fn MbtxTools::list_tools(Self) -> Array[@kernel.ToolDef]
-pub fn MbtxTools::manifest(Self) -> @port.ExtensionManifest
-pub fn MbtxTools::system_prompt(Self) -> String
-pub impl @port.Extension for MbtxTools
-pub impl @port.SystemPromptContributor for MbtxTools
-pub impl @port.ToolProvider for MbtxTools
+pub fn Artifact::identity(Self) -> String
 
-pub(all) struct SpawnRule {
-  program : String
-  args_prefix : Array[String]
+pub(all) struct Diagnostic {
+  level : String
+  content : String
+} derive(@debug.Debug)
+pub fn Diagnostic::to_repr(Self) -> @debug.Repr
+
+pub(all) struct InvocationResult {
+  outcome : @protocol.Outcome
+  stderr : String
+  logs : Array[Diagnostic]
 }
 
+pub struct Runtime {
+  // private fields
+}
+pub fn Runtime::Runtime(sdk_source_root~ : String, async_source_root~ : String, moon? : String, moonrun? : String) -> Self
+pub async fn Runtime::build(Self, String, timeout_ms? : Int) -> Artifact
+pub fn Runtime::cancel(Self, String) -> Bool
+pub async fn Runtime::clear_cache(Self) -> Unit
+pub async fn Runtime::close(Self) -> Unit
+pub async fn Runtime::run(Self, Artifact, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
+
 // Type aliases
+pub using @protocol {type Outcome}
 
 // Traits
+pub(open) trait ToolInvoker {
+  async fn invoke(Self, String, Json) -> @protocol.Outcome
+}

@@ -1,0 +1,9 @@
+import {
+  "colmugx/posoco-ext-mbtx/protocol",
+  "colmugx/posoco-ext-mbtx/sdk",
+  "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/stdio" @system_stdio,
+}
+
+supported_targets = "native + wasm"

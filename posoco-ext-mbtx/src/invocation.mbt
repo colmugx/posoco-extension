@@ -1,0 +1,226 @@
+///|
+fn guest_policy() -> Json {
+  {
+    "env": { "from_host": [] },
+    "fs": { "read": [], "write": [] },
+    "net": { "dns": [], "connect": [], "bind": [] },
+    "process": { "allow": [] },
+  }
+}
+
+///|
+async fn communicate(
+  process : &GuestProcess,
+  input : Json,
+  tools : Array[String],
+  invoker : &ToolInvoker?,
+  frame_limit : Int32,
+  max_pending : Int32,
+  max_calls : Int32,
+  output_limit : Int32,
+  handshake_ms : Int32,
+) -> InvocationResult {
+  let session = @protocol.HostSession(max_pending~, max_calls~)
+  defer session.close()
+  let writer = @async.Mutex()
+  let ready : @aqueue.Queue[Unit] = @aqueue.Queue(kind=Blocking(1))
+  let logs = []
+  let stderr_bytes = []
+  let mut total = 0
+  let account = fn(bytes : Bytes) raise {
+    if bytes.length() > output_limit - total {
+      raise RuntimeError::ProtocolFailure("invocation output budget exceeded")
+    }
+    total += bytes.length()
+  }
+  let send = async fn(message : @protocol.Message) {
+    let bytes = @protocol.encode_frame(
+      message.to_json(),
+      max_frame_bytes=frame_limit,
+    )
+    writer.acquire()
+    defer writer.release()
+    process.write(bytes)
+  }
+  @async.with_task_group(group => {
+    let err = group.spawn(() => {
+      for ;; {
+        match process.stderr() {
+          None => break
+          Some(bytes) => {
+            account(bytes)
+            for byte in bytes {
+              stderr_bytes.push(byte)
+            }
+          }
+        }
+      }
+    })
+    let out = group.spawn(() => {
+      let decoder = @protocol.Decoder(max_frame_bytes=frame_limit)
+      for ;; {
+        let bytes = match process.stdout() {
+          Some(bytes) => bytes
+          None => break
+        }
+        account(bytes)
+        for frame in decoder.feed(bytes) {
+          match session.receive(@protocol.Message::from_json(frame)) {
+            Ready => {
+              send(
+                @protocol.Invoke(
+                  input~,
+                  tools~,
+                  max_pending~,
+                  max_frame_bytes=frame_limit,
+                ),
+              )
+              ready.put(())
+            }
+            Call(id~, name~, arguments~) =>
+              group.spawn_bg(() => {
+                let outcome = if !tools.contains(name) {
+                  @protocol.Failure(
+                    code="CapabilityDenied",
+                    content="tool is outside effective capability: " + name,
+                    structured=None,
+                  )
+                } else {
+                  match invoker {
+                    None =>
+                      @protocol.Failure(
+                        code="ToolInvocationUnavailable",
+                        content="Posoco scoped tool invocation is not connected",
+                        structured=None,
+                      )
+                    Some(invoker) => invoker.invoke(name, arguments)
+                  }
+                }
+                send(session.reply(id, outcome))
+              })
+            Diagnostic(level~, content~) =>
+              logs.push(Diagnostic::{ level, content, })
+            Closing => ()
+          }
+        }
+      }
+      decoder.finish()
+    })
+    @async.with_timeout(handshake_ms, () => ready.get()) catch {
+      error =>
+        if error is @async.TimeoutError {
+          raise RuntimeError::TimedOut("handshake")
+        } else {
+          raise error
+        }
+    }
+    let exit_code = process.wait()
+    out.wait()
+    err.wait()
+    if exit_code != 0 {
+      raise RuntimeError::GuestFailure(
+        "guest exit status " +
+        exit_code.to_string() +
+        ": " +
+        @utf8.decode(Bytes::from_array(stderr_bytes)),
+      )
+    }
+    {
+      outcome: session.finish(exit_code),
+      stderr: @utf8.decode(Bytes::from_array(stderr_bytes)),
+      logs,
+    }
+  })
+}
+
+///|
+pub async fn Runtime::run(
+  self : Runtime,
+  artifact : Artifact,
+  input : Json,
+  invocation_id~ : String,
+  tools~ : Array[String] = [],
+  invoker? : &ToolInvoker,
+  timeout_ms~ : Int32 = 120000,
+  handshake_ms~ : Int32 = 5000,
+  max_frame_bytes~ : Int32 = 65536,
+  max_pending~ : Int32 = 8,
+  max_calls~ : Int32 = 128,
+  max_output_bytes~ : Int32 = 1048576,
+) -> InvocationResult {
+  if self.clearing {
+    raise RuntimeError::Invalid("artifact cache maintenance is in progress")
+  }
+  if self.closed {
+    raise RuntimeError::Closed
+  }
+  if invocation_id == "" || self.active.contains(invocation_id) {
+    raise RuntimeError::Invalid(
+      "invocation id must be nonempty and unique while active",
+    )
+  }
+  if timeout_ms <= 0 ||
+    handshake_ms <= 0 ||
+    max_frame_bytes <= 0 ||
+    max_frame_bytes > 65536 ||
+    max_pending <= 0 ||
+    max_calls <= 0 ||
+    max_output_bytes <= 0 ||
+    tools.contains("*") {
+    raise RuntimeError::Invalid(
+      "invalid resource limits or wildcard tool capability",
+    )
+  }
+  match self.cache.get(artifact.key) {
+    Some(cached) if cached.path == artifact.path => ()
+    _ =>
+      raise RuntimeError::Invalid(
+        "artifact is not owned by this runtime or cache was cleared",
+      )
+  }
+  let tools = tools.copy()
+  @async.with_task_group(group => {
+    let task = group.spawn(allow_failure=true, () => {
+      match
+        @async.handle_cancellation(() => {
+          @async.with_timeout(timeout_ms, () => {
+            let directory = temporary_directory("posoco-mbtx-invocation-")
+            @async.with_task_group(scope => {
+              scope.add_defer(() => remove_directory(directory))
+              let policy = directory + "/policy.json"
+              write_text(policy, guest_policy().stringify())
+              with_process(
+                self.moonrun,
+                [artifact.path, "--policy", policy],
+                Some(directory),
+                false,
+                process => {
+                  communicate(
+                    process, input, tools, invoker, max_frame_bytes, max_pending,
+                    max_calls, max_output_bytes, handshake_ms,
+                  )
+                },
+              )
+            })
+          }) catch {
+            error =>
+              if error is @async.TimeoutError {
+                raise RuntimeError::TimedOut("invocation")
+              } else {
+                raise error
+              }
+          }
+        }) {
+        Some(result) => result
+        None => raise RuntimeError::Cancelled
+      }
+    })
+    self.active[invocation_id] = () => task.cancel()
+    defer self.active.remove(invocation_id)
+    task.wait()
+  }) catch {
+    @protocol.ProtocolError::Invalid(reason) =>
+      raise RuntimeError::ProtocolFailure(reason)
+    error => raise error
+  }
+}

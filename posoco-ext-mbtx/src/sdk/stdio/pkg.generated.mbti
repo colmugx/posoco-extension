@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-mbtx/sdk/stdio"
+
+import {
+  "colmugx/posoco-ext-mbtx/protocol",
+  "colmugx/posoco-ext-mbtx/sdk",
+}
+
+// Values
+pub async fn serve(async (@sdk.Context, Json) -> @protocol.Outcome) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

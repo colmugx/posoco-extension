@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-mbtx/sdk"
+
+import {
+  "colmugx/posoco-ext-mbtx/protocol",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Context {
+  // private fields
+}
+pub fn Context::Context(tools~ : &ToolClient, allowed~ : Array[String], logs? : &LogSink) -> Self
+pub async fn Context::call(Self, String, Json) -> @protocol.Outcome
+pub fn Context::close(Self) -> Unit
+pub async fn Context::log(Self, String, String) -> Unit
+
+// Type aliases
+pub using @protocol {type Outcome}
+
+// Traits
+pub(open) trait LogSink {
+  async fn log(Self, String, String) -> Unit
+}
+
+pub(open) trait ToolClient {
+  async fn call(Self, String, Json) -> @protocol.Outcome
+}
