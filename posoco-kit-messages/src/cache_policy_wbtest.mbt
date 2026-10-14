@@ -366,3 +366,67 @@ test "history checkpoint budget fails rather than dropping stable positions" {
     _ => fail("expected explicit rejection when checkpoint capacity is exceeded")
   }
 }
+
+
+///|
+test "existing automatic caching is validated even when request is unchanged" {
+  let request : Json = {
+    "model": "m",
+    "max_tokens": 1024,
+    "cache_control": { "type": "ephemeral", "ttl": "1h" },
+    "messages": [{ "role": "user", "content": [{ "type": "text", "text": "Hello" }] }],
+  }
+  let unchanged = apply_messages_cache_policy(request, CacheUnchanged)
+  assert_eq(unchanged, request)
+  let unavailable = Ok(apply_messages_cache_policy(
+    request, CacheUnchanged,
+    capabilities={ automatic: false, one_hour: false },
+  )) catch { error => Err(error) }
+  match unavailable {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("capability"))
+    _ => fail("expected capability rejection of existing automatic caching")
+  }
+  let duplicate = Ok(apply_messages_cache_policy(request, CacheAutomatic5m)) catch {
+    error => Err(error)
+  }
+  match duplicate {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("duplicate_automatic"))
+    _ => fail("expected duplicate automatic cache rejection")
+  }
+  let explicit = Ok(apply_messages_cache_policy(request, CacheExplicit)) catch {
+    error => Err(error)
+  }
+  match explicit {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("mode_conflict"))
+    _ => fail("expected explicit-mode conflict")
+  }
+}
+
+///|
+test "existing automatic cache counts toward four-breakpoint budget" {
+  let marks : Array[Json] = []
+  for i in 0..<4 {
+    marks.push({
+      "type": "text",
+      "text": "stable-\{i}",
+      "cache_control": { "type": "ephemeral" },
+    })
+  }
+  let request : Json = {
+    "model": "m",
+    "max_tokens": 1024,
+    "cache_control": { "type": "ephemeral" },
+    "messages": [{ "role": "user", "content": marks }],
+  }
+  let result = Ok(apply_messages_cache_policy(request, CacheUnchanged)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("breakpoints"))
+    _ => fail("expected combined breakpoint budget check")
+  }
+}
