@@ -13,7 +13,7 @@ import {
 }
 
 // Values
-pub async fn fetch_zai_models(String, String, endpoint_prefix? : String) -> Array[String] raise @error.ModelError
+pub async fn fetch_zai_models(String, String) -> Array[String] raise @error.ModelError
 
 pub fn parse_cached_zai_models(Json?) -> Array[String]?
 
@@ -28,6 +28,10 @@ pub fn zai_model_catalog_from_ids(Array[String], ZaiConfig, @devkit.ExtContext, 
 pub fn zai_platform_endpoint(String) -> (String, String)?
 
 pub fn zai_setting_context_window(@posoco-kit-provider.ProviderConfigSource, manifest_id~ : String) -> Int? raise @error.CompositionError
+
+pub fn zai_setting_max_output_tokens(@posoco-kit-provider.ProviderConfigSource, manifest_id~ : String) -> Int? raise @error.CompositionError
+
+pub fn zai_thinking_efforts() -> Array[String]
 
 // Errors
 
@@ -46,12 +50,12 @@ pub(all) struct ZaiConfig {
   model : String
   endpoint_prefix : String
   reasoning_effort : String
-  thinking_efforts : Array[String]
   context_window : Int?
+  max_output_tokens : Int
 } derive(Eq, @debug.Debug)
-pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String], context_window? : Int?) -> Self
+pub fn ZaiConfig::ZaiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, context_window? : Int?, max_output_tokens? : Int) -> Self
 pub fn ZaiConfig::equal(Self, Self) -> Bool
-pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String, context_window? : Int?) -> Self
+pub fn ZaiConfig::for_model(String, String, base_url~ : String, endpoint_prefix~ : String, context_window? : Int?, max_output_tokens? : Int) -> Self
 pub fn ZaiConfig::not_equal(Self, Self) -> Bool
 pub fn ZaiConfig::to_repr(Self) -> @debug.Repr
 pub fn ZaiConfig::with_reasoning_effort(Self, String, manifest_id? : String) -> Self raise @error.CompositionError

@@ -26,8 +26,9 @@ test "factory: ready catalog defaults to the Z.ai platform" {
     fail("expected Ready")
   }
   inspect(catalog.provider_id, content="zai")
-  inspect(catalog.slots.length(), content="4")
+  inspect(catalog.slots.length(), content="2")
   inspect(catalog.slots[0].model_id, content="glm-5.3-flash")
+  inspect(catalog.slots[1].model_id, content="glm-5.3")
   inspect(catalog.slots[0].id, content="zai/glm-5.3-flash")
   inspect(catalog.slots[0].label, content="Z.ai / glm-5.3-flash")
   assert_false(catalog.capabilities.contains("coding_plan"))
@@ -43,7 +44,7 @@ test "factory: platform setting selects bigmodel" {
   )
   guard config is Some(value) else { fail("expected config") }
   inspect(value.base_url, content="https://open.bigmodel.cn")
-  inspect(value.endpoint_prefix, content="/api/paas/v4")
+  inspect(value.endpoint_prefix, content="/api/anthropic")
 }
 
 ///|
@@ -80,7 +81,7 @@ test "factory: base_url override keeps the platform prefix" {
   )
   guard config is Some(value) else { fail("expected config") }
   inspect(value.base_url, content="https://proxy.example.com")
-  inspect(value.endpoint_prefix, content="/api/paas/v4")
+  inspect(value.endpoint_prefix, content="/api/anthropic")
 }
 
 ///|
@@ -137,7 +138,7 @@ test "factory: credential endpoint honors the platform marker" {
       secret: "k",
       metadata: Map::from_array([("platform", "bigmodel")]),
     }),
-    content="Some((\"https://open.bigmodel.cn\", \"/api/paas/v4\"))",
+    content="Some((\"https://open.bigmodel.cn\", \"/api/anthropic\"))",
   )
   debug_inspect(
     zai_credential_endpoint({ secret: "k", metadata: Map::from_array([]), }),
@@ -221,11 +222,11 @@ test "factory: non-numeric context_window is a typed failure" {
 }
 
 ///|
-test "provider_config reports the declared window" {
+test "provider_config reports the declared window and effort ladder" {
   let port = ZaiModelPort(ZaiConfig("k", context_window=Some(131072)))
   let config = @posoco.ModelPort::provider_config(port)
   assert_true(config.context_window == Some(131072))
-  assert_true(config.reasoning_effort_values.length() == 0)
+  assert_true(config.reasoning_effort_values == ["low", "high", "max"])
   assert_true(config.compact_threshold is None)
   let bare = @posoco.ModelPort::provider_config(ZaiModelPort(ZaiConfig("k")))
   assert_true(bare.context_window is None)

@@ -1,20 +1,6 @@
 ///|
-fn zai_slot_efforts(config : ZaiConfig) -> Array[String] {
-  if config.thinking_efforts.is_empty() {
-    return []
-  }
-  let efforts : Array[String] = ["off"]
-  efforts.append(config.thinking_efforts.copy())
-  efforts
-}
-
-///|
 fn zai_effort_label(config : ZaiConfig) -> String {
-  if config.reasoning_effort == "" {
-    "off"
-  } else {
-    config.reasoning_effort
-  }
+  config.reasoning_effort
 }
 
 ///|
@@ -25,25 +11,17 @@ fn zai_catalog_slot(
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
   let port : &@posoco.ModelPort = ZaiModelPort(config, ctx~)
-  let slot_efforts = zai_slot_efforts(config)
-  let default_effort = if slot_efforts.is_empty() {
-    None
-  } else {
-    Some(zai_effort_label(config))
-  }
-  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = if slot_efforts.is_empty() {
-    None
-  } else {
-    Some(fn(effort) {
-      let rebuilt = config.with_reasoning_effort(
-        effort,
-        manifest_id=identity.manifest_id,
-      ) catch {
-        err => abort("zai catalog effort rebuild failed: " + err.to_string())
-      }
-      zai_catalog_slot(rebuilt, ctx, identity, api_key)
-    })
-  }
+  let slot_efforts = zai_thinking_efforts()
+  let default_effort = Some(zai_effort_label(config))
+  let rebuild_on_effort : ((String) -> @llm.ModelSlot)? = Some(fn(effort) {
+    let rebuilt = config.with_reasoning_effort(
+      effort,
+      manifest_id=identity.manifest_id,
+    ) catch {
+      err => abort("zai catalog effort rebuild failed: " + err.to_string())
+    }
+    zai_catalog_slot(rebuilt, ctx, identity, api_key)
+  })
   @llm.ModelSlot::ModelSlot(
     id=identity.provider_id + "/" + config.model,
     label=identity.label_prefix + " / " + config.model,
@@ -87,6 +65,7 @@ fn zai_catalog_slot(
                 base_url~,
                 endpoint_prefix~,
                 context_window=config.context_window,
+                max_output_tokens=config.max_output_tokens,
               )
             None =>
               ZaiConfig::for_model(
@@ -95,6 +74,7 @@ fn zai_catalog_slot(
                 base_url=config.base_url,
                 endpoint_prefix=config.endpoint_prefix,
                 context_window=config.context_window,
+                max_output_tokens=config.max_output_tokens,
               )
           }
         None =>
@@ -104,6 +84,7 @@ fn zai_catalog_slot(
             base_url=config.base_url,
             endpoint_prefix=config.endpoint_prefix,
             context_window=config.context_window,
+            max_output_tokens=config.max_output_tokens,
           )
       }
       let with_effort = if config.reasoning_effort == "" {
@@ -194,6 +175,7 @@ pub fn zai_model_catalog_from_ids(
         id,
         base_url=config.base_url,
         endpoint_prefix=config.endpoint_prefix,
+        max_output_tokens=config.max_output_tokens,
       )
     }
     slots.push(zai_catalog_slot(slot_config, ctx, identity, api_key))
@@ -216,11 +198,14 @@ pub fn zai_model_catalog(
   api_key : &@llm.ApiKeyFactory,
   capabilities~ : Array[String] = ["chat", "streaming", "api_key"],
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
-  let ids : Array[String] = []
-  for info in zai_models() {
-    ids.push(info.id)
-  }
-  zai_model_catalog_from_ids(ids, config, ctx, identity, api_key, capabilities~)
+  zai_model_catalog_from_ids(
+    zai_preset_models(),
+    config,
+    ctx,
+    identity,
+    api_key,
+    capabilities~,
+  )
 }
 
 ///|

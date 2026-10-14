@@ -114,7 +114,7 @@ fn zai_catalog_ids(
     "k",
     preferred,
     base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
+    endpoint_prefix="/api/anthropic",
   )
   let api_key : &@llm.ApiKeyFactory = ZaiProvider()
   let catalog = zai_model_catalog_from_ids(
@@ -148,33 +148,31 @@ test "catalog from ids keeps the configured model first, preserves order" {
 }
 
 ///|
-test "catalog from ids assigns generation thinking policy to unknown ids" {
+test "catalog from ids applies the uniform posture to unknown ids" {
   let ids = zai_catalog_ids(["glm-5.4-turbo", "glm-4.7-flash"], "glm-5.4-turbo")
   inspect(ids.length(), content="2")
-  let config5 = ZaiConfig::for_model(
-    "k",
-    "glm-5.4-turbo",
-    base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
+  for model in ["glm-5.4-turbo", "glm-4.7-flash", "embedding-3"] {
+    let config = ZaiConfig::for_model(
+      "k",
+      model,
+      base_url="https://api.z.ai",
+      endpoint_prefix="/api/anthropic",
+    )
+    inspect(config.reasoning_effort, content="high")
+    inspect(config.max_output_tokens, content="32768")
+  }
+}
+
+///|
+test "models discovery stays pinned to the OpenAI list route" {
+  inspect(
+    zai_models_url("https://api.z.ai", ZAI_MODELS_DISCOVERY_PREFIX),
+    content="https://api.z.ai/api/paas/v4/models",
   )
-  debug_inspect(
-    ZaiModelPort(config5).thinking_state(),
-    content="(true, Some(\"high\"))",
+  inspect(
+    zai_models_url("https://open.bigmodel.cn/", ZAI_MODELS_DISCOVERY_PREFIX),
+    content="https://open.bigmodel.cn/api/paas/v4/models",
   )
-  let config4 = ZaiConfig::for_model(
-    "k",
-    "glm-4.7-flash",
-    base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
-  )
-  debug_inspect(ZaiModelPort(config4).thinking_state(), content="(true, None)")
-  let other = ZaiConfig::for_model(
-    "k",
-    "embedding-3",
-    base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
-  )
-  debug_inspect(ZaiModelPort(other).thinking_state(), content="(false, None)")
 }
 
 ///|

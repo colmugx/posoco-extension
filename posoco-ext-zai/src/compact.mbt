@@ -1,24 +1,15 @@
 ///|
-/// One non-streaming chat call producing the summary: same transport,
-/// headers, thinking resolution and error classification as `chat`, with
-/// an empty toolset.
+/// One non-streaming messages call producing the summary: same transport,
+/// headers, effort posture and error classification as `chat`, with an
+/// empty toolset.
 async fn ZaiModelPort::zai_compact_completion(
   self : ZaiModelPort,
   prompt_messages : Array[@posoco.Message],
   options : @posoco.ChatOptions,
 ) -> @posoco.Completion raise @posoco.ModelError {
-  let (thinking_enabled, effort_str) = self.thinking_state()
-  let body = build_chat_request(
-    prompt_messages,
-    [],
-    options,
-    self.config.model,
-    false,
-    thinking_enabled,
-    effort_str,
-  )
+  let body = build_messages_request(self.config, prompt_messages, [], options)
   let (response, body_data) = @http.post(
-    chat_url(self.config),
+    messages_url(self.config),
     body.stringify(),
     headers=build_headers(self.config),
   ) catch {
@@ -51,7 +42,7 @@ async fn ZaiModelPort::zai_compact_completion(
         "zai compact parse failure (stage=json, body_chars=\{body_text.length()})",
       )
   }
-  decode_chat_response(resp_json)
+  @messages.parse_response(provider="zai", resp_json).completion
 }
 
 ///|

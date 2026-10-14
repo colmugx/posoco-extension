@@ -182,34 +182,55 @@ pub fn zai_setting_context_window(
   source : @llm.ProviderConfigSource,
   manifest_id~ : String,
 ) -> Int32? raise @posoco.CompositionError {
-  match source.setting("context_window") {
+  zai_setting_positive_whole(source, key="context_window", manifest_id~)
+}
+
+///|
+/// The host-declared output cap backing the Messages-required `max_tokens`
+/// field; unset keeps the config default.
+pub fn zai_setting_max_output_tokens(
+  source : @llm.ProviderConfigSource,
+  manifest_id~ : String,
+) -> Int32? raise @posoco.CompositionError {
+  zai_setting_positive_whole(source, key="max_output_tokens", manifest_id~)
+}
+
+///|
+/// Positive whole-number setting reader shared by the host-declared numeric
+/// knobs (context_window, max_output_tokens).
+fn zai_setting_positive_whole(
+  source : @llm.ProviderConfigSource,
+  key~ : String,
+  manifest_id~ : String,
+) -> Int32? raise @posoco.CompositionError {
+  match source.setting(key) {
     None => None
     Some(Json::Number(value, ..)) => {
       if value != value.floor() {
         raise @posoco.CompositionError::ManifestSchemaError(
           manifest_id~,
-          detail="setting must be a whole number: context_window",
+          detail="setting must be a whole number: " + key,
         )
       }
       if value > 2147483647.0 {
         raise @posoco.CompositionError::ManifestSchemaError(
           manifest_id~,
-          detail="context_window exceeds Int range",
+          detail="setting exceeds Int range: " + key,
         )
       }
-      let window = value.to_int()
-      if window <= 0 {
+      let parsed = value.to_int()
+      if parsed <= 0 {
         raise @posoco.CompositionError::ManifestSchemaError(
           manifest_id~,
-          detail="setting must be positive: context_window",
+          detail="setting must be positive: " + key,
         )
       }
-      Some(window)
+      Some(parsed)
     }
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
         manifest_id~,
-        detail="setting must be a number: context_window",
+        detail="setting must be a number: " + key,
       )
   }
 }
@@ -256,12 +277,18 @@ fn zai_build_config(
     source,
     manifest_id="posoco_ext_zai",
   )
+  let max_output_tokens = match
+    zai_setting_max_output_tokens(source, manifest_id="posoco_ext_zai") {
+    Some(value) => value
+    None => 32768
+  }
   let config = ZaiConfig::for_model(
     api_key,
     model,
     base_url~,
     endpoint_prefix~,
     context_window~,
+    max_output_tokens~,
   )
   let requested_effort = zai_setting_string(source, "reasoning_effort")
   match requested_effort {
@@ -343,11 +370,7 @@ pub impl @llm.RefreshableProviderFactory for ZaiProvider with fn refresh(
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
   match zai_build_config(source) {
     Some(config) => {
-      let ids = fetch_zai_models(
-        config.base_url,
-        config.api_key,
-        endpoint_prefix=config.endpoint_prefix,
-      ) catch {
+      let ids = fetch_zai_models(config.base_url, config.api_key) catch {
         err =>
           raise @posoco.CompositionError::ManifestSchemaError(
             manifest_id="posoco_ext_zai",

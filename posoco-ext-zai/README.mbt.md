@@ -5,11 +5,13 @@
 
 Direct Z.ai / BigModel GLM access for
 [Posoco](https://mooncakes.io/docs/colmugx/posoco): one provider for the real
-platform APIs (`api.z.ai`, `open.bigmodel.cn`), pay-as-you-go balance, with
-the GLM wire specifics owned end to end — thinking effort, tool calls,
-streaming, and typed 429 quota verdicts. This is **not** a generic
-OpenAI-compatible pass-through, and it does not serve the GLM Coding Plan
-endpoints (the coding-plan adaptor owns those).
+platform APIs (`api.z.ai`, `open.bigmodel.cn`), pay-as-you-go balance, on the
+platforms' **Anthropic-compatible Messages route** (`/api/anthropic`) through
+`posoco-kit-messages`. Wire specifics owned end to end — the uniform
+thinking/effort posture, signed-thinking replay, native tool_result
+attachments, streaming, and typed 429 quota verdicts. This is **not** a
+generic OpenAI-compatible pass-through, and it does not serve the GLM Coding
+Plan endpoints (the coding-plan adaptor owns those).
 
 ## Ports contributed
 
@@ -32,9 +34,9 @@ moon add colmugx/posoco-ext-zai
 
 let config = @zai.ZaiConfig::for_model(
   "sk-...",
-  "glm-5.3", // default; catalog also serves glm-5.3-flash / 5.2 / 4.5-air
+  "glm-5.3", // default; the preset catalog also serves glm-5.3-flash
   base_url="https://api.z.ai",
-  endpoint_prefix="/api/paas/v4",
+  endpoint_prefix="/api/anthropic",
 )
 let port = @zai.ZaiModelPort(config)
 let catalog = port.model_catalog()
@@ -51,19 +53,21 @@ discovers the live list.
 ## Model discovery
 
 The model list is fetched, not hardcoded. `refresh` issues exactly one
-authenticated `GET {base}{prefix}/models` (OpenAI `list` envelope; both
-platforms follow it) and builds one slot per discovered id, with the
-configured model ordered first. Hosts persist the discovered list to
+authenticated `GET {base}/api/paas/v4/models` — model-catalog discovery stays
+on the platform's OpenAI-compatible list route (a management surface whose
+envelope `parse_zai_models` already speaks), while chat traffic runs on the
+Messages route. Discovered ids build one slot each, with the configured model
+ordered first. Hosts persist the discovered list to
 `~/.cetas/model_lists.json`; `build` then expands the same catalog offline
 from those cached records, so a restart announces the full list without a
-network request. With no cache the four-model preset stands until the first
-refresh; malformed cache records degrade to the preset, never fail
-composition.
+network request. With no cache the two-model preset stands (`glm-5.3`,
+`glm-5.3-flash`) until the first refresh; malformed cache records degrade to
+the preset, never fail composition.
 
-Thinking profiles are a deterministic provider policy by GLM generation, so
-a newly released id still gets the right picker without an extension update:
-`glm-5*` exposes `low|high|max` (default `high`), `glm-4*` is an always-on
-thinker with no selector, anything else gets no selector.
+There are **no per-model thinking policies**: every model id — preset,
+discovered, or hand-configured — shares one uniform posture (below). Legacy
+generations (GLM-4.x, GLM-5.2) are outside the supported set; ids that still
+resolve get the same uniform posture without a correctness guarantee.
 
 ## Login: platform choice, then key
 
@@ -78,33 +82,44 @@ and after `/login` — no extra settings key is required.
 
 ## Endpoints
 
-| `platform` | base | billing |
-| --- | --- | --- |
-| `zai` (default) | `https://api.z.ai/api/paas/v4` | Z.ai international, balance |
-| `bigmodel` | `https://open.bigmodel.cn/api/paas/v4` | BigModel China, balance |
+| `platform` | base | chat route | billing |
+| --- | --- | --- | --- |
+| `zai` (default) | `https://api.z.ai` | `/api/anthropic/v1/messages` | Z.ai international, balance |
+| `bigmodel` | `https://open.bigmodel.cn` | `/api/anthropic/v1/messages` | BigModel China, balance |
 
 Resolution order: credential `platform` metadata → `platform` setting →
 `zai`. A `base_url` setting overrides the host but keeps the platform's path
 prefix unless the URL carries its own path.
 
-## GLM-specific behavior
+## Messages-protocol behavior
 
-- `thinking: {"type": "enabled"|"disabled"}` per model; `reasoning_effort`
-  (`low|high|max`) only for GLM-5.x. GLM-4.x models are always-on thinkers
-  with no effort selector.
-- `reasoning_content` is resent on assistant messages that carry
-  `tool_calls` (GLM 400s otherwise) and omitted otherwise, preserving the
-  prefix cache.
-- Streaming requests send `tool_stream: true` (incremental tool-call
-  arguments) only for glm-4.6+ model ids; older models may reject the field.
-- 429 classification follows z.ai's documented error-code table: quota
-  verdicts (1308/1310/1316–1321) parse `{next_flush_time}` out of the message
-  (UTC+8 when no explicit offset) into the typed `ModelError::RateLimited` —
-  pair with a rate-limit extension for automatic resume. Transient verdicts
-  (1302 concurrency, 1305 overload) classify as `RateLimited` with no reset
-  time.
-- `Accept-Language: en-US,en` request header, per z.ai docs.
-- Usage decoding accounts for `prompt_tokens_details.cached_tokens`.
+- **Uniform thinking posture, no exceptions**: every request sends
+  `thinking: {"type": "enabled"}` (no `budget_tokens` — the budget-free
+  enabled dialect the GLM Messages endpoint accepts) plus the platform's
+  top-level `reasoning_effort` (`low|high|max`, default `high`). Thinking
+  cannot be disabled: forced-thinking models answer
+  `thinking: {"type": "disabled"}` with HTTP 400, so `off` is not offered and
+  `with_reasoning_effort("off")` is a typed composition error.
+- Signed thinking blocks replay verbatim: the kit stores the entire assistant
+  wire block sequence in the reasoning replay envelope and re-emits it on the
+  next turn after fingerprint verification — no `reasoning_content` resend
+  hacks, correct interleaving of thinking with tool calls.
+- Tool results are native `tool_result` blocks; attachments ride as sibling
+  image blocks on vision models. Non-vision models degrade user images and
+  tool attachments to explicit `[Attached …, omitted]` placeholders — never a
+  silent drop.
+- `max_tokens` is always sent (Messages requires it): the host chat option
+  wins, otherwise the config default 32768 (settings key `max_output_tokens`).
+- `temperature` passes through; values above 1.0 are a typed request error
+  (the Messages contract is [0, 1]).
+- Headers: `Authorization: Bearer`, `anthropic-version: 2023-06-01`,
+  `Accept-Language: en-US,en`. No `anthropic-beta` features are negotiated.
+- 429 classification follows z.ai's documented error-code table (devkit's
+  protocol-neutral quota-verdict decoder): quota verdicts
+  (1308/1310/1316–1321) parse the flush time out of the message (UTC+8 when
+  no explicit offset) into the typed `ModelError::RateLimited` — pair with a
+  rate-limit extension for automatic resume. Transient verdicts (1302
+  concurrency, 1305 overload) classify as `RateLimited` with no reset time.
 
 ## Context window
 
@@ -123,15 +138,16 @@ unknown window.
 | `model` | default `glm-5.3` |
 | `platform` | `zai` or `bigmodel`; ignored when the credential names one |
 | `base_url` | endpoint override (keeps the platform prefix on bare hosts) |
-| `reasoning_effort` | picker effort; `off` disables thinking |
+| `reasoning_effort` | picker effort `low\|high\|max`; there is no `off` |
 | `context_window` | declared model capacity in tokens; enables the `ctx` window/percent figures and auto-compact |
+| `max_output_tokens` | output cap backing the required `max_tokens` field; default 32768 |
 
 ## Dependencies
 
 - `colmugx/posoco` — ModelPort trait + types
-- `posoco/devkit` — `ExtContext` logger helper
+- `posoco/devkit` — `ExtContext` helper + protocol-neutral 429 verdict decoder
 - `posoco/ext-llm` — provider-neutral catalog/router
 - `posoco/ext-oauth` — credential store / auth prompt seams
-- `posoco/kit-chat-completions` — shared chat-completions protocol kit
+- `colmugx/posoco-kit-messages` — Messages wire codec, replay envelope, SSE
 - `colmugx/posoco-kit-compact-summary` — client-side compaction
 - `moonbitlang/async/http` — HTTP transport

@@ -4,7 +4,8 @@
 /// what makes auto-resume schedulable. Transient 429s (1302 concurrency,
 /// 1305 overload) carry no reset time. Every other non-2xx keeps the
 /// redacted DeepSeek-style summary — provider payloads never cross into
-/// generic transport messages.
+/// generic transport messages. The classifier is devkit's protocol-neutral
+/// quota-verdict decoder; only the platform defaults live here.
 
 ///|
 /// z.ai is UTC+8 native; flush times without an explicit offset are +08:00.
@@ -42,7 +43,7 @@ fn classify_zai_http_error(
     return None
   }
   if status == 429 {
-    return @chatkit.classify_chat_completions_http_error(
+    return @devkit.classify_rate_limit_error(
       status,
       body_text,
       default_tz_offset_minutes=ZAI_DEFAULT_TZ_OFFSET_MINUTES,

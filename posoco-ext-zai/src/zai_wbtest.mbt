@@ -2,231 +2,310 @@
 test "platform endpoints" {
   debug_inspect(
     zai_platform_endpoint("zai"),
-    content="Some((\"https://api.z.ai\", \"/api/paas/v4\"))",
+    content="Some((\"https://api.z.ai\", \"/api/anthropic\"))",
   )
   debug_inspect(
     zai_platform_endpoint("bigmodel"),
-    content="Some((\"https://open.bigmodel.cn\", \"/api/paas/v4\"))",
+    content="Some((\"https://open.bigmodel.cn\", \"/api/anthropic\"))",
   )
   debug_inspect(zai_platform_endpoint("bogus"), content="None")
 }
 
 ///|
-test "for_model picks per-model thinking defaults" {
-  let glm5 = ZaiConfig::for_model(
-    "key",
-    "glm-5.3",
-    base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
-  )
-  inspect(glm5.reasoning_effort, content="high")
-  let glm4 = ZaiConfig::for_model(
-    "key",
-    "glm-4.5-air",
-    base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
-  )
-  inspect(glm4.reasoning_effort, content="")
-  inspect(glm4.thinking_efforts.length(), content="0")
-  let port5 = ZaiModelPort(glm5)
-  let port4 = ZaiModelPort(glm4)
-  debug_inspect(port5.thinking_state(), content="(true, Some(\"high\"))")
-  debug_inspect(port4.thinking_state(), content="(true, None)")
-  let off = glm5.with_reasoning_effort("off")
-  debug_inspect(ZaiModelPort(off).thinking_state(), content="(false, None)")
-}
-
-///|
-test "with_reasoning_effort rejects unknown levels" {
-  let config = ZaiConfig::for_model(
-    "key",
-    "glm-5.3",
-    base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
-  )
-  try config.with_reasoning_effort("ultra") catch {
-    @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
-      inspect(manifest_id, content="posoco_ext_zai")
-      inspect(detail, content="unsupported reasoning effort: ultra")
-    }
-    _ => fail("expected ManifestSchemaError")
-  } noraise {
-    _ => fail("expected failure")
+test "for_model applies the uniform posture to every model id" {
+  for model in ["glm-5.3", "glm-5.3-flash", "glm-something-new"] {
+    let config = ZaiConfig::for_model(
+      "key",
+      model,
+      base_url="https://api.z.ai",
+      endpoint_prefix="/api/anthropic",
+    )
+    inspect(config.reasoning_effort, content="high")
+    inspect(config.max_output_tokens, content="32768")
+    inspect(config.context_window, content="None")
   }
 }
 
 ///|
-test "encode: thinking and reasoning_effort on the wire" {
+test "with_reasoning_effort rejects off and unknown levels" {
   let config = ZaiConfig::for_model(
     "key",
     "glm-5.3",
     base_url="https://api.z.ai",
-    endpoint_prefix="/api/paas/v4",
+    endpoint_prefix="/api/anthropic",
   )
-  let body = build_chat_request(
+  for effort in ["off", "ultra"] {
+    try config.with_reasoning_effort(effort) catch {
+      @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
+        inspect(manifest_id, content="posoco_ext_zai")
+        inspect(
+          detail,
+          content="unsupported reasoning effort: \{effort} (thinking stays enabled; use low | high | max)",
+        )
+      }
+      _ => fail("expected ManifestSchemaError")
+    } noraise {
+      _ => fail("expected failure for \{effort}")
+    }
+  }
+  let lowered = config.with_reasoning_effort("low")
+  inspect(lowered.reasoning_effort, content="low")
+}
+
+///|
+test "headers carry the messages protocol version" {
+  let config = ZaiConfig::for_model(
+    "key",
+    "glm-5.3",
+    base_url="https://api.z.ai",
+    endpoint_prefix="/api/anthropic",
+  )
+  let headers = build_headers(config)
+  guard headers.get("anthropic-version") is Some(version) else {
+    fail("missing anthropic-version")
+  }
+  inspect(version, content="2023-06-01")
+  guard headers.get("Authorization") is Some(authorization) else {
+    fail("missing Authorization")
+  }
+  inspect(authorization, content="Bearer key")
+}
+
+///|
+fn messages_config(model~ : String = "glm-5.3") -> ZaiConfig {
+  ZaiConfig::for_model(
+    "key",
+    model,
+    base_url="https://api.z.ai",
+    endpoint_prefix="/api/anthropic",
+  )
+}
+
+///|
+fn default_chat_options() -> @posoco.ChatOptions {
+  { temperature: None, max_output_tokens: None, }
+}
+
+///|
+fn wire_int_field(body : Json, key~ : String) -> Int32 {
+  guard body.value(key) is Some(Json::Number(n, ..)) else {
+    abort("test fixture: missing number field \"\{key}\"")
+  }
+  n.to_int()
+}
+
+///|
+test "encode: uniform thinking posture and effort on the wire" {
+  let body = build_messages_request(
+    messages_config(),
     [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
     [],
-    { temperature: None, max_output_tokens: None, },
-    config.model,
-    false,
-    true,
-    Some("high"),
+    default_chat_options(),
   )
   json_inspect(body, content={
     "model": "glm-5.3",
-    "messages": [{ "role": "user", "content": "hi" }],
+    "max_tokens": 32768,
+    "messages": [
+      { "role": "user", "content": [{ "type": "text", "text": "hi" }] },
+    ],
     "thinking": { "type": "enabled" },
     "reasoning_effort": "high",
   })
 }
 
 ///|
-fn encode_request(model : String, stream : Bool) -> Map[String, Json] {
-  let body = build_chat_request(
+test "encode: streaming requests enable SSE while non-streaming requests do not" {
+  let messages = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")]),
+  ]
+  let streaming = build_messages_request(
+    messages_config(),
+    messages,
+    [],
+    default_chat_options(),
+    stream=true,
+  )
+  assert_true(streaming is { "stream": true, .. })
+  let non_streaming = build_messages_request(
+    messages_config(),
+    messages,
+    [],
+    default_chat_options(),
+    stream=false,
+  )
+  assert_true(non_streaming is { "stream"? : None, .. })
+}
+
+///|
+test "encode: host max_output_tokens overrides the config default" {
+  let config = ZaiConfig::for_model(
+    "key",
+    "glm-5.3",
+    base_url="https://api.z.ai",
+    endpoint_prefix="/api/anthropic",
+    max_output_tokens=777,
+  )
+  let body = build_messages_request(
+    config,
     [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
     [],
-    { temperature: None, max_output_tokens: None, },
-    model,
-    stream,
-    true,
-    None,
+    { temperature: None, max_output_tokens: Some(1024), },
   )
-  guard body is Object(fields) else { abort("expected JSON object") }
-  fields
+  inspect(wire_int_field(body, key="max_tokens"), content="1024")
+  let fallback = build_messages_request(
+    config,
+    [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
+    [],
+    default_chat_options(),
+  )
+  inspect(wire_int_field(fallback, key="max_tokens"), content="777")
 }
 
 ///|
-test "encode: tool_stream rides along when streaming glm-4.6+" {
-  json_inspect(encode_request("glm-5.3", true), content={
-    "model": "glm-5.3",
-    "messages": [{ "role": "user", "content": "hi" }],
-    "thinking": { "type": "enabled" },
-    "stream": true,
-    "stream_options": { "include_usage": true },
-    "tool_stream": true,
-  })
-  for model in ["glm-5", "glm-5.1", "glm-4.6", "glm-4.7", "glm-5.3-air"] {
-    let fields = encode_request(model, true)
-    guard fields.contains("tool_stream") else {
-      fail("expected tool_stream for \{model}")
-    }
-    assert_true(fields["tool_stream"] is True)
-  }
-}
-
-///|
-test "encode: tool_stream omitted for unsupported models and non-streaming" {
-  for model in ["glm-4.5", "glm-4.5-air", "some-other"] {
-    inspect(
-      encode_request(model, true).contains("tool_stream"),
-      content="false",
+test "encode: temperature above 1.0 is a typed range error" {
+  try
+    build_messages_request(
+      messages_config(),
+      [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
+      [],
+      { temperature: Some(1.2), max_output_tokens: None, },
     )
+  catch {
+    @posoco.ModelError::RequestBuild(message) =>
+      inspect(message.contains("category=range"), content="true")
+    _ => fail("expected RequestBuild")
+  } noraise {
+    _ => fail("expected failure")
   }
-  inspect(
-    encode_request("glm-4.6", false).contains("tool_stream"),
-    content="false",
-  )
-  assert_false(supports_tool_stream("glm"))
-  assert_false(supports_tool_stream("glm-4"))
-  assert_true(supports_tool_stream("prefix-glm-4.6v"))
-  assert_false(supports_tool_stream("glm-4."))
 }
 
 ///|
-test "encode: reasoning_content only resent with tool_calls" {
-  let reasoning : @posoco.Reasoning? = Some({ content: "thought", raw: None, })
-  let call : @posoco.ToolCall = {
+test "encode: system content lifts to the top-level system field" {
+  let body = build_messages_request(
+    messages_config(),
+    [
+      @posoco.Message::SystemMessage(content=[@posoco.Content::Text("be brief")]),
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")]),
+      @posoco.Message::SystemMessage(content=[
+        @posoco.Content::Text("also honest"),
+      ]),
+    ],
+    [],
+    default_chat_options(),
+  )
+  json_inspect(body, content={
+    "model": "glm-5.3",
+    "max_tokens": 32768,
+    "system": [
+      { "type": "text", "text": "be brief" },
+      { "type": "text", "text": "also honest" },
+    ],
+    "messages": [
+      { "role": "user", "content": [{ "type": "text", "text": "hi" }] },
+    ],
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "high",
+  })
+}
+
+///|
+fn grep_call() -> @posoco.ToolCall {
+  {
     call_id: @posoco.CallId::unchecked("c1"),
     name: @posoco.ToolName::unchecked("grep"),
     arguments: Json::object({}),
   }
-  let with_tools = encode_message(
-    @posoco.Message::AssistantMessage(
-      content=[],
-      tool_calls=[call],
-      reasoning~,
-      finish_reason=@posoco.FinishReason::ToolCalls,
-    ),
+}
+
+///|
+test "encode: tool calls and tool results take the messages shapes" {
+  let body = build_messages_request(
+    messages_config(),
+    [
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text("run")]),
+      @posoco.Message::AssistantMessage(
+        content=[],
+        tool_calls=[grep_call()],
+        reasoning=None,
+        finish_reason=@posoco.FinishReason::ToolCalls,
+      ),
+      @posoco.Message::ToolMessage(
+        call_id=@posoco.CallId::unchecked("c1"),
+        tool_name=@posoco.ToolName::unchecked("grep"),
+        outcome=@posoco.ToolOutcome::Success(content="found", structured=None),
+      ),
+    ],
+    [],
+    default_chat_options(),
   )
-  json_inspect(with_tools, content={
-    "role": "assistant",
-    "content": "",
-    "tool_calls": [
+  json_inspect(body, content={
+    "model": "glm-5.3",
+    "max_tokens": 32768,
+    "messages": [
+      { "role": "user", "content": [{ "type": "text", "text": "run" }] },
       {
-        "id": "c1",
-        "type": "function",
-        "function": { "name": "grep", "arguments": "{}" },
+        "role": "assistant",
+        "content": [
+          { "type": "tool_use", "id": "c1", "name": "grep", "input": {} },
+        ],
+      },
+      {
+        "role": "user",
+        "content": [
+          { "type": "tool_result", "tool_use_id": "c1", "content": "found" },
+        ],
       },
     ],
-    "reasoning_content": "thought",
-  })
-  let without_tools = encode_message(
-    @posoco.Message::AssistantMessage(
-      content=[@posoco.Content::Text("answer")],
-      tool_calls=[],
-      reasoning~,
-      finish_reason=@posoco.FinishReason::Stop,
-    ),
-  )
-  json_inspect(without_tools, content={
-    "role": "assistant",
-    "content": "answer",
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "high",
   })
 }
 
 ///|
-test "decode: reasoning, tool calls and cached usage" {
+test "decode + replay: thinking blocks survive the round trip" {
   let json : Json = @json.parse(
     (
       #|{
-      #|  "choices": [{
-      #|    "message": {
-      #|      "content": "done",
-      #|      "reasoning_content": "thinking hard",
-      #|      "tool_calls": [{
-      #|        "id": "call_1",
-      #|        "type": "function",
-      #|        "function": { "name": "read", "arguments": "{\"path\":\"a\"}" }
-      #|      }]
-      #|    },
-      #|    "finish_reason": "tool_calls"
-      #|  }],
-      #|  "usage": {
-      #|    "prompt_tokens": 100,
-      #|    "completion_tokens": 20,
-      #|    "total_tokens": 120,
-      #|    "prompt_tokens_details": { "cached_tokens": 60 }
-      #|  }
+      #|  "type": "message",
+      #|  "role": "assistant",
+      #|  "id": "msg_1",
+      #|  "model": "glm-5.3",
+      #|  "content": [
+      #|    { "type": "thinking", "thinking": "hmm", "signature": "sig" },
+      #|    { "type": "tool_use", "id": "call_1", "name": "read", "input": {"path": "a"} }
+      #|  ],
+      #|  "stop_reason": "tool_use",
+      #|  "usage": { "input_tokens": 10, "output_tokens": 5 }
       #|}
     ),
   ) catch {
     _ => fail("fixture json")
   }
-  let completion = decode_chat_response(json)
+  let result = @messages.parse_response(provider="zai", json)
+  let completion = result.completion
   inspect(completion.has_tool_calls(), content="true")
-  inspect(completion.tool_calls()[0].name.to_string(), content="read")
-  match completion.message.reasoning {
-    Some(r) => inspect(r.content, content="thinking hard")
-    None => fail("expected reasoning")
-  }
-  inspect(
-    completion.finish_reason() is @posoco.FinishReason::ToolCalls,
-    content="true",
-  )
-  debug_inspect(
-    completion.usage,
-    content=(
-      #|Some(
-      #|  {
-      #|    input_tokens: Some(100),
-      #|    output_tokens: Some(20),
-      #|    total_tokens: Some(120),
-      #|    cached_input_tokens: Some(60),
-      #|    uncached_input_tokens: None,
-      #|  },
-      #|)
+  let replayed = @messages.message_to_wire(
+    @posoco.Message::AssistantMessage(
+      content=completion.message.content,
+      tool_calls=completion.message.tool_calls,
+      reasoning=completion.message.reasoning,
+      finish_reason=completion.message.finish_reason,
     ),
   )
+  json_inspect(replayed, content=[
+    {
+      "role": "assistant",
+      "content": [
+        { "type": "thinking", "thinking": "hmm", "signature": "sig" },
+        {
+          "type": "tool_use",
+          "id": "call_1",
+          "name": "read",
+          "input": { "path": "a" },
+        },
+      ],
+    },
+  ])
 }
 
 ///|
@@ -270,8 +349,9 @@ test "classify: quota 429 keeps typed reset, others redact" {
 }
 
 ///|
-test "encode: vision model sends image blocks as image_url parts" {
-  let body = build_chat_request(
+test "encode: vision model sends native image blocks" {
+  let body = build_messages_request(
+    messages_config(model="glm-5.3-flash"),
     [
       @posoco.Message::UserMessage(content=[
         @posoco.Content::Text("what is this?"),
@@ -279,22 +359,23 @@ test "encode: vision model sends image blocks as image_url parts" {
       ]),
     ],
     [],
-    { temperature: None, max_output_tokens: None, },
-    "glm-5.3-flash",
-    false,
-    true,
-    Some("high"),
+    default_chat_options(),
   )
   json_inspect(body, content={
     "model": "glm-5.3-flash",
+    "max_tokens": 32768,
     "messages": [
       {
         "role": "user",
         "content": [
           { "type": "text", "text": "what is this?" },
           {
-            "type": "image_url",
-            "image_url": { "url": "data:image/png;base64,aGVsbG8=" },
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "aGVsbG8=",
+            },
           },
         ],
       },
@@ -305,8 +386,9 @@ test "encode: vision model sends image blocks as image_url parts" {
 }
 
 ///|
-test "encode: non-vision model downgrades images to explicit placeholders" {
-  let body = build_chat_request(
+test "encode: non-vision model downgrades images and tool attachments" {
+  let body = build_messages_request(
+    messages_config(),
     [
       @posoco.Message::UserMessage(content=[
         @posoco.Content::Text("see this?"),
@@ -314,49 +396,84 @@ test "encode: non-vision model downgrades images to explicit placeholders" {
       ]),
     ],
     [],
-    { temperature: None, max_output_tokens: None, },
-    "glm-5.3",
-    false,
-    true,
-    Some("high"),
+    default_chat_options(),
   )
   json_inspect(body, content={
     "model": "glm-5.3",
+    "max_tokens": 32768,
     "messages": [
       {
         "role": "user",
-        "content": "see this?\n[Attached image/png, ~0 KB, omitted: this model does not accept image input]",
+        "content": [
+          { "type": "text", "text": "see this?" },
+          {
+            "type": "text",
+            "text": "[Attached image/png, ~0 KB, omitted: this model does not accept image input]",
+          },
+        ],
       },
     ],
     "thinking": { "type": "enabled" },
     "reasoning_effort": "high",
   })
-}
-
-///|
-test "encode: vision flag leaves text-only messages as plain strings" {
-  let body = build_chat_request(
-    [@posoco.Message::UserMessage(content=[@posoco.Content::Text("hi")])],
+  let with_attachment = build_messages_request(
+    messages_config(),
+    [
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text("run")]),
+      @posoco.Message::AssistantMessage(
+        content=[],
+        tool_calls=[grep_call()],
+        reasoning=None,
+        finish_reason=@posoco.FinishReason::ToolCalls,
+      ),
+      @posoco.Message::ToolMessage(
+        call_id=@posoco.CallId::unchecked("c1"),
+        tool_name=@posoco.ToolName::unchecked("grep"),
+        outcome=@posoco.ToolOutcome::SuccessWithAttachments(
+          content="found",
+          structured=None,
+          attachments=[
+            @posoco.Content::Image(media_type="image/jpeg", data="aGk="),
+          ],
+        ),
+      ),
+    ],
     [],
-    { temperature: None, max_output_tokens: None, },
-    "glm-5.3-flash",
-    false,
-    true,
-    Some("high"),
+    default_chat_options(),
   )
-  json_inspect(body, content={
-    "model": "glm-5.3-flash",
-    "messages": [{ "role": "user", "content": "hi" }],
-    "thinking": { "type": "enabled" },
-    "reasoning_effort": "high",
-  })
+  match with_attachment.value("messages") {
+    Some(Json::Array(messages)) =>
+      match messages[2] {
+        Json::Object(turn) =>
+          match turn.get("content") {
+            Some(Json::Array(blocks)) =>
+              match blocks[0] {
+                Json::Object(result_block) =>
+                  match result_block.get("content") {
+                    Some(Json::String(text)) =>
+                      inspect(
+                        text,
+                        content=(
+                          #|found
+                          #|[Attached image/jpeg, ~0 KB, omitted: this model does not accept image input]
+                        ),
+                      )
+                    _ => fail("tool_result content must be a string")
+                  }
+                _ => fail("tool_result must be an object")
+              }
+            _ => fail("tool turn content must be an array")
+          }
+        _ => fail("tool turn must be an object")
+      }
+    _ => fail("messages must be an array")
+  }
 }
 
 ///|
 test "supports_images: only documented vision models, never guessed" {
   assert_true(zai_supports_images("glm-5.3-flash"))
   assert_false(zai_supports_images("glm-5.3"))
-  assert_false(zai_supports_images("glm-4.5-air"))
   // Undocumented/unknown ids stay conservative even when the name looks
   // vision-capable — image input is declared, not inferred.
   assert_false(zai_supports_images("glm-4.5v"))

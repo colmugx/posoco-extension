@@ -1,11 +1,11 @@
 ///|
-/// GLM Coding Plan endpoint presets. The plan only honors plan quota on the
-/// coding endpoints; direct platform API access (pay-as-you-go balance)
-/// lives in posoco-ext-zai.
+/// GLM Coding Plan endpoint presets on the Anthropic-compatible Messages
+/// route. The plan only honors plan quota on the coding endpoints; direct
+/// platform API access (pay-as-you-go balance) lives in posoco-ext-zai.
 pub fn zai_coding_plan_profile_endpoint(profile : String) -> (String, String)? {
   match profile {
-    "coding" => Some(("https://api.z.ai", "/api/coding/paas/v4"))
-    "cn_coding" => Some(("https://open.bigmodel.cn", "/api/coding/paas/v4"))
+    "coding" => Some(("https://api.z.ai", "/api/anthropic"))
+    "cn_coding" => Some(("https://open.bigmodel.cn", "/api/anthropic"))
     _ => None
   }
 }
@@ -153,12 +153,21 @@ fn zai_coding_plan_build_config(
     source,
     manifest_id="posoco_ext_zai_coding_plan",
   )
+  let max_output_tokens = match
+    @zai.zai_setting_max_output_tokens(
+      source,
+      manifest_id="posoco_ext_zai_coding_plan",
+    ) {
+    Some(value) => value
+    None => 32768
+  }
   let config = @zai.ZaiConfig::for_model(
     api_key,
     model,
     base_url~,
     endpoint_prefix~,
     context_window~,
+    max_output_tokens~,
   )
   let requested_effort = zai_coding_plan_setting_string(
     source, "reasoning_effort",

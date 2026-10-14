@@ -9,11 +9,11 @@ fn zcp_settings(pairs : Array[(String, Json)]) -> @llm.ProviderConfigSource {
 test "profile endpoints" {
   debug_inspect(
     zai_coding_plan_profile_endpoint("coding"),
-    content="Some((\"https://api.z.ai\", \"/api/coding/paas/v4\"))",
+    content="Some((\"https://api.z.ai\", \"/api/anthropic\"))",
   )
   debug_inspect(
     zai_coding_plan_profile_endpoint("cn_coding"),
-    content="Some((\"https://open.bigmodel.cn\", \"/api/coding/paas/v4\"))",
+    content="Some((\"https://open.bigmodel.cn\", \"/api/anthropic\"))",
   )
   debug_inspect(zai_coding_plan_profile_endpoint("general"), content="None")
 }
@@ -39,8 +39,9 @@ test "factory: ready catalog with coding-plan default endpoint" {
     fail("expected Ready")
   }
   inspect(catalog.provider_id, content="zai-coding-plan")
-  inspect(catalog.slots.length(), content="4")
+  inspect(catalog.slots.length(), content="2")
   inspect(catalog.slots[0].model_id, content="glm-5.3-flash")
+  inspect(catalog.slots[1].model_id, content="glm-5.3")
   inspect(catalog.slots[0].id, content="zai-coding-plan/glm-5.3-flash")
   inspect(catalog.slots[0].label, content="Z.ai Coding Plan / glm-5.3-flash")
   assert_true(catalog.capabilities.contains("coding_plan"))
@@ -49,7 +50,7 @@ test "factory: ready catalog with coding-plan default endpoint" {
   )
   guard config is Some(value) else { fail("expected config") }
   inspect(value.base_url, content="https://api.z.ai")
-  inspect(value.endpoint_prefix, content="/api/coding/paas/v4")
+  inspect(value.endpoint_prefix, content="/api/anthropic")
 }
 
 ///|
@@ -62,7 +63,7 @@ test "factory: cn_coding profile selects bigmodel" {
   )
   guard config is Some(value) else { fail("expected config") }
   inspect(value.base_url, content="https://open.bigmodel.cn")
-  inspect(value.endpoint_prefix, content="/api/coding/paas/v4")
+  inspect(value.endpoint_prefix, content="/api/anthropic")
 }
 
 ///|
@@ -182,7 +183,10 @@ test "factory: unknown effort names the coding-plan manifest" {
   catch {
     @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {
       inspect(manifest_id, content="posoco_ext_zai_coding_plan")
-      inspect(detail, content="unsupported reasoning effort: ultra")
+      inspect(
+        detail,
+        content="unsupported reasoning effort: ultra (thinking stays enabled; use low | high | max)",
+      )
     }
     _ => fail("expected ManifestSchemaError")
   } noraise {
@@ -196,7 +200,7 @@ test "manifest: coding-plan extension identity" {
     "k",
     "glm-5.3",
     base_url="https://api.z.ai",
-    endpoint_prefix="/api/coding/paas/v4",
+    endpoint_prefix="/api/anthropic",
   )
   let port = ZaiCodingPlanModelPort(config)
   inspect(port.extension_id(), content="posoco_ext_zai_coding_plan")

@@ -1,9 +1,9 @@
-/// Both platforms follow the OpenAI list envelope (`{"object": "list",
-/// "data": [...]}`), but their model records carry platform-specific extra
-/// fields. Parsing is therefore tolerant: `data` with non-empty string `id`s
-/// is the contract; `object` is checked only when present; every other field
-/// is ignored. Thinking profiles are a deterministic provider policy
-/// (`zai_model_info` by GLM generation), not a field read from the response.
+///|
+/// Model-catalog discovery stays on the platform's OpenAI-compatible list
+/// route: `/models` is a management surface whose list envelope
+/// `parse_zai_models` already speaks, while chat traffic runs on the
+/// Anthropic Messages route.
+const ZAI_MODELS_DISCOVERY_PREFIX : String = "/api/paas/v4"
 
 ///|
 fn zai_models_url(base_url : String, endpoint_prefix : String) -> String {
@@ -15,6 +15,13 @@ fn zai_models_url(base_url : String, endpoint_prefix : String) -> String {
 }
 
 ///|
+/// Both platforms follow the OpenAI list envelope (`{"object": "list",
+/// "data": [...]}`), but their model records carry platform-specific extra
+/// fields. Parsing is therefore tolerant: `data` with non-empty string `id`s
+/// is the contract; `object` is checked only when present; every other field
+/// is ignored. The uniform thinking posture is a provider policy, not a
+/// field read from the response.
+///
 /// Parse a z.ai /models response without performing I/O. Duplicate ids keep
 /// their first occurrence; an empty or shapeless list is a typed parse error
 /// (an empty catalog is never silently announced).
@@ -109,11 +116,12 @@ pub fn parse_cached_zai_models(records : Json?) -> Array[String]? {
 }
 
 ///|
-/// Fetch and decode the live Z.ai / BigModel model list.
+/// Fetch and decode the live Z.ai / BigModel model list. Discovery always
+/// hits the platform's OpenAI-compatible route regardless of the chat
+/// endpoint the config resolved to.
 pub async fn fetch_zai_models(
   base_url : String,
   api_key : String,
-  endpoint_prefix~ : String = "",
 ) -> Array[String] raise @posoco.ModelError {
   let headers : @http.Headers = {
     "Authorization": "Bearer " + api_key,
@@ -121,7 +129,7 @@ pub async fn fetch_zai_models(
     "Accept-Language": "en-US,en",
   }
   let (response, body_data) = @async.with_timeout(30000, () => {
-    @http.get(zai_models_url(base_url, endpoint_prefix), headers~)
+    @http.get(zai_models_url(base_url, ZAI_MODELS_DISCOVERY_PREFIX), headers~)
   }) catch {
     @async.TimeoutError =>
       raise @posoco.ModelError::Transport(

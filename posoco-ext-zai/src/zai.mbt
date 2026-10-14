@@ -4,32 +4,187 @@ fn build_headers(config : ZaiConfig) -> @http.Headers {
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",
     "Accept-Language": "en-US,en",
+    "anthropic-version": "2023-06-01",
   }
 }
 
 ///|
-fn chat_url(config : ZaiConfig) -> String {
-  config.base_url + config.endpoint_prefix + "/chat/completions"
+fn messages_url(config : ZaiConfig) -> String {
+  config.base_url + config.endpoint_prefix + "/v1/messages"
 }
 
 ///|
-/// Thinking wire state derived from config: enabled when an effort is set or
-/// the model is an always-on GLM-4.x thinker; `reasoning_effort` is sent only
-/// for models that declare efforts.
-fn ZaiModelPort::thinking_state(self : ZaiModelPort) -> (Bool, String?) {
-  match zai_model_info(self.config.model) {
-    Some(info) =>
-      if info.thinking_always {
-        (true, None)
-      } else if info.efforts.is_empty() {
-        (false, None)
-      } else if self.config.reasoning_effort == "" {
-        (false, None)
-      } else {
-        (true, Some(self.config.reasoning_effort))
+/// Placeholder for an image the model cannot accept. The size is the
+/// decoded-byte estimate (base64 length × 3/4) so the model can gauge how
+/// much was attached without seeing it.
+fn image_placeholder(media_type : String, data : String) -> String {
+  let approx_kb = data.length() * 3 / 4096
+  "[Attached " +
+  media_type +
+  ", ~" +
+  approx_kb.to_string() +
+  " KB, omitted: this model does not accept image input]"
+}
+
+///|
+/// Image blocks degrade to explicit placeholders for models without
+/// documented image input; text passes through untouched.
+fn downgrade_image_blocks(
+  blocks : Array[@posoco.Content],
+) -> Array[@posoco.Content] {
+  blocks.map(fn(block) {
+    match block {
+      @posoco.Content::Image(media_type~, data~) =>
+        @posoco.Content::Text(image_placeholder(media_type, data))
+      text => text
+    }
+  })
+}
+
+///|
+/// Tool attachments degrade to explicit placeholders appended to the tool
+/// text for models without documented image input (never a silent drop).
+fn downgrade_tool_outcome(outcome : @posoco.ToolOutcome) -> @posoco.ToolOutcome {
+  match outcome {
+    @posoco.ToolOutcome::SuccessWithAttachments(
+      content~,
+      structured~,
+      attachments~
+    ) => {
+      let merged = StringBuilder()
+      merged.write_string(content)
+      for block in attachments {
+        merged.write_string("\n")
+        match block {
+          @posoco.Content::Image(media_type~, data~) =>
+            merged.write_string(image_placeholder(media_type, data))
+          @posoco.Content::Text(text) => merged.write_string(text)
+        }
       }
-    None => (self.config.reasoning_effort != "", None)
+      @posoco.ToolOutcome::SuccessWithAttachments(
+        content=merged.to_string(),
+        structured~,
+        attachments=[],
+      )
+    }
+    other => other
   }
+}
+
+///|
+/// Pre-encode window shaping for models without documented image input:
+/// user/system images and tool attachments become explicit placeholders.
+/// Vision models pass through untouched (the kit encodes native blocks).
+fn shape_for_model(
+  messages : Array[@posoco.Message],
+  model : String,
+) -> Array[@posoco.Message] {
+  if zai_supports_images(model) {
+    return messages
+  }
+  messages.map(fn(msg) {
+    match msg {
+      @posoco.Message::SystemMessage(content~) =>
+        @posoco.Message::SystemMessage(content=downgrade_image_blocks(content))
+      @posoco.Message::UserMessage(content~) =>
+        @posoco.Message::UserMessage(content=downgrade_image_blocks(content))
+      @posoco.Message::ToolMessage(call_id~, tool_name~, outcome~) =>
+        @posoco.Message::ToolMessage(
+          call_id~,
+          tool_name~,
+          outcome=downgrade_tool_outcome(outcome),
+        )
+      assistant => assistant
+    }
+  })
+}
+
+///|
+/// All system content lifts to the top-level `system` field (in order); the
+/// transcript itself never carries a system role in the Messages dialect.
+fn split_system(
+  messages : Array[@posoco.Message],
+) -> (Array[@posoco.Content], Array[@posoco.Message]) {
+  let system : Array[@posoco.Content] = []
+  let transcript : Array[@posoco.Message] = []
+  for msg in messages {
+    match msg {
+      @posoco.Message::SystemMessage(content~) =>
+        for block in content {
+          system.push(block)
+        }
+      other => transcript.push(other)
+    }
+  }
+  (system, transcript)
+}
+
+///|
+/// Uniform GLM-on-Messages posture: thinking is always enabled without a
+/// budget (the endpoint scales thinking through its own effort control) and
+/// the effort rides as the platform's top-level `reasoning_effort` field.
+fn build_request_options(
+  config : ZaiConfig,
+  options : @posoco.ChatOptions,
+) -> @messages.MessagesRequestOptions raise @posoco.ModelError {
+  let temperature : Double? = match options.temperature {
+    Some(t) =>
+      if t > 1.0 {
+        raise @posoco.ModelError::RequestBuild(
+          "zai request build failure (stage=temperature, category=range): messages temperature must be within [0, 1]",
+        )
+      } else {
+        Some(t)
+      }
+    None => None
+  }
+
+  @messages.MessagesRequestOptions::MessagesRequestOptions(
+    temperature~,
+    thinking=Some(@messages.ThinkingConfig::Enabled(budget_tokens=None)),
+    extra_top_level=[
+      ("reasoning_effort", Json::string(config.reasoning_effort)),
+      ("stream", Json::boolean(true)),
+    ],
+  )
+}
+
+///|
+fn build_messages_request(
+  config : ZaiConfig,
+  messages : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+) -> Json raise @posoco.ModelError {
+  let (system, transcript) = split_system(
+    shape_for_model(messages, config.model),
+  )
+  let system_json : Json? = if system.is_empty() {
+    None
+  } else {
+    Some(@messages.system_to_wire(content=system))
+  }
+  let wire_messages : Array[Json] = []
+  for msg in transcript {
+    for block in @messages.message_to_wire(msg) {
+      wire_messages.push(block)
+    }
+  }
+  let wire_tools : Array[Json] = tools.map(fn(tool) {
+    @messages.tool_to_wire(tool~)
+  })
+  let max_tokens = match options.max_output_tokens {
+    Some(n) => n
+    None => config.max_output_tokens
+  }
+  @messages.encode_request(
+    model=config.model,
+    max_tokens~,
+    system=system_json,
+    messages=wire_messages,
+    tools=wire_tools,
+    options=build_request_options(config, options),
+  )
 }
 
 ///|
@@ -41,21 +196,12 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
-  let (thinking_enabled, effort_str) = self.thinking_state()
   let messages_owned = messages.to_owned()
+  let body = build_messages_request(self.config, messages_owned, tools, options)
   match stream {
     NoStream => {
-      let body = build_chat_request(
-        messages_owned,
-        tools,
-        options,
-        self.config.model,
-        false,
-        thinking_enabled,
-        effort_str,
-      )
       let (response, body_data) = @http.post(
-        chat_url(self.config),
+        messages_url(self.config),
         body.stringify(),
         headers=build_headers(self.config),
       ) catch {
@@ -88,24 +234,15 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
             "zai response parse failure (stage=json, body_chars=\{body_text.length()})",
           )
       }
-      let completion = decode_chat_response(resp_json)
+      let result = @messages.parse_response(provider="zai", resp_json)
       @posoco.ModelCallResult::{
-        completion,
+        completion: result.completion,
         processed_messages: messages_owned,
       }
     }
     Stream(on_chunk) => {
-      let body = build_chat_request(
-        messages_owned,
-        tools,
-        options,
-        self.config.model,
-        true,
-        thinking_enabled,
-        effort_str,
-      )
       let client = @http.post_stream(
-        chat_url(self.config),
+        messages_url(self.config),
         headers=build_headers(self.config),
       ) catch {
         err =>
@@ -147,8 +284,9 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
         }
       }
       let acc = @posoco.StreamAccumulator::StreamAccumulator()
+      let state = @messages.MessagesSseState::MessagesSseState()
+      let decoder = @messages.SseDecoder::SseDecoder()
       let mut done = false
-      let mut data_buffer = ""
       let mut last_yield = @async.now()
       while !done {
         let line = client.read_until("\n") catch {
@@ -160,18 +298,17 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
           }
         }
         match line {
-          Some(data) => {
-            let trimmed = data.trim()
-            if trimmed.has_prefix("data:") {
-              let payload = trimmed[5:].trim().to_owned()
-              if payload.length() > 0 {
-                data_buffer = payload
-                done = process_zai_sse(payload, acc, on_chunk)
-              }
-            } else if trimmed == "" && data_buffer.length() > 0 {
-              data_buffer = ""
+          Some(data) =>
+            for event in decoder.push(data + "\n") {
+              done = @messages.process_messages_event(
+                provider="zai",
+                event_name=event.name,
+                data=event.data,
+                acc~,
+                on_chunk~,
+                state~,
+              )
             }
-          }
           None => {
             client.close()
             raise @posoco.ModelError::ResponseParse(
@@ -188,10 +325,13 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
         }
       }
       client.close()
-      validate_zai_stream_tool_calls(acc)
-      let completion = acc.to_completion()
+      let result = @messages.messages_stream_result(
+        provider="zai",
+        acc~,
+        state~,
+      )
       @posoco.ModelCallResult::{
-        completion,
+        completion: result.completion,
         processed_messages: messages_owned,
       }
     }
@@ -202,24 +342,11 @@ pub impl @posoco.ModelPort for ZaiModelPort with fn chat(
 pub extend ZaiModelPort with @posoco.ModelPort::{provider_config, chat, compact}
 
 ///|
-fn validate_zai_stream_tool_calls(
-  acc : @posoco.StreamAccumulator,
-) -> Unit raise @posoco.ModelError {
-  let _ = acc.to_completion() catch {
-    @posoco.ModelError::ResponseParse(message) =>
-      raise @posoco.ModelError::ResponseParse(
-        "zai SSE parse failure (stage=tool_calls): " + message,
-      )
-    error => raise error
-  }
-}
-
-///|
 pub impl @posoco.ModelPort for ZaiModelPort with fn provider_config(
   self : ZaiModelPort,
 ) -> @posoco.ProviderConfig {
   @posoco.ProviderConfig::ProviderConfig(
-    reasoning_effort_values=[],
+    reasoning_effort_values=zai_thinking_efforts(),
     context_window=self.config.context_window,
     compact_threshold=None,
   )
