@@ -379,10 +379,12 @@ pub fn message_to_wire(msg : @posoco.Message) -> Array[Json] raise @posoco.Model
               "messages tool_use id and name must be non-empty (stage=encode, category=tool_identity)",
             )
           }
-          if tc.arguments is not Json::Object(_) {
-            raise @posoco.ModelError::RequestBuild(
-              "messages tool_use input must be an object (stage=encode, category=tool_input)",
-            )
+          match tc.arguments {
+            Json::Object(_) => ()
+            _ =>
+              raise @posoco.ModelError::RequestBuild(
+                "messages tool_use input must be an object (stage=encode, category=tool_input)",
+              )
           }
           blocks.push(
             Json::object({
