@@ -148,3 +148,27 @@ pub fn analyze_messages_cache_economics(
     },
   }
 }
+
+
+///|
+/// Convenience over the native MessagesResult produced by either the
+/// non-streaming decoder or the SSE state machine. Missing usage is an
+/// unknown result, not zero usage. Incomplete TTL distribution is retained
+/// as unknown cost by analyze_messages_cache_economics.
+pub fn MessagesResult::cache_economics(
+  result : MessagesResult,
+  rates : MessagesCacheRates,
+) -> MessagesCacheEconomics? raise @posoco.ModelError {
+  match result.usage {
+    Some(native) =>
+      Some(analyze_messages_cache_economics(
+        native,
+        result.cache_creation.unwrap_or({
+          ephemeral_5m_input_tokens: None,
+          ephemeral_1h_input_tokens: None,
+        }),
+        rates,
+      ))
+    None => None
+  }
+}
