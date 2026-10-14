@@ -637,6 +637,7 @@ pub fn encode_request(
     if [
       "model", "max_tokens", "system", "messages", "tools", "tool_choice",
       "stop_sequences", "temperature", "thinking", "metadata",
+      "cache_control",
     ].contains(name) {
       raise @posoco.ModelError::RequestBuild(
         "messages extra_top_level cannot override core fields (stage=encode, category=reserved)",
