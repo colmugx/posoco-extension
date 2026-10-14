@@ -236,10 +236,58 @@ pub fn apply_messages_cache_policy(
       "messages endpoint does not support 1h caching (stage=cache, category=capability)",
     )
   }
+  // Existing top-level automatic caching is part of the protocol contract,
+  // even when this helper is asked to leave a request unchanged. Never pass
+  // malformed or unsupported caller-supplied cache controls through.
+  let existing_automatic = match body {
+    Json::Object(root) =>
+      match root.get("cache_control") {
+        Some(mark) => Some(cache_mark_ttl(mark))
+        None => None
+      }
+    _ => None
+  }
+  match existing_automatic {
+    Some(existing) => {
+      if !capabilities.automatic || (existing == "1h" && !capabilities.one_hour) {
+        raise @posoco.ModelError::RequestBuild(
+          "messages endpoint cannot preserve existing automatic cache policy (stage=cache, category=capability)",
+        )
+      }
+      if scan.explicit_count >= 4 {
+        raise @posoco.ModelError::RequestBuild(
+          "messages automatic caching needs a free breakpoint slot (stage=cache, category=breakpoints)",
+        )
+      }
+      if existing == "1h" && scan.seen_five_minute {
+        raise @posoco.ModelError::RequestBuild(
+          "messages automatic 1h cache cannot follow 5m marks (stage=cache, category=ttl_order)",
+        )
+      }
+      match scan.last_cacheable_ttl {
+        Some(last) if last != existing =>
+          raise @posoco.ModelError::RequestBuild(
+            "messages automatic cache conflicts with final explicit TTL (stage=cache, category=ttl_conflict)",
+          )
+        _ => ()
+      }
+    }
+    None => ()
+  }
   let ttl = match mode {
     CacheAutomatic5m => Some("5m")
     CacheAutomatic1h => Some("1h")
     CacheUnchanged | CacheExplicit => None
+  }
+  if mode == CacheExplicit && existing_automatic is Some(_) {
+    raise @posoco.ModelError::RequestBuild(
+      "messages explicit cache mode cannot include automatic cache_control (stage=cache, category=mode_conflict)",
+    )
+  }
+  if ttl is Some(_) && existing_automatic is Some(_) {
+    raise @posoco.ModelError::RequestBuild(
+      "messages automatic cache_control already exists (stage=cache, category=duplicate_automatic)",
+    )
   }
   match ttl {
     None => body
