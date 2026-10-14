@@ -196,14 +196,10 @@ fn supported_image_media_type(media_type : String) -> Bool {
 fn user_content_block(c : @posoco.Content) -> Json raise @posoco.ModelError {
   match c {
     @posoco.Content::Text(text) =>
-      if text == "" {
-        Json::null()
-      } else {
-        Json::object({
-          "type": Json::string("text"),
-          "text": Json::string(text),
-        })
-      }
+      Json::object({
+        "type": Json::string("text"),
+        "text": Json::string(text),
+      })
     @posoco.Content::Image(media_type~, data~) =>
       if !supported_image_media_type(media_type) {
         raise @posoco.ModelError::RequestBuild(
@@ -330,6 +326,7 @@ pub fn message_to_wire(msg : @posoco.Message) -> Array[Json] raise @posoco.Model
     }
     @posoco.Message::AssistantMessage(content~, tool_calls~, reasoning~, ..) => {
       let blocks : Array[Json] = []
+      let mut has_full_replay = false
       match reasoning {
         Some(reasoning) =>
           // Replay only this kit's own fingerprint-verified envelope. Plain
@@ -348,14 +345,20 @@ pub fn message_to_wire(msg : @posoco.Message) -> Array[Json] raise @posoco.Model
                     ) {
                   blocks.push(block)
                 }
+                has_full_replay = is_complete_messages_replay_envelope(raw)
+              } else {
+                raise @posoco.ModelError::RequestBuild(
+                  "messages cannot replay foreign or malformed reasoning state (stage=encode, category=foreign_replay)",
+                )
               }
             None => ()
           }
         None => ()
       }
-      for block in content {
-        match block {
-          @posoco.Content::Text(text) =>
+      if !has_full_replay {
+        for block in content {
+          match block {
+            @posoco.Content::Text(text) =>
             if text != "" {
               blocks.push(
                 Json::object({
@@ -364,21 +367,32 @@ pub fn message_to_wire(msg : @posoco.Message) -> Array[Json] raise @posoco.Model
                 }),
               )
             }
-          @posoco.Content::Image(..) =>
-            raise @posoco.ModelError::RequestBuild(
-              "messages assistant content cannot carry images (stage=encode, category=assistant_image)",
-            )
+            @posoco.Content::Image(..) =>
+              raise @posoco.ModelError::RequestBuild(
+                "messages assistant content cannot carry images (stage=encode, category=assistant_image)",
+              )
+          }
         }
-      }
-      for tc in tool_calls {
-        blocks.push(
-          Json::object({
-            "type": Json::string("tool_use"),
-            "id": Json::string(tc.call_id.to_string()),
-            "name": Json::string(tc.name.to_string()),
-            "input": tc.arguments,
-          }),
-        )
+        for tc in tool_calls {
+          if tc.call_id.to_string() == "" || tc.name.to_string() == "" {
+            raise @posoco.ModelError::RequestBuild(
+              "messages tool_use id and name must be non-empty (stage=encode, category=tool_identity)",
+            )
+          }
+          if tc.arguments is not Json::Object(_) {
+            raise @posoco.ModelError::RequestBuild(
+              "messages tool_use input must be an object (stage=encode, category=tool_input)",
+            )
+          }
+          blocks.push(
+            Json::object({
+              "type": Json::string("tool_use"),
+              "id": Json::string(tc.call_id.to_string()),
+              "name": Json::string(tc.name.to_string()),
+              "input": tc.arguments,
+            }),
+          )
+        }
       }
       if blocks.is_empty() {
         raise @posoco.ModelError::RequestBuild(
@@ -589,6 +603,14 @@ pub fn encode_request(
     if name == "" {
       raise @posoco.ModelError::RequestBuild(
         "messages extra_top_level names must be non-empty (stage=encode, category=extra)",
+      )
+    }
+    if [
+      "model", "max_tokens", "system", "messages", "tools", "tool_choice",
+      "stop_sequences", "temperature", "thinking", "metadata",
+    ].contains(name) {
+      raise @posoco.ModelError::RequestBuild(
+        "messages extra_top_level cannot override core fields (stage=encode, category=reserved)",
       )
     }
     fields.push((name, value))
