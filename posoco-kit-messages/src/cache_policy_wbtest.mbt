@@ -299,3 +299,70 @@ test "empty text block cannot be used as an explicit breakpoint" {
     _ => fail("expected empty text cache marker rejection")
   }
 }
+
+
+///|
+test "stable-history lookback inserts only safe user checkpoints" {
+  let messages : Array[Json] = []
+  for i in 0..<28 {
+    messages.push(Json::object({
+      "role": Json::string("user"),
+      "content": Json::array([
+        Json::object({
+          "type": Json::string("text"),
+          "text": Json::string("stable-\{i}"),
+        }),
+      ]),
+    }))
+  }
+  messages.push({
+    "role": "user",
+    "content": [{ "type": "text", "text": "volatile request" }],
+  })
+  let request = encode_request(
+    model="m",
+    max_tokens=2048,
+    messages~,
+    options=MessagesRequestOptions::MessagesRequestOptions(
+      cache_mode=CacheAutomatic5m,
+      stable_history_messages=Some(28),
+    ),
+  )
+  let layout = inspect_messages_cache_layout(request)
+  assert_eq(layout.explicit_breakpoints, 2)
+  assert_eq(jget(jget(request, key="cache_control"), key="type"), "ephemeral")
+  let output = jget(request, key="messages")
+  let earlier = jget(jat(output, index=17), key="content")
+  assert_eq(jget(jget(jat(earlier, index=0), key="cache_control"), key="type"), "ephemeral")
+  let latest = jget(jat(output, index=28), key="content")
+  assert_eq(jat(latest, index=0).value("cache_control"), None)
+  // The caller's original canonical messages were never rewritten.
+  assert_eq(jat(jget(messages[17], key="content"), index=0).value("cache_control"), None)
+}
+
+///|
+test "history checkpoint budget fails rather than dropping stable positions" {
+  let msgs : Array[Json] = []
+  for i in 0..<110 {
+    msgs.push(Json::object({
+      "role": Json::string("user"),
+      "content": Json::array([Json::object({
+        "type": Json::string("text"),
+        "text": Json::string("stable-\{i}"),
+      })]),
+    }))
+  }
+  let request : Json = {
+    "model": "m",
+    "max_tokens": 2048,
+    "messages": msgs,
+  }
+  let outcome = Ok(mark_messages_stable_history_checkpoints(
+    request, stable_messages=110,
+  )) catch { error => Err(error) }
+  match outcome {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("breakpoints"))
+    _ => fail("expected explicit rejection when checkpoint capacity is exceeded")
+  }
+}
