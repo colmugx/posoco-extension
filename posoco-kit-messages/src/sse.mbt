@@ -399,7 +399,7 @@ fn MessagesSseState::emit_usage(
 ///|
 fn event_index(provider~ : String, fields : Map[String, Json]) -> Int32 raise @posoco.ModelError {
   match fields.get("index") {
-    Some(Json::Number(n, ..)) if n >= 0.0 && n == n.floor() => n.to_int()
+    Some(Json::Number(n, ..)) if n >= 0.0 && n <= 2147483647.0 && n == n.floor() => n.to_int()
     Some(Json::Number(_)) | Some(_) | None =>
       raise @posoco.ModelError::ResponseParse(
         "\{provider} SSE parse failure (stage=index, category=invalid)",
@@ -477,7 +477,6 @@ pub fn process_messages_event(
           "\{provider} SSE parse failure (stage=lifecycle, category=duplicate_message_start)",
         )
       }
-      state.started = true
       let message = match fields.get("message") {
         Some(Json::Object(message)) => message
         Some(_) =>
@@ -504,6 +503,7 @@ pub fn process_messages_event(
         Some(Json::String(model)) => state.model = model
         _ => ()
       }
+      state.started = true
       match message.get("usage") {
         Some(Json::Object(_)) =>
           state.merge_usage(
@@ -612,7 +612,12 @@ pub fn process_messages_event(
           )
       }
       match delta.get("type") {
-        Some(Json::String("text_delta")) =>
+        Some(Json::String("text_delta")) => {
+          if accum.kind != "text" {
+            raise @posoco.ModelError::ResponseParse(
+              "\{provider} SSE parse failure (stage=delta, category=block_type_mismatch)",
+            )
+          }
           match delta.get("text") {
             Some(Json::String(token)) => {
               accum.text.write_string(token)
@@ -628,7 +633,13 @@ pub fn process_messages_event(
                 "\{provider} SSE parse failure (stage=text, category=missing)",
               )
           }
-        Some(Json::String("thinking_delta")) =>
+        }
+        Some(Json::String("thinking_delta")) => {
+          if accum.kind != "thinking" {
+            raise @posoco.ModelError::ResponseParse(
+              "\{provider} SSE parse failure (stage=delta, category=block_type_mismatch)",
+            )
+          }
           match delta.get("thinking") {
             Some(Json::String(token)) => {
               accum.text.write_string(token)
@@ -642,7 +653,13 @@ pub fn process_messages_event(
                 "\{provider} SSE parse failure (stage=thinking, category=missing)",
               )
           }
-        Some(Json::String("signature_delta")) =>
+        }
+        Some(Json::String("signature_delta")) => {
+          if accum.kind != "thinking" {
+            raise @posoco.ModelError::ResponseParse(
+              "\{provider} SSE parse failure (stage=delta, category=block_type_mismatch)",
+            )
+          }
           match delta.get("signature") {
             Some(Json::String(sig)) => accum.signature.write_string(sig)
             Some(Json::Null) => ()
@@ -651,7 +668,13 @@ pub fn process_messages_event(
                 "\{provider} SSE parse failure (stage=signature, category=missing)",
               )
           }
-        Some(Json::String("input_json_delta")) =>
+        }
+        Some(Json::String("input_json_delta")) => {
+          if accum.kind != "tool_use" {
+            raise @posoco.ModelError::ResponseParse(
+              "\{provider} SSE parse failure (stage=delta, category=block_type_mismatch)",
+            )
+          }
           match delta.get("partial_json") {
             Some(Json::String(fragment)) => {
               accum.arguments.write_string(fragment)
@@ -673,6 +696,7 @@ pub fn process_messages_event(
                 "\{provider} SSE parse failure (stage=partial_json, category=missing)",
               )
           }
+        }
         // Future delta types on known blocks: ignored (documented
         // forward-compatibility policy); lifecycle bookkeeping above still
         // applied.
@@ -768,6 +792,18 @@ pub fn process_messages_event(
       false
     }
     "message_stop" => {
+      if !state.started || state.stop_reason == "" {
+        raise @posoco.ModelError::ResponseParse(
+          "\{provider} SSE parse failure (stage=lifecycle, category=incomplete_message)",
+        )
+      }
+      for _, block in state.blocks {
+        if !block.stopped {
+          raise @posoco.ModelError::ResponseParse(
+            "\{provider} SSE parse failure (stage=lifecycle, category=open_block)",
+          )
+        }
+      }
       state.stopped = true
       // The canonical Finish chunk, mapped from the wire stop reason the
       // last message_delta reported (end_turn/stop_sequence -> "stop",
