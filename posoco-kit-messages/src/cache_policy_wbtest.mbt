@@ -146,3 +146,113 @@ test "cache economics does not invent TTL distribution" {
   assert_eq(result.net_savings, None)
   assert_eq(result.cache_hit_ratio, Some(0.5))
 }
+
+
+///|
+test "nonstreaming Messages result retains native 5m and 1h cache-write split" {
+  let result = parse_response(
+    provider="test",
+    {
+      "id": "msg_cached",
+      "type": "message",
+      "role": "assistant",
+      "model": "m",
+      "content": [{ "type": "text", "text": "Done" }],
+      "stop_reason": "end_turn",
+      "stop_sequence": None,
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "cache_creation_input_tokens": 300,
+        "cache_read_input_tokens": 600,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 100,
+          "ephemeral_1h_input_tokens": 200,
+        },
+      },
+    },
+  )
+  let split = result.cache_creation.unwrap_or({
+    ephemeral_5m_input_tokens: None,
+    ephemeral_1h_input_tokens: None,
+  })
+  assert_eq(split.ephemeral_5m_input_tokens, Some(100))
+  assert_eq(split.ephemeral_1h_input_tokens, Some(200))
+  let economics = result.cache_economics({
+    ordinary_input: 1.0,
+    cache_read: 0.1,
+    cache_write_5m: 1.25,
+    cache_write_1h: 2.0,
+  }).unwrap_or({
+    input_tokens: 0,
+    cache_read_tokens: None,
+    cache_write_tokens: None,
+    cache_hit_ratio: None,
+    effective_input_cost: None,
+    uncached_input_cost: None,
+    net_savings: None,
+  })
+  assert_eq(economics.input_tokens, 1000)
+  assert_eq(economics.effective_input_cost, Some(685.0))
+  assert_eq(economics.net_savings, Some(315.0))
+}
+
+///|
+test "too many native explicit breakpoints are rejected" {
+  let marks : Array[Json] = []
+  for i in 0..<5 {
+    marks.push({
+      "type": "text",
+      "text": "part \{i}",
+      "cache_control": { "type": "ephemeral" },
+    })
+  }
+  let body : Json = {
+    "model": "m",
+    "max_tokens": 100,
+    "messages": [{ "role": "user", "content": marks }],
+  }
+  let rejected = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch { error => Err(error) }
+  match rejected {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("breakpoints"))
+    _ => fail("expected breakpoint limit error")
+  }
+}
+
+///|
+test "explicit cache TTL must be 1h before 5m" {
+  let body : Json = {
+    "model": "m",
+    "max_tokens": 100,
+    "messages": [{
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "first", "cache_control": { "type": "ephemeral" } },
+        { "type": "text", "text": "second", "cache_control": { "type": "ephemeral", "ttl": "1h" } },
+      ],
+    }],
+  }
+  let rejected = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch { error => Err(error) }
+  match rejected {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("ttl_order"))
+    _ => fail("expected TTL order error")
+  }
+}
+
+///|
+test "cache lookback risk is diagnostic not a false cache hit" {
+  let blocks : Array[Json] = []
+  for i in 0..<21 {
+    blocks.push({ "type": "text", "text": "block \{i}" })
+  }
+  let body : Json = {
+    "model": "m",
+    "max_tokens": 100,
+    "messages": [{ "role": "user", "content": blocks }],
+  }
+  let layout = inspect_messages_cache_layout(body)
+  assert_true(layout.lookback_risk)
+  assert_eq(layout.blocks_since_last_explicit, 21)
+}
