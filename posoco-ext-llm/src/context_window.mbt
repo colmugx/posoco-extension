@@ -20,6 +20,31 @@ fn positive_window(value : Int32?) -> Int32? {
 }
 
 ///|
+/// Preserve the historical ext-llm entry point while provider-level decoding
+/// lives canonically in posoco-kit-provider. This remains a public function:
+/// existing consumers must not be forced to change imports.
+pub fn context_window_integer(value : Json?) -> Int32? {
+  @provider.context_window_integer(value)
+}
+
+///|
+/// Preserve the legacy ext-llm entry point for cached provider windows.
+/// Forward to the canonical kit without changing optional argument semantics.
+pub fn cached_provider_context_window(
+  records : Json?,
+  model_id : String,
+  metadata_provider_id? : String,
+) -> Int32? {
+  match metadata_provider_id {
+    Some(id) =>
+      @provider.cached_provider_context_window(
+        records, model_id, metadata_provider_id=id,
+      )
+    None => @provider.cached_provider_context_window(records, model_id)
+  }
+}
+
+///|
 pub async fn RouterModelPort::refresh_model_metadata(
   self : RouterModelPort,
 ) -> Unit noraise {
