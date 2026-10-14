@@ -715,3 +715,62 @@ test "request encoder refuses foreign reasoning state" {
     _ => fail("expected foreign replay state rejection")
   }
 }
+
+
+///|
+test "manual thinking budget must fit max_tokens and adaptive is a wire variant" {
+  let messages : Array[Json] = [{
+    "role": "user",
+    "content": [{ "type": "text", "text": "Hi" }],
+  }]
+  let bad = Ok(encode_request(
+    model="m",
+    max_tokens=1024,
+    messages~,
+    options=MessagesRequestOptions::MessagesRequestOptions(
+      thinking=Some(ThinkingConfig::Enabled(budget_tokens=1024)),
+    ),
+  )) catch { error => Err(error) }
+  match bad {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("thinking_budget"))
+    _ => fail("expected manual-thinking budget validation")
+  }
+  let adaptive = encode_request(
+    model="m",
+    max_tokens=1024,
+    messages~,
+    options=MessagesRequestOptions::MessagesRequestOptions(
+      thinking=Some(ThinkingConfig::Adaptive),
+    ),
+  )
+  assert_eq(jget(jget(adaptive, key="thinking"), key="type"), "adaptive")
+}
+
+///|
+test "messages usage rejects 32-bit arithmetic overflow" {
+  let input_overflow : MessagesUsage = {
+    input_tokens: 2147483647,
+    output_tokens: 0,
+    cache_creation_input_tokens: Some(1),
+    cache_read_input_tokens: None,
+  }
+  let bad_input = Ok(input_overflow.prompt_total()) catch { error => Err(error) }
+  match bad_input {
+    Err(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("overflow"))
+    _ => fail("expected prompt-total overflow error")
+  }
+  let total_overflow : MessagesUsage = {
+    input_tokens: 2147483647,
+    output_tokens: 1,
+    cache_creation_input_tokens: None,
+    cache_read_input_tokens: None,
+  }
+  let bad_total = Ok(total_overflow.to_canonical()) catch { error => Err(error) }
+  match bad_total {
+    Err(@posoco.ModelError::ResponseParse(message)) =>
+      assert_true(message.contains("overflow"))
+    _ => fail("expected total-token overflow error")
+  }
+}
