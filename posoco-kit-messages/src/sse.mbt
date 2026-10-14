@@ -941,6 +941,16 @@ pub fn messages_stream_result(
     completion
   } else {
     let message = completion.message
+    let all_blocks : Array[Json] = []
+    for i in 0..<state.next_block_index {
+      match state.full_blocks.get(i) {
+        Some(block) => all_blocks.push(block)
+        None =>
+          raise @posoco.ModelError::ResponseParse(
+            "\{provider} SSE parse failure (stage=full_blocks, category=missing)",
+          )
+      }
+    }
     let reasoning : @posoco.Reasoning? = Some({
       content: acc.reasoning(),
       raw: Some(
@@ -948,6 +958,7 @@ pub fn messages_stream_result(
           content=message.content,
           tool_calls=message.tool_calls,
           blocks=state.replay_blocks,
+          full_blocks=Some(all_blocks),
         ),
       ),
     })
