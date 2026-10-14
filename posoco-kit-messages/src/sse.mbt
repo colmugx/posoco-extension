@@ -580,13 +580,14 @@ pub fn process_messages_event(
           // Arrives complete; validated and captured verbatim into replay
           // state, never surfaced as text.
           match block.get("data") {
-            Some(Json::String(data)) if data != "" =>
+            Some(Json::String(data)) if data != "" => {
               let redacted = Json::object({
                 "type": Json::string("redacted_thinking"),
                 "data": Json::string(data),
               })
               state.replay_blocks.push(redacted)
               state.full_blocks[index] = redacted
+            }
             _ =>
               raise @posoco.ModelError::ResponseParse(
                 "\{provider} SSE parse failure (stage=replay.redacted, category=invalid)",
