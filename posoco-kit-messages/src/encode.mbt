@@ -173,6 +173,8 @@ pub(all) struct MessagesRequestOptions {
   extra_top_level : Array[(String, Json)]
   cache_mode : MessagesCacheMode
   cache_capabilities : MessagesCacheCapabilities
+  stable_prefix : MessagesStablePrefix?
+  stable_prefix_ttl : String
 } derive(Debug)
 
 ///|
@@ -185,6 +187,8 @@ pub fn MessagesRequestOptions::MessagesRequestOptions(
   extra_top_level? : Array[(String, Json)] = [],
   cache_mode? : MessagesCacheMode = CacheUnchanged,
   cache_capabilities? : MessagesCacheCapabilities = MessagesCacheCapabilities::native(),
+  stable_prefix? : MessagesStablePrefix? = None,
+  stable_prefix_ttl? : String = "5m",
 ) -> MessagesRequestOptions {
   {
     temperature,
@@ -195,6 +199,8 @@ pub fn MessagesRequestOptions::MessagesRequestOptions(
     extra_top_level,
     cache_mode,
     cache_capabilities,
+    stable_prefix,
+    stable_prefix_ttl,
   }
 }
 
@@ -638,8 +644,16 @@ pub fn encode_request(
     }
     fields.push((name, value))
   }
+  let plain = Json::object(Map::from_array(fields))
+  let marked = match options.stable_prefix {
+    Some(scope) =>
+      mark_messages_stable_prefix(
+        plain, scope, ttl=options.stable_prefix_ttl,
+      )
+    None => plain
+  }
   apply_messages_cache_policy(
-    Json::object(Map::from_array(fields)),
+    marked,
     options.cache_mode,
     capabilities=options.cache_capabilities,
   )
