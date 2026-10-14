@@ -103,6 +103,21 @@ fn normalize_base_url(url : String) -> String raise MagpieGatewayError {
   if trimmed is "http://" || trimmed is "https://" {
     raise MagpieGatewayError::InvalidConfig("base_url names no host")
   }
+  // Gateway base URL is an origin, never a path, query, fragment or URL
+  // containing credentials. Otherwise Authorization could be sent to an
+  // unintended destination or secrets could leak through diagnostics.
+  let authority = if has_https {
+    trimmed[8:]
+  } else {
+    trimmed[7:]
+  }
+  if authority == "" || authority.contains("/") || authority.contains("?") ||
+    authority.contains("#") || authority.contains("@") || authority.contains("\\") ||
+    authority.contains(" ") {
+    raise MagpieGatewayError::InvalidConfig(
+      "base_url must be a gateway origin without path, query or userinfo",
+    )
+  }
   if trimmed.has_suffix("/") {
     trimmed[:trimmed.length() - 1].to_owned()
   } else {
