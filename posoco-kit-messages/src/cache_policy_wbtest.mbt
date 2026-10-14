@@ -256,3 +256,46 @@ test "cache lookback risk is diagnostic not a false cache hit" {
   assert_true(layout.lookback_risk)
   assert_eq(layout.blocks_since_last_explicit, 21)
 }
+
+
+///|
+test "native lookback counts consecutive tool batches as one position" {
+  let tools : Array[Json] = []
+  for i in 0..<25 {
+    tools.push({
+      "type": "tool_result",
+      "tool_use_id": "tool-\{i}",
+      "content": "ok",
+    })
+  }
+  let body : Json = {
+    "model": "m",
+    "max_tokens": 1024,
+    "messages": [{ "role": "user", "content": tools }],
+  }
+  let layout = inspect_messages_cache_layout(body)
+  assert_eq(layout.scanned_blocks, 1)
+  assert_false(layout.lookback_risk)
+}
+
+///|
+test "empty text block cannot be used as an explicit breakpoint" {
+  let body : Json = {
+    "model": "m",
+    "max_tokens": 1024,
+    "messages": [{
+      "role": "user",
+      "content": [{
+        "type": "text",
+        "text": "",
+        "cache_control": { "type": "ephemeral" },
+      }],
+    }],
+  }
+  let failure = Ok(apply_messages_cache_policy(body, CacheExplicit)) catch { e => Err(e) }
+  match failure {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("placement"))
+    _ => fail("expected empty text cache marker rejection")
+  }
+}
