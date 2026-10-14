@@ -14,6 +14,10 @@ import {
 }
 
 // Values
+pub fn cached_provider_context_window(Json?, String, metadata_provider_id? : String) -> Int?
+
+pub fn context_window_integer(Json?) -> Int?
+
 pub fn transient_retry_port(inner~ : &@port.ModelPort, policy~ : TransientRetryPolicy) -> &@port.ModelPort
 
 // Errors
