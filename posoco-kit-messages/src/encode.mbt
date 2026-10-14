@@ -171,6 +171,8 @@ pub(all) struct MessagesRequestOptions {
   /// verbatim at the top level. Documented as opaque: the kit does not
   /// validate their semantics.
   extra_top_level : Array[(String, Json)]
+  cache_mode : MessagesCacheMode
+  cache_capabilities : MessagesCacheCapabilities
 } derive(Debug)
 
 ///|
@@ -181,6 +183,8 @@ pub fn MessagesRequestOptions::MessagesRequestOptions(
   thinking? : ThinkingConfig? = None,
   metadata? : Json? = None,
   extra_top_level? : Array[(String, Json)] = [],
+  cache_mode? : MessagesCacheMode = CacheUnchanged,
+  cache_capabilities? : MessagesCacheCapabilities = MessagesCacheCapabilities::native(),
 ) -> MessagesRequestOptions {
   {
     temperature,
@@ -189,6 +193,8 @@ pub fn MessagesRequestOptions::MessagesRequestOptions(
     thinking,
     metadata,
     extra_top_level,
+    cache_mode,
+    cache_capabilities,
   }
 }
 
@@ -632,5 +638,9 @@ pub fn encode_request(
     }
     fields.push((name, value))
   }
-  Json::object(Map::from_array(fields))
+  apply_messages_cache_policy(
+    Json::object(Map::from_array(fields)),
+    options.cache_mode,
+    capabilities=options.cache_capabilities,
+  )
 }
