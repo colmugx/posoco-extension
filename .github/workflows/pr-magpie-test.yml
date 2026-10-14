@@ -1,0 +1,30 @@
+name: magpie manager tests
+
+on:
+  pull_request:
+    paths:
+      - "posoco-ext-magpie/**"
+      - "moon.work"
+      - ".github/workflows/pr-magpie-test.yml"
+
+jobs:
+  magpie:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon update
+      - name: Native manager tests
+        run: moon test --target native -p colmugx/posoco-ext-magpie
+      - name: JS manager tests
+        run: moon test --target js -p colmugx/posoco-ext-magpie
+      - name: Wasm manager tests
+        run: moon test --target wasm -p colmugx/posoco-ext-magpie
+      - name: Verify public interface
+        run: |
+          moon info
+          git diff --exit-code -- posoco-ext-magpie/src/pkg.generated.mbti
