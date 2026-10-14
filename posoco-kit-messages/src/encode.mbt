@@ -175,6 +175,8 @@ pub(all) struct MessagesRequestOptions {
   cache_capabilities : MessagesCacheCapabilities
   stable_prefix : MessagesStablePrefix?
   stable_prefix_ttl : String
+  stable_history_messages : Int?
+  stable_history_ttl : String
 } derive(Debug)
 
 ///|
@@ -189,6 +191,8 @@ pub fn MessagesRequestOptions::MessagesRequestOptions(
   cache_capabilities? : MessagesCacheCapabilities = MessagesCacheCapabilities::native(),
   stable_prefix? : MessagesStablePrefix? = None,
   stable_prefix_ttl? : String = "5m",
+  stable_history_messages? : Int? = None,
+  stable_history_ttl? : String = "5m",
 ) -> MessagesRequestOptions {
   {
     temperature,
@@ -201,6 +205,8 @@ pub fn MessagesRequestOptions::MessagesRequestOptions(
     cache_capabilities,
     stable_prefix,
     stable_prefix_ttl,
+    stable_history_messages,
+    stable_history_ttl,
   }
 }
 
@@ -652,6 +658,20 @@ pub fn encode_request(
         plain, scope, ttl=options.stable_prefix_ttl,
       )
     None => plain
+  }
+  let reserve_auto = match options.cache_mode {
+    CacheAutomatic5m | CacheAutomatic1h => true
+    CacheUnchanged | CacheExplicit => false
+  }
+  let marked = match options.stable_history_messages {
+    Some(stable_messages) =>
+      mark_messages_stable_history_checkpoints(
+        marked,
+        stable_messages~,
+        ttl=options.stable_history_ttl,
+        reserve_automatic_slot=reserve_auto,
+      )
+    None => marked
   }
   apply_messages_cache_policy(
     marked,
