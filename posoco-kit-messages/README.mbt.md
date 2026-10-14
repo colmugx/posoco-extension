@@ -101,9 +101,17 @@ encoded JSON without mutating caller-owned objects.
 `inspect_messages_cache_layout` reports explicit breakpoint usage and
 20-position lookback risk; consecutive tool_use/tool_result batch blocks count
 as one position. It is a diagnostic, not a token estimator or a cache hit
-predictor. Insert explicit stable checkpoints where suitable when the risk is
-reported. Never insert a marker inside a thinking block: signed thinking is
-preserved exactly.
+predictor. Never insert a marker inside a thinking block: signed
+thinking is preserved exactly.
+
+For caller-declared stable history, `stable_history_messages=Some(n)`
+in request options (or `mark_messages_stable_history_checkpoints`)
+adds bounded-interval explicit checkpoints and reserves a slot for top-level
+automatic caching. The caller must supply the count of immutable historical
+messages. This helper **only marks eligible user text/image/tool-result
+blocks**, never signed assistant blocks. If it cannot safely span a
+20-position lookback interval, or needs too many markers, it fails explicitly.
+It never assumes the latest query or fresh tool result will recur.
 
 `compare_messages_cache_prefix` checks that the model, tools, system and
 existing message history are stable across two requests, and flags changes in
