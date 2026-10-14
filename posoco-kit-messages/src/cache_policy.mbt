@@ -315,6 +315,8 @@ pub(all) struct MessagesCachePrefixComparison {
   tools_stable : Bool
   system_stable : Bool
   history_is_prefix : Bool
+  request_settings_stable : Bool
+  prefix_reusable : Bool
   suffix_message_count : Int
 } derive(Eq, Debug)
 
@@ -350,11 +352,24 @@ pub fn compare_messages_cache_prefix(
       }
     }
   }
+  let model_stable = a.get("model") == b.get("model")
+  let tools_stable = a.get("tools") == b.get("tools")
+  let system_stable = a.get("system") == b.get("system")
+  let mut settings_stable = true
+  // These request-level settings may affect provider cache matching.
+  // Never label a prefix reusable after a known cache-relevant change.
+  for key in ["thinking", "output_config", "tool_choice", "temperature", "top_p", "top_k", "stop_sequences"] {
+    if a.get(key) != b.get(key) {
+      settings_stable = false
+    }
+  }
   {
-    model_stable: a.get("model") == b.get("model"),
-    tools_stable: a.get("tools") == b.get("tools"),
-    system_stable: a.get("system") == b.get("system"),
+    model_stable,
+    tools_stable,
+    system_stable,
     history_is_prefix: is_prefix,
+    request_settings_stable: settings_stable,
+    prefix_reusable: model_stable && tools_stable && system_stable && is_prefix && settings_stable,
     suffix_message_count: if is_prefix { pb.length() - pa.length() } else { 0 },
   }
 }
