@@ -17,12 +17,10 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - run: moon update
-      - name: Generate and display public Messages interface
+      - name: Verify generated Messages interface
         run: |
           moon info
-          echo '===BEGIN_MESSAGES_MBTI==='
-          cat posoco-kit-messages/src/pkg.generated.mbti
-          echo '===END_MESSAGES_MBTI==='
+          git diff --exit-code -- posoco-kit-messages/src/pkg.generated.mbti
       - name: Native messages tests
         run: moon test --target native -p colmugx/posoco-kit-messages
       - name: JS messages tests
