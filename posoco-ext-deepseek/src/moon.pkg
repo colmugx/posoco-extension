@@ -1,9 +1,9 @@
 import {
   "colmugx/posoco",
+  "colmugx/posoco-kit-provider" @provider,
   "posoco/devkit",
   "posoco/kit-chat-completions" @chatkit,
   "colmugx/posoco-kit-compact-evict" @evict,
-  "posoco/ext-llm" @llm,
   "posoco/ext-oauth" @oauth,
   "moonbitlang/async",
   "moonbitlang/async/http",
@@ -13,6 +13,7 @@ import {
 
 import {
   "moonbitlang/async",
+  "posoco/ext-llm" @llm,
 } for "wbtest"
 
 options(

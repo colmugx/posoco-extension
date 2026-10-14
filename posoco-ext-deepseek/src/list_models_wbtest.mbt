@@ -47,7 +47,7 @@ test "DeepSeek models parser rejects a non-list envelope" {
 ///|
 async test "DeepSeek refresh rejects an unknown effort as composition error" {
   let provider = DeepSeekProvider()
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+  let source = @provider.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
       @json.parse(
         "{\"api_key\":\"key\",\"model\":\"deepseek-flash\",\"reasoning_effort\":\"unknown\"}",
