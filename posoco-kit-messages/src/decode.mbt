@@ -139,7 +139,10 @@ fn decode_content_block(
     "text" =>
       match fields.get("text") {
         Some(Json::String(text)) => DecodedBlock::Text(text)
-        Some(Json::Null) | None => DecodedBlock::Text("")
+        Some(Json::Null) | None =>
+          raise @posoco.ModelError::ResponseParse(
+            "\{provider} response parse failure (stage=text, category=missing)",
+          )
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
             "\{provider} response parse failure (stage=text, category=wrong_type)",
