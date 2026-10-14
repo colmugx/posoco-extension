@@ -1,0 +1,140 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-messages"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn attach_cache_control(Json, cache_control~ : CacheControl) -> Json raise @error.ModelError
+
+pub fn build_replay_envelope(content~ : Array[@kernel.Content], tool_calls~ : Array[@kernel.ToolCall], blocks~ : Array[Json], full_blocks? : Array[Json]?) -> Json
+
+pub fn classify_stream_termination(provider~ : String, StreamTermination) -> @error.ModelError?
+
+pub fn count_tokens_request(model~ : String, messages~ : Array[Json], system? : Json?, tools? : Array[Json], thinking? : ThinkingConfig?) -> Json raise @error.ModelError
+
+pub fn encode_request(model~ : String, max_tokens~ : Int, system? : Json?, messages~ : Array[Json], tools? : Array[Json], options? : MessagesRequestOptions) -> Json raise @error.ModelError
+
+pub fn is_complete_messages_replay_envelope(Json) -> Bool
+
+pub fn is_messages_replay_envelope(Json?) -> Bool
+
+pub fn map_stop_reason(reason~ : String) -> @kernel.FinishReason raise @error.ModelError
+
+pub fn message_to_wire(@kernel.Message) -> Array[Json] raise @error.ModelError
+
+pub fn messages_stream_result(provider~ : String, acc~ : @types.StreamAccumulator, state~ : MessagesSseState) -> MessagesResult raise @error.ModelError
+
+pub fn parse_count_tokens_response(provider~ : String, Json) -> Int raise @error.ModelError
+
+pub fn parse_messages_usage(provider~ : String, Json) -> MessagesUsage raise @error.ModelError
+
+pub fn parse_replay_envelope(provider~ : String, Json, content~ : Array[@kernel.Content], tool_calls~ : Array[@kernel.ToolCall]) -> Array[Json] raise @error.ModelError
+
+pub fn parse_response(provider~ : String, Json) -> MessagesResult raise @error.ModelError
+
+pub fn process_messages_event(provider~ : String, event_name? : String?, data~ : String, acc~ : @types.StreamAccumulator, on_chunk~ : (@types.StreamChunk) -> Unit, state? : MessagesSseState) -> Bool raise @error.ModelError
+
+pub fn system_to_wire(content~ : Array[@kernel.Content], cache_control? : CacheControl?) -> Json raise @error.ModelError
+
+pub fn tool_to_wire(tool~ : @kernel.ToolDef, cache_control? : CacheControl?) -> Json raise @error.ModelError
+
+// Errors
+
+// Types and methods
+pub(all) struct CacheControl {
+  ttl : String?
+} derive(Eq, @debug.Debug)
+pub fn CacheControl::equal(Self, Self) -> Bool
+pub fn CacheControl::not_equal(Self, Self) -> Bool
+pub fn CacheControl::to_repr(Self) -> @debug.Repr
+pub fn CacheControl::to_wire(Self) -> Json raise @error.ModelError
+
+pub(all) struct MessagesRequestOptions {
+  temperature : Double?
+  stop_sequences : Array[String]
+  tool_choice : MessagesToolChoice?
+  thinking : ThinkingConfig?
+  metadata : Json?
+  extra_top_level : Array[(String, Json)]
+} derive(@debug.Debug)
+pub fn MessagesRequestOptions::MessagesRequestOptions(temperature? : Double?, stop_sequences? : Array[String], tool_choice? : MessagesToolChoice?, thinking? : ThinkingConfig?, metadata? : Json?, extra_top_level? : Array[(String, Json)]) -> Self
+
+pub(all) struct MessagesResult {
+  completion : @kernel.Completion
+  stop_reason : String
+  stop_sequence : String?
+  response_id : String
+  model : String
+  usage : MessagesUsage?
+  extensions : Array[(String, Json)]
+} derive(@debug.Debug)
+pub fn MessagesResult::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MessagesSseState {
+  // private fields
+} derive(@debug.Debug)
+pub fn MessagesSseState::MessagesSseState() -> Self
+
+pub(all) enum MessagesToolChoice {
+  Auto
+  Any
+  Forbid
+  Tool(name~ : String)
+} derive(Eq, @debug.Debug)
+pub fn MessagesToolChoice::equal(Self, Self) -> Bool
+pub fn MessagesToolChoice::not_equal(Self, Self) -> Bool
+pub fn MessagesToolChoice::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MessagesUsage {
+  input_tokens : Int
+  output_tokens : Int
+  cache_creation_input_tokens : Int?
+  cache_read_input_tokens : Int?
+} derive(Eq, @debug.Debug)
+pub fn MessagesUsage::equal(Self, Self) -> Bool
+pub fn MessagesUsage::not_equal(Self, Self) -> Bool
+pub fn MessagesUsage::prompt_total(Self) -> Int raise @error.ModelError
+pub fn MessagesUsage::to_canonical(Self) -> @kernel.Usage raise @error.ModelError
+pub fn MessagesUsage::to_repr(Self) -> @debug.Repr
+
+pub struct SseDecoder {
+  // private fields
+} derive(@debug.Debug)
+pub fn SseDecoder::SseDecoder() -> Self
+pub fn SseDecoder::flush(Self) -> Unit
+pub fn SseDecoder::push(Self, String) -> Array[SseEvent]
+
+pub(all) struct SseEvent {
+  name : String?
+  data : String
+} derive(Eq, @debug.Debug)
+pub fn SseEvent::equal(Self, Self) -> Bool
+pub fn SseEvent::not_equal(Self, Self) -> Bool
+pub fn SseEvent::to_repr(Self) -> @debug.Repr
+
+pub(all) enum StreamTermination {
+  ExplicitTerminal
+  CleanEof
+} derive(Eq, @debug.Debug)
+pub fn StreamTermination::equal(Self, Self) -> Bool
+pub fn StreamTermination::not_equal(Self, Self) -> Bool
+pub fn StreamTermination::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ThinkingConfig {
+  Enabled(budget_tokens~ : Int)
+  Adaptive
+  BetweenTools
+  Disabled
+} derive(Eq, @debug.Debug)
+pub fn ThinkingConfig::equal(Self, Self) -> Bool
+pub fn ThinkingConfig::not_equal(Self, Self) -> Bool
+pub fn ThinkingConfig::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
