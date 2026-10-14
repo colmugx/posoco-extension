@@ -2,7 +2,6 @@
 package "posoco/ext-llm"
 
 import {
-  "colmugx/posoco-kit-model-management",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -119,7 +118,6 @@ pub(all) struct RouterModelPort {
 }
 pub fn RouterModelPort::RouterModelPort(slots~ : Array[ModelSlot], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource]) -> Self raise @error.CompositionError
 pub fn RouterModelPort::active_effort(Self) -> String?
-pub fn RouterModelPort::active_selection(Self) -> @posoco-kit-model-management.ManagerSelection
 pub fn RouterModelPort::active_slot_id(Self) -> String
 pub async fn RouterModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub fn RouterModelPort::commands(Self) -> Array[@port.CommandDef]
@@ -131,11 +129,9 @@ pub fn RouterModelPort::extension_id(Self) -> String
 pub fn RouterModelPort::from_catalogs(Array[ProviderModelCatalog], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource], transient_retry? : TransientRetryPolicy?) -> Self raise @error.CompositionError
 pub async fn RouterModelPort::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn RouterModelPort::list_auth_capabilities(Self) -> Json
-pub fn RouterModelPort::list_models(Self) -> Array[@posoco-kit-model-management.ManagerModelInfo]
 pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slots(Self) -> Array[ModelSlot]
-pub fn RouterModelPort::manager_id(Self) -> String
 pub fn RouterModelPort::manifest(Self) -> @port.ExtensionManifest
 pub fn RouterModelPort::on_bus_event(Self, @devkit.BusEvent) -> Unit
 pub fn RouterModelPort::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
@@ -147,9 +143,7 @@ pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub async fn RouterModelPort::refresh_model_metadata(Self) -> Unit noraise
 pub fn RouterModelPort::replace_provider_slots(Self, String, Array[ModelSlot]) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError
-pub fn RouterModelPort::select_model(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
 pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
-pub impl @posoco-kit-model-management.ModelManagerControl for RouterModelPort
 pub impl @port.CommandPort for RouterModelPort
 pub impl @port.Extension for RouterModelPort
 pub impl @port.Lifecycle for RouterModelPort

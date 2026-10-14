@@ -156,19 +156,3 @@ optional async `RefreshableProviderFactory` seam. Hosts invoke it explicitly
 remains a pure snapshot build and `/model` never performs an implicit network
 refresh. A refresh failure is typed and observable rather than hidden behind a
 stale/static fallback.
-
-## Manager control contract
-
-The router implements the shared, provider-neutral control contract from
-`posoco-kit-model-management` (`colmugx/posoco-kit-model-management`), so
-hosts can drive it — or any future peer Model Manager — through a plain
-`&ModelManagerControl` trait reference. The adapter owns no routing logic:
-`manager_id` is the constant `"posoco_ext_llm"`; `list_models`/`active_selection`
-project `list_slots`/`active_slot_id`/`active_effort` verbatim (slot ids stay
-opaque; a provider-declared `None` context window stays unknown); and
-`select_model`/`select_effort` delegate to `switch_slot`/`select_effort`, so
-the shared contract inherits their validation, effort-reset, status-publication,
-provider-event, and quota-invalidation invariants without duplicating them.
-The projection and error relabeling table lives in the kit README; the
-`/model`, `/effort`, `/login`, and `/status` commands are untouched and remain
-the interactive surface.
