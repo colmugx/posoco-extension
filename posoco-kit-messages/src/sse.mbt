@@ -188,6 +188,8 @@ pub(all) struct MessagesSseState {
   /// only; wire indices interleave with text/thinking blocks).
   priv tool_slots : Map[Int32, Int32]
   priv replay_blocks : Array[Json]
+  priv full_blocks : Map[Int32, Json]
+  priv mut next_block_index : Int32
   priv mut response_id : String
   priv mut model : String
   priv mut usage : UsageSnapshot?
@@ -203,6 +205,8 @@ pub fn MessagesSseState::MessagesSseState() -> MessagesSseState {
     blocks: Map::from_array([]),
     tool_slots: Map::from_array([]),
     replay_blocks: [],
+    full_blocks: Map::from_array([]),
+    next_block_index: 0,
     response_id: "",
     model: "",
     usage: None,
@@ -521,6 +525,11 @@ pub fn process_messages_event(
           "\{provider} SSE parse failure (stage=lifecycle, category=block_before_start)",
         )
       }
+      if index != state.next_block_index {
+        raise @posoco.ModelError::ResponseParse(
+          "\{provider} SSE parse failure (stage=index, category=non_sequential)",
+        )
+      }
       if state.blocks.contains(index) {
         raise @posoco.ModelError::ResponseParse(
           "\{provider} SSE parse failure (stage=lifecycle, category=duplicate_block)",
@@ -572,12 +581,12 @@ pub fn process_messages_event(
           // state, never surfaced as text.
           match block.get("data") {
             Some(Json::String(data)) if data != "" =>
-              state.replay_blocks.push(
-                Json::object({
-                  "type": Json::string("redacted_thinking"),
-                  "data": Json::string(data),
-                }),
-              )
+              let redacted = Json::object({
+                "type": Json::string("redacted_thinking"),
+                "data": Json::string(data),
+              })
+              state.replay_blocks.push(redacted)
+              state.full_blocks[index] = redacted
             _ =>
               raise @posoco.ModelError::ResponseParse(
                 "\{provider} SSE parse failure (stage=replay.redacted, category=invalid)",
@@ -588,6 +597,7 @@ pub fn process_messages_event(
         _ => ()
       }
       state.blocks[index] = accum
+      state.next_block_index += 1
       false
     }
     "content_block_delta" => {
@@ -724,6 +734,11 @@ pub fn process_messages_event(
       }
       accum.stopped = true
       match accum.kind {
+        "text" =>
+          state.full_blocks[index] = Json::object({
+            "type": Json::string("text"),
+            "text": Json::string(accum.text.to_string()),
+          })
         "thinking" => {
           let text = accum.text.to_string()
           let signature = accum.signature.to_string()
@@ -739,7 +754,9 @@ pub fn process_messages_event(
           if signature != "" {
             fields_out.push(("signature", Json::string(signature)))
           }
-          state.replay_blocks.push(Json::object(Map::from_array(fields_out)))
+          let full = Json::object(Map::from_array(fields_out))
+          state.replay_blocks.push(full)
+          state.full_blocks[index] = full
         }
         "tool_use" => {
           // Tool arguments are parsed only when the block completes: by
@@ -756,14 +773,24 @@ pub fn process_messages_event(
             }
           }
           match args_json {
-            Json::Object(_) => ()
+            Json::Object(_) =>
+              state.full_blocks[index] = Json::object({
+                "type": Json::string("tool_use"),
+                "id": Json::string(accum.tool_id),
+                "name": Json::string(accum.tool_name),
+                "input": args_json,
+              })
             _ =>
               raise @posoco.ModelError::ResponseParse(
                 "\{provider} SSE parse failure (stage=tool.arguments, category=not_object)",
               )
           }
         }
-        _ => ()
+        "redacted_thinking" => ()
+        _ =>
+          raise @posoco.ModelError::ResponseParse(
+            "\{provider} SSE parse failure (stage=block, category=unsupported)",
+          )
       }
       false
     }
