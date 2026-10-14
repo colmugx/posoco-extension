@@ -106,10 +106,15 @@ fn normalize_base_url(url : String) -> String raise MagpieGatewayError {
   // Gateway base URL is an origin, never a path, query, fragment or URL
   // containing credentials. Otherwise Authorization could be sent to an
   // unintended destination or secrets could leak through diagnostics.
-  let authority = if has_https {
-    trimmed[8:]
+  let origin = if trimmed.has_suffix("/") {
+    trimmed[:trimmed.length() - 1].to_owned()
   } else {
-    trimmed[7:]
+    trimmed
+  }
+  let authority = if has_https {
+    origin[8:]
+  } else {
+    origin[7:]
   }
   if authority == "" || authority.contains("/") || authority.contains("?") ||
     authority.contains("#") || authority.contains("@") || authority.contains("\\") ||
