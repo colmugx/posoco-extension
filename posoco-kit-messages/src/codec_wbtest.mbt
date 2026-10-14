@@ -676,3 +676,42 @@ test "opaque top-level response fields pass through, malformed shapes reject" {
     _ => fail("expected empty tool id rejection")
   }
 }
+
+
+///|
+/// An opaque extra field must never shadow request fields validated by the kit.
+test "extra_top_level cannot override model or messages" {
+  let result = Ok(encode_request(
+    model="test",
+    max_tokens=128,
+    messages=[Json::object({
+      "role": Json::string("user"),
+      "content": Json::string("hi"),
+    })],
+    options=MessagesRequestOptions::MessagesRequestOptions(
+      extra_top_level=[("model", Json::string("injected"))],
+    ),
+  )) catch { error => Err(error) }
+  match result {
+    Err(@posoco.ModelError::RequestBuild(_)) => ()
+    _ => fail("expected reserved field rejection")
+  }
+}
+
+///|
+test "request encoder refuses foreign reasoning state" {
+  let msg = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("hello")],
+    tool_calls=[],
+    reasoning=Some({
+      content: "thinking",
+      raw: Some(Json::object({ "codec": Json::string("foreign") })),
+    }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let result = Ok(message_to_wire(msg)) catch { error => Err(error) }
+  match result {
+    Err(@posoco.ModelError::RequestBuild(_)) => ()
+    _ => fail("expected foreign replay state rejection")
+  }
+}
