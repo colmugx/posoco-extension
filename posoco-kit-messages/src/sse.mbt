@@ -708,10 +708,13 @@ pub fn process_messages_event(
               )
           }
         }
-        // Future delta types on known blocks: ignored (documented
-        // forward-compatibility policy); lifecycle bookkeeping above still
-        // applied.
-        Some(Json::String(_)) => ()
+        // A new delta type on a known block may carry meaningful content.
+        // Do not silently drop it: that would corrupt the canonical output
+        // or invalidate the opaque replay signature.
+        Some(Json::String(_)) =>
+          raise @posoco.ModelError::ResponseParse(
+            "\{provider} SSE parse failure (stage=delta.type, category=unsupported)",
+          )
         _ =>
           raise @posoco.ModelError::ResponseParse(
             "\{provider} SSE parse failure (stage=delta.type, category=missing)",
