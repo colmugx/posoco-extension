@@ -76,3 +76,73 @@ test "cache economics prices actual native 5m writes and hits" {
   assert_eq(result.effective_input_cost, Some(420.0))
   assert_eq(result.net_savings, Some(580.0))
 }
+
+
+///|
+test "stable system and automatic cache combine in correct prefix order" {
+  let body = mark_messages_stable_prefix(cache_body(), StableSystem)
+  let marked = apply_messages_cache_policy(body, CacheAutomatic5m)
+  let system = jget(marked, key="system")
+  let item = jat(system, index=0)
+  assert_eq(jget(jget(item, key="cache_control"), key="type"), "ephemeral")
+  assert_eq(jget(jget(marked, key="cache_control"), key="type"), "ephemeral")
+  let layout = inspect_messages_cache_layout(marked)
+  assert_eq(layout.explicit_breakpoints, 1)
+  assert_eq(layout.blocks_since_last_explicit, 1)
+}
+
+///|
+test "stable prefix marker and automatic caching are request options" {
+  let body = encode_request(
+    model="m",
+    max_tokens=2048,
+    system=Some([{ "type": "text", "text": "Stable" }]),
+    messages=[{ "role": "user", "content": [{ "type": "text", "text": "A" }] }],
+    options=MessagesRequestOptions::MessagesRequestOptions(
+      stable_prefix=Some(StableSystem),
+      cache_mode=CacheAutomatic5m,
+    ),
+  )
+  assert_eq(jget(jget(body, key="cache_control"), key="type"), "ephemeral")
+  assert_eq(jget(jget(jat(jget(body, key="system"), index=0), key="cache_control"), key="type"), "ephemeral")
+}
+
+///|
+test "cache TTL order refuses one-hour automatic after five-minute explicit" {
+  let body = mark_messages_stable_prefix(cache_body(), StableSystem)
+  let value = Ok(apply_messages_cache_policy(body, CacheAutomatic1h)) catch { error => Err(error) }
+  match value {
+    Err(@posoco.ModelError::RequestBuild(message)) =>
+      assert_true(message.contains("ttl_order"))
+    _ => fail("expected 1h after 5m to fail")
+  }
+}
+
+///|
+test "cache prefix flags changed thinking and tool shapes" {
+  let previous = cache_body()
+  let current = cache_body()
+  guard current is Json::Object(fields) else { fail("expected object") }
+  fields["thinking"] = { "type": "adaptive" }
+  let result = compare_messages_cache_prefix(previous, current)
+  assert_false(result.request_settings_stable)
+  assert_false(result.prefix_reusable)
+}
+
+///|
+test "cache economics does not invent TTL distribution" {
+  let usage : MessagesUsage = {
+    input_tokens: 100,
+    output_tokens: 10,
+    cache_creation_input_tokens: Some(400),
+    cache_read_input_tokens: Some(500),
+  }
+  let result = analyze_messages_cache_economics(
+    usage,
+    { ephemeral_5m_input_tokens: None, ephemeral_1h_input_tokens: None },
+    { ordinary_input: 1.0, cache_read: 0.1, cache_write_5m: 1.25, cache_write_1h: 2.0 },
+  )
+  assert_eq(result.effective_input_cost, None)
+  assert_eq(result.net_savings, None)
+  assert_eq(result.cache_hit_ratio, Some(0.5))
+}
