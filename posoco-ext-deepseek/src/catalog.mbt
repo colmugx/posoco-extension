@@ -21,19 +21,19 @@ fn deepseek_effort_label(config : DeepSeekConfig) -> String {
 fn deepseek_catalog_slot(
   config : DeepSeekConfig,
   ctx : @devkit.ExtContext,
-  api_key : &@llm.ApiKeyFactory,
-) -> @llm.ModelSlot {
+  api_key : &@provider.ApiKeyFactory,
+) -> @provider.ModelSlot {
   let port : &@posoco.ModelPort = DeepSeekModelPort(config, ctx~)
   let slot_id = "deepseek/" + config.model
   let slot_efforts = deepseek_slot_efforts()
   let default_effort = Some(deepseek_effort_label(config))
-  let rebuild_on_effort : (String) -> @llm.ModelSlot = fn(effort) {
+  let rebuild_on_effort : (String) -> @provider.ModelSlot = fn(effort) {
     let rebuilt_config = config.with_reasoning_effort(effort) catch {
       err => abort("DeepSeek catalog effort rebuild failed: " + err.to_string())
     }
     deepseek_catalog_slot(rebuilt_config, ctx, api_key)
   }
-  let slot = @llm.ModelSlot::ModelSlot(
+  let slot = @provider.ModelSlot::ModelSlot(
     id=slot_id,
     label="DeepSeek / " + config.model,
     provider_id="deepseek",
@@ -69,8 +69,8 @@ fn deepseek_catalog_slot_from_info(
   base_config : DeepSeekConfig,
   info : DeepSeekModelInfo,
   ctx : @devkit.ExtContext,
-  api_key : &@llm.ApiKeyFactory,
-) -> @llm.ModelSlot {
+  api_key : &@provider.ApiKeyFactory,
+) -> @provider.ModelSlot {
   let config = DeepSeekConfig(
     base_config.api_key,
     model=info.id,
@@ -119,10 +119,10 @@ fn deepseek_preferred_models(
 /// only receives a ready-to-compose catalog and never parses DeepSeek config.
 pub fn DeepSeekModelPort::model_catalog(
   self : DeepSeekModelPort,
-) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
+) -> @provider.ProviderModelCatalog raise @posoco.CompositionError {
   let api_key_impl = DeepSeekProvider(ctx=self.ctx)
-  let api_key : &@llm.ApiKeyFactory = api_key_impl
-  @llm.ProviderModelCatalog::ProviderModelCatalog(
+  let api_key : &@provider.ApiKeyFactory = api_key_impl
+  @provider.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="deepseek",
     slots=[deepseek_catalog_slot(self.config, self.ctx, api_key)],
     capabilities=["chat", "streaming", "fim", "prefix", "api_key"],
@@ -134,7 +134,7 @@ pub fn DeepSeekModelPort::model_catalog(
 pub fn DeepSeekModelPort::model_catalog_from_models(
   self : DeepSeekModelPort,
   models : Array[DeepSeekModelInfo],
-) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
+) -> @provider.ProviderModelCatalog raise @posoco.CompositionError {
   if models.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_deepseek",
@@ -142,14 +142,14 @@ pub fn DeepSeekModelPort::model_catalog_from_models(
     )
   }
   let api_key_impl = DeepSeekProvider(ctx=self.ctx)
-  let api_key : &@llm.ApiKeyFactory = api_key_impl
-  let slots : Array[@llm.ModelSlot] = []
+  let api_key : &@provider.ApiKeyFactory = api_key_impl
+  let slots : Array[@provider.ModelSlot] = []
   for info in deepseek_preferred_models(models, self.config.model) {
     slots.push(
       deepseek_catalog_slot_from_info(self.config, info, self.ctx, api_key),
     )
   }
-  @llm.ProviderModelCatalog::ProviderModelCatalog(
+  @provider.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="deepseek",
     slots~,
     capabilities=["chat", "streaming", "fim", "prefix", "api_key"],

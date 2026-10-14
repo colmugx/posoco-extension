@@ -5,4 +5,4 @@
 // that are actually dot-called within this module.
 
 ///|
-pub extend DeepSeekProvider with @llm.RefreshableProviderFactory::{refresh}
+pub extend DeepSeekProvider with @provider.RefreshableProviderFactory::{refresh}

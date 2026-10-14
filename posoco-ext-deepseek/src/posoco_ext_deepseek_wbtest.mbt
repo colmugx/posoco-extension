@@ -45,7 +45,7 @@ pub extend DeepSeekApiKeyPrompt with @posoco/ext-oauth.AuthPromptInteraction::{
 ///|
 async test "DeepSeek API-key factory validates and returns an opaque credential" {
   let provider = DeepSeekProvider()
-  let api : &@llm.ApiKeyFactory = provider
+  let api : &@provider.ApiKeyFactory = provider
   let prompt_impl = DeepSeekApiKeyPrompt::{ value: "deepseek-secret", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let credential = api.login(prompt)
@@ -55,7 +55,7 @@ async test "DeepSeek API-key factory validates and returns an opaque credential"
 ///|
 async test "DeepSeek API-key factory rejects an empty secret" {
   let provider = DeepSeekProvider()
-  let api : &@llm.ApiKeyFactory = provider
+  let api : &@provider.ApiKeyFactory = provider
   let prompt_impl = DeepSeekApiKeyPrompt::{ value: "", }
   let prompt : &@oauth.AuthPromptInteraction = prompt_impl
   let result = Ok(api.login(prompt)) catch { error => Err(error) }
@@ -1268,8 +1268,8 @@ test "model_catalog slot advertises an implicit off and derives the default effo
 ///|
 test "ProviderFactory::build accepts reasoning_effort off and produces a disabled slot" {
   let provider = DeepSeekProvider()
-  let factory : &@llm.ProviderFactory = provider
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+  let factory : &@provider.ProviderFactory = provider
+  let source = @provider.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
       Json::object(
         Map::from_array([
@@ -1281,14 +1281,14 @@ test "ProviderFactory::build accepts reasoning_effort off and produces a disable
     ),
   )
   match factory.build(source) {
-    @llm.ProviderBuildResult::Ready(catalog) => {
+    @provider.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
       assert_eq(slot.thinking_efforts, [
         "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
       ])
       assert_eq(slot.default_effort, Some("off"))
     }
-    @llm.ProviderBuildResult::Unconfigured =>
+    @provider.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog with reasoning_effort off")
   }
 }
@@ -1296,8 +1296,8 @@ test "ProviderFactory::build accepts reasoning_effort off and produces a disable
 ///|
 test "ProviderFactory::build accepts reasoning_effort low" {
   let provider = DeepSeekProvider()
-  let factory : &@llm.ProviderFactory = provider
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+  let factory : &@provider.ProviderFactory = provider
+  let source = @provider.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
       Json::object(
         Map::from_array([
@@ -1309,14 +1309,14 @@ test "ProviderFactory::build accepts reasoning_effort low" {
     ),
   )
   match factory.build(source) {
-    @llm.ProviderBuildResult::Ready(catalog) => {
+    @provider.ProviderBuildResult::Ready(catalog) => {
       let slot = catalog.slots()[0]
       assert_eq(slot.thinking_efforts, [
         "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
       ])
       assert_eq(slot.default_effort, Some("low"))
     }
-    @llm.ProviderBuildResult::Unconfigured =>
+    @provider.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog with reasoning_effort low")
   }
 }
@@ -1344,8 +1344,8 @@ fn deepseek_cached_records(ids : Array[String]) -> Json {
 ///|
 test "ProviderFactory::build expands host-cached records into a multi-slot catalog" {
   let provider = DeepSeekProvider()
-  let factory : &@llm.ProviderFactory = provider
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+  let factory : &@provider.ProviderFactory = provider
+  let source = @provider.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
       Json::object(
         Map::from_array([
@@ -1359,7 +1359,7 @@ test "ProviderFactory::build expands host-cached records into a multi-slot catal
     ),
   )
   match factory.build(source) {
-    @llm.ProviderBuildResult::Ready(catalog) => {
+    @provider.ProviderBuildResult::Ready(catalog) => {
       let slots = catalog.slots()
       // The configured model is pinned first; the uniform effort ladder is
       // re-derived exactly as the live refresh would.
@@ -1373,7 +1373,7 @@ test "ProviderFactory::build expands host-cached records into a multi-slot catal
         assert_eq(slot.default_effort, Some("high"))
       }
     }
-    @llm.ProviderBuildResult::Unconfigured =>
+    @provider.ProviderBuildResult::Unconfigured =>
       fail("expected Ready catalog from cached records")
   }
 }
@@ -1381,7 +1381,7 @@ test "ProviderFactory::build expands host-cached records into a multi-slot catal
 ///|
 test "ProviderFactory::build degrades to the static slot on bad cached records" {
   let provider = DeepSeekProvider()
-  let factory : &@llm.ProviderFactory = provider
+  let factory : &@provider.ProviderFactory = provider
   for
     bad in [
       Json::array([]),
@@ -1394,7 +1394,7 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
         Json::object(Map::from_array([("model_id", Json::null())])),
       ]),
     ] {
-    let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    let source = @provider.ProviderConfigSource::ProviderConfigSource(
       settings=Some(
         Json::object(
           Map::from_array([
@@ -1406,12 +1406,12 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
       cached_models=Some(bad),
     )
     match factory.build(source) {
-      @llm.ProviderBuildResult::Ready(catalog) => {
+      @provider.ProviderBuildResult::Ready(catalog) => {
         let slots = catalog.slots()
         assert_true(slots.length() == 1)
         assert_eq(slots[0].model_id, "deepseek-flash")
       }
-      @llm.ProviderBuildResult::Unconfigured =>
+      @provider.ProviderBuildResult::Unconfigured =>
         fail(
           "bad cache records must degrade to the static build, not Unconfigured",
         )
@@ -1422,19 +1422,19 @@ test "ProviderFactory::build degrades to the static slot on bad cached records" 
 ///|
 test "ProviderFactory::build composes the provider default without a model setting" {
   let provider = DeepSeekProvider()
-  let factory : &@llm.ProviderFactory = provider
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+  let factory : &@provider.ProviderFactory = provider
+  let source = @provider.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
       Json::object(Map::from_array([("api_key", Json::string("sk-test"))])),
     ),
   )
   match factory.build(source) {
-    @llm.ProviderBuildResult::Ready(catalog) => {
+    @provider.ProviderBuildResult::Ready(catalog) => {
       let slots = catalog.slots()
       assert_true(slots.length() == 1)
       assert_eq(slots[0].model_id, "deepseek-flash")
     }
-    @llm.ProviderBuildResult::Unconfigured =>
+    @provider.ProviderBuildResult::Unconfigured =>
       fail("a credential alone must compose the provider-owned default")
   }
 }
@@ -1442,7 +1442,7 @@ test "ProviderFactory::build composes the provider default without a model setti
 ///|
 async test "DeepSeek refresh without a model setting reaches the models fetch" {
   let provider = DeepSeekProvider()
-  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+  let source = @provider.ProviderConfigSource::ProviderConfigSource(
     settings=Some(
       Json::object(
         Map::from_array([

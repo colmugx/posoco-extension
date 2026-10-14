@@ -15,7 +15,7 @@ pub fn DeepSeekProvider::DeepSeekProvider(
 
 ///|
 fn deepseek_setting_string(
-  source : @llm.ProviderConfigSource,
+  source : @provider.ProviderConfigSource,
   key : String,
 ) -> String? raise @posoco.CompositionError {
   match source.setting(key) {
@@ -63,21 +63,21 @@ fn deepseek_endpoint_parts(url : String) -> (String, String) {
 }
 
 ///|
-pub impl @llm.ProviderFactory for DeepSeekProvider with fn provider_id(
+pub impl @provider.ProviderFactory for DeepSeekProvider with fn provider_id(
   _self : DeepSeekProvider,
 ) -> String {
   "deepseek"
 }
 
 ///|
-pub extend DeepSeekProvider with @posoco/ext-llm.ProviderFactory::{
+pub extend DeepSeekProvider with @provider.ProviderFactory::{
   credential_id,
   provider_id,
   build,
 }
 
 ///|
-pub impl @llm.ProviderFactory for DeepSeekProvider with fn credential_id(
+pub impl @provider.ProviderFactory for DeepSeekProvider with fn credential_id(
   _self : DeepSeekProvider,
 ) -> String {
   "deepseek"
@@ -88,7 +88,7 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn credential_id(
 /// anywhere. Shared by the catalog build/refresh and the balance probe so
 /// both read the account through one credential.
 fn deepseek_api_key(
-  source : @llm.ProviderConfigSource,
+  source : @provider.ProviderConfigSource,
 ) -> String? raise @posoco.CompositionError {
   let credential = source.effective_credential("deepseek")
   match credential {
@@ -108,7 +108,7 @@ fn deepseek_api_key(
 /// endpoint lives on the platform root, not under the chat prefix.
 pub fn DeepSeekProvider::balance_source(
   _self : DeepSeekProvider,
-  source : @llm.ProviderConfigSource,
+  source : @provider.ProviderConfigSource,
 ) -> DeepSeekBalanceSource? raise @posoco.CompositionError {
   let api_key = match deepseek_api_key(source) {
     Some(value) => value
@@ -130,13 +130,13 @@ fn deepseek_setting_effort_supported(effort : String) -> Bool {
 }
 
 ///|
-pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
+pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
   self : DeepSeekProvider,
-  source : @llm.ProviderConfigSource,
-) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
+  source : @provider.ProviderConfigSource,
+) -> @provider.ProviderBuildResult raise @posoco.CompositionError {
   let api_key = match deepseek_api_key(source) {
     Some(value) => value
-    None => return @llm.ProviderBuildResult::Unconfigured
+    None => return @provider.ProviderBuildResult::Unconfigured
   }
   let model = match deepseek_setting_string(source, "model") {
     Some(value) => value
@@ -193,13 +193,13 @@ pub impl @llm.ProviderFactory for DeepSeekProvider with fn build(
   // without needing a credential snapshot.
   let pricing_borrowed : &@devkit.PricingSource = DeepSeekPricingSource::{ }
   @devkit.pricing_registry_register("deepseek", pricing_borrowed)
-  @llm.ProviderBuildResult::Ready(
+  @provider.ProviderBuildResult::Ready(
     catalog.with_cached_context_windows(source.cached_models),
   )
 }
 
 ///|
-pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn provider_id(
+pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn provider_id(
   _self : DeepSeekProvider,
 ) -> String {
   "deepseek"
@@ -209,13 +209,13 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn provider_i
 /// Explicit live model discovery. Unlike `build`, this path performs exactly
 /// one authenticated `/models` request and fails composition on transport or
 /// schema errors; it never falls back to the configured static model.
-pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
+pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
   self : DeepSeekProvider,
-  source : @llm.ProviderConfigSource,
-) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
+  source : @provider.ProviderConfigSource,
+) -> @provider.ProviderBuildResult raise @posoco.CompositionError {
   let api_key = match deepseek_api_key(source) {
     Some(value) => value
-    None => return @llm.ProviderBuildResult::Unconfigured
+    None => return @provider.ProviderBuildResult::Unconfigured
   }
   let model = match deepseek_setting_string(source, "model") {
     Some(value) => value
@@ -277,30 +277,30 @@ pub impl @llm.RefreshableProviderFactory for DeepSeekProvider with fn refresh(
   // newest refresh so the /model catalog pull stays live.
   let pricing_borrowed : &@devkit.PricingSource = DeepSeekPricingSource::{ }
   @devkit.pricing_registry_register("deepseek", pricing_borrowed)
-  @llm.ProviderBuildResult::Ready(port.model_catalog_from_models(models))
+  @provider.ProviderBuildResult::Ready(port.model_catalog_from_models(models))
 }
 
 ///|
 /// Provider-owned API-key login. The host supplies only a provider-neutral
 /// secret prompt; validation and credential shape stay in this extension.
-pub impl @llm.ApiKeyFactory for DeepSeekProvider with fn provider_id(
+pub impl @provider.ApiKeyFactory for DeepSeekProvider with fn provider_id(
   _self : DeepSeekProvider,
 ) -> String {
   "deepseek"
 }
 
 ///|
-pub extend DeepSeekProvider with @posoco/ext-llm.ApiKeyFactory::{login}
+pub extend DeepSeekProvider with @provider.ApiKeyFactory::{login}
 
 ///|
-pub impl @llm.ApiKeyFactory for DeepSeekProvider with fn credential_id(
+pub impl @provider.ApiKeyFactory for DeepSeekProvider with fn credential_id(
   _self : DeepSeekProvider,
 ) -> String {
   "deepseek"
 }
 
 ///|
-pub impl @llm.ApiKeyFactory for DeepSeekProvider with fn login(
+pub impl @provider.ApiKeyFactory for DeepSeekProvider with fn login(
   _self : DeepSeekProvider,
   interaction : &@oauth.AuthPromptInteraction,
 ) -> @oauth.ApiKeyCredential raise @oauth.OAuthError {
