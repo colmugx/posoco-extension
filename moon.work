@@ -60,6 +60,7 @@ members = [
   "./posoco-kit-lody",
   "./posoco-kit-model-management",
   "./posoco-kit-paseo",
+  "./posoco-kit-provider",
   "./posoco-kit-responses",
   "./posoco-kit-subagent",
   "./posoco-ext-zcode",
