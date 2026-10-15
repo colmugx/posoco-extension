@@ -542,6 +542,7 @@ pub(all) struct MagpieUsageRequestRow {
   output_tokens : Int?
   cache_read_tokens : Int?
   cache_write_tokens : Int?
+  cache_write_1h_tokens : Int?
   reasoning_tokens : Int?
   cost : Double?
   priced : Bool?
@@ -571,6 +572,7 @@ pub(all) struct MagpieUsageSummary {
   output_tokens : Int?
   cache_read_tokens : Int?
   cache_write_tokens : Int?
+  cache_write_1h_tokens : Int?
   reasoning_tokens : Int?
   cost : Double?
   unpriced : Int?
