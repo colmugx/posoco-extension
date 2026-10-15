@@ -795,27 +795,22 @@ async fn main {
               },
               @posoco.StreamMode::NoStream,
             )
-            guard first.completion.message.tool_calls.length() > 0 else {
+            if first.completion.message.tool_calls.is_empty() {
               ctx.skip("tool round trip: model answered without calling the tool")
-              return
-            }
+            } else {
             // Step 3: validate call identity and arguments.
             let call = first.completion.message.tool_calls[0]
             let args_ok = call.arguments is Json::Object(input) &&
               input.get("city") is Some(Json::String(_))
-            guard call.name == @posoco.ToolName::unchecked("get_weather") &&
-              args_ok else {
-              ctx.fail(
-                "tool round trip: tool_use identity/args mismatch",
-              )
-              return
-            }
+            if call.name != @posoco.ToolName::unchecked("get_weather") ||
+              !args_ok {
+              ctx.fail("tool round trip: tool_use identity/args mismatch")
+            } else {
             // Steps 4–5: deterministic result replayed in the same session;
             // the kit correlates the tool_result to this exact call id.
             if !ctx.reserve_billable() {
               ctx.skip("tool round trip second turn: billable budget exhausted")
-              return
-            }
+            } else {
             ctx.requests += 1
             let second = runtime
             .model_port()
@@ -869,6 +864,9 @@ async fn main {
                 "tool round trip: final assistant response was empty",
               )
             }
+            } // Second inference was approved.
+            } // Tool call identity and arguments validated.
+            } // Model emitted at least one tool call.
           } catch {
             error =>
               ctx.fail(
