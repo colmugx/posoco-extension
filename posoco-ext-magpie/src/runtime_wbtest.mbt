@@ -125,7 +125,7 @@ async test "switching models goes through the manager surface" {
   // Unknown ids are argument errors; selection unchanged.
   try
     runtime.invoke(
-      "model",
+      "magpie_model",
       Json::object({ "model": Json::string("nope/gone") }),
     )
   catch {
@@ -152,7 +152,7 @@ async test "switching effort applies and rejects unadvertised levels" {
   inspect(runtime.manager.active_selection().effort == Some("high"), content="true")
   try
     runtime.invoke(
-      "model",
+      "magpie_model",
       Json::object({ "effort": Json::string("ultra") }),
     )
   catch {
