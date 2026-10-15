@@ -36,8 +36,8 @@ async test "concurrent guest requests remain correlated and are constrained by c
       #|}
     // Test double only: this is not a Posoco governance adapter.
     let invoker = EchoInvoker::{ calls: [], }
-    let artifact = runtime.build(source)
-    let result = runtime.run(
+    let artifact = test_program(group, source)
+    let result = runtime.run_file(
       artifact,
       {},
       invocation_id="join",
@@ -110,8 +110,8 @@ async test "concurrent out-of-order replies stay correlated per request" {
       #|  }
       #|}
     let invoker = ReversedInvoker::{ calls: [], }
-    let artifact = runtime.build(source)
-    let result = runtime.run(
+    let artifact = test_program(group, source)
+    let result = runtime.run_file(
       artifact,
       {},
       invocation_id="reversed",
@@ -145,14 +145,14 @@ async test "missing Posoco capability is an explicit outcome, not a provider byp
       #|async fn run(ctx : @sdk.Context, input : Json) -> @sdk.Outcome {
       #|  ctx.call("read", input)
       #|}
-    let artifact = runtime.build(source)
-    let result = runtime.run(artifact, {}, invocation_id="unavailable", tools=[
+    let artifact = test_program(group, source)
+    let result = runtime.run_file(artifact, {}, invocation_id="unavailable", tools=[
       "read",
     ])
     assert_true(
       result.outcome is @protocol.Failure(code="ToolInvocationUnavailable", ..),
     )
-    let denied = runtime.run(artifact, {}, invocation_id="denied")
+    let denied = runtime.run_file(artifact, {}, invocation_id="denied")
     assert_true(
       denied.outcome is @protocol.Failure(code="CapabilityDenied", ..),
     )

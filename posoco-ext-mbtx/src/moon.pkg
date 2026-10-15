@@ -16,6 +16,8 @@ options(
     "filesystem.native.mbt": [ "native" ],
     "filesystem.js.mbt": [ "js" ],
     "runtime_test.mbt": [ "native", "js" ],
+    "fixture_native_test.mbt": [ "native" ],
+    "fixture_js_test.mbt": [ "js" ],
   },
 )
 

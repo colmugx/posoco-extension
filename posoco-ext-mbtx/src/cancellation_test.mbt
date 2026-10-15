@@ -27,13 +27,19 @@ async test "cancellation joins pending calls and the same invocation id can be r
       #|async fn run(ctx : @sdk.Context, input : Json) -> @sdk.Outcome {
       #|  ctx.call("read", input)
       #|}
-    let artifact = runtime.build(source)
+    let artifact = test_program(group, source)
     let invoker = BlockingInvoker::{
       entered: @aqueue.Queue(kind=Blocking(1)),
       settled: false,
     }
     let call = group.spawn(allow_failure=true, () => {
-      runtime.run(artifact, {}, invocation_id="retry", tools=["read"], invoker~)
+      runtime.run_file(
+        artifact,
+        {},
+        invocation_id="retry",
+        tools=["read"],
+        invoker~,
+      )
     })
     @async.with_timeout(5000, () => invoker.entered.get())
     let cancellation_started = @async.now()
@@ -48,7 +54,7 @@ async test "cancellation joins pending calls and the same invocation id can be r
     assert_true(@async.now() - cancellation_started < 3000L)
     assert_true(invoker.settled)
     assert_false(runtime.cancel("retry"))
-    let retry = runtime.run(
+    let retry = runtime.run_file(
       artifact,
       { "value": 2 },
       invocation_id="retry",
@@ -75,10 +81,10 @@ async test "wall clock timeout does not close the runtime" {
       #|  if input != Json::boolean(true) { @async.sleep(60000) }
       #|  @sdk.Outcome::Success(content="done", structured=None)
       #|}
-    let artifact = runtime.build(source)
+    let artifact = test_program(group, source)
     let timeout_started = @async.now()
     try
-      runtime.run(
+      runtime.run_file(
         artifact,
         Json::boolean(false),
         invocation_id="timeout",
@@ -91,7 +97,7 @@ async test "wall clock timeout does not close the runtime" {
       _ => fail("expected invocation timeout")
     }
     assert_true(@async.now() - timeout_started < 3000L)
-    let result = runtime.run(
+    let result = runtime.run_file(
       artifact,
       Json::boolean(true),
       invocation_id="timeout",

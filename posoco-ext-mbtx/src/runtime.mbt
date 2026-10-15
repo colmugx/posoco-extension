@@ -3,6 +3,7 @@ pub using @protocol {type Outcome}
 
 ///|
 pub suberror RuntimeError {
+  ToolchainUnavailable(String)
   BuildFailed(String)
   ProtocolFailure(String)
   GuestFailure(String)
@@ -38,52 +39,37 @@ pub(all) struct InvocationResult {
 }
 
 ///|
-pub struct Artifact {
-  priv path : String
-  priv workspace : String
-  priv key : String
-}
+/// Auto prefers moonx; Moon uses build-only followed by a directly owned moonrun.
+pub(all) enum Launcher {
+  Auto
+  Moon
+  Moonx
+} derive(Debug, Eq)
 
 ///|
-pub fn Artifact::identity(self : Artifact) -> String {
-  let parts = self.workspace.split("/").to_array()
-  parts[parts.length() - 1].to_owned()
-}
+pub extend Launcher with Debug::{to_repr}
+
+///|
+pub extend Launcher with Eq::{equal, not_equal}
 
 ///|
 pub struct Runtime {
-  priv sdk_source_root : String
-  priv async_source_root : String
-  priv fuwaroid_source_root : String
+  priv launcher : Launcher
   priv moon : String
+  priv moonx : String
   priv moonrun : String
-  priv cache : Map[String, Artifact]
-  priv build_lock : @async.Mutex
   priv active : Map[String, () -> Unit]
   priv mut closed : Bool
-  priv mut clearing : Bool
 }
 
 ///|
 pub fn Runtime::Runtime(
-  sdk_source_root~ : String,
-  async_source_root~ : String,
-  fuwaroid_source_root~ : String,
+  launcher~ : Launcher = Auto,
   moon~ : String = "moon",
+  moonx~ : String = "moonx",
   moonrun~ : String = "moonrun",
 ) -> Runtime {
-  {
-    sdk_source_root,
-    async_source_root,
-    fuwaroid_source_root,
-    moon,
-    moonrun,
-    cache: Map([]),
-    build_lock: @async.Mutex(),
-    active: Map([]),
-    closed: false,
-    clearing: false,
-  }
+  { launcher, moon, moonx, moonrun, active: Map([]), closed: false, }
 }
 
 ///|
@@ -98,34 +84,11 @@ pub fn Runtime::cancel(self : Runtime, invocation_id : String) -> Bool {
 }
 
 ///|
-pub async fn Runtime::clear_cache(self : Runtime) -> Unit {
-  self.build_lock.acquire()
-  defer self.build_lock.release()
-  if !self.active.is_empty() {
-    raise RuntimeError::Invalid(
-      "cannot clear artifacts while invocations are active",
-    )
-  }
-  self.clearing = true
-  defer {
-    self.clearing = false
-  }
-  errdefer {
-    self.closed = true
-  }
-  for key, artifact in self.cache.copy() {
-    remove_directory(artifact.workspace)
-    self.cache.remove(key)
-  }
-}
-
-///|
-pub async fn Runtime::close(self : Runtime) -> Unit {
+pub fn Runtime::close(self : Runtime) -> Unit raise RuntimeError {
   if !self.active.is_empty() {
     raise RuntimeError::Invalid(
       "cancel and join active invocations before closing runtime",
     )
   }
   self.closed = true
-  self.clear_cache()
 }

@@ -1,22 +1,10 @@
 ///|
 #module("node:fs")
-extern "js" fn node_read_file(path : String, encoding : String) -> String = "readFileSync"
-
-///|
-#module("node:fs")
 extern "js" fn node_write_file(path : String, text : String) -> Unit = "writeFileSync"
-
-///|
-#module("node:fs")
-extern "js" fn node_list(path : String) -> FixedArray[String] = "readdirSync"
 
 ///|
 #external
 priv type FsOptions
-
-///|
-#module("node:fs")
-extern "js" fn node_mkdir(path : String, options : FsOptions) -> Unit = "mkdirSync"
 
 ///|
 #module("node:fs")
@@ -39,18 +27,6 @@ extern "js" fn node_realpath(path : String) -> String = "realpathSync"
 extern "js" fn node_tmpdir() -> String = "tmpdir"
 
 ///|
-#external
-priv type FsStat
-
-///|
-#module("node:fs")
-extern "js" fn node_stat(path : String) -> FsStat = "lstatSync"
-
-///|
-extern "js" fn stat_kind(stat : FsStat) -> String =
-  #| s => s.isFile() ? 'file' : s.isDirectory() ? 'directory' : 'unsupported'
-
-///|
 extern "js" fn fs_capture(action : () -> String) -> String =
   #| f => { try { return JSON.stringify({ok: true, value: f()}); } catch (e) { return JSON.stringify({ok: false, error: String(e)}); } }
 
@@ -69,8 +45,8 @@ fn temporary_directory(prefix : String) -> String raise {
 }
 
 ///|
-fn read_text(path : String) -> String raise {
-  fs_value(() => node_read_file(path, "utf8"))
+fn canonical_path(path : String) -> String raise {
+  fs_value(() => node_realpath(path))
 }
 
 ///|
@@ -84,16 +60,6 @@ fn write_text(path : String, text : String) -> Unit raise {
 }
 
 ///|
-fn make_directory(path : String) -> Unit raise {
-  ignore(
-    fs_value(() => {
-      node_mkdir(path, recursive_options())
-      ""
-    }),
-  )
-}
-
-///|
 fn remove_directory(path : String) -> Unit raise {
   ignore(
     fs_value(() => {
@@ -101,28 +67,4 @@ fn remove_directory(path : String) -> Unit raise {
       ""
     }),
   )
-}
-
-///|
-fn list_directory(path : String) -> Array[String] raise {
-  let encoded = fs_value(() => Json(node_list(path)).stringify())
-  match @json.parse(encoded) {
-    Array(values) =>
-      values.map(value => {
-        match value {
-          String(name) => name
-          _ => raise Failure::Failure("invalid directory entry")
-        }
-      })
-    _ => raise Failure::Failure("invalid directory envelope")
-  }
-}
-
-///|
-fn path_kind(path : String) -> String raise {
-  let kind = fs_value(() => stat_kind(node_stat(path)))
-  if kind == "unsupported" {
-    raise Failure::Failure("unsupported build resource kind: " + path)
-  }
-  kind
 }

@@ -1,196 +1,150 @@
 # posoco-ext-mbtx
 
-An experimental **MoonBit guest runtime for Posoco Code Mode**. Programs perform
-computation and compose capabilities; MBTX is not a shell or a command runner.
+An experimental **MoonBit guest runtime for Posoco Code Mode**. MBTX executes
+programs, not shell commands. Plugin Mode and Posoco-scoped tool invocation are
+not implemented; this package does not register an Extension or ToolProvider yet.
 
-This is a breaking replacement of the previous extension, not a compatibility
-update. The old `MbtxTools`, `cmd`, command allowlist, prompt charter, permission
-exemptions and sandbox escalation APIs are gone.
+## Prerequisite: an installed MoonBit runner
 
-## What is implemented
+The user provides the MoonBit toolchain or a callable `moonx`. Nothing here
+installs a compiler, locates `.mooncakes`, vendors dependency sources, or maintains
+an alternative package resolver.
 
-- A host `Runtime` that compiles programs without executing them, caches
-  artifacts, and launches a short-lived Wasm guest for each invocation.
-- A bounded, versioned, bidirectional JSON protocol over stdio.
-- A guest SDK with `Context`, injectable `ToolClient`, structured `Outcome` and logs.
-- A guest stdio bridge whose request ids, pending registrations, reply
-  settlement and closing state are owned by one private single-writer registry
-  (`colmugx/fuwaroid@0.3.1`). Frame writes, waiter waits and all other I/O stay
-  on ordinary structured tasks outside that registry loop; send refusals, a
-  stopped registry and unknown or duplicate replies fail the invocation
-  explicitly instead of dropping or stranding a waiter.
-- Native and Node-compatible JS host adapters, including cancellable I/O,
-  terminate/hard-kill/reap, and scoped temporary-workspace cleanup.
+`Runtime()` probes `moonx --version` first, then `moon --version` if moonx is
+unavailable. Explicit `launcher=Moon` or `launcher=Moonx` selects one path;
+`moon`, `moonx`, and `moonrun` executable names can be overridden. Missing runners
+produce `ToolchainUnavailable` with the probe diagnostics.
 
-**What is not implemented:** Posoco-scoped tool invocation, Agent tool
-registration, Plugin Mode, dynamic catalog integration, or the Cetas plugin
-manager. No `ToolProvider` or `Extension` is registered by this package yet.
+- **Moonx:** runs a normal `.mbtx` file with `--target wasm` and the host's
+  `--experimental-policy`. Runtime does not invoke `moon` or `moonrun` separately.
+- **Moon:** uses `moon run --build-only --target wasm --output-json`, then directly
+  owns the reported artifact's `moonrun --policy` process. It does not leave a
+  `moon run` wrapper between cancellation and the guest.
 
-`ToolInvoker` is a trusted host integration seam for the future Posoco adapter,
-not a governance implementation. Tests use explicit fakes. Production code must
-not implement this seam by directly calling a `ToolProvider`, duplicating the
-permission pipeline, or fabricating child effects. Without an adapter, an
-otherwise permitted tool request returns `ToolInvocationUnavailable`.
+Imports, dependency resolution/downloads and compiler dependency caches belong to
+MoonBit. There is no offline/frozen requirement. Runtime removes its temporary
+scripts, policy files and build outputs when the invocation settles; it does not
+clear the user's toolchain caches.
 
-## Package boundaries
-
-| Package | Responsibility |
-|---|---|
-| `colmugx/posoco-ext-mbtx` | Host runtime, build/cache, process lifecycle, invocation bridge |
-| `colmugx/posoco-ext-mbtx/protocol` | Framing, messages, structured outcomes and host protocol state machine |
-| `colmugx/posoco-ext-mbtx/sdk` | Guest-facing Context and injectable ToolClient/LogSink |
-| `colmugx/posoco-ext-mbtx/sdk/stdio` | Guest stdio transport, `serve` and the single-writer request registry |
-
-The SDK does not depend on Posoco, its Kernel, or the host runtime. The guest
-bridge's only dependency beyond `moonbitlang/async` is the single-writer
-registry library `colmugx/fuwaroid`, which the host snapshots like the async
-sources. The current wire protocol number is 1, but the ABI remains
-experimental until the real Posoco adapter has been integrated and verified.
-
-## Guest program
-
-The current builder accepts ordinary MoonBit declarations defining this handler:
+## Host API
 
 ```mbt nocheck
-async fn run(ctx : @sdk.Context, input : Json) -> @sdk.Outcome {
-  ctx.log("info", "computing")
-  let values = [1, 2, 3]
-  let sum = values.fold(init=0, (a, b) => a + b)
-  @sdk.Outcome::Success(
-    content="computed",
-    structured=Some({ "sum": sum, "input": input }),
-  )
-}
-```
-
-The host supplies the entry point calling `serve(run)` and owns the build
-manifest. This is not the legacy arbitrary `.mbtx` main-program interface.
-Available package aliases are `@sdk`, `@mbtx` (stdio), `@protocol`, `@async` and
-`@json`, plus the MoonBit prelude. Guest code does not choose dependencies or
-supply build hooks.
-
-To compose a tool, the handler uses `ctx.call(name, arguments)`. Its result is a
-structured `Outcome`, not parsed stdout. Several calls can be awaited with normal
-MoonBit structured concurrency. Requests outside the effective tool-name set
-return `CapabilityDenied`; a closed Context returns `ScopeClosed`. The host
-checks the effective tool-name set again before dispatch. These checks are
-attenuation, not a replacement for Posoco governance.
-
-Normal guest code should not write stdout; use `ctx.log`. Unframed debug output
-is a protocol error, never an implicit successful result.
-
-## Host lifecycle
-
-The host provisions trusted SDK sources and source snapshots of the
-already-installed `moonbitlang/async@0.22.4` and `colmugx/fuwaroid@0.3.1`.
-There is no installation or dependency download during an invocation. `moon`
-and `moonrun` must be available to the host; explicit executable paths can be
-supplied to the constructor.
-
-Illustrative host code (the paths are relative to this module in the workspace):
-
-```mbt nocheck
-let runtime = @mbtx.Runtime(
-  sdk_source_root="src",
-  async_source_root="../.mooncakes/moonbitlang/async",
-  fuwaroid_source_root="../.mooncakes/colmugx/fuwaroid",
-)
-let artifact = runtime.build(source)
-let result = runtime.run(artifact, input, invocation_id="operation-1")
+let runtime = @mbtx.Runtime()
+let result = runtime.run(source, input, invocation_id="operation-1")
 // Consume result.outcome, result.logs and result.stderr.
 runtime.close()
 ```
 
-Real hosts must put `close()` in protected cleanup. `cancel(invocation_id)` requests
-cancellation; the caller must still join the running `run()` call. Cancellation
-closes the invocation, not the Runtime. Retrying after cancellation or timeout is
-supported. There is no automatic replay of partially completed workflows.
+`run` accepts a **complete `.mbtx` script**, including its import block and main.
+It no longer accepts a handler fragment or an Artifact handle. The old `build`,
+`clear_cache`, `Artifact` and dependency-source-root constructor arguments are gone.
 
-`clear_cache()` is allowed only while no invocation is active. It invalidates
-existing Artifact handles. `close()` closes admission and clears artifacts;
-callers must cancel and join active invocations first. Filesystem cleanup errors
-are surfaced, not silently swallowed; a failed cache cleanup closes admission
-and can be retried with `close()`.
+`run_file(path, input, invocation_id=...)` executes an existing `.mbtx` file.
+With the explicit Moon launcher it also accepts a local main package or an
+already-built Wasm artifact. It does not discover or register plugin tools.
 
-## Build/cache contract
+Hosts must close the Runtime in cleanup after joining active calls. Calling
+`cancel(invocation_id)` requests cancellation; the caller must still join that
+`run` or `run_file` call. Cancellation ends the invocation, not the Runtime.
+`close()` is synchronous, closes admission, and refuses while calls are active.
+There is no automatic replay or rollback of effects.
 
-The builder creates a host-owned workspace containing the program, SDK and
-snapshots of the prepared `moonbitlang/async` and `colmugx/fuwaroid`
-dependencies, resolved as workspace members. It invokes `moon run --build-only`
-with `--frozen --target wasm --output-json`; it never runs the guest during
-build and the guest never downloads dependencies. The toolchain and provisioned
-SDK/dependency roots are trusted host inputs, not paths supplied by the guest.
+## Guest SDK: normal MoonBit packages
 
-Cache lookup compares an exact content descriptor, not a collision-prone hash:
-program, SDK sources/manifests, dependency sources/manifests, reported MoonBit
-and moonrun versions, generated build configuration, target and protocol number.
-The installed toolchain/core library is assumed immutable for a given reported
-version. Successful builds are published only after an artifact is reported;
-failed/cancelled builds are cleaned and cannot poison a ready artifact.
+The SDK is imported like any other MoonBit package. A complete script looks like
+this **once a compatible SDK module version is available through Mooncakes**:
 
-The cache is instance-scoped (not a persistent cross-restart cache), holds at
-most 16 artifacts, and requires explicit idle cleanup when full. Artifact
-handles pin their implementation; invocation permissions are supplied separately
-and are never cached as build authorization. Builds are serialized; build timeout
-starts after acquiring the build slot. Source is limited to 1 MiB.
+```mbt nocheck
+import {
+  "colmugx/posoco-ext-mbtx@0.1.0/sdk",
+  "colmugx/posoco-ext-mbtx@0.1.0/sdk/stdio" @mbtx,
+  "moonbitlang/async@0.22.4",
+}
 
-## Isolation and limits
+async fn run(ctx : @sdk.Context, input : Json) -> @sdk.Outcome {
+  ctx.log("info", "computing")
+  @sdk.Outcome::Success(content="done", structured=Some(input))
+}
 
-Guest target: **Wasm only**. Host targets: **native and JS**. These are separate
-choices; a JS host still runs the guest under moonrun, not as JavaScript.
+async fn main {
+  @mbtx.serve(run)
+}
+```
 
-The generated moonrun policy denies guest filesystem read/write, network,
-process spawning and host-environment inheritance. There is no process API or
-sandbox-bypass option in the SDK. Host compiler/launcher subprocesses are runtime
-implementation details, not capabilities of the program. The JS launcher keeps
-only host PATH for executable resolution; guest environment access is still
-denied by the policy.
+The new SDK ABI in this checkout has not been published by this change. The
+example is not a claim that the registry currently contains that ABI. Local SDK
+integration tests use a normal `moon.work` dependency on this module and compile
+their test main package normally; they do not copy SDK or third-party sources.
+Runtime itself has no SDK file list, SDK version pin, or SDK source path.
+
+| Package | Responsibility |
+|---|---|
+| `colmugx/posoco-ext-mbtx` | Host invocation, runner selection and process lifecycle |
+| `colmugx/posoco-ext-mbtx/protocol` | Framing, outcomes and host protocol state machine |
+| `colmugx/posoco-ext-mbtx/sdk` | Context, injectable ToolClient/LogSink |
+| `colmugx/posoco-ext-mbtx/sdk/stdio` | `serve` and private fuwaroid request registry |
+
+The SDK does not depend on Posoco's Kernel or host Runtime. Fuwaroid is an ordinary
+SDK implementation dependency, not a source directory passed to Runtime. Its
+single-writer registry owns request ids, pending waiters and settlement; I/O stays
+on structured tasks outside the actor. Unknown or duplicate replies fail explicitly.
+
+`ctx.call(name, arguments)` returns a structured Outcome. Requests outside the
+effective tool-name set return `CapabilityDenied`. Without the future Posoco
+adapter, otherwise allowed calls return `ToolInvocationUnavailable`.
+
+`ToolInvoker` is a trusted integration seam, **not** a governance implementation.
+Do not implement it by directly calling a ToolProvider or fabricating child
+effects. Tests use fakes and do not certify Posoco permissions or scheduling.
+
+## Protocol, isolation and limits
+
+Guests run as linear-memory Wasm; host targets are native and Node-compatible JS.
+The host supplies a deny-by-default policy for guest filesystem, network, process
+spawning and environment access. Script-embedded policy does not replace it.
+The compiler/runner inherits its normal host environment to resolve dependencies;
+**guest execution policy does not sandbox compilation or dependency build hooks**.
+Toolchains and dependencies must be trusted. This is not a hermetic build service.
+
+Transport is bounded UTF-8 JSON, one complete object per LF-delimited frame.
+stdout is protocol only; stderr is collected separately. Use `ctx.log`, not println.
+
+```text
+Guest → Host: hello(protocol)
+Host → Guest: invoke(input, tools, max_pending, max_frame_bytes)
+Guest → Host: request(id, name, arguments)
+Host → Guest: reply(id, outcome)
+Guest → Host: log(level, content)
+Guest → Host: result(outcome)
+```
+
+Multiple requests may be in flight. Invalid framing/UTF-8/JSON, unknown or duplicate
+ids, result-with-pending-requests, partial EOF and successful exit without a final
+result are errors. Results are accepted only after process exit and scope
+settlement. Structured JSON null remains distinct from an absent field.
 
 | Limit | Default |
 |---|---:|
-| Build timeout (after admission) | 30 seconds |
-| Invocation wall clock | 120 seconds |
-| Handshake timeout | 5 seconds |
-| Frame size | 64 KiB (also the maximum accepted configuration) |
-| Concurrent pending tool requests | 8 |
-| Total tool requests per invocation | 128 |
-| Combined stdout/stderr bytes | 1 MiB |
-| Process termination grace before hard kill | 1 second |
+| Entire invocation, including runner probe and compilation | 120 seconds |
+| Initial hello (includes compilation for Moonx) | 30 seconds |
+| Source size | 1 MiB |
+| Frame size | 64 KiB, also maximum configurable size |
+| Pending tool requests | 8 |
+| Total tool requests | 128 |
+| Combined protocol stdout/stderr | 1 MiB |
+| Compiler/probe output collection | 1 MiB per command |
+| Termination grace before hard kill | 1 second |
 
-Limits fail closed; protocol bytes are not truncated into apparently valid
-messages. There is not yet a separate OS-enforced memory quota or CPU-fuel limit.
-The runtime does not support persistent workers, detached guest jobs, arbitrary
-guest imports, workflow checkpoint/resume, or plugin installation.
+Moon compile failures report `BuildFailed`. Moonx combines compilation and
+execution, so a failed launcher reports `GuestFailure` with its stderr, including
+compiler diagnostics. EOF before hello is reported immediately rather than
+waiting out the handshake timeout. Compiler/probe output has its own collection
+budget; guest protocol bytes are never silently truncated.
 
-## Protocol
-
-Transport is UTF-8 JSON with **one complete JSON object per LF-delimited frame**.
-Frame limits count bytes, not characters. JSON strings carry escaped newlines.
-stdout is protocol-only; stderr is a separate bounded diagnostic stream.
-
-```text
-Starting → Handshaking → Running → Closing → Terminated
-
-Guest → Host: hello(protocol)
-Host → Guest: invoke(input, tools, max_pending, max_frame_bytes)
-Guest → Host: request(id, name, arguments)   ┐ multiple requests may be in flight
-Host → Guest: reply(id, outcome)            ┘
-Guest → Host: log(level, content)
-Guest → Host: result(outcome)
-Host → Guest: cancel(reason)                (SDK-supported control message)
-```
-
-Host cancellation currently tears down the process scope directly; it does not
-rely on a cooperative guest cancel acknowledgement. Ordinary JS I/O waits use
-AbortSignal-aware promises so cancellation reaches the process cleanup. Only the
-protected termination/reap wait is deliberately non-cancellable.
-
-Invalid UTF-8/JSON, unknown message types, version mismatch, duplicate request
-IDs, excess pending/total requests, replies without correlation, partial EOF,
-messages after final result and final result with pending requests are rejected.
-An exit code of zero without a final result is failure. A result is accepted only
-after process exit and scope settlement. A present structured JSON null remains
-distinct from an absent `structured` field.
+There is no separate OS-enforced memory quota or CPU fuel budget. Persistent
+workers, detached services, workflow recovery, dynamic tool registration and
+Plugin Mode remain outside this implementation. No Posoco core changes are needed
+or made by this runtime refactor.
 
 ## Verification
 
@@ -205,6 +159,6 @@ moon -C external/cetas/extension/posoco-ext-mbtx test --target js -p colmugx/pos
 moon -C external/cetas/extension/posoco-ext-mbtx test --target wasm -p colmugx/posoco-ext-mbtx/sdk/stdio --output-json
 ```
 
-The runtime tests compile and run actual guests. The tool bridge tests use fakes
-and do **not** certify Posoco permissions, effect trees or scheduling. Those
-integration tests belong to the future scoped-invocation adapter milestone.
+Runtime tests require both installed runners to verify both launch paths. SDK
+fixtures are ordinary local packages; standalone runner fixtures import the
+released async module normally and exercise real Wasm execution.

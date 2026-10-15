@@ -1,13 +1,10 @@
 ///|
-async test "build failure does not poison a ready artifact and changed source rebuilds" {
+async test "compiler diagnostics are surfaced and a failed source does not disable retry" {
   let runtime = test_runtime()
   @async.with_task_group(group => {
     group.add_defer(() => @async.protect_from_cancel(() => runtime.close()))
-    let good = runtime.build(compute_source)
     try
-      runtime.build(
-        "async fn run(_ctx : @sdk.Context, _input : Json) -> @sdk.Outcome { unknown_value }",
-      )
+      runtime.run("fn main { unknown_value }", {}, invocation_id="compile")
     catch {
       @posoco-ext-mbtx.RuntimeError::BuildFailed(diagnostics) =>
         assert_true(diagnostics.contains("unknown_value"))
@@ -15,17 +12,15 @@ async test "build failure does not poison a ready artifact and changed source re
     } noraise {
       _ => fail("invalid source compiled successfully")
     }
-    assert_eq(runtime.build(compute_source).identity(), good.identity())
-    let changed = runtime.build(
-      compute_source + "\n// distinct program revision\n",
-    )
-    assert_true(changed.identity() != good.identity())
-    runtime.clear_cache()
-    try runtime.run(good, {}, invocation_id="stale") catch {
-      @posoco-ext-mbtx.RuntimeError::Invalid(_) => ()
+    let good = test_program(group, compute_source)
+    let result = runtime.run_file(good, {}, invocation_id="compile")
+    assert_true(result.outcome is @protocol.Success(..))
+    runtime.close()
+    try runtime.run_file(good, {}, invocation_id="closed") catch {
+      @posoco-ext-mbtx.RuntimeError::Closed => ()
       error => raise error
     } noraise {
-      _ => fail("cleared artifact remained executable")
+      _ => fail("closed runtime accepted an invocation")
     }
   }) catch {
     @posoco-ext-mbtx.RuntimeError::BuildFailed(message) => fail(message)
@@ -43,18 +38,18 @@ async test "protocol contamination and guest failure are not successful outputs"
       #|  println("debug output is not a frame")
       #|  @sdk.Outcome::Success(content="wrong", structured=None)
       #|}
-    let noisy = runtime.build(noisy_source)
-    try runtime.run(noisy, {}, invocation_id="noisy") catch {
+    let noisy = test_program(group, noisy_source)
+    try runtime.run_file(noisy, {}, invocation_id="noisy") catch {
       @posoco-ext-mbtx.RuntimeError::ProtocolFailure(reason) =>
         assert_true(reason.contains("JSON"))
       error => raise error
     } noraise {
       _ => fail("unframed stdout was accepted")
     }
-    let crashing = runtime.build(
-      "async fn run(_ctx : @sdk.Context, _input : Json) -> @sdk.Outcome { raise Failure::Failure(\"guest failed\") }",
+    let crashing = test_program(
+      group, "async fn run(_ctx : @sdk.Context, _input : Json) -> @sdk.Outcome { raise Failure::Failure(\"guest failed\") }",
     )
-    try runtime.run(crashing, {}, invocation_id="crash") catch {
+    try runtime.run_file(crashing, {}, invocation_id="crash") catch {
       @posoco-ext-mbtx.RuntimeError::GuestFailure(_) => ()
       error => raise error
     } noraise {
@@ -71,9 +66,9 @@ async test "output and child call budgets fail closed without disabling later in
   let runtime = test_runtime()
   @async.with_task_group(group => {
     group.add_defer(() => @async.protect_from_cancel(() => runtime.close()))
-    let artifact = runtime.build(compute_source)
+    let artifact = test_program(group, compute_source)
     try
-      runtime.run(artifact, {}, invocation_id="output", max_output_bytes=8)
+      runtime.run_file(artifact, {}, invocation_id="output", max_output_bytes=8)
     catch {
       @posoco-ext-mbtx.RuntimeError::ProtocolFailure(reason) =>
         assert_true(reason.contains("output budget"))
@@ -86,9 +81,9 @@ async test "output and child call budgets fail closed without disabling later in
       #|  ignore(ctx.call("read", {}))
       #|  ctx.call("read", {})
       #|}
-    let workflow = runtime.build(source)
+    let workflow = test_program(group, source)
     try
-      runtime.run(
+      runtime.run_file(
         workflow,
         {},
         invocation_id="calls",
@@ -103,7 +98,7 @@ async test "output and child call budgets fail closed without disabling later in
     } noraise {
       _ => fail("child call budget was ignored")
     }
-    let result = runtime.run(artifact, {}, invocation_id="output")
+    let result = runtime.run_file(artifact, {}, invocation_id="output")
     assert_true(result.outcome is @protocol.Success(..))
   }) catch {
     @posoco-ext-mbtx.RuntimeError::BuildFailed(message) => fail(message)
@@ -130,13 +125,19 @@ async test "an abandoned in-flight request exits promptly without a fabricated o
       #|    @protocol.Success(content="abandoned", structured=None)
       #|  })
       #|}
-    let artifact = runtime.build(source)
+    let artifact = test_program(group, source)
     let abandoned_started = @async.now()
     try
-      runtime.run(artifact, {}, invocation_id="abandoned", tools=["read"], invoker=BlockingInvoker::{
-        entered: @aqueue.Queue(kind=Blocking(1)),
-        settled: false,
-      })
+      runtime.run_file(
+        artifact,
+        {},
+        invocation_id="abandoned",
+        tools=["read"],
+        invoker=BlockingInvoker::{
+          entered: @aqueue.Queue(kind=Blocking(1)),
+          settled: false,
+        },
+      )
     catch {
       @posoco-ext-mbtx.RuntimeError::ProtocolFailure(reason) => {
         assert_true(reason.contains("pending"))
@@ -151,8 +152,8 @@ async test "an abandoned in-flight request exits promptly without a fabricated o
         assert_true(@async.now() - abandoned_started < 30000L)
       }
     }
-    let recovery = runtime.build(compute_source)
-    let result = runtime.run(recovery, {}, invocation_id="after-abandon")
+    let recovery = test_program(group, compute_source)
+    let result = runtime.run_file(recovery, {}, invocation_id="after-abandon")
     assert_true(result.outcome is @protocol.Success(..))
   }) catch {
     @posoco-ext-mbtx.RuntimeError::BuildFailed(message) => fail(message)

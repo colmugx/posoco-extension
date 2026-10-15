@@ -10,6 +10,7 @@ import {
 
 // Errors
 pub suberror RuntimeError {
+  ToolchainUnavailable(String)
   BuildFailed(String)
   ProtocolFailure(String)
   GuestFailure(String)
@@ -21,11 +22,6 @@ pub suberror RuntimeError {
 pub fn RuntimeError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
-pub struct Artifact {
-  // private fields
-}
-pub fn Artifact::identity(Self) -> String
-
 pub(all) struct Diagnostic {
   level : String
   content : String
@@ -38,15 +34,23 @@ pub(all) struct InvocationResult {
   logs : Array[Diagnostic]
 }
 
+pub(all) enum Launcher {
+  Auto
+  Moon
+  Moonx
+} derive(Eq, @debug.Debug)
+pub fn Launcher::equal(Self, Self) -> Bool
+pub fn Launcher::not_equal(Self, Self) -> Bool
+pub fn Launcher::to_repr(Self) -> @debug.Repr
+
 pub struct Runtime {
   // private fields
 }
-pub fn Runtime::Runtime(sdk_source_root~ : String, async_source_root~ : String, fuwaroid_source_root~ : String, moon? : String, moonrun? : String) -> Self
-pub async fn Runtime::build(Self, String, timeout_ms? : Int) -> Artifact
+pub fn Runtime::Runtime(launcher? : Launcher, moon? : String, moonx? : String, moonrun? : String) -> Self
 pub fn Runtime::cancel(Self, String) -> Bool
-pub async fn Runtime::clear_cache(Self) -> Unit
-pub async fn Runtime::close(Self) -> Unit
-pub async fn Runtime::run(Self, Artifact, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
+pub fn Runtime::close(Self) -> Unit raise RuntimeError
+pub async fn Runtime::run(Self, String, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
+pub async fn Runtime::run_file(Self, String, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
 
 // Type aliases
 pub using @protocol {type Outcome}

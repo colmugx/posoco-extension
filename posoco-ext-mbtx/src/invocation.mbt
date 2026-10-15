@@ -23,7 +23,8 @@ async fn communicate(
   let session = @protocol.HostSession(max_pending~, max_calls~)
   defer session.close()
   let writer = @async.Mutex()
-  let ready : @aqueue.Queue[Unit] = @aqueue.Queue(kind=Blocking(1))
+  let ready : @aqueue.Queue[Bool] = @aqueue.Queue(kind=Blocking(1))
+  let mut greeted = false
   let logs = []
   let stderr_bytes = []
   let mut total = 0
@@ -67,6 +68,7 @@ async fn communicate(
         for frame in decoder.feed(bytes) {
           match session.receive(@protocol.Message::from_json(frame)) {
             Ready => {
+              greeted = true
               send(
                 @protocol.Invoke(
                   input~,
@@ -75,7 +77,7 @@ async fn communicate(
                   max_frame_bytes=frame_limit,
                 ),
               )
-              ready.put(())
+              ready.put(true)
             }
             Call(id~, name~, arguments~) =>
               group.spawn_bg(() => {
@@ -105,8 +107,13 @@ async fn communicate(
         }
       }
       decoder.finish()
+      if !greeted {
+        ready.put(false)
+      }
     })
-    @async.with_timeout(handshake_ms, () => ready.get()) catch {
+    @async.with_timeout(handshake_ms, () => {
+      if !ready.get() { ignore(process.wait()) }
+    }) catch {
       error =>
         if error is @async.TimeoutError {
           raise RuntimeError::TimedOut("handshake")
@@ -134,9 +141,15 @@ async fn communicate(
 }
 
 ///|
-pub async fn Runtime::run(
+priv enum Program {
+  Source(String)
+  File(String)
+}
+
+///|
+async fn Runtime::execute(
   self : Runtime,
-  artifact : Artifact,
+  program : Program,
   input : Json,
   invocation_id~ : String,
   tools~ : Array[String] = [],
@@ -148,9 +161,6 @@ pub async fn Runtime::run(
   max_calls~ : Int32 = 128,
   max_output_bytes~ : Int32 = 1048576,
 ) -> InvocationResult {
-  if self.clearing {
-    raise RuntimeError::Invalid("artifact cache maintenance is in progress")
-  }
   if self.closed {
     raise RuntimeError::Closed
   }
@@ -171,12 +181,14 @@ pub async fn Runtime::run(
       "invalid resource limits or wildcard tool capability",
     )
   }
-  match self.cache.get(artifact.key) {
-    Some(cached) if cached.path == artifact.path => ()
-    _ =>
+  match program {
+    Source(source) if source == "" || @utf8.encode(source).length() > 1048576 =>
+      raise RuntimeError::Invalid("source must be 1..1048576 bytes")
+    File(path) if path == "" || path.has_prefix("-") =>
       raise RuntimeError::Invalid(
-        "artifact is not owned by this runtime or cache was cleared",
+        "program must be a nonempty file or package path",
       )
+    _ => ()
   }
   let tools = tools.copy()
   @async.with_task_group(group => {
@@ -189,18 +201,39 @@ pub async fn Runtime::run(
               scope.add_defer(() => remove_directory(directory))
               let policy = directory + "/policy.json"
               write_text(policy, guest_policy().stringify())
-              with_process(
-                self.moonrun,
-                [artifact.path, "--policy", policy],
-                Some(directory),
-                false,
-                process => {
-                  communicate(
-                    process, input, tools, invoker, max_frame_bytes, max_pending,
-                    max_calls, max_output_bytes, handshake_ms,
+              let launcher = self.resolve_launcher()
+              let path = match program {
+                Source(source) => {
+                  let path = directory + "/program.mbtx"
+                  write_text(path, source)
+                  path
+                }
+                File(path) => canonical_path(path)
+              }
+              let (command, args) = match launcher {
+                Moon => {
+                  let artifact = self.build_program(path, directory)
+                  (self.moonrun, [artifact, "--policy", policy])
+                }
+                Moonx => {
+                  if !path.has_suffix(".mbtx") {
+                    raise RuntimeError::Invalid(
+                      "moonx requires a .mbtx file; use the Moon launcher for a local package or Wasm artifact",
+                    )
+                  }
+                  (
+                    self.moonx,
+                    ["--target", "wasm", "--experimental-policy", policy, path],
                   )
-                },
-              )
+                }
+                Auto => abort("unresolved launcher")
+              }
+              with_process(command, args, None, true, process => {
+                communicate(
+                  process, input, tools, invoker, max_frame_bytes, max_pending, max_calls,
+                  max_output_bytes, handshake_ms,
+                )
+              })
             })
           }) catch {
             error =>
