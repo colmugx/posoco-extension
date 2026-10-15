@@ -231,8 +231,19 @@ pub fn matrix_from_report(
       Some(index) => trimmed[index + 1:].to_owned().trim(chars=" ").to_owned()
       None => ""
     }
+    // Evidence is per section, not per invocation. A read-only PASS
+    // must never inherit a "live-inference" label merely because paid
+    // probes were enabled elsewhere in the same run.
+    let evidence = if area == "Inference (billable)" ||
+      area == "Messages cache economics (billable)" ||
+      area == "One-hour cache writes" {
+      if source == "live-inference+read-only" { "live-inference" } else { "not-executed" }
+    } else {
+      "live-read-only"
+    }
+    let actual_evidence = if verdict_label == "SKIP" { "not-executed" } else { evidence }
     rows.push(
-      "| \{area} | \{capability} | \{verdict_label} | \{source} | \{gateway_version} | \{detail} |",
+      "| \{area} | \{capability} | \{verdict_label} | \{actual_evidence} | \{gateway_version} | \{detail} |",
     )
   }
   let out = StringBuilder()
