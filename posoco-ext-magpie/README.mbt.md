@@ -8,7 +8,7 @@ Independent Gateway-aware Model Manager for Posoco, not a provider hosted by
 `MagpieRuntime::activate(settings?, transport?)` is the one-call activation
 path: typed settings in (`base_url`, `gateway_key`, `enabled`, `model`,
 `effort`), manager + model port + intelligence wired, invalid settings
-recovered to defaults with a recorded reason. Activation never performs
+recovered to a disabled local configuration with a recorded reason. Activation never performs
 I/O — `on_start` refreshes the catalog and an offline gateway leaves the
 explicit offline state instead of failing startup; `on_shutdown`
 deactivates the runtime and drops owned observation state.
@@ -18,15 +18,14 @@ The runtime implements `@posoco.Extension` (manifest
 `@posoco.CommandPort`, and `@posoco.Lifecycle` following the repository's
 existing extension conventions — the same shape `posoco-ext-llm` and
 `posoco-ext-zai` use. The manager owns selection state; the runtime adds no
-competing registry. ext-llm's router can host the magpie port as an
-ordinary slot, verified by a composition test.
+competing registry. Magpie remains a peer-level Model Manager; no production dependency on ext-llm or its provider types is required.
 
 Commands (category `magpie`, following the existing `model` command
 conventions):
 
 | Command | Effect |
 |---|---|
-| `model` [model] [effort] | no args: structured catalog; with args: select model / apply effort (unknown/unadvertised → argument error) |
+| `magpie_model` [model] [effort] | no args: structured catalog; with args: select model / apply effort (unknown/unadvertised → argument error) |
 | `magpie_status` | gateway connection, selection + pending, catalog size, per-service availability, unconfigured reason |
 | `magpie_refresh` | re-read `/v1/models`; offline gateway → explicit failure outcome, not a crash |
 | `magpie_route` (session) | routing decision for a session; failures surface without session identifiers |
