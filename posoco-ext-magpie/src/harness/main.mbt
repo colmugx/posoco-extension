@@ -828,9 +828,9 @@ async fn main {
                   ),
                 ]),
                 @posoco.Message::AssistantMessage(
-                  content=[],
-                  tool_calls=[call],
-                  reasoning=None,
+                  content=first.completion.message.content,
+                  tool_calls=first.completion.message.tool_calls,
+                  reasoning=first.completion.message.reasoning,
                   finish_reason=@posoco.FinishReason::ToolCalls,
                 ),
                 @posoco.Message::ToolMessage(
