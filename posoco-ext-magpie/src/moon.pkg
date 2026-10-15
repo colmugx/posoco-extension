@@ -5,11 +5,6 @@ import {
   "colmugx/posoco-kit-responses" @responses,
   "posoco/kit-chat-completions" @chatkit,
   "colmugx/posoco-kit-rate-limit" @ratelimit,
-  // The next two are exercised only by the runtime composition tests
-  // (wbtest unit); the warnings about them being "unused" in the main unit
-  // are a known cross-unit artifact and do not affect CI.
-  "colmugx/posoco-kit-provider" @provider,
-  "posoco/ext-llm" @llm,
   "colmugx/posoco-kit-compact-summary" @summary,
   "moonbitlang/async",
   "moonbitlang/async/http",
