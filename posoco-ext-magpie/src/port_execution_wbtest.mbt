@@ -823,3 +823,36 @@ test "text-only model downgrades images to an explicit placeholder" {
   inspect(placeholder.contains("image/png"), content="true")
   inspect(placeholder.contains("does not accept image input"), content="true")
 }
+
+///|
+/// The public ModelPort must reject image input for an explicitly text-only
+/// catalog model before any HTTP request; internal shaping is not a promise
+/// that the execution path silently downgrades images.
+async test "text-only catalog blocks image inference before transport" {
+  let transport = chat_transport(posts=[])
+  let manager = manager_with(transport~, config=local_config())
+  refresh_ok(manager)
+  let port = select_and_port(manager, "openai/gpt-chat")
+  let input : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[
+      @posoco.Content::Text("look at this"),
+      @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
+    ]),
+  ]
+  try
+    port.chat(
+      exec_scope(session="image-text-only"),
+      input,
+      [],
+      chat_options(),
+      NoStream,
+    )
+  catch {
+    @posoco.ModelError::RequestBuild(detail) =>
+      inspect(detail.contains("images required"), content="true")
+    _ => fail("expected planning rejection for text-only image input")
+  } noraise {
+    _ => fail("text-only image input must not reach gateway")
+  }
+  inspect(transport.post_calls.length(), content="0")
+}
