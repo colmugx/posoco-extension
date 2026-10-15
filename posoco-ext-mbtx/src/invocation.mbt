@@ -112,7 +112,9 @@ async fn communicate(
       }
     })
     @async.with_timeout(handshake_ms, () => {
-      if !ready.get() { ignore(process.wait()) }
+      if !ready.get() {
+        ignore(process.wait())
+      }
     }) catch {
       error =>
         if error is @async.TimeoutError {
