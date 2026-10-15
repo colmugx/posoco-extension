@@ -45,7 +45,7 @@ fn msg_start(id~ : String, model~ : String) -> Array[String] {
 }
 
 ///|
-fn block_start(index~ : Int, block~ : Json) -> Array[String] {
+fn block_start(index~ : Int32, block~ : Json) -> Array[String] {
   sse_event(
     "content_block_start",
     Json::object({
@@ -57,7 +57,7 @@ fn block_start(index~ : Int, block~ : Json) -> Array[String] {
 }
 
 ///|
-fn block_delta(index~ : Int, delta~ : Json) -> Array[String] {
+fn block_delta(index~ : Int32, delta~ : Json) -> Array[String] {
   sse_event(
     "content_block_delta",
     Json::object({
@@ -69,7 +69,7 @@ fn block_delta(index~ : Int, delta~ : Json) -> Array[String] {
 }
 
 ///|
-fn block_stop(index~ : Int) -> Array[String] {
+fn block_stop(index~ : Int32) -> Array[String] {
   sse_event(
     "content_block_stop",
     Json::object({
@@ -80,7 +80,7 @@ fn block_stop(index~ : Int) -> Array[String] {
 }
 
 ///|
-fn msg_delta(stop_reason~ : String, output_tokens~ : Int) -> Array[String] {
+fn msg_delta(stop_reason~ : String, output_tokens~ : Int32) -> Array[String] {
   sse_event(
     "message_delta",
     Json::object({
@@ -98,7 +98,10 @@ fn msg_delta(stop_reason~ : String, output_tokens~ : Int) -> Array[String] {
 
 ///|
 fn msg_stop() -> Array[String] {
-  sse_event("message_stop", Json::object({ "type": Json::string("message_stop") }))
+  sse_event(
+    "message_stop",
+    Json::object({ "type": Json::string("message_stop") }),
+  )
 }
 
 ///|
@@ -262,8 +265,7 @@ fn responses_nonstream_body(text~ : String, reasoning_item~ : Json) -> String {
       "output_tokens": Json::number(3),
       "total_tokens": Json::number(14),
     }),
-  })
-  .stringify()
+  }).stringify()
 }
 
 ///|
@@ -287,8 +289,7 @@ fn chat_nonstream_body(text~ : String) -> String {
       "completion_tokens": Json::number(2),
       "total_tokens": Json::number(7),
     }),
-  })
-  .stringify()
+  }).stringify()
 }
 
 ///|
@@ -298,16 +299,13 @@ fn chat_chunk(delta~ : Json, finish~ : String?) -> Array[String] {
     ("delta", delta),
   ]
   match finish {
-    Some(reason) =>
-      choice_fields.push(("finish_reason", Json::string(reason)))
+    Some(reason) => choice_fields.push(("finish_reason", Json::string(reason)))
     None => ()
   }
   let payload = Json::object({
     "choices": Json::array([Json::object(Map::from_array(choice_fields))]),
   })
-  [
-    "data: \{payload.stringify()}",
-  ]
+  ["data: \{payload.stringify()}"]
 }
 
 ///|
@@ -380,10 +378,7 @@ fn chat_parallel_tool_stream() -> Array[String] {
       }),
       finish=None,
     ),
-    chat_chunk(
-      delta=Json::object({}),
-      finish=Some("tool_calls"),
-    ),
+    chat_chunk(delta=Json::object({}), finish=Some("tool_calls")),
     chat_usage_chunk(),
     ["data: [DONE]"],
   ])
@@ -406,6 +401,5 @@ fn messages_nonstream_body(text~ : String) -> String {
       "input_tokens": Json::number(7),
       "output_tokens": Json::number(2),
     }),
-  })
-  .stringify()
+  }).stringify()
 }

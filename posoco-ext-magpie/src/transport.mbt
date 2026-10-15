@@ -106,7 +106,7 @@ impl MagpieTransport for HttpMagpieTransport with fn post(
   url : String,
   headers~ : Map[String, String],
   body~ : String,
-) -> (Int, String) raise MagpieGatewayError {
+) -> (Int32, String) raise MagpieGatewayError {
   let http_headers : @http.Headers = Map::from_array([])
   for key, value in headers {
     http_headers[@http.CaseInsensitiveString(key)] = value
@@ -144,7 +144,9 @@ priv struct HttpEventStream {
 impl MagpieEventStream for HttpEventStream with fn next_line(
   self : HttpEventStream,
 ) -> String? raise MagpieGatewayError {
-  if self.closed { return None }
+  if self.closed {
+    return None
+  }
   self.client.read_until("\n") catch {
     err => raise MagpieGatewayError::Offline("stream read failed: \{err}")
   }
@@ -166,7 +168,7 @@ impl MagpieTransport for HttpMagpieTransport with fn post_stream(
   url : String,
   headers~ : Map[String, String],
   body~ : String,
-) -> (Int, &MagpieEventStream) raise MagpieGatewayError {
+) -> (Int32, &MagpieEventStream) raise MagpieGatewayError {
   let http_headers : @http.Headers = Map::from_array([])
   for key, value in headers {
     http_headers[@http.CaseInsensitiveString(key)] = value
@@ -186,5 +188,5 @@ impl MagpieTransport for HttpMagpieTransport with fn post_stream(
       raise MagpieGatewayError::Offline("stream start failed: \{err}")
     }
   }
-  (response.code, HttpEventStream::{ client, closed: false })
+  (response.code, HttpEventStream::{ client, closed: false, })
 }

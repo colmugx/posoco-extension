@@ -22,12 +22,12 @@ priv struct FakePostStep {
 
 ///|
 fn buffered_post(status~ : Int32, body~ : String) -> FakePostStep {
-  { status, body, stream_lines: None }
+  { status, body, stream_lines: None, }
 }
 
 ///|
 fn streaming_post(status~ : Int32, lines~ : Array[String]) -> FakePostStep {
-  { status, body: "", stream_lines: Some(lines) }
+  { status, body: "", stream_lines: Some(lines), }
 }
 
 ///|
@@ -50,7 +50,7 @@ struct FakeTransport {
 ///|
 fn FakeTransport::FakeTransport(
   steps : Array[FakeStep],
-  posts? : Array[FakePostStep] = [],
+  posts~ : Array[FakePostStep] = [],
 ) -> FakeTransport {
   {
     steps,
@@ -99,7 +99,7 @@ impl MagpieTransport for FakeTransport with fn get(
 /// pause so cancellation tests can land mid-read.
 struct FakeEventStream {
   lines : Array[String]
-  mut cursor : Int
+  mut cursor : Int32
   delay_ms : Int32
 }
 
@@ -177,8 +177,9 @@ impl MagpieTransport for FakeTransport with fn post_stream(
       "fake transport: streaming POST got a buffered step",
     )
   }
-  (step.status, FakeEventStream::{ lines, cursor: 0, delay_ms: self.delay_ms })
+  (step.status, FakeEventStream::{ lines, cursor: 0, delay_ms: self.delay_ms, })
 }
+
 ///|
 /// A valid `/api/hello` body.
 fn hello_body(version~ : String = "0.1.1224") -> String {

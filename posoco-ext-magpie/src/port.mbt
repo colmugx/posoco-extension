@@ -29,13 +29,13 @@ pub struct MagpieModelPort {
 ///|
 pub fn MagpieModelPort::MagpieModelPort(
   manager~ : MagpieManager,
-  transport? : &MagpieTransport = HttpMagpieTransport::HttpMagpieTransport(),
-  policy? : MagpieTranslationPolicy = NativeOnly,
-  preference? : MagpiePreference = Any,
-  require_signed_thinking_replay? : Bool = false,
-  require_native_prompt_caching? : Bool = false,
-  require_reasoning_output? : Bool = false,
-  report_sink? : (MagpieExecutionReport) -> Unit = fn(_report) { () },
+  transport~ : &MagpieTransport = HttpMagpieTransport::HttpMagpieTransport(),
+  policy~ : MagpieTranslationPolicy = NativeOnly,
+  preference~ : MagpiePreference = Any,
+  require_signed_thinking_replay~ : Bool = false,
+  require_native_prompt_caching~ : Bool = false,
+  require_reasoning_output~ : Bool = false,
+  report_sink~ : (MagpieExecutionReport) -> Unit = fn(_report) { () },
 ) -> MagpieModelPort {
   {
     manager,
@@ -49,11 +49,11 @@ pub fn MagpieModelPort::MagpieModelPort(
   }
 }
 
-
+///|
 /// Manual-compact parity default: keep the most recent tokens verbatim and
 /// summarize the head. Unknown windows are never guessed; auto-compact only
 /// arms itself on a declared catalog window.
-const COMPACT_KEEP_RECENT_TOKENS : Int = 20000
+const COMPACT_KEEP_RECENT_TOKENS : Int32 = 20000
 
 ///|
 /// Resolves the active selection into an executable call context, planning
@@ -87,10 +87,10 @@ fn MagpieModelPort::prepare_execution(
     Planned(plan) => plan
     Incompatible(blocked) => {
       let reasons = blocked.blockers
-      .map(fn(blocker) {
-        "\{blocker.protocol}: \{blocker.reasons.join("; ")}"
-      })
-      .join(" | ")
+        .map(fn(blocker) {
+          "\{blocker.protocol}: \{blocker.reasons.join("; ")}"
+        })
+        .join(" | ")
       raise @posoco.ModelError::RequestBuild(
         "magpie request build failure (stage=planning): no protocol satisfies the requirements for \"\{blocked.model_id}\" under \{blocked.policy} (\{reasons})",
       )
@@ -132,11 +132,7 @@ pub impl @posoco.ModelPort for MagpieModelPort with fn chat(
   )
   let call = self.prepare_execution(scope, entry_requirements=requirements)
   let (result, report) = execute_planned(
-    call,
-    messages_owned,
-    tools,
-    options,
-    stream,
+    call, messages_owned, tools, options, stream,
   )
   (self.report_sink)(report)
   result
@@ -187,13 +183,13 @@ pub impl @posoco.ModelPort for MagpieModelPort with fn compact(
   )
   (self.report_sink)(report)
   let summary_text = call_result.completion.message.content
-  .filter_map(fn(block) {
-    match block {
-      @posoco.Content::Text(text) => Some(text)
-      _ => None
-    }
-  })
-  .join("")
+    .filter_map(fn(block) {
+      match block {
+        @posoco.Content::Text(text) => Some(text)
+        _ => None
+      }
+    })
+    .join("")
   if summary_text.length() == 0 {
     raise @posoco.ModelError::ResponseParse(
       "magpie compact parse failure (stage=compact, category=empty_summary)",
