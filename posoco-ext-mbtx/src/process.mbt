@@ -15,6 +15,7 @@ async fn collect_process(
 ) -> (Int32, String) {
   with_process(command, args, cwd, true, process => {
     @async.with_task_group(group => {
+      @async.pause()
       let output = []
       let diagnostics = []
       let mut total = 0

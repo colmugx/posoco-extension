@@ -6,8 +6,14 @@ async test "auto falls back to moon and an early cancelled invocation can retry"
     let call = group.spawn(allow_failure=true, () => {
       runtime.run(script_source, {}, invocation_id="early")
     })
-    @async.sleep(1)
-    assert_true(runtime.cancel("early"))
+    @async.with_timeout(1000, () => {
+      for ;; {
+        if runtime.cancel("early") {
+          break
+        }
+        @async.sleep(1)
+      }
+    })
     try call.wait() catch {
       @posoco-ext-mbtx.RuntimeError::Cancelled => ()
       error => raise error

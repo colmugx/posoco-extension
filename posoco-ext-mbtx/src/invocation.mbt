@@ -44,6 +44,7 @@ async fn communicate(
     process.write(bytes)
   }
   @async.with_task_group(group => {
+    @async.pause()
     let err = group.spawn(() => {
       for ;; {
         match process.stderr() {
@@ -193,7 +194,17 @@ async fn Runtime::execute(
     _ => ()
   }
   let tools = tools.copy()
+  let cancel_task : Ref[(() -> Unit)?] = Ref(None)
+  let cancelled = Ref(false)
+  self.active[invocation_id] = () => {
+    cancelled.val = true
+    if cancel_task.val is Some(cancel) {
+      cancel()
+    }
+  }
+  defer self.active.remove(invocation_id)
   @async.with_task_group(group => {
+    @async.pause()
     let task = group.spawn(allow_failure=true, () => {
       match
         @async.handle_cancellation(() => {
@@ -250,8 +261,10 @@ async fn Runtime::execute(
         None => raise RuntimeError::Cancelled
       }
     })
-    self.active[invocation_id] = () => task.cancel()
-    defer self.active.remove(invocation_id)
+    cancel_task.val = Some(() => task.cancel())
+    if cancelled.val {
+      task.cancel()
+    }
     task.wait()
   }) catch {
     @protocol.ProtocolError::Invalid(reason) =>

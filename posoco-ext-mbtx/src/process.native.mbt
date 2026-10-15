@@ -35,6 +35,7 @@ async fn[X] with_process(
   body : async (&GuestProcess) -> X,
 ) -> X {
   @async.with_task_group(group => {
+    @async.pause()
     let (child_stdin, stdin) = @process.write_to_process()
     defer stdin.close()
     let (stdout, child_stdout) = @process.read_from_process()
