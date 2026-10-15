@@ -20,7 +20,9 @@ import {
   "colmugx/posoco-kit-messages@0.1.0",
   "colmugx/posoco-kit-responses@0.1.0",
   "posoco/kit-chat-completions@0.1.0",
+  "colmugx/posoco-kit-provider@0.1.0",
   "colmugx/posoco-kit-rate-limit@0.1.0",
   "colmugx/posoco-kit-compact-summary@0.1.0",
+  "posoco/ext-llm@0.2.0",
   "moonbitlang/async@0.22.4",
 }
