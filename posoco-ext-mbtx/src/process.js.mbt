@@ -185,10 +185,6 @@ async fn[X] with_process(
     cwd.unwrap_or(""),
     inherit_env,
   )
-  @async.with_task_group(group => {
-    group.add_defer(() => {
-      @async.protect_from_cancel(() => node_stop(raw).wait())
-    })
-    body(JsProcess::{ raw, })
-  })
+  defer @async.protect_from_cancel(() => node_stop(raw).wait())
+  body(JsProcess::{ raw, })
 }

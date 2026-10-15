@@ -198,44 +198,44 @@ async fn Runtime::execute(
       match
         @async.handle_cancellation(() => {
           @async.with_timeout(timeout_ms, () => {
-            let directory = temporary_directory("posoco-mbtx-invocation-")
-            @async.with_task_group(scope => {
-              scope.add_defer(() => remove_directory(directory))
-              let policy = directory + "/policy.json"
-              write_text(policy, guest_policy().stringify())
-              let launcher = self.resolve_launcher()
-              let path = match program {
-                Source(source) => {
-                  let path = directory + "/program.mbtx"
-                  write_text(path, source)
-                  path
-                }
-                File(path) => canonical_path(path)
+            let directory = @async.protect_from_cancel(() => {
+              temporary_directory("posoco-mbtx-invocation-")
+            })
+            defer remove_directory(directory)
+            let policy = directory + "/policy.json"
+            write_text(policy, guest_policy().stringify())
+            let launcher = self.resolve_launcher()
+            let path = match program {
+              Source(source) => {
+                let path = directory + "/program.mbtx"
+                write_text(path, source)
+                path
               }
-              let (command, args) = match launcher {
-                Moon => {
-                  let artifact = self.build_program(path, directory)
-                  (self.moonrun, [artifact, "--policy", policy])
-                }
-                Moonx => {
-                  if !path.has_suffix(".mbtx") {
-                    raise RuntimeError::Invalid(
-                      "moonx requires a .mbtx file; use the Moon launcher for a local package or Wasm artifact",
-                    )
-                  }
-                  (
-                    self.moonx,
-                    ["--target", "wasm", "--experimental-policy", policy, path],
+              File(path) => canonical_path(path)
+            }
+            let (command, args) = match launcher {
+              Moon => {
+                let artifact = self.build_program(path, directory)
+                (self.moonrun, [artifact, "--policy", policy])
+              }
+              Moonx => {
+                if !path.has_suffix(".mbtx") {
+                  raise RuntimeError::Invalid(
+                    "moonx requires a .mbtx file; use the Moon launcher for a local package or Wasm artifact",
                   )
                 }
-                Auto => abort("unresolved launcher")
-              }
-              with_process(command, args, None, true, process => {
-                communicate(
-                  process, input, tools, invoker, max_frame_bytes, max_pending, max_calls,
-                  max_output_bytes, handshake_ms,
+                (
+                  self.moonx,
+                  ["--target", "wasm", "--experimental-policy", policy, path],
                 )
-              })
+              }
+              Auto => abort("unresolved launcher")
+            }
+            with_process(command, args, None, true, process => {
+              communicate(
+                process, input, tools, invoker, max_frame_bytes, max_pending, max_calls,
+                max_output_bytes, handshake_ms,
+              )
             })
           }) catch {
             error =>

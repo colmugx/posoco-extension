@@ -251,8 +251,11 @@ fn intel_int(
   match fields.get(key) {
     None => None
     Some(Json::Null) => None
-    Some(Json::Number(value, ..)) if value >= 0.0 && value <= 2147483647.0 && value == value.floor() => Some(value.to_int())
-    Some(Json::Number(_, ..)) => raise intel_error("\{stage}.\{key}", "out_of_range_or_fractional")
+    Some(Json::Number(value, ..)) if value >= 0.0 &&
+      value <= 2147483647.0 &&
+      value == value.floor() => Some(value.to_int())
+    Some(Json::Number(_, ..)) =>
+      raise intel_error("\{stage}.\{key}", "out_of_range_or_fractional")
     Some(_) => raise intel_error("\{stage}.\{key}", "wrong_type")
   }
 }
@@ -292,7 +295,8 @@ pub async fn MagpieGatewayIntelligence::route_snapshot(
   self : MagpieGatewayIntelligence,
   query~ : MagpieRouteQuery,
 ) -> MagpieRouteSnapshot raise @posoco.ModelError {
-  if query.session == "" || (query.after is Some(n) && n < 0) ||
+  if query.session == "" ||
+    (query.after is Some(n) && n < 0) ||
     (query.wait is Some(seconds) && (seconds < 0 || seconds > 60)) {
     raise @posoco.ModelError::RequestBuild(
       "magpie intelligence request build failure (stage=route): wait is limited to 60 seconds",
@@ -819,10 +823,8 @@ pub fn MagpieUsageRequestRow::cache_economics(
   // cache_write_1h is the 1h subset, not additional tokens. Without a
   // 1h breakdown, the TTL distribution is unknown and no exact write
   // pricing may be inferred from the aggregate.
-  let creation : @messages.MessagesCacheCreation = match (
-    self.cache_write_tokens,
-    self.cache_write_1h_tokens,
-  ) {
+  let creation : @messages.MessagesCacheCreation = match
+    (self.cache_write_tokens, self.cache_write_1h_tokens) {
     (Some(total), Some(hour)) if hour >= 0 && total >= hour =>
       {
         ephemeral_5m_input_tokens: Some(total - hour),
@@ -832,10 +834,7 @@ pub fn MagpieUsageRequestRow::cache_economics(
       raise @posoco.ModelError::ResponseParse(
         "magpie cache accounting invalid (stage=economics, category=one_hour_exceeds_total)",
       )
-    _ => {
-      ephemeral_5m_input_tokens: None,
-      ephemeral_1h_input_tokens: None,
-    }
+    _ => { ephemeral_5m_input_tokens: None, ephemeral_1h_input_tokens: None, }
   }
   let usage = @messages.MessagesUsage::{
     input_tokens: self.input_tokens.unwrap_or(0),

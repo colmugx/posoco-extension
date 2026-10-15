@@ -622,7 +622,6 @@ async test "manual quota refresh posts and decodes the refreshed list" {
   inspect(refreshed.post_auths[0], content="Bearer magpie-posoco")
 }
 
- 
 ///|
 async test "one-hour cache writes use the actual TTL split" {
   let client = intel_client(
@@ -632,12 +631,14 @@ async test "one-hour cache writes use the actual TTL split" {
   )
   let row = client.usage_requests().rows[0]
   inspect(row.cache_write_1h_tokens, content="Some(5)")
-  let economics = row.cache_economics(rates=@messages.MessagesCacheRates::{
-    ordinary_input: 3,
-    cache_read: 0.3,
-    cache_write_5m: 3.75,
-    cache_write_1h: 7.5,
-  }).unwrap()
+  let economics = row
+    .cache_economics(rates=@messages.MessagesCacheRates::{
+      ordinary_input: 3,
+      cache_read: 0.3,
+      cache_write_5m: 3.75,
+      cache_write_1h: 7.5,
+    })
+    .unwrap()
   // 100 ordinary, 800 cache reads, 15 five-minute, 5 one-hour writes.
   inspect(economics.effective_input_cost, content="Some(633.75)")
 }
@@ -650,12 +651,14 @@ async test "unknown cache-write TTL distribution cannot claim cost savings" {
     "cache_read": 800,
     "cache_write": 20,
   })
-  let economics = row.cache_economics(rates=@messages.MessagesCacheRates::{
-    ordinary_input: 3,
-    cache_read: 0.3,
-    cache_write_5m: 3.75,
-    cache_write_1h: 7.5,
-  }).unwrap()
+  let economics = row
+    .cache_economics(rates=@messages.MessagesCacheRates::{
+      ordinary_input: 3,
+      cache_read: 0.3,
+      cache_write_5m: 3.75,
+      cache_write_1h: 7.5,
+    })
+    .unwrap()
   inspect(economics.effective_input_cost is None, content="true")
   inspect(economics.net_savings is None, content="true")
 }
