@@ -27,9 +27,9 @@ pub(all) struct MagpieExecutionReport {
   /// Canonical usage projection for the run budget.
   usage : @posoco.Usage?
   /// Native cache-read tokens when the protocol reports them.
-  cache_read_tokens : Int?
+  cache_read_tokens : Int32?
   /// Native cache-write (creation) tokens when the protocol reports them.
-  cache_write_tokens : Int?
+  cache_write_tokens : Int32?
   /// Protocol-level finish reason, canonically mapped.
   finish_reason : @posoco.FinishReason
   /// Gateway response identifier, when the protocol response names one.
@@ -43,14 +43,12 @@ pub(all) struct MagpieExecutionReport {
 pub extend MagpieExecutionReport with Eq::{not_equal, equal}
 
 ///|
-pub extend MagpieExecutionReport with @moonbitlang/core/debug.Debug::{
-  to_repr,
-}
+pub extend MagpieExecutionReport with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Default output budget when the caller does not bound the call. Magpie's
 /// Messages dialect requires an explicit `max_tokens`.
-const DEFAULT_MAX_OUTPUT_TOKENS : Int = 8192
+const DEFAULT_MAX_OUTPUT_TOKENS : Int32 = 8192
 
 ///|
 /// Streaming read loops yield to the event loop at most every 16ms; the
@@ -90,7 +88,7 @@ async fn execute_planned(
 ///|
 /// Resolves the output budget: the caller's bound when given, otherwise
 /// the execution default.
-fn output_budget(options : @posoco.ChatOptions) -> Int {
+fn output_budget(options : @posoco.ChatOptions) -> Int32 {
   match options.max_output_tokens {
     Some(n) => n
     None => DEFAULT_MAX_OUTPUT_TOKENS
@@ -123,7 +121,7 @@ async fn post_response_json(
 ) -> Json raise @posoco.ModelError {
   let (code, text) = call.transport.post(
     endpoint,
-    headers=headers,
+    headers~,
     body=body.stringify(),
   ) catch {
     error => raise transport_error("\{stage}.post", error.to_string())
@@ -150,7 +148,7 @@ async fn open_event_stream(
 ) -> &MagpieEventStream raise @posoco.ModelError {
   let (code, stream) = call.transport.post_stream(
     endpoint,
-    headers=headers,
+    headers~,
     body=body.stringify(),
   ) catch {
     error => raise transport_error("\{stage}.post_stream", error.to_string())
@@ -171,6 +169,7 @@ async fn open_event_stream(
 /// are captured into the kit's replay envelope on decode and re-expanded on
 /// encode; usage and cache-creation accounting stay protocol-native; cache
 /// marking follows the request options and defaults to untouched.
+#warnings("-fragile_catch_all")
 async fn execute_messages(
   call : ExecCall,
   messages : Array[@posoco.Message],
@@ -219,13 +218,15 @@ async fn execute_messages(
     let root = post_response_json(call, "messages", endpoint, headers, body)
     let result = @messages.parse_response(provider="magpie", root)
     return (
-      { completion: result.completion, processed_messages: messages },
+      { completion: result.completion, processed_messages: messages, },
       messages_report(call, result, endpoint),
     )
   }
   // Streaming: kit SSE decoder plus kit event processor; EOF before the
   // terminal marker is an incomplete stream, classified by the kit.
-  let event_stream = open_event_stream(call, "messages", endpoint, headers, body)
+  let event_stream = open_event_stream(
+    call, "messages", endpoint, headers, body,
+  )
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let state = @messages.MessagesSseState::MessagesSseState()
   let decoder = @messages.SseDecoder::SseDecoder()
@@ -234,7 +235,9 @@ async fn execute_messages(
   while !done {
     let line = event_stream.next_line() catch {
       error => {
-        event_stream.close_stream() catch { _ => () }
+        event_stream.close_stream() catch {
+          _ => ()
+        }
         raise transport_error("messages.read_stream", error.to_string())
       }
     }
@@ -250,13 +253,17 @@ async fn execute_messages(
             state~,
           ) catch {
             error => {
-              event_stream.close_stream() catch { _ => () }
+              event_stream.close_stream() catch {
+                _ => ()
+              }
               raise error
             }
           }
         }
       None => {
-        event_stream.close_stream() catch { _ => () }
+        event_stream.close_stream() catch {
+          _ => ()
+        }
         match
           @messages.classify_stream_termination(
             provider="magpie",
@@ -273,7 +280,9 @@ async fn execute_messages(
       last_yield = now
     }
   }
-  event_stream.close_stream() catch { _ => () }
+  event_stream.close_stream() catch {
+    _ => ()
+  }
   match
     @messages.classify_stream_termination(
       provider="magpie",
@@ -284,7 +293,7 @@ async fn execute_messages(
   }
   let result = @messages.messages_stream_result(provider="magpie", acc~, state~)
   (
-    { completion: result.completion, processed_messages: messages },
+    { completion: result.completion, processed_messages: messages, },
     messages_report(call, result, endpoint),
   )
 }
@@ -302,22 +311,22 @@ fn messages_report(
   // flat counter. The native numbers stay separate from the canonical use.
   let cache_write = match result.cache_creation {
     Some(creation) =>
-      match (
-        creation.ephemeral_5m_input_tokens,
-        creation.ephemeral_1h_input_tokens,
-      ) {
+      match
+        (creation.ephemeral_5m_input_tokens, creation.ephemeral_1h_input_tokens) {
         (Some(five), Some(one)) => Some(five + one)
         (Some(five), None) => Some(five)
         (None, Some(one)) => Some(one)
-        (None, None) => match result.usage {
-          Some(usage) => usage.cache_creation_input_tokens
-          None => None
-        }
+        (None, None) =>
+          match result.usage {
+            Some(usage) => usage.cache_creation_input_tokens
+            None => None
+          }
       }
-    None => match result.usage {
-      Some(usage) => usage.cache_creation_input_tokens
-      None => None
-    }
+    None =>
+      match result.usage {
+        Some(usage) => usage.cache_creation_input_tokens
+        None => None
+      }
   }
   let cache_read = match result.usage {
     Some(usage) => usage.cache_read_input_tokens
@@ -387,9 +396,7 @@ fn responses_request(
   }
   match call.effort {
     Some(effort) =>
-      body["reasoning"] = Json::object({
-        "effort": Json::string(effort),
-      })
+      body["reasoning"] = Json::object({ "effort": Json::string(effort) })
     None => ()
   }
   Json::object(body)
@@ -418,10 +425,7 @@ fn attach_reasoning_items(
   @posoco.Completion::Completion(
     content=completion.message.content,
     tool_calls=completion.message.tool_calls,
-    reasoning=Some({
-      content,
-      raw: Some(Json::array(state.items)),
-    }),
+    reasoning=Some({ content, raw: Some(Json::array(state.items)), }),
     finish_reason=completion.message.finish_reason,
     usage=completion.usage,
   )
@@ -431,6 +435,7 @@ fn attach_reasoning_items(
 /// OpenAI Responses execution through the responses kit. Reasoning items
 /// replay verbatim; usage comes from the terminal response; the gateway's
 /// reported model and response id are surfaced when present.
+#warnings("-fragile_catch_all")
 async fn execute_responses(
   call : ExecCall,
   messages : Array[@posoco.Message],
@@ -444,15 +449,24 @@ async fn execute_responses(
   let body = responses_request(call, messages, tools, options, streaming)
   if !streaming {
     let root = post_response_json(call, "responses", endpoint, headers, body)
-    @responses.validate_terminal_response(provider="magpie", root, "chat.nonstream")
-    let completion = @responses.parse_responses_response(provider="magpie", root)
+    @responses.validate_terminal_response(
+      provider="magpie",
+      root,
+      "chat.nonstream",
+    )
+    let completion = @responses.parse_responses_response(
+      provider="magpie",
+      root,
+    )
     let usage = @responses.extract_usage(provider="magpie", root)
     return (
-      { completion, processed_messages: messages },
+      { completion, processed_messages: messages, },
       responses_report(call, endpoint, completion, usage, root),
     )
   }
-  let event_stream = open_event_stream(call, "responses", endpoint, headers, body)
+  let event_stream = open_event_stream(
+    call, "responses", endpoint, headers, body,
+  )
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let sse_state = @responses.SseStreamState::SseStreamState()
   let on_chunk = stream_callback(stream)
@@ -461,7 +475,9 @@ async fn execute_responses(
   while !done {
     let line = event_stream.next_line() catch {
       error => {
-        event_stream.close_stream() catch { _ => () }
+        event_stream.close_stream() catch {
+          _ => ()
+        }
         raise transport_error("responses.read_stream", error.to_string())
       }
     }
@@ -477,14 +493,18 @@ async fn execute_responses(
               state=sse_state,
             ) catch {
               error => {
-                event_stream.close_stream() catch { _ => () }
+                event_stream.close_stream() catch {
+                  _ => ()
+                }
                 raise error
               }
             }
           None => ()
         }
       None => {
-        event_stream.close_stream() catch { _ => () }
+        event_stream.close_stream() catch {
+          _ => ()
+        }
         raise @posoco.ModelError::ResponseParse(
           "magpie response parse failure (stage=responses.eof, category=truncated_stream)",
         )
@@ -496,7 +516,9 @@ async fn execute_responses(
       last_yield = now
     }
   }
-  event_stream.close_stream() catch { _ => () }
+  event_stream.close_stream() catch {
+    _ => ()
+  }
   match
     @responses.classify_stream_termination(
       provider="magpie",
@@ -511,7 +533,7 @@ async fn execute_responses(
     sse_state,
   )
   (
-    { completion, processed_messages: messages },
+    { completion, processed_messages: messages, },
     responses_report(call, endpoint, completion, completion.usage, Json::null()),
   )
 }
@@ -559,7 +581,9 @@ fn responses_report(
 ///|
 /// The stream callback out of a `StreamMode`, for kits that take the chunk
 /// sink positionally. `NoStream` never reaches the adapters' stream paths.
-fn stream_callback(stream : @posoco.StreamMode) -> (@posoco.StreamChunk) -> Unit {
+fn stream_callback(
+  stream : @posoco.StreamMode,
+) -> (@posoco.StreamChunk) -> Unit {
   match stream {
     Stream(on_chunk) => on_chunk
     NoStream => fn(_chunk) { () }
@@ -572,8 +596,10 @@ fn stream_callback(stream : @posoco.StreamMode) -> (@posoco.StreamChunk) -> Unit
 /// `reasoning_content` text — the dialect has no signature channel, which
 /// is exactly why planning rates its thinking replay Unknown.
 fn encode_chat_message(msg : @posoco.Message, supports_images : Bool) -> Json {
-  let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match msg {
-    @posoco.Message::SystemMessage(content~) => ("system", content, [], None, None)
+  let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
+    msg {
+    @posoco.Message::SystemMessage(content~) =>
+      ("system", content, [], None, None)
     @posoco.Message::UserMessage(content~) => ("user", content, [], None, None)
     @posoco.Message::AssistantMessage(content~, tool_calls~, reasoning~, ..) => {
       let reasoning_text = match reasoning {
@@ -686,7 +712,7 @@ fn decode_chat_response(
     Some(_) => raise chat_parse_error("choices", "wrong_type")
     None => raise chat_parse_error("choices", "missing")
   }
-  guard choices is [first, .. _] else {
+  guard choices is [first, ..] else {
     raise chat_parse_error("choices", "empty")
   }
   guard first is Json::Object(choice) else {
@@ -707,7 +733,7 @@ fn decode_chat_response(
       if value is "" {
         None
       } else {
-        Some({ content: value, raw: None })
+        Some({ content: value, raw: None, })
       }
     Some(Json::Null) | None => None
     Some(_) => raise chat_parse_error("message.reasoning_content", "wrong_type")
@@ -752,17 +778,20 @@ fn decode_chat_response(
     Some(Json::Null) | None => []
     Some(_) => raise chat_parse_error("message.tool_calls", "wrong_type")
   }
-  let finish_reason = chat_finish_reason(match choice.get("finish_reason") {
-    Some(Json::String(reason)) => Some(reason)
-    _ => None
-  })
+  let finish_reason = chat_finish_reason(
+    match choice.get("finish_reason") {
+      Some(Json::String(reason)) => Some(reason)
+      _ => None
+    },
+  )
   let usage : @posoco.Usage? = match fields.get("usage") {
     Some(Json::Object(fields)) => {
-      let read = (field : String) =>
+      let read = (field : String) => {
         match fields.get(field) {
           Some(Json::Number(value, ..)) => Some(value.to_int())
           _ => None
         }
+      }
       Some({
         input_tokens: read("prompt_tokens"),
         output_tokens: read("completion_tokens"),
@@ -775,10 +804,10 @@ fn decode_chat_response(
   }
   let completion = @posoco.Completion::Completion(
     content=if text is "" { [] } else { [@posoco.Content::Text(text)] },
-    tool_calls=tool_calls,
-    reasoning=reasoning,
-    finish_reason=finish_reason,
-    usage=usage,
+    tool_calls~,
+    reasoning~,
+    finish_reason~,
+    usage~,
   )
   (completion, usage, served, response_id)
 }
@@ -787,6 +816,7 @@ fn decode_chat_response(
 /// OpenAI Chat Completions execution through the chat kit: the kit owns
 /// content encoding and SSE event decoding; the adapter assembles the
 /// request and decodes the buffered response shape.
+#warnings("-fragile_catch_all")
 async fn execute_chat(
   call : ExecCall,
   messages : Array[@posoco.Message],
@@ -822,7 +852,7 @@ async fn execute_chat(
     let root = post_response_json(call, "chat", endpoint, headers, body)
     let (completion, usage, served, response_id) = decode_chat_response(root)
     return (
-      { completion, processed_messages: messages },
+      { completion, processed_messages: messages, },
       {
         requested_model: call.model_id,
         served_model: served,
@@ -850,7 +880,9 @@ async fn execute_chat(
   while !done {
     let line = event_stream.next_line() catch {
       error => {
-        event_stream.close_stream() catch { _ => () }
+        event_stream.close_stream() catch {
+          _ => ()
+        }
         raise transport_error("chat.read_stream", error.to_string())
       }
     }
@@ -870,7 +902,9 @@ async fn execute_chat(
                 on_chunk,
               ) catch {
                 error => {
-                  event_stream.close_stream() catch { _ => () }
+                  event_stream.close_stream() catch {
+                    _ => ()
+                  }
                   raise error
                 }
               }
@@ -878,7 +912,9 @@ async fn execute_chat(
           None => ()
         }
       None => {
-        event_stream.close_stream() catch { _ => () }
+        event_stream.close_stream() catch {
+          _ => ()
+        }
         raise @posoco.ModelError::ResponseParse(
           "magpie response parse failure (stage=chat.eof, category=truncated_stream)",
         )
@@ -890,7 +926,9 @@ async fn execute_chat(
       last_yield = now
     }
   }
-  event_stream.close_stream() catch { _ => () }
+  event_stream.close_stream() catch {
+    _ => ()
+  }
   for snapshot in acc.tool_calls() {
     if snapshot.id is "" || snapshot.name is "" {
       raise @posoco.ModelError::ResponseParse(
@@ -900,7 +938,7 @@ async fn execute_chat(
   }
   let completion = acc.to_completion()
   (
-    { completion, processed_messages: messages },
+    { completion, processed_messages: messages, },
     {
       requested_model: call.model_id,
       served_model: None,

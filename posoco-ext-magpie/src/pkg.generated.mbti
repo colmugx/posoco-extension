@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-magpie"
 
 import {
+  "colmugx/posoco-kit-messages",
   "colmugx/posoco-kit-model-management",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
@@ -107,6 +108,16 @@ pub(all) struct MagpieCatalogReport {
 } derive(@debug.Debug)
 pub fn MagpieCatalogReport::to_repr(Self) -> @debug.Repr
 
+pub(all) struct MagpieConcurrencySnapshot {
+  requests : Array[Json]
+  waiting : Int?
+  tools : Int?
+  data : Array[(String, Int)]
+} derive(Eq, @debug.Debug)
+pub fn MagpieConcurrencySnapshot::equal(Self, Self) -> Bool
+pub fn MagpieConcurrencySnapshot::not_equal(Self, Self) -> Bool
+pub fn MagpieConcurrencySnapshot::to_repr(Self) -> @debug.Repr
+
 pub struct MagpieConfig {
   base_url : String
   credential : String?
@@ -189,6 +200,20 @@ pub fn MagpieFeature::to_repr(Self) -> @debug.Repr
 pub fn MagpieFeature::to_string(Self) -> String
 pub impl Show for MagpieFeature
 
+pub struct MagpieGatewayIntelligence {
+  // private fields
+}
+pub fn MagpieGatewayIntelligence::MagpieGatewayIntelligence(config~ : MagpieConfig, transport? : &MagpieTransport) -> Self
+pub async fn MagpieGatewayIntelligence::concurrency_snapshot(Self) -> MagpieConcurrencySnapshot raise @error.ModelError
+pub fn MagpieGatewayIntelligence::for_manager(MagpieManager) -> Self
+pub async fn MagpieGatewayIntelligence::key_limit(Self) -> MagpieKeyLimit raise @error.ModelError
+pub async fn MagpieGatewayIntelligence::quota_snapshot(Self, kept? : Bool) -> MagpieQuotaSnapshot raise @error.ModelError
+pub async fn MagpieGatewayIntelligence::refresh_quota_cards(Self) -> MagpieQuotaSnapshot raise @error.ModelError
+pub async fn MagpieGatewayIntelligence::route_snapshot(Self, query~ : MagpieRouteQuery) -> MagpieRouteSnapshot raise @error.ModelError
+pub fn MagpieGatewayIntelligence::service_availability(Self, service~ : MagpieService) -> MagpieServiceAvailability
+pub async fn MagpieGatewayIntelligence::usage_requests(Self, offset? : Int, limit? : Int, period? : MagpieUsagePeriod?) -> MagpieUsageRequestsPage raise @error.ModelError
+pub async fn MagpieGatewayIntelligence::usage_summary(Self, period? : MagpieUsagePeriod) -> MagpieUsageSummary raise @error.ModelError
+
 pub(all) struct MagpieIdentity {
   name : String
   version : String?
@@ -206,6 +231,14 @@ pub(all) struct MagpieIncompatibility {
 pub fn MagpieIncompatibility::equal(Self, Self) -> Bool
 pub fn MagpieIncompatibility::not_equal(Self, Self) -> Bool
 pub fn MagpieIncompatibility::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieKeyLimit {
+  key : String?
+  limited : Bool
+} derive(Eq, @debug.Debug)
+pub fn MagpieKeyLimit::equal(Self, Self) -> Bool
+pub fn MagpieKeyLimit::not_equal(Self, Self) -> Bool
+pub fn MagpieKeyLimit::to_repr(Self) -> @debug.Repr
 
 pub struct MagpieManager {
   // private fields
@@ -335,6 +368,47 @@ pub fn MagpieProtocolPlan::equal(Self, Self) -> Bool
 pub fn MagpieProtocolPlan::not_equal(Self, Self) -> Bool
 pub fn MagpieProtocolPlan::to_repr(Self) -> @debug.Repr
 
+pub(all) struct MagpieQuotaCard {
+  provider : String
+  name : String?
+  kind : String?
+  plan : String?
+  user : String?
+  windows : Array[MagpieQuotaWindow]?
+  read_at : String?
+  error : String?
+  until : String?
+  renew : String?
+  resets_count : Int?
+  resets_until : String?
+  resets_each_until : Array[String]?
+} derive(Eq, @debug.Debug)
+pub fn MagpieQuotaCard::equal(Self, Self) -> Bool
+pub fn MagpieQuotaCard::not_equal(Self, Self) -> Bool
+pub fn MagpieQuotaCard::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieQuotaSnapshot {
+  cards : Array[MagpieQuotaCard]
+  kept : Bool
+} derive(Eq, @debug.Debug)
+pub fn MagpieQuotaSnapshot::equal(Self, Self) -> Bool
+pub fn MagpieQuotaSnapshot::not_equal(Self, Self) -> Bool
+pub fn MagpieQuotaSnapshot::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieQuotaWindow {
+  name : String
+  used : Double?
+  remaining : Double?
+  resets_at : String?
+  reset_secs : Int?
+  display : String?
+  amount : Double?
+  limit : Double?
+} derive(Eq, @debug.Debug)
+pub fn MagpieQuotaWindow::equal(Self, Self) -> Bool
+pub fn MagpieQuotaWindow::not_equal(Self, Self) -> Bool
+pub fn MagpieQuotaWindow::to_repr(Self) -> @debug.Repr
+
 pub(all) struct MagpieRefreshOutcome {
   total : Int
   added : Int
@@ -361,6 +435,78 @@ pub fn MagpieRequirements::equal(Self, Self) -> Bool
 pub fn MagpieRequirements::not_equal(Self, Self) -> Bool
 pub fn MagpieRequirements::to_repr(Self) -> @debug.Repr
 
+pub(all) struct MagpieRouteDecision {
+  asked : String?
+  group : String?
+  rule : Json?
+  rule_pick : String?
+  model : String?
+  effort : String?
+  served : String?
+  done : Bool?
+  status : Json?
+  tries : Array[MagpieRouteTry]?
+} derive(Eq, @debug.Debug)
+pub fn MagpieRouteDecision::equal(Self, Self) -> Bool
+pub fn MagpieRouteDecision::not_equal(Self, Self) -> Bool
+pub fn MagpieRouteDecision::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieRouteQuery {
+  session : String
+  after : Int?
+  wait : Int?
+} derive(Eq, @debug.Debug)
+pub fn MagpieRouteQuery::equal(Self, Self) -> Bool
+pub fn MagpieRouteQuery::not_equal(Self, Self) -> Bool
+pub fn MagpieRouteQuery::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieRouteSnapshot {
+  session : String
+  seq : Int?
+  route : MagpieRouteDecision?
+} derive(Eq, @debug.Debug)
+pub fn MagpieRouteSnapshot::equal(Self, Self) -> Bool
+pub fn MagpieRouteSnapshot::not_equal(Self, Self) -> Bool
+pub fn MagpieRouteSnapshot::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieRouteTry {
+  model : String?
+  effort : String?
+  fail : String?
+} derive(Eq, @debug.Debug)
+pub fn MagpieRouteTry::equal(Self, Self) -> Bool
+pub fn MagpieRouteTry::not_equal(Self, Self) -> Bool
+pub fn MagpieRouteTry::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MagpieService {
+  Route
+  Quotas
+  Limit
+  Usage
+  UsageRequests
+  Concurrency
+} derive(Eq, @debug.Debug)
+pub fn MagpieService::equal(Self, Self) -> Bool
+pub fn MagpieService::not_equal(Self, Self) -> Bool
+pub fn MagpieService::output(Self, &Logger) -> Unit
+pub fn MagpieService::to_repr(Self) -> @debug.Repr
+pub fn MagpieService::to_string(Self) -> String
+pub impl Show for MagpieService
+
+pub(all) enum MagpieServiceAvailability {
+  Accessible
+  Forbidden
+  TemporarilyUnavailable
+  NotSupported
+  Unknown
+} derive(Eq, @debug.Debug)
+pub fn MagpieServiceAvailability::equal(Self, Self) -> Bool
+pub fn MagpieServiceAvailability::not_equal(Self, Self) -> Bool
+pub fn MagpieServiceAvailability::output(Self, &Logger) -> Unit
+pub fn MagpieServiceAvailability::to_repr(Self) -> @debug.Repr
+pub fn MagpieServiceAvailability::to_string(Self) -> String
+pub impl Show for MagpieServiceAvailability
+
 pub(all) enum MagpieTranslationPolicy {
   NativeOnly
   AllowTranslated
@@ -371,6 +517,69 @@ pub fn MagpieTranslationPolicy::output(Self, &Logger) -> Unit
 pub fn MagpieTranslationPolicy::to_repr(Self) -> @debug.Repr
 pub fn MagpieTranslationPolicy::to_string(Self) -> String
 pub impl Show for MagpieTranslationPolicy
+
+pub(all) enum MagpieUsagePeriod {
+  Today
+  Week
+  Month
+  All
+} derive(Eq, @debug.Debug)
+pub fn MagpieUsagePeriod::equal(Self, Self) -> Bool
+pub fn MagpieUsagePeriod::not_equal(Self, Self) -> Bool
+pub fn MagpieUsagePeriod::output(Self, &Logger) -> Unit
+pub fn MagpieUsagePeriod::to_repr(Self) -> @debug.Repr
+pub fn MagpieUsagePeriod::to_string(Self) -> String
+pub impl Show for MagpieUsagePeriod
+
+pub(all) struct MagpieUsageRequestRow {
+  t : String?
+  agent : String?
+  provider : String?
+  model : String?
+  served : String?
+  session : String?
+  input_tokens : Int?
+  output_tokens : Int?
+  cache_read_tokens : Int?
+  cache_write_tokens : Int?
+  reasoning_tokens : Int?
+  cost : Double?
+  priced : Bool?
+  status : Int?
+  duration_ms : Int?
+} derive(Eq, @debug.Debug)
+pub fn MagpieUsageRequestRow::cache_economics(Self, rates~ : @posoco-kit-messages.MessagesCacheRates) -> @posoco-kit-messages.MessagesCacheEconomics? raise @error.ModelError
+pub fn MagpieUsageRequestRow::equal(Self, Self) -> Bool
+pub fn MagpieUsageRequestRow::not_equal(Self, Self) -> Bool
+pub fn MagpieUsageRequestRow::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieUsageRequestsPage {
+  rows : Array[MagpieUsageRequestRow]
+  offset : Int?
+  total : Int?
+} derive(Eq, @debug.Debug)
+pub fn MagpieUsageRequestsPage::equal(Self, Self) -> Bool
+pub fn MagpieUsageRequestsPage::not_equal(Self, Self) -> Bool
+pub fn MagpieUsageRequestsPage::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieUsageSummary {
+  period : String?
+  since : String?
+  calls : Int?
+  errors : Int?
+  input_tokens : Int?
+  output_tokens : Int?
+  cache_read_tokens : Int?
+  cache_write_tokens : Int?
+  reasoning_tokens : Int?
+  cost : Double?
+  unpriced : Int?
+  session_count : Int?
+  sessions : Array[Json]
+} derive(Eq, @debug.Debug)
+pub fn MagpieUsageSummary::equal(Self, Self) -> Bool
+pub fn MagpieUsageSummary::not_equal(Self, Self) -> Bool
+pub fn MagpieUsageSummary::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

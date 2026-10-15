@@ -12,22 +12,30 @@ fn exec_catalog_body() -> String {
       name="Claude Native",
       owned_by="anthropic",
       fields="\"reasoning\":true,\"supported_reasoning_levels\":[{\"effort\":\"low\"},{\"effort\":\"high\"}],\"context_window\":200000,\"native_endpoints\":[\"/v1/messages\"],\"modalities\":{\"input\":[\"text\",\"image\"]}",
-    ) + "," + model_entry(
+    ) +
+    "," +
+    model_entry(
       id="codex/gpt-responses",
       name="GPT Responses",
       owned_by="codex",
       fields="\"reasoning\":true,\"supported_reasoning_levels\":[{\"effort\":\"low\"},{\"effort\":\"high\"}],\"context_window\":922000,\"native_endpoints\":[\"/v1/responses\"],\"modalities\":{\"input\":[\"text\",\"image\"]}",
-    ) + "," + model_entry(
+    ) +
+    "," +
+    model_entry(
       id="openai/gpt-chat",
       name="GPT Chat",
       owned_by="openai",
       fields="\"reasoning\":false,\"supported_reasoning_levels\":[],\"context_window\":128000,\"native_endpoints\":[\"/v1/chat/completions\"],\"modalities\":{\"input\":[\"text\"]}",
-    ) + "," + model_entry(
+    ) +
+    "," +
+    model_entry(
       id="relay/translated-only",
       name="Translated Only",
       owned_by="relay",
       fields="\"reasoning\":true,\"supported_reasoning_levels\":[{\"effort\":\"high\"}],\"context_window\":8192",
-    ) + "," + model_entry(
+    ) +
+    "," +
+    model_entry(
       id="group/auto",
       name="Auto Group",
       owned_by="codex",
@@ -43,7 +51,7 @@ fn chat_transport(posts~ : Array[FakePostStep]) -> FakeTransport {
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=exec_catalog_body()),
     ],
-    posts=posts,
+    posts~,
   )
 }
 
@@ -59,7 +67,7 @@ fn exec_scope(session~ : String) -> @posoco.InvocationScope {
 
 ///|
 fn chat_options() -> @posoco.ChatOptions {
-  { temperature: None, max_output_tokens: None }
+  { temperature: None, max_output_tokens: None, }
 }
 
 ///|
@@ -80,12 +88,12 @@ fn user_text(text : String) -> Array[@posoco.Message] {
 fn select_and_port(
   manager : MagpieManager,
   model_id : String,
-  policy? : MagpieTranslationPolicy = NativeOnly,
-  preference? : MagpiePreference = Any,
-  require_signed_thinking_replay? : Bool = false,
-  require_native_prompt_caching? : Bool = false,
-  require_reasoning_output? : Bool = false,
-  report_log? : Ref[Array[MagpieExecutionReport]] = Ref([]),
+  policy~ : MagpieTranslationPolicy = NativeOnly,
+  preference~ : MagpiePreference = Any,
+  require_signed_thinking_replay~ : Bool = false,
+  require_native_prompt_caching~ : Bool = false,
+  require_reasoning_output~ : Bool = false,
+  report_log~ : Ref[Array[MagpieExecutionReport]] = Ref([]),
 ) -> MagpieModelPort raise {
   let control = manager as &@modelmgmt.ModelManagerControl
   control.select_model(model_id)
@@ -103,9 +111,9 @@ fn select_and_port(
 
 ///|
 async test "native messages execution streams with signed-thinking fidelity" {
-  let transport = chat_transport(
-    posts=[streaming_post(status=200, lines=messages_thinking_stream())],
-  )
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=messages_thinking_stream()),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
@@ -159,13 +167,11 @@ async test "native messages execution streams with signed-thinking fidelity" {
 
 ///|
 async test "session affinity is stable per session and isolated across sessions" {
-  let transport = chat_transport(
-    posts=[
-      buffered_post(status=200, body=messages_nonstream_body(text="one")),
-      buffered_post(status=200, body=messages_nonstream_body(text="two")),
-      buffered_post(status=200, body=messages_nonstream_body(text="three")),
-    ],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="one")),
+    buffered_post(status=200, body=messages_nonstream_body(text="two")),
+    buffered_post(status=200, body=messages_nonstream_body(text="three")),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let port = select_and_port(manager, "anthropic/claude-native")
@@ -194,7 +200,10 @@ async test "session affinity is stable per session and isolated across sessions"
   inspect(transport.post_sessions[1], content="sess-A")
   inspect(transport.post_sessions[2], content="sess-B")
   // The opaque model ID travels verbatim at the declared endpoint.
-  inspect(transport.post_calls[0].contains("\"model\":\"anthropic/claude-native\""), content="true")
+  inspect(
+    transport.post_calls[0].contains("\"model\":\"anthropic/claude-native\""),
+    content="true",
+  )
   inspect(transport.post_calls[0].contains("/v1/messages"), content="true")
   // The local application credential authenticates the call.
   inspect(transport.post_auths[0], content="Bearer magpie-posoco")
@@ -207,14 +216,12 @@ async test "native responses execution parses completions and replays reasoning 
     "summary": Json::array([]),
     "encrypted_content": Json::string("enc-1"),
   })
-  let transport = chat_transport(
-    posts=[
-      buffered_post(
-        status=200,
-        body=responses_nonstream_body(text="hi there", reasoning_item~),
-      ),
-    ],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(
+      status=200,
+      body=responses_nonstream_body(text="hi there", reasoning_item~),
+    ),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
@@ -245,9 +252,9 @@ async test "native responses execution parses completions and replays reasoning 
 
 ///|
 async test "native chat completions execution decodes buffered completions" {
-  let transport = chat_transport(
-    posts=[buffered_post(status=200, body=chat_nonstream_body(text="hello from chat"))],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=chat_nonstream_body(text="hello from chat")),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
@@ -260,7 +267,8 @@ async test "native chat completions execution decodes buffered completions" {
     NoStream,
   )
   inspect(
-    result.completion.message.content == [@posoco.Content::Text("hello from chat")],
+    result.completion.message.content ==
+    [@posoco.Content::Text("hello from chat")],
     content="true",
   )
   inspect(result.completion.message.finish_reason, content="Stop")
@@ -273,9 +281,9 @@ async test "native chat completions execution decodes buffered completions" {
 
 ///|
 async test "responses streaming emits text deltas and preserves reasoning replay" {
-  let transport = chat_transport(
-    posts=[streaming_post(status=200, lines=responses_text_stream())],
-  )
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=responses_text_stream()),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let port = select_and_port(manager, "codex/gpt-responses")
@@ -303,9 +311,9 @@ async test "responses streaming emits text deltas and preserves reasoning replay
 
 ///|
 async test "routing-group execution rides the gateway and keeps the group id" {
-  let transport = chat_transport(
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="group answer"))],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="group answer")),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
@@ -322,7 +330,10 @@ async test "routing-group execution rides the gateway and keeps the group id" {
     chat_options(),
     NoStream,
   )
-  inspect(transport.post_calls[0].contains("\"model\":\"group/auto\""), content="true")
+  inspect(
+    transport.post_calls[0].contains("\"model\":\"group/auto\""),
+    content="true",
+  )
   let report = reports.val[0]
   inspect(report.requested_model, content="group/auto")
   inspect(report.kind, content="GatewayTranslated")
@@ -358,9 +369,9 @@ async test "translated execution requires the explicit opt-in and reports it" {
   } noraise {
     _ => fail("strict fidelity must reject")
   }
-  let lossy_transport = chat_transport(
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="lossy ok"))],
-  )
+  let lossy_transport = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="lossy ok")),
+  ])
   let lossy_manager = manager_with(
     transport=lossy_transport,
     config=local_config(),
@@ -381,7 +392,10 @@ async test "translated execution requires the explicit opt-in and reports it" {
     chat_options(),
     NoStream,
   )
-  inspect(result.completion.message.content == [@posoco.Content::Text("lossy ok")], content="true")
+  inspect(
+    result.completion.message.content == [@posoco.Content::Text("lossy ok")],
+    content="true",
+  )
   let report = reports.val[0]
   inspect(report.lossy_opt_in, content="true")
   inspect(report.kind, content="GatewayTranslated")
@@ -399,7 +413,9 @@ async test "pending selections are rejected before any request" {
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=reduced_catalog),
     ],
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="never"))],
+    posts=[
+      buffered_post(status=200, body=messages_nonstream_body(text="never")),
+    ],
   )
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
@@ -427,9 +443,9 @@ async test "pending selections are rejected before any request" {
 
 ///|
 async test "tool-call round trips preserve identities and arguments" {
-  let transport = chat_transport(
-    posts=[streaming_post(status=200, lines=messages_tool_stream())],
-  )
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=messages_tool_stream()),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let port = select_and_port(manager, "anthropic/claude-native")
@@ -451,9 +467,9 @@ async test "tool-call round trips preserve identities and arguments" {
 
 ///|
 async test "parallel tool calls assemble separately in one stream" {
-  let transport = chat_transport(
-    posts=[streaming_post(status=200, lines=chat_parallel_tool_stream())],
-  )
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=chat_parallel_tool_stream()),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let port = select_and_port(manager, "openai/gpt-chat")
@@ -477,9 +493,9 @@ async test "parallel tool calls assemble separately in one stream" {
 
 ///|
 async test "incomplete streams are detected, not completed silently" {
-  let transport = chat_transport(
-    posts=[streaming_post(status=200, lines=messages_truncated_stream())],
-  )
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=messages_truncated_stream()),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let port = select_and_port(manager, "anthropic/claude-native")
@@ -501,9 +517,9 @@ async test "incomplete streams are detected, not completed silently" {
 
 ///|
 async test "gateway authentication failures map to transport errors" {
-  let transport = chat_transport(
-    posts=[buffered_post(status=401, body="{\"error\":\"bad key\"}")],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=401, body="{\"error\":\"bad key\"}"),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let port = select_and_port(manager, "anthropic/claude-native")
@@ -526,12 +542,10 @@ async test "gateway authentication failures map to transport errors" {
 
 ///|
 async test "rate limits carry the structured verdict; 5xx stays a transport error" {
-  let transport = chat_transport(
-    posts=[
-      buffered_post(status=429, body="rate limit exceeded, retry at 12:00Z"),
-      buffered_post(status=503, body="upstream unavailable"),
-    ],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=429, body="rate limit exceeded, retry at 12:00Z"),
+    buffered_post(status=503, body="upstream unavailable"),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let port = select_and_port(manager, "anthropic/claude-native")
@@ -591,11 +605,10 @@ async test "usage accounting preserves native cache information" {
       "cache_read_input_tokens": Json::number(80),
       "cache_creation_input_tokens": Json::number(10),
     }),
-  })
-  .stringify()
-  let transport = chat_transport(
-    posts=[buffered_post(status=200, body=usage_body)],
-  )
+  }).stringify()
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=usage_body),
+  ])
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
   let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
@@ -690,12 +703,12 @@ async test "a catalog refresh invalidating the plan is honored on the next call"
 
 ///|
 async test "identical executions produce identical request shapes" {
-  let transport_a = chat_transport(
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="x"))],
-  )
-  let transport_b = chat_transport(
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="x"))],
-  )
+  let transport_a = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="x")),
+  ])
+  let transport_b = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="x")),
+  ])
   let manager_a = manager_with(transport=transport_a, config=local_config())
   refresh_ok(manager_a)
   let port_a = select_and_port(manager_a, "anthropic/claude-native")
@@ -716,14 +729,17 @@ async test "identical executions produce identical request shapes" {
     chat_options(),
     NoStream,
   )
-  inspect(transport_a.post_calls[0] == transport_b.post_calls[0], content="true")
+  inspect(
+    transport_a.post_calls[0] == transport_b.post_calls[0],
+    content="true",
+  )
 }
 
 ///|
 async test "streaming execution is cancellable mid-stream" {
-  let transport = chat_transport(
-    posts=[streaming_post(status=200, lines=messages_thinking_stream())],
-  )
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=messages_thinking_stream()),
+  ])
   transport.delay_ms = 30
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
@@ -742,21 +758,24 @@ async test "streaming execution is cancellable mid-stream" {
     // Land the cancellation in the middle of the scripted stream.
     @async.sleep(50)
     task.cancel()
-    try task.wait() catch {
+    task.wait() catch {
       @async.WaitedTaskAlreadyCancelled => ()
       error => fail("cancellation surfaced the wrong error: \{error}")
     }
   })
 }
 
- 
 ///|
 /// Unknown image modality must not trigger implicit placeholder conversion.
 test "unknown image modality preserves original image blocks" {
-  let entry = decode_catalog(models_body(model_entry(
-    id="x/unknown-image",
-    fields="\"native_endpoints\":[\"/v1/messages\"]",
-  ))).entries[0]
+  let entry = decode_catalog(
+      models_body(
+        model_entry(
+          id="x/unknown-image",
+          fields="\"native_endpoints\":[\"/v1/messages\"]",
+        ),
+      ),
+    ).entries[0]
   inspect(entry.meta.modalities_input is None, content="true")
   inspect(model_supports_images(entry), content="true")
   let input : Array[@posoco.Content] = [
@@ -766,5 +785,8 @@ test "unknown image modality preserves original image blocks" {
     [@posoco.Message::UserMessage(content=input)],
     model_supports_images(entry),
   )
-  inspect(shaped == [@posoco.Message::UserMessage(content=input)], content="true")
+  inspect(
+    shaped == [@posoco.Message::UserMessage(content=input)],
+    content="true",
+  )
 }

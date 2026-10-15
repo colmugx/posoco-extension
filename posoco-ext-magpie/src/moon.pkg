@@ -1,5 +1,5 @@
 import {
-  "colmugx/posoco" @posoco,
+  "colmugx/posoco",
   "colmugx/posoco-kit-model-management" @modelmgmt,
   "colmugx/posoco-kit-messages" @messages,
   "colmugx/posoco-kit-responses" @responses,

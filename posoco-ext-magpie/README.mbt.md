@@ -39,6 +39,22 @@ Independent Gateway-aware Model Manager for Posoco, not a provider hosted by
   finish reason, and the gateway response id — delivered to a caller
   supplied sink, designed for later routing/quota/cost attachments. Cost
   data is never fabricated.
+- Gateway intelligence (`MagpieGatewayIntelligence`): a typed, read-only
+  client for the documented control and observability endpoints —
+  `GET /v1/magpie/route?session=…` (with `after`/`wait` long-poll),
+  `GET /v1/magpie/quotas` (`?kept=1` for the cached answer),
+  `POST /v1/magpie/quotas/refresh`, `GET /v1/magpie/limit`,
+  `GET /v1/magpie/usage?period=…`, `GET /v1/magpie/usage/requests`
+  (`offset`/`limit` ≤ 500), and `GET /v1/magpie/concurrency`. Typed
+  snapshots (`MagpieRouteSnapshot`, `MagpieQuotaSnapshot`,
+  `MagpieKeyLimit`, `MagpieUsageSummary`, `MagpieUsageRequestsPage`,
+  `MagpieConcurrencySnapshot`) follow the gateway's observed field shapes —
+  asked/group/rule/model/effort/served/tries with fallback reasons on the
+  route, windows with used/remaining/resets per card, session rows,
+  request-history rows with served/model attribution, cost, and cache
+  numbers. Query values are percent-encoded; the usage rows' cache numbers
+  can be run through the messages kit's cache economics with a caller
+  supplied rate card.
 
 - Typed gateway URL, local/remote authentication and redacted configuration.
 - `GET /api/hello` identity verification and `GET /v1/models` catalog refresh.
@@ -121,6 +137,19 @@ rejections (images on a text-only model, an effort outside the advertised
 ladder) block every policy; required-but-unguaranteed features are planned
 only under `AllowTranslated`, with the risks kept on the plan.
 
+### Permission behavior and service availability
+
+`MagpieGatewayIntelligence::service_availability(service)` reports, per
+service and independent from inference: `Accessible`, `Forbidden` (401
+unauthenticated / 403 forbidden — the documented `gateway_key_held` denial
+code is recognized and quoted; bodies never are), `TemporarilyUnavailable`
+(429/5xx/unreachable), `NotSupported` (404 — gateway version without the
+endpoint), or `Unknown` (never probed). A 403 on quotas or concurrency
+never marks the manager offline: inference keeps working, the manager's own
+connection status is untouched, and the next refresh or chat call proceeds
+normally. Session identifiers never appear in intelligence diagnostics;
+error messages quote stages, statuses, and documented codes only.
+
 ### Capability matrix
 
 `CatalogDeclared` rows depend on the model's catalog entry; everything the
@@ -149,8 +178,8 @@ call re-validates. Later PRs can attach gateway routing, quota and cost
 observations to the execution report sink; actual cache-hit and cost claims
 require upstream usage evidence and are never fabricated here.
 
-Remaining follow-ups: `count_tokens` integration, gateway-side route
-observability, and quota telemetry.
+Remaining follow-ups: `count_tokens` integration, reported-usage POSTing
+(`POST /v1/magpie/usage/requests`), and quota telemetry.
 
 ## Catalog limitations
 

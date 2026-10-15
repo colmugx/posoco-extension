@@ -19,10 +19,10 @@ pub fn MagpieProtocol::canonical_path(self : MagpieProtocol) -> String {
 
 ///|
 /// Bounded error-body capture: at most 2048 chars are read for diagnostics.
-const MAX_ERROR_BODY_CHARS : Int = 2048
+const MAX_ERROR_BODY_CHARS : Int32 = 2048
 
 ///|
-fn is_http_success(code : Int) -> Bool {
+fn is_http_success(code : Int32) -> Bool {
   code >= 200 && code < 300
 }
 
@@ -55,7 +55,7 @@ async fn drain_error_body(
 /// counted, never quoted.
 fn classify_http_error(
   stage : String,
-  code : Int,
+  code : Int32,
   body_text : String,
   now_ms~ : Int64,
 ) -> @posoco.ModelError? {
@@ -81,7 +81,7 @@ fn classify_http_error(
 /// Raises the classified error when the status is not a success.
 fn require_http_success(
   stage : String,
-  code : Int,
+  code : Int32,
   body_text : String,
 ) -> Unit raise @posoco.ModelError {
   match classify_http_error(stage, code, body_text, now_ms=@async.now()) {
@@ -140,17 +140,22 @@ fn exec_headers(
 /// turns of the same session and distinct across sessions. `None` = the
 /// scope carried no usable identity; the request then runs without the
 /// affinity header instead of inventing one.
-fn session_identity(
-  scope : @posoco.InvocationScope,
-) -> String? {
+fn session_identity(scope : @posoco.InvocationScope) -> String? {
   let id = scope.session_id.to_string()
-  if id is "" { None } else { Some(id) }
+  if id is "" {
+    None
+  } else {
+    Some(id)
+  }
 }
 
 ///|
 /// Resolves the endpoint the plan selected: the declared native path, or
 /// the protocol's canonical gateway path for translated execution.
-fn execution_endpoint(config : MagpieConfig, plan : MagpieProtocolPlan) -> String {
+fn execution_endpoint(
+  config : MagpieConfig,
+  plan : MagpieProtocolPlan,
+) -> String {
   let path = match plan.endpoint_path {
     Some(path) => path
     None => plan.protocol.canonical_path()
@@ -167,7 +172,9 @@ fn image_placeholder_text(media_type : String, data : String) -> String {
 }
 
 ///|
-fn downgrade_image_blocks(blocks : Array[@posoco.Content]) -> Array[@posoco.Content] {
+fn downgrade_image_blocks(
+  blocks : Array[@posoco.Content],
+) -> Array[@posoco.Content] {
   blocks.map(fn(block) {
     match block {
       @posoco.Content::Image(media_type~, data~) =>
@@ -183,7 +190,7 @@ fn downgrade_tool_outcome(outcome : @posoco.ToolOutcome) -> @posoco.ToolOutcome 
     @posoco.ToolOutcome::SuccessWithAttachments(
       content~,
       structured~,
-      attachments~,
+      attachments~
     ) => {
       let merged = StringBuilder()
       merged.write_string(content)
@@ -236,17 +243,19 @@ fn shape_for_images(
 ///|
 /// Whether the transcript carries image content anywhere.
 fn transcript_has_images(messages : Array[@posoco.Message]) -> Bool {
-  messages.iter().any(fn(msg) {
+  messages
+  .iter()
+  .any(fn(msg) {
     match msg {
-      @posoco.Message::SystemMessage(content~) |
-      @posoco.Message::UserMessage(content~) =>
+      @posoco.Message::SystemMessage(content~)
+      | @posoco.Message::UserMessage(content~) =>
         content.iter().any(fn(block) { block is @posoco.Content::Image(_) })
       @posoco.Message::ToolMessage(outcome~, ..) =>
         match outcome {
           @posoco.ToolOutcome::SuccessWithAttachments(attachments~, ..) =>
-            attachments.iter().any(fn(block) {
-              block is @posoco.Content::Image(_)
-            })
+            attachments
+            .iter()
+            .any(fn(block) { block is @posoco.Content::Image(_) })
           _ => false
         }
       _ => false
