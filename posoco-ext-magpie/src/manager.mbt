@@ -108,8 +108,24 @@ pub fn MagpieManager::catalog_entry(
 }
 
 ///|
-/// An isolated deep copy of a catalog entry: fresh arrays, shared
-/// immutable `raw`/`info` scalars.
+/// Copy JSON recursively so callers cannot mutate our catalog by editing
+/// nested extension metadata in a returned catalog entry.
+fn deep_copy_magpie_json(value : Json) -> Json {
+  match value {
+    Json::Object(fields) => {
+      let cloned : Map[String, Json] = Map::from_array([])
+      for key, item in fields {
+        cloned[key] = deep_copy_magpie_json(item)
+      }
+      Json::object(cloned)
+    }
+    Json::Array(items) => Json::array(items.map(deep_copy_magpie_json))
+    _ => value
+  }
+}
+
+///|
+/// An isolated deep copy of a catalog entry: fresh arrays and nested JSON.
 fn copy_entry(entry : MagpieCatalogEntry) -> MagpieCatalogEntry {
   let meta = entry.meta
   {
@@ -140,7 +156,7 @@ fn copy_entry(entry : MagpieCatalogEntry) -> MagpieCatalogEntry {
         endpoints.copy()
       }),
     },
-    raw: entry.raw,
+    raw: deep_copy_magpie_json(entry.raw),
   }
 }
 
