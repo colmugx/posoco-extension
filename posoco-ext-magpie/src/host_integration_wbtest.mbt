@@ -112,6 +112,52 @@ async test "first turn flows through the composed model port with selection" {
 }
 
 ///|
+/// Posoco Core owns lifecycle startup. A real Host must not be required to
+/// manually call runtime.on_start() to make the first inference work.
+async test "first agent turn automatically starts magpie lifecycle exactly once" {
+  let transport = FakeTransport(
+    [
+      Respond(code=200, body=hello_body()),
+      Respond(code=200, body=exec_catalog_body()),
+    ],
+    posts=[
+      buffered_post(status=200, body=messages_nonstream_body(text="first")),
+      buffered_post(status=200, body=messages_nonstream_body(text="second")),
+    ],
+  )
+  let runtime = MagpieRuntime::activate(
+    settings=Some(Json::object({
+      "model": Json::string("anthropic/claude-native"),
+    })),
+    transport~,
+  )
+  let agent = @posoco.Agent::Agent(
+    exts=[runtime],
+    config=@posoco.tk_config(),
+  )
+  inspect(transport.calls.length(), content="0")
+  let first = agent.run_turn(
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
+    "host-lifecycle-auto",
+  )
+  inspect(transport.calls.length(), content="2")
+  inspect(transport.post_calls.length(), content="1")
+  inspect(runtime.manager.connection_status().connected(), content="true")
+  guard first.message is @posoco.Message::AssistantMessage(..) else {
+    fail("first turn must complete after implicit lifecycle startup")
+  }
+  let second = agent.run_turn(
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("again")]),
+    "host-lifecycle-auto",
+  )
+  guard second.message is @posoco.Message::AssistantMessage(..) else {
+    fail("second turn should reuse the already-started runtime")
+  }
+  inspect(transport.calls.length(), content="2")
+  inspect(transport.post_calls.length(), content="2")
+}
+
+///|
 async test "duplicate extension registration is rejected by composition" {
   let runtime = MagpieRuntime::activate(
     transport=FakeTransport([
