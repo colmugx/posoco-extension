@@ -1,0 +1,94 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-opencode-go"
+
+import {
+  "colmugx/posoco-ext-opencode-zen",
+  "colmugx/posoco-kit-provider",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+  "posoco/devkit",
+  "posoco/ext-oauth",
+}
+
+// Values
+pub async fn fetch_go_usage(String, String, now_ms? : () -> Int64) -> Result[GoUsage, String]
+
+pub fn go_model_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, Array[@posoco-ext-opencode-zen.ZenModelInfo], String, Map[String, @posoco-ext-opencode-zen.ZenModelMeta], &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+
+pub fn go_monthly_allowance(String, GoPlan) -> Double?
+
+pub fn go_plan_of_setting(String) -> GoPlan raise @error.CompositionError
+
+pub fn go_static_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+
+pub fn go_usage_url(String) -> String
+
+pub fn parse_go_usage(Json, fetched_at_ms~ : Int64) -> Result[GoUsage, String]
+
+pub fn resolve_go_wire(String, npm? : String?, overrides? : Map[String, String]) -> @posoco-ext-opencode-zen.WireKind
+
+// Errors
+
+// Types and methods
+pub(all) enum GoPlan {
+  Go
+  GoPlus
+} derive(Eq, @debug.Debug)
+pub fn GoPlan::equal(Self, Self) -> Bool
+pub fn GoPlan::not_equal(Self, Self) -> Bool
+pub fn GoPlan::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GoRateLimitModelPort {
+  inner : &@port.ModelPort
+  base_url : String
+  api_key : String
+}
+pub fn GoRateLimitModelPort::GoRateLimitModelPort(inner~ : &@port.ModelPort, base_url~ : String, api_key~ : String) -> Self
+pub async fn GoRateLimitModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn GoRateLimitModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn GoRateLimitModelPort::provider_config(Self) -> @port.ProviderConfig
+pub impl @port.ModelPort for GoRateLimitModelPort
+
+pub(all) struct GoUsage {
+  rolling : GoUsageWindow
+  weekly : GoUsageWindow
+  monthly : GoUsageWindow
+  fetched_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn GoUsage::equal(Self, Self) -> Bool
+pub fn GoUsage::not_equal(Self, Self) -> Bool
+pub fn GoUsage::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GoUsageQuotaSource {
+  base_url : String
+  api_key : String
+  now_ms : () -> Int64
+}
+pub fn GoUsageQuotaSource::GoUsageQuotaSource(base_url~ : String, api_key~ : String, now_ms? : () -> Int64) -> Self
+pub async fn GoUsageQuotaSource::read(Self) -> Result[Array[@devkit.QuotaReading], String]
+pub impl @devkit.QuotaSource for GoUsageQuotaSource
+
+pub(all) struct GoUsageWindow {
+  percent : Double
+  reset_at_ms : Int64?
+  rate_limited : Bool
+} derive(Eq, @debug.Debug)
+pub fn GoUsageWindow::equal(Self, Self) -> Bool
+pub fn GoUsageWindow::not_equal(Self, Self) -> Bool
+pub fn GoUsageWindow::to_repr(Self) -> @debug.Repr
+
+pub(all) struct OpenCodeGoProvider {
+  ctx : @devkit.ExtContext
+}
+pub fn OpenCodeGoProvider::OpenCodeGoProvider(ctx? : @devkit.ExtContext) -> Self
+pub async fn OpenCodeGoProvider::refresh(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
+pub impl @posoco-kit-provider.ApiKeyFactory for OpenCodeGoProvider
+pub impl @posoco-kit-provider.ProviderFactory for OpenCodeGoProvider
+pub impl @posoco-kit-provider.RefreshableProviderFactory for OpenCodeGoProvider
+
+// Type aliases
+
+// Traits
