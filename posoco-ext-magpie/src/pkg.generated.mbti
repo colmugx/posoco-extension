@@ -17,7 +17,11 @@ pub const MANAGER_ID : String = "magpie"
 
 pub fn decode_catalog(String) -> MagpieCatalogReport raise MagpieGatewayError
 
+pub fn decode_model_metadata(model_id~ : String, display_name~ : String, provider_id~ : String, Map[String, Json], String) -> MagpieModelMetadata raise MagpieGatewayError
+
 pub fn effective_token(MagpieConfig) -> String?
+
+pub fn evaluate_protocol(MagpieCatalogEntry, MagpieProtocol, requirements~ : MagpieRequirements) -> MagpieProtocolEvaluation
 
 pub fn gateway_headers(String) -> Map[String, String]
 
@@ -26,6 +30,10 @@ pub fn gateway_url(MagpieConfig, String) -> String
 pub fn is_loopback_url(String) -> Bool
 
 pub fn parse_hello(String) -> MagpieIdentity raise MagpieGatewayError
+
+pub fn parse_native_endpoint(String) -> MagpieNativeEndpoint
+
+pub fn plan_protocol(MagpieCatalogEntry, requirements~ : MagpieRequirements, preference? : MagpiePreference, policy? : MagpieTranslationPolicy) -> MagpiePlanOutcome
 
 // Errors
 pub(all) suberror MagpieGatewayError {
@@ -48,8 +56,43 @@ pub struct HttpMagpieTransport {
 }
 pub fn HttpMagpieTransport::HttpMagpieTransport(timeout_ms? : Int) -> Self
 
+pub(all) struct MagpieCapability {
+  feature : MagpieFeature
+  status : MagpieCapabilityStatus
+  source : MagpieCapabilitySource
+  detail : String
+} derive(Eq, @debug.Debug)
+pub fn MagpieCapability::equal(Self, Self) -> Bool
+pub fn MagpieCapability::not_equal(Self, Self) -> Bool
+pub fn MagpieCapability::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MagpieCapabilitySource {
+  ProtocolNative
+  CatalogDeclared
+  GatewayLevel
+  Unknown
+} derive(Eq, @debug.Debug)
+pub fn MagpieCapabilitySource::equal(Self, Self) -> Bool
+pub fn MagpieCapabilitySource::not_equal(Self, Self) -> Bool
+pub fn MagpieCapabilitySource::output(Self, &Logger) -> Unit
+pub fn MagpieCapabilitySource::to_repr(Self) -> @debug.Repr
+pub fn MagpieCapabilitySource::to_string(Self) -> String
+pub impl Show for MagpieCapabilitySource
+
+pub(all) enum MagpieCapabilityStatus {
+  Available
+  Unsupported
+} derive(Eq, @debug.Debug)
+pub fn MagpieCapabilityStatus::equal(Self, Self) -> Bool
+pub fn MagpieCapabilityStatus::not_equal(Self, Self) -> Bool
+pub fn MagpieCapabilityStatus::output(Self, &Logger) -> Unit
+pub fn MagpieCapabilityStatus::to_repr(Self) -> @debug.Repr
+pub fn MagpieCapabilityStatus::to_string(Self) -> String
+pub impl Show for MagpieCapabilityStatus
+
 pub(all) struct MagpieCatalogEntry {
   info : @posoco-kit-model-management.ManagerModelInfo
+  meta : MagpieModelMetadata
   raw : Json
 } derive(@debug.Debug)
 pub fn MagpieCatalogEntry::to_repr(Self) -> @debug.Repr
@@ -58,6 +101,7 @@ pub(all) struct MagpieCatalogReport {
   entries : Array[MagpieCatalogEntry]
   duplicates : Array[String]
 } derive(@debug.Debug)
+pub fn MagpieCatalogReport::to_repr(Self) -> @debug.Repr
 
 pub struct MagpieConfig {
   base_url : String
@@ -71,6 +115,7 @@ pub fn MagpieConfig::MagpieConfig(base_url? : String, credential? : String?, con
 pub fn MagpieConfig::equal(Self, Self) -> Bool
 pub fn MagpieConfig::not_equal(Self, Self) -> Bool
 pub fn MagpieConfig::output(Self, &Logger) -> Unit
+pub fn MagpieConfig::to_repr(Self) -> @debug.Repr
 pub fn MagpieConfig::to_string(Self) -> String
 pub impl Show for MagpieConfig
 pub impl @debug.Debug for MagpieConfig
@@ -93,6 +138,35 @@ pub fn MagpieConnectionStatus::to_repr(Self) -> @debug.Repr
 pub fn MagpieConnectionStatus::to_string(Self) -> String
 pub impl Show for MagpieConnectionStatus
 
+pub(all) enum MagpieEndpointKind {
+  Native
+  GatewayTranslated
+} derive(Eq, @debug.Debug)
+pub fn MagpieEndpointKind::equal(Self, Self) -> Bool
+pub fn MagpieEndpointKind::not_equal(Self, Self) -> Bool
+pub fn MagpieEndpointKind::output(Self, &Logger) -> Unit
+pub fn MagpieEndpointKind::to_repr(Self) -> @debug.Repr
+pub fn MagpieEndpointKind::to_string(Self) -> String
+pub impl Show for MagpieEndpointKind
+
+pub(all) enum MagpieFeature {
+  Tools
+  Streaming
+  Images
+  ReasoningOutput
+  SignedThinkingReplay
+  ReasoningEffort
+  NativePromptCaching
+  TokenUsageIntegrity
+  Cancellation
+} derive(Eq, @debug.Debug)
+pub fn MagpieFeature::equal(Self, Self) -> Bool
+pub fn MagpieFeature::not_equal(Self, Self) -> Bool
+pub fn MagpieFeature::output(Self, &Logger) -> Unit
+pub fn MagpieFeature::to_repr(Self) -> @debug.Repr
+pub fn MagpieFeature::to_string(Self) -> String
+pub impl Show for MagpieFeature
+
 pub(all) struct MagpieIdentity {
   name : String
   version : String?
@@ -101,11 +175,22 @@ pub fn MagpieIdentity::equal(Self, Self) -> Bool
 pub fn MagpieIdentity::not_equal(Self, Self) -> Bool
 pub fn MagpieIdentity::to_repr(Self) -> @debug.Repr
 
+pub(all) struct MagpieIncompatibility {
+  model_id : String
+  requirements : MagpieRequirements
+  policy : MagpieTranslationPolicy
+  blockers : Array[MagpieProtocolBlocker]
+} derive(Eq, @debug.Debug)
+pub fn MagpieIncompatibility::equal(Self, Self) -> Bool
+pub fn MagpieIncompatibility::not_equal(Self, Self) -> Bool
+pub fn MagpieIncompatibility::to_repr(Self) -> @debug.Repr
+
 pub struct MagpieManager {
   // private fields
 }
 pub fn MagpieManager::MagpieManager(config~ : MagpieConfig, transport? : &MagpieTransport) -> Self
 pub fn MagpieManager::active_selection(Self) -> @posoco-kit-model-management.ManagerSelection
+pub fn MagpieManager::catalog_entry(Self, String) -> MagpieCatalogEntry?
 pub fn MagpieManager::connection_status(Self) -> MagpieConnectionStatus
 pub fn MagpieManager::last_refresh_report(Self) -> MagpieRefreshOutcome?
 pub fn MagpieManager::list_models(Self) -> Array[@posoco-kit-model-management.ManagerModelInfo]
@@ -114,6 +199,109 @@ pub async fn MagpieManager::refresh(Self) -> MagpieRefreshOutcome raise MagpieGa
 pub fn MagpieManager::select_effort(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
 pub fn MagpieManager::select_model(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
 pub impl @posoco-kit-model-management.ModelManagerControl for MagpieManager
+
+pub(all) struct MagpieModelMetadata {
+  model_id : String
+  display_name : String
+  magpie_label : String?
+  provider_id : String
+  is_routing_group : Bool
+  context_window : Int?
+  context_length : Int?
+  max_input_tokens : Int?
+  max_output_tokens : Int?
+  modalities_input : Array[String]?
+  reasoning_declared : Bool?
+  reasoning_levels : Array[String]?
+  native_endpoints : Array[MagpieNativeEndpoint]?
+} derive(Eq, @debug.Debug)
+pub fn MagpieModelMetadata::equal(Self, Self) -> Bool
+pub fn MagpieModelMetadata::native_path_for(Self, MagpieProtocol) -> String?
+pub fn MagpieModelMetadata::not_equal(Self, Self) -> Bool
+pub fn MagpieModelMetadata::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieNativeEndpoint {
+  protocol : MagpieProtocol?
+  path : String
+} derive(Eq, @debug.Debug)
+pub fn MagpieNativeEndpoint::equal(Self, Self) -> Bool
+pub fn MagpieNativeEndpoint::not_equal(Self, Self) -> Bool
+pub fn MagpieNativeEndpoint::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MagpiePlanConfidence {
+  DeclaredNative
+  Inferred
+} derive(Eq, @debug.Debug)
+pub fn MagpiePlanConfidence::equal(Self, Self) -> Bool
+pub fn MagpiePlanConfidence::not_equal(Self, Self) -> Bool
+pub fn MagpiePlanConfidence::output(Self, &Logger) -> Unit
+pub fn MagpiePlanConfidence::to_repr(Self) -> @debug.Repr
+pub fn MagpiePlanConfidence::to_string(Self) -> String
+pub impl Show for MagpiePlanConfidence
+
+pub(all) enum MagpiePlanOutcome {
+  Planned(MagpieProtocolPlan)
+  Incompatible(MagpieIncompatibility)
+} derive(Eq, @debug.Debug)
+pub fn MagpiePlanOutcome::equal(Self, Self) -> Bool
+pub fn MagpiePlanOutcome::not_equal(Self, Self) -> Bool
+pub fn MagpiePlanOutcome::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MagpiePreference {
+  Any
+  Prefer(MagpieProtocol)
+} derive(Eq, @debug.Debug)
+pub fn MagpiePreference::equal(Self, Self) -> Bool
+pub fn MagpiePreference::not_equal(Self, Self) -> Bool
+pub fn MagpiePreference::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MagpieProtocol {
+  Messages
+  Responses
+  ChatCompletions
+} derive(Eq, @debug.Debug)
+pub fn MagpieProtocol::equal(Self, Self) -> Bool
+pub fn MagpieProtocol::not_equal(Self, Self) -> Bool
+pub fn MagpieProtocol::output(Self, &Logger) -> Unit
+pub fn MagpieProtocol::to_repr(Self) -> @debug.Repr
+pub fn MagpieProtocol::to_string(Self) -> String
+pub impl Show for MagpieProtocol
+
+pub(all) struct MagpieProtocolBlocker {
+  protocol : MagpieProtocol
+  reasons : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn MagpieProtocolBlocker::equal(Self, Self) -> Bool
+pub fn MagpieProtocolBlocker::not_equal(Self, Self) -> Bool
+pub fn MagpieProtocolBlocker::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieProtocolEvaluation {
+  protocol : MagpieProtocol
+  native_path : String?
+  capabilities : Array[MagpieCapability]
+  hard_blockers : Array[String]
+  unguaranteed : Array[String]
+  risks : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn MagpieProtocolEvaluation::equal(Self, Self) -> Bool
+pub fn MagpieProtocolEvaluation::not_equal(Self, Self) -> Bool
+pub fn MagpieProtocolEvaluation::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieProtocolPlan {
+  model_id : String
+  protocol : MagpieProtocol
+  endpoint_path : String?
+  kind : MagpieEndpointKind
+  confidence : MagpiePlanConfidence
+  capabilities : Array[MagpieCapability]
+  risks : Array[String]
+  unsupported : Array[String]
+  reasons : Array[String]
+  lossy_opt_in : Bool
+} derive(Eq, @debug.Debug)
+pub fn MagpieProtocolPlan::equal(Self, Self) -> Bool
+pub fn MagpieProtocolPlan::not_equal(Self, Self) -> Bool
+pub fn MagpieProtocolPlan::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MagpieRefreshOutcome {
   total : Int
@@ -124,6 +312,33 @@ pub(all) struct MagpieRefreshOutcome {
 pub fn MagpieRefreshOutcome::equal(Self, Self) -> Bool
 pub fn MagpieRefreshOutcome::not_equal(Self, Self) -> Bool
 pub fn MagpieRefreshOutcome::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MagpieRequirements {
+  tools : Bool
+  streaming : Bool
+  images : Bool
+  reasoning_output : Bool
+  signed_thinking_replay : Bool
+  reasoning_effort : String?
+  native_prompt_caching : Bool
+  token_usage_integrity : Bool
+  cancellation : Bool
+} derive(Eq, @debug.Debug)
+pub fn MagpieRequirements::MagpieRequirements(tools? : Bool, streaming? : Bool, images? : Bool, reasoning_output? : Bool, signed_thinking_replay? : Bool, reasoning_effort? : String?, native_prompt_caching? : Bool, token_usage_integrity? : Bool, cancellation? : Bool) -> Self
+pub fn MagpieRequirements::equal(Self, Self) -> Bool
+pub fn MagpieRequirements::not_equal(Self, Self) -> Bool
+pub fn MagpieRequirements::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MagpieTranslationPolicy {
+  NativeOnly
+  AllowTranslated
+} derive(Eq, @debug.Debug)
+pub fn MagpieTranslationPolicy::equal(Self, Self) -> Bool
+pub fn MagpieTranslationPolicy::not_equal(Self, Self) -> Bool
+pub fn MagpieTranslationPolicy::output(Self, &Logger) -> Unit
+pub fn MagpieTranslationPolicy::to_repr(Self) -> @debug.Repr
+pub fn MagpieTranslationPolicy::to_string(Self) -> String
+pub impl Show for MagpieTranslationPolicy
 
 // Type aliases
 

@@ -21,9 +21,16 @@ pub extend MagpieCatalogEntry with @moonbitlang/core/debug.Debug::{to_repr}
 pub(all) struct MagpieCatalogEntry {
   /// Manager-neutral projection (`ManagerModelInfo`).
   info : @modelmgmt.ManagerModelInfo
-  /// The original Magpie JSON entry, verbatim.
+  /// Typed Magpie-specific metadata (labels, context limits, modalities,
+  /// reasoning declaration, native endpoints, routing-group identity).
+  meta : MagpieModelMetadata
+  /// The original Magpie JSON entry, verbatim; unknown extension metadata
+  /// stays available here.
   raw : Json
 } derive(Debug)
+
+///|
+pub extend MagpieCatalogReport with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Result of decoding one `/v1/models` payload: the deduplicated catalog in
@@ -87,30 +94,36 @@ fn decode_entry(
   let where_ = "entry[\{index}] (\{id})"
   let display_name = required_string(fields, "display_name", where_)
   let owned_by = required_string(fields, "owned_by", where_)
-  // A present `reasoning` flag must be a boolean; its absence advertises
-  // nothing on its own.
-  match fields.get("reasoning") {
-    None => ()
-    Some(Json::True) | Some(Json::False) => ()
-    Some(_) =>
-      raise MagpieGatewayError::InvalidResponse(
-        "/v1/models: \{where_} field \"reasoning\" must be a boolean",
-      )
+  let meta = decode_model_metadata(
+    model_id=id,
+    display_name~,
+    provider_id=owned_by,
+    fields,
+    where_,
+  )
+  // The neutral projection is derived from the typed metadata, so both
+  // layers always agree. Absent declarations stay honest: no fabricated
+  // defaults, no invented grouping.
+  let capabilities = match meta.modalities_input {
+    Some(inputs) => inputs.filter(fn(modality) { modality != "text" })
+    None => []
   }
-  let context_window = optional_int(fields, "context_window", where_)
-  let capabilities = decode_modalities(fields, where_)
-  let efforts = decode_efforts(fields, where_)
+  let efforts = match meta.reasoning_levels {
+    Some(levels) => levels
+    None => []
+  }
   {
     info: {
       model_id: id,
       label: display_name,
       provider_id: owned_by,
-      context_window,
+      context_window: meta.context_window,
       capabilities,
       efforts,
       default_effort: None,
       display_group: None,
     },
+    meta,
     raw: item,
   }
 }
@@ -159,76 +172,4 @@ fn optional_int(
         "/v1/models: \{where_} field \"\{key}\" must be a number",
       )
   }
-}
-
-///|
-/// Input modalities beyond plain text become capability identifiers, in
-/// server order (`{"input":["text","image"]}` → `["image"]`). Absent
-/// modalities mean nothing is claimed.
-fn decode_modalities(
-  fields : Map[String, Json],
-  where_ : String,
-) -> Array[String] raise MagpieGatewayError {
-  let capabilities : Array[String] = []
-  match fields.get("modalities") {
-    None => ()
-    Some(Json::Object(modalities)) =>
-      match modalities.get("input") {
-        None => ()
-        Some(Json::Array(inputs)) =>
-          for input in inputs {
-            guard input is Json::String(modality) else {
-              raise MagpieGatewayError::InvalidResponse(
-                "/v1/models: \{where_} modalities.input must hold strings",
-              )
-            }
-            if modality != "text" {
-              capabilities.push(modality)
-            }
-          }
-        Some(_) =>
-          raise MagpieGatewayError::InvalidResponse(
-            "/v1/models: \{where_} modalities.input must be an array",
-          )
-      }
-    Some(_) =>
-      raise MagpieGatewayError::InvalidResponse(
-        "/v1/models: \{where_} modalities must be an object",
-      )
-  }
-  capabilities
-}
-
-///|
-/// Advertised reasoning efforts, in server order, from
-/// `supported_reasoning_levels` (`[{"effort":"low"}, …]`). Absent levels
-/// mean no effort is advertised — never an invented one. A `reasoning`
-/// flag alone advertises nothing.
-fn decode_efforts(
-  fields : Map[String, Json],
-  where_ : String,
-) -> Array[String] raise MagpieGatewayError {
-  let efforts : Array[String] = []
-  match fields.get("supported_reasoning_levels") {
-    None => ()
-    Some(Json::Array(levels)) =>
-      for level in levels {
-        guard level is Json::Object(level_fields) else {
-          raise MagpieGatewayError::InvalidResponse(
-            "/v1/models: \{where_} supported_reasoning_levels must hold objects",
-          )
-        }
-        guard level_fields.get("effort") is Some(Json::String(effort)) else {
-          raise MagpieGatewayError::InvalidResponse(
-            "/v1/models: \{where_} reasoning level needs a string \"effort\"",
-          )
-        }
-        efforts.push(effort)
-      }
-    Some(_) =>
-      raise MagpieGatewayError::InvalidResponse(
-        "/v1/models: \{where_} supported_reasoning_levels must be an array",
-      )
-  }
-  efforts
 }

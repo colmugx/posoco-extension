@@ -90,6 +90,61 @@ pub fn MagpieManager::connection_status(
 }
 
 ///|
+/// An isolated copy of the typed catalog entry for `model_id`, when the
+/// current catalog carries it. Mutating the returned entry never affects
+/// the manager. Planning consumes this; the neutral trait surface and the
+/// registry stay untouched.
+pub fn MagpieManager::catalog_entry(
+  self : MagpieManager,
+  model_id : String,
+) -> MagpieCatalogEntry? {
+  match
+    find_first(self.catalog.iter(), fn(entry) {
+      entry.info.model_id == model_id
+    }) {
+    Some(entry) => Some(copy_entry(entry))
+    None => None
+  }
+}
+
+///|
+/// An isolated deep copy of a catalog entry: fresh arrays, shared
+/// immutable `raw`/`info` scalars.
+fn copy_entry(entry : MagpieCatalogEntry) -> MagpieCatalogEntry {
+  let meta = entry.meta
+  {
+    info: {
+      model_id: entry.info.model_id,
+      label: entry.info.label,
+      provider_id: entry.info.provider_id,
+      context_window: entry.info.context_window,
+      capabilities: entry.info.capabilities.copy(),
+      efforts: entry.info.efforts.copy(),
+      default_effort: entry.info.default_effort,
+      display_group: entry.info.display_group,
+    },
+    meta: {
+      model_id: meta.model_id,
+      display_name: meta.display_name,
+      magpie_label: meta.magpie_label,
+      provider_id: meta.provider_id,
+      is_routing_group: meta.is_routing_group,
+      context_window: meta.context_window,
+      context_length: meta.context_length,
+      max_input_tokens: meta.max_input_tokens,
+      max_output_tokens: meta.max_output_tokens,
+      modalities_input: meta.modalities_input.map(fn(names) { names.copy() }),
+      reasoning_declared: meta.reasoning_declared,
+      reasoning_levels: meta.reasoning_levels.map(fn(levels) { levels.copy() }),
+      native_endpoints: meta.native_endpoints.map(fn(endpoints) {
+        endpoints.copy()
+      }),
+    },
+    raw: entry.raw,
+  }
+}
+
+///|
 /// Report of the last successful refresh, if any has succeeded.
 pub fn MagpieManager::last_refresh_report(
   self : MagpieManager,

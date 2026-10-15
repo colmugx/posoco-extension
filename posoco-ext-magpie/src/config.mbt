@@ -111,13 +111,13 @@ fn normalize_base_url(url : String) -> String raise MagpieGatewayError {
   } else {
     trimmed
   }
-  let authority = if has_https {
-    origin[8:]
-  } else {
-    origin[7:]
-  }
-  if authority == "" || authority.contains("/") || authority.contains("?") ||
-    authority.contains("#") || authority.contains("@") || authority.contains("\\") ||
+  let authority = if has_https { origin[8:] } else { origin[7:] }
+  if authority == "" ||
+    authority.contains("/") ||
+    authority.contains("?") ||
+    authority.contains("#") ||
+    authority.contains("@") ||
+    authority.contains("\\") ||
     authority.contains(" ") {
     raise MagpieGatewayError::InvalidConfig(
       "base_url must be a gateway origin without path, query or userinfo",
@@ -134,6 +134,9 @@ fn normalize_base_url(url : String) -> String raise MagpieGatewayError {
 /// Redacted rendering of the configuration: the credential, if any, appears
 /// only as `<redacted>`, in both the `Debug` and `Show` renderings. Never
 /// derive `Debug`/`Show` over the raw struct.
+pub extend MagpieConfig with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub impl Debug for MagpieConfig with fn to_repr(self) -> @debug.Repr {
   @debug.Repr::Repr(self.to_string())
 }
