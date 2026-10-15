@@ -1079,12 +1079,18 @@ async fn main {
         let posted = ctx.post(path="/v1/messages", key~, body=turn1h)
         match posted {
           Ok((codeh, bodyh)) => {
+            // Total cache creation does not prove a one-hour write.
+            // Require the native 1h breakdown reported by the upstream.
             let creation1h = match bodyh {
               Some(Json::Object(fields)) =>
                 match fields.get("usage") {
                   Some(Json::Object(u)) =>
-                    match u.get("cache_creation_input_tokens") {
-                      Some(Json::Number(n, ..)) => Some(n.to_int())
+                    match u.get("cache_creation") {
+                      Some(Json::Object(parts)) =>
+                        match parts.get("ephemeral_1h_input_tokens") {
+                          Some(Json::Number(n, ..)) if n > 0.0 => Some(n.to_int())
+                          _ => None
+                        }
                       _ => None
                     }
                   _ => None
@@ -1094,11 +1100,11 @@ async fn main {
             match creation1h {
               Some(tokens) if tokens > 0 =>
                 ctx.pass(
-                  "explicitly approved 1h write reported \{tokens} tokens (HTTP \{codeh})",
+                  "explicitly approved 1h write reported \{tokens} native 1h tokens (HTTP \{codeh})",
                 )
               _ =>
                 ctx.fail(
-                  "1h write approved by flag but no creation tokens reported (HTTP \{codeh})",
+                  "1h write approved, but no native 1h cache-creation breakdown reported (HTTP \{codeh})",
                 )
             }
           }
