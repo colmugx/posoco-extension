@@ -137,12 +137,14 @@ impl MagpieTransport for HttpMagpieTransport with fn post(
 /// path by the caller-facing handle.
 priv struct HttpEventStream {
   client : @http.Client
+  mut closed : Bool
 }
 
 ///|
 impl MagpieEventStream for HttpEventStream with fn next_line(
   self : HttpEventStream,
 ) -> String? raise MagpieGatewayError {
+  if self.closed { return None }
   self.client.read_until("\n") catch {
     err => raise MagpieGatewayError::Offline("stream read failed: \{err}")
   }
@@ -150,9 +152,12 @@ impl MagpieEventStream for HttpEventStream with fn next_line(
 
 ///|
 impl MagpieEventStream for HttpEventStream with fn close_stream(
-  _self : HttpEventStream,
+  self : HttpEventStream,
 ) -> Unit raise MagpieGatewayError {
-  ()
+  if !self.closed {
+    self.closed = true
+    self.client.close()
+  }
 }
 
 ///|
@@ -181,5 +186,5 @@ impl MagpieTransport for HttpMagpieTransport with fn post_stream(
       raise MagpieGatewayError::Offline("stream start failed: \{err}")
     }
   }
-  (response.code, HttpEventStream::{ client })
+  (response.code, HttpEventStream::{ client, closed: false })
 }
