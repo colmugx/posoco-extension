@@ -179,9 +179,9 @@ test "replace_provider_slots expands a provider in place and keeps order" {
   assert_eq(router.active_slot_id(), "one/a")
   // The preserved-active path republishes the model segment from the
   // swapped catalog and nothing else: no provider event rides this path.
-  assert_eq(capture.events.length(), 1)
+  assert_eq(router_visible_events(capture).length(), 1)
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -218,9 +218,9 @@ test "replace_provider_slots falls back when the active slot disappears" {
   assert_eq(router.active_effort(), None)
   // The fallback path publishes the provider event first, then the model
   // segment rendered from the swapped catalog with the cleared effort.
-  assert_eq(capture.events.length(), 2)
-  assert_eq(capture.events[0].topic, "provider")
-  match capture.events[0].data {
+  assert_eq(router_visible_events(capture).length(), 2)
+  assert_eq(router_visible_events(capture)[0].topic, "provider")
+  match router_visible_events(capture)[0].data {
     Json::Object(fields) =>
       match fields.get("provider_id") {
         Some(Json::String("one")) => ()
@@ -229,7 +229,7 @@ test "replace_provider_slots falls back when the active slot disappears" {
     _ => fail("expected a provider event payload object")
   }
   assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
+    @devkit.decode_status_op(router_visible_events(capture)[1]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -393,11 +393,11 @@ test "model response publishes cache and model segments" {
       ),
     ),
   )
-  assert_eq(capture.events.length(), 2)
-  assert_eq(capture.events[0].source, "posoco_ext_llm")
-  assert_eq(capture.events[0].topic, "status")
+  assert_eq(router_visible_events(capture).length(), 2)
+  assert_eq(router_visible_events(capture)[0].source, "posoco_ext_llm")
+  assert_eq(router_visible_events(capture)[0].topic, "status")
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="cache",
@@ -409,7 +409,7 @@ test "model response publishes cache and model segments" {
     ),
   )
   assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
+    @devkit.decode_status_op(router_visible_events(capture)[1]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -437,9 +437,9 @@ test "model effort falls back to slot default then to default" {
     bus=Some(bus),
   )
   without_default.publish_model_status()
-  assert_eq(capture.events.length(), 2)
+  assert_eq(router_visible_events(capture).length(), 2)
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -451,7 +451,7 @@ test "model effort falls back to slot default then to default" {
     ),
   )
   assert_eq(
-    @devkit.decode_status_op(capture.events[1]),
+    @devkit.decode_status_op(router_visible_events(capture)[1]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -481,10 +481,10 @@ test "on_compose registers the model segment and leaves ctx unregistered" {
       ui=ui as &@posoco.UiPort,
     ),
   )
-  assert_eq(capture.events.length(), 3)
-  assert_eq(capture.events[0].source, "posoco_ext_llm")
+  assert_eq(router_visible_events(capture).length(), 3)
+  assert_eq(router_visible_events(capture)[0].source, "posoco_ext_llm")
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -495,10 +495,10 @@ test "on_compose registers the model segment and leaves ctx unregistered" {
       ),
     ),
   )
-  assert_eq(capture.events[1].topic, "provider")
-  assert_eq(capture.events[1].source, "posoco_ext_llm")
+  assert_eq(router_visible_events(capture)[1].topic, "provider")
+  assert_eq(router_visible_events(capture)[1].source, "posoco_ext_llm")
   assert_eq(
-    @devkit.decode_status_op(capture.events[2]),
+    @devkit.decode_status_op(router_visible_events(capture)[2]),
     Some(@devkit.StatusOp::Unregister(segment="ctx")),
   )
 }
@@ -719,7 +719,7 @@ test "missing cached or absent usage unregisters the cache segment" {
     slots=[router_effort_slot("slot-a", "one", "slot-a")],
     bus=Some(bus),
   )
-  assert_eq(capture.events.length(), 0)
+  assert_eq(router_visible_events(capture).length(), 0)
   router.on_event_at(
     Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
@@ -729,9 +729,9 @@ test "missing cached or absent usage unregisters the cache segment" {
       ),
     ),
   )
-  assert_eq(capture.events.length(), 2)
+  assert_eq(router_visible_events(capture).length(), 2)
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(@devkit.StatusOp::Unregister(segment="cache")),
   )
   router.on_event_at(
@@ -741,9 +741,9 @@ test "missing cached or absent usage unregisters the cache segment" {
       usage=None,
     ),
   )
-  assert_eq(capture.events.length(), 4)
+  assert_eq(router_visible_events(capture).length(), 4)
   assert_eq(
-    @devkit.decode_status_op(capture.events[2]),
+    @devkit.decode_status_op(router_visible_events(capture)[2]),
     Some(@devkit.StatusOp::Unregister(segment="cache")),
   )
 }
@@ -759,9 +759,9 @@ test "switch_slot republishes the model segment" {
   router.switch_slot("second") catch {
     _ => fail("unexpected slot switch failure")
   }
-  assert_eq(capture.events.length(), 2)
+  assert_eq(router_visible_events(capture).length(), 2)
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -772,8 +772,8 @@ test "switch_slot republishes the model segment" {
       ),
     ),
   )
-  assert_eq(capture.events[1].topic, "provider")
-  match capture.events[1].data {
+  assert_eq(router_visible_events(capture)[1].topic, "provider")
+  match router_visible_events(capture)[1].data {
     Json::Object(fields) =>
       match fields.get("provider_id") {
         Some(Json::String("two")) => ()
@@ -996,7 +996,7 @@ async test "chat refreshes quota segments after the response" {
   @devkit.quota_registry_unregister("router-quota-provider")
   guard outcome is Ok(_) else { fail("router chat must succeed") }
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="balance",
@@ -1470,8 +1470,8 @@ test "a pending default publishes the model segment from the persisted id" {
     bus=Some(bus),
   )
   router.publish_model_status()
-  assert_eq(capture.events.length(), 1)
-  match @devkit.decode_status_op(capture.events[0]) {
+  assert_eq(router_visible_events(capture).length(), 1)
+  match @devkit.decode_status_op(router_visible_events(capture)[0]) {
     Some(@devkit.StatusOp::Register(segment="model", value=Some(value), ..)) =>
       assert_eq(value, "g1:default")
     _ => fail("expected a model status register")
@@ -1486,6 +1486,19 @@ fn router_selection_events(events : Array[@devkit.BusEvent]) -> Array[Json] {
   for event in events {
     if event.source == "posoco_ext_llm" && event.topic == "model_selection" {
       out.push(event.data)
+    }
+  }
+  out
+}
+
+///|
+/// The bus traffic the status-protocol tests assert on: everything except
+/// the structured `model_selection` events the selection channel adds.
+fn router_visible_events(capture : StatusCapture) -> Array[@devkit.BusEvent] {
+  let out : Array[@devkit.BusEvent] = []
+  for event in capture.events {
+    if event.topic != "model_selection" {
+      out.push(event)
     }
   }
   out
@@ -1518,6 +1531,7 @@ test "selection changes publish a structured model_selection event" {
   let seeded = router_selection_events(capture.events)
   assert_eq(seeded.length(), 1)
   router_selection_payload(seeded[0], "one/a", Json::null())
+  capture.events.clear()
   // Slot switch: effort resets to the slot default (null).
   router.switch_slot("two/b") catch {
     _ => fail("unexpected switch failure")
@@ -1525,6 +1539,7 @@ test "selection changes publish a structured model_selection event" {
   let switched = router_selection_events(capture.events)
   assert_eq(switched.length(), 1)
   router_selection_payload(switched[0], "two/b", Json::null())
+  capture.events.clear()
   // Explicit effort on the effort-capable slot rides along with the slot id.
   router.switch_slot("one/a") catch {
     _ => fail("unexpected switch failure")

@@ -343,9 +343,9 @@ async test "model switch republishes the model segment with the new slot" {
     Json::object(Map::from_array([("slot", Json::string("second"))])),
   )
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
-  assert_eq(capture.events.length(), 2)
+  assert_eq(router_visible_events(capture).length(), 2)
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -356,8 +356,8 @@ async test "model switch republishes the model segment with the new slot" {
       ),
     ),
   )
-  assert_eq(capture.events[1].topic, "provider")
-  match capture.events[1].data {
+  assert_eq(router_visible_events(capture)[1].topic, "provider")
+  match router_visible_events(capture)[1].data {
     Json::Object(fields) =>
       match fields.get("provider_id") {
         Some(Json::String("provider-b")) => ()
@@ -381,9 +381,9 @@ async test "effort switch republishes the model segment" {
     Json::object(Map::from_array([("effort", Json::string("high"))])),
   )
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
-  assert_eq(capture.events.length(), 2)
+  assert_eq(router_visible_events(capture).length(), 2)
   assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
+    @devkit.decode_status_op(router_visible_events(capture)[0]),
     Some(
       @devkit.StatusOp::Register(
         segment="model",
@@ -394,8 +394,8 @@ async test "effort switch republishes the model segment" {
       ),
     ),
   )
-  assert_eq(capture.events[1].topic, "provider")
-  match capture.events[1].data {
+  assert_eq(router_visible_events(capture)[1].topic, "provider")
+  match router_visible_events(capture)[1].data {
     Json::Object(fields) =>
       match fields.get("provider_id") {
         Some(Json::String("one")) => ()
