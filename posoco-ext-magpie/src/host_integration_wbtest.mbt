@@ -359,3 +359,32 @@ async test "shutdown is idempotent and construction performs no network I/O" {
   // The command surface stays consistent after repeated shutdowns.
   inspect(composed_command_ids(agent).length() >= 10, content="true")
 }
+
+///|
+/// Host shutdown is terminal for Agent turns; a manifest still listing
+/// commands does not demonstrate that the Host remains usable after shutdown.
+async test "agent shutdown is idempotent and prevents later turns" {
+  let transport = FakeTransport([
+    Respond(code=200, body=hello_body()),
+    Respond(code=200, body=exec_catalog_body()),
+  ])
+  let runtime = MagpieRuntime::activate(transport~)
+  let agent = @posoco.Agent::Agent(
+    exts=[runtime],
+    config=@posoco.tk_config(),
+  )
+  agent.shutdown()
+  agent.shutdown()
+  inspect(transport.calls.length(), content="0")
+  try
+    agent.run_turn(
+      @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
+      "shutdown-host",
+    )
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("shut-down Host must reject a new turn")
+  }
+  inspect(transport.post_calls.length(), content="0")
+}
