@@ -57,6 +57,10 @@ pub fn sanitize_label(String, limit? : Int) -> String
 
 pub fn sanitize_path(String, limit? : Int) -> String
 
+pub fn status_bus_default() -> EventBus?
+
+pub fn status_bus_register(EventBus) -> Unit
+
 pub fn status_color_roles() -> Array[String]
 
 pub fn strip_dot_prefix(String) -> String
