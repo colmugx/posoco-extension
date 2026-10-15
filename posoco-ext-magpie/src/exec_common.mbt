@@ -275,12 +275,13 @@ fn split_system(
 }
 
 ///|
-/// Model-declared image support: `true` only when the catalog explicitly
-/// declares image input; unknown modalities stay pass-through here and are
-/// reported as unknown by planning.
+/// Images pass through when the catalog has not declared modalities.
+/// Unknown is NOT a declaration of text-only input, and rewriting unknown
+/// images into placeholders silently loses user content. Explicit text-only
+/// declarations are blocked by protocol planning before execution.
 fn model_supports_images(entry : MagpieCatalogEntry) -> Bool {
   match entry.meta.modalities_input {
     Some(inputs) => inputs.contains("image")
-    None => false
+    None => true
   }
 }
