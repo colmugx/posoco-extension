@@ -18,6 +18,18 @@ pub(open) trait MagpieTransport {
     Int32,
     String,
   ) raise MagpieGatewayError
+  async fn post(
+    Self,
+    url : String,
+    headers~ : Map[String, String],
+    body~ : String,
+  ) -> (Int32, String) raise MagpieGatewayError
+  async fn post_stream(
+    Self,
+    url : String,
+    headers~ : Map[String, String],
+    body~ : String,
+  ) -> (Int32, &MagpieEventStream) raise MagpieGatewayError
 }
 
 ///|
@@ -69,4 +81,105 @@ impl MagpieTransport for HttpMagpieTransport with fn get(
     Answered(code~, body~) => (code, body)
     Failed(detail~) => raise MagpieGatewayError::Offline(detail)
   }
+}
+
+///|
+/// An open streaming response body: lines of raw text until EOF. The
+/// execution layer feeds the lines to the protocol kits' SSE decoders; the
+/// transport never interprets them. `next_line` returns `None` at EOF and
+/// is the stream's cancellation point. `close` is idempotent.
+pub(open) trait MagpieEventStream {
+  async fn next_line(Self) -> String? raise MagpieGatewayError
+  async fn close_stream(Self) -> Unit raise MagpieGatewayError
+}
+
+///|
+/// Buffered HTTP POST helper note: `post` returns the full body;
+/// `post_stream` returns the status plus an open event stream whose lines
+/// feed the protocol kits' SSE decoders. Both keep the `get` error
+/// discipline: network failures raise `Offline`, statuses are returned
+/// as-is, and credentials are never logged or stored.
+
+///|
+impl MagpieTransport for HttpMagpieTransport with fn post(
+  self : HttpMagpieTransport,
+  url : String,
+  headers~ : Map[String, String],
+  body~ : String,
+) -> (Int, String) raise MagpieGatewayError {
+  let http_headers : @http.Headers = Map::from_array([])
+  for key, value in headers {
+    http_headers[@http.CaseInsensitiveString(key)] = value
+  }
+  let outcome = @async.with_timeout(self.timeout_ms, () => {
+    let (response, data) = @http.post(url, body, headers=http_headers) catch {
+      failure => return Failed(detail="request failed: \{failure}")
+    }
+    let text = data.text() catch {
+      _ => return Failed(detail="response body could not be decoded")
+    }
+    Answered(code=response.code, body=text)
+  }) catch {
+    failure =>
+      raise MagpieGatewayError::Offline(
+        "request timed out after \{self.timeout_ms}ms (\{failure})",
+      )
+  }
+  match outcome {
+    Answered(code~, body~) => (code, body)
+    Failed(detail~) => raise MagpieGatewayError::Offline(detail)
+  }
+}
+
+///|
+/// Streaming HTTP response over `moonbitlang/async/http`: one client per
+/// request, `read_until("\n")` per line, closed exactly once on every exit
+/// path by the caller-facing handle.
+priv struct HttpEventStream {
+  client : @http.Client
+}
+
+///|
+impl MagpieEventStream for HttpEventStream with fn next_line(
+  self : HttpEventStream,
+) -> String? raise MagpieGatewayError {
+  self.client.read_until("\n") catch {
+    err => raise MagpieGatewayError::Offline("stream read failed: \{err}")
+  }
+}
+
+///|
+impl MagpieEventStream for HttpEventStream with fn close_stream(
+  _self : HttpEventStream,
+) -> Unit raise MagpieGatewayError {
+  ()
+}
+
+///|
+impl MagpieTransport for HttpMagpieTransport with fn post_stream(
+  _self : HttpMagpieTransport,
+  url : String,
+  headers~ : Map[String, String],
+  body~ : String,
+) -> (Int, &MagpieEventStream) raise MagpieGatewayError {
+  let http_headers : @http.Headers = Map::from_array([])
+  for key, value in headers {
+    http_headers[@http.CaseInsensitiveString(key)] = value
+  }
+  let client = @http.post_stream(url, headers=http_headers) catch {
+    err => raise MagpieGatewayError::Offline("stream open failed: \{err}")
+  }
+  client.write(body) catch {
+    err => {
+      client.close()
+      raise MagpieGatewayError::Offline("stream write failed: \{err}")
+    }
+  }
+  let response = client.end_request() catch {
+    err => {
+      client.close()
+      raise MagpieGatewayError::Offline("stream start failed: \{err}")
+    }
+  }
+  (response.code, HttpEventStream::{ client })
 }

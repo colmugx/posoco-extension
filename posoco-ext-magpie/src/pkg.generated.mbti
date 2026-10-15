@@ -3,6 +3,10 @@ package "colmugx/posoco-ext-magpie"
 
 import {
   "colmugx/posoco-kit-model-management",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
   "moonbitlang/core/debug",
 }
 
@@ -149,6 +153,24 @@ pub fn MagpieEndpointKind::to_repr(Self) -> @debug.Repr
 pub fn MagpieEndpointKind::to_string(Self) -> String
 pub impl Show for MagpieEndpointKind
 
+pub(all) struct MagpieExecutionReport {
+  requested_model : String
+  served_model : String?
+  protocol : MagpieProtocol
+  kind : MagpieEndpointKind
+  endpoint_path : String
+  usage : @kernel.Usage?
+  cache_read_tokens : Int?
+  cache_write_tokens : Int?
+  finish_reason : @kernel.FinishReason
+  response_id : String?
+  lossy_opt_in : Bool
+  session_identified : Bool
+} derive(Eq, @debug.Debug)
+pub fn MagpieExecutionReport::equal(Self, Self) -> Bool
+pub fn MagpieExecutionReport::not_equal(Self, Self) -> Bool
+pub fn MagpieExecutionReport::to_repr(Self) -> @debug.Repr
+
 pub(all) enum MagpieFeature {
   Tools
   Streaming
@@ -220,6 +242,15 @@ pub fn MagpieModelMetadata::native_path_for(Self, MagpieProtocol) -> String?
 pub fn MagpieModelMetadata::not_equal(Self, Self) -> Bool
 pub fn MagpieModelMetadata::to_repr(Self) -> @debug.Repr
 
+pub struct MagpieModelPort {
+  // private fields
+}
+pub fn MagpieModelPort::MagpieModelPort(manager~ : MagpieManager, transport? : &MagpieTransport, policy? : MagpieTranslationPolicy, preference? : MagpiePreference, require_signed_thinking_replay? : Bool, require_native_prompt_caching? : Bool, require_reasoning_output? : Bool, report_sink? : (MagpieExecutionReport) -> Unit) -> Self
+pub async fn MagpieModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn MagpieModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn MagpieModelPort::provider_config(Self) -> @port.ProviderConfig
+pub impl @port.ModelPort for MagpieModelPort
+
 pub(all) struct MagpieNativeEndpoint {
   protocol : MagpieProtocol?
   path : String
@@ -260,6 +291,7 @@ pub(all) enum MagpieProtocol {
   Responses
   ChatCompletions
 } derive(Eq, @debug.Debug)
+pub fn MagpieProtocol::canonical_path(Self) -> String
 pub fn MagpieProtocol::equal(Self, Self) -> Bool
 pub fn MagpieProtocol::not_equal(Self, Self) -> Bool
 pub fn MagpieProtocol::output(Self, &Logger) -> Unit
@@ -343,6 +375,13 @@ pub impl Show for MagpieTranslationPolicy
 // Type aliases
 
 // Traits
+pub(open) trait MagpieEventStream {
+  async fn next_line(Self) -> String? raise MagpieGatewayError
+  async fn close_stream(Self) -> Unit raise MagpieGatewayError
+}
+
 pub(open) trait MagpieTransport {
   async fn get(Self, String, Map[String, String]) -> (Int, String) raise MagpieGatewayError
+  async fn post(Self, String, headers~ : Map[String, String], body~ : String) -> (Int, String) raise MagpieGatewayError
+  async fn post_stream(Self, String, headers~ : Map[String, String], body~ : String) -> (Int, &MagpieEventStream) raise MagpieGatewayError
 }

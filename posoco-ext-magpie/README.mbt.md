@@ -5,6 +5,41 @@ Independent Gateway-aware Model Manager for Posoco, not a provider hosted by
 
 ## Implemented in this PR
 
+- Multi-protocol ModelPort execution (`MagpieModelPort`): consumes the
+  validated `MagpieProtocolPlan`, re-planned fresh from the current catalog
+  on every call, so a plan is always checked against the catalog it runs
+  against. One call is one plan, one endpoint, one attempt — no silent
+  fallback between models or protocols, no automatic retries of requests
+  that may already have produced output.
+- Three execution adapters over the existing protocol kits
+  (`posoco-kit-messages`, `posoco-kit-responses`,
+  `posoco/kit-chat-completions`): request encoding, response parsing and
+  SSE event decoding are the kits' own; the adapters own request assembly,
+  endpoint selection, status classification, and error mapping.
+- Streaming and tools: incremental SSE decoding, text and reasoning deltas,
+  tool calls with argument assembly (parallel calls included), tool
+  results, image inputs (downgraded to explicit placeholders for models
+  without declared image input — never a silent drop), stream cancellation,
+  provider errors, incomplete-stream detection, and final usage.
+- Native Messages fidelity: thinking blocks and signatures travel in the
+  kit's replay envelope (captured on decode, re-expanded on encode);
+  tool-use identities are preserved; cache marking is policy-driven and
+  defaults to untouched; native cache creation/read numbers are preserved
+  separately from the canonical usage. A native endpoint declaration alone
+  never claims extended thinking or cache support — planning separates
+  protocol support, model capability, and unknown upstream behavior, and
+  reports cache hits only from usage evidence.
+- Session affinity: `X-Magpie-Session` carries the Posoco session id,
+  stable across turns, distinct across sessions, one identity per call
+  (never per tool call), omitted when no identity exists, and never logged
+  or reported.
+- Usage and observability: `MagpieExecutionReport` captures the requested
+  model ID, the gateway-served model, protocol, native vs translated
+  endpoint, canonical usage, native cache read/write tokens, protocol
+  finish reason, and the gateway response id — delivered to a caller
+  supplied sink, designed for later routing/quota/cost attachments. Cost
+  data is never fabricated.
+
 - Typed gateway URL, local/remote authentication and redacted configuration.
 - `GET /api/hello` identity verification and `GET /v1/models` catalog refresh.
 - Injectable transport and deterministic fake gateway tests.
@@ -25,9 +60,39 @@ Independent Gateway-aware Model Manager for Posoco, not a provider hosted by
   `MagpieTranslationPolicy` into either a structured plan or an explicit
   incompatibility with per-protocol blockers. Pure and deterministic.
 
+### Execution architecture
+
+`MagpieModelPort(manager~, transport?, policy?, preference?, require_*?,
+report_sink?)` implements Posoco's `ModelPort` (`chat`, `compact`,
+`provider_config`). Each `chat` call:
+
+1. reads the active selection and rejects pending/absent selections before
+   any request;
+2. re-plans from the current catalog under the port's strictness dials
+   (`require_signed_thinking_replay`, `require_native_prompt_caching`,
+   `require_reasoning_output`) and the translation policy — a planning
+   rejection raises `RequestBuild` with the per-protocol blockers;
+3. dispatches to the protocol adapter at the planned endpoint (the declared
+   native path, or the protocol's canonical path when translated);
+4. decodes through the protocol kit and returns the completion with the
+   input transcript as `processed_messages`;
+5. emits `MagpieExecutionReport` to the sink.
+
+`compact` rides the selected protocol as a plain non-streaming
+summarization call (keep the recent tail verbatim, summarize the head,
+replace in place). `provider_config` reports the active model's advertised
+effort ladder and declared context window — unknown windows stay unknown.
+
+Errors map onto Posoco's `ModelError`: planning/selection failures to
+`RequestBuild`, network/HTTP failures to `Transport` (statuses 401, 403 and
+5xx carry stage/status/body-size only — bodies are counted, never quoted;
+429 goes through the rate-limit kit and keeps the structured verdict), and
+malformed payloads to `ResponseParse`.
+
 Use `MagpieConfig::MagpieConfig(...)` and
 `MagpieManager::MagpieManager(config=...)`, then call
-`manager.refresh()` before offering models to users. `manager.catalog_entry(id)`
+`manager.refresh()` before offering models to users, and execute through
+`MagpieModelPort::MagpieModelPort(manager~, ...)`. `manager.catalog_entry(id)`
 hands out an isolated typed entry for `plan_protocol`:
 
 ```mbt nocheck
@@ -76,17 +141,16 @@ preserve cache-control or thinking-signature semantics.
 
 ## Deliberately not implemented yet
 
-This is still a **control-plane foundation**, not a functioning Posoco
-`ModelPort`. No inference, streaming, session affinity, active route
-observability, quota telemetry, or usage reporting is implemented here. Do
-not present a successful catalog refresh or a `Planned` outcome as proof
-that a model is available for inference.
+Execution is in, but this is still not a quota or administration layer: no
+quota dashboards, no global usage dashboards, no administrative APIs, and no
+duplicated gateway routing logic. Do not present a successful catalog
+refresh or a completed execution as proof of future availability — every
+call re-validates. Later PRs can attach gateway routing, quota and cost
+observations to the execution report sink; actual cache-hit and cost claims
+require upstream usage evidence and are never fabricated here.
 
-The follow-up executes the three protocols against the resulting typed plan,
-integrating the existing `posoco-kit-messages`, `posoco-kit-responses`, and
-`posoco/kit-chat-completions` according to Magpie's `native_endpoints`,
-while preserving model/group identity and keeping translation risk visible.
-Execution consumes the plan; it must not reimplement protocol selection.
+Remaining follow-ups: `count_tokens` integration, gateway-side route
+observability, and quota telemetry.
 
 ## Catalog limitations
 
@@ -105,6 +169,15 @@ the fixture itself (decode, order, verbatim efforts, group identity, typed
 endpoints, raw retention) and hardcode no catalog size or contents, so they
 hold for any gateway configuration, a single-model gateway included. No test
 touches a running gateway.
+
+The execution suite adds a fake gateway with scripted POST and SSE steps,
+covering: native Messages / Responses / Chat Completions execution;
+routing-group execution; translated execution with the explicit opt-in and
+strict fidelity rejection; streaming text; signed-thinking replay; tool
+round trips and parallel tool calls; usage and cache accounting; session
+affinity (stable, isolated, omitted when unavailable); mid-stream
+cancellation; incomplete streams; 401/429/503 handling; and catalog refresh
+invalidating a plan. Runs on native, JS and Wasm.
 
 ## Testing
 
