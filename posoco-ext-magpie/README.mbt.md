@@ -3,6 +3,71 @@
 Independent Gateway-aware Model Manager for Posoco, not a provider hosted by
 `posoco-ext-llm`.
 
+## Live gateway compatibility (PR #113)
+
+`src/harness/` is an opt-in executable that validates this extension
+against a real Magpie gateway. It is never part of CI: without
+configuration it prints `RESULT: SKIPPED` and touches nothing.
+
+```bash
+# read-only smoke (10 gateway GETs, zero billable requests)
+MAGPIE_LIVE_URL=http://127.0.0.1:3425 moon run --target native posoco-ext-magpie/src/harness
+
+# with billable inference and cache-economics verification (≤14 small requests)
+MAGPIE_LIVE_URL=... MAGPIE_LIVE_KEY=... MAGPIE_LIVE_INFER=1 moon run --target native posoco-ext-magpie/src/harness
+```
+
+`MAGPIE_LIVE_KEY` is optional; local gateways accept any key and use it to
+name the caller in usage pages. Reports stream line by line and record
+sanitized schema shapes only — field names, types, counts, model ids,
+usage numbers; never keys, raw bodies, or account details.
+
+### Compatibility matrix
+
+Observation sources are explicit: **LIVE** = executed against a real
+gateway (magpie 0.1.1224, localhost, read-only pass on 2026-10-15),
+**SIM** = deterministic fake-transport tests in the offline suite,
+**N/E** = not exercised live (see limitations).
+
+| Area | Source | Observation |
+|---|---|---|
+| `/api/hello` identity | LIVE | `{name, version}`; version text drives the Connected status line |
+| `/v1/models` catalog | LIVE | 72 entries; `data/first_id/has_more/last_id/object`; native endpoints for all three protocols declared; routing groups present |
+| `/v1/magpie/route` | LIVE | `{route, seq, session}`; empty session → `route: null` |
+| `/v1/magpie/quotas` | LIVE | 6 provider cards; two error cards (signed-out / disabled providers) surface as per-card errors while others render |
+| `/v1/magpie/limit` | LIVE | `{key, limited}` |
+| `/v1/magpie/usage` | LIVE | superset schema (`series`, `by`, `through/direct/reported`); our decoder reads only the modeled fields — compatible |
+| `/v1/magpie/usage/requests` | LIVE | `{rows, offset, total, by, through, direct, reported}`; superset tolerated |
+| `/v1/magpie/concurrency` | LIVE | `{data: {}, object}` |
+| Auth classification | LIVE (note) | local gateways accept any key and name the caller; restricted-key 401/403 paths remain SIM (fake transport) |
+| Runtime commands ×10 | LIVE | all PASS incl. structured + human output; `magpie_model` lists the real catalog; quota errors do not touch inference |
+| Messages native execution | SIM | full request/parse/stream/tool/replay coverage |
+| Responses native execution | SIM | idem |
+| Chat Completions native execution | SIM | idem |
+| Streaming SSE parsing | SIM | event/data scripts, thinking replay, usage tail, incomplete EOF → explicit parse error |
+| Tool-call round trips | SIM | tool_use emission and result replay |
+| Reasoning effort wiring | SIM | advertised efforts selected, unknown rejected |
+| Cache economics (creation/read) | N/E | harness ready (stable prefix, `cache_control` ephemeral only, upstream-usage verdicts); not yet run live |
+| Cancellation / reconnect / shutdown | SIM | next-line cancellation points, offline→reconnect, deactivation semantics |
+| Rate limiting (429) | SIM | classified, isolated to the execution |
+
+### Remaining production-readiness limitations
+
+- Billable inference was attempted once against the live gateway and was
+  cut short by the 5s default transport timeout (an inference-sized
+  request needs more); the harness now builds its transport with a
+  120s timeout. Re-running requires `MAGPIE_LIVE_INFER=1` and should
+  stay below the gateway's per-key rate limits — stop at the first
+  sign of `limited` rather than pushing through.
+- Restricted-key 401/403 classification and cache-hit proof are still
+  pending a live run; until then they are proven only in simulation.
+- The `magpie_model` command id intentionally differs from ext-llm's
+  resident `model` command so both extensions can coexist in one Agent.
+- Report streaming, a Result-shaped POST path, and the 120s timeout were
+  added to the harness after the aborted live inference attempt; the
+  read-only smoke was re-verified green afterwards (19 passed / 3
+  skipped / 0 billable).
+
 ## Runtime integration
 
 `MagpieRuntime::activate(settings?, transport?)` is the one-call activation

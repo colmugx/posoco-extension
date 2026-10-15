@@ -1,0 +1,15 @@
+// Live gateway compatibility harness — opt-in via MAGPIE_LIVE_URL.
+// Runnable entry for the opt-in live gateway suite (`moon run .../harness`).
+supported_targets = "+native"
+
+pkgtype(kind: "executable")
+
+import {
+  "colmugx/posoco-ext-magpie" @magpie,
+  "colmugx/posoco-kit-messages" @messages,
+  "colmugx/posoco",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}

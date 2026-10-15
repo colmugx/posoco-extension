@@ -57,6 +57,16 @@ pub fn HttpMagpieTransport::HttpMagpieTransport(
 }
 
 ///|
+/// Public trait-object constructor: hosts outside this package wire the
+/// HTTP transport into `MagpieRuntime::activate` and the intelligence
+/// client through this (the trait `impl` itself is package-private).
+pub fn magpie_http_transport(
+  timeout_ms~ : Int32 = DEFAULT_CONNECT_TIMEOUT_MS,
+) -> &MagpieTransport {
+  HttpMagpieTransport::HttpMagpieTransport(timeout_ms~)
+}
+
+///|
 impl MagpieTransport for HttpMagpieTransport with fn get(
   self : HttpMagpieTransport,
   url : String,

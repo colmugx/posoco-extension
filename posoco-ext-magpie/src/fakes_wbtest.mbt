@@ -45,6 +45,8 @@ struct FakeTransport {
   post_sessions : Array[String]
   /// Artificial pause before answering, to force overlapping refreshes.
   mut delay_ms : Int32
+  /// How many streams opened by this transport were closed.
+  mut stream_closes : Int32
 }
 
 ///|
@@ -63,6 +65,7 @@ fn FakeTransport::FakeTransport(
     post_auths: [],
     post_sessions: [],
     delay_ms: 0,
+    stream_closes: 0,
   }
 }
 
@@ -101,6 +104,7 @@ struct FakeEventStream {
   lines : Array[String]
   mut cursor : Int32
   delay_ms : Int32
+  closes : Ref[FakeTransport]
 }
 
 ///|
@@ -122,7 +126,7 @@ impl MagpieEventStream for FakeEventStream with fn next_line(
 impl MagpieEventStream for FakeEventStream with fn close_stream(
   self : FakeEventStream,
 ) -> Unit raise MagpieGatewayError {
-  let _ = self
+  self.closes.val.stream_closes += 1
 }
 
 ///|
@@ -177,7 +181,17 @@ impl MagpieTransport for FakeTransport with fn post_stream(
       "fake transport: streaming POST got a buffered step",
     )
   }
-  (step.status, FakeEventStream::{ lines, cursor: 0, delay_ms: self.delay_ms, })
+  let closes : Ref[Int32] = Ref(0)
+  let _ = closes
+  (
+    step.status,
+    FakeEventStream::{
+      lines,
+      cursor: 0,
+      delay_ms: self.delay_ms,
+      closes: Ref(self),
+    },
+  )
 }
 
 ///|
