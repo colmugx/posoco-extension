@@ -1,5 +1,5 @@
 ///|
-/// harness/main.mbt — Magpie live gateway compatibility harness.
+/// Magpie live gateway compatibility harness.
 ///
 /// Opt-in: runs only when MAGPIE_LIVE_URL is set. Without it the harness
 /// prints a SKIPPED report and exits cleanly, so ordinary CI never touches
