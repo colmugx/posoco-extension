@@ -28,6 +28,17 @@ struct Ctx {
 }
 
 ///|
+/// One attempt, one reserved paid request. This includes calls made via
+/// MagpieModelPort, not only direct POST probes.
+fn Ctx::reserve_billable(self : Ctx) -> Bool {
+  if self.billable >= 14 {
+    return false
+  }
+  self.billable += 1
+  true
+}
+
+///|
 fn Ctx::pass(self : Ctx, line : String) -> Unit {
   self.checks += 1
   let entry = "- [PASS] \{line}"
@@ -146,8 +157,10 @@ async fn Ctx::post(
   key~ : String,
   body~ : Json,
 ) -> Result[(Int32, Json?), String] {
+  if !self.reserve_billable() {
+    return Err("billable request budget reached (14 attempts)")
+  }
   self.requests += 1
-  self.billable += 1
   let headers : Map[String, String] = { "Authorization": "Bearer \{key}" }
   let (code, raw) = self.transport.post(
     "\{self.base}\{path}",
@@ -209,7 +222,7 @@ async fn probe_get(
     Err(MagpieErrorShape::{
       code,
       detail: match body {
-        Some(json) => sanitize(text=json.stringify(), secret=ctx.key)
+        Some(_) => "upstream error response redacted"
         None => "no body"
       },
     })
@@ -310,6 +323,7 @@ fn assistant_wire(text : String) -> Json {
 
 ///|
 async fn chat_via_port(
+  ctx : Ctx,
   runtime : @magpie.MagpieRuntime,
   model~ : String,
   session~ : String,
@@ -323,6 +337,10 @@ async fn chat_via_port(
   guard outcome is @posoco.CommandOutcome::Success(..) else {
     return Err("select reported failure")
   }
+  if !ctx.reserve_billable() {
+    return Err("billable request budget reached (14 attempts)")
+  }
+  ctx.requests += 1
   let before = runtime.recent_reports().length()
   let chunks : Ref[Int32] = Ref(0)
   let mode : @posoco.StreamMode = if stream {
@@ -487,7 +505,7 @@ async fn main {
           Some(json) => shape(json, depth=1)
           None => "no structured output"
         }
-        ctx.pass("\{id} → \"\{feedback}\" | structured: \{shape_text}")
+        ctx.pass("\{id} → feedback_present=\{feedback.length() > 0}; structured: \{shape_text}")
       }
       @posoco.CommandOutcome::Failure(reason~) =>
         ctx.skip("\{id} → Failure: \{sanitize(text=reason, secret=key)}")
@@ -509,6 +527,7 @@ async fn main {
         if ctx.billable < budget {
           match
             chat_via_port(
+              ctx,
               runtime,
               model~,
               session="posoco-live-msg",
@@ -525,6 +544,7 @@ async fn main {
           // Streaming over the same protocol.
           match
             chat_via_port(
+              ctx,
               runtime,
               model~,
               session="posoco-live-msg-stream",
@@ -547,6 +567,7 @@ async fn main {
         if ctx.billable < budget {
           match
             chat_via_port(
+              ctx,
               runtime,
               model~,
               session="posoco-live-resp",
@@ -569,6 +590,7 @@ async fn main {
         if ctx.billable < budget {
           match
             chat_via_port(
+              ctx,
               runtime,
               model~,
               session="posoco-live-chat",
@@ -593,6 +615,7 @@ async fn main {
         if ctx.billable < budget {
           match
             chat_via_port(
+              ctx,
               runtime,
               model=group,
               session="posoco-live-group",
@@ -621,8 +644,10 @@ async fn main {
                 "effort": Json::string(effort),
               }),
             )
-            try {
-              let _ = runtime
+            if ctx.reserve_billable() {
+              ctx.requests += 1
+              try {
+                let _ = runtime
                 .model_port()
                 .chat(
                   @posoco.InvocationScope::{
@@ -648,11 +673,14 @@ async fn main {
               ctx.pass(
                 "effort \{effort} accepted for \{model} (\{ctx.billable} billable so far)",
               )
-            } catch {
-              error =>
-                ctx.fail(
-                  "effort \{effort} rejected for \{model}: \{sanitize(text=@debug.to_string(error), secret=key)}",
-                )
+              } catch {
+                error =>
+                  ctx.fail(
+                    "effort \{effort} rejected for \{model}: \{sanitize(text=@debug.to_string(error), secret=key)}",
+                  )
+              }
+            } else {
+              ctx.skip("reasoning effort: billable budget exhausted")
             }
           }
           None =>
@@ -681,8 +709,10 @@ async fn main {
           policy: @posoco.ExecutionPolicy::Sequential,
           provenance: None,
         }
-        try {
-          let result = runtime
+        if ctx.reserve_billable() {
+          ctx.requests += 1
+          try {
+            let result = runtime
             .model_port()
             .chat(
               @posoco.InvocationScope::{
@@ -711,11 +741,14 @@ async fn main {
           } else {
             ctx.skip("tool round trip: model answered without calling the tool")
           }
-        } catch {
-          error =>
-            ctx.fail(
-              "tool round trip (\{model}): \{sanitize(text=@debug.to_string(error), secret=key)}",
-            )
+          } catch {
+            error =>
+              ctx.fail(
+                "tool round trip (\{model}): \{sanitize(text=@debug.to_string(error), secret=key)}",
+              )
+          }
+        } else {
+          ctx.skip("tool probe: billable budget exhausted")
         }
       }
       None => ctx.skip("no native /v1/messages model for the tool round trip")
@@ -879,6 +912,8 @@ async fn main {
   )
   if ctx.failures > 0 {
     report.val.push("RESULT: FAILED")
+  } else if ctx.checks == ctx.skips {
+    report.val.push("RESULT: SKIPPED")
   } else {
     report.val.push("RESULT: PASSED")
   }
