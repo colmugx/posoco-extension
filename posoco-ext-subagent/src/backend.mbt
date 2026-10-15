@@ -927,6 +927,54 @@ fn parse_answer_args(arguments : Json) -> AnswerArgs raise SpawnArgError {
 }
 
 ///|
+/// Collapse whitespace runs to single spaces; bounded echo for receipt lines.
+fn flatten_spaces(text : String) -> String {
+  let buf = StringBuilder()
+  let mut pending_space = false
+  let mut wrote_any = false
+  for ch in text {
+    if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+      pending_space = true
+    } else {
+      if pending_space && wrote_any {
+        buf.write_char(' ')
+      }
+      pending_space = false
+      wrote_any = true
+      buf.write_char(ch)
+    }
+  }
+  @devkit.truncate_chars(buf.to_string(), 200)
+}
+
+///|
+/// Readable echo of the submitted answer for the persisted receipt. The
+/// model wrote the value; this line exists so the transcript record carries
+/// the question→answer pair without any store lookup.
+fn answer_echo_word(
+  req : @posoco.UiRequest,
+  response : @posoco.UiResponse,
+) -> String {
+  match (req, response) {
+    (@posoco.UiRequest::Input(..), @posoco.UiResponse::Text(text)) =>
+      flatten_spaces(text)
+    (@posoco.UiRequest::Confirm(..), @posoco.UiResponse::Yes) => "true"
+    (@posoco.UiRequest::Confirm(..), @posoco.UiResponse::No) => "false"
+    (
+      @posoco.UiRequest::Select(options~, ..),
+      @posoco.UiResponse::Selected(index),
+    ) => {
+      let word = match options.get(index) {
+        Some(option) => option
+        None => ""
+      }
+      "\{word} (index \{index})"
+    }
+    _ => ""
+  }
+}
+
+///|
 /// The `answer_question` tool: submit the parent agent's answer for one
 /// pending child question. Validation failures are recoverable errors the
 /// model can read and fix; a successful answer only acknowledges — the
@@ -1013,6 +1061,19 @@ fn SubagentTools::answer(
         Some(record) => record.kind
         None => ""
       }
+      let prompt = request_prompt(info.req)
+      let (type_word, options_json) = match info.req {
+        @posoco.UiRequest::Input(..) => ("input", Json::null())
+        @posoco.UiRequest::Confirm(..) => ("confirm", Json::null())
+        @posoco.UiRequest::Select(options~, ..) => {
+          let items : Array[Json] = []
+          for option in options {
+            items.push(Json::string(option))
+          }
+          ("select", Json::array(items))
+        }
+      }
+      let answer_word = answer_echo_word(info.req, response)
       self.emit_custom(
         info.child_session,
         kind,
@@ -1024,12 +1085,15 @@ fn SubagentTools::answer(
         }),
       )
       @posoco.ToolOutcome::Success(
-        content="answer accepted for question \{args.question_id} — the child continues; its final result arrives as a follow-up turn",
+        content="answer accepted for question \{args.question_id} — the child continues; its final result arrives as a follow-up turn\nquestion: \{prompt}\nanswer: \{answer_word}",
         structured=Some(
           Json::object({
             "question_id": Json::string(args.question_id),
             "child_session": Json::string(info.child_session),
             "answered": Json::boolean(true),
+            "question": Json::string(prompt),
+            "type": Json::string(type_word),
+            "options": options_json,
           }),
         ),
       )

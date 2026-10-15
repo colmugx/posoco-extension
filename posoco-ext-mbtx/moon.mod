@@ -6,7 +6,7 @@ import {
   "colmugx/posoco@0.22.1",
   "posoco/devkit@0.4.1",
   "moonbitlang/async@0.22.5",
-  "colmugx/fuwaroid@0.3.1",
+  "colmugx/fuwaroid@0.3.2",
 }
 
 readme = "README.mbt.md"

@@ -20,7 +20,7 @@ async fn[X] test_program(
   )
   fixture_write(
     directory + "/guest/moon.mod",
-    "name = \"mbtx/test-guest\"\nversion = \"0.0.0\"\nimport { \"colmugx/posoco-ext-mbtx@0.1.0\", \"moonbitlang/async@0.22.4\" }\n",
+    "name = \"mbtx/test-guest\"\nversion = \"0.0.0\"\nimport { \"colmugx/posoco-ext-mbtx@0.1.0\", \"moonbitlang/async@0.22.5\" }\n",
   )
   fixture_write(
     directory + "/guest/moon.pkg",

@@ -2,8 +2,8 @@
 /// Wire fixture independent of the unpublished SDK, exercising real script imports.
 let script_source : String =
   #|import {
-  #|  "moonbitlang/async@0.22.4",
-  #|  "moonbitlang/async@0.22.4/stdio",
+  #|  "moonbitlang/async@0.22.5",
+  #|  "moonbitlang/async@0.22.5/stdio",
   #|  "moonbitlang/core/json",
   #|}
   #|async fn main {

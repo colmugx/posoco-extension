@@ -1,5 +1,6 @@
 import {
   "colmugx/posoco",
+  "colmugx/fuwaroid",
   "moonbitlang/core/debug",
   "posoco/devkit",
   "colmugx/posoco-kit-subagent" @kit,
