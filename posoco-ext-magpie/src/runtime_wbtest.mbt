@@ -10,7 +10,7 @@ fn runtime_transport(posts~ : Array[FakePostStep]) -> FakeTransport {
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=exec_catalog_body()),
     ],
-    posts=posts,
+    posts~,
   )
 }
 
@@ -19,7 +19,7 @@ async fn activate_runtime(
   transport~ : &MagpieTransport,
   settings~ : Json? = None,
 ) -> MagpieRuntime {
-  let runtime = MagpieRuntime::activate(settings=settings, transport=transport)
+  let runtime = MagpieRuntime::activate(settings~, transport~)
   runtime.on_start()
   runtime
 }
@@ -107,7 +107,10 @@ async test "catalog refresh and model discovery through the model command" {
     error => fail("model listing must succeed: \{error}")
   }
   let catalog = invoke_structured(outcome)
-  inspect(catalog.stringify().contains("anthropic/claude-native"), content="true")
+  inspect(
+    catalog.stringify().contains("anthropic/claude-native"),
+    content="true",
+  )
   inspect(catalog.stringify().contains("group/auto"), content="true")
 }
 
@@ -121,7 +124,10 @@ async test "switching models goes through the manager surface" {
     Json::object({ "model": Json::string("codex/gpt-responses") }),
   )
   inspect(invoke_text(outcome).contains("codex/gpt-responses"), content="true")
-  inspect(runtime.manager.active_selection().model_id == "codex/gpt-responses", content="true")
+  inspect(
+    runtime.manager.active_selection().model_id == "codex/gpt-responses",
+    content="true",
+  )
   // Unknown ids are argument errors; selection unchanged.
   try
     runtime.invoke(
@@ -134,7 +140,10 @@ async test "switching models goes through the manager surface" {
   } noraise {
     _ => ()
   }
-  inspect(runtime.manager.active_selection().model_id == "codex/gpt-responses", content="true")
+  inspect(
+    runtime.manager.active_selection().model_id == "codex/gpt-responses",
+    content="true",
+  )
 }
 
 ///|
@@ -149,7 +158,10 @@ async test "switching effort applies and rejects unadvertised levels" {
     Json::object({ "effort": Json::string("high") }),
   )
   inspect(invoke_text(outcome).contains("effort high"), content="true")
-  inspect(runtime.manager.active_selection().effort == Some("high"), content="true")
+  inspect(
+    runtime.manager.active_selection().effort == Some("high"),
+    content="true",
+  )
   try
     runtime.invoke(
       "magpie_model",
@@ -161,7 +173,10 @@ async test "switching effort applies and rejects unadvertised levels" {
   } noraise {
     _ => ()
   }
-  inspect(runtime.manager.active_selection().effort == Some("high"), content="true")
+  inspect(
+    runtime.manager.active_selection().effort == Some("high"),
+    content="true",
+  )
 }
 
 ///|
@@ -173,10 +188,7 @@ async test "a pending selection is visible in status and rejects execution" {
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=models_body(model_entry(id="other/only"))),
     ],
-    posts=[buffered_post(
-      status=200,
-      body=messages_nonstream_body(text="x"),
-    )],
+    posts=[buffered_post(status=200, body=messages_nonstream_body(text="x"))],
   )
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
@@ -191,7 +203,9 @@ async test "a pending selection is visible in status and rejects execution" {
   inspect(selection.pending, content="true")
   // And execution refuses before any request.
   try
-    runtime.model_port().chat(
+    runtime
+    .model_port()
+    .chat(
       exec_scope(session="s"),
       user_text("hi"),
       [],
@@ -210,40 +224,44 @@ async test "a pending selection is visible in status and rejects execution" {
 
 ///|
 async test "session isolation and stable affinity across turns" {
-  let transport = chat_transport(
-    posts=[
-      buffered_post(status=200, body=messages_nonstream_body(text="a")),
-      buffered_post(status=200, body=messages_nonstream_body(text="b")),
-      buffered_post(status=200, body=messages_nonstream_body(text="c")),
-    ],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="a")),
+    buffered_post(status=200, body=messages_nonstream_body(text="b")),
+    buffered_post(status=200, body=messages_nonstream_body(text="c")),
+  ])
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
     "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   // Two turns of session A, one turn of session B.
-  let _ = runtime.model_port().chat(
-    exec_scope(session="sess-A"),
-    user_text("1"),
-    [],
-    chat_options(),
-    NoStream,
-  )
-  let _ = runtime.model_port().chat(
-    exec_scope(session="sess-A"),
-    user_text("2"),
-    [],
-    chat_options(),
-    NoStream,
-  )
-  let _ = runtime.model_port().chat(
-    exec_scope(session="sess-B"),
-    user_text("3"),
-    [],
-    chat_options(),
-    NoStream,
-  )
+  let _ = runtime
+    .model_port()
+    .chat(
+      exec_scope(session="sess-A"),
+      user_text("1"),
+      [],
+      chat_options(),
+      NoStream,
+    )
+  let _ = runtime
+    .model_port()
+    .chat(
+      exec_scope(session="sess-A"),
+      user_text("2"),
+      [],
+      chat_options(),
+      NoStream,
+    )
+  let _ = runtime
+    .model_port()
+    .chat(
+      exec_scope(session="sess-B"),
+      user_text("3"),
+      [],
+      chat_options(),
+      NoStream,
+    )
   inspect(transport.post_sessions[0], content="sess-A")
   inspect(transport.post_sessions[1], content="sess-A")
   inspect(transport.post_sessions[2], content="sess-B")
@@ -281,10 +299,12 @@ async test "a quota 403 fails the quota command, not inference" {
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=exec_catalog_body()),
     ],
-    posts=[buffered_post(
-      status=200,
-      body=messages_nonstream_body(text="inference fine"),
-    )],
+    posts=[
+      buffered_post(
+        status=200,
+        body=messages_nonstream_body(text="inference fine"),
+      ),
+    ],
   )
   let runtime = activate_runtime(transport~)
   let outcome = runtime.invoke("magpie_quotas", Json::null())
@@ -301,15 +321,18 @@ async test "a quota 403 fails the quota command, not inference" {
     "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
-  let result = runtime.model_port().chat(
-    exec_scope(session="sess-Q"),
-    user_text("hi"),
-    [],
-    chat_options(),
-    NoStream,
-  )
+  let result = runtime
+    .model_port()
+    .chat(
+      exec_scope(session="sess-Q"),
+      user_text("hi"),
+      [],
+      chat_options(),
+      NoStream,
+    )
   inspect(
-    result.completion.message.content == [@posoco.Content::Text("inference fine")],
+    result.completion.message.content ==
+    [@posoco.Content::Text("inference fine")],
     content="true",
   )
 }
@@ -355,23 +378,24 @@ async test "cache statistics appear in recent executions" {
       "cache_read_input_tokens": Json::number(80),
       "cache_creation_input_tokens": Json::number(10),
     }),
-  })
-  .stringify()
-  let transport = chat_transport(
-    posts=[buffered_post(status=200, body=usage_body)],
-  )
+  }).stringify()
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=usage_body),
+  ])
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
     "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
-  let _ = runtime.model_port().chat(
-    exec_scope(session="sess-Cache"),
-    user_text("hi"),
-    [],
-    chat_options(),
-    NoStream,
-  )
+  let _ = runtime
+    .model_port()
+    .chat(
+      exec_scope(session="sess-Cache"),
+      user_text("hi"),
+      [],
+      chat_options(),
+      NoStream,
+    )
   let reports = runtime.recent_reports()
   inspect(reports.length(), content="1")
   inspect(reports[0].cache_read_tokens == Some(80), content="true")
@@ -391,11 +415,14 @@ async test "credentials and keys are redacted everywhere" {
   )
   // The rendered status never names the key.
   inspect(runtime.status_feedback().contains("sk-magpie"), content="false")
-  inspect(runtime.status_json().stringify().contains("sk-magpie"), content="false")
-  // The credential still authenticates requests.
-  let posting = chat_transport(
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="ok"))],
+  inspect(
+    runtime.status_json().stringify().contains("sk-magpie"),
+    content="false",
   )
+  // The credential still authenticates requests.
+  let posting = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="ok")),
+  ])
   let posting_runtime = activate_runtime(
     transport=posting,
     settings=Some(settings),
@@ -404,30 +431,27 @@ async test "credentials and keys are redacted everywhere" {
     "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
-  let _ = posting_runtime.model_port().chat(
-    exec_scope(session="s"),
-    user_text("hi"),
-    [],
-    chat_options(),
-    NoStream,
-  )
-  inspect(
-    posting.post_auths[0],
-    content="Bearer sk-magpie-super-secret",
-  )
+  let _ = posting_runtime
+    .model_port()
+    .chat(
+      exec_scope(session="s"),
+      user_text("hi"),
+      [],
+      chat_options(),
+      NoStream,
+    )
+  inspect(posting.post_auths[0], content="Bearer sk-magpie-super-secret")
 }
 
 ///|
 async test "deactivation cleans up and commands refuse afterwards" {
-  let transport = chat_transport(
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="x"))],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="x")),
+  ])
   let runtime = activate_runtime(transport~)
   runtime.on_shutdown()
   inspect(runtime.recent_reports().length(), content="0")
-  try
-    runtime.invoke("magpie_status", Json::null())
-  catch {
+  try runtime.invoke("magpie_status", Json::null()) catch {
     @posoco.CommandError::ExecutionFailed(detail) =>
       inspect(detail.contains("deactivated"), content="true")
     _ => fail("expected ExecutionFailed")
@@ -442,39 +466,44 @@ async test "deactivation cleans up and commands refuse afterwards" {
 async test "runtime commands stay namespaced without ext-llm dependency" {
   let runtime = activate_runtime(transport=runtime_transport(posts=[]))
   let commands = runtime.commands()
-  inspect(commands.any(fn(command) { command.id == "magpie_model" }), content="true")
+  inspect(
+    commands.any(fn(command) { command.id == "magpie_model" }),
+    content="true",
+  )
   inspect(commands.any(fn(command) { command.id == "model" }), content="false")
 }
 
 ///|
-
 async test "multiple sessions keep their own affinity and selection" {
-  let transport = chat_transport(
-    posts=[
-      buffered_post(status=200, body=messages_nonstream_body(text="one")),
-      buffered_post(status=200, body=messages_nonstream_body(text="two")),
-      buffered_post(status=200, body=messages_nonstream_body(text="three")),
-    ],
-  )
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="one")),
+    buffered_post(status=200, body=messages_nonstream_body(text="two")),
+    buffered_post(status=200, body=messages_nonstream_body(text="three")),
+  ])
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
     "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   for session in ["sess-1", "sess-2", "sess-3"] {
-    let _ = runtime.model_port().chat(
-      exec_scope(session~),
-      user_text("turn"),
-      [],
-      chat_options(),
-      NoStream,
-    )
+    let _ = runtime
+      .model_port()
+      .chat(
+        exec_scope(session~),
+        user_text("turn"),
+        [],
+        chat_options(),
+        NoStream,
+      )
   }
   inspect(transport.post_sessions[0], content="sess-1")
   inspect(transport.post_sessions[1], content="sess-2")
   inspect(transport.post_sessions[2], content="sess-3")
   // One selection registry: the manager's.
-  inspect(runtime.manager.active_selection().model_id, content="anthropic/claude-native")
+  inspect(
+    runtime.manager.active_selection().model_id,
+    content="anthropic/claude-native",
+  )
 }
 
 ///|
@@ -498,10 +527,9 @@ async test "the model port survives intelligence service errors" {
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=exec_catalog_body()),
     ],
-    posts=[buffered_post(
-      status=200,
-      body=messages_nonstream_body(text="still here"),
-    )],
+    posts=[
+      buffered_post(status=200, body=messages_nonstream_body(text="still here")),
+    ],
   )
   let runtime = activate_runtime(transport~)
   let outcome = runtime.invoke("magpie_concurrency", Json::null())
@@ -517,13 +545,15 @@ async test "the model port survives intelligence service errors" {
     "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
-  let result = runtime.model_port().chat(
-    exec_scope(session="sess-K"),
-    user_text("hi"),
-    [],
-    chat_options(),
-    NoStream,
-  )
+  let result = runtime
+    .model_port()
+    .chat(
+      exec_scope(session="sess-K"),
+      user_text("hi"),
+      [],
+      chat_options(),
+      NoStream,
+    )
   inspect(
     result.completion.message.content == [@posoco.Content::Text("still here")],
     content="true",

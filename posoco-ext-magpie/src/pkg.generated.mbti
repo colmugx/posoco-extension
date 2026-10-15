@@ -34,6 +34,8 @@ pub fn gateway_url(MagpieConfig, String) -> String
 
 pub fn is_loopback_url(String) -> Bool
 
+pub fn magpie_http_transport(timeout_ms? : Int) -> &MagpieTransport
+
 pub fn parse_hello(String) -> MagpieIdentity raise MagpieGatewayError
 
 pub fn parse_native_endpoint(String) -> MagpieNativeEndpoint
