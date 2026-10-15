@@ -28,5 +28,6 @@ options(
     "compact_replay_wbtest.mbt": [ "native" ],
     "jsonl_session_js_test.mbt": [ "js" ],
     "list_ids_test.mbt": [ "native" ],
+    "model_selection_test.mbt": [ "native" ],
   },
 )

@@ -11,6 +11,11 @@ pub(all) struct SessionSummary {
   id : String
   name : String?
   title : String?
+  /// Router slot id recorded for the session's last persisted turn; `None`
+  /// for legacy journals and stores composed without the model bus.
+  model : String?
+  /// Explicit reasoning effort recorded with `model`; `None` = slot default.
+  effort : String?
 } derive(Eq, Debug)
 
 ///|
@@ -38,7 +43,11 @@ pub async fn JsonlSessionStore::summary(
     Some(Json::String(s)) => normalize_title(s)
     _ => legacy_title_from_messages(session.messages)
   }
-  { id, name, title, }
+  let (model, effort) = match model_selection_from_metadata(session.metadata) {
+    Some((slot, effort)) => (Some(slot), effort)
+    None => (None, None)
+  }
+  { id, name, title, model, effort, }
 }
 
 ///|

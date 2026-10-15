@@ -9,6 +9,12 @@ pub(all) struct JsonlSessionStore {
   /// Id of the session this store last persisted successfully; the /name
   /// command targets it, so slash consumers need no explicit session id.
   mut current_id : String?
+  /// Latest ext-llm selection observed on the bus; `None` = no observation,
+  /// in which case persisted metadata is never decorated.
+  mut observed_selection : (String, String?)?
+  /// Selection already reflected in the persisted metadata line, so the
+  /// append fast path only rewrites line 1 after an observed change.
+  mut written_selection : (String, String?)?
 }
 
 ///|
@@ -16,7 +22,15 @@ pub fn JsonlSessionStore::JsonlSessionStore(
   root_dir : String,
   bus~ : @devkit.EventBus? = None,
 ) -> JsonlSessionStore {
-  { root_dir, bus, current_id: None, }
+  let store : JsonlSessionStore = {
+    root_dir,
+    bus,
+    current_id: None,
+    observed_selection: None,
+    written_selection: None,
+  }
+  store.subscribe_model_selection(bus)
+  store
 }
 
 ///|
@@ -145,7 +159,9 @@ pub extend JsonlSessionStore with @posoco.SessionStore::{
 
 ///|
 /// SessionStore::save — serialise session and replace the file contents.
-/// Directory is created lazily.
+/// Directory is created lazily. The persisted metadata line is decorated
+/// with the latest observed model selection so the file remembers the
+/// model/effort behind its transcript tail.
 pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
   self,
   id : String,
@@ -153,7 +169,10 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
 ) -> Unit raise @posoco.SessionError {
   let path = save_session_path(self.root_dir, id)
   self.ensure_root_dir()
-  let jsonl = session_to_jsonl(session)
+  let jsonl = session_to_jsonl({
+    ..session,
+    metadata: metadata_with_selection(session.metadata, self.observed_selection),
+  })
   @xfs.write_string_to_file(path, jsonl) catch {
     e =>
       raise @posoco.SessionError::Save(
@@ -162,6 +181,7 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
   }
   publish_session_status(self.bus, id)
   self.current_id = Some(id)
+  self.mark_selection_written(self.observed_selection)
 }
 
 ///|
@@ -181,7 +201,10 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   if !exists {
     let session : @posoco.Session = {
       messages: messages.to_owned(),
-      metadata: Map::from_array([]),
+      metadata: metadata_with_selection(
+        Map::from_array([]),
+        self.observed_selection,
+      ),
     }
     let jsonl = session_to_jsonl(session)
     @xfs.write_string_to_file(path, jsonl) catch {
@@ -192,7 +215,13 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
     }
     publish_session_status(self.bus, id)
     self.current_id = Some(id)
+    self.mark_selection_written(self.observed_selection)
     return
+  }
+  // A selection change since the last persist is recorded by rewriting only
+  // the metadata line; unchanged selections keep the pure-append fast path.
+  if self.observed_selection != self.written_selection {
+    self.refresh_metadata_selection(path)
   }
   let file = @fs.open(
     path,
@@ -220,4 +249,24 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   file.close()
   publish_session_status(self.bus, id)
   self.current_id = Some(id)
+  self.mark_selection_written(self.observed_selection)
+}
+
+///|
+/// Best-effort metadata-line rewrite for the append fast path: records a
+/// freshly observed selection without disturbing appended history. I/O
+/// failures are swallowed — the next full save heals the file, and the
+/// caller marks the selection written only after the append itself succeeds.
+fn JsonlSessionStore::refresh_metadata_selection(
+  self : JsonlSessionStore,
+  path : String,
+) -> Unit noraise {
+  let content = @xfs.read_file_to_string(path) catch { _ => return }
+  match rewrite_metadata_line(content, self.observed_selection) {
+    Some(updated) =>
+      @xfs.write_string_to_file(path, updated) catch {
+        _ => return
+      }
+    None => ()
+  }
 }

@@ -11,11 +11,15 @@ import {
 }
 
 // Values
+pub const MODEL_SELECTION_METADATA_KEY : String = "posoco.model_selection"
+
 pub fn companion_path(String, String, ext? : String) -> String
 
 pub fn display_title(SessionSummary) -> String
 
 pub fn jsonl_session_path(String, String) -> String
+
+pub fn model_selection_from_metadata(Map[String, Json]) -> (String, String?)?
 
 pub fn normalize_cwd(String) -> String
 
@@ -24,6 +28,8 @@ pub fn project_dir_name(String) -> String
 pub fn project_sessions_dir(String, String) -> String
 
 pub fn project_slug(String) -> String
+
+pub fn rewrite_metadata_line(String, (String, String?)?) -> String?
 
 pub fn session_from_jsonl(String) -> Result[@types.Session, @error.SessionError]
 
@@ -38,6 +44,8 @@ pub(all) struct JsonlSessionStore {
   root_dir : String
   bus : @devkit.EventBus?
   mut current_id : String?
+  mut observed_selection : (String, String?)?
+  mut written_selection : (String, String?)?
 }
 pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @devkit.EventBus?) -> Self
 pub async fn JsonlSessionStore::append_messages(Self, String, Int, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
@@ -61,6 +69,8 @@ pub(all) struct SessionSummary {
   id : String
   name : String?
   title : String?
+  model : String?
+  effort : String?
 } derive(Eq, @debug.Debug)
 pub fn SessionSummary::equal(Self, Self) -> Bool
 pub fn SessionSummary::not_equal(Self, Self) -> Bool

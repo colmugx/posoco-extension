@@ -67,6 +67,20 @@ created before that metadata key existed retain a compatibility-only fallback
 to their first user-role message. Hosts should consume `display_title()`
 instead of inferring human provenance from transcript roles.
 
+## Model selection record
+
+When the store is composed with the shared `EventBus`, it subscribes to the
+ext-llm router's `model_selection` events and records the active slot id and
+explicit reasoning effort into the metadata line under
+`posoco.model_selection` (shape `{"slot_id": ..., "effort": ... | null}`).
+The record reflects the selection at the moment of the last persist — the
+model that produced the transcript's tail — so a switch that is never
+followed by a persist is not recorded. Stores composed without a bus never
+observe anything and never decorate, leaving legacy journals untouched.
+`summary()` projects the record as `model`/`effort` fields, and
+`model_selection_from_metadata()` reads it from an already-loaded session;
+hosts use these to restore the session's model on resume.
+
 ## Behavior
 
 - **Session ids are filename stems** — validated at the storage boundary

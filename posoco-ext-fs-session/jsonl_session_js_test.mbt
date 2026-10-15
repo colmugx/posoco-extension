@@ -140,3 +140,108 @@ async test "io[js]: append_messages on existing file appends only new lines" {
     _ => fail("expected UserMessage")
   }
 }
+
+///|
+#module("node:fs")
+extern "js" fn js_test_read_sync(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+/// Publish one `model_selection` bus event the way ext-llm's router does.
+fn js_publish_selection(
+  bus : @devkit.EventBus,
+  slot~ : String,
+  effort~ : String? = None,
+) -> Unit {
+  bus.publish({
+    source: "posoco_ext_llm",
+    topic: "model_selection",
+    data: Json::object(
+      Map::from_array([
+        ("slot_id", Json::string(slot)),
+        (
+          "effort",
+          match effort {
+            Some(value) => Json::string(value)
+            None => Json::null()
+          },
+        ),
+      ]),
+    ),
+  })
+}
+
+///|
+/// First physical line of a stored journal.
+fn js_stored_metadata_line(path : String) -> String {
+  js_test_read_sync(path, "utf8")
+}
+
+///|
+async test "io[js]: observed selection decorates save, append, and summary" {
+  if !js_bun_available() {
+    return
+  }
+  let root = "/tmp/posoco-fs-session-js-sel-" + js_now_ms().to_string()
+  let bus = @devkit.EventBus()
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
+    root,
+    bus=Some(bus),
+  )
+  js_publish_selection(bus, slot="qwen/glm-4.6", effort=Some("high"))
+  let one : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("one")]),
+  ]
+  store.append_messages("sess_sel", 0, one[:]) catch {
+    e => fail("first append failed: \{e}")
+  }
+  let s = store.summary("sess_sel") catch { e => fail("summary failed: \{e}") }
+  assert_eq(s.model, Some("qwen/glm-4.6"))
+  assert_eq(s.effort, Some("high"))
+  // A later selection change is picked up by the next append's line-1
+  // rewrite.
+  js_publish_selection(bus, slot="z/d")
+  let two : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("two")]),
+  ]
+  store.append_messages("sess_sel", 1, two[:]) catch {
+    e => fail("second append failed: \{e}")
+  }
+  let s2 = store.summary("sess_sel") catch {
+    e => fail("summary after rewrite failed: \{e}")
+  }
+  assert_eq(s2.model, Some("z/d"))
+  assert_eq(s2.effort, None)
+  let reloaded = store.load("sess_sel") catch {
+    e => fail("reload failed: \{e}")
+  }
+  assert_eq(reloaded.messages.length(), 2)
+}
+
+///|
+async test "io[js]: append without a change keeps the metadata line" {
+  if !js_bun_available() {
+    return
+  }
+  let root = "/tmp/posoco-fs-session-js-selfast-" + js_now_ms().to_string()
+  let bus = @devkit.EventBus()
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(
+    root,
+    bus=Some(bus),
+  )
+  js_publish_selection(bus, slot="a/b")
+  let one : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("one")]),
+  ]
+  store.append_messages("sess_fast", 0, one[:]) catch {
+    e => fail("first append failed: \{e}")
+  }
+  let path = @posoco-ext-fs-session.jsonl_session_path(root, "sess_fast")
+  let before = js_stored_metadata_line(path)
+  let two : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("two")]),
+  ]
+  store.append_messages("sess_fast", 1, two[:]) catch {
+    e => fail("second append failed: \{e}")
+  }
+  assert_eq(js_stored_metadata_line(path), before)
+}
