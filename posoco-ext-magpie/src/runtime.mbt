@@ -785,6 +785,9 @@ pub impl @posoco.CommandPort for MagpieRuntime with fn invoke(
 pub impl @posoco.Lifecycle for MagpieRuntime with fn on_start(
   self : MagpieRuntime,
 ) -> Unit {
+  // A new host lifecycle cycle reactivates the runtime; without this a
+  // restarted host would stay deactivated by the previous shutdown.
+  self.active = true
   try {
     let _ = self.manager.refresh()
   } catch {

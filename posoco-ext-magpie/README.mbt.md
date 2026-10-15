@@ -277,9 +277,144 @@ This is a complete runtime extension, but not a quota administration layer:
 no dashboards, no automatic account switching, no duplicated gateway routing
 or pricing logic. Configuration accepts the gateway key as a plain setting
 value (hosts reading it from a credential store pass the value through; the
-extension persists nothing to disk). The runtime composition tests import
-`posoco/ext-llm` and `posoco-kit-provider` for coexistence verification
-only — magpie neither modifies nor wraps them.
+extension persists nothing to disk). Magpie has no dependency on
+`posoco-ext-llm` or `posoco-kit-provider`; coexistence is verified against
+the core composition contract itself (see the host-level acceptance tests).
+
+## Operational guide
+
+### Installation and activation
+
+Magpie is a MoonBit module, so a Host installs it by adding the dependency
+and composing it at agent construction — Posoco has no runtime plugin
+discovery, and the `Extension` manifest is the discovery surface:
+
+```mbt nocheck
+let runtime = @magpie.MagpieRuntime::activate(
+  settings=Some(settings_json),
+  transport=@magpie.magpie_http_transport(timeout_ms=120000),
+)
+let agent = @posoco.Agent::Agent(exts=[runtime], config=my_agent_config)
+```
+
+One `activate` call wires the Model Manager, the ModelPort and the
+intelligence client; `Agent::Agent` then registers the model slot, the ten
+`magpie_*` commands and the lifecycle from the manifest. The host-level
+acceptance tests (`host_integration_wbtest.mbt`) are the installation and
+activation proof: they compose a real `Agent::Agent` and drive every check
+through the composed agent's own command surface.
+
+### Configuration
+
+Settings arrive as one JSON object; wrong-typed values degrade to the
+documented defaults with a recorded `unconfigured_reason` — an invalid
+configuration never silently activates the default gateway:
+
+```json
+{
+  "base_url": "http://127.0.0.1:3425",
+  "gateway_key": "sk-...",
+  "enabled": true,
+  "model": "anthropic/claude-native",
+  "effort": "high"
+}
+```
+
+- `base_url` — gateway address. Loopback endpoints work without a key; a
+  remote `base_url` without `gateway_key` refuses to refresh
+  (`NotConfigured`), the key never leaves the machine implicitly.
+- `gateway_key` — the extension persists nothing to disk; a Host that keeps
+  secrets in a credential store reads the value and passes it in here.
+- `enabled` — `false` (or a broken setting that falls back to `false`)
+  makes every catalog refresh raise `Disabled`: the extension stays
+  installed but inert.
+- `model`, `effort` — optional selection seeds; they apply as pending
+  selections until confirmed against a loaded catalog.
+
+### First run
+
+The complete path, each step covered by the host-level tests in this order:
+install and compose (activation proof) → `magpie_status` verifies the
+connection (`connected: true`) → `magpie_model` with no argument lists
+models and routing groups (opaque ids, verbatim) → `magpie_model` with
+`{"model": "<id>", "effort": "<level>"}` selects → send the first message
+through the composed Agent (the lifecycle refreshes the catalog on the
+first turn automatically) → `magpie_route` shows the session's routing
+decision, `magpie_usage` / `magpie_quotas` / `magpie_limit` show account
+state. An unavailable gateway cannot crash Host startup: `on_start`
+swallows the refresh error and `magpie_status` reports the disconnected
+state until a later refresh succeeds.
+
+### Commands
+
+All ten commands are namespaced `magpie_*`, so no global command
+collisions are possible (the core composition raises `CommandCollision`
+on any duplicate id, and the host-level suite asserts all ten survive
+composition). `magpie_model`, `magpie_status` and `magpie_usage_recent`
+work fully offline against cached state; the account-backed commands
+(`magpie_route`, `magpie_quotas`, `magpie_limit`, `magpie_usage`,
+`magpie_requests`, `magpie_concurrency`) degrade to explicit
+`Failure`/offline answers when the gateway forbids those services — the
+command surface itself never requires a specific Intelligence service.
+
+### Native versus translated protocol selection
+
+Models advertising a native endpoint in `native_endpoints` are addressed
+on that protocol verbatim (`/v1/messages`, `/v1/responses`,
+`/v1/chat/completions`); models without one are executed through the
+translated path, which requires the explicit opt-in and rejects any
+fidelity-risky transformation. Routing groups (`"group": true`) are
+selected like models; the gateway does the internal scheduling and the
+`X-Magpie-Session` header (derived from the Posoco session id) keeps
+affinity. Magpie never reproduces the gateway's routing algorithm.
+
+### Cache economics
+
+5-minute cache writes are exercised by the live harness behind
+`MAGPIE_LIVE_INFER=1`; one-hour writes additionally require
+`MAGPIE_LIVE_CACHE_1H=1` and are never enabled by default. Cache numbers
+are reported only from gateway usage fields; a cold turn whose usage
+lacks cache fields is reported unsupported, not failed. See the
+production-readiness section above for the recorded evidence and the
+explicit list of what remains live-unverified.
+
+### Two model managers, coexistence
+
+Posoco's composition allows exactly one ModelPort per Agent
+(`MultipleModels` otherwise) and unique command ids across extensions.
+Two Model Managers therefore coexist as: one per Agent (separate agents,
+independent selection state — asserted by the host-level tests), never
+two in one Agent. Magpie holds no global registry, so two runtime
+instances never share selection state.
+
+### Lifecycle
+
+`activate` → `on_start` (catalog refresh; offline tolerated) → turns →
+`on_shutdown` (deactivates the runtime, clears the in-memory report log,
+commands refuse with an explicit error). A following `on_start` cycle
+reactivates: this repair is covered by the repeated-lifecycle host test.
+Repeated `activate` calls simply build independent runtimes.
+
+### Troubleshooting
+
+| Symptom | Meaning | Action |
+|---|---|---|
+| `magpie_status`: `connected: false` | gateway unreachable or refresh failed | check `base_url`; fix and re-run `magpie_refresh` or restart the turn |
+| `unconfigured_reason` set | settings failed to parse; defaults with `enabled: false` took over | correct the settings and recompose |
+| refresh says `Disabled` | `enabled: false` in effect | enable explicitly; nothing activates by default |
+| refresh says `NotConfigured` | remote gateway without `gateway_key` | configure a key from your credential store |
+| selection reports `pending` | seeded `model`/`effort` not yet confirmed against a catalog | refresh, then select a catalog id |
+| commands answer `deactivated` | runtime after `on_shutdown` | start a new lifecycle cycle (`on_start`) |
+
+### Known compatibility limitations
+
+Unchanged from the production-readiness section: real streaming events,
+one-hour cache writes, restricted-key 401/403 and disconnect-on-shared-
+gateway remain verified only by the opt-in live harness, not by CI. The
+catalog parser keeps unknown fields verbatim; a gateway dropping
+`native_endpoints` degrades those models to translated execution. No
+ Posoco Core, Cetas, ZAI, ZAI Coding Plan or ZCode code is modified, and
+the three protocol kits are untouched.
 
 Remaining follow-ups: `count_tokens` integration, reported-usage POSTing
 (`POST /v1/magpie/usage/requests`), and quota telemetry.
