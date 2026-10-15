@@ -38,11 +38,7 @@ pub(all) struct CheckOutcome {
 
 ///|
 pub fn CheckOutcome::row(self : CheckOutcome) -> String {
-  let gating = if self.required {
-    "required"
-  } else {
-    "optional"
-  }
+  let gating = if self.required { "required" } else { "optional" }
   "| \{self.area} | \{self.capability} | \{self.verdict.label()} | \{gating} | \{self.detail} |"
 }
 
@@ -52,13 +48,13 @@ pub fn CheckOutcome::row(self : CheckOutcome) -> String {
 /// counted by the caller before issuing anything, and once exhausted no
 /// further paid request is issued.
 pub(all) struct Budget {
-  mut spent : Int
-  limit : Int
+  mut spent : Int32
+  limit : Int32
 } derive(Debug)
 
 ///|
-pub fn Budget::Budget(limit~ : Int) -> Budget {
-  { spent: 0, limit }
+pub fn Budget::Budget(limit~ : Int32) -> Budget {
+  { spent: 0, limit, }
 }
 
 ///|
@@ -73,7 +69,7 @@ pub fn Budget::pay(self : Budget) -> Bool {
 }
 
 ///|
-pub fn Budget::remaining(self : Budget) -> Int {
+pub fn Budget::remaining(self : Budget) -> Int32 {
   let rest = self.limit - self.spent
   if rest < 0 {
     0
@@ -128,9 +124,7 @@ pub fn summarize(
   let mut saw_skip = false
   for outcome in outcomes {
     match outcome.verdict {
-      VFail => if outcome.required {
-        return Failed
-      }
+      VFail => if outcome.required { return Failed }
       VSkip => {
         if outcome.required {
           // A configured run must not skip required checks; treat that as
@@ -167,13 +161,7 @@ pub fn CheckOutcome::make(
   required~ : Bool,
   detail~ : String,
 ) -> CheckOutcome {
-  {
-    area,
-    capability,
-    verdict,
-    required,
-    detail: cap_detail(detail),
-  }
+  { area, capability, verdict, required, detail: cap_detail(detail), }
 }
 
 ///|
@@ -237,17 +225,27 @@ pub fn matrix_from_report(
     let evidence = if area == "Inference (billable)" ||
       area == "Messages cache economics (billable)" ||
       area == "One-hour cache writes" {
-      if source == "live-inference+read-only" { "live-inference" } else { "not-executed" }
+      if source == "live-inference+read-only" {
+        "live-inference"
+      } else {
+        "not-executed"
+      }
     } else {
       "live-read-only"
     }
-    let actual_evidence = if verdict_label == "SKIP" { "not-executed" } else { evidence }
+    let actual_evidence = if verdict_label == "SKIP" {
+      "not-executed"
+    } else {
+      evidence
+    }
     rows.push(
       "| \{area} | \{capability} | \{verdict_label} | \{actual_evidence} | \{gateway_version} | \{detail} |",
     )
   }
   let out = StringBuilder()
-  out.write_string("| Area | Capability | Verdict | Evidence source | Gateway | Observation |")
+  out.write_string(
+    "| Area | Capability | Verdict | Evidence source | Gateway | Observation |",
+  )
   out.write_string("\n|---|---|---|---|---|---|\n")
   for row in rows {
     out.write_string(row)

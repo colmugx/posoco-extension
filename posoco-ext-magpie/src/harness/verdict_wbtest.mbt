@@ -8,13 +8,7 @@ fn pass_outcome(
   capability~ : String,
   required~ : Bool = true,
 ) -> CheckOutcome {
-  CheckOutcome::make(
-    area~,
-    capability~,
-    verdict=VPass,
-    required~,
-    detail="ok",
-  )
+  CheckOutcome::make(area~, capability~, verdict=VPass, required~, detail="ok")
 }
 
 ///|
@@ -106,7 +100,10 @@ test "skips and unsupported capabilities yield PASSED (with skips)" {
       detail="model does not declare one-hour caching",
     ),
   ]
-  inspect(summarize(outcomes, configured=true).label(), content="PASSED (with skips)")
+  inspect(
+    summarize(outcomes, configured=true).label(),
+    content="PASSED (with skips)",
+  )
   inspect(verdict_requires_failure_exit(outcomes), content="false")
 }
 
@@ -203,11 +200,8 @@ test "detail text is length-capped" {
 ///|
 test "report lines translate into matrix rows with section areas" {
   let lines = [
-    "## Discovery",
-    "- [PASS] /api/hello: HTTP 200; {name:string,version:string}",
-    "- [FAIL] /v1/models: HTTP 500 nope",
-    "## Commands",
-    "- [PASS] magpie_status: feedback_present=true",
+    "## Discovery", "- [PASS] /api/hello: HTTP 200; {name:string,version:string}",
+    "- [FAIL] /v1/models: HTTP 500 nope", "## Commands", "- [PASS] magpie_status: feedback_present=true",
     "  - note: all 10 runtime commands passed",
   ]
   let markdown = matrix_from_report(
@@ -216,11 +210,15 @@ test "report lines translate into matrix rows with section areas" {
     source="live-read-only",
   )
   inspect(
-    markdown.contains("| Discovery | /api/hello | PASS | live-read-only | magpie 0.1.1224 | HTTP 200;"),
+    markdown.contains(
+      "| Discovery | /api/hello | PASS | live-read-only | magpie 0.1.1224 | HTTP 200;",
+    ),
     content="true",
   )
   inspect(
-    markdown.contains("| Discovery | /v1/models | FAIL | live-read-only | magpie 0.1.1224 | HTTP 500"),
+    markdown.contains(
+      "| Discovery | /v1/models | FAIL | live-read-only | magpie 0.1.1224 | HTTP 500",
+    ),
     content="true",
   )
   inspect(
@@ -238,8 +236,8 @@ test "a failed required discovery closes the gate while optional cache trouble d
   // The gate counts required failures only; this mirrors the harness rule
   // that /api/hello and /v1/models are the required contract, and cache or
   // tool capability gaps are optional observations.
-  let required_failed = [ "- [FAIL] /api/hello: HTTP 500" ]
-  let optional_failed = [ "- [FAIL] cache-hit: identical prefix read 0" ]
+  let required_failed = ["- [FAIL] /api/hello: HTTP 500"]
+  let optional_failed = ["- [FAIL] cache-hit: identical prefix read 0"]
   fn gate_closed(lines : Array[String]) -> Bool {
     // /api/hello and /v1/models are the required discovery contract.
     for line in lines {

@@ -20,7 +20,11 @@ test "user text survives wire encoding verbatim" {
   inspect(block.get("type") == Some(Json::string("text")), content="true")
   inspect(
     block.get("text") ==
-    Some(Json::string("Remember the codeword LANTERN. Reply with the codeword only.")),
+    Some(
+      Json::string(
+        "Remember the codeword LANTERN. Reply with the codeword only.",
+      ),
+    ),
     content="true",
   )
 }
@@ -68,23 +72,21 @@ test "assistant reasoning replays with its raw envelope intact" {
   let mut saw_thinking = false
   for message in wire {
     guard message is Json::Object(fields) else { continue }
-    guard fields.get("content") is Some(Json::Array(blocks)) else {
-      continue
-    }
+    guard fields.get("content") is Some(Json::Array(blocks)) else { continue }
     for block in blocks {
-    guard block is Json::Object(bfields) else { continue }
-    if bfields.get("type") is Some(Json::String("thinking")) {
-      saw_thinking = true
-      inspect(
-        bfields.get("thinking") ==
-        Some(Json::string("figuring out the answer step by step")),
-        content="true",
-      )
-      inspect(
-        bfields.get("signature") == Some(Json::string("sig-abc123=")),
-        content="true",
-      )
-    }
+      guard block is Json::Object(bfields) else { continue }
+      if bfields.get("type") is Some(Json::String("thinking")) {
+        saw_thinking = true
+        inspect(
+          bfields.get("thinking") ==
+          Some(Json::string("figuring out the answer step by step")),
+          content="true",
+        )
+        inspect(
+          bfields.get("signature") == Some(Json::string("sig-abc123=")),
+          content="true",
+        )
+      }
     }
   }
   inspect(saw_thinking, content="true")
@@ -111,9 +113,7 @@ test "tool_result carries the exact tool_use call identity" {
   let mut saw_result = false
   for message in wire {
     guard message is Json::Object(fields) else { continue }
-    guard fields.get("content") is Some(Json::Array(blocks)) else {
-      continue
-    }
+    guard fields.get("content") is Some(Json::Array(blocks)) else { continue }
     for block in blocks {
       guard block is Json::Object(bfields) else { continue }
       if bfields.get("type") is Some(Json::String("tool_result")) {
@@ -135,11 +135,11 @@ test "the stable system prefix encodes identically across turns" {
   let system = [@posoco.Content::Text("You are documenting a gateway.")]
   let first = @messages.system_to_wire(
     content=system,
-    cache_control=Some(@messages.CacheControl::{ ttl: None }),
+    cache_control=Some(@messages.CacheControl::{ ttl: None, }),
   )
   let second = @messages.system_to_wire(
     content=system,
-    cache_control=Some(@messages.CacheControl::{ ttl: None }),
+    cache_control=Some(@messages.CacheControl::{ ttl: None, }),
   )
   // Prefix stability is byte-level: identical inputs, identical wire.
   inspect(first == second, content="true")
@@ -148,11 +148,11 @@ test "the stable system prefix encodes identically across turns" {
 
 ///|
 test "cache_control marks the 5-minute flavor by default and never 1h" {
-  let ephemeral = @messages.CacheControl::{ ttl: None }.to_wire()
+  let ephemeral = @messages.CacheControl::{ ttl: None, }.to_wire()
   guard ephemeral is Json::Object(fields) else { fail("cache_control shape") }
   inspect(fields.get("type") == Some(Json::string("ephemeral")), content="true")
   inspect(fields.contains("ttl"), content="false")
-  let one_hour = @messages.CacheControl::{ ttl: Some("1h") }.to_wire()
+  let one_hour = @messages.CacheControl::{ ttl: Some("1h"), }.to_wire()
   guard one_hour is Json::Object(fields1h) else { fail("cache_control shape") }
   inspect(fields1h.get("ttl") == Some(Json::string("1h")), content="true")
 }

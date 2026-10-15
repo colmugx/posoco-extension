@@ -12,7 +12,7 @@ async fn host_invoke(
   agent : @posoco.Agent,
   id~ : String,
   args~ : Json,
-) -> @posoco.CommandOutcome raise {
+) -> @posoco.CommandOutcome {
   for port in agent.commands() {
     for def in port.commands() {
       if def.id == id {
@@ -43,16 +43,13 @@ async test "host composition discovers the extension, its model port and command
       Respond(code=200, body=exec_catalog_body()),
     ]),
   )
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
   let ids = composed_command_ids(agent)
-  for expected in [
-    "magpie_model", "magpie_status", "magpie_refresh", "magpie_route",
-    "magpie_quotas", "magpie_limit", "magpie_usage", "magpie_requests",
-    "magpie_concurrency", "magpie_usage_recent",
-  ] {
+  for
+    expected in [
+      "magpie_model", "magpie_status", "magpie_refresh", "magpie_route", "magpie_quotas",
+      "magpie_limit", "magpie_usage", "magpie_requests", "magpie_concurrency", "magpie_usage_recent",
+    ] {
     guard ids.contains(expected) else {
       fail("composed agent is missing command \{expected}")
     }
@@ -68,22 +65,21 @@ async test "first turn flows through the composed model port with selection" {
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=exec_catalog_body()),
     ],
-    posts=[buffered_post(status=200, body=messages_nonstream_body(text="hi there"))],
+    posts=[
+      buffered_post(status=200, body=messages_nonstream_body(text="hi there")),
+    ],
   )
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
   // Host startup loads the catalog before selection is possible.
   runtime.on_start()
   // Model selection through the composed command surface.
-  guard
-    host_invoke(
+  guard host_invoke(
       agent,
       id="magpie_model",
       args=Json::object({ "model": Json::string("anthropic/claude-native") }),
-    ) is @posoco.CommandOutcome::Success(..) else {
+    )
+    is @posoco.CommandOutcome::Success(..) else {
     fail("model selection through the composed agent failed")
   }
   // A real turn: the Host-visible lifecycle fires on_start (catalog
@@ -93,8 +89,7 @@ async test "first turn flows through the composed model port with selection" {
     "host-session-1",
   )
   let mut text = ""
-  guard
-    result.message
+  guard result.message
     is @posoco.Message::AssistantMessage(content=completion, ..) else {
     fail("turn must end with an assistant message")
   }
@@ -105,10 +100,7 @@ async test "first turn flows through the composed model port with selection" {
   inspect(text, content="hi there")
   // The POST went through the extension's transport with the session header.
   inspect(transport.post_calls.length() > 0, content="true")
-  inspect(
-    transport.post_sessions[0].contains("host-session-1"),
-    content="true",
-  )
+  inspect(transport.post_sessions[0].contains("host-session-1"), content="true")
 }
 
 ///|
@@ -126,15 +118,12 @@ async test "first agent turn automatically starts magpie lifecycle exactly once"
     ],
   )
   let runtime = MagpieRuntime::activate(
-    settings=Some(Json::object({
-      "model": Json::string("anthropic/claude-native"),
-    })),
+    settings=Some(
+      Json::object({ "model": Json::string("anthropic/claude-native") }),
+    ),
     transport~,
   )
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
   inspect(transport.calls.length(), content="0")
   let first = agent.run_turn(
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("hello")]),
@@ -168,14 +157,12 @@ async test "duplicate extension registration is rejected by composition" {
   // The same instance twice would double-register commands and the model
   // slot; composition must refuse rather than silently merge.
   try
-    @posoco.Agent::Agent(
-      exts=[runtime, runtime],
-      config=@posoco.tk_config(),
-    ) catch {
-      _ => ()
-    } noraise {
-      _ => fail("duplicate extension registration must be rejected")
-    }
+    @posoco.Agent::Agent(exts=[runtime, runtime], config=@posoco.tk_config())
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("duplicate extension registration must be rejected")
+  }
 }
 
 ///|
@@ -198,11 +185,12 @@ async test "two model managers cannot share one agent; separate agents keep sele
     @posoco.Agent::Agent(
       exts=[runtime_a, runtime_b],
       config=@posoco.tk_config(),
-    ) catch {
-      _ => ()
-    } noraise {
-      _ => fail("two model managers must not compose into one agent")
-    }
+    )
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("two model managers must not compose into one agent")
+  }
   // Coexistence is per-agent: independent runtimes hold independent
   // selection state (no global registry).
   let _ = runtime_a.manager.refresh()
@@ -228,9 +216,7 @@ async test "two model managers cannot share one agent; separate agents keep sele
 ///|
 async test "invalid configuration starts degraded, never silently on the default gateway" {
   let runtime = MagpieRuntime::activate(
-    settings=Some(
-      Json::object({ "enabled": Json::string("yes") }),
-    ),
+    settings=Some(Json::object({ "enabled": Json::string("yes") })),
     transport=FakeTransport([
       Respond(code=200, body=hello_body()),
       Respond(code=200, body=exec_catalog_body()),
@@ -239,12 +225,8 @@ async test "invalid configuration starts degraded, never silently on the default
   guard runtime.unconfigured_reason() is Some(_) else {
     fail("invalid settings must record the reason")
   }
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
-  guard
-    host_invoke(agent, id="magpie_status", args=Json::null())
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  guard host_invoke(agent, id="magpie_status", args=Json::null())
     is @posoco.CommandOutcome::Success(structured=Some(status), ..) else {
     fail("status must answer after degraded startup")
   }
@@ -257,7 +239,8 @@ async test "invalid configuration starts degraded, never silently on the default
   guard fields.get("selected") is Some(Json::String("")) else {
     fail("degraded startup must not hold a model selection")
   }
-  guard fields.get("catalog_size") is Some(Json::Number(n, ..)) && n.to_int() == 0 else {
+  guard fields.get("catalog_size") is Some(Json::Number(n, ..)) &&
+    n.to_int() == 0 else {
     fail("degraded startup must not load a catalog")
   }
 }
@@ -270,14 +253,10 @@ async test "offline gateway does not crash host startup and recovers on reconnec
     Respond(code=200, body=exec_catalog_body()),
   ])
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
   // Host startup: on_start must swallow the offline gateway.
   runtime.on_start()
-  guard
-    host_invoke(agent, id="magpie_status", args=Json::null())
+  guard host_invoke(agent, id="magpie_status", args=Json::null())
     is @posoco.CommandOutcome::Success(structured=Some(offline), ..) else {
     fail("status must answer while offline")
   }
@@ -289,8 +268,7 @@ async test "offline gateway does not crash host startup and recovers on reconnec
   }
   // Recovery: the next lifecycle start refreshes successfully.
   runtime.on_start()
-  guard
-    host_invoke(agent, id="magpie_status", args=Json::null())
+  guard host_invoke(agent, id="magpie_status", args=Json::null())
     is @posoco.CommandOutcome::Success(structured=Some(recovered), ..) else {
     fail("status must answer after recovery")
   }
@@ -300,9 +278,8 @@ async test "offline gateway does not crash host startup and recovers on reconnec
   guard recovered_fields.get("connected") is Some(Json::True) else {
     fail("recovery must report a connected gateway")
   }
-  guard
-    recovered_fields.get("catalog_size")
-    is Some(Json::Number(size, ..)) && size.to_int() > 0 else {
+  guard recovered_fields.get("catalog_size") is Some(Json::Number(size, ..)) &&
+    size.to_int() > 0 else {
     fail("recovery must load the catalog")
   }
 }
@@ -319,10 +296,7 @@ async test "repeated lifecycle transitions keep the command surface consistent" 
     posts=[buffered_post(status=200, body=messages_nonstream_body(text="ok"))],
   )
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
   runtime.on_start()
   runtime.on_shutdown()
   // After shutdown the command surface must refuse work, not serve stale state.
@@ -333,8 +307,7 @@ async test "repeated lifecycle transitions keep the command surface consistent" 
   }
   // Reactivation restores full service without duplicate registrations.
   runtime.on_start()
-  guard
-    host_invoke(agent, id="magpie_status", args=Json::null())
+  guard host_invoke(agent, id="magpie_status", args=Json::null())
     is @posoco.CommandOutcome::Success(..) else {
     fail("commands must work again after reactivation")
   }
@@ -351,10 +324,7 @@ async test "shutdown drops owned observation state; reactivation rebuilds it" {
     posts=[buffered_post(status=200, body=messages_nonstream_body(text="done"))],
   )
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
   runtime.on_start()
   let _ = host_invoke(
     agent,

@@ -320,6 +320,7 @@ fn user_wire(text : String) -> Json raise {
     @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)]),
   )[0]
 }
+
 ///|
 async fn chat_via_port(
   ctx : Ctx,
@@ -436,7 +437,11 @@ async fn main {
   )
   let ctx_version : Ref[String?] = Ref(None)
   let run_source : Ref[String] = Ref(
-    if infer_approved { "live-inference+read-only" } else { "live-read-only" },
+    if infer_approved {
+      "live-inference+read-only"
+    } else {
+      "live-read-only"
+    },
   )
   let ctx = Ctx::{
     base,
@@ -466,11 +471,10 @@ async fn main {
   let hello = probe_get(ctx, path="/api/hello", key~)
   ctx.observe(label="/api/hello", outcome=hello)
   match hello {
-    Ok((_, Some(Json::Object(fields)))) => {
+    Ok((_, Some(Json::Object(fields)))) =>
       if fields.get("version") is Some(Json::String(version)) {
         ctx_version.val = Some("magpie \{version}")
       }
-    }
     _ => ()
   }
   let models_result = probe_get(ctx, path="/v1/models", key~)
@@ -556,14 +560,15 @@ async fn main {
           Some(json) => shape(json, depth=1)
           None => "no structured output"
         }
-        ctx.pass("\{id} → feedback_present=\{feedback.length() > 0}; structured: \{shape_text}")
+        ctx.pass(
+          "\{id} → feedback_present=\{feedback.length() > 0}; structured: \{shape_text}",
+        )
       }
-      @posoco.CommandOutcome::Failure(reason~) => {
+      @posoco.CommandOutcome::Failure(reason~) =>
         // A command contract that answers with Failure is still a working
         // command surface; the failure reason is service-level (e.g. 403)
         // and recorded, not a gate closure.
         ctx.skip("\{id} → Failure: \{sanitize(text=reason, secret=key)}")
-      }
       @posoco.CommandOutcome::NeedsInput(prompt~) => {
         ctx.required_failures += 1
         ctx.fail("\{id} → NeedsInput: \{prompt}")
@@ -705,31 +710,31 @@ async fn main {
               ctx.requests += 1
               try {
                 let _ = runtime
-                .model_port()
-                .chat(
-                  @posoco.InvocationScope::{
-                    session_id: @posoco.SessionId::unchecked(
-                      "posoco-live-effort",
-                    ),
-                    run_id: @posoco.RunId::unchecked("live-run"),
-                    effect_id: None,
-                    pressure: None,
-                  },
-                  [
-                    @posoco.Message::UserMessage(content=[
-                      @posoco.Content::Text("Reply with OK only."),
-                    ]),
-                  ],
-                  [],
-                  @posoco.ChatOptions::{
-                    temperature: None,
-                    max_output_tokens: Some(64),
-                  },
-                  @posoco.StreamMode::NoStream,
+                  .model_port()
+                  .chat(
+                    @posoco.InvocationScope::{
+                      session_id: @posoco.SessionId::unchecked(
+                        "posoco-live-effort",
+                      ),
+                      run_id: @posoco.RunId::unchecked("live-run"),
+                      effect_id: None,
+                      pressure: None,
+                    },
+                    [
+                      @posoco.Message::UserMessage(content=[
+                        @posoco.Content::Text("Reply with OK only."),
+                      ]),
+                    ],
+                    [],
+                    @posoco.ChatOptions::{
+                      temperature: None,
+                      max_output_tokens: Some(64),
+                    },
+                    @posoco.StreamMode::NoStream,
+                  )
+                ctx.pass(
+                  "effort \{effort} accepted for \{model} (\{ctx.billable} billable so far)",
                 )
-              ctx.pass(
-                "effort \{effort} accepted for \{model} (\{ctx.billable} billable so far)",
-              )
               } catch {
                 error =>
                   ctx.fail(
@@ -773,101 +778,106 @@ async fn main {
           ctx.requests += 1
           try {
             let first = runtime
-            .model_port()
-            .chat(
-              @posoco.InvocationScope::{
-                session_id: @posoco.SessionId::unchecked("posoco-live-tool"),
-                run_id: @posoco.RunId::unchecked("live-run"),
-                effect_id: None,
-                pressure: None,
-              },
-              [
-                @posoco.Message::UserMessage(content=[
-                  @posoco.Content::Text(
-                    "What is the weather in Tokyo? Use the tool.",
-                  ),
-                ]),
-              ],
-              [tool],
-              @posoco.ChatOptions::{
-                temperature: None,
-                max_output_tokens: Some(128),
-              },
-              @posoco.StreamMode::NoStream,
-            )
+              .model_port()
+              .chat(
+                @posoco.InvocationScope::{
+                  session_id: @posoco.SessionId::unchecked("posoco-live-tool"),
+                  run_id: @posoco.RunId::unchecked("live-run"),
+                  effect_id: None,
+                  pressure: None,
+                },
+                [
+                  @posoco.Message::UserMessage(content=[
+                    @posoco.Content::Text(
+                      "What is the weather in Tokyo? Use the tool.",
+                    ),
+                  ]),
+                ],
+                [tool],
+                @posoco.ChatOptions::{
+                  temperature: None,
+                  max_output_tokens: Some(128),
+                },
+                @posoco.StreamMode::NoStream,
+              )
             if first.completion.message.tool_calls.is_empty() {
-              ctx.skip("tool round trip: model answered without calling the tool")
-            } else {
-            // Step 3: validate call identity and arguments.
-            let call = first.completion.message.tool_calls[0]
-            let args_ok = call.arguments is Json::Object(input) &&
-              input.get("city") is Some(Json::String(_))
-            if call.name != @posoco.ToolName::unchecked("get_weather") ||
-              !args_ok {
-              ctx.fail("tool round trip: tool_use identity/args mismatch")
-            } else {
-            // Steps 4–5: deterministic result replayed in the same session;
-            // the kit correlates the tool_result to this exact call id.
-            if !ctx.reserve_billable() {
-              ctx.skip("tool round trip second turn: billable budget exhausted")
-            } else {
-            ctx.requests += 1
-            let second = runtime
-            .model_port()
-            .chat(
-              @posoco.InvocationScope::{
-                session_id: @posoco.SessionId::unchecked("posoco-live-tool"),
-                run_id: @posoco.RunId::unchecked("live-run"),
-                effect_id: None,
-                pressure: None,
-              },
-              [
-                @posoco.Message::UserMessage(content=[
-                  @posoco.Content::Text(
-                    "What is the weather in Tokyo? Use the tool.",
-                  ),
-                ]),
-                @posoco.Message::AssistantMessage(
-                  content=first.completion.message.content,
-                  tool_calls=first.completion.message.tool_calls,
-                  reasoning=first.completion.message.reasoning,
-                  finish_reason=@posoco.FinishReason::ToolCalls,
-                ),
-                @posoco.Message::ToolMessage(
-                  call_id=call.call_id,
-                  tool_name=call.name,
-                  outcome=@posoco.ToolOutcome::Success(
-                    content="Tokyo: 21C, clear",
-                    structured=None,
-                  ),
-                ),
-              ],
-              [tool],
-              @posoco.ChatOptions::{
-                temperature: None,
-                max_output_tokens: Some(128),
-              },
-              @posoco.StreamMode::NoStream,
-            )
-            // Step 6: a final assistant response must exist.
-            let mut final_text = ""
-            for block in second.completion.message.content {
-              guard block is @posoco.Content::Text(part) else { continue }
-              final_text = final_text + part
-            }
-            if final_text.length() > 0 {
-              ctx.pass(
-                "tool round trip: validated call completed with a final response (\{final_text.length()} chars)",
+              ctx.skip(
+                "tool round trip: model answered without calling the tool",
               )
             } else {
-              ctx.fail(
-                "tool round trip: final assistant response was empty",
-              )
-            }
-            } // Second inference was approved.
+              // Step 3: validate call identity and arguments.
+              let call = first.completion.message.tool_calls[0]
+              let args_ok = call.arguments is Json::Object(input) &&
+                input.get("city") is Some(Json::String(_))
+              if call.name != @posoco.ToolName::unchecked("get_weather") ||
+                !args_ok {
+                ctx.fail("tool round trip: tool_use identity/args mismatch")
+                // Steps 4–5: deterministic result replayed in the same session;
+                // the kit correlates the tool_result to this exact call id.
+              } else if !ctx.reserve_billable() {
+                ctx.skip(
+                  "tool round trip second turn: billable budget exhausted",
+                )
+              } else {
+                ctx.requests += 1
+                let second = runtime
+                  .model_port()
+                  .chat(
+                    @posoco.InvocationScope::{
+                      session_id: @posoco.SessionId::unchecked(
+                        "posoco-live-tool",
+                      ),
+                      run_id: @posoco.RunId::unchecked("live-run"),
+                      effect_id: None,
+                      pressure: None,
+                    },
+                    [
+                      @posoco.Message::UserMessage(content=[
+                        @posoco.Content::Text(
+                          "What is the weather in Tokyo? Use the tool.",
+                        ),
+                      ]),
+                      @posoco.Message::AssistantMessage(
+                        content=first.completion.message.content,
+                        tool_calls=first.completion.message.tool_calls,
+                        reasoning=first.completion.message.reasoning,
+                        finish_reason=@posoco.FinishReason::ToolCalls,
+                      ),
+                      @posoco.Message::ToolMessage(
+                        call_id=call.call_id,
+                        tool_name=call.name,
+                        outcome=@posoco.ToolOutcome::Success(
+                          content="Tokyo: 21C, clear",
+                          structured=None,
+                        ),
+                      ),
+                    ],
+                    [tool],
+                    @posoco.ChatOptions::{
+                      temperature: None,
+                      max_output_tokens: Some(128),
+                    },
+                    @posoco.StreamMode::NoStream,
+                  )
+                // Step 6: a final assistant response must exist.
+                let mut final_text = ""
+                for block in second.completion.message.content {
+                  guard block is @posoco.Content::Text(part) else { continue }
+                  final_text = final_text + part
+                }
+                if final_text.length() > 0 {
+                  ctx.pass(
+                    "tool round trip: validated call completed with a final response (\{final_text.length()} chars)",
+                  )
+                } else {
+                  ctx.fail(
+                    "tool round trip: final assistant response was empty",
+                  )
+                }
+              } // Second inference was approved.
             } // Tool call identity and arguments validated.
-            } // Model emitted at least one tool call.
-          } catch {
+          } // Model emitted at least one tool call.
+           catch {
             error =>
               ctx.fail(
                 "tool round trip (\{model}): \{sanitize(text=@debug.to_string(error), secret=key)}",
@@ -928,7 +938,10 @@ async fn main {
           Err(reason) => {
             ctx.fail("cache cold turn errored: \{reason}")
             runtime.on_shutdown()
-            ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
+            ctx.finish_report(
+              gateway_version=ctx_version.val.unwrap_or("unknown"),
+              source=run_source.val,
+            )
             return
           }
         }
@@ -978,21 +991,30 @@ async fn main {
               _ => {
                 ctx.fail("cache cold response missing assistant content")
                 runtime.on_shutdown()
-                ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
+                ctx.finish_report(
+                  gateway_version=ctx_version.val.unwrap_or("unknown"),
+                  source=run_source.val,
+                )
                 return
               }
             }
           _ => {
             ctx.fail("cache cold response was not a Messages object")
             runtime.on_shutdown()
-            ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
+            ctx.finish_report(
+              gateway_version=ctx_version.val.unwrap_or("unknown"),
+              source=run_source.val,
+            )
             return
           }
         }
         if code1 < 200 || code1 >= 300 {
           ctx.fail("cache cold response status was not successful")
           runtime.on_shutdown()
-          ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
+          ctx.finish_report(
+            gateway_version=ctx_version.val.unwrap_or("unknown"),
+            source=run_source.val,
+          )
           return
         }
         let turn2 = @messages.encode_request(
@@ -1013,7 +1035,10 @@ async fn main {
           Err(reason) => {
             ctx.fail("cache warm turn errored: \{reason}")
             runtime.on_shutdown()
-            ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
+            ctx.finish_report(
+              gateway_version=ctx_version.val.unwrap_or("unknown"),
+              source=run_source.val,
+            )
             return
           }
         }
@@ -1065,9 +1090,11 @@ async fn main {
         }
         let system1h = @messages.system_to_wire(
           content=[
-            @posoco.Content::Text("You are documenting a gateway. " + builder1h.to_string()),
+            @posoco.Content::Text(
+              "You are documenting a gateway. " + builder1h.to_string(),
+            ),
           ],
-          cache_control=Some(@messages.CacheControl::{ ttl: Some("1h") }),
+          cache_control=Some(@messages.CacheControl::{ ttl: Some("1h"), }),
         )
         let turn1h = @messages.encode_request(
           model~,
@@ -1088,7 +1115,8 @@ async fn main {
                     match u.get("cache_creation") {
                       Some(Json::Object(parts)) =>
                         match parts.get("ephemeral_1h_input_tokens") {
-                          Some(Json::Number(n, ..)) if n > 0.0 => Some(n.to_int())
+                          Some(Json::Number(n, ..)) if n > 0.0 =>
+                            Some(n.to_int())
                           _ => None
                         }
                       _ => None
@@ -1118,16 +1146,10 @@ async fn main {
   // ---- Session isolation (read-only) -------------------------------------
   report.val.push("")
   report.val.push("## Session and routing")
-  let route_a = ctx.get(
-    path="/v1/magpie/route?session=posoco-live-probe",
-    key=key,
-  ) catch {
+  let route_a = ctx.get(path="/v1/magpie/route?session=posoco-live-probe", key~) catch {
     error => (-1, None)
   }
-  let route_b = ctx.get(
-    path="/v1/magpie/route?session=posoco-live-other",
-    key=key,
-  ) catch {
+  let route_b = ctx.get(path="/v1/magpie/route?session=posoco-live-other", key~) catch {
     error => (-1, None)
   }
   match (route_a, route_b) {
@@ -1193,5 +1215,8 @@ async fn main {
 
   // ---- Summary ----------------------------------------------------------
   report.val.push("")
-  ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
+  ctx.finish_report(
+    gateway_version=ctx_version.val.unwrap_or("unknown"),
+    source=run_source.val,
+  )
 }
