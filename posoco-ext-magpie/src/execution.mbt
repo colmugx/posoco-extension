@@ -248,7 +248,12 @@ async fn execute_messages(
             acc~,
             on_chunk=stream_callback(stream),
             state~,
-          )
+          ) catch {
+            error => {
+              event_stream.close_stream() catch { _ => () }
+              raise error
+            }
+          }
         }
       None => {
         event_stream.close_stream() catch { _ => () }
@@ -470,7 +475,12 @@ async fn execute_responses(
               acc,
               on_chunk,
               state=sse_state,
-            )
+            ) catch {
+              error => {
+                event_stream.close_stream() catch { _ => () }
+                raise error
+              }
+            }
           None => ()
         }
       None => {
@@ -858,7 +868,12 @@ async fn execute_chat(
                 payload,
                 acc,
                 on_chunk,
-              )
+              ) catch {
+                error => {
+                  event_stream.close_stream() catch { _ => () }
+                  raise error
+                }
+              }
             }
           None => ()
         }
