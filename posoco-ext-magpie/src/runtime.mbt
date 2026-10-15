@@ -137,7 +137,7 @@ pub fn MagpieRuntime::activate(
         base_url: DEFAULT_GATEWAY_URL,
         credential: None,
         connect_timeout_ms: DEFAULT_CONNECT_TIMEOUT_MS,
-        enabled: true,
+        enabled: false,
         selected_model: None,
         selected_effort: None,
       }
@@ -382,8 +382,8 @@ pub impl @posoco.CommandPort for MagpieRuntime with fn commands(
   let _ = self
   [
     magpie_command(
-      id="model",
-      label="Switch Model",
+      id="magpie_model",
+      label="Switch Magpie Model",
       description="List Magpie models, select one, or apply a reasoning effort",
       params=[
         text_param(
@@ -512,7 +512,7 @@ pub impl @posoco.CommandPort for MagpieRuntime with fn invoke(
 ) -> @posoco.CommandOutcome raise @posoco.CommandError {
   self.require_active()
   match id {
-    "model" => {
+    "magpie_model" => {
       let control = self.manager as &@modelmgmt.ModelManagerControl
       let model = runtime_arg_str(args, "model")
       let effort = runtime_arg_str(args, "effort")
