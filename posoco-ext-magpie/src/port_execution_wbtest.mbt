@@ -1,6 +1,6 @@
 ///|
 /// port_execution_wbtest.mbt — ModelPort execution against the fake
-/// gateway: deterministic, offline, covering the #110 matrix.
+/// gateway: deterministic, offline model execution checks.
 
 ///|
 /// The shared execution catalog: one native model per protocol, an
