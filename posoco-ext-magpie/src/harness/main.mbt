@@ -844,13 +844,44 @@ async fn main {
               "no cache creation tokens on the cold turn (code \{code1}) — caching may be unsupported for \{model}",
             )
         }
+        // Replay the actual server response instead of inventing an
+        // assistant turn. This preserves signed thinking/tool blocks and
+        // the original prefix for a meaningful native cache probe.
+        let real_assistant = match body1 {
+          Some(Json::Object(fields)) =>
+            match fields.get("content") {
+              Some(Json::Array(blocks)) =>
+                Json::object({
+                  "role": Json::string("assistant"),
+                  "content": Json::array(blocks),
+                })
+              _ => {
+                ctx.fail("cache cold response missing assistant content")
+                runtime.on_shutdown()
+                ctx.finish_report()
+                return
+              }
+            }
+          _ => {
+            ctx.fail("cache cold response was not a Messages object")
+            runtime.on_shutdown()
+            ctx.finish_report()
+            return
+          }
+        }
+        if code1 < 200 || code1 >= 300 {
+          ctx.fail("cache cold response status was not successful")
+          runtime.on_shutdown()
+          ctx.finish_report()
+          return
+        }
         let turn2 = @messages.encode_request(
           model~,
           max_tokens=32,
           system=Some(system),
           messages=[
             user_wire("Reply with OK only."),
-            assistant_wire("OK"),
+            real_assistant,
             user_wire("Reply with THANKS only."),
           ],
           tools=[wire_tool],
