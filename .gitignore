@@ -4,6 +4,7 @@ _build/
 .moonagent/
 
 .agents
+.cetas-*-work/
 
 /external/examples/web-demo
 /external/examples/web-spike
