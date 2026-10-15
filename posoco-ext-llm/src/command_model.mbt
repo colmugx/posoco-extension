@@ -191,6 +191,7 @@ pub fn RouterModelPort::select_effort(
       )
   }
   self.active_effort = Some(effort)
+  self.publish_model_selection()
 }
 
 ///|
@@ -401,6 +402,7 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
             }
             self.active_id = slot_id
             self.publish_model_status()
+            self.publish_model_selection()
             self.publish_provider_event()
             // Immediate probe so the bar reflects the new provider's quota
             // as soon as the command returns.

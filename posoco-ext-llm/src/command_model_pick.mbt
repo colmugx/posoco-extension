@@ -255,6 +255,7 @@ async fn RouterModelPort::run_provider_pick(
   self.select_effort(winner.slot_id, winner.point.effort)
   self.active_id = winner.slot_id
   self.publish_model_status()
+  self.publish_model_selection()
   self.publish_provider_event()
   // Mirror the manual switch: immediate probe so the bar reflects the new
   // provider's quota as soon as the command returns.

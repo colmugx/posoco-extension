@@ -134,6 +134,7 @@ pub fn RouterModelPort::RouterModelPort(
     Some(bus) => bus.subscribe(router as &@devkit.BusSubscriber)
     None => ()
   }
+  router.publish_model_selection()
   router
 }
 
@@ -288,6 +289,7 @@ pub fn RouterModelPort::switch_slot(
   self.active_id = slot_id
   self.active_effort = None
   self.publish_model_status()
+  self.publish_model_selection()
   self.publish_provider_event()
   // The new provider's readings are unknown until its first response (or an
   // immediate /model probe): drop the previous provider's quota segments and
@@ -381,6 +383,7 @@ pub fn RouterModelPort::replace_provider_slots(
     self.active_id = slots[0].id
     self.active_effort = None
     self.publish_provider_event()
+    self.publish_model_selection()
   }
   // Last, and only once the active id is guaranteed valid again: the model
   // segment render reads the active slot.

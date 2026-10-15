@@ -410,16 +410,23 @@ async test "status invoke warms the statusbar segments" {
   let outcome = router.invoke("status", Json::null())
   @devkit.quota_registry_unregister("provider-a")
   assert_true(outcome is @posoco.CommandOutcome::Success(..))
-  assert_eq(
-    @devkit.decode_status_op(capture.events[0]),
-    Some(
-      @devkit.StatusOp::Register(
-        segment="balance",
-        label=None,
-        priority=45,
-        value=Some("110.00 CNY"),
-        color=None,
-      ),
-    ),
-  )
+  // The composition-time model_selection seed shares the bus; the balance
+  // register may land at any index.
+  let mut balance_registered = false
+  for event in capture.events {
+    if @devkit.decode_status_op(event)
+      is Some(
+        @devkit.StatusOp::Register(
+          segment="balance",
+          label=None,
+          priority=45,
+          value=Some("110.00 CNY"),
+          color=None
+        )
+      ) {
+      balance_registered = true
+      break
+    }
+  }
+  assert_true(balance_registered)
 }

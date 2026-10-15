@@ -1477,3 +1477,63 @@ test "a pending default publishes the model segment from the persisted id" {
     _ => fail("expected a model status register")
   }
 }
+
+///|
+/// Extract the payload of every `model_selection` event published by the
+/// router, ignoring the status/quota/provider events that share the bus.
+fn router_selection_events(events : Array[@devkit.BusEvent]) -> Array[Json] {
+  let out : Array[Json] = []
+  for event in events {
+    if event.source == "posoco_ext_llm" && event.topic == "model_selection" {
+      out.push(event.data)
+    }
+  }
+  out
+}
+
+///|
+fn router_selection_payload(
+  data : Json,
+  expected_slot : String,
+  expected_effort : Json,
+) -> Unit raise {
+  match data {
+    Json::Object(fields) => {
+      assert_eq(fields.get("slot_id"), Some(Json::string(expected_slot)))
+      assert_eq(fields.get("effort"), Some(expected_effort))
+    }
+    _ => fail("expected a model_selection JSON object")
+  }
+}
+
+///|
+test "selection changes publish a structured model_selection event" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let effort_slot = router_effort_slot("one/a", "one", "model-a")
+  let plain_slot = router_test_slot("two/b", "two", "model-b", [])
+  let router = RouterModelPort(slots=[effort_slot, plain_slot], bus=Some(bus))
+  // Composition seeds exactly one event for the initial selection.
+  let seeded = router_selection_events(capture.events)
+  assert_eq(seeded.length(), 1)
+  router_selection_payload(seeded[0], "one/a", Json::null())
+  // Slot switch: effort resets to the slot default (null).
+  router.switch_slot("two/b") catch {
+    _ => fail("unexpected switch failure")
+  }
+  let switched = router_selection_events(capture.events)
+  assert_eq(switched.length(), 1)
+  router_selection_payload(switched[0], "two/b", Json::null())
+  // Explicit effort on the effort-capable slot rides along with the slot id.
+  router.switch_slot("one/a") catch {
+    _ => fail("unexpected switch failure")
+  }
+  capture.events.clear()
+  router.select_effort("one/a", "high") catch {
+    _ => fail("unexpected effort failure")
+  }
+  let with_effort = router_selection_events(capture.events)
+  assert_eq(with_effort.length(), 1)
+  router_selection_payload(with_effort[0], "one/a", Json::string("high"))
+}

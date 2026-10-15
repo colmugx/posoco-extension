@@ -191,9 +191,10 @@ test "select_model through the control trait switches, resets effort, and preser
   // Switching models resets the applied effort.
   assert_eq(router.active_selection().effort, None)
   assert_false(router.active_selection().pending)
-  // Model status republication, then the provider event for the new
-  // provider — the same wire shape `/model` produces.
-  assert_eq(capture.events.length(), 2)
+  // Model status republication, then the structured model_selection event,
+  // then the provider event for the new provider — the same wire shape
+  // `/model` produces.
+  assert_eq(capture.events.length(), 3)
   assert_eq(
     @devkit.decode_status_op(capture.events[0]),
     Some(
@@ -206,8 +207,9 @@ test "select_model through the control trait switches, resets effort, and preser
       ),
     ),
   )
-  assert_eq(capture.events[1].topic, "provider")
-  match capture.events[1].data {
+  assert_eq(capture.events[1].topic, "model_selection")
+  assert_eq(capture.events[2].topic, "provider")
+  match capture.events[2].data {
     Json::Object(fields) =>
       assert_eq(fields.get("provider_id"), Some(Json::string("two")))
     _ => fail("expected a provider event payload object")
@@ -222,6 +224,9 @@ test "select_model rejects unknown ids without mutating state" {
   let first = control_test_slot("one/a", "one", "model-a", [])
   let second = control_test_slot("two/b", "two", "model-b", [])
   let router = control_router(slots=[first, second], bus=Some(bus))
+  // Ignore the composition-time model_selection seed; the rejected
+  // selection must produce zero events.
+  capture.events.clear()
   let result = Ok(router.select_model("ghost")) catch { error => Err(error) }
   match result {
     Err(@modelmgmt.ModelManagerError::UnknownModel(detail)) =>

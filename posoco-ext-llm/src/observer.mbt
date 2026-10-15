@@ -37,6 +37,33 @@ fn RouterModelPort::publish_model_status(self : RouterModelPort) -> Unit {
 }
 
 ///|
+/// Machine-readable twin of the `model` status segment: one bus event per
+/// selection change carrying the active slot id and the explicitly selected
+/// effort (`null` = slot default) — the same vocabulary as the persisted
+/// `ActiveModelSelection`, so peers such as the fs-session store can record
+/// it into session metadata and a later resume can restore the selection.
+fn RouterModelPort::publish_model_selection(self : RouterModelPort) -> Unit {
+  let effort = match self.active_effort {
+    Some(value) => Json::string(value)
+    None => Json::null()
+  }
+  match self.bus {
+    Some(bus) =>
+      bus.publish({
+        source: "posoco_ext_llm",
+        topic: "model_selection",
+        data: Json::object(
+          Map::from_array([
+            ("slot_id", Json::string(self.active_id)),
+            ("effort", effort),
+          ]),
+        ),
+      })
+    None => ()
+  }
+}
+
+///|
 /// Provider-scoped status publishers (the Codex quota segments) show or
 /// hide their own segments on this event; republication is idempotent.
 fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
