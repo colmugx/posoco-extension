@@ -6,8 +6,7 @@
 /// fidelity picture, `plan_protocol` produces a structured execution plan
 /// for one of the three protocols — or an explicit incompatibility. It is a
 /// pure function of its inputs: identical inputs always yield an identical
-/// plan, and the future execution layer can consume the plan without
-/// reimplementing protocol selection.
+/// plan, which execution consumes without reimplementing selection.
 ///
 /// Evidence discipline (three tiers, never mixed):
 /// - `ProtocolNative` — inherent to the protocol shape itself.
@@ -312,8 +311,7 @@ pub impl Show for MagpiePlanConfidence with fn to_string(
 pub extend MagpiePlanConfidence with Show::{to_string, output}
 
 ///|
-/// A structured execution plan for one protocol. Pure output: the future
-/// execution layer consumes this without re-deriving protocol selection.
+/// A protocol execution plan, including evidence and fidelity risks.
 pub(all) struct MagpieProtocolPlan {
   model_id : String
   protocol : MagpieProtocol
