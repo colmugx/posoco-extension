@@ -618,6 +618,9 @@ fn intel_usage_summary(
     cache_write_tokens: intel_int(fields, "cache_write", "usage") catch {
       _ => raise intel_error("usage.cache_write", "wrong_type")
     },
+    cache_write_1h_tokens: intel_int(fields, "cache_write_1h", "usage") catch {
+      _ => raise intel_error("usage.cache_write_1h", "wrong_type")
+    },
     reasoning_tokens: intel_int(fields, "reasoning", "usage") catch {
       _ => raise intel_error("usage.reasoning", "wrong_type")
     },
@@ -685,6 +688,9 @@ fn intel_usage_row(
     },
     cache_write_tokens: intel_int(fields, "cache_write", "usage.requests") catch {
       _ => raise intel_error("usage.requests.cache_write", "wrong_type")
+    },
+    cache_write_1h_tokens: intel_int(fields, "cache_write_1h", "usage.requests") catch {
+      _ => raise intel_error("usage.requests.cache_write_1h", "wrong_type")
     },
     reasoning_tokens: intel_int(fields, "reasoning", "usage.requests") catch {
       _ => raise intel_error("usage.requests.reasoning", "wrong_type")
@@ -804,20 +810,33 @@ pub fn MagpieUsageRequestRow::cache_economics(
   guard self.cache_read_tokens is Some(_) || self.cache_write_tokens is Some(_) else {
     return None
   }
+  // Magpie's cache_write is the total number of created cache tokens.
+  // cache_write_1h is the 1h subset, not additional tokens. Without a
+  // 1h breakdown, the TTL distribution is unknown and no exact write
+  // pricing may be inferred from the aggregate.
+  let creation : @messages.MessagesCacheCreation = match (
+    self.cache_write_tokens,
+    self.cache_write_1h_tokens,
+  ) {
+    (Some(total), Some(hour)) if hour >= 0 && total >= hour =>
+      {
+        ephemeral_5m_input_tokens: Some(total - hour),
+        ephemeral_1h_input_tokens: Some(hour),
+      }
+    (Some(_), Some(_)) =>
+      raise @posoco.ModelError::ResponseParse(
+        "magpie cache accounting invalid (stage=economics, category=one_hour_exceeds_total)",
+      )
+    _ => {
+      ephemeral_5m_input_tokens: None,
+      ephemeral_1h_input_tokens: None,
+    }
+  }
   let usage = @messages.MessagesUsage::{
     input_tokens: self.input_tokens.unwrap_or(0),
     output_tokens: self.output_tokens.unwrap_or(0),
     cache_read_input_tokens: self.cache_read_tokens,
     cache_creation_input_tokens: self.cache_write_tokens,
   }
-  Some(
-    @messages.analyze_messages_cache_economics(
-      usage,
-      @messages.MessagesCacheCreation::{
-        ephemeral_5m_input_tokens: self.cache_write_tokens,
-        ephemeral_1h_input_tokens: None,
-      },
-      rates,
-    ),
-  )
+  Some(@messages.analyze_messages_cache_economics(usage, creation, rates))
 }
