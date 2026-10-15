@@ -748,3 +748,23 @@ async test "streaming execution is cancellable mid-stream" {
     }
   })
 }
+
+ 
+///|
+/// Unknown image modality must not trigger implicit placeholder conversion.
+test "unknown image modality preserves original image blocks" {
+  let entry = decode_catalog(models_body(model_entry(
+    id="x/unknown-image",
+    fields="\"native_endpoints\":[\"/v1/messages\"]",
+  ))).entries[0]
+  inspect(entry.meta.modalities_input is None, content="true")
+  inspect(model_supports_images(entry), content="true")
+  let input : Array[@posoco.Content] = [
+    @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
+  ]
+  let shaped = shape_for_images(
+    [@posoco.Message::UserMessage(content=input)],
+    model_supports_images(entry),
+  )
+  inspect(shaped == [@posoco.Message::UserMessage(content=input)], content="true")
+}
