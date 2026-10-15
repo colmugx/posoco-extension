@@ -478,6 +478,38 @@ pub fn MagpieRouteTry::equal(Self, Self) -> Bool
 pub fn MagpieRouteTry::not_equal(Self, Self) -> Bool
 pub fn MagpieRouteTry::to_repr(Self) -> @debug.Repr
 
+pub struct MagpieRuntime {
+  // private fields
+}
+pub fn MagpieRuntime::activate(settings? : Json?, transport? : &MagpieTransport) -> Self
+pub fn MagpieRuntime::commands(Self) -> Array[@port.CommandDef]
+pub fn MagpieRuntime::extension_id(Self) -> String
+pub fn MagpieRuntime::intelligence(Self) -> MagpieGatewayIntelligence
+pub async fn MagpieRuntime::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn MagpieRuntime::manager(Self) -> MagpieManager
+pub fn MagpieRuntime::manifest(Self) -> @port.ExtensionManifest
+pub fn MagpieRuntime::model_port(Self) -> MagpieModelPort
+pub fn MagpieRuntime::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn MagpieRuntime::on_shutdown(Self) -> Unit
+pub async fn MagpieRuntime::on_start(Self) -> Unit
+pub fn MagpieRuntime::recent_reports(Self) -> Array[MagpieExecutionReport]
+pub fn MagpieRuntime::unconfigured_reason(Self) -> String?
+pub impl @port.CommandPort for MagpieRuntime
+pub impl @port.Extension for MagpieRuntime
+pub impl @port.Lifecycle for MagpieRuntime
+
+pub(all) struct MagpieRuntimeSettings {
+  base_url : String?
+  gateway_key : String?
+  enabled : Bool?
+  model : String?
+  effort : String?
+} derive(Eq, @debug.Debug)
+pub fn MagpieRuntimeSettings::equal(Self, Self) -> Bool
+pub fn MagpieRuntimeSettings::from_settings(Json?) -> Self raise MagpieGatewayError
+pub fn MagpieRuntimeSettings::not_equal(Self, Self) -> Bool
+pub fn MagpieRuntimeSettings::to_repr(Self) -> @debug.Repr
+
 pub(all) enum MagpieService {
   Route
   Quotas

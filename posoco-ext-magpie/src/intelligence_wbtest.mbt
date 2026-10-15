@@ -630,7 +630,7 @@ async test "one-hour cache writes use the actual TTL split" {
     ]),
   )
   let row = client.usage_requests().rows[0]
-  inspect(row.cache_write_1h_tokens, content="Some(5)")
+  inspect(row.cache_write_1h_tokens == Some(5), content="true")
   let economics = row
     .cache_economics(rates=@messages.MessagesCacheRates::{
       ordinary_input: 3,
@@ -640,7 +640,7 @@ async test "one-hour cache writes use the actual TTL split" {
     })
     .unwrap()
   // 100 ordinary, 800 cache reads, 15 five-minute, 5 one-hour writes.
-  inspect(economics.effective_input_cost, content="Some(633.75)")
+  inspect(economics.effective_input_cost == Some(633.75), content="true")
 }
 
 ///|

@@ -3,6 +3,45 @@
 Independent Gateway-aware Model Manager for Posoco, not a provider hosted by
 `posoco-ext-llm`.
 
+## Runtime integration
+
+`MagpieRuntime::activate(settings?, transport?)` is the one-call activation
+path: typed settings in (`base_url`, `gateway_key`, `enabled`, `model`,
+`effort`), manager + model port + intelligence wired, invalid settings
+recovered to defaults with a recorded reason. Activation never performs
+I/O — `on_start` refreshes the catalog and an offline gateway leaves the
+explicit offline state instead of failing startup; `on_shutdown`
+deactivates the runtime and drops owned observation state.
+
+The runtime implements `@posoco.Extension` (manifest
+`posoco_ext_magpie`: one ModelPort, the commands, the lifecycle),
+`@posoco.CommandPort`, and `@posoco.Lifecycle` following the repository's
+existing extension conventions — the same shape `posoco-ext-llm` and
+`posoco-ext-zai` use. The manager owns selection state; the runtime adds no
+competing registry. ext-llm's router can host the magpie port as an
+ordinary slot, verified by a composition test.
+
+Commands (category `magpie`, following the existing `model` command
+conventions):
+
+| Command | Effect |
+|---|---|
+| `model` [model] [effort] | no args: structured catalog; with args: select model / apply effort (unknown/unadvertised → argument error) |
+| `magpie_status` | gateway connection, selection + pending, catalog size, per-service availability, unconfigured reason |
+| `magpie_refresh` | re-read `/v1/models`; offline gateway → explicit failure outcome, not a crash |
+| `magpie_route` (session) | routing decision for a session; failures surface without session identifiers |
+| `magpie_quotas` [kept] | quota cards; 403 `gateway_key_held` → failure outcome while inference continues |
+| `magpie_limit` | the calling key's own limit |
+| `magpie_usage` [period] | usage summary with the gateway's own cost |
+| `magpie_requests` [period] [offset] [limit] | request history, one page at a time |
+| `magpie_concurrency` | in-flight / waiting / tool-wait counts |
+| `magpie_usage_recent` | this runtime's recent execution reports (canonical usage, cache numbers, served model, protocol, translated flag) |
+
+Session affinity keeps using the Posoco session id through the port; the
+route command takes an explicit session argument because the command
+framework carries no implicit session. Intelligence service errors fail
+their own command and never touch the model port.
+
 ## Implemented in this PR
 
 - Multi-protocol ModelPort execution (`MagpieModelPort`): consumes the
@@ -170,13 +209,13 @@ preserve cache-control or thinking-signature semantics.
 
 ## Deliberately not implemented yet
 
-Execution is in, but this is still not a quota or administration layer: no
-quota dashboards, no global usage dashboards, no administrative APIs, and no
-duplicated gateway routing logic. Do not present a successful catalog
-refresh or a completed execution as proof of future availability — every
-call re-validates. Later PRs can attach gateway routing, quota and cost
-observations to the execution report sink; actual cache-hit and cost claims
-require upstream usage evidence and are never fabricated here.
+This is a complete runtime extension, but not a quota administration layer:
+no dashboards, no automatic account switching, no duplicated gateway routing
+or pricing logic. Configuration accepts the gateway key as a plain setting
+value (hosts reading it from a credential store pass the value through; the
+extension persists nothing to disk). The runtime composition tests import
+`posoco/ext-llm` and `posoco-kit-provider` for coexistence verification
+only — magpie neither modifies nor wraps them.
 
 Remaining follow-ups: `count_tokens` integration, reported-usage POSTing
 (`POST /v1/magpie/usage/requests`), and quota telemetry.
