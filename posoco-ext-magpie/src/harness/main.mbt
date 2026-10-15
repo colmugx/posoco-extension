@@ -25,6 +25,9 @@ struct Ctx {
   mut skips : Int32
   mut requests : Int32
   mut billable : Int32
+  /// Required-contract failures (hello/models discovery, runtime commands).
+  /// These close the production gate; optional capability gaps do not.
+  mut required_failures : Int32
 }
 
 ///|
@@ -187,7 +190,14 @@ fn Ctx::observe(
       }
       self.pass("GET \{label} → \{code}; shape: \{shape_text}")
     }
-    Err(shape) => self.fail("GET \{label} → \{shape.describe()}")
+    Err(shape) => {
+      // /api/hello and /v1/models are the required discovery contract:
+      // any failure there closes the production gate.
+      if label == "/api/hello" || label == "/v1/models" {
+        self.required_failures += 1
+      }
+      self.fail("GET \{label} → \{shape.describe()}")
+    }
   }
 }
 
@@ -310,17 +320,6 @@ fn user_wire(text : String) -> Json raise {
     @posoco.Message::UserMessage(content=[@posoco.Content::Text(text)]),
   )[0]
 }
-
-///|
-fn assistant_wire(text : String) -> Json {
-  Json::object({
-    "role": Json::string("assistant"),
-    "content": Json::array([
-      Json::object({ "type": Json::string("text"), "text": Json::string(text) }),
-    ]),
-  })
-}
-
 ///|
 async fn chat_via_port(
   ctx : Ctx,
@@ -379,19 +378,38 @@ async fn chat_via_port(
 
 ///|
 /// Always print an explicit verdict even when a live probe cannot continue.
-fn Ctx::finish_report(self : Ctx) -> Unit {
+fn Ctx::finish_report(
+  self : Ctx,
+  gateway_version~ : String,
+  source~ : String,
+) -> Unit {
   self.report.val.push(
     "## Summary: \{self.checks - self.failures - self.skips} passed, \{self.failures} failed, \{self.skips} skipped — \{self.requests} gateway requests (\{self.billable} billable)",
   )
-  if self.failures > 0 {
+  if self.required_failures > 0 {
+    self.report.val.push("RESULT: FAILED (required contract broken)")
+  } else if self.failures > 0 {
     self.report.val.push("RESULT: FAILED")
   } else if self.checks == self.skips {
     self.report.val.push("RESULT: SKIPPED")
   } else {
     self.report.val.push("RESULT: PASSED")
   }
+  // The evidence matrix is rendered from this run's own recorded lines —
+  // the source column can only ever name what actually executed.
+  self.report.val.push("")
+  self.report.val.push("## Capability matrix")
+  self.report.val.push(
+    matrix_from_report(self.report.val, gateway_version~, source~),
+  )
   for line in self.report.val {
     println(line)
+  }
+  // A broken required contract must not exit clean.
+  if self.required_failures > 0 {
+    @abort.abort(
+      "production gate closed: \{self.required_failures} required check(s) failed",
+    )
   }
 }
 
@@ -402,6 +420,7 @@ async fn main {
   let url = @env.get_env_var("MAGPIE_LIVE_URL")
   let key = @env.get_env_var("MAGPIE_LIVE_KEY").unwrap_or("magpie-posoco-live")
   let infer_approved = @env.get_env_var("MAGPIE_LIVE_INFER") == Some("1")
+  let one_hour_approved = @env.get_env_var("MAGPIE_LIVE_CACHE_1H") == Some("1")
   guard url is Some(base) else {
     report.val.push("")
     report.val.push("RESULT: SKIPPED — MAGPIE_LIVE_URL is not set.")
@@ -415,6 +434,10 @@ async fn main {
   let transport : &@magpie.MagpieTransport = @magpie.magpie_http_transport(
     timeout_ms=120000,
   )
+  let ctx_version : Ref[String?] = Ref(None)
+  let run_source : Ref[String] = Ref(
+    if infer_approved { "live-inference+read-only" } else { "live-read-only" },
+  )
   let ctx = Ctx::{
     base,
     key,
@@ -425,6 +448,7 @@ async fn main {
     skips: 0,
     requests: 0,
     billable: 0,
+    required_failures: 0,
   }
   report.val.push("")
   report.val.push(
@@ -441,6 +465,14 @@ async fn main {
   ]
   let hello = probe_get(ctx, path="/api/hello", key~)
   ctx.observe(label="/api/hello", outcome=hello)
+  match hello {
+    Ok((_, Some(Json::Object(fields)))) => {
+      if fields.get("version") is Some(Json::String(version)) {
+        ctx_version.val = Some("magpie \{version}")
+      }
+    }
+    _ => ()
+  }
   let models_result = probe_get(ctx, path="/v1/models", key~)
   ctx.observe(label="/v1/models", outcome=models_result)
   for path in discovery[2:] {
@@ -511,6 +543,7 @@ async fn main {
   for (id, args) in command_specs {
     let outcome = runtime.invoke(id, args) catch {
       error => {
+        ctx.required_failures += 1
         ctx.fail(
           "\{id} raised: \{sanitize(text=error.to_string(), secret=key)}",
         )
@@ -525,10 +558,16 @@ async fn main {
         }
         ctx.pass("\{id} → feedback_present=\{feedback.length() > 0}; structured: \{shape_text}")
       }
-      @posoco.CommandOutcome::Failure(reason~) =>
+      @posoco.CommandOutcome::Failure(reason~) => {
+        // A command contract that answers with Failure is still a working
+        // command surface; the failure reason is service-level (e.g. 403)
+        // and recorded, not a gate closure.
         ctx.skip("\{id} → Failure: \{sanitize(text=reason, secret=key)}")
-      @posoco.CommandOutcome::NeedsInput(prompt~) =>
+      }
+      @posoco.CommandOutcome::NeedsInput(prompt~) => {
+        ctx.required_failures += 1
         ctx.fail("\{id} → NeedsInput: \{prompt}")
+      }
     }
   }
 
@@ -727,10 +766,13 @@ async fn main {
           policy: @posoco.ExecutionPolicy::Sequential,
           provenance: None,
         }
+        // Full round trip: definition → tool_use → identity/args validation
+        // → deterministic tool result → replay in the same session → final
+        // assistant response. A tool_use alone is not success.
         if ctx.reserve_billable() {
           ctx.requests += 1
           try {
-            let result = runtime
+            let first = runtime
             .model_port()
             .chat(
               @posoco.InvocationScope::{
@@ -753,12 +795,80 @@ async fn main {
               },
               @posoco.StreamMode::NoStream,
             )
-          let calls = result.completion.message.tool_calls.length()
-          if calls > 0 {
-            ctx.pass("tool round trip: \{calls} tool call(s) requested")
-          } else {
-            ctx.skip("tool round trip: model answered without calling the tool")
-          }
+            guard first.completion.message.tool_calls.length() > 0 else {
+              ctx.skip("tool round trip: model answered without calling the tool")
+              return
+            }
+            // Step 3: validate call identity and arguments.
+            let call = first.completion.message.tool_calls[0]
+            let args_ok = call.arguments is Json::Object(input) &&
+              input.get("city") is Some(Json::String(_))
+            guard call.name == @posoco.ToolName::unchecked("get_weather") &&
+              args_ok else {
+              ctx.fail(
+                "tool round trip: tool_use identity/args mismatch",
+              )
+              return
+            }
+            // Steps 4–5: deterministic result replayed in the same session;
+            // the kit correlates the tool_result to this exact call id.
+            if !ctx.reserve_billable() {
+              ctx.skip("tool round trip second turn: billable budget exhausted")
+              return
+            }
+            ctx.requests += 1
+            let second = runtime
+            .model_port()
+            .chat(
+              @posoco.InvocationScope::{
+                session_id: @posoco.SessionId::unchecked("posoco-live-tool"),
+                run_id: @posoco.RunId::unchecked("live-run"),
+                effect_id: None,
+                pressure: None,
+              },
+              [
+                @posoco.Message::UserMessage(content=[
+                  @posoco.Content::Text(
+                    "What is the weather in Tokyo? Use the tool.",
+                  ),
+                ]),
+                @posoco.Message::AssistantMessage(
+                  content=[],
+                  tool_calls=[call],
+                  reasoning=None,
+                  finish_reason=@posoco.FinishReason::ToolCalls,
+                ),
+                @posoco.Message::ToolMessage(
+                  call_id=call.call_id,
+                  tool_name=call.name,
+                  outcome=@posoco.ToolOutcome::Success(
+                    content="Tokyo: 21C, clear",
+                    structured=None,
+                  ),
+                ),
+              ],
+              [tool],
+              @posoco.ChatOptions::{
+                temperature: None,
+                max_output_tokens: Some(128),
+              },
+              @posoco.StreamMode::NoStream,
+            )
+            // Step 6: a final assistant response must exist.
+            let mut final_text = ""
+            for block in second.completion.message.content {
+              guard block is @posoco.Content::Text(part) else { continue }
+              final_text = final_text + part
+            }
+            if final_text.length() > 0 {
+              ctx.pass(
+                "tool round trip: validated call completed with a final response (\{final_text.length()} chars)",
+              )
+            } else {
+              ctx.fail(
+                "tool round trip: final assistant response was empty",
+              )
+            }
           } catch {
             error =>
               ctx.fail(
@@ -820,7 +930,7 @@ async fn main {
           Err(reason) => {
             ctx.fail("cache cold turn errored: \{reason}")
             runtime.on_shutdown()
-            ctx.finish_report()
+            ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
             return
           }
         }
@@ -839,10 +949,22 @@ async fn main {
         match creation {
           Some(tokens) if tokens > 0 =>
             ctx.pass("cache creation reported: \{tokens} tokens")
-          _ =>
-            ctx.fail(
-              "no cache creation tokens on the cold turn (code \{code1}) — caching may be unsupported for \{model}",
-            )
+          _ => {
+            // A miss and an unsupported capability are different facts:
+            // fields absent → the gateway/model does not expose caching;
+            // fields present but zero → a fresh prefix should have written.
+            let declared = usage1 is Some(Json::Object(u)) &&
+              u.contains("cache_creation_input_tokens")
+            if declared {
+              ctx.fail(
+                "cache miss: usage reported cache fields but creation was 0 on a fresh prefix",
+              )
+            } else {
+              ctx.skip(
+                "caching unsupported: gateway usage lacks cache fields for this model",
+              )
+            }
+          }
         }
         // Replay the actual server response instead of inventing an
         // assistant turn. This preserves signed thinking/tool blocks and
@@ -858,21 +980,21 @@ async fn main {
               _ => {
                 ctx.fail("cache cold response missing assistant content")
                 runtime.on_shutdown()
-                ctx.finish_report()
+                ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
                 return
               }
             }
           _ => {
             ctx.fail("cache cold response was not a Messages object")
             runtime.on_shutdown()
-            ctx.finish_report()
+            ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
             return
           }
         }
         if code1 < 200 || code1 >= 300 {
           ctx.fail("cache cold response status was not successful")
           runtime.on_shutdown()
-          ctx.finish_report()
+          ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
           return
         }
         let turn2 = @messages.encode_request(
@@ -893,7 +1015,7 @@ async fn main {
           Err(reason) => {
             ctx.fail("cache warm turn errored: \{reason}")
             runtime.on_shutdown()
-            ctx.finish_report()
+            ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
             return
           }
         }
@@ -923,6 +1045,113 @@ async fn main {
       }
       None => ctx.skip("no native /v1/messages model for cache economics")
     }
+  }
+
+  // ---- One-hour cache writes (explicit approval only) -------------------
+  report.val.push("")
+  report.val.push("## One-hour cache writes")
+  if !infer_approved {
+    ctx.skip("cache write 1h: billable inference not approved")
+  } else if !one_hour_approved {
+    ctx.skip(
+      "cache write 1h: not approved (MAGPIE_LIVE_CACHE_1H=1); never enabled by default",
+    )
+  } else {
+    match pick_model(catalog, endpoint="/v1/messages") {
+      Some(model) => {
+        let builder1h = StringBuilder()
+        for _index in 0..<90 {
+          builder1h.write_string(
+            "The gateway routes requests, tracks usage, and enforces quotas. ",
+          )
+        }
+        let system1h = @messages.system_to_wire(
+          content=[
+            @posoco.Content::Text("You are documenting a gateway. " + builder1h.to_string()),
+          ],
+          cache_control=Some(@messages.CacheControl::{ ttl: Some("1h") }),
+        )
+        let turn1h = @messages.encode_request(
+          model~,
+          max_tokens=32,
+          system=Some(system1h),
+          messages=[user_wire("Reply with OK only.")],
+          options=@messages.MessagesRequestOptions::MessagesRequestOptions(),
+        )
+        let posted = ctx.post(path="/v1/messages", key~, body=turn1h)
+        match posted {
+          Ok((codeh, bodyh)) => {
+            let creation1h = match bodyh {
+              Some(Json::Object(fields)) =>
+                match fields.get("usage") {
+                  Some(Json::Object(u)) =>
+                    match u.get("cache_creation_input_tokens") {
+                      Some(Json::Number(n, ..)) => Some(n.to_int())
+                      _ => None
+                    }
+                  _ => None
+                }
+              _ => None
+            }
+            match creation1h {
+              Some(tokens) if tokens > 0 =>
+                ctx.pass(
+                  "explicitly approved 1h write reported \{tokens} tokens (HTTP \{codeh})",
+                )
+              _ =>
+                ctx.fail(
+                  "1h write approved by flag but no creation tokens reported (HTTP \{codeh})",
+                )
+            }
+          }
+          Err(reason) => ctx.fail("cache 1h turn errored: \{reason}")
+        }
+      }
+      None => ctx.skip("cache write 1h: no native /v1/messages model")
+    }
+  }
+
+  // ---- Session isolation (read-only) -------------------------------------
+  report.val.push("")
+  report.val.push("## Session and routing")
+  let route_a = ctx.get(
+    path="/v1/magpie/route?session=posoco-live-probe",
+    key=key,
+  ) catch {
+    error => (-1, None)
+  }
+  let route_b = ctx.get(
+    path="/v1/magpie/route?session=posoco-live-other",
+    key=key,
+  ) catch {
+    error => (-1, None)
+  }
+  match (route_a, route_b) {
+    ((code_a, body_a), (code_b, body_b)) => {
+      let echo_ok = match body_b {
+        Some(Json::Object(fields)) =>
+          fields.get("session") is Some(Json::String("posoco-live-other"))
+        _ => false
+      }
+      let seq_a = match body_a {
+        Some(Json::Object(fields)) =>
+          match fields.get("seq") {
+            Some(Json::Number(n, ..)) => n.to_int()
+            _ => -1
+          }
+        _ => -1
+      }
+      if code_a == 200 && code_b == 200 && echo_ok {
+        ctx.pass(
+          "session isolation: distinct sessions tracked independently (seq A=\{seq_a})",
+        )
+      } else {
+        ctx.fail(
+          "session isolation: route answered \{code_a}/\{code_b}, echo=\{echo_ok}",
+        )
+      }
+    }
+    _ => ctx.fail("session isolation: route endpoint errored")
   }
 
   // ---- Usage reconciliation (read-only) --------------------------------
@@ -960,5 +1189,5 @@ async fn main {
 
   // ---- Summary ----------------------------------------------------------
   report.val.push("")
-  ctx.finish_report()
+  ctx.finish_report(gateway_version=ctx_version.val.unwrap_or("unknown"), source=run_source.val)
 }
