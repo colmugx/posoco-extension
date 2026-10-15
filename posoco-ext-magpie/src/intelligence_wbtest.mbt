@@ -132,6 +132,7 @@ fn full_usage_row() -> Json {
     "out": Json::number(50),
     "cache_read": Json::number(800),
     "cache_write": Json::number(20),
+    "cache_write_1h": Json::number(5),
     "reasoning": Json::number(12),
     "cost": Json::number(0.0123),
     "priced": Json::boolean(true),
@@ -619,4 +620,52 @@ async test "manual quota refresh posts and decodes the refreshed list" {
     content="true",
   )
   inspect(refreshed.post_auths[0], content="Bearer magpie-posoco")
+}
+
+ 
+///|
+async test "one-hour cache writes use the actual TTL split" {
+  let client = intel_client(
+    transport=intel_transport(gets=[
+      Respond(code=200, body=usage_requests_page([full_usage_row()])),
+    ]),
+  )
+  let row = client.usage_requests().rows[0]
+  inspect(row.cache_write_1h_tokens, content="Some(5)")
+  let economics = row.cache_economics(rates=@messages.MessagesCacheRates::{
+    ordinary_input: 3,
+    cache_read: 0.3,
+    cache_write_5m: 3.75,
+    cache_write_1h: 7.5,
+  }).unwrap()
+  // 100 ordinary, 800 cache reads, 15 five-minute, 5 one-hour writes.
+  inspect(economics.effective_input_cost, content="Some(633.75)")
+}
+
+///|
+async test "unknown cache-write TTL distribution cannot claim cost savings" {
+  let row = intel_usage_row({
+    "in": 100,
+    "out": 20,
+    "cache_read": 800,
+    "cache_write": 20,
+  })
+  let economics = row.cache_economics(rates=@messages.MessagesCacheRates::{
+    ordinary_input: 3,
+    cache_read: 0.3,
+    cache_write_5m: 3.75,
+    cache_write_1h: 7.5,
+  }).unwrap()
+  inspect(economics.effective_input_cost is None, content="true")
+  inspect(economics.net_savings is None, content="true")
+}
+
+///|
+test "intel_int rejects fractional and overflowing counts" {
+  for bad in [Json::number(-1), Json::number(1.5), Json::number(2147483648.0)] {
+    let result = Ok(intel_int({ "calls": bad }, "calls", "usage")) catch {
+      error => Err(error)
+    }
+    inspect(result is Err(_), content="true")
+  }
 }
