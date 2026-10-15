@@ -111,10 +111,11 @@ pub fn MagpieRuntime::activate(
   transport~ : &MagpieTransport = HttpMagpieTransport::HttpMagpieTransport(),
 ) -> MagpieRuntime {
   let reason : Ref[String?] = Ref(None)
+  // Invalid settings must never silently activate the default gateway.
   let fallback : MagpieRuntimeSettings = {
     base_url: None,
     gateway_key: None,
-    enabled: None,
+    enabled: Some(false),
     model: None,
     effort: None,
   }
