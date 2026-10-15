@@ -437,57 +437,17 @@ async test "deactivation cleans up and commands refuse afterwards" {
 }
 
 ///|
-async test "ext-llm composition hosts the magpie port without clashes" {
-  // ext-llm's router hosts arbitrary ModelPorts as slots; the magpie port
-  // slots in like any provider, and both extensions keep distinct ids and
-  // their own model arrays.
-  let transport = chat_transport(
-    posts=[buffered_post(
-      status=200,
-      body=messages_nonstream_body(text="routed via ext-llm"),
-    )],
-  )
-  let runtime = activate_runtime(transport~)
-  let _ = runtime.invoke(
-    "model",
-    Json::object({ "model": Json::string("anthropic/claude-native") }),
-  )
-  let slot = @provider.ModelSlot::ModelSlot(
-    id="magpie/claude-native",
-    label="Claude Native",
-    provider_id="magpie",
-    model_id="anthropic/claude-native",
-    port=runtime.model_port(),
-  )
-  let router = @llm.RouterModelPort::RouterModelPort(
-    slots=[slot],
-    default_slot_id="magpie/claude-native",
-    allow_missing_default=true,
-  )
-  inspect(runtime.extension_id(), content="posoco_ext_magpie")
-  inspect(router.extension_id(), content="posoco_ext_llm")
-  inspect(runtime.manifest().models.length(), content="1")
-  inspect(router.manifest().models.length(), content="1")
-  // The router routes to the magpie port; no registry is shared.
-  let result = router.chat(
-    exec_scope(session="sess-LLM"),
-    user_text("through the router"),
-    [],
-    chat_options(),
-    NoStream,
-  ) catch {
-    error => fail("router chat failed: \{error}")
-  }
-  // The router reached the magpie port and the answer came back.
-  inspect(
-    result.completion.message.content == [
-      @posoco.Content::Text("routed via ext-llm"),
-    ],
-    content="true",
-  )
+/// Magpie must expose its own namespaced commands without claiming
+/// ext-llm's global /model command. Both managers can coexist.
+async test "runtime commands stay namespaced without ext-llm dependency" {
+  let runtime = activate_runtime(transport=runtime_transport(posts=[]))
+  let commands = runtime.commands()
+  inspect(commands.any(fn(command) { command.id == "magpie_model" }), content="true")
+  inspect(commands.any(fn(command) { command.id == "model" }), content="false")
 }
 
 ///|
+
 async test "multiple sessions keep their own affinity and selection" {
   let transport = chat_transport(
     posts=[
