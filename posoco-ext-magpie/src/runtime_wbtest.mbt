@@ -97,13 +97,13 @@ async test "invalid configuration recovers with a recorded reason" {
     fail("invalid settings must record a reason")
   }
   inspect(reason.contains("settings.base_url"), content="true")
-  inspect(runtime.active, content="true")
+  inspect(runtime.manager.connection_status() is Disabled, content="true")
 }
 
 ///|
 async test "catalog refresh and model discovery through the model command" {
   let runtime = activate_runtime(transport=runtime_transport(posts=[]))
-  let outcome = runtime.invoke("model", Json::null()) catch {
+  let outcome = runtime.invoke("magpie_model", Json::null()) catch {
     error => fail("model listing must succeed: \{error}")
   }
   let catalog = invoke_structured(outcome)
@@ -117,7 +117,7 @@ async test "switching models goes through the manager surface" {
   let selection = runtime.manager.active_selection()
   inspect(selection.pending, content="true")
   let outcome = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("codex/gpt-responses") }),
   )
   inspect(invoke_text(outcome).contains("codex/gpt-responses"), content="true")
@@ -141,11 +141,11 @@ async test "switching models goes through the manager surface" {
 async test "switching effort applies and rejects unadvertised levels" {
   let runtime = activate_runtime(transport=runtime_transport(posts=[]))
   let _ = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   let outcome = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "effort": Json::string("high") }),
   )
   inspect(invoke_text(outcome).contains("effort high"), content="true")
@@ -180,7 +180,7 @@ async test "a pending selection is visible in status and rejects execution" {
   )
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   runtime.on_start()
@@ -219,7 +219,7 @@ async test "session isolation and stable affinity across turns" {
   )
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   // Two turns of session A, one turn of session B.
@@ -298,7 +298,7 @@ async test "a quota 403 fails the quota command, not inference" {
   )
   // Quota visibility is forbidden; inference is untouched.
   let _ = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   let result = runtime.model_port().chat(
@@ -362,7 +362,7 @@ async test "cache statistics appear in recent executions" {
   )
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   let _ = runtime.model_port().chat(
@@ -401,7 +401,7 @@ async test "credentials and keys are redacted everywhere" {
     settings=Some(settings),
   )
   let _ = posting_runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   let _ = posting_runtime.model_port().chat(
@@ -458,7 +458,7 @@ async test "multiple sessions keep their own affinity and selection" {
   )
   let runtime = activate_runtime(transport~)
   let _ = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   for session in ["sess-1", "sess-2", "sess-3"] {
@@ -514,7 +514,7 @@ async test "the model port survives intelligence service errors" {
   )
   // Inference keeps working after the intelligence error.
   let _ = runtime.invoke(
-    "model",
+    "magpie_model",
     Json::object({ "model": Json::string("anthropic/claude-native") }),
   )
   let result = runtime.model_port().chat(
