@@ -13,6 +13,6 @@ description = "Small helper layer for Posoco extension authors"
 source = "src"
 
 import {
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.5",
   "moonbitlang/x@0.5.5",
 }

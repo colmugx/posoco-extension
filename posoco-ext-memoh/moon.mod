@@ -8,7 +8,7 @@ import {
   "colmugx/posoco-ext-mcp@0.5.1",
   "colmugx/posoco-ext-permission@0.2.0",
   "colmugx/mcp@0.18.0",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.5",
 }
 
 readme = "README.mbt.md"

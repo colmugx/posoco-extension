@@ -5,7 +5,7 @@ version = "0.1.0"
 import {
   "colmugx/posoco-ext-board@0.1.0",
   "colmugx/posoco@0.21.0",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.5",
   "moonbitlang/moonback@0.8.6",
 }
 

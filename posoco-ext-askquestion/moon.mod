@@ -14,7 +14,7 @@ description = "Interactive ask_question tool extension for Posoco hosts with a U
 
 import {
   "colmugx/posoco@0.22.1",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.5",
 }
 
 source = "src"

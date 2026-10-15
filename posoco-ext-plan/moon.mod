@@ -7,7 +7,7 @@ import {
   "posoco/devkit@0.4.1",
   "colmugx/posoco-ext-lazytools@0.1.0",
   "colmugx/posoco-ext-workspace@0.1.0",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.5",
 }
 
 readme = "README.mbt.md"

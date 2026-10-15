@@ -6,7 +6,7 @@ import {
   "colmugx/posoco@0.22.1",
   "posoco/ext-llm@0.2.0",
   "posoco/ext-oauth@0.1.0",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.5",
   "moonbitlang/x@0.5.5",
   "posoco/devkit@0.4.1",
   "colmugx/posoco-kit-rate-limit@0.1.0",

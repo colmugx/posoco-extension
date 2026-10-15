@@ -17,7 +17,7 @@ import {
   "colmugx/posoco-ext-kind@0.1.0",
   "colmugx/posoco-ext-permission@0.2.0",
   "posoco/devkit@0.4.1",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.5",
 }
 
 source = "src"
