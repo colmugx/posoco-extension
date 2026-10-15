@@ -104,8 +104,7 @@ const RUNTIME_REPORT_LOG_LIMIT : Int32 = 20
 ///|
 /// Activates the runtime. Never performs I/O: an offline gateway is
 /// discovered by `on_start`'s refresh, not here. Invalid settings or an
-/// invalid derived configuration recover to the documented defaults with a
-/// recorded reason, so startup cannot crash on configuration.
+/// invalid derived configuration disable the runtime with a recorded reason.
 pub fn MagpieRuntime::activate(
   settings~ : Json? = None,
   transport~ : &MagpieTransport = HttpMagpieTransport::HttpMagpieTransport(),
@@ -194,7 +193,7 @@ pub fn MagpieRuntime::intelligence(
 }
 
 ///|
-/// Why the runtime fell back to default settings, when it did.
+/// Why the runtime rejected its configuration, if applicable.
 pub fn MagpieRuntime::unconfigured_reason(self : MagpieRuntime) -> String? {
   self.unconfigured_reason
 }
