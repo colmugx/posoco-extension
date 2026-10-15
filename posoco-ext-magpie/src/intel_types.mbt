@@ -258,6 +258,8 @@ pub(all) struct MagpieUsageSummary {
   output_tokens : Int32?
   cache_read_tokens : Int32?
   cache_write_tokens : Int32?
+  /// The portion of cache writes retained for one hour, when reported.
+  cache_write_1h_tokens : Int32?
   reasoning_tokens : Int32?
   /// The gateway's actual reported cost (USD). Authoritative when present.
   cost : Double?
@@ -289,6 +291,8 @@ pub(all) struct MagpieUsageRequestRow {
   output_tokens : Int32?
   cache_read_tokens : Int32?
   cache_write_tokens : Int32?
+  /// The 1h portion of writes; total writes minus this value are 5m writes.
+  cache_write_1h_tokens : Int32?
   reasoning_tokens : Int32?
   /// The gateway's actual billed cost (USD), authoritative when present.
   cost : Double?
