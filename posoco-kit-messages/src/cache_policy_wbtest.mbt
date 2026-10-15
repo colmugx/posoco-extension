@@ -18,7 +18,7 @@ test "automatic Messages cache uses top-level cache_control" {
   assert_eq(jget(jget(cached, key="cache_control"), key="type"), "ephemeral")
   let again = apply_messages_cache_policy(body, CacheAutomatic1h)
   assert_eq(jget(jget(again, key="cache_control"), key="ttl"), "1h")
-  assert_eq(body.value("cache_control"), None)
+  assert_eq(jopt(body, key="cache_control"), None)
 }
 
 ///|
@@ -174,7 +174,7 @@ test "nonstreaming Messages result retains native 5m and 1h cache-write split" {
     "model": "m",
     "content": [{ "type": "text", "text": "Done" }],
     "stop_reason": "end_turn",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": {
       "input_tokens": 100,
       "output_tokens": 20,
@@ -374,10 +374,10 @@ test "stable-history lookback inserts only safe user checkpoints" {
     "ephemeral",
   )
   let latest = jget(jat(output, index=28), key="content")
-  assert_eq(jat(latest, index=0).value("cache_control"), None)
+  assert_eq(jopt(jat(latest, index=0), key="cache_control"), None)
   // The caller's original canonical messages were never rewritten.
   assert_eq(
-    jat(jget(messages[17], key="content"), index=0).value("cache_control"),
+    jopt(jat(jget(messages[17], key="content"), index=0), key="cache_control"),
     None,
   )
 }

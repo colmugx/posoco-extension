@@ -188,6 +188,9 @@ pub(all) struct MessagesRequestOptions {
 } derive(Debug)
 
 ///|
+pub extend MessagesRequestOptions with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn MessagesRequestOptions::MessagesRequestOptions(
   temperature~ : Double? = None,
   stop_sequences~ : Array[String] = [],
@@ -238,7 +241,7 @@ fn user_content_block(c : @posoco.Content) -> Json raise @posoco.ModelError {
         raise @posoco.ModelError::RequestBuild(
           "messages image media_type is not supported (stage=encode, category=media_type)",
         )
-      } else if data.starts_with("http://") || data.starts_with("https://") {
+      } else if data.has_prefix("http://") || data.has_prefix("https://") {
         Json::object({
           "type": Json::string("image"),
           "source": Json::object({

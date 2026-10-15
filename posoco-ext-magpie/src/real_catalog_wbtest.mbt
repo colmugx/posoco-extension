@@ -20,15 +20,21 @@ test "the complete real catalog decodes with structure preserved" {
   // itself would also pass if entries or routing groups were omitted.
   inspect(data.length(), content="78")
   inspect(report.entries.length(), content="78")
-  inspect(data.filter(fn(item) {
-    match item {
-      Json::Object(fields) => match fields.get("id") {
-        Some(Json::String(id)) => id.has_prefix("group/")
+  inspect(
+    data
+    .filter(fn(item) {
+      match item {
+        Json::Object(fields) =>
+          match fields.get("id") {
+            Some(Json::String(id)) => id.has_prefix("group/")
+            _ => false
+          }
         _ => false
       }
-      _ => false
-    }
-  }).length(), content="12")
+    })
+    .length(),
+    content="12",
+  )
   // The deduplicated decode covers exactly the payload's own entries.
   inspect(report.entries.length() == data.length(), content="true")
   // Server order is preserved, id for id.

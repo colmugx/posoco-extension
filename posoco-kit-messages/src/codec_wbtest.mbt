@@ -6,7 +6,7 @@
 /// Test accessors: this toolchain's Json exposes item()/value() rather than
 /// indexing syntax. Missing keys/indices abort the test loudly.
 fn jget(v : Json, key~ : String) -> Json {
-  guard v.value(key) is Some(out) else {
+  guard v is Object(fields) && fields.get(key) is Some(out) else {
     abort("test fixture: missing key \"\{key}\"")
   }
   out
@@ -14,15 +14,29 @@ fn jget(v : Json, key~ : String) -> Json {
 
 ///|
 fn jat(v : Json, index~ : Int32) -> Json {
-  guard v.item(index) is Some(out) else {
+  guard v is Array(items) && items.get(index) is Some(out) else {
     abort("test fixture: missing index \{index}")
   }
   out
 }
 
 ///|
+/// Absent-tolerant lookup: Json::null() and missing keys both read as None.
+fn jopt(v : Json, key~ : String) -> Json? {
+  if v is Object(fields) {
+    fields.get(key)
+  } else {
+    None
+  }
+}
+
+///|
 fn jlen(v : Json) -> Int32 {
-  v.as_array().unwrap_or([]).length()
+  if v is Array(items) {
+    items.length()
+  } else {
+    0
+  }
 }
 
 ///|
@@ -60,7 +74,7 @@ test "text-only single-turn request and response" {
     "model": "test-model",
     "content": [{ "type": "text", "text": "hello" }],
     "stop_reason": "end_turn",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 10, "output_tokens": 5 },
   })
   assert_eq(result.completion.message.content, [@posoco.Content::Text("hello")])
@@ -321,7 +335,7 @@ test "non-streaming mixed thinking, text, and tool blocks in original order" {
       },
     ],
     "stop_reason": "tool_use",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 20, "output_tokens": 30 },
   })
   assert_eq(result.completion.message.content, [
@@ -382,7 +396,7 @@ test "stop reason mapping preserves unknown values" {
       },
     ],
     "stop_reason": "max_tokens",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 1, "output_tokens": 1 },
   })
   assert_eq(
@@ -421,8 +435,8 @@ test "prompt caching usage converts explicitly" {
   let nulled = parse_messages_usage(provider="test", {
     "input_tokens": 7,
     "output_tokens": 3,
-    "cache_creation_input_tokens": None,
-    "cache_read_input_tokens": None,
+    "cache_creation_input_tokens": Json::null(),
+    "cache_read_input_tokens": Json::null(),
   }).to_canonical()
   assert_eq(nulled.cached_input_tokens, None)
   // Malformed counters are rejected, never zero-filled.
@@ -455,7 +469,7 @@ test "prompt caching usage converts explicitly" {
 test "encode validation failures are typed and local" {
   let checks : Array[() -> Unit raise @posoco.ModelError] = [
     // SystemMessage has no Messages placement.
-    fn() {
+    fn() raise @posoco.ModelError {
       ignore(
         message_to_wire(
           @posoco.Message::SystemMessage(content=[@posoco.Content::Text("s")]),
@@ -463,7 +477,7 @@ test "encode validation failures are typed and local" {
       )
     },
     // Images cannot ride assistant content.
-    fn() {
+    fn() raise @posoco.ModelError {
       ignore(
         message_to_wire(
           @posoco.Message::AssistantMessage(
@@ -476,7 +490,7 @@ test "encode validation failures are typed and local" {
       )
     },
     // thinking + forced tool_choice is a protocol conflict.
-    fn() {
+    fn() raise @posoco.ModelError {
       ignore(
         encode_request(
           model="m",
@@ -492,7 +506,7 @@ test "encode validation failures are typed and local" {
       )
     },
     // thinking forces temperature 1.0.
-    fn() {
+    fn() raise @posoco.ModelError {
       ignore(
         encode_request(
           model="m",
@@ -508,7 +522,7 @@ test "encode validation failures are typed and local" {
       )
     },
     // thinking budget below the protocol floor.
-    fn() {
+    fn() raise @posoco.ModelError {
       ignore(
         encode_request(
           model="m",
@@ -523,7 +537,7 @@ test "encode validation failures are typed and local" {
       )
     },
     // More than four stop sequences.
-    fn() {
+    fn() raise @posoco.ModelError {
       ignore(
         encode_request(
           model="m",
@@ -538,7 +552,7 @@ test "encode validation failures are typed and local" {
       )
     },
     // cache_control ttl is validated locally.
-    fn() {
+    fn() raise @posoco.ModelError {
       ignore(
         attach_cache_control({ "type": "text", "text": "x" }, cache_control={
           ttl: Some("9h"),
@@ -579,7 +593,7 @@ test "opaque top-level response fields pass through, malformed shapes reject" {
     "model": "m",
     "content": [],
     "stop_reason": "end_turn",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 1, "output_tokens": 1 },
     "container": { "seed": 1 },
     "context_management": "future",
@@ -594,7 +608,7 @@ test "opaque top-level response fields pass through, malformed shapes reject" {
       "model": "m",
       "content": [{ "type": "tool_use", "id": "", "name": "f", "input": {} }],
       "stop_reason": "end_turn",
-      "stop_sequence": None,
+      "stop_sequence": Json::null(),
       "usage": { "input_tokens": 1, "output_tokens": 1 },
     }),
   ) catch {

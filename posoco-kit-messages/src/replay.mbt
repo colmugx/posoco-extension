@@ -75,9 +75,9 @@ fn assistant_fingerprint(
   fn hex_digit(n : UInt64) -> Char {
     let digit = (n & 0xfUL).to_int()
     if digit < 10 {
-      Char::from_int(48 + digit)
+      (48 + digit).unsafe_to_char()
     } else {
-      Char::from_int(87 + digit)
+      (87 + digit).unsafe_to_char()
     }
   }
   let builder = StringBuilder()

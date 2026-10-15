@@ -42,6 +42,9 @@ pub struct SseDecoder {
 } derive(Debug)
 
 ///|
+pub extend SseDecoder with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn SseDecoder::SseDecoder() -> SseDecoder {
   { buf: StringBuilder(), data_lines: [], event_name: None, }
 }
@@ -95,14 +98,14 @@ pub fn SseDecoder::push(self : SseDecoder, text : String) -> Array[SseEvent] {
           Some(event) => events.push(event)
           None => ()
         }
-      } else if line.starts_with(":") {
+      } else if line.has_prefix(":") {
         // Comment: ignored.
       } else {
         let (field, value) = match line.find(":") {
           Some(index) => {
             let mut value = line[index + 1:].to_owned()
             // One optional leading space after the colon is stripped.
-            if value.starts_with(" ") {
+            if value.has_prefix(" ") {
               value = value[1:].to_owned()
             }
             (line[:index].to_owned(), value)
@@ -194,6 +197,9 @@ pub(all) struct MessagesSseState {
   priv mut stop_reason : String
   priv mut stop_sequence : String?
 } derive(Debug)
+
+///|
+pub extend MessagesSseState with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn MessagesSseState::MessagesSseState() -> MessagesSseState {

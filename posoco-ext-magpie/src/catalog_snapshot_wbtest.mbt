@@ -3,10 +3,12 @@
 /// manager's last-known-good catalog.
 async test "catalog_entry returns a fully isolated raw JSON snapshot" {
   let transport = gateway(
-    models=models_body(model_entry(
-      id="m/snapshot",
-      fields="\"reasoning\":true,\"native_endpoints\":[\"/v1/messages\"],\"modalities\":{\"input\":[\"text\",\"image\"]}",
-    )),
+    models=models_body(
+      model_entry(
+        id="m/snapshot",
+        fields="\"reasoning\":true,\"native_endpoints\":[\"/v1/messages\"],\"modalities\":{\"input\":[\"text\",\"image\"]}",
+      ),
+    ),
   )
   let manager = manager_with(transport~, config=local_config())
   refresh_ok(manager)
@@ -32,12 +34,14 @@ async test "catalog_entry returns a fully isolated raw JSON snapshot" {
   }
   match second.raw {
     Json::Object(fields) => {
-      inspect(fields.get("id") == Some(Json::string("m/snapshot")), content="true")
+      inspect(
+        fields.get("id") == Some(Json::string("m/snapshot")),
+        content="true",
+      )
       match fields.get("modalities") {
         Some(Json::Object(modalities)) =>
           match modalities.get("input") {
-            Some(Json::Array(inputs)) =>
-              inspect(inputs.length(), content="2")
+            Some(Json::Array(inputs)) => inspect(inputs.length(), content="2")
             _ => fail("missing untouched raw inputs")
           }
         _ => fail("missing untouched raw modalities")

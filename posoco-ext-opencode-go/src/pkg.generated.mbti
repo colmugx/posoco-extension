@@ -84,6 +84,10 @@ pub(all) struct OpenCodeGoProvider {
   ctx : @devkit.ExtContext
 }
 pub fn OpenCodeGoProvider::OpenCodeGoProvider(ctx? : @devkit.ExtContext) -> Self
+pub fn OpenCodeGoProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
+pub fn OpenCodeGoProvider::credential_id(Self) -> String
+pub async fn OpenCodeGoProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
+pub fn OpenCodeGoProvider::provider_id(Self) -> String
 pub async fn OpenCodeGoProvider::refresh(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-kit-provider.ApiKeyFactory for OpenCodeGoProvider
 pub impl @posoco-kit-provider.ProviderFactory for OpenCodeGoProvider

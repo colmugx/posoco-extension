@@ -32,7 +32,7 @@ fn mixed_assistant_response() -> Json {
       },
     ],
     "stop_reason": "tool_use",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 10, "output_tokens": 20 },
   }
 }
@@ -78,7 +78,7 @@ test "redacted thinking replays as opaque state, never as text" {
       { "type": "text", "text": "Done." },
     ],
     "stop_reason": "end_turn",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 1, "output_tokens": 1 },
   })
   // The redacted payload does not surface in canonical content.
@@ -205,7 +205,7 @@ test "empty thinking block with no signature is a capture-time error" {
       "model": "m",
       "content": [{ "type": "thinking", "thinking": "", "signature": "" }],
       "stop_reason": "end_turn",
-      "stop_sequence": None,
+      "stop_sequence": Json::null(),
       "usage": { "input_tokens": 1, "output_tokens": 1 },
     }),
   ) catch {
@@ -224,7 +224,7 @@ test "empty thinking block with no signature is a capture-time error" {
     "model": "m",
     "content": [{ "type": "thinking", "thinking": "", "signature": "sig-only" }],
     "stop_reason": "end_turn",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 1, "output_tokens": 1 },
   })
   assert_true(signed_only.completion.message.reasoning is Some(_))
@@ -247,7 +247,7 @@ test "opaque future assistant blocks ride the envelope for continuity" {
       },
     ],
     "stop_reason": "end_turn",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 1, "output_tokens": 1 },
   })
   let assistant = @posoco.Message::AssistantMessage(
@@ -279,7 +279,7 @@ test "ordered replay keeps thinking interspersed with visible and tool blocks" {
       { "type": "redacted_thinking", "data": "opaque-secret" },
     ],
     "stop_reason": "tool_use",
-    "stop_sequence": None,
+    "stop_sequence": Json::null(),
     "usage": { "input_tokens": 1, "output_tokens": 2 },
   })
   let assistant = @posoco.Message::AssistantMessage(

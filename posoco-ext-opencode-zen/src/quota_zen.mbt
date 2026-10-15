@@ -39,6 +39,9 @@ pub impl @devkit.QuotaSource for ZenSpendQuotaSource with fn read(
 }
 
 ///|
+pub extend ZenSpendQuotaSource with @devkit.QuotaSource::{read}
+
+///|
 /// Register the pull-style spend reading under the provider id, mirroring the
 /// deepseek/zai pattern: every configured build/refresh re-registers, and
 /// pull consumers (the `/status` command, the model picker) read live at

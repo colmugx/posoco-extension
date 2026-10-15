@@ -56,3 +56,13 @@ async fn[X] with_process(
     body(NativeProcess::{ stdin, stdout, stderr, process, })
   })
 }
+
+///|
+/// Per-target import keeper: this backend never touches `@js_async` (it
+/// backs the bun runner), so the import would trip `unused_package` under
+/// the native check.
+#cfg(not(target="js"))
+// The reference intentionally targets the native js_async stub, whose
+// unimplemented alert is noise for a value that is never evaluated.
+#warnings("-alert_unimplemented")
+let _js_async_import_keeper : Unit = ignore(@js_async.AbortController::new)

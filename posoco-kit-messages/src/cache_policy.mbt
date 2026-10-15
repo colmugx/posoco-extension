@@ -46,7 +46,6 @@ priv struct CacheMarkScan {
   mut explicit_count : Int32
   mut seen_five_minute : Bool
   mut last_cacheable_ttl : String?
-  mut last_cacheable_kind : String
   mut content_blocks : Int32
   mut latest_explicit_block : Int32
   mut has_one_hour : Bool
@@ -59,7 +58,6 @@ fn CacheMarkScan::new() -> CacheMarkScan {
     explicit_count: 0,
     seen_five_minute: false,
     last_cacheable_ttl: None,
-    last_cacheable_kind: "",
     content_blocks: 0,
     latest_explicit_block: 0,
     has_one_hour: false,
@@ -104,7 +102,6 @@ fn inspect_cache_block(
   }
   scan.previous_position_kind = kind
   if cacheable {
-    scan.last_cacheable_kind = kind
     scan.last_cacheable_ttl = None
   }
   match block {

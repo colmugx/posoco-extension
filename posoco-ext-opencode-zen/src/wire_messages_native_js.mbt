@@ -157,9 +157,7 @@ fn build_messages_request(
       wire_messages.push(block)
     }
   }
-  let wire_tools : Array[Json] = tools.map(fn(tool) {
-    @messages.tool_to_wire(tool~)
-  })
+  let wire_tools : Array[Json] = tools.map(tool => @messages.tool_to_wire(tool~))
   let extra : Array[(String, Json)] = if stream {
     [("stream", Json::boolean(true))]
   } else {

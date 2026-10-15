@@ -202,6 +202,13 @@ pub impl @llm.ProviderFactory for OpenCodeGoProvider with fn build(
 }
 
 ///|
+pub extend OpenCodeGoProvider with @posoco/ext-llm.ProviderFactory::{
+  credential_id,
+  provider_id,
+  build,
+}
+
+///|
 /// Provider-owned API-key login. The host supplies the provider-neutral
 /// secret prompt; validation stays in this extension.
 pub impl @llm.ApiKeyFactory for OpenCodeGoProvider with fn provider_id(
@@ -230,6 +237,9 @@ pub impl @llm.ApiKeyFactory for OpenCodeGoProvider with fn login(
   }
   @oauth.ApiKeyCredential::ApiKeyCredential(secret~)
 }
+
+///|
+pub extend OpenCodeGoProvider with @posoco/ext-llm.ApiKeyFactory::{login}
 
 ///|
 pub impl @llm.RefreshableProviderFactory for OpenCodeGoProvider with fn provider_id(

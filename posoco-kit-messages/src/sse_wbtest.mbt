@@ -60,8 +60,8 @@ fn message_start(id~ : String, input~ : Int32) -> String {
       "role": "assistant",
       "model": "m",
       "content": [],
-      "stop_reason": None,
-      "stop_sequence": None,
+      "stop_reason": Json::null(),
+      "stop_sequence": Json::null(),
       "usage": { "input_tokens": input, "output_tokens": 1 },
     },
   })
@@ -99,7 +99,7 @@ test "streaming text splits across many events into a correct completion" {
       }),
       ev(name="message_delta", data={
         "type": "message_delta",
-        "delta": { "stop_reason": "end_turn", "stop_sequence": None },
+        "delta": { "stop_reason": "end_turn", "stop_sequence": Json::null() },
         "usage": { "output_tokens": 12 },
       }),
       ev(name="message_stop", data={ "type": "message_stop" }),
@@ -180,7 +180,7 @@ test "tool arguments split across arbitrary JSON fragment boundaries" {
       ev(name="content_block_delta", data={
         "type": "content_block_delta",
         "index": 0,
-        "delta": { "type": "input_json_delta", "partial_json": None },
+        "delta": { "type": "input_json_delta", "partial_json": Json::null() },
       }),
       ev(name="content_block_stop", data={
         "type": "content_block_stop",

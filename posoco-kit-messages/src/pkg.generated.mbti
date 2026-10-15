@@ -152,6 +152,7 @@ pub(all) struct MessagesRequestOptions {
   stable_history_ttl : String
 } derive(@debug.Debug)
 pub fn MessagesRequestOptions::MessagesRequestOptions(temperature? : Double?, stop_sequences? : Array[String], tool_choice? : MessagesToolChoice?, thinking? : ThinkingConfig?, metadata? : Json?, extra_top_level? : Array[(String, Json)], cache_mode? : MessagesCacheMode, cache_capabilities? : MessagesCacheCapabilities, stable_prefix? : MessagesStablePrefix?, stable_prefix_ttl? : String, stable_history_messages? : Int?, stable_history_ttl? : String) -> Self
+pub fn MessagesRequestOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MessagesResult {
   completion : @kernel.Completion
@@ -170,6 +171,7 @@ pub(all) struct MessagesSseState {
   // private fields
 } derive(@debug.Debug)
 pub fn MessagesSseState::MessagesSseState() -> Self
+pub fn MessagesSseState::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MessagesStablePrefix {
   StableTools
@@ -207,6 +209,7 @@ pub struct SseDecoder {
 pub fn SseDecoder::SseDecoder() -> Self
 pub fn SseDecoder::flush(Self) -> Unit
 pub fn SseDecoder::push(Self, String) -> Array[SseEvent]
+pub fn SseDecoder::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SseEvent {
   name : String?

@@ -178,9 +178,7 @@ fn build_messages_request(
       wire_messages.push(block)
     }
   }
-  let wire_tools : Array[Json] = tools.map(fn(tool) {
-    @messages.tool_to_wire(tool~)
-  })
+  let wire_tools : Array[Json] = tools.map(tool => @messages.tool_to_wire(tool~))
   let max_tokens = match options.max_output_tokens {
     Some(n) => n
     None => config.max_output_tokens
