@@ -1725,7 +1725,7 @@ test "messages wire maps levels to budgets and none to off" {
   assert_eq(fields.get("model"), Some(Json::string("claude-sonnet-5")))
   match fields.get("max_tokens") {
     Some(Json::Number(n, ..)) => assert_eq(n, 12345.0)
-    other => fail("expected max_tokens, got \{other}")
+    other => fail("expected max_tokens, got \{Repr(other)}")
   }
   match fields.get("thinking") {
     Some(Json::Object(thinking)) => {
@@ -1735,10 +1735,10 @@ test "messages wire maps levels to budgets and none to off" {
       }
       match thinking.get("budget_tokens") {
         Some(Json::Number(n, ..)) => assert_eq(n, 4096.0)
-        other => fail("expected the low-level budget, got \{other}")
+        other => fail("expected the low-level budget, got \{Repr(other)}")
       }
     }
-    other => fail("expected a thinking object, got \{other}")
+    other => fail("expected a thinking object, got \{Repr(other)}")
   }
   // `none` disables thinking; the stream flag rides the extra fields.
   let config_none = OpenCodeZenConfig(
@@ -1759,7 +1759,7 @@ test "messages wire maps levels to budgets and none to off" {
   guard off_body is Object(off_fields) else { fail("expected object body") }
   match off_fields.get("thinking") {
     Some(Json::Null) | None => ()
-    other => fail("expected thinking omitted for none, got \{other}")
+    other => fail("expected thinking omitted for none, got \{Repr(other)}")
   }
   match off_fields.get("stream") {
     Some(value) => assert_eq(value.stringify(), "true")
@@ -1798,14 +1798,14 @@ test "responses wire lifts instructions, pins statelessness, maps effort" {
     Some(Json::Object(reasoning)) =>
       match reasoning.get("effort") {
         Some(Json::String("high")) => ()
-        other => fail("expected reasoning.effort=high, got \{other}")
+        other => fail("expected reasoning.effort=high, got \{Repr(other)}")
       }
-    other => fail("expected a reasoning object, got \{other}")
+    other => fail("expected a reasoning object, got \{Repr(other)}")
   }
   // Reasoning requests strip temperature (the upstream rejects it).
   match fields.get("temperature") {
     Some(Json::Null) | None => ()
-    other => fail("expected temperature stripped, got \{other}")
+    other => fail("expected temperature stripped, got \{Repr(other)}")
   }
   // `none` sends no reasoning surface and keeps temperature.
   let config_none = OpenCodeZenConfig(
@@ -1823,12 +1823,12 @@ test "responses wire lifts instructions, pins statelessness, maps effort" {
   guard plain is Object(plain_fields) else { fail("expected object body") }
   match plain_fields.get("reasoning") {
     Some(Json::Null) | None => ()
-    other => fail("expected no reasoning object for none, got \{other}")
+    other => fail("expected no reasoning object for none, got \{Repr(other)}")
   }
   match plain_fields.get("temperature") {
     Some(Json::Number(n, ..)) => assert_eq(n, 0.0)
     None => fail("expected temperature preserved on plain requests")
-    other => fail("expected temperature preserved, got \{other}")
+    other => fail("expected temperature preserved, got \{Repr(other)}")
   }
 }
 

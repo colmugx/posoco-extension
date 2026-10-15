@@ -22,7 +22,7 @@ test "for_model applies the uniform posture to every model id" {
     )
     inspect(config.reasoning_effort, content="high")
     inspect(config.max_output_tokens, content="32768")
-    inspect(config.context_window, content="None")
+    debug_inspect(config.context_window, content="None")
   }
 }
 
@@ -88,7 +88,8 @@ fn default_chat_options() -> @posoco.ChatOptions {
 
 ///|
 fn wire_int_field(body : Json, key~ : String) -> Int32 {
-  guard body.value(key) is Some(Json::Number(n, ..)) else {
+  let value = if body is Object(obj) { obj.get(key) } else { None }
+  guard value is Some(Json::Number(n, ..)) else {
     abort("test fixture: missing number field \"\{key}\"")
   }
   n.to_int()
@@ -441,7 +442,12 @@ test "encode: non-vision model downgrades images and tool attachments" {
     [],
     default_chat_options(),
   )
-  match with_attachment.value("messages") {
+  let messages = if with_attachment is Object(obj) {
+    obj.get("messages")
+  } else {
+    None
+  }
+  match messages {
     Some(Json::Array(messages)) =>
       match messages[2] {
         Json::Object(turn) =>
