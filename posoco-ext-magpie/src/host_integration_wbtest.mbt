@@ -339,3 +339,23 @@ async test "shutdown drops owned observation state; reactivation rebuilds it" {
   runtime.on_shutdown()
   inspect(runtime.recent_reports().length(), content="0")
 }
+
+///|
+/// Shutdown is idempotent: a second cycle changes nothing and construction
+/// stays offline (no transport call before the first lifecycle start).
+async test "shutdown is idempotent and construction performs no network I/O" {
+  let transport = FakeTransport([
+    Respond(code=200, body=hello_body()),
+    Respond(code=200, body=exec_catalog_body()),
+  ])
+  let runtime = MagpieRuntime::activate(transport=transport)
+  // Construction must not touch the transport.
+  inspect(transport.calls.length(), content="0")
+  inspect(transport.post_calls.length(), content="0")
+  runtime.on_shutdown()
+  runtime.on_shutdown()
+  inspect(transport.calls.length(), content="0")
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
+  // The command surface stays consistent after repeated shutdowns.
+  inspect(composed_command_ids(agent).length() >= 10, content="true")
+}

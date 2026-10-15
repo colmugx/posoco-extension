@@ -790,3 +790,36 @@ test "unknown image modality preserves original image blocks" {
     content="true",
   )
 }
+
+///|
+/// A text-only model must replace image blocks with the explicit
+/// placeholder — the downgrade is visible in the payload, never silent.
+test "text-only model downgrades images to an explicit placeholder" {
+  let entry = decode_catalog(
+      models_body(
+        model_entry(
+          id="openai/gpt-chat",
+          fields="\"reasoning\":false,\"supported_reasoning_levels\":[],\"context_window\":128000,\"native_endpoints\":[\"/v1/chat/completions\"],\"modalities\":{\"input\":[\"text\"]}",
+        ),
+      ),
+    ).entries[0]
+  inspect(model_supports_images(entry), content="false")
+  let input : Array[@posoco.Content] = [
+    @posoco.Content::Text("look at this"),
+    @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
+  ]
+  let shaped = shape_for_images(
+    [@posoco.Message::UserMessage(content=input)],
+    model_supports_images(entry),
+  )
+  guard
+    shaped[0] is @posoco.Message::UserMessage(content=blocks) else {
+    fail("user message must stay a user message")
+  }
+  inspect(blocks.length(), content="2")
+  guard blocks[1] is @posoco.Content::Text(placeholder) else {
+    fail("the image block must be downgraded to text")
+  }
+  inspect(placeholder.contains("image/png"), content="true")
+  inspect(placeholder.contains("does not accept image input"), content="true")
+}
