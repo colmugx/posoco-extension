@@ -812,8 +812,7 @@ test "text-only model downgrades images to an explicit placeholder" {
     [@posoco.Message::UserMessage(content=input)],
     model_supports_images(entry),
   )
-  guard
-    shaped[0] is @posoco.Message::UserMessage(content=blocks) else {
+  guard shaped[0] is @posoco.Message::UserMessage(content=blocks) else {
     fail("user message must stay a user message")
   }
   inspect(blocks.length(), content="2")

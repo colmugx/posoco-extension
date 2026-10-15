@@ -348,7 +348,7 @@ async test "shutdown is idempotent and construction performs no network I/O" {
     Respond(code=200, body=hello_body()),
     Respond(code=200, body=exec_catalog_body()),
   ])
-  let runtime = MagpieRuntime::activate(transport=transport)
+  let runtime = MagpieRuntime::activate(transport~)
   // Construction must not touch the transport.
   inspect(transport.calls.length(), content="0")
   inspect(transport.post_calls.length(), content="0")
@@ -369,10 +369,7 @@ async test "agent shutdown is idempotent and prevents later turns" {
     Respond(code=200, body=exec_catalog_body()),
   ])
   let runtime = MagpieRuntime::activate(transport~)
-  let agent = @posoco.Agent::Agent(
-    exts=[runtime],
-    config=@posoco.tk_config(),
-  )
+  let agent = @posoco.Agent::Agent(exts=[runtime], config=@posoco.tk_config())
   agent.shutdown()
   agent.shutdown()
   inspect(transport.calls.length(), content="0")
