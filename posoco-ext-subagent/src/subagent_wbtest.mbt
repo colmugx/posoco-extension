@@ -815,3 +815,53 @@ test "queued_question_wakeup_gates_and_fallbacks" {
   )
   assert_eq(recorder.requests, [])
 }
+
+///|
+test "answer_echo_word_renders_each_question_type" {
+  assert_eq(
+    answer_echo_word(
+      @posoco.UiRequest::Input(prompt="q", default=None),
+      @posoco.UiResponse::Text("src/lib/agent.mbt"),
+    ),
+    "src/lib/agent.mbt",
+  )
+  assert_eq(
+    answer_echo_word(
+      @posoco.UiRequest::Confirm(prompt="go?"),
+      @posoco.UiResponse::Yes,
+    ),
+    "true",
+  )
+  assert_eq(
+    answer_echo_word(
+      @posoco.UiRequest::Confirm(prompt="go?"),
+      @posoco.UiResponse::No,
+    ),
+    "false",
+  )
+  assert_eq(
+    answer_echo_word(
+      @posoco.UiRequest::Select(
+        prompt="pick",
+        options=["alpha", "beta"],
+        default=None,
+      ),
+      @posoco.UiResponse::Selected(1),
+    ),
+    "beta (index 1)",
+  )
+}
+
+///|
+test "flatten_spaces_collapses_runs_and_bounds_length" {
+  assert_eq(flatten_spaces("  a\n\nb\t c "), "a b c")
+  assert_eq(flatten_spaces("\n\t keep inner  space "), "keep inner space")
+  assert_eq(flatten_spaces(""), "")
+  let buf = StringBuilder()
+  for _i in 0..<300 {
+    buf.write_string("x\n")
+  }
+  let long = flatten_spaces(buf.to_string())
+  assert_true(long.length() <= 200)
+  assert_true(!long.contains("\n"))
+}

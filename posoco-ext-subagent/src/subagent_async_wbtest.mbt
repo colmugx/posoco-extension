@@ -1885,6 +1885,10 @@ async test "interactive_child_roundtrip_input_question" {
   assert_true(model.inputs[1].contains("which file?"))
   assert_true(model.inputs[1].contains("answer_question"))
   assert_eq(model.states[1], [("subagent-1", "waiting_reply")])
+  // The answer receipt carries the question→answer pair for the transcript.
+  assert_true(model.inputs.length() >= 3)
+  assert_true(model.inputs[2].contains("question: which file?"))
+  assert_true(model.inputs[2].contains("answer: src/lib/agent.mbt"))
   // The answer reached the child in its original session.
   assert_eq(composer.answers, ["subagent-1=src/lib/agent.mbt"])
   assert_eq(tools.background_children(), [("subagent-1", "completed")])
@@ -1967,6 +1971,9 @@ async test "interactive_child_select_validation_and_double_answer" {
   })
   assert_true(model.inputs[2].contains("out of range"))
   assert_true(model.inputs[3].contains("is type select"))
+  // The accepted select answer echoes the question and the resolved option.
+  assert_true(model.inputs[4].contains("question: pick one"))
+  assert_true(model.inputs[4].contains("answer: beta (index 1)"))
   assert_eq(composer.answers, ["subagent-1=sel:1"])
   assert_true(model.inputs[5].contains("already answered"))
   assert_eq(tools.background_children(), [("subagent-1", "completed")])

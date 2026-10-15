@@ -56,16 +56,19 @@ priv enum AskOutcome {
 priv struct PendingQuestion {
   child_session : String
   req : @posoco.UiRequest
+  /// Authoritative terminal record (why a late answer is refused); the
+  /// cell below is the wake channel and carries the same value.
   mut outcome : AskOutcome?
-  cell : @async.Semaphore
+  cell : @fuwaroid.OneShot[AskOutcome]
 }
 
 ///|
-/// One-shot signal the spawning `agent` tool races on: released exactly when
-/// the child registers its first question while the tool call is still live.
+/// One-shot signal the spawning `agent` tool races on: completed exactly
+/// when the child registers its first question while the tool call is still
+/// live. `complete`'s first-wins result decides raced-vs-queued at
+/// registration, so no shadow info field is needed.
 priv struct ArmedWaiter {
-  mut info : QuestionInfo?
-  cell : @async.Semaphore
+  cell : @fuwaroid.OneShot[QuestionInfo]
 }
 
 ///|
@@ -148,18 +151,15 @@ fn QuestionBroker::register(
     child_session,
     req,
     outcome: None,
-    cell: @async.Semaphore(1, initial_value=0),
+    cell: @fuwaroid.OneShot::OneShot(),
   }
   match self.armed.get(child_session) {
     Some(waiter) =>
-      match waiter.info {
-        None => {
-          // Live race: the receipt carries this question in-wave; no hook.
-          waiter.info = Some(info)
-          waiter.cell.release()
-          self.armed.remove(child_session)
-        }
-        Some(_) => {
+      // First-wins: Ok hands this question to the live race in-wave (no
+      // hook); Err means the waiter already carried one — queue instead.
+      match waiter.cell.complete(info) {
+        Ok(_) => self.armed.remove(child_session)
+        Err(_) => {
           self.queued.push(info)
           self.fire_queued(info)
         }
@@ -180,21 +180,14 @@ fn QuestionBroker::arm(
   self : QuestionBroker,
   child_session : String,
 ) -> ArmedWaiter {
-  let waiter : ArmedWaiter = {
-    info: None,
-    cell: @async.Semaphore(1, initial_value=0),
-  }
+  let waiter : ArmedWaiter = { cell: @fuwaroid.OneShot::OneShot(), }
   self.armed[child_session] = waiter
   waiter
 }
 
 ///|
 async fn ArmedWaiter::wait(self : ArmedWaiter) -> QuestionInfo {
-  self.cell.acquire()
-  match self.info {
-    Some(info) => info
-    None => abort("armed waiter released without a question")
-  }
+  self.cell.wait()
 }
 
 ///|
@@ -219,11 +212,10 @@ pub async fn ParentQuestionChannel::ask(
         Some(entry) => entry
         None => raise QuestionError::Cancelled
       }
-      entry.cell.acquire()
-      match entry.outcome {
-        Some(AskOutcome::Answered(response)) => response
-        Some(AskOutcome::TimedOut) => raise QuestionError::TimedOut
-        Some(AskOutcome::Cancelled) | None => raise QuestionError::Cancelled
+      match entry.cell.wait() {
+        AskOutcome::Answered(response) => response
+        AskOutcome::TimedOut => raise QuestionError::TimedOut
+        AskOutcome::Cancelled => raise QuestionError::Cancelled
       }
     }
     if broker.answer_timeout_ms > 0L {
@@ -271,6 +263,7 @@ fn QuestionBroker::expire(self : QuestionBroker, id : String) -> Unit {
     Some(entry) =>
       if entry.outcome is None {
         entry.outcome = Some(AskOutcome::TimedOut)
+        ignore(entry.cell.complete(AskOutcome::TimedOut))
       }
     None => ()
   }
@@ -313,7 +306,7 @@ fn QuestionBroker::resolve(
         Some(AskOutcome::Cancelled) => Err("question '\{id}' was cancelled")
         None => {
           entry.outcome = Some(AskOutcome::Answered(response))
-          entry.cell.release()
+          ignore(entry.cell.complete(AskOutcome::Answered(response)))
           Ok(())
         }
       }
@@ -330,7 +323,7 @@ fn QuestionBroker::reject_child(
   for entry in self.pending.values() {
     if entry.child_session == child_session && entry.outcome is None {
       entry.outcome = Some(AskOutcome::Cancelled)
-      entry.cell.release()
+      ignore(entry.cell.complete(AskOutcome::Cancelled))
     }
   }
   let kept : Array[QuestionInfo] = []
@@ -349,7 +342,7 @@ fn QuestionBroker::reject_all(self : QuestionBroker) -> Unit {
   for entry in self.pending.values() {
     if entry.outcome is None {
       entry.outcome = Some(AskOutcome::Cancelled)
-      entry.cell.release()
+      ignore(entry.cell.complete(AskOutcome::Cancelled))
     }
   }
   self.queued = []
