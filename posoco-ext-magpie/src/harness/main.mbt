@@ -378,6 +378,24 @@ async fn chat_via_port(
 }
 
 ///|
+/// Always print an explicit verdict even when a live probe cannot continue.
+fn Ctx::finish_report(self : Ctx) -> Unit {
+  self.report.val.push(
+    "## Summary: \{self.checks - self.failures - self.skips} passed, \{self.failures} failed, \{self.skips} skipped — \{self.requests} gateway requests (\{self.billable} billable)",
+  )
+  if self.failures > 0 {
+    self.report.val.push("RESULT: FAILED")
+  } else if self.checks == self.skips {
+    self.report.val.push("RESULT: SKIPPED")
+  } else {
+    self.report.val.push("RESULT: PASSED")
+  }
+  for line in self.report.val {
+    println(line)
+  }
+}
+
+///|
 async fn main {
   let report : Ref[Array[String]] = Ref([])
   report.val.push("# Magpie live gateway compatibility harness")
@@ -801,6 +819,8 @@ async fn main {
           Ok(pair) => pair
           Err(reason) => {
             ctx.fail("cache cold turn errored: \{reason}")
+            runtime.on_shutdown()
+            ctx.finish_report()
             return
           }
         }
@@ -841,6 +861,8 @@ async fn main {
           Ok(pair) => pair
           Err(reason) => {
             ctx.fail("cache warm turn errored: \{reason}")
+            runtime.on_shutdown()
+            ctx.finish_report()
             return
           }
         }
@@ -907,17 +929,5 @@ async fn main {
 
   // ---- Summary ----------------------------------------------------------
   report.val.push("")
-  report.val.push(
-    "## Summary: \{ctx.checks - ctx.failures - ctx.skips} passed, \{ctx.failures} failed, \{ctx.skips} skipped — \{ctx.requests} gateway requests (\{ctx.billable} billable)",
-  )
-  if ctx.failures > 0 {
-    report.val.push("RESULT: FAILED")
-  } else if ctx.checks == ctx.skips {
-    report.val.push("RESULT: SKIPPED")
-  } else {
-    report.val.push("RESULT: PASSED")
-  }
-  for line in report.val {
-    println(line)
-  }
+  ctx.finish_report()
 }
