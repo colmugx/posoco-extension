@@ -9,6 +9,7 @@ import {
   "colmugx/posoco-kit-messages" @messages,
   "colmugx/posoco",
   "moonbitlang/async",
+  "moonbitlang/core/abort" @abort,
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
