@@ -251,7 +251,8 @@ fn intel_int(
   match fields.get(key) {
     None => None
     Some(Json::Null) => None
-    Some(Json::Number(value, ..)) => Some(value.to_int())
+    Some(Json::Number(value, ..)) if value >= 0.0 && value <= 2147483647.0 && value == value.floor() => Some(value.to_int())
+    Some(Json::Number(..)) => raise intel_error("\{stage}.\{key}", "out_of_range_or_fractional")
     Some(_) => raise intel_error("\{stage}.\{key}", "wrong_type")
   }
 }
@@ -291,7 +292,8 @@ pub async fn MagpieGatewayIntelligence::route_snapshot(
   self : MagpieGatewayIntelligence,
   query~ : MagpieRouteQuery,
 ) -> MagpieRouteSnapshot raise @posoco.ModelError {
-  if query.wait is Some(seconds) && seconds > 60 {
+  if query.session == "" || query.after is Some(n) && n < 0 ||
+    query.wait is Some(seconds) && (seconds < 0 || seconds > 60) {
     raise @posoco.ModelError::RequestBuild(
       "magpie intelligence request build failure (stage=route): wait is limited to 60 seconds",
     )
@@ -574,6 +576,9 @@ pub async fn MagpieGatewayIntelligence::key_limit(
   let limited = intel_bool(fields, "limited", "limit") catch {
     _ => raise intel_error("limit.limited", "wrong_type")
   }
+  if limited is None {
+    raise intel_error("limit.limited", "missing")
+  }
   {
     key: intel_str(fields, "key", "limit") catch {
       _ => raise intel_error("limit.key", "wrong_type")
@@ -719,7 +724,7 @@ pub async fn MagpieGatewayIntelligence::usage_requests(
   limit~ : Int32 = 100,
   period~ : MagpieUsagePeriod? = Some(Today),
 ) -> MagpieUsageRequestsPage raise @posoco.ModelError {
-  if limit > 500 {
+  if limit < 1 || limit > 500 || offset < 0 {
     raise @posoco.ModelError::RequestBuild(
       "magpie intelligence request build failure (stage=usage.requests): limit is limited to 500",
     )
