@@ -1,6 +1,8 @@
 ///|
 /// Catalog construction for OpenCode Zen: one gateway, many models, each
-/// model one slot over an OpenCodeZenModelPort.
+/// model one slot over an OpenCodeZenModelPort. The wire each slot speaks is
+/// derived per model (protocol.mbt) — never stored, so a catalog refresh
+/// re-routes with no migration.
 
 ///|
 /// The provider id this extension claims. Centralised so the factory, catalog,
@@ -9,14 +11,17 @@ let zen_provider_id : String = "opencode"
 
 ///|
 /// The conventional Zen base URL. Exposed so the factory default and tests
-/// reference one source of truth.
-let zen_default_base_url : String = "https://opencode.ai/zen/v1"
+/// reference one source of truth. The documented Console inference endpoint
+/// serves every wire family; the legacy `https://opencode.ai/zen/v1` keeps
+/// working via the `base_url` setting (same gateway, two spellings).
+let zen_default_base_url : String = "https://opencode.ai/inference/v1"
 
 ///|
 /// The models.dev mirror OpenCode publishes its model metadata at — the
-/// canonical source of the per-model reasoning surface. A fixed constant with
-/// no settings override: a refresh either reads the same catalog OpenCode
-/// itself reads, or degrades to the off/on fallback picker.
+/// canonical source of the per-model reasoning surface, context window,
+/// image input, and SDK wire signal. A fixed constant with no settings
+/// override: a refresh either reads the same catalog OpenCode itself reads,
+/// or degrades to the safe fallbacks.
 let zen_models_dev_url : String = "https://models.opencode.ai/api.json"
 
 ///|
@@ -48,10 +53,10 @@ fn zen_cached_surface(info : ZenModelInfo) -> ZenReasoningSurface? {
 /// fallback for models the fresh map does not cover.
 fn zen_model_surface(
   info : ZenModelInfo,
-  surfaces : Map[String, ZenReasoningSurface],
+  metas : Map[String, ZenModelMeta],
 ) -> ZenReasoningSurface? {
-  match surfaces.get(info.id) {
-    Some(surface) => Some(surface)
+  match metas.get(info.id) {
+    Some(meta) => Some(meta.surface)
     None => zen_cached_surface(info)
   }
 }
@@ -110,6 +115,11 @@ fn zen_catalog_slot(
   } else {
     None
   }
+  let capabilities : Array[String] = if config.supports_images {
+    ["chat", "streaming", "api_key", "image_in"]
+  } else {
+    ["chat", "streaming", "api_key"]
+  }
   @llm.ModelSlot::ModelSlot(
     id=slot_id,
     label="Zen / " + config.model,
@@ -118,19 +128,14 @@ fn zen_catalog_slot(
     port~,
     api_key=Some(api_key),
     thinking_efforts=slot_efforts,
-    capabilities=["chat", "streaming", "api_key"],
+    capabilities~,
     default_effort~,
     display_group=Some("zen"),
     rebuild_on_api_key=Some(fn(credential) {
-      let rebuilt_config = OpenCodeZenConfig(
-        credential.secret,
-        base_url=config.base_url,
-        model=config.model,
-        endpoint_prefix=config.endpoint_prefix,
-        thinking=config.thinking,
-        reasoning_effort=config.reasoning_effort,
-        thinking_efforts=config.thinking_efforts,
-      )
+      let rebuilt_config : OpenCodeZenConfig = {
+        ..config,
+        api_key: credential.secret,
+      }
       zen_catalog_slot(rebuilt_config, surface, api_key)
     }),
     rebuild_on_effort~,
@@ -166,33 +171,72 @@ fn zen_preferred_models(
 
 ///|
 /// Build a Zen config for one discovered model from a base config (the
-/// user's resolved credential/endpoint). Each model shares the endpoint and
-/// key; the reasoning surface decides the wire state: a level-bearing model
-/// starts on its default level with the levels attached, every other shape
-/// stays thinking-off (which omits the reasoning surface on the wire, so the
-/// gateway applies the model's own default).
+/// user's resolved credential/endpoint). The wire is derived from the
+/// settings override, in-code table, models.dev SDK signal, and family
+/// fallback; the window and image support come from the fresh metadata with
+/// the host cache as the offline fallback. The reasoning surface decides the
+/// picker state: a level-bearing model starts on its default level with the
+/// levels attached, every other shape stays thinking-off (which omits the
+/// reasoning surface on the wire, so the gateway applies the model's own
+/// default).
 fn zen_config_for_model(
   base : OpenCodeZenConfig,
-  model_id : String,
+  info : ZenModelInfo,
   surface : ZenReasoningSurface?,
+  meta : ZenModelMeta?,
+  overrides~ : Map[String, String] = Map::from_array([]),
 ) -> OpenCodeZenConfig {
+  let wire = resolve_zen_wire(
+    info.id,
+    npm=match meta {
+      Some(meta) => meta.provider_npm
+      None => None
+    },
+    overrides~,
+  )
+  let context_window : Int32? = match meta {
+    Some(meta) => meta.context_window
+    None => info.context_window
+  }
+  let supports_images = match meta {
+    Some(meta) => meta.supports_images
+    None => info.supports_images
+  }
+  let rates : ZenCostRates? = match meta {
+    Some(meta) => meta.rates
+    None => None
+  }
   match surface {
     Some(surface) if surface.reasoning && !surface.levels.is_empty() =>
       OpenCodeZenConfig(
         base.api_key,
         base_url=base.base_url,
-        model=model_id,
+        model=info.id,
         endpoint_prefix=base.endpoint_prefix,
         thinking=true,
         reasoning_effort=Some(zen_preset_default_level(surface.levels)),
         thinking_efforts=surface.levels.copy(),
+        context_window~,
+        supports_images~,
+        wire~,
+        max_output_tokens=base.max_output_tokens,
+        rates~,
+        client_id=base.client_id,
+        spend_source=base.spend_source,
       )
     _ =>
       OpenCodeZenConfig(
         base.api_key,
         base_url=base.base_url,
-        model=model_id,
+        model=info.id,
         endpoint_prefix=base.endpoint_prefix,
+        context_window~,
+        supports_images~,
+        wire~,
+        max_output_tokens=base.max_output_tokens,
+        rates~,
+        client_id=base.client_id,
+        spend_source=base.spend_source,
       )
   }
 }
@@ -200,18 +244,32 @@ fn zen_config_for_model(
 ///|
 /// Build a single-slot catalog for the static `build` path (no network). Used
 /// by `ProviderFactory::build` so agent composition never blocks on the Zen
-/// discovery endpoint; the full list arrives later via `refresh`. No surface
-/// is known offline here, so the slot presents the safe off/on toggle and the
-/// full catalog is reconstructed from host-cached records when available.
+/// discovery endpoint; the full list arrives later via `refresh`. No fresh
+/// metadata exists offline here, so the slot presents the safe off/on toggle,
+/// the wire re-derives from the table/family/default chain, and the full
+/// catalog is reconstructed from host-cached records when available.
 pub fn zen_static_catalog(
   config : OpenCodeZenConfig,
   api_key : &@llm.ApiKeyFactory,
+  overrides~ : Map[String, String] = Map::from_array([]),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=zen_provider_id,
     slots=[
       zen_catalog_slot(
-        zen_config_for_model(config, config.model, None),
+        zen_config_for_model(
+          config,
+          ZenModelInfo::{
+            id: config.model,
+            owned_by: "",
+            cached_efforts: [],
+            context_window: config.context_window,
+            supports_images: config.supports_images,
+          },
+          None,
+          None,
+          overrides~,
+        ),
         None,
         api_key,
       ),
@@ -222,17 +280,21 @@ pub fn zen_static_catalog(
 
 ///|
 /// Build a multi-slot catalog from the gateway's live `/models` response.
-/// `surfaces` carries the models.dev-derived reasoning surfaces; a model the
-/// map does not cover falls back to its host-cached picker, and finally to
-/// the off/on toggle. Raises on an empty list so a transient gateway glitch
-/// surfaces as a typed composition failure rather than a silently empty
-/// picker.
+/// `metas` carries the models.dev-derived metadata (surface, window, images,
+/// SDK wire signal); a model the map does not cover falls back to its
+/// host-cached picker and window, and finally to the safe defaults. Models
+/// resolving to an unserved wire (Google Generative AI, SystemOne, the
+/// Mistral dialect) are excluded from the catalog rather than offered on a
+/// wire that would answer `400 ModelProtocolUnsupported`. Raises on an empty
+/// list so a transient gateway glitch surfaces as a typed composition
+/// failure rather than a silently empty picker.
 pub fn zen_model_catalog(
   base_config : OpenCodeZenConfig,
   models : Array[ZenModelInfo],
   preferred_id : String,
-  surfaces : Map[String, ZenReasoningSurface],
+  metas : Map[String, ZenModelMeta],
   api_key : &@llm.ApiKeyFactory,
+  overrides~ : Map[String, String] = Map::from_array([]),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   if models.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
@@ -240,10 +302,32 @@ pub fn zen_model_catalog(
       detail="OpenCode Zen models endpoint returned an empty catalog",
     )
   }
-  let slots : Array[@llm.ModelSlot] = []
+  let servable : Array[ZenModelInfo] = []
   for info in zen_preferred_models(models, preferred_id) {
-    let surface = zen_model_surface(info, surfaces)
-    let config = zen_config_for_model(base_config, info.id, surface)
+    let npm = match metas.get(info.id) {
+      Some(meta) => meta.provider_npm
+      None => None
+    }
+    if wire_servable(resolve_zen_wire(info.id, npm~, overrides~)) {
+      servable.push(info)
+    }
+  }
+  if servable.is_empty() {
+    raise @posoco.CompositionError::ManifestSchemaError(
+      manifest_id="posoco_ext_opencode_zen",
+      detail="OpenCode Zen models endpoint returned no servable models",
+    )
+  }
+  let slots : Array[@llm.ModelSlot] = []
+  for info in servable {
+    let surface = zen_model_surface(info, metas)
+    let config = zen_config_for_model(
+      base_config,
+      info,
+      surface,
+      metas.get(info.id),
+      overrides~,
+    )
     slots.push(zen_catalog_slot(config, surface, api_key))
   }
   @llm.ProviderModelCatalog::ProviderModelCatalog(

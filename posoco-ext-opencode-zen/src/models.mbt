@@ -24,6 +24,12 @@ pub(all) struct ZenModelInfo {
   /// path (the previous refresh's full picker, "off" included); empty on the
   /// live parse path.
   cached_efforts : Array[String]
+  /// Declared context window. Live path: models.dev `limit.context`; cache
+  /// path: the host record's `context_window`. `None` = never guess.
+  context_window : Int32?
+  /// Declared image input. Live path: models.dev `attachment`; cache path:
+  /// the host record's `image_in` marker.
+  supports_images : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -113,7 +119,13 @@ pub fn parse_zen_models(
           "OpenCode Zen models item is missing string owned_by",
         )
     }
-    result.push(ZenModelInfo::{ id, owned_by, cached_efforts: [], })
+    result.push(ZenModelInfo::{
+      id,
+      owned_by,
+      cached_efforts: [],
+      context_window: None,
+      supports_images: false,
+    })
   }
   result
 }
@@ -132,10 +144,16 @@ fn zen_models_url(base_url : String, endpoint_prefix : String) -> String {
 /// The cache is derived data — a previous `refresh` projected to slot records
 /// by the host — so any malformed shape degrades to `None` (the static
 /// single-slot build) instead of failing composition. The id identifies the
-/// slot and `thinking_efforts` (the cached picker, "off"/"on" included) is
-/// all the reasoning knowledge that survives offline; every slot shares the
-/// endpoint and key.
-fn parse_cached_zen_models(records : Json?) -> Array[ZenModelInfo]? {
+/// slot; `thinking_efforts` (the cached picker, "off"/"on" included),
+/// `context_window`, and `image_in` carry the reasoning/window/vision
+/// knowledge that survives offline. The wire is never cached: it re-derives
+/// from the in-code table, family fallback, and the gateway default.
+
+///|
+/// Tolerant host-cache record decode shared by every product on this
+/// package (the projection is provider-neutral: model_id/thinking_efforts/
+/// context_window/image_in).
+pub fn parse_opencode_cached_models(records : Json?) -> Array[ZenModelInfo]? {
   let items = match records {
     Some(Json::Array(items)) if items.length() > 0 => items
     _ => return None
@@ -161,7 +179,21 @@ fn parse_cached_zen_models(records : Json?) -> Array[ZenModelInfo]? {
         }
       _ => ()
     }
-    models.push(ZenModelInfo::{ id, owned_by: "", cached_efforts, })
+    let context_window : Int32? = match fields.get("context_window") {
+      Some(Json::Number(n, ..)) => if n > 0.0 { Some(n.to_int()) } else { None }
+      _ => None
+    }
+    let supports_images = match fields.get("image_in") {
+      Some(Json::True) => true
+      _ => false
+    }
+    models.push(ZenModelInfo::{
+      id,
+      owned_by: "",
+      cached_efforts,
+      context_window,
+      supports_images,
+    })
   }
   Some(models)
 }

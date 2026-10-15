@@ -10,19 +10,73 @@ async fn read_zen_error_body(client : @http.Client) -> ZenErrorBody {
 }
 
 ///|
+/// Wire dispatch: each model's `config.wire` selects the vendor-native
+/// request shape (see protocol.mbt). The three unserved wires raise a typed
+/// error here even though the catalog excludes them — a hand-built config
+/// must fail loudly, not fall onto the wrong endpoint. A settled call with
+/// declared rates records its spend estimate into the per-session tracker.
 pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
   self : OpenCodeZenModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let messages_owned = messages.to_owned()
+  let result = match self.config.wire {
+    ChatCompletions =>
+      self.chat_chat_completions(messages_owned, tools, options, stream)
+    Messages => self.chat_messages(messages_owned, tools, options, stream)
+    Responses => self.chat_responses(messages_owned, tools, options, stream)
+    GoogleGenai | SystemOne | MistralDialect =>
+      raise @posoco.ModelError::Transport(
+        "opencode-zen unsupported wire (stage=chat, category=wire_not_served, model=\{self.config.model}, wire=\{self.config.wire.to_id()}, reason=\{wire_exclusion_reason(self.config.wire)})",
+      )
+  }
+  self.zen_record_spend(scope, result.completion.usage)
+  result
+}
+
+///|
+/// Account one settled call's estimated cost. Rates absence (offline static
+/// build, unknown model) or missing usage numbers keep the estimate silent —
+/// never an invented figure.
+fn OpenCodeZenModelPort::zen_record_spend(
+  self : OpenCodeZenModelPort,
+  scope : @posoco.InvocationScope,
+  usage : @posoco.Usage?,
+) -> Unit {
+  let rates = match self.config.rates {
+    Some(rates) => rates
+    None => return
+  }
+  let usage = match usage {
+    Some(usage) => usage
+    None => return
+  }
+  let cost = match zen_step_cost(rates, usage) {
+    Some(cost) => cost
+    None => return
+  }
+  zen_spend_tracker_for(self.config.spend_source).record_and_publish(
+    scope.session_id.to_string(),
+    cost,
+  )
+}
+
+///|
+async fn OpenCodeZenModelPort::chat_chat_completions(
+  self : OpenCodeZenModelPort,
+  messages : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+  stream : @posoco.StreamMode,
+) -> @posoco.ModelCallResult raise @posoco.ModelError {
   match stream {
     NoStream => {
       let body = build_chat_request(
-        messages_owned,
+        messages,
         tools,
         options,
         self.config.model,
@@ -30,17 +84,15 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
         self.config.thinking,
         self.config.reasoning_effort,
         self.config.supports_images,
+        glm_flavor=zen_glm_flavored(self.config.model),
       )
       let resp_json = self.zen_post_chat_json(body, "chat")
       let completion = decode_chat_response(resp_json)
-      @posoco.ModelCallResult::{
-        completion,
-        processed_messages: messages_owned,
-      }
+      @posoco.ModelCallResult::{ completion, processed_messages: messages, }
     }
     Stream(on_chunk) => {
       let body = build_chat_request(
-        messages_owned,
+        messages,
         tools,
         options,
         self.config.model,
@@ -48,6 +100,7 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
         self.config.thinking,
         self.config.reasoning_effort,
         self.config.supports_images,
+        glm_flavor=zen_glm_flavored(self.config.model),
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)
@@ -159,10 +212,7 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
       }
       validate_zen_stream_tool_calls(acc)
       let completion = acc.to_completion()
-      @posoco.ModelCallResult::{
-        completion,
-        processed_messages: messages_owned,
-      }
+      @posoco.ModelCallResult::{ completion, processed_messages: messages, }
     }
   }
 }

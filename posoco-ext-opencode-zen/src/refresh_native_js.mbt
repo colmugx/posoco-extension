@@ -24,6 +24,7 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh
   }
   let base_url = zen_resolve_base_url(source)
   let preferred = zen_resolve_model(source)
+  let overrides = zen_protocol_overrides(source)
   let config = OpenCodeZenConfig(api_key, base_url~, model=preferred)
   let models = fetch_zen_models(config.base_url, config.api_key) catch {
     err =>
@@ -33,14 +34,21 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeZenProvider with fn refresh
       )
   }
   // Deliberate degradation: a missing models.dev mirror must not fail the
-  // whole refresh — the picker falls back to off/on per model.
-  let surfaces : Map[String, ZenReasoningSurface] = fetch_models_dev_surfaces() catch {
+  // whole refresh — the picker falls back to off/on per model, windows stay
+  // undeclared (auto-compact off), and the wire re-derives from the table.
+  let metas : Map[String, ZenModelMeta] = fetch_models_dev_meta() catch {
     _ => Map::from_array([])
   }
   let api_key_factory : &@llm.ApiKeyFactory = self
   let catalog = zen_model_catalog(
-    config, models, preferred, surfaces, api_key_factory,
+    config,
+    models,
+    preferred,
+    metas,
+    api_key_factory,
+    overrides~,
   )
+  zen_register_quota_sources()
   @llm.ProviderBuildResult::Ready(catalog)
 }
 

@@ -58,10 +58,17 @@ fn is_zen_http_success(status : Int32) -> Bool {
 
 ///|
 /// Pure HTTP-status classifier. A captured provider body is carried through
-/// to the observable error message so a 400 says why it is a 400. A 429 is a
-/// quota verdict: the body is parsed for a stated reset time
-/// (`resets_at`/`resets_in_seconds`, `retry_after`, or a timestamp inside
-/// the message text) and raised as the typed `RateLimited`.
+/// to the observable error message so a 400 says why it is a 400. Three
+/// verdicts are typed before the generic transport fallback:
+///
+/// - a 429 is a quota verdict: the body is parsed for a stated reset time
+///   (`resets_at`/`resets_in_seconds`, `retry_after`, or a timestamp inside
+///   the message text) and raised as the typed `RateLimited`;
+/// - a `FreeTierError` body is the gateway's free-tier gate (it refuses
+///   every credential a request can carry) — a stable typed marker, never a
+///   generic transport failure;
+/// - a `ModelProtocolUnsupported` body means the model was sent to a wire it
+///   is not served on — the dispatch-table correction signal.
 fn classify_zen_http_status(
   stage : String,
   status : Int32,
@@ -71,11 +78,25 @@ fn classify_zen_http_status(
   if is_zen_http_success(status) {
     return None
   }
+  let body_text = match body {
+    BodyText(text) => text
+    _ => ""
+  }
+  if body_text.contains("FreeTierError") {
+    return Some(
+      @posoco.ModelError::Transport(
+        "opencode-zen free tier unavailable (stage=\{stage}, category=free_tier_error, status=\{status}, body=\{cap_zen_error_body(body_text)})",
+      ),
+    )
+  }
+  if body_text.contains("ModelProtocolUnsupported") {
+    return Some(
+      @posoco.ModelError::Transport(
+        "opencode-zen model protocol unsupported (stage=\{stage}, category=model_protocol_unsupported, status=\{status}, body=\{cap_zen_error_body(body_text)})",
+      ),
+    )
+  }
   if status == 429 {
-    let body_text = match body {
-      BodyText(text) => text
-      _ => ""
-    }
     let verdict = @ratelimit.classify_rate_limit_error(
       status,
       body_text,

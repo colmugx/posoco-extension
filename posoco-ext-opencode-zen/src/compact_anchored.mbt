@@ -148,3 +148,14 @@ pub extend ZenAnchoredCompactPort with @posoco.ModelPort::{
   chat,
   compact,
 }
+
+///|
+/// Public port assembly for products built on this package (zen, go): the
+/// wire-dispatching model port wrapped in the anchored-summary compact
+/// decorator. This is exactly what the zen catalog slots wrap; exposing it
+/// keeps downstream products from reaching for the private pieces.
+pub fn opencode_anchored_compact_port(
+  config : OpenCodeZenConfig,
+) -> &@posoco.ModelPort {
+  zen_anchored_compact_port(OpenCodeZenModelPort(config))
+}

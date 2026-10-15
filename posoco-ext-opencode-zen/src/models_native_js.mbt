@@ -61,22 +61,27 @@ pub async fn fetch_zen_models(
 }
 
 ///|
-/// Fetch and decode the per-model reasoning surfaces from models.dev's
-/// OpenCode mirror. Anonymous: the mirror is publicly readable, so no
-/// credential is sent. Callers own the degradation policy — refresh swallows
-/// every failure here into an empty map rather than aborting composition.
-async fn fetch_models_dev_surfaces() -> Map[String, ZenReasoningSurface] raise @posoco.ModelError {
+/// Fetch and decode the per-model metadata from models.dev's OpenCode
+/// mirror (reasoning surfaces, context windows, image input, SDK wire
+/// signal). Anonymous: the mirror is publicly readable, so no credential is
+/// sent. Callers own the degradation policy — refresh swallows every failure
+/// here into an empty map rather than aborting composition.
+
+///|
+/// Live models.dev metadata fetch (reasoning surfaces, context windows,
+/// image input, SDK wire signal, cost rates) for products on this package.
+pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @posoco.ModelError {
   let headers : @http.Headers = { "Accept": "application/json" }
   let (response, body_data) = @async.with_timeout(30000, () => {
     @http.get(zen_models_dev_url, headers~)
   }) catch {
     @async.TimeoutError =>
       raise @posoco.ModelError::Transport(
-        "models.dev surfaces request timed out (timeout_ms=30000)",
+        "models.dev metadata request timed out (timeout_ms=30000)",
       )
     err =>
       raise @posoco.ModelError::Transport(
-        "models.dev surfaces request failed: " + err.to_string(),
+        "models.dev metadata request failed: " + err.to_string(),
       )
   }
   if response.code < 200 || response.code >= 300 {
@@ -84,24 +89,24 @@ async fn fetch_models_dev_surfaces() -> Map[String, ZenReasoningSurface] raise @
     let text = body_data.text() catch {
       _ =>
         raise @posoco.ModelError::Transport(
-          "models.dev surfaces HTTP status: \{response.code}, body_bytes=\{byte_length}, body_category=invalid_utf8",
+          "models.dev metadata HTTP status: \{response.code}, body_bytes=\{byte_length}, body_category=invalid_utf8",
         )
     }
     raise @posoco.ModelError::Transport(
-      "models.dev surfaces HTTP status: \{response.code}, body=\{text}",
+      "models.dev metadata HTTP status: \{response.code}, body=\{text}",
     )
   }
   let body_text = body_data.text() catch {
     err =>
       raise @posoco.ModelError::Transport(
-        "models.dev surfaces body read failed: " + err.to_string(),
+        "models.dev metadata body read failed: " + err.to_string(),
       )
   }
   let payload = @json.parse(body_text) catch {
     err =>
       raise @posoco.ModelError::ResponseParse(
-        "models.dev surfaces JSON parse failed: " + err.to_string(),
+        "models.dev metadata JSON parse failed: " + err.to_string(),
       )
   }
-  parse_models_dev_surfaces(payload)
+  parse_models_dev_meta(payload)
 }

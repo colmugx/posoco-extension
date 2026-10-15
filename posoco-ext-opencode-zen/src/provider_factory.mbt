@@ -92,6 +92,47 @@ fn zen_resolve_model(
 }
 
 ///|
+/// Resolve the per-model wire overrides. `protocol_overrides` maps a bare
+/// model id to a wire id (`chat_completions`, `messages`, `responses`,
+/// `google_genai`, `system_one`, `mistral`) and wins over every table —
+/// the escape hatch when the gateway moves a model before the table
+/// catches up. Malformed shapes are typed composition failures so a broken
+/// entry cannot silently mis-route.
+fn zen_protocol_overrides(
+  source : @llm.ProviderConfigSource,
+) -> Map[String, String] raise @posoco.CompositionError {
+  let overrides : Map[String, String] = Map::from_array([])
+  match source.setting("protocol_overrides") {
+    None => ()
+    Some(Json::Object(fields)) =>
+      for id, value in fields {
+        match value {
+          Json::String(wire) =>
+            match wire_kind_of_id(wire) {
+              Some(_) => overrides[id] = wire
+              None =>
+                raise @posoco.CompositionError::ManifestSchemaError(
+                  manifest_id="posoco_ext_opencode_zen",
+                  detail="protocol_overrides names an unknown wire for \{id}: \{wire}",
+                )
+            }
+          _ =>
+            raise @posoco.CompositionError::ManifestSchemaError(
+              manifest_id="posoco_ext_opencode_zen",
+              detail="protocol_overrides values must be strings: \{id}",
+            )
+        }
+      }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_opencode_zen",
+        detail="setting protocol_overrides must be an object",
+      )
+  }
+  overrides
+}
+
+///|
 pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn provider_id(
   _self : OpenCodeZenProvider,
 ) -> String {
@@ -129,11 +170,13 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn build(
   }
   let base_url = zen_resolve_base_url(source)
   let model = zen_resolve_model(source)
+  let overrides = zen_protocol_overrides(source)
   let config = OpenCodeZenConfig(api_key, base_url~, model~)
   let api_key_factory : &@llm.ApiKeyFactory = self
-  // No live surfaces exist on the static path: each cached record rebuilds
-  // its picker from the cached thinking_efforts (empty → off/on).
-  let catalog = match parse_cached_zen_models(source.cached_models) {
+  // No live metadata exists on the static path: each cached record rebuilds
+  // its picker from the cached thinking_efforts and carries its cached
+  // window/image facts; the wire re-derives offline from the table.
+  let catalog = match parse_opencode_cached_models(source.cached_models) {
     Some(models) =>
       zen_model_catalog(
         config,
@@ -141,9 +184,11 @@ pub impl @llm.ProviderFactory for OpenCodeZenProvider with fn build(
         model,
         Map::from_array([]),
         api_key_factory,
+        overrides~,
       )
-    None => zen_static_catalog(config, api_key_factory)
+    None => zen_static_catalog(config, api_key_factory, overrides~)
   }
+  zen_register_quota_sources()
   @llm.ProviderBuildResult::Ready(catalog)
 }
 

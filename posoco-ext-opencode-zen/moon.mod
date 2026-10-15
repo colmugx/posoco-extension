@@ -6,6 +6,8 @@ import {
   "colmugx/posoco@0.22.1",
   "posoco/devkit@0.4.1",
   "colmugx/posoco-kit-rate-limit@0.1.0",
+  "colmugx/posoco-kit-messages@0.1.0",
+  "colmugx/posoco-kit-responses@0.1.0",
   "posoco/ext-llm@0.2.0",
   "posoco/ext-oauth@0.1.0",
   "posoco/kit-chat-completions@0.1.0",

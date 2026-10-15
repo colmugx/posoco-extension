@@ -39,11 +39,17 @@ test "Zen routing headers carry stable session and fresh request identity" {
   let first = zen_request_headers()
   let second = zen_request_headers()
   assert_eq(first["x-opencode-project"], "posoco")
-  assert_eq(first["x-opencode-client"], "posoco")
+  assert_eq(first["x-opencode-client"], "opencode-zen")
   assert_eq(first["User-Agent"], "posoco/opencode-zen")
   assert_eq(first["x-opencode-session"], second["x-opencode-session"])
   assert_true(first["x-opencode-session"].length() > 0)
   assert_true(first["x-opencode-request"] != second["x-opencode-request"])
+  // A product-built identity names its own client; the session id stays
+  // process-stable across products on the same gateway family.
+  let go = opencode_request_headers("opencode-go")
+  assert_eq(go["x-opencode-client"], "opencode-go")
+  assert_eq(go["User-Agent"], "posoco/opencode-go")
+  assert_eq(go["x-opencode-session"], first["x-opencode-session"])
 }
 
 ///|
@@ -824,7 +830,18 @@ fn zen_surface_slot(
   provider : OpenCodeZenProvider,
 ) -> @llm.ModelSlot {
   let api_key_factory : &@llm.ApiKeyFactory = provider
-  let config = zen_config_for_model(zen_base_config(), "probe-model", surface)
+  let config = zen_config_for_model(
+    zen_base_config(),
+    ZenModelInfo::{
+      id: "probe-model",
+      owned_by: "",
+      cached_efforts: [],
+      context_window: None,
+      supports_images: false,
+    },
+    surface,
+    None,
+  )
   zen_catalog_slot(config, surface, api_key_factory)
 }
 
@@ -913,17 +930,23 @@ test "zen slot mapping covers all reasoning surface shapes" {
 test "zen_model_catalog applies models.dev surfaces end to end" {
   let provider = OpenCodeZenProvider()
   let api_key_factory : &@llm.ApiKeyFactory = provider
-  let surfaces = parse_models_dev_surfaces(models_dev_sample_payload())
+  let metas = parse_models_dev_meta(models_dev_sample_payload())
   // Real gpt-5.1 sample: effort values ["none","low","medium","high"] with
   // no toggle — "none" in the levels contributes the "off" entry.
   let gpt_models = [
-    ZenModelInfo::{ id: "gpt-5.1", owned_by: "opencode", cached_efforts: [], },
+    ZenModelInfo::{
+      id: "gpt-5.1",
+      owned_by: "opencode",
+      cached_efforts: [],
+      context_window: None,
+      supports_images: false,
+    },
   ]
   let gpt_catalog = zen_model_catalog(
     zen_base_config(),
     gpt_models,
     "gpt-5.1",
-    surfaces,
+    metas,
     api_key_factory,
   )
   let gpt_slot = gpt_catalog.slots()[0]
@@ -940,13 +963,15 @@ test "zen_model_catalog applies models.dev surfaces end to end" {
       id: "deepseek-v4-flash",
       owned_by: "opencode",
       cached_efforts: [],
+      context_window: None,
+      supports_images: false,
     },
   ]
   let deepseek_catalog = zen_model_catalog(
     zen_base_config(),
     deepseek_models,
     "deepseek-v4-flash",
-    surfaces,
+    metas,
     api_key_factory,
   )
   let deepseek_slot = deepseek_catalog.slots()[0]
@@ -963,13 +988,15 @@ test "zen_model_catalog applies models.dev surfaces end to end" {
       id: "claude-3-5-haiku",
       owned_by: "opencode",
       cached_efforts: [],
+      context_window: None,
+      supports_images: false,
     },
   ]
   let chat_catalog = zen_model_catalog(
     zen_base_config(),
     chat_models,
     "claude-3-5-haiku",
-    surfaces,
+    metas,
     api_key_factory,
   )
   assert_true(chat_catalog.slots()[0].thinking_efforts.is_empty())
@@ -1032,6 +1059,8 @@ test "zen cached surface rebuilds levels from the cached picker" {
     id: "x",
     owned_by: "",
     cached_efforts: ["off", "low", "high"],
+    context_window: None,
+    supports_images: false,
   })
   guard level_surface is Some(level) else {
     fail("expected a surface from a level-bearing picker")
@@ -1056,6 +1085,8 @@ test "zen cached surface rebuilds levels from the cached picker" {
     id: "x",
     owned_by: "",
     cached_efforts: ["off", "on"],
+    context_window: None,
+    supports_images: false,
   })
   guard toggle_surface is Some(toggle) else {
     fail("expected a surface from an off/on picker")
@@ -1074,6 +1105,8 @@ test "zen cached surface rebuilds levels from the cached picker" {
       id: "x",
       owned_by: "",
       cached_efforts: [],
+      context_window: None,
+      supports_images: false,
     })
     is None,
   )
@@ -1094,7 +1127,7 @@ test "zen cached records parse with their thinking_efforts picker" {
     // No thinking_efforts field: tolerated as an empty picker.
     Json::object(Map::from_array([("model_id", Json::string("y"))])),
   ])
-  guard parse_cached_zen_models(Some(records)) is Some(models) else {
+  guard parse_opencode_cached_models(Some(records)) is Some(models) else {
     fail("expected cached models")
   }
   assert_eq(models.length(), 2)
@@ -1358,6 +1391,7 @@ test "zen wire sends the GLM thinking object and verbatim reasoning_effort" {
     true,
     Some("low"),
     false,
+    glm_flavor=true,
   )
   guard with_effort is Object(with_fields) else {
     fail("expected request to be an object")
@@ -1384,6 +1418,7 @@ test "zen wire sends the GLM thinking object and verbatim reasoning_effort" {
     true,
     None,
     false,
+    glm_flavor=true,
   )
   guard toggle_on is Object(on_fields) else {
     fail("expected request to be an object")
@@ -1410,6 +1445,7 @@ test "zen wire sends the GLM thinking object and verbatim reasoning_effort" {
     false,
     None,
     false,
+    glm_flavor=true,
   )
   guard toggle_off is Object(off_fields) else {
     fail("expected request to be an object")
@@ -1502,4 +1538,557 @@ test "zen wire opts into stream usage accounting" {
       }
     _ => fail("expected stream_options for usage accounting")
   }
+}
+
+///|
+/// Wire resolution precedence: settings override > in-code table > models.dev
+/// npm signal > family fallback > gateway default. The unserved wires must be
+/// detectable so the catalog can exclude those models.
+test "resolve_zen_wire resolves per precedence and exposes unserved wires" {
+  // Family fallback when nothing else knows the id.
+  assert_eq(resolve_zen_wire("claude-sonnet-5"), Messages)
+  assert_eq(resolve_zen_wire("gpt-6-luna"), Responses)
+  assert_eq(resolve_zen_wire("grok-4.7"), Responses)
+  assert_eq(resolve_zen_wire("glm-5.2"), ChatCompletions)
+  // In-code table where the family rule disagrees with the vendor table.
+  assert_eq(resolve_zen_wire("qwen3.8-max"), ChatCompletions)
+  // Family rule for the rest of the qwen tiers: Messages.
+  assert_eq(resolve_zen_wire("qwen3.7-plus"), Messages)
+  // npm signal wins over family: an anthropic-npm claude stays Messages, and
+  // a google-npm model resolves to the unserved Google wire.
+  assert_eq(
+    resolve_zen_wire("mystery-id", npm=Some("@ai-sdk/anthropic")),
+    Messages,
+  )
+  assert_eq(resolve_zen_wire("gemini-3.8-flash"), GoogleGenai)
+  // Settings override wins over everything, including the table.
+  assert_eq(
+    resolve_zen_wire(
+      "qwen3.8-max",
+      overrides=Map::from_array([("qwen3.8-max", "messages")]),
+    ),
+    Messages,
+  )
+  // Unknown ids with no signal land on the gateway default.
+  assert_eq(resolve_zen_wire("omen-alpha"), ChatCompletions)
+  // Unserved wires are flagged for exclusion.
+  assert_false(wire_servable(GoogleGenai))
+  assert_false(wire_servable(SystemOne))
+  assert_true(wire_servable(Messages))
+  assert_true(wire_exclusion_reason(GoogleGenai).contains("google"))
+}
+
+///|
+/// models.dev metadata decode: context window, image input, and the SDK npm
+/// signal ride next to the reasoning surface, each independently degrading.
+test "parse_models_dev_meta decodes window, images, and npm signal" {
+  let payload = Json::object(
+    Map::from_array([
+      (
+        "opencode",
+        Json::object(
+          Map::from_array([
+            (
+              "models",
+              Json::object(
+                Map::from_array([
+                  (
+                    "claude-sonnet-5",
+                    Json::object(
+                      Map::from_array([
+                        ("reasoning", Json::boolean(true)),
+                        ("attachment", Json::boolean(true)),
+                        (
+                          "limit",
+                          Json::object(
+                            Map::from_array([
+                              ("context", Json::number(200000.0)),
+                              ("output", Json::number(64000.0)),
+                            ]),
+                          ),
+                        ),
+                        (
+                          "provider",
+                          Json::object(
+                            Map::from_array([
+                              ("npm", Json::string("@ai-sdk/anthropic")),
+                            ]),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  (
+                    "bare-model",
+                    Json::object(
+                      Map::from_array([("reasoning", Json::boolean(false))]),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    ]),
+  )
+  let metas = parse_models_dev_meta(payload)
+  guard metas.get("claude-sonnet-5") is Some(claude) else {
+    fail("expected claude metadata")
+  }
+  assert_eq(claude.context_window, Some(200000))
+  assert_true(claude.supports_images)
+  assert_eq(claude.provider_npm, Some("@ai-sdk/anthropic"))
+  assert_true(claude.surface.reasoning)
+  // A model without any optional fields degrades field by field.
+  guard metas.get("bare-model") is Some(bare) else {
+    fail("expected bare metadata")
+  }
+  assert_eq(bare.context_window, None)
+  assert_false(bare.supports_images)
+  assert_eq(bare.provider_npm, None)
+  assert_false(bare.surface.reasoning)
+}
+
+///|
+/// The catalog config builder carries the derived wire plus the declared
+/// window/image facts into the config that the port speaks; fresh metadata
+/// wins over the host cache, and the picker state stays surface-driven.
+test "zen_config_for_model carries wire, window, and image facts" {
+  let base = zen_base_config()
+  let surface = zen_surface(
+    reasoning=true,
+    levels=["low", "high"],
+    can_disable=true,
+  )
+  let meta : ZenModelMeta = {
+    surface,
+    context_window: Some(100000),
+    supports_images: false,
+    provider_npm: Some("@ai-sdk/anthropic"),
+    rates: None,
+  }
+  let info = ZenModelInfo::{
+    id: "claude-sonnet-5",
+    owned_by: "",
+    cached_efforts: [],
+    context_window: Some(200000),
+    supports_images: true,
+  }
+  let config = zen_config_for_model(base, info, Some(surface), Some(meta))
+  assert_eq(config.wire, Messages)
+  // Fresh metadata wins over the cached facts.
+  assert_eq(config.context_window, Some(100000))
+  assert_false(config.supports_images)
+  assert_eq(config.reasoning_effort, Some("high"))
+  // Cache-only facts apply when the fresh metadata is missing.
+  let offline = zen_config_for_model(base, info, None, None)
+  assert_eq(offline.context_window, Some(200000))
+  assert_true(offline.supports_images)
+  // A meta without a window never guesses one.
+  let windowless = zen_config_for_model(
+    base,
+    info,
+    None,
+    Some({
+      surface: { reasoning: false, levels: [], can_disable: false, },
+      context_window: None,
+      supports_images: false,
+      provider_npm: None,
+      rates: None,
+    }),
+  )
+  assert_eq(windowless.context_window, None)
+}
+
+///|
+/// Messages wire encoding: system lifts to the top-level field, max_tokens
+/// carries the config ceiling, and the picker level maps onto a thinking
+/// budget; `none` means thinking off.
+test "messages wire maps levels to budgets and none to off" {
+  let config_thinking = OpenCodeZenConfig(
+    "sk-test",
+    base_url="https://opencode.ai/inference/v1",
+    model="claude-sonnet-5",
+    thinking=true,
+    reasoning_effort=Some("low"),
+    wire=Messages,
+    max_output_tokens=12345,
+  )
+  let body = build_messages_request(
+    config_thinking,
+    [zen_user_msg("hi")],
+    [],
+    zen_flaky_options(),
+  )
+  guard body is Object(fields) else { fail("expected object body") }
+  assert_eq(fields.get("model"), Some(Json::string("claude-sonnet-5")))
+  match fields.get("max_tokens") {
+    Some(Json::Number(n, ..)) => assert_eq(n, 12345.0)
+    other => fail("expected max_tokens, got \{other}")
+  }
+  match fields.get("thinking") {
+    Some(Json::Object(thinking)) => {
+      match thinking.get("type") {
+        Some(Json::String("enabled")) => ()
+        _ => fail("expected thinking enabled")
+      }
+      match thinking.get("budget_tokens") {
+        Some(Json::Number(n, ..)) => assert_eq(n, 4096.0)
+        other => fail("expected the low-level budget, got \{other}")
+      }
+    }
+    other => fail("expected a thinking object, got \{other}")
+  }
+  // `none` disables thinking; the stream flag rides the extra fields.
+  let config_none = OpenCodeZenConfig(
+    "sk-test",
+    base_url="https://opencode.ai/inference/v1",
+    model="claude-sonnet-5",
+    thinking=true,
+    reasoning_effort=Some("none"),
+    wire=Messages,
+  )
+  let off_body = build_messages_request(
+    config_none,
+    [zen_user_msg("hi")],
+    [],
+    zen_flaky_options(),
+    stream=true,
+  )
+  guard off_body is Object(off_fields) else { fail("expected object body") }
+  match off_fields.get("thinking") {
+    Some(Json::Null) | None => ()
+    other => fail("expected thinking omitted for none, got \{other}")
+  }
+  match off_fields.get("stream") {
+    Some(value) => assert_eq(value.stringify(), "true")
+    None => fail("expected stream=true for the streaming request")
+  }
+}
+
+///|
+/// Responses wire encoding: system lifts into `instructions`, the request is
+/// stateless (`store:false`), a level becomes `reasoning.effort` (temperature
+/// stripped), and `none` sends no reasoning surface at all.
+test "responses wire lifts instructions, pins statelessness, maps effort" {
+  let config_effort = OpenCodeZenConfig(
+    "sk-test",
+    base_url="https://opencode.ai/inference/v1",
+    model="gpt-6-luna",
+    thinking=true,
+    reasoning_effort=Some("high"),
+    wire=Responses,
+  )
+  let messages : Array[@posoco.Message] = [
+    @posoco.Message::SystemMessage(content=[@posoco.Content::Text("be terse")]),
+    zen_user_msg("hi"),
+  ]
+  let body = build_responses_request(config_effort, messages, [], {
+    ..zen_flaky_options(),
+    temperature: Some(0.0),
+  })
+  guard body is Object(fields) else { fail("expected object body") }
+  assert_eq(fields.get("instructions"), Some(Json::string("be terse")))
+  match fields.get("store") {
+    Some(value) => assert_eq(value.stringify(), "false")
+    None => fail("expected store=false")
+  }
+  match fields.get("reasoning") {
+    Some(Json::Object(reasoning)) =>
+      match reasoning.get("effort") {
+        Some(Json::String("high")) => ()
+        other => fail("expected reasoning.effort=high, got \{other}")
+      }
+    other => fail("expected a reasoning object, got \{other}")
+  }
+  // Reasoning requests strip temperature (the upstream rejects it).
+  match fields.get("temperature") {
+    Some(Json::Null) | None => ()
+    other => fail("expected temperature stripped, got \{other}")
+  }
+  // `none` sends no reasoning surface and keeps temperature.
+  let config_none = OpenCodeZenConfig(
+    "sk-test",
+    base_url="https://opencode.ai/inference/v1",
+    model="gpt-6-luna",
+    thinking=true,
+    reasoning_effort=Some("none"),
+    wire=Responses,
+  )
+  let plain = build_responses_request(config_none, [zen_user_msg("hi")], [], {
+    ..zen_flaky_options(),
+    temperature: Some(0.0),
+  })
+  guard plain is Object(plain_fields) else { fail("expected object body") }
+  match plain_fields.get("reasoning") {
+    Some(Json::Null) | None => ()
+    other => fail("expected no reasoning object for none, got \{other}")
+  }
+  match plain_fields.get("temperature") {
+    Some(Json::Number(n, ..)) => assert_eq(n, 0.0)
+    None => fail("expected temperature preserved on plain requests")
+    other => fail("expected temperature preserved, got \{other}")
+  }
+}
+
+///|
+/// The HTTP classifier types the gateway's two structural verdicts before
+/// the generic transport fallback: the free-tier gate and a model sent to a
+/// wire it is not served on.
+test "http classifier types free tier and protocol-unsupported verdicts" {
+  let free = classify_zen_http_status(
+    "chat.http_status",
+    403,
+    BodyText("{\"error\":{\"type\":\"FreeTierError\"}}"),
+    now_ms=0L,
+  )
+  guard free is Some(@posoco.ModelError::Transport(message)) else {
+    fail("expected a typed transport error for FreeTierError")
+  }
+  assert_true(message.contains("category=free_tier_error"))
+  let protocol = classify_zen_http_status(
+    "chat.http_status",
+    400,
+    BodyText("{\"error\":\"ModelProtocolUnsupported\"}"),
+    now_ms=0L,
+  )
+  guard protocol is Some(@posoco.ModelError::Transport(pmessage)) else {
+    fail("expected a typed transport error for ModelProtocolUnsupported")
+  }
+  assert_true(pmessage.contains("category=model_protocol_unsupported"))
+  // An ordinary 400 stays a plain transport failure with the body carried.
+  let plain = classify_zen_http_status(
+    "chat.http_status",
+    400,
+    BodyText("{\"error\":\"bad field\"}"),
+    now_ms=0L,
+  )
+  guard plain is Some(@posoco.ModelError::Transport(plain_message)) else {
+    fail("expected a transport error")
+  }
+  assert_false(plain_message.contains("category="))
+}
+
+///|
+/// Host-cached records carry the window and image facts offline; the wire is
+/// never cached — it re-derives from the table at static build.
+test "cached records carry context_window and image_in offline" {
+  let records = Json::array([
+    Json::object(
+      Map::from_array([
+        ("model_id", Json::string("claude-sonnet-5")),
+        (
+          "thinking_efforts",
+          Json::array([Json::string("off"), Json::string("low")]),
+        ),
+        ("context_window", Json::number(200000.0)),
+        ("image_in", Json::boolean(true)),
+      ]),
+    ),
+    Json::object(
+      Map::from_array([
+        ("model_id", Json::string("glm-5.2")),
+        ("thinking_efforts", Json::array([])),
+        ("context_window", Json::null()),
+        ("image_in", Json::boolean(false)),
+      ]),
+    ),
+  ])
+  let models = parse_opencode_cached_models(Some(records))
+  guard models is Some(parsed) else { fail("expected cached models") }
+  assert_eq(parsed.length(), 2)
+  assert_eq(parsed[0].context_window, Some(200000))
+  assert_true(parsed[0].supports_images)
+  assert_eq(parsed[1].context_window, None)
+  assert_false(parsed[1].supports_images)
+}
+
+///|
+/// Cost rates decode: flat schedules pass through; context tiers become the
+/// above-threshold schedule; non-object shapes degrade to None.
+test "parse_zen_cost_rates decodes flat and tiered schedules" {
+  let flat = parse_zen_cost_rates(
+    Map::from_array([
+      ("input", Json::number(1.4)),
+      ("output", Json::number(4.4)),
+      ("cache_read", Json::number(0.26)),
+    ]),
+  )
+  guard flat is Some(f) else { fail("expected flat rates") }
+  assert_eq(f.input, 1.4)
+  assert_eq(f.output, 4.4)
+  assert_eq(f.cache_read, 0.26)
+  assert_eq(f.tier_threshold, None)
+  let tiered = parse_zen_cost_rates(
+    Map::from_array([
+      ("input", Json::number(0.10)),
+      ("output", Json::number(0.50)),
+      ("cache_read", Json::number(0.01)),
+      (
+        "tiers",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              ("input", Json::number(0.20)),
+              ("output", Json::number(0.75)),
+              ("cache_read", Json::number(0.02)),
+              (
+                "tier",
+                Json::object(
+                  Map::from_array([
+                    ("type", Json::string("context")),
+                    ("size", Json::number(272000.0)),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  guard tiered is Some(t) else { fail("expected tiered rates") }
+  assert_eq(t.input, 0.10)
+  assert_eq(t.tier_threshold, Some(272000))
+  assert_eq(t.tier_input, 0.20)
+  assert_eq(t.tier_output, 0.75)
+  // A non-object shape produces no phantom price.
+  assert_true(parse_zen_cost_rates(Map::from_array([])) is Some(_))
+}
+
+///|
+/// Step cost: uncached/cached/output multiply their per-1M rates; the tier
+/// schedule applies only above the threshold; missing usage degrades to no
+/// estimate.
+test "zen_step_cost prices usage and switches tiers by prompt size" {
+  let flat : ZenCostRates = {
+    input: 1.0,
+    output: 2.0,
+    cache_read: 0.1,
+    tier_threshold: None,
+    tier_input: 0.0,
+    tier_output: 0.0,
+    tier_cache_read: 0.0,
+  }
+  let usage : @posoco.Usage = {
+    input_tokens: Some(1_000_000),
+    output_tokens: Some(500_000),
+    total_tokens: Some(1_500_000),
+    cached_input_tokens: None,
+    uncached_input_tokens: Some(1_000_000),
+  }
+  let cost = zen_step_cost(flat, usage)
+  guard cost is Some(c) else { fail("expected a cost") }
+  assert_eq(c, 2.0)
+  // Tiered: below threshold uses the base schedule, above uses the tier.
+  let tiered : ZenCostRates = {
+    input: 0.10,
+    output: 0.50,
+    cache_read: 0.01,
+    tier_threshold: Some(272_000),
+    tier_input: 0.20,
+    tier_output: 0.75,
+    tier_cache_read: 0.02,
+  }
+  let small : @posoco.Usage = {
+    input_tokens: Some(100_000),
+    output_tokens: Some(1_000_000),
+    total_tokens: Some(1_100_000),
+    cached_input_tokens: None,
+    uncached_input_tokens: Some(100_000),
+  }
+  guard zen_step_cost(tiered, small) is Some(small_cost) else {
+    fail("expected small cost")
+  }
+  // 100k*0.10/1M + 1M*0.50/1M = 0.01 + 0.50
+  assert_eq(small_cost, 0.51)
+  let big : @posoco.Usage = {
+    input_tokens: Some(300_000),
+    output_tokens: Some(1_000_000),
+    total_tokens: Some(1_300_000),
+    cached_input_tokens: None,
+    uncached_input_tokens: Some(300_000),
+  }
+  guard zen_step_cost(tiered, big) is Some(big_cost) else {
+    fail("expected big cost")
+  }
+  // 300k*0.20/1M + 1M*0.75/1M = 0.06 + 0.75
+  assert_eq(big_cost, 0.81)
+  // Missing output tokens: no estimate, never zero.
+  let unknown : @posoco.Usage = {
+    input_tokens: Some(10),
+    output_tokens: None,
+    total_tokens: None,
+    cached_input_tokens: None,
+    uncached_input_tokens: None,
+  }
+  assert_true(zen_step_cost(flat, unknown) is None)
+}
+
+///|
+/// The statusbar format keeps cheap steps visible: fixed four decimals,
+/// rounding half up, and non-finite/negative callers surface as `$?`.
+test "zen_format_usd renders four decimals and guards bad input" {
+  assert_eq(zen_format_usd(0.0), "$0.0000")
+  assert_eq(zen_format_usd(0.0003), "$0.0003")
+  assert_eq(zen_format_usd(1.23456), "$1.2346")
+  assert_eq(zen_format_usd(12.0), "$12.0000")
+  assert_eq(zen_format_usd(-1.0), "$?")
+}
+
+///|
+/// The tracker accumulates per session and publishes the session total as
+/// the `spent` segment through the default bus; the quota read states the
+/// spend per session and stays silent before the first recorded step.
+async test "spend tracker accumulates, publishes, and reads back" {
+  let tracker = ZenSpendTracker::ZenSpendTracker()
+  let bus = @devkit.EventBus()
+  let capture = SpendCapture::SpendCapture()
+  bus.subscribe(capture)
+  @devkit.status_bus_register(bus)
+  tracker.record_and_publish("s1", 0.25)
+  tracker.record_and_publish("s1", 0.125)
+  tracker.record_and_publish("s2", 2.0)
+  assert_eq(capture.events.length(), 3)
+  let op = @devkit.decode_status_op(capture.events[2])
+  guard op is Some(_) else { fail("expected a status op") }
+  assert_eq(capture.events[2].source, "posoco_ext_opencode_zen")
+  assert_eq(tracker.session_spend("s1"), Some(0.375))
+  assert_eq(tracker.session_spend("s3"), None)
+  // The pull-style reading states one spend entry per recorded session.
+  let source = ZenSpendQuotaSource(tracker~)
+  let readings = match source.read() {
+    Ok(values) => values
+    Err(_) => []
+  }
+  assert_eq(readings.length(), 2)
+  let empty = ZenSpendQuotaSource(tracker=ZenSpendTracker::ZenSpendTracker())
+  let no_readings = match empty.read() {
+    Ok(values) => values
+    Err(_) => []
+  }
+  assert_eq(no_readings.length(), 0)
+  // With no bus registered the accounting still happens.
+  @devkit.status_bus_register(@devkit.EventBus())
+  tracker.record_and_publish("s1", 0.0)
+  assert_eq(tracker.session_spend("s1"), Some(0.375))
+}
+
+///|
+priv struct SpendCapture {
+  events : Array[@devkit.BusEvent]
+}
+
+///|
+fn SpendCapture::SpendCapture() -> SpendCapture {
+  { events: [], }
+}
+
+///|
+impl @devkit.BusSubscriber for SpendCapture with fn on_bus_event(
+  self : SpendCapture,
+  event : @devkit.BusEvent,
+) -> Unit {
+  self.events.push(event)
 }

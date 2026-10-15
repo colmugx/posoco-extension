@@ -110,6 +110,12 @@ fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
 ///|
 /// Build the full chat completions request body. Returns just the JSON payload;
 /// the caller prepends base_url.
+///
+/// `glm_flavor` gates the GLM dialect surface: GLM upstreams take the
+/// `thinking` object next to the verbatim `reasoning_effort`; other
+/// chat-completions models (kimi, deepseek, minimax, ...) get the standard
+/// OpenAI shape — no `thinking` object, and `reasoning_effort` only when a
+/// level is actually selected (`none` selects nothing).
 fn build_chat_request(
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
@@ -119,6 +125,7 @@ fn build_chat_request(
   thinking : Bool,
   reasoning_effort : String?,
   supports_images : Bool,
+  glm_flavor~ : Bool = false,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(model),
@@ -139,15 +146,23 @@ fn build_chat_request(
     Some(n) => body["max_tokens"] = Json::number(n.to_double())
     None => ()
   }
-  // Thinking off omits the reasoning surface entirely — no `thinking`, no
-  // `reasoning_effort`; the endpoint applies its own default. Thinking on
-  // uses the object form (never a bare boolean, which strict gateways such
-  // as OpenCode Zen's upstream reject); a selected level additionally sends
-  // the top-level `reasoning_effort` verbatim.
-  if thinking {
+  // Reasoning surface per dialect. GLM flavor: thinking off omits both
+  // fields so the endpoint applies its own default; thinking on uses the
+  // object form (never a bare boolean, which strict gateways reject) with
+  // the selected level verbatim as `reasoning_effort`. Standard shape: no
+  // `thinking` object; `reasoning_effort` only when a real level is selected.
+  if thinking && glm_flavor {
     body["thinking"] = Json::object({ "type": Json::string("enabled") })
     match reasoning_effort {
       Some(effort) => body["reasoning_effort"] = Json::string(effort)
+      None => ()
+    }
+  } else if thinking {
+    match reasoning_effort {
+      Some(effort) =>
+        if effort != "none" {
+          body["reasoning_effort"] = Json::string(effort)
+        }
       None => ()
     }
   }

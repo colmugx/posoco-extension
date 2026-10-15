@@ -13,15 +13,51 @@ import {
 }
 
 // Values
+pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @error.ModelError
+
 pub async fn fetch_zen_models(String, String, endpoint_prefix? : String) -> Array[ZenModelInfo] raise @error.ModelError
+
+pub fn opencode_anchored_compact_port(OpenCodeZenConfig) -> &@port.ModelPort
+
+pub fn opencode_request_headers(String) -> Map[String, String]
+
+pub fn parse_models_dev_meta(Json) -> Map[String, ZenModelMeta] raise @error.ModelError
 
 pub fn parse_models_dev_surfaces(Json) -> Map[String, ZenReasoningSurface] raise @error.ModelError
 
+pub fn parse_opencode_cached_models(Json?) -> Array[ZenModelInfo]?
+
+pub fn parse_zen_cost_rates(Map[String, Json]) -> ZenCostRates?
+
 pub fn parse_zen_models(Json) -> Array[ZenModelInfo] raise @error.ModelError
 
-pub fn zen_model_catalog(OpenCodeZenConfig, Array[ZenModelInfo], String, Map[String, ZenReasoningSurface], &@posoco-kit-provider.ApiKeyFactory) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn resolve_zen_wire(String, npm? : String?, overrides? : Map[String, String]) -> WireKind
 
-pub fn zen_static_catalog(OpenCodeZenConfig, &@posoco-kit-provider.ApiKeyFactory) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn wire_exclusion_reason(WireKind) -> String
+
+pub fn wire_from_family(String) -> WireKind?
+
+pub fn wire_from_models_dev_npm(String?) -> WireKind?
+
+pub fn wire_kind_of_id(String) -> WireKind?
+
+pub fn wire_servable(WireKind) -> Bool
+
+pub fn zen_format_usd(Double) -> String
+
+pub fn zen_model_catalog(OpenCodeZenConfig, Array[ZenModelInfo], String, Map[String, ZenModelMeta], &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+
+pub fn zen_preset_default_level(Array[String]) -> String
+
+pub fn zen_register_quota_sources() -> Unit
+
+pub fn zen_spend_tracker() -> ZenSpendTracker
+
+pub fn zen_spend_tracker_for(String) -> ZenSpendTracker
+
+pub fn zen_static_catalog(OpenCodeZenConfig, &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+
+pub fn zen_step_cost(ZenCostRates, @kernel.Usage) -> Double?
 
 // Errors
 
@@ -37,8 +73,13 @@ pub(all) struct OpenCodeZenConfig {
   context_window : Int?
   compact_threshold : Double?
   supports_images : Bool
+  wire : WireKind
+  max_output_tokens : Int
+  rates : ZenCostRates?
+  client_id : String
+  spend_source : String
 } derive(Eq, @debug.Debug)
-pub fn OpenCodeZenConfig::OpenCodeZenConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, supports_images? : Bool) -> Self
+pub fn OpenCodeZenConfig::OpenCodeZenConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, supports_images? : Bool, wire? : WireKind, max_output_tokens? : Int, rates? : ZenCostRates?, client_id? : String, spend_source? : String) -> Self
 pub fn OpenCodeZenConfig::equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::not_equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::to_repr(Self) -> @debug.Repr
@@ -66,20 +107,59 @@ pub impl @posoco-kit-provider.ApiKeyFactory for OpenCodeZenProvider
 pub impl @posoco-kit-provider.ProviderFactory for OpenCodeZenProvider
 pub impl @posoco-kit-provider.RefreshableProviderFactory for OpenCodeZenProvider
 
+pub(all) enum WireKind {
+  ChatCompletions
+  Messages
+  Responses
+  GoogleGenai
+  SystemOne
+  MistralDialect
+} derive(Eq, @debug.Debug)
+pub fn WireKind::equal(Self, Self) -> Bool
+pub fn WireKind::not_equal(Self, Self) -> Bool
+pub fn WireKind::to_id(Self) -> String
+pub fn WireKind::to_repr(Self) -> @debug.Repr
+
 type ZenAnchoredCompactPort
 pub async fn ZenAnchoredCompactPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub async fn ZenAnchoredCompactPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn ZenAnchoredCompactPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for ZenAnchoredCompactPort
 
+pub(all) struct ZenCostRates {
+  input : Double
+  output : Double
+  cache_read : Double
+  tier_threshold : Int?
+  tier_input : Double
+  tier_output : Double
+  tier_cache_read : Double
+} derive(Eq, @debug.Debug)
+pub fn ZenCostRates::equal(Self, Self) -> Bool
+pub fn ZenCostRates::not_equal(Self, Self) -> Bool
+pub fn ZenCostRates::to_repr(Self) -> @debug.Repr
+
 pub(all) struct ZenModelInfo {
   id : String
   owned_by : String
   cached_efforts : Array[String]
+  context_window : Int?
+  supports_images : Bool
 } derive(Eq, @debug.Debug)
 pub fn ZenModelInfo::equal(Self, Self) -> Bool
 pub fn ZenModelInfo::not_equal(Self, Self) -> Bool
 pub fn ZenModelInfo::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ZenModelMeta {
+  surface : ZenReasoningSurface
+  context_window : Int?
+  supports_images : Bool
+  provider_npm : String?
+  rates : ZenCostRates?
+} derive(Eq, @debug.Debug)
+pub fn ZenModelMeta::equal(Self, Self) -> Bool
+pub fn ZenModelMeta::not_equal(Self, Self) -> Bool
+pub fn ZenModelMeta::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ZenReasoningSurface {
   reasoning : Bool
@@ -89,6 +169,23 @@ pub(all) struct ZenReasoningSurface {
 pub fn ZenReasoningSurface::equal(Self, Self) -> Bool
 pub fn ZenReasoningSurface::not_equal(Self, Self) -> Bool
 pub fn ZenReasoningSurface::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ZenSpendQuotaSource {
+  tracker : ZenSpendTracker
+}
+pub fn ZenSpendQuotaSource::ZenSpendQuotaSource(tracker~ : ZenSpendTracker) -> Self
+pub impl @devkit.QuotaSource for ZenSpendQuotaSource
+
+pub(all) struct ZenSpendTracker {
+  source : String
+  buckets : Map[String, Double]
+} derive(Eq, @debug.Debug)
+pub fn ZenSpendTracker::ZenSpendTracker(source? : String) -> Self
+pub fn ZenSpendTracker::equal(Self, Self) -> Bool
+pub fn ZenSpendTracker::not_equal(Self, Self) -> Bool
+pub fn ZenSpendTracker::record_and_publish(Self, String, Double) -> Unit
+pub fn ZenSpendTracker::session_spend(Self, String) -> Double?
+pub fn ZenSpendTracker::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -26,15 +26,24 @@ fn zen_session_id() -> String {
 }
 
 ///|
-/// Build the per-request Zen headers: stable session id, fresh request id.
-fn zen_request_headers() -> Map[String, String] {
+/// Build the per-request OpenCode routing headers: stable session id, fresh
+/// request id, honest posoco attribution. `client` names the product in the
+/// User-Agent and the `x-opencode-client` value ("opencode-zen",
+/// "opencode-go", ...). Shared by every product built on this package.
+pub fn opencode_request_headers(client : String) -> Map[String, String] {
   Map::from_array([
     ("x-opencode-project", "posoco"),
     ("x-opencode-session", zen_session_id()),
     ("x-opencode-request", zen_random_uuid_v4()),
-    ("x-opencode-client", "posoco"),
-    ("User-Agent", "posoco/opencode-zen"),
+    ("x-opencode-client", client),
+    ("User-Agent", "posoco/\{client}"),
   ])
+}
+
+///|
+/// Build the per-request Zen headers: stable session id, fresh request id.
+fn zen_request_headers() -> Map[String, String] {
+  opencode_request_headers("opencode-zen")
 }
 
 ///|
