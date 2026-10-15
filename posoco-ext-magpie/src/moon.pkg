@@ -1,5 +1,11 @@
 import {
+  "colmugx/posoco" @posoco,
   "colmugx/posoco-kit-model-management" @modelmgmt,
+  "colmugx/posoco-kit-messages" @messages,
+  "colmugx/posoco-kit-responses" @responses,
+  "posoco/kit-chat-completions" @chatkit,
+  "colmugx/posoco-kit-rate-limit" @ratelimit,
+  "colmugx/posoco-kit-compact-summary" @summary,
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/debug",
