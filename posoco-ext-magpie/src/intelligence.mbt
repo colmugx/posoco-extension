@@ -252,7 +252,7 @@ fn intel_int(
     None => None
     Some(Json::Null) => None
     Some(Json::Number(value, ..)) if value >= 0.0 && value <= 2147483647.0 && value == value.floor() => Some(value.to_int())
-    Some(Json::Number(..)) => raise intel_error("\{stage}.\{key}", "out_of_range_or_fractional")
+    Some(Json::Number(_, ..)) => raise intel_error("\{stage}.\{key}", "out_of_range_or_fractional")
     Some(_) => raise intel_error("\{stage}.\{key}", "wrong_type")
   }
 }
@@ -292,8 +292,8 @@ pub async fn MagpieGatewayIntelligence::route_snapshot(
   self : MagpieGatewayIntelligence,
   query~ : MagpieRouteQuery,
 ) -> MagpieRouteSnapshot raise @posoco.ModelError {
-  if query.session == "" || query.after is Some(n) && n < 0 ||
-    query.wait is Some(seconds) && (seconds < 0 || seconds > 60) {
+  if query.session == "" || (query.after is Some(n) && n < 0) ||
+    (query.wait is Some(seconds) && (seconds < 0 || seconds > 60)) {
     raise @posoco.ModelError::RequestBuild(
       "magpie intelligence request build failure (stage=route): wait is limited to 60 seconds",
     )
