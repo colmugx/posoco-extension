@@ -35,9 +35,10 @@ extern "js" fn ws_js_open(
   #|     const registry = (globalThis.__posocoWs ||= { seq: 0, sockets: new Map() });
   #|     const socket = new WebSocket(url, { headers: JSON.parse(headersJson) });
   #|     const handle = ++registry.seq;
-  #|     const entry = { socket, queue: [], waiter: null, opened: false };
+  #|     const entry = { socket, queue: [], waiter: null, opened: false, closed: false };
   #|     registry.sockets.set(handle, entry);
   #|     socket.addEventListener("message", (event) => {
+  #|       if (entry.closed) return;
   #|       const frame = String(event.data);
   #|       if (entry.waiter) {
   #|         const waiter = entry.waiter;
@@ -49,10 +50,12 @@ extern "js" fn ws_js_open(
   #|       }
   #|     });
   #|     const finish = () => {
+  #|       entry.closed = true;
+  #|       registry.sockets.delete(handle);
   #|       if (entry.waiter) {
   #|         const waiter = entry.waiter;
   #|         entry.waiter = null;
-  #|         waiter.resolve(null);
+  #|         waiter.resolve(undefined);
   #|       }
   #|       entry.queue.length = 0;
   #|     };
@@ -88,7 +91,7 @@ extern "js" fn ws_js_open(
 const WS_IDLE_TIMEOUT_MS : Int32 = 120_000
 
 ///|
-/// Next text frame; `null` resolves on close/error (stream end) and `""` on
+/// Next text frame; `undefined` encodes MoonBit `None` on close/error and `""` on
 /// idle timeout (a server frame is never empty, so the sentinel is
 /// unambiguous). The abort signal is honored so a cancelled pump never waits
 /// on a silent socket. The idle timeout is the dead-connection escape: a
@@ -102,22 +105,24 @@ extern "js" fn ws_js_next(
   #| (handle, signal, idleTimeoutMs) => new Promise((resolve) => {
   #|   const registry = globalThis.__posocoWs;
   #|   const entry = registry && registry.sockets.get(handle);
-  #|   if (!entry) return resolve(null);
+  #|   if (!entry || signal.aborted) return resolve(undefined);
   #|   if (entry.queue.length > 0) return resolve(entry.queue.shift());
   #|   let done = false;
   #|   const finish = (value) => {
   #|     if (done) return;
   #|     done = true;
-  #|     if (value === "" && entry.waiter && entry.waiter.timer) clearTimeout(entry.waiter.timer);
+  #|     clearTimeout(timer);
+  #|     signal.removeEventListener("abort", onAbort);
   #|     entry.waiter = null;
   #|     resolve(value);
   #|   };
+  #|   const onAbort = () => finish(undefined);
   #|   const timer = setTimeout(() => {
-  #|     try { entry.socket.close(); } catch {}
   #|     finish("");
+  #|     try { entry.socket.close(); } catch {}
   #|   }, idleTimeoutMs);
   #|   entry.waiter = { resolve: finish, timer };
-  #|   signal.addEventListener("abort", () => finish(null), { once: true });
+  #|   signal.addEventListener("abort", onAbort, { once: true });
   #| })
 
 ///|

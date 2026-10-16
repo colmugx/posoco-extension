@@ -28,7 +28,26 @@ extern "js" fn node_spawn_shell(
   cwd : String,
 ) -> ShellProc =
   #| (spawn, cmd, cwd) => {
-  #|   const proc = spawn("sh", ["-c", cmd], { stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) })
+  #|   const grouped = process.platform !== "win32"
+  #|   const proc = spawn("sh", ["-c", cmd], { detached: grouped, stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) })
+  #|   const kill = (signal) => {
+  #|     if (!proc.pid) return
+  #|     if (grouped) process.kill(-proc.pid, signal)
+  #|     else proc.kill(signal)
+  #|   }
+  #|   // Fatal host exits cannot rely on MoonBit coroutine unwinding.
+  #|   const key = Symbol.for("posoco.bash.activeChildren")
+  #|   let children = globalThis[key]
+  #|   if (!children) {
+  #|     children = globalThis[key] = new Set()
+  #|     process.once("exit", () => {
+  #|       for (const terminate of children) {
+  #|         try { terminate("SIGKILL") } catch {}
+  #|       }
+  #|     })
+  #|   }
+  #|   children.add(kill)
+  #|   proc.once("close", () => children.delete(kill))
   #|   const drain = (stream) => stream
   #|     ? new Promise((resolve) => {
   #|         let text = ""
@@ -44,7 +63,7 @@ extern "js" fn node_spawn_shell(
   #|     proc.on("close", (code) => resolve(code ?? -1))
   #|     proc.on("error", () => resolve(-1))
   #|   })
-  #|   return { proc, exited, stdoutText: drain(proc.stdout), stderrText: drain(proc.stderr) }
+  #|   return { proc, kill, exited, stdoutText: drain(proc.stdout), stderrText: drain(proc.stderr) }
   #| }
 
 ///|
@@ -71,11 +90,11 @@ extern "js" fn ShellProc::stderr_text(
 
 ///|
 extern "js" fn ShellProc::kill(self : ShellProc, signal : String) -> Unit =
-  #| (handle, signal) => { try { handle.proc.kill(signal) } catch {} }
+  #| (handle, signal) => { try { handle.kill(signal) } catch {} }
 
 ///|
 extern "js" fn ShellProc::kill_default(self : ShellProc) -> Unit =
-  #| (handle) => { try { handle.proc.kill() } catch {} }
+  #| (handle) => { try { handle.kill("SIGTERM") } catch {} }
 
 ///|
 /// JS child handle; `exited` marks a settled exit promise so unwind cleanup

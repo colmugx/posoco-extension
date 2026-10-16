@@ -40,6 +40,7 @@ options(
     "codex_ws_js.mbt": [ "js" ],
     "codex_ws_other.mbt": [ "wasm" ],
     "codex_ws_native_wbtest.mbt": [ "native" ],
+    "codex_ws_js_wbtest.mbt": [ "js" ],
     "version_file_cache.native.mbt": [ "native" ],
     "version_file_cache.js.mbt": [ "js" ],
     "version_file_cache_fallback.mbt": [ "wasm" ],
