@@ -69,11 +69,17 @@ fn quotas_body() -> String {
         "kind": Json::string("subscription"),
         "plan": Json::string("plus"),
         "user": Json::string("a@example.com"),
+        "alias": Json::string("Work"),
+        "lastServedAt": Json::string("2026-10-14T23:57:40Z"),
+        "last": Json::boolean(true),
+        "readDeferred": Json::boolean(true),
         "windows": Json::array([
           Json::object({
             "name": Json::string("5 hours"),
             "used": Json::number(47),
             "remaining": Json::number(53),
+            "pool": Json::string("shared"),
+            "unlimited": Json::boolean(false),
             "resetsAt": Json::string("2026-10-15T15:24:39+08:00"),
           }),
           Json::object({
@@ -263,9 +269,15 @@ async test "quota cards decode windows, resets, plan and read errors" {
   inspect(codex.provider, content="codex")
   inspect(codex.plan == Some("plus"), content="true")
   inspect(codex.user == Some("a@example.com"), content="true")
+  inspect(codex.alias == Some("Work"), content="true")
+  inspect(codex.last == Some(true), content="true")
+  inspect(codex.read_deferred == Some(true), content="true")
+  inspect(codex.last_served_at is Some(_), content="true")
   let windows = codex.windows.unwrap()
   inspect(windows.length(), content="2")
   inspect(windows[0].used == Some(47), content="true")
+  inspect(windows[0].pool == Some("shared"), content="true")
+  inspect(windows[0].unlimited == Some(false), content="true")
   inspect(windows[1].limit == Some(100), content="true")
   inspect(windows[1].display == Some("2 / 100"), content="true")
   inspect(codex.resets_count == Some(2), content="true")

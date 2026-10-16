@@ -614,36 +614,105 @@ pub impl @posoco.CommandPort for MagpieRuntime with fn invoke(
       )
     }
     "magpie_quotas" => {
-      let kept = runtime_arg_bool(args, "kept").unwrap_or(false)
+      let kept = runtime_arg_bool(args, "kept").unwrap_or(true)
       let snapshot = self.intelligence.quota_snapshot(kept~) catch {
         error =>
           return @posoco.CommandOutcome::Failure(reason=error.to_string())
       }
       let lines = snapshot.cards.map(fn(card) {
-        match card.error {
-          Some(error) => "\{card.provider}: error (\{error})"
-          None => {
-            let window_text = match card.windows {
-              Some(windows) =>
-                windows
-                .map(fn(window) {
-                  "\{window.name} \{window.used.unwrap_or(0)}%"
-                })
-                .join(", ")
-              None => "no windows"
-            }
-            "\{card.provider} \{card.plan.unwrap_or("")}: \{window_text}"
-          }
+        // Each card is one account, plan or key. Never pool unrelated quota
+        // percentages, and never claim the gateway-wide "last" is this session.
+        let label = match card.alias {
+          Some(alias) => "\{card.provider} (\{alias})"
+          None => "\{card.provider} \{card.kind.unwrap_or("")}"
         }
+        let window_text = match card.windows {
+          Some(windows) =>
+            windows
+            .map(fn(window) {
+              if window.unlimited == Some(true) {
+                "\{window.name}: unlimited"
+              } else {
+                let remaining = match window.remaining {
+                  Some(value) => "\{value}% left"
+                  None => "remaining unknown"
+                }
+                let reset = match window.resets_at {
+                  Some(at) => " · resets \{at}"
+                  None => ""
+                }
+                "\{window.name}: \{remaining}\{reset}"
+              }
+            })
+            .join(", ")
+          None => "no quota windows reported"
+        }
+        let state = match card.error {
+          Some(_) => " · reading unavailable"
+          None =>
+            if card.read_deferred == Some(true) {
+              " · reading deferred"
+            } else {
+              ""
+            }
+        }
+        let observed = match card.read_at {
+          Some(at) => " · read \{at}"
+          None => " · reading time unknown"
+        }
+        "\{label}: \{window_text}\{state}\{observed}"
+      })
+      let cards = snapshot.cards.map(fn(card) {
+        Json::object({
+          "provider": Json::string(card.provider),
+          "kind": match card.kind {
+            Some(kind) => Json::string(kind)
+            None => Json::null()
+          },
+          "alias": match card.alias {
+            Some(alias) => Json::string(alias)
+            None => Json::null()
+          },
+          "read_at": match card.read_at {
+            Some(at) => Json::string(at)
+            None => Json::null()
+          },
+          "read_deferred": Json::boolean(card.read_deferred.unwrap_or(false)),
+          "error": match card.error {
+            Some(_) => Json::boolean(true)
+            None => Json::boolean(false)
+          },
+          "windows": Json::array(match card.windows {
+            Some(windows) => windows.map(fn(window) {
+              Json::object({
+                "name": Json::string(window.name),
+                "remaining": match window.remaining {
+                  Some(value) => Json::number(value)
+                  None => Json::null()
+                },
+                "used": match window.used {
+                  Some(value) => Json::number(value)
+                  None => Json::null()
+                },
+                "resets_at": match window.resets_at {
+                  Some(at) => Json::string(at)
+                  None => Json::null()
+                },
+                "unlimited": Json::boolean(
+                  window.unlimited.unwrap_or(false),
+                ),
+              })
+            })
+            None => []
+          }),
+        })
       })
       @posoco.CommandOutcome::Success(
         feedback=lines.join("\n"),
         structured=Some(
           Json::object({
             "kept": Json::boolean(snapshot.kept),
-            "cards": Json::array(
-              snapshot.cards.map(fn(card) { Json::string(card.provider) }),
-            ),
+            "cards": Json::array(cards),
           }),
         ),
         ui_hint=None,

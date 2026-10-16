@@ -150,6 +150,15 @@ pub(all) struct MagpieQuotaCard {
   plan : String?
   /// Account attribution, as reported to the authorized caller.
   user : String?
+  /// User-defined alias; unlike an email it is safe to use as a compact label.
+  alias : String?
+  /// Gateway-wide last service, NOT attribution to the current session.
+  last_served_at : String?
+  last : Bool?
+  /// Cached observations and deferrals must not be treated as live guarantees.
+  read_deferred : Bool?
+  from : String?
+  balance : String?
   windows : Array[MagpieQuotaWindow]?
   read_at : String?
   /// The card's own read error, when the vendor refused.
@@ -177,6 +186,9 @@ pub(all) struct MagpieQuotaWindow {
   remaining : Double?
   resets_at : String?
   reset_secs : Int32?
+  /// A vendor's pool may be shared across models or accounts.
+  pool : String?
+  unlimited : Bool?
   display : String?
   amount : Double?
   limit : Double?
