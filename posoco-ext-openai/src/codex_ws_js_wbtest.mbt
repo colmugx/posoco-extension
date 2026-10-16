@@ -125,7 +125,9 @@ async test "close drains buffered frames before EOF" {
   ws_test_text(handle, "{\"first\":true}")
   assert_eq(first.wait(), Some("{\"first\":true}"))
   // No-waiter window: the error frame can only buffer.
-  ws_test_text(handle, "{\"type\":\"error\",\"error\":{\"message\":\"usage limit reached\"}}")
+  ws_test_text(
+    handle, "{\"type\":\"error\",\"error\":{\"message\":\"usage limit reached\"}}",
+  )
   // Close fires before the pump reads again.
   ws_test_emit(handle, "close")
   let second = ws_js_next(handle, controller.signal(), 1000)
@@ -135,7 +137,9 @@ async test "close drains buffered frames before EOF" {
   }
   // After the drain, a closed socket reads as EOF promptly (no idle wait).
   let eof = ws_js_next(handle, controller.signal(), 1000)
-  let outcome = @async.with_timeout_opt(100, () => eof.wait(abort_controller=controller))
+  let outcome = @async.with_timeout_opt(100, () => {
+    eof.wait(abort_controller=controller)
+  })
   assert_true(outcome is Some(None))
 }
 
@@ -165,9 +169,17 @@ async test "close keeps every buffered frame in order" {
   ws_test_text(handle, "{\"n\":1}")
   ws_test_text(handle, "{\"n\":2}")
   ws_test_emit(handle, "close")
-  assert_eq(ws_js_next(handle, controller.signal(), 1000).wait(), Some("{\"n\":1}"))
-  assert_eq(ws_js_next(handle, controller.signal(), 1000).wait(), Some("{\"n\":2}"))
+  assert_eq(
+    ws_js_next(handle, controller.signal(), 1000).wait(),
+    Some("{\"n\":1}"),
+  )
+  assert_eq(
+    ws_js_next(handle, controller.signal(), 1000).wait(),
+    Some("{\"n\":2}"),
+  )
   let eof = ws_js_next(handle, controller.signal(), 1000)
-  let outcome = @async.with_timeout_opt(100, () => eof.wait(abort_controller=controller))
+  let outcome = @async.with_timeout_opt(100, () => {
+    eof.wait(abort_controller=controller)
+  })
   assert_true(outcome is Some(None))
 }

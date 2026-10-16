@@ -682,29 +682,32 @@ pub impl @posoco.CommandPort for MagpieRuntime with fn invoke(
             Some(_) => Json::boolean(true)
             None => Json::boolean(false)
           },
-          "windows": Json::array(match card.windows {
-            Some(windows) => windows.map(fn(window) {
-              Json::object({
-                "name": Json::string(window.name),
-                "remaining": match window.remaining {
-                  Some(value) => Json::number(value)
-                  None => Json::null()
-                },
-                "used": match window.used {
-                  Some(value) => Json::number(value)
-                  None => Json::null()
-                },
-                "resets_at": match window.resets_at {
-                  Some(at) => Json::string(at)
-                  None => Json::null()
-                },
-                "unlimited": Json::boolean(
-                  window.unlimited.unwrap_or(false),
-                ),
-              })
-            })
-            None => []
-          }),
+          "windows": Json::array(
+            match card.windows {
+              Some(windows) =>
+                windows.map(fn(window) {
+                  Json::object({
+                    "name": Json::string(window.name),
+                    "remaining": match window.remaining {
+                      Some(value) => Json::number(value)
+                      None => Json::null()
+                    },
+                    "used": match window.used {
+                      Some(value) => Json::number(value)
+                      None => Json::null()
+                    },
+                    "resets_at": match window.resets_at {
+                      Some(at) => Json::string(at)
+                      None => Json::null()
+                    },
+                    "unlimited": Json::boolean(
+                      window.unlimited.unwrap_or(false),
+                    ),
+                  })
+                })
+              None => []
+            },
+          ),
         })
       })
       @posoco.CommandOutcome::Success(
