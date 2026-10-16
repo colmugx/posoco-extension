@@ -414,6 +414,12 @@ fn intel_quota_card(item : Json) -> MagpieQuotaCard raise @posoco.ModelError {
         }
         typed.push({
           name,
+          pool: intel_str(window, "pool", "quotas.window") catch {
+            _ => raise intel_error("quotas.window.pool", "wrong_type")
+          },
+          unlimited: intel_bool(window, "unlimited", "quotas.window") catch {
+            _ => raise intel_error("quotas.window.unlimited", "wrong_type")
+          },
           used: intel_double(window, "used", "quotas.window") catch {
             _ => raise intel_error("quotas.window.used", "wrong_type")
           },
@@ -474,6 +480,24 @@ fn intel_quota_card(item : Json) -> MagpieQuotaCard raise @posoco.ModelError {
     },
     user: intel_str(fields, "user", "quotas.card") catch {
       _ => raise intel_error("quotas.card.user", "wrong_type")
+    },
+    alias: intel_str(fields, "alias", "quotas.card") catch {
+      _ => raise intel_error("quotas.card.alias", "wrong_type")
+    },
+    last_served_at: intel_str(fields, "lastServedAt", "quotas.card") catch {
+      _ => raise intel_error("quotas.card.lastServedAt", "wrong_type")
+    },
+    last: intel_bool(fields, "last", "quotas.card") catch {
+      _ => raise intel_error("quotas.card.last", "wrong_type")
+    },
+    read_deferred: intel_bool(fields, "readDeferred", "quotas.card") catch {
+      _ => raise intel_error("quotas.card.readDeferred", "wrong_type")
+    },
+    from: intel_str(fields, "from", "quotas.card") catch {
+      _ => raise intel_error("quotas.card.from", "wrong_type")
+    },
+    balance: intel_str(fields, "balance", "quotas.card") catch {
+      _ => raise intel_error("quotas.card.balance", "wrong_type")
     },
     windows,
     read_at: intel_str(fields, "readAt", "quotas.card") catch {
