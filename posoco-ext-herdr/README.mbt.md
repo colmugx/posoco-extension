@@ -6,7 +6,7 @@ Herdr for [Posoco](https://mooncakes.io/docs/colmugx/posoco) agents. When the
 host process runs inside a [herdr](https://herdr.dev) pane, this extension
 makes the agent visible to herdr twice over: it reports lifecycle presence to
 herdr's agent rollup, and it offers one delegation tool that spawns a fresh
-cetas-headless agent in a neighboring pane. Zero changes to posoco core.
+cetas-run agent in a neighboring pane. Zero changes to posoco core.
 
 ## Ports contributed
 
@@ -24,8 +24,13 @@ Two extensions ship from this package; each contributes exactly one port.
 Both constructors are environment-gated: without `HERDR_ENV` and
 `HERDR_PANE_ID` (injected by herdr into managed panes) detection returns
 `None` and nothing registers — outside herdr the cost is one environment
-probe at startup. Presence and delegation are detected independently, so a
-host may hold either alone.
+probe at startup. `HerdrDelegate::detect` additionally resolves the child
+binary (`CETAS_RUN_BIN`, default `cetas-run`) and runs a which-style
+executability probe (PATH scan + `access(X_OK)` on native, `node:fs`
+`accessSync` on js) before registering: when the resolved binary cannot be
+executed in this terminal context, the delegate — and with it the
+`herdr_delegate` tool — stays unregistered. Presence and delegation are
+detected independently, so a host may hold either alone.
 
 ## Usage
 
@@ -48,8 +53,8 @@ match @herdr.HerdrDelegate::detect(cwd=runtime.config.cwd) {
 ```
 
 with `exts` feeding `Agent(exts=[..], config~)`. cetas-bun is the only
-shipped outlet holding the delegate. cetas-headless wires the reporter only
-(`lib/host.mbt`): **headless never composes `HerdrDelegate`** — it is a
+shipped outlet holding the delegate. cetas-run wires the reporter only
+(`lib/host.mbt`): **the child never composes `HerdrDelegate`** — it is a
 depth-1 leaf by hard rule, so a delegated child can never
 delegate further.
 
@@ -100,25 +105,25 @@ as the tool result:
 
 ```text
 herdr pane split       --pane <this pane> --direction <right|down> --cwd <host cwd> --no-focus
-herdr pane run         <new pane> "cetas-headless --permission readonly -- '<task>' ; echo '[cetas-headless] pane-id'le"
-herdr pane wait-output --regex "\[cetas-headless\] (turn [0-9]+ done|turn failed:|pane-idle)" --source recent-unwrapped --timeout <ms> <new pane>
+herdr pane run         <new pane> "cetas-run --permission readonly -- '<task>' ; echo '[cetas-run] pane-id'le"
+herdr pane wait-output --regex "\[cetas-run\] (turn [0-9]+ done|turn failed:|pane-idle)" --source recent-unwrapped --timeout <ms> <new pane>
 herdr pane read        <new pane> --source recent-unwrapped
                                      (re-run once, best-effort, after a timeout to capture child_session)
 herdr pane close       <new pane>   (only after a successful read; skipped when close_pane=false)
 ```
 
-The `pane run` command ends with a trailing `; echo '[cetas-headless] pane-id'le`
+The `pane run` command ends with a trailing `; echo '[cetas-run] pane-id'le`
 (the idle sentinel). The launcher types it split across a quote boundary so the
-command-line echo never contains the full literal `[cetas-headless] pane-idle` —
+command-line echo never contains the full literal `[cetas-run] pane-idle` —
 only the executed echo's output does. When the child exits (any exit path,
 including a startup crash) the echo prints and the pane is back at a
 command-ready state.
 
 The wait matches one Rust regex (substring semantics, unanchored, `--source
 recent-unwrapped` so pty line-wrapping cannot break it) covering the three
-terminal shapes: the completion marker `[cetas-headless] turn N done`, the
-failure line `[cetas-headless] turn failed: …`, and the idle sentinel. The
-child is one-shot headless (one task, one turn), so a healthy run ends at
+terminal shapes: the completion marker `[cetas-run] turn N done`, the
+failure line `[cetas-run] turn failed: …`, and the idle sentinel. The
+child is one-shot (one task, one turn), so a healthy run ends at
 `turn 1 done`; a startup failure ends at the failure line; anything else ends
 at the sentinel. `wait-output` matches pre-existing output first (the typed
 command echo included), which is exactly why the sentinel is quote-split.
@@ -128,10 +133,10 @@ command echo included), which is exactly why the sentinel is quote-split.
 | argument | type | default | meaning |
 |---|---|---|---|
 | `task` | string, required | — | the delegated task; must be a single line — a newline is rejected before any CLI call, since it would escape the one `pane run` argv element into separate shell commands |
-| `permission` | `"readonly"` / `"write"` | `readonly` | readonly launches `cetas-headless --permission readonly` (cannot write); write launches `--yolo` (unattended full permission) |
+| `permission` | `"readonly"` / `"write"` | `readonly` | readonly launches `cetas-run --permission readonly` (cannot write); write launches `--yolo` (unattended full permission) |
 | `model` | string | — | forwarded to the child as `--model`; an empty string is treated as omitted |
 | `effort` | string | — | forwarded to the child as `--effort`; an empty string is treated as omitted |
-| `session` | string | — | a `child_session` id from an earlier result or error footer (returned on success, failure, and best-effort timeout); re-launches headless with `--session` to continue that child. Related tasks must reuse the same child session instead of spawning a new one. Omit it for a new conversation — never pass an empty string (an empty string is treated as omitted) |
+| `session` | string | — | a `child_session` id from an earlier result or error footer (returned on success, failure, and best-effort timeout); re-launches cetas-run with `--session` to continue that child. Related tasks must reuse the same child session instead of spawning a new one. Omit it for a new conversation — never pass an empty string (an empty string is treated as omitted) |
 | `timeout_ms` | integer | `1800000` (30 min) | wait bound for the completion marker |
 | `direction` | `"right"` / `"down"` | `right` | direction of the split |
 | `close_pane` | boolean | `true` | auto-close the child pane after a successful read; the pane is never closed on failure or timeout (a timed-out child may still be running and its pane stays for inspection); pass `false` to always keep the pane |
@@ -139,17 +144,17 @@ command echo included), which is exactly why the sentinel is quote-split.
 
 ### Result contract
 
-- Success: the headless answer, then a footer — `peer_pane: <new pane id>`
+- Success: the child's answer, then a footer — `peer_pane: <new pane id>`
   and, when the pane showed a `session: <id>` line, `child_session: <id>`.
   Pass the child session back via `session` to continue that child. On this
   success path the child pane is then closed (default `close_pane=true`);
   when `pane close` itself fails the result still succeeds, with a final
   `note: pane auto-close failed (pane still open)` footer line.
-- The child's own failure (a `[cetas-headless] turn failed: <reason>` line
+- The child's own failure (a `[cetas-run] turn failed: <reason>` line
   on the pane) surfaces as a tool error carrying the reason, `peer_pane`,
   and — when the pane showed a session line — `child_session`. A startup
-  failure (the headless launcher exiting with code 2 before any turn) prints
-  the same shape first — `[cetas-headless] turn failed: startup: …` — so the
+  failure (the cetas-run launcher exiting with code 2 before any turn) prints
+  the same shape first — `[cetas-run] turn failed: startup: …` — so the
   wait catches it and the delegate reports it like any child failure. A child
   that exits without printing any protocol line at all is still terminated
   promptly by the idle sentinel; the delegate then reports
@@ -210,7 +215,7 @@ Completed result with garbage. Tests: `src/background_wbtest.mbt`
 
 ### Guardrails and limits
 
-- **Depth 1** — hosts never wire delegation tools into cetas-headless, so a
+- **Depth 1** — hosts never wire delegation tools into cetas-run, so a
   delegated child cannot split further panes.
 - **Concurrency cap 4** — a fifth in-flight delegate is refused until an
   earlier one finishes; background delegations hold their slot from accept
@@ -234,7 +239,7 @@ Completed result with garbage. Tests: `src/background_wbtest.mbt`
 |---|---|---|
 | `HERDR_ENV` + `HERDR_PANE_ID` | reporter and delegate | must be present and non-empty; absent → the extension is absent |
 | `HERDR_BIN_PATH` | reporter and delegate | herdr CLI binary; defaults to `herdr` when absent or blank |
-| `CETAS_HEADLESS_BIN` | delegate only | headless binary; defaults to `cetas-headless` when absent or blank |
+| `CETAS_RUN_BIN` | delegate only | child agent binary; defaults to `cetas-run` when absent or blank; the resolved value must pass the executability precheck or the delegate does not register |
 
 The CLI inherits the environment, so herdr's socket path needs no explicit
 plumbing.
@@ -243,6 +248,6 @@ plumbing.
 
 | target | detection | CLI transport | notes |
 |---|---|---|---|
-| native | `@env` reads (synchronous, no subprocess) | `@process.collect_output` — stdout and stderr captured separately | herdr writes result JSON on stdout and error JSON on stderr, so merged capture would make a success read as an error |
-| js (bun) | `Bun.env` (synchronous) | `Bun.spawn` with both streams piped; exit and drains awaited as one JSON envelope | the extern touches Bun only when invoked |
+| native | `@env` reads + libc `access(X_OK)` executability probe (synchronous, no subprocess) | `@process.collect_output` — stdout and stderr captured separately | herdr writes result JSON on stdout and error JSON on stderr, so merged capture would make a success read as an error |
+| js (bun) | `process.env` reads + `node:fs` `accessSync` executability probe (synchronous) | `Bun.spawn` with both streams piped; exit and drains awaited as one JSON envelope | the extern touches node modules only when invoked |
 | wasm / wasm-gc | — | — | compiles as fully inert; both constructors return `None` |
