@@ -151,7 +151,7 @@ pub(all) struct MagpieQuotaCard {
   /// Account attribution, as reported to the authorized caller.
   user : String?
   /// User-defined alias; unlike an email it is safe to use as a compact label.
-  alias : String?
+  account_alias : String?
   /// Gateway-wide last service, NOT attribution to the current session.
   last_served_at : String?
   last : Bool?

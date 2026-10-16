@@ -481,7 +481,7 @@ fn intel_quota_card(item : Json) -> MagpieQuotaCard raise @posoco.ModelError {
     user: intel_str(fields, "user", "quotas.card") catch {
       _ => raise intel_error("quotas.card.user", "wrong_type")
     },
-    alias: intel_str(fields, "alias", "quotas.card") catch {
+    account_alias: intel_str(fields, "alias", "quotas.card") catch {
       _ => raise intel_error("quotas.card.alias", "wrong_type")
     },
     last_served_at: intel_str(fields, "lastServedAt", "quotas.card") catch {

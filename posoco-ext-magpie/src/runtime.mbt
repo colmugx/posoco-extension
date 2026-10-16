@@ -622,8 +622,8 @@ pub impl @posoco.CommandPort for MagpieRuntime with fn invoke(
       let lines = snapshot.cards.map(fn(card) {
         // Each card is one account, plan or key. Never pool unrelated quota
         // percentages, and never claim the gateway-wide "last" is this session.
-        let label = match card.alias {
-          Some(alias) => "\{card.provider} (\{alias})"
+        let label = match card.account_alias {
+          Some(account_name) => "\{card.provider} (\{account_name})"
           None => "\{card.provider} \{card.kind.unwrap_or("")}"
         }
         let window_text = match card.windows {
@@ -669,8 +669,8 @@ pub impl @posoco.CommandPort for MagpieRuntime with fn invoke(
             Some(kind) => Json::string(kind)
             None => Json::null()
           },
-          "alias": match card.alias {
-            Some(alias) => Json::string(alias)
+          "alias": match card.account_alias {
+            Some(account_name) => Json::string(account_name)
             None => Json::null()
           },
           "read_at": match card.read_at {
