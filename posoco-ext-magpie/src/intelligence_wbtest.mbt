@@ -269,7 +269,7 @@ async test "quota cards decode windows, resets, plan and read errors" {
   inspect(codex.provider, content="codex")
   inspect(codex.plan == Some("plus"), content="true")
   inspect(codex.user == Some("a@example.com"), content="true")
-  inspect(codex.alias == Some("Work"), content="true")
+  inspect(codex.account_alias == Some("Work"), content="true")
   inspect(codex.last == Some(true), content="true")
   inspect(codex.read_deferred == Some(true), content="true")
   inspect(codex.last_served_at is Some(_), content="true")

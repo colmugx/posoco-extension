@@ -376,6 +376,12 @@ pub(all) struct MagpieQuotaCard {
   kind : String?
   plan : String?
   user : String?
+  account_alias : String?
+  last_served_at : String?
+  last : Bool?
+  read_deferred : Bool?
+  from : String?
+  balance : String?
   windows : Array[MagpieQuotaWindow]?
   read_at : String?
   error : String?
@@ -403,6 +409,8 @@ pub(all) struct MagpieQuotaWindow {
   remaining : Double?
   resets_at : String?
   reset_secs : Int?
+  pool : String?
+  unlimited : Bool?
   display : String?
   amount : Double?
   limit : Double?
