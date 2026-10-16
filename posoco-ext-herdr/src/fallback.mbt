@@ -17,3 +17,12 @@ pub fn HerdrReporter::detect() -> HerdrReporter? {
 fn herdr_spawn_report(_bin : String, _args : Array[String]) -> Unit {
   ()
 }
+
+///|
+// wasm has no synchronous executable probe; keep the delegate's historical
+// permissive behavior — in practice the env gate already keeps wasm
+// delegates out, since a wasm host sees no herdr environment.
+#cfg(not(any(target="native", target="js")))
+fn herdr_bin_runnable(_bin : String) -> Bool {
+  true
+}

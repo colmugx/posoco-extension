@@ -880,3 +880,70 @@ test "delegate schema keeps weak-model recovery semantics explicit" {
   assert_true(background_desc.contains("starts a fresh child"))
   assert_true(background_desc.contains("cannot take 'session'"))
 }
+
+///|
+test "delegate gate: an unrunnable child binary blocks registration" {
+  // The default "cetas-run" resolution is probed like any other.
+  let missing = herdr_delegate_gate(
+    Some("dev"),
+    Some("1-2"),
+    Some("herdr"),
+    None,
+    "/tmp/ws",
+    bin_runnable=Some(fn(_bin : String) { false }),
+  )
+  assert_true(missing is None)
+  // An explicit CETAS_RUN_BIN override is probed as resolved.
+  let probed : Array[String] = []
+  let found = herdr_delegate_gate(
+    Some("dev"),
+    Some("1-2"),
+    Some("herdr"),
+    Some("cetas-run-nightly"),
+    "/tmp/ws",
+    bin_runnable=Some(fn(bin : String) {
+      probed.push(bin)
+      true
+    }),
+  )
+  assert_true(found is Some(_))
+  assert_eq(probed, ["cetas-run-nightly"])
+}
+
+///|
+test "path lookup: bare names scan PATH, separator paths probe directly" {
+  let hits : Array[String] = []
+  let probe = fn(path : String) {
+    hits.push(path)
+    path == "/usr/bin/cetas-run"
+  }
+  // PATH order decides: stop at the first executable hit.
+  assert_true(herdr_path_lookup("cetas-run", Some("/bin:/usr/bin"), probe))
+  assert_eq(hits, ["/bin/cetas-run", "/usr/bin/cetas-run"])
+  hits.clear()
+  assert_true(herdr_path_lookup("cetas-run", Some("/usr/bin:/bin"), probe))
+  assert_eq(hits, ["/usr/bin/cetas-run"])
+  // A path with a separator bypasses PATH entirely.
+  hits.clear()
+  assert_true(herdr_path_lookup("/usr/bin/cetas-run", None, probe))
+  assert_eq(hits, ["/usr/bin/cetas-run"])
+  // Missing PATH var: a bare name never resolves.
+  hits.clear()
+  assert_false(herdr_path_lookup("cetas-run", None, probe))
+  assert_eq(hits, [])
+  // An empty PATH entry means the current directory.
+  assert_true(
+    herdr_path_lookup("x", Some(":/opt/bin"), fn(path : String) {
+      path == "./x"
+    }),
+  )
+}
+
+///|
+/// End-to-end smoke on the real backend probe: an installed command
+/// resolves, a garbage name does not. (`sh` exists on every POSIX host the
+/// native transport already requires.)
+test "real bin probe: installed command found, garbage name absent" {
+  assert_true(herdr_bin_runnable("sh"))
+  assert_false(herdr_bin_runnable("no-such-cetas-run-binary-xyz"))
+}

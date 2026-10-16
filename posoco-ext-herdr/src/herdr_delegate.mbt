@@ -63,9 +63,40 @@ let herdr_delegate_limit : Int32 = 4
 let herdr_default_timeout_ms : Int32 = 1800000
 
 ///|
+/// Shared which-style resolution behind the delegate registration precheck:
+/// a bare command name resolves through `path_var` (':'-separated; an empty
+/// entry means "."), anything containing a separator is probed as-is.
+/// `probe` answers whether that exact path is executable.
+#cfg(any(target="native", target="js"))
+fn herdr_path_lookup(
+  bin : String,
+  path_var : String?,
+  probe : (String) -> Bool,
+) -> Bool {
+  if bin.contains("/") {
+    return probe(bin)
+  }
+  match path_var {
+    Some(path_var) =>
+      for entry in path_var.split(":") {
+        let dir = entry.to_owned()
+        let dir = if dir == "" { "." } else { dir }
+        if probe(dir + "/" + bin) {
+          return true
+        }
+      }
+    None => ()
+  }
+  false
+}
+
+///|
 /// Shared composition gate for targets with environment access: the
 /// reporter's HERDR_ENV + HERDR_PANE_ID gate decides presence; the cetas-run
-/// binary defaults to "cetas-run" when CETAS_RUN_BIN is missing or blank.
+/// binary defaults to "cetas-run" when CETAS_RUN_BIN is missing or blank and
+/// must resolve to an executable (which semantics) or the delegate — and
+/// with it the herdr_delegate tool — never registers. `bin_runnable`
+/// overrides the backend probe in tests.
 #cfg(any(target="native", target="wasm", target="js"))
 fn herdr_delegate_gate(
   marker : String?,
@@ -74,12 +105,20 @@ fn herdr_delegate_gate(
   run_bin : String?,
   cwd : String,
   parent_yolo~ : (() -> Bool)? = None,
+  bin_runnable~ : ((String) -> Bool)? = None,
 ) -> HerdrDelegate? {
   match herdr_gate(marker, pane, bin) {
     Some(cfg) => {
       let runner = match run_bin {
         Some(bin) if bin != "" => bin
         _ => "cetas-run"
+      }
+      let runnable = match bin_runnable {
+        Some(probe) => probe
+        None => herdr_bin_runnable
+      }
+      if !runnable(runner) {
+        return None
       }
       Some(
         HerdrDelegate::HerdrDelegate(

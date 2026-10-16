@@ -18,6 +18,36 @@ fn herdr_env(name : String) -> String? {
 }
 
 ///|
+#module("node:fs")
+extern "js" fn fs_access_sync(path : String, mode : Int32) -> Unit = "accessSync"
+
+///|
+// which-probe for the bun runtime. The access function is passed in and the
+// try/catch lives JS-side, so no exception crosses the FFI; 1 is the libuv
+// access mask (fs.constants.X_OK === 1).
+extern "js" fn node_path_executable(
+  access : (String, Int32) -> Unit,
+  path : String,
+) -> Bool =
+  #| (access, path) => {
+  #|   try {
+  #|     access(path, 1)
+  #|     return true
+  #|   } catch (_) {
+  #|     return false
+  #|   }
+  #| }
+
+///|
+/// js which-probe behind the delegate registration precheck: an
+/// executable-permission check per candidate path, resolution via PATH.
+fn herdr_bin_runnable(bin : String) -> Bool {
+  herdr_path_lookup(bin, herdr_env("PATH"), fn(path) {
+    node_path_executable(fs_access_sync, path)
+  })
+}
+
+///|
 // JS-side catch mirrors the native side's ignored system() status: presence
 // telemetry must never fail Agent composition.
 extern "js" fn node_spawn_detached(
