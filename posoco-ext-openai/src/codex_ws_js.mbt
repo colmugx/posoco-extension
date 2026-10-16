@@ -51,13 +51,16 @@ extern "js" fn ws_js_open(
   #|     });
   #|     const finish = () => {
   #|       entry.closed = true;
-  #|       registry.sockets.delete(handle);
   #|       if (entry.waiter) {
   #|         const waiter = entry.waiter;
   #|         entry.waiter = null;
-  #|         waiter.resolve(undefined);
+  #|         waiter.resolve(entry.queue.length > 0 ? entry.queue.shift() : undefined);
   #|       }
-  #|       entry.queue.length = 0;
+  #|       // A close that overtakes buffered frames must not discard them: the
+  #|       // usage-limit error frame precedes the close, and dropping it turns
+  #|       // a typed RateLimited into a plain transport failure. Keep the
+  #|       // entry while frames remain so later reads drain them before EOF.
+  #|       if (entry.queue.length === 0) registry.sockets.delete(handle);
   #|     };
   #|     socket.addEventListener("open", () => {
   #|       entry.opened = true;
@@ -93,10 +96,11 @@ const WS_IDLE_TIMEOUT_MS : Int32 = 120_000
 ///|
 /// Next text frame; `undefined` encodes MoonBit `None` on close/error and `""` on
 /// idle timeout (a server frame is never empty, so the sentinel is
-/// unambiguous). The abort signal is honored so a cancelled pump never waits
-/// on a silent socket. The idle timeout is the dead-connection escape: a
-/// server that accepts frames but stops answering would otherwise hold the
-/// pump forever.
+/// unambiguous). Frames received before a close are drained first — only an
+/// empty, closed socket reads as `None`. The abort signal is honored so a
+/// cancelled pump never waits on a silent socket. The idle timeout is the
+/// dead-connection escape: a server that accepts frames but stops answering
+/// would otherwise hold the pump forever.
 extern "js" fn ws_js_next(
   handle : Int32,
   signal : @js_async.AbortSignal,
@@ -107,6 +111,7 @@ extern "js" fn ws_js_next(
   #|   const entry = registry && registry.sockets.get(handle);
   #|   if (!entry || signal.aborted) return resolve(undefined);
   #|   if (entry.queue.length > 0) return resolve(entry.queue.shift());
+  #|   if (entry.closed) return resolve(undefined);
   #|   let done = false;
   #|   const finish = (value) => {
   #|     if (done) return;
@@ -146,6 +151,7 @@ extern "js" fn ws_js_close(handle : Int32) -> Unit =
   #|     const registry = globalThis.__posocoWs;
   #|     const entry = registry && registry.sockets.get(handle);
   #|     if (entry) {
+  #|       registry.sockets.delete(handle);
   #|       entry.socket.close();
   #|     }
   #|   } catch {}
