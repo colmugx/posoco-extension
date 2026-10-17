@@ -208,6 +208,7 @@ async fn Runtime::execute(
     let task = group.spawn(allow_failure=true, () => {
       match
         @async.handle_cancellation(() => {
+          let toolchain = self.resolve_toolchain()
           @async.with_timeout(timeout_ms, () => {
             let directory = @async.protect_from_cancel(() => {
               temporary_directory("posoco-mbtx-invocation-")
@@ -215,7 +216,6 @@ async fn Runtime::execute(
             defer remove_directory(directory)
             let policy = directory + "/policy.json"
             write_text(policy, guest_policy().stringify())
-            let toolchain = self.resolve_toolchain()
             let launcher = toolchain.launcher
             let path = match program {
               Source(source) => {

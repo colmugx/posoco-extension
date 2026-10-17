@@ -15,6 +15,8 @@ import {
 options(
   targets: {
     "process.native.mbt": [ "native" ],
+    "toolchain_platform.native.mbt": [ "native" ],
+    "toolchain_platform.js.mbt": [ "js" ],
     "process.js.mbt": [ "js" ],
     "filesystem.native.mbt": [ "native" ],
     "filesystem.js.mbt": [ "js" ],

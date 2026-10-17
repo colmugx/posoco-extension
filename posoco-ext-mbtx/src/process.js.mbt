@@ -186,8 +186,19 @@ async fn[X] with_process(
     FixedArray::from_array(args),
     cwd.unwrap_or(""),
     inherit_env,
-    Json::object(extra_env.map(fn(k, v) { (k, Json::string(v)) })).stringify(),
+    mbtx_env_json(extra_env),
   )
   defer @async.protect_from_cancel(() => node_stop(raw).wait())
   body(JsProcess::{ raw, })
+}
+
+///|
+/// Child processes are never permitted to inherit a different toolchain by
+/// accident. String encoding also keeps the FFI independent of Json internals.
+fn mbtx_env_json(extra_env : Map[String, String]) -> String {
+  let fields : Array[(String, Json)] = []
+  for key, value in extra_env {
+    fields.push((key, Json::string(value)))
+  }
+  Json::object(Map::from_array(fields)).stringify()
 }
