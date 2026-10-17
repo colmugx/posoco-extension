@@ -505,7 +505,7 @@ pub impl @modelmgmt.ModelManagerControl for TestSelectionControl with fn manager
 
 ///|
 pub impl @modelmgmt.ModelManagerControl for TestSelectionControl with fn list_models(
-  self : TestSelectionControl,
+  _self : TestSelectionControl,
 ) -> Array[@modelmgmt.ManagerModelInfo] { [] }
 
 ///|
