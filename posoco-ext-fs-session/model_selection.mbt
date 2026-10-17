@@ -138,10 +138,13 @@ pub fn rewrite_metadata_line_v2(
   let parts : Array[String] = []
   for part in content.split("\n") { parts.push(part.to_owned()) }
   if parts.length() < 2 { return None }
-  let metadata = match @json.parse(parts[0]) {
-    Json::Object(fields) => fields
+  let parsed : Result[Json, Error] = Ok(@json.parse(parts[0])) catch {
+    e => Err(e)
+  }
+  let metadata : Map[String, Json] = match parsed {
+    Ok(Json::Object(fields)) => fields
     _ => return None
-  } catch { _ => return None }
+  }
   metadata[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(value)
   let buf = StringBuilder()
   buf.write_string(Json::object(metadata).stringify())
