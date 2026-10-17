@@ -1,8 +1,20 @@
 ///|
+#external
+priv type ToolchainFsOptions
+
+///|
+extern "js" fn toolchain_recursive_options() -> ToolchainFsOptions =
+  #| () => ({recursive: true})
+
+///|
+extern "js" fn toolchain_remove_options() -> ToolchainFsOptions =
+  #| () => ({recursive: true, force: true})
+
+///|
 /// Synchronous Node filesystem operations are quick metadata changes; the
 /// long-running download and compilation are async process operations.
 #module("node:fs")
-extern "js" fn mbtx_node_mkdir(path : String, options : Json) -> Unit = "mkdirSync"
+extern "js" fn mbtx_node_mkdir(path : String, options : ToolchainFsOptions) -> Unit = "mkdirSync"
 
 ///|
 #module("node:fs")
@@ -10,7 +22,7 @@ extern "js" fn mbtx_node_exists(path : String) -> Bool = "existsSync"
 
 ///|
 #module("node:fs")
-extern "js" fn mbtx_node_remove(path : String, options : Json) -> Unit = "rmSync"
+extern "js" fn mbtx_node_remove(path : String, options : ToolchainFsOptions) -> Unit = "rmSync"
 
 ///|
 #module("node:fs")
@@ -30,7 +42,7 @@ extern "js" fn mbtx_node_platform_windows() -> Bool =
 
 ///|
 extern "js" fn mbtx_node_try_mkdir(
-  mkdir : (String, Json) -> Unit,
+  mkdir : (String, ToolchainFsOptions) -> Unit,
   path : String,
 ) -> Bool =
   #| (mkdir, path) => {
@@ -45,7 +57,7 @@ fn mbtx_is_windows() -> Bool {
 
 ///|
 fn tc_fs_mkdir(path : String) -> Unit {
-  mbtx_node_mkdir(path, {"recursive": true})
+  mbtx_node_mkdir(path, toolchain_recursive_options())
 }
 
 ///|
@@ -55,12 +67,12 @@ fn tc_fs_try_lock(path : String) -> Bool {
 
 ///|
 fn tc_fs_unlock(path : String) -> Unit {
-  mbtx_node_remove(path, {"recursive": true, "force": true})
+  mbtx_node_remove(path, toolchain_remove_options())
 }
 
 ///|
 fn tc_fs_remove(path : String) -> Unit {
-  mbtx_node_remove(path, {"recursive": true, "force": true})
+  mbtx_node_remove(path, toolchain_remove_options())
 }
 
 ///|
