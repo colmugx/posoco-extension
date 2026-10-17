@@ -65,8 +65,11 @@ pub(all) struct JsonlSessionStore {
   mut written_selection : (String, String?)?
   mut observed_selection_v2 : SessionSelectionV2?
   mut written_selection_v2 : SessionSelectionV2?
+  mut written_session_id : String?
+  selection_control : &@posoco-kit-model-management.ModelManagerControl?
+  mut selection_revision : Int64
 }
-pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @devkit.EventBus?) -> Self
+pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @devkit.EventBus?, selection_control? : &@posoco-kit-model-management.ModelManagerControl?) -> Self
 pub async fn JsonlSessionStore::append_messages(Self, String, Int, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
 pub async fn JsonlSessionStore::checkpoint(Self, String, @port.SessionCheckpoint) -> Unit raise @error.SessionError
 pub fn JsonlSessionStore::commands(Self) -> Array[@port.CommandDef]

@@ -67,6 +67,25 @@ created before that metadata key existed retain a compatibility-only fallback
 to their first user-role message. Hosts should consume `display_title()`
 instead of inferring human provenance from transcript roles.
 
+## Versioned model selection through a neutral control
+
+Hosts may inject `selection_control : &ModelManagerControl` when constructing
+`JsonlSessionStore`. At each save or append, the store snapshots
+`active_selection` and `manager_id` **through that interface**, writes
+owner-qualified `posoco.model_selection_v2`, and increments its local revision
+only when the logical selection changes. The store never inspects a concrete
+manager type, provider name, model ID syntax, or upstream routing decision.
+
+The v2 owner is required during restoration: `selection_for_owner` refuses
+a mismatched owner even when the model ID happens to match. Existing legacy
+sessions remain readable. The historical bus-only recording path is retained
+for hosts that do not inject a control. An optional manual
+`observe_selection_v2` injection remains supported for existing callers.
+
+The append fast path also tracks the **journal ID**, not merely the last
+model value. A failed metadata rewrite remains pending for a later attempt;
+no session's model record is assumed to match a different journal.
+
 ## Model selection record
 
 When the store is composed with the shared `EventBus`, it subscribes to the
