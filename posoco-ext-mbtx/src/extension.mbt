@@ -10,8 +10,9 @@ pub struct MbtxExtension {
 pub fn MbtxExtension::MbtxExtension(
   bus? : @devkit.EventBus,
   home? : String,
+  prefer_system~ : Bool = true,
 ) -> MbtxExtension {
-  { runtime: Runtime(bus?, home?), }
+  { runtime: Runtime(bus?, home?, prefer_system~), }
 }
 
 ///|
@@ -43,7 +44,16 @@ pub impl @posoco.CommandPort for MbtxExtension with fn commands(
     description: "Inspect MoonBit Code Mode toolchain readiness and provenance",
     category: "mbtx",
     ctype: @posoco.CommandType::Action,
-    params: [],
+    params: [{
+      name: "action",
+      label: "Action",
+      description: "Show current MBTX status",
+      ptype: @posoco.ParamType::Str,
+      required: false,
+      default: Some(Json::string("status")),
+      choices: Some(["status"]),
+      positional: true,
+    }],
     aliases: ["mbtx_status"],
     shortcut: None,
     icon: None,

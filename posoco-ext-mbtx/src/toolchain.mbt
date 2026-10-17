@@ -33,12 +33,14 @@ pub struct ToolchainManager {
   priv mut reason : String
   priv bus : @devkit.EventBus?
   priv home : String
+  priv prefer_system : Bool
 }
 
 ///|
 pub fn ToolchainManager::ToolchainManager(
   bus? : @devkit.EventBus,
   home? : String,
+  prefer_system~ : Bool = true,
 ) -> ToolchainManager {
   {
     lock: @async.Mutex(),
@@ -47,6 +49,7 @@ pub fn ToolchainManager::ToolchainManager(
     reason: "",
     bus,
     home: home.unwrap_or(@devkit.home_dir().unwrap_or("")),
+    prefer_system,
   }
 }
 
@@ -188,9 +191,11 @@ pub async fn ToolchainManager::ensure_ready(
 ///|
 async fn ToolchainManager::discover(self : ToolchainManager) -> ResolvedToolchain {
   self.publish("checking", "looking for a usable MoonBit runner")
-  match mbtx_candidate(System, "moon", "moonx", "moonrun", "PATH") {
-    Some(tc) => return tc
-    None => ()
+  if self.prefer_system {
+    match mbtx_candidate(System, "moon", "moonx", "moonrun", "PATH") {
+      Some(tc) => return tc
+      None => ()
+    }
   }
   if self.home == "" {
     raise RuntimeError::ToolchainUnavailable(
@@ -198,15 +203,17 @@ async fn ToolchainManager::discover(self : ToolchainManager) -> ResolvedToolchai
     )
   }
   let official = self.home + "/.moon/bin"
-  match mbtx_candidate(
-    System,
-    official + "/" + mbtx_exe("moon"),
-    official + "/" + mbtx_exe("moonx"),
-    official + "/" + mbtx_exe("moonrun"),
-    official,
-  ) {
-    Some(tc) => return tc
-    None => ()
+  if self.prefer_system {
+    match mbtx_candidate(
+      System,
+      official + "/" + mbtx_exe("moon"),
+      official + "/" + mbtx_exe("moonx"),
+      official + "/" + mbtx_exe("moonrun"),
+      official,
+    ) {
+      Some(tc) => return tc
+      None => ()
+    }
   }
   let root = self.home + "/.cetas/moon_toolchain"
   match self.managed_candidate(root + "/current") {

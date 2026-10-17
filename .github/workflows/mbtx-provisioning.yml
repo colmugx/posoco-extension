@@ -1,0 +1,28 @@
+name: MBTX provisioning and runtime
+
+on:
+  pull_request:
+    paths:
+      - "posoco-ext-mbtx/**"
+      - ".github/workflows/mbtx-provisioning.yml"
+
+jobs:
+  mbtx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Refresh Mooncakes
+        run: moon update
+      - name: MBTX native tests
+        run: moon test --target native -p colmugx/posoco-ext-mbtx --output-json
+      - name: MBTX JavaScript tests
+        run: moon test --target js -p colmugx/posoco-ext-mbtx --output-json
+      - name: MBTX first-run provisioning and cached reuse
+        env:
+          MBTX_BOOTSTRAP_TEST: "1"
+        run: moon test --target js -p colmugx/posoco-ext-mbtx --output-json
