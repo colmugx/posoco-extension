@@ -83,7 +83,9 @@ fn herdr_spawn_report(bin : String, args : Array[String]) -> Unit {
   if ffi_windows_host() != 0 {
     // CreateProcessW receives real argv (with Unicode and Windows quoting)
     // rather than an interpolated cmd.exe line. Fire-and-forget telemetry.
-    ignore(ffi_win_spawn_report(@utf8.encode(herdr_report_argv_payload(bin, args))))
+    ignore(
+      ffi_win_spawn_report(@utf8.encode(herdr_report_argv_payload(bin, args))),
+    )
   } else {
     let line = "\{[bin, ..args].map(fn(x) { herdr_shell_quote(x) }).join(" ")} >/dev/null 2>&1 &"
     ignore(ffi_system(herdr_c_string(line)))
