@@ -48,6 +48,7 @@ pub struct ManagerStatusAdapter {
   observed_at_ms : Int64
 }
 pub fn ManagerStatusAdapter::ManagerStatusAdapter(&ModelManagerControl, observed_at_ms~ : Int64) -> Self
+pub fn ManagerStatusAdapter::model_facts(Self) -> ModelObservation[ModelStatusFacts]
 pub impl ModelFactsSource for ManagerStatusAdapter
 
 pub(all) struct ModelBudgetSnapshot {
