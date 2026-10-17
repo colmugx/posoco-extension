@@ -20,7 +20,7 @@ async test "mbtx publishes checking and unregisters on successful initialization
   let bus = @devkit.EventBus()
   let recorder = MbtxStatusRecorder::{events: []}
   bus.subscribe(recorder)
-  let manager = @posoco-ext-mbtx.ToolchainManager(bus=Some(bus))
+  let manager = @posoco-ext-mbtx.ToolchainManager(bus=bus)
   let first = manager.ensure_ready()
   assert_eq(first.origin, @posoco-ext-mbtx.ToolchainOrigin::System)
   assert_true(manager.status().contains("MBTX: ready"))
