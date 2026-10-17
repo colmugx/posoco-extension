@@ -52,3 +52,23 @@ pub(open) trait ModelManagerControl {
   fn select_model(Self, String) -> Unit raise ModelManagerError
   fn select_effort(Self, String) -> Unit raise ModelManagerError
 }
+
+pub(all) struct SelectionRef {
+  owner : String
+  model_id : String
+  effort : String?
+  pending : Bool
+  revision : Int64
+}
+
+pub fn SelectionRef::valid(Self) -> Bool
+
+pub fn selection_ref(&ModelManagerControl, revision~ : Int64 = ..) -> SelectionRef
+
+pub(all) enum ModelObservation[T] {
+  Known(T, observed_at_ms~ : Int64, provenance~ : String)
+  Stale(T, observed_at_ms~ : Int64, provenance~ : String)
+  Unknown(String)
+  Unavailable(String)
+  Unsupported
+}
