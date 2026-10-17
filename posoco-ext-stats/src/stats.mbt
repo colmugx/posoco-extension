@@ -3,8 +3,10 @@
 /// `ttft` (round start → first streamed token, published the moment the
 /// first token arrives), `tps` (output tokens over the decode span — last
 /// delta chunk minus first delta chunk — so prefill, tool gaps, and the
-/// commit tail stay out of the denominator), `avg` (the running per-round
-/// mean of settled `tps`), and `cache` (the process aggregate of
+/// commit tail stay out of the denominator), `avg` (the aggregate decode
+/// rate: total counted tokens over total counted decode time, so long
+/// rounds carry proportional weight and short tool-call rounds cannot
+/// dominate), and `cache` (the process aggregate of
 /// per-session prompt-cache accounting). During streaming the `tps` segment
 /// shows a live estimate (streamed chars over the calibrated chars-per-token
 /// ratio, prefixed `≈`), replaced by the exact rate when the round settles;
@@ -45,7 +47,11 @@ pub struct Stats {
   mut streamed_output_tokens : Int32?
   mut chars_per_token : Double
   mut last_live_ms : Int64?
-  mut sum_tps : Double
+  /// Aggregate decode accounting: every counted round adds its token count
+  /// and its decode span, so `avg` is a total-over-total rate rather than a
+  /// mean of per-round rates.
+  mut sum_tps_tokens : Double
+  mut sum_tps_ms : Int64
   mut tps_rounds : Int32
   cache_buckets : Map[String, CacheBucket]
 }
@@ -91,7 +97,8 @@ pub fn Stats::Stats(
     streamed_output_tokens: None,
     chars_per_token: 3.5,
     last_live_ms: None,
-    sum_tps: 0.0,
+    sum_tps_tokens: 0.0,
+    sum_tps_ms: 0,
     tps_rounds: 0,
     cache_buckets: Map::from_array([]),
   }
@@ -425,13 +432,19 @@ fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
   // Above the plausibility bound the span measured transfer, not decode
   // time; the true rate is unrecoverable, so the round stays out of tps
   // and avg.
-  match tps {
-    Some((rate, _)) =>
+  match (tps, decode_ms) {
+    (Some((rate, _)), Some(span)) =>
       if rate <= self.max_plausible_tps {
-        self.sum_tps += rate
+        match tokens {
+          Some((t, _)) => {
+            self.sum_tps_tokens += t
+            self.sum_tps_ms += span
+          }
+          None => ()
+        }
         self.tps_rounds += 1
       }
-    None => ()
+    _ => ()
   }
   // Recalibrate the chars-per-token ratio only from exact output counts.
   let exact_out : Int32? = match usage {
@@ -470,11 +483,11 @@ fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
       }
     None => ()
   }
-  if self.tps_rounds > 0 {
+  if self.tps_rounds > 0 && self.sum_tps_ms > 0 {
     self.publish_segment(
       segment="avg",
       priority=70,
-      value="\{fmt_one_decimal(self.sum_tps / self.tps_rounds.to_double())}/s",
+      value="\{fmt_one_decimal(self.sum_tps_tokens * 1000.0 / self.sum_tps_ms.to_double())}/s",
     )
   }
   // Update the cache segment only when this response carried usage. The

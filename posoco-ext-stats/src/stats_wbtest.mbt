@@ -189,7 +189,7 @@ test "full round publishes ttft at first token then tps avg and cache at close" 
 }
 
 ///|
-test "second round re-anchors and avg becomes the per-round mean" {
+test "second round re-anchors and avg aggregates tokens over decode time" {
   let bus = @devkit.EventBus()
   let capture = BusCapture::BusCapture()
   bus.subscribe(capture)
@@ -209,7 +209,8 @@ test "second round re-anchors and avg becomes the per-round mean" {
     ),
   )
   // Round two without a fresh TurnStarted (tool loop): the re-anchor at
-  // 2700 makes ttft 500ms; decode 4000-3200=800ms -> 30.0/s, avg 28.3/s.
+  // 2700 makes ttft 500ms; decode 4000-3200=800ms -> 30.0/s. avg is the
+  // aggregate: 48 tokens over 900+800=1700ms -> 28.2/s.
   stats.on_event(
     @posoco.TurnEvent::StreamChunkReceived(
       chunk=@posoco.StreamChunk::ReasoningDelta(token="hmm"),
@@ -249,7 +250,7 @@ test "second round re-anchors and avg becomes the per-round mean" {
     index=6,
     segment="avg",
     priority=70,
-    value="28.3/s",
+    value="28.2/s",
   )
   assert_segment(
     capture.events,
@@ -535,8 +536,8 @@ test "live tps throttles to the interval and tracks the estimate" {
   )
   // Round one: ttft(300) at first token, tps 40.0, avg 40.0, cache.
   // Round two: ttft(500), live ≈13.3/s at 2300 (14 chars), live ≈18.1/s at
-  // 2600 (38 chars), settled 16.7/s over the 600ms decode span, avg 28.3/s,
-  // cache.
+  // 2600 (38 chars), settled 16.7/s over the 600ms decode span. avg is the
+  // aggregate: 14 tokens over 100+600=700ms -> 20.0/s, cache.
   assert_eq(capture.events.length(), 10)
   assert_segment(
     capture.events,
@@ -571,7 +572,7 @@ test "live tps throttles to the interval and tracks the estimate" {
     index=8,
     segment="avg",
     priority=70,
-    value="28.3/s",
+    value="20.0/s",
   )
 }
 
@@ -1172,6 +1173,67 @@ test "burst round above the plausibility bound stays out of tps and avg" {
     segment="cache",
     priority=80,
     value="n/a",
+  )
+}
+
+///|
+test "avg weights by decode time so short tool rounds cannot dominate" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1100, 1200, 1300, 2000, 2020, 2100]),
+    live_interval_ms=suppress_live,
+  )
+  // Round one: a 100ms decode span delivering 20 tokens -> 200.0/s.
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_delta("a"))
+  stats.on_event(tk_delta("b"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(20)),
+    ),
+  )
+  // Round two: a 20ms tool-argument burst delivering 2 tokens -> 100.0/s.
+  // Under a per-round mean this short round weighs the same as the long
+  // answer above; under the aggregate it carries 1/11 the tokens and 1/6
+  // the decode time, so it barely moves the result.
+  stats.on_event(
+    @posoco.TurnEvent::StreamChunkReceived(
+      chunk=@posoco.StreamChunk::ToolCallDelta(
+        index=0,
+        id=None,
+        name=None,
+        arguments_delta=Some("{}"),
+      ),
+    ),
+  )
+  stats.on_event(
+    @posoco.TurnEvent::StreamChunkReceived(
+      chunk=@posoco.StreamChunk::ToolCallDelta(
+        index=0,
+        id=None,
+        name=None,
+        arguments_delta=Some("{}"),
+      ),
+    ),
+  )
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(2)),
+    ),
+  )
+  // Aggregate: 22 tokens over 100+20=120ms -> 183.3/s. The per-round mean
+  // would read 150.0/s, so this pins the token-and-time weighting.
+  assert_segment(
+    capture.events,
+    index=capture.events.length() - 2,
+    segment="avg",
+    priority=70,
+    value="183.3/s",
   )
 }
 
