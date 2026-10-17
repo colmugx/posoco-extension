@@ -1,0 +1,66 @@
+name: continuity
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "posoco-ext-continuity/**"
+      - ".github/workflows/continuity.yml"
+  pull_request:
+    paths:
+      - "posoco-ext-continuity/**"
+      - ".github/workflows/continuity.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: checkout posoco workspace member
+        run: git clone --depth 1 --branch main https://github.com/colmugx/posoco.git posoco
+
+      - name: create MoonBit workspace
+        run: |
+          cat > moon.work <<'EOF'
+          members = [
+            "posoco",
+            "posoco-ext-continuity",
+          ]
+          EOF
+
+      - name: install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: versions
+        run: |
+          moon version --all
+          node --version
+
+      - name: update dependencies
+        run: moon update
+
+      - name: check and test native
+        working-directory: posoco-ext-continuity
+        run: |
+          moon check --target native
+          moon test --target native
+          moon test --release --target native
+
+      - name: check and test JavaScript
+        working-directory: posoco-ext-continuity
+        run: |
+          moon check --target js
+          moon test --target js
+          moon test --release --target js
+
+      - name: format and interface
+        working-directory: posoco-ext-continuity
+        run: |
+          moon fmt
+          moon info
+          git diff --exit-code
