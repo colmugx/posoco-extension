@@ -169,3 +169,53 @@ pub fn ModelRecoveryAdvice::deadline(
 pub(open) trait ModelRecoverySource {
   fn recovery_advice(Self) -> ModelObservation[ModelRecoveryAdvice]
 }
+
+///|
+/// A small adapter from any active ModelManagerControl into the common
+/// status facts vocabulary. This is not another Router: it observes only
+/// the opaque active selection and its catalog-declared context capacity.
+/// Usage/context consumption is intentionally left unknown until provided
+/// by Core's current scoped ContextState.
+pub struct ManagerStatusAdapter {
+  control : &ModelManagerControl
+  observed_at_ms : Int64
+}
+
+///|
+pub fn ManagerStatusAdapter::ManagerStatusAdapter(
+  control : &ModelManagerControl,
+  observed_at_ms~ : Int64,
+) -> ManagerStatusAdapter {
+  { control, observed_at_ms, }
+}
+
+///|
+pub impl ModelFactsSource for ManagerStatusAdapter with fn model_facts(
+  self : ManagerStatusAdapter,
+) -> ModelObservation[ModelStatusFacts] {
+  let selection = selection_ref(self.control)
+  if !selection.valid() {
+    return ModelObservation::Unknown("no active selection")
+  }
+  let mut capacity : Int64? = None
+  for model in self.control.list_models() {
+    if model.model_id == selection.model_id {
+      capacity = match model.context_window {
+        Some(n) if n > 0 => Some(n.to_int64())
+        _ => None
+      }
+      break
+    }
+  }
+  ModelObservation::Known(
+    {
+      selection,
+      context_used_tokens: None,
+      context_capacity_tokens: capacity,
+      last_served_model_id: None,
+      observed_at_ms: self.observed_at_ms,
+    },
+    observed_at_ms=self.observed_at_ms,
+    provenance="model-management",
+  )
+}
