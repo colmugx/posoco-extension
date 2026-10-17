@@ -71,8 +71,9 @@ pub fn Runtime::Runtime(
   moonrun~ : String = "moonrun",
   bus? : @devkit.EventBus,
   home? : String,
+  prefer_system~ : Bool = true,
 ) -> Runtime {
-  { launcher, moon, moonx, moonrun, toolchain: ToolchainManager(bus?, home?), active: Map([]), closed: false, }
+  { launcher, moon, moonx, moonrun, toolchain: ToolchainManager(bus?, home?, prefer_system~), active: Map([]), closed: false, }
 }
 
 ///|

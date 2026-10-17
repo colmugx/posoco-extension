@@ -24,7 +24,7 @@ The Runtime supports a \`bus\` keyword argument. When provided, it publishes
 status bus and unregisters the segment on success. The optional Posoco
 \`MbtxExtension\` exposes a read-only \`/mbtx status\` command.
 
-Explicit custom launcher paths retain their previous behavior without automatic
+For isolated testing or forced managed installation, pass \`prefer_system=false\` to Runtime or MbtxExtension. Explicit custom launcher paths retain their previous behavior without automatic
 installation. The guest SDK imports are still resolved through MoonBit, not
 bundled by the host. ToolInvoker/Posoco governance integration remains separate.
 
