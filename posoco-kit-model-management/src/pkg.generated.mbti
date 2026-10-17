@@ -43,6 +43,27 @@ pub fn ManagerSelection::equal(Self, Self) -> Bool
 pub fn ManagerSelection::not_equal(Self, Self) -> Bool
 pub fn ManagerSelection::to_repr(Self) -> @debug.Repr
 
+pub(all) struct ModelBudgetSnapshot {
+  budget_label : String
+  remaining : Double?
+  currency : String?
+  resets_at_ms : Int64?
+  observed_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn ModelBudgetSnapshot::equal(Self, Self) -> Bool
+pub fn ModelBudgetSnapshot::not_equal(Self, Self) -> Bool
+pub fn ModelBudgetSnapshot::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ModelExecutionFacts {
+  requested_model_id : String
+  served_model_id : String?
+  served_source_ref : String?
+  observed_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn ModelExecutionFacts::equal(Self, Self) -> Bool
+pub fn ModelExecutionFacts::not_equal(Self, Self) -> Bool
+pub fn ModelExecutionFacts::to_repr(Self) -> @debug.Repr
+
 pub(all) enum ModelObservation[T] {
   Known(T, observed_at_ms~ : Int64, provenance~ : String)
   Stale(T, observed_at_ms~ : Int64, provenance~ : String)
@@ -50,6 +71,59 @@ pub(all) enum ModelObservation[T] {
   Unavailable(String)
   Unsupported
 }
+
+pub(all) struct ModelQuotaSnapshot {
+  selection : SelectionRef
+  sources : Array[ModelQuotaSourceSnapshot]
+  observed_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn ModelQuotaSnapshot::equal(Self, Self) -> Bool
+pub fn ModelQuotaSnapshot::not_equal(Self, Self) -> Bool
+pub fn ModelQuotaSnapshot::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ModelQuotaSourceSnapshot {
+  source_ref : String
+  display_label : String
+  windows : Array[ModelQuotaWindow]
+  eligible : Bool?
+  observed_at_ms : Int64?
+} derive(Eq, @debug.Debug)
+pub fn ModelQuotaSourceSnapshot::equal(Self, Self) -> Bool
+pub fn ModelQuotaSourceSnapshot::not_equal(Self, Self) -> Bool
+pub fn ModelQuotaSourceSnapshot::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ModelQuotaWindow {
+  name : String
+  remaining_percent : Double?
+  resets_at_ms : Int64?
+  unlimited : Bool?
+} derive(Eq, @debug.Debug)
+pub fn ModelQuotaWindow::equal(Self, Self) -> Bool
+pub fn ModelQuotaWindow::not_equal(Self, Self) -> Bool
+pub fn ModelQuotaWindow::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ModelRecoveryAdvice {
+  WaitUntil(Int64)
+  ProbeWithBackoff
+  Stop(String)
+  Unknown
+} derive(Eq, @debug.Debug)
+pub fn ModelRecoveryAdvice::deadline(Self) -> Int64?
+pub fn ModelRecoveryAdvice::equal(Self, Self) -> Bool
+pub fn ModelRecoveryAdvice::not_equal(Self, Self) -> Bool
+pub fn ModelRecoveryAdvice::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ModelStatusFacts {
+  selection : SelectionRef
+  context_used_tokens : Int64?
+  context_capacity_tokens : Int64?
+  last_served_model_id : String?
+  observed_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn ModelStatusFacts::context_percent(Self) -> Double?
+pub fn ModelStatusFacts::equal(Self, Self) -> Bool
+pub fn ModelStatusFacts::not_equal(Self, Self) -> Bool
+pub fn ModelStatusFacts::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SelectionRef {
   owner : String
@@ -66,10 +140,30 @@ pub fn SelectionRef::valid(Self) -> Bool
 // Type aliases
 
 // Traits
+pub(open) trait ModelBudgetSource {
+  fn model_budget(Self) -> ModelObservation[ModelBudgetSnapshot]
+}
+
+pub(open) trait ModelExecutionFactsSource {
+  fn last_execution_facts(Self) -> ModelObservation[ModelExecutionFacts]
+}
+
+pub(open) trait ModelFactsSource {
+  fn model_facts(Self) -> ModelObservation[ModelStatusFacts]
+}
+
 pub(open) trait ModelManagerControl {
   fn manager_id(Self) -> String
   fn list_models(Self) -> Array[ManagerModelInfo]
   fn active_selection(Self) -> ManagerSelection
   fn select_model(Self, String) -> Unit raise ModelManagerError
   fn select_effort(Self, String) -> Unit raise ModelManagerError
+}
+
+pub(open) trait ModelQuotaSource {
+  fn model_quota(Self, SelectionRef) -> ModelObservation[ModelQuotaSnapshot]
+}
+
+pub(open) trait ModelRecoverySource {
+  fn recovery_advice(Self) -> ModelObservation[ModelRecoveryAdvice]
 }
