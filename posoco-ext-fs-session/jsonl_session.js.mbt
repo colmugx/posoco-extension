@@ -20,6 +20,8 @@ pub(all) struct JsonlSessionStore {
   /// Selection already reflected in the persisted metadata line, so the
   /// append fast path only rewrites line 1 after an observed change.
   mut written_selection : (String, String?)?
+  mut observed_selection_v2 : SessionSelectionV2?
+  mut written_selection_v2 : SessionSelectionV2?
 }
 
 ///|
@@ -33,6 +35,8 @@ pub fn JsonlSessionStore::JsonlSessionStore(
     current_id: None,
     observed_selection: None,
     written_selection: None,
+    observed_selection_v2: None,
+    written_selection_v2: None,
   }
   store.subscribe_model_selection(bus)
   store
@@ -177,7 +181,10 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
   let path = js_save_session_path(self.root_dir, id)
   let jsonl = session_to_jsonl({
     ..session,
-    metadata: metadata_with_selection(session.metadata, self.observed_selection),
+    metadata: metadata_with_observed_selection_v2(
+      metadata_with_selection(session.metadata, self.observed_selection),
+      self.observed_selection_v2,
+    ),
   })
   let res = js_write_file_ffi(
     fs_mkdir_sync,
@@ -213,9 +220,9 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   if !fs_exists_sync(path) {
     let session : @posoco.Session = {
       messages: messages.to_owned(),
-      metadata: metadata_with_selection(
-        Map::from_array([]),
-        self.observed_selection,
+      metadata: metadata_with_observed_selection_v2(
+        metadata_with_selection(Map::from_array([]), self.observed_selection),
+        self.observed_selection_v2,
       ),
     }
     let res = js_write_file_ffi(
@@ -235,7 +242,8 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
     self.mark_selection_written(self.observed_selection)
     return
   }
-  if self.observed_selection != self.written_selection {
+  if self.observed_selection != self.written_selection ||
+    self.observed_selection_v2 != self.written_selection_v2 {
     self.refresh_metadata_selection(path)
   }
   // Each line is prefixed with \n to terminate the previous line.
@@ -268,18 +276,18 @@ fn JsonlSessionStore::refresh_metadata_selection(
   if !res.is_ok() {
     return
   }
-  match rewrite_metadata_line(res.content(), self.observed_selection) {
-    Some(updated) => {
-      let write_res = js_write_file_ffi(
-        fs_mkdir_sync,
-        fs_write_file_sync,
-        self.root_dir,
-        path,
-        updated,
-      )
-      ignore(write_res)
-    }
-    None => ()
+  let content = res.content()
+  let updated_legacy = rewrite_metadata_line(
+    content, self.observed_selection,
+  ).unwrap_or(content)
+  let updated = rewrite_metadata_line_v2(
+    updated_legacy, self.observed_selection_v2,
+  ).unwrap_or(updated_legacy)
+  if updated != content {
+    let write_res = js_write_file_ffi(
+      fs_mkdir_sync, fs_write_file_sync, self.root_dir, path, updated,
+    )
+    ignore(write_res)
   }
 }
 

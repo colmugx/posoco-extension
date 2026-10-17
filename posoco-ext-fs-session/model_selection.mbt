@@ -103,6 +103,56 @@ pub fn session_selection_v2_for_owner(
 }
 
 ///|
+///|
+/// Injected by the host at a successful manager-selection boundary.
+/// The store cannot infer ownership from a model name or a provider prefix.
+pub fn JsonlSessionStore::observe_selection_v2(
+  self : JsonlSessionStore,
+  selection : SessionSelectionV2,
+) -> Unit {
+  if selection.owner.is_empty() || selection.model_id.is_empty() ||
+    selection.revision < 0L {
+    return
+  }
+  self.observed_selection_v2 = Some(selection)
+}
+
+///|
+fn metadata_with_observed_selection_v2(
+  metadata : Map[String, Json],
+  selection : SessionSelectionV2?,
+) -> Map[String, Json] {
+  match selection {
+    Some(value) => metadata_with_selection_v2(metadata, value)
+    None => metadata
+  }
+}
+
+///|
+/// Rewrites only metadata line 1; preserves message lines byte-for-byte.
+pub fn rewrite_metadata_line_v2(
+  content : String,
+  selection : SessionSelectionV2?,
+) -> String? {
+  guard selection is Some(value) else { return None }
+  let parts : Array[String] = []
+  for part in content.split("\n") { parts.push(part.to_owned()) }
+  if parts.length() < 2 { return None }
+  let metadata = match @json.parse(parts[0]) {
+    Json::Object(fields) => fields
+    _ => return None
+  } catch { _ => return None }
+  metadata[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(value)
+  let buf = StringBuilder()
+  buf.write_string(Json::object(metadata).stringify())
+  for i in 1..<parts.length() {
+    buf.write_char('\n')
+    buf.write_string(parts[i])
+  }
+  Some(buf.to_string())
+}
+
+///|
 pub fn metadata_with_selection_v2(
   metadata : Map[String, Json],
   selection : SessionSelectionV2,
@@ -272,4 +322,5 @@ fn JsonlSessionStore::mark_selection_written(
   selection : (String, String?)?,
 ) -> Unit {
   self.written_selection = selection
+  self.written_selection_v2 = self.observed_selection_v2
 }
