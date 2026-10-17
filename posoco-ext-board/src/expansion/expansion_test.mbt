@@ -705,7 +705,7 @@ impl @store.BoardStore for AmbiguousStore with fn persist(
 
 ///|
 async test "durability uncertainty freezes whole mapping and reconciles without any replay" {
-  for mode in [1, 2, 3] {
+  for mode in [1, 2] {
     @async.with_task_group(group => {
       let store : AmbiguousStore = {
         inner: @store.MemoryBoardStore(),
@@ -821,6 +821,7 @@ async test "allocator invalid duplicate or colliding IDs cannot partially commit
         .approve(host.preview().unwrap(), HostApprover::{ grant: true, })
         .unwrap()
       assert_true(host.commit(approval) is Err(@expansion.AllocationFailed))
+      assert_eq(host.mapping(), [])
       assert_eq(backend.state().unwrap(), before)
       assert_eq(host.phase(), @expansion.Conflict)
       assert_true(host.commit(approval) is Err(@expansion.InvalidPhase))

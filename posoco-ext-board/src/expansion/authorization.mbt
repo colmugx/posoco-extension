@@ -54,9 +54,7 @@ fn check_authority(
   for id in [auth.authorization_id_, auth.workflow_, auth.parent_] {
     if id.is_empty() ||
       id.length() > 128 ||
-      id
-      .iter()
-      .any(ch => ch.is_whitespace() || ch.to_int() < 32 || ch.to_int() == 127) {
+      id.iter().any(ch => ch.is_whitespace() || ch.is_control()) {
       return Err(InvalidAuthorization("invalid identity"))
     }
   }

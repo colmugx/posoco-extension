@@ -146,7 +146,7 @@ fn schema_identifier(
     schema_fail(ExceedsLimit(path~, limit="at most \{max_chars} code units"))
   }
   for unit in value {
-    if unit.is_whitespace() || unit.to_int() < 32 || unit.to_int() == 127 {
+    if unit.is_whitespace() || unit.is_control() {
       schema_fail(InvalidString(path~, reason="must not contain whitespace"))
     }
   }
@@ -164,7 +164,7 @@ fn schema_text(
   }
   if value
     .iter()
-    .any(ch => ch.to_int() < 32 && ch != '\n' && ch != '\r' && ch != '\t') {
+    .any(ch => ch.is_control() && ch != '\n' && ch != '\r' && ch != '\t') {
     schema_fail(InvalidString(path~, reason="unsupported control character"))
   }
   if value.trim().is_empty() && (!allow_blank || !value.is_empty()) {
