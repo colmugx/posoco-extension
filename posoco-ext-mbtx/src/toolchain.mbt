@@ -51,11 +51,6 @@ pub fn ToolchainManager::ToolchainManager(
 }
 
 ///|
-fn mbtx_is_windows() -> Bool {
-  @async.platform is Windows
-}
-
-///|
 fn mbtx_exe(name : String) -> String {
   if mbtx_is_windows() { name + ".exe" } else { name }
 }
@@ -294,30 +289,37 @@ async fn ToolchainManager::install(self : ToolchainManager, root : String, stage
 /// @fs file locking serializes independent host processes. A partially
 /// written stage is never published as current; retries discard it.
 async fn ToolchainManager::provision(self : ToolchainManager, root : String) -> ResolvedToolchain {
-  @fs.mkdir(root, recursive=true, allow_exist=true)
-  let file = @fs.open(
-    root + "/.install.lock",
-    mode=ReadWrite,
-    create_mode=OpenOrCreate,
-  )
-  defer file.close()
-  @async.with_timeout(1200000, () => file.lock(Exclusive))
-  defer file.unlock()
+  tc_fs_mkdir(root)
+  // mkdir is an atomic cross-process lock on native and Node/Bun.
+  let lock_dir = root + "/.install.lock"
+  let mut acquired = false
+  for _ in 0..<600 {
+    if tc_fs_try_lock(lock_dir) {
+      acquired = true
+      break
+    }
+    @async.sleep(100)
+  }
+  if !acquired {
+    raise RuntimeError::ToolchainUnavailable(
+      "timed out waiting for MBTX toolchain installation lock",
+    )
+  }
+  defer tc_fs_unlock(lock_dir)
   let current = root + "/current"
   match self.managed_candidate(current) {
     Some(tc) => return tc
     None => ()
   }
   let stage = root + "/.incoming"
-  @fs.rmdir(stage, recursive=true) catch { _ => () }
-  @fs.mkdir(stage, recursive=true, allow_exist=true)
-  defer (@fs.rmdir(stage, recursive=true) catch { _ => () })
+  tc_fs_remove(stage)
+  tc_fs_mkdir(stage)
+  defer tc_fs_remove(stage)
   self.install(root, stage)
   let moon = mbtx_bin(stage, "moon")
   let moonx = mbtx_bin(stage, "moonx")
-  if !@fs.exists(moonx) && @fs.exists(moon) {
-    @fs.write_file(moonx, @fs.read_file(moon))
-    if !mbtx_is_windows() { @fs.chmod(moonx, 0o755) }
+  if !tc_fs_exists(moonx) && tc_fs_exists(moon) {
+    tc_fs_copy_executable(moon, moonx)
   }
   self.publish("verifying", "checking MoonBit compiler and runner")
   guard self.managed_candidate(stage) is Some(_tc) else {
@@ -325,8 +327,8 @@ async fn ToolchainManager::provision(self : ToolchainManager, root : String) -> 
       "downloaded MoonBit failed pinned version or runner verification",
     )
   }
-  @fs.rmdir(current, recursive=true) catch { _ => () }
-  @fs.rename(stage, current, replace=true)
+  tc_fs_remove(current)
+  tc_fs_rename(stage, current)
   match self.managed_candidate(current) {
     Some(tc) => tc
     None => raise RuntimeError::ToolchainUnavailable(
