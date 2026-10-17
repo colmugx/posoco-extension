@@ -27,6 +27,7 @@ pub struct Stats {
   bus : @devkit.EventBus?
   clock : () -> Int64
   live_interval_ms : Int64
+  max_plausible_tps : Double
   mut round_started_ms : Int64?
   mut first_token_ms : Int64?
   mut last_chunk_ms : Int64?
@@ -38,7 +39,7 @@ pub struct Stats {
   mut tps_rounds : Int
   cache_buckets : Map[String, CacheBucket]
 }
-pub fn Stats::Stats(bus? : @devkit.EventBus?, clock? : () -> Int64, live_interval_ms? : Int64) -> Self
+pub fn Stats::Stats(bus? : @devkit.EventBus?, clock? : () -> Int64, live_interval_ms? : Int64, max_plausible_tps? : Double) -> Self
 pub fn Stats::commands(Self) -> Array[@port.CommandDef]
 pub fn Stats::extension_id(Self) -> String
 pub async fn Stats::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError

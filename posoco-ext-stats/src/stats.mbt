@@ -14,6 +14,11 @@
 /// `bus = None` the observer still maintains its state and publishes
 /// nowhere.
 ///
+/// Rates above `max_plausible_tps` are treated as unmeasurable: proxy
+/// buffering, bulk tool-argument delivery, and post-stall network flushes
+/// make the chunk-arrival span measure transfer, not decode time, so such
+/// rounds publish no `tps` and stay out of `avg`.
+///
 /// A "round" is one model response: `ModelResponseReceived` closes the round
 /// (settling metrics, then re-anchoring at the current time) so a tool loop
 /// measures one round per response without a fresh `TurnStarted`.
@@ -32,6 +37,7 @@ pub struct Stats {
   bus : @devkit.EventBus?
   clock : () -> Int64
   live_interval_ms : Int64
+  max_plausible_tps : Double
   mut round_started_ms : Int64?
   mut first_token_ms : Int64?
   mut last_chunk_ms : Int64?
@@ -71,11 +77,13 @@ pub fn Stats::Stats(
   bus~ : @devkit.EventBus? = None,
   clock~ : () -> Int64 = fn() { @async.now() },
   live_interval_ms~ : Int64 = 250,
+  max_plausible_tps~ : Double = 2500.0,
 ) -> Stats {
   {
     bus,
     clock,
     live_interval_ms,
+    max_plausible_tps,
     round_started_ms: None,
     first_token_ms: None,
     last_chunk_ms: None,
@@ -315,7 +323,8 @@ fn Stats::note_delta(self : Stats, chars : Int32) -> Unit {
 /// has elapsed since the round's first token, and at most one per interval
 /// afterwards. The rate is cumulative since the first token: exact when a
 /// `Usage` chunk reported output tokens, else estimated from chars and
-/// marked `≈`.
+/// marked `≈`. Rates above `max_plausible_tps` are not published and do
+/// not consume the throttle slot.
 fn Stats::publish_live(self : Stats, now : Int64) -> Unit {
   if self.bus is None {
     return
@@ -332,13 +341,18 @@ fn Stats::publish_live(self : Stats, now : Int64) -> Unit {
     Some(last) => if now - last < self.live_interval_ms { return }
     None => ()
   }
-  self.last_live_ms = Some(now)
   let exact = self.streamed_output_tokens is Some(_)
   let tokens : Double = match self.streamed_output_tokens {
     Some(n) => n.to_double()
     None => self.delta_chars.to_double() / self.chars_per_token
   }
   let rate = tokens * 1000.0 / elapsed.to_double()
+  // Arrival-batched bursts yield implausible rates; skipping without
+  // consuming the throttle slot lets the next plausible chunk republish.
+  if rate > self.max_plausible_tps {
+    return
+  }
+  self.last_live_ms = Some(now)
   let prefix : String = if exact { "" } else { "≈" }
   self.publish_segment(
     segment="tps",
@@ -408,11 +422,15 @@ fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
       Some((t * 1000.0 / span.to_double(), exact))
     _ => None
   }
+  // Above the plausibility bound the span measured transfer, not decode
+  // time; the true rate is unrecoverable, so the round stays out of tps
+  // and avg.
   match tps {
-    Some((rate, _)) => {
-      self.sum_tps += rate
-      self.tps_rounds += 1
-    }
+    Some((rate, _)) =>
+      if rate <= self.max_plausible_tps {
+        self.sum_tps += rate
+        self.tps_rounds += 1
+      }
     None => ()
   }
   // Recalibrate the chars-per-token ratio only from exact output counts.
@@ -441,14 +459,15 @@ fn Stats::close_round(self : Stats, usage : @posoco.Usage?) -> Unit {
   self.round_started_ms = Some(now)
   self.reset_round()
   match tps {
-    Some((rate, exact)) => {
-      let prefix : String = if exact { "" } else { "≈" }
-      self.publish_segment(
-        segment="tps",
-        priority=60,
-        value="\{prefix}\{fmt_one_decimal(rate)}/s",
-      )
-    }
+    Some((rate, exact)) =>
+      if rate <= self.max_plausible_tps {
+        let prefix : String = if exact { "" } else { "≈" }
+        self.publish_segment(
+          segment="tps",
+          priority=60,
+          value="\{prefix}\{fmt_one_decimal(rate)}/s",
+        )
+      }
     None => ()
   }
   if self.tps_rounds > 0 {

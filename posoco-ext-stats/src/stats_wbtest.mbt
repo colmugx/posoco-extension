@@ -1094,3 +1094,124 @@ async test "usage on a fresh stats renders an empty aggregate without a rate" {
     _ => fail("expected success outcome")
   }
 }
+
+///|
+test "burst round above the plausibility bound stays out of tps and avg" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1300, 1303, 1305, 1605, 2505, 2605]),
+    live_interval_ms=suppress_live,
+  )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  stats.on_event(tk_delta("Hel"))
+  // Bulk-delivered round: the whole payload lands 3ms after the first
+  // token, so the arrival span (3ms for 3000 tokens) measures transfer,
+  // not decode time — no tps, no avg sample.
+  stats.on_event(tk_delta("lo"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(3000)),
+    ),
+  )
+  assert_eq(stats.tps_rounds, 0)
+  assert_eq(capture.events.length(), 2)
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="ttft",
+    priority=50,
+    value="300ms",
+  )
+  assert_segment(
+    capture.events,
+    index=1,
+    segment="cache",
+    priority=80,
+    value="n/a",
+  )
+  // A normal round afterwards proves avg was not poisoned: decode
+  // 2505-1605=900ms with 24 tokens -> 26.7/s, and avg holds at 26.7/s.
+  stats.on_event(tk_delta("Hel"))
+  stats.on_event(tk_delta("lo"))
+  stats.on_event(
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=tk_assistant(),
+      usage=Some(tk_usage_out(24)),
+    ),
+  )
+  assert_eq(stats.tps_rounds, 1)
+  assert_eq(capture.events.length(), 6)
+  assert_segment(
+    capture.events,
+    index=2,
+    segment="ttft",
+    priority=50,
+    value="300ms",
+  )
+  assert_segment(
+    capture.events,
+    index=3,
+    segment="tps",
+    priority=60,
+    value="26.7/s",
+  )
+  assert_segment(
+    capture.events,
+    index=4,
+    segment="avg",
+    priority=70,
+    value="26.7/s",
+  )
+  assert_segment(
+    capture.events,
+    index=5,
+    segment="cache",
+    priority=80,
+    value="n/a",
+  )
+}
+
+///|
+test "live burst estimate above the plausibility bound is not published" {
+  let bus = @devkit.EventBus()
+  let capture = BusCapture::BusCapture()
+  bus.subscribe(capture)
+  let stats = Stats(
+    bus=Some(bus),
+    clock=stepped_clock([1000, 1300, 1500, 1600, 8800]),
+    live_interval_ms=200,
+  )
+  stats.on_event(@posoco.TurnEvent::TurnStarted)
+  // First token publishes ttft only; the live estimate needs elapsed time
+  // since that token.
+  stats.on_event(tk_delta("Hel"))
+  // A 60000-char bulk delivery 200ms after the first token is
+  // arrival-limited: the live rate would be ≈85718/s, so nothing publishes
+  // and no throttle slot is consumed.
+  stats.on_event(tk_delta("0123456789".repeat(6000)))
+  stats.on_event(tk_delta("lo"))
+  assert_eq(stats.last_live_ms, None)
+  // Once enough time dilutes the cumulative estimate below the bound,
+  // live publishing resumes (60006 chars ≈ 17144.6 tokens over 7.5s).
+  stats.on_event(tk_delta("x"))
+  assert_eq(stats.last_live_ms, Some(8800L))
+  assert_eq(capture.events.length(), 2)
+  assert_segment(
+    capture.events,
+    index=0,
+    segment="ttft",
+    priority=50,
+    value="300ms",
+  )
+  assert_segment(
+    capture.events,
+    index=1,
+    segment="tps",
+    priority=60,
+    value="≈2285.9/s",
+  )
+}
