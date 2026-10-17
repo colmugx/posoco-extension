@@ -197,7 +197,9 @@ Host diagnostics distinguish `DecodeFailed`, `InvalidProposal`,
 `PolicyBudgetExceeded`, `InvalidAuthorization`/`DefaultDenied`/`Expired`,
 `StalePreview`, `DuplicateProposal`, `ApprovalMismatch` and `DigestConflict`.
 `DomainRejected` retains typed DAG/revision errors, while `Backend` retains
-`PersistFailed`, `DurabilityUncertain`, restore and availability errors.
+`PersistFailed`, `DurabilityUncertain`, restore and availability errors. A definitive
+pre-visibility `PersistFailed` ends in Conflict, not Uncertain; neither outcome
+reuses the approval or automatically retries the mutation.
 
 The identity and all graph nodes live in the **same snapshot replacement**, not
 in a second expansion journal. Committed proposal IDs cannot commit again, even

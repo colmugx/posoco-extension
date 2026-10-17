@@ -299,6 +299,7 @@ pub async fn ExpansionHost::commit(
   }
   let ids = snapshot.tasks.map(t => t.id)
   let allocated : Array[@domain.BoardTaskId] = []
+  let mapping : Array[(String, @domain.BoardTaskId)] = []
   for index, task in draft.tasks {
     let raw = self.allocator_.canonical_task_id(
       proposal_id=draft.proposal_id,
@@ -308,16 +309,15 @@ pub async fn ExpansionHost::commit(
     let id = @domain.BoardTaskId(raw)
     if raw.is_empty() ||
       raw.length() > 128 ||
-      raw
-      .iter()
-      .any(ch => ch.is_whitespace() || ch.to_int() < 32 || ch.to_int() == 127) ||
+      raw.iter().any(ch => ch.is_whitespace() || ch.is_control()) ||
       ids.contains(id) ||
       allocated.contains(id) {
       return Err(AllocationFailed)
     }
     allocated.push(id)
-    self.mapping_.push((task.key, id))
+    mapping.push((task.key, id))
   }
+  self.mapping_.append(mapping)
   self.candidates_ = graph_candidates(draft, self.mapping_)
   let now = (self.now_ms_)()
   match check_authority(auth, now) {
@@ -355,7 +355,7 @@ pub async fn ExpansionHost::commit(
     }
     Err(error) => {
       self.phase_ = match error {
-        @coordinator.Rejected(_) => Conflict
+        @coordinator.Rejected(_) | @coordinator.PersistFailed(_) => Conflict
         _ => Uncertain
       }
       Err(Backend(error))

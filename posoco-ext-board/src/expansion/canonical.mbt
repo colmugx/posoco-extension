@@ -31,13 +31,6 @@ fn proposal_digest(draft : DraftExpansion) -> String {
 
 ///|
 fn sha256_text(text : String) -> String {
-  let bytes = @crypto.sha256(@utf8.encode(text.view()))
-  let buf = StringBuilder()
-  buf.write_string("sha256:")
-  let hex = "0123456789abcdef"
-  for byte in bytes {
-    buf.write_char(hex[byte.to_int() / 16].unsafe_to_char())
-    buf.write_char(hex[byte.to_int() % 16].unsafe_to_char())
-  }
-  buf.to_string()
+  "sha256:" +
+  @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(text.view())))
 }
