@@ -46,6 +46,8 @@ pub(all) struct JsonlSessionStore {
   mut current_id : String?
   mut observed_selection : (String, String?)?
   mut written_selection : (String, String?)?
+  mut observed_selection_v2 : SessionSelectionV2?
+  mut written_selection_v2 : SessionSelectionV2?
 }
 pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @devkit.EventBus?) -> Self
 pub async fn JsonlSessionStore::append_messages(Self, String, Int, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
@@ -79,3 +81,33 @@ pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 // Type aliases
 
 // Traits
+
+pub const MODEL_SELECTION_V2_METADATA_KEY : String
+
+pub(all) struct SessionSelectionV2 {
+  owner : String
+  model_id : String
+  effort : String?
+  pending : Bool
+  revision : Int64
+}
+
+pub fn SessionSelectionV2::equal(Self, Self) -> Bool
+
+pub fn SessionSelectionV2::not_equal(Self, Self) -> Bool
+
+pub fn SessionSelectionV2::to_repr(Self) -> @debug.Repr
+
+pub fn JsonlSessionStore::observe_selection_v2(Self, SessionSelectionV2) -> Unit
+
+pub fn metadata_with_selection_v2(Map[String, Json], SessionSelectionV2) -> Map[String, Json]
+
+pub fn rewrite_metadata_line_v2(String, SessionSelectionV2?) -> String?
+
+pub fn session_selection_v2_for_owner(Map[String, Json], String) -> SessionSelectionV2?
+
+pub fn session_selection_v2_from_json(Json) -> SessionSelectionV2?
+
+pub fn session_selection_v2_from_metadata(Map[String, Json]) -> SessionSelectionV2?
+
+pub fn session_selection_v2_to_json(SessionSelectionV2) -> Json

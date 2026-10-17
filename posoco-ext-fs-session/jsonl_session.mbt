@@ -15,6 +15,8 @@ pub(all) struct JsonlSessionStore {
   /// Selection already reflected in the persisted metadata line, so the
   /// append fast path only rewrites line 1 after an observed change.
   mut written_selection : (String, String?)?
+  mut observed_selection_v2 : SessionSelectionV2?
+  mut written_selection_v2 : SessionSelectionV2?
 }
 
 ///|
@@ -28,6 +30,8 @@ pub fn JsonlSessionStore::JsonlSessionStore(
     current_id: None,
     observed_selection: None,
     written_selection: None,
+    observed_selection_v2: None,
+    written_selection_v2: None,
   }
   store.subscribe_model_selection(bus)
   store
@@ -171,7 +175,10 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn save(
   self.ensure_root_dir()
   let jsonl = session_to_jsonl({
     ..session,
-    metadata: metadata_with_selection(session.metadata, self.observed_selection),
+    metadata: metadata_with_observed_selection_v2(
+      metadata_with_selection(session.metadata, self.observed_selection),
+      self.observed_selection_v2,
+    ),
   })
   @xfs.write_string_to_file(path, jsonl) catch {
     e =>
@@ -201,9 +208,9 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   if !exists {
     let session : @posoco.Session = {
       messages: messages.to_owned(),
-      metadata: metadata_with_selection(
-        Map::from_array([]),
-        self.observed_selection,
+      metadata: metadata_with_observed_selection_v2(
+        metadata_with_selection(Map::from_array([]), self.observed_selection),
+        self.observed_selection_v2,
       ),
     }
     let jsonl = session_to_jsonl(session)
@@ -220,7 +227,8 @@ pub impl @posoco.SessionStore for JsonlSessionStore with fn append_messages(
   }
   // A selection change since the last persist is recorded by rewriting only
   // the metadata line; unchanged selections keep the pure-append fast path.
-  if self.observed_selection != self.written_selection {
+  if self.observed_selection != self.written_selection ||
+    self.observed_selection_v2 != self.written_selection_v2 {
     self.refresh_metadata_selection(path)
   }
   let file = @fs.open(
@@ -262,11 +270,13 @@ fn JsonlSessionStore::refresh_metadata_selection(
   path : String,
 ) -> Unit noraise {
   let content = @xfs.read_file_to_string(path) catch { _ => return }
-  match rewrite_metadata_line(content, self.observed_selection) {
-    Some(updated) =>
-      @xfs.write_string_to_file(path, updated) catch {
-        _ => return
-      }
-    None => ()
+  let updated_legacy = rewrite_metadata_line(
+    content, self.observed_selection,
+  ).unwrap_or(content)
+  let updated = rewrite_metadata_line_v2(
+    updated_legacy, self.observed_selection_v2,
+  ).unwrap_or(updated_legacy)
+  if updated != content {
+    @xfs.write_string_to_file(path, updated) catch { _ => return }
   }
 }
