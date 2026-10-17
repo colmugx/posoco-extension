@@ -7,6 +7,7 @@ pub struct PosocoBoardExecutionAdapter {
   priv extensions : () -> Array[&@posoco.Extension]
   priv config : @posoco.AgentConfig
   priv available : () -> Bool
+  priv result_channel : BoardExecutionResultChannel?
   priv mut active : Bool
 }
 
@@ -25,8 +26,9 @@ pub fn PosocoBoardExecutionAdapter::PosocoBoardExecutionAdapter(
   extensions~ : () -> Array[&@posoco.Extension],
   config~ : @posoco.AgentConfig = @posoco.agent_config(),
   available~ : () -> Bool = () => true,
+  result_channel? : BoardExecutionResultChannel,
 ) -> PosocoBoardExecutionAdapter {
-  { extensions, config, available, active: false, }
+  { extensions, config, available, result_channel, active: false, }
 }
 
 ///|
@@ -103,7 +105,11 @@ pub extend PosocoBoardExecutionAdapter with BoardExecutionAdapter::{ready, run}
 pub impl BoardExecutionAdapter for PosocoBoardExecutionAdapter with fn ready(
   self,
 ) {
-  !self.active && (self.available)()
+  let channel_available = match self.result_channel {
+    Some(channel) => channel.available()
+    None => true
+  }
+  !self.active && (self.available)() && channel_available
 }
 
 ///|
@@ -142,6 +148,15 @@ pub impl BoardExecutionAdapter for PosocoBoardExecutionAdapter with fn run(
     gate.completed &&
     !gate.failed &&
     result.final_session_id == request.session_id {
+    if self.result_channel is Some(channel) {
+      guard gate.scope is Some(run) else { return Interrupted }
+      // A completed Agent turn stays Completed even when its bounded
+      // ephemeral output cannot be captured (oversized text or a channel
+      // already holding unread output). The channel simply stays empty:
+      // the planning consumer observes a missing result instead of the
+      // execution lying about a failed turn.
+      ignore(channel.capture(request, run, result))
+    }
     Completed
   } else {
     Interrupted

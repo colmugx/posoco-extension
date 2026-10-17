@@ -99,6 +99,7 @@ test "recovery leaves every non-running stage and status unchanged and detached"
           ),
           s.attempts[1],
         ],
+        expansions: [],
       }
       let result = recover_snapshot(snapshot, at_ms=100L).unwrap()
       assert_eq(result.snapshot, snapshot)

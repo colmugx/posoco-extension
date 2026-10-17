@@ -21,6 +21,10 @@ test "command domain errors are stable wire codes without entity or reason detai
     (DependencyCycle(cycle=[task]), "dependency_cycle"),
     (DuplicateTask(task~), "duplicate_task"),
     (DuplicateAttempt(attempt~), "duplicate_attempt"),
+    (
+      DuplicateExpansion(expansion=@domain.ExpansionId("private-expansion")),
+      "duplicate_expansion",
+    ),
     (InvalidInput(reason="secret diagnostic"), "invalid_input"),
   ]
   for (error, code) in cases {

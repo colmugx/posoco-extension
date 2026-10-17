@@ -94,6 +94,14 @@ fn assert_step(
       assert_baseline(replica, 2L, 2L)
       assert_eq(replica.tasks()[0].updated_at_ms, 1000L)
     }
+    "graph-expanded" => {
+      // Inside the canonical chain the expansion fixture predates the
+      // baseline cursor, so it is a duplicate; the standalone test below
+      // applies it from an authoritative parent baseline.
+      assert_true(outcome is @client.Duplicate)
+      assert_baseline(replica, 5L, 5L)
+      assert_eq(replica.tasks().length(), 1)
+    }
     "task-updated" => {
       assert_true(outcome is @client.Applied)
       assert_baseline(replica, 3L, 3L)
@@ -219,7 +227,10 @@ async fn canonical_chain(via_text : Bool) -> Unit {
       replica.apply_frame(frame)
     }
     assert_step(replica, name, frame, outcome)
-    if name == "telemetry" || name == "command-result" || name == "task-created" {
+    if name == "telemetry" ||
+      name == "command-result" ||
+      name == "task-created" ||
+      name == "graph-expanded" {
       assert_eq_eq(replica.tasks(), tasks_before)
       assert_eq_eq(replica.attempts(), attempts_before)
       if name != "telemetry" {
@@ -258,4 +269,37 @@ async test "standalone creation applies from an authoritative empty baseline the
   assert_eq(replica.tasks().length(), 1)
   assert_eq(replica.revision(), 1L)
   assert_eq(replica.last_seq(), 1L)
+}
+
+///|
+async test "whole graph fixture applies both forward-referenced nodes then duplicates" {
+  let replica = @client.BoardReplica::empty()
+  let parent_frame = fixture_frame(fixture_directory(), "task-created")
+  guard parent_frame is Event(parent_event) else { fail("parent event") }
+  let parent = match parent_event.payload {
+    { "task": task, .. } => task
+    _ => fail("parent task")
+  }
+  let baseline : @protocol.BoardSnapshot = {
+    protocol_version: 1,
+    board_revision: 0L,
+    last_seq: 0L,
+    payload: {
+      "board": { "revision": 0, "tasks": Json::array([parent]), "attempts": [] },
+      "events": [],
+    },
+  }
+  assert_true(replica.apply_snapshot(baseline) is @client.Applied)
+  let frame = fixture_frame(fixture_directory(), "graph-expanded")
+  assert_true(replica.apply_frame(frame) is @client.Applied)
+  assert_eq(replica.tasks().length(), 3)
+  assert_eq(replica.tasks()[1].id, "task-2")
+  assert_eq(replica.tasks()[1].dependencies, ["task-3"])
+  assert_eq(replica.tasks()[2].id, "task-3")
+  assert_eq(replica.tasks()[2].dependencies, ["task-1"])
+  assert_eq(replica.attempts().length(), 0)
+  assert_eq(replica.revision(), 1L)
+  assert_eq(replica.last_seq(), 1L)
+  assert_true(replica.apply_frame(frame) is @client.Duplicate)
+  assert_eq(replica.tasks().length(), 3)
 }

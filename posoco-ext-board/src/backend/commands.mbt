@@ -13,6 +13,7 @@ fn board_domain_error_code(error : @domain.BoardError) -> String {
     DependencyCycle(..) => "dependency_cycle"
     DuplicateTask(..) => "duplicate_task"
     DuplicateAttempt(..) => "duplicate_attempt"
+    DuplicateExpansion(..) => "duplicate_expansion"
     InvalidInput(..) => "invalid_input"
   }
 }

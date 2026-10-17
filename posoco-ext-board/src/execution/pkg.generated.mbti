@@ -110,6 +110,13 @@ pub(all) struct BoardExecutionRequest {
   timeout_ms : Int?
 }
 
+pub struct BoardExecutionResultChannel {
+  // private fields
+}
+pub fn BoardExecutionResultChannel::BoardExecutionResultChannel(max_chars~ : Int) -> Self
+pub fn BoardExecutionResultChannel::discard(Self) -> Unit
+pub fn BoardExecutionResultChannel::take(Self, BoardExecutionBinding) -> String?
+
 pub(all) struct BoardExecutionRun {
   session_id : String
   run_id : String
@@ -130,7 +137,7 @@ pub impl BoardExecutionStore for MemoryBoardExecutionStore
 pub struct PosocoBoardExecutionAdapter {
   // private fields
 }
-pub fn PosocoBoardExecutionAdapter::PosocoBoardExecutionAdapter(extensions~ : () -> Array[&@port.Extension], config? : @posoco.AgentConfig, available? : () -> Bool) -> Self
+pub fn PosocoBoardExecutionAdapter::PosocoBoardExecutionAdapter(extensions~ : () -> Array[&@port.Extension], config? : @posoco.AgentConfig, available? : () -> Bool, result_channel? : BoardExecutionResultChannel) -> Self
 pub fn PosocoBoardExecutionAdapter::ready(Self) -> Bool
 pub async fn PosocoBoardExecutionAdapter::run(Self, BoardExecutionRequest, async (BoardExecutionRun) -> Bool) -> BoardExecutionOutcome
 pub impl BoardExecutionAdapter for PosocoBoardExecutionAdapter

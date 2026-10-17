@@ -55,7 +55,29 @@ pub fn Attempt::from_record(
 }
 
 ///|
-/// Deep copy of a detached snapshot, including nested task arrays.
+/// Construct a detached snapshot record, not a committed state or a domain
+/// transition. All fields are preserved verbatim; storage validates records.
+pub fn ExpansionRecord::from_record(
+  expansion_id~ : ExpansionId,
+  parent_task_id~ : BoardTaskId,
+  workflow_id~ : String,
+  mapping~ : Array[ExpansionMapping],
+  content_digest~ : String,
+  created_at_ms~ : Int64,
+) -> ExpansionRecord {
+  {
+    expansion_id,
+    parent_task_id,
+    workflow_id,
+    mapping: mapping.copy(),
+    content_digest,
+    created_at_ms,
+  }
+}
+
+///|
+/// Deep copy of a detached snapshot, including nested task arrays and the
+/// durable expansion history.
 pub fn BoardStateSnapshot::copy_detached(
   self : BoardStateSnapshot,
 ) -> BoardStateSnapshot {
@@ -63,5 +85,6 @@ pub fn BoardStateSnapshot::copy_detached(
     revision: self.revision,
     tasks: self.tasks.map(task => task.copy_detached()),
     attempts: self.attempts.map(attempt => attempt.copy_detached()),
+    expansions: self.expansions.map(record => record.copy_detached()),
   }
 }

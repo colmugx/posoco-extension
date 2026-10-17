@@ -124,6 +124,18 @@ pub fn BoardReplica::apply_event(
     ) {
     return self.invalidate("board revision discontinuity")
   }
+  if event.kind == "board.graph.expanded" {
+    if event.board_revision != self.board_revision + 1L {
+      return self.invalidate("expansion revision discontinuity")
+    }
+    let tasks = graph_entities(event, self.task_records) catch {
+      DecodeFailure(reason) => return self.invalidate(reason)
+    }
+    self.task_records = tasks
+    self.board_revision = event.board_revision
+    self.sequence = event.seq
+    return Applied
+  }
   let update = event_entity(event) catch {
     DecodeFailure(reason) => return self.invalidate(reason)
   }

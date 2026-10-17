@@ -32,7 +32,7 @@ fn attempt_order(a : @domain.Attempt, b : @domain.Attempt) -> Int32 {
 /// ```mbt check
 /// test {
 ///   let plan = @orchestration.plan_execution(
-///     { revision: 0L, tasks: [], attempts: [], },
+///     { revision: 0L, tasks: [], attempts: [], expansions: [], },
 ///     @orchestration.ExecutionPolicy(enabled=true),
 ///     [],
 ///   )

@@ -32,6 +32,11 @@ pub(all) enum BoardError {
   DuplicateTask(task~ : BoardTaskId)
   /// QueueAttempt with an id that already exists.
   DuplicateAttempt(attempt~ : AttemptId)
+  /// ExpandGraph with an expansion id that is already part of the durable
+  /// expansion history. Reuse is rejected regardless of content: committed
+  /// expansions are never replayed, and the same identity may never bind a
+  /// second candidate.
+  DuplicateExpansion(expansion~ : ExpansionId)
   /// Structurally malformed input: empty identifiers, negative timestamps,
   /// empty titles or DoD items, no-op updates, unrecordable decisions.
   InvalidInput(reason~ : String)

@@ -1,0 +1,14 @@
+import {
+  "colmugx/posoco-ext-board/expansion",
+  "colmugx/posoco-ext-board/execution",
+  "moonbitlang/async",
+}
+
+import {
+  "colmugx/posoco",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/domain",
+} for "test"
+
+supported_targets = "+native+js"

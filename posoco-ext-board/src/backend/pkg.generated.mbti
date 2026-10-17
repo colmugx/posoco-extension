@@ -24,6 +24,8 @@ pub async fn BoardBackend::bootstrap_snapshot(Self) -> Result[@protocol.BoardSna
 pub fn BoardBackend::current_seq(Self) -> Int64
 pub fn BoardBackend::enqueue_local(Self, BoardSubscription, @protocol.BoardServerFrame) -> Unit
 pub fn BoardBackend::event_history(Self) -> Array[@protocol.BoardWireEvent]
+pub async fn BoardBackend::expand_graph(Self, expansion~ : @domain.ExpansionId, candidates~ : Array[@domain.GraphTask], parent~ : @domain.BoardTaskId, workflow~ : String, at_ms? : Int64?, expected_revision~ : Int64) -> Result[Array[@domain.BoardEvent], @coordinator.BoardCoordinatorError]
+pub async fn BoardBackend::expansion_history(Self) -> Result[Array[@domain.ExpansionRecord], @coordinator.BoardCoordinatorError]
 pub async fn BoardBackend::handle_command(Self, @protocol.BoardClientCommand) -> @protocol.BoardCommandResult
 pub fn BoardBackend::publish_telemetry(Self, board_revision~ : Int64, kind~ : String, scope? : @protocol.BoardEventScope?, payload~ : Json) -> @protocol.BoardWireEvent
 pub async fn BoardBackend::shutdown(Self) -> Unit

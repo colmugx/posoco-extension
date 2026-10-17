@@ -50,7 +50,7 @@ fn planner_snapshot(
   tasks~ : Array[@domain.BoardTask] = [],
   attempts~ : Array[@domain.Attempt] = [],
 ) -> @domain.BoardStateSnapshot {
-  { revision, tasks, attempts, }
+  { revision, tasks, attempts, expansions: [], }
 }
 
 ///|

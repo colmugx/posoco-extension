@@ -55,6 +55,17 @@ pub(all) enum BoardCommand {
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
+  /// S4E1 atomic additive graph expansion: all detached candidate tasks in
+  /// stage Created, one durable expansion record and one GraphExpanded
+  /// event. Existing tasks, edges and attempts are never touched.
+  ExpandGraph(
+    expansion~ : ExpansionId,
+    candidates~ : Array[GraphTask],
+    parent~ : BoardTaskId,
+    workflow~ : String,
+    at_ms~ : Int64,
+    expected_revision~ : Int64
+  )
 } derive(Eq, Debug)
 
 ///|
@@ -73,7 +84,8 @@ fn BoardCommand::expected_revision(self : BoardCommand) -> Int64 {
     | QueueAttempt(expected_revision~, ..)
     | StartAttempt(expected_revision~, ..)
     | FinishAttempt(expected_revision~, ..)
-    | RecordReview(expected_revision~, ..) => expected_revision
+    | RecordReview(expected_revision~, ..)
+    | ExpandGraph(expected_revision~, ..) => expected_revision
   }
 }
 
@@ -139,6 +151,22 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       SetDependencies(
         id~,
         dependencies=dependencies.copy(),
+        at_ms~,
+        expected_revision~,
+      )
+    ExpandGraph(
+      expansion~,
+      candidates~,
+      parent~,
+      workflow~,
+      at_ms~,
+      expected_revision~
+    ) =>
+      ExpandGraph(
+        expansion~,
+        candidates=candidates.map(candidate => candidate.copy_detached()),
+        parent~,
+        workflow~,
         at_ms~,
         expected_revision~,
       )

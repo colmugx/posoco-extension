@@ -13,6 +13,14 @@ See [`docs/S4B-orchestration.md`](docs/S4B-orchestration.md) for dependency poli
 input authorization, revision revalidation and conservative recovery. No browser
 execution action or automatic scheduling loop is installed.
 
+S4E1 adds opt-in `expansion` and `expansion/agent` packages: bounded Agent-generated
+proposals, explicit host approval, atomic durable additive graph commits and
+read-only replanning. Generated tasks are not automatically executable. See
+[`docs/S4E1-dynamic-expansion.md`](docs/S4E1-dynamic-expansion.md) for the schema,
+trust boundary, identity reconciliation, event contract and rollback limitations.
+No browser expansion command is installed.
+
+
 ## Current status: headless service, client replica and embedded dashboard
 
 S0 established the independent wire protocol and in-memory telemetry sequence.
@@ -83,7 +91,8 @@ host or desktop host owns its own presentation lifecycle; a TUI standalone brows
 ## Client contract and writable standalone dashboard
 
 `colmugx/posoco-ext-board/client` is a pure native/JS replica, independent of
-Board domain records and presentation frameworks. It strictly decodes the
+presentation frameworks and mutable Board ownership. It reuses the domain's
+pure graph validator for atomic expansion events. It strictly decodes the
 full wire task/attempt entities, validates composite snapshots and retained
 sequence suffixes, and consumes authoritative full-entity Board events.
 Snapshots replace rather than merge state; retained events are not replayed.

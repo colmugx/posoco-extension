@@ -247,3 +247,104 @@ fn event_entity(
     _ => raise DecodeFailure("unknown board event")
   }
 }
+
+///|
+fn graph_entities(
+  event : @protocol.BoardWireEvent,
+  existing : Array[ClientBoardTask],
+) -> Array[ClientBoardTask] raise DecodeFailure {
+  let obj = fields(event.payload)
+  let expansion = @domain.ExpansionId(text(required(obj, "expansion_id")))
+  let parent = @domain.BoardTaskId(text(required(obj, "parent_task_id")))
+  let workflow = text(required(obj, "workflow_id"))
+  let digest = text(required(obj, "content_digest"))
+  let at_ms = integer(required(obj, "at_ms"))
+  let tasks = items(required(obj, "tasks")).map(task)
+  let mapping = items(required(obj, "mapping"))
+  guard tasks.length() == mapping.length() else {
+    raise DecodeFailure("expansion mapping mismatch")
+  }
+  let candidates : Array[@domain.GraphTask] = []
+  for i, entity in tasks {
+    let entry = fields(mapping[i])
+    guard text(required(entry, "task_id")) == entity.id &&
+      entity.stage == Created &&
+      entity.created_at_ms == at_ms &&
+      entity.updated_at_ms == at_ms &&
+      entity.ready_since_ms == None else {
+      raise DecodeFailure("expansion task metadata mismatch")
+    }
+    candidates.push(
+      @domain.GraphTask::from_record(
+        id=@domain.BoardTaskId(entity.id),
+        title=entity.title,
+        description=entity.description,
+        priority=domain_priority(entity.priority),
+        definition_of_done=entity.definition_of_done,
+        dependencies=entity.dependencies.map(id => @domain.BoardTaskId(id)),
+        local_ref=text(required(entry, "local_ref")),
+      ),
+    )
+  }
+  guard @domain.valid_expansion_digest(digest) &&
+    @domain.expansion_content_digest(
+      expansion~,
+      candidates~,
+      parent~,
+      workflow~,
+    ) ==
+    digest else {
+    raise DecodeFailure("expansion digest mismatch")
+  }
+  // Reuse the domain's whole-proposal DAG and identity validation on a detached
+  // structural baseline. No mutation is exposed to browser command callers.
+  let snapshot : @domain.BoardStateSnapshot = {
+    revision: 0L,
+    attempts: [],
+    expansions: [],
+    tasks: existing.map(entity => {
+      @domain.BoardTask::from_record(
+        id=@domain.BoardTaskId(entity.id),
+        title=entity.title,
+        description=entity.description,
+        stage=@domain.Created,
+        priority=domain_priority(entity.priority),
+        definition_of_done=entity.definition_of_done,
+        dependencies=entity.dependencies.map(id => @domain.BoardTaskId(id)),
+        created_at_ms=entity.created_at_ms,
+        updated_at_ms=entity.updated_at_ms,
+        ready_since_ms=entity.ready_since_ms,
+      )
+    }),
+  }
+  let state = match @domain.BoardState::from_snapshot(snapshot) {
+    Ok(state) => state
+    Err(_) => raise DecodeFailure("invalid expansion baseline")
+  }
+  match
+    @domain.BoardDomain::propose(
+      state,
+      @domain.ExpandGraph(
+        expansion~,
+        candidates~,
+        parent~,
+        workflow~,
+        at_ms~,
+        expected_revision=0L,
+      ),
+    ) {
+    Err(_) => raise DecodeFailure("invalid expansion graph")
+    Ok(_) => ()
+  }
+  existing.map(task => task.copy_detached()) + tasks
+}
+
+///|
+fn domain_priority(priority : ClientBoardPriority) -> @domain.BoardPriority {
+  match priority {
+    Low => @domain.Low
+    Normal => @domain.Normal
+    High => @domain.High
+    Critical => @domain.Critical
+  }
+}

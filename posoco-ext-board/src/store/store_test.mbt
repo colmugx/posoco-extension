@@ -53,6 +53,7 @@ test "public domain record factory and detached snapshot codec roundtrip" {
     revision: 9007199254740993L,
     tasks: [task],
     attempts: [attempt],
+    expansions: [],
   }
   dod.clear()
   dependencies.push(task.id)

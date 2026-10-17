@@ -155,11 +155,14 @@ pub extend Attempt with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// Detached point-in-time view of the whole board. Deep copies only; never
-/// aliases committed state.
+/// aliases committed state. `expansions` carries the durable S4E1 expansion
+/// history (identity, lineage, local_ref mapping, normalized content
+/// digest); boards without expansions carry an empty array.
 pub(all) struct BoardStateSnapshot {
   revision : Int64
   tasks : Array[BoardTask]
   attempts : Array[Attempt]
+  expansions : Array[ExpansionRecord]
 } derive(Eq, Debug)
 
 ///|

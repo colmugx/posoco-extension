@@ -287,6 +287,34 @@ pub fn project_event(
         ("decision", wire_decision(decision)),
         ("at_ms", wire_number(at_ms)),
       ])
+    GraphExpanded(
+      expansion~,
+      tasks~,
+      parent~,
+      workflow~,
+      mapping~,
+      digest~,
+      at_ms~
+    ) =>
+      wire_event(kind="board.graph.expanded", payload=[
+        ("expansion_id", Json::string(expansion.value)),
+        ("tasks", Json::array(tasks.map(task_to_json))),
+        ("parent_task_id", Json::string(parent.value)),
+        ("workflow_id", Json::string(workflow)),
+        (
+          "mapping",
+          Json::array(
+            mapping.map(entry => {
+              Json::object({
+                "local_ref": Json::string(entry.local_ref),
+                "task_id": Json::string(entry.task_id.value),
+              })
+            }),
+          ),
+        ),
+        ("content_digest", Json::string(digest)),
+        ("at_ms", wire_number(at_ms)),
+      ])
   }
   { ..wire, board_revision: snapshot.revision, }
 }

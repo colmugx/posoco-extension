@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/expansion/agent"
+
+import {
+  "colmugx/posoco-ext-board/execution",
+  "colmugx/posoco-ext-board/expansion",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct OwnedAgentPlanSource {
+  // private fields
+}
+pub fn OwnedAgentPlanSource::OwnedAgentPlanSource(owner~ : @execution.BoardExecutionOwner, channel~ : @execution.BoardExecutionResultChannel, request~ : @execution.BoardExecutionRequest, context~ : @expansion.DynamicPlanContext, now_ms~ : () -> Int64, authorize? : (@expansion.DynamicPlanContext) -> Bool) -> Self
+pub async fn OwnedAgentPlanSource::generate(Self, @expansion.DynamicPlanContext) -> Result[@expansion.DynamicPlanReply, @expansion.DynamicPlanSourceError]
+pub impl @expansion.DynamicPlanSource for OwnedAgentPlanSource
+
+// Type aliases
+
+// Traits

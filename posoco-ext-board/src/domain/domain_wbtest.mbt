@@ -871,6 +871,7 @@ test "queries return deep copies that never alias committed state" {
       },
     ],
     attempts: [],
+    expansions: [],
   })
 }
 

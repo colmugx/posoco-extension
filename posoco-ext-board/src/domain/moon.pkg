@@ -1,5 +1,7 @@
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/crypto",
 }
 
 supported_targets = "+native +js"

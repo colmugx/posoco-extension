@@ -336,12 +336,74 @@ fn attempt_decode(value : Json) -> @domain.Attempt raise CodecError {
 }
 
 ///|
+/// Durable S4E1 expansion record: identity, lineage, local_ref mapping and
+/// the normalized content binding. Only digests and identifiers are
+/// persisted — never raw proposal text.
+fn mapping_json(mapping : Array[@domain.ExpansionMapping]) -> Json {
+  Json::array(
+    mapping.map(entry => {
+      Json::object({
+        "local_ref": Json::string(entry.local_ref),
+        "task_id": Json::string(entry.task_id.value),
+      })
+    }),
+  )
+}
+
+///|
+fn mapping_decode(
+  value : Json,
+) -> Array[@domain.ExpansionMapping] raise CodecError {
+  array(value).map(value => {
+    let f = fields(value, ["local_ref", "task_id"])
+    { local_ref: nonempty(f["local_ref"]), task_id: task_id(f["task_id"]), }
+  })
+}
+
+///|
+fn expansion_json(record : @domain.ExpansionRecord) -> Json {
+  Json::object({
+    "expansion_id": Json::string(record.expansion_id.value),
+    "parent_task_id": Json::string(record.parent_task_id.value),
+    "workflow_id": Json::string(record.workflow_id),
+    "mapping": mapping_json(record.mapping),
+    "content_digest": Json::string(record.content_digest),
+    "created_at_ms": number(record.created_at_ms),
+  })
+}
+
+///|
+fn expansion_decode(value : Json) -> @domain.ExpansionRecord raise CodecError {
+  let f = fields(value, [
+    "expansion_id", "parent_task_id", "workflow_id", "mapping", "content_digest",
+    "created_at_ms",
+  ])
+  @domain.ExpansionRecord::from_record(
+    expansion_id=@domain.ExpansionId(nonempty(f["expansion_id"])),
+    parent_task_id=task_id(f["parent_task_id"]),
+    workflow_id=nonempty(f["workflow_id"]),
+    mapping=mapping_decode(f["mapping"]),
+    content_digest=nonempty(f["content_digest"]),
+    created_at_ms=integer(f["created_at_ms"]),
+  )
+}
+
+///|
+fn expansions_json(expansions : Array[@domain.ExpansionRecord]) -> Json {
+  Json::array(expansions.map(expansion_json))
+}
+
+///|
+/// Snapshot schema v2 adds the durable expansion history. v1 boards carry
+/// no expansions key and decode with an empty history, so every pre-S4E1
+/// snapshot keeps loading unchanged.
 fn snapshot_json(snapshot : @domain.BoardStateSnapshot) -> Json {
   Json::object({
-    "schema_version": Json::number(1),
+    "schema_version": Json::number(2),
     "revision": number(snapshot.revision),
     "tasks": Json::array(snapshot.tasks.map(task_json)),
     "attempts": Json::array(snapshot.attempts.map(attempt_json)),
+    "expansions": expansions_json(snapshot.expansions),
   })
 }
 
@@ -354,13 +416,48 @@ fn version(f : Map[String, Json]) -> Unit raise CodecError {
 }
 
 ///|
+fn snapshot_version(value : Json) -> Int64 raise CodecError {
+  let mut schema = 0L
+  match value {
+    Json::Number(1, ..) => schema = 1L
+    Json::Number(2, ..) => schema = 2L
+    _ => bad("unsupported schema version")
+  }
+  schema
+}
+
+///|
+/// v1 boards (pre-S4E1) carry exactly the four historical keys and decode
+/// with an empty expansion history; v2 boards carry the durable expansion
+/// history. Any other shape is rejected.
 fn snapshot_decode(value : Json) -> @domain.BoardStateSnapshot raise CodecError {
-  let f = fields(value, ["schema_version", "revision", "tasks", "attempts"])
-  version(f)
+  let object = match value {
+    Json::Object(object) => object
+    _ => raise Bad("expected object")
+  }
+  let schema = match object.get("schema_version") {
+    Some(value) => snapshot_version(value)
+    None => raise Bad("missing field 'schema_version'")
+  }
+  if schema == 1L && object.contains("expansions") {
+    bad("unexpected field 'expansions' for schema version 1")
+  }
+  let keys = if schema == 1L {
+    ["schema_version", "revision", "tasks", "attempts"]
+  } else {
+    ["schema_version", "revision", "tasks", "attempts", "expansions"]
+  }
+  let f = fields(value, keys)
+  let expansions : Array[@domain.ExpansionRecord] = if schema == 1L {
+    []
+  } else {
+    array(f["expansions"]).map(expansion_decode)
+  }
   let snapshot : @domain.BoardStateSnapshot = {
     revision: integer(f["revision"]),
     tasks: array(f["tasks"]).map(task_decode),
     attempts: array(f["attempts"]).map(attempt_decode),
+    expansions,
   }
   validate_references(snapshot)
   snapshot
@@ -419,6 +516,11 @@ fn validate_references(
       bad("attempt task missing")
     }
     attempts[attempt.id.value] = true
+  }
+  // The domain is the single authority for durable expansion identity rules.
+  match @domain.BoardState::from_snapshot(snapshot) {
+    Err(_) => bad("invalid snapshot identity")
+    Ok(_) => ()
   }
 }
 
