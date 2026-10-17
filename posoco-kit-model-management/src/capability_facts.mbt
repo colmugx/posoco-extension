@@ -219,3 +219,6 @@ pub impl ModelFactsSource for ManagerStatusAdapter with fn model_facts(
     provenance="model-management",
   )
 }
+
+///|
+pub extend ManagerStatusAdapter with ModelFactsSource::{model_facts}
