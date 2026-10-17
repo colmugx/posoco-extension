@@ -208,6 +208,7 @@ async fn Runtime::execute(
     let task = group.spawn(allow_failure=true, () => {
       match
         @async.handle_cancellation(() => {
+          let toolchain = self.resolve_toolchain()
           @async.with_timeout(timeout_ms, () => {
             let directory = @async.protect_from_cancel(() => {
               temporary_directory("posoco-mbtx-invocation-")
@@ -215,7 +216,7 @@ async fn Runtime::execute(
             defer remove_directory(directory)
             let policy = directory + "/policy.json"
             write_text(policy, guest_policy().stringify())
-            let launcher = self.resolve_launcher()
+            let launcher = toolchain.launcher
             let path = match program {
               Source(source) => {
                 let path = directory + "/program.mbtx"
@@ -226,8 +227,8 @@ async fn Runtime::execute(
             }
             let (command, args) = match launcher {
               Moon => {
-                let artifact = self.build_program(path, directory)
-                (self.moonrun, [artifact, "--policy", policy])
+                let artifact = self.build_program(path, directory, toolchain)
+                (toolchain.moonrun, [artifact, "--policy", policy])
               }
               Moonx => {
                 if !path.has_suffix(".mbtx") {
@@ -236,7 +237,7 @@ async fn Runtime::execute(
                   )
                 }
                 (
-                  self.moonx,
+                  toolchain.moonx,
                   ["--target", "wasm", "--experimental-policy", policy, path],
                 )
               }
@@ -247,7 +248,7 @@ async fn Runtime::execute(
                 process, input, tools, invoker, max_frame_bytes, max_pending, max_calls,
                 max_output_bytes, handshake_ms,
               )
-            })
+            }, extra_env=mbtx_env(toolchain))
           }) catch {
             error =>
               if error is @async.TimeoutError {

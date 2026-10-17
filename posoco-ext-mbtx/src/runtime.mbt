@@ -58,6 +58,7 @@ pub struct Runtime {
   priv moon : String
   priv moonx : String
   priv moonrun : String
+  priv toolchain : ToolchainManager
   priv active : Map[String, () -> Unit]
   priv mut closed : Bool
 }
@@ -68,8 +69,11 @@ pub fn Runtime::Runtime(
   moon~ : String = "moon",
   moonx~ : String = "moonx",
   moonrun~ : String = "moonrun",
+  bus? : @devkit.EventBus,
+  home? : String,
+  prefer_system~ : Bool = true,
 ) -> Runtime {
-  { launcher, moon, moonx, moonrun, active: Map([]), closed: false, }
+  { launcher, moon, moonx, moonrun, toolchain: ToolchainManager(bus?, home?, prefer_system~), active: Map([]), closed: false, }
 }
 
 ///|
@@ -91,4 +95,10 @@ pub fn Runtime::close(self : Runtime) -> Unit raise RuntimeError {
     )
   }
   self.closed = true
+}
+
+///|
+/// Read-only diagnostics; querying never triggers a download.
+pub fn Runtime::toolchain_status(self : Runtime) -> String {
+  self.toolchain.status()
 }

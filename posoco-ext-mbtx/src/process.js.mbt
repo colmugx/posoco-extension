@@ -17,9 +17,10 @@ extern "js" fn open_node_process(
   args : FixedArray[String],
   cwd : String,
   inherit_env : Bool,
+  extra_env_json : String,
 ) -> NodeProcess =
-  #| (spawn, command, args, cwd, inherit) => {
-  #|   const p = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], env: inherit ? process.env : {PATH: process.env.PATH ?? ''}, ...(cwd ? {cwd} : {}) });
+  #| (spawn, command, args, cwd, inherit, extra_env_json) => {
+  #|   const p = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], env: {...(inherit ? process.env : {PATH: process.env.PATH ?? ''}), ...JSON.parse(extra_env_json)}, ...(cwd ? {cwd} : {}) });
   #|   const attach = stream => {
   #|     const s = {stream, q: [], bytes: 0, ended: false, error: '', waiter: null};
   #|     const wake = () => { const w = s.waiter; s.waiter = null; if (w) w(); };
@@ -177,6 +178,7 @@ async fn[X] with_process(
   cwd : String?,
   inherit_env : Bool,
   body : async (&GuestProcess) -> X,
+  extra_env~ : Map[String, String] = Map([]),
 ) -> X {
   let raw = open_node_process(
     node_spawn,
@@ -184,7 +186,19 @@ async fn[X] with_process(
     FixedArray::from_array(args),
     cwd.unwrap_or(""),
     inherit_env,
+    mbtx_env_json(extra_env),
   )
   defer @async.protect_from_cancel(() => node_stop(raw).wait())
   body(JsProcess::{ raw, })
+}
+
+///|
+/// Child processes are never permitted to inherit a different toolchain by
+/// accident. String encoding also keeps the FFI independent of Json internals.
+fn mbtx_env_json(extra_env : Map[String, String]) -> String {
+  let fields : Array[(String, Json)] = []
+  for key, value in extra_env {
+    fields.push((key, Json::string(value)))
+  }
+  Json::object(Map::from_array(fields)).stringify()
 }

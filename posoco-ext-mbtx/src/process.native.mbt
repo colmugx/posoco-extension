@@ -33,6 +33,7 @@ async fn[X] with_process(
   cwd : String?,
   inherit_env : Bool,
   body : async (&GuestProcess) -> X,
+  extra_env~ : Map[String, String] = Map([]),
 ) -> X {
   @async.with_task_group(group => {
     @async.pause()
@@ -51,6 +52,7 @@ async fn[X] with_process(
       stderr=child_stderr,
       cwd?=cwd.map(path => path[:]),
       inherit_env~,
+      extra_env~,
       no_wait=true,
       cancel_handler=@process.graceful_cancel(timeout=1000),
     )

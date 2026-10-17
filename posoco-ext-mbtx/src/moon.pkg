@@ -5,6 +5,9 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/js_async",
   "moonbitlang/async/process",
+  "moonbitlang/core/env",
+  "posoco/devkit",
+  "colmugx/posoco",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
 }
@@ -12,6 +15,8 @@ import {
 options(
   targets: {
     "process.native.mbt": [ "native" ],
+    "toolchain_platform.native.mbt": [ "native" ],
+    "toolchain_platform.js.mbt": [ "js" ],
     "process.js.mbt": [ "js" ],
     "filesystem.native.mbt": [ "native" ],
     "filesystem.js.mbt": [ "js" ],

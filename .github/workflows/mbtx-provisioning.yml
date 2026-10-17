@@ -1,0 +1,43 @@
+name: MBTX provisioning and runtime
+
+on:
+  pull_request:
+    paths:
+      - "posoco-ext-mbtx/**"
+      - ".github/workflows/mbtx-provisioning.yml"
+
+jobs:
+  mbtx:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Install MoonBit (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Join-Path $env:RUNNER_TEMP "install-moonbit.ps1"
+          Invoke-WebRequest -Uri "https://cli.moonbitlang.com/install/powershell.ps1" -OutFile $installer
+          & $installer
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $env:USERPROFILE ".moon\bin")
+      - name: Refresh Mooncakes
+        run: moon update
+      - name: MBTX native tests
+        run: moon test --target native -p colmugx/posoco-ext-mbtx --output-json
+      - name: MBTX JavaScript tests
+        run: moon test --target js -p colmugx/posoco-ext-mbtx --output-json
+      - name: MBTX first-run provisioning and cached reuse
+        env:
+          MBTX_BOOTSTRAP_TEST: "1"
+        run: moon test --target js -p colmugx/posoco-ext-mbtx --output-json
