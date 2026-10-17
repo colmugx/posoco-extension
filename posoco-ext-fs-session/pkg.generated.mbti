@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-fs-session"
 
 import {
+  "colmugx/posoco-kit-model-management",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
@@ -13,11 +14,15 @@ import {
 // Values
 pub const MODEL_SELECTION_METADATA_KEY : String = "posoco.model_selection"
 
+pub const MODEL_SELECTION_V2_METADATA_KEY : String = "posoco.model_selection_v2"
+
 pub fn companion_path(String, String, ext? : String) -> String
 
 pub fn display_title(SessionSummary) -> String
 
 pub fn jsonl_session_path(String, String) -> String
+
+pub fn metadata_with_selection_v2(Map[String, Json], SessionSelectionV2) -> Map[String, Json]
 
 pub fn model_selection_from_metadata(Map[String, Json]) -> (String, String?)?
 
@@ -31,7 +36,19 @@ pub fn project_slug(String) -> String
 
 pub fn rewrite_metadata_line(String, (String, String?)?) -> String?
 
+pub fn rewrite_metadata_line_v2(String, SessionSelectionV2?) -> String?
+
 pub fn session_from_jsonl(String) -> Result[@types.Session, @error.SessionError]
+
+pub fn session_selection_v2_for_owner(Map[String, Json], String) -> SessionSelectionV2?
+
+pub fn session_selection_v2_from_json(Json) -> SessionSelectionV2?
+
+pub fn session_selection_v2_from_metadata(Map[String, Json]) -> SessionSelectionV2?
+
+pub fn session_selection_v2_of(@posoco-kit-model-management.SelectionRef) -> SessionSelectionV2?
+
+pub fn session_selection_v2_to_json(SessionSelectionV2) -> Json
 
 pub fn session_to_jsonl(@types.Session) -> String
 
@@ -58,14 +75,27 @@ pub async fn JsonlSessionStore::invoke(Self, String, Json) -> @port.CommandOutco
 pub async fn JsonlSessionStore::list_ids(Self) -> Array[String] raise @error.SessionError
 pub async fn JsonlSessionStore::load(Self, String) -> @types.Session raise @error.SessionError
 pub fn JsonlSessionStore::manifest(Self) -> @port.ExtensionManifest
+pub fn JsonlSessionStore::observe_selection_v2(Self, SessionSelectionV2) -> Unit
 pub fn JsonlSessionStore::of_project(home~ : String, cwd~ : String) -> Self
 pub async fn JsonlSessionStore::save(Self, String, @types.Session) -> Unit raise @error.SessionError
+pub async fn JsonlSessionStore::selection_for_owner(Self, String, String) -> @posoco-kit-model-management.SelectionRef? raise @error.SessionError
 pub async fn JsonlSessionStore::set_session_name(Self, String, String) -> Unit raise @error.SessionError
 pub async fn JsonlSessionStore::summary(Self, String) -> SessionSummary raise @error.SessionError
 pub async fn JsonlSessionStore::truncate(Self, String, Int) -> Unit raise @error.SessionError
 pub impl @port.CommandPort for JsonlSessionStore
 pub impl @port.Extension for JsonlSessionStore
 pub impl @port.SessionStore for JsonlSessionStore
+
+pub(all) struct SessionSelectionV2 {
+  owner : String
+  model_id : String
+  effort : String?
+  pending : Bool
+  revision : Int64
+} derive(Eq, @debug.Debug)
+pub fn SessionSelectionV2::equal(Self, Self) -> Bool
+pub fn SessionSelectionV2::not_equal(Self, Self) -> Bool
+pub fn SessionSelectionV2::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionSummary {
   id : String
@@ -81,37 +111,3 @@ pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 // Type aliases
 
 // Traits
-
-pub const MODEL_SELECTION_V2_METADATA_KEY : String
-
-pub(all) struct SessionSelectionV2 {
-  owner : String
-  model_id : String
-  effort : String?
-  pending : Bool
-  revision : Int64
-}
-
-pub fn SessionSelectionV2::equal(Self, Self) -> Bool
-
-pub fn SessionSelectionV2::not_equal(Self, Self) -> Bool
-
-pub fn SessionSelectionV2::to_repr(Self) -> @debug.Repr
-
-pub fn JsonlSessionStore::observe_selection_v2(Self, SessionSelectionV2) -> Unit
-
-pub fn metadata_with_selection_v2(Map[String, Json], SessionSelectionV2) -> Map[String, Json]
-
-pub fn rewrite_metadata_line_v2(String, SessionSelectionV2?) -> String?
-
-pub fn session_selection_v2_for_owner(Map[String, Json], String) -> SessionSelectionV2?
-
-pub fn session_selection_v2_from_json(Json) -> SessionSelectionV2?
-
-pub fn session_selection_v2_from_metadata(Map[String, Json]) -> SessionSelectionV2?
-
-pub fn session_selection_v2_to_json(SessionSelectionV2) -> Json
-
-pub async fn JsonlSessionStore::selection_for_owner(Self, String, String) -> @modelmgmt.SelectionRef? raise @error.SessionError
-
-pub fn session_selection_v2_of(@modelmgmt.SelectionRef) -> SessionSelectionV2?
