@@ -48,12 +48,13 @@ async fn Runtime::build_program(
   self : Runtime,
   program : String,
   directory : String,
+  toolchain : ResolvedToolchain,
 ) -> String {
   if program.has_suffix(".wasm") {
     return program
   }
   let (code, diagnostics) = collect_process(
-    self.moon,
+    toolchain.moon,
     [
       "run",
       "--build-only",
@@ -65,9 +66,30 @@ async fn Runtime::build_program(
       program,
     ],
     None,
+    extra_env=mbtx_env(toolchain),
   )
   if code != 0 {
     raise RuntimeError::BuildFailed(diagnostics)
   }
   artifact_path(diagnostics)
+}
+
+///|
+/// Automatic paths use extension-owned discovery. Custom launcher paths
+/// preserve the old explicit override semantics, with no auto download.
+async fn Runtime::resolve_toolchain(self : Runtime) -> ResolvedToolchain {
+  if self.launcher == Auto && self.moon == "moon" &&
+    self.moonx == "moonx" && self.moonrun == "moonrun" {
+    return self.toolchain.ensure_ready()
+  }
+  let launcher = self.resolve_launcher()
+  {
+    origin: System,
+    version: "explicit",
+    launcher,
+    moon: self.moon,
+    moonx: self.moonx,
+    moonrun: self.moonrun,
+    bin_dir: "",
+  }
 }
