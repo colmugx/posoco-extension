@@ -377,3 +377,49 @@ async test "io[native]: checkpoint with metadata keeps the selection record" {
     _ => ()
   }
 }
+
+///|
+async test "io[native]: v2 injection persists on save and append" {
+  let root = fresh_root("selection-v2")
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
+  let first : @posoco-ext-fs-session.SessionSelectionV2 = {
+    owner: "owned-manager",
+    model_id: "opaque-one",
+    effort: Some("high"),
+    pending: false,
+    revision: 1L,
+  }
+  store.observe_selection_v2(first)
+  store.save("sess_v2", {
+    messages: [selection_test_message("first")],
+    metadata: Map::from_array([]),
+  }) catch { e => fail("v2 save failed: \{e}") }
+  let saved = store.load("sess_v2") catch {
+    e => fail("v2 load failed: \{e}")
+  }
+  assert_eq(
+    @posoco-ext-fs-session.session_selection_v2_from_metadata(saved.metadata),
+    Some(first),
+  )
+  let second = { ..first, model_id: "opaque-two", revision: 2L, }
+  store.observe_selection_v2(second)
+  store.append_messages("sess_v2", 1, [selection_test_message("next")][:]) catch {
+    e => fail("v2 append failed: \{e}")
+  }
+  let reread = store.load("sess_v2") catch {
+    e => fail("v2 reread failed: \{e}")
+  }
+  assert_eq(reread.messages.length(), 2)
+  assert_eq(
+    @posoco-ext-fs-session.session_selection_v2_for_owner(
+      reread.metadata, "owned-manager",
+    ),
+    Some(second),
+  )
+  assert_true(
+    @posoco-ext-fs-session.session_selection_v2_for_owner(
+      reread.metadata, "other-manager",
+    ) is None,
+  )
+  @fs.rmdir(root, recursive=true) catch { _ => () }
+}
