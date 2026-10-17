@@ -12,6 +12,7 @@ async fn collect_process(
   args : Array[String],
   cwd : String?,
   max_bytes~ : Int32 = 1048576,
+  extra_env~ : Map[String, String] = Map([]),
 ) -> (Int32, String) {
   with_process(command, args, cwd, true, process => {
     @async.with_task_group(group => {
@@ -46,5 +47,5 @@ async fn collect_process(
         @utf8.decode(Bytes::from_array(diagnostics)),
       )
     })
-  })
+  }, extra_env~)
 }

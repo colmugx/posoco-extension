@@ -4,27 +4,29 @@ An experimental **MoonBit guest runtime for Posoco Code Mode**. MBTX executes
 programs, not shell commands. Plugin Mode and Posoco-scoped tool invocation are
 not implemented; this package does not register an Extension or ToolProvider yet.
 
-## Prerequisite: an installed MoonBit runner
+## Automatic MoonBit toolchain provisioning
 
-The user provides the MoonBit toolchain or a callable `moonx`. Nothing here
-installs a compiler, locates `.mooncakes`, vendors dependency sources, or maintains
-an alternative package resolver.
+No host-side toolchain setup is required. A default Runtime first probes a
+working \`moonx\` or \`moon\`/\`moonrun\` on PATH, then under the official
+\`~/.moon/bin\` directory. If neither works, it reuses or installs a private
+MoonBit toolchain under \`~/.cetas/moon_toolchain/current\`.
 
-`Runtime()` probes `moonx --version` first, then `moon --version` if moonx is
-unavailable. Explicit `launcher=Moon` or `launcher=Moonx` selects one path;
-`moon`, `moonx`, and `moonrun` executable names can be overridden. Missing runners
-produce `ToolchainUnavailable` with the probe diagnostics.
+The managed version is pinned by \`MBTX_TOOLCHAIN_VERSION\`; installation uses
+the official HTTPS MoonBit installer in an isolated \`MOON_HOME\`, checks the
+compiler version, and refuses to publish failed or partially installed stages.
+A file lock prevents competing host processes from installing simultaneously.
+The first call requiring MBTX may need network access and an available
+\`curl\`/PowerShell or Bash executable. A cached toolchain works offline when
+guest dependencies are also cached.
 
-- **Moonx:** runs a normal `.mbtx` file with `--target wasm` and the host's
-  `--experimental-policy`. Runtime does not invoke `moon` or `moonrun` separately.
-- **Moon:** uses `moon run --build-only --target wasm --output-json`, then directly
-  owns the reported artifact's `moonrun --policy` process. It does not leave a
-  `moon run` wrapper between cancellation and the guest.
+The Runtime supports a \`bus\` keyword argument. When provided, it publishes
+\`mbtx: checking/downloading/initializing/verifying\` on the existing devkit
+status bus and unregisters the segment on success. The optional Posoco
+\`MbtxExtension\` exposes a read-only \`/mbtx status\` command.
 
-Imports, dependency resolution/downloads and compiler dependency caches belong to
-MoonBit. There is no offline/frozen requirement. Runtime removes its temporary
-scripts, policy files and build outputs when the invocation settles; it does not
-clear the user's toolchain caches.
+Explicit custom launcher paths retain their previous behavior without automatic
+installation. The guest SDK imports are still resolved through MoonBit, not
+bundled by the host. ToolInvoker/Posoco governance integration remains separate.
 
 ## Host API
 
