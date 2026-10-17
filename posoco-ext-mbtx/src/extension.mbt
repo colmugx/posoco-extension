@@ -78,3 +78,9 @@ pub impl @posoco.CommandPort for MbtxExtension with fn invoke(
     _ => raise @posoco.CommandError::NotFound(id)
   }
 }
+
+///|
+pub extend MbtxExtension with @posoco.Extension::{manifest, extension_id}
+
+///|
+pub extend MbtxExtension with @posoco.CommandPort::{commands, invoke}

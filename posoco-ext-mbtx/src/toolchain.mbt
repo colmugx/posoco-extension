@@ -10,6 +10,9 @@ pub(all) enum ToolchainOrigin {
 pub extend ToolchainOrigin with Eq::{equal, not_equal}
 
 ///|
+pub extend ToolchainOrigin with Debug::{to_repr}
+
+///|
 pub(all) struct ResolvedToolchain {
   origin : ToolchainOrigin
   version : String
@@ -225,7 +228,7 @@ async fn ToolchainManager::discover(self : ToolchainManager) -> ResolvedToolchai
 
 ///|
 async fn ToolchainManager::managed_candidate(
-  self : ToolchainManager,
+  _self : ToolchainManager,
   root : String,
 ) -> ResolvedToolchain? {
   match mbtx_probe(mbtx_bin(root, "moonc"), ["-v"]) {
