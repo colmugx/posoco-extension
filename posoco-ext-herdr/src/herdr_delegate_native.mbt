@@ -3,10 +3,28 @@
 // @env; execution spawns the herdr CLI through @process.
 
 ///|
+// The pane command builder currently emits a POSIX shell script; it must not
+// advertise a working delegate under Windows shells before a platform-aware
+// pane-run command builder exists.
+#cfg(target="native")
+fn herdr_delegate_os_supported() -> Bool {
+  ffi_windows_host() == 0
+}
+
+///|
+#cfg(not(target="native"))
+fn herdr_delegate_os_supported() -> Bool {
+  true
+}
+
+///|
 pub fn HerdrDelegate::detect(
   cwd~ : String,
   parent_yolo~ : (() -> Bool)? = None,
 ) -> HerdrDelegate? {
+  if !herdr_delegate_os_supported() {
+    return None
+  }
   herdr_delegate_gate(
     @env.get_env_var("HERDR_ENV"),
     @env.get_env_var("HERDR_PANE_ID"),
