@@ -1,25 +1,25 @@
 ///|
 test "selection refs preserve opaque manager and model ids" {
   let manager = fake_manager()
-  let ref = selection_ref(manager, revision=7L)
-  assert_eq(ref.owner, "fake")
-  assert_eq(ref.model_id, "plain")
-  assert_eq(ref.effort, None)
-  assert_eq(ref.revision, 7L)
-  assert_true(ref.valid())
+  let selection = selection_ref(manager, revision=7L)
+  assert_eq(selection.owner, "fake")
+  assert_eq(selection.model_id, "plain")
+  assert_eq(selection.effort, None)
+  assert_eq(selection.revision, 7L)
+  assert_true(selection.valid())
 }
 
 ///|
 test "invalid unqualified selection refs fail closed" {
-  let ref : SelectionRef = {
+  let selection : SelectionRef = {
     owner: "",
     model_id: "same-name",
     effort: None,
     pending: false,
     revision: 0L,
   }
-  assert_false(ref.valid())
-  assert_false({ ..ref, owner: "router", revision: -1L }.valid())
+  assert_false(selection.valid())
+  assert_false({ ..selection, owner: "router", revision: -1L }.valid())
 }
 
 ///|
@@ -36,8 +36,8 @@ test "optional observations distinguish unknown stale and unsupported" {
   )
   let unknown : ModelObservation[Int] = Unknown("not observed")
   let unsupported : ModelObservation[Int] = Unsupported
-  assert_true(known is Known(..))
-  assert_true(stale is Stale(..))
-  assert_true(unknown is Unknown(..))
+  assert_true(known is Known(_))
+  assert_true(stale is Stale(_))
+  assert_true(unknown is Unknown(_))
   assert_true(unsupported is Unsupported)
 }
