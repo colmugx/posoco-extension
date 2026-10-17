@@ -15,9 +15,9 @@ test "context percentage requires actual nonzero capacity" {
     observed_at_ms: 1L,
   }
   assert_eq(f.context_percent(), Some(25.0))
-  assert_eq({ ..f, context_capacity_tokens: None }.context_percent(), None)
-  assert_eq({ ..f, context_capacity_tokens: Some(0L) }.context_percent(), None)
-  assert_eq({ ..f, context_used_tokens: Some(-1L) }.context_percent(), None)
+  assert_eq({ ..f, context_capacity_tokens: None, }.context_percent(), None)
+  assert_eq({ ..f, context_capacity_tokens: Some(0L), }.context_percent(), None)
+  assert_eq({ ..f, context_used_tokens: Some(-1L), }.context_percent(), None)
 }
 
 ///|
@@ -55,8 +55,8 @@ test "quota windows preserve independent source and time domains" {
         source_ref: "opaque-B",
         display_label: "Subscription B",
         windows: [
-          { ..five_hour, remaining_percent: Some(80.0) },
-          { ..week, remaining_percent: Some(10.0) },
+          { ..five_hour, remaining_percent: Some(80.0), },
+          { ..week, remaining_percent: Some(10.0), },
         ],
         eligible: Some(true),
         observed_at_ms: Some(2L),

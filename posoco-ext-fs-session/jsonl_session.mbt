@@ -289,14 +289,17 @@ fn JsonlSessionStore::refresh_metadata_selection(
   path : String,
 ) -> Bool noraise {
   let content = @xfs.read_file_to_string(path) catch { _ => return false }
-  let updated_legacy = rewrite_metadata_line(
-    content, self.observed_selection,
-  ).unwrap_or(content)
+  let updated_legacy = rewrite_metadata_line(content, self.observed_selection).unwrap_or(
+    content,
+  )
   let updated = rewrite_metadata_line_v2(
-    updated_legacy, self.observed_selection_v2,
+    updated_legacy,
+    self.observed_selection_v2,
   ).unwrap_or(updated_legacy)
   if updated != content {
-    @xfs.write_string_to_file(path, updated) catch { _ => return false }
+    @xfs.write_string_to_file(path, updated) catch {
+      _ => return false
+    }
   }
   true
 }

@@ -296,17 +296,24 @@ fn JsonlSessionStore::refresh_metadata_selection(
     return false
   }
   let content = res.content()
-  let updated_legacy = rewrite_metadata_line(
-    content, self.observed_selection,
-  ).unwrap_or(content)
+  let updated_legacy = rewrite_metadata_line(content, self.observed_selection).unwrap_or(
+    content,
+  )
   let updated = rewrite_metadata_line_v2(
-    updated_legacy, self.observed_selection_v2,
+    updated_legacy,
+    self.observed_selection_v2,
   ).unwrap_or(updated_legacy)
   if updated != content {
     let write_res = js_write_file_ffi(
-      fs_mkdir_sync, fs_write_file_sync, self.root_dir, path, updated,
+      fs_mkdir_sync,
+      fs_write_file_sync,
+      self.root_dir,
+      path,
+      updated,
     )
-    if !write_res.is_ok() { return false }
+    if !write_res.is_ok() {
+      return false
+    }
   }
   true
 }
