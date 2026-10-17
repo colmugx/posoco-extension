@@ -129,6 +129,44 @@ fn metadata_with_observed_selection_v2(
 }
 
 ///|
+/// Restore lookup is owner-qualified. Reading alone never changes an active
+/// manager or an Agent; the host resolves the returned selection through its
+/// currently bound ModelManagerControl, with no id-name guessing.
+pub async fn JsonlSessionStore::selection_for_owner(
+  self : JsonlSessionStore,
+  session_id : String,
+  owner : String,
+) -> @modelmgmt.SelectionRef? raise @posoco.SessionError {
+  let session = self.load(session_id)
+  match session_selection_v2_for_owner(session.metadata, owner) {
+    Some(value) => Some({
+      owner: value.owner,
+      model_id: value.model_id,
+      effort: value.effort,
+      pending: value.pending,
+      revision: value.revision,
+    })
+    None => None
+  }
+}
+
+///|
+/// Convert the neutral Manager's committed selection into the versioned
+/// session payload; no concrete Router/Gateway type is inspected.
+pub fn session_selection_v2_of(
+  value : @modelmgmt.SelectionRef,
+) -> SessionSelectionV2? {
+  if !value.valid() { return None }
+  Some({
+    owner: value.owner,
+    model_id: value.model_id,
+    effort: value.effort,
+    pending: value.pending,
+    revision: value.revision,
+  })
+}
+
+///|
 /// Rewrites only metadata line 1; preserves message lines byte-for-byte.
 pub fn rewrite_metadata_line_v2(
   content : String,

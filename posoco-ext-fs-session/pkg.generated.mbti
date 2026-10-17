@@ -111,3 +111,7 @@ pub fn session_selection_v2_from_json(Json) -> SessionSelectionV2?
 pub fn session_selection_v2_from_metadata(Map[String, Json]) -> SessionSelectionV2?
 
 pub fn session_selection_v2_to_json(SessionSelectionV2) -> Json
+
+pub async fn JsonlSessionStore::selection_for_owner(Self, String, String) -> @modelmgmt.SelectionRef? raise @error.SessionError
+
+pub fn session_selection_v2_of(@modelmgmt.SelectionRef) -> SessionSelectionV2?
