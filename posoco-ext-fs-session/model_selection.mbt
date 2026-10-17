@@ -97,7 +97,7 @@ pub fn session_selection_v2_for_owner(
   owner : String,
 ) -> SessionSelectionV2? {
   match session_selection_v2_from_metadata(metadata) {
-    Some(ref) if ref.owner == owner => Some(ref)
+    Some(selection) if selection.owner == owner => Some(selection)
     _ => None
   }
 }
@@ -105,10 +105,10 @@ pub fn session_selection_v2_for_owner(
 ///|
 pub fn metadata_with_selection_v2(
   metadata : Map[String, Json],
-  ref : SessionSelectionV2,
+  selection : SessionSelectionV2,
 ) -> Map[String, Json] {
   let result = metadata.copy()
-  result[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(ref)
+  result[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(selection)
   result
 }
 
