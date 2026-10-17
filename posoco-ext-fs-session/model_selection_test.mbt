@@ -423,3 +423,38 @@ async test "io[native]: v2 injection persists on save and append" {
   )
   @fs.rmdir(root, recursive=true) catch { _ => () }
 }
+
+ 
+///|
+async test "io[native]: lookup projects an owner-scoped neutral selection ref" {
+  let root = fresh_root("selection-owner-lookup")
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
+  let value : @posoco-ext-fs-session.SessionSelectionV2 = {
+    owner: "bound-manager",
+    model_id: "opaque-model",
+    effort: Some("high"),
+    pending: false,
+    revision: 8L,
+  }
+  store.observe_selection_v2(value)
+  store.save("sess_owner", {
+    messages: [selection_test_message("work")],
+    metadata: Map::from_array([]),
+  }) catch { e => fail("save failed: \{e}") }
+  let owned = store.selection_for_owner("sess_owner", "bound-manager") catch {
+    e => fail("lookup failed: \{e}")
+  }
+  match owned {
+    Some(value) => {
+      assert_eq(value.owner, "bound-manager")
+      assert_eq(value.model_id, "opaque-model")
+      assert_eq(value.revision, 8L)
+    }
+    None => fail("missing owned selection")
+  }
+  let foreign = store.selection_for_owner("sess_owner", "different") catch {
+    e => fail("lookup failed: \{e}")
+  }
+  assert_true(foreign is None)
+  @fs.rmdir(root, recursive=true) catch { _ => () }
+}
