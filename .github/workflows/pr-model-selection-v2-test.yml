@@ -1,0 +1,32 @@
+name: model capability and session v2 tests
+
+on:
+  pull_request:
+    paths:
+      - "posoco-kit-model-management/**"
+      - "posoco-ext-fs-session/**"
+      - ".github/workflows/pr-model-selection-v2-test.yml"
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon update
+      - name: Native contract tests
+        run: moon test --target native -p colmugx/posoco-kit-model-management
+      - name: JS contract tests
+        run: moon test --target js -p colmugx/posoco-kit-model-management
+      - name: Native session tests
+        run: moon test --target native -p colmugx/posoco-ext-fs-session
+      - name: JS session tests
+        run: moon test --target js -p colmugx/posoco-ext-fs-session
+      - name: Verify public interfaces
+        run: |
+          moon info
+          git diff --exit-code -- posoco-kit-model-management/src/pkg.generated.mbti posoco-ext-fs-session/pkg.generated.mbti
