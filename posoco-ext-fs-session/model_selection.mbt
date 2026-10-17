@@ -14,6 +14,105 @@
 /// plain-library uses are untouched.
 
 ///|
+/// V2 selection metadata is owner-qualified. The legacy `slot_id` value
+/// is never interpreted as a manager-neutral model id.
+pub const MODEL_SELECTION_V2_METADATA_KEY : String = "posoco.model_selection_v2"
+
+///|
+pub(all) struct SessionSelectionV2 {
+  owner : String
+  model_id : String
+  effort : String?
+  pending : Bool
+  revision : Int64
+} derive(Eq, Debug)
+
+///|
+pub extend SessionSelectionV2 with Eq::{not_equal, equal}
+
+///|
+pub extend SessionSelectionV2 with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub fn session_selection_v2_to_json(value : SessionSelectionV2) -> Json {
+  Json::object(Map::from_array([
+    ("version", Json::number(2)),
+    ("owner", Json::string(value.owner)),
+    ("model_id", Json::string(value.model_id)),
+    ("effort", match value.effort {
+      Some(effort) => Json::string(effort)
+      None => Json::null()
+    }),
+    ("pending", Json::boolean(value.pending)),
+    ("revision", Json::string(value.revision.to_string())),
+  ]))
+}
+
+///|
+/// Version and owner must be explicit: invalid v2 never silently becomes
+/// an ext-llm or ext-magpie selection.
+pub fn session_selection_v2_from_json(value : Json) -> SessionSelectionV2? {
+  guard value is Json::Object(fields) else { return None }
+  guard fields.get("version") is Some(Json::Number(version, ..)) &&
+    version == 2.0 &&
+    fields.get("owner") is Some(Json::String(owner)) &&
+    !owner.is_empty() &&
+    fields.get("model_id") is Some(Json::String(model_id)) &&
+    !model_id.is_empty() else { return None }
+  let effort = match fields.get("effort") {
+    None | Some(Json::Null) => None
+    Some(Json::String(v)) => Some(v)
+    _ => return None
+  }
+  let pending = match fields.get("pending") {
+    Some(Json::True) => true
+    Some(Json::False) => false
+    _ => return None
+  }
+  guard fields.get("revision") is Some(Json::String(revision_text)) else {
+    return None
+  }
+  let revision : Int64 = @string.parse_int64(revision_text) catch {
+    _ => return None
+  }
+  if revision < 0L { return None }
+  Some({ owner, model_id, effort, pending, revision, })
+}
+
+///|
+pub fn session_selection_v2_from_metadata(
+  metadata : Map[String, Json],
+) -> SessionSelectionV2? {
+  match metadata.get(MODEL_SELECTION_V2_METADATA_KEY) {
+    Some(value) => session_selection_v2_from_json(value)
+    None => None
+  }
+}
+
+///|
+/// Owner-mismatched sessions must not select a same-named model from an
+/// unrelated manager. Legacy records are deliberately not part of this API.
+pub fn session_selection_v2_for_owner(
+  metadata : Map[String, Json],
+  owner : String,
+) -> SessionSelectionV2? {
+  match session_selection_v2_from_metadata(metadata) {
+    Some(ref) if ref.owner == owner => Some(ref)
+    _ => None
+  }
+}
+
+///|
+pub fn metadata_with_selection_v2(
+  metadata : Map[String, Json],
+  ref : SessionSelectionV2,
+) -> Map[String, Json] {
+  let result = metadata.copy()
+  result[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(ref)
+  result
+}
+
+///|
 /// Metadata key written by this store. Value shape:
 /// `{"slot_id": "<router slot id>", "effort": "<effort>" | null}` where
 /// `slot_id` matches the router's persisted-selection vocabulary

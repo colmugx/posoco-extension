@@ -4,6 +4,40 @@
 /// and the summary projection.
 
 ///|
+test "v2 selection preserves ownership and fails closed on mismatches" {
+  let selection : @posoco-ext-fs-session.SessionSelectionV2 = {
+    owner: "manager-a",
+    model_id: "same/model",
+    effort: Some("high"),
+    pending: false,
+    revision: 9L,
+  }
+  let metadata = @posoco-ext-fs-session.metadata_with_selection_v2(
+    Map::from_array([]),
+    selection,
+  )
+  assert_true(@posoco-ext-fs-session.session_selection_v2_for_owner(
+    metadata, "manager-b",
+  ) is None)
+  match @posoco-ext-fs-session.session_selection_v2_for_owner(
+    metadata, "manager-a",
+  ) {
+    Some(found) => assert_eq(found, selection)
+    None => fail("owner-qualified v2 selection was lost")
+  }
+  let malformed = metadata.copy()
+  malformed[@posoco-ext-fs-session.MODEL_SELECTION_V2_METADATA_KEY] =
+    Json::object(Map::from_array([
+      ("version", Json::number(2)),
+      ("owner", Json::string("")),
+      ("model_id", Json::string("same/model")),
+    ]))
+  assert_true(@posoco-ext-fs-session.session_selection_v2_from_metadata(
+    malformed,
+  ) is None)
+}
+
+///|
 /// Publish one `model_selection` bus event the way ext-llm's router does.
 fn publish_selection(
   bus : @devkit.EventBus,
