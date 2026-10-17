@@ -1,12 +1,24 @@
 ///|
 // Native backend. Detection reads the herdr-injected environment directly
-// (@env, synchronous, no subprocess). Per-event reports run through libc
-// system() with the command backgrounded and silenced: the sync Observer
-// callback blocks only for the fork+exec of /bin/sh, at turn boundaries, and
-// never propagates failure.
+// (@env, synchronous, no subprocess). On Unix, reports use the existing
+// backgrounded/silenced system() path. On Windows, the C shim uses
+// CreateProcessW with argv quoting and redirected NUL handles. Both are
+// best-effort, non-blocking from the Observer callback.
 
 #borrow(cmd)
 extern "C" fn ffi_system(cmd : Bytes) -> Int32 = "herdr_ffi_system"
+
+///|
+// Single compiled native package on Unix and Windows; the C shim chooses OS.
+extern "C" fn ffi_windows_host() -> Int32 = "herdr_ffi_windows_host"
+
+///|
+#borrow(bin)
+extern "C" fn ffi_win_bin_runnable(bin : Bytes) -> Int32 = "herdr_ffi_win_bin_runnable"
+
+///|
+#borrow(payload)
+extern "C" fn ffi_win_spawn_report(payload : Bytes) -> Int32 = "herdr_ffi_win_spawn_report"
 
 ///|
 fn herdr_c_string(s : String) -> Bytes {
@@ -49,13 +61,31 @@ extern "C" fn ffi_access_x(path : Bytes) -> Int32 = "herdr_ffi_access_x"
 /// Native which-probe behind the delegate registration precheck: an
 /// executable-permission check per candidate path, resolution via PATH.
 fn herdr_bin_runnable(bin : String) -> Bool {
+  if ffi_windows_host() != 0 {
+    // SearchPathW respects the Windows PATH separator and .exe extension.
+    return ffi_win_bin_runnable(herdr_c_string(bin)) == 0
+  }
   herdr_path_lookup(bin, @env.get_env_var("PATH"), fn(path) {
     ffi_access_x(herdr_c_string(path)) == 0
   })
 }
 
 ///|
+// One NUL per argv element plus an empty terminator. Embedded NUL characters
+// in an untrusted report message must not turn it into extra argv elements.
+fn herdr_report_argv_payload(bin : String, args : Array[String]) -> String {
+  let nul = "\u{0}"
+  [bin, ..args].map(fn(x) { x.replace(old=nul, new=" ") }).join(nul) + nul + nul
+}
+
+///|
 fn herdr_spawn_report(bin : String, args : Array[String]) -> Unit {
-  let line = "\{[bin, ..args].map(fn(x) { herdr_shell_quote(x) }).join(" ")} >/dev/null 2>&1 &"
-  ignore(ffi_system(herdr_c_string(line)))
+  if ffi_windows_host() != 0 {
+    // CreateProcessW receives real argv (with Unicode and Windows quoting)
+    // rather than an interpolated cmd.exe line. Fire-and-forget telemetry.
+    ignore(ffi_win_spawn_report(@utf8.encode(herdr_report_argv_payload(bin, args))))
+  } else {
+    let line = "\{[bin, ..args].map(fn(x) { herdr_shell_quote(x) }).join(" ")} >/dev/null 2>&1 &"
+    ignore(ffi_system(herdr_c_string(line)))
+  }
 }

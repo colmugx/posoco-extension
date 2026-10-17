@@ -1,6 +1,6 @@
 # posoco-ext-herdr
 
-> **Targets: native + js (bun); compiles inert elsewhere**
+> **Targets: native (Unix/Windows) + js (bun); compiles inert elsewhere**
 
 Herdr for [Posoco](https://mooncakes.io/docs/colmugx/posoco) agents. When the
 host process runs inside a [herdr](https://herdr.dev) pane, this extension
@@ -14,8 +14,8 @@ Two extensions ship from this package; each contributes exactly one port.
 
 | Struct | Port | Contribution |
 |--------|------|--------------|
-| `HerdrReporter` | `Observer` | maps turn lifecycle onto herdr agent states by shelling `herdr pane report-agent` |
-| `HerdrReporter` | `Lifecycle` | releases the pane's herdr authority on Agent shutdown by shelling `herdr pane release-agent` |
+| `HerdrReporter` | `Observer` | maps turn lifecycle onto herdr agent states by launching `herdr pane report-agent` |
+| `HerdrReporter` | `Lifecycle` | releases the pane's herdr authority on Agent shutdown by launching `herdr pane release-agent` |
 | `HerdrReporter` | `Extension` | contributes that observer plus that lifecycle and nothing else — no tools, no hooks, no prompt sections |
 | `HerdrDelegate` | `ToolProvider` | contributes exactly one tool, `herdr_delegate` |
 | `HerdrDelegate` | `Lifecycle` / `Observer` | captures the composed `Tasks` capability and tracks the parent session (background support) |
@@ -26,11 +26,23 @@ Both constructors are environment-gated: without `HERDR_ENV` and
 `None` and nothing registers — outside herdr the cost is one environment
 probe at startup. `HerdrDelegate::detect` additionally resolves the child
 binary (`CETAS_RUN_BIN`, default `cetas-run`) and runs a which-style
-executability probe (PATH scan + `access(X_OK)` on native, `node:fs`
-`accessSync` on js) before registering: when the resolved binary cannot be
+executability probe (Unix PATH scan + `access(X_OK)`, Windows
+`SearchPathW`, `node:fs` `accessSync` on js) before registering: when the resolved binary cannot be
 executed in this terminal context, the delegate — and with it the
 `herdr_delegate` tool — stays unregistered. Presence and delegation are
 detected independently, so a host may hold either alone.
+
+### Windows native behavior
+
+The reporter uses `CreateProcessW` to send each argument directly to the herdr
+CLI, with UTF-8 to UTF-16 conversion, Windows argv quoting, and stdio redirected
+to `NUL`. Shell metacharacters in the bounded `--message` are **not** executed.
+The Unix reporter continues to use its existing background `system()` path.
+
+`HerdrDelegate::detect` returns `None` on Windows native **for now**:
+`pane run` still constructs POSIX shell commands and cannot safely be used
+under PowerShell/cmd. Windows does not register a broken delegation tool.
+This is a runtime limitation, not a native compilation limitation.
 
 ## Usage
 
