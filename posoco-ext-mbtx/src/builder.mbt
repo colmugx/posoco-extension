@@ -45,7 +45,7 @@ fn artifact_path(output : String) -> String raise RuntimeError {
 
 ///|
 async fn Runtime::build_program(
-  self : Runtime,
+  _self : Runtime,
   program : String,
   directory : String,
   toolchain : ResolvedToolchain,
