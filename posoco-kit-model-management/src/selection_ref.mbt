@@ -36,8 +36,7 @@ pub fn selection_ref(
 ///|
 /// Fail closed on malformed or unqualified identities.
 pub fn SelectionRef::valid(self : SelectionRef) -> Bool {
-  !self.owner.is_empty() && !self.model_id.is_empty() &&
-  self.revision >= 0L
+  !self.owner.is_empty() && !self.model_id.is_empty() && self.revision >= 0L
 }
 
 ///|

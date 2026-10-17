@@ -35,17 +35,22 @@ pub extend SessionSelectionV2 with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn session_selection_v2_to_json(value : SessionSelectionV2) -> Json {
-  Json::object(Map::from_array([
-    ("version", Json::number(2)),
-    ("owner", Json::string(value.owner)),
-    ("model_id", Json::string(value.model_id)),
-    ("effort", match value.effort {
-      Some(effort) => Json::string(effort)
-      None => Json::null()
-    }),
-    ("pending", Json::boolean(value.pending)),
-    ("revision", Json::string(value.revision.to_string())),
-  ]))
+  Json::object(
+    Map::from_array([
+      ("version", Json::number(2)),
+      ("owner", Json::string(value.owner)),
+      ("model_id", Json::string(value.model_id)),
+      (
+        "effort",
+        match value.effort {
+          Some(effort) => Json::string(effort)
+          None => Json::null()
+        },
+      ),
+      ("pending", Json::boolean(value.pending)),
+      ("revision", Json::string(value.revision.to_string())),
+    ]),
+  )
 }
 
 ///|
@@ -58,7 +63,9 @@ pub fn session_selection_v2_from_json(value : Json) -> SessionSelectionV2? {
     fields.get("owner") is Some(Json::String(owner)) &&
     !owner.is_empty() &&
     fields.get("model_id") is Some(Json::String(model_id)) &&
-    !model_id.is_empty() else { return None }
+    !model_id.is_empty() else {
+    return None
+  }
   let effort = match fields.get("effort") {
     None | Some(Json::Null) => None
     Some(Json::String(v)) => Some(v)
@@ -75,7 +82,9 @@ pub fn session_selection_v2_from_json(value : Json) -> SessionSelectionV2? {
   let revision : Int64 = @string.parse_int64(revision_text) catch {
     _ => return None
   }
-  if revision < 0L { return None }
+  if revision < 0L {
+    return None
+  }
   Some({ owner, model_id, effort, pending, revision, })
 }
 
@@ -103,6 +112,7 @@ pub fn session_selection_v2_for_owner(
 }
 
 ///|
+
 ///|
 /// Injected by the host at a successful manager-selection boundary.
 /// The store cannot infer ownership from a model name or a provider prefix.
@@ -110,7 +120,8 @@ pub fn JsonlSessionStore::observe_selection_v2(
   self : JsonlSessionStore,
   selection : SessionSelectionV2,
 ) -> Unit {
-  if selection.owner.is_empty() || selection.model_id.is_empty() ||
+  if selection.owner.is_empty() ||
+    selection.model_id.is_empty() ||
     selection.revision < 0L {
     return
   }
@@ -139,13 +150,14 @@ pub async fn JsonlSessionStore::selection_for_owner(
 ) -> @modelmgmt.SelectionRef? raise @posoco.SessionError {
   let session = self.load(session_id)
   match session_selection_v2_for_owner(session.metadata, owner) {
-    Some(value) => Some({
-      owner: value.owner,
-      model_id: value.model_id,
-      effort: value.effort,
-      pending: value.pending,
-      revision: value.revision,
-    })
+    Some(value) =>
+      Some({
+        owner: value.owner,
+        model_id: value.model_id,
+        effort: value.effort,
+        pending: value.pending,
+        revision: value.revision,
+      })
     None => None
   }
 }
@@ -156,7 +168,9 @@ pub async fn JsonlSessionStore::selection_for_owner(
 pub fn session_selection_v2_of(
   value : @modelmgmt.SelectionRef,
 ) -> SessionSelectionV2? {
-  if !value.valid() { return None }
+  if !value.valid() {
+    return None
+  }
   Some({
     owner: value.owner,
     model_id: value.model_id,
@@ -174,8 +188,12 @@ pub fn rewrite_metadata_line_v2(
 ) -> String? {
   guard selection is Some(value) else { return None }
   let parts : Array[String] = []
-  for part in content.split("\n") { parts.push(part.to_owned()) }
-  if parts.length() < 2 { return None }
+  for part in content.split("\n") {
+    parts.push(part.to_owned())
+  }
+  if parts.length() < 2 {
+    return None
+  }
   let parsed : Result[Json, Error] = Ok(@json.parse(parts[0])) catch {
     e => Err(e)
   }
@@ -183,7 +201,9 @@ pub fn rewrite_metadata_line_v2(
     Ok(Json::Object(fields)) => fields
     _ => return None
   }
-  metadata[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(value)
+  metadata[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(
+    value,
+  )
   let buf = StringBuilder()
   buf.write_string(Json::object(metadata).stringify())
   for i in 1..<parts.length() {
@@ -199,7 +219,9 @@ pub fn metadata_with_selection_v2(
   selection : SessionSelectionV2,
 ) -> Map[String, Json] {
   let result = metadata.copy()
-  result[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(selection)
+  result[MODEL_SELECTION_V2_METADATA_KEY] = session_selection_v2_to_json(
+    selection,
+  )
   result
 }
 

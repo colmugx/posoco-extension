@@ -19,23 +19,23 @@ test "invalid unqualified selection refs fail closed" {
     revision: 0L,
   }
   assert_false(selection.valid())
-  assert_false({ ..selection, owner: "router", revision: -1L }.valid())
+  assert_false({ ..selection, owner: "router", revision: -1L, }.valid())
 }
 
 ///|
 test "optional observations distinguish unknown stale and unsupported" {
-  let known : ModelObservation[Int] = Known(
+  let known : ModelObservation[Int32] = Known(
     5,
     observed_at_ms=2L,
     provenance="adapter",
   )
-  let stale : ModelObservation[Int] = Stale(
+  let stale : ModelObservation[Int32] = Stale(
     5,
     observed_at_ms=1L,
     provenance="adapter",
   )
-  let unknown : ModelObservation[Int] = Unknown("not observed")
-  let unsupported : ModelObservation[Int] = Unsupported
+  let unknown : ModelObservation[Int32] = Unknown("not observed")
+  let unsupported : ModelObservation[Int32] = Unsupported
   assert_true(known is Known(_))
   assert_true(stale is Stale(_))
   assert_true(unknown is Unknown(_))

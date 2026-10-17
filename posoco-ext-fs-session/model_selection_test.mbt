@@ -16,25 +16,26 @@ test "v2 selection preserves ownership and fails closed on mismatches" {
     Map::from_array([]),
     selection,
   )
-  assert_true(@posoco-ext-fs-session.session_selection_v2_for_owner(
-    metadata, "manager-b",
-  ) is None)
-  match @posoco-ext-fs-session.session_selection_v2_for_owner(
-    metadata, "manager-a",
-  ) {
+  assert_true(
+    @posoco-ext-fs-session.session_selection_v2_for_owner(metadata, "manager-b")
+    is None,
+  )
+  match
+    @posoco-ext-fs-session.session_selection_v2_for_owner(metadata, "manager-a") {
     Some(found) => assert_eq(found, selection)
     None => fail("owner-qualified v2 selection was lost")
   }
   let malformed = metadata.copy()
-  malformed[@posoco-ext-fs-session.MODEL_SELECTION_V2_METADATA_KEY] =
-    Json::object(Map::from_array([
+  malformed[@posoco-ext-fs-session.MODEL_SELECTION_V2_METADATA_KEY] = Json::object(
+    Map::from_array([
       ("version", Json::number(2)),
       ("owner", Json::string("")),
       ("model_id", Json::string("same/model")),
-    ]))
-  assert_true(@posoco-ext-fs-session.session_selection_v2_from_metadata(
-    malformed,
-  ) is None)
+    ]),
+  )
+  assert_true(
+    @posoco-ext-fs-session.session_selection_v2_from_metadata(malformed) is None,
+  )
 }
 
 ///|
@@ -393,10 +394,10 @@ async test "io[native]: v2 injection persists on save and append" {
   store.save("sess_v2", {
     messages: [selection_test_message("first")],
     metadata: Map::from_array([]),
-  }) catch { e => fail("v2 save failed: \{e}") }
-  let saved = store.load("sess_v2") catch {
-    e => fail("v2 load failed: \{e}")
+  }) catch {
+    e => fail("v2 save failed: \{e}")
   }
+  let saved = store.load("sess_v2") catch { e => fail("v2 load failed: \{e}") }
   assert_eq(
     @posoco-ext-fs-session.session_selection_v2_from_metadata(saved.metadata),
     Some(first),
@@ -412,19 +413,23 @@ async test "io[native]: v2 injection persists on save and append" {
   assert_eq(reread.messages.length(), 2)
   assert_eq(
     @posoco-ext-fs-session.session_selection_v2_for_owner(
-      reread.metadata, "owned-manager",
+      reread.metadata,
+      "owned-manager",
     ),
     Some(second),
   )
   assert_true(
     @posoco-ext-fs-session.session_selection_v2_for_owner(
-      reread.metadata, "other-manager",
-    ) is None,
+      reread.metadata,
+      "other-manager",
+    )
+    is None,
   )
-  @fs.rmdir(root, recursive=true) catch { _ => () }
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
 }
 
- 
 ///|
 async test "io[native]: lookup projects an owner-scoped neutral selection ref" {
   let root = fresh_root("selection-owner-lookup")
@@ -440,7 +445,9 @@ async test "io[native]: lookup projects an owner-scoped neutral selection ref" {
   store.save("sess_owner", {
     messages: [selection_test_message("work")],
     metadata: Map::from_array([]),
-  }) catch { e => fail("save failed: \{e}") }
+  }) catch {
+    e => fail("save failed: \{e}")
+  }
   let owned = store.selection_for_owner("sess_owner", "bound-manager") catch {
     e => fail("lookup failed: \{e}")
   }
@@ -456,5 +463,7 @@ async test "io[native]: lookup projects an owner-scoped neutral selection ref" {
     e => fail("lookup failed: \{e}")
   }
   assert_true(foreign is None)
-  @fs.rmdir(root, recursive=true) catch { _ => () }
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
 }
