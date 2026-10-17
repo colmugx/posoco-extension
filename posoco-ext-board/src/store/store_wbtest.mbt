@@ -62,6 +62,7 @@ fn fixture() -> @domain.BoardStateSnapshot {
         updated_at_ms=6L,
       ),
     ],
+    expansions: [],
   }
 }
 
@@ -259,8 +260,9 @@ test "snapshot rejects syntax schema incomplete extra and duplicate fields" {
     invalid(decode_snapshot(input))
   }
   let base = snapshot_json(fixture())
-  for key in ["schema_version", "revision", "tasks", "attempts"] {
-    let f = fields(base, ["schema_version", "revision", "tasks", "attempts"])
+  let keys = ["schema_version", "revision", "tasks", "attempts", "expansions"]
+  for key in keys {
+    let f = fields(base, keys)
     let removed = f.copy()
     let _ = removed.remove(key)
     invalid(decode_snapshot(Json::object(removed).stringify()))

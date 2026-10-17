@@ -7,11 +7,17 @@ pub struct BoardState {
   priv mut revision : Int64
   priv tasks : Map[BoardTaskId, BoardTask]
   priv attempts : Map[AttemptId, Attempt]
+  priv expansions : Map[ExpansionId, ExpansionRecord]
 }
 
 ///|
 pub fn BoardState::BoardState() -> BoardState {
-  { revision: 0L, tasks: Map::from_array([]), attempts: Map::from_array([]), }
+  {
+    revision: 0L,
+    tasks: Map::from_array([]),
+    attempts: Map::from_array([]),
+    expansions: Map::from_array([]),
+  }
 }
 
 ///|
@@ -59,8 +65,35 @@ pub fn BoardState::attempts(self : BoardState) -> Array[Attempt] {
 }
 
 ///|
+/// Detached copy of one durable expansion record, or None when the
+/// expansion id is not part of the committed history.
+pub fn BoardState::expansion(
+  self : BoardState,
+  id : ExpansionId,
+) -> ExpansionRecord? {
+  self.expansions.get(id).map(record => record.copy_detached())
+}
+
+///|
+/// All durable expansion records in deterministic order: creation time
+/// ascending, then expansion id ascending.
+pub fn BoardState::expansions(self : BoardState) -> Array[ExpansionRecord] {
+  let all = self.expansions
+    .values()
+    .map(record => record.copy_detached())
+    .collect()
+  all.sort_by(compare_expansion_order)
+  all
+}
+
+///|
 pub fn BoardState::snapshot(self : BoardState) -> BoardStateSnapshot {
-  { revision: self.revision, tasks: self.tasks(), attempts: self.attempts(), }
+  {
+    revision: self.revision,
+    tasks: self.tasks(),
+    attempts: self.attempts(),
+    expansions: self.expansions(),
+  }
 }
 
 ///|
@@ -82,6 +115,14 @@ fn compare_attempt_order(a : Attempt, b : Attempt) -> Int32 {
     return if a.created_at_ms < b.created_at_ms { -1 } else { 1 }
   }
   a.id.value.compare(b.id.value)
+}
+
+///|
+fn compare_expansion_order(a : ExpansionRecord, b : ExpansionRecord) -> Int32 {
+  if a.created_at_ms != b.created_at_ms {
+    return if a.created_at_ms < b.created_at_ms { -1 } else { 1 }
+  }
+  a.expansion_id.value.compare(b.expansion_id.value)
 }
 
 ///|
@@ -112,7 +153,11 @@ fn BoardState::clone_detached(self : BoardState) -> BoardState {
   for id, attempt in self.attempts {
     attempts[id] = attempt.copy_detached()
   }
-  { revision: self.revision, tasks, attempts, }
+  let expansions : Map[ExpansionId, ExpansionRecord] = Map::from_array([])
+  for id, record in self.expansions {
+    expansions[id] = record.copy_detached()
+  }
+  { revision: self.revision, tasks, attempts, expansions, }
 }
 
 ///|
@@ -123,6 +168,14 @@ fn BoardState::put_task(self : BoardState, task : BoardTask) -> Unit {
 ///|
 fn BoardState::put_attempt(self : BoardState, attempt : Attempt) -> Unit {
   self.attempts[attempt.id] = attempt
+}
+
+///|
+fn BoardState::put_expansion(
+  self : BoardState,
+  record : ExpansionRecord,
+) -> Unit {
+  self.expansions[record.expansion_id] = record
 }
 
 ///|

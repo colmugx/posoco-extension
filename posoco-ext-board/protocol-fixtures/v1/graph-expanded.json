@@ -1,0 +1,54 @@
+{
+  "type": "event",
+  "seq": 1,
+  "board_revision": 1,
+  "kind": "board.graph.expanded",
+  "scope": null,
+  "payload": {
+    "expansion_id": "expansion-1",
+    "parent_task_id": "task-1",
+    "workflow_id": "workflow-1",
+    "content_digest": "sha256:e055c09e90b23c397fd9ab9658bcaeb6e8a90ff10c57a2c899bd56af00c1c1e5",
+    "at_ms": 2000,
+    "tasks": [
+      {
+        "id": "task-2",
+        "title": "Expand the Board graph",
+        "description": "Created atomically by one trusted graph expansion.",
+        "stage": "created",
+        "priority": "high",
+        "definition_of_done": [],
+        "dependencies": [
+          "task-3"
+        ],
+        "created_at_ms": 2000,
+        "updated_at_ms": 2000,
+        "ready_since_ms": null
+      },
+      {
+        "id": "task-3",
+        "title": "Validate expanded work",
+        "description": "Created atomically by one trusted graph expansion.",
+        "stage": "created",
+        "priority": "normal",
+        "definition_of_done": [],
+        "dependencies": [
+          "task-1"
+        ],
+        "created_at_ms": 2000,
+        "updated_at_ms": 2000,
+        "ready_since_ms": null
+      }
+    ],
+    "mapping": [
+      {
+        "local_ref": "plan-step-2",
+        "task_id": "task-2"
+      },
+      {
+        "local_ref": "plan-step-3",
+        "task_id": "task-3"
+      }
+    ]
+  }
+}

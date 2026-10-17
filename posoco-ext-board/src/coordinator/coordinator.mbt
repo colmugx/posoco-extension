@@ -405,6 +405,25 @@ pub async fn BoardCoordinator::attempts(
 }
 
 ///|
+/// Detached durable expansion history: every committed S4E1 expansion
+/// record with its identity, lineage, local_ref mapping and normalized
+/// content binding. Hosts read this after a `DurabilityUncertain` result to
+/// learn whether the uncertain expansion had already landed; they never
+/// resubmit a committed expansion id.
+pub async fn BoardCoordinator::expansions(
+  self : BoardCoordinator,
+) -> Result[Array[@domain.ExpansionRecord], BoardCoordinatorError] {
+  let reply = match self.request(ListExpansions) {
+    Ok(reply) => reply
+    Err(error) => return Err(error)
+  }
+  match reply {
+    ExpansionsReply(expansions) => Ok(expansions)
+    _ => abort("board coordinator: reply does not match an expansions request")
+  }
+}
+
+///|
 pub async fn BoardCoordinator::revision(
   self : BoardCoordinator,
 ) -> Result[Int64, BoardCoordinatorError] {

@@ -34,6 +34,19 @@ pub(all) enum BoardEvent {
     decision~ : ReviewDecision,
     at_ms~ : Int64
   )
+  /// The one authoritative fact of an accepted graph expansion: the new
+  /// task exists in stage Created and the durable expansion record binds
+  /// the expansion identity, the lineage and the local_ref mapping. The
+  /// digest is the normalized content binding, never raw proposal text.
+  GraphExpanded(
+    expansion~ : ExpansionId,
+    tasks~ : Array[BoardTask],
+    parent~ : BoardTaskId,
+    workflow~ : String,
+    mapping~ : Array[ExpansionMapping],
+    digest~ : String,
+    at_ms~ : Int64
+  )
 } derive(Eq, Debug)
 
 ///|
@@ -41,3 +54,31 @@ pub extend BoardEvent with Eq::{equal, not_equal}
 
 ///|
 pub extend BoardEvent with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// Detach every mutable event payload at store, hook and caller boundaries.
+pub fn BoardEvent::copy_detached(self : BoardEvent) -> BoardEvent {
+  match self {
+    DependenciesSet(id~, dependencies~, at_ms~) =>
+      DependenciesSet(id~, dependencies=dependencies.copy(), at_ms~)
+    GraphExpanded(
+      expansion~,
+      tasks~,
+      parent~,
+      workflow~,
+      mapping~,
+      digest~,
+      at_ms~
+    ) =>
+      GraphExpanded(
+        expansion~,
+        tasks=tasks.map(task => task.copy_detached()),
+        parent~,
+        workflow~,
+        mapping=mapping.copy(),
+        digest~,
+        at_ms~,
+      )
+    _ => self
+  }
+}

@@ -100,8 +100,9 @@ fn restored_snapshot(
   revision~ : Int64 = 0L,
   tasks~ : Array[@domain.BoardTask],
   attempts~ : Array[@domain.Attempt] = [],
+  expansions~ : Array[@domain.ExpansionRecord] = [],
 ) -> @domain.BoardStateSnapshot {
-  { revision, tasks, attempts, }
+  { revision, tasks, attempts, expansions, }
 }
 
 ///|

@@ -1,0 +1,273 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/expansion"
+
+import {
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/coordinator",
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/orchestration",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode_expansion_proposal(payload~ : String, policy~ : ExpansionPolicy) -> Result[DraftExpansion, ExpansionDecodeError]
+
+pub fn expansion_execution_outlook(keys~ : Array[String], task_ids~ : Array[String], snapshot~ : @domain.BoardStateSnapshot, workflow_task_scope? : Array[String], policy? : @orchestration.ExecutionPolicy) -> Array[GeneratedTaskOutlook]
+
+pub async fn recover_expansion(@backend.BoardBackend, String) -> Result[@domain.ExpansionRecord?, ExpansionError]
+
+// Errors
+
+// Types and methods
+pub(all) enum ApprovalDecision {
+  Grant
+  Deny
+} derive(Eq, @debug.Debug)
+pub fn ApprovalDecision::equal(Self, Self) -> Bool
+pub fn ApprovalDecision::not_equal(Self, Self) -> Bool
+pub fn ApprovalDecision::to_repr(Self) -> @debug.Repr
+
+pub(all) struct DraftExpansion {
+  proposal_id : String
+  parent_task_id : String
+  base_revision : Int64
+  tasks : Array[DraftTask]
+} derive(Eq, @debug.Debug)
+pub fn DraftExpansion::equal(Self, Self) -> Bool
+pub fn DraftExpansion::not_equal(Self, Self) -> Bool
+pub fn DraftExpansion::to_repr(Self) -> @debug.Repr
+
+pub(all) struct DraftTask {
+  key : String
+  title : String
+  description : String
+  priority : @domain.BoardPriority
+  definition_of_done : Array[String]
+  depends_on : Array[ExpansionRefResolution]
+} derive(Eq, @debug.Debug)
+pub fn DraftTask::equal(Self, Self) -> Bool
+pub fn DraftTask::not_equal(Self, Self) -> Bool
+pub fn DraftTask::to_repr(Self) -> @debug.Repr
+
+pub(all) struct DynamicPlanContext {
+  workflow_parent : String
+  workflow : String?
+  authorization_id : String
+  permitted_existing_dependencies : Array[String]
+  max_new_tasks : Int
+  max_new_edges : Int
+  max_payload_bytes : Int
+  deadline_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn DynamicPlanContext::equal(Self, Self) -> Bool
+pub fn DynamicPlanContext::not_equal(Self, Self) -> Bool
+pub fn DynamicPlanContext::to_repr(Self) -> @debug.Repr
+
+pub(all) struct DynamicPlanReply {
+  payload : String
+} derive(Eq, @debug.Debug)
+pub fn DynamicPlanReply::equal(Self, Self) -> Bool
+pub fn DynamicPlanReply::not_equal(Self, Self) -> Bool
+pub fn DynamicPlanReply::to_repr(Self) -> @debug.Repr
+
+pub(all) enum DynamicPlanSourceError {
+  Unavailable
+  Denied
+} derive(Eq, @debug.Debug)
+pub fn DynamicPlanSourceError::equal(Self, Self) -> Bool
+pub fn DynamicPlanSourceError::not_equal(Self, Self) -> Bool
+pub fn DynamicPlanSourceError::to_repr(Self) -> @debug.Repr
+
+pub struct ExpansionApproval {
+  // private fields
+}
+
+pub struct ExpansionApprovalPreview {
+  proposal_id : String
+  digest : String
+  revision : Int64
+  policy : ExpansionPolicySnapshot
+  budgets : ExpansionBudgetSnapshot
+  authorization_id : String
+  workflow : String
+  workflow_parent : String
+  deadline_ms : Int64
+  max_tasks : Int
+  max_edges : Int
+  // private fields
+}
+pub fn ExpansionApprovalPreview::permitted_existing_dependencies(Self) -> Array[String]
+pub fn ExpansionApprovalPreview::proposal(Self) -> DraftExpansion
+pub fn ExpansionApprovalPreview::workflow_task_scope(Self) -> Array[String]
+
+pub struct ExpansionAuthorization {
+  // private fields
+}
+pub fn ExpansionAuthorization::ExpansionAuthorization(authorization_id~ : String, workflow~ : String, workflow_parent~ : String, workflow_task_scope~ : Array[String], permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int, max_edges? : Int) -> Self
+
+pub(all) struct ExpansionBudgetSnapshot {
+  expansions_used : Int
+  max_expansions : Int
+  cumulative_tasks : Int
+  max_cumulative_tasks : Int
+} derive(Eq, @debug.Debug)
+pub fn ExpansionBudgetSnapshot::equal(Self, Self) -> Bool
+pub fn ExpansionBudgetSnapshot::not_equal(Self, Self) -> Bool
+pub fn ExpansionBudgetSnapshot::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ExpansionDecodeError {
+  MalformedJson(offset~ : Int, reason~ : String)
+  UnsupportedEncoding(offset~ : Int, reason~ : String)
+  InvalidNumber(offset~ : Int, reason~ : String)
+  DuplicateField(path~ : String, field~ : String)
+  UnknownField(path~ : String, field~ : String)
+  MissingField(path~ : String, field~ : String)
+  TypeMismatch(path~ : String, expected~ : String)
+  InvalidVersion(found~ : String)
+  InvalidPriority(path~ : String, value~ : String)
+  InvalidString(path~ : String, reason~ : String)
+  ExceedsLimit(path~ : String, limit~ : String)
+} derive(Eq, @debug.Debug)
+pub fn ExpansionDecodeError::equal(Self, Self) -> Bool
+pub fn ExpansionDecodeError::not_equal(Self, Self) -> Bool
+pub fn ExpansionDecodeError::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ExpansionError {
+  DefaultDenied
+  InvalidAuthorization(String)
+  Expired
+  Busy
+  InvalidPhase
+  DecodeFailed(ExpansionDecodeError)
+  InvalidProposal(String)
+  PolicyBudgetExceeded(String)
+  DomainRejected(@domain.BoardError)
+  Backend(@coordinator.BoardCoordinatorError)
+  SourceFailed(DynamicPlanSourceError)
+  StalePreview
+  ApprovalMismatch
+  HostDenied
+  AllocationFailed
+  DuplicateProposal
+  DigestConflict
+} derive(Eq, @debug.Debug)
+pub fn ExpansionError::equal(Self, Self) -> Bool
+pub fn ExpansionError::not_equal(Self, Self) -> Bool
+pub fn ExpansionError::to_repr(Self) -> @debug.Repr
+
+pub struct ExpansionHost {
+  // private fields
+}
+pub fn ExpansionHost::ExpansionHost(backend~ : @backend.BoardBackend, policy? : ExpansionPolicy, allocator? : &ExpansionIdAllocator, now_ms? : () -> Int64) -> Self
+pub fn ExpansionHost::approve(Self, ExpansionApprovalPreview, &ExpansionApprover) -> Result[ExpansionApproval, ExpansionError]
+pub async fn ExpansionHost::commit(Self, ExpansionApproval) -> Result[Unit, ExpansionError]
+pub async fn ExpansionHost::generate(Self, &DynamicPlanSource, authorization? : ExpansionAuthorization?) -> Result[Unit, ExpansionError]
+pub fn ExpansionHost::mapping(Self) -> Array[(String, @domain.BoardTaskId)]
+pub async fn ExpansionHost::outlook(Self) -> Result[Array[GeneratedTaskOutlook], ExpansionError]
+pub fn ExpansionHost::phase(Self) -> ExpansionPhase
+pub async fn ExpansionHost::prepare(Self, String, authorization? : ExpansionAuthorization?) -> Result[Unit, ExpansionError]
+pub async fn ExpansionHost::preview(Self) -> Result[ExpansionApprovalPreview, ExpansionError]
+pub async fn ExpansionHost::reconcile(Self) -> Result[Bool, ExpansionError]
+
+pub(all) enum ExpansionPhase {
+  Empty
+  Validated
+  AwaitingApproval
+  Approved
+  CommitRequested
+  Committed
+  Rejected
+  Conflict
+  Uncertain
+} derive(Eq, @debug.Debug)
+pub fn ExpansionPhase::equal(Self, Self) -> Bool
+pub fn ExpansionPhase::not_equal(Self, Self) -> Bool
+pub fn ExpansionPhase::to_repr(Self) -> @debug.Repr
+
+pub struct ExpansionPolicy {
+  // private fields
+}
+pub fn ExpansionPolicy::ExpansionPolicy(max_tasks? : Int, max_edges? : Int, max_deps_per_task? : Int, max_key_chars? : Int, max_title_chars? : Int, max_description_chars? : Int, max_dod_items? : Int, max_dod_item_chars? : Int, max_payload_bytes? : Int, max_depth? : Int, max_workflow_expansions? : Int, max_workflow_tasks? : Int) -> Self
+pub fn ExpansionPolicy::max_deps_per_task(Self) -> Int
+pub fn ExpansionPolicy::max_depth(Self) -> Int
+pub fn ExpansionPolicy::max_description_chars(Self) -> Int
+pub fn ExpansionPolicy::max_dod_item_chars(Self) -> Int
+pub fn ExpansionPolicy::max_dod_items(Self) -> Int
+pub fn ExpansionPolicy::max_edges(Self) -> Int
+pub fn ExpansionPolicy::max_key_chars(Self) -> Int
+pub fn ExpansionPolicy::max_payload_bytes(Self) -> Int
+pub fn ExpansionPolicy::max_tasks(Self) -> Int
+pub fn ExpansionPolicy::max_title_chars(Self) -> Int
+pub fn ExpansionPolicy::max_workflow_expansions(Self) -> Int
+pub fn ExpansionPolicy::max_workflow_tasks(Self) -> Int
+pub fn ExpansionPolicy::snapshot(Self) -> ExpansionPolicySnapshot
+
+pub(all) struct ExpansionPolicySnapshot {
+  max_tasks : Int
+  max_edges : Int
+  max_deps_per_task : Int
+  max_key_chars : Int
+  max_title_chars : Int
+  max_description_chars : Int
+  max_dod_items : Int
+  max_dod_item_chars : Int
+  max_payload_bytes : Int
+  max_depth : Int
+  max_workflow_expansions : Int
+  max_workflow_tasks : Int
+} derive(Eq, @debug.Debug)
+pub fn ExpansionPolicySnapshot::equal(Self, Self) -> Bool
+pub fn ExpansionPolicySnapshot::not_equal(Self, Self) -> Bool
+pub fn ExpansionPolicySnapshot::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ExpansionRefResolution {
+  NewTask(key~ : String)
+  ExistingTask(id~ : @domain.BoardTaskId)
+} derive(Eq, @debug.Debug)
+pub fn ExpansionRefResolution::equal(Self, Self) -> Bool
+pub fn ExpansionRefResolution::not_equal(Self, Self) -> Bool
+pub fn ExpansionRefResolution::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GeneratedTaskOutlook {
+  key : String
+  task_id : String
+  outside_workflow_task_scope : Bool
+  stage_created : Bool
+  queued_execute_attempts : Int
+  class : GeneratedTaskOutlookClass
+  unexpected_state : Bool
+} derive(Eq, @debug.Debug)
+pub fn GeneratedTaskOutlook::equal(Self, Self) -> Bool
+pub fn GeneratedTaskOutlook::not_equal(Self, Self) -> Bool
+pub fn GeneratedTaskOutlook::to_repr(Self) -> @debug.Repr
+
+pub(all) enum GeneratedTaskOutlookClass {
+  Eligible
+  Blocked(reasons~ : Array[@orchestration.ExecutionBlockReason])
+  OutOfScope
+} derive(Eq, @debug.Debug)
+pub fn GeneratedTaskOutlookClass::equal(Self, Self) -> Bool
+pub fn GeneratedTaskOutlookClass::not_equal(Self, Self) -> Bool
+pub fn GeneratedTaskOutlookClass::to_repr(Self) -> @debug.Repr
+
+pub struct NumberedExpansionAllocator {
+  // private fields
+}
+pub fn NumberedExpansionAllocator::NumberedExpansionAllocator(prefix~ : String) -> Self
+pub fn NumberedExpansionAllocator::canonical_task_id(Self, proposal_id~ : String, key~ : String, index~ : Int) -> String
+pub impl ExpansionIdAllocator for NumberedExpansionAllocator
+
+// Type aliases
+
+// Traits
+pub(open) trait DynamicPlanSource {
+  async fn generate(Self, DynamicPlanContext) -> Result[DynamicPlanReply, DynamicPlanSourceError]
+}
+
+pub(open) trait ExpansionApprover {
+  fn approve(Self, ExpansionApprovalPreview) -> ApprovalDecision
+}
+
+pub(open) trait ExpansionIdAllocator {
+  fn canonical_task_id(Self, proposal_id~ : String, key~ : String, index~ : Int) -> String
+}

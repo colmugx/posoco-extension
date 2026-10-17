@@ -32,10 +32,19 @@ record constructors, not domain transitions or committed-state restoration.
 validate these records. The committed `BoardState` remains encapsulated;
 coordinator restoration/integration is not part of S3B1.
 
-## Schema v1
+## Snapshot schemas v1 and v2
 
-`board.json` is one JSON object with exactly `schema_version: 1`, `revision`,
-`tasks`, and `attempts`. Tasks contain all ten domain fields; attempts contain
+S4E1 writes `board.json` as schema v2: exactly `schema_version: 2`, `revision`,
+`tasks`, `attempts`, and required `expansions`. Each expansion stores its proposal
+identity, workflow/parent lineage, complete ordered local-reference/task mapping,
+SHA256 content digest and creation time in the same replacement as its graph.
+Restore rejects missing/ambiguous identities, duplicate mappings and missing
+parent/generated Tasks. Schema-v1 snapshots remain readable with empty history;
+a v1 snapshot containing `expansions` is rejected, not silently downgraded.
+See [S4E1](../../docs/S4E1-dynamic-expansion.md) for reconciliation and rollback.
+
+A legacy v1 object contains exactly `schema_version: 1`, `revision`, `tasks`, and
+`attempts`. Tasks contain all ten domain fields; attempts contain
 all nine. All fields, including nullable fields, are required. Enum values are
 explicit case-sensitive strings, not Debug representations. Every revision
 and timestamp is a canonical **nonnegative decimal string**, from `"0"` through
@@ -44,8 +53,9 @@ and reviews use JSON `null`.
 
 Each journal record is a JSON object with `schema_version: 1`, `revision`, `type`,
 and every field of its typed domain event variant. `revision` uses the same
-canonical nonnegative Int64 string encoding as snapshot revisions. All eight
-domain event variants are encoded.
+canonical nonnegative Int64 string encoding as snapshot revisions. `GraphExpanded`
+adds one full-graph audit fact (all tasks, mapping and digest) without changing the
+journal envelope version. Its content is revalidated by the shared domain rules.
 The journal has no replay semantics or separate sequence/revision allocator.
 
 Decoders reject invalid JSON, duplicate keys (including escaped equivalents),

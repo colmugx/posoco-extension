@@ -20,6 +20,7 @@ pub fn BoardCoordinator::BoardCoordinator(store? : &@store.BoardStore, now_ms? :
 pub fn BoardCoordinator::attach(Self, group~ : @async.TaskGroup[Unit]) -> Unit
 pub async fn BoardCoordinator::attempt(Self, id~ : @domain.AttemptId) -> Result[@domain.Attempt?, BoardCoordinatorError]
 pub async fn BoardCoordinator::attempts(Self) -> Result[Array[@domain.Attempt], BoardCoordinatorError]
+pub async fn BoardCoordinator::expansions(Self) -> Result[Array[@domain.ExpansionRecord], BoardCoordinatorError]
 pub async fn BoardCoordinator::revision(Self) -> Result[Int64, BoardCoordinatorError]
 pub async fn BoardCoordinator::shutdown(Self) -> Unit
 pub async fn BoardCoordinator::snapshot(Self) -> Result[@domain.BoardStateSnapshot, BoardCoordinatorError]

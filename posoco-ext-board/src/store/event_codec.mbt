@@ -52,6 +52,24 @@ fn event_json(event : @domain.BoardEvent) -> Json {
       f["decision"] = decision_json(decision)
       f["at_ms"] = number(at_ms)
     }
+    GraphExpanded(
+      expansion~,
+      tasks~,
+      parent~,
+      workflow~,
+      mapping~,
+      digest~,
+      at_ms~
+    ) => {
+      f["type"] = "GraphExpanded"
+      f["expansion_id"] = Json::string(expansion.value)
+      f["tasks"] = Json::array(tasks.map(task_json))
+      f["parent_task_id"] = Json::string(parent.value)
+      f["workflow_id"] = Json::string(workflow)
+      f["mapping"] = mapping_json(mapping)
+      f["content_digest"] = Json::string(digest)
+      f["at_ms"] = number(at_ms)
+    }
   }
   Json::object(f)
 }
@@ -66,26 +84,44 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
     Some(value) => text(value)
     None => raise Bad("missing event type")
   }
-  let keys = ["schema_version", "type", "id", "at_ms"]
+  let keys = ["schema_version", "type", "at_ms"]
   match tag {
-    "TaskCreated" | "TaskUpdated" => ()
-    "DependenciesSet" => keys.push("dependencies")
+    "TaskCreated" | "TaskUpdated" => keys.push("id")
+    "DependenciesSet" => {
+      keys.push("id")
+      keys.push("dependencies")
+    }
     "TaskStageChanged" => {
+      keys.push("id")
       keys.push("from")
       keys.push("to")
     }
     "AttemptQueued" => {
+      keys.push("id")
       keys.push("task_id")
       keys.push("kind")
     }
-    "AttemptStarted" => keys.push("task_id")
+    "AttemptStarted" => {
+      keys.push("id")
+      keys.push("task_id")
+    }
     "AttemptFinished" => {
+      keys.push("id")
       keys.push("task_id")
       keys.push("outcome")
     }
     "ReviewRecorded" => {
+      keys.push("id")
       keys.push("task_id")
       keys.push("decision")
+    }
+    "GraphExpanded" => {
+      keys.push("expansion_id")
+      keys.push("tasks")
+      keys.push("parent_task_id")
+      keys.push("workflow_id")
+      keys.push("mapping")
+      keys.push("content_digest")
     }
     _ => raise Bad("unknown domain event type")
   }
@@ -135,6 +171,70 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
         decision=decision(f["decision"]),
         at_ms~,
       )
+    "GraphExpanded" => {
+      let tasks = array(f["tasks"]).map(task_decode)
+      let mapping = mapping_decode(f["mapping"])
+      let digest = nonempty(f["content_digest"])
+      let expansion = @domain.ExpansionId(nonempty(f["expansion_id"]))
+      let parent = task_id(f["parent_task_id"])
+      let workflow = nonempty(f["workflow_id"])
+      // Validate the complete normalized event, not just individual entities.
+      if !@domain.valid_expansion_digest(digest) ||
+        tasks.is_empty() ||
+        mapping.length() != tasks.length() ||
+        workflow.trim().is_empty() ||
+        expansion.value.trim().is_empty() {
+        bad("invalid expansion event identity")
+      }
+      let ids : Set[@domain.BoardTaskId] = Set::from_array([])
+      let refs : Set[String] = Set::from_array([])
+      let candidates : Array[@domain.GraphTask] = []
+      for i, task in tasks {
+        let entry = mapping[i]
+        if task.id != entry.task_id ||
+          ids.contains(task.id) ||
+          refs.contains(entry.local_ref) ||
+          entry.local_ref.trim().is_empty() ||
+          task.id == parent ||
+          task.stage != @domain.Created ||
+          task.created_at_ms != at_ms ||
+          task.updated_at_ms != at_ms ||
+          task.ready_since_ms != None {
+          bad("invalid expansion task mapping")
+        }
+        ids.add(task.id)
+        refs.add(entry.local_ref)
+        candidates.push(
+          @domain.GraphTask::from_record(
+            id=task.id,
+            title=task.title,
+            description=task.description,
+            priority=task.priority,
+            definition_of_done=task.definition_of_done,
+            dependencies=task.dependencies,
+            local_ref=entry.local_ref,
+          ),
+        )
+      }
+      if @domain.expansion_content_digest(
+          expansion~,
+          candidates~,
+          parent~,
+          workflow~,
+        ) !=
+        digest {
+        bad("expansion digest mismatch")
+      }
+      GraphExpanded(
+        expansion~,
+        tasks~,
+        parent~,
+        workflow~,
+        mapping~,
+        digest~,
+        at_ms~,
+      )
+    }
     _ => raise Bad("unknown domain event type")
   }
 }

@@ -1,7 +1,7 @@
 ///|
 let fixture_names : Array[String] = [
   "snapshot", "task-created", "task-updated", "attempt-started", "attempt-finished",
-  "telemetry", "command-result", "resync-required", "protocol-error",
+  "graph-expanded", "telemetry", "command-result", "resync-required", "protocol-error",
 ]
 
 ///|

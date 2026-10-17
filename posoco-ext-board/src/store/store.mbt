@@ -44,7 +44,7 @@ pub(open) trait BoardStore {
 
 ///|
 pub fn empty_snapshot() -> @domain.BoardStateSnapshot {
-  { revision: 0L, tasks: [], attempts: [], }
+  { revision: 0L, tasks: [], attempts: [], expansions: [], }
 }
 
 ///|
@@ -106,13 +106,7 @@ pub fn MemoryBoardStore::MemoryBoardStore() -> MemoryBoardStore {
 
 ///|
 fn copy_events(events : Array[@domain.BoardEvent]) -> Array[@domain.BoardEvent] {
-  events.map(event => {
-    match event {
-      @domain.DependenciesSet(id~, dependencies~, at_ms~) =>
-        @domain.DependenciesSet(id~, dependencies=dependencies.copy(), at_ms~)
-      _ => event
-    }
-  })
+  events.map(event => event.copy_detached())
 }
 
 ///|
@@ -229,6 +223,10 @@ pub fn recover_snapshot(
       revision: snapshot.revision + (if changed { 1L } else { 0L }),
       tasks,
       attempts,
+      // Startup normalization only touches Running tasks/attempts; the
+      // durable expansion history passes through verbatim from the
+      // already detached copy.
+      expansions: detached.expansions,
     },
     events,
   })

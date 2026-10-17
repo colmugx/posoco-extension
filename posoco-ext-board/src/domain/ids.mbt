@@ -20,6 +20,29 @@ pub extend BoardTaskId with Hash::{hash, hash_combine}
 pub extend BoardTaskId with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+/// Nominal durable identity of one graph expansion. Expansion ids are
+/// distinct from task and attempt ids and are never reused: a committed
+/// expansion id rejects every later reuse, so it can anchor idempotence
+/// decisions without replaying anything.
+pub struct ExpansionId {
+  value : String
+} derive(Eq, Hash, Debug)
+
+///|
+pub fn ExpansionId::ExpansionId(value : String) -> ExpansionId {
+  { value, }
+}
+
+///|
+pub extend ExpansionId with Eq::{equal, not_equal}
+
+///|
+pub extend ExpansionId with Hash::{hash, hash_combine}
+
+///|
+pub extend ExpansionId with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub struct AttemptId {
   value : String
 } derive(Eq, Hash, Debug)

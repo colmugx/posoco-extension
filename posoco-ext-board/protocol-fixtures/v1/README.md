@@ -17,6 +17,7 @@ Read the files in this order. Start with `BoardReplica::empty()`.
 | `task-updated.json` | `seq=3`, `board_revision=3` | `Applied` |
 | `attempt-started.json` | `seq=4`, `board_revision=4` | `Applied` |
 | `attempt-finished.json` | `seq=5`, `board_revision=5` | `Applied` |
+| `graph-expanded.json` | `seq=1`, `board_revision=1` | `Duplicate` in the chain; `Applied` from an empty baseline |
 | `telemetry.json` | `seq=6`, `board_revision=0` | `Applied` (cursor only) |
 | `command-result.json` | `current_revision=5`, no cursor | `CommandSettled` |
 | `resync-required.json` | `current_seq=7` | `NeedsSnapshot` |
@@ -29,6 +30,16 @@ creation file is semantically identical to the first retained event. It is
 **not** a new creation after the snapshot: it exercises duplicate delivery. An
 independent test applies that same file after an authoritative empty revision-0,
 sequence-0 snapshot, where it is `Applied`, then delivers it again as `Duplicate`.
+
+`graph-expanded.json` is the S4E1 atomic graph expansion event
+(`board.graph.expanded`). Its payload carries the expansion identity and
+metadata (`expansion_id`, `parent_task_id`, `workflow_id`, `local_ref`,
+`content_digest` — a normalized content digest, never proposal text) plus the
+complete created task under `task`, so reducers apply it as an additive task
+upsert. The same independent-test pattern applies it `Applied` from an
+authoritative empty baseline and then as `Duplicate`. Expansion records
+themselves are server-side workflow metadata and never appear in the snapshot
+projection.
 
 Updates preserve task identity and creation time. Starting the queued discussion
 attempt sets its start time; finishing preserves that time and sets the finish

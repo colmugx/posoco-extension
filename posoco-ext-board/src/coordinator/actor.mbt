@@ -83,6 +83,7 @@ priv enum BoardQuery {
   ListTasks
   GetAttempt(@domain.AttemptId)
   ListAttempts
+  ListExpansions
   Revision
 }
 
@@ -94,6 +95,7 @@ priv enum BoardReply {
   TasksReply(Array[@domain.BoardTask])
   AttemptReply(@domain.Attempt?)
   AttemptsReply(Array[@domain.Attempt])
+  ExpansionsReply(Array[@domain.ExpansionRecord])
   RevisionReply(Int64)
   ErrorReply(BoardCoordinatorError)
 }
@@ -190,7 +192,10 @@ fn coordinator_commit(
   if events.is_empty() {
     return
   }
-  (core.coordinator.on_commit)(snapshot.copy_detached(), events.copy())
+  (core.coordinator.on_commit)(
+    snapshot.copy_detached(),
+    events.map(event => event.copy_detached()),
+  )
 }
 
 ///|
@@ -271,7 +276,7 @@ fn coordinator_propose_and_persist(
         ctx.address,
         ticket,
         proposal.next_state.snapshot(),
-        proposal.events,
+        proposal.events.map(event => event.copy_detached()),
       )
       if !admitted {
         state.pending = None
@@ -639,6 +644,7 @@ fn coordinator_on_query(
     ListTasks => TasksReply(state.committed.tasks())
     GetAttempt(id) => AttemptReply(state.committed.attempt(id))
     ListAttempts => AttemptsReply(state.committed.attempts())
+    ListExpansions => ExpansionsReply(state.committed.expansions())
     Revision => RevisionReply(state.committed.revision())
   }
   (state, reply)
@@ -646,8 +652,10 @@ fn coordinator_on_query(
 
 ///|
 /// Full-state canonical equality between the reloaded authoritative
-/// snapshot and a local version. Task and attempt order is irrelevant (the
-/// storage codec may reorder); every field and the revision must match.
+/// snapshot and a local version. Task, attempt and expansion order is
+/// irrelevant (the storage codec may reorder); every field and the revision
+/// must match. Expansion records are located by id, then compared in full,
+/// including their digest and ordered mapping, to prove an uncertain write.
 fn snapshot_matches(
   left : @domain.BoardStateSnapshot,
   right : @domain.BoardStateSnapshot,
@@ -684,6 +692,22 @@ fn snapshot_matches(
       None => return false
     }
     if other != attempt {
+      return false
+    }
+  }
+  if left.expansions.length() != right.expansions.length() {
+    return false
+  }
+  let expansions : Map[String, @domain.ExpansionRecord] = Map::from_array([])
+  for record in left.expansions {
+    expansions[record.expansion_id.value] = record
+  }
+  for record in right.expansions {
+    let other = match expansions.get(record.expansion_id.value) {
+      Some(other) => other
+      None => return false
+    }
+    if other != record {
       return false
     }
   }

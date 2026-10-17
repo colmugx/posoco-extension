@@ -122,6 +122,10 @@ pub fn BoardDomain::propose(
       propose_finish_attempt(state, id, outcome, at_ms)
     RecordReview(id~, decision~, at_ms~, ..) =>
       propose_record_review(state, id, decision, at_ms)
+    ExpandGraph(expansion~, candidates~, parent~, workflow~, at_ms~, ..) =>
+      propose_expand_graph(
+        state, expansion, candidates, parent, workflow, at_ms,
+      )
   }
 }
 
@@ -558,4 +562,85 @@ fn dependency_cycle(
     None
   }
   walk(root)
+}
+
+///|
+/// One detached whole-graph candidate, validated only after all nodes exist.
+fn propose_expand_graph(
+  state : BoardState,
+  expansion : ExpansionId,
+  candidates : Array[GraphTask],
+  parent : BoardTaskId,
+  workflow : String,
+  at_ms : Int64,
+) -> Result[BoardProposal, BoardError] {
+  let candidates = candidates.map(candidate => candidate.copy_detached())
+  match validate_expansion_input(expansion, candidates, workflow, at_ms) {
+    Some(error) => return Err(error)
+    None => ()
+  }
+  if state.task_ref(parent) is None {
+    return Err(TaskMissing(task=parent))
+  }
+  if state.expansion(expansion) is Some(_) {
+    return Err(DuplicateExpansion(expansion~))
+  }
+  let next = state.clone_detached()
+  let tasks : Array[BoardTask] = []
+  for candidate in candidates {
+    if next.task_ref(candidate.id) is Some(_) {
+      return Err(DuplicateTask(task=candidate.id))
+    }
+    let task : BoardTask = {
+      id: candidate.id,
+      title: candidate.title,
+      description: candidate.description,
+      stage: Created,
+      priority: candidate.priority,
+      definition_of_done: candidate.definition_of_done.copy(),
+      dependencies: candidate.dependencies.copy(),
+      created_at_ms: at_ms,
+      updated_at_ms: at_ms,
+      ready_since_ms: None,
+    }
+    next.put_task(task)
+    tasks.push(task.copy_detached())
+  }
+  // The ordinary command DAG validator sees every forward reference.
+  for candidate in candidates {
+    match validate_dependencies(next, candidate.id, candidate.dependencies) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+  }
+  let digest = expansion_content_digest(
+    expansion~,
+    candidates~,
+    parent~,
+    workflow~,
+  )
+  let record = expansion_record(
+    expansion~,
+    candidates~,
+    parent~,
+    workflow~,
+    digest~,
+    at_ms~,
+  )
+  next.put_expansion(record)
+  next.bump_revision()
+  Ok({
+    next_state: next,
+    events: [
+      GraphExpanded(
+        expansion~,
+        tasks~,
+        parent~,
+        workflow~,
+        mapping=record.mapping.copy(),
+        digest~,
+        at_ms~,
+      ),
+    ],
+  })
 }

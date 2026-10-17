@@ -7,8 +7,9 @@
 ///
 /// Structural validation mirrors the storage codec: field sanity (negative
 /// revision or timestamps, empty identifiers, titles or DoD items),
-/// duplicate task/attempt ids, dependency existence, self-reference,
-/// duplicate edges and cycles, and attempts referencing missing tasks.
+/// duplicate task/attempt/expansion ids, dependency existence,
+/// self-reference, duplicate edges and cycles, and attempts or expansion
+/// records referencing missing tasks.
 /// Command FSM feasibility (stage/attempt transitions, timestamp
 /// monotonicity, S4 execution coupling) is deliberately not validated.
 pub fn BoardState::from_snapshot(
@@ -21,12 +22,16 @@ pub fn BoardState::from_snapshot(
         revision: snapshot.revision,
         tasks: Map::from_array([]),
         attempts: Map::from_array([]),
+        expansions: Map::from_array([]),
       }
       for task in snapshot.tasks {
         state.tasks[task.id] = task.copy_detached()
       }
       for attempt in snapshot.attempts {
         state.attempts[attempt.id] = attempt.copy_detached()
+      }
+      for record in snapshot.expansions {
+        state.expansions[record.expansion_id] = record.copy_detached()
       }
       Ok(state)
     }
@@ -80,6 +85,69 @@ fn validate_restoration(
       return Err(TaskMissing(task=attempt.task_id))
     }
     attempt_ids.add(attempt.id)
+  }
+  let expansions : Map[ExpansionId, ExpansionRecord] = Map::from_array([])
+  let mapped : Set[BoardTaskId] = Set::from_array([])
+  for record in snapshot.expansions {
+    match validate_restored_expansion(record, tasks) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+    if expansions.contains(record.expansion_id) {
+      return Err(DuplicateExpansion(expansion=record.expansion_id))
+    }
+    for entry in record.mapping {
+      if mapped.contains(entry.task_id) {
+        return Err(InvalidInput(reason="task mapped by multiple expansions"))
+      }
+      mapped.add(entry.task_id)
+    }
+    expansions[record.expansion_id] = record
+  }
+  Ok(())
+}
+
+///|
+/// Strict durable identity validation. Content cannot be rehashed after task edits.
+fn validate_restored_expansion(
+  record : ExpansionRecord,
+  tasks : Map[BoardTaskId, BoardTask],
+) -> Result[Unit, BoardError] {
+  if record.expansion_id.value.trim().is_empty() {
+    return Err(InvalidInput(reason="expansion id must not be empty"))
+  }
+  if record.workflow_id.trim().is_empty() {
+    return Err(InvalidInput(reason="workflow id must not be empty"))
+  }
+  if !valid_expansion_digest(record.content_digest) {
+    return Err(InvalidInput(reason="invalid expansion SHA256 digest"))
+  }
+  if record.created_at_ms < 0L {
+    return Err(InvalidInput(reason="created_at_ms must not be negative"))
+  }
+  if tasks.get(record.parent_task_id) is None {
+    return Err(TaskMissing(task=record.parent_task_id))
+  }
+  if record.mapping.is_empty() {
+    return Err(InvalidInput(reason="expansion mapping must not be empty"))
+  }
+  let refs : Set[String] = Set::from_array([])
+  let ids : Set[BoardTaskId] = Set::from_array([])
+  for entry in record.mapping {
+    if entry.local_ref.trim().is_empty() ||
+      entry.task_id.value.trim().is_empty() {
+      return Err(InvalidInput(reason="empty expansion mapping identity"))
+    }
+    if refs.contains(entry.local_ref) ||
+      ids.contains(entry.task_id) ||
+      entry.task_id == record.parent_task_id {
+      return Err(InvalidInput(reason="duplicate or invalid expansion mapping"))
+    }
+    if tasks.get(entry.task_id) is None {
+      return Err(TaskMissing(task=entry.task_id))
+    }
+    refs.add(entry.local_ref)
+    ids.add(entry.task_id)
   }
   Ok(())
 }

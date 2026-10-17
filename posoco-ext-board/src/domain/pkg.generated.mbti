@@ -6,6 +6,9 @@ import {
 }
 
 // Values
+pub fn expansion_content_digest(expansion~ : ExpansionId, candidates~ : Array[GraphTask], parent~ : BoardTaskId, workflow~ : String) -> String
+
+pub fn valid_expansion_digest(String) -> Bool
 
 // Errors
 
@@ -77,6 +80,7 @@ pub(all) enum BoardCommand {
   StartAttempt(id~ : AttemptId, at_ms~ : Int64, expected_revision~ : Int64)
   FinishAttempt(id~ : AttemptId, outcome~ : AttemptOutcome, at_ms~ : Int64, expected_revision~ : Int64)
   RecordReview(id~ : AttemptId, decision~ : ReviewDecision, at_ms~ : Int64, expected_revision~ : Int64)
+  ExpandGraph(expansion~ : ExpansionId, candidates~ : Array[GraphTask], parent~ : BoardTaskId, workflow~ : String, at_ms~ : Int64, expected_revision~ : Int64)
 } derive(Eq, @debug.Debug)
 pub fn BoardCommand::copy_detached(Self) -> Self
 pub fn BoardCommand::equal(Self, Self) -> Bool
@@ -86,6 +90,7 @@ pub fn BoardCommand::to_repr(Self) -> @debug.Repr
 pub struct BoardDomain {
 }
 pub fn BoardDomain::BoardDomain() -> Self
+pub fn BoardDomain::preview_expand_graph(BoardStateSnapshot, expansion~ : ExpansionId, candidates~ : Array[GraphTask], parent~ : BoardTaskId, workflow~ : String, at_ms~ : Int64, expected_revision~ : Int64) -> Result[ExpansionPreview, BoardError]
 pub fn BoardDomain::propose(BoardState, BoardCommand) -> Result[BoardProposal, BoardError]
 
 pub(all) enum BoardError {
@@ -101,6 +106,7 @@ pub(all) enum BoardError {
   DependencyCycle(cycle~ : Array[BoardTaskId])
   DuplicateTask(task~ : BoardTaskId)
   DuplicateAttempt(attempt~ : AttemptId)
+  DuplicateExpansion(expansion~ : ExpansionId)
   InvalidInput(reason~ : String)
 } derive(Eq, @debug.Debug)
 pub fn BoardError::equal(Self, Self) -> Bool
@@ -116,7 +122,9 @@ pub(all) enum BoardEvent {
   AttemptStarted(id~ : AttemptId, task_id~ : BoardTaskId, at_ms~ : Int64)
   AttemptFinished(id~ : AttemptId, task_id~ : BoardTaskId, outcome~ : AttemptOutcome, at_ms~ : Int64)
   ReviewRecorded(id~ : AttemptId, task_id~ : BoardTaskId, decision~ : ReviewDecision, at_ms~ : Int64)
+  GraphExpanded(expansion~ : ExpansionId, tasks~ : Array[BoardTask], parent~ : BoardTaskId, workflow~ : String, mapping~ : Array[ExpansionMapping], digest~ : String, at_ms~ : Int64)
 } derive(Eq, @debug.Debug)
+pub fn BoardEvent::copy_detached(Self) -> Self
 pub fn BoardEvent::equal(Self, Self) -> Bool
 pub fn BoardEvent::not_equal(Self, Self) -> Bool
 pub fn BoardEvent::to_repr(Self) -> @debug.Repr
@@ -156,6 +164,8 @@ pub struct BoardState {
 pub fn BoardState::BoardState() -> Self
 pub fn BoardState::attempt(Self, AttemptId) -> Attempt?
 pub fn BoardState::attempts(Self) -> Array[Attempt]
+pub fn BoardState::expansion(Self, ExpansionId) -> ExpansionRecord?
+pub fn BoardState::expansions(Self) -> Array[ExpansionRecord]
 pub fn BoardState::from_snapshot(BoardStateSnapshot) -> Result[Self, BoardError]
 pub fn BoardState::revision(Self) -> Int64
 pub fn BoardState::snapshot(Self) -> BoardStateSnapshot
@@ -166,6 +176,7 @@ pub(all) struct BoardStateSnapshot {
   revision : Int64
   tasks : Array[BoardTask]
   attempts : Array[Attempt]
+  expansions : Array[ExpansionRecord]
 } derive(Eq, @debug.Debug)
 pub fn BoardStateSnapshot::copy_detached(Self) -> Self
 pub fn BoardStateSnapshot::equal(Self, Self) -> Bool
@@ -199,6 +210,61 @@ pub fn BoardTaskId::hash(Self) -> Int
 pub fn BoardTaskId::hash_combine(Self, Hasher) -> Unit
 pub fn BoardTaskId::not_equal(Self, Self) -> Bool
 pub fn BoardTaskId::to_repr(Self) -> @debug.Repr
+
+pub struct ExpansionId {
+  value : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn ExpansionId::ExpansionId(String) -> Self
+pub fn ExpansionId::equal(Self, Self) -> Bool
+pub fn ExpansionId::hash(Self) -> Int
+pub fn ExpansionId::hash_combine(Self, Hasher) -> Unit
+pub fn ExpansionId::not_equal(Self, Self) -> Bool
+pub fn ExpansionId::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ExpansionMapping {
+  local_ref : String
+  task_id : BoardTaskId
+} derive(Eq, @debug.Debug)
+pub fn ExpansionMapping::equal(Self, Self) -> Bool
+pub fn ExpansionMapping::not_equal(Self, Self) -> Bool
+pub fn ExpansionMapping::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ExpansionPreview {
+  digest : String
+  record : ExpansionRecord
+} derive(Eq, @debug.Debug)
+pub fn ExpansionPreview::equal(Self, Self) -> Bool
+pub fn ExpansionPreview::not_equal(Self, Self) -> Bool
+pub fn ExpansionPreview::to_repr(Self) -> @debug.Repr
+
+pub struct ExpansionRecord {
+  expansion_id : ExpansionId
+  parent_task_id : BoardTaskId
+  workflow_id : String
+  mapping : Array[ExpansionMapping]
+  content_digest : String
+  created_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn ExpansionRecord::copy_detached(Self) -> Self
+pub fn ExpansionRecord::equal(Self, Self) -> Bool
+pub fn ExpansionRecord::from_record(expansion_id~ : ExpansionId, parent_task_id~ : BoardTaskId, workflow_id~ : String, mapping~ : Array[ExpansionMapping], content_digest~ : String, created_at_ms~ : Int64) -> Self
+pub fn ExpansionRecord::not_equal(Self, Self) -> Bool
+pub fn ExpansionRecord::to_repr(Self) -> @debug.Repr
+
+pub struct GraphTask {
+  id : BoardTaskId
+  title : String
+  description : String
+  priority : BoardPriority
+  definition_of_done : Array[String]
+  dependencies : Array[BoardTaskId]
+  local_ref : String
+} derive(Eq, @debug.Debug)
+pub fn GraphTask::copy_detached(Self) -> Self
+pub fn GraphTask::equal(Self, Self) -> Bool
+pub fn GraphTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], local_ref~ : String) -> Self
+pub fn GraphTask::not_equal(Self, Self) -> Bool
+pub fn GraphTask::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReviewDecision {
   Pending

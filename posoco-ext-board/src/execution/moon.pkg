@@ -12,6 +12,7 @@ import {
   "moonbitlang/async/aqueue",
   "colmugx/posoco-ext-board/store",
   "colmugx/posoco-ext-board/runtime",
+  "colmugx/posoco-ext-board/coordinator",
 } for "test"
 
 import {
