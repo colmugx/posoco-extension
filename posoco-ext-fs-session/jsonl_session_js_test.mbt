@@ -245,3 +245,37 @@ async test "io[js]: append without a change keeps the metadata line" {
   }
   assert_eq(js_stored_metadata_line(path), before)
 }
+
+///|
+async test "io[js]: v2 selection survives append metadata rewrite" {
+  if !js_bun_available() { return }
+  let root = "/tmp/posoco-fs-session-js-v2-" + js_now_ms().to_string()
+  let store = @posoco-ext-fs-session.JsonlSessionStore::JsonlSessionStore(root)
+  let first : @posoco-ext-fs-session.SessionSelectionV2 = {
+    owner: "owned-manager",
+    model_id: "opaque-one",
+    effort: None,
+    pending: false,
+    revision: 1L,
+  }
+  store.observe_selection_v2(first)
+  let one : Array[@posoco.Message] = [
+    @posoco.Message::UserMessage(content=[@posoco.Content::Text("one")]),
+  ]
+  store.append_messages("sess_v2", 0, one[:]) catch {
+    e => fail("v2 first append failed: \{e}")
+  }
+  let second = { ..first, model_id: "opaque-two", revision: 2L, }
+  store.observe_selection_v2(second)
+  store.append_messages("sess_v2", 1, one[:]) catch {
+    e => fail("v2 second append failed: \{e}")
+  }
+  let saved = store.load("sess_v2") catch {
+    e => fail("v2 read failed: \{e}")
+  }
+  assert_eq(saved.messages.length(), 2)
+  assert_eq(
+    @posoco-ext-fs-session.session_selection_v2_from_metadata(saved.metadata),
+    Some(second),
+  )
+}
