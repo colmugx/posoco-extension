@@ -23,9 +23,7 @@ pub extend ModelStatusFacts with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// A compact status should never pretend stale/absent model facts are zero.
-pub fn ModelStatusFacts::context_percent(
-  self : ModelStatusFacts,
-) -> Double? {
+pub fn ModelStatusFacts::context_percent(self : ModelStatusFacts) -> Double? {
   match (self.context_used_tokens, self.context_capacity_tokens) {
     (Some(used), Some(capacity)) if used >= 0L && capacity > 0L =>
       Some(used.to_double() * 100.0 / capacity.to_double())
@@ -71,7 +69,9 @@ pub(all) struct ModelQuotaSourceSnapshot {
 pub extend ModelQuotaSourceSnapshot with Eq::{not_equal, equal}
 
 ///|
-pub extend ModelQuotaSourceSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
+pub extend ModelQuotaSourceSnapshot with @moonbitlang/core/debug.Debug::{
+  to_repr,
+}
 
 ///|
 /// Model-local quota observations; no pooled remaining-percent property.
@@ -154,9 +154,7 @@ pub extend ModelRecoveryAdvice with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// A deadline may be missing. A missing deadline is not "retry immediately".
-pub fn ModelRecoveryAdvice::deadline(
-  self : ModelRecoveryAdvice,
-) -> Int64? {
+pub fn ModelRecoveryAdvice::deadline(self : ModelRecoveryAdvice) -> Int64? {
   match self {
     WaitUntil(at) if at > 0L => Some(at)
     _ => None
