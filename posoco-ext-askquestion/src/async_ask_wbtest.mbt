@@ -353,3 +353,51 @@ async test "notify_user_degrades_without_wakeup_and_clears_on_shutdown" {
   assert_true(!tools.has_undelivered())
   assert_eq(@posoco.PipelineHook::before_model(tools, []).length(), 0)
 }
+
+///|
+/// A plain reply (no id binding) closes every open question: no envelope,
+/// no later expiry, and a late id-bound answer is refused.
+async test "notify_user_plain_reply_closes_questions" {
+  let tools = AskQuestionTools()
+  let closed : Array[String] = []
+  tools.subscribe(fn(event) {
+    match event {
+      Closed(question_id~) => closed.push(question_id)
+      _ => ()
+    }
+  })
+  ignore(
+    @posoco.ToolProvider::execute(
+      tools,
+      recorded_ctx(select_call("call-1", ["staging", "production"])),
+    ),
+  )
+  ignore(
+    @posoco.ToolProvider::execute(
+      tools,
+      recorded_ctx(
+        notify_call(
+          "call-2",
+          Json::object({ "question": Json::string("Node 22?") }),
+        ),
+      ),
+    ),
+  )
+  assert_eq(tools.open_questions().length(), 2)
+  // The human typed a reply: the host closes what is open.
+  assert_eq(tools.close_open_for_reply().length(), 2)
+  assert_eq(closed, ["question-1", "question-2"])
+  assert_eq(tools.open_questions().length(), 0)
+  // No envelope is queued for a closed question, and nothing expires later.
+  assert_eq(tools.drain_answers_for_test(now=99_999_999L).length(), 0)
+  assert_eq(@posoco.PipelineHook::before_model(tools, []).length(), 0)
+  // The closed question is settled: an id-bound answer cannot revive it.
+  match
+    tools.answer_async(
+      question_id="question-1",
+      response=@posoco.UiResponse::Selected(0),
+    ) {
+    Err(AsyncAskError::AlreadyAnswered(..)) => ()
+    _ => fail("expected the closed question to stay settled")
+  }
+}
