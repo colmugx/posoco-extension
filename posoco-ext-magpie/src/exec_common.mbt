@@ -50,9 +50,10 @@ async fn drain_error_body(
 
 ///|
 /// Classifies a non-2xx gateway status into a Posoco model error.
-/// 429 goes through the rate-limit kit (reset extraction stays structured);
-/// everything else becomes a bounded `Transport` diagnostic — bodies are
-/// counted, never quoted.
+/// 429 goes through the rate-limit kit (reset extraction stays structured).
+/// HTTP 408 and 5xx are transient gateway failures, scheduled by Posoco's
+/// rate-limit recovery actor. Authentication and request errors stay terminal.
+/// Bodies are counted, never quoted.
 fn classify_http_error(
   stage : String,
   code : Int32,
@@ -69,6 +70,9 @@ fn classify_http_error(
       default_tz_offset_minutes=0,
       now_ms~,
     )
+  }
+  if code == 408 || code >= 500 && code <= 599 {
+    return Some(magpie_transient_error("http", "status_\{code}"))
   }
   Some(
     @posoco.ModelError::Transport(
@@ -93,7 +97,60 @@ fn require_http_success(
 ///|
 /// Maps a transport-level failure onto the Posoco error vocabulary from the
 /// error's structural text. Errors quote facts, never bodies or headers.
+///|
+/// A retryable failure without a provider deadline. The recovery guard owns
+/// backoff; do not fabricate a provider reset timestamp here.
+fn magpie_transient_error(stage : String, category : String) -> @posoco.ModelError {
+  @posoco.ModelError::RateLimited(@posoco.RateLimitInfo::{
+    message: "magpie transient failure (stage=\{stage}, category=\{category})",
+    reset_at_ms: None,
+    provider_code: Some("magpie_transient"),
+  })
+}
+
+///|
+/// Only Magpie's well-known stream-failure envelope is retryable. Arbitrary
+/// upstream error text, policy refusals and auth failures stay terminal.
+/// We only inspect the error shape; no provider text enters diagnostics.
+fn magpie_stream_transient(payload : String) -> Bool {
+  let json : Json = @json.parse(payload) catch { _ => Json::null() }
+  guard json is Json::Object(root) else { return false }
+  let err = match root.get("error") {
+    Some(Json::Object(fields)) => Some(fields)
+    _ =>
+      match root.get("response") {
+        Some(Json::Object(response)) =>
+          match response.get("error") {
+            Some(Json::Object(fields)) => Some(fields)
+            _ => None
+          }
+        _ => None
+      }
+  }
+  guard err is Some(fields) else { return false }
+  let message = match fields.get("message") {
+    Some(Json::String(value)) => value.to_lower()
+    _ => ""
+  }
+  let code = match (fields.get("type"), fields.get("code")) {
+    (Some(Json::String(kind)), _) => kind
+    (_, Some(Json::String(kind))) => kind
+    _ => ""
+  }
+  (code == "api_error" || code == "server_error") &&
+  (message.contains("connection lost mid-reply") ||
+    message.contains("stream ended before") ||
+    message.contains("upstream died mid-reply"))
+}
+
+///|
 fn transport_error(stage : String, detail : String) -> @posoco.ModelError {
+  let lower = detail.to_lower()
+  // User-initiated cancellation must never restart an intentionally stopped
+  // turn, even when it surfaces as a transport exception.
+  if !lower.contains("cancel") && !lower.contains("abort") {
+    return magpie_transient_error(stage, "connection")
+  }
   @posoco.ModelError::Transport(
     "magpie transport failure (stage=\{stage}): \{detail}",
   )
