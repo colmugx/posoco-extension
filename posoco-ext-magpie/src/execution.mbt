@@ -277,7 +277,7 @@ async fn execute_messages(
             provider="magpie",
             @messages.StreamTermination::CleanEof,
           ) {
-          Some(error) => raise error
+          Some(_) => raise magpie_transient_error("messages.eof", "truncated_stream")
           None => done = true
         }
       }
