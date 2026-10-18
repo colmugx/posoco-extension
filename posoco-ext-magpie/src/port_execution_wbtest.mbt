@@ -868,7 +868,7 @@ async test "default model port executes routing groups through the gateway" {
   let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
   let port = MagpieModelPort::MagpieModelPort(
     manager~,
-    transport=transport,
+    transport~,
     report_sink=capturing_sink(reports),
   )
   let result = port.chat(
@@ -879,8 +879,7 @@ async test "default model port executes routing groups through the gateway" {
     NoStream,
   )
   inspect(
-    result.completion.message.content ==
-    [@posoco.Content::Text("group answer")],
+    result.completion.message.content == [@posoco.Content::Text("group answer")],
     content="true",
   )
   inspect(transport.post_calls.length(), content="1")

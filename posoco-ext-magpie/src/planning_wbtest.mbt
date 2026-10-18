@@ -501,6 +501,7 @@ test "the requested-feature matrix is fixed-order and complete" {
     content="true",
   )
 }
+
 ///|
 test "routing groups are delegated without weakening native model policy" {
   let group = entry_of(
@@ -518,11 +519,8 @@ test "routing groups are delegated without weakening native model policy" {
   guard plan_protocol(group, requirements~) is Incompatible(_) else {
     fail("an explicitly native-only request must reject dynamic routing")
   }
-  guard plan_protocol(
-      group,
-      requirements~,
-      policy=AllowGatewayGroups,
-    ) is Planned(plan) else {
+  guard plan_protocol(group, requirements~, policy=AllowGatewayGroups)
+    is Planned(plan) else {
     fail("group must be dispatched through the gateway")
   }
   inspect(plan.model_id, content="group/deepseek-v4.1-flash")
@@ -532,11 +530,8 @@ test "routing groups are delegated without weakening native model policy" {
   let strict_model = entry_of(
     model_entry(id="relay/no-native-endpoint", owned_by="relay"),
   )
-  guard plan_protocol(
-      strict_model,
-      requirements~,
-      policy=AllowGatewayGroups,
-    ) is Incompatible(_) else {
+  guard plan_protocol(strict_model, requirements~, policy=AllowGatewayGroups)
+    is Incompatible(_) else {
     fail("gateway-group policy must not loosen concrete-model selection")
   }
 }
@@ -550,17 +545,14 @@ test "routing groups cannot claim upstream-native fidelity" {
       fields="\"reasoning\":true,\"modalities\":{\"input\":[\"text\"]}",
     ),
   )
-  for requirements in [
-    MagpieRequirements::MagpieRequirements(signed_thinking_replay=true),
-    MagpieRequirements::MagpieRequirements(native_prompt_caching=true),
-  ] {
-    guard plan_protocol(
-        group,
-        requirements~,
-        policy=AllowGatewayGroups,
-      ) is Incompatible(_) else {
+  for
+    requirements in [
+      MagpieRequirements::MagpieRequirements(signed_thinking_replay=true),
+      MagpieRequirements::MagpieRequirements(native_prompt_caching=true),
+    ] {
+    guard plan_protocol(group, requirements~, policy=AllowGatewayGroups)
+      is Incompatible(_) else {
       fail("routing-group execution must not promise native-only fidelity")
     }
   }
 }
-
