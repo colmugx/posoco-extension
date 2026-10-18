@@ -501,3 +501,66 @@ test "the requested-feature matrix is fixed-order and complete" {
     content="true",
   )
 }
+///|
+test "routing groups are delegated without weakening native model policy" {
+  let group = entry_of(
+    model_entry(
+      id="group/deepseek-v4.1-flash",
+      owned_by="deepseek",
+      fields="\"reasoning\":true,\"context_window\":262144,\"modalities\":{\"input\":[\"text\"]}",
+    ),
+  )
+  let requirements = MagpieRequirements::MagpieRequirements(
+    tools=true,
+    streaming=true,
+    cancellation=true,
+  )
+  guard plan_protocol(group, requirements~) is Incompatible(_) else {
+    fail("an explicitly native-only request must reject dynamic routing")
+  }
+  guard plan_protocol(
+      group,
+      requirements~,
+      policy=AllowGatewayGroups,
+    ) is Planned(plan) else {
+    fail("group must be dispatched through the gateway")
+  }
+  inspect(plan.model_id, content="group/deepseek-v4.1-flash")
+  inspect(plan.kind, content="GatewayTranslated")
+  inspect(plan.endpoint_path is None, content="true")
+  inspect(plan.lossy_opt_in, content="false")
+  let strict_model = entry_of(
+    model_entry(id="relay/no-native-endpoint", owned_by="relay"),
+  )
+  guard plan_protocol(
+      strict_model,
+      requirements~,
+      policy=AllowGatewayGroups,
+    ) is Incompatible(_) else {
+    fail("gateway-group policy must not loosen concrete-model selection")
+  }
+}
+
+///|
+test "routing groups cannot claim upstream-native fidelity" {
+  let group = entry_of(
+    model_entry(
+      id="group/deepseek-v4.1-flash",
+      owned_by="deepseek",
+      fields="\"reasoning\":true,\"modalities\":{\"input\":[\"text\"]}",
+    ),
+  )
+  for requirements in [
+    MagpieRequirements::MagpieRequirements(signed_thinking_replay=true),
+    MagpieRequirements::MagpieRequirements(native_prompt_caching=true),
+  ] {
+    guard plan_protocol(
+        group,
+        requirements~,
+        policy=AllowGatewayGroups,
+      ) is Incompatible(_) else {
+      fail("routing-group execution must not promise native-only fidelity")
+    }
+  }
+}
+

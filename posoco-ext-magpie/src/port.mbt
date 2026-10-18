@@ -11,8 +11,8 @@
 
 ///|
 /// Execution-time strictness dials. Each one becomes a hard requirement in
-/// the execution plan; an unguaranteed requirement under `NativeOnly`
-/// yields an explicit error instead of a silent lossy call.
+/// the execution plan. The default delegates routing groups to Magpie, but
+/// leaves concrete models native-only and protects native-only fidelity.
 pub struct MagpieModelPort {
   priv manager : MagpieManager
   priv transport : &MagpieTransport
@@ -30,7 +30,7 @@ pub struct MagpieModelPort {
 pub fn MagpieModelPort::MagpieModelPort(
   manager~ : MagpieManager,
   transport~ : &MagpieTransport = HttpMagpieTransport::HttpMagpieTransport(),
-  policy~ : MagpieTranslationPolicy = NativeOnly,
+  policy~ : MagpieTranslationPolicy = AllowGatewayGroups,
   preference~ : MagpiePreference = Any,
   require_signed_thinking_replay~ : Bool = false,
   require_native_prompt_caching~ : Bool = false,
