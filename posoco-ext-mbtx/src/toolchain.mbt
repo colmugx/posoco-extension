@@ -186,7 +186,6 @@ async fn mbtx_candidate(
 /// The catch in `ensure_ready` publishes the failure segment, then
 /// re-raises: error reporting, not cleanup. Suppress the warning until
 /// `errdefer` can carry the error message (it cannot bind the error yet).
-
 pub async fn ToolchainManager::ensure_ready(
   self : ToolchainManager,
 ) -> ResolvedToolchain {
