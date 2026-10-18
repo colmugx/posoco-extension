@@ -923,7 +923,6 @@ async test "messages requests carry the stream flag in the body" {
   inspect(transport.post_calls[1].contains("\"stream\":false"), content="true")
 }
 
-
 ///|
 test "transient classification recognizes gateway failures without inventing resets" {
   for code in [408, 500, 502, 503, 504] {
@@ -945,19 +944,29 @@ test "transient classification recognizes gateway failures without inventing res
 
 ///|
 test "mid-reply stream failure is recoverable but arbitrary provider errors are not" {
-  assert_true(magpie_stream_transient(
-    "{\"error\":{\"type\":\"api_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (The operation timed out.)\"}}",
-  ))
-  assert_true(magpie_stream_transient(
-    "{\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"server_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (timeout)\"}}}",
-  ))
-  assert_true(magpie_stream_transient(
-    "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (timeout)\"}}",
-  ))
-  assert_true(!magpie_stream_transient(
-    "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"bad request\"}}",
-  ))
-  assert_true(!magpie_stream_transient(
-    "{\"error\":{\"type\":\"api_error\",\"message\":\"other upstream error\"}}",
-  ))
+  assert_true(
+    magpie_stream_transient(
+      "{\"error\":{\"type\":\"api_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (The operation timed out.)\"}}",
+    ),
+  )
+  assert_true(
+    magpie_stream_transient(
+      "{\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"server_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (timeout)\"}}}",
+    ),
+  )
+  assert_true(
+    magpie_stream_transient(
+      "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"OpenCode Zen Free: connection lost mid-reply (timeout)\"}}",
+    ),
+  )
+  assert_true(
+    !magpie_stream_transient(
+      "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"bad request\"}}",
+    ),
+  )
+  assert_true(
+    !magpie_stream_transient(
+      "{\"error\":{\"type\":\"api_error\",\"message\":\"other upstream error\"}}",
+    ),
+  )
 }

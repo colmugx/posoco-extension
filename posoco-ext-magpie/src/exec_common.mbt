@@ -71,7 +71,7 @@ fn classify_http_error(
       now_ms~,
     )
   }
-  if code == 408 || code >= 500 && code <= 599 {
+  if code == 408 || (code >= 500 && code <= 599) {
     return Some(magpie_transient_error("http", "status_\{code}"))
   }
   Some(
@@ -97,10 +97,14 @@ fn require_http_success(
 ///|
 /// Maps a transport-level failure onto the Posoco error vocabulary from the
 /// error's structural text. Errors quote facts, never bodies or headers.
+
 ///|
 /// A retryable failure without a provider deadline. The recovery guard owns
 /// backoff; do not fabricate a provider reset timestamp here.
-fn magpie_transient_error(stage : String, category : String) -> @posoco.ModelError {
+fn magpie_transient_error(
+  stage : String,
+  category : String,
+) -> @posoco.ModelError {
   @posoco.ModelError::RateLimited(@posoco.RateLimitInfo::{
     message: "magpie transient failure (stage=\{stage}, category=\{category})",
     reset_at_ms: None,
@@ -138,9 +142,11 @@ fn magpie_stream_transient(payload : String) -> Bool {
     _ => ""
   }
   (code == "api_error" || code == "server_error") &&
-  (message.contains("connection lost mid-reply") ||
+  (
+    message.contains("connection lost mid-reply") ||
     message.contains("stream ended before") ||
-    message.contains("upstream died mid-reply"))
+    message.contains("upstream died mid-reply")
+  )
 }
 
 ///|

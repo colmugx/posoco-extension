@@ -249,7 +249,9 @@ async fn execute_messages(
       Some(raw) =>
         for event in decoder.push(raw + "\n") {
           if magpie_stream_transient(event.data) {
-            event_stream.close_stream() catch { _ => () }
+            event_stream.close_stream() catch {
+              _ => ()
+            }
             raise magpie_transient_error("messages.stream", "mid_reply")
           }
           done = @messages.process_messages_event(
@@ -277,7 +279,8 @@ async fn execute_messages(
             provider="magpie",
             @messages.StreamTermination::CleanEof,
           ) {
-          Some(_) => raise magpie_transient_error("messages.eof", "truncated_stream")
+          Some(_) =>
+            raise magpie_transient_error("messages.eof", "truncated_stream")
           None => done = true
         }
       }
@@ -494,7 +497,9 @@ async fn execute_responses(
         match sse_payload(raw) {
           Some(payload) => {
             if magpie_stream_transient(payload) {
-              event_stream.close_stream() catch { _ => () }
+              event_stream.close_stream() catch {
+                _ => ()
+              }
               raise magpie_transient_error("responses.stream", "mid_reply")
             }
             done = @responses.process_responses_sse(
@@ -515,7 +520,9 @@ async fn execute_responses(
           None => ()
         }
       None => {
-        event_stream.close_stream() catch { _ => () }
+        event_stream.close_stream() catch {
+          _ => ()
+        }
         raise magpie_transient_error("responses.eof", "truncated_stream")
       }
     }
@@ -905,7 +912,9 @@ async fn execute_chat(
               done = true
             } else {
               if magpie_stream_transient(payload) {
-                event_stream.close_stream() catch { _ => () }
+                event_stream.close_stream() catch {
+                  _ => ()
+                }
                 raise magpie_transient_error("chat.stream", "mid_reply")
               }
               let _ = @chatkit.process_chat_completions_sse(
