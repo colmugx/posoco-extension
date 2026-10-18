@@ -510,6 +510,7 @@ async fn execute_responses(
                 }
                 raise error
               }
+            }
           }
           None => ()
         }
