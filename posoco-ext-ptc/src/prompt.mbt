@@ -15,7 +15,8 @@ pub impl @posoco.SystemPromptContributor for PtcExtension with fn system_prompt(
     "A denied/failed nested call returns {\"error\": \"CODE\", \"content\": \"message\"}; check this before consuming.",
     "Filter, loop and summarize in MoonBit. Return ONLY the final Json value. Inner results remain in the program, not in the model transcript.",
     "For ordinary comparisons, use MoonBit patterns on JSON, e.g. if value is {\"error\": String(reason), ..} { ... }.",
-    "Call run_code with code, description and optionally input. Avoid recreating raw tool schemas.",
+    "Call run_code with code or source, description and optionally input.",
+    "For reusable programs prefer source: a complete .mbtx with the versioned MBTX SDK, @mbtx.serve(run), and normal source locations.",
     "Available bindings (only these tool names may be called):",
   ]
   if self.exposed.is_empty() {
