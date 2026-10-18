@@ -18,7 +18,6 @@ pub(all) enum DynamicWorkflowError {
   ExpansionDisabled
   NoActiveProposal
   ProposalActive
-  UncertainProposalFrozen
   NoUncertainProposal
   ExpansionFailed(@expansion.ExpansionError)
   WorkflowMismatch
@@ -28,7 +27,6 @@ pub(all) enum DynamicWorkflowError {
   InvalidPreparation
   StaleRevision
   NotQuiescent
-  PlanningActive
   DuplicateAuthorization
   ApprovalDenied
   ScopeApprovalDenied

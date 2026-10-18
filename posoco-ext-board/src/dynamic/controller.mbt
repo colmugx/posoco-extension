@@ -152,6 +152,9 @@ async fn[T] DynamicWorkflowController::perform(
   work : async () -> Result[T, DynamicWorkflowError],
   recovery~ : Bool = false,
 ) -> Result[T, DynamicWorkflowError] {
+  if self.closed {
+    return Err(Closed)
+  }
   if self.busy {
     return Err(Busy)
   }
@@ -356,8 +359,13 @@ pub async fn DynamicWorkflowController::resume_workflow(
   if !self.runner.quiescent() {
     return Err(NotQuiescent)
   }
+  let was_paused = self.host_paused
   self.host_paused = false
-  self.gate()
+  let result = self.gate()
+  if result is Err(_) {
+    self.host_paused = was_paused
+  }
+  result
 }
 
 ///|
