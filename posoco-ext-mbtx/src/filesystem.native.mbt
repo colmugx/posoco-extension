@@ -21,9 +21,7 @@ async fn remove_directory(path : String) -> Unit nocancel {
 ///|
 /// Preserve source mtime on cache hits to allow Moon's no-op build.
 async fn write_text_if_changed(path : String, source : String) -> Unit {
-  let same = match @fs.read_file(path) {
-    file => file.text() == source
-  } catch { _ => false }
+  let same = (@fs.read_file(path).text() == source) catch { _ => false }
   if !same {
     @fs.write_file(path, source)
   }
