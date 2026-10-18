@@ -167,7 +167,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
     _ => Json::null()
   }
   let source = match ctx.arguments {
-    { "source": String(source), "code": _, .. } =>
+    { "source": String(_), "code": _, .. } =>
       return @posoco.ToolOutcome::ToolReportedError(
         content="run_code: specify source or code, not both",
         structured=None,
@@ -247,7 +247,12 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
   }
   let invocation_id = ctx.effect_id.to_string()
   (ctx.register_cancel)(self as &@posoco.ToolCancellable)
-  self.execute_source(source, input, invocation_id)
+  self.execute_source(source, input, invocation_id) catch {
+    error => @posoco.ToolOutcome::ToolReportedError(
+      content="run_code failed: " + error.to_string(),
+      structured=None,
+    )
+  }
 }
 
 ///|
