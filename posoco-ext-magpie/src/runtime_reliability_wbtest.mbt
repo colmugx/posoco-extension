@@ -85,8 +85,9 @@ async test "an incomplete stream cleans up its connection and isolates the failu
       Stream(fn(chunk) { chunks.push(chunk) }),
     )
   catch {
-    @posoco.ModelError::ResponseParse(_) => ()
-    _ => fail("expected ResponseParse for an incomplete stream")
+    @posoco.ModelError::RateLimited(info) =>
+      inspect(info.provider_code == Some("magpie_transient"), content="true")
+    _ => fail("expected recoverable RateLimited for an incomplete stream")
   } noraise {
     _ => ()
   }
