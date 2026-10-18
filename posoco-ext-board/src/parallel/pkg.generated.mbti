@@ -35,11 +35,18 @@ pub struct ParallelWorkflowRunner {
   // private fields
 }
 pub fn ParallelWorkflowRunner::ParallelWorkflowRunner(orchestrator~ : @orchestration.BoardOrchestrator, group~ : @async.TaskGroup[Unit], now_ms? : () -> Int64) -> Self
+pub fn ParallelWorkflowRunner::authorized_scope(Self) -> Array[String]
+pub fn ParallelWorkflowRunner::begin_planning(Self) -> Result[Unit, @workflow.WorkflowError]
 pub fn ParallelWorkflowRunner::cancel(Self) -> Unit
+pub fn ParallelWorkflowRunner::end_planning(Self, binding~ : @execution.BoardExecutionBinding?) -> Result[Unit, @workflow.WorkflowError]
+pub async fn ParallelWorkflowRunner::extend_scope(Self, ids~ : Array[String], expected_revision~ : Int64) -> Result[Unit, @workflow.WorkflowError]
 pub fn ParallelWorkflowRunner::pause(Self) -> Bool
+pub fn ParallelWorkflowRunner::planning_gate(Self) -> Bool
+pub fn ParallelWorkflowRunner::quiescent(Self) -> Bool
 pub fn ParallelWorkflowRunner::resume_workflow(Self) -> Bool
 pub async fn ParallelWorkflowRunner::shutdown(Self, timeout_ms? : Int) -> Bool
 pub async fn ParallelWorkflowRunner::start(Self, ParallelWorkflowSpec) -> Result[Unit, @workflow.WorkflowError]
+pub async fn ParallelWorkflowRunner::start_controlled(Self, ParallelWorkflowSpec) -> Result[Unit, @workflow.WorkflowError]
 pub fn ParallelWorkflowRunner::status(Self) -> ParallelWorkflowStatus
 pub fn ParallelWorkflowRunner::stop_after_wave(Self) -> Bool
 pub async fn ParallelWorkflowRunner::wait(Self) -> ParallelWorkflowStatus

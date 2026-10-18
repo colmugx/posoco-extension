@@ -178,6 +178,10 @@ async fn ParallelWorkflowRunner::run_loop(
   let mut stale = 0
   while true {
     @async.pause()
+    if self.controlled &&
+      self.phase is (Failed | Unresolved | Completed | Stopped) {
+      return
+    }
     if self.cancel_requested || self.closed {
       self.finish(
         @workflow.Stopped,
@@ -192,6 +196,11 @@ async fn ParallelWorkflowRunner::run_loop(
     if self.stop_requested {
       self.finish(@workflow.Stopped, @workflow.StopRequested)
       return
+    }
+    if self.controlled && self.phase is (Pausing | Paused) {
+      self.phase = @workflow.Paused
+      self.wake.get()
+      continue
     }
     if self.admitted >= spec.max_executions {
       self.finish(@workflow.Completed, @workflow.ExecutionBudgetReached)
@@ -257,6 +266,10 @@ async fn ParallelWorkflowRunner::run_loop(
     let limit = spec.max_concurrency.min(spec.max_executions - self.admitted)
     let wave = status.plan.eligible[:limit].to_owned()
     if wave.is_empty() {
+      if self.controlled {
+        self.phase = @workflow.Paused
+        continue
+      }
       self.finish(@workflow.Completed, @workflow.NoEligibleWork)
       return
     }
@@ -350,9 +363,25 @@ async fn ParallelWorkflowRunner::run_loop(
       self.finish(@workflow.Failed, @workflow.ExecutionFailed(outcome))
       return
     }
-    match self.orchestrator.board_state() {
-      Ok(state) => self.revision = Some(state.revision)
-      Err(_) => ()
+    if self.controlled {
+      match self.orchestrator.plan(task_scope=self.scope) {
+        Ok(plan) => {
+          self.revision = Some(plan.revision)
+          self.blocked = plan.blocked
+        }
+        Err(error) => {
+          self.finish(@workflow.Failed, @workflow.AdmissionRejected(error))
+          return
+        }
+      }
+    } else {
+      match self.orchestrator.board_state() {
+        Ok(state) => self.revision = Some(state.revision)
+        Err(_) => ()
+      }
+    }
+    if self.controlled && !self.cancel_requested && !self.stop_requested {
+      self.phase = @workflow.Paused
     }
     if replan {
       stale += 1
@@ -385,7 +414,7 @@ pub async fn ParallelWorkflowRunner::shutdown(
   }) catch {
     _ => false
   }
-  if !joined || self.starting {
+  if !joined || self.starting || self.planning || self.scope_busy {
     return false
   }
   let remaining = (deadline - (self.now_ms)())

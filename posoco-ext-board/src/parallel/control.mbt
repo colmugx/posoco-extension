@@ -20,6 +20,9 @@ pub struct ParallelWorkflowRunner {
   priv history : Array[String]
   priv handles : Array[@execution.BoardExecutionHandle]
   priv accounted : Map[String, Unit]
+  priv mut controlled : Bool
+  priv mut planning : Bool
+  priv mut scope_busy : Bool
   priv mut spec : ParallelWorkflowSpec?
   priv mut scope : Array[String]
   priv mut worker : @async.Task[Unit]?
@@ -59,6 +62,9 @@ pub fn ParallelWorkflowRunner::ParallelWorkflowRunner(
     history: [],
     handles: [],
     accounted: Map([]),
+    controlled: false,
+    planning: false,
+    scope_busy: false,
     spec: None,
     scope: [],
     worker: None,
@@ -142,6 +148,9 @@ fn ParallelWorkflowRunner::finish(
   ignore(self.elapsed_ms())
   self.phase = phase
   self.reason = Some(reason)
+  if self.controlled {
+    ignore(self.wake.try_put(()) catch { _ => false })
+  }
 }
 
 ///|
@@ -157,9 +166,10 @@ fn ParallelWorkflowRunner::has_time(
 ///|
 /// Freeze scope and reserve one control loop before any await. Process restart
 /// never restores this authorization; unresolved journal history blocks start.
-pub async fn ParallelWorkflowRunner::start(
+async fn ParallelWorkflowRunner::start_inner(
   self : ParallelWorkflowRunner,
   spec : ParallelWorkflowSpec,
+  controlled~ : Bool,
 ) -> Result[Unit, @workflow.WorkflowError] {
   if self.closed {
     return Err(@workflow.Closed)
@@ -225,6 +235,12 @@ pub async fn ParallelWorkflowRunner::start(
       return Err(@workflow.StartCancelled)
     }
     self.spec = Some(detached)
+    self.controlled = controlled
+    self.planning = false
+    self.scope_busy = false
+    if controlled {
+      self.phase = @workflow.Paused
+    }
     self.scope = scope
     self.history.push(detached.run_id)
     self.accounted.clear()
@@ -273,7 +289,11 @@ pub fn ParallelWorkflowRunner::pause(self : ParallelWorkflowRunner) -> Bool {
 pub fn ParallelWorkflowRunner::resume_workflow(
   self : ParallelWorkflowRunner,
 ) -> Bool {
-  if !self.closed && self.phase is Paused {
+  if !self.closed &&
+    !self.planning &&
+    !self.scope_busy &&
+    !self.cancel_requested &&
+    self.phase is Paused {
     self.phase = @workflow.Running
     ignore(self.wake.try_put(()) catch { _ => false })
     true

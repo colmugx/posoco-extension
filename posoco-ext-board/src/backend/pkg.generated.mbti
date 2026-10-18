@@ -30,6 +30,7 @@ pub async fn BoardBackend::handle_command(Self, @protocol.BoardClientCommand) ->
 pub fn BoardBackend::publish_telemetry(Self, board_revision~ : Int64, kind~ : String, scope? : @protocol.BoardEventScope?, payload~ : Json) -> @protocol.BoardWireEvent
 pub async fn BoardBackend::shutdown(Self) -> Unit
 pub async fn BoardBackend::state(Self) -> Result[@domain.BoardStateSnapshot, @coordinator.BoardCoordinatorError]
+pub async fn BoardBackend::submit(Self, @domain.BoardCommand) -> Result[Array[@domain.BoardEvent], @coordinator.BoardCoordinatorError]
 pub fn BoardBackend::subscribe(Self, Int64, Bool) -> BoardSubscription
 pub fn BoardBackend::subscriber_count(Self) -> Int
 pub fn BoardBackend::unsubscribe(Self, BoardSubscription) -> Unit
