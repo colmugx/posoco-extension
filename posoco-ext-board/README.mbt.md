@@ -20,6 +20,12 @@ read-only replanning. Generated tasks are not automatically executable. See
 trust boundary, identity reconciliation, event contract and rollback limitations.
 No browser expansion command is installed.
 
+S4E2 adds the optional `dynamic` controller: explicit quiescent S4D waves,
+S4E1 graph approval, separately approved execution-scope extension, legal generated
+task preparation and shared planning/execution budgets through the same S4A owner.
+See [`docs/S4E2-dynamic-runner.md`](docs/S4E2-dynamic-runner.md) for the worked
+example, pause/cancel/shutdown behavior, uncertainty and in-process-only authority.
+
 
 ## Current status: headless service, client replica and embedded dashboard
 

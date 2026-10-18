@@ -73,6 +73,7 @@ pub fn BoardExecutionOwner::cancel(Self, String) -> Result[Unit, BoardExecutionE
 pub async fn BoardExecutionOwner::execute(Self, BoardExecutionRequest, admission_guard? : (@domain.BoardStateSnapshot) -> Bool, reservation_revision? : Int64) -> Result[BoardExecutionHandle, BoardExecutionError]
 pub async fn BoardExecutionOwner::shutdown(Self, timeout_ms? : Int) -> Bool
 pub fn BoardExecutionOwner::status(Self) -> BoardExecutionOwnerStatus
+pub fn BoardExecutionOwner::uses_backend(Self, @backend.BoardBackend) -> Bool
 pub fn BoardExecutionOwner::with_slots(backend~ : @backend.BoardBackend, store~ : &BoardExecutionStore, adapter_factory~ : (Int) -> &BoardExecutionAdapter, max_concurrency? : Int) -> Result[Self, BoardExecutionError]
 
 pub(all) struct BoardExecutionOwnerStatus {

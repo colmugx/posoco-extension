@@ -1,0 +1,197 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/dynamic"
+
+import {
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/coordinator",
+  "colmugx/posoco-ext-board/execution",
+  "colmugx/posoco-ext-board/expansion",
+  "colmugx/posoco-ext-board/orchestration",
+  "colmugx/posoco-ext-board/parallel",
+  "colmugx/posoco-ext-board/workflow",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct DynamicExpansionSpec {
+  max_expansions : Int
+  max_generated_tasks : Int
+  max_depth : Int
+  scope_approval : DynamicScopeApprovalPolicy
+} derive(Eq, @debug.Debug)
+pub fn DynamicExpansionSpec::DynamicExpansionSpec(max_expansions~ : Int, max_generated_tasks~ : Int, max_depth~ : Int, scope_approval? : DynamicScopeApprovalPolicy) -> Self
+pub fn DynamicExpansionSpec::equal(Self, Self) -> Bool
+pub fn DynamicExpansionSpec::not_equal(Self, Self) -> Bool
+pub fn DynamicExpansionSpec::to_repr(Self) -> @debug.Repr
+
+pub(all) enum DynamicScopeApprovalPolicy {
+  Denied
+  HostApprover
+} derive(Eq, @debug.Debug)
+pub fn DynamicScopeApprovalPolicy::equal(Self, Self) -> Bool
+pub fn DynamicScopeApprovalPolicy::not_equal(Self, Self) -> Bool
+pub fn DynamicScopeApprovalPolicy::to_repr(Self) -> @debug.Repr
+
+pub struct DynamicWorkflowController {
+  // private fields
+}
+pub fn DynamicWorkflowController::approve(Self, preview~ : @expansion.ExpansionApprovalPreview, approver~ : &@expansion.ExpansionApprover) -> Result[@expansion.ExpansionApproval, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::authorize_scope_extension(Self, workflow_id~ : String, expansion_id~ : String, approved_task_ids~ : Array[String], expected_revision~ : Int64, approver~ : &ScopeExtensionApprover) -> Result[Unit, DynamicWorkflowError]
+pub fn DynamicWorkflowController::cancel(Self) -> Unit
+pub async fn DynamicWorkflowController::commit(Self, approval~ : @expansion.ExpansionApproval) -> Result[Unit, DynamicWorkflowError]
+pub fn DynamicWorkflowController::create(owner~ : @execution.BoardExecutionOwner, backend~ : @backend.BoardBackend, resolver~ : &@orchestration.BoardExecutionInputResolver, group~ : @async.TaskGroup[Unit], spec~ : DynamicWorkflowSpec, now_ms? : () -> Int64) -> Result[Self, DynamicWorkflowError]
+pub fn DynamicWorkflowController::discard_proposal(Self) -> Unit
+pub async fn DynamicWorkflowController::generate_plan(Self, request~ : @execution.BoardExecutionRequest, channel~ : @execution.BoardExecutionResultChannel, authorization_id~ : String, workflow_parent~ : String, permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int, max_edges? : Int) -> Result[Unit, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::outlook(Self, expansion_id~ : String) -> Result[Array[@expansion.GeneratedTaskOutlook], DynamicWorkflowError]
+pub fn DynamicWorkflowController::pause(Self) -> Bool
+pub async fn DynamicWorkflowController::prepare_proposal(Self, payload~ : String, authorization_id~ : String, workflow_parent~ : String, permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int, max_edges? : Int) -> Result[Unit, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::prepare_task(Self, task_id~ : String, attempt_id~ : String, expected_revision~ : Int64) -> Result[Unit, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::preview(Self) -> Result[@expansion.ExpansionApprovalPreview, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::reconcile(Self) -> Result[Bool, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::reconcile_preparation(Self, task_id~ : String) -> Result[PreparationRecord, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::refresh_status(Self) -> Result[DynamicWorkflowStatus, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::resume_workflow(Self) -> Result[Unit, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::run_wave(Self) -> Result[Unit, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn DynamicWorkflowController::start(Self) -> Result[Unit, DynamicWorkflowError]
+pub fn DynamicWorkflowController::status(Self) -> DynamicWorkflowStatus
+pub async fn DynamicWorkflowController::wait(Self) -> DynamicWorkflowStatus
+pub async fn DynamicWorkflowController::wait_boundary(Self) -> Result[DynamicWorkflowStatus, DynamicWorkflowError]
+
+pub(all) enum DynamicWorkflowError {
+  InvalidSpec
+  InvalidScope
+  Closed
+  NotStarted
+  AlreadyStarted
+  BoardUnavailable
+  Busy
+  HostPaused
+  BudgetExceeded
+  OperationInterrupted
+  PreparationBlocked
+  BackendMismatch
+  RunnerRejected(@workflow.WorkflowError)
+  ExpansionDisabled
+  NoActiveProposal
+  ProposalActive
+  UncertainProposalFrozen
+  NoUncertainProposal
+  ExpansionFailed(@expansion.ExpansionError)
+  WorkflowMismatch
+  UnknownExpansion
+  ParentOutOfScope
+  TaskOutOfScope
+  InvalidPreparation
+  StaleRevision
+  NotQuiescent
+  PlanningActive
+  DuplicateAuthorization
+  ApprovalDenied
+  ScopeApprovalDenied
+  PreparationFailed(@coordinator.BoardCoordinatorError)
+  PreparationUncertain(PreparationRecord)
+} derive(Eq, @debug.Debug)
+pub fn DynamicWorkflowError::equal(Self, Self) -> Bool
+pub fn DynamicWorkflowError::not_equal(Self, Self) -> Bool
+pub fn DynamicWorkflowError::to_repr(Self) -> @debug.Repr
+
+pub(all) struct DynamicWorkflowSpec {
+  workflow_id : String
+  initial_scope : Array[String]
+  max_executions : Int
+  max_elapsed_ms : Int
+  execution_timeout_ms : Int
+  failure_policy : @parallel.ParallelFailurePolicy
+  max_concurrency : Int
+  expansion : DynamicExpansionSpec?
+} derive(Eq, @debug.Debug)
+pub fn DynamicWorkflowSpec::DynamicWorkflowSpec(workflow_id~ : String, initial_scope~ : Array[String], max_executions~ : Int, max_elapsed_ms~ : Int, execution_timeout_ms~ : Int, max_concurrency? : Int, failure_policy? : @parallel.ParallelFailurePolicy, expansion? : DynamicExpansionSpec?) -> Self
+pub fn DynamicWorkflowSpec::equal(Self, Self) -> Bool
+pub fn DynamicWorkflowSpec::not_equal(Self, Self) -> Bool
+pub fn DynamicWorkflowSpec::to_repr(Self) -> @debug.Repr
+pub fn DynamicWorkflowSpec::validate(Self) -> Bool
+
+pub(all) struct DynamicWorkflowStatus {
+  workflow_id : String
+  phase : @workflow.WorkflowPhase
+  reason : @workflow.WorkflowStopReason?
+  runner : @parallel.ParallelWorkflowStatus
+  scope : Array[String]
+  scope_authorizations : Int
+  expansions_attempted : Int
+  expansions_committed : Int
+  generated_tasks_committed : Int
+  expansion_enabled : Bool
+  expansion_phase : @expansion.ExpansionPhase?
+  planning_active : Bool
+  partial_preparations : Array[PreparationRecord]
+  board_revision : Int64?
+  blocked : Array[@orchestration.BlockedExecution]
+  pending_proposal_id : String?
+  last_committed_expansion_id : String?
+  host_paused : Bool
+  operation_active : Bool
+  unresolved : Bool
+  remaining_expansions : Int
+  remaining_generated_tasks : Int
+} derive(Eq, @debug.Debug)
+pub fn DynamicWorkflowStatus::equal(Self, Self) -> Bool
+pub fn DynamicWorkflowStatus::not_equal(Self, Self) -> Bool
+pub fn DynamicWorkflowStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PreparationRecord {
+  task_id : String
+  attempt_id : String
+  step : PreparationStep
+  uncertain : Bool
+  base_revision : Int64
+  completed_steps : Int
+} derive(Eq, @debug.Debug)
+pub fn PreparationRecord::equal(Self, Self) -> Bool
+pub fn PreparationRecord::not_equal(Self, Self) -> Bool
+pub fn PreparationRecord::to_repr(Self) -> @debug.Repr
+
+pub(all) enum PreparationStep {
+  MoveRefining
+  MoveReady
+  QueueExecute
+} derive(Eq, @debug.Debug)
+pub fn PreparationStep::equal(Self, Self) -> Bool
+pub fn PreparationStep::not_equal(Self, Self) -> Bool
+pub fn PreparationStep::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ScopeExtensionPreview {
+  workflow_id : String
+  expansion_id : String
+  parent_task_id : String
+  mapping : Array[ScopeTaskMapping]
+  approved_task_ids : Array[String]
+  revision : Int64
+  scope_before : Array[String]
+  expansions_committed : Int
+  scope_authorizations : Int
+} derive(Eq, @debug.Debug)
+pub fn ScopeExtensionPreview::equal(Self, Self) -> Bool
+pub fn ScopeExtensionPreview::not_equal(Self, Self) -> Bool
+pub fn ScopeExtensionPreview::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ScopeTaskMapping {
+  key : String
+  task_id : String
+} derive(Eq, @debug.Debug)
+pub fn ScopeTaskMapping::equal(Self, Self) -> Bool
+pub fn ScopeTaskMapping::not_equal(Self, Self) -> Bool
+pub fn ScopeTaskMapping::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
+pub(open) trait ScopeExtensionApprover {
+  fn approve(Self, ScopeExtensionPreview) -> @expansion.ApprovalDecision
+}
