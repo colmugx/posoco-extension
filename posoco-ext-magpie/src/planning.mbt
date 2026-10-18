@@ -72,6 +72,10 @@ pub(all) enum MagpieTranslationPolicy {
   /// Only endpoints the gateway declares native for the model; a required
   /// feature that cannot be guaranteed yields an explicit incompatibility.
   NativeOnly
+  /// A routing group is explicitly delegated to the gateway, where its
+  /// upstream protocol is chosen at request time. Concrete models remain
+  /// native-only, and requirements for upstream-native fidelity still fail.
+  AllowGatewayGroups
   /// Gateway-translated execution is acceptable even when fidelity is not
   /// guaranteed; the plan keeps the risks visible and is marked lossy.
   AllowTranslated
@@ -89,6 +93,7 @@ pub impl Show for MagpieTranslationPolicy with fn to_string(
 ) -> String {
   match self {
     NativeOnly => "NativeOnly"
+    AllowGatewayGroups => "AllowGatewayGroups"
     AllowTranslated => "AllowTranslated"
   }
 }
@@ -686,9 +691,10 @@ fn transport_capability(
 /// Selection rules, in priority order and all deterministic:
 /// 1. Protocols with declared-fact blockers are never eligible; no policy
 ///    repairs declared facts.
-/// 2. `NativeOnly` accepts only declared-native endpoints and only plans
-///    that guarantee every required feature; `AllowTranslated` accepts the
-///    rest with risks visible (the explicit lossy opt-in).
+/// 2. `NativeOnly` accepts only declared-native endpoints and full
+///    guarantees. `AllowGatewayGroups` also delegates explicitly selected
+///    routing groups to the gateway unless native fidelity is required.
+///    `AllowTranslated` accepts the rest with visible fidelity risks.
 /// 3. When signed thinking or native prompt caching is required and a
 ///    declared native Messages endpoint exists, that protocol wins.
 /// 4. Otherwise the caller preference wins among eligible protocols.
@@ -721,11 +727,26 @@ pub fn plan_protocol(
     }
     let unguaranteed = evaluation.unguaranteed.length() > 0
     let native_declared = evaluation.native_path is Some(_)
-    // NativeOnly demands a declared native endpoint and full guarantees;
-    // AllowTranslated accepts the rest with the risks kept visible.
-    if !(policy is AllowTranslated || (!unguaranteed && native_declared)) {
-      let policy_reasons = if !native_declared && policy is NativeOnly {
-        ["no declared native endpoint under the NativeOnly policy"]
+    // A routing group cannot advertise an upstream-native endpoint:
+    // its serving model may change on every call. A group-specific policy
+    // delegates ordinary requests without weakening concrete-model fidelity.
+    // Signed-thinking replay and native prompt caching still require native
+    // upstream guarantees and are never assumed from a group.
+    let group_delegation = entry.meta.is_routing_group &&
+      policy is AllowGatewayGroups &&
+      !requirements.signed_thinking_replay &&
+      !requirements.native_prompt_caching
+    if !(policy is AllowTranslated || (!unguaranteed && native_declared) ||
+      group_delegation) {
+      let strict_endpoint = policy is NativeOnly ||
+        (policy is AllowGatewayGroups && !entry.meta.is_routing_group)
+      let policy_reasons = if !native_declared && strict_endpoint {
+        ["no declared native endpoint under the {policy} policy"]
+      } else if entry.meta.is_routing_group &&
+        policy is AllowGatewayGroups &&
+        (requirements.signed_thinking_replay ||
+        requirements.native_prompt_caching) {
+        ["routing groups cannot guarantee upstream-native thinking replay or prompt caching"]
       } else {
         []
       }

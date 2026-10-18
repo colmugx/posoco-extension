@@ -855,3 +855,39 @@ async test "text-only catalog blocks image inference before transport" {
   }
   inspect(transport.post_calls.length(), content="0")
 }
+
+///|
+async test "default model port executes routing groups through the gateway" {
+  let transport = chat_transport(posts=[
+    buffered_post(status=200, body=messages_nonstream_body(text="group answer")),
+  ])
+  let manager = manager_with(transport~, config=local_config())
+  refresh_ok(manager)
+  let control = manager as &@modelmgmt.ModelManagerControl
+  control.select_model("group/auto")
+  let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
+  let port = MagpieModelPort::MagpieModelPort(
+    manager~,
+    transport,
+    report_sink=capturing_sink(reports),
+  )
+  let result = port.chat(
+    exec_scope(session="sess-group-default"),
+    user_text("route me"),
+    [],
+    chat_options(),
+    NoStream,
+  )
+  inspect(
+    result.completion.message.content ==
+    [@posoco.Content::Text("group answer")],
+    content="true",
+  )
+  inspect(transport.post_calls.length(), content="1")
+  inspect(
+    transport.post_calls[0].contains("\"model\":\"group/auto\""),
+    content="true",
+  )
+  inspect(reports.val[0].kind, content="GatewayTranslated")
+  inspect(reports.val[0].lossy_opt_in, content="false")
+}

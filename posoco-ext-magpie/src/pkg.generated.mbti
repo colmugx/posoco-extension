@@ -551,6 +551,7 @@ pub impl Show for MagpieServiceAvailability
 
 pub(all) enum MagpieTranslationPolicy {
   NativeOnly
+  AllowGatewayGroups
   AllowTranslated
 } derive(Eq, @debug.Debug)
 pub fn MagpieTranslationPolicy::equal(Self, Self) -> Bool
