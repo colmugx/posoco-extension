@@ -248,6 +248,10 @@ async fn execute_messages(
     match line {
       Some(raw) =>
         for event in decoder.push(raw + "\n") {
+          if magpie_stream_transient(event.data) {
+            event_stream.close_stream() catch { _ => () }
+            raise magpie_transient_error("messages.stream", "mid_reply")
+          }
           done = @messages.process_messages_event(
             provider="magpie",
             event_name=event.name,
@@ -488,7 +492,11 @@ async fn execute_responses(
     match line {
       Some(raw) =>
         match sse_payload(raw) {
-          Some(payload) =>
+          Some(payload) => {
+            if magpie_stream_transient(payload) {
+              event_stream.close_stream() catch { _ => () }
+              raise magpie_transient_error("responses.stream", "mid_reply")
+            }
             done = @responses.process_responses_sse(
               provider="magpie",
               payload,
@@ -502,16 +510,12 @@ async fn execute_responses(
                 }
                 raise error
               }
-            }
+          }
           None => ()
         }
       None => {
-        event_stream.close_stream() catch {
-          _ => ()
-        }
-        raise @posoco.ModelError::ResponseParse(
-          "magpie response parse failure (stage=responses.eof, category=truncated_stream)",
-        )
+        event_stream.close_stream() catch { _ => () }
+        raise magpie_transient_error("responses.eof", "truncated_stream")
       }
     }
     let now = @async.now()
@@ -899,6 +903,10 @@ async fn execute_chat(
             if payload is "[DONE]" {
               done = true
             } else {
+              if magpie_stream_transient(payload) {
+                event_stream.close_stream() catch { _ => () }
+                raise magpie_transient_error("chat.stream", "mid_reply")
+              }
               let _ = @chatkit.process_chat_completions_sse(
                 provider="magpie",
                 payload,
@@ -919,9 +927,7 @@ async fn execute_chat(
         event_stream.close_stream() catch {
           _ => ()
         }
-        raise @posoco.ModelError::ResponseParse(
-          "magpie response parse failure (stage=chat.eof, category=truncated_stream)",
-        )
+        raise magpie_transient_error("chat.eof", "truncated_stream")
       }
     }
     let now = @async.now()
