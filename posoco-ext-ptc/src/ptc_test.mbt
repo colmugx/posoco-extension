@@ -42,12 +42,12 @@ async test "PTC real MoonBit guest calls trusted bridge and filters result" {
     name="run_code",
     arguments={
       "description": "Select tool name",
-      "code": #|let value = ctx.call("read", {"path": "README.md"})
+      "code": (#|let value = ctx.call("read", {"path": "README.md"})
               #|match value {
               #|  {"name": String(name), ..} => {"picked": name}
               #|  _ => {"picked": "missing"}
               #|}
-      ,
+      ),
     },
   )
   let result = ptc.execute(ctx)
@@ -70,9 +70,9 @@ async test "PTC refuses nested tool use without trusted bridge" {
       name="run_code",
       arguments={
         "description": "Fail closed",
-        "code": #|let value = ctx.call("read", {})
+        "code": (#|let value = ctx.call("read", {})
                 #|value
-        ,
+        ),
       },
     ),
   )
@@ -95,9 +95,9 @@ async test "PTC rejects names outside exposed capabilities before invoking bridg
       name="run_code",
       arguments={
         "description": "Reject write",
-        "code": #|let value = ctx.call("write", {"path": "secret"})
+        "code": (#|let value = ctx.call("write", {"path": "secret"})
                 #|value
-        ,
+        ),
       },
     ),
   )
