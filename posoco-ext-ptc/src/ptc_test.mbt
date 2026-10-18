@@ -23,7 +23,7 @@ fn test_ptc_tools() -> Array[@posoco.ToolDef] {
 
 ///|
 test "PTC model sees only run_code and a stable generated tool catalog" {
-  let ptc = @ptc.PtcExtension(exposed=test_ptc_tools())
+  let ptc = @posoco-ext-ptc.PtcExtension(exposed=test_ptc_tools())
   assert_eq(ptc.manifest().tools.length(), 1)
   let defs = ptc.list_tools()
   assert_eq(defs.length(), 1)
@@ -37,7 +37,7 @@ test "PTC model sees only run_code and a stable generated tool catalog" {
 ///|
 async test "PTC real MoonBit guest calls trusted bridge and filters result" {
   let mock = PtcMockInvoker::{calls: []}
-  let ptc = @ptc.PtcExtension(exposed=test_ptc_tools(), scoped_invoker=mock)
+  let ptc = @posoco-ext-ptc.PtcExtension(exposed=test_ptc_tools(), scoped_invoker=mock)
   let ctx = @posoco.tk_tool_call_ctx(
     name="run_code",
     arguments={
@@ -61,7 +61,7 @@ async test "PTC real MoonBit guest calls trusted bridge and filters result" {
 
 ///|
 async test "PTC refuses nested tool use without trusted bridge" {
-  let ptc = @ptc.PtcExtension(exposed=test_ptc_tools())
+  let ptc = @posoco-ext-ptc.PtcExtension(exposed=test_ptc_tools())
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(
       name="run_code",

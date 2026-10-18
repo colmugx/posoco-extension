@@ -8,4 +8,4 @@ import {
 }
 import {
   "moonbitlang/async",
-} for "wbtest"
+} for "test"
