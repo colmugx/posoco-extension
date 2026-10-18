@@ -112,10 +112,23 @@ async fn Runtime::build_cached_source(
   self.build_lock.acquire()
   defer self.build_lock.release()
   tc_fs_mkdir(root)
-  // A per-source build directory avoids compiler timestamp coalescing when
-  // distinct programs are submitted within the same filesystem clock tick.
-  let keyed = root + "/" + cached_source_key(source)
+  // Include compiler version in the key: a changed toolchain must not
+  // reuse an old build graph or Wasm artifact.
+  let keyed = root + "/" + cached_source_key(tc.version + ":" + source)
   tc_fs_mkdir(keyed)
+  let lock = keyed + "/.build.lock"
+  let mut locked = false
+  for _ in 0..<600 {
+    if tc_fs_try_lock(lock) {
+      locked = true
+      break
+    }
+    @async.sleep(100)
+  }
+  if !locked {
+    raise RuntimeError::BuildFailed("timed out waiting for shared compiler cache")
+  }
+  defer tc_fs_unlock(lock)
   let source_path = keyed + "/snippet.mbtx"
   write_text_if_changed(source_path, source)
   let wasm = self.build_program(source_path, keyed, tc)
