@@ -26,6 +26,7 @@ async fn communicate(
   let ready : @aqueue.Queue[Bool] = @aqueue.Queue(kind=Blocking(1))
   let mut greeted = false
   let logs = []
+  let calls : Array[ToolCallTrace] = []
   let stderr_bytes = []
   let mut total = 0
   let account = fn(bytes : Bytes) raise {
@@ -99,6 +100,7 @@ async fn communicate(
                     Some(invoker) => invoker.invoke(name, arguments)
                   }
                 }
+                calls.push({ request_id: id, name, arguments, outcome, })
                 send(session.reply(id, outcome))
               })
             Diagnostic(level~, content~) =>
@@ -139,6 +141,7 @@ async fn communicate(
       outcome: session.finish(exit_code),
       stderr: @utf8.decode(Bytes::from_array(stderr_bytes)),
       logs,
+      calls,
     }
   })
 }

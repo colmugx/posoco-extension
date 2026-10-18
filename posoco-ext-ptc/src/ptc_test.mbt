@@ -57,6 +57,9 @@ async test "PTC real MoonBit guest calls trusted bridge and filters result" {
     _ => fail("guest did not return structured success")
   }
   assert_eq(mock.calls, ["read"])
+  let trace = ptc.trace(ctx.effect_id.to_string())
+  assert_eq(trace.length(), 1)
+  assert_eq(trace[0].name, "read")
 }
 
 ///|

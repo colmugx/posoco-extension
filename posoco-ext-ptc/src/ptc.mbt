@@ -11,6 +11,7 @@ pub struct PtcExtension {
   priv tool_names : Array[String]
   priv scoped_invoker : &@mbtx.ToolInvoker?
   priv max_output_bytes : Int32
+  priv traces : Map[String, Array[@mbtx.ToolCallTrace]]
 }
 
 ///|
@@ -49,6 +50,7 @@ pub fn PtcExtension::PtcExtension(
     tool_names,
     scoped_invoker,
     max_output_bytes,
+    traces: Map([]),
   }
 }
 
@@ -60,6 +62,20 @@ pub fn PtcExtension::allowed_tools(self : PtcExtension) -> Array[String] {
 ///|
 pub fn PtcExtension::toolchain_status(self : PtcExtension) -> String {
   self.runtime.toolchain_status()
+}
+
+
+///|
+/// Snapshot of completed nested tool requests for one enclosing effect.
+/// This diagnostic channel is not included in the model-facing final result.
+pub fn PtcExtension::trace(
+  self : PtcExtension,
+  effect_id : String,
+) -> Array[@mbtx.ToolCallTrace] {
+  match self.traces.get(effect_id) {
+    Some(calls) => calls.copy()
+    None => []
+  }
 }
 
 ///|
@@ -176,6 +192,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
         structured=None,
       )
   }
+  self.traces[invocation_id] = result.calls.copy()
   match result.outcome {
     @protocol.Success(content~, structured~) =>
       @posoco.ToolOutcome::Success(content~, structured~)
