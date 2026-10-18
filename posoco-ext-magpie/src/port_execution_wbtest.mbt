@@ -868,7 +868,7 @@ async test "default model port executes routing groups through the gateway" {
   let reports : Ref[Array[MagpieExecutionReport]] = Ref([])
   let port = MagpieModelPort::MagpieModelPort(
     manager~,
-    transport,
+    transport=transport,
     report_sink=capturing_sink(reports),
   )
   let result = port.chat(
