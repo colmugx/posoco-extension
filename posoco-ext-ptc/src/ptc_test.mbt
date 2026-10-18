@@ -130,7 +130,7 @@ async test "PTC background mode fails closed when no Agent task scope exists" {
       name="run_code",
       arguments={
         "description": "Schedule a program",
-        "code": #|{"ok": true},
+        "code": "{\"ok\": true}",
         "background": true,
       },
     ),
