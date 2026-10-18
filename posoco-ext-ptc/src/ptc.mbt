@@ -222,14 +222,13 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
       timeout_ms: Some(300000),
       run: async fn() {
         let outcome = self.execute_source(source, input, invocation_id)
+        let content = match outcome {
+          @kernel.ToolOutcome::Success(content~, structured=_) => content
+          @kernel.ToolOutcome::ToolReportedError(content~, structured=_) => content
+          _ => "PTC program failed"
+        }
         @kernel.Message::UserMessage(
-          content=[@kernel.Content::Text("PTC background result: " +
-            match outcome {
-              @kernel.ToolOutcome::Success(content~, ..) => content
-              @kernel.ToolOutcome::ToolReportedError(content~, ..) => content
-              _ => "PTC program failed",
-            },
-          )],
+          content=[@kernel.Content::Text("PTC background result: " + content)],
         )
       },
     }
