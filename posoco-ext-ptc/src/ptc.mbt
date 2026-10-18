@@ -12,6 +12,9 @@ pub struct PtcExtension {
   priv scoped_invoker : &@mbtx.ToolInvoker?
   priv max_output_bytes : Int32
   priv traces : Map[String, Array[@mbtx.ToolCallTrace]]
+  priv mut tasks : @posoco.Tasks?
+  priv task_session : (() -> String)?
+  priv mut next_task_id : Int32
 }
 
 ///|
@@ -29,6 +32,7 @@ pub fn PtcExtension::PtcExtension(
   home? : String,
   max_output_bytes~ : Int32 = 65536,
   build_cache? : String,
+  task_session? : () -> String,
 ) -> PtcExtension {
   let tool_names : Array[String] = []
   for def in exposed {
@@ -51,6 +55,9 @@ pub fn PtcExtension::PtcExtension(
     scoped_invoker,
     max_output_bytes,
     traces: Map([]),
+    tasks: None,
+    task_session,
+    next_task_id: 0,
   }
 }
 
@@ -94,6 +101,7 @@ pub impl @posoco.Extension for PtcExtension with fn manifest(
     tools=[self],
     prompt_contributors=[self],
     lifecycle=[self],
+    requires=[@posoco.Capability::Tasks],
   )
 }
 
@@ -110,6 +118,10 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
     input_schema: {
       "type": "object",
       "properties": {
+        "background": {
+          "type": "boolean",
+          "description": "Adopt execution as an Agent-owned background task when session attribution is available."
+        },
         "source": {
           "type": "string",
           "description": "Full MoonBit .mbtx source; import the MBTX SDK and use @mbtx.serve(run). Exclusive with code."
@@ -174,10 +186,80 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
       structured=None,
     )
   }
-  // Effect identity, not a user-controlled invocation id. Cancellation can
-  // only address the currently owned guest process.
+  // Background tasks are Agent-owned. They must have a host-supplied
+  // session identity and an active composed Tasks capability; model input
+  // can request handoff but can never select the owning session.
+  if ctx.arguments is { "background": true, .. } {
+    let tasks = match self.tasks {
+      Some(value) => value
+      None =>
+        return @posoco.ToolOutcome::ToolReportedError(
+          content="PTC background tasks are unavailable outside an Agent scope",
+          structured=None,
+        )
+    }
+    let session = match self.task_session {
+      Some(get_session) => get_session()
+      None => ""
+    }
+    if session == "" {
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="PTC background session attribution is missing",
+        structured=None,
+      )
+    }
+    self.next_task_id += 1
+    let invocation_id = session + ":ptc-background-" +
+      self.next_task_id.to_string()
+    let label = match ctx.arguments {
+      { "description": String(description), .. } => description
+      _ => "PTC background program"
+    }
+    let spec : @posoco.TaskSpec = {
+      session_id: session,
+      mode: @posoco.TaskMode::Background,
+      label,
+      timeout_ms: Some(300000),
+      run: async fn() {
+        let outcome = self.execute_source(source, input, invocation_id)
+        @kernel.Message::UserMessage(
+          content=[@kernel.Content::Text("PTC background result: " +
+            match outcome {
+              @kernel.ToolOutcome::Success(content~, ..) => content
+              @kernel.ToolOutcome::ToolReportedError(content~, ..) => content
+              _ => "PTC program failed",
+            },
+          )],
+        )
+      },
+    }
+    return match tasks.submit(spec) {
+      Ok(handle) =>
+        @posoco.ToolOutcome::Success(
+          content="PTC background task accepted: " + handle.receipt().id,
+          structured=Some({ "task_id": handle.receipt().id }),
+        )
+      Err(_) =>
+        @posoco.ToolOutcome::ToolReportedError(
+          content="PTC background task was not admitted",
+          structured=None,
+        )
+    }
+  }
   let invocation_id = ctx.effect_id.to_string()
   (ctx.register_cancel)(self as &@posoco.ToolCancellable)
+  self.execute_source(source, input, invocation_id)
+}
+
+///|
+/// This helper is shared by foreground ToolProvider execution and Agent-owned
+/// background tasks; each receives a unique invocation ID.
+async fn PtcExtension::execute_source(
+  self : PtcExtension,
+  source : String,
+  input : Json,
+  invocation_id : String,
+) -> @posoco.ToolOutcome {
   let result = self.runtime.run(
     source,
     input,
@@ -219,6 +301,14 @@ pub impl @posoco.ToolCancellable for PtcExtension with fn cancel(
 
 ///|
 pub extend PtcExtension with @posoco.ToolCancellable::{cancel}
+
+///|
+pub impl @posoco.Lifecycle for PtcExtension with fn on_compose(
+  self : PtcExtension,
+  ctx : @posoco.CompositionView,
+) -> Unit {
+  self.tasks = ctx.tasks()
+}
 
 ///|
 pub impl @posoco.Lifecycle for PtcExtension with fn on_shutdown(
