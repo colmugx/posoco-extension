@@ -1,0 +1,23 @@
+name: PTC programmatic runtime
+on:
+  pull_request:
+    paths:
+      - "posoco-ext-ptc/**"
+      - "moon.work"
+      - ".github/workflows/ptc-runtime.yml"
+jobs:
+  ptc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Install module dependencies
+        run: moon update
+      - name: PTC native tests
+        run: moon test --target native -p colmugx/posoco-ext-ptc --output-json
+      - name: PTC JS tests
+        run: moon test --target js -p colmugx/posoco-ext-ptc --output-json
