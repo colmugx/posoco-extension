@@ -216,7 +216,14 @@ async fn Runtime::execute(
             defer remove_directory(directory)
             let policy = directory + "/policy.json"
             write_text(policy, guest_policy().stringify())
-            let launcher = toolchain.launcher
+            let launcher = if self.build_cache is Some(_) &&
+              program is Source(_) &&
+              executable_failure(toolchain.moon) is None &&
+              executable_failure(toolchain.moonrun) is None {
+              Moon
+            } else {
+              toolchain.launcher
+            }
             let path = match program {
               Source(source) => {
                 let path = directory + "/program.mbtx"
@@ -227,7 +234,11 @@ async fn Runtime::execute(
             }
             let (command, args) = match launcher {
               Moon => {
-                let artifact = self.build_program(path, directory, toolchain)
+                let artifact = match program {
+                  Source(source) if self.build_cache is Some(_) =>
+                    self.build_cached_source(source, directory, toolchain)
+                  _ => self.build_program(path, directory, toolchain)
+                }
                 (toolchain.moonrun, [artifact, "--policy", policy])
               }
               Moonx => {

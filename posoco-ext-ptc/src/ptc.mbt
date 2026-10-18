@@ -27,6 +27,7 @@ pub fn PtcExtension::PtcExtension(
   bus? : @devkit.EventBus,
   home? : String,
   max_output_bytes~ : Int32 = 65536,
+  build_cache? : String,
 ) -> PtcExtension {
   let tool_names : Array[String] = []
   for def in exposed {
@@ -36,7 +37,14 @@ pub fn PtcExtension::PtcExtension(
     }
   }
   {
-    runtime: @mbtx.Runtime(bus?, home?),
+    runtime: @mbtx.Runtime(
+      bus?,
+      home?,
+      build_cache=build_cache.unwrap_or_else(() => {
+        let path = home.unwrap_or(@devkit.home_dir().unwrap_or(""))
+        if path == "" { "" } else { path + "/.cetas/ptc_build_cache" }
+      }),
+    ),
     exposed: exposed.copy(),
     tool_names,
     scoped_invoker,

@@ -164,3 +164,12 @@ moon -C external/cetas/extension/posoco-ext-mbtx test --target wasm -p colmugx/p
 Runtime tests require both installed runners to verify both launch paths. SDK
 fixtures are ordinary local packages; standalone runner fixtures import the
 released async module normally and exercise real Wasm execution.
+
+## Incremental build cache
+
+A configured PTC extension reuses a stable compiler cache at
+`~/.cetas/ptc_build_cache` (overridable with `build_cache`).
+MBTX serializes builds within its Runtime, retains source mtimes on exact
+matches, and copies each finished Wasm artifact into a private invocation
+directory. No guest results, policies or tool outputs are cached.
+The fallback `moonx`-only execution path remains supported.

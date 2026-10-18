@@ -95,3 +95,27 @@ async fn Runtime::resolve_toolchain(self : Runtime) -> ResolvedToolchain {
     bin_dir: "",
   }
 }
+
+///|
+/// Per-Runtime single writer around the shared incremental build directory.
+/// The artifact is copied before lock release; a later build cannot replace
+/// the binary of an already-running guest.
+async fn Runtime::build_cached_source(
+  self : Runtime,
+  source : String,
+  invocation_dir : String,
+  tc : ResolvedToolchain,
+) -> String {
+  guard self.build_cache is Some(root) && root != "" else {
+    raise RuntimeError::Invalid("build cache is not configured")
+  }
+  self.build_lock.acquire()
+  defer self.build_lock.release()
+  tc_fs_mkdir(root)
+  let source_path = root + "/snippet.mbtx"
+  write_text_if_changed(source_path, source)
+  let wasm = self.build_program(source_path, root, tc)
+  let destination = invocation_dir + "/cached.wasm"
+  copy_build_artifact(wasm, destination)
+  destination
+}

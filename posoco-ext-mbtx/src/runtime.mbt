@@ -59,6 +59,8 @@ pub struct Runtime {
   priv moonx : String
   priv moonrun : String
   priv toolchain : ToolchainManager
+  priv build_cache : String?
+  priv build_lock : @async.Mutex
   priv active : Map[String, () -> Unit]
   priv mut closed : Bool
 }
@@ -72,6 +74,7 @@ pub fn Runtime::Runtime(
   bus? : @devkit.EventBus,
   home? : String,
   prefer_system~ : Bool = true,
+  build_cache? : String,
 ) -> Runtime {
   {
     launcher,
@@ -79,6 +82,8 @@ pub fn Runtime::Runtime(
     moonx,
     moonrun,
     toolchain: ToolchainManager(bus?, home?, prefer_system~),
+    build_cache,
+    build_lock: @async.Mutex(),
     active: Map([]),
     closed: false,
   }
@@ -109,4 +114,10 @@ pub fn Runtime::close(self : Runtime) -> Unit raise RuntimeError {
 /// Read-only diagnostics; querying never triggers a download.
 pub fn Runtime::toolchain_status(self : Runtime) -> String {
   self.toolchain.status()
+}
+
+///|
+/// The caller owns the lifetime and cleanup of this persistent compiler cache.
+pub fn Runtime::build_cache_directory(self : Runtime) -> String? {
+  self.build_cache
 }

@@ -68,3 +68,24 @@ fn remove_directory(path : String) -> Unit raise {
     }),
   )
 }
+
+///|
+#module("node:fs")
+extern "js" fn node_read_utf8(path : String, encoding : String) -> String = "readFileSync"
+
+///|
+#module("node:fs")
+extern "js" fn node_copy_artifact(from : String, to : String) -> Unit = "copyFileSync"
+
+///|
+fn write_text_if_changed(path : String, source : String) -> Unit raise {
+  let old = fs_value(() => node_read_utf8(path, "utf8")) catch { _ => "" }
+  if old != source || !tc_fs_exists(path) {
+    write_text(path, source)
+  }
+}
+
+///|
+fn copy_build_artifact(from : String, to : String) -> Unit raise {
+  ignore(fs_value(() => { node_copy_artifact(from, to); "" }))
+}
