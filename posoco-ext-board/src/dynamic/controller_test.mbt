@@ -344,3 +344,18 @@ async test "fresh resolver denial blocks generated work without implicit task or
     dynamic_close(h)
   })
 }
+
+///|
+async test "shutdown revokes read-only recovery operation admission as well as execution" {
+  @async.with_task_group(group => {
+    let h = dynamic_harness(group)
+    dynamic_close(h)
+    assert_eq(h.controller.reconcile(), Err(@dynamic.Closed))
+    assert_eq(
+      h.controller.reconcile_preparation(task_id="parent"),
+      Err(@dynamic.Closed),
+    )
+    assert_false(h.controller.status().operation_active)
+    assert_true(h.controller.shutdown())
+  })
+}
