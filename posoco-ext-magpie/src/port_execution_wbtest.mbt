@@ -541,7 +541,7 @@ async test "gateway authentication failures map to transport errors" {
 }
 
 ///|
-async test "rate limits carry the structured verdict; 5xx stays a transport error" {
+async test "rate limits and 5xx carry recovery verdicts" {
   let transport = chat_transport(posts=[
     buffered_post(status=429, body="rate limit exceeded, retry at 12:00Z"),
     buffered_post(status=503, body="upstream unavailable"),
@@ -573,12 +573,12 @@ async test "rate limits carry the structured verdict; 5xx stays a transport erro
       NoStream,
     )
   catch {
-    @posoco.ModelError::Transport(detail) => {
-      inspect(detail.contains("503"), content="true")
-      // Bounded diagnostics: the body is counted, never quoted.
-      inspect(detail.contains("unavailable"), content="false")
+    @posoco.ModelError::RateLimited(info) => {
+      inspect(info.provider_code == Some("magpie_transient"), content="true")
+      inspect(info.reset_at_ms is None, content="true")
+      inspect(info.message.contains("status_503"), content="true")
     }
-    _ => fail("expected Transport")
+    _ => fail("expected recoverable failure")
   } noraise {
     _ => fail("503 must raise")
   }
