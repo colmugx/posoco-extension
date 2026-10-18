@@ -121,3 +121,39 @@ async test "PTC rejects invalid code without spawning a guest" {
   )
   assert_true(result is @posoco.ToolOutcome::ToolReportedError(..))
 }
+
+///|
+async test "PTC background mode fails closed when no Agent task scope exists" {
+  let ptc = @posoco-ext-ptc.PtcExtension()
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(
+      name="run_code",
+      arguments={
+        "description": "Schedule a program",
+        "code": #|{"ok": true},
+        "background": true,
+      },
+    ),
+  )
+  match result {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("background tasks are unavailable"))
+    _ => fail("PTC scheduled an unscoped background task")
+  }
+}
+
+///|
+async test "PTC complete script and inline code are mutually exclusive" {
+  let ptc = @posoco-ext-ptc.PtcExtension()
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(
+      name="run_code",
+      arguments={
+        "description": "Reject ambiguous source",
+        "source": "async fn main {}",
+        "code": "{}",
+      },
+    ),
+  )
+  assert_true(result is @posoco.ToolOutcome::ToolReportedError(..))
+}
