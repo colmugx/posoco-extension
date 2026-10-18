@@ -32,10 +32,19 @@ pub(all) struct Diagnostic {
 pub extend Diagnostic with Debug::{to_repr}
 
 ///|
+pub(all) struct ToolCallTrace {
+  request_id : Int32
+  name : String
+  arguments : Json
+  outcome : Outcome
+}
+
+///|
 pub(all) struct InvocationResult {
   outcome : Outcome
   stderr : String
   logs : Array[Diagnostic]
+  calls : Array[ToolCallTrace]
 }
 
 ///|
