@@ -736,7 +736,8 @@ pub fn plan_protocol(
       policy is AllowGatewayGroups &&
       !requirements.signed_thinking_replay &&
       !requirements.native_prompt_caching
-    if !(policy is AllowTranslated || (!unguaranteed && native_declared) ||
+    if !(policy is AllowTranslated ||
+      (!unguaranteed && native_declared) ||
       group_delegation) {
       let strict_endpoint = policy is NativeOnly ||
         (policy is AllowGatewayGroups && !entry.meta.is_routing_group)
@@ -744,9 +745,13 @@ pub fn plan_protocol(
         ["no declared native endpoint under the {policy} policy"]
       } else if entry.meta.is_routing_group &&
         policy is AllowGatewayGroups &&
-        (requirements.signed_thinking_replay ||
-        requirements.native_prompt_caching) {
-        ["routing groups cannot guarantee upstream-native thinking replay or prompt caching"]
+        (
+          requirements.signed_thinking_replay ||
+          requirements.native_prompt_caching
+        ) {
+        [
+          "routing groups cannot guarantee upstream-native thinking replay or prompt caching",
+        ]
       } else {
         []
       }
