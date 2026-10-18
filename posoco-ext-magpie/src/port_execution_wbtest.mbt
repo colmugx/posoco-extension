@@ -890,3 +890,35 @@ async test "default model port executes routing groups through the gateway" {
   inspect(reports.val[0].kind, content="GatewayTranslated")
   inspect(reports.val[0].lossy_opt_in, content="false")
 }
+
+///|
+/// Regression: the gateway keys Messages streaming on the body's `stream`
+/// field, not on `Accept`. A streamed call without the field gets one
+/// buffered JSON body and dies as "SSE truncated (message_stop missing)".
+async test "messages requests carry the stream flag in the body" {
+  let transport = chat_transport(posts=[
+    streaming_post(status=200, lines=messages_thinking_stream()),
+    buffered_post(status=200, body=messages_nonstream_body(text="buffered")),
+  ])
+  let manager = manager_with(transport~, config=local_config())
+  refresh_ok(manager)
+  let port = select_and_port(manager, "anthropic/claude-native")
+  let _ = port.chat(
+    exec_scope(session="sess-stream-flag"),
+    user_text("hello"),
+    [],
+    chat_options(),
+    Stream(fn(_chunk) { () }),
+  )
+  inspect(transport.post_calls.length(), content="1")
+  inspect(transport.post_calls[0].contains("\"stream\":true"), content="true")
+  let _ = port.chat(
+    exec_scope(session="sess-stream-flag"),
+    user_text("hello"),
+    [],
+    chat_options(),
+    NoStream,
+  )
+  inspect(transport.post_calls.length(), content="2")
+  inspect(transport.post_calls[1].contains("\"stream\":false"), content="true")
+}

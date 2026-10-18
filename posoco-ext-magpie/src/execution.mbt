@@ -197,9 +197,13 @@ async fn execute_messages(
     }
   }
   let wire_tools : Array[Json] = tools.map(tool => @messages.tool_to_wire(tool~))
-  let extra : Array[(String, Json)] = match call.effort {
-    Some(effort) => [("reasoning_effort", Json::string(effort))]
-    None => []
+  // The gateway keys Messages streaming on the body field, not on the
+  // Accept header: without this flag a streamed call gets one buffered
+  // JSON body and the SSE terminal check reports a truncated stream.
+  let extra : Array[(String, Json)] = [("stream", Json::boolean(streaming))]
+  match call.effort {
+    Some(effort) => extra.push(("reasoning_effort", Json::string(effort)))
+    None => ()
   }
   let request_options = @messages.MessagesRequestOptions::MessagesRequestOptions(
     temperature=options.temperature,
