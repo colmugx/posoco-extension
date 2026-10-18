@@ -22,12 +22,16 @@ async fn tc_fs_try_lock(path : String) -> Bool {
 
 ///|
 async fn tc_fs_unlock(path : String) -> Unit nocancel {
-  @fs.rmdir(path) catch { _ => () }
+  @fs.rmdir(path) catch {
+    _ => ()
+  }
 }
 
 ///|
 async fn tc_fs_remove(path : String) -> Unit nocancel {
-  @fs.rmdir(path, recursive=true) catch { _ => () }
+  @fs.rmdir(path, recursive=true) catch {
+    _ => ()
+  }
 }
 
 ///|

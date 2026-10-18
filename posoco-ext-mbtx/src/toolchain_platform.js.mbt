@@ -14,7 +14,10 @@ extern "js" fn toolchain_remove_options() -> ToolchainFsOptions =
 /// Synchronous Node filesystem operations are quick metadata changes; the
 /// long-running download and compilation are async process operations.
 #module("node:fs")
-extern "js" fn mbtx_node_mkdir(path : String, options : ToolchainFsOptions) -> Unit = "mkdirSync"
+extern "js" fn mbtx_node_mkdir(
+  path : String,
+  options : ToolchainFsOptions,
+) -> Unit = "mkdirSync"
 
 ///|
 #module("node:fs")
@@ -22,7 +25,10 @@ extern "js" fn mbtx_node_exists(path : String) -> Bool = "existsSync"
 
 ///|
 #module("node:fs")
-extern "js" fn mbtx_node_remove(path : String, options : ToolchainFsOptions) -> Unit = "rmSync"
+extern "js" fn mbtx_node_remove(
+  path : String,
+  options : ToolchainFsOptions,
+) -> Unit = "rmSync"
 
 ///|
 #module("node:fs")

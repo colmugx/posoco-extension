@@ -3,10 +3,14 @@ package "colmugx/posoco-ext-mbtx"
 
 import {
   "colmugx/posoco-ext-mbtx/protocol",
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
   "moonbitlang/core/debug",
+  "posoco/devkit",
 }
 
 // Values
+pub const MBTX_TOOLCHAIN_VERSION : String = "0.10.15+943464bfa"
 
 // Errors
 pub suberror RuntimeError {
@@ -43,14 +47,52 @@ pub fn Launcher::equal(Self, Self) -> Bool
 pub fn Launcher::not_equal(Self, Self) -> Bool
 pub fn Launcher::to_repr(Self) -> @debug.Repr
 
+pub struct MbtxExtension {
+  runtime : Runtime
+}
+pub fn MbtxExtension::MbtxExtension(bus? : @devkit.EventBus, home? : String, prefer_system? : Bool) -> Self
+pub fn MbtxExtension::commands(Self) -> Array[@port.CommandDef]
+pub fn MbtxExtension::extension_id(Self) -> String
+pub async fn MbtxExtension::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn MbtxExtension::manifest(Self) -> @port.ExtensionManifest
+pub fn MbtxExtension::runtime(Self) -> Runtime
+pub impl @port.CommandPort for MbtxExtension
+pub impl @port.Extension for MbtxExtension
+
+pub(all) struct ResolvedToolchain {
+  origin : ToolchainOrigin
+  version : String
+  launcher : Launcher
+  moon : String
+  moonx : String
+  moonrun : String
+  bin_dir : String
+}
+
 pub struct Runtime {
   // private fields
 }
-pub fn Runtime::Runtime(launcher? : Launcher, moon? : String, moonx? : String, moonrun? : String) -> Self
+pub fn Runtime::Runtime(launcher? : Launcher, moon? : String, moonx? : String, moonrun? : String, bus? : @devkit.EventBus, home? : String, prefer_system? : Bool) -> Self
 pub fn Runtime::cancel(Self, String) -> Bool
 pub fn Runtime::close(Self) -> Unit raise RuntimeError
 pub async fn Runtime::run(Self, String, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
 pub async fn Runtime::run_file(Self, String, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
+pub fn Runtime::toolchain_status(Self) -> String
+
+pub struct ToolchainManager {
+  // private fields
+}
+pub fn ToolchainManager::ToolchainManager(bus? : @devkit.EventBus, home? : String, prefer_system? : Bool) -> Self
+pub async fn ToolchainManager::ensure_ready(Self) -> ResolvedToolchain
+pub fn ToolchainManager::status(Self) -> String
+
+pub(all) enum ToolchainOrigin {
+  System
+  Managed
+} derive(Eq, @debug.Debug)
+pub fn ToolchainOrigin::equal(Self, Self) -> Bool
+pub fn ToolchainOrigin::not_equal(Self, Self) -> Bool
+pub fn ToolchainOrigin::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 pub using @protocol {type Outcome}

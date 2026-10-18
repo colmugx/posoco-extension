@@ -78,8 +78,10 @@ async fn Runtime::build_program(
 /// Automatic paths use extension-owned discovery. Custom launcher paths
 /// preserve the old explicit override semantics, with no auto download.
 async fn Runtime::resolve_toolchain(self : Runtime) -> ResolvedToolchain {
-  if self.launcher == Auto && self.moon == "moon" &&
-    self.moonx == "moonx" && self.moonrun == "moonrun" {
+  if self.launcher == Auto &&
+    self.moon == "moon" &&
+    self.moonx == "moonx" &&
+    self.moonrun == "moonrun" {
     return self.toolchain.ensure_ready()
   }
   let launcher = self.resolve_launcher()

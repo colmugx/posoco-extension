@@ -243,12 +243,19 @@ async fn Runtime::execute(
               }
               Auto => abort("unresolved launcher")
             }
-            with_process(command, args, None, true, process => {
-              communicate(
-                process, input, tools, invoker, max_frame_bytes, max_pending, max_calls,
-                max_output_bytes, handshake_ms,
-              )
-            }, extra_env=mbtx_env(toolchain))
+            with_process(
+              command,
+              args,
+              None,
+              true,
+              process => {
+                communicate(
+                  process, input, tools, invoker, max_frame_bytes, max_pending, max_calls,
+                  max_output_bytes, handshake_ms,
+                )
+              },
+              extra_env=mbtx_env(toolchain),
+            )
           }) catch {
             error =>
               if error is @async.TimeoutError {

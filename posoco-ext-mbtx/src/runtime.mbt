@@ -73,7 +73,15 @@ pub fn Runtime::Runtime(
   home? : String,
   prefer_system~ : Bool = true,
 ) -> Runtime {
-  { launcher, moon, moonx, moonrun, toolchain: ToolchainManager(bus?, home?, prefer_system~), active: Map([]), closed: false, }
+  {
+    launcher,
+    moon,
+    moonx,
+    moonrun,
+    toolchain: ToolchainManager(bus?, home?, prefer_system~),
+    active: Map([]),
+    closed: false,
+  }
 }
 
 ///|

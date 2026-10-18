@@ -58,7 +58,11 @@ pub fn ToolchainManager::ToolchainManager(
 
 ///|
 fn mbtx_exe(name : String) -> String {
-  if mbtx_is_windows() { name + ".exe" } else { name }
+  if mbtx_is_windows() {
+    name + ".exe"
+  } else {
+    name
+  }
 }
 
 ///|
@@ -72,8 +76,9 @@ fn mbtx_env(tc : ResolvedToolchain) -> Map[String, String] {
     return Map([])
   }
   {
-    "PATH": tc.bin_dir + (if mbtx_is_windows() { ";" } else { ":" }) +
-      @env.get_env_var("PATH").unwrap_or(""),
+    "PATH": tc.bin_dir +
+    (if mbtx_is_windows() { ";" } else { ":" }) +
+    @env.get_env_var("PATH").unwrap_or(""),
   }
 }
 
@@ -112,13 +117,22 @@ pub fn ToolchainManager::status(self : ToolchainManager) -> String {
   match self.resolved {
     Some(tc) => {
       let source = if tc.origin == System { "system" } else { "managed" }
-      "MBTX: ready\nToolchain: " + source + "\nVersion: " +
-      tc.version + "\nLauncher: " +
+      "MBTX: ready\nToolchain: " +
+      source +
+      "\nVersion: " +
+      tc.version +
+      "\nLauncher: " +
       (if tc.launcher == Moonx { "moonx" } else { "moon" }) +
-      "\nMoon: " + tc.moon + "\nMoonx: " + tc.moonx +
-      "\nMoonrun: " + tc.moonrun
+      "\nMoon: " +
+      tc.moon +
+      "\nMoonx: " +
+      tc.moonx +
+      "\nMoonrun: " +
+      tc.moonrun
     }
-    None => "MBTX: " + self.phase +
+    None =>
+      "MBTX: " +
+      self.phase +
       (if self.reason == "" { "" } else { "\nDetail: " + self.reason })
   }
 }
@@ -130,8 +144,14 @@ pub fn ToolchainManager::status(self : ToolchainManager) -> String {
 async fn mbtx_probe(program : String, args : Array[String]) -> String? {
   let result = @async.with_timeout(15000, () => {
     collect_process(program, args, None, max_bytes=16384)
-  }) catch { _ => return None }
-  if result.0 == 0 { Some(result.1.trim().to_owned()) } else { None }
+  }) catch {
+    _ => return None
+  }
+  if result.0 == 0 {
+    Some(result.1.trim().to_owned())
+  } else {
+    None
+  }
 }
 
 ///|
@@ -157,15 +177,7 @@ async fn mbtx_candidate(
   }
   match (mbtx_probe(moon, ["--version"]), mbtx_probe(moonrun, ["--version"])) {
     (Some(version), Some(_)) =>
-      Some({
-        origin,
-        version,
-        launcher: Moon,
-        moon,
-        moonx,
-        moonrun,
-        bin_dir,
-      })
+      Some({ origin, version, launcher: Moon, moon, moonx, moonrun, bin_dir, })
     _ => None
   }
 }
@@ -182,7 +194,7 @@ pub async fn ToolchainManager::ensure_ready(
   }
   let tc = self.discover() catch {
     error => {
-      self.publish("failed", error.to_string())
+      
       raise error
     }
   }
@@ -192,7 +204,9 @@ pub async fn ToolchainManager::ensure_ready(
 }
 
 ///|
-async fn ToolchainManager::discover(self : ToolchainManager) -> ResolvedToolchain {
+async fn ToolchainManager::discover(
+  self : ToolchainManager,
+) -> ResolvedToolchain {
   self.publish("checking", "looking for a usable MoonBit runner")
   if self.prefer_system {
     match mbtx_candidate(System, "moon", "moonx", "moonrun", "PATH") {
@@ -207,13 +221,14 @@ async fn ToolchainManager::discover(self : ToolchainManager) -> ResolvedToolchai
   }
   let official = self.home + "/.moon/bin"
   if self.prefer_system {
-    match mbtx_candidate(
-      System,
-      official + "/" + mbtx_exe("moon"),
-      official + "/" + mbtx_exe("moonx"),
-      official + "/" + mbtx_exe("moonrun"),
-      official,
-    ) {
+    match
+      mbtx_candidate(
+        System,
+        official + "/" + mbtx_exe("moon"),
+        official + "/" + mbtx_exe("moonx"),
+        official + "/" + mbtx_exe("moonrun"),
+        official,
+      ) {
       Some(tc) => return tc
       None => ()
     }
@@ -249,7 +264,11 @@ async fn ToolchainManager::managed_candidate(
 /// over HTTPS into a private staging directory. The installer receives
 /// MOON_HOME and a pinned requested version; no system installation is
 /// modified. Compiler-version validation is mandatory after it exits.
-async fn ToolchainManager::install(self : ToolchainManager, root : String, stage : String) -> Unit {
+async fn ToolchainManager::install(
+  self : ToolchainManager,
+  root : String,
+  stage : String,
+) -> Unit {
   self.publish("downloading", "fetching MoonBit installer")
   let windows = mbtx_is_windows()
   let suffix = if windows { "powershell.ps1" } else { "unix.sh" }
@@ -259,10 +278,9 @@ async fn ToolchainManager::install(self : ToolchainManager, root : String, stage
   let (code, output) = collect_process(
     curl,
     [
-      "--fail", "--location", "--silent", "--show-error",
-      "--proto", "=https", "--proto-redir", "=https",
-      "--connect-timeout", "15", "--max-time", "600", "--retry", "2",
-      url, "--output", script,
+      "--fail", "--location", "--silent", "--show-error", "--proto", "=https", "--proto-redir",
+      "=https", "--connect-timeout", "15", "--max-time", "600", "--retry", "2", url,
+      "--output", script,
     ],
     None,
   )
@@ -275,13 +293,16 @@ async fn ToolchainManager::install(self : ToolchainManager, root : String, stage
     "MOONBIT_INSTALL_VERSION": MBTX_TOOLCHAIN_VERSION,
     "HOME": root,
     "USERPROFILE": root,
-    "PATH": stage + "/bin" + (if windows { ";" } else { ":" }) +
-      @env.get_env_var("PATH").unwrap_or(""),
+    "PATH": stage +
+    "/bin" +
+    (if windows { ";" } else { ":" }) +
+    @env.get_env_var("PATH").unwrap_or(""),
   }
   let (command, args) = if windows {
-    ("powershell.exe", [
-      "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
-    ])
+    (
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script],
+    )
   } else {
     ("bash", [script])
   }
@@ -298,7 +319,10 @@ async fn ToolchainManager::install(self : ToolchainManager, root : String, stage
 ///|
 /// @fs file locking serializes independent host processes. A partially
 /// written stage is never published as current; retries discard it.
-async fn ToolchainManager::provision(self : ToolchainManager, root : String) -> ResolvedToolchain {
+async fn ToolchainManager::provision(
+  self : ToolchainManager,
+  root : String,
+) -> ResolvedToolchain {
   tc_fs_mkdir(root)
   // mkdir is an atomic cross-process lock on native and Node/Bun.
   let lock_dir = root + "/.install.lock"
@@ -341,8 +365,9 @@ async fn ToolchainManager::provision(self : ToolchainManager, root : String) -> 
   tc_fs_rename(stage, current)
   match self.managed_candidate(current) {
     Some(tc) => tc
-    None => raise RuntimeError::ToolchainUnavailable(
-      "managed MoonBit disappeared after installation",
-    )
+    None =>
+      raise RuntimeError::ToolchainUnavailable(
+        "managed MoonBit disappeared after installation",
+      )
   }
 }

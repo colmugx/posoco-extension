@@ -38,28 +38,32 @@ pub impl @posoco.Extension for MbtxExtension with fn manifest(
 pub impl @posoco.CommandPort for MbtxExtension with fn commands(
   _self : MbtxExtension,
 ) -> Array[@posoco.CommandDef] {
-  [{
-    id: "mbtx",
-    label: "MBTX status",
-    description: "Inspect MoonBit Code Mode toolchain readiness and provenance",
-    category: "mbtx",
-    ctype: @posoco.CommandType::Action,
-    params: [{
-      name: "action",
-      label: "Action",
-      description: "Show current MBTX status",
-      ptype: @posoco.ParamType::Str,
-      required: false,
-      default: Some(Json::string("status")),
-      choices: Some(["status"]),
-      positional: true,
-    }],
-    aliases: ["mbtx_status"],
-    shortcut: None,
-    icon: None,
-    visible: true,
-    metadata: None,
-  }]
+  [
+    {
+      id: "mbtx",
+      label: "MBTX status",
+      description: "Inspect MoonBit Code Mode toolchain readiness and provenance",
+      category: "mbtx",
+      ctype: @posoco.CommandType::Action,
+      params: [
+        {
+          name: "action",
+          label: "Action",
+          description: "Show current MBTX status",
+          ptype: @posoco.ParamType::Str,
+          required: false,
+          default: Some(Json::string("status")),
+          choices: Some(["status"]),
+          positional: true,
+        },
+      ],
+      aliases: ["mbtx_status"],
+      shortcut: None,
+      icon: None,
+      visible: true,
+      metadata: None,
+    },
+  ]
 }
 
 ///|
