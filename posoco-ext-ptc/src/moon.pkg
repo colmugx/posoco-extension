@@ -4,7 +4,6 @@ import {
   "colmugx/posoco-ext-mbtx" @mbtx,
   "colmugx/posoco-ext-mbtx/protocol" @protocol,
   "posoco/devkit" @devkit,
-  "moonbitlang/core/json",
 }
 import {
   "moonbitlang/async",
