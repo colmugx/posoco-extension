@@ -51,3 +51,14 @@ moon test --target js -p colmugx/posoco-ext-ptc --output-json
 ```
 
 Tests cover manifest tool presentation, stable SDK prompt, actual MoonBit guest program execution, tool-call transport with fake invoker, fail-closed no-invoker and invalid code, across Native and JS.
+
+## Complete script / official guest SDK
+
+In addition to the inline \`code\` function-body form, \`run_code\` now accepts
+\`source\` for a whole \`.mbtx\` program, including explicit imports and \`main\`.
+This is the supported path for ordinary reusable MoonBit programs. It is
+executed by the same MBTX runtime with the same tool allow-list and policy.
+Use \`colmugx/posoco-ext-mbtx/sdk/stdio\` \`serve(run)\` and
+\`colmugx/posoco-ext-mbtx/sdk\` \`Context\`. Unlike the simple body form, the
+official SDK implements asynchronous request/reply multiplexing and allows
+normal script source locations. Do not mix \`source\` and \`code\` in one call.

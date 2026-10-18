@@ -94,6 +94,10 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
     input_schema: {
       "type": "object",
       "properties": {
+        "source": {
+          "type": "string",
+          "description": "Full MoonBit .mbtx source; import the MBTX SDK and use @mbtx.serve(run). Exclusive with code."
+        },
         "code": {
           "type": "string",
           "description": "Body of async fn ptc_run(ctx: PtcContext, input: Json) -> Json. Call ctx.call(name, args), inspect results, return a JSON value."
@@ -106,7 +110,8 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
           "description": "Brief summary of what the program will do"
         },
       },
-      "required": ["code", "description"],
+      "required": ["description"],
+      "oneOf": [{"required": ["code"]}, {"required": ["source"]}],
       "additionalProperties": false,
     },
     owner: @posoco.OwnerId::unchecked("posoco_ext_ptc"),
@@ -129,23 +134,27 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
       structured=None,
     )
   }
-  let (code, input) = match ctx.arguments {
-    { "code": String(code), .. } => {
-      let input = match ctx.arguments {
-        { "input": input, .. } => input
-        _ => Json::null()
-      }
-      (code, input)
-    }
+  let input = match ctx.arguments {
+    { "input": value, .. } => value
+    _ => Json::null()
+  }
+  let source = match ctx.arguments {
+    { "source": String(source), "code": _, .. } =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code: specify source or code, not both",
+        structured=None,
+      )
+    { "source": String(source), .. } => source
+    { "code": String(code), .. } => ptc_guest_source(code)
     _ =>
       return @posoco.ToolOutcome::ToolReportedError(
-        content="run_code: expected a 'code' string",
+        content="run_code: expected code or source",
         structured=None,
       )
   }
-  if code.trim().is_empty() || code.length() > 50000 {
+  if source.trim().is_empty() || source.length() > 100000 {
     return @posoco.ToolOutcome::ToolReportedError(
-      content="run_code: code must be 1..50000 bytes",
+      content="run_code: source must be 1..100000 bytes",
       structured=None,
     )
   }
@@ -154,7 +163,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
   let invocation_id = ctx.effect_id.to_string()
   (ctx.register_cancel)(self as &@posoco.ToolCancellable)
   let result = self.runtime.run(
-    ptc_guest_source(code),
+    source,
     input,
     invocation_id~,
     tools=self.tool_names,
