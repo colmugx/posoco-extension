@@ -80,3 +80,41 @@ async test "PTC refuses nested tool use without trusted bridge" {
     _ => fail("guest did not fail closed")
   }
 }
+
+///|
+async test "PTC rejects names outside exposed capabilities before invoking bridge" {
+  let mock = PtcMockInvoker::{calls: []}
+  let ptc = @posoco-ext-ptc.PtcExtension(
+    exposed=test_ptc_tools(), scoped_invoker=mock,
+  )
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(
+      name="run_code",
+      arguments={
+        "description": "Reject write",
+        "code": #|let value = ctx.call("write", {"path": "secret"})
+                #|value
+        ,
+      },
+    ),
+  )
+  match result {
+    @posoco.ToolOutcome::Success(
+      structured=Some({"error": String(code), ..}), ..
+    ) => assert_eq(code, "CapabilityDenied")
+    _ => fail("disallowed tool was not rejected")
+  }
+  assert_eq(mock.calls.length(), 0)
+}
+
+///|
+async test "PTC rejects invalid code without spawning a guest" {
+  let ptc = @posoco-ext-ptc.PtcExtension()
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(
+      name="run_code",
+      arguments={"description": "Invalid", "code": ""},
+    ),
+  )
+  assert_true(result is @posoco.ToolOutcome::ToolReportedError(..))
+}
