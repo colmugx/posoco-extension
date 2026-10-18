@@ -27,3 +27,6 @@ options(
 )
 
 supported_targets = "native + js"
+
+// Target-specific native/JS dependencies are intentionally unused on the other backend.
+warnings = "-unused_package"
