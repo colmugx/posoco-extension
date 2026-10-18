@@ -17,6 +17,14 @@ pub struct AskQuestionTools {
   mut ui : &@posoco.UiPort?
   audience : QuestionAudience
   endpoint : &QuestionEndpoint?
+  /// Non-blocking ask table (answers carried back by host input).
+  priv registry : AsyncQuestionRegistry
+  /// Wakeup capability for turn-end answer delivery (`Capability::Wakeup`).
+  mut wakeup : @posoco.WakeupPort?
+  /// Parent session for wakeup admission, set by the answering host.
+  mut session : String?
+  /// Host subscriptions to question lifecycle events.
+  priv events : Array[(QuestionEvent) -> Unit]
 }
 
 ///|
@@ -24,7 +32,30 @@ pub struct AskQuestionTools {
 /// composition; constructing without a host that contributes a UiPort makes
 /// every ask_question report "ui unavailable".
 pub fn AskQuestionTools::AskQuestionTools() -> AskQuestionTools {
-  { ui: None, audience: Human, endpoint: None, }
+  {
+    ui: None,
+    audience: Human,
+    endpoint: None,
+    registry: AsyncQuestionRegistry::AsyncQuestionRegistry(),
+    wakeup: None,
+    session: None,
+    events: [],
+  }
+}
+
+///|
+/// Human face with an explicit answer deadline for `notify_user`; `0`
+/// disables expiry.
+pub fn AskQuestionTools::with_async_timeout(
+  async_timeout_ms~ : Int64,
+) -> AskQuestionTools {
+  let base = AskQuestionTools::AskQuestionTools()
+  {
+    ..base,
+    registry: AsyncQuestionRegistry::AsyncQuestionRegistry(
+      timeout_ms=async_timeout_ms,
+    ),
+  }
 }
 
 ///|
@@ -34,7 +65,15 @@ pub fn AskQuestionTools::AskQuestionTools() -> AskQuestionTools {
 pub fn AskQuestionTools::for_parent(
   endpoint~ : &QuestionEndpoint,
 ) -> AskQuestionTools {
-  { ui: None, audience: ParentAgent, endpoint: Some(endpoint), }
+  {
+    ui: None,
+    audience: ParentAgent,
+    endpoint: Some(endpoint),
+    registry: AsyncQuestionRegistry::AsyncQuestionRegistry(),
+    wakeup: None,
+    session: None,
+    events: [],
+  }
 }
 
 ///|
@@ -279,6 +318,42 @@ const PARENT_ASK_DESCRIPTION : String = "This is ask_question for a subagent ses
 const PARENT_ANSWERER : String = "the parent agent that spawned this session"
 
 ///|
+/// Non-blocking tool name, human face only.
+pub const NOTIFY_USER_TOOL : String = "notify_user"
+
+///|
+const NOTIFY_USER_DESCRIPTION : String = "Ask the user one question WITHOUT blocking: the tool returns immediately, the turn keeps running, and the answer arrives later as ordinary user input. Use it when you can keep working and only need the user's preference or confirmation eventually; the reply may arrive long after this turn — do not wait for it. If the very next step needs the answer, use ask_question instead (it blocks). Do not ask for information available tools can discover."
+
+///|
+fn notify_user_schema() -> Json {
+  Json::object({
+    "type": Json::string("object"),
+    "properties": Json::object({
+      "question": Json::object({
+        "type": Json::string("string"),
+        "description": Json::string(
+          "One self-contained question for the user; include the context needed to answer it",
+        ),
+      }),
+      "type": Json::object({
+        "type": Json::string("string"),
+        "enum": Json::array([
+          Json::string("input"),
+          Json::string("confirm"),
+          Json::string("select"),
+        ]),
+      }),
+      "options": Json::object({
+        "type": Json::string("array"),
+        "items": Json::object({ "type": Json::string("string") }),
+        "description": Json::string("Concise choices for a select prompt"),
+      }),
+    }),
+    "required": Json::array([Json::string("question")]),
+  })
+}
+
+///|
 fn AskQuestionTools::face(self : AskQuestionTools) -> (String, String, String) {
   match self.audience {
     Human => ("ask_question", HUMAN_ASK_DESCRIPTION, "the user")
@@ -292,7 +367,7 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
   self : AskQuestionTools,
 ) -> Array[@posoco.ToolDef] {
   let (name, description, answerer) = self.face()
-  [
+  let defs : Array[@posoco.ToolDef] = [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked(name),
       description,
@@ -302,6 +377,21 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
       provenance: Some("posoco_ext_askquestion"),
     },
   ]
+  match self.audience {
+    Human =>
+      defs.push(@posoco.ToolDef::{
+        name: @posoco.ToolName::unchecked(NOTIFY_USER_TOOL),
+        description: NOTIFY_USER_DESCRIPTION,
+        input_schema: notify_user_schema(),
+        owner: @posoco.OwnerId::unchecked("posoco_ext_askquestion"),
+        // It cannot interleave: Sequential already runs beside parallel
+        // work, and an Exclusive barrier would order it behind long tools.
+        policy: @posoco.ExecutionPolicy::Sequential,
+        provenance: Some("posoco_ext_askquestion"),
+      })
+    ParentAgent => ()
+  }
+  defs
 }
 
 ///|
@@ -311,6 +401,9 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let (tool_name, _, _) = self.face()
   let name = ctx.name.to_string()
+  if self.audience is Human && name == NOTIFY_USER_TOOL {
+    return self.submit_async(ctx.call_id.to_string(), ctx.arguments)
+  }
   if name != tool_name {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_askquestion: unknown tool '" + name + "'",
@@ -389,7 +482,7 @@ pub impl @posoco.SystemPromptContributor for AskQuestionTools with fn system_pro
 ) -> String {
   match self.audience {
     Human =>
-      "Use ask_question only when a user decision or missing fact blocks progress. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
+      "Use ask_question only when a user decision or missing fact blocks progress. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover. When you can keep working without the answer, use notify_user instead: it returns immediately and the reply arrives later as ordinary user input — never block on it, and never ask the same thing twice."
     ParentAgent =>
       "Use ask_question_child only when a decision or missing fact blocks progress. The parent agent that spawned this session answers — never a human user. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
   }
@@ -407,13 +500,14 @@ pub impl @posoco.Extension for AskQuestionTools with fn manifest(
   self : AskQuestionTools,
 ) -> @posoco.ExtensionManifest {
   let requires : Array[@posoco.Capability] = match self.audience {
-    Human => [@posoco.Capability::Ui]
+    Human => [@posoco.Capability::Ui, @posoco.Capability::Wakeup]
     ParentAgent => []
   }
   @posoco.ExtensionManifest(
     id="posoco_ext_askquestion",
     requires~,
     lifecycle=[self],
+    hooks=[self],
     tools=[self],
   )
 }
@@ -425,7 +519,16 @@ pub impl @posoco.Lifecycle for AskQuestionTools with fn on_compose(
 ) -> Unit raise @posoco.CompositionError {
   if self.audience is Human {
     self.ui = view.ui()
+    self.wakeup = view.wakeup()
   }
+}
+
+///|
+/// Shutdown: no answer outlives the agent.
+pub impl @posoco.Lifecycle for AskQuestionTools with fn on_shutdown(
+  self : AskQuestionTools,
+) -> Unit {
+  self.shutdown_answers()
 }
 
 ///|
@@ -436,18 +539,17 @@ pub extend AskQuestionTools with @posoco.Lifecycle::{
 }
 
 ///|
-pub impl @posoco.Lifecycle for AskQuestionTools with fn on_shutdown(
-  _self : AskQuestionTools,
-) -> Unit {
-  ()
-}
-
-///|
 pub extend AskQuestionTools with @posoco.ToolProvider::{list_tools, execute}
 
 ///|
 pub extend AskQuestionTools with @posoco.SystemPromptContributor::{
   system_prompt,
+}
+
+///|
+pub extend AskQuestionTools with @posoco.PipelineHook::{
+  before_model,
+  on_turn_end,
 }
 
 ///|

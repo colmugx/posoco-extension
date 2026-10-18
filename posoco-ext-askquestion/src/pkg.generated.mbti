@@ -9,6 +9,13 @@ import {
 }
 
 // Values
+pub const DEFAULT_ASYNC_ANSWER_TIMEOUT_MS : Int64 = 600_000
+
+pub const NOTIFY_USER_TOOL : String = "notify_user"
+
+pub fn async_env_lines(Array[AsyncOutcome]) -> String?
+
+pub fn question_prompt(@port.UiRequest) -> String
 
 // Errors
 pub(all) suberror QuestionError {
@@ -26,26 +33,92 @@ pub struct AskQuestionTools {
   mut ui : &@port.UiPort?
   audience : QuestionAudience
   endpoint : &QuestionEndpoint?
+  mut wakeup : @port.WakeupPort?
+  mut session : String?
+  // private fields
 }
 pub fn AskQuestionTools::AskQuestionTools() -> Self
+pub fn AskQuestionTools::answer_async(Self, question_id~ : String, response~ : @port.UiResponse) -> Result[Unit, AsyncAskError]
+pub async fn AskQuestionTools::before_model(Self, Array[@kernel.Message]) -> Array[@kernel.Message] raise @port.HookAbort
+pub fn AskQuestionTools::close_open_for_reply(Self) -> Array[AsyncQuestion]
+pub fn AskQuestionTools::drain_answers_for_test(Self, now~ : Int64) -> Array[AsyncOutcome]
 pub async fn AskQuestionTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn AskQuestionTools::extension_id(Self) -> String
 pub fn AskQuestionTools::for_parent(endpoint~ : &QuestionEndpoint) -> Self
+pub fn AskQuestionTools::has_undelivered(Self) -> Bool
 pub fn AskQuestionTools::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn AskQuestionTools::manifest(Self) -> @port.ExtensionManifest
 pub fn AskQuestionTools::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub async fn AskQuestionTools::on_shutdown(Self) -> Unit
 pub async fn AskQuestionTools::on_start(Self) -> Unit
+pub async fn AskQuestionTools::on_turn_end(Self) -> Unit
+pub fn AskQuestionTools::open_questions(Self) -> Array[AsyncQuestion]
+pub fn AskQuestionTools::set_session(Self, session~ : String) -> Unit
+pub fn AskQuestionTools::shutdown_answers(Self) -> Unit
+pub fn AskQuestionTools::subscribe(Self, (QuestionEvent) -> Unit) -> Unit
 pub fn AskQuestionTools::system_prompt(Self) -> String
+pub fn AskQuestionTools::with_async_timeout(async_timeout_ms~ : Int64) -> Self
 pub impl @port.Extension for AskQuestionTools
 pub impl @port.Lifecycle for AskQuestionTools
 pub impl @port.SystemPromptContributor for AskQuestionTools
 pub impl @port.ToolProvider for AskQuestionTools
 
+pub enum AsyncAskError {
+  Unknown(id~ : String)
+  AlreadyAnswered(id~ : String)
+  Expired(id~ : String)
+  WrongAnswerKind(id~ : String, expected~ : String)
+  IndexOutOfRange(id~ : String, index~ : Int, options~ : Int)
+} derive(Eq, @debug.Debug)
+pub fn AsyncAskError::equal(Self, Self) -> Bool
+pub fn AsyncAskError::not_equal(Self, Self) -> Bool
+pub fn AsyncAskError::output(Self, &Logger) -> Unit
+pub fn AsyncAskError::to_repr(Self) -> @debug.Repr
+pub fn AsyncAskError::to_string(Self) -> String
+pub impl Show for AsyncAskError
+
+pub enum AsyncOutcome {
+  Answered(question~ : AsyncQuestion, response~ : @port.UiResponse)
+  Expired(question~ : AsyncQuestion)
+} derive(@debug.Debug)
+pub fn AsyncOutcome::to_repr(Self) -> @debug.Repr
+
+pub(all) struct AsyncQuestion {
+  id : String
+  req : @port.UiRequest
+  origin_call : String
+  asked_at : Int64
+  deadline_at : Int64
+} derive(@debug.Debug)
+pub fn AsyncQuestion::options(Self) -> Array[String]
+pub fn AsyncQuestion::prompt(Self) -> String
+pub fn AsyncQuestion::short_id(Self) -> String
+pub fn AsyncQuestion::to_repr(Self) -> @debug.Repr
+pub fn AsyncQuestion::type_word(Self) -> String
+
+pub struct AsyncQuestionRegistry {
+  // private fields
+}
+pub fn AsyncQuestionRegistry::AsyncQuestionRegistry(timeout_ms? : Int64) -> Self
+pub fn AsyncQuestionRegistry::answer(Self, id~ : String, response~ : @port.UiResponse, now~ : Int64) -> Result[Unit, AsyncAskError]
+pub fn AsyncQuestionRegistry::close_open_for_reply(Self) -> Array[AsyncQuestion]
+pub fn AsyncQuestionRegistry::drain(Self, now~ : Int64) -> Array[AsyncOutcome]
+pub fn AsyncQuestionRegistry::has_undelivered(Self) -> Bool
+pub fn AsyncQuestionRegistry::open(Self) -> Array[AsyncQuestion]
+pub fn AsyncQuestionRegistry::reject_all(Self) -> Unit
+pub fn AsyncQuestionRegistry::submit(Self, req~ : @port.UiRequest, origin_call~ : String, now~ : Int64) -> AsyncQuestion
+
 pub enum QuestionAudience {
   Human
   ParentAgent
 }
+
+pub(all) enum QuestionEvent {
+  Asked(question~ : AsyncQuestion)
+  Answered(question_id~ : String)
+  Closed(question_id~ : String)
+} derive(@debug.Debug)
+pub fn QuestionEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

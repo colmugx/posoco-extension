@@ -100,14 +100,19 @@ test "ask_question_rejects_empty_select" {
 test "ask_question_manifest_and_policy" {
   let tools = AskQuestionTools()
   let defs = @posoco.ToolProvider::list_tools(tools)
-  assert_eq(defs.length(), 1)
+  assert_eq(defs.length(), 2)
   assert_eq(defs[0].name.to_string(), "ask_question")
   assert_true(defs[0].policy is @posoco.ExecutionPolicy::Exclusive)
+  assert_eq(defs[1].name.to_string(), "notify_user")
+  assert_true(defs[1].policy is @posoco.ExecutionPolicy::Sequential)
   let manifest = tools.manifest()
   assert_eq(manifest.id, "posoco_ext_askquestion")
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 0)
-  assert_eq(manifest.requires, [@posoco.Capability::Ui])
+  assert_eq(manifest.requires, [
+    @posoco.Capability::Ui,
+    @posoco.Capability::Wakeup,
+  ])
   assert_eq(manifest.lifecycle.length(), 1)
 }
 
