@@ -112,10 +112,25 @@ async fn Runtime::build_cached_source(
   self.build_lock.acquire()
   defer self.build_lock.release()
   tc_fs_mkdir(root)
-  let source_path = root + "/snippet.mbtx"
+  // A per-source build directory avoids compiler timestamp coalescing when
+  // distinct programs are submitted within the same filesystem clock tick.
+  let keyed = root + "/" + cached_source_key(source)
+  tc_fs_mkdir(keyed)
+  let source_path = keyed + "/snippet.mbtx"
   write_text_if_changed(source_path, source)
-  let wasm = self.build_program(source_path, root, tc)
+  let wasm = self.build_program(source_path, keyed, tc)
   let destination = invocation_dir + "/cached.wasm"
   copy_build_artifact(wasm, destination)
   destination
+}
+
+///|
+/// Stable content key; the compiler still verifies content in the staged
+/// file, so a hash collision alone does not make the cache authoritative.
+fn cached_source_key(source : String) -> String {
+  let mut hash : UInt64 = 0xcbf29ce484222325
+  for char in source {
+    hash = (hash ^ char.to_int().to_uint64()) * 0x100000001b3
+  }
+  hash.to_string()
 }
