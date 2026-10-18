@@ -144,7 +144,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
   // Effect identity, not a user-controlled invocation id. Cancellation can
   // only address the currently owned guest process.
   let invocation_id = ctx.effect_id.to_string()
-  ctx.register_cancel(self as &@posoco.ToolCancellable)
+  (ctx.register_cancel)(self as &@posoco.ToolCancellable)
   let result = self.runtime.run(
     ptc_guest_source(code),
     input,
@@ -173,13 +173,13 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
 ///|
 pub impl @posoco.ToolCancellable for PtcExtension with fn cancel(
   self : PtcExtension,
-  effect_id : @posoco.EffectId,
-  _reason : @posoco.CancelReason,
-) -> @posoco.CancelDisposition {
+  effect_id : @kernel.EffectId,
+  _reason : @kernel.CancelReason,
+) -> @kernel.CancelDisposition {
   if self.runtime.cancel(effect_id.to_string()) {
-    @posoco.CancelDisposition::Propagated
+    @kernel.CancelDisposition::Propagated
   } else {
-    @posoco.CancelDisposition::NotPropagated
+    @kernel.CancelDisposition::NotPropagated
   }
 }
 
