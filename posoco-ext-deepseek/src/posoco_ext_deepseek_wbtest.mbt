@@ -1860,3 +1860,14 @@ test "request with tools replays reasoning from plain assistant history" {
   guard wire2[1] is Object(assistant2) else { fail("expected assistant") }
   assert_true(assistant2.get("reasoning_content") is None)
 }
+
+///|
+test "stream reasoning ceiling is strict and opt-in" {
+  assert_false(deepseek_reasoning_limit_exceeded(100, 100))
+  assert_true(deepseek_reasoning_limit_exceeded(101, 100))
+  assert_false(deepseek_reasoning_limit_exceeded(0, 100))
+  let disabled = DeepSeekConfig("test")
+  assert_true(disabled.max_reasoning_chars is None)
+  let enabled = DeepSeekConfig("test", max_reasoning_chars=100)
+  assert_eq(enabled.max_reasoning_chars, Some(100))
+}
