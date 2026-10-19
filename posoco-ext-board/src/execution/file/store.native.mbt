@@ -50,7 +50,7 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn load
     }
     if !self.locked {
       let lock = @fs.create(
-        self.directory + "/execution.lock",
+        self.directory + "/" + @node_fs.execution_lock_name,
         allow_existing=false,
         permission=0o600,
       )
@@ -65,13 +65,13 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn load
       defer directory.close()
       directory.sync()
     }
-    let path = self.directory + "/executions.json"
+    let path = self.directory + "/" + @node_fs.execution_journal_name
     let names = @fs.readdir(
       self.directory,
       include_hidden=true,
       include_special=true,
     )
-    if !names.contains("executions.json") {
+    if !names.contains(@node_fs.execution_journal_name) {
       return Ok([])
     }
     if @fs.kind(path, follow_symlink=false) != Regular {
@@ -104,7 +104,7 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn pers
     Ok(data) => data
     Err(error) => return Err(error)
   }
-  let tmp = self.directory + "/executions.json.tmp"
+  let tmp = self.directory + "/" + @node_fs.execution_journal_name + ".tmp"
   let created = Ref(false)
   try {
     @async.protect_from_cancel(() => {
@@ -116,7 +116,11 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn pers
       if self.fail_at == Some(BeforeRename) {
         raise Unsafe
       }
-      @fs.rename(tmp, self.directory + "/executions.json", replace=true)
+      @fs.rename(
+        tmp,
+        self.directory + "/" + @node_fs.execution_journal_name,
+        replace=true,
+      )
       if self.fail_at == Some(AfterRename) {
         raise Unsafe
       }
@@ -149,7 +153,7 @@ pub async fn FileBoardExecutionStore::close(
 ) -> Unit {
   @async.protect_from_cancel(() => {
     if self.locked {
-      @fs.remove(self.directory + "/execution.lock")
+      @fs.remove(self.directory + "/" + @node_fs.execution_lock_name)
       self.locked = false
     }
   })

@@ -1,6 +1,6 @@
 import {
   "colmugx/posoco-ext-board/execution",
-  "colmugx/posoco-ext-board/internal/node_fs",
+  "colmugx/posoco-ext-board/internal/storage" @node_fs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
 }
@@ -18,5 +18,6 @@ options(
     "inspect.native.mbt": [ "native" ],
     "inspect.js.mbt": [ "js" ],
     "store_js_test.mbt": [ "js" ],
+    "store_native_test.mbt": [ "native" ],
   },
 )

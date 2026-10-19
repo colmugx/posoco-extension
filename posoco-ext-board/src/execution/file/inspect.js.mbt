@@ -6,7 +6,7 @@ pub fn FileBoardExecutionStore::inspect(
   Array[@execution.BoardExecutionBinding],
   @execution.BoardExecutionError,
 ] {
-  match @node_fs.read(directory + "/executions.json") {
+  match @node_fs.read(directory + "/" + @node_fs.execution_journal_name) {
     Ok(None) => Ok([])
     Ok(Some(text)) => @execution.decode_execution_journal(text)
     Err(_) => Err(@execution.StoreUnavailable)
