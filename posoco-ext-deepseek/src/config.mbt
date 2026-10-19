@@ -24,6 +24,8 @@ pub(all) struct DeepSeekConfig {
   context_window : Int32?
   /// Optional streamed reasoning character ceiling. None disables this guard.
   max_reasoning_chars : Int32?
+  /// Retry once at low effort on a non-stream reasoning-only length cutoff.
+  recover_on_reasoning_exhaustion : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -41,6 +43,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   reasoning_effort~ : String = "high",
   context_window~ : Int32? = None,
   max_reasoning_chars~ : Int32? = None,
+  recover_on_reasoning_exhaustion~ : Bool = false,
 ) -> DeepSeekConfig {
   if reasoning_effort != "" &&
     !deepseek_reasoning_efforts().contains(reasoning_effort) {
@@ -69,6 +72,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     reasoning_effort,
     context_window,
     max_reasoning_chars,
+    recover_on_reasoning_exhaustion,
   }
 }
 
