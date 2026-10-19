@@ -107,7 +107,7 @@ fn BoardWorkflowPolicy::spec(
 
 ///|
 /// Sanitized product failures. Raw provider/store exceptions are never UI data.
-pub(all) suberror BoardWorkflowError {
+pub(all) enum BoardWorkflowError {
   Disabled
   InvalidConfiguration
   MissingUi
@@ -126,6 +126,13 @@ pub(all) suberror BoardWorkflowError {
   PreparationBlocked
   OperationRejected
 } derive(Eq, @debug.Debug)
+
+///|
+/// Exceptions are an internal short-circuit only. Public product failures remain
+/// ordinary Result data, matching the expansion/controller contracts.
+priv suberror WorkflowFault {
+  WorkflowFault(BoardWorkflowError)
+}
 
 ///|
 pub extend BoardWorkflowError with Eq::{equal, not_equal}
@@ -159,27 +166,33 @@ pub fn BoardWorkflowError::code(self : BoardWorkflowError) -> String {
 ///|
 fn[T] controller_result(
   value : Result[T, @dynamic.DynamicWorkflowError],
-) -> T raise BoardWorkflowError {
+) -> T raise WorkflowFault {
   match value {
     Ok(value) => value
     Err(error) =>
-      raise match error {
-        @dynamic.Busy => Busy
-        @dynamic.Closed => Closed
-        @dynamic.BudgetExceeded => BudgetExceeded
-        @dynamic.HostPaused | @dynamic.NotQuiescent => NotQuiescent
-        @dynamic.StaleRevision
-        | @dynamic.ExpansionFailed(@expansion.StalePreview) => RevisionConflict
-        @dynamic.ApprovalDenied | @dynamic.ScopeApprovalDenied => ApprovalDenied
-        @dynamic.PreparationBlocked => PreparationBlocked
-        @dynamic.PreparationUncertain(_) => DurabilityUncertain
-        @dynamic.ExpansionFailed(@expansion.DecodeFailed(_)) => InvalidProposal
-        @dynamic.ExpansionFailed(@expansion.SourceFailed(_)) => AgentUnavailable
-        @dynamic.ExpansionFailed(
-          @expansion.Backend(@coordinator.DurabilityUncertain(_))
-        ) => DurabilityUncertain
-        _ => OperationRejected
-      }
+      raise WorkflowFault(
+        match error {
+          @dynamic.Busy => Busy
+          @dynamic.Closed => Closed
+          @dynamic.BudgetExceeded => BudgetExceeded
+          @dynamic.HostPaused | @dynamic.NotQuiescent => NotQuiescent
+          @dynamic.StaleRevision
+          | @dynamic.ExpansionFailed(@expansion.StalePreview) =>
+            RevisionConflict
+          @dynamic.ApprovalDenied | @dynamic.ScopeApprovalDenied =>
+            ApprovalDenied
+          @dynamic.PreparationBlocked => PreparationBlocked
+          @dynamic.PreparationUncertain(_) => DurabilityUncertain
+          @dynamic.ExpansionFailed(@expansion.DecodeFailed(_)) =>
+            InvalidProposal
+          @dynamic.ExpansionFailed(@expansion.SourceFailed(_)) =>
+            AgentUnavailable
+          @dynamic.ExpansionFailed(
+            @expansion.Backend(@coordinator.DurabilityUncertain(_))
+          ) => DurabilityUncertain
+          _ => OperationRejected
+        },
+      )
   }
 }
 

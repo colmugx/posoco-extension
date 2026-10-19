@@ -3,7 +3,7 @@ struct UnusedFactory {}
 
 ///|
 impl WorkflowAgentFactory for UnusedFactory with fn prepare(_, _) {
-  raise AgentUnavailable
+  raise WorkflowFault(AgentUnavailable)
 }
 
 ///|

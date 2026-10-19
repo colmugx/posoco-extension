@@ -15,7 +15,9 @@ import {
 // Values
 
 // Errors
-pub(all) suberror BoardWorkflowError {
+
+// Types and methods
+pub(all) enum BoardWorkflowError {
   Disabled
   InvalidConfiguration
   MissingUi
@@ -39,7 +41,6 @@ pub fn BoardWorkflowError::equal(Self, Self) -> Bool
 pub fn BoardWorkflowError::not_equal(Self, Self) -> Bool
 pub fn BoardWorkflowError::to_repr(Self) -> @debug.Repr
 
-// Types and methods
 pub struct BoardWorkflowPolicy {
   enabled : Bool
   max_executions : Int

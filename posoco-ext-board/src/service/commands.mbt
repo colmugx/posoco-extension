@@ -57,11 +57,11 @@ async fn BoardWorkflows::input(
 ) -> String {
   let ui = match self.ui {
     Some(ui) => ui
-    None => raise MissingUi
+    None => raise WorkflowFault(MissingUi)
   }
   match ui.request(@posoco.UiRequest::Input(prompt~, default=None)) {
     @posoco.UiResponse::Text(text) => text
-    _ => raise ApprovalDenied
+    _ => raise WorkflowFault(ApprovalDenied)
   }
 }
 
@@ -72,11 +72,11 @@ async fn BoardWorkflows::choose(
   options : Array[String],
 ) -> String {
   if options.is_empty() {
-    raise OperationRejected
+    raise WorkflowFault(OperationRejected)
   }
   let ui = match self.ui {
     Some(ui) => ui
-    None => raise MissingUi
+    None => raise WorkflowFault(MissingUi)
   }
   match
     ui.request(
@@ -85,9 +85,9 @@ async fn BoardWorkflows::choose(
     @posoco.UiResponse::Selected(index) =>
       match options.get(index) {
         Some(option) => option
-        None => raise ApprovalDenied
+        None => raise WorkflowFault(ApprovalDenied)
       }
-    _ => raise ApprovalDenied
+    _ => raise WorkflowFault(ApprovalDenied)
   }
 }
 

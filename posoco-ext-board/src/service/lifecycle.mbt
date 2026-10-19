@@ -32,7 +32,7 @@ pub impl @posoco.Lifecycle for BoardWorkflows with fn on_compose(self, view) {
 ///|
 pub impl @posoco.Lifecycle for BoardWorkflows with fn on_shutdown(self) {
   if !self.shutdown() {
-    raise UnresolvedExecution
+    raise WorkflowFault(UnresolvedExecution)
   }
 }
 

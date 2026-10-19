@@ -5,16 +5,16 @@ pub async fn BoardWorkflows::start(
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
   self.perform(() => {
     if title.trim().is_empty() || title.length() > 256 {
-      raise InvalidConfiguration
+      raise WorkflowFault(InvalidConfiguration)
     }
     if self.controller is Some(_) {
-      raise Busy
+      raise WorkflowFault(Busy)
     }
     if self.ui is None {
-      raise MissingUi
+      raise WorkflowFault(MissingUi)
     }
     if !self.policy.spec("check", "check").validate() {
-      raise InvalidConfiguration
+      raise WorkflowFault(InvalidConfiguration)
     }
     self.deadline = Some((self.clock)() + self.policy.max_elapsed_ms.to_int64())
     self.confirm(
@@ -46,7 +46,7 @@ pub async fn BoardWorkflows::start(
     let spec = self.policy.spec(self.workflow.val, root)
     let left = (self.deadline.unwrap() - (self.clock)()).max(0L).to_int()
     if left < self.policy.execution_timeout_ms {
-      raise BudgetExceeded
+      raise WorkflowFault(BudgetExceeded)
     }
     let spec = { ..spec, max_elapsed_ms: left, }
     let controller = controller_result(
@@ -74,22 +74,22 @@ pub async fn BoardWorkflows::propose(
 ) -> Result[Json, BoardWorkflowError] {
   self.perform(() => {
     if requirements.trim().is_empty() || requirements.length() > 16384 {
-      raise InvalidConfiguration
+      raise WorkflowFault(InvalidConfiguration)
     }
     let controller = self.running()
     let status = controller.status()
     if status.operation_active ||
       status.planning_active ||
       !self.owner.unwrap().status().active_bindings.is_empty() {
-      raise NotQuiescent
+      raise WorkflowFault(NotQuiescent)
     }
     if status.remaining_expansions <= 0 ||
       status.runner.remaining_executions <= 0 ||
       status.runner.remaining_ms < self.policy.execution_timeout_ms.to_int64() {
-      raise BudgetExceeded
+      raise WorkflowFault(BudgetExceeded)
     }
     if !status.scope.contains(parent) {
-      raise OperationRejected
+      raise WorkflowFault(OperationRejected)
     }
     self.confirm(
       "Run one planning Agent for parent " +
@@ -168,11 +168,13 @@ pub async fn BoardWorkflows::graph_decision(
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
   self.perform(() => {
     let controller = self.running()
-    guard self.preview_ is Some(preview) else { raise InvalidProposal }
+    guard self.preview_ is Some(preview) else {
+      raise WorkflowFault(InvalidProposal)
+    }
     if !grant {
       self.preview_ = None
       controller.discard_proposal()
-      raise ApprovalDenied
+      raise WorkflowFault(ApprovalDenied)
     }
     self.confirm(
       "GRAPH APPROVAL — commit exactly this proposal?\n" +
@@ -196,18 +198,18 @@ pub async fn BoardWorkflows::scope_decision(
   self.perform(() => {
     let controller = self.running()
     if !grant {
-      raise ApprovalDenied
+      raise WorkflowFault(ApprovalDenied)
     }
     let snapshot = self.snapshot()
     guard snapshot.expansions
       .iter()
       .find_first(e => e.expansion_id.value == expansion_id)
       is Some(record) else {
-      raise InvalidProposal
+      raise WorkflowFault(InvalidProposal)
     }
     if record.workflow_id != self.workflow.val ||
       !controller.status().scope.contains(record.parent_task_id.value) {
-      raise OperationRejected
+      raise WorkflowFault(OperationRejected)
     }
     let ids = record.mapping.map(m => m.task_id.value)
     let prompt : Json = {
@@ -246,10 +248,10 @@ pub async fn BoardWorkflows::prepare(
   self.perform(() => {
     let controller = self.running()
     if input.trim().is_empty() || input.length() > 32768 {
-      raise InvalidConfiguration
+      raise WorkflowFault(InvalidConfiguration)
     }
     if !controller.status().scope.contains(task_id) {
-      raise OperationRejected
+      raise WorkflowFault(OperationRejected)
     }
     self.confirm(
       "Prepare " +
@@ -328,10 +330,10 @@ pub async fn BoardWorkflows::resume_workflow(
   self.perform(
     () => {
       if self.stopped {
-        raise Closed
+        raise WorkflowFault(Closed)
       }
       if !(self.authorize)() {
-        raise ApprovalDenied
+        raise WorkflowFault(ApprovalDenied)
       }
       ignore(controller_result(self.running().resume_workflow()))
       self.paused = false
@@ -370,14 +372,14 @@ pub async fn BoardWorkflows::move_task(
   self.perform(() => {
     let controller = self.running()
     if evidence.trim().is_empty() || evidence.length() > 4096 {
-      raise InvalidConfiguration
+      raise WorkflowFault(InvalidConfiguration)
     }
     if !controller.status().scope.contains(task_id) {
-      raise OperationRejected
+      raise WorkflowFault(OperationRejected)
     }
     if !self.owner.unwrap().status().active_bindings.is_empty() ||
       controller.status().operation_active {
-      raise NotQuiescent
+      raise WorkflowFault(NotQuiescent)
     }
     self.confirm(
       "Move " +
