@@ -140,3 +140,12 @@ defaults. Pass them explicitly only for compatibility.
 - `posoco/kit-chat-completions` — OpenAI-compatible chat protocol kit
 - `colmugx/posoco-kit-compact-evict` — turn-protected tool-result eviction (the Auto compaction tier)
 - `moonbitlang/async/http` — HTTP transport
+
+## Reasoning convergence guards
+
+The provider has two independent safeguards:
+
+- **Repeated tool-call guidance:** after three identical assistant tool calls in the same user turn, with tools still available, the next request includes a one-time convergence instruction. This does not interrupt a single hidden-thinking response.
+- **Optional streaming ceiling:** `DeepSeekConfig("sk-...", max_reasoning_chars=120000)` limits accumulated streamed reasoning characters. This is **not** a token budget. The default `None` leaves the ceiling disabled. On breach, the stream is closed and `ModelError::Transport` is raised; no synthetic successful completion is returned. Hosts must handle the error and should not assume a complete assistant message was produced. Non-streaming requests are not affected.
+
+These are safety rails rather than a semantic proof of stagnation. Too-small limits may interrupt useful complex reasoning; choose the ceiling based on observed workload and avoid automatic silent retries after partial stream output.
