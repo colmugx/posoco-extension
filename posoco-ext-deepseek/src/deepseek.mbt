@@ -207,6 +207,21 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
               if payload.length() > 0 {
                 data_buffer = payload
                 done = process_deepseek_sse(payload, acc, on_chunk)
+                match self.config.repeated_reasoning_span_chars {
+                  Some(span) => if acc.text().length() == 0 &&
+                    deepseek_has_repeated_reasoning_suffix(acc.reasoning(), span) {
+                    self.ctx.warn(
+                      source="posoco-ext-deepseek",
+                      code="deepseek.reasoning_repetition_detected",
+                      message="Repeated reasoning suffix detected; aborting stream",
+                    )
+                    client.close()
+                    raise @posoco.ModelError::Transport(
+                      "DeepSeek stream reasoning repetition detected (stage=read_stream, category=reasoning_repetition)",
+                    )
+                  }
+                  None => ()
+                }
                 match self.config.max_reasoning_chars {
                   Some(limit) => if deepseek_reasoning_limit_exceeded(
                     acc.reasoning().length(), limit,
