@@ -1961,3 +1961,11 @@ test "generic factory validates repeated reasoning span" {
     _ => fail("expected typed validation error")
   }
 }
+
+///|
+test "repeated reasoning suffix safely handles non-ASCII thinking" {
+  let chinese = "思考过程".repeat(128)
+  assert_true(deepseek_has_repeated_reasoning_suffix(
+    chinese + chinese + chinese, chinese.length(),
+  ))
+}
