@@ -1867,7 +1867,7 @@ test "stream reasoning ceiling is strict and opt-in" {
   assert_true(deepseek_reasoning_limit_exceeded(101, 100))
   assert_false(deepseek_reasoning_limit_exceeded(0, 100))
   let disabled = DeepSeekConfig("test")
-  assert_true(disabled.max_reasoning_chars is None)
+  assert_eq(disabled.max_reasoning_chars, Some(120000))
   let enabled = DeepSeekConfig("test", max_reasoning_chars=Some(100))
   assert_eq(enabled.max_reasoning_chars, Some(100))
 }
@@ -1914,7 +1914,7 @@ test "safe recovery only permits empty length-limited completion" {
 ///|
 test "generic factory validates recovery flag and retains defaults" {
   let missing = @llm.ProviderConfigSource(settings=Some({ "api_key": "test" }))
-  assert_false(deepseek_setting_recover_on_exhaustion(missing))
+  assert_true(deepseek_setting_recover_on_exhaustion(missing))
   let enabled = @llm.ProviderConfigSource(settings=Some({
     "api_key": "test", "recover_on_reasoning_exhaustion": true,
   }))
@@ -1941,7 +1941,7 @@ test "exact repeated reasoning suffix detector requires three long repeats" {
   assert_true(deepseek_has_repeated_reasoning_suffix(a + a + a, 128))
   assert_false(deepseek_has_repeated_reasoning_suffix(a + b + a, 128))
   assert_false(deepseek_has_repeated_reasoning_suffix(a + a + a, 64))
-  assert_true(DeepSeekConfig("test").repeated_reasoning_span_chars is None)
+  assert_eq(DeepSeekConfig("test").repeated_reasoning_span_chars, Some(256))
 }
 
 ///|
@@ -1968,4 +1968,34 @@ test "repeated reasoning suffix safely handles non-ASCII thinking" {
   assert_true(deepseek_has_repeated_reasoning_suffix(
     chinese + chinese + chinese, chinese.length(),
   ))
+}
+
+///|
+test "DeepSeek default protections are active and explicitly opt-out" {
+  let defaults = DeepSeekConfig("test")
+  assert_eq(defaults.max_reasoning_chars, Some(120000))
+  assert_true(defaults.recover_on_reasoning_exhaustion)
+  assert_eq(defaults.repeated_reasoning_span_chars, Some(256))
+  let source = @llm.ProviderConfigSource(settings=Some({ "api_key": "test" }))
+  assert_eq(deepseek_setting_max_reasoning_chars(source), Some(120000))
+  assert_true(deepseek_setting_recover_on_exhaustion(source))
+  assert_eq(deepseek_setting_repeated_span(source), Some(256))
+  let opt_out = @llm.ProviderConfigSource(settings=Some({
+    "api_key": "test",
+    "max_reasoning_chars": null,
+    "recover_on_reasoning_exhaustion": false,
+    "repeated_reasoning_span_chars": null,
+  }))
+  assert_true(deepseek_setting_max_reasoning_chars(opt_out) is None)
+  assert_false(deepseek_setting_recover_on_exhaustion(opt_out))
+  assert_true(deepseek_setting_repeated_span(opt_out) is None)
+  let port = DeepSeekConfig(
+    "test",
+    max_reasoning_chars=None,
+    recover_on_reasoning_exhaustion=false,
+    repeated_reasoning_span_chars=None,
+  )
+  assert_true(port.max_reasoning_chars is None)
+  assert_false(port.recover_on_reasoning_exhaustion)
+  assert_true(port.repeated_reasoning_span_chars is None)
 }
