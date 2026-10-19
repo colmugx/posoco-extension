@@ -60,51 +60,73 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   let messages_owned = messages.to_owned()
   match stream {
     NoStream => {
-      let body = build_chat_request(
-        self.ctx,
-        messages_owned,
-        tools,
-        options,
-        self.config.model,
-        false,
-        thinking_json,
-        effort_str,
-      )
-      let headers = build_headers(self.config)
-      let url = chat_url(self.config)
-      let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=post): " + err.to_string(),
-          )
-      }
-      if !is_deepseek_http_success(response.code) {
-        match
-          classify_deepseek_http_status(
+      // Retry only an entirely non-actionable length-limited response.
+      // No prior stream chunks or tool calls have reached the host.
+      let mut retry = false
+      let mut attempts = 0
+      loop {
+        let selected_effort = if retry { Some("low") } else { effort_str }
+        let selected_thinking = if retry {
+          enabled_thinking_json()
+        } else {
+          thinking_json
+        }
+        let body = build_chat_request(
+          self.ctx,
+          messages_owned,
+          tools,
+          options,
+          self.config.model,
+          false,
+          selected_thinking,
+          selected_effort,
+        )
+        let headers = build_headers(self.config)
+        let url = chat_url(self.config)
+        let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
+          err =>
+            raise @posoco.ModelError::Transport(
+              "DeepSeek transport failure (stage=post): " + err.to_string(),
+            )
+        }
+        if !is_deepseek_http_success(response.code) {
+          match classify_deepseek_http_status(
             "chat.http_status",
             response.code,
             BodyBytesUtf8(body_data.binary().length()),
           ) {
-          Some(err) => raise err
-          None => ()
+            Some(err) => raise err
+            None => ()
+          }
         }
-      }
-      let body_text = body_data.text() catch {
-        _ =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\{body_data.binary().length()})",
+        let body_text = body_data.text() catch {
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\\{body_data.binary().length()})",
+            )
+        }
+        let resp_json : Json = @json.parse(body_text) catch {
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "DeepSeek response parse failure (stage=json, category=malformed, body_chars=\\{body_text.length()})",
+            )
+        }
+        let completion = decode_chat_response(resp_json)
+        if self.config.recover_on_reasoning_exhaustion &&
+          attempts == 0 && deepseek_can_retry_reasoning_exhaustion(completion) {
+          self.ctx.warn(
+            source="posoco-ext-deepseek",
+            code="deepseek.reasoning_exhaustion_recovery",
+            message="Retrying nonstream reasoning-only length cutoff once at low effort",
           )
-      }
-      let resp_json : Json = @json.parse(body_text) catch {
-        _ =>
-          raise @posoco.ModelError::ResponseParse(
-            "DeepSeek response parse failure (stage=json, category=malformed, body_chars=\{body_text.length()})",
-          )
-      }
-      let completion = decode_chat_response(resp_json)
-      @posoco.ModelCallResult::{
-        completion,
-        processed_messages: messages_owned,
+          attempts += 1
+          retry = true
+          continue
+        }
+        break @posoco.ModelCallResult::{
+          completion,
+          processed_messages: messages_owned,
+        }
       }
     }
     Stream(on_chunk) => {
