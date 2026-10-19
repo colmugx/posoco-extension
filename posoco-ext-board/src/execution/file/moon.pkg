@@ -1,0 +1,22 @@
+import {
+  "colmugx/posoco-ext-board/execution",
+  "colmugx/posoco-ext-board/internal/node_fs",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+}
+
+import {
+  "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
+} for "test"
+
+supported_targets = "+native+js"
+
+options(
+  targets: {
+    "store.native.mbt": [ "native" ],
+    "store.js.mbt": [ "js" ],
+    "inspect.native.mbt": [ "native" ],
+    "inspect.js.mbt": [ "js" ],
+    "store_js_test.mbt": [ "js" ],
+  },
+)

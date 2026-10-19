@@ -1,11 +1,16 @@
 import {
   "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/internal/node_fs",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
+
+import {
+  "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
+} for "wbtest"
 
 supported_targets = "+native +js"
 
@@ -15,6 +20,8 @@ options(
   "native-stub": [ "truncate_stub.c" ],
   targets: {
     "file.native.mbt": [ "native" ],
+    "file.js.mbt": [ "js" ],
+    "file_js_wbtest.mbt": [ "js" ],
     "file_native_wbtest.mbt": [ "native" ],
     "expansion_native_wbtest.mbt": [ "native" ],
   },

@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/testkit/node_fs"
+
+// Values
+pub async fn cleanup(String) -> Unit
+
+pub async fn put(String, String) -> Unit
+
+pub async fn temporary_directory() -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

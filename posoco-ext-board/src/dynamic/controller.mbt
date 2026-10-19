@@ -448,6 +448,9 @@ pub fn DynamicWorkflowController::discard_proposal(
     return
   }
   if self.op is Some(host) {
+    if host.phase() is (CommitRequested | Uncertain) {
+      return
+    }
     self.last_expansion_phase = Some(host.phase())
     self.op = None
     self.pending_id = None
@@ -465,7 +468,7 @@ pub async fn DynamicWorkflowController::wait(
 ///|
 /// Cancels/joins operations and S4D/S4A before permitting backend/lock teardown.
 /// A frozen graph identity is retained even when this returns true.
-pub async fn DynamicWorkflowController::shutdown(
+pub async fn DynamicWorkflowController::quiesce(
   self : DynamicWorkflowController,
   timeout_ms~ : Int32 = 4000,
 ) -> Bool {
@@ -492,6 +495,20 @@ pub async fn DynamicWorkflowController::shutdown(
     .max(1L)
     .to_int()
   if !self.runner.shutdown(timeout_ms=remaining) {
+    return false
+  }
+  true
+}
+
+///|
+/// Final teardown for direct headless hosts. Composed extensions quiesce,
+/// release their journal lock, then close their owned backend last.
+pub async fn DynamicWorkflowController::shutdown(
+  self : DynamicWorkflowController,
+  timeout_ms~ : Int32 = 4000,
+) -> Bool {
+  let start = @async.now()
+  if !self.quiesce(timeout_ms~) {
     return false
   }
   let left = (timeout_ms.to_int64() - (@async.now() - start)).max(1L).to_int()

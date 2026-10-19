@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/execution/file"
+
+import {
+  "colmugx/posoco-ext-board/execution",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct FileBoardExecutionStore {
+  // private fields
+}
+pub fn FileBoardExecutionStore::FileBoardExecutionStore(directory~ : String, fail_at? : JournalFailure) -> Self
+pub async fn FileBoardExecutionStore::close(Self) -> Unit
+pub async fn FileBoardExecutionStore::inspect(directory~ : String) -> Result[Array[@execution.BoardExecutionBinding], @execution.BoardExecutionError]
+pub async fn FileBoardExecutionStore::load(Self) -> Result[Array[@execution.BoardExecutionBinding], @execution.BoardExecutionError]
+pub async fn FileBoardExecutionStore::persist(Self, Array[@execution.BoardExecutionBinding]) -> Result[Unit, @execution.BoardExecutionError]
+pub impl @execution.BoardExecutionStore for FileBoardExecutionStore
+
+pub(all) enum JournalFailure {
+  BeforeRename
+  AfterRename
+} derive(Eq)
+pub fn JournalFailure::equal(Self, Self) -> Bool
+pub fn JournalFailure::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

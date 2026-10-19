@@ -3,6 +3,7 @@ import {
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/protocol",
   "colmugx/posoco-ext-board/runtime",
+  "colmugx/posoco-ext-board/service",
   "moonbitlang/async",
   "moonbitlang/core/debug",
 }

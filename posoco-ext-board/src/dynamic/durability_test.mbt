@@ -91,6 +91,9 @@ async test "lost graph commit acknowledgement reconciles one exact durable ident
     assert_eq(committed.expansions.length(), 1)
     assert_eq(h.controller.status().scope, ["parent"])
     let calls = store.calls
+    h.controller.discard_proposal()
+    h.controller.cancel()
+    assert_eq(h.controller.status().expansion_phase, Some(@expansion.Uncertain))
     assert_eq(h.controller.reconcile(), Ok(true))
     assert_eq(store.calls, calls)
     assert_eq(h.board.state().unwrap(), committed)

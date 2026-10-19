@@ -58,6 +58,7 @@ pub struct FileBoardStore {
   // private fields
 }
 pub fn FileBoardStore::FileBoardStore(root? : String, fail_at? : StoreFailureStage?) -> Self
+pub fn FileBoardStore::at_directory(directory~ : String, fail_at? : StoreFailureStage) -> Self
 pub async fn FileBoardStore::load(Self) -> Result[BoardLoad, BoardStoreError]
 pub async fn FileBoardStore::persist(Self, @domain.BoardStateSnapshot, Array[@domain.BoardEvent]) -> Result[Unit, BoardStoreError]
 pub impl BoardStore for FileBoardStore

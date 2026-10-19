@@ -14,7 +14,9 @@ supplied snapshot revision, without allocating another revision. Empty event
 arrays replace the snapshot without discarding the existing journal. Both stores
 expose the complete detached journal on load, including records ahead of the
 snapshot after a failed native rename. There is no separate memory-only audit API.
-`MemoryBoardStore` works on native and JS; `FileBoardStore` is native-only and
+`MemoryBoardStore` works on native and JS; `FileBoardStore` is available on
+both targets — native through `moonbitlang/async/fs`, JS through Node-compatible
+synchronous `node:fs`/`node:path`/`node:crypto` APIs — and
 uses `<root>/.cetas/board/default`, with `root="."` by default. An empty root is
 also treated as `"."`, keeping the path relative to the current workspace.
 Inject a workspace root using `FileBoardStore::FileBoardStore(root=...)`, not a
@@ -95,7 +97,11 @@ directory recursively and performs:
 The installed `moonbitlang/async@0.22.4` file API supplies explicit `File::sync`,
 append-open, and replace-rename; the POSIX implementation uses fsync and native
 replace-rename syscalls. Directory open/fsync also works through that API. The
-only C seam is descriptor-based `ftruncate` for audit tail repair (retries EINTR,
+JS build performs the same six stages through Node's synchronous
+`node:fs`/`node:path`/`node:crypto` entry points (`fsyncSync`, `renameSync`,
+`ftruncateSync`), rejects symlinks on every control-plane file, and reports a
+directory-fsync failure after the rename as `DurabilityUncertain`.
+On native, the only C seam is descriptor-based `ftruncate` for audit tail repair (retries EINTR,
 returns errno, borrows no MoonBit objects). No dependencies are added.
 
 The six optional injected stages are `TempWrite`, `TempFsync`, `JournalAppend`,
@@ -144,8 +150,9 @@ facts for the caller, not authoritative EventHub publications.
   macOS uses ordinary fsync, not F_FULLFSYNC.
 - Native filesystem behavior is tested on macOS; the C tail-repair seam supports
   macOS/Linux. No Windows durability guarantee is made (unsupported platforms
-  return ENOSYS for tail truncation). JS has the memory/codec/recovery implementation,
-  not a filesystem implementation.
+  return ENOSYS for tail truncation). JS runs the same filesystem pipeline
+  through Node's synchronous APIs; other JS runtimes (for example Bun) are
+  neither claimed nor tested.
 - The audit is validated/read in full on load and persist. There is no rotation,
   compaction, checksum, locking, size limit, backup, or automatic corrupt-board repair.
   Committed-state/coordinator restoration and the persistence commit barrier are deferred.

@@ -52,6 +52,7 @@ pub fn DynamicWorkflowController::pause(Self) -> Bool
 pub async fn DynamicWorkflowController::prepare_proposal(Self, payload~ : String, authorization_id~ : String, workflow_parent~ : String, permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int, max_edges? : Int) -> Result[Unit, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::prepare_task(Self, task_id~ : String, attempt_id~ : String, expected_revision~ : Int64) -> Result[Unit, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::preview(Self) -> Result[@expansion.ExpansionApprovalPreview, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::quiesce(Self, timeout_ms? : Int) -> Bool
 pub async fn DynamicWorkflowController::reconcile(Self) -> Result[Bool, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::reconcile_preparation(Self, task_id~ : String) -> Result[PreparationRecord, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::refresh_status(Self) -> Result[DynamicWorkflowStatus, DynamicWorkflowError]

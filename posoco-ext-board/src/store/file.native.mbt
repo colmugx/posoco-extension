@@ -17,6 +17,15 @@ pub fn FileBoardStore::FileBoardStore(
 }
 
 ///|
+/// Exact private namespace selected by a composed Board extension.
+pub fn FileBoardStore::at_directory(
+  directory~ : String,
+  fail_at? : StoreFailureStage,
+) -> FileBoardStore {
+  { directory, fail_at, }
+}
+
+///|
 pub extend FileBoardStore with BoardStore::{load, persist}
 
 ///|
