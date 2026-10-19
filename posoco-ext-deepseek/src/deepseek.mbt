@@ -208,7 +208,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
                 data_buffer = payload
                 done = process_deepseek_sse(payload, acc, on_chunk)
                 match self.config.repeated_reasoning_span_chars {
-                  Some(span) => if acc.text().length() == 0 &&
+                  Some(span) => if !done && acc.text().length() == 0 &&
                     deepseek_has_repeated_reasoning_suffix(acc.reasoning(), span) {
                     self.ctx.warn(
                       source="posoco-ext-deepseek",
