@@ -1932,3 +1932,32 @@ test "generic factory validates recovery flag and retains defaults" {
     _ => fail("expected typed provider config error")
   }
 }
+
+///|
+test "exact repeated reasoning suffix detector requires three long repeats" {
+  let a = "a".repeat(128)
+  let b = "b".repeat(128)
+  assert_false(deepseek_has_repeated_reasoning_suffix(a + a, 128))
+  assert_true(deepseek_has_repeated_reasoning_suffix(a + a + a, 128))
+  assert_false(deepseek_has_repeated_reasoning_suffix(a + b + a, 128))
+  assert_false(deepseek_has_repeated_reasoning_suffix(a + a + a, 64))
+  assert_true(DeepSeekConfig("test").repeated_reasoning_span_chars is None)
+}
+
+///|
+test "generic factory validates repeated reasoning span" {
+  let good = @llm.ProviderConfigSource(settings=Some({
+    "api_key": "test", "repeated_reasoning_span_chars": 256,
+  }))
+  assert_eq(deepseek_setting_repeated_span(good), Some(256))
+  let bad = @llm.ProviderConfigSource(settings=Some({
+    "api_key": "test", "repeated_reasoning_span_chars": 32,
+  }))
+  try DeepSeekProvider().build(bad) catch {
+    @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+      assert_true(detail.contains("repeated_reasoning_span_chars"))
+    err => raise err
+  } noraise {
+    _ => fail("expected typed validation error")
+  }
+}
