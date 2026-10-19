@@ -130,6 +130,39 @@ fn deepseek_setting_effort_supported(effort : String) -> Bool {
 }
 
 ///|
+/// Provider-owned ceiling parser. Both factory build and authenticated
+/// refresh use the same strict validation. No host-specific settings schema.
+fn deepseek_setting_max_reasoning_chars(
+  source : @provider.ProviderConfigSource,
+) -> Int32? raise @posoco.CompositionError {
+  match source.setting("max_reasoning_chars") {
+    None => None
+    Some(Json::Number(number, ..)) => {
+      if number.is_nan() || number.is_inf() || number <= 0.0 ||
+        number > 2147483647.0 {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_deepseek",
+          detail="max_reasoning_chars must be a positive integer within Int range",
+        )
+      }
+      let value = number.to_int()
+      if value.to_double() != number {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_deepseek",
+          detail="max_reasoning_chars must be a positive integer within Int range",
+        )
+      }
+      Some(value)
+    }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_deepseek",
+        detail="max_reasoning_chars must be a positive integer within Int range",
+      )
+  }
+}
+
+///|
 pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
   self : DeepSeekProvider,
   source : @provider.ProviderConfigSource,
@@ -168,6 +201,7 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
     context_window=source.context_window_setting(
       manifest_id="posoco_ext_deepseek",
     ),
+    max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
@@ -251,6 +285,7 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
     context_window=source.context_window_setting(
       manifest_id="posoco_ext_deepseek",
     ),
+    max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
   )
   let models = fetch_deepseek_models(
     config.base_url,
