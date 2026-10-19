@@ -1755,3 +1755,51 @@ async test "auto compact sizes from the scope pressure over local config" {
   assert_true(result.mode == @posoco.CompactMode::Replace)
   inspect(result.compacted_messages.length(), content="5")
 }
+
+///|
+test "repetition guard triggers only for three identical calls in one user turn" {
+  let tool = fn(path : String) -> @posoco.Message {
+    @posoco.Message::AssistantMessage(
+      content=[],
+      tool_calls=[{
+        call_id: @posoco.CallId::unchecked("unique-id"),
+        name: @posoco.ToolName::unchecked("read_file"),
+        arguments: Json::object({ "path": Json::string(path) }),
+      }],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::ToolCalls,
+    )
+  }
+  let a = tool("/tmp/a")
+  let b = tool("/tmp/b")
+  assert_false(deepseek_repeated_tool_calls([user_msg("read"), a, a]))
+  assert_true(deepseek_repeated_tool_calls([user_msg("read"), a, a, a]))
+  assert_false(deepseek_repeated_tool_calls([user_msg("read"), a, b, a]))
+  assert_false(deepseek_repeated_tool_calls([a, a, user_msg("new"), a]))
+}
+
+///|
+test "repetition guard injects convergence hint only on repeated tool calls" {
+  let a = @posoco.Message::AssistantMessage(
+    content=[],
+    tool_calls=[{
+      call_id: @posoco.CallId::unchecked("id"),
+      name: @posoco.ToolName::unchecked("read_file"),
+      arguments: Json::object({ "path": Json::string("/tmp/a") }),
+    }],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::ToolCalls,
+  )
+  let ctx = @devkit.ExtContext::default()
+  let messages = [user_msg("read"), a, a, a]
+  let tools : Array[@posoco.ToolDef] = []
+  let ordinary = build_chat_request(
+    ctx, messages, tools, chat_options(), "deepseek-flash", false,
+    enabled_thinking_json(), Some("high"),
+  )
+  guard ordinary is Object(no_tools) else { fail("expected request") }
+  guard no_tools.get("messages") is Some(Array(original)) else { fail("expected messages") }
+  assert_eq(original.length(), 4)
+  // Request-level injection must not mutate the caller's transcript.
+  assert_eq(messages.length(), 4)
+}
