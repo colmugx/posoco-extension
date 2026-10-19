@@ -169,3 +169,7 @@ disabled for streaming calls because already forwarded stream events cannot
 be safely retracted. Failures of the second attempt remain visible errors;
 the adapter does not conceal or indefinitely loop on them.
 The provider emits an ordinary ExtContext warning when it takes this path.
+
+### Optional exact repetition guard
+
+`repeated_reasoning_span_chars` (positive integer >= 128, or `Some(256)` in a direct `DeepSeekConfig`) detects three **adjacent, exactly equal suffix spans** in streamed reasoning before answer text begins. This guard is disabled by default, reports an `ExtContext` warning, closes the connection and raises an explicit transport error on detection. It is a deliberately narrow textual cycle detector, not a semantic information-gain estimator. A syntactically different reasoning loop will not trigger; an unusually repetitive but valid reasoning stream may trigger. No automatic replay is attempted after forwarded streaming chunks.
