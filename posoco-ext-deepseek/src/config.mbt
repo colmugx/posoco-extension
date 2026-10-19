@@ -26,6 +26,8 @@ pub(all) struct DeepSeekConfig {
   max_reasoning_chars : Int32?
   /// Retry once at low effort on a non-stream reasoning-only length cutoff.
   recover_on_reasoning_exhaustion : Bool
+  /// Optional repeated reasoning suffix span; >= 128, disabled by default.
+  repeated_reasoning_span_chars : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -44,6 +46,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   context_window~ : Int32? = None,
   max_reasoning_chars~ : Int32? = None,
   recover_on_reasoning_exhaustion~ : Bool = false,
+  repeated_reasoning_span_chars~ : Int32? = None,
 ) -> DeepSeekConfig {
   if reasoning_effort != "" &&
     !deepseek_reasoning_efforts().contains(reasoning_effort) {
@@ -64,6 +67,12 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     }
     None => ()
   }
+  match repeated_reasoning_span_chars {
+    Some(n) => if n < 128 {
+      abort("posoco-ext-deepseek: repeated_reasoning_span_chars must be at least 128")
+    }
+    None => ()
+  }
   {
     api_key,
     base_url,
@@ -73,6 +82,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     context_window,
     max_reasoning_chars,
     recover_on_reasoning_exhaustion,
+    repeated_reasoning_span_chars,
   }
 }
 
