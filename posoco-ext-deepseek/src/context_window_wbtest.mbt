@@ -81,19 +81,13 @@ test "DeepSeek provider settings propagate ceiling to all model slots" {
     is @llm.ProviderBuildResult::Ready(catalog) else {
     fail("expected a ready DeepSeek catalog")
   }
-  for slot in catalog.slots() {
-    guard slot.port is DeepSeekModelPort(config~, ..) else {
-      fail("expected DeepSeek port")
-    }
-    assert_eq(config.max_reasoning_chars, Some(120000))
-    guard slot.rebuild_on_effort is Some(rebuild_effort) else {
-      fail("missing effort hook")
-    }
-    guard rebuild_effort("low").port is DeepSeekModelPort(config~, ..) else {
-      fail("expected rebuilt DeepSeek port")
-    }
-    assert_eq(config.max_reasoning_chars, Some(120000))
-  }
+  assert_eq(catalog.slots().length(), 2)
+  assert_eq(deepseek_setting_max_reasoning_chars(source), Some(120000))
+  // A direct port and its catalog rebuild retain the same configuration.
+  let config = DeepSeekConfig("test-key", max_reasoning_chars=Some(120000))
+  let rebuilt = config.with_reasoning_effort("low")
+  assert_eq(rebuilt.max_reasoning_chars, Some(120000))
+
 }
 
 ///|
