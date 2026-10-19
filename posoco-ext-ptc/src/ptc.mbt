@@ -118,7 +118,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
   [
     {
       name: @posoco.ToolName::unchecked("run_code"),
-      description: "Execute a MoonBit program with filtered nested tool calls. Return only the final JSON value. Use for multi-step search, filtering and summarization.",
+      description: "Execute a MoonBit program with filtered nested tool calls. Return only the final JSON value. Use for multi-step search, filtering and summarization. Provide exactly one of code or source.",
       input_schema: {
         "type": "object",
         "properties": {
@@ -132,7 +132,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
           },
           "code": {
             "type": "string",
-            "description": "Body of async fn ptc_run(ctx: PtcContext, input: Json) -> Json. Call ctx.call(name, args), inspect results, return a JSON value.",
+            "description": "Body of async fn ptc_run(ctx: PtcContext, input: Json) -> Json. Call ctx.call(name, args), inspect results, return a JSON value. Exclusive with source.",
           },
           "input": { "description": "JSON input supplied to the program" },
           "description": {
@@ -141,7 +141,6 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
           },
         },
         "required": ["description"],
-        "oneOf": [{ "required": ["code"] }, { "required": ["source"] }],
         "additionalProperties": false,
       },
       owner: @posoco.OwnerId::unchecked("posoco_ext_ptc"),
