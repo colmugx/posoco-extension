@@ -1871,3 +1871,64 @@ test "stream reasoning ceiling is strict and opt-in" {
   let enabled = DeepSeekConfig("test", max_reasoning_chars=Some(100))
   assert_eq(enabled.max_reasoning_chars, Some(100))
 }
+
+///|
+test "safe recovery only permits empty length-limited completion" {
+  let empty : Json = {
+    "choices": [{
+      "message": { "role": "assistant", "content": "", "reasoning_content": "unfinished" },
+      "finish_reason": "length",
+    }],
+  }
+  assert_true(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(empty)))
+  let partial : Json = {
+    "choices": [{
+      "message": { "role": "assistant", "content": "partial answer" },
+      "finish_reason": "length",
+    }],
+  }
+  assert_false(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(partial)))
+  let stopped : Json = {
+    "choices": [{
+      "message": { "role": "assistant", "content": "" },
+      "finish_reason": "stop",
+    }],
+  }
+  assert_false(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(stopped)))
+  let tools : Json = {
+    "choices": [{
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{
+          "id": "call_1", "type": "function",
+          "function": { "name": "read", "arguments": "{}" },
+        }],
+      },
+      "finish_reason": "length",
+    }],
+  }
+  assert_false(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(tools)))
+}
+
+///|
+test "generic factory validates recovery flag and retains defaults" {
+  let missing = @llm.ProviderConfigSource(settings=Some({ "api_key": "test" }))
+  assert_false(deepseek_setting_recover_on_exhaustion(missing))
+  let enabled = @llm.ProviderConfigSource(settings=Some({
+    "api_key": "test", "recover_on_reasoning_exhaustion": true,
+  }))
+  assert_true(deepseek_setting_recover_on_exhaustion(enabled))
+  let config = DeepSeekConfig("test", recover_on_reasoning_exhaustion=true)
+  assert_true(config.with_reasoning_effort("low").recover_on_reasoning_exhaustion)
+  let malformed = @llm.ProviderConfigSource(settings=Some({
+    "api_key": "test", "recover_on_reasoning_exhaustion": "yes",
+  }))
+  try DeepSeekProvider().build(malformed) catch {
+    @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
+      assert_true(detail.contains("recover_on_reasoning_exhaustion"))
+    err => raise err
+  } noraise {
+    _ => fail("expected typed provider config error")
+  }
+}
