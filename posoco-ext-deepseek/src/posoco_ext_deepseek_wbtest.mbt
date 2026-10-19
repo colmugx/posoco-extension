@@ -1868,6 +1868,6 @@ test "stream reasoning ceiling is strict and opt-in" {
   assert_false(deepseek_reasoning_limit_exceeded(0, 100))
   let disabled = DeepSeekConfig("test")
   assert_true(disabled.max_reasoning_chars is None)
-  let enabled = DeepSeekConfig("test", max_reasoning_chars=100)
+  let enabled = DeepSeekConfig("test", max_reasoning_chars=Some(100))
   assert_eq(enabled.max_reasoning_chars, Some(100))
 }
