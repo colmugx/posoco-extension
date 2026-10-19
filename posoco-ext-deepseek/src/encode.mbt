@@ -2,10 +2,10 @@
 /// Wire encoder: convert kernel canonical types to DeepSeek API JSON.
 ///
 /// DeepSeek-specific reasoning_content rules (per official thinking_mode guide):
-/// - Assistant message WITH tool_calls: reasoning_content MUST be resent in
-///   all subsequent turns (otherwise DeepSeek returns 400).
-/// - Assistant message WITHOUT tool_calls: reasoning_content is optional;
-///   omitting it saves tokens and preserves prefix cache.
+/// - When the *current request* has tools, reasoning_content from every
+///   assistant history turn MUST be replayed (even without tool_calls).
+/// - When the current request has no tools, DeepSeek ignores historical
+///   reasoning_content; omit it unless preserving legacy tool-call replay.
 /// - Non-assistant messages: never carry reasoning_content.
 /// - Tool call arguments are JSON strings (DeepSeek convention).
 /// - Message order is append-only (prefix-cache friendly).
@@ -13,6 +13,16 @@
 ///|
 /// Encode a kernel Message into a DeepSeek chat message JSON object.
 fn encode_message(msg : @posoco.Message) -> Json {
+  encode_message_with_reasoning(msg, false)
+}
+
+///|
+/// Request-aware encoding: DeepSeek requires full reasoning replay whenever
+/// the outgoing request carries tools, even for plain assistant replies.
+fn encode_message_with_reasoning(
+  msg : @posoco.Message,
+  replay_all_reasoning : Bool,
+) -> Json {
   let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
     msg {
     SystemMessage(content~) => ("system", content, [], None, None)
@@ -72,14 +82,14 @@ fn encode_message(msg : @posoco.Message) -> Json {
   // message has tool_calls (otherwise 400 error). When there are no tool_calls,
   // resending is optional and wasteful (pollutes prefix cache), so we skip it.
   // This is the official recommendation from DeepSeek thinking_mode docs.
-  if role == "assistant" && tool_calls.length() > 0 {
+  if role == "assistant" && (replay_all_reasoning || tool_calls.length() > 0) {
     match reasoning_text {
       Some(r) => obj["reasoning_content"] = Json::string(r)
       None => ()
     }
   }
-  // NOTE: for non-tool-call turns, reasoning_content is deliberately omitted
-  // even if present — see DeepSeek thinking_mode guide.
+  // With tools enabled, previous assistant reasoning is replayed regardless
+  // of whether that particular message contains a tool call.
   Json::object(obj)
 }
 
@@ -121,7 +131,9 @@ fn build_chat_request(
   thinking_json : Json,
   reasoning_effort_str : String?,
 ) -> Json {
-  let wire_messages = @chatkit.fold_tool_attachments(messages, false).map(encode_message)
+  let wire_messages = @chatkit.fold_tool_attachments(messages, false).map(fn(message) {
+    encode_message_with_reasoning(message, tools.length() > 0)
+  })
   if tools.length() > 0 && deepseek_repeated_tool_calls(messages) {
     wire_messages.push(Json::object({
       "role": Json::string("system"),
