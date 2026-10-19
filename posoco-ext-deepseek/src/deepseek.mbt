@@ -64,7 +64,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
       // No prior stream chunks or tool calls have reached the host.
       let mut retry = false
       let mut attempts = 0
-      loop {
+      while attempts < 2 {
         let selected_effort = if retry { Some("low") } else { effort_str }
         let selected_thinking = if retry {
           enabled_thinking_json()
@@ -123,11 +123,14 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
           retry = true
           continue
         }
-        break @posoco.ModelCallResult::{
+        return @posoco.ModelCallResult::{
           completion,
           processed_messages: messages_owned,
         }
       }
+      raise @posoco.ModelError::Transport(
+        "DeepSeek recovery exhausted its bounded retry attempts",
+      )
     }
     Stream(on_chunk) => {
       let body = build_chat_request(
