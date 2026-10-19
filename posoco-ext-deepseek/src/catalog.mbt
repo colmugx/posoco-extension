@@ -54,6 +54,7 @@ fn deepseek_catalog_slot(
         context_window=config.context_window,
         max_reasoning_chars=config.max_reasoning_chars,
         recover_on_reasoning_exhaustion=config.recover_on_reasoning_exhaustion,
+        repeated_reasoning_span_chars=config.repeated_reasoning_span_chars,
       )
       deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     }),
@@ -86,6 +87,7 @@ fn deepseek_catalog_slot_from_info(
     },
     max_reasoning_chars=base_config.max_reasoning_chars,
     recover_on_reasoning_exhaustion=base_config.recover_on_reasoning_exhaustion,
+    repeated_reasoning_span_chars=base_config.repeated_reasoning_span_chars,
   )
   deepseek_catalog_slot(config, ctx, api_key)
 }
