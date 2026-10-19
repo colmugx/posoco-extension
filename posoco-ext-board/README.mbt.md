@@ -26,6 +26,15 @@ task preparation and shared planning/execution budgets through the same S4A owne
 See [`docs/S4E2-dynamic-runner.md`](docs/S4E2-dynamic-runner.md) for the worked
 example, pause/cancel/shutdown behavior, uncertainty and in-process-only authority.
 
+S4F composes those packages into one opt-in root `BoardWorkflows` extension:
+clients provide a private directory, an Agent factory, the host task group and a
+UI capability; the instance owns the store, identity journal and lock, the
+single-writer gate, the Agent owner, controller, per-slot channels, budgets and
+shutdown. Graph, execution-scope, preparation and wave admission stay separate
+approvals, and success never implies Done or Review approval. See
+[`docs/S4F-workflow-extension.md`](docs/S4F-workflow-extension.md) for the
+composition contract, command surface, failure codes and operator recovery.
+
 
 ## Current status: headless service, client replica and embedded dashboard
 
@@ -223,6 +232,38 @@ Board state. Binding fixes the authoritative backend for that listener instance:
 `set_backend` while bound/running is ignored, so existing subscriptions and
 commands cannot silently switch to another stream. A stopped adapter can be
 bound again with a backend.
+
+## Composed Board workflows (S4F)
+
+For bounded Agent workflows, compose the optional root `BoardWorkflows`
+extension instead of assembling S4 packages. The client supplies four Lego
+parts — one private directory, a `WorkflowAgentFactory`, the host task group
+and a `UiPort` extension — and the instance owns the Board store, the execution
+identity journal and its lock, the single-writer gate, the S4A Agent owner, the
+S4E2 controller, per-slot result channels, shared budgets and shutdown.
+Workflows are disabled until `enabled=true`, every step is a separate trusted
+UI approval, and no command takes executable JSON arguments.
+
+```mbt nocheck
+@async.with_task_group(group => {
+  let workflows = @board.BoardWorkflows(
+    directory="private/board-data",
+    agents=my_workflow_agent_factory, // fresh Agent composition per run
+    group~,
+    policy=@board.BoardWorkflowPolicy(enabled=true),
+  )
+  let agent = @posoco.Agent(exts=[ui_extension, workflows], config)
+  // `workflow` / `board.workflow.*` commands are now available. Final host
+  // shutdown drains the workflow, releases the journal lock and closes the
+  // backend; a false shutdown result retains the lock.
+})
+```
+
+A stale `execution.lock` after a crash is never removed automatically: prove
+the old owner is dead, delete the lock, and never edit journal records to force
+progress. File stores run on native and on Node-compatible JS (synchronous
+`node:fs`), with fail-closed fsync/replace-rename durability on both; see
+[`docs/S4F-workflow-extension.md`](docs/S4F-workflow-extension.md).
 
 ## Commands
 
@@ -566,6 +607,8 @@ execution. See [bounded parallel workflows](docs/S4D-parallel-workflow.md).
 ## Packages
 
 - root package: config, commands, lifecycle adapter and Observer projection;
+- `service`: opt-in S4F composed `BoardWorkflows` extension, re-exported at the
+  module root; see [the S4F guide](docs/S4F-workflow-extension.md);
 - `protocol`: UI/server-independent JSON wire types and codecs;
 - `domain`: pure Board task/attempt lifecycle, FSM and propose decisions;
 - `store`: durable snapshot persistence and recovery adapters;

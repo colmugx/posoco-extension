@@ -4,6 +4,7 @@ package "colmugx/posoco-ext-board"
 import {
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/runtime",
+  "colmugx/posoco-ext-board/service",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
@@ -53,5 +54,20 @@ pub impl @port.Lifecycle for BoardExtension
 pub impl @port.Observer for BoardExtension
 
 // Type aliases
+pub using @service {type BoardWorkflowError}
+
+pub using @service {type BoardWorkflowPolicy}
+
+pub using @service {type BoardWorkflowView}
+
+pub using @service {type BoardWorkflows}
+
+pub using @service {type WorkflowAgentComposition}
+
+pub using @service {type WorkflowAgentContext}
+
+pub using @service {type WorkflowAgentPurpose}
+
+pub using @service {trait WorkflowAgentFactory}
 
 // Traits

@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/async/fs",
+}
+
+supported_targets = "+native+js"
+
+options(
+  targets: { "fixtures.js.mbt": [ "js" ], "fixtures.native.mbt": [ "native" ] },
+)

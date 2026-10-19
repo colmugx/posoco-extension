@@ -1,0 +1,128 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-board/service"
+
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/dynamic",
+  "colmugx/posoco-ext-board/execution",
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror BoardWorkflowError {
+  Disabled
+  InvalidConfiguration
+  MissingUi
+  Closed
+  Busy
+  NotStarted
+  ApprovalDenied
+  RevisionConflict
+  InvalidProposal
+  AgentUnavailable
+  StoreUnavailable
+  DurabilityUncertain
+  UnresolvedExecution
+  BudgetExceeded
+  NotQuiescent
+  PreparationBlocked
+  OperationRejected
+} derive(Eq, @debug.Debug)
+pub fn BoardWorkflowError::code(Self) -> String
+pub fn BoardWorkflowError::equal(Self, Self) -> Bool
+pub fn BoardWorkflowError::not_equal(Self, Self) -> Bool
+pub fn BoardWorkflowError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub struct BoardWorkflowPolicy {
+  enabled : Bool
+  max_executions : Int
+  max_elapsed_ms : Int
+  execution_timeout_ms : Int
+  max_concurrency : Int
+  max_expansions : Int
+  max_generated_tasks : Int
+  max_depth : Int
+  continue_on_confirmed_failure : Bool
+}
+pub fn BoardWorkflowPolicy::BoardWorkflowPolicy(enabled? : Bool, max_executions? : Int, max_elapsed_ms? : Int, execution_timeout_ms? : Int, max_concurrency? : Int, max_expansions? : Int, max_generated_tasks? : Int, max_depth? : Int, continue_on_confirmed_failure? : Bool) -> Self
+
+pub struct BoardWorkflowView {
+  snapshot : @domain.BoardStateSnapshot
+  run : @dynamic.DynamicWorkflowStatus?
+  executions : Array[@execution.BoardExecutionBinding]
+  operation_active : Bool
+  unresolved : Bool
+  mutation_uncertain : Bool
+  stopped : Bool
+  paused : Bool
+} derive(Eq, @debug.Debug)
+pub fn BoardWorkflowView::equal(Self, Self) -> Bool
+pub fn BoardWorkflowView::not_equal(Self, Self) -> Bool
+pub fn BoardWorkflowView::to_json(Self) -> Json
+pub fn BoardWorkflowView::to_repr(Self) -> @debug.Repr
+
+pub struct BoardWorkflows {
+  // private fields
+}
+pub fn BoardWorkflows::BoardWorkflows(directory~ : String, agents~ : &WorkflowAgentFactory, group~ : @async.TaskGroup[Unit], policy? : BoardWorkflowPolicy, now_ms? : () -> Int64, authorize? : () -> Bool) -> Self
+pub fn BoardWorkflows::cancel(Self) -> Unit
+pub fn BoardWorkflows::commands(Self) -> Array[@port.CommandDef]
+pub fn BoardWorkflows::extension_id(Self) -> String
+pub async fn BoardWorkflows::graph_decision(Self, grant~ : Bool) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
+pub fn BoardWorkflows::manifest(Self) -> @port.ExtensionManifest
+pub async fn BoardWorkflows::move_task(Self, task_id~ : String, stage~ : @domain.BoardStage, evidence~ : String) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub fn BoardWorkflows::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn BoardWorkflows::on_shutdown(Self) -> Unit
+pub async fn BoardWorkflows::on_start(Self) -> Unit
+pub fn BoardWorkflows::pause(Self) -> Bool
+pub async fn BoardWorkflows::prepare(Self, task_id~ : String, input~ : String) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::propose(Self, parent~ : String, requirements~ : String) -> Result[Json, BoardWorkflowError]
+pub async fn BoardWorkflows::reconcile(Self, task_id? : String) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::resume_workflow(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::run_wave(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::scope_decision(Self, expansion_id~ : String, grant~ : Bool) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn BoardWorkflows::start(Self, title~ : String) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub fn BoardWorkflows::stop_after_wave(Self) -> Unit
+pub async fn BoardWorkflows::view(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::wait_boundary(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub impl @port.CommandPort for BoardWorkflows
+pub impl @port.Extension for BoardWorkflows
+pub impl @port.Lifecycle for BoardWorkflows
+
+pub(all) struct WorkflowAgentComposition {
+  extensions : Array[&@port.Extension]
+  config : @posoco.AgentConfig
+}
+
+pub(all) struct WorkflowAgentContext {
+  purpose : WorkflowAgentPurpose
+  workflow_id : String
+  task_id : String
+  attempt_id : String
+  session_id : String
+  slot : Int
+}
+
+pub(all) enum WorkflowAgentPurpose {
+  Planning
+  Execution
+} derive(Eq, @debug.Debug)
+pub fn WorkflowAgentPurpose::equal(Self, Self) -> Bool
+pub fn WorkflowAgentPurpose::not_equal(Self, Self) -> Bool
+pub fn WorkflowAgentPurpose::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
+pub(open) trait WorkflowAgentFactory {
+  async fn prepare(Self, WorkflowAgentContext) -> WorkflowAgentComposition
+}

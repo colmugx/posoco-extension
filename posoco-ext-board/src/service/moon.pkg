@@ -1,0 +1,34 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-board/backend",
+  "colmugx/posoco-ext-board/coordinator",
+  "colmugx/posoco-ext-board/domain",
+  "colmugx/posoco-ext-board/dynamic",
+  "colmugx/posoco-ext-board/execution",
+  "colmugx/posoco-ext-board/execution/file" @journal,
+  "colmugx/posoco-ext-board/expansion",
+  "colmugx/posoco-ext-board/orchestration",
+  "colmugx/posoco-ext-board/parallel",
+  "colmugx/posoco-ext-board/store",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "colmugx/posoco/kernel",
+  "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
+} for "test"
+
+import {
+  "colmugx/posoco-ext-board/testkit/node_fs" @fixtures,
+} for "wbtest"
+
+supported_targets = "+native+js"
+
+options(
+  targets: {
+    "directory.native.mbt": [ "native" ],
+    "directory.js.mbt": [ "js" ],
+  },
+)

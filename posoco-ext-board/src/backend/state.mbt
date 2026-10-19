@@ -14,3 +14,11 @@ pub async fn BoardBackend::state(
 ) -> Result[@domain.BoardStateSnapshot, @coordinator.BoardCoordinatorError] {
   self.coordinator.snapshot()
 }
+
+///|
+/// Join initial durable restore before a composed capability admits work.
+pub async fn BoardBackend::wait_ready(
+  self : BoardBackend,
+) -> Result[Unit, @coordinator.BoardCoordinatorError] {
+  self.coordinator.wait_ready()
+}

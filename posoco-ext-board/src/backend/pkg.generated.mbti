@@ -34,6 +34,7 @@ pub async fn BoardBackend::submit(Self, @domain.BoardCommand) -> Result[Array[@d
 pub fn BoardBackend::subscribe(Self, Int64, Bool) -> BoardSubscription
 pub fn BoardBackend::subscriber_count(Self) -> Int
 pub fn BoardBackend::unsubscribe(Self, BoardSubscription) -> Unit
+pub async fn BoardBackend::wait_ready(Self) -> Result[Unit, @coordinator.BoardCoordinatorError]
 
 pub struct BoardSubscription {
   plan : BoardSubscriptionPlan
