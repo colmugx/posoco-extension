@@ -22,11 +22,12 @@ pub(all) struct DeepSeekConfig {
   /// itself. None leaves auto-compact disabled — an unknown window is never
   /// guessed (the /models endpoint carries no context length).
   context_window : Int32?
-  /// Optional streamed reasoning character ceiling. None disables this guard.
+  /// Streamed reasoning ceiling: default 120000 characters; None disables it.
   max_reasoning_chars : Int32?
   /// Retry once at low effort on a non-stream reasoning-only length cutoff.
+  /// Enabled by default; false disables retries.
   recover_on_reasoning_exhaustion : Bool
-  /// Optional repeated reasoning suffix span; >= 128, disabled by default.
+  /// Exact repeated reasoning suffix span: default 256; None disables it.
   repeated_reasoning_span_chars : Int32?
 } derive(Eq, Debug)
 
@@ -44,9 +45,9 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   endpoint_prefix~ : String = "",
   reasoning_effort~ : String = "high",
   context_window~ : Int32? = None,
-  max_reasoning_chars~ : Int32? = None,
-  recover_on_reasoning_exhaustion~ : Bool = false,
-  repeated_reasoning_span_chars~ : Int32? = None,
+  max_reasoning_chars~ : Int32? = Some(120000),
+  recover_on_reasoning_exhaustion~ : Bool = true,
+  repeated_reasoning_span_chars~ : Int32? = Some(256),
 ) -> DeepSeekConfig {
   if reasoning_effort != "" &&
     !deepseek_reasoning_efforts().contains(reasoning_effort) {
