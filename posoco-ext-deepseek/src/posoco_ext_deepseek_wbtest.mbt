@@ -1792,14 +1792,24 @@ test "repetition guard injects convergence hint only on repeated tool calls" {
   )
   let ctx = @devkit.ExtContext::default()
   let messages = [user_msg("read"), a, a, a]
-  let tools : Array[@posoco.ToolDef] = []
+  let tools : Array[@posoco.ToolDef] = [{
+    name: @posoco.ToolName::unchecked("read_file"),
+    description: "Read a file",
+    input_schema: Json::empty_object(),
+  }]
   let ordinary = build_chat_request(
     ctx, messages, tools, chat_options(), "deepseek-flash", false,
     enabled_thinking_json(), Some("high"),
   )
   guard ordinary is Object(no_tools) else { fail("expected request") }
   guard no_tools.get("messages") is Some(Array(original)) else { fail("expected messages") }
-  assert_eq(original.length(), 4)
+  assert_eq(original.length(), 5)
+  guard original[4] is Object(hint) else { fail("expected convergence message") }
+  assert_json_field_string(hint, "role", "system")
+  guard hint.get("content") is Some(String(instruction)) else {
+    fail("expected convergence instruction")
+  }
+  assert_true(instruction.contains("three times"))
   // Request-level injection must not mutate the caller's transcript.
   assert_eq(messages.length(), 4)
 }
