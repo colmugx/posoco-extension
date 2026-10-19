@@ -68,8 +68,10 @@ extern "js" fn api_new(
   parent : (String) -> String,
   random : () -> String,
   truncate : (Int32, Int32) -> Unit,
+  journal_name : String,
+  lock_name : String,
 ) -> FsApi =
-  #| (open, close, sync, write, read, rename, unlink, stat, mkdir, parent, random, truncate) => {
+  #| (open, close, sync, write, read, rename, unlink, stat, mkdir, parent, random, truncate, journalName, lockName) => {
   #|   const decode = bytes => new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   #|   const regular = path => { if (!stat(path).isFile()) throw new Error('unsafe file'); };
   #|   const directory = path => { if (!stat(path).isDirectory()) throw new Error('unsafe directory'); };
@@ -93,7 +95,7 @@ extern "js" fn api_new(
   #|       try {
   #|         prepare(path);
   #|         const token = `board-execution-journal-v1:${random()}\n`;
-  #|         const fd = open(`${path}/execution.lock`, 'wx', 0o600);
+  #|         const fd = open(`${path}/${lockName}`, 'wx', 0o600);
   #|         try { write(fd, token); sync(fd); } finally { close(fd); }
   #|         syncDir(path);
   #|         return { code: 0, text: token };
@@ -101,9 +103,9 @@ extern "js" fn api_new(
   #|     },
   #|     unlock(path, token) {
   #|       try {
-  #|         const current = readOptional(`${path}/execution.lock`);
+  #|         const current = readOptional(`${path}/${lockName}`);
   #|         if (current.code !== 0 || current.text !== token) throw new Error('wrong lock owner');
-  #|         unlink(`${path}/execution.lock`);
+  #|         unlink(`${path}/${lockName}`);
   #|         syncDir(path);
   #|         return { code: 0, text: '' };
   #|       } catch { return { code: 2, text: '' }; }
@@ -120,7 +122,7 @@ extern "js" fn api_new(
   #|           try { regular(`${path}/${file}`); } catch (e) { if (e?.code !== 'ENOENT') throw e; }
   #|         }
   #|         injected(1);
-  #|         const fd = open(tmp, name === 'executions.json' ? 'wx' : 'w', 0o600);
+  #|         const fd = open(tmp, name === journalName ? 'wx' : 'w', 0o600);
   #|         ownedTemp = true;
   #|         try { write(fd, text); injected(2); sync(fd); } finally { close(fd); }
   #|         if (name === 'board.json') {
@@ -152,7 +154,7 @@ extern "js" fn api_new(
 ///|
 let api : FsApi = api_new(
   open_sync, close_sync, sync_fd, write_fd, read_sync, rename_sync, unlink_sync,
-  lstat_sync, mkdir_sync, dirname, uuid, truncate_sync,
+  lstat_sync, mkdir_sync, dirname, uuid, truncate_sync, execution_journal_name, execution_lock_name,
 )
 
 ///|

@@ -1,6 +1,6 @@
 import {
   "colmugx/posoco-ext-board/domain",
-  "colmugx/posoco-ext-board/internal/node_fs",
+  "colmugx/posoco-ext-board/internal/storage" @node_fs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/debug",

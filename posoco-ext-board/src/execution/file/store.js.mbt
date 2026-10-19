@@ -38,7 +38,7 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn load
       }
     }
   }
-  match @node_fs.read(self.directory + "/executions.json") {
+  match @node_fs.read(self.directory + "/" + @node_fs.execution_journal_name) {
     Ok(None) => Ok([])
     Ok(Some(text)) => {
       let result = @execution.decode_execution_journal(text)
@@ -71,7 +71,14 @@ pub impl @execution.BoardExecutionStore for FileBoardExecutionStore with fn pers
     Some(AfterRename) => 6
     None => 0
   }
-  if @node_fs.replace(self.directory, "executions.json", text, "", stage) == 0 {
+  if @node_fs.replace(
+      self.directory,
+      @node_fs.execution_journal_name,
+      text,
+      "",
+      stage,
+    ) ==
+    0 {
     Ok(())
   } else {
     self.failed = true

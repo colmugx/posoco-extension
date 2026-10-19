@@ -7,7 +7,7 @@ pub async fn FileBoardExecutionStore::inspect(
   @execution.BoardExecutionError,
 ] {
   try {
-    let path = directory + "/executions.json"
+    let path = directory + "/" + @node_fs.execution_journal_name
     if !@fs.exists(path) {
       return Ok([])
     }
