@@ -155,3 +155,17 @@ These are safety rails rather than a semantic proof of stagnation. Too-small lim
 Any Posoco host that registers `DeepSeekProvider` through the generic `ProviderFactory` can set `max_reasoning_chars` as a positive JSON integer in the provider settings. The limit is read both by offline `build` and live `refresh`, propagated to discovered models and preserved by credential/effort rebuilds. No Cetas-specific integration is needed. Invalid values cause a typed `CompositionError::ManifestSchemaError`; omitted values keep the guard disabled.
 
 The budget is a *fail-closed* streaming resource cap, not automatic semantic convergence or a successful recovery. This feature is scoped to DeepSeek, but works for every Posoco Agent using this extension.
+
+## Optional safe non-stream recovery
+
+All Posoco agents using `DeepSeekProvider` can set
+`recover_on_reasoning_exhaustion: true` in generic provider settings, or
+`DeepSeekConfig("sk-...", recover_on_reasoning_exhaustion=true)` directly.
+The default is false. On a non-stream response with `finish_reason=length`,
+no answer text and no tool calls, the adapter makes **at most one** second
+request at low reasoning effort. The original transcript is unchanged.
+Partial answers and any tool calls suppress retry. Recovery is intentionally
+disabled for streaming calls because already forwarded stream events cannot
+be safely retracted. Failures of the second attempt remain visible errors;
+the adapter does not conceal or indefinitely loop on them.
+The provider emits an ordinary ExtContext warning when it takes this path.
