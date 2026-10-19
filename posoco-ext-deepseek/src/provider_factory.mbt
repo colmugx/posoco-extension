@@ -163,6 +163,21 @@ fn deepseek_setting_max_reasoning_chars(
 }
 
 ///|
+fn deepseek_setting_recover_on_exhaustion(
+  source : @provider.ProviderConfigSource,
+) -> Bool raise @posoco.CompositionError {
+  match source.setting("recover_on_reasoning_exhaustion") {
+    None | Some(Json::False) => false
+    Some(Json::True) => true
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_deepseek",
+        detail="recover_on_reasoning_exhaustion must be a boolean",
+      )
+  }
+}
+
+///|
 pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
   self : DeepSeekProvider,
   source : @provider.ProviderConfigSource,
@@ -202,6 +217,7 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
       manifest_id="posoco_ext_deepseek",
     ),
     max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
+    recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(source),
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
@@ -286,6 +302,7 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
       manifest_id="posoco_ext_deepseek",
     ),
     max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
+    recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(source),
   )
   let models = fetch_deepseek_models(
     config.base_url,
