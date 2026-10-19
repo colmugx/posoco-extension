@@ -68,8 +68,8 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     None => ()
   }
   match repeated_reasoning_span_chars {
-    Some(n) => if n < 128 {
-      abort("posoco-ext-deepseek: repeated_reasoning_span_chars must be at least 128")
+    Some(n) => if n < 128 || n > 715827882 {
+      abort("posoco-ext-deepseek: repeated_reasoning_span_chars must be between 128 and 715827882")
     }
     None => ()
   }
