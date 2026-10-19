@@ -52,6 +52,7 @@ fn deepseek_catalog_slot(
         endpoint_prefix=config.endpoint_prefix,
         reasoning_effort=config.reasoning_effort,
         context_window=config.context_window,
+        max_reasoning_chars=config.max_reasoning_chars,
       )
       deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     }),
@@ -82,6 +83,7 @@ fn deepseek_catalog_slot_from_info(
     } else {
       None
     },
+    max_reasoning_chars=base_config.max_reasoning_chars,
   )
   deepseek_catalog_slot(config, ctx, api_key)
 }
