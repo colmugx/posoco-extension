@@ -136,7 +136,8 @@ fn deepseek_setting_max_reasoning_chars(
   source : @provider.ProviderConfigSource,
 ) -> Int32? raise @posoco.CompositionError {
   match source.setting("max_reasoning_chars") {
-    None => None
+    None => Some(120000)
+    Some(Json::Null) => None
     Some(Json::Number(number, ..)) => {
       if number.is_nan() || number.is_inf() || number <= 0.0 ||
         number > 2147483647.0 {
@@ -167,7 +168,8 @@ fn deepseek_setting_repeated_span(
   source : @provider.ProviderConfigSource,
 ) -> Int32? raise @posoco.CompositionError {
   match source.setting("repeated_reasoning_span_chars") {
-    None => None
+    None => Some(256)
+    Some(Json::Null) => None
     Some(Json::Number(n, ..)) => {
       if n.is_nan() || n.is_inf() || n < 128.0 || n > 715827882.0 ||
         n.to_int().to_double() != n {
@@ -191,8 +193,8 @@ fn deepseek_setting_recover_on_exhaustion(
   source : @provider.ProviderConfigSource,
 ) -> Bool raise @posoco.CompositionError {
   match source.setting("recover_on_reasoning_exhaustion") {
-    None | Some(Json::False) => false
-    Some(Json::True) => true
+    None | Some(Json::True) => true
+    Some(Json::False) => false
     Some(_) =>
       raise @posoco.CompositionError::ManifestSchemaError(
         manifest_id="posoco_ext_deepseek",
