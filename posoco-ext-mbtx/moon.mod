@@ -18,5 +18,3 @@ keywords = [ "posoco", "mbtx", "moonbit", "code-mode", "guest-runtime", "sdk" ]
 description = "MoonBit guest runtime, protocol and SDK for Posoco Code Mode; scoped tool invocation integration pending"
 
 source = "src"
-
-supported_targets = "+native+js"
