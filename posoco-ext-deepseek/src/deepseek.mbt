@@ -182,6 +182,17 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
               if payload.length() > 0 {
                 data_buffer = payload
                 done = process_deepseek_sse(payload, acc, on_chunk)
+                match self.config.max_reasoning_chars {
+                  Some(limit) => if deepseek_reasoning_limit_exceeded(
+                    acc.reasoning().length(), limit,
+                  ) {
+                    client.close()
+                    raise @posoco.ModelError::Transport(
+                      "DeepSeek reasoning stream exceeded configured max_reasoning_chars (stage=read_stream, category=reasoning_budget_exceeded)",
+                    )
+                  }
+                  None => ()
+                }
               }
             } else if trimmed == "" && data_buffer.length() > 0 {
               data_buffer = ""
