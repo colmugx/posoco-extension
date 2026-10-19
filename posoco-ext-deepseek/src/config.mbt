@@ -22,6 +22,8 @@ pub(all) struct DeepSeekConfig {
   /// itself. None leaves auto-compact disabled — an unknown window is never
   /// guessed (the /models endpoint carries no context length).
   context_window : Int32?
+  /// Optional streamed reasoning character ceiling. None disables this guard.
+  max_reasoning_chars : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -38,6 +40,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   endpoint_prefix~ : String = "",
   reasoning_effort~ : String = "high",
   context_window~ : Int32? = None,
+  max_reasoning_chars~ : Int32? = None,
 ) -> DeepSeekConfig {
   if reasoning_effort != "" &&
     !deepseek_reasoning_efforts().contains(reasoning_effort) {
@@ -52,6 +55,12 @@ pub fn DeepSeekConfig::DeepSeekConfig(
       }
     None => ()
   }
+  match max_reasoning_chars {
+    Some(n) => if n <= 0 {
+      abort("posoco-ext-deepseek: max_reasoning_chars must be positive")
+    }
+    None => ()
+  }
   {
     api_key,
     base_url,
@@ -59,6 +68,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     endpoint_prefix,
     reasoning_effort,
     context_window,
+    max_reasoning_chars,
   }
 }
 
