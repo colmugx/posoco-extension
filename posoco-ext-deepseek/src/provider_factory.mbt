@@ -163,6 +163,30 @@ fn deepseek_setting_max_reasoning_chars(
 }
 
 ///|
+fn deepseek_setting_repeated_span(
+  source : @provider.ProviderConfigSource,
+) -> Int32? raise @posoco.CompositionError {
+  match source.setting("repeated_reasoning_span_chars") {
+    None => None
+    Some(Json::Number(n, ..)) => {
+      if n.is_nan() || n.is_inf() || n < 128.0 || n > 715827882.0 ||
+        n.to_int().to_double() != n {
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_deepseek",
+          detail="repeated_reasoning_span_chars must be an integer from 128 to 715827882",
+        )
+      }
+      Some(n.to_int())
+    }
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_deepseek",
+        detail="repeated_reasoning_span_chars must be an integer from 128 to 715827882",
+      )
+  }
+}
+
+///|
 fn deepseek_setting_recover_on_exhaustion(
   source : @provider.ProviderConfigSource,
 ) -> Bool raise @posoco.CompositionError {
@@ -218,6 +242,7 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
     ),
     max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
     recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(source),
+    repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
@@ -303,6 +328,7 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
     ),
     max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
     recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(source),
+    repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
   )
   let models = fetch_deepseek_models(
     config.base_url,
