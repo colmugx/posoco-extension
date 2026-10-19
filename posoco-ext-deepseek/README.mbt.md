@@ -146,6 +146,12 @@ defaults. Pass them explicitly only for compatibility.
 The provider has two independent safeguards:
 
 - **Repeated tool-call guidance:** after three identical assistant tool calls in the same user turn, with tools still available, the next request includes a one-time convergence instruction. This does not interrupt a single hidden-thinking response.
-- **Optional streaming ceiling:** `DeepSeekConfig("sk-...", max_reasoning_chars=120000)` limits accumulated streamed reasoning characters. This is **not** a token budget. The default `None` leaves the ceiling disabled. On breach, the stream is closed and `ModelError::Transport` is raised; no synthetic successful completion is returned. Hosts must handle the error and should not assume a complete assistant message was produced. Non-streaming requests are not affected.
+- **Optional streaming ceiling:** `DeepSeekConfig("sk-...", max_reasoning_chars=Some(120000))` limits accumulated streamed reasoning characters. This is **not** a token budget. The default `None` leaves the ceiling disabled. On breach, the stream is closed and `ModelError::Transport` is raised; no synthetic successful completion is returned. Hosts must handle the error and should not assume a complete assistant message was produced. Non-streaming requests are not affected.
 
 These are safety rails rather than a semantic proof of stagnation. Too-small limits may interrupt useful complex reasoning; choose the ceiling based on observed workload and avoid automatic silent retries after partial stream output.
+
+### Shared ProviderFactory configuration
+
+Any Posoco host that registers `DeepSeekProvider` through the generic `ProviderFactory` can set `max_reasoning_chars` as a positive JSON integer in the provider settings. The limit is read both by offline `build` and live `refresh`, propagated to discovered models and preserved by credential/effort rebuilds. No Cetas-specific integration is needed. Invalid values cause a typed `CompositionError::ManifestSchemaError`; omitted values keep the guard disabled.
+
+The budget is a *fail-closed* streaming resource cap, not automatic semantic convergence or a successful recovery. This feature is scoped to DeepSeek, but works for every Posoco Agent using this extension.
