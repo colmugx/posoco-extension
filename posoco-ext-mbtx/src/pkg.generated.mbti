@@ -36,6 +36,7 @@ pub(all) struct InvocationResult {
   outcome : @protocol.Outcome
   stderr : String
   logs : Array[Diagnostic]
+  calls : Array[ToolCallTrace]
 }
 
 pub(all) enum Launcher {
@@ -72,12 +73,20 @@ pub(all) struct ResolvedToolchain {
 pub struct Runtime {
   // private fields
 }
-pub fn Runtime::Runtime(launcher? : Launcher, moon? : String, moonx? : String, moonrun? : String, bus? : @devkit.EventBus, home? : String, prefer_system? : Bool) -> Self
+pub fn Runtime::Runtime(launcher? : Launcher, moon? : String, moonx? : String, moonrun? : String, bus? : @devkit.EventBus, home? : String, prefer_system? : Bool, build_cache? : String) -> Self
+pub fn Runtime::build_cache_directory(Self) -> String?
 pub fn Runtime::cancel(Self, String) -> Bool
 pub fn Runtime::close(Self) -> Unit raise RuntimeError
 pub async fn Runtime::run(Self, String, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
 pub async fn Runtime::run_file(Self, String, Json, invocation_id~ : String, tools? : Array[String], invoker? : &ToolInvoker, timeout_ms? : Int, handshake_ms? : Int, max_frame_bytes? : Int, max_pending? : Int, max_calls? : Int, max_output_bytes? : Int) -> InvocationResult
 pub fn Runtime::toolchain_status(Self) -> String
+
+pub(all) struct ToolCallTrace {
+  request_id : Int
+  name : String
+  arguments : Json
+  outcome : @protocol.Outcome
+}
 
 pub struct ToolchainManager {
   // private fields

@@ -87,5 +87,10 @@ fn write_text_if_changed(path : String, source : String) -> Unit raise {
 
 ///|
 fn copy_build_artifact(from : String, to : String) -> Unit raise {
-  ignore(fs_value(() => { node_copy_artifact(from, to); "" }))
+  ignore(
+    fs_value(() => {
+      node_copy_artifact(from, to)
+      ""
+    }),
+  )
 }

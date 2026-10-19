@@ -126,7 +126,9 @@ async fn Runtime::build_cached_source(
     @async.sleep(100)
   }
   if !locked {
-    raise RuntimeError::BuildFailed("timed out waiting for shared compiler cache")
+    raise RuntimeError::BuildFailed(
+      "timed out waiting for shared compiler cache",
+    )
   }
   defer tc_fs_unlock(lock)
   let source_path = keyed + "/snippet.mbtx"

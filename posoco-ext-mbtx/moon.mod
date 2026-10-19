@@ -19,4 +19,4 @@ description = "MoonBit guest runtime, protocol and SDK for Posoco Code Mode; sco
 
 source = "src"
 
-preferred_target = "native"
+supported_targets = "+native+js"

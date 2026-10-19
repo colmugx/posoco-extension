@@ -47,7 +47,11 @@ pub fn PtcExtension::PtcExtension(
       home?,
       build_cache=build_cache.unwrap_or_else(() => {
         let path = home.unwrap_or(@devkit.home_dir().unwrap_or(""))
-        if path == "" { "" } else { path + "/.cetas/ptc_build_cache" }
+        if path == "" {
+          ""
+        } else {
+          path + "/.cetas/ptc_build_cache"
+        }
       }),
     ),
     exposed: exposed.copy(),
@@ -70,7 +74,6 @@ pub fn PtcExtension::allowed_tools(self : PtcExtension) -> Array[String] {
 pub fn PtcExtension::toolchain_status(self : PtcExtension) -> String {
   self.runtime.toolchain_status()
 }
-
 
 ///|
 /// Snapshot of completed nested tool requests for one enclosing effect.
@@ -112,40 +115,40 @@ pub extend PtcExtension with @posoco.Extension::{manifest, extension_id}
 pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
   _self : PtcExtension,
 ) -> Array[@posoco.ToolDef] {
-  [{
-    name: @posoco.ToolName::unchecked("run_code"),
-    description: "Execute a MoonBit program with filtered nested tool calls. Return only the final JSON value. Use for multi-step search, filtering and summarization.",
-    input_schema: {
-      "type": "object",
-      "properties": {
-        "background": {
-          "type": "boolean",
-          "description": "Adopt execution as an Agent-owned background task when session attribution is available."
+  [
+    {
+      name: @posoco.ToolName::unchecked("run_code"),
+      description: "Execute a MoonBit program with filtered nested tool calls. Return only the final JSON value. Use for multi-step search, filtering and summarization.",
+      input_schema: {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": "boolean",
+            "description": "Adopt execution as an Agent-owned background task when session attribution is available.",
+          },
+          "source": {
+            "type": "string",
+            "description": "Full MoonBit .mbtx source; import the MBTX SDK and use @mbtx.serve(run). Exclusive with code.",
+          },
+          "code": {
+            "type": "string",
+            "description": "Body of async fn ptc_run(ctx: PtcContext, input: Json) -> Json. Call ctx.call(name, args), inspect results, return a JSON value.",
+          },
+          "input": { "description": "JSON input supplied to the program" },
+          "description": {
+            "type": "string",
+            "description": "Brief summary of what the program will do",
+          },
         },
-        "source": {
-          "type": "string",
-          "description": "Full MoonBit .mbtx source; import the MBTX SDK and use @mbtx.serve(run). Exclusive with code."
-        },
-        "code": {
-          "type": "string",
-          "description": "Body of async fn ptc_run(ctx: PtcContext, input: Json) -> Json. Call ctx.call(name, args), inspect results, return a JSON value."
-        },
-        "input": {
-          "description": "JSON input supplied to the program"
-        },
-        "description": {
-          "type": "string",
-          "description": "Brief summary of what the program will do"
-        },
+        "required": ["description"],
+        "oneOf": [{ "required": ["code"] }, { "required": ["source"] }],
+        "additionalProperties": false,
       },
-      "required": ["description"],
-      "oneOf": [{"required": ["code"]}, {"required": ["source"]}],
-      "additionalProperties": false,
+      owner: @posoco.OwnerId::unchecked("posoco_ext_ptc"),
+      policy: @posoco.ExecutionPolicy::Sequential,
+      provenance: Some("posoco_ext_ptc"),
     },
-    owner: @posoco.OwnerId::unchecked("posoco_ext_ptc"),
-    policy: @posoco.ExecutionPolicy::Sequential,
-    provenance: Some("posoco_ext_ptc"),
-  }]
+  ]
 }
 
 ///|
@@ -209,7 +212,8 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
       )
     }
     self.next_task_id += 1
-    let invocation_id = session + ":ptc-background-" +
+    let invocation_id = session +
+      ":ptc-background-" +
       self.next_task_id.to_string()
     let label = match ctx.arguments {
       { "description": String(description), .. } => description
@@ -224,12 +228,13 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
         let outcome = self.execute_source(source, input, invocation_id)
         let content = match outcome {
           @kernel.ToolOutcome::Success(content~, structured=_) => content
-          @kernel.ToolOutcome::ToolReportedError(content~, structured=_) => content
+          @kernel.ToolOutcome::ToolReportedError(content~, structured=_) =>
+            content
           _ => "PTC program failed"
         }
-        @kernel.Message::UserMessage(
-          content=[@kernel.Content::Text("PTC background result: " + content)],
-        )
+        @kernel.Message::UserMessage(content=[
+          @kernel.Content::Text("PTC background result: " + content),
+        ])
       },
     }
     return match tasks.submit(spec) {
@@ -248,10 +253,11 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
   let invocation_id = ctx.effect_id.to_string()
   (ctx.register_cancel)(self as &@posoco.ToolCancellable)
   self.execute_source(source, input, invocation_id) catch {
-    error => @posoco.ToolOutcome::ToolReportedError(
-      content="run_code failed: " + error.to_string(),
-      structured=None,
-    )
+    error =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="run_code failed: " + error.to_string(),
+        structured=None,
+      )
   }
 }
 
@@ -322,4 +328,8 @@ pub impl @posoco.Lifecycle for PtcExtension with fn on_shutdown(
 }
 
 ///|
-pub extend PtcExtension with @posoco.Lifecycle::{on_shutdown, on_start, on_compose}
+pub extend PtcExtension with @posoco.Lifecycle::{
+  on_shutdown,
+  on_start,
+  on_compose,
+}

@@ -1,10 +1,11 @@
 import {
   "colmugx/posoco",
-  "colmugx/posoco/kernel" @kernel,
+  "colmugx/posoco/kernel",
   "colmugx/posoco-ext-mbtx" @mbtx,
-  "colmugx/posoco-ext-mbtx/protocol" @protocol,
-  "posoco/devkit" @devkit,
+  "colmugx/posoco-ext-mbtx/protocol",
+  "posoco/devkit",
 }
+
 import {
   "moonbitlang/async",
 } for "test"

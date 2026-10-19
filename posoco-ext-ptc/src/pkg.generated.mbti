@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-ptc"
+
+import {
+  "colmugx/posoco-ext-mbtx",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "posoco/devkit",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct PtcExtension {
+  // private fields
+}
+pub fn PtcExtension::PtcExtension(exposed? : Array[@kernel.ToolDef], scoped_invoker? : &@posoco-ext-mbtx.ToolInvoker, bus? : @devkit.EventBus, home? : String, max_output_bytes? : Int, build_cache? : String, task_session? : () -> String) -> Self
+pub fn PtcExtension::allowed_tools(Self) -> Array[String]
+pub async fn PtcExtension::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
+pub async fn PtcExtension::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn PtcExtension::extension_id(Self) -> String
+pub fn PtcExtension::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn PtcExtension::manifest(Self) -> @port.ExtensionManifest
+pub fn PtcExtension::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn PtcExtension::on_shutdown(Self) -> Unit
+pub async fn PtcExtension::on_start(Self) -> Unit
+pub fn PtcExtension::system_prompt(Self) -> String
+pub fn PtcExtension::toolchain_status(Self) -> String
+pub fn PtcExtension::trace(Self, String) -> Array[@posoco-ext-mbtx.ToolCallTrace]
+pub impl @port.Extension for PtcExtension
+pub impl @port.Lifecycle for PtcExtension
+pub impl @port.SystemPromptContributor for PtcExtension
+pub impl @port.ToolCancellable for PtcExtension
+pub impl @port.ToolProvider for PtcExtension
+
+// Type aliases
+
+// Traits

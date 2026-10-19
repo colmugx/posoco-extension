@@ -1,24 +1,33 @@
 ///|
-struct PtcMockInvoker { calls : Array[String] }
+struct PtcMockInvoker {
+  calls : Array[String]
+}
 
 ///|
 impl @mbtx.ToolInvoker for PtcMockInvoker with fn invoke(
-  self : PtcMockInvoker, name : String, args : Json,
+  self : PtcMockInvoker,
+  name : String,
+  args : Json,
 ) -> @protocol.Outcome {
   self.calls.push(name)
-  @protocol.Success(content="ok", structured=Some({"name": name, "args": args}))
+  @protocol.Success(
+    content="ok",
+    structured=Some({ "name": name, "args": args }),
+  )
 }
 
 ///|
 fn test_ptc_tools() -> Array[@posoco.ToolDef] {
-  [{
-    name: @posoco.ToolName::unchecked("read"),
-    description: "Read one file",
-    input_schema: {"type": "object"},
-    owner: @posoco.OwnerId::unchecked("test"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("test"),
-  }]
+  [
+    {
+      name: @posoco.ToolName::unchecked("read"),
+      description: "Read one file",
+      input_schema: { "type": "object" },
+      owner: @posoco.OwnerId::unchecked("test"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("test"),
+    },
+  ]
 }
 
 ///|
@@ -36,24 +45,25 @@ test "PTC model sees only run_code and a stable generated tool catalog" {
 
 ///|
 async test "PTC real MoonBit guest calls trusted bridge and filters result" {
-  let mock = PtcMockInvoker::{calls: []}
-  let ptc = @posoco-ext-ptc.PtcExtension(exposed=test_ptc_tools(), scoped_invoker=mock)
-  let ctx = @posoco.tk_tool_call_ctx(
-    name="run_code",
-    arguments={
-      "description": "Select tool name",
-      "code": (#|let value = ctx.call("read", {"path": "README.md"})
-              #|match value {
-              #|  {"name": String(name), ..} => {"picked": name}
-              #|  _ => {"picked": "missing"}
-              #|}
-      ),
-    },
+  let mock = PtcMockInvoker::{ calls: [], }
+  let ptc = @posoco-ext-ptc.PtcExtension(
+    exposed=test_ptc_tools(),
+    scoped_invoker=mock,
   )
+  let ctx = @posoco.tk_tool_call_ctx(name="run_code", arguments={
+    "description": "Select tool name",
+    "code": (
+      #|let value = ctx.call("read", {"path": "README.md"})
+      #|match value {
+      #|  {"name": String(name), ..} => {"picked": name}
+      #|  _ => {"picked": "missing"}
+      #|}
+    ),
+  })
   let result = ptc.execute(ctx)
   match result {
     @posoco.ToolOutcome::Success(structured=Some(value), ..) =>
-      assert_eq(value, {"picked": "read"})
+      assert_eq(value, { "picked": "read" })
     _ => fail("guest did not return structured success")
   }
   assert_eq(mock.calls, ["read"])
@@ -66,19 +76,18 @@ async test "PTC real MoonBit guest calls trusted bridge and filters result" {
 async test "PTC refuses nested tool use without trusted bridge" {
   let ptc = @posoco-ext-ptc.PtcExtension(exposed=test_ptc_tools())
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(
-      name="run_code",
-      arguments={
-        "description": "Fail closed",
-        "code": (#|let value = ctx.call("read", {})
-                #|value
-        ),
-      },
-    ),
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Fail closed",
+      "code": (
+        #|let value = ctx.call("read", {})
+        #|value
+      ),
+    }),
   )
   match result {
     @posoco.ToolOutcome::Success(
-      structured=Some({"error": String(code), ..}), ..
+      structured=Some({ "error": String(code), .. }),
+      ..
     ) => assert_eq(code, "ToolInvocationUnavailable")
     _ => fail("guest did not fail closed")
   }
@@ -86,24 +95,24 @@ async test "PTC refuses nested tool use without trusted bridge" {
 
 ///|
 async test "PTC rejects names outside exposed capabilities before invoking bridge" {
-  let mock = PtcMockInvoker::{calls: []}
+  let mock = PtcMockInvoker::{ calls: [], }
   let ptc = @posoco-ext-ptc.PtcExtension(
-    exposed=test_ptc_tools(), scoped_invoker=mock,
+    exposed=test_ptc_tools(),
+    scoped_invoker=mock,
   )
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(
-      name="run_code",
-      arguments={
-        "description": "Reject write",
-        "code": (#|let value = ctx.call("write", {"path": "secret"})
-                #|value
-        ),
-      },
-    ),
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Reject write",
+      "code": (
+        #|let value = ctx.call("write", {"path": "secret"})
+        #|value
+      ),
+    }),
   )
   match result {
     @posoco.ToolOutcome::Success(
-      structured=Some({"error": String(code), ..}), ..
+      structured=Some({ "error": String(code), .. }),
+      ..
     ) => assert_eq(code, "CapabilityDenied")
     _ => fail("disallowed tool was not rejected")
   }
@@ -114,10 +123,10 @@ async test "PTC rejects names outside exposed capabilities before invoking bridg
 async test "PTC rejects invalid code without spawning a guest" {
   let ptc = @posoco-ext-ptc.PtcExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(
-      name="run_code",
-      arguments={"description": "Invalid", "code": ""},
-    ),
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Invalid",
+      "code": "",
+    }),
   )
   assert_true(result is @posoco.ToolOutcome::ToolReportedError(..))
 }
@@ -126,14 +135,11 @@ async test "PTC rejects invalid code without spawning a guest" {
 async test "PTC background mode fails closed when no Agent task scope exists" {
   let ptc = @posoco-ext-ptc.PtcExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(
-      name="run_code",
-      arguments={
-        "description": "Schedule a program",
-        "code": "{\"ok\": true}",
-        "background": true,
-      },
-    ),
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Schedule a program",
+      "code": "{\"ok\": true}",
+      "background": true,
+    }),
   )
   match result {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
@@ -146,14 +152,11 @@ async test "PTC background mode fails closed when no Agent task scope exists" {
 async test "PTC complete script and inline code are mutually exclusive" {
   let ptc = @posoco-ext-ptc.PtcExtension()
   let result = ptc.execute(
-    @posoco.tk_tool_call_ctx(
-      name="run_code",
-      arguments={
-        "description": "Reject ambiguous source",
-        "source": "async fn main {}",
-        "code": "{}",
-      },
-    ),
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Reject ambiguous source",
+      "source": "async fn main {}",
+      "code": "{}",
+    }),
   )
   assert_true(result is @posoco.ToolOutcome::ToolReportedError(..))
 }
