@@ -34,7 +34,7 @@ async fn BoardWorkflows::read_view(self : BoardWorkflows) -> BoardWorkflowView {
   } else {
     match @store.FileBoardStore::at_directory(directory=self.directory).load() {
       Ok(loaded) => loaded.snapshot
-      Err(_) => raise StoreUnavailable
+      Err(_) => raise WorkflowFault(StoreUnavailable)
     }
   }
   let run = match self.controller {
@@ -50,7 +50,7 @@ async fn BoardWorkflows::read_view(self : BoardWorkflows) -> BoardWorkflowView {
       match
         @journal.FileBoardExecutionStore::inspect(directory=self.directory) {
         Ok(records) => records
-        Err(_) => raise StoreUnavailable
+        Err(_) => raise WorkflowFault(StoreUnavailable)
       }
   }
   {

@@ -78,39 +78,37 @@ pub fn BoardWorkflows::BoardWorkflows(
 }
 
 ///|
-fn BoardWorkflows::check(
-  self : BoardWorkflows,
-) -> Unit raise BoardWorkflowError {
+fn BoardWorkflows::check(self : BoardWorkflows) -> Unit raise WorkflowFault {
   if self.closed || self.stopped {
-    raise Closed
+    raise WorkflowFault(Closed)
   }
   if !self.policy.enabled {
-    raise Disabled
+    raise WorkflowFault(Disabled)
   }
   if !(self.authorize)() {
-    raise ApprovalDenied
+    raise WorkflowFault(ApprovalDenied)
   }
   if self.uncertain {
-    raise DurabilityUncertain
+    raise WorkflowFault(DurabilityUncertain)
   }
   if self.unresolved {
-    raise UnresolvedExecution
+    raise WorkflowFault(UnresolvedExecution)
   }
   if self.paused {
-    raise NotQuiescent
+    raise WorkflowFault(NotQuiescent)
   }
   if self.deadline is Some(deadline) && (self.clock)() >= deadline {
-    raise BudgetExceeded
+    raise WorkflowFault(BudgetExceeded)
   }
 }
 
 ///|
 fn BoardWorkflows::running(
   self : BoardWorkflows,
-) -> @dynamic.DynamicWorkflowController raise BoardWorkflowError {
+) -> @dynamic.DynamicWorkflowController raise WorkflowFault {
   match self.controller {
     Some(controller) => controller
-    None => raise NotStarted
+    None => raise WorkflowFault(NotStarted)
   }
 }
 
@@ -130,20 +128,20 @@ async fn BoardWorkflows::initialize(self : BoardWorkflows) -> Unit {
     return
   }
   if self.unresolved {
-    raise UnresolvedExecution
+    raise WorkflowFault(UnresolvedExecution)
   }
   prepare_directory(self.directory)
   let records = match self.journal.load() {
     Ok(records) => records
-    Err(_) => raise StoreUnavailable
+    Err(_) => raise WorkflowFault(StoreUnavailable)
   }
   if records.any(b => b.phase != @execution.Settled) {
     self.unresolved = true
-    raise UnresolvedExecution
+    raise WorkflowFault(UnresolvedExecution)
   }
   self.board.attach(self.group)
   if self.board.wait_ready() is Err(_) {
-    raise StoreUnavailable
+    raise WorkflowFault(StoreUnavailable)
   }
   let leases : Map[Int32, Array[&@posoco.Extension]] = Map([])
   let owner = @execution.BoardExecutionOwner::with_slots(
@@ -165,12 +163,12 @@ async fn BoardWorkflows::initialize(self : BoardWorkflows) -> Unit {
   )
   let owner = match owner {
     Ok(owner) => owner
-    Err(_) => raise InvalidConfiguration
+    Err(_) => raise WorkflowFault(InvalidConfiguration)
   }
   self.owner = Some(owner)
   if owner.attach(self.group) is Err(_) || owner.status().unresolved {
     self.unresolved = true
-    raise UnresolvedExecution
+    raise WorkflowFault(UnresolvedExecution)
   }
   self.live.val = true
   self.initialized = true
@@ -239,22 +237,7 @@ async fn settle_operation(task : @async.Task[Unit], timeout : Int32) -> Bool {
 ///|
 fn safe_error(error : Error) -> BoardWorkflowError {
   match error {
-    BoardWorkflowError::Disabled => Disabled
-    BoardWorkflowError::InvalidConfiguration => InvalidConfiguration
-    BoardWorkflowError::MissingUi => MissingUi
-    BoardWorkflowError::Closed => Closed
-    BoardWorkflowError::Busy => Busy
-    BoardWorkflowError::NotStarted => NotStarted
-    BoardWorkflowError::ApprovalDenied => ApprovalDenied
-    BoardWorkflowError::RevisionConflict => RevisionConflict
-    BoardWorkflowError::InvalidProposal => InvalidProposal
-    BoardWorkflowError::AgentUnavailable => AgentUnavailable
-    BoardWorkflowError::StoreUnavailable => StoreUnavailable
-    BoardWorkflowError::DurabilityUncertain => DurabilityUncertain
-    BoardWorkflowError::UnresolvedExecution => UnresolvedExecution
-    BoardWorkflowError::BudgetExceeded => BudgetExceeded
-    BoardWorkflowError::NotQuiescent => NotQuiescent
-    BoardWorkflowError::PreparationBlocked => PreparationBlocked
+    WorkflowFault(failure) => failure
     _ => OperationRejected
   }
 }
@@ -266,14 +249,14 @@ async fn BoardWorkflows::confirm(
 ) -> Unit {
   let ui = match self.ui {
     Some(ui) => ui
-    None => raise MissingUi
+    None => raise WorkflowFault(MissingUi)
   }
   let response = ui.request(@posoco.UiRequest::Confirm(prompt~)) catch {
-    _ => raise ApprovalDenied
+    _ => raise WorkflowFault(ApprovalDenied)
   }
   self.check()
   if response != @posoco.UiResponse::Yes {
-    raise ApprovalDenied
+    raise WorkflowFault(ApprovalDenied)
   }
 }
 
@@ -289,13 +272,13 @@ async fn BoardWorkflows::submit(
     Ok(_) => self.uncertain = false
     Err(@coordinator.Rejected(@domain.RevisionConflict(..))) => {
       self.uncertain = false
-      raise RevisionConflict
+      raise WorkflowFault(RevisionConflict)
     }
     Err(@coordinator.Rejected(_)) | Err(@coordinator.PersistFailed(_)) => {
       self.uncertain = false
-      raise OperationRejected
+      raise WorkflowFault(OperationRejected)
     }
-    Err(_) => raise DurabilityUncertain
+    Err(_) => raise WorkflowFault(DurabilityUncertain)
   }
 }
 
@@ -305,7 +288,7 @@ async fn BoardWorkflows::snapshot(
 ) -> @domain.BoardStateSnapshot {
   match self.board.state() {
     Ok(snapshot) => snapshot
-    Err(_) => raise StoreUnavailable
+    Err(_) => raise WorkflowFault(StoreUnavailable)
   }
 }
 
