@@ -1796,6 +1796,9 @@ test "repetition guard injects convergence hint only on repeated tool calls" {
     name: @posoco.ToolName::unchecked("read_file"),
     description: "Read a file",
     input_schema: Json::empty_object(),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+    policy: @posoco.ExecutionPolicy::Sequential,
+    provenance: Some("posoco_ext_deepseek"),
   }]
   let ordinary = build_chat_request(
     ctx, messages, tools, chat_options(), "deepseek-flash", false,
@@ -1812,4 +1815,48 @@ test "repetition guard injects convergence hint only on repeated tool calls" {
   assert_true(instruction.contains("three times"))
   // Request-level injection must not mutate the caller's transcript.
   assert_eq(messages.length(), 4)
+}
+
+///|
+test "request with tools replays reasoning from plain assistant history" {
+  let history : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("earlier answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{
+      content: "reasoning before earlier answer",
+      raw: None,
+    }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let tools : Array[@posoco.ToolDef] = [{
+    name: @posoco.ToolName::unchecked("read_file"),
+    description: "Read a file",
+    input_schema: Json::empty_object(),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+    policy: @posoco.ExecutionPolicy::Sequential,
+    provenance: Some("posoco_ext_deepseek"),
+  }]
+  let messages = [user_msg("question"), history, user_msg("next question")]
+  let with_tools = build_chat_request(
+    @devkit.ExtContext::default(), messages, tools, chat_options(),
+    "deepseek-flash", false, enabled_thinking_json(), Some("high"),
+  )
+  guard with_tools is Object(body) else { fail("expected request") }
+  guard body.get("messages") is Some(Array(wire)) else {
+    fail("expected wire messages")
+  }
+  guard wire[1] is Object(assistant) else { fail("expected assistant") }
+  assert_json_field_string(
+    assistant, "reasoning_content", "reasoning before earlier answer",
+  )
+  let without_tools = build_chat_request(
+    @devkit.ExtContext::default(), messages, [], chat_options(),
+    "deepseek-flash", false, enabled_thinking_json(), Some("high"),
+  )
+  guard without_tools is Object(body2) else { fail("expected request") }
+  guard body2.get("messages") is Some(Array(wire2)) else {
+    fail("expected wire messages")
+  }
+  guard wire2[1] is Object(assistant2) else { fail("expected assistant") }
+  assert_true(assistant2.get("reasoning_content") is None)
 }
