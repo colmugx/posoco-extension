@@ -146,13 +146,13 @@ defaults. Pass them explicitly only for compatibility.
 The provider has two independent safeguards:
 
 - **Repeated tool-call guidance:** after three identical assistant tool calls in the same user turn, with tools still available, the next request includes a one-time convergence instruction. This does not interrupt a single hidden-thinking response.
-- **Optional streaming ceiling:** `DeepSeekConfig("sk-...", max_reasoning_chars=Some(120000))` limits accumulated streamed reasoning characters. This is **not** a token budget. The default `None` leaves the ceiling disabled. On breach, the stream is closed and `ModelError::Transport` is raised; no synthetic successful completion is returned. Hosts must handle the error and should not assume a complete assistant message was produced. Non-streaming requests are not affected.
+- **Optional streaming ceiling:** `DeepSeekConfig("sk-...", max_reasoning_chars=Some(120000))` limits accumulated streamed reasoning characters. This is **not** a token budget. By default, the ceiling is `Some(120000)`; `None` disables it. On breach, the stream is closed and `ModelError::Transport` is raised; no synthetic successful completion is returned. Hosts must handle the error and should not assume a complete assistant message was produced. Non-streaming requests are not affected.
 
 These are safety rails rather than a semantic proof of stagnation. Too-small limits may interrupt useful complex reasoning; choose the ceiling based on observed workload and avoid automatic silent retries after partial stream output.
 
 ### Shared ProviderFactory configuration
 
-Any Posoco host that registers `DeepSeekProvider` through the generic `ProviderFactory` can set `max_reasoning_chars` as a positive JSON integer in the provider settings. The limit is read both by offline `build` and live `refresh`, propagated to discovered models and preserved by credential/effort rebuilds. No Cetas-specific integration is needed. Invalid values cause a typed `CompositionError::ManifestSchemaError`; omitted values keep the guard disabled.
+Any Posoco host that registers `DeepSeekProvider` through the generic `ProviderFactory` can set `max_reasoning_chars` as a positive JSON integer in the provider settings. The limit is read both by offline `build` and live `refresh`, propagated to discovered models and preserved by credential/effort rebuilds. No Cetas-specific integration is needed. Invalid values cause a typed `CompositionError::ManifestSchemaError`; omitted values enable the built-in guard; explicit JSON `null` disables it.
 
 The budget is a *fail-closed* streaming resource cap, not automatic semantic convergence or a successful recovery. This feature is scoped to DeepSeek, but works for every Posoco Agent using this extension.
 
@@ -161,7 +161,7 @@ The budget is a *fail-closed* streaming resource cap, not automatic semantic con
 All Posoco agents using `DeepSeekProvider` can set
 `recover_on_reasoning_exhaustion: true` in generic provider settings, or
 `DeepSeekConfig("sk-...", recover_on_reasoning_exhaustion=true)` directly.
-The default is false. On a non-stream response with `finish_reason=length`,
+The default is true. On a non-stream response with `finish_reason=length`,
 no answer text and no tool calls, the adapter makes **at most one** second
 request at low reasoning effort. The original transcript is unchanged.
 Partial answers and any tool calls suppress retry. Recovery is intentionally
@@ -172,4 +172,25 @@ The provider emits an ordinary ExtContext warning when it takes this path.
 
 ### Optional exact repetition guard
 
-`repeated_reasoning_span_chars` (positive integer >= 128, or `Some(256)` in a direct `DeepSeekConfig`) detects three **adjacent, exactly equal suffix spans** in streamed reasoning before answer text begins. This guard is disabled by default, reports an `ExtContext` warning, closes the connection and raises an explicit transport error on detection. It is a deliberately narrow textual cycle detector, not a semantic information-gain estimator. A syntactically different reasoning loop will not trigger; an unusually repetitive but valid reasoning stream may trigger. No automatic replay is attempted after forwarded streaming chunks.
+`repeated_reasoning_span_chars` (positive integer >= 128, default `Some(256)` in a direct `DeepSeekConfig`) detects three **adjacent, exactly equal suffix spans** in streamed reasoning before answer text begins. This guard defaults to `Some(256)` and reports an `ExtContext` warning, closes the connection and raises an explicit transport error on detection. It is a deliberately narrow textual cycle detector, not a semantic information-gain estimator. A syntactically different reasoning loop will not trigger; an unusually repetitive but valid reasoning stream may trigger. No automatic replay is attempted after forwarded streaming chunks.
+
+## Default protection policy (no host configuration required)
+
+The DeepSeek extension enables conservative protections for **every** Posoco
+host, including hosts that only pass a credential to `DeepSeekProvider`:
+
+| Setting | Default | Explicit opt-out in ProviderFactory settings |
+|---|---|---|
+| `max_reasoning_chars` | `120000` | `null` |
+| `repeated_reasoning_span_chars` | `256` | `null` |
+| `recover_on_reasoning_exhaustion` | `true` | `false` |
+
+The first two are fail-closed limits for streaming: they raise a transport
+error and never silently replay already streamed tokens. The recovery policy
+applies **only to non-streaming** completions that end due to length with no
+text and no tool calls, and retries at most once at low effort. Explicit values
+still override these defaults. In direct MoonBit configuration, pass `None`
+or `false` to disable individual guards.
+
+No Cetas-specific settings, middleware, or UI changes are necessary. This
+does not constitute semantic reasoning-loop detection or live-model validation.
