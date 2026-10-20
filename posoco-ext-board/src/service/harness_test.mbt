@@ -49,9 +49,6 @@ struct ScriptState {
   mut fail : Bool
   mut delay : Int32
   mut chain : Bool
-  // Test-only synchronization: hold execution model replies until two
-  // independent slots have actually entered their model calls.
-  mut require_parallel : Bool
   mut active : Int32
   mut peak : Int32
   contexts : Array[@service.WorkflowAgentContext]
@@ -86,15 +83,21 @@ impl @posoco.ModelPort for ScriptModel with fn chat(self, _, messages, _, _, _) 
   defer {
     self.state.active -= 1
   }
-  if self.state.require_parallel &&
+  if self.state.delay == -1 &&
     self.context.purpose == @service.WorkflowAgentPurpose::Execution {
-    // Timing sleeps cannot prove concurrency on loaded CI workers.
-    // Bound the barrier: a serialized runner fails instead of hanging.
-    @async.with_timeout(2000, () => {
+    // Test-only barrier: both independent Agents must enter the model port.
+    // A serialized runner fails the bounded wait instead of hanging.
+    let joined = @async.with_timeout(2000, () => {
       while self.state.active < 2 {
         @async.sleep(1)
       }
-    })
+      true
+    }) catch {
+      _ => false
+    }
+    if !joined {
+      raise @posoco.ModelError::Transport("parallel test barrier timed out")
+    }
   }
   if self.state.delay > 0 {
     @async.sleep(self.state.delay)
@@ -209,7 +212,6 @@ fn harness(
     fail: false,
     delay: 1,
     chain: true,
-    require_parallel: false,
     active: 0,
     peak: 0,
     contexts: [],
