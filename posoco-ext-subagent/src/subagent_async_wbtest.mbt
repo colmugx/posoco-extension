@@ -188,12 +188,12 @@ fn sibling_failure_wave() -> @posoco.ModelCallResult {
   let calls : Array[@posoco.ToolCall] = [
     {
       call_id: @posoco.CallId::unchecked("sibling-fail"),
-      name: @posoco.ToolName::unchecked("agent"),
+      name: @posoco.ToolName::unchecked("subagent"),
       arguments: args_object([("task", Json::string("explode"))]),
     },
     {
       call_id: @posoco.CallId::unchecked("sibling-ok"),
-      name: @posoco.ToolName::unchecked("agent"),
+      name: @posoco.ToolName::unchecked("subagent"),
       arguments: args_object([("task", Json::string("survive"))]),
     },
   ]
@@ -942,7 +942,7 @@ impl @posoco.ModelPort for BgParentModel with fn chat(
   self.calls = self.calls + 1
   if self.calls == 1 {
     return @posoco.tk_tool_call_response(
-      "agent",
+      "subagent",
       "call_1",
       self.agent_arguments,
     )
@@ -995,7 +995,7 @@ fn build_parent_agent(
     runtime=@runtime.PortRuntime(
       model~,
       tools=Map::from_array([
-        ("agent", tools as &@posoco.ToolProvider),
+        ("subagent", tools as &@posoco.ToolProvider),
         ("answer_question", tools as &@posoco.ToolProvider),
       ]),
     ),
@@ -1809,7 +1809,7 @@ fn two_agent_wave(
   let calls : Array[@posoco.ToolCall] = [
     {
       call_id: @posoco.CallId::unchecked("wave-a"),
-      name: @posoco.ToolName::unchecked("agent"),
+      name: @posoco.ToolName::unchecked("subagent"),
       arguments: args_object([
         ("task", Json::string(first_task)),
         ("kind", Json::string("loose")),
@@ -1817,7 +1817,7 @@ fn two_agent_wave(
     },
     {
       call_id: @posoco.CallId::unchecked("wave-b"),
-      name: @posoco.ToolName::unchecked("agent"),
+      name: @posoco.ToolName::unchecked("subagent"),
       arguments: args_object([
         ("task", Json::string(second_task)),
         ("kind", Json::string("loose")),
@@ -1852,7 +1852,7 @@ async test "interactive_child_roundtrip_input_question" {
   let model = SceneParentModel::SceneParentModel(
     steps=[
       @posoco.tk_tool_call_response(
-        "agent",
+        "subagent",
         "spawn-1",
         args_object([
           ("task", Json::string("find the file")),
@@ -1915,7 +1915,7 @@ async test "interactive_child_select_validation_and_double_answer" {
   let model = SceneParentModel::SceneParentModel(
     steps=[
       @posoco.tk_tool_call_response(
-        "agent",
+        "subagent",
         "spawn-1",
         args_object([
           ("task", Json::string("pick")),
@@ -2058,7 +2058,7 @@ async test "interactive_child_answer_deadline_times_out" {
   let model = SceneParentModel::SceneParentModel(
     steps=[
       @posoco.tk_tool_call_response(
-        "agent",
+        "subagent",
         "spawn-1",
         args_object([
           ("task", Json::string("t")),
@@ -2239,7 +2239,7 @@ async test "background_child_question_roundtrip_lazy_injection" {
   let model = SceneParentModel::SceneParentModel(
     steps=[
       @posoco.tk_tool_call_response(
-        "agent",
+        "subagent",
         "spawn-bg",
         args_object([
           ("task", Json::string("work then ask")),
@@ -2301,7 +2301,7 @@ async test "two_background_children_questions_do_not_cross" {
   let model = SceneParentModel::SceneParentModel(
     steps=[
       @posoco.tk_tool_call_response(
-        "agent",
+        "subagent",
         "spawn-a",
         args_object([
           ("task", Json::string("first worker")),
@@ -2310,7 +2310,7 @@ async test "two_background_children_questions_do_not_cross" {
         ]),
       ),
       @posoco.tk_tool_call_response(
-        "agent",
+        "subagent",
         "spawn-b",
         args_object([
           ("task", Json::string("second worker")),
@@ -2381,7 +2381,7 @@ async test "interactive_child_second_question_flows_through_queue" {
   let model = SceneParentModel::SceneParentModel(
     steps=[
       @posoco.tk_tool_call_response(
-        "agent",
+        "subagent",
         "spawn-1",
         args_object([
           ("task", Json::string("two questions")),

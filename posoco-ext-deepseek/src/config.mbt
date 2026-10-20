@@ -63,15 +63,19 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     None => ()
   }
   match max_reasoning_chars {
-    Some(n) => if n <= 0 {
-      abort("posoco-ext-deepseek: max_reasoning_chars must be positive")
-    }
+    Some(n) =>
+      if n <= 0 {
+        abort("posoco-ext-deepseek: max_reasoning_chars must be positive")
+      }
     None => ()
   }
   match repeated_reasoning_span_chars {
-    Some(n) => if n < 128 || n > 715827882 {
-      abort("posoco-ext-deepseek: repeated_reasoning_span_chars must be between 128 and 715827882")
-    }
+    Some(n) =>
+      if n < 128 || n > 715827882 {
+        abort(
+          "posoco-ext-deepseek: repeated_reasoning_span_chars must be between 128 and 715827882",
+        )
+      }
     None => ()
   }
   {

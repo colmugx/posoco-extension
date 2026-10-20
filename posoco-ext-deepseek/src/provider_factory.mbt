@@ -139,7 +139,9 @@ fn deepseek_setting_max_reasoning_chars(
     None => Some(120000)
     Some(Json::Null) => None
     Some(Json::Number(number, ..)) => {
-      if number.is_nan() || number.is_inf() || number <= 0.0 ||
+      if number.is_nan() ||
+        number.is_inf() ||
+        number <= 0.0 ||
         number > 2147483647.0 {
         raise @posoco.CompositionError::ManifestSchemaError(
           manifest_id="posoco_ext_deepseek",
@@ -171,7 +173,10 @@ fn deepseek_setting_repeated_span(
     None => Some(256)
     Some(Json::Null) => None
     Some(Json::Number(n, ..)) => {
-      if n.is_nan() || n.is_inf() || n < 128.0 || n > 715827882.0 ||
+      if n.is_nan() ||
+        n.is_inf() ||
+        n < 128.0 ||
+        n > 715827882.0 ||
         n.to_int().to_double() != n {
         raise @posoco.CompositionError::ManifestSchemaError(
           manifest_id="posoco_ext_deepseek",
@@ -243,7 +248,9 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
       manifest_id="posoco_ext_deepseek",
     ),
     max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
-    recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(source),
+    recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(
+      source,
+    ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
@@ -329,7 +336,9 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
       manifest_id="posoco_ext_deepseek",
     ),
     max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
-    recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(source),
+    recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(
+      source,
+    ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
   )
   let models = fetch_deepseek_models(

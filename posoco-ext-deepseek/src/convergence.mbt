@@ -13,7 +13,9 @@ fn deepseek_repeated_tool_calls(messages : Array[@posoco.Message]) -> Bool {
           break
         }
         let call = tool_calls[0]
-        let fingerprint = call.name.to_string() + "\n" + call.arguments.stringify()
+        let fingerprint = call.name.to_string() +
+          "\n" +
+          call.arguments.stringify()
         if previous == "" || previous == fingerprint {
           previous = fingerprint
           streak += 1

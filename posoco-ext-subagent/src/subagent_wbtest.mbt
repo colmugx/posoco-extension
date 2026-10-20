@@ -250,7 +250,7 @@ fn config_with_global_concurrency(limit : Int32) -> @kit.SubagentConfig {
 fn agent_call(arguments : Json) -> @posoco.ToolCall {
   {
     call_id: @posoco.CallId::unchecked("agent-test"),
-    name: @posoco.ToolName::unchecked("agent"),
+    name: @posoco.ToolName::unchecked("subagent"),
     arguments,
   }
 }
@@ -343,7 +343,7 @@ test "list_tools_declares_agent_schema_and_description" {
   let defs = @posoco.ToolProvider::list_tools(tools)
   assert_eq(defs.length(), 2)
   let def = defs[0]
-  assert_eq(def.name.to_string(), "agent")
+  assert_eq(def.name.to_string(), "subagent")
   assert_true(def.policy is @posoco.ExecutionPolicy::Parallel)
   assert_true(def.description.contains("cannot spawn further subagents"))
   assert_true(def.description.contains("user-position slot"))

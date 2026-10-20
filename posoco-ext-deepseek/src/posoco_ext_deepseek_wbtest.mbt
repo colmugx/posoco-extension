@@ -1761,11 +1761,13 @@ test "repetition guard triggers only for three identical calls in one user turn"
   let tool = fn(path : String) -> @posoco.Message {
     @posoco.Message::AssistantMessage(
       content=[],
-      tool_calls=[{
-        call_id: @posoco.CallId::unchecked("unique-id"),
-        name: @posoco.ToolName::unchecked("read_file"),
-        arguments: Json::object({ "path": Json::string(path) }),
-      }],
+      tool_calls=[
+        {
+          call_id: @posoco.CallId::unchecked("unique-id"),
+          name: @posoco.ToolName::unchecked("read_file"),
+          arguments: Json::object({ "path": Json::string(path) }),
+        },
+      ],
       reasoning=None,
       finish_reason=@posoco.FinishReason::ToolCalls,
     )
@@ -1782,32 +1784,46 @@ test "repetition guard triggers only for three identical calls in one user turn"
 test "repetition guard injects convergence hint only on repeated tool calls" {
   let a = @posoco.Message::AssistantMessage(
     content=[],
-    tool_calls=[{
-      call_id: @posoco.CallId::unchecked("id"),
-      name: @posoco.ToolName::unchecked("read_file"),
-      arguments: Json::object({ "path": Json::string("/tmp/a") }),
-    }],
+    tool_calls=[
+      {
+        call_id: @posoco.CallId::unchecked("id"),
+        name: @posoco.ToolName::unchecked("read_file"),
+        arguments: Json::object({ "path": Json::string("/tmp/a") }),
+      },
+    ],
     reasoning=None,
     finish_reason=@posoco.FinishReason::ToolCalls,
   )
   let ctx = @devkit.ExtContext::default()
   let messages = [user_msg("read"), a, a, a]
-  let tools : Array[@posoco.ToolDef] = [{
-    name: @posoco.ToolName::unchecked("read_file"),
-    description: "Read a file",
-    input_schema: Json::empty_object(),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
-    policy: @posoco.ExecutionPolicy::Sequential,
-    provenance: Some("posoco_ext_deepseek"),
-  }]
+  let tools : Array[@posoco.ToolDef] = [
+    {
+      name: @posoco.ToolName::unchecked("read_file"),
+      description: "Read a file",
+      input_schema: Json::empty_object(),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+      policy: @posoco.ExecutionPolicy::Sequential,
+      provenance: Some("posoco_ext_deepseek"),
+    },
+  ]
   let ordinary = build_chat_request(
-    ctx, messages, tools, chat_options(), "deepseek-flash", false,
-    enabled_thinking_json(), Some("high"),
+    ctx,
+    messages,
+    tools,
+    chat_options(),
+    "deepseek-flash",
+    false,
+    enabled_thinking_json(),
+    Some("high"),
   )
   guard ordinary is Object(no_tools) else { fail("expected request") }
-  guard no_tools.get("messages") is Some(Array(original)) else { fail("expected messages") }
+  guard no_tools.get("messages") is Some(Array(original)) else {
+    fail("expected messages")
+  }
   assert_eq(original.length(), 5)
-  guard original[4] is Object(hint) else { fail("expected convergence message") }
+  guard original[4] is Object(hint) else {
+    fail("expected convergence message")
+  }
   assert_json_field_string(hint, "role", "system")
   guard hint.get("content") is Some(String(instruction)) else {
     fail("expected convergence instruction")
@@ -1828,18 +1844,26 @@ test "request with tools replays reasoning from plain assistant history" {
     }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let tools : Array[@posoco.ToolDef] = [{
-    name: @posoco.ToolName::unchecked("read_file"),
-    description: "Read a file",
-    input_schema: Json::empty_object(),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
-    policy: @posoco.ExecutionPolicy::Sequential,
-    provenance: Some("posoco_ext_deepseek"),
-  }]
+  let tools : Array[@posoco.ToolDef] = [
+    {
+      name: @posoco.ToolName::unchecked("read_file"),
+      description: "Read a file",
+      input_schema: Json::empty_object(),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+      policy: @posoco.ExecutionPolicy::Sequential,
+      provenance: Some("posoco_ext_deepseek"),
+    },
+  ]
   let messages = [user_msg("question"), history, user_msg("next question")]
   let with_tools = build_chat_request(
-    @devkit.ExtContext::default(), messages, tools, chat_options(),
-    "deepseek-flash", false, enabled_thinking_json(), Some("high"),
+    @devkit.ExtContext::default(),
+    messages,
+    tools,
+    chat_options(),
+    "deepseek-flash",
+    false,
+    enabled_thinking_json(),
+    Some("high"),
   )
   guard with_tools is Object(body) else { fail("expected request") }
   guard body.get("messages") is Some(Array(wire)) else {
@@ -1850,8 +1874,14 @@ test "request with tools replays reasoning from plain assistant history" {
     assistant, "reasoning_content", "reasoning before earlier answer",
   )
   let without_tools = build_chat_request(
-    @devkit.ExtContext::default(), messages, [], chat_options(),
-    "deepseek-flash", false, enabled_thinking_json(), Some("high"),
+    @devkit.ExtContext::default(),
+    messages,
+    [],
+    chat_options(),
+    "deepseek-flash",
+    false,
+    enabled_thinking_json(),
+    Some("high"),
   )
   guard without_tools is Object(body2) else { fail("expected request") }
   guard body2.get("messages") is Some(Array(wire2)) else {
@@ -1875,55 +1905,83 @@ test "stream reasoning ceiling is strict and opt-in" {
 ///|
 test "safe recovery only permits empty length-limited completion" {
   let empty : Json = {
-    "choices": [{
-      "message": { "role": "assistant", "content": "", "reasoning_content": "unfinished" },
-      "finish_reason": "length",
-    }],
-  }
-  assert_true(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(empty)))
-  let partial : Json = {
-    "choices": [{
-      "message": { "role": "assistant", "content": "partial answer" },
-      "finish_reason": "length",
-    }],
-  }
-  assert_false(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(partial)))
-  let stopped : Json = {
-    "choices": [{
-      "message": { "role": "assistant", "content": "" },
-      "finish_reason": "stop",
-    }],
-  }
-  assert_false(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(stopped)))
-  let tools : Json = {
-    "choices": [{
-      "message": {
-        "role": "assistant",
-        "content": "",
-        "tool_calls": [{
-          "id": "call_1", "type": "function",
-          "function": { "name": "read", "arguments": "{}" },
-        }],
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "unfinished",
+        },
+        "finish_reason": "length",
       },
-      "finish_reason": "length",
-    }],
+    ],
   }
-  assert_false(deepseek_can_retry_reasoning_exhaustion(decode_chat_response(tools)))
+  assert_true(
+    deepseek_can_retry_reasoning_exhaustion(decode_chat_response(empty)),
+  )
+  let partial : Json = {
+    "choices": [
+      {
+        "message": { "role": "assistant", "content": "partial answer" },
+        "finish_reason": "length",
+      },
+    ],
+  }
+  assert_false(
+    deepseek_can_retry_reasoning_exhaustion(decode_chat_response(partial)),
+  )
+  let stopped : Json = {
+    "choices": [
+      {
+        "message": { "role": "assistant", "content": "" },
+        "finish_reason": "stop",
+      },
+    ],
+  }
+  assert_false(
+    deepseek_can_retry_reasoning_exhaustion(decode_chat_response(stopped)),
+  )
+  let tools : Json = {
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "id": "call_1",
+              "type": "function",
+              "function": { "name": "read", "arguments": "{}" },
+            },
+          ],
+        },
+        "finish_reason": "length",
+      },
+    ],
+  }
+  assert_false(
+    deepseek_can_retry_reasoning_exhaustion(decode_chat_response(tools)),
+  )
 }
 
 ///|
 test "generic factory validates recovery flag and retains defaults" {
   let missing = @llm.ProviderConfigSource(settings=Some({ "api_key": "test" }))
   assert_true(deepseek_setting_recover_on_exhaustion(missing))
-  let enabled = @llm.ProviderConfigSource(settings=Some({
-    "api_key": "test", "recover_on_reasoning_exhaustion": true,
-  }))
+  let enabled = @llm.ProviderConfigSource(
+    settings=Some({ "api_key": "test", "recover_on_reasoning_exhaustion": true }),
+  )
   assert_true(deepseek_setting_recover_on_exhaustion(enabled))
   let config = DeepSeekConfig("test", recover_on_reasoning_exhaustion=true)
-  assert_true(config.with_reasoning_effort("low").recover_on_reasoning_exhaustion)
-  let malformed = @llm.ProviderConfigSource(settings=Some({
-    "api_key": "test", "recover_on_reasoning_exhaustion": "yes",
-  }))
+  assert_true(
+    config.with_reasoning_effort("low").recover_on_reasoning_exhaustion,
+  )
+  let malformed = @llm.ProviderConfigSource(
+    settings=Some({
+      "api_key": "test",
+      "recover_on_reasoning_exhaustion": "yes",
+    }),
+  )
   try DeepSeekProvider().build(malformed) catch {
     @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
       assert_true(detail.contains("recover_on_reasoning_exhaustion"))
@@ -1946,13 +2004,13 @@ test "exact repeated reasoning suffix detector requires three long repeats" {
 
 ///|
 test "generic factory validates repeated reasoning span" {
-  let good = @llm.ProviderConfigSource(settings=Some({
-    "api_key": "test", "repeated_reasoning_span_chars": 256,
-  }))
+  let good = @llm.ProviderConfigSource(
+    settings=Some({ "api_key": "test", "repeated_reasoning_span_chars": 256 }),
+  )
   assert_eq(deepseek_setting_repeated_span(good), Some(256))
-  let bad = @llm.ProviderConfigSource(settings=Some({
-    "api_key": "test", "repeated_reasoning_span_chars": 32,
-  }))
+  let bad = @llm.ProviderConfigSource(
+    settings=Some({ "api_key": "test", "repeated_reasoning_span_chars": 32 }),
+  )
   try DeepSeekProvider().build(bad) catch {
     @posoco.CompositionError::ManifestSchemaError(detail~, ..) =>
       assert_true(detail.contains("repeated_reasoning_span_chars"))
@@ -1965,9 +2023,12 @@ test "generic factory validates repeated reasoning span" {
 ///|
 test "repeated reasoning suffix safely handles non-ASCII thinking" {
   let chinese = "思考过程".repeat(128)
-  assert_true(deepseek_has_repeated_reasoning_suffix(
-    chinese + chinese + chinese, chinese.length(),
-  ))
+  assert_true(
+    deepseek_has_repeated_reasoning_suffix(
+      chinese + chinese + chinese,
+      chinese.length(),
+    ),
+  )
 }
 
 ///|
@@ -1980,12 +2041,14 @@ test "DeepSeek default protections are active and explicitly opt-out" {
   assert_eq(deepseek_setting_max_reasoning_chars(source), Some(120000))
   assert_true(deepseek_setting_recover_on_exhaustion(source))
   assert_eq(deepseek_setting_repeated_span(source), Some(256))
-  let opt_out = @llm.ProviderConfigSource(settings=Some({
-    "api_key": "test",
-    "max_reasoning_chars": null,
-    "recover_on_reasoning_exhaustion": false,
-    "repeated_reasoning_span_chars": null,
-  }))
+  let opt_out = @llm.ProviderConfigSource(
+    settings=Some({
+      "api_key": "test",
+      "max_reasoning_chars": null,
+      "recover_on_reasoning_exhaustion": false,
+      "repeated_reasoning_span_chars": null,
+    }),
+  )
   assert_true(deepseek_setting_max_reasoning_chars(opt_out) is None)
   assert_false(deepseek_setting_recover_on_exhaustion(opt_out))
   assert_true(deepseek_setting_repeated_span(opt_out) is None)

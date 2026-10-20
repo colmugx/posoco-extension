@@ -350,7 +350,7 @@ fn question_envelope(info : QuestionInfo, kind : String) -> String {
 ///|
 /// Append one synthetic user message carrying every un-injected question
 /// envelope, and announce each on the subscription channel (parent_call is
-/// the background label: these asks arrive outside any live agent-tool
+/// the background label: these asks arrive outside any live subagent-tool
 /// call). Exactly-once per question id — the drain is the delivery.
 fn SubagentTools::inject_queued_questions(
   self : SubagentTools,

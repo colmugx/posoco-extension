@@ -33,7 +33,7 @@ fn bounded_result_text(text : String) -> (String, Bool) {
 }
 
 ///|
-/// Map a child run's terminal state to the `agent` tool result:
+/// Map a child run's terminal state to the `subagent` tool result:
 /// `Completed` yields `Success`; every other state yields
 /// `ToolReportedError` whose text opens with a model-readable terminal
 /// classification (`failed: <reason>` / `timed out` / `cancelled`) so the

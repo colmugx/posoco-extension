@@ -1,7 +1,7 @@
 ///|
 /// Fully resolved spawn request handed to a `ChildComposer`.
 /// Every slicing decision (model slot, effort, tool face, skills, system
-/// prompt) has already been made by the `agent` tool; the composer only
+/// prompt) has already been made by the `subagent` tool; the composer only
 /// assembles the child `Agent` — it must not re-derive or widen the trim.
 ///
 /// No `Debug` derive: the `observers` field holds trait objects that cannot
@@ -21,7 +21,7 @@ pub(all) struct ChildSpec {
   /// Spawn face resolved by the tool: `None` = the host default core face
   /// (the composer expands it), `Some([])` = no tools, `Some(list)` =
   /// explicit whitelist ∩ kind whitelist. Depth 1 is structural: this face
-  /// never contains `agent`/`agent_swarm`.
+  /// never contains `subagent`/`agent_swarm`.
   tools : Array[String]?
   /// `None` = do not load skills; `Some(list)` = whitelist; `Some([])` =
   /// load everything discovered.
@@ -45,7 +45,7 @@ pub(all) struct ChildSpec {
 
 ///|
 /// Child-composition failures. Raised by the composer when the child Agent
-/// cannot be assembled; the `agent` tool maps it to the `failed` terminal
+/// cannot be assembled; the `subagent` tool maps it to the `failed` terminal
 /// state, never to a silent drop.
 pub(all) suberror ComposerError {
   Failed(String)

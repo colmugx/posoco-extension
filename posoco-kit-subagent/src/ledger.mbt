@@ -1,6 +1,6 @@
 ///|
 /// Per-run spawn budget ledger: counts spawns across the
-/// `agent` and `agent_swarm` tools of one run and refuses once the budget is
+/// `subagent` and `agent_swarm` tools of one run and refuses once the budget is
 /// exhausted — the caller rejects explicitly, nothing queues silently.
 /// Acquisition is monotonic within a run: there is no release, and duplicate
 /// labels are recorded as separate acquisitions for audit. Concurrency is

@@ -131,14 +131,18 @@ fn build_chat_request(
   thinking_json : Json,
   reasoning_effort_str : String?,
 ) -> Json {
-  let wire_messages = @chatkit.fold_tool_attachments(messages, false).map(fn(message) {
+  let wire_messages = @chatkit.fold_tool_attachments(messages, false).map(fn(
+    message,
+  ) {
     encode_message_with_reasoning(message, tools.length() > 0)
   })
   if tools.length() > 0 && deepseek_repeated_tool_calls(messages) {
-    wire_messages.push(Json::object({
-      "role": Json::string("system"),
-      "content": Json::string(deepseek_convergence_instruction()),
-    }))
+    wire_messages.push(
+      Json::object({
+        "role": Json::string("system"),
+        "content": Json::string(deepseek_convergence_instruction()),
+      }),
+    )
   }
   let body : Map[String, Json] = {
     "model": Json::string(model),

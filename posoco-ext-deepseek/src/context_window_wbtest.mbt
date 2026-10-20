@@ -71,10 +71,7 @@ test "DeepSeek provider settings propagate ceiling to all model slots" {
     { "model_id": "deepseek-pro", "context_window": 128000 },
   ]
   let source = @llm.ProviderConfigSource(
-    settings=Some({
-      "api_key": "test-key",
-      "max_reasoning_chars": 120000,
-    }),
+    settings=Some({ "api_key": "test-key", "max_reasoning_chars": 120000 }),
     cached_models=Some(records),
   )
   guard DeepSeekProvider().build(source)
@@ -87,24 +84,21 @@ test "DeepSeek provider settings propagate ceiling to all model slots" {
   let config = DeepSeekConfig("test-key", max_reasoning_chars=Some(120000))
   let rebuilt = config.with_reasoning_effort("low")
   assert_eq(rebuilt.max_reasoning_chars, Some(120000))
-
 }
 
 ///|
 test "DeepSeek generic provider rejects malformed reasoning ceilings" {
-  for value in [
-    Json::number(0.0),
-    Json::number(-1.0),
-    Json::number(1.5),
-    Json::number(2147483648.0),
-    Json::string("5000"),
-    Json::boolean(true),
-  ] {
+  for
+    value in [
+      Json::number(0.0),
+      Json::number(-1.0),
+      Json::number(1.5),
+      Json::number(2147483648.0),
+      Json::string("5000"),
+      Json::boolean(true),
+    ] {
     let source = @llm.ProviderConfigSource(
-      settings=Some({
-        "api_key": "test-key",
-        "max_reasoning_chars": value,
-      }),
+      settings=Some({ "api_key": "test-key", "max_reasoning_chars": value }),
     )
     try DeepSeekProvider().build(source) catch {
       @posoco.CompositionError::ManifestSchemaError(manifest_id~, detail~) => {

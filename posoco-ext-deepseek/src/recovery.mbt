@@ -6,8 +6,8 @@ fn deepseek_can_retry_reasoning_exhaustion(
   completion : @posoco.Completion,
 ) -> Bool {
   completion.finish_reason() is @posoco.FinishReason::Length &&
-    completion.message.content.length() == 0 &&
-    completion.tool_calls().length() == 0
+  completion.message.content.length() == 0 &&
+  completion.tool_calls().length() == 0
 }
 
 ///|
@@ -16,7 +16,7 @@ fn deepseek_can_retry_reasoning_exhaustion(
 /// reasoning. A large window limits false positives from common short phrases.
 fn deepseek_has_repeated_reasoning_suffix(
   reasoning : String,
-  span_chars : Int,
+  span_chars : Int32,
 ) -> Bool {
   if span_chars < 128 || reasoning.length() < span_chars * 3 {
     return false

@@ -6,7 +6,7 @@ priv suberror SpawnArgError {
 }
 
 ///|
-/// Parsed and type-validated `agent` arguments. `skills` is already mapped:
+/// Parsed and type-validated `subagent` arguments. `skills` is already mapped:
 /// absent/false → `None`, true → `Some([])` (load all), array → whitelist.
 priv struct SpawnArgs {
   task : String
@@ -30,7 +30,8 @@ fn opt_string(
   match fields.get(key) {
     None => None
     Some(Json::String(value)) => Some(value)
-    Some(_) => raise SpawnArgError::Invalid("agent: '\{key}' must be a string")
+    Some(_) =>
+      raise SpawnArgError::Invalid("subagent: '\{key}' must be a string")
   }
 }
 
@@ -48,7 +49,7 @@ fn opt_string_array(
           Json::String(value) => out.push(value)
           _ =>
             raise SpawnArgError::Invalid(
-              "agent: '\{key}' entries must be strings",
+              "subagent: '\{key}' entries must be strings",
             )
         }
       }
@@ -56,7 +57,7 @@ fn opt_string_array(
     }
     Some(_) =>
       raise SpawnArgError::Invalid(
-        "agent: '\{key}' must be an array of strings",
+        "subagent: '\{key}' must be an array of strings",
       )
   }
 }
@@ -70,7 +71,8 @@ fn opt_bool(
     None => None
     Some(Json::True) => Some(true)
     Some(Json::False) => Some(false)
-    Some(_) => raise SpawnArgError::Invalid("agent: '\{key}' must be a boolean")
+    Some(_) =>
+      raise SpawnArgError::Invalid("subagent: '\{key}' must be a boolean")
   }
 }
 
@@ -84,12 +86,12 @@ fn opt_int(
     Some(Json::Number(value, ..)) => {
       let whole = value.to_int()
       if value != whole.to_double() {
-        raise SpawnArgError::Invalid("agent: '\{key}' must be an integer")
+        raise SpawnArgError::Invalid("subagent: '\{key}' must be an integer")
       }
       Some(whole)
     }
     Some(_) =>
-      raise SpawnArgError::Invalid("agent: '\{key}' must be an integer")
+      raise SpawnArgError::Invalid("subagent: '\{key}' must be an integer")
   }
 }
 
@@ -97,18 +99,21 @@ fn opt_int(
 fn parse_spawn_args(arguments : Json) -> SpawnArgs raise SpawnArgError {
   let fields = match arguments {
     Json::Object(fields) => fields
-    _ => raise SpawnArgError::Invalid("agent: arguments must be a JSON object")
+    _ =>
+      raise SpawnArgError::Invalid("subagent: arguments must be a JSON object")
   }
   let task = match fields.get("task") {
     Some(Json::String(value)) =>
       if value.trim().is_empty() {
-        raise SpawnArgError::Invalid("agent: 'task' must be a non-empty string")
+        raise SpawnArgError::Invalid(
+          "subagent: 'task' must be a non-empty string",
+        )
       } else {
         value
       }
-    Some(_) => raise SpawnArgError::Invalid("agent: 'task' must be a string")
+    Some(_) => raise SpawnArgError::Invalid("subagent: 'task' must be a string")
     None =>
-      raise SpawnArgError::Invalid("agent: missing required 'task' argument")
+      raise SpawnArgError::Invalid("subagent: missing required 'task' argument")
   }
   let skills : Array[String]? = match fields.get("skills") {
     None => None
@@ -121,7 +126,7 @@ fn parse_spawn_args(arguments : Json) -> SpawnArgs raise SpawnArgError {
           Json::String(value) => out.push(value)
           _ =>
             raise SpawnArgError::Invalid(
-              "agent: 'skills' entries must be strings",
+              "subagent: 'skills' entries must be strings",
             )
         }
       }
@@ -129,7 +134,7 @@ fn parse_spawn_args(arguments : Json) -> SpawnArgs raise SpawnArgError {
     }
     Some(_) =>
       raise SpawnArgError::Invalid(
-        "agent: 'skills' must be a boolean or an array of strings",
+        "subagent: 'skills' must be a boolean or an array of strings",
       )
   }
   let timeout_ms = opt_int(fields, "timeout_ms")
@@ -137,7 +142,7 @@ fn parse_spawn_args(arguments : Json) -> SpawnArgs raise SpawnArgError {
     Some(ms) =>
       if ms <= 0 {
         raise SpawnArgError::Invalid(
-          "agent: 'timeout_ms' must be a positive integer",
+          "subagent: 'timeout_ms' must be a positive integer",
         )
       }
     None => ()
@@ -266,7 +271,7 @@ fn SubagentTools::finish(
 /// background receipt (the child runs as an Agent-owned background task; its
 /// terminal arrives as a follow-up turn in the parent session) or a single
 /// blocking run under the timeout with the explicit terminal-state mapping.
-/// Multiple `agent` calls in one model response ride the kernel's parallel
+/// Multiple `subagent` calls in one model response ride the kernel's parallel
 /// tool waves. The per-run ledger bounds total admissions; `global_slots`
 /// bounds simultaneously live children across foreground and background work.
 ///
@@ -331,7 +336,7 @@ async fn SubagentTools::spawn(
     None => ()
   }
   // Budget: explicit refusal, never a silent queue.
-  if !self.ledger.try_acquire("agent") {
+  if !self.ledger.try_acquire("subagent") {
     return @posoco.ToolOutcome::ToolReportedError(
       content="spawn budget exhausted (\{self.ledger.acquired().length()}/\{self.config.limits.spawn_budget} used): explicit refusal — finish with the subagents you have",
       structured=None,
@@ -373,7 +378,7 @@ async fn SubagentTools::spawn(
   let system_prompt = assemble_prompt(kind_spec, args.instructions) catch {
     @kit.PromptAssemblyError::InstructionsTooLong(message) =>
       return @posoco.ToolOutcome::ToolReportedError(
-        content="agent: \{message}",
+        content="subagent: \{message}",
         structured=None,
       )
   }
@@ -723,7 +728,7 @@ pub impl @posoco.ToolProvider for SubagentTools with fn execute(
       arguments: ctx.arguments,
     })
   }
-  if name != "agent" {
+  if name != "subagent" {
     raise @posoco.RuntimeError::UnknownTool(
       "posoco_ext_subagent: unknown tool '\{name}'",
     )
@@ -731,7 +736,7 @@ pub impl @posoco.ToolProvider for SubagentTools with fn execute(
   self.spawn({ call_id: ctx.call_id, name: ctx.name, arguments: ctx.arguments, }) catch {
     error =>
       raise @posoco.RuntimeError::InvocationFailed(
-        "agent tool: \{error.to_string()}",
+        "subagent tool: \{error.to_string()}",
       )
   }
 }

@@ -42,15 +42,14 @@ pub impl @posoco.ToolProvider for PtcGuardedProvider with fn execute(
         )
     }
     match decision {
-      @posoco.ToolDecision::Approve(call=accepted) |
-      @posoco.ToolDecision::ApproveAfterConsent(call=accepted, ..) => {
+      @posoco.ToolDecision::Approve(call=accepted)
+      | @posoco.ToolDecision::ApproveAfterConsent(call=accepted, ..) =>
         if accepted != call {
           return @kernel.ToolReportedError(
             content="PTC final policy attempted to rewrite a validated call",
             structured=None,
           )
         }
-      }
       @posoco.ToolDecision::Reject(reason~) =>
         return @kernel.ToolReportedError(
           content="PTC final policy rejected call: " + reason,

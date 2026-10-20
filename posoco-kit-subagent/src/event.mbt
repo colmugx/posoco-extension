@@ -9,7 +9,7 @@ pub(all) struct SubagentEvent {
   child_session : String
   /// Kind the child was spawned with.
   kind : String
-  /// Parent `agent` tool-call id that spawned this run — hosts key live
+  /// Parent `subagent` tool-call id that spawned this run — hosts key live
   /// rendering (tool-row invalidation) on it.
   parent_call : String
   /// The unmodified kernel event from the child run.

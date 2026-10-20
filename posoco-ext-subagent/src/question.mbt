@@ -63,7 +63,7 @@ priv struct PendingQuestion {
 }
 
 ///|
-/// One-shot signal the spawning `agent` tool races on: completed exactly
+/// One-shot signal the spawning `subagent` tool races on: completed exactly
 /// when the child registers its first question while the tool call is still
 /// live. `complete`'s first-wins result decides raced-vs-queued at
 /// registration, so no shadow info field is needed.
