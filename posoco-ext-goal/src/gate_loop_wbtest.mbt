@@ -305,3 +305,60 @@ async test "budget exhaustion stops without consuming extra model steps" {
   assert_true(result.turns_completed <= 2)
   assert_eq(model.call_count(), 2)
 }
+
+
+///|
+async test "goal resume preserves charter, history and turn budget" {
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("step one")),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("<goal-complete/>"),
+    ),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let goal = goal_extension(goal_condition="test resume")
+  // Force a pause after exactly one productive working turn.
+  goal.options.budget.max_turns = 4
+  goal.options.stall_turn_threshold = 1
+  goal.options.stall_min_tokens = 1000000
+  let agent = gate_build_agent(goal, model, store)
+  let first = goal.execute(agent, "resume_session")
+  assert_true(first.final_status == Paused)
+  assert_eq(first.turns_completed, 1)
+  assert_eq(first.history.length(), 1)
+  assert_true(goal.charter_delivered)
+  // Disable artificial stall; explicit resume should not re-arm charter.
+  goal.options.stall_turn_threshold = 100
+  goal.resume_goal()
+  let second = goal.execute(agent, "resume_session")
+  assert_true(second.final_status == Completed)
+  assert_eq(second.turns_completed, 3)
+  assert_eq(second.history.length(), 3)
+  assert_eq(model.call_count(), 3)
+  assert_true(!gate_model_input_text(model, 1).contains("<goal-context>"))
+}
+
+///|
+async test "goal execute rejects foreign resume session without resetting state" {
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("step one")),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let goal = goal_extension(goal_condition="test isolation")
+  goal.options.stall_turn_threshold = 1
+  goal.options.stall_min_tokens = 1000000
+  let agent = gate_build_agent(goal, model, store)
+  let first = goal.execute(agent, "original_session")
+  assert_true(first.final_status == Paused)
+  let snapshot = goal.execute(agent, "other_session")
+  match snapshot.final_status {
+    Failed(reason) => assert_true(reason.contains("different session"))
+    other => fail("expected session mismatch, got \{other}")
+  }
+  assert_eq(goal.current_turn, 1)
+  assert_eq(goal.history.length(), 1)
+  assert_eq(model.call_count(), 1)
+}
