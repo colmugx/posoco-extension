@@ -97,7 +97,7 @@ test "blocked without reason line above yields empty reason" {
 }
 
 ///|
-test "last signal line wins" {
+test "last non-empty line controls the signal" {
   let msg = asst("a\n<goal-complete/>\nb\nc\nd\ne\nf\n<goal-blocked/>")
   debug_inspect(scan(msg), content="BlockedClaimed(reason=\"f\")")
   let rev = asst("a\n<goal-blocked/>\nb\nc\n<goal-complete/>")
@@ -105,14 +105,19 @@ test "last signal line wins" {
 }
 
 ///|
-test "scan is message-shape agnostic" {
+test "only final assistant text may signal completion" {
   debug_inspect(
     scan(@posoco.tk_user_msg("need a key\n<goal-blocked/>")),
-    content="BlockedClaimed(reason=\"need a key\")",
+    content="NoSignal",
+  )
+  debug_inspect(scan(sys("all good\n<goal-complete/>")), content="NoSignal")
+  debug_inspect(
+    scan(asst("example\n<goal-complete/>\nstill working")),
+    content="NoSignal",
   )
   debug_inspect(
-    scan(sys("all good\n<goal-complete/>")),
-    content="CompletionClaimed",
+    scan(asst("example\n<goal-blocked/>\ncontinuing")),
+    content="NoSignal",
   )
 }
 
