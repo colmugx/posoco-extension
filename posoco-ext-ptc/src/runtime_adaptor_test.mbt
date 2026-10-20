@@ -34,7 +34,7 @@ async test "PTC nested dispatch allows read and rejects other tool names" {
   let dispatch = @posoco.ScopedToolDispatch([
     recording as &@posoco.ToolProvider,
   ])
-  let invoker = PtcScopedInvoker::{ dispatch, }
+  let invoker = PtcScopedInvoker(dispatch~)
   let good = invoker.invoke("read", { "path": "README.md" })
   assert_true(good is @protocol.Success(..))
   let denied = invoker.invoke("write", { "path": "README.md" })
