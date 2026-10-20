@@ -1,7 +1,7 @@
 // js target: engine ladder — banner-validated ripgrep when found (a shim only
 // costs one wasted spawn), else the in-process node:fs walker; rg flags are
-// pinned for parity with the walker (--no-ignore, --glob excludes, hidden skip,
-// -F literals).
+// pinned for parity with the walker (--no-ignore, --glob excludes, hidden
+// skip, -F literals unless regex mode).
 
 ///|
 #module("node:fs")
@@ -151,20 +151,24 @@ async fn probe_rg() -> String? noraise {
 ///|
 /// rg argv for one search. Flags mirror the native walker's semantics:
 /// NUL-separated output (safe against `:` in filenames), literal pattern
-/// via -e (safe against leading `-`), fixed strings, hidden skip is the rg
-/// default, and the ignore list rides in as negated globs.
+/// via -e (safe against leading `-`), fixed strings unless regex mode,
+/// hidden skip is the rg default, and the ignore list rides in as negated
+/// globs.
 fn build_rg_args(
   bin : String,
   pattern : String,
   base : String,
   file_glob : String,
   case_insensitive : Bool,
+  use_regex : Bool,
   ignores : Array[String],
 ) -> Array[String] {
   let args : Array[String] = [
     bin, "--line-number", "--color=never", "--no-heading", "--no-ignore", "--null",
-    "-F",
   ]
+  if !use_regex {
+    args.push("-F")
+  }
   if case_insensitive {
     args.push("-i")
   }
@@ -227,6 +231,7 @@ impl GrepSearcher for JsRgSearcher with fn search(
   base : String,
   file_glob : String,
   case_insensitive : Bool,
+  use_regex : Bool,
 ) -> Array[GrepMatch] {
   match probe_rg() {
     Some(bin) => {
@@ -236,6 +241,7 @@ impl GrepSearcher for JsRgSearcher with fn search(
         base,
         file_glob,
         case_insensitive,
+        use_regex,
         self.ignores,
       )
       let result = js_spawn_result(argv)
@@ -255,6 +261,7 @@ impl GrepSearcher for JsRgSearcher with fn search(
         base,
         file_glob,
         case_insensitive,
+        use_regex,
       )
   }
 }
@@ -394,20 +401,11 @@ impl GrepSearcher for JsWalkGrepSearcher with fn search(
   base : String,
   file_glob : String,
   case_insensitive : Bool,
+  use_regex : Bool,
 ) -> Array[GrepMatch] {
   let results : Array[GrepMatch] = []
-  let needle = if case_insensitive { pattern.to_lower() } else { pattern }
-  js_walk_grep_dir(
-    self.ignores,
-    pattern,
-    needle,
-    case_insensitive,
-    file_glob,
-    base,
-    base,
-    "",
-    results,
-  ) catch {
+  let match_line = grep_line_matcher(pattern, case_insensitive, use_regex)
+  js_walk_grep_dir(self.ignores, match_line, file_glob, base, base, "", results) catch {
     _ =>
       raise @posoco.RuntimeError::InvocationFailed(
         "grep: walk failed for '\{@devkit.sanitize_path(base)}'",
@@ -421,9 +419,7 @@ impl GrepSearcher for JsWalkGrepSearcher with fn search(
 /// `rel`); a failed base read raises, everything else skips quietly.
 fn js_walk_grep_dir(
   ignores : Array[String],
-  pattern : String,
-  needle : String,
-  case_insensitive : Bool,
+  match_line : (StringView) -> Bool,
   file_glob : String,
   base : String,
   dir : String,
@@ -453,8 +449,7 @@ fn js_walk_grep_dir(
     match js_is_directory(entry_full) {
       Some(true) =>
         js_walk_grep_dir(
-          ignores, pattern, needle, case_insensitive, file_glob, base, entry_full,
-          entry_rel, out,
+          ignores, match_line, file_glob, base, entry_full, entry_rel, out,
         )
       _ => {
         if file_glob != "" && !js_grep_glob_matches(file_glob, entry_rel) {
@@ -473,12 +468,7 @@ fn js_walk_grep_dir(
         let mut line_num = 0
         for line in text.split("\n") {
           line_num += 1
-          let hit = if case_insensitive {
-            line.to_lower().contains(needle)
-          } else {
-            line.contains(pattern)
-          }
-          if hit {
+          if match_line(line) {
             out.push(GrepMatch::{
               path: entry_full,
               line: line_num,

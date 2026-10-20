@@ -6,6 +6,7 @@ import {
   "posoco/devkit@0.4.1",
   "colmugx/posoco@0.22.3",
   "moonbitlang/async@0.22.5",
+  "moonbitlang/regexp@0.3.6",
 }
 
 readme = "README.mbt.md"

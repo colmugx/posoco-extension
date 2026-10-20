@@ -3,9 +3,9 @@
 > **Targets: native + js (bun)**
 
 A `grep` content-search tool for
-[Posoco](https://mooncakes.io/docs/colmugx/posoco) agents: searches for a
-literal text pattern (not a regex) in files under a directory and returns
-matching lines grouped by file with line numbers.
+[Posoco](https://mooncakes.io/docs/colmugx/posoco) agents: searches files
+under a directory for a literal text pattern by default (opt-in `regex`
+matching) and returns matching lines grouped by file with line numbers.
 
 ## Ports contributed
 
@@ -36,25 +36,30 @@ directory names (default: `@devkit.default_ignore_patterns()`).
 
 ## Engine ladder (js) and engine parity
 
-Both engines share one contract: literal matching, hidden entries and
-`ignores` directories pruned, binary-looking files skipped, `glob` filter
-applied.
+Both engines share one contract: literal matching by default with opt-in
+`regex` search, hidden entries and `ignores` directories pruned,
+binary-looking files skipped, `glob` filter applied. Regex flavor: ripgrep
+syntax on the js ripgrep path, `moonbitlang/regexp` in the walker engines —
+the common core (alternation, classes, quantifiers, anchors, groups) behaves
+the same and every engine matches line-wise; an invalid regex fails the
+search loudly.
 
-- **native** — in-process walker (`@fs.walk` + per-line `contains`),
+- **native** — in-process walker (`@fs.walk` + per-line matcher),
   deterministic order, no external dependency.
 - **js (bun)** — ripgrep first: PATH via `Bun.which`, then the common
   Homebrew prefixes; each candidate is validated by spawning `rg --version`
   and checking the banner, so a `grep` shim on PATH is rejected. Pinned
   flags: `--no-ignore` + negated `--glob` excludes (parity with the walker's
   ignore list — no `.gitignore` reading), NUL-separated output (safe against
-  `:` in filenames), `-F` literal matching. When no real rg is found the
-  same in-process walker runs over `node:fs`.
+  `:` in filenames), `-F` literal matching (omitted in regex mode). When no
+  real rg is found the same in-process walker runs over `node:fs`.
 
 ## Tool arguments
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `pattern` | string, required | Literal text to search for (non-empty; not a regex) |
+| `pattern` | string, required | Text to search for — literal by default, a regular expression when `regex` is true (non-empty) |
+| `regex` | bool | Treat `pattern` as a regular expression (default false = literal) |
 | `path` | string | Directory to search in (default `"."`) |
 | `glob` | string | File filter; bare name pattern (e.g. `*.mbt`) matches the basename at any depth, a pattern containing `/` matches the base-relative path |
 | `output_mode` | string | `content` (default), `files_with_matches`, or `count` |

@@ -157,6 +157,10 @@ async test "grep_unknown_output_mode_and_bad_max_matches_are_loud" {
       ("pattern", Json::string("needle")),
       ("case_insensitive", Json::string("yes")),
     ]),
+    grep_call_fields([
+      ("pattern", Json::string("needle")),
+      ("regex", Json::string("yes")),
+    ]),
   ]
   for call in cases {
     let result = Ok(GrepTools::GrepTools().execute(test_ctx(call))) catch {
@@ -615,4 +619,144 @@ test "grep_files_footer_is_compact" {
   assert_true(truncated)
   assert_true(text.has_suffix("… +1 files"))
   assert_false(text.contains("Found"))
+}
+
+///|
+/// The motivating case: alternation is regex semantics under `regex: true`,
+/// while the same pattern stays a literal string (and matches nothing) by
+/// default.
+async test "grep_regex_alternation_matches_and_literal_pipe_does_not" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-regex")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file(
+      "\{dir}/model.txt",
+      "pub(all) struct ToolCall {\nstruct ToolCallBuilder {\nplain line\n",
+      create_mode=CreateNew,
+    )
+    let regex_hit = GrepTools::GrepTools().execute(
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("struct ToolCall|ToolCall \\{")),
+          ("path", Json::string(dir)),
+          ("regex", Json::boolean(true)),
+        ]),
+      ),
+    )
+    match regex_hit {
+      Success(content~, structured~) => {
+        assert_true(content.contains("1|pub(all) struct ToolCall {"))
+        assert_true(content.contains("2|struct ToolCallBuilder {"))
+        assert_false(content.contains("3|plain"))
+        assert_true(
+          structured is Some(Object(meta)) &&
+          meta.get("count") is Some(Number(2.0, ..)),
+        )
+      }
+      other =>
+        fail("expected Success for regex alternation, got " + other.to_string())
+    }
+    let literal_miss = GrepTools::GrepTools().execute(
+      test_ctx(grep_call("struct ToolCall|ToolCall \\{", dir)),
+    )
+    match literal_miss {
+      Success(content~, ..) => assert_eq(content, "(no matches)")
+      other =>
+        fail("expected literal pipe to match nothing, got " + other.to_string())
+    }
+  }
+}
+
+///|
+/// An invalid regex fails the whole search loudly instead of silently
+/// matching nothing.
+async test "grep_invalid_regex_fails_loudly" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-badre")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.txt", "needle\n", create_mode=CreateNew)
+    let result = Ok(
+      GrepTools::GrepTools().execute(
+        test_ctx(
+          grep_call_fields([
+            ("pattern", Json::string("(unclosed")),
+            ("path", Json::string(dir)),
+            ("regex", Json::boolean(true)),
+          ]),
+        ),
+      ),
+    ) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+        assert_true(message.contains("invalid regex"))
+      _ => fail("expected InvocationFailed for an invalid regex")
+    }
+  }
+}
+
+///|
+async test "grep_regex_case_insensitive_combo" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-re-ci")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file(
+      "\{dir}/a.txt",
+      "needle here\nother line\n",
+      create_mode=CreateNew,
+    )
+    let result = GrepTools::GrepTools().execute(
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("^NEEDLE")),
+          ("path", Json::string(dir)),
+          ("regex", Json::boolean(true)),
+          ("case_insensitive", Json::boolean(true)),
+        ]),
+      ),
+    )
+    match result {
+      Success(content~, ..) => {
+        assert_true(content.contains("1|needle here"))
+        assert_false(content.contains("2|"))
+      }
+      other => fail("expected Success for regex ci, got " + other.to_string())
+    }
+  }
+}
+
+///|
+async test "grep_regex_respects_glob_filter" {
+  @async.with_task_group() <| group => {
+    let dir = @fs.tmpdir(prefix="posoco-grep-re-glob")
+    group.add_defer() <| () => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    }
+    @fs.write_file("\{dir}/a.txt", "alpha\n", create_mode=CreateNew)
+    @fs.write_file("\{dir}/b.md", "gamma\n", create_mode=CreateNew)
+    let result = GrepTools::GrepTools().execute(
+      test_ctx(
+        grep_call_fields([
+          ("pattern", Json::string("alpha|gamma")),
+          ("path", Json::string(dir)),
+          ("glob", Json::string("*.txt")),
+          ("regex", Json::boolean(true)),
+        ]),
+      ),
+    )
+    match result {
+      Success(content~, ..) => {
+        assert_true(content.contains("a.txt"))
+        assert_false(content.contains("b.md"))
+      }
+      other => fail("expected Success for regex glob, got " + other.to_string())
+    }
+  }
 }

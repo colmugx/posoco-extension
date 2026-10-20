@@ -1,14 +1,18 @@
 ///|
 /// GrepTools — content search tool provider.
 ///
-/// Engines share one contract: literal (non-regex) matching, hidden entries
-/// and `ignores` directories pruned, binary-looking files skipped, and an
-/// optional `glob` filter restricting which files are searched. On native
-/// the engine is an in-process walker (`@fs.walk` + per-line `contains`).
-/// On js (bun) the engine ladder is ripgrep first (validated via
-/// `rg --version`, so a grep shim on PATH is rejected), falling back to an
-/// in-process node:fs walker when no real rg is found. On wasm-gc the
-/// tool is not listed and execute raises `RuntimeError::InvocationFailed`.
+/// Engines share one contract: literal matching by default with opt-in
+/// `regex` search, hidden entries and `ignores` directories pruned,
+/// binary-looking files skipped, and an optional `glob` filter restricting
+/// which files are searched. Regex flavor: the js ripgrep path uses ripgrep
+/// syntax, the walker engines use `moonbitlang/regexp`; the common core
+/// (alternation, classes, quantifiers, anchors, groups) agrees across both
+/// and every engine matches line-wise. On native the engine is an in-process
+/// walker (`@fs.walk` + per-line matcher). On js (bun) the engine ladder is
+/// ripgrep first (validated via `rg --version`, so a grep shim on PATH is
+/// rejected), falling back to an in-process node:fs walker when no real rg
+/// is found. On wasm-gc the tool is not listed and execute raises
+/// `RuntimeError::InvocationFailed`.
 pub(all) struct GrepTools {
   // Resolves the search base against the workspace root; None leaves the
   // base on the process working directory.
@@ -57,7 +61,34 @@ priv trait GrepSearcher {
     base : String,
     file_glob : String,
     case_insensitive : Bool,
+    use_regex : Bool,
   ) -> Array[GrepMatch] raise @posoco.RuntimeError
+}
+
+///|
+/// One per-line predicate shared by the walker engines. Regex mode compiles
+/// once per search (`i` flag rides `case_insensitive`); an invalid pattern
+/// fails the whole search loudly instead of silently matching nothing.
+fn grep_line_matcher(
+  pattern : String,
+  case_insensitive : Bool,
+  use_regex : Bool,
+) -> ((StringView) -> Bool) raise @posoco.RuntimeError {
+  if use_regex {
+    let flags = if case_insensitive { "i" } else { "" }
+    let re = @regexp.compile(pattern, flags~) catch {
+      error =>
+        raise @posoco.RuntimeError::InvocationFailed(
+          "grep: invalid regex '\{pattern}': \{error.to_string()}",
+        )
+    }
+    fn(line) { re.match_(line) is Some(_) }
+  } else if case_insensitive {
+    let needle = pattern.to_lower()
+    fn(line) { line.to_lower().contains(needle) }
+  } else {
+    fn(line) { line.contains(pattern) }
+  }
 }
 
 ///|
@@ -107,13 +138,21 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("grep"),
-      description: "Literal file search. Content mode returns file headers plus `line|text`; other modes return matching paths or counts. Skips hidden/ignored/binary files.",
+      description: "Literal file search; set `regex: true` to match a regular expression instead. Content mode returns file headers plus `line|text`; other modes return matching paths or counts. Skips hidden/ignored/binary files. For syntax-shaped code queries (definitions, call sites, AST patterns in source), prefer astgrep.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
             "type": Json::string("string"),
-            "description": Json::string("Literal search text"),
+            "description": Json::string(
+              "Literal search text, or a regular expression when `regex` is true",
+            ),
+          }),
+          "regex": Json::object({
+            "type": Json::string("boolean"),
+            "description": Json::string(
+              "Treat pattern as a regular expression; default false = literal text",
+            ),
           }),
           "path": Json::object({
             "type": Json::string("string"),
@@ -148,12 +187,12 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
 }
 
 ///|
-/// Extract `(pattern, base, file_glob, mode, case_insensitive, max_matches)`
-/// from ToolCall arguments. Wrong types and bad values are loud; `base`
-/// defaults to "." and `file_glob` to "" (no filter).
+/// Extract `(pattern, base, file_glob, mode, case_insensitive, use_regex,
+/// max_matches)` from ToolCall arguments. Wrong types and bad values are
+/// loud; `base` defaults to "." and `file_glob` to "" (no filter).
 fn extract_grep_args(
   args : Json,
-) -> (String, String, String, GrepOutputMode, Bool, Int32) raise @posoco.RuntimeError {
+) -> (String, String, String, GrepOutputMode, Bool, Bool, Int32) raise @posoco.RuntimeError {
   match args {
     Object(obj) => {
       let p = match obj.get("pattern") {
@@ -214,6 +253,15 @@ fn extract_grep_args(
             "grep: 'case_insensitive' must be boolean",
           )
       }
+      let use_regex = match obj.get("regex") {
+        None | Some(Null) => false
+        Some(True) => true
+        Some(False) => false
+        Some(_) =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "grep: 'regex' must be boolean",
+          )
+      }
       let max = match obj.get("max_matches") {
         None | Some(Null) => GREP_DEFAULT_MAX_MATCHES
         Some(Number(n, ..)) => {
@@ -230,7 +278,7 @@ fn extract_grep_args(
             "grep: 'max_matches' must be an integer",
           )
       }
-      (p, b, g, mode, ci, max)
+      (p, b, g, mode, ci, use_regex, max)
     }
     _ => raise @posoco.RuntimeError::UnknownTool("grep: invalid arguments")
   }
@@ -435,14 +483,20 @@ async fn execute_grep_impl(
   anchor : @devkit.WorkspaceAnchor?,
   call : @posoco.ToolCall,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
-  let (pattern, raw_base, file_glob, mode, case_insensitive, max_matches) = extract_grep_args(
-    call.arguments,
-  )
+  let (
+    pattern,
+    raw_base,
+    file_glob,
+    mode,
+    case_insensitive,
+    use_regex,
+    max_matches,
+  ) = extract_grep_args(call.arguments)
   let matches = match anchor {
     Some(anchor) => {
       let resolved = anchor.resolve(raw_base)
       let found = searcher.search(
-        pattern, resolved, file_glob, case_insensitive,
+        pattern, resolved, file_glob, case_insensitive, use_regex,
       )
       [
         for m in found => {
@@ -460,7 +514,7 @@ async fn execute_grep_impl(
     }
     None => {
       let found = searcher.search(
-        pattern, raw_base, file_glob, case_insensitive,
+        pattern, raw_base, file_glob, case_insensitive, use_regex,
       )
       [
         for m in found => {

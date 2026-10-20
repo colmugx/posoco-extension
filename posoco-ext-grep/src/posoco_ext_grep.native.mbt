@@ -47,9 +47,10 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
   base : String,
   file_glob : String,
   case_insensitive : Bool,
+  use_regex : Bool,
 ) -> Array[GrepMatch] {
   let results : Array[GrepMatch] = []
-  let needle = if case_insensitive { pattern.to_lower() } else { pattern }
+  let match_line = grep_line_matcher(pattern, case_insensitive, use_regex)
   @fs.walk(
     base,
     (dir : String, entries : Array[String]) => {
@@ -83,12 +84,7 @@ impl GrepSearcher for NativeGrepSearcher with fn search(
         let mut line_num = 0
         for line in text.split("\n") {
           line_num += 1
-          let hit = if case_insensitive {
-            line.to_lower().contains(needle)
-          } else {
-            line.contains(pattern)
-          }
-          if hit {
+          if match_line(line) {
             results.push(GrepMatch::{
               path: full,
               line: line_num,

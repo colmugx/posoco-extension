@@ -63,14 +63,14 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("astgrep"),
-      description: "Structural code search with ast-grep patterns and meta-variables. Returns compact file/line excerpts.",
+      description: "Structural code search with ast-grep patterns and meta-variables (`$NAME`, `$$$BODY`). Prefer over grep for code-shape queries in source files — where a function/class/method is defined, who calls it, method overrides, argument shapes. Returns compact file/line excerpts.",
       input_schema: Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
             "type": Json::string("string"),
             "description": Json::string(
-              "AST pattern; supports $NAME and $$$BODY meta-variables",
+              "AST pattern; supports $NAME and $$$BODY meta-variables, e.g. `function $F($$$ARGS) { $$$BODY }`",
             ),
           }),
           "lang": Json::object({
