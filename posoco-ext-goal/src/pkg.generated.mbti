@@ -13,13 +13,13 @@ import {
 // Values
 pub fn build_charter(goal_condition~ : String, checklist~ : Array[String], completion_marker~ : String, blocked_marker~ : String, plan_tool_name~ : String) -> String
 
-pub fn build_progress(turn~ : Int, max_turns~ : Int, total_tokens~ : Int, max_total_tokens~ : Int, plan_snapshot~ : String, next_step~ : String?, variant~ : Int) -> String
+pub fn build_progress(turn~ : Int32, max_turns~ : Int32, total_tokens~ : Int32, max_total_tokens~ : Int32, plan_snapshot~ : String, next_step~ : String?, variant~ : Int32) -> String
 
 pub fn build_verification_prompt(checklist~ : Array[String], completion_marker~ : String, blocked_marker~ : String) -> String
 
 pub fn build_wrapup_prompt(goal_condition~ : String, plan_tool_name~ : String, completion_marker~ : String) -> String
 
-pub fn continue_instruction(Int) -> String
+pub fn continue_instruction(Int32) -> String
 
 pub fn goal_extension(goal_condition~ : String) -> GoalRunner
 
@@ -29,13 +29,13 @@ pub fn scan_final_message(message~ : @kernel.Message, completion_marker~ : Strin
 
 // Types and methods
 pub(all) struct GoalBudget {
-  mut max_turns : Int
-  mut max_total_tokens : Int
+  mut max_turns : Int32
+  mut max_total_tokens : Int32
 } derive(@debug.Debug)
 pub fn GoalBudget::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalHistoryEntry {
-  turn : Int
+  turn : Int32
   usage : GoalUsage
   summary : String
 } derive(Eq, @debug.Debug)
@@ -49,11 +49,11 @@ pub(all) struct GoalOptions {
   completion_marker : String
   blocked_marker : String
   mut wrapup_ratio : Double
-  mut stall_turn_threshold : Int
-  mut stall_min_tokens : Int
+  mut stall_turn_threshold : Int32
+  mut stall_min_tokens : Int32
   completion_checklist : Array[String]
-  mut max_verifier_rounds : Int
-  mut stall_repeat_threshold : Int
+  mut max_verifier_rounds : Int32
+  mut stall_repeat_threshold : Int32
   mut plan_tool_name : String
 } derive(@debug.Debug)
 pub fn GoalOptions::default(goal_condition~ : String) -> Self
@@ -96,7 +96,7 @@ pub impl Show for GoalPlanStatus
 pub(all) struct GoalResult {
   final_status : GoalStatus
   total_usage : GoalUsage
-  turns_completed : Int
+  turns_completed : Int32
   history : Array[GoalHistoryEntry]
   final_plan : GoalPlan
   stall_reason : String?
@@ -108,22 +108,22 @@ pub struct GoalRunner {
   mut status : GoalStatus
   mut usage : GoalUsage
   mut history : Array[GoalHistoryEntry]
-  mut current_turn : Int
-  mut last_total_tokens : Int
-  mut stall_count : Int
+  mut current_turn : Int32
+  mut last_total_tokens : Int32
+  mut stall_count : Int32
   mut wrapup_sent : Bool
   mut plan : GoalPlan
   mut charter : String
   mut charter_delivered : Bool
   mut completion_claimed : Bool
   mut verifying : Bool
-  mut verifier_rounds : Int
-  mut prompt_variant : Int
+  mut verifier_rounds : Int32
+  mut prompt_variant : Int32
   mut last_stall_reason : String?
   mut last_retraction : String?
   mut last_tool_fp : String?
-  mut repeat_count : Int
-  mut plan_streak : Int
+  mut repeat_count : Int32
+  mut plan_streak : Int32
   mut prev_plan_fp : String?
 } derive(@debug.Debug)
 pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> Self
@@ -160,8 +160,8 @@ pub fn GoalStatus::to_string(Self) -> String
 pub impl Show for GoalStatus
 
 pub(all) struct GoalUsage {
-  mut turns : Int
-  mut total_tokens : Int
+  mut turns : Int32
+  mut total_tokens : Int32
 } derive(Eq, @debug.Debug)
 pub fn GoalUsage::equal(Self, Self) -> Bool
 pub fn GoalUsage::not_equal(Self, Self) -> Bool

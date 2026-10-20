@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub fn encode_frame(Json, max_frame_bytes? : Int) -> Bytes raise ProtocolError
+pub fn encode_frame(Json, max_frame_bytes? : Int32) -> Bytes raise ProtocolError
 
-pub let version : Int
+pub let version : Int32
 
 // Errors
 pub suberror ProtocolError {
@@ -19,7 +19,7 @@ pub fn ProtocolError::to_repr(Self) -> @debug.Repr
 // Types and methods
 pub(all) enum Action {
   Ready
-  Call(id~ : Int, name~ : String, arguments~ : Json)
+  Call(id~ : Int32, name~ : String, arguments~ : Json)
   Diagnostic(level~ : String, content~ : String)
   Closing
 } derive(@debug.Debug)
@@ -27,26 +27,26 @@ pub fn Action::to_repr(Self) -> @debug.Repr
 
 pub struct Decoder {
   bytes : Array[Byte]
-  max_frame_bytes : Int
+  max_frame_bytes : Int32
 }
-pub fn Decoder::Decoder(max_frame_bytes? : Int) -> Self
+pub fn Decoder::Decoder(max_frame_bytes? : Int32) -> Self
 pub fn Decoder::feed(Self, Bytes) -> Array[Json] raise ProtocolError
 pub fn Decoder::finish(Self) -> Unit raise ProtocolError
 
 pub struct HostSession {
   // private fields
 }
-pub fn HostSession::HostSession(max_pending? : Int, max_calls? : Int) -> Self
+pub fn HostSession::HostSession(max_pending? : Int32, max_calls? : Int32) -> Self
 pub fn HostSession::close(Self) -> Unit
-pub fn HostSession::finish(Self, Int) -> Outcome raise ProtocolError
+pub fn HostSession::finish(Self, Int32) -> Outcome raise ProtocolError
 pub fn HostSession::receive(Self, Message) -> Action raise ProtocolError
-pub fn HostSession::reply(Self, Int, Outcome) -> Message raise ProtocolError
+pub fn HostSession::reply(Self, Int32, Outcome) -> Message raise ProtocolError
 
 pub(all) enum Message {
-  Hello(protocol~ : Int)
-  Invoke(input~ : Json, tools~ : Array[String], max_pending~ : Int, max_frame_bytes~ : Int)
-  Request(id~ : Int, name~ : String, arguments~ : Json)
-  Reply(id~ : Int, outcome~ : Outcome)
+  Hello(protocol~ : Int32)
+  Invoke(input~ : Json, tools~ : Array[String], max_pending~ : Int32, max_frame_bytes~ : Int32)
+  Request(id~ : Int32, name~ : String, arguments~ : Json)
+  Reply(id~ : Int32, outcome~ : Outcome)
   Log(level~ : String, content~ : String)
   Result(outcome~ : Outcome)
   Cancel(reason~ : String)

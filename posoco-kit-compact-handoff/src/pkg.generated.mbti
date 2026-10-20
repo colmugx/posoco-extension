@@ -8,7 +8,7 @@ import {
 // Values
 pub const HANDOFF_PREFIX : String = "This session continues from a previous conversation that was compacted. Summary of the earlier work:"
 
-pub fn build_handoff_result(String, Array[@kernel.Message], String, retrieval_hint? : String, tail_turns? : Int) -> @kernel.CompactResult
+pub fn build_handoff_result(String, Array[@kernel.Message], String, retrieval_hint? : String, tail_turns? : Int32) -> @kernel.CompactResult
 
 pub fn default_retrieval_hint() -> String
 

@@ -28,9 +28,9 @@ pub(all) struct QwenConfig {
   emit_preserve_thinking : Bool
   tool_stream : Bool
   supports_images : Bool
-  context_window : Int?
+  context_window : Int32?
 } derive(Eq, @debug.Debug)
-pub fn QwenConfig::QwenConfig(String, base_url~ : String, model? : String, endpoint_prefix? : String, reasoning_effort? : String?, enable_thinking? : Bool?, preserve_thinking? : Bool?, tool_stream? : Bool?, supports_images? : Bool?, context_window? : Int?) -> Self
+pub fn QwenConfig::QwenConfig(String, base_url~ : String, model? : String, endpoint_prefix? : String, reasoning_effort? : String?, enable_thinking? : Bool?, preserve_thinking? : Bool?, tool_stream? : Bool?, supports_images? : Bool?, context_window? : Int32?) -> Self
 pub fn QwenConfig::equal(Self, Self) -> Bool
 pub fn QwenConfig::not_equal(Self, Self) -> Bool
 pub fn QwenConfig::to_repr(Self) -> @debug.Repr

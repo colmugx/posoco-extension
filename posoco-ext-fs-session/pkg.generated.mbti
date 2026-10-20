@@ -70,7 +70,7 @@ pub(all) struct JsonlSessionStore {
   mut selection_revision : Int64
 }
 pub fn JsonlSessionStore::JsonlSessionStore(String, bus? : @devkit.EventBus?, selection_control? : &@posoco-kit-model-management.ModelManagerControl?) -> Self
-pub async fn JsonlSessionStore::append_messages(Self, String, Int, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
+pub async fn JsonlSessionStore::append_messages(Self, String, Int32, ArrayView[@kernel.Message]) -> Unit raise @error.SessionError
 pub async fn JsonlSessionStore::checkpoint(Self, String, @port.SessionCheckpoint) -> Unit raise @error.SessionError
 pub fn JsonlSessionStore::commands(Self) -> Array[@port.CommandDef]
 pub fn JsonlSessionStore::extension_id(Self) -> String
@@ -84,7 +84,7 @@ pub async fn JsonlSessionStore::save(Self, String, @types.Session) -> Unit raise
 pub async fn JsonlSessionStore::selection_for_owner(Self, String, String) -> @posoco-kit-model-management.SelectionRef? raise @error.SessionError
 pub async fn JsonlSessionStore::set_session_name(Self, String, String) -> Unit raise @error.SessionError
 pub async fn JsonlSessionStore::summary(Self, String) -> SessionSummary raise @error.SessionError
-pub async fn JsonlSessionStore::truncate(Self, String, Int) -> Unit raise @error.SessionError
+pub async fn JsonlSessionStore::truncate(Self, String, Int32) -> Unit raise @error.SessionError
 pub impl @port.CommandPort for JsonlSessionStore
 pub impl @port.Extension for JsonlSessionStore
 pub impl @port.SessionStore for JsonlSessionStore

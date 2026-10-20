@@ -20,7 +20,7 @@ pub fn SequentialWorkflowRunner::SequentialWorkflowRunner(orchestrator~ : @orche
 pub fn SequentialWorkflowRunner::cancel(Self) -> Unit
 pub fn SequentialWorkflowRunner::pause(Self) -> Bool
 pub fn SequentialWorkflowRunner::resume_workflow(Self) -> Bool
-pub async fn SequentialWorkflowRunner::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn SequentialWorkflowRunner::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn SequentialWorkflowRunner::start(Self, WorkflowRunSpec) -> Result[Unit, WorkflowError]
 pub fn SequentialWorkflowRunner::status(Self) -> WorkflowStatus
 pub fn SequentialWorkflowRunner::stop_after_current(Self) -> Bool
@@ -66,12 +66,12 @@ pub fn WorkflowPhase::to_repr(Self) -> @debug.Repr
 pub(all) struct WorkflowRunSpec {
   run_id : String
   scope : WorkflowScope
-  max_executions : Int
-  max_elapsed_ms : Int
-  execution_timeout_ms : Int
+  max_executions : Int32
+  max_elapsed_ms : Int32
+  execution_timeout_ms : Int32
   failure_policy : WorkflowFailurePolicy
 } derive(Eq, @debug.Debug)
-pub fn WorkflowRunSpec::WorkflowRunSpec(run_id~ : String, scope~ : WorkflowScope, max_executions~ : Int, max_elapsed_ms~ : Int, execution_timeout_ms~ : Int, failure_policy? : WorkflowFailurePolicy) -> Self
+pub fn WorkflowRunSpec::WorkflowRunSpec(run_id~ : String, scope~ : WorkflowScope, max_executions~ : Int32, max_elapsed_ms~ : Int32, execution_timeout_ms~ : Int32, failure_policy? : WorkflowFailurePolicy) -> Self
 pub fn WorkflowRunSpec::equal(Self, Self) -> Bool
 pub fn WorkflowRunSpec::not_equal(Self, Self) -> Bool
 pub fn WorkflowRunSpec::to_repr(Self) -> @debug.Repr
@@ -88,11 +88,11 @@ pub fn WorkflowScope::to_repr(Self) -> @debug.Repr
 pub(all) struct WorkflowStatus {
   run_id : String?
   phase : WorkflowPhase
-  admitted : Int
-  succeeded : Int
-  failed : Int
-  cancelled : Int
-  remaining_executions : Int
+  admitted : Int32
+  succeeded : Int32
+  failed : Int32
+  cancelled : Int32
+  remaining_executions : Int32
   started_at_ms : Int64?
   elapsed_ms : Int64
   remaining_ms : Int64

@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub const MAX_TODOS : Int = 50
+pub const MAX_TODOS : Int32 = 50
 
 pub fn render_todos(Array[TodoItem]) -> String
 
@@ -38,7 +38,7 @@ pub fn TodoList::manifest(Self) -> @port.ExtensionManifest
 pub fn TodoList::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub async fn TodoList::on_shutdown(Self) -> Unit
 pub async fn TodoList::on_start(Self) -> Unit
-pub fn TodoList::revision(Self) -> Int
+pub fn TodoList::revision(Self) -> Int32
 pub fn TodoList::system_prompt(Self) -> String
 pub impl @port.CommandPort for TodoList
 pub impl @port.Extension for TodoList

@@ -6,19 +6,19 @@ import {
 }
 
 // Values
-pub fn estimate_tokens(String) -> Int
+pub fn estimate_tokens(String) -> Int32
 
-pub fn estimate_transcript_tokens(Array[@kernel.Message]) -> Int
+pub fn estimate_transcript_tokens(Array[@kernel.Message]) -> Int32
 
-pub fn evict_old_tool_results(Array[@kernel.Message], protect_user_turns? : Int) -> EvictResult
+pub fn evict_old_tool_results(Array[@kernel.Message], protect_user_turns? : Int32) -> EvictResult
 
 // Errors
 
 // Types and methods
 pub(all) struct EvictResult {
   messages : Array[@kernel.Message]
-  evicted_tool_calls : Int
-  evicted_tokens : Int
+  evicted_tool_calls : Int32
+  evicted_tokens : Int32
 } derive(Eq)
 pub fn EvictResult::equal(Self, Self) -> Bool
 pub fn EvictResult::not_equal(Self, Self) -> Bool

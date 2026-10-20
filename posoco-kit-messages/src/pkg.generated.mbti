@@ -23,7 +23,7 @@ pub fn compare_messages_cache_prefix(Json, Json) -> MessagesCachePrefixCompariso
 
 pub fn count_tokens_request(model~ : String, messages~ : Array[Json], system? : Json?, tools? : Array[Json], thinking? : ThinkingConfig?) -> Json raise @error.ModelError
 
-pub fn encode_request(model~ : String, max_tokens~ : Int, system? : Json?, messages~ : Array[Json], tools? : Array[Json], options? : MessagesRequestOptions) -> Json raise @error.ModelError
+pub fn encode_request(model~ : String, max_tokens~ : Int32, system? : Json?, messages~ : Array[Json], tools? : Array[Json], options? : MessagesRequestOptions) -> Json raise @error.ModelError
 
 pub fn inspect_messages_cache_layout(Json) -> MessagesCacheLayout raise @error.ModelError
 
@@ -33,7 +33,7 @@ pub fn is_messages_replay_envelope(Json?) -> Bool
 
 pub fn map_stop_reason(reason~ : String) -> @kernel.FinishReason raise @error.ModelError
 
-pub fn mark_messages_stable_history_checkpoints(Json, stable_messages~ : Int, ttl? : String, reserve_automatic_slot? : Bool) -> Json raise @error.ModelError
+pub fn mark_messages_stable_history_checkpoints(Json, stable_messages~ : Int32, ttl? : String, reserve_automatic_slot? : Bool) -> Json raise @error.ModelError
 
 pub fn mark_messages_stable_prefix(Json, MessagesStablePrefix, ttl? : String) -> Json raise @error.ModelError
 
@@ -41,7 +41,7 @@ pub fn message_to_wire(@kernel.Message) -> Array[Json] raise @error.ModelError
 
 pub fn messages_stream_result(provider~ : String, acc~ : @types.StreamAccumulator, state~ : MessagesSseState) -> MessagesResult raise @error.ModelError
 
-pub fn parse_count_tokens_response(provider~ : String, Json) -> Int raise @error.ModelError
+pub fn parse_count_tokens_response(provider~ : String, Json) -> Int32 raise @error.ModelError
 
 pub fn parse_messages_cache_creation(Json) -> MessagesCacheCreation raise @error.ModelError
 
@@ -78,17 +78,17 @@ pub fn MessagesCacheCapabilities::not_equal(Self, Self) -> Bool
 pub fn MessagesCacheCapabilities::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MessagesCacheCreation {
-  ephemeral_5m_input_tokens : Int?
-  ephemeral_1h_input_tokens : Int?
+  ephemeral_5m_input_tokens : Int32?
+  ephemeral_1h_input_tokens : Int32?
 } derive(Eq, @debug.Debug)
 pub fn MessagesCacheCreation::equal(Self, Self) -> Bool
 pub fn MessagesCacheCreation::not_equal(Self, Self) -> Bool
 pub fn MessagesCacheCreation::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MessagesCacheEconomics {
-  input_tokens : Int
-  cache_read_tokens : Int?
-  cache_write_tokens : Int?
+  input_tokens : Int32
+  cache_read_tokens : Int32?
+  cache_write_tokens : Int32?
   cache_hit_ratio : Double?
   effective_input_cost : Double?
   uncached_input_cost : Double?
@@ -97,9 +97,9 @@ pub(all) struct MessagesCacheEconomics {
 pub fn MessagesCacheEconomics::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MessagesCacheLayout {
-  explicit_breakpoints : Int
-  scanned_blocks : Int
-  blocks_since_last_explicit : Int
+  explicit_breakpoints : Int32
+  scanned_blocks : Int32
+  blocks_since_last_explicit : Int32
   lookback_risk : Bool
 } derive(Eq, @debug.Debug)
 pub fn MessagesCacheLayout::equal(Self, Self) -> Bool
@@ -123,7 +123,7 @@ pub(all) struct MessagesCachePrefixComparison {
   history_is_prefix : Bool
   request_settings_stable : Bool
   prefix_reusable : Bool
-  suffix_message_count : Int
+  suffix_message_count : Int32
 } derive(Eq, @debug.Debug)
 pub fn MessagesCachePrefixComparison::equal(Self, Self) -> Bool
 pub fn MessagesCachePrefixComparison::not_equal(Self, Self) -> Bool
@@ -148,10 +148,10 @@ pub(all) struct MessagesRequestOptions {
   cache_capabilities : MessagesCacheCapabilities
   stable_prefix : MessagesStablePrefix?
   stable_prefix_ttl : String
-  stable_history_messages : Int?
+  stable_history_messages : Int32?
   stable_history_ttl : String
 } derive(@debug.Debug)
-pub fn MessagesRequestOptions::MessagesRequestOptions(temperature? : Double?, stop_sequences? : Array[String], tool_choice? : MessagesToolChoice?, thinking? : ThinkingConfig?, metadata? : Json?, extra_top_level? : Array[(String, Json)], cache_mode? : MessagesCacheMode, cache_capabilities? : MessagesCacheCapabilities, stable_prefix? : MessagesStablePrefix?, stable_prefix_ttl? : String, stable_history_messages? : Int?, stable_history_ttl? : String) -> Self
+pub fn MessagesRequestOptions::MessagesRequestOptions(temperature? : Double?, stop_sequences? : Array[String], tool_choice? : MessagesToolChoice?, thinking? : ThinkingConfig?, metadata? : Json?, extra_top_level? : Array[(String, Json)], cache_mode? : MessagesCacheMode, cache_capabilities? : MessagesCacheCapabilities, stable_prefix? : MessagesStablePrefix?, stable_prefix_ttl? : String, stable_history_messages? : Int32?, stable_history_ttl? : String) -> Self
 pub fn MessagesRequestOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MessagesResult {
@@ -192,14 +192,14 @@ pub fn MessagesToolChoice::not_equal(Self, Self) -> Bool
 pub fn MessagesToolChoice::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MessagesUsage {
-  input_tokens : Int
-  output_tokens : Int
-  cache_creation_input_tokens : Int?
-  cache_read_input_tokens : Int?
+  input_tokens : Int32
+  output_tokens : Int32
+  cache_creation_input_tokens : Int32?
+  cache_read_input_tokens : Int32?
 } derive(Eq, @debug.Debug)
 pub fn MessagesUsage::equal(Self, Self) -> Bool
 pub fn MessagesUsage::not_equal(Self, Self) -> Bool
-pub fn MessagesUsage::prompt_total(Self) -> Int raise @error.ModelError
+pub fn MessagesUsage::prompt_total(Self) -> Int32 raise @error.ModelError
 pub fn MessagesUsage::to_canonical(Self) -> @kernel.Usage raise @error.ModelError
 pub fn MessagesUsage::to_repr(Self) -> @debug.Repr
 
@@ -228,7 +228,7 @@ pub fn StreamTermination::not_equal(Self, Self) -> Bool
 pub fn StreamTermination::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ThinkingConfig {
-  Enabled(budget_tokens~ : Int?)
+  Enabled(budget_tokens~ : Int32?)
   Adaptive
   BetweenTools
   Disabled

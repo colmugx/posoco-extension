@@ -24,7 +24,7 @@ pub(all) struct ManagerModelInfo {
   model_id : String
   label : String
   provider_id : String
-  context_window : Int?
+  context_window : Int32?
   capabilities : Array[String]
   efforts : Array[String]
   default_effort : String?

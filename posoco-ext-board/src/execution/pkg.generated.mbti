@@ -71,10 +71,10 @@ pub fn BoardExecutionOwner::bindings(Self) -> Array[BoardExecutionBinding]
 pub async fn BoardExecutionOwner::board_state(Self) -> Result[@domain.BoardStateSnapshot, BoardExecutionError]
 pub fn BoardExecutionOwner::cancel(Self, String) -> Result[Unit, BoardExecutionError]
 pub async fn BoardExecutionOwner::execute(Self, BoardExecutionRequest, admission_guard? : (@domain.BoardStateSnapshot) -> Bool, reservation_revision? : Int64) -> Result[BoardExecutionHandle, BoardExecutionError]
-pub async fn BoardExecutionOwner::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn BoardExecutionOwner::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub fn BoardExecutionOwner::status(Self) -> BoardExecutionOwnerStatus
 pub fn BoardExecutionOwner::uses_backend(Self, @backend.BoardBackend) -> Bool
-pub fn BoardExecutionOwner::with_slots(backend~ : @backend.BoardBackend, store~ : &BoardExecutionStore, adapter_factory~ : (Int) -> &BoardExecutionAdapter, max_concurrency? : Int) -> Result[Self, BoardExecutionError]
+pub fn BoardExecutionOwner::with_slots(backend~ : @backend.BoardBackend, store~ : &BoardExecutionStore, adapter_factory~ : (Int32) -> &BoardExecutionAdapter, max_concurrency? : Int32) -> Result[Self, BoardExecutionError]
 
 pub(all) struct BoardExecutionOwnerStatus {
   attached : Bool
@@ -83,9 +83,9 @@ pub(all) struct BoardExecutionOwnerStatus {
   host_available : Bool
   unresolved : Bool
   active : BoardExecutionBinding?
-  capacity : Int
+  capacity : Int32
   active_bindings : Array[BoardExecutionBinding]
-  available_slots : Int
+  available_slots : Int32
 } derive(Eq, @debug.Debug)
 pub fn BoardExecutionOwnerStatus::equal(Self, Self) -> Bool
 pub fn BoardExecutionOwnerStatus::not_equal(Self, Self) -> Bool
@@ -108,13 +108,13 @@ pub(all) struct BoardExecutionRequest {
   execution_id : String
   session_id : String
   input : String
-  timeout_ms : Int?
+  timeout_ms : Int32?
 }
 
 pub struct BoardExecutionResultChannel {
   // private fields
 }
-pub fn BoardExecutionResultChannel::BoardExecutionResultChannel(max_chars~ : Int) -> Self
+pub fn BoardExecutionResultChannel::BoardExecutionResultChannel(max_chars~ : Int32) -> Self
 pub fn BoardExecutionResultChannel::discard(Self) -> Unit
 pub fn BoardExecutionResultChannel::take(Self, BoardExecutionBinding) -> String?
 

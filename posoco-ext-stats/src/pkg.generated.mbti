@@ -14,13 +14,13 @@ import {
 
 // Types and methods
 pub struct CacheBucket {
-  mut requests : Int
-  mut cache_reported_requests : Int
-  mut hit_requests : Int
-  mut sum_input : Int
-  mut sum_cache_input : Int
-  mut sum_output : Int
-  mut sum_cached : Int
+  mut requests : Int32
+  mut cache_reported_requests : Int32
+  mut hit_requests : Int32
+  mut sum_input : Int32
+  mut sum_cache_input : Int32
+  mut sum_output : Int32
+  mut sum_cached : Int32
 }
 
 pub struct Stats {
@@ -31,13 +31,13 @@ pub struct Stats {
   mut round_started_ms : Int64?
   mut first_token_ms : Int64?
   mut last_chunk_ms : Int64?
-  mut delta_chars : Int
-  mut streamed_output_tokens : Int?
+  mut delta_chars : Int32
+  mut streamed_output_tokens : Int32?
   mut chars_per_token : Double
   mut last_live_ms : Int64?
   mut sum_tps_tokens : Double
   mut sum_tps_ms : Int64
-  mut tps_rounds : Int
+  mut tps_rounds : Int32
   cache_buckets : Map[String, CacheBucket]
 }
 pub fn Stats::Stats(bus? : @devkit.EventBus?, clock? : () -> Int64, live_interval_ms? : Int64, max_plausible_tps? : Double) -> Self

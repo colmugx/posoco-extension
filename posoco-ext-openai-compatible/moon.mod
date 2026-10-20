@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-openai-compatible"
 version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.22.2",
+  "colmugx/posoco@0.22.3",
   "posoco/devkit@0.4.1",
   "colmugx/posoco-kit-rate-limit@0.1.0",
   "posoco/kit-chat-completions@0.1.0",

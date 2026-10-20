@@ -64,7 +64,7 @@ pub async fn FileBoardStore::persist(Self, @domain.BoardStateSnapshot, Array[@do
 pub impl BoardStore for FileBoardStore
 
 pub(all) struct JournalRecord {
-  schema_version : Int
+  schema_version : Int32
   revision : Int64
   event : @domain.BoardEvent
 } derive(Eq, @debug.Debug)

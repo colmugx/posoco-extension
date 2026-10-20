@@ -39,7 +39,7 @@ pub fn pricing_registry_register(String, &PricingSource) -> Unit
 
 pub fn pricing_registry_unregister(String) -> Unit
 
-pub fn publish_status_register(EventBus, source~ : String, segment~ : String, label? : String, priority? : Int, value? : String, color? : String) -> Unit
+pub fn publish_status_register(EventBus, source~ : String, segment~ : String, label? : String, priority? : Int32, value? : String, color? : String) -> Unit
 
 pub fn publish_status_unregister(EventBus, source~ : String, segment~ : String) -> Unit
 
@@ -53,9 +53,9 @@ pub fn quota_registry_unregister(String) -> Unit
 
 pub fn relative_to_base(String, String) -> String
 
-pub fn sanitize_label(String, limit? : Int) -> String
+pub fn sanitize_label(String, limit? : Int32) -> String
 
-pub fn sanitize_path(String, limit? : Int) -> String
+pub fn sanitize_path(String, limit? : Int32) -> String
 
 pub fn status_bus_default() -> EventBus?
 
@@ -65,7 +65,7 @@ pub fn status_color_roles() -> Array[String]
 
 pub fn strip_dot_prefix(String) -> String
 
-pub fn truncate_chars(String, Int) -> String
+pub fn truncate_chars(String, Int32) -> String
 
 // Errors
 
@@ -85,7 +85,7 @@ pub struct EventBus {
 pub fn EventBus::EventBus() -> Self
 pub fn EventBus::publish(Self, BusEvent) -> Unit
 pub fn EventBus::subscribe(Self, &BusSubscriber) -> Unit
-pub fn EventBus::subscriber_count(Self) -> Int
+pub fn EventBus::subscriber_count(Self) -> Int32
 
 pub(all) struct ExtContext {
   logger : &Logger
@@ -100,7 +100,7 @@ pub fn ExtContext::warn(Self, source~ : String, code~ : String, message~ : Strin
 
 pub(all) struct FileStamp {
   mtime_s : Int64
-  mtime_ns : Int
+  mtime_ns : Int32
   size : Int64
 } derive(Eq, @debug.Debug)
 pub fn FileStamp::equal(Self, Self) -> Bool
@@ -157,8 +157,8 @@ pub(all) struct MetricsPoint {
   effort : String
   iq : Double
   cost_usd : Double
-  passed : Int
-  total : Int
+  passed : Int32
+  total : Int32
   tokens : Double?
   minutes : Double?
 } derive(Eq, @debug.Debug)
@@ -193,7 +193,7 @@ pub fn QuotaReading::not_equal(Self, Self) -> Bool
 pub fn QuotaReading::to_repr(Self) -> @debug.Repr
 
 pub(all) enum StatusOp {
-  Register(segment~ : String, label~ : String?, priority~ : Int, value~ : String?, color~ : String?)
+  Register(segment~ : String, label~ : String?, priority~ : Int32, value~ : String?, color~ : String?)
   Update(segment~ : String, value~ : String)
   Unregister(segment~ : String)
 } derive(Eq, @debug.Debug)

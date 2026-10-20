@@ -77,13 +77,13 @@ pub(all) enum AuthPromptRequest {
 pub(all) struct Credential {
   access_token : String
   refresh_token : String
-  expires_at : Int
+  expires_at : Int32
   token_type : String
   metadata : Map[String, String]
 }
-pub fn Credential::Credential(access_token~ : String, refresh_token~ : String, expires_at~ : Int, token_type? : String, metadata? : Map[String, String]) -> Self
+pub fn Credential::Credential(access_token~ : String, refresh_token~ : String, expires_at~ : Int32, token_type? : String, metadata? : Map[String, String]) -> Self
 pub fn Credential::from_json(Json) -> Self?
-pub fn Credential::is_expired(Self, Int) -> Bool
+pub fn Credential::is_expired(Self, Int32) -> Bool
 pub fn Credential::metadata_value(Self, String) -> String?
 pub fn Credential::to_auth_header(Self) -> AuthHeader
 pub fn Credential::to_json(Self) -> Json
@@ -100,8 +100,8 @@ pub(all) struct DeviceAuthResponse {
   user_code : String
   verification_uri : String
   verification_uri_complete : String?
-  expires_in : Int
-  interval : Int
+  expires_in : Int32
+  interval : Int32
 }
 
 pub(all) struct DeviceFlowConfig {
@@ -162,20 +162,20 @@ pub(all) struct OAuthHttpRequest {
 pub fn OAuthHttpRequest::OAuthHttpRequest(url~ : String, body~ : String, headers~ : Map[String, String]) -> Self
 
 pub(all) struct OAuthHttpResponse {
-  status : Int
+  status : Int32
   body : String
 }
-pub fn OAuthHttpResponse::OAuthHttpResponse(status~ : Int, body~ : String) -> Self
+pub fn OAuthHttpResponse::OAuthHttpResponse(status~ : Int32, body~ : String) -> Self
 
 pub(all) struct PkceFlowConfig {
   client_id : String
   authorize_url : String
   token_url : String
   redirect_uri : String
-  callback_port : Int
+  callback_port : Int32
   scope : String
   extra_authorize_params : Array[(String, String)]
-  fallback_port : Int?
+  fallback_port : Int32?
 }
 
 pub(all) struct PkcePair {
@@ -225,7 +225,7 @@ pub(open) trait AuthPromptInteraction {
 }
 
 pub(open) trait CallbackServer {
-  async fn start(Self, Int) -> Unit raise OAuthError
+  async fn start(Self, Int32) -> Unit raise OAuthError
   async fn wait_callback(Self) -> (String, String) raise OAuthError
   fn stop(Self) -> Unit
 }

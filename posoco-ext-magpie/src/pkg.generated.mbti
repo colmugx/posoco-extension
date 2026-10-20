@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub const DEFAULT_CONNECT_TIMEOUT_MS : Int = 5000
+pub const DEFAULT_CONNECT_TIMEOUT_MS : Int32 = 5000
 
 pub const DEFAULT_GATEWAY_URL : String = "http://127.0.0.1:3425"
 
@@ -34,7 +34,7 @@ pub fn gateway_url(MagpieConfig, String) -> String
 
 pub fn is_loopback_url(String) -> Bool
 
-pub fn magpie_http_transport(timeout_ms? : Int) -> &MagpieTransport
+pub fn magpie_http_transport(timeout_ms? : Int32) -> &MagpieTransport
 
 pub fn parse_hello(String) -> MagpieIdentity raise MagpieGatewayError
 
@@ -61,7 +61,7 @@ pub impl Show for MagpieGatewayError
 pub struct HttpMagpieTransport {
   // private fields
 }
-pub fn HttpMagpieTransport::HttpMagpieTransport(timeout_ms? : Int) -> Self
+pub fn HttpMagpieTransport::HttpMagpieTransport(timeout_ms? : Int32) -> Self
 
 pub(all) struct MagpieCapability {
   feature : MagpieFeature
@@ -112,9 +112,9 @@ pub fn MagpieCatalogReport::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MagpieConcurrencySnapshot {
   requests : Array[Json]
-  waiting : Int?
-  tools : Int?
-  data : Array[(String, Int)]
+  waiting : Int32?
+  tools : Int32?
+  data : Array[(String, Int32)]
 } derive(Eq, @debug.Debug)
 pub fn MagpieConcurrencySnapshot::equal(Self, Self) -> Bool
 pub fn MagpieConcurrencySnapshot::not_equal(Self, Self) -> Bool
@@ -123,12 +123,12 @@ pub fn MagpieConcurrencySnapshot::to_repr(Self) -> @debug.Repr
 pub struct MagpieConfig {
   base_url : String
   credential : String?
-  connect_timeout_ms : Int
+  connect_timeout_ms : Int32
   enabled : Bool
   selected_model : String?
   selected_effort : String?
 } derive(Eq)
-pub fn MagpieConfig::MagpieConfig(base_url? : String, credential? : String?, connect_timeout_ms? : Int, enabled? : Bool, selected_model? : String?, selected_effort? : String?) -> Self raise MagpieGatewayError
+pub fn MagpieConfig::MagpieConfig(base_url? : String, credential? : String?, connect_timeout_ms? : Int32, enabled? : Bool, selected_model? : String?, selected_effort? : String?) -> Self raise MagpieGatewayError
 pub fn MagpieConfig::equal(Self, Self) -> Bool
 pub fn MagpieConfig::not_equal(Self, Self) -> Bool
 pub fn MagpieConfig::output(Self, &Logger) -> Unit
@@ -173,8 +173,8 @@ pub(all) struct MagpieExecutionReport {
   kind : MagpieEndpointKind
   endpoint_path : String
   usage : @kernel.Usage?
-  cache_read_tokens : Int?
-  cache_write_tokens : Int?
+  cache_read_tokens : Int32?
+  cache_write_tokens : Int32?
   finish_reason : @kernel.FinishReason
   response_id : String?
   lossy_opt_in : Bool
@@ -213,7 +213,7 @@ pub async fn MagpieGatewayIntelligence::quota_snapshot(Self, kept? : Bool) -> Ma
 pub async fn MagpieGatewayIntelligence::refresh_quota_cards(Self) -> MagpieQuotaSnapshot raise @error.ModelError
 pub async fn MagpieGatewayIntelligence::route_snapshot(Self, query~ : MagpieRouteQuery) -> MagpieRouteSnapshot raise @error.ModelError
 pub fn MagpieGatewayIntelligence::service_availability(Self, service~ : MagpieService) -> MagpieServiceAvailability
-pub async fn MagpieGatewayIntelligence::usage_requests(Self, offset? : Int, limit? : Int, period? : MagpieUsagePeriod?) -> MagpieUsageRequestsPage raise @error.ModelError
+pub async fn MagpieGatewayIntelligence::usage_requests(Self, offset? : Int32, limit? : Int32, period? : MagpieUsagePeriod?) -> MagpieUsageRequestsPage raise @error.ModelError
 pub async fn MagpieGatewayIntelligence::usage_summary(Self, period? : MagpieUsagePeriod) -> MagpieUsageSummary raise @error.ModelError
 
 pub(all) struct MagpieIdentity {
@@ -263,10 +263,10 @@ pub(all) struct MagpieModelMetadata {
   magpie_label : String?
   provider_id : String
   is_routing_group : Bool
-  context_window : Int?
-  context_length : Int?
-  max_input_tokens : Int?
-  max_output_tokens : Int?
+  context_window : Int32?
+  context_length : Int32?
+  max_input_tokens : Int32?
+  max_output_tokens : Int32?
   modalities_input : Array[String]?
   reasoning_declared : Bool?
   reasoning_levels : Array[String]?
@@ -387,7 +387,7 @@ pub(all) struct MagpieQuotaCard {
   error : String?
   until : String?
   renew : String?
-  resets_count : Int?
+  resets_count : Int32?
   resets_until : String?
   resets_each_until : Array[String]?
 } derive(Eq, @debug.Debug)
@@ -408,7 +408,7 @@ pub(all) struct MagpieQuotaWindow {
   used : Double?
   remaining : Double?
   resets_at : String?
-  reset_secs : Int?
+  reset_secs : Int32?
   pool : String?
   unlimited : Bool?
   display : String?
@@ -420,9 +420,9 @@ pub fn MagpieQuotaWindow::not_equal(Self, Self) -> Bool
 pub fn MagpieQuotaWindow::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MagpieRefreshOutcome {
-  total : Int
-  added : Int
-  removed : Int
+  total : Int32
+  added : Int32
+  removed : Int32
   duplicates : Array[String]
 } derive(Eq, @debug.Debug)
 pub fn MagpieRefreshOutcome::equal(Self, Self) -> Bool
@@ -463,8 +463,8 @@ pub fn MagpieRouteDecision::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MagpieRouteQuery {
   session : String
-  after : Int?
-  wait : Int?
+  after : Int32?
+  wait : Int32?
 } derive(Eq, @debug.Debug)
 pub fn MagpieRouteQuery::equal(Self, Self) -> Bool
 pub fn MagpieRouteQuery::not_equal(Self, Self) -> Bool
@@ -472,7 +472,7 @@ pub fn MagpieRouteQuery::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MagpieRouteSnapshot {
   session : String
-  seq : Int?
+  seq : Int32?
   route : MagpieRouteDecision?
 } derive(Eq, @debug.Debug)
 pub fn MagpieRouteSnapshot::equal(Self, Self) -> Bool
@@ -581,16 +581,16 @@ pub(all) struct MagpieUsageRequestRow {
   model : String?
   served : String?
   session : String?
-  input_tokens : Int?
-  output_tokens : Int?
-  cache_read_tokens : Int?
-  cache_write_tokens : Int?
-  cache_write_1h_tokens : Int?
-  reasoning_tokens : Int?
+  input_tokens : Int32?
+  output_tokens : Int32?
+  cache_read_tokens : Int32?
+  cache_write_tokens : Int32?
+  cache_write_1h_tokens : Int32?
+  reasoning_tokens : Int32?
   cost : Double?
   priced : Bool?
-  status : Int?
-  duration_ms : Int?
+  status : Int32?
+  duration_ms : Int32?
 } derive(Eq, @debug.Debug)
 pub fn MagpieUsageRequestRow::cache_economics(Self, rates~ : @posoco-kit-messages.MessagesCacheRates) -> @posoco-kit-messages.MessagesCacheEconomics? raise @error.ModelError
 pub fn MagpieUsageRequestRow::equal(Self, Self) -> Bool
@@ -599,8 +599,8 @@ pub fn MagpieUsageRequestRow::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MagpieUsageRequestsPage {
   rows : Array[MagpieUsageRequestRow]
-  offset : Int?
-  total : Int?
+  offset : Int32?
+  total : Int32?
 } derive(Eq, @debug.Debug)
 pub fn MagpieUsageRequestsPage::equal(Self, Self) -> Bool
 pub fn MagpieUsageRequestsPage::not_equal(Self, Self) -> Bool
@@ -609,17 +609,17 @@ pub fn MagpieUsageRequestsPage::to_repr(Self) -> @debug.Repr
 pub(all) struct MagpieUsageSummary {
   period : String?
   since : String?
-  calls : Int?
-  errors : Int?
-  input_tokens : Int?
-  output_tokens : Int?
-  cache_read_tokens : Int?
-  cache_write_tokens : Int?
-  cache_write_1h_tokens : Int?
-  reasoning_tokens : Int?
+  calls : Int32?
+  errors : Int32?
+  input_tokens : Int32?
+  output_tokens : Int32?
+  cache_read_tokens : Int32?
+  cache_write_tokens : Int32?
+  cache_write_1h_tokens : Int32?
+  reasoning_tokens : Int32?
   cost : Double?
-  unpriced : Int?
-  session_count : Int?
+  unpriced : Int32?
+  session_count : Int32?
   sessions : Array[Json]
 } derive(Eq, @debug.Debug)
 pub fn MagpieUsageSummary::equal(Self, Self) -> Bool
@@ -635,7 +635,7 @@ pub(open) trait MagpieEventStream {
 }
 
 pub(open) trait MagpieTransport {
-  async fn get(Self, String, Map[String, String]) -> (Int, String) raise MagpieGatewayError
-  async fn post(Self, String, headers~ : Map[String, String], body~ : String) -> (Int, String) raise MagpieGatewayError
-  async fn post_stream(Self, String, headers~ : Map[String, String], body~ : String) -> (Int, &MagpieEventStream) raise MagpieGatewayError
+  async fn get(Self, String, Map[String, String]) -> (Int32, String) raise MagpieGatewayError
+  async fn post(Self, String, headers~ : Map[String, String], body~ : String) -> (Int32, String) raise MagpieGatewayError
+  async fn post_stream(Self, String, headers~ : Map[String, String], body~ : String) -> (Int32, &MagpieEventStream) raise MagpieGatewayError
 }

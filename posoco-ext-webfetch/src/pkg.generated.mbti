@@ -21,19 +21,19 @@ pub struct CachedDoc {
   content_type : String
   url_requested : String
   url_final : String
-  status : Int
-  bytes_fetched : Int
+  status : Int32
+  bytes_fetched : Int32
   retrieved_ms : Int64
 }
 
 pub struct DocCache {
   ttl_ms : Int64
-  cap : Int
+  cap : Int32
   now_ms : () -> Int64
   entries : Map[String, CachedDoc]
   order : Array[String]
 }
-pub fn DocCache::DocCache(ttl_ms? : Int64, cap? : Int, now_ms? : () -> Int64) -> Self
+pub fn DocCache::DocCache(ttl_ms? : Int64, cap? : Int32, now_ms? : () -> Int64) -> Self
 pub fn DocCache::drop_key(Self, String) -> Unit
 pub fn DocCache::get(Self, String) -> CachedDoc?
 pub fn DocCache::put(Self, String, CachedDoc) -> Unit
@@ -41,23 +41,23 @@ pub fn DocCache::shift_out(Self, String) -> Bool
 pub fn DocCache::touch(Self, String) -> Unit
 
 pub(all) struct HttpReply {
-  status : Int
+  status : Int32
   reason : String
   content_type : String
   location : String?
   body : String
-  bytes_read : Int
+  bytes_read : Int32
   truncated : Bool
 }
 
 pub struct WebFetchTools {
-  timeout_ms : Int
-  max_chars : Int
-  byte_cap : Int
+  timeout_ms : Int32
+  max_chars : Int32
+  byte_cap : Int32
   cache : DocCache
   io : &HttpIo?
 }
-pub fn WebFetchTools::WebFetchTools(timeout_ms? : Int, max_chars? : Int, byte_cap? : Int, cache? : DocCache, io? : &HttpIo?) -> Self
+pub fn WebFetchTools::WebFetchTools(timeout_ms? : Int32, max_chars? : Int32, byte_cap? : Int32, cache? : DocCache, io? : &HttpIo?) -> Self
 pub async fn WebFetchTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn WebFetchTools::extension_id(Self) -> String
 pub fn WebFetchTools::list_tools(Self) -> Array[@kernel.ToolDef]
@@ -69,5 +69,5 @@ pub impl @port.ToolProvider for WebFetchTools
 
 // Traits
 pub(open) trait HttpIo {
-  async fn fetch(Self, String, Int) -> HttpReply raise @error.RuntimeError
+  async fn fetch(Self, String, Int32) -> HttpReply raise @error.RuntimeError
 }

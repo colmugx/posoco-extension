@@ -29,7 +29,7 @@ pub(all) struct SkillCatalog {
 pub fn SkillCatalog::empty() -> Self
 pub fn SkillCatalog::find(Self, String) -> SkillDescriptor?
 pub fn SkillCatalog::names(Self) -> Array[String]
-pub fn SkillCatalog::render_prompt_body(Self, max_chars~ : Int, activate_tool_name? : String, read_resource_tool_name? : String) -> String
+pub fn SkillCatalog::render_prompt_body(Self, max_chars~ : Int32, activate_tool_name? : String, read_resource_tool_name? : String) -> String
 pub fn SkillCatalog::validate(Self) -> Result[Unit, String]
 
 pub(all) struct SkillDescriptor {
@@ -100,9 +100,9 @@ pub(all) struct SkillDiscoveryOptions {
   allow_repository_external_symlinks : Bool
   include_user : Bool
   extra_roots : Array[String]
-  max_candidates : Int
-  max_skills : Int
-  max_skill_file_chars : Int
+  max_candidates : Int32
+  max_skills : Int32
+  max_skill_file_chars : Int32
 }
 pub fn SkillDiscoveryOptions::default() -> Self
 pub fn SkillDiscoveryOptions::validate(Self) -> Result[Unit, String]
@@ -144,18 +144,18 @@ pub impl @port.SystemPromptContributor for Skills
 pub impl @port.ToolProvider for Skills
 
 pub(all) struct SkillsConfig {
-  catalog_max_chars : Int
+  catalog_max_chars : Int32
   contribute_prompt : Bool
   activate_tool_name : String
   read_resource_tool_name : String
-  max_activation_file_chars : Int
-  max_instruction_chars : Int
-  max_resource_entries : Int
-  max_resource_listing_chars : Int
-  max_resource_warnings : Int
-  max_resource_depth : Int
-  max_resource_nodes : Int
-  max_resource_chars : Int
+  max_activation_file_chars : Int32
+  max_instruction_chars : Int32
+  max_resource_entries : Int32
+  max_resource_listing_chars : Int32
+  max_resource_warnings : Int32
+  max_resource_depth : Int32
+  max_resource_nodes : Int32
+  max_resource_chars : Int32
 }
 pub fn SkillsConfig::default() -> Self
 pub fn SkillsConfig::validate(Self) -> Result[Unit, String]

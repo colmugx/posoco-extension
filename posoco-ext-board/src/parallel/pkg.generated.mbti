@@ -16,7 +16,7 @@ import {
 // Types and methods
 pub(all) struct ParallelBlockCount {
   reason : @orchestration.ExecutionBlockReason
-  count : Int
+  count : Int32
 } derive(Eq, @debug.Debug)
 pub fn ParallelBlockCount::equal(Self, Self) -> Bool
 pub fn ParallelBlockCount::not_equal(Self, Self) -> Bool
@@ -44,7 +44,7 @@ pub fn ParallelWorkflowRunner::pause(Self) -> Bool
 pub fn ParallelWorkflowRunner::planning_gate(Self) -> Bool
 pub fn ParallelWorkflowRunner::quiescent(Self) -> Bool
 pub fn ParallelWorkflowRunner::resume_workflow(Self) -> Bool
-pub async fn ParallelWorkflowRunner::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn ParallelWorkflowRunner::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn ParallelWorkflowRunner::start(Self, ParallelWorkflowSpec) -> Result[Unit, @workflow.WorkflowError]
 pub async fn ParallelWorkflowRunner::start_controlled(Self, ParallelWorkflowSpec) -> Result[Unit, @workflow.WorkflowError]
 pub fn ParallelWorkflowRunner::status(Self) -> ParallelWorkflowStatus
@@ -54,13 +54,13 @@ pub async fn ParallelWorkflowRunner::wait(Self) -> ParallelWorkflowStatus
 pub(all) struct ParallelWorkflowSpec {
   run_id : String
   scope : @workflow.WorkflowScope
-  max_concurrency : Int
-  max_executions : Int
-  max_elapsed_ms : Int
-  execution_timeout_ms : Int
+  max_concurrency : Int32
+  max_executions : Int32
+  max_elapsed_ms : Int32
+  execution_timeout_ms : Int32
   failure_policy : ParallelFailurePolicy
 } derive(Eq, @debug.Debug)
-pub fn ParallelWorkflowSpec::ParallelWorkflowSpec(run_id~ : String, scope~ : @workflow.WorkflowScope, max_executions~ : Int, max_elapsed_ms~ : Int, execution_timeout_ms~ : Int, max_concurrency? : Int, failure_policy? : ParallelFailurePolicy) -> Self
+pub fn ParallelWorkflowSpec::ParallelWorkflowSpec(run_id~ : String, scope~ : @workflow.WorkflowScope, max_executions~ : Int32, max_elapsed_ms~ : Int32, execution_timeout_ms~ : Int32, max_concurrency? : Int32, failure_policy? : ParallelFailurePolicy) -> Self
 pub fn ParallelWorkflowSpec::equal(Self, Self) -> Bool
 pub fn ParallelWorkflowSpec::not_equal(Self, Self) -> Bool
 pub fn ParallelWorkflowSpec::to_repr(Self) -> @debug.Repr
@@ -69,22 +69,22 @@ pub fn ParallelWorkflowSpec::validate(Self) -> Bool
 pub(all) struct ParallelWorkflowStatus {
   run_id : String?
   phase : @workflow.WorkflowPhase
-  max_concurrency : Int
+  max_concurrency : Int32
   active : Array[@execution.BoardExecutionBinding]
-  active_count : Int
-  available_slots : Int
-  admitted : Int
-  settled : Int
-  succeeded : Int
-  failed : Int
-  cancelled : Int
-  remaining_executions : Int
+  active_count : Int32
+  available_slots : Int32
+  admitted : Int32
+  settled : Int32
+  succeeded : Int32
+  failed : Int32
+  cancelled : Int32
+  remaining_executions : Int32
   started_at_ms : Int64?
   elapsed_ms : Int64
   remaining_ms : Int64
   board_revision : Int64?
   blocked : Array[@orchestration.BlockedExecution]
-  blocked_count : Int
+  blocked_count : Int32
   blocked_reason_counts : Array[ParallelBlockCount]
   reason : @workflow.WorkflowStopReason?
 } derive(Eq, @debug.Debug)

@@ -41,10 +41,10 @@ pub(all) struct KimiConfig {
   reasoning_effort : String
   thinking_efforts : Array[String]
   identity_headers : Map[String, String]
-  context_window : Int?
+  context_window : Int32?
   send_prompt_cache_key : Bool
 } derive(Eq, @debug.Debug)
-pub fn KimiConfig::KimiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String], context_window? : Int?, send_prompt_cache_key? : Bool) -> Self
+pub fn KimiConfig::KimiConfig(String, model? : String, base_url? : String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String], context_window? : Int32?, send_prompt_cache_key? : Bool) -> Self
 pub fn KimiConfig::equal(Self, Self) -> Bool
 pub fn KimiConfig::from_oauth_credential(@ext-oauth.Credential, String, endpoint_prefix? : String, reasoning_effort? : String, thinking_efforts? : Array[String]?, identity_headers? : Map[String, String]) -> Self
 pub fn KimiConfig::not_equal(Self, Self) -> Bool
@@ -60,7 +60,7 @@ pub(all) struct KimiIdentity {
 pub(all) struct KimiModelInfo {
   id : String
   display_name : String
-  context_window : Int
+  context_window : Int32
   thinking_efforts : Array[String]
   default_effort : String?
   capabilities : Array[String]

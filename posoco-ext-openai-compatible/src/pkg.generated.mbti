@@ -25,12 +25,12 @@ pub(all) struct OpenAICompatibleConfig {
   model : String
   reasoning_effort : String?
   thinking_efforts : Array[String]
-  context_window : Int?
+  context_window : Int32?
   compact_threshold : Double?
   supports_images : Bool
   send_prompt_cache_key : Bool
 } derive(Eq, @debug.Debug)
-pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
+pub fn OpenAICompatibleConfig::OpenAICompatibleConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
 pub fn OpenAICompatibleConfig::equal(Self, Self) -> Bool
 pub fn OpenAICompatibleConfig::not_equal(Self, Self) -> Bool
 pub fn OpenAICompatibleConfig::to_repr(Self) -> @debug.Repr

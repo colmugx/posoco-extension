@@ -7,9 +7,9 @@ import {
 }
 
 // Values
-pub fn estimate_tokens(Array[@kernel.Message]) -> Int
+pub fn estimate_tokens(Array[@kernel.Message]) -> Int32
 
-pub fn trim_fallback(Array[@kernel.Message], Int) -> Result[@kernel.CompactResult, TrimError]
+pub fn trim_fallback(Array[@kernel.Message], Int32) -> Result[@kernel.CompactResult, TrimError]
 
 // Errors
 

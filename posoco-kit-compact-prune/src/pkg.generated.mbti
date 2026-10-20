@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub fn estimate_tokens(String) -> Int
+pub fn estimate_tokens(String) -> Int32
 
-pub fn prune_tool_outputs(Array[@kernel.Message], protect_tokens? : Int, min_gain? : Int, placeholder? : String, protected_tools? : Array[String]) -> PruneResult
+pub fn prune_tool_outputs(Array[@kernel.Message], protect_tokens? : Int32, min_gain? : Int32, placeholder? : String, protected_tools? : Array[String]) -> PruneResult
 
 // Errors
 
@@ -22,8 +22,8 @@ pub fn PruneAction::not_equal(Self, Self) -> Bool
 
 pub(all) struct PruneResult {
   messages : Array[@kernel.Message]
-  pruned_tokens : Int
-  pruned_count : Int
+  pruned_tokens : Int32
+  pruned_count : Int32
   action : PruneAction
 } derive(Eq)
 pub fn PruneResult::equal(Self, Self) -> Bool

@@ -9,9 +9,9 @@ import {
 }
 
 // Values
-pub fn cached_provider_context_window(Json?, String, metadata_provider_id? : String) -> Int?
+pub fn cached_provider_context_window(Json?, String, metadata_provider_id? : String) -> Int32?
 
-pub fn context_window_integer(Json?) -> Int?
+pub fn context_window_integer(Json?) -> Int32?
 
 // Errors
 
@@ -34,7 +34,7 @@ pub(all) struct ModelSlot {
   oauth : &@ext-oauth.OAuthProvider?
   api_key : &ApiKeyFactory?
   thinking_efforts : Array[String]
-  context_window : Int?
+  context_window : Int32?
   context_window_source : String
   metadata_provider_id : String?
   capabilities : Array[String]
@@ -44,7 +44,7 @@ pub(all) struct ModelSlot {
   rebuild_on_api_key : ((@ext-oauth.ApiKeyCredential) -> ModelSlot)?
   rebuild_on_effort : ((String) -> ModelSlot)?
 }
-pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int?, context_window_source? : String, metadata_provider_id? : String?, capabilities? : Array[String], default_effort? : String?, display_group? : String?, rebuild_on_credential? : ((@ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
+pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int32?, context_window_source? : String, metadata_provider_id? : String?, capabilities? : Array[String], default_effort? : String?, display_group? : String?, rebuild_on_credential? : ((@ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
 
 pub(all) enum ProviderBuildResult {
   Ready(ProviderModelCatalog)
@@ -60,7 +60,7 @@ pub(all) struct ProviderConfigSource {
   credential_store : &@ext-oauth.ProviderCredentialStore?
 }
 pub fn ProviderConfigSource::ProviderConfigSource(settings? : Json?, provider_credential? : @ext-oauth.ProviderCredential?, credential? : @ext-oauth.Credential?, api_key_credential? : @ext-oauth.ApiKeyCredential?, cached_models? : Json?, credential_store? : &@ext-oauth.ProviderCredentialStore?) -> Self
-pub fn ProviderConfigSource::context_window_setting(Self, manifest_id~ : String) -> Int? raise @error.CompositionError
+pub fn ProviderConfigSource::context_window_setting(Self, manifest_id~ : String) -> Int32? raise @error.CompositionError
 pub fn ProviderConfigSource::effective_credential(Self, String) -> @ext-oauth.ProviderCredential? raise @error.CompositionError
 pub fn ProviderConfigSource::has_settings(Self) -> Bool
 pub fn ProviderConfigSource::setting(Self, String) -> Json? raise @error.CompositionError

@@ -68,7 +68,7 @@ pub enum AsyncAskError {
   AlreadyAnswered(id~ : String)
   Expired(id~ : String)
   WrongAnswerKind(id~ : String, expected~ : String)
-  IndexOutOfRange(id~ : String, index~ : Int, options~ : Int)
+  IndexOutOfRange(id~ : String, index~ : Int32, options~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn AsyncAskError::equal(Self, Self) -> Bool
 pub fn AsyncAskError::not_equal(Self, Self) -> Bool

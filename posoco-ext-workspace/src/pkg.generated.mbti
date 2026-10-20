@@ -90,12 +90,12 @@ pub(all) enum WorkspaceFileKind {
 pub fn WorkspaceFileKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspaceLimits {
-  max_read_bytes : Int
-  max_walk_depth : Int
-  max_walk_entries : Int
-  max_results : Int
-  max_matches_per_file : Int
-  max_line_width : Int
+  max_read_bytes : Int32
+  max_walk_depth : Int32
+  max_walk_entries : Int32
+  max_results : Int32
+  max_matches_per_file : Int32
+  max_line_width : Int32
 } derive(@debug.Debug)
 pub fn WorkspaceLimits::defaults() -> Self
 pub fn WorkspaceLimits::to_repr(Self) -> @debug.Repr

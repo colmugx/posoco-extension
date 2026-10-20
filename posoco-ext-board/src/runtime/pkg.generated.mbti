@@ -9,14 +9,14 @@ import {
 }
 
 // Values
-pub fn default_board_runtime(Int, client_queue_depth? : Int) -> BoardRuntime
+pub fn default_board_runtime(Int32, client_queue_depth? : Int32) -> BoardRuntime
 
 // Errors
 
 // Types and methods
 pub(all) struct BoardEndpoint {
   host : String
-  port : Int
+  port : Int32
 } derive(Eq, @debug.Debug)
 pub fn BoardEndpoint::base_url(Self) -> String
 pub fn BoardEndpoint::equal(Self, Self) -> Bool

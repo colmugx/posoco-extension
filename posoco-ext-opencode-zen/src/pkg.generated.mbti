@@ -70,16 +70,16 @@ pub(all) struct OpenCodeZenConfig {
   thinking : Bool
   reasoning_effort : String?
   thinking_efforts : Array[String]
-  context_window : Int?
+  context_window : Int32?
   compact_threshold : Double?
   supports_images : Bool
   wire : WireKind
-  max_output_tokens : Int
+  max_output_tokens : Int32
   rates : ZenCostRates?
   client_id : String
   spend_source : String
 } derive(Eq, @debug.Debug)
-pub fn OpenCodeZenConfig::OpenCodeZenConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, supports_images? : Bool, wire? : WireKind, max_output_tokens? : Int, rates? : ZenCostRates?, client_id? : String, spend_source? : String) -> Self
+pub fn OpenCodeZenConfig::OpenCodeZenConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, supports_images? : Bool, wire? : WireKind, max_output_tokens? : Int32, rates? : ZenCostRates?, client_id? : String, spend_source? : String) -> Self
 pub fn OpenCodeZenConfig::equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::not_equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::to_repr(Self) -> @debug.Repr
@@ -130,7 +130,7 @@ pub(all) struct ZenCostRates {
   input : Double
   output : Double
   cache_read : Double
-  tier_threshold : Int?
+  tier_threshold : Int32?
   tier_input : Double
   tier_output : Double
   tier_cache_read : Double
@@ -143,7 +143,7 @@ pub(all) struct ZenModelInfo {
   id : String
   owned_by : String
   cached_efforts : Array[String]
-  context_window : Int?
+  context_window : Int32?
   supports_images : Bool
 } derive(Eq, @debug.Debug)
 pub fn ZenModelInfo::equal(Self, Self) -> Bool
@@ -152,7 +152,7 @@ pub fn ZenModelInfo::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ZenModelMeta {
   surface : ZenReasoningSurface
-  context_window : Int?
+  context_window : Int32?
   supports_images : Bool
   provider_npm : String?
   rates : ZenCostRates?

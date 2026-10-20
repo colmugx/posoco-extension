@@ -18,7 +18,7 @@ import {
 pub struct BoardBackend {
   // private fields
 }
-pub fn BoardBackend::BoardBackend(event_buffer? : Int, client_queue_depth? : Int, store? : &@store.BoardStore, now_ms? : () -> Int64) -> Self
+pub fn BoardBackend::BoardBackend(event_buffer? : Int32, client_queue_depth? : Int32, store? : &@store.BoardStore, now_ms? : () -> Int64) -> Self
 pub fn BoardBackend::attach(Self, @async.TaskGroup[Unit]) -> Unit
 pub async fn BoardBackend::bootstrap_snapshot(Self) -> Result[@protocol.BoardSnapshot, String]
 pub fn BoardBackend::current_seq(Self) -> Int64
@@ -32,7 +32,7 @@ pub async fn BoardBackend::shutdown(Self) -> Unit
 pub async fn BoardBackend::state(Self) -> Result[@domain.BoardStateSnapshot, @coordinator.BoardCoordinatorError]
 pub async fn BoardBackend::submit(Self, @domain.BoardCommand) -> Result[Array[@domain.BoardEvent], @coordinator.BoardCoordinatorError]
 pub fn BoardBackend::subscribe(Self, Int64, Bool) -> BoardSubscription
-pub fn BoardBackend::subscriber_count(Self) -> Int
+pub fn BoardBackend::subscriber_count(Self) -> Int32
 pub fn BoardBackend::unsubscribe(Self, BoardSubscription) -> Unit
 pub async fn BoardBackend::wait_ready(Self) -> Result[Unit, @coordinator.BoardCoordinatorError]
 

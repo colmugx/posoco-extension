@@ -43,16 +43,16 @@ pub fn BoardWorkflowError::to_repr(Self) -> @debug.Repr
 
 pub struct BoardWorkflowPolicy {
   enabled : Bool
-  max_executions : Int
-  max_elapsed_ms : Int
-  execution_timeout_ms : Int
-  max_concurrency : Int
-  max_expansions : Int
-  max_generated_tasks : Int
-  max_depth : Int
+  max_executions : Int32
+  max_elapsed_ms : Int32
+  execution_timeout_ms : Int32
+  max_concurrency : Int32
+  max_expansions : Int32
+  max_generated_tasks : Int32
+  max_depth : Int32
   continue_on_confirmed_failure : Bool
 }
-pub fn BoardWorkflowPolicy::BoardWorkflowPolicy(enabled? : Bool, max_executions? : Int, max_elapsed_ms? : Int, execution_timeout_ms? : Int, max_concurrency? : Int, max_expansions? : Int, max_generated_tasks? : Int, max_depth? : Int, continue_on_confirmed_failure? : Bool) -> Self
+pub fn BoardWorkflowPolicy::BoardWorkflowPolicy(enabled? : Bool, max_executions? : Int32, max_elapsed_ms? : Int32, execution_timeout_ms? : Int32, max_concurrency? : Int32, max_expansions? : Int32, max_generated_tasks? : Int32, max_depth? : Int32, continue_on_confirmed_failure? : Bool) -> Self
 
 pub struct BoardWorkflowView {
   snapshot : @domain.BoardStateSnapshot
@@ -90,7 +90,7 @@ pub async fn BoardWorkflows::reconcile(Self, task_id? : String) -> Result[BoardW
 pub async fn BoardWorkflows::resume_workflow(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
 pub async fn BoardWorkflows::run_wave(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
 pub async fn BoardWorkflows::scope_decision(Self, expansion_id~ : String, grant~ : Bool) -> Result[BoardWorkflowView, BoardWorkflowError]
-pub async fn BoardWorkflows::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn BoardWorkflows::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn BoardWorkflows::start(Self, title~ : String) -> Result[BoardWorkflowView, BoardWorkflowError]
 pub fn BoardWorkflows::stop_after_wave(Self) -> Unit
 pub async fn BoardWorkflows::view(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
@@ -110,7 +110,7 @@ pub(all) struct WorkflowAgentContext {
   task_id : String
   attempt_id : String
   session_id : String
-  slot : Int
+  slot : Int32
 }
 
 pub(all) enum WorkflowAgentPurpose {

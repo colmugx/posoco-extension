@@ -74,7 +74,7 @@ pub(all) struct SubagentTools {
   parent_selection : (() -> (String, String?))?
   observers : Array[(@posoco-kit-subagent.SubagentEvent) -> Unit]
   ledger : @posoco-kit-subagent.SpawnLedger
-  mut counter : Int
+  mut counter : Int32
   mut tasks : @port.Tasks?
   mut wakeup : @port.WakeupPort?
   auto_wakeup : Bool

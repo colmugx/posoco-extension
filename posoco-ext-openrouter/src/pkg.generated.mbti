@@ -41,14 +41,14 @@ pub(all) struct OpenRouterConfig {
   thinking : Bool
   reasoning_effort : String?
   thinking_efforts : Array[String]
-  context_window : Int?
+  context_window : Int32?
   compact_threshold : Double?
   http_referer : String?
   title : String?
   supports_images : Bool
   send_prompt_cache_key : Bool
 } derive(Eq, @debug.Debug)
-pub fn OpenRouterConfig::OpenRouterConfig(String, model~ : String, base_url? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int?, compact_threshold? : Double?, http_referer? : String?, title? : String?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
+pub fn OpenRouterConfig::OpenRouterConfig(String, model~ : String, base_url? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, http_referer? : String?, title? : String?, supports_images? : Bool, send_prompt_cache_key? : Bool) -> Self
 pub fn OpenRouterConfig::equal(Self, Self) -> Bool
 pub fn OpenRouterConfig::not_equal(Self, Self) -> Bool
 pub fn OpenRouterConfig::to_repr(Self) -> @debug.Repr
@@ -56,7 +56,7 @@ pub fn OpenRouterConfig::with_reasoning_effort(Self, String) -> Self raise @erro
 
 pub(all) struct OpenRouterModelInfo {
   id : String
-  context_length : Int?
+  context_length : Int32?
   reasoning_supported : Bool
   supported_efforts : Array[String]
   default_effort : String?

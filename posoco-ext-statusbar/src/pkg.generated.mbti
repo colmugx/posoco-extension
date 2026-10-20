@@ -17,7 +17,7 @@ pub(all) struct SegmentInfo {
   segment : String
   owner : String
   label : String?
-  priority : Int
+  priority : Int32
   value : String?
   color : String?
 } derive(Eq, @debug.Debug)

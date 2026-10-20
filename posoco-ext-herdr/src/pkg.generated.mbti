@@ -18,7 +18,7 @@ pub struct HerdrDelegate {
   bin : String
   run_bin : String
   cwd : String
-  mut active : Int
+  mut active : Int32
   mut tasks : @port.Tasks?
   mut session : String?
   parent_yolo : (() -> Bool)?

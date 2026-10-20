@@ -9,7 +9,7 @@ import {
 // Values
 pub fn app() -> @rabbita.App
 
-pub fn attempt_count(@client.BoardReplica, String) -> Int
+pub fn attempt_count(@client.BoardReplica, String) -> Int32
 
 pub fn attempt_finishable(@client.ClientAttemptStatus) -> Bool
 
@@ -45,7 +45,7 @@ pub fn priority_label(@client.ClientBoardPriority) -> String
 
 pub fn queue_attempt_id_valid(@client.BoardReplica, String) -> Bool
 
-pub fn retry_delay(Int) -> Int
+pub fn retry_delay(Int32) -> Int32
 
 pub fn review_decision_label(@client.ClientRecordableReviewDecision) -> String
 

@@ -17,7 +17,7 @@ pub(all) struct AuthorizedExecutionInput {
   execution_id : String
   session_id : String
   input : String
-  timeout_ms : Int?
+  timeout_ms : Int32?
 }
 
 pub(all) struct BlockedExecution {
@@ -35,10 +35,10 @@ pub struct BoardOrchestrator {
 pub fn BoardOrchestrator::BoardOrchestrator(owner~ : @execution.BoardExecutionOwner, resolver~ : &BoardExecutionInputResolver, policy? : ExecutionPolicy) -> Self
 pub async fn BoardOrchestrator::board_state(Self) -> Result[@domain.BoardStateSnapshot, OrchestrationError]
 pub fn BoardOrchestrator::cancel_active(Self, String) -> Result[Unit, @execution.BoardExecutionError]
-pub async fn BoardOrchestrator::dispatch_next(Self, candidate? : ExecutionCandidate, planning_revision? : Int64, task_scope? : Array[String], admission_guard? : () -> Bool, execution_timeout_ms? : Int, on_admitted? : (@execution.BoardExecutionHandle) -> Unit) -> Result[ExecutionDispatch, OrchestrationError]
+pub async fn BoardOrchestrator::dispatch_next(Self, candidate? : ExecutionCandidate, planning_revision? : Int64, task_scope? : Array[String], admission_guard? : () -> Bool, execution_timeout_ms? : Int32, on_admitted? : (@execution.BoardExecutionHandle) -> Unit) -> Result[ExecutionDispatch, OrchestrationError]
 pub fn BoardOrchestrator::owner_status(Self) -> @execution.BoardExecutionOwnerStatus
 pub async fn BoardOrchestrator::plan(Self, task_scope? : Array[String]) -> Result[ExecutionPlan, OrchestrationError]
-pub async fn BoardOrchestrator::shutdown(Self, timeout_ms? : Int) -> Bool
+pub async fn BoardOrchestrator::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn BoardOrchestrator::status(Self, task_scope? : Array[String]) -> Result[OrchestrationStatus, OrchestrationError]
 
 pub(all) enum ExecutionBlockReason {

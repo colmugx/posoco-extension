@@ -35,7 +35,7 @@ pub struct AttemptId {
 } derive(Eq, Hash, @debug.Debug)
 pub fn AttemptId::AttemptId(String) -> Self
 pub fn AttemptId::equal(Self, Self) -> Bool
-pub fn AttemptId::hash(Self) -> Int
+pub fn AttemptId::hash(Self) -> Int32
 pub fn AttemptId::hash_combine(Self, Hasher) -> Unit
 pub fn AttemptId::not_equal(Self, Self) -> Bool
 pub fn AttemptId::to_repr(Self) -> @debug.Repr
@@ -137,7 +137,7 @@ pub(all) enum BoardPriority {
 } derive(Eq, @debug.Debug)
 pub fn BoardPriority::equal(Self, Self) -> Bool
 pub fn BoardPriority::not_equal(Self, Self) -> Bool
-pub fn BoardPriority::rank(Self) -> Int
+pub fn BoardPriority::rank(Self) -> Int32
 pub fn BoardPriority::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BoardProposal {
@@ -206,7 +206,7 @@ pub struct BoardTaskId {
 } derive(Eq, Hash, @debug.Debug)
 pub fn BoardTaskId::BoardTaskId(String) -> Self
 pub fn BoardTaskId::equal(Self, Self) -> Bool
-pub fn BoardTaskId::hash(Self) -> Int
+pub fn BoardTaskId::hash(Self) -> Int32
 pub fn BoardTaskId::hash_combine(Self, Hasher) -> Unit
 pub fn BoardTaskId::not_equal(Self, Self) -> Bool
 pub fn BoardTaskId::to_repr(Self) -> @debug.Repr
@@ -216,7 +216,7 @@ pub struct ExpansionId {
 } derive(Eq, Hash, @debug.Debug)
 pub fn ExpansionId::ExpansionId(String) -> Self
 pub fn ExpansionId::equal(Self, Self) -> Bool
-pub fn ExpansionId::hash(Self) -> Int
+pub fn ExpansionId::hash(Self) -> Int32
 pub fn ExpansionId::hash_combine(Self, Hasher) -> Unit
 pub fn ExpansionId::not_equal(Self, Self) -> Bool
 pub fn ExpansionId::to_repr(Self) -> @debug.Repr

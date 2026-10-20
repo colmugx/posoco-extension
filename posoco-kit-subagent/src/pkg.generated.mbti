@@ -19,14 +19,14 @@ pub fn render_swarm_task(String, String) -> String
 
 pub fn task_status_to_terminal(status~ : @port.TaskStatus) -> TerminalState
 
-pub fn terminal_outcome(state~ : TerminalState, kind~ : String, child_session~ : String, result_text~ : String, turns~ : Int, input_tokens~ : Int, output_tokens~ : Int) -> @kernel.ToolOutcome
+pub fn terminal_outcome(state~ : TerminalState, kind~ : String, child_session~ : String, result_text~ : String, turns~ : Int32, input_tokens~ : Int32, output_tokens~ : Int32) -> @kernel.ToolOutcome
 
 pub fn terminal_state_word(TerminalState) -> String
 
 // Errors
 pub(all) suberror BatchPlanError {
   ItemsEmpty
-  TooManyItems(limit~ : Int)
+  TooManyItems(limit~ : Int32)
   DuplicateKey(key~ : String)
   InvalidTimeout(key~ : String)
 } derive(Eq, @debug.Debug)
@@ -60,7 +60,7 @@ pub(all) struct BatchItem {
   tools : Array[String]?
   permission : @posoco-ext-permission.PermissionMode
   mode : @port.TaskMode
-  timeout_ms : Int
+  timeout_ms : Int32
   resuming : Bool
 } derive(Eq, @debug.Debug)
 pub fn BatchItem::equal(Self, Self) -> Bool
@@ -69,17 +69,17 @@ pub fn BatchItem::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BatchPlan {
   items : Array[BatchItem]
-  wave_cap : Int
+  wave_cap : Int32
 } derive(@debug.Debug)
 pub fn BatchPlan::build(config~ : SubagentConfig, items~ : Array[BatchItem]) -> Self raise BatchPlanError
 pub fn BatchPlan::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BatchResult {
   terminals : Map[String, TerminalState]
-  completed : Int
-  failed : Int
-  timed_out : Int
-  cancelled : Int
+  completed : Int32
+  failed : Int32
+  timed_out : Int32
+  cancelled : Int32
 } derive(@debug.Debug)
 pub fn BatchResult::summary(Self) -> String
 pub fn BatchResult::to_repr(Self) -> @debug.Repr
@@ -97,12 +97,12 @@ pub fn BatchState::result(Self) -> BatchResult
 pub fn BatchState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SpawnLedger {
-  limit : Int
+  limit : Int32
   labels : Array[String]
 } derive(@debug.Debug)
-pub fn SpawnLedger::SpawnLedger(limit? : Int) -> Self
+pub fn SpawnLedger::SpawnLedger(limit? : Int32) -> Self
 pub fn SpawnLedger::acquired(Self) -> Array[String]
-pub fn SpawnLedger::remaining(Self) -> Int
+pub fn SpawnLedger::remaining(Self) -> Int32
 pub fn SpawnLedger::reset(Self) -> Unit
 pub fn SpawnLedger::to_repr(Self) -> @debug.Repr
 pub fn SpawnLedger::try_acquire(Self, String) -> Bool
@@ -126,11 +126,11 @@ pub(all) struct SubagentEvent {
 pub fn SubagentEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubagentLimits {
-  swarm_items : Int
-  concurrency : Int
-  global_concurrency : Int
-  timeout_ms : Int
-  spawn_budget : Int
+  swarm_items : Int32
+  concurrency : Int32
+  global_concurrency : Int32
+  timeout_ms : Int32
+  spawn_budget : Int32
   answer_timeout_ms : Int64
 } derive(Eq, @debug.Debug)
 pub fn SubagentLimits::equal(Self, Self) -> Bool

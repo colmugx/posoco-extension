@@ -55,7 +55,7 @@ pub fn AcpHostFsError::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror AcpTerminalError {
   HostCallFailed(method_name~ : String, cause~ : @agent.AgentContextError)
-  TerminalTimedOut(timeout_ms~ : Int, partial_output~ : String)
+  TerminalTimedOut(timeout_ms~ : Int32, partial_output~ : String)
   TerminalCancelled(partial_output~ : String)
 } derive(Eq, @debug.Debug)
 pub fn AcpTerminalError::equal(Self, Self) -> Bool
@@ -68,23 +68,23 @@ pub struct AcpBridge {
   mut context : @agent.AgentContext?
   mut session_id : String?
   meta_decorator : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?
-  mut message_seq : Int
+  mut message_seq : Int32
   mut current_text_id : String?
   mut current_thought_id : String?
   mut text_streamed : Bool
   mut thought_streamed : Bool
-  mut used_tokens : Int
+  mut used_tokens : Int32
   mut last_finish : @kernel.FinishReason?
   mut last_failure : String?
   // private fields
 }
-pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?, context_window? : Int?) -> Self
+pub fn AcpBridge::AcpBridge(meta? : ((@types.TurnEvent, @protocol.SessionUpdate) -> Json?)?, context_window? : Int32?) -> Self
 pub async fn AcpBridge::ask(Self, @posoco-ext-permission.ApprovalRequest) -> @posoco-ext-permission.ApprovalDecision
 pub fn AcpBridge::attach(Self, context~ : @agent.AgentContext, session_id~ : String) -> Unit
 pub fn AcpBridge::close(Self) -> Unit
 pub fn AcpBridge::detach(Self) -> Unit
 pub fn AcpBridge::extension_id(Self) -> String
-pub async fn AcpBridge::flush(Self) -> Int noraise
+pub async fn AcpBridge::flush(Self) -> Int32 noraise
 pub fn AcpBridge::manifest(Self) -> @port.ExtensionManifest
 pub fn AcpBridge::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn AcpBridge::on_event(Self, @types.TurnEvent) -> Unit
@@ -96,7 +96,7 @@ pub async fn AcpBridge::push_session_info_update(Self, session_id~ : String, tit
 pub fn AcpBridge::render(Self, @port.UiRender) -> Unit
 pub async fn AcpBridge::request(Self, @port.UiRequest) -> @port.UiResponse raise @error.UiError
 pub fn AcpBridge::session_id(Self) -> String?
-pub fn AcpBridge::set_context_window(Self, Int?) -> Unit
+pub fn AcpBridge::set_context_window(Self, Int32?) -> Unit
 pub fn[G] AcpBridge::spawn_pump(Self, @async.TaskGroup[G]) -> Unit
 pub fn AcpBridge::stop_reason(Self) -> @session.StopReason
 pub fn AcpBridge::take_failure(Self) -> String?
@@ -120,10 +120,10 @@ pub struct AcpTerminal {
   session_id : String
 }
 pub fn AcpTerminal::AcpTerminal(context~ : @agent.AgentContext, session_id~ : String) -> Self
-pub async fn AcpTerminal::run(Self, String, cwd~ : String, on_output? : (String) -> Unit, timeout_ms? : Int) -> AcpTerminalResult raise AcpTerminalError
+pub async fn AcpTerminal::run(Self, String, cwd~ : String, on_output? : (String) -> Unit, timeout_ms? : Int32) -> AcpTerminalResult raise AcpTerminalError
 
 pub(all) struct AcpTerminalResult {
-  exit_code : Int?
+  exit_code : Int32?
   output : String
 } derive(Eq, @debug.Debug)
 pub fn AcpTerminalResult::equal(Self, Self) -> Bool

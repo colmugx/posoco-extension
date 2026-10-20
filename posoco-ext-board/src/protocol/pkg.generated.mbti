@@ -21,7 +21,7 @@ pub fn encode_server_frame(BoardServerFrame) -> String
 
 pub fn project_event(@domain.BoardStateSnapshot, @domain.BoardEvent) -> BoardWireEvent
 
-pub fn protocol_version() -> Int
+pub fn protocol_version() -> Int32
 
 pub fn snapshot_to_json(@domain.BoardStateSnapshot) -> Json
 
@@ -80,7 +80,7 @@ pub fn BoardEventScope::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BoardHello {
   last_seq : Int64
-  protocol_version : Int
+  protocol_version : Int32
   has_board_snapshot : Bool
 } derive(Eq, @debug.Debug)
 pub fn BoardHello::equal(Self, Self) -> Bool
@@ -91,7 +91,7 @@ pub fn BoardHello::to_repr(Self) -> @debug.Repr
 pub(all) enum BoardProtocolError {
   InvalidJson(String)
   InvalidFrame(String)
-  UnsupportedVersion(expected~ : Int, got~ : Int)
+  UnsupportedVersion(expected~ : Int32, got~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn BoardProtocolError::equal(Self, Self) -> Bool
 pub fn BoardProtocolError::not_equal(Self, Self) -> Bool
@@ -109,7 +109,7 @@ pub fn BoardServerFrame::not_equal(Self, Self) -> Bool
 pub fn BoardServerFrame::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BoardSnapshot {
-  protocol_version : Int
+  protocol_version : Int32
   last_seq : Int64
   board_revision : Int64
   payload : Json

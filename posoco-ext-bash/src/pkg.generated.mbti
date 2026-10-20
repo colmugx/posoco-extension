@@ -18,7 +18,7 @@ type ShellChildHandle
 
 pub struct ShellTools {
   anchor : @devkit.WorkspaceAnchor?
-  in_flight : Map[Int, ShellChildHandle]
+  in_flight : Map[Int32, ShellChildHandle]
 }
 pub fn ShellTools::ShellTools(anchor? : @devkit.WorkspaceAnchor?) -> Self
 pub async fn ShellTools::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition

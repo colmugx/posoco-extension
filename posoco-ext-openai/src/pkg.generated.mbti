@@ -56,8 +56,8 @@ pub(all) struct CodexModelInfo {
   supported_reasoning_levels : Array[CodexReasoningLevel]
   visibility : String
   supported_in_api : Bool
-  priority : Int
-  context_window : Int?
+  priority : Int32
+  context_window : Int32?
   use_responses_lite : Bool
 }
 
@@ -130,7 +130,7 @@ pub(all) struct OpenAICachedModel {
   model_id : String
   thinking_efforts : Array[String]
   default_effort : String?
-  context_window : Int?
+  context_window : Int32?
   image_in : Bool
   use_responses_lite : Bool
 }
@@ -142,7 +142,7 @@ pub(all) struct OpenAIConfig {
   organization : String?
   account_id : String?
   reasoning_effort : String?
-  context_window : Int?
+  context_window : Int32?
   use_responses_lite : Bool
 }
 pub fn OpenAIConfig::OpenAIConfig(String, String) -> Self
@@ -171,7 +171,7 @@ pub fn OpenAIModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for OpenAIModelPort
 
 pub(all) struct OpenAIModelsHttpResponse {
-  status : Int
+  status : Int32
   body : String
 }
 

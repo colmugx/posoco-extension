@@ -21,10 +21,10 @@ pub(all) struct BoardConfig {
   auto_start : Bool
   auto_open : Bool
   bind_host : String
-  event_buffer : Int
-  client_queue_depth : Int
+  event_buffer : Int32
+  client_queue_depth : Int32
 } derive(Eq, @debug.Debug)
-pub fn BoardConfig::BoardConfig(auto_start? : Bool, auto_open? : Bool, bind_host? : String, event_buffer? : Int, client_queue_depth? : Int) -> Self
+pub fn BoardConfig::BoardConfig(auto_start? : Bool, auto_open? : Bool, bind_host? : String, event_buffer? : Int32, client_queue_depth? : Int32) -> Self
 pub fn BoardConfig::equal(Self, Self) -> Bool
 pub fn BoardConfig::not_equal(Self, Self) -> Bool
 pub fn BoardConfig::to_repr(Self) -> @debug.Repr

@@ -54,9 +54,9 @@ pub(all) struct DynamicPlanContext {
   workflow : String?
   authorization_id : String
   permitted_existing_dependencies : Array[String]
-  max_new_tasks : Int
-  max_new_edges : Int
-  max_payload_bytes : Int
+  max_new_tasks : Int32
+  max_new_edges : Int32
+  max_payload_bytes : Int32
   deadline_ms : Int64
 } derive(Eq, @debug.Debug)
 pub fn DynamicPlanContext::equal(Self, Self) -> Bool
@@ -92,8 +92,8 @@ pub struct ExpansionApprovalPreview {
   workflow : String
   workflow_parent : String
   deadline_ms : Int64
-  max_tasks : Int
-  max_edges : Int
+  max_tasks : Int32
+  max_edges : Int32
   // private fields
 }
 pub fn ExpansionApprovalPreview::permitted_existing_dependencies(Self) -> Array[String]
@@ -103,22 +103,22 @@ pub fn ExpansionApprovalPreview::workflow_task_scope(Self) -> Array[String]
 pub struct ExpansionAuthorization {
   // private fields
 }
-pub fn ExpansionAuthorization::ExpansionAuthorization(authorization_id~ : String, workflow~ : String, workflow_parent~ : String, workflow_task_scope~ : Array[String], permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int, max_edges? : Int) -> Self
+pub fn ExpansionAuthorization::ExpansionAuthorization(authorization_id~ : String, workflow~ : String, workflow_parent~ : String, workflow_task_scope~ : Array[String], permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int32, max_edges? : Int32) -> Self
 
 pub(all) struct ExpansionBudgetSnapshot {
-  expansions_used : Int
-  max_expansions : Int
-  cumulative_tasks : Int
-  max_cumulative_tasks : Int
+  expansions_used : Int32
+  max_expansions : Int32
+  cumulative_tasks : Int32
+  max_cumulative_tasks : Int32
 } derive(Eq, @debug.Debug)
 pub fn ExpansionBudgetSnapshot::equal(Self, Self) -> Bool
 pub fn ExpansionBudgetSnapshot::not_equal(Self, Self) -> Bool
 pub fn ExpansionBudgetSnapshot::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ExpansionDecodeError {
-  MalformedJson(offset~ : Int, reason~ : String)
-  UnsupportedEncoding(offset~ : Int, reason~ : String)
-  InvalidNumber(offset~ : Int, reason~ : String)
+  MalformedJson(offset~ : Int32, reason~ : String)
+  UnsupportedEncoding(offset~ : Int32, reason~ : String)
+  InvalidNumber(offset~ : Int32, reason~ : String)
   DuplicateField(path~ : String, field~ : String)
   UnknownField(path~ : String, field~ : String)
   MissingField(path~ : String, field~ : String)
@@ -187,34 +187,34 @@ pub fn ExpansionPhase::to_repr(Self) -> @debug.Repr
 pub struct ExpansionPolicy {
   // private fields
 }
-pub fn ExpansionPolicy::ExpansionPolicy(max_tasks? : Int, max_edges? : Int, max_deps_per_task? : Int, max_key_chars? : Int, max_title_chars? : Int, max_description_chars? : Int, max_dod_items? : Int, max_dod_item_chars? : Int, max_payload_bytes? : Int, max_depth? : Int, max_workflow_expansions? : Int, max_workflow_tasks? : Int) -> Self
-pub fn ExpansionPolicy::max_deps_per_task(Self) -> Int
-pub fn ExpansionPolicy::max_depth(Self) -> Int
-pub fn ExpansionPolicy::max_description_chars(Self) -> Int
-pub fn ExpansionPolicy::max_dod_item_chars(Self) -> Int
-pub fn ExpansionPolicy::max_dod_items(Self) -> Int
-pub fn ExpansionPolicy::max_edges(Self) -> Int
-pub fn ExpansionPolicy::max_key_chars(Self) -> Int
-pub fn ExpansionPolicy::max_payload_bytes(Self) -> Int
-pub fn ExpansionPolicy::max_tasks(Self) -> Int
-pub fn ExpansionPolicy::max_title_chars(Self) -> Int
-pub fn ExpansionPolicy::max_workflow_expansions(Self) -> Int
-pub fn ExpansionPolicy::max_workflow_tasks(Self) -> Int
+pub fn ExpansionPolicy::ExpansionPolicy(max_tasks? : Int32, max_edges? : Int32, max_deps_per_task? : Int32, max_key_chars? : Int32, max_title_chars? : Int32, max_description_chars? : Int32, max_dod_items? : Int32, max_dod_item_chars? : Int32, max_payload_bytes? : Int32, max_depth? : Int32, max_workflow_expansions? : Int32, max_workflow_tasks? : Int32) -> Self
+pub fn ExpansionPolicy::max_deps_per_task(Self) -> Int32
+pub fn ExpansionPolicy::max_depth(Self) -> Int32
+pub fn ExpansionPolicy::max_description_chars(Self) -> Int32
+pub fn ExpansionPolicy::max_dod_item_chars(Self) -> Int32
+pub fn ExpansionPolicy::max_dod_items(Self) -> Int32
+pub fn ExpansionPolicy::max_edges(Self) -> Int32
+pub fn ExpansionPolicy::max_key_chars(Self) -> Int32
+pub fn ExpansionPolicy::max_payload_bytes(Self) -> Int32
+pub fn ExpansionPolicy::max_tasks(Self) -> Int32
+pub fn ExpansionPolicy::max_title_chars(Self) -> Int32
+pub fn ExpansionPolicy::max_workflow_expansions(Self) -> Int32
+pub fn ExpansionPolicy::max_workflow_tasks(Self) -> Int32
 pub fn ExpansionPolicy::snapshot(Self) -> ExpansionPolicySnapshot
 
 pub(all) struct ExpansionPolicySnapshot {
-  max_tasks : Int
-  max_edges : Int
-  max_deps_per_task : Int
-  max_key_chars : Int
-  max_title_chars : Int
-  max_description_chars : Int
-  max_dod_items : Int
-  max_dod_item_chars : Int
-  max_payload_bytes : Int
-  max_depth : Int
-  max_workflow_expansions : Int
-  max_workflow_tasks : Int
+  max_tasks : Int32
+  max_edges : Int32
+  max_deps_per_task : Int32
+  max_key_chars : Int32
+  max_title_chars : Int32
+  max_description_chars : Int32
+  max_dod_items : Int32
+  max_dod_item_chars : Int32
+  max_payload_bytes : Int32
+  max_depth : Int32
+  max_workflow_expansions : Int32
+  max_workflow_tasks : Int32
 } derive(Eq, @debug.Debug)
 pub fn ExpansionPolicySnapshot::equal(Self, Self) -> Bool
 pub fn ExpansionPolicySnapshot::not_equal(Self, Self) -> Bool
@@ -233,7 +233,7 @@ pub(all) struct GeneratedTaskOutlook {
   task_id : String
   outside_workflow_task_scope : Bool
   stage_created : Bool
-  queued_execute_attempts : Int
+  queued_execute_attempts : Int32
   class : GeneratedTaskOutlookClass
   unexpected_state : Bool
 } derive(Eq, @debug.Debug)
@@ -254,7 +254,7 @@ pub struct NumberedExpansionAllocator {
   // private fields
 }
 pub fn NumberedExpansionAllocator::NumberedExpansionAllocator(prefix~ : String) -> Self
-pub fn NumberedExpansionAllocator::canonical_task_id(Self, proposal_id~ : String, key~ : String, index~ : Int) -> String
+pub fn NumberedExpansionAllocator::canonical_task_id(Self, proposal_id~ : String, key~ : String, index~ : Int32) -> String
 pub impl ExpansionIdAllocator for NumberedExpansionAllocator
 
 // Type aliases
@@ -269,5 +269,5 @@ pub(open) trait ExpansionApprover {
 }
 
 pub(open) trait ExpansionIdAllocator {
-  fn canonical_task_id(Self, proposal_id~ : String, key~ : String, index~ : Int) -> String
+  fn canonical_task_id(Self, proposal_id~ : String, key~ : String, index~ : Int32) -> String
 }
