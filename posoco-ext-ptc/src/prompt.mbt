@@ -1,6 +1,6 @@
 ///|
-/// Stable prefix: the full tool catalog and its JSON schemas are rendered
-/// deterministically once, never rewritten after individual tool calls.
+/// Keep the stable prefix small. Full schemas for the core coding tools only;
+/// all other capabilities are discoverable by concise name/description.
 /// Model tools list contains only run_code; these are PROGRAM bindings only.
 pub impl @posoco.SystemPromptContributor for PtcExtension with fn system_prompt(
   self : PtcExtension,
@@ -22,11 +22,14 @@ pub impl @posoco.SystemPromptContributor for PtcExtension with fn system_prompt(
       let name = def.name.to_string()
       if self.tool_names.contains(name) {
         sections.push(
-          name +
-          ": " +
-          def.description +
-          "\n  input_schema=" +
-          def.input_schema.stringify(),
+          if name == "read" || name == "glob" || name == "grep" ||
+            name == "edit" || name == "write" || name == "bash" ||
+            name == "apply_patch" {
+            name + ": " + def.description + "\n  input_schema=" +
+            def.input_schema.stringify()
+          } else {
+            name + ": " + def.description
+          },
         )
       }
     }
