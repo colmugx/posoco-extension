@@ -7,7 +7,6 @@
 /// permission to invoke wrapped ToolProviders directly.
 pub struct PtcExtension {
   priv runtime : @mbtx.Runtime
-  priv exposed : Array[@posoco.ToolDef]
   priv tool_names : Array[String]
   priv scoped_invoker : &@mbtx.ToolInvoker?
   priv max_output_bytes : Int32
@@ -54,7 +53,6 @@ pub fn PtcExtension::PtcExtension(
         }
       }),
     ),
-    exposed: exposed.copy(),
     tool_names,
     scoped_invoker,
     max_output_bytes,
