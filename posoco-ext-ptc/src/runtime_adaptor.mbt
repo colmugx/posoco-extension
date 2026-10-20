@@ -163,15 +163,8 @@ pub impl @runtime.Runtime for PtcRuntime with fn call_model(
   call_options : Json,
   on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
-  // The fallback may contribute live MCP/Pi tools and the core may prepend
-  // memory tools. Neither is a PTC capability. Filter on EVERY model call.
-  let visible : Array[@kernel.ToolDef] = []
-  for definition in tool_definitions {
-    if definition.name.to_string() == "run_code" {
-      visible.push(definition)
-    }
-  }
-  self.fallback.call_model(scope, messages, visible, call_options, on_chunk)
+  // Additive contract: preserve the complete original model tool surface.
+  self.fallback.call_model(scope, messages, tool_definitions, call_options, on_chunk)
 }
 
 ///|
@@ -181,10 +174,7 @@ pub impl @runtime.Runtime for PtcRuntime with fn execute_tool(
 ) -> @kernel.ToolOutcome {
   if ctx.tool_name.to_string() != "run_code" ||
     ctx.owner.to_string() != "posoco_ext_ptc" {
-    return @kernel.ToolReportedError(
-      content="PTC-only mode rejects direct native tool execution",
-      structured=None,
-    )
+    return self.fallback.execute_tool(ctx)
   }
   // A detached background task has no enclosing Effect lifetime or cancel
   // correlation. Reject until the protocol supports an explicit owner scope.
@@ -279,13 +269,7 @@ pub impl @runtime.Runtime for PtcRuntime with fn compact(
   call_options : Json,
   trigger : @kernel.CompactTrigger,
 ) -> Result[@kernel.CompactResult, @kernel.ModelFailure] {
-  let filtered : Array[@kernel.ToolDef] = []
-  for definition in tools {
-    if definition.name.to_string() == "run_code" {
-      filtered.push(definition)
-    }
-  }
-  self.fallback.compact(scope, messages, filtered, call_options, trigger)
+  self.fallback.compact(scope, messages, tools, call_options, trigger)
 }
 
 ///|
