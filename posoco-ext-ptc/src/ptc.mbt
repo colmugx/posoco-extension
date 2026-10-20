@@ -118,7 +118,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
   [
     {
       name: @posoco.ToolName::unchecked("run_code"),
-      description: "Execute a MoonBit program with filtered nested tool calls. Return only the final JSON value. Use for multi-step search, filtering and summarization. Provide exactly one of code or source.",
+      description: "Optional MoonBit batching. Select only when several predictable tool calls can run without further model judgment and keeping intermediate results local saves tokens. For single calls, uncertain next steps, or high compilation overhead, use the existing tools instead. Supply code or source, not both; return concise final JSON.",
       input_schema: {
         "type": "object",
         "properties": {
