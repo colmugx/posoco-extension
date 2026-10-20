@@ -146,20 +146,25 @@ pub struct GoalRunner {
   mut repeat_count : Int32 // consecutive identical tool-call fingerprints
   mut plan_streak : Int32 // consecutive turns with unchanged plan fingerprint
   mut prev_plan_fp : String?
+  // Scope and re-entrancy guard: only events emitted by this runner's
+  // current agent.run_turn belong in its budget and repetition counters.
+  mut active_session_id : String?
+  mut executing_loop : Bool
+  mut executing_turn : Bool
 } derive(Debug)
 
 ///|
 pub extend GoalRunner with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-/// Default options for a goal condition: unlimited budget, standard
+/// Default options for a goal condition: 20 turns (0 explicitly opts into unlimited), standard
 /// `<goal-complete/>` / `<goal-blocked/>` markers, wrap-up at 90% of the
 /// budget, stall flagging after 3 turns below 50 tokens / 3 identical tool
 /// calls / 3 turns with an unchanged plan, at most 2 verifier rounds.
 pub fn GoalOptions::default(goal_condition~ : String) -> GoalOptions {
   GoalOptions::{
     goal_condition,
-    budget: { max_turns: 0, max_total_tokens: 0, },
+    budget: { max_turns: 20, max_total_tokens: 0, },
     completion_marker: "<goal-complete/>",
     blocked_marker: "<goal-blocked/>",
     wrapup_ratio: 0.9,
@@ -216,6 +221,9 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
     repeat_count: 0,
     plan_streak: 0,
     prev_plan_fp: None,
+    active_session_id: None,
+    executing_loop: false,
+    executing_turn: false,
   }
 }
 
@@ -375,12 +383,34 @@ pub impl @posoco.Observer for GoalRunner with fn on_event(
 }
 
 ///|
-pub extend GoalRunner with @posoco.Observer::{on_event_at}
+/// Core dispatches the scoped observer only. A GoalRunner must never
+/// charge another session's turns or tool calls to its own budget.
+/// The turn flag also rejects telemetry produced before or after execute.
+pub impl @posoco.Observer for GoalRunner with fn on_event_at(
+  self : GoalRunner,
+  scope : @posoco.EventScope?,
+  event : @posoco.TurnEvent,
+) -> Unit {
+  if !self.executing_turn {
+    return
+  }
+  match (scope, self.active_session_id) {
+    (Some(s), Some(session)) if s.session_id.to_string() == session => {
+      self.on_event(event)
+      match event {
+        @posoco.TurnEvent::SessionRedirect(to~, ..) =>
+          self.active_session_id = Some(to)
+        _ => ()
+      }
+    }
+    _ => ()
+  }
+}
 
 ///|
 fn GoalRunner::is_budget_exhausted(self : GoalRunner) -> Bool {
   let b = self.options.budget
-  if b.max_turns > 0 && self.usage.turns >= b.max_turns {
+  if b.max_turns > 0 && self.current_turn >= b.max_turns {
     return true
   }
   if b.max_total_tokens > 0 && self.usage.total_tokens >= b.max_total_tokens {
@@ -392,14 +422,14 @@ fn GoalRunner::is_budget_exhausted(self : GoalRunner) -> Bool {
 ///|
 fn GoalRunner::near_budget_limit(self : GoalRunner) -> Bool {
   let b = self.options.budget
-  if b.max_total_tokens > 0 {
+  let tokens_near = if b.max_total_tokens > 0 {
     let threshold = (b.max_total_tokens.to_double() * self.options.wrapup_ratio).to_int()
-    return self.usage.total_tokens >= threshold
+    self.usage.total_tokens >= threshold
+  } else {
+    false
   }
-  if b.max_turns > 0 {
-    return self.current_turn >= b.max_turns - 1
-  }
-  false
+  let turns_near = b.max_turns > 0 && self.current_turn >= b.max_turns - 1
+  tokens_near || turns_near
 }
 
 ///|
@@ -417,7 +447,7 @@ fn GoalRunner::build_turn_prompt(self : GoalRunner) -> String {
       blocked_marker=self.options.blocked_marker,
     )
   }
-  if self.near_budget_limit() && !self.wrapup_sent {
+  if self.charter_delivered && self.near_budget_limit() && !self.wrapup_sent {
     self.wrapup_sent = true
     return build_wrapup_prompt(
       goal_condition=self.options.goal_condition,
@@ -468,12 +498,17 @@ pub fn GoalRunner::pause(self : GoalRunner) -> Unit {
 pub fn GoalRunner::resume_goal(self : GoalRunner) -> Unit {
   if self.status == Paused {
     self.status = Running
+    self.last_stall_reason = None
   }
 }
 
 ///|
 /// Clear the goal entirely, resetting all state to Idle.
 pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
+  // Never destroy live accounting underneath an in-flight model/tool turn.
+  if self.executing_loop {
+    return
+  }
   self.status = Idle
   self.usage = { turns: 0, total_tokens: 0, }
   self.history = []
@@ -493,6 +528,25 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.plan_streak = 0
   self.prev_plan_fp = None
   self.charter_delivered = false
+  self.charter = ""
+  self.active_session_id = None
+  self.executing_turn = false
+}
+
+///|
+/// Snapshot the current run without mutating the runner's state.
+fn GoalRunner::result(self : GoalRunner, final_status : GoalStatus) -> GoalResult {
+  GoalResult::{
+    final_status,
+    total_usage: {
+      turns: self.usage.turns,
+      total_tokens: self.usage.total_tokens,
+    },
+    turns_completed: self.current_turn,
+    history: self.history.copy(),
+    final_plan: GoalPlan::{ items: self.plan.items.copy(), },
+    stall_reason: self.last_stall_reason,
+  }
 }
 
 ///|
@@ -510,32 +564,33 @@ pub async fn GoalRunner::execute(
   agent : @posoco.Agent,
   session_id : String,
 ) -> GoalResult {
+  if self.executing_loop {
+    return self.result(Failed("goal is already executing"))
+  }
+  match self.status {
+    Idle => {
+      // Start a new run only from Idle. Resume never resets its state.
+      self.clear()
+      self.charter = build_charter(
+        goal_condition=self.options.goal_condition,
+        checklist=self.options.completion_checklist,
+        completion_marker=self.options.completion_marker,
+        blocked_marker=self.options.blocked_marker,
+        plan_tool_name=self.options.plan_tool_name,
+      )
+      self.active_session_id = Some(session_id)
+    }
+    Paused | Running =>
+      match self.active_session_id {
+        Some(saved) if saved != session_id =>
+          return self.result(Failed("cannot resume goal in a different session"))
+        Some(_) => ()
+        None => return self.result(Failed("goal has no active session"))
+      }
+    _ => return self.result(self.status)
+  }
   self.status = Running
-  self.usage = { turns: 0, total_tokens: 0, }
-  self.history = []
-  self.wrapup_sent = false
-  self.current_turn = 0
-  self.last_total_tokens = 0
-  self.stall_count = 0
-  self.completion_claimed = false
-  self.verifying = false
-  self.verifier_rounds = 0
-  self.prompt_variant = 0
-  self.last_stall_reason = None
-  self.last_retraction = None
-  self.last_tool_fp = None
-  self.repeat_count = 0
-  self.plan_streak = 0
-  self.prev_plan_fp = None
-  self.plan = GoalPlan::empty()
-  self.charter = build_charter(
-    goal_condition=self.options.goal_condition,
-    checklist=self.options.completion_checklist,
-    completion_marker=self.options.completion_marker,
-    blocked_marker=self.options.blocked_marker,
-    plan_tool_name=self.options.plan_tool_name,
-  )
-  self.charter_delivered = false
+  self.executing_loop = true
 
   while self.status == Running {
     if self.is_budget_exhausted() {
@@ -551,11 +606,17 @@ pub async fn GoalRunner::execute(
       @posoco.Content::Text(prompt),
     ])
 
+    let current_session = match self.active_session_id {
+      Some(id) => id
+      None => session_id
+    }
+    self.executing_turn = true
     let outcome : Result[@posoco.TurnResult, String] = Ok(
-      agent.run_turn(input, session_id),
+      agent.run_turn(input, current_session),
     ) catch {
       e => Err(e.to_string())
     }
+    self.executing_turn = false
     let turn_result = match outcome {
       Ok(r) => r
       Err(msg) => {
@@ -564,6 +625,7 @@ pub async fn GoalRunner::execute(
       }
     }
 
+    self.active_session_id = Some(turn_result.final_session_id)
     let summary = truncate_text(text_of_message(turn_result.message), 200)
     let usage_snapshot : GoalUsage = {
       turns: self.usage.turns,
@@ -574,6 +636,11 @@ pub async fn GoalRunner::execute(
       usage: usage_snapshot,
       summary,
     })
+    if self.status == Paused {
+      // A pause requested during an in-flight turn takes effect as soon
+      // as the turn settles; the completed turn remains in history.
+      break
+    }
 
     let verdict = scan_final_message(
       message=turn_result.message,
@@ -649,15 +716,7 @@ pub async fn GoalRunner::execute(
     self.last_total_tokens = self.usage.total_tokens
   }
 
-  GoalResult::{
-    final_status: self.status,
-    total_usage: {
-      turns: self.usage.turns,
-      total_tokens: self.usage.total_tokens,
-    },
-    turns_completed: self.current_turn,
-    history: self.history.copy(),
-    final_plan: GoalPlan::{ items: self.plan.items.copy(), },
-    stall_reason: self.last_stall_reason,
-  }
+  self.executing_loop = false
+  self.executing_turn = false
+  self.result(self.status)
 }
