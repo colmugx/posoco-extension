@@ -230,6 +230,9 @@ async fn DeepSeekModelPort::ds_compact_completion(
     false,
     thinking_json,
     effort_str,
+    // Byte-for-byte replay requires the same image encoding the routed chat
+    // request used, so the compacted prefix stays a genuine prefix.
+    self.config.supports_images,
   )
   let headers = build_headers(self.config)
   let url = chat_url(self.config)

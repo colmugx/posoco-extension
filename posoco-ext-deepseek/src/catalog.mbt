@@ -44,6 +44,7 @@ fn deepseek_catalog_slot(
     default_effort~,
     context_window=config.context_window,
     context_window_source="configured",
+    capabilities=if config.supports_images { ["image_in"] } else { [] },
     rebuild_on_api_key=Some(fn(credential) {
       let rebuilt_config = DeepSeekConfig(
         credential.secret,
@@ -55,6 +56,7 @@ fn deepseek_catalog_slot(
         max_reasoning_chars=config.max_reasoning_chars,
         recover_on_reasoning_exhaustion=config.recover_on_reasoning_exhaustion,
         repeated_reasoning_span_chars=config.repeated_reasoning_span_chars,
+        supports_images=config.supports_images,
       )
       deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     }),
@@ -88,6 +90,10 @@ fn deepseek_catalog_slot_from_info(
     max_reasoning_chars=base_config.max_reasoning_chars,
     recover_on_reasoning_exhaustion=base_config.recover_on_reasoning_exhaustion,
     repeated_reasoning_span_chars=base_config.repeated_reasoning_span_chars,
+    // The image opt-in describes the configured model; discovered sibling
+    // models must not inherit its image_in advertisement (same scoping as
+    // the configured context_window above).
+    supports_images=info.id == base_config.model && base_config.supports_images,
   )
   deepseek_catalog_slot(config, ctx, api_key)
 }

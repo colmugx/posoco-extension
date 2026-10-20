@@ -80,6 +80,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
           false,
           selected_thinking,
           selected_effort,
+          self.config.supports_images,
         )
         let headers = build_headers(self.config)
         let url = chat_url(self.config)
@@ -144,6 +145,7 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
         true,
         thinking_json,
         effort_str,
+        self.config.supports_images,
       )
       let headers = build_headers(self.config)
       let url = chat_url(self.config)

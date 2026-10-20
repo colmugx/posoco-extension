@@ -508,6 +508,7 @@ test "build_chat_request_high_thinking_no_warn" {
     false,
     enabled_thinking_json(),
     Some("high"),
+    false,
   )
   guard body is Object(root) else { fail("expected object") }
   assert_json_field_string(root, "model", "deepseek-flash")
@@ -532,6 +533,7 @@ test "build_chat_request_maximum_thinking_no_warn" {
     false,
     enabled_thinking_json(),
     Some("max"),
+    false,
   )
   guard body is Object(root) else { fail("expected object") }
   guard root.get("thinking") is Some(Object(thinking)) else {
@@ -555,6 +557,7 @@ test "build_chat_request_off_disables_thinking_no_warn" {
     false,
     disabled_thinking_json(),
     None,
+    false,
   )
   guard body is Object(root) else { fail("expected object") }
   guard root.get("thinking") is Some(Object(thinking)) else {
@@ -1266,6 +1269,134 @@ test "model_catalog slot advertises an implicit off and derives the default effo
 }
 
 ///|
+fn image_user_msg() -> @posoco.Message {
+  @posoco.Message::UserMessage(content=[
+    @posoco.Content::Text("what is in this picture?"),
+    @posoco.Content::Image(media_type="image/png", data="aGVsbG8="),
+  ])
+}
+
+///|
+test "encode image blocks as typed parts when the model accepts image input" {
+  let json = encode_message_with_reasoning(image_user_msg(), false, true)
+  guard json is Object(obj) else { fail("expected object") }
+  guard obj.get("content") is Some(Json::Array(parts)) else {
+    fail("expected typed content parts")
+  }
+  assert_eq(parts.length(), 2)
+  guard parts[0]
+    is Json::Object(
+      {
+        "type": Json::String("text"),
+        "text": Json::String("what is in this picture?"),
+        ..
+      }
+    ) else {
+    fail("expected text part")
+  }
+  guard parts[1]
+    is Json::Object(
+      {
+        "type": Json::String("image_url"),
+        "image_url": Json::Object(
+          { "url": Json::String("data:image/png;base64,aGVsbG8="), .. }
+        ),
+        ..
+      }
+    ) else {
+    fail("expected image_url part")
+  }
+}
+
+///|
+test "image blocks downgrade to the explicit placeholder without image input" {
+  let json = encode_message_with_reasoning(image_user_msg(), false, false)
+  guard json is Object(obj) else { fail("expected object") }
+  guard obj.get("content") is Some(Json::String(content)) else {
+    fail("expected string content")
+  }
+  assert_true(content.contains("[Attached image/png"))
+  assert_true(
+    content.contains("omitted: this model does not accept image input]"),
+  )
+  assert_true(content.contains("what is in this picture?"))
+}
+
+///|
+test "only image-enabled slots declare image_in and effort rebuild keeps it" {
+  let plain = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", model="deepseek-flash"),
+  )
+  assert_false(
+    plain.model_catalog().slots()[0].capabilities.contains("image_in"),
+  )
+  let vision = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", model="deepseek-flash", supports_images=true),
+  )
+  let slot = vision.model_catalog().slots()[0]
+  assert_true(slot.capabilities.contains("image_in"))
+  guard slot.rebuild_on_effort is Some(rebuild) else {
+    fail("expected effort rebuild hook")
+  }
+  assert_true(rebuild("low").capabilities.contains("image_in"))
+  assert_true(rebuild("off").capabilities.contains("image_in"))
+}
+
+///|
+test "refresh catalog scopes image_in to the configured model" {
+  let vision = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", model="deepseek-flash", supports_images=true),
+  )
+  let catalog = vision.model_catalog_from_models([
+    { id: "deepseek-v4-pro", owned_by: "deepseek", },
+    { id: "deepseek-flash", owned_by: "deepseek", },
+  ])
+  for slot in catalog.slots() {
+    assert_eq(
+      slot.capabilities.contains("image_in"),
+      slot.model_id == "deepseek-flash",
+    )
+  }
+}
+
+///|
+test "ProviderFactory::build image_input setting drives the image_in capability" {
+  let provider = DeepSeekProvider()
+  let factory : &@provider.ProviderFactory = provider
+  fn source_with(image_value : Json) -> @provider.ProviderConfigSource {
+    @provider.ProviderConfigSource::ProviderConfigSource(
+      settings=Some(
+        Json::object(
+          Map::from_array([
+            ("api_key", Json::string("sk-test")),
+            ("model", Json::string("deepseek-flash")),
+            ("image_input", image_value),
+          ]),
+        ),
+      ),
+    )
+  }
+  match factory.build(source_with(Json::boolean(true))) {
+    @provider.ProviderBuildResult::Ready(catalog) =>
+      assert_true(catalog.slots()[0].capabilities.contains("image_in"))
+    _ => fail("expected Ready catalog with image_input=true")
+  }
+  match factory.build(source_with(Json::boolean(false))) {
+    @provider.ProviderBuildResult::Ready(catalog) =>
+      assert_false(catalog.slots()[0].capabilities.contains("image_in"))
+    _ => fail("expected Ready catalog with image_input=false")
+  }
+  let invalid = Ok(factory.build(source_with(Json::string("yes")))) catch {
+    err => Err(err)
+  }
+  match invalid {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_eq(detail, "image_input must be a boolean")
+    _ => fail("a non-boolean image_input must fail at the factory boundary")
+  }
+}
+
+///|
 test "ProviderFactory::build accepts reasoning_effort off and produces a disabled slot" {
   let provider = DeepSeekProvider()
   let factory : &@provider.ProviderFactory = provider
@@ -1815,6 +1946,7 @@ test "repetition guard injects convergence hint only on repeated tool calls" {
     false,
     enabled_thinking_json(),
     Some("high"),
+    false,
   )
   guard ordinary is Object(no_tools) else { fail("expected request") }
   guard no_tools.get("messages") is Some(Array(original)) else {
@@ -1864,6 +1996,7 @@ test "request with tools replays reasoning from plain assistant history" {
     false,
     enabled_thinking_json(),
     Some("high"),
+    false,
   )
   guard with_tools is Object(body) else { fail("expected request") }
   guard body.get("messages") is Some(Array(wire)) else {
@@ -1882,6 +2015,7 @@ test "request with tools replays reasoning from plain assistant history" {
     false,
     enabled_thinking_json(),
     Some("high"),
+    false,
   )
   guard without_tools is Object(body2) else { fail("expected request") }
   guard body2.get("messages") is Some(Array(wire2)) else {

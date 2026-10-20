@@ -45,7 +45,10 @@ pub fn PtcRuntime::PtcRuntime(
   // the Agent starts. Never silently fall back to raw provider dispatch.
   let guarded_providers : Array[&@posoco.ToolProvider] = []
   for provider in tools {
-    guarded_providers.push(PtcGuardedProvider(inner=provider, guards=final_guards) as &@posoco.ToolProvider)
+    guarded_providers.push(
+      PtcGuardedProvider(inner=provider, guards=final_guards)
+      as &@posoco.ToolProvider,
+    )
   }
   let _ = @posoco.ScopedToolDispatch(guarded_providers, hooks~)
   // run_code is a transport, not a privileged operation. The permission
@@ -53,11 +56,12 @@ pub fn PtcRuntime::PtcRuntime(
   // approval for the enclosing tool. The hard capability gate above
   // prevents unscoped tool execution.
   match bus {
-    Some(bus) => bus.publish({
-      source: "posoco_ext_ptc",
-      topic: "tool_exemptions",
-      data: { "tools": ["run_code"] },
-    })
+    Some(bus) =>
+      bus.publish({
+        source: "posoco_ext_ptc",
+        topic: "tool_exemptions",
+        data: { "tools": ["run_code"] },
+      })
     None => ()
   }
   {
@@ -132,17 +136,9 @@ pub impl @mbtx.ToolInvoker for PtcScopedInvoker with fn invoke(
     @kernel.SuccessWithAttachments(content~, structured~, ..) =>
       @protocol.Success(content~, structured~)
     @kernel.ToolReportedError(content~, structured~) =>
-      @protocol.Failure(
-        code="ToolRejected",
-        content~,
-        structured~,
-      )
+      @protocol.Failure(code="ToolRejected", content~, structured~)
     @kernel.RuntimeFailure(error_category~, message~) =>
-      @protocol.Failure(
-        code=error_category,
-        content=message,
-        structured=None,
-      )
+      @protocol.Failure(code=error_category, content=message, structured=None)
     @kernel.NotExecuted(..) =>
       @protocol.Failure(
         code="NotExecuted",
@@ -165,7 +161,9 @@ pub impl @runtime.Runtime for PtcRuntime with fn call_model(
   on_chunk : ((@posoco.StreamChunk) -> Unit)?,
 ) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure] {
   // Additive contract: preserve the complete original model tool surface.
-  self.fallback.call_model(scope, messages, tool_definitions, call_options, on_chunk)
+  self.fallback.call_model(
+    scope, messages, tool_definitions, call_options, on_chunk,
+  )
 }
 
 ///|
@@ -275,5 +273,8 @@ pub impl @runtime.Runtime for PtcRuntime with fn compact(
 
 ///|
 pub extend PtcRuntime with @runtime.Runtime::{
-  call_model, execute_tool, cancel_effects, compact,
+  call_model,
+  execute_tool,
+  cancel_effects,
+  compact,
 }

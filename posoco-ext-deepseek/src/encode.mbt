@@ -12,16 +12,21 @@
 
 ///|
 /// Encode a kernel Message into a DeepSeek chat message JSON object.
+/// FIM/prefix endpoints are text-only, so images keep the placeholder
+/// downgrade here.
 fn encode_message(msg : @posoco.Message) -> Json {
-  encode_message_with_reasoning(msg, false)
+  encode_message_with_reasoning(msg, false, false)
 }
 
 ///|
 /// Request-aware encoding: DeepSeek requires full reasoning replay whenever
 /// the outgoing request carries tools, even for plain assistant replies.
+/// `supports_images` switches image blocks from the placeholder downgrade to
+/// typed `image_url` content parts.
 fn encode_message_with_reasoning(
   msg : @posoco.Message,
   replay_all_reasoning : Bool,
+  supports_images : Bool,
 ) -> Json {
   let (role, content_blocks, tool_calls, tool_call_id, reasoning_text) = match
     msg {
@@ -47,11 +52,11 @@ fn encode_message_with_reasoning(
       ("tool", tool_blocks, [], Some(call_id.to_string()), None)
     }
   }
-  // Shared content encoding: string form (this endpoint does not accept
-  // content parts), with any Image block downgraded to an explicit
-  // placeholder instead of a silent drop.
+  // Shared content encoding: string form by default; when the configured
+  // model accepts image input, image blocks encode as typed parts instead of
+  // the explicit placeholder downgrade (never a silent drop).
   let content_json : Json = match
-    @chatkit.encode_chat_message_content(content_blocks) {
+    @chatkit.encode_chat_message_content(content_blocks, supports_images~) {
     TextContent(s) => Json::string(s)
     PartsContent(parts) => Json::array(parts)
   }
@@ -130,12 +135,18 @@ fn build_chat_request(
   stream : Bool,
   thinking_json : Json,
   reasoning_effort_str : String?,
+  supports_images : Bool,
 ) -> Json {
-  let wire_messages = @chatkit.fold_tool_attachments(messages, false).map(fn(
-    message,
-  ) {
-    encode_message_with_reasoning(message, tools.length() > 0)
-  })
+  let wire_messages = @chatkit.fold_tool_attachments(messages, supports_images).map(fn(
+      message,
+    ) {
+      encode_message_with_reasoning(
+        message,
+        tools.length() > 0,
+        supports_images,
+      )
+    },
+  )
   if tools.length() > 0 && deepseek_repeated_tool_calls(messages) {
     wire_messages.push(
       Json::object({

@@ -29,6 +29,11 @@ pub(all) struct DeepSeekConfig {
   recover_on_reasoning_exhaustion : Bool
   /// Exact repeated reasoning suffix span: default 256; None disables it.
   repeated_reasoning_span_chars : Int32?
+  /// When true, image blocks encode as typed `image_url` content parts
+  /// instead of placeholder downgrades and the model slot advertises
+  /// `image_in`. Opt-in via the `image_input` setting: the /models endpoint
+  /// carries no modality metadata, so the host declares image capability.
+  supports_images : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -48,6 +53,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   max_reasoning_chars~ : Int32? = Some(120000),
   recover_on_reasoning_exhaustion~ : Bool = true,
   repeated_reasoning_span_chars~ : Int32? = Some(256),
+  supports_images~ : Bool = false,
 ) -> DeepSeekConfig {
   if reasoning_effort != "" &&
     !deepseek_reasoning_efforts().contains(reasoning_effort) {
@@ -88,6 +94,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     max_reasoning_chars,
     recover_on_reasoning_exhaustion,
     repeated_reasoning_span_chars,
+    supports_images,
   }
 }
 

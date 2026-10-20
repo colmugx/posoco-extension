@@ -174,6 +174,28 @@ The provider emits an ordinary ExtContext warning when it takes this path.
 
 `repeated_reasoning_span_chars` (positive integer >= 128, default `Some(256)` in a direct `DeepSeekConfig`) detects three **adjacent, exactly equal suffix spans** in streamed reasoning before answer text begins. This guard defaults to `Some(256)` and reports an `ExtContext` warning, closes the connection and raises an explicit transport error on detection. It is a deliberately narrow textual cycle detector, not a semantic information-gain estimator. A syntactically different reasoning loop will not trigger; an unusually repetitive but valid reasoning stream may trigger. No automatic replay is attempted after forwarded streaming chunks.
 
+## Optional image input (multimodal chat)
+
+`image_input: true` in generic provider settings, or
+`DeepSeekConfig("sk-...", supports_images=true)` directly, opts the configured
+model into typed image content. The default is `false`: every image block then
+downgrades to an explicit `"[Attached image/png, ~N KB, omitted: ...]"`
+placeholder so the model knows an image existed but was not delivered — never
+a silent drop.
+
+With the opt-in, user messages carrying image blocks encode as OpenAI-style
+`image_url` content parts (base64 data URLs or http(s) URLs pass through),
+tool-attachment folding keeps the same fidelity, and the model slot advertises
+the `image_in` capability so hosts may attach images. Discovered sibling
+models from `/models` do **not** inherit the advertisement — the setting
+describes the configured model only. Compaction replays the conversation head
+with the same encoding the routed chat request used, so the compacted prefix
+stays a genuine prefix. A non-boolean `image_input` fails composition with a
+typed `ManifestSchemaError`.
+
+Whether a given DeepSeek model actually accepts image parts is a
+provider-side fact; enable the flag only for models with vision input.
+
 ## Default protection policy (no host configuration required)
 
 The DeepSeek extension enables conservative protections for **every** Posoco

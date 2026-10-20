@@ -209,6 +209,24 @@ fn deepseek_setting_recover_on_exhaustion(
 }
 
 ///|
+/// Image-input opt-in. The /models endpoint carries no modality metadata,
+/// so the host declares it per settings; default false keeps every image
+/// block on the explicit placeholder downgrade.
+fn deepseek_setting_image_input(
+  source : @provider.ProviderConfigSource,
+) -> Bool raise @posoco.CompositionError {
+  match source.setting("image_input") {
+    None | Some(Json::False) => false
+    Some(Json::True) => true
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_deepseek",
+        detail="image_input must be a boolean",
+      )
+  }
+}
+
+///|
 pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
   self : DeepSeekProvider,
   source : @provider.ProviderConfigSource,
@@ -252,6 +270,7 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
       source,
     ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
+    supports_images=deepseek_setting_image_input(source),
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
@@ -340,6 +359,7 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
       source,
     ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
+    supports_images=deepseek_setting_image_input(source),
   )
   let models = fetch_deepseek_models(
     config.base_url,
