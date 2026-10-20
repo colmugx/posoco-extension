@@ -410,6 +410,9 @@ pub fn session_to_jsonl(session : @posoco.Session) -> String {
 /// - A malformed final physical line is ignored only when the file does not
 ///   end in `\n`. This is the torn-tail shape left when a process dies during
 ///   an append; recovery returns the last fully persisted message boundary.
+// This public parser deliberately returns Result as ordinary corruption/recovery data.
+// Callers distinguish torn-tail recovery from a valid loaded Session without throwing.
+#warnings("-result_error_return")
 pub fn session_from_jsonl(
   content : String,
 ) -> Result[@posoco.Session, @posoco.SessionError] {
