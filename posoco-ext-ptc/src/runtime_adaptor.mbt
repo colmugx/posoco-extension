@@ -1,12 +1,13 @@
 ///|
-/// Advanced Posoco runtime binding for read-only programmatic tool calls.
+/// Advanced Posoco runtime binding for programmatic tool calls.
 /// The enclosing run_code is a normal reducer-owned Effect. Nested requests
 /// deliberately remain private to the MBTX invocation; they are NOT kernel
-/// child Effects. The only supported nested providers are read/grep/glob.
+/// child Effects. Provider capabilities are supplied explicitly by the host.
 pub struct PtcRuntime {
   priv fallback : &@runtime.Runtime
   priv tools : Array[&@posoco.ToolProvider]
   priv hooks : Array[&@posoco.PipelineHook]
+  priv final_guards : Array[&@posoco.PipelineHook]
   priv definitions : Array[@posoco.ToolDef]
   priv presentation : PtcExtension
   priv home : String?
@@ -18,22 +19,23 @@ pub fn PtcRuntime::PtcRuntime(
   fallback~ : &@runtime.Runtime,
   tools~ : Array[&@posoco.ToolProvider],
   hooks~ : Array[&@posoco.PipelineHook] = [],
+  final_guards~ : Array[&@posoco.PipelineHook] = [],
   home? : String,
 ) -> PtcRuntime raise @posoco.CompositionError {
   let definitions : Array[@posoco.ToolDef] = []
   if tools.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
       manifest_id="posoco_ext_ptc",
-      detail="PTC requires an explicit read-only provider set",
+      detail="PTC requires an explicit provider set",
     )
   }
   for provider in tools {
     for definition in provider.list_tools() {
       let name = definition.name.to_string()
-      if name != "read" && name != "grep" && name != "glob" {
+      if name == "run_code" || name == "" {
         raise @posoco.CompositionError::ManifestSchemaError(
           manifest_id="posoco_ext_ptc",
-          detail="PTC experimental scope excludes tool '" + name + "'",
+          detail="PTC scope excludes recursive or unnamed tool '" + name + "'",
         )
       }
       definitions.push(definition)
@@ -41,11 +43,16 @@ pub fn PtcRuntime::PtcRuntime(
   }
   // Composition gate: reject duplicate tools and unsupported schemas before
   // the Agent starts. Never silently fall back to raw provider dispatch.
-  let _ = @posoco.ScopedToolDispatch(tools, hooks~)
+  let protected : Array[&@posoco.ToolProvider] = []
+  for provider in tools {
+    protected.push(PtcGuardedProvider(inner=provider, guards=final_guards) as &@posoco.ToolProvider)
+  }
+  let _ = @posoco.ScopedToolDispatch(protected, hooks~)
   {
     fallback,
-    tools: tools.copy(),
+    tools: protected,
     hooks: hooks.copy(),
+    final_guards: final_guards.copy(),
     definitions,
     presentation: PtcExtension(exposed=definitions, home?),
     home,
