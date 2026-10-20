@@ -42,6 +42,9 @@ struct CompactLoopback {
 }
 
 ///|
+// Test-helper failure is deliberately ordinary Result data.
+#warnings("-result_error_return")
+
 /// Await-style attempt: binds a raising async call into a Result so each
 /// server step can degrade explicitly.
 async fn[T] attempt_async(f : async () -> T) -> Result[T, Error] {
