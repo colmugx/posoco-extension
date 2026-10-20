@@ -57,44 +57,48 @@ fn truncate_reason(reason : String) -> String {
 }
 
 ///|
-/// Scan the message text line by line. A signal line is one whose TRIMMED
-/// content EXACTLY equals the completion or blocked marker. When several
-/// signal lines exist, the LAST one wins (final intent). For BlockedClaimed
-/// the reason is the last non-empty line ABOVE that tag line, truncated to
-/// 200 characters (append "…" when truncated); "" when none.
+/// The marker is only a protocol signal when it is the last non-empty line
+/// of an assistant message. Earlier marker examples, quotations, and user
+/// messages never authorize goal completion or blocking.
+///
+/// For BlockedClaimed the reason is the last non-empty preceding line,
+/// truncated to 200 UTF-16 code units.
 pub fn scan_final_message(
   message~ : @posoco.Message,
   completion_marker~ : String,
   blocked_marker~ : String,
 ) -> TurnVerdict {
+  let content = match message {
+    @posoco.Message::AssistantMessage(content~, ..) => content
+    _ => return NoSignal
+  }
   let lines : Array[String] = []
-  for line in text_of_message(message).split("\n") {
+  for line in text_of_content(content).split("\n") {
     lines.push(line.trim().to_owned())
   }
-  let mut last_signal_index : Int32? = None
-  let mut last_is_completion = false
+  // Trailing whitespace is harmless; non-marker prose after a tag is not.
+  let mut last_nonempty : Int32? = None
   for i, line in lines {
-    if line == completion_marker {
-      last_signal_index = Some(i)
-      last_is_completion = true
-    } else if line == blocked_marker {
-      last_signal_index = Some(i)
-      last_is_completion = false
+    if line != "" {
+      last_nonempty = Some(i)
     }
   }
-  match last_signal_index {
+  match last_nonempty {
     None => NoSignal
-    Some(i) =>
-      if last_is_completion {
-        CompletionClaimed
-      } else {
-        let mut reason = ""
-        for j in 0..<i {
-          if lines[j] != "" {
-            reason = lines[j]
-          }
-        }
-        BlockedClaimed(reason=truncate_reason(reason))
+    Some(i) => {
+      if lines[i] == completion_marker {
+        return CompletionClaimed
       }
+      if lines[i] != blocked_marker {
+        return NoSignal
+      }
+      let mut reason = ""
+      for j in 0..<i {
+        if lines[j] != "" {
+          reason = lines[j]
+        }
+      }
+      BlockedClaimed(reason=truncate_reason(reason))
+    }
   }
 }
