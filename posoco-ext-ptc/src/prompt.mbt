@@ -1,27 +1,27 @@
 ///|
-/// Keep the stable prefix small. Full schemas for the core coding tools only;
-/// all other capabilities are discoverable by concise name/description.
-/// Model tools list contains only run_code; these are PROGRAM bindings only.
 pub impl @posoco.SystemPromptContributor for PtcExtension with fn system_prompt(
   self : PtcExtension,
 ) -> String {
-  let sections : Array[String] = [
-    "## Programmatic tool calling (MoonBit)", "run_code is an OPTIONAL batching tool alongside normal tools. Prefer direct calls for single simple actions; use run_code only when several deterministic tool calls can be combined without quality loss. Its code is the BODY of:",
-    "async fn ptc_run(ctx : PtcContext, input : Json) -> Json { ... }", "Do not include import statements, the function signature, or main.",
-    "Use ctx.call(\"tool_name\", {\"arg\": value}) for nested tools.", "A successful nested call returns its structured JSON value, or a string if no structured result is supplied.",
-    "A denied/failed nested call returns {\"error\": \"CODE\", \"content\": \"message\"}; check this before consuming.",
-    "Filter, loop and summarize in MoonBit. Return ONLY the final Json value. Inner results remain in the program, not in the model transcript.",
-    "For ordinary comparisons, use MoonBit patterns on JSON, e.g. if value is {\"error\": String(reason), ..} { ... }.",
-    "Call run_code with code or source, description and optionally input.", "For reusable programs prefer source: a complete .mbtx with the versioned MBTX SDK, @mbtx.serve(run), and normal source locations.",
-    "PTC guest bindings (only these tool names may be called FROM code; ordinary model-facing tools remain available directly):",
-  ]
+  let sections : String =
+    #|## Programmatic tool calling (MoonBit)
+    #|run_code is optional. Use ordinary tools for simple operations and batch deterministic multi-tool work with run_code only when it reduces model turns.
+    #|code is the body of: async fn ptc_run(ctx : PtcContext, input : Json) -> Json { ... }
+    #|Do not include imports, the function signature, or main in code.
+    #|Call ctx.call("tool_name", {"arg": value}) to invoke nested tools.
+    #|Successful calls return structured JSON, or the content string when no structured result exists.
+    #|Failed calls return {"error": "CODE", "content": "message"}; inspect errors before continuing.
+    #|Keep intermediate tool results in MoonBit. Return a concise final Json value.
+    #|Call run_code with code or source, description, and optionally input.
+    #|For reusable programs, source accepts a complete .mbtx program using the versioned MBTX SDK and @mbtx.serve(run).
+    #|Only these names are available through ctx.call; other model-visible tools remain directly usable:
+  let entries : Array[String] = []
   if self.exposed.is_empty() {
-    sections.push("(none; pure MoonBit computation only)")
+    entries.push("(none; pure MoonBit computation only)")
   } else {
     for def in self.exposed {
       let name = def.name.to_string()
       if self.tool_names.contains(name) {
-        sections.push(
+        entries.push(
           if name == "read" || name == "glob" || name == "grep" ||
             name == "edit" || name == "write" || name == "bash" ||
             name == "apply_patch" {
@@ -34,7 +34,7 @@ pub impl @posoco.SystemPromptContributor for PtcExtension with fn system_prompt(
       }
     }
   }
-  sections.join("\n")
+  sections + "\n" + entries.join("\n")
 }
 
 ///|
