@@ -258,3 +258,40 @@ test "clearing a running execution cannot destroy its state" {
   assert_eq(goal.current_turn, 0)
   assert_true(goal.status == Idle)
 }
+
+///|
+/// The plan mutates runner state: it may not be scheduled as a parallel tool.
+test "goal plan tool executes sequentially" {
+  let goal = goal_extension(goal_condition="safe plan updates")
+  let definitions = goal.list_tools()
+  assert_eq(definitions.length(), 1)
+  assert_true(definitions[0].policy == @posoco.ExecutionPolicy::Sequential)
+}
+
+///|
+/// Absent token telemetry cannot be interpreted as low model output.
+test "unknown output usage remains unknown" {
+  let goal = goal_extension(goal_condition="unknown output usage")
+  goal.executing_turn = true
+  goal.active_session_id = Some("s1")
+  let scope : @posoco.EventScope = {
+    session_id: @kernel.SessionId::unchecked("s1"),
+    run_id: @kernel.RunId::unchecked("r1"),
+    turn_id: @kernel.TurnId::unchecked("t1"),
+  }
+  goal.on_event_at(
+    Some(scope),
+    @posoco.TurnEvent::ModelResponseReceived(
+      message=@posoco.Message::AssistantMessage(
+        content=[@posoco.Content::Text("still working")],
+        tool_calls=[],
+        reasoning=None,
+        finish_reason=@posoco.FinishReason::Stop,
+      ),
+      usage=None,
+    ),
+  )
+  assert_false(goal.turn_output_known)
+  assert_eq(goal.turn_output_tokens, 0)
+  assert_eq(goal.usage.total_tokens, 0)
+}
