@@ -943,6 +943,9 @@ fn router_test_balance_reading() -> @devkit.QuotaReading {
 }
 
 ///|
+// Test-helper failure is deliberately ordinary Result data.
+#warnings("-result_error_return")
+
 /// Drive one chat through the router's ModelPort trait view.
 async fn router_quota_chat(
   router : RouterModelPort,
