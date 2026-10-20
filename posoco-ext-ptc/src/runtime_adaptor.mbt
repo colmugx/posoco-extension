@@ -21,6 +21,7 @@ pub fn PtcRuntime::PtcRuntime(
   hooks~ : Array[&@posoco.PipelineHook] = [],
   final_guards~ : Array[&@posoco.PipelineHook] = [],
   home? : String,
+  bus? : @devkit.EventBus,
 ) -> PtcRuntime raise @posoco.CompositionError {
   let definitions : Array[@posoco.ToolDef] = []
   if tools.is_empty() {
@@ -48,6 +49,18 @@ pub fn PtcRuntime::PtcRuntime(
     protected.push(PtcGuardedProvider(inner=provider, guards=final_guards) as &@posoco.ToolProvider)
   }
   let _ = @posoco.ScopedToolDispatch(protected, hooks~)
+  // run_code is a transport, not a privileged operation. The permission
+  // gate must inspect EVERY nested leaf call, not require a second blanket
+  // approval for the enclosing tool. The hard capability gate above
+  // prevents unscoped tool execution.
+  match bus {
+    Some(bus) => bus.publish({
+      source: "posoco_ext_ptc",
+      topic: "tool_exemptions",
+      data: { "tools": ["run_code"] },
+    })
+    None => ()
+  }
   {
     fallback,
     tools: protected,
