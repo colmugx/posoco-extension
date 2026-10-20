@@ -28,3 +28,6 @@ jobs:
 
       - name: moon check (js)
         run: moon check --target js --output-json
+
+      - name: Goal tests (native)
+        run: moon test --target native --package colmugx/posoco-ext-goal
