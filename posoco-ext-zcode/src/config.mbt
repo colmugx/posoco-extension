@@ -361,6 +361,8 @@ pub async fn zcode_probe_paths(
 /// Command assembly for a resolved bin: a .cjs/.mjs/.js entry is prefixed
 /// with the interpreter (config.node → ZCODE_NODE → "node"); anything else
 /// spawns directly.
+// Preserve the existing Result-valued command assembly contract for callers.
+#warnings("-result_error_return")
 fn zcode_command_for(
   config~ : ZcodeConfig,
   env~ : (String) -> String?,
@@ -385,6 +387,8 @@ fn zcode_command_for(
 /// Resolve over an explicit candidate list (the caller decides the list and
 /// answers `exists`): the first existing candidate wins. A PATH-stub hit
 /// keeps the bare "zcode" command; every other hit keeps the probed path.
+// Missing discovery candidates are an expected, inspectable result.
+#warnings("-result_error_return")
 pub fn zcode_resolve_command_from(
   config~ : ZcodeConfig,
   env~ : (String) -> String?,
@@ -410,6 +414,8 @@ pub fn zcode_resolve_command_from(
 /// `zcode_candidate_paths`. env/exists are injected so every branch is
 /// testable without touching the real host. Hosts with read IO can widen the
 /// candidate list via `zcode_probe_paths` + `zcode_resolve_command_from`.
+// Result intentionally represents optional discovery, not an exceptional fault.
+#warnings("-result_error_return")
 pub fn zcode_resolve_command(
   config~ : ZcodeConfig,
   env~ : (String) -> String?,
