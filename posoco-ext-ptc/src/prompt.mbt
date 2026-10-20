@@ -3,38 +3,18 @@ pub impl @posoco.SystemPromptContributor for PtcExtension with fn system_prompt(
   self : PtcExtension,
 ) -> String {
   let sections : String =
-    #|## Programmatic tool calling (MoonBit)
-    #|run_code is optional. Use ordinary tools for simple operations and batch deterministic multi-tool work with run_code only when it reduces model turns.
-    #|code is the body of: async fn ptc_run(ctx : PtcContext, input : Json) -> Json { ... }
-    #|Do not include imports, the function signature, or main in code.
-    #|Call ctx.call("tool_name", {"arg": value}) to invoke nested tools.
-    #|Successful calls return structured JSON, or the content string when no structured result exists.
-    #|Failed calls return {"error": "CODE", "content": "message"}; inspect errors before continuing.
-    #|Keep intermediate tool results in MoonBit. Return a concise final Json value.
-    #|Call run_code with code or source, description, and optionally input.
-    #|For reusable programs, source accepts a complete .mbtx program using the versioned MBTX SDK and @mbtx.serve(run).
-    #|Only these names are available through ctx.call; other model-visible tools remain directly usable:
-  let entries : Array[String] = []
-  if self.exposed.is_empty() {
-    entries.push("(none; pure MoonBit computation only)")
+    #|## Optional MoonBit programmatic tool calling
+    #|Ordinary tools remain available. Prefer them for simple calls, uncertain next steps, or when compiling code would cost more than it saves.
+    #|Choose run_code when several deterministic calls can be batched and intermediate results can stay out of the model context. Do not retry or promote run_code merely because it is available.
+    #|code is the body of async fn ptc_run(ctx : PtcContext, input : Json) -> Json { ... }; omit imports, signature, and main.
+    #|Use ctx.call("name", arguments). Success returns structured JSON or a content string; failure returns {"error": "CODE", "content": "message"}.
+    #|Return a concise final Json value. source accepts a complete .mbtx program using the MBTX SDK and @mbtx.serve(run).
+  let names = if self.tool_names.is_empty() {
+    "(none)"
   } else {
-    for def in self.exposed {
-      let name = def.name.to_string()
-      if self.tool_names.contains(name) {
-        entries.push(
-          if name == "read" || name == "glob" || name == "grep" ||
-            name == "edit" || name == "write" || name == "bash" ||
-            name == "apply_patch" {
-            name + ": " + def.description + "\n  input_schema=" +
-            def.input_schema.stringify()
-          } else {
-            name + ": " + def.description
-          },
-        )
-      }
-    }
+    self.tool_names.join(", ")
   }
-  sections + "\n" + entries.join("\n")
+  sections + "\nNested capabilities: " + names
 }
 
 ///|
