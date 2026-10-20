@@ -92,7 +92,14 @@ pub extend PtcCatalogSource with @runtime.CatalogSource::{revision, tools}
 /// invoker or a borrowed raw provider. The dispatch's fixed catalog is the
 /// maximum set of operations that any Hook may approve or rewrite to.
 pub struct PtcScopedInvoker {
-  dispatch : @posoco.ScopedToolDispatch
+  priv dispatch : @posoco.ScopedToolDispatch
+}
+
+///|
+pub fn PtcScopedInvoker::PtcScopedInvoker(
+  dispatch~ : @posoco.ScopedToolDispatch,
+) -> PtcScopedInvoker {
+  { dispatch, }
 }
 
 ///|
@@ -174,7 +181,7 @@ pub impl @runtime.Runtime for PtcRuntime with fn execute_tool(
         message=error.to_string(),
       )
   }
-  let invoker = PtcScopedInvoker::{ dispatch, }
+  let invoker = PtcScopedInvoker(dispatch~)
   let ptc = PtcExtension(
     exposed=self.definitions,
     scoped_invoker=invoker,
