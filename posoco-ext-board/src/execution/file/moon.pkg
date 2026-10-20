@@ -1,3 +1,5 @@
+warn-list: -unused_package
+
 import {
   "colmugx/posoco-ext-board/execution",
   "colmugx/posoco-ext-board/internal/storage" @node_fs,
