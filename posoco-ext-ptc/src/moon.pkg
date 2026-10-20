@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco/kernel",
+  "colmugx/posoco/runtime",
   "colmugx/posoco-ext-mbtx" @mbtx,
   "colmugx/posoco-ext-mbtx/protocol",
   "posoco/devkit",
