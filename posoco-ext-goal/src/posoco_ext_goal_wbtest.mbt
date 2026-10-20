@@ -193,3 +193,68 @@ test "clear_keeps_options_derived_charter" {
   assert_eq(goal.options.goal_condition, "idle after clear")
   assert_false(goal.charter_delivered)
 }
+
+///|
+
+test "goal default has a bounded turn budget" {
+  let goal = goal_extension(goal_condition="bounded by default")
+  assert_true(goal.options.budget.max_turns > 0)
+}
+
+test "scoped observer rejects foreign sessions and out-of-turn events" {
+  let goal = goal_extension(goal_condition="scope")
+  goal.status = Running
+  goal.active_session_id = Some("s1")
+  let usage : @posoco.Usage = {
+    input_tokens: Some(6),
+    output_tokens: Some(4),
+    total_tokens: Some(10),
+    cached_input_tokens: None,
+    uncached_input_tokens: None,
+  }
+  let event = @posoco.TurnEvent::ModelResponseReceived(
+    message=@posoco.Message::AssistantMessage(
+      content=[@posoco.Content::Text("ok")],
+      tool_calls=[],
+      reasoning=None,
+      finish_reason=@posoco.FinishReason::Stop,
+    ),
+    usage=Some(usage),
+  )
+  let foreign : @posoco.EventScope = {
+    session_id: @kernel.SessionId::unchecked("s2"),
+    run_id: @kernel.RunId::unchecked("r1"),
+    turn_id: @kernel.TurnId::unchecked("t1"),
+  }
+  let local : @posoco.EventScope = {
+    session_id: @kernel.SessionId::unchecked("s1"),
+    run_id: @kernel.RunId::unchecked("r1"),
+    turn_id: @kernel.TurnId::unchecked("t1"),
+  }
+  goal.on_event_at(Some(local), event)
+  assert_eq(goal.usage.total_tokens, 0)
+  goal.executing_turn = true
+  goal.on_event_at(Some(foreign), event)
+  goal.on_event_at(None, event)
+  assert_eq(goal.usage.total_tokens, 0)
+  goal.on_event_at(Some(local), event)
+  assert_eq(goal.usage.total_tokens, 10)
+  goal.on_event_at(Some(foreign), @posoco.TurnEvent::TurnCompleted)
+  assert_eq(goal.usage.turns, 0)
+  goal.on_event_at(Some(local), @posoco.TurnEvent::TurnCompleted)
+  assert_eq(goal.usage.turns, 1)
+}
+
+test "clearing a running execution cannot destroy its state" {
+  let goal = goal_extension(goal_condition="guard")
+  goal.status = Running
+  goal.executing_loop = true
+  goal.current_turn = 2
+  goal.clear()
+  assert_eq(goal.current_turn, 2)
+  assert_true(goal.status == Running)
+  goal.executing_loop = false
+  goal.clear()
+  assert_eq(goal.current_turn, 0)
+  assert_true(goal.status == Idle)
+}
