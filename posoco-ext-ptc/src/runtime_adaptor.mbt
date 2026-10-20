@@ -61,11 +61,13 @@ pub fn PtcRuntime::extension(self : PtcRuntime) -> &@posoco.Extension {
 
 ///|
 /// Only run_code is advertised, independently of the fallback's dynamic catalog.
-pub struct PtcCatalogSource {}
+pub struct PtcCatalogSource {
+  priv revision_ : Int32
+}
 
 ///|
 pub fn PtcCatalogSource::PtcCatalogSource() -> PtcCatalogSource {
-  {}
+  { revision_: 0, }
 }
 
 ///|
@@ -89,7 +91,7 @@ pub extend PtcCatalogSource with @runtime.CatalogSource::{revision, tools}
 /// Per-invocation MBTX adapter. It owns a fresh dispatch, never a process-wide
 /// invoker or a borrowed raw provider. The dispatch's fixed catalog is the
 /// maximum set of operations that any Hook may approve or rewrite to.
-priv struct PtcScopedInvoker {
+pub struct PtcScopedInvoker {
   dispatch : @posoco.ScopedToolDispatch
 }
 
@@ -176,7 +178,7 @@ pub impl @runtime.Runtime for PtcRuntime with fn execute_tool(
   let ptc = PtcExtension(
     exposed=self.definitions,
     scoped_invoker=invoker,
-    home=self.home,
+    home?=self.home,
   )
   let id = ctx.effect_id.to_int()
   // Prevent a stale or collided EffectId from silently replacing an active
