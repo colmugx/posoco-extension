@@ -7,7 +7,6 @@ pub struct PtcRuntime {
   priv fallback : &@runtime.Runtime
   priv tools : Array[&@posoco.ToolProvider]
   priv hooks : Array[&@posoco.PipelineHook]
-  priv final_guards : Array[&@posoco.PipelineHook]
   priv definitions : Array[@posoco.ToolDef]
   priv presentation : PtcExtension
   priv home : String?
@@ -44,11 +43,11 @@ pub fn PtcRuntime::PtcRuntime(
   }
   // Composition gate: reject duplicate tools and unsupported schemas before
   // the Agent starts. Never silently fall back to raw provider dispatch.
-  let protected : Array[&@posoco.ToolProvider] = []
+  let guarded_providers : Array[&@posoco.ToolProvider] = []
   for provider in tools {
-    protected.push(PtcGuardedProvider(inner=provider, guards=final_guards) as &@posoco.ToolProvider)
+    guarded_providers.push(PtcGuardedProvider(inner=provider, guards=final_guards) as &@posoco.ToolProvider)
   }
-  let _ = @posoco.ScopedToolDispatch(protected, hooks~)
+  let _ = @posoco.ScopedToolDispatch(guarded_providers, hooks~)
   // run_code is a transport, not a privileged operation. The permission
   // gate must inspect EVERY nested leaf call, not require a second blanket
   // approval for the enclosing tool. The hard capability gate above
@@ -63,9 +62,8 @@ pub fn PtcRuntime::PtcRuntime(
   }
   {
     fallback,
-    tools: protected,
+    tools: guarded_providers,
     hooks: hooks.copy(),
-    final_guards: final_guards.copy(),
     definitions,
     presentation: PtcExtension(exposed=definitions, home?),
     home,
@@ -92,9 +90,9 @@ pub fn PtcCatalogSource::PtcCatalogSource() -> PtcCatalogSource {
 
 ///|
 pub impl @runtime.CatalogSource for PtcCatalogSource with fn revision(
-  _self : PtcCatalogSource,
+  self : PtcCatalogSource,
 ) -> Int32 {
-  0
+  self.revision_
 }
 
 ///|
@@ -153,6 +151,9 @@ pub impl @mbtx.ToolInvoker for PtcScopedInvoker with fn invoke(
       )
   }
 }
+
+///|
+pub extend PtcScopedInvoker with @mbtx.ToolInvoker::{invoke}
 
 ///|
 pub impl @runtime.Runtime for PtcRuntime with fn call_model(
