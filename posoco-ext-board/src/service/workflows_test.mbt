@@ -311,7 +311,7 @@ async test "two actual execution Agents use independent identities and bounded s
         .checked(),
       )
     }
-    h.state.require_parallel = true
+    h.state.delay = -1
     ignore(h.board.run_wave().checked())
     let done = h.board.wait_boundary().checked()
     assert_eq(h.state.peak, 2)
