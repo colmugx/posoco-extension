@@ -1,4 +1,5 @@
-warn-list: -unused_package
+// Target-specific native async/fs import is intentionally unused by JS files.
+warnings = "-unused_package"
 
 import {
   "moonbitlang/async/fs",
