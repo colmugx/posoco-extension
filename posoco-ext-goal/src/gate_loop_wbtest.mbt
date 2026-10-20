@@ -108,7 +108,7 @@ async test "gate_retract_then_confirm" {
       @posoco.tk_stop_response("claim\n<goal-complete/>"),
     ),
     @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-blocked/>\nitem 1 failed"),
+      @posoco.tk_stop_response("item 1 failed\n<goal-blocked/>"),
     ),
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("fixed\n<goal-complete/>"),
