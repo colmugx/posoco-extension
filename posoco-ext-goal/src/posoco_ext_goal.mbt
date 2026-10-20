@@ -130,7 +130,10 @@ pub struct GoalRunner {
   mut usage : GoalUsage
   mut history : Array[GoalHistoryEntry]
   mut current_turn : Int32
-  mut last_total_tokens : Int32 // for delta tracking
+  mut last_total_tokens : Int32 // retained for legacy telemetry/debugging
+  mut turn_output_known : Bool // whether usage reported actual output tokens
+  mut turn_output_tokens : Int32 // output only: input tokens do not show work
+  mut turn_tool_count : Int32 // activity in current turn, not plan mutation
   mut stall_count : Int32 // consecutive low-output turns
   mut wrapup_sent : Bool // prevent duplicate wrap-up
   mut plan : GoalPlan // replaced wholesale by the plan tool / reset
@@ -206,6 +209,9 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
     history: [],
     current_turn: 0,
     last_total_tokens: 0,
+    turn_output_known: false,
+    turn_output_tokens: 0,
+    turn_tool_count: 0,
     stall_count: 0,
     wrapup_sent: false,
     plan: GoalPlan::empty(),
@@ -302,7 +308,7 @@ pub impl @posoco.ToolProvider for GoalRunner with fn list_tools(self) -> Array[
       description="Rewrite the full goal plan. Pass every item with status pending/in_progress/done; keep exactly one in_progress.",
       input_schema=plan_input_schema(),
       owner=@posoco.OwnerId::unchecked("posoco_ext_goal"),
-      policy=@posoco.ExecutionPolicy::Parallel,
+      policy=@posoco.ExecutionPolicy::Sequential,
       provenance=Some("posoco_ext_goal"),
     ),
   ]
@@ -354,15 +360,24 @@ pub impl @posoco.Observer for GoalRunner with fn on_event(
   match event {
     @posoco.TurnEvent::ModelResponseReceived(usage~, ..) =>
       match usage {
-        Some(u) =>
+        Some(u) => {
           match u.total_tokens {
             Some(v) => self.usage.total_tokens = self.usage.total_tokens + v
             None => ()
           }
+          match u.output_tokens {
+            Some(v) => {
+              self.turn_output_known = true
+              self.turn_output_tokens = self.turn_output_tokens + v
+            }
+            None => ()
+          }
+        }
         None => ()
       }
     @posoco.TurnEvent::TurnCompleted => self.usage.turns = self.usage.turns + 1
     @posoco.TurnEvent::ToolCallPending(call) => {
+      self.turn_tool_count = self.turn_tool_count + 1
       let fp = call.name.to_string() + "|" + call.arguments.stringify()
       match self.last_tool_fp {
         Some(prev) =>
@@ -514,6 +529,9 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.history = []
   self.current_turn = 0
   self.last_total_tokens = 0
+  self.turn_output_known = false
+  self.turn_output_tokens = 0
+  self.turn_tool_count = 0
   self.stall_count = 0
   self.wrapup_sent = false
   self.plan = GoalPlan::empty()
@@ -610,6 +628,9 @@ pub async fn GoalRunner::execute(
       Some(id) => id
       None => session_id
     }
+    self.turn_output_known = false
+    self.turn_output_tokens = 0
+    self.turn_tool_count = 0
     self.executing_turn = true
     let outcome : Result[@posoco.TurnResult, String] = Ok(
       agent.run_turn(input, current_session),
@@ -684,8 +705,12 @@ pub async fn GoalRunner::execute(
 
     // Stall detection: only on work turns that did not end the run.
     if self.status == Running && !self.verifying {
-      let delta = self.usage.total_tokens - self.last_total_tokens
-      if delta < self.options.stall_min_tokens {
+      // Missing usage is unknown, never evidence of low model output.
+      // Input/prefill tokens also do not establish work, so only count
+      // reported output tokens. Tools are concrete activity and suppress
+      // the short-output heuristic for their turn.
+      if self.turn_output_known && self.turn_tool_count == 0 &&
+        self.turn_output_tokens < self.options.stall_min_tokens {
         self.stall_count = self.stall_count + 1
       } else {
         self.stall_count = 0
@@ -700,13 +725,19 @@ pub async fn GoalRunner::execute(
         self.last_stall_reason = Some("repeated identical tool calls")
         break
       }
+      // A stable plan is normal while the agent performs tool work.
+      // Only count tool-free turns with an unchanged plan as potentially
+      // stale. Successful tool actions are not proof of progress, but
+      // they must not be classified as *inactivity* by this heuristic.
       let fp = GoalPlan::fingerprint(self.plan)
-      if Some(fp) == self.prev_plan_fp {
+      if self.turn_tool_count > 0 {
+        self.plan_streak = 0
+      } else if Some(fp) == self.prev_plan_fp {
         self.plan_streak = self.plan_streak + 1
       } else {
         self.plan_streak = 1
-        self.prev_plan_fp = Some(fp)
       }
+      self.prev_plan_fp = Some(fp)
       if self.plan_streak >= self.options.stall_turn_threshold {
         self.status = Paused
         self.last_stall_reason = Some("plan unchanged")
