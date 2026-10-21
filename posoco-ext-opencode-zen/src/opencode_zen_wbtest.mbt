@@ -35,18 +35,21 @@ fn zen_settings(pairs : Array[(String, String)]) -> Json {
 }
 
 ///|
-test "Zen routing headers carry stable session and fresh request identity" {
-  let first = zen_request_headers()
-  let second = zen_request_headers()
+test "OpenCode routing uses stable per-conversation identity across wires" {
+  let first = zen_request_headers("agent-a")
+  let second = zen_request_headers("agent-a")
+  let concurrent = zen_request_headers("agent-b")
   assert_eq(first["x-opencode-project"], "posoco")
   assert_eq(first["x-opencode-client"], "opencode-zen")
   assert_eq(first["User-Agent"], "posoco/opencode-zen")
+  assert_eq(first["x-opencode-session"], "agent-a")
   assert_eq(first["x-opencode-session"], second["x-opencode-session"])
-  assert_true(first["x-opencode-session"].length() > 0)
+  assert_eq(concurrent["x-opencode-session"], "agent-b")
+  assert_true(first["x-opencode-session"] != concurrent["x-opencode-session"])
   assert_true(first["x-opencode-request"] != second["x-opencode-request"])
-  // A product-built identity names its own client; the session id stays
-  // process-stable across products on the same gateway family.
-  let go = opencode_request_headers("opencode-go")
+  assert_true(first["x-opencode-request"] != concurrent["x-opencode-request"])
+  // Go and Zen use the same kernel conversation id, never a process-global id.
+  let go = opencode_request_headers("opencode-go", "agent-a")
   assert_eq(go["x-opencode-client"], "opencode-go")
   assert_eq(go["User-Agent"], "posoco/opencode-go")
   assert_eq(go["x-opencode-session"], first["x-opencode-session"])
@@ -2187,4 +2190,74 @@ test "zen decode falls back to message.reasoning" {
     Some(reasoning) => assert_eq(reasoning.content, "real")
     None => fail("expected reasoning")
   }
+}
+
+
+///|
+/// OpenCode Go's delta.reasoning alias must survive decoding and the next
+/// Chat Completions tool-result turn. This is a provider dialect contract:
+/// the shared standard chat-completions kit is not changed.
+test "OpenCode Go reasoning survives SSE tool call replay" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let on_chunk = fn(chunk : @posoco.StreamChunk) -> Unit { chunks.push(chunk) }
+  let reasoning_a =
+    #|{"choices":[{"delta":{"reasoning":"consider "},"finish_reason":null}]}
+  let reasoning_b =
+    #|{"choices":[{"delta":{"reasoning_content":"the file"},"finish_reason":null}]}
+  let tool_delta =
+    #|{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":"{}"}}]},"finish_reason":null}]}
+  let tool_finish =
+    #|{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+  assert_false(process_zen_sse(reasoning_a, acc, on_chunk))
+  assert_false(process_zen_sse(reasoning_b, acc, on_chunk))
+  assert_false(process_zen_sse(tool_delta, acc, on_chunk))
+  assert_true(process_zen_sse(tool_finish, acc, on_chunk))
+  let completion = acc.to_completion()
+  assert_eq(completion.message.tool_calls.length(), 1)
+  guard completion.message.reasoning is Some(reasoning) else {
+    fail("expected complete streamed reasoning")
+  }
+  assert_eq(reasoning.content, "consider the file")
+  let assistant : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=completion.message.content,
+    tool_calls=completion.message.tool_calls,
+    reasoning=completion.message.reasoning,
+    finish_reason=completion.message.finish_reason,
+  )
+  let tool_reply : @posoco.Message = @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("call_1"),
+    tool_name=@posoco.ToolName::unchecked("read"),
+    outcome=@posoco.ToolOutcome::Success(content="file contents", structured=None),
+  )
+  let request = build_chat_request(
+    [zen_user_msg("read the file"), assistant, tool_reply],
+    [],
+    zen_flaky_options(),
+    "deepseek-v4.1-flash",
+    true,
+    true,
+    Some("high"),
+    false,
+  )
+  guard request is Object(fields) else { fail("expected chat request") }
+  guard fields.get("messages") is Some(Array(history)) else {
+    fail("expected encoded message history")
+  }
+  assert_eq(history.length(), 3)
+  guard history[1] is Object(assistant_wire) else {
+    fail("expected encoded assistant tool turn")
+  }
+  match assistant_wire.get("reasoning_content") {
+    Some(String(text)) => assert_eq(text, "consider the file")
+    _ => fail("OpenCode dialect reasoning must be replayed unchanged"),
+  }
+  guard assistant_wire.get("tool_calls") is Some(Array(calls)) else {
+    fail("expected original assistant tool calls")
+  }
+  assert_eq(calls.length(), 1)
+  guard history[2] is Object(tool_wire) else {
+    fail("expected tool result message")
+  }
+  assert_eq(tool_wire["tool_call_id"], Json::string("call_1"))
 }

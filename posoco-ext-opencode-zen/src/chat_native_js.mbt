@@ -26,9 +26,9 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
   let messages_owned = messages.to_owned()
   let result = match self.config.wire {
     ChatCompletions =>
-      self.chat_chat_completions(messages_owned, tools, options, stream)
-    Messages => self.chat_messages(messages_owned, tools, options, stream)
-    Responses => self.chat_responses(messages_owned, tools, options, stream)
+      self.chat_chat_completions(scope, messages_owned, tools, options, stream)
+    Messages => self.chat_messages(scope, messages_owned, tools, options, stream)
+    Responses => self.chat_responses(scope, messages_owned, tools, options, stream)
     GoogleGenai | SystemOne | MistralDialect =>
       raise @posoco.ModelError::Transport(
         "opencode-zen unsupported wire (stage=chat, category=wire_not_served, model=\{self.config.model}, wire=\{self.config.wire.to_id()}, reason=\{wire_exclusion_reason(self.config.wire)})",
@@ -68,6 +68,7 @@ fn OpenCodeZenModelPort::zen_record_spend(
 ///|
 async fn OpenCodeZenModelPort::chat_chat_completions(
   self : OpenCodeZenModelPort,
+  scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -86,7 +87,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         self.config.supports_images,
         glm_flavor=zen_glm_flavored(self.config.model),
       )
-      let resp_json = self.zen_post_chat_json(body, "chat")
+      let resp_json = self.zen_post_chat_json(body, "chat", scope)
       let completion = decode_chat_response(resp_json)
       @posoco.ModelCallResult::{ completion, processed_messages: messages, }
     }
@@ -102,7 +103,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         self.config.supports_images,
         glm_flavor=zen_glm_flavored(self.config.model),
       )
-      let headers = build_headers(self.config)
+      let headers = build_headers(self.config, scope)
       let url = chat_url(self.config)
       let client = @http.post_stream(url, headers~) catch {
         err =>

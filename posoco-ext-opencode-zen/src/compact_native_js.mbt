@@ -11,8 +11,9 @@ async fn OpenCodeZenModelPort::zen_post_chat_json(
   self : OpenCodeZenModelPort,
   body : Json,
   stage : String,
+  scope : @posoco.InvocationScope,
 ) -> Json raise @posoco.ModelError {
-  let headers = build_headers(self.config)
+  let headers = build_headers(self.config, scope)
   let url = chat_url(self.config)
   let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
     err =>
@@ -122,7 +123,7 @@ fn zen_compact_messages(
 ///|
 pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn compact(
   self : OpenCodeZenModelPort,
-  _scope : @posoco.InvocationScope,
+  scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
   _tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -138,7 +139,7 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn compact(
     None,
     false,
   )
-  let resp_json = self.zen_post_chat_json(body, "compact")
+  let resp_json = self.zen_post_chat_json(body, "compact", scope)
   let completion = decode_chat_response(resp_json)
   let summary = completion.message.content
     .filter_map(fn(block) {

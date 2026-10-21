@@ -147,6 +147,7 @@ fn zen_attach_reasoning_items(
 ///|
 async fn OpenCodeZenModelPort::chat_responses(
   self : OpenCodeZenModelPort,
+  scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -158,7 +159,7 @@ async fn OpenCodeZenModelPort::chat_responses(
       let (response, body_data) = @http.post(
         responses_url(self.config),
         body.stringify(),
-        headers=build_headers(self.config),
+        headers=build_headers(self.config, scope),
       ) catch {
         err =>
           raise @posoco.ModelError::Transport(
@@ -203,7 +204,7 @@ async fn OpenCodeZenModelPort::chat_responses(
         options,
         stream=true,
       )
-      let headers = build_headers(self.config)
+      let headers = build_headers(self.config, scope)
       let url = responses_url(self.config)
       let client = @http.post_stream(url, headers~) catch {
         err =>

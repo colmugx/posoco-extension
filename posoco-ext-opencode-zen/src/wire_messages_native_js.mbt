@@ -181,6 +181,7 @@ fn build_messages_request(
 ///|
 async fn OpenCodeZenModelPort::chat_messages(
   self : OpenCodeZenModelPort,
+  scope : @posoco.InvocationScope,
   messages : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
@@ -192,7 +193,7 @@ async fn OpenCodeZenModelPort::chat_messages(
       let (response, body_data) = @http.post(
         messages_url(self.config),
         body.stringify(),
-        headers=build_messages_headers(self.config),
+        headers=build_messages_headers(self.config, scope),
       ) catch {
         err =>
           raise @posoco.ModelError::Transport(
@@ -239,7 +240,7 @@ async fn OpenCodeZenModelPort::chat_messages(
       )
       let client = @http.post_stream(
         messages_url(self.config),
-        headers=build_messages_headers(self.config),
+        headers=build_messages_headers(self.config, scope),
       ) catch {
         err =>
           raise @posoco.ModelError::Transport(
