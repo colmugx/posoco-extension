@@ -822,6 +822,14 @@ pub async fn GoalRunner::execute(
       NoSignal => ()
     }
 
+    // A hard resource cap takes precedence over heuristic stall handling.
+    // The boundary turn has already been counted and the model did not
+    // complete the goal; the next action must not be semantic deferral.
+    if self.is_budget_exhausted() {
+      self.status = BudgetExhausted
+      break
+    }
+
     // Stall detection: deterministic by default, with an optional,
     // bounded semantic reconsideration only after a stall is detected.
     if self.status == Running {
