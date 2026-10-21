@@ -715,6 +715,27 @@ pub async fn GoalRunner::execute(
       blocked_marker=self.options.blocked_marker,
     )
 
+    // The optional decision provider is invoked only when the model claims
+    // completion, never on every working turn. It informs the next review;
+    // it never overwrites the independent verifier's result.
+    if verdict == CompletionClaimed && self.semantic_probability is None {
+      match self.adviser {
+        Some(adviser) => {
+          let request : GoalVerificationRequest = {
+            goal: self.options.goal_condition,
+            criteria: self.options.completion_checklist.copy(),
+            session_id: match self.active_session_id {
+              Some(v) => v
+              None => session_id
+            },
+            claim: text_of_message(turn_result.message),
+          }
+          self.semantic_probability = adviser.assess(request)
+        }
+        None => ()
+      }
+    }
+
     // Gate: route completion/blocked claims through the verifier protocol.
     match verdict {
       CompletionClaimed => {
@@ -779,27 +800,6 @@ pub async fn GoalRunner::execute(
         if self.verifying {
           self.verifying = false
         }
-    }
-
-    // The optional decision provider is invoked only when the model claims
-    // completion, never on every working turn. It informs the next review;
-    // it never overwrites the independent verifier's result.
-    if self.completion_claimed && self.semantic_probability is None {
-      match self.adviser {
-        Some(adviser) => {
-          let request : GoalVerificationRequest = {
-            goal: self.options.goal_condition,
-            criteria: self.options.completion_checklist.copy(),
-            session_id: match self.active_session_id {
-              Some(v) => v
-              None => session_id
-            },
-            claim: text_of_message(turn_result.message),
-          }
-          self.semantic_probability = adviser.assess(request)
-        }
-        None => ()
-      }
     }
 
     // Stall detection: only on work turns that did not end the run.
