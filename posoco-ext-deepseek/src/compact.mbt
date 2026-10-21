@@ -85,8 +85,10 @@ fn ds_compact_estimate_chars(chars : Int32) -> Int32 {
 }
 
 ///|
-/// Visible character count of one message (text content; tool-call name and
-/// JSON arguments for assistants; the outcome payload for tool results).
+/// Estimated visible characters of a message including historical reasoning.
+/// This is a fallback heuristic, not an exact V4/V4.1 tokenizer count: tool
+/// schemas, template markers, and expanded image tokens require a renderer.
+/// Use scope.pressure occupancy when available instead.
 fn ds_compact_message_chars(message : @posoco.Message) -> Int32 {
   let mut total = 0
   match message {
@@ -97,12 +99,18 @@ fn ds_compact_message_chars(message : @posoco.Message) -> Int32 {
           Image(..) => ()
         }
       }
-    AssistantMessage(content~, tool_calls~, ..) => {
+    AssistantMessage(content~, tool_calls~, reasoning~, ..) => {
       for block in content {
         match block {
           Text(text) => total += text.length()
           Image(..) => ()
         }
+      }
+      // The wire replays this text whenever the current request has tools.
+      // Counting it here is conservative even for requests without tools.
+      match reasoning {
+        Some(r) => total += r.content.length()
+        None => ()
       }
       for call in tool_calls {
         total += call.name.to_string().length()
