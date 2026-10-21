@@ -109,8 +109,25 @@ fn outcome_to_wire_text(outcome : @posoco.ToolOutcome) -> String {
 ///|
 /// Encode kernel ToolDef array into DeepSeek tool definitions.
 fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
+  // OpenAI function tools are looked up by name, not declaration index.
+  // Canonicalize the *wire* order only: host execution and registrations are
+  // unchanged. Equal tool sets then share the V4.1 system prompt prefix.
+  let ordered = tools.copy()
+  ordered.sort_by((a, b) => {
+    let by_name = a.name.to_string().compare(b.name.to_string())
+    if by_name != 0 {
+      by_name
+    } else {
+      let by_description = a.description.compare(b.description)
+      if by_description != 0 {
+        by_description
+      } else {
+        a.input_schema.stringify().compare(b.input_schema.stringify())
+      }
+    }
+  })
   Json::array(
-    tools.map(fn(t) {
+    ordered.map(fn(t) {
       Json::object({
         "type": Json::string("function"),
         "function": Json::object({
