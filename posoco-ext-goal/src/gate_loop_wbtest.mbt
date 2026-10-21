@@ -603,3 +603,105 @@ async test "decision provider failure falls back without changing verdict" {
   assert_eq(result.semantic_probability, None)
   assert_eq(decision.call_count(), 1)
 }
+
+
+///|
+/// A high confidence semantic prediction can defer one deterministic stall,
+/// but cannot extend a hard turn budget or confer completion authority.
+async test "semantic adviser can defer a stall for one bounded work turn" {
+  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::BooleanAnswer(
+          id="goal_continue_has_value",
+          probability_true=0.95,
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::BooleanAnswer(
+          id="goal_satisfied",
+          probability_true=0.80,
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let goal = goal_extension(goal_condition="rescue bounded stall")
+  goal.options.stall_turn_threshold = 1
+  goal.options.stall_min_tokens = 0
+  goal.set_decision_adviser(decision)
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("thinking before evidence"),
+    ),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = gate_build_agent(goal, model, store)
+  let result = goal.execute(agent, "stall_deferral")
+  assert_true(result.final_status == Completed)
+  assert_eq(result.turns_completed, 2)
+  assert_eq(goal.semantic_stall_deferrals, 1)
+  assert_eq(decision.call_count(), 2)
+}
+
+///|
+/// A semantic provider must never indefinitely override a deterministic
+/// stall. The policy defaults to at most one override.
+async test "semantic stall deferral count is strictly bounded" {
+  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::BooleanAnswer(
+          id="goal_continue_has_value",
+          probability_true=0.99,
+        ),
+      ],
+      model: None,
+      usage: None,
+    }),
+  ])
+  let goal = goal_extension(goal_condition="do not loop forever")
+  goal.options.stall_turn_threshold = 1
+  goal.options.stall_min_tokens = 0
+  goal.set_decision_adviser(decision)
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("thinking")),
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("still thinking")),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = gate_build_agent(goal, model, store)
+  let result = goal.execute(agent, "bounded_stall")
+  assert_true(result.final_status == Paused)
+  assert_eq(result.turns_completed, 2)
+  assert_eq(goal.semantic_stall_deferrals, 1)
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+/// Even a confident semantic continuation cannot evade the user's hard
+/// max_turns limit.
+async test "semantic adviser cannot override an exhausted turn budget" {
+  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([])
+  let goal = goal_extension(goal_condition="hard budget wins")
+  goal.options.budget.max_turns = 1
+  goal.options.stall_turn_threshold = 1
+  goal.options.stall_min_tokens = 0
+  goal.set_decision_adviser(decision)
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("thinking")),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = gate_build_agent(goal, model, store)
+  let result = goal.execute(agent, "hard_budget")
+  assert_true(result.final_status == Paused)
+  assert_eq(decision.call_count(), 0)
+  assert_eq(goal.semantic_stall_deferrals, 0)
+}
