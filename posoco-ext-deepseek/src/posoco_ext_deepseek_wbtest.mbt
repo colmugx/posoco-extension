@@ -2402,6 +2402,6 @@ test "V4.1 structured JSON schema does not silently activate on unknown aliases"
   let schema = Json::object({ "type": Json::string("object") })
   let result = model.ds_json_schema_body(
     [user_msg("Return a JSON object")], "answer", schema,
-  ) catch { _ => Json::Null }
-  assert_true(result == Json::Null)
+  ) catch { _ => Json::null() }
+  assert_true(result == Json::null())
 }
