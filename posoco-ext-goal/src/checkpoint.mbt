@@ -91,7 +91,7 @@ pub fn GoalRunner::checkpoint(self : GoalRunner) -> Result[Json, String] {
   Ok(
     Json::object(
       Map::from_array([
-        ("version", Json::number(1.0)),
+        ("version", Json::number(2.0)),
         ("goal", Json::string(self.options.goal_condition)),
         ("criteria", Json::array(self.options.completion_checklist.map(fn(item) {
           Json::string(item)
@@ -117,6 +117,7 @@ pub fn GoalRunner::checkpoint(self : GoalRunner) -> Result[Json, String] {
         ("repeat_count", Json::number(self.repeat_count.to_double())),
         ("stall_count", Json::number(self.stall_count.to_double())),
         ("plan_streak", Json::number(self.plan_streak.to_double())),
+        ("semantic_stall_deferrals", Json::number(self.semantic_stall_deferrals.to_double())),
         ("prev_plan_fp", cp_optional_string(self.prev_plan_fp)),
       ]),
     ),
@@ -142,7 +143,7 @@ pub fn GoalRunner::restore_checkpoint(
     Ok(v) => v
     Err(e) => return Err(e)
   }
-  if version != 1 {
+  if version != 2 {
     return Err("unsupported goal checkpoint version")
   }
   let goal = match cp_string(fields, "goal") {
@@ -306,6 +307,10 @@ pub fn GoalRunner::restore_checkpoint(
     Ok(v) => v
     Err(e) => return Err(e)
   }
+  let semantic_stall_deferrals = match cp_int(fields, "semantic_stall_deferrals") {
+    Ok(v) if v <= self.options.max_semantic_stall_deferrals => v
+    _ => return Err("checkpoint semantic stall deferrals are invalid")
+  }
   let prev_plan_fp = match cp_maybe_string(fields, "prev_plan_fp") {
     Ok(v) => v
     Err(e) => return Err(e)
@@ -334,6 +339,7 @@ pub fn GoalRunner::restore_checkpoint(
   self.repeat_count = repeat_count
   self.stall_count = stall_count
   self.plan_streak = plan_streak
+  self.semantic_stall_deferrals = semantic_stall_deferrals
   self.prev_plan_fp = prev_plan_fp
   self.active_session_id = Some(session)
   self.active_run_id = None
