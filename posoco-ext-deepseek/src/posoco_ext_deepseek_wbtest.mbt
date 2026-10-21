@@ -2196,3 +2196,63 @@ test "DeepSeek default protections are active and explicitly opt-out" {
   assert_false(port.recover_on_reasoning_exhaustion)
   assert_true(port.repeated_reasoning_span_chars is None)
 }
+
+ 
+///|
+test "compaction estimate includes the assistant reasoning transcript" {
+  let plain : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let reasoned : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{
+      content: "a long historical thinking span",
+      raw: None,
+    }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  assert_eq(
+    ds_compact_message_chars(reasoned) - ds_compact_message_chars(plain),
+    "a long historical thinking span".length(),
+  )
+}
+
+///|
+test "summary wire request keeps tool schemas and reasoning in prefix" {
+  let history : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("prior answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{
+      content: "reasoning history",
+      raw: None,
+    }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  let tools : Array[@posoco.ToolDef] = [{
+    name: @posoco.ToolName::unchecked("read_file"),
+    description: "Read a file",
+    input_schema: Json::empty_object(),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+    policy: @posoco.ExecutionPolicy::Sequential,
+    provenance: Some("posoco_ext_deepseek"),
+  }]
+  let messages = [user_msg("first"), history, user_msg("second")]
+  let body = build_chat_request(
+    @devkit.ExtContext::default(), messages, tools, chat_options(),
+    "deepseek-flash", false, enabled_thinking_json(), Some("high"), false,
+  )
+  guard body is Object(root) else { fail("expected request object") }
+  guard root.get("tools") is Some(Array(defs)) else {
+    fail("summary path must retain tool definitions")
+  }
+  assert_eq(defs.length(), 1)
+  guard root.get("messages") is Some(Array(wire)) else {
+    fail("expected wire messages")
+  }
+  guard wire[1] is Object(msg) else { fail("expected assistant") }
+  assert_json_field_string(msg, "reasoning_content", "reasoning history")
+}
