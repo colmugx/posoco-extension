@@ -2,38 +2,26 @@
 /// OpenCode Zen routing metadata.
 ///
 /// Zen uses these OpenCode headers for session/provider affinity and request
-/// attribution. Like the OpenCode CLI, one session id stays stable for the
-/// whole process while every HTTP request gets a fresh request id; the values
-/// honestly identify posoco rather than impersonating the CLI.
+/// attribution. One session id stays stable for a kernel conversation, while
+/// every HTTP request gets a fresh request id. Identity names posoco rather
+/// than impersonating the CLI.
 
 ///|
-let zen_session_cell : Ref[String?] = Ref::{ val: None, }
+/// OpenCode Go requires a stable gateway identity per conversation, not per
+/// process. Using the kernel's session id also isolates concurrently running
+/// Agents without mutable global bookkeeping. Request IDs stay fresh.
 
 ///|
-/// Process-local session id, minted lazily on first use and reused by every
-/// Zen request afterwards. Slot rebuilds (effort/model switches) and catalog
-/// refreshes do not rotate it, matching the sticky `x-opencode-session`
-/// semantics OpenCode relies on.
-fn zen_session_id() -> String {
-  match zen_session_cell.val {
-    Some(id) => id
-    None => {
-      let id = "posoco_" + zen_random_uuid_v4()
-      zen_session_cell.val = Some(id)
-      id
-    }
-  }
-}
-
-///|
-/// Build the per-request OpenCode routing headers: stable session id, fresh
-/// request id, honest posoco attribution. `client` names the product in the
-/// User-Agent and the `x-opencode-client` value ("opencode-zen",
-/// "opencode-go", ...). Shared by every product built on this package.
-pub fn opencode_request_headers(client : String) -> Map[String, String] {
+/// Build the per-request OpenCode routing headers with the explicit kernel
+/// conversation identity. Both Zen and Go use this helper across all wires;
+/// never cache the session value at process or provider scope.
+pub fn opencode_request_headers(
+  client : String,
+  session_id : String,
+) -> Map[String, String] {
   Map::from_array([
     ("x-opencode-project", "posoco"),
-    ("x-opencode-session", zen_session_id()),
+    ("x-opencode-session", session_id),
     ("x-opencode-request", zen_random_uuid_v4()),
     ("x-opencode-client", client),
     ("User-Agent", "posoco/\{client}"),
@@ -41,11 +29,12 @@ pub fn opencode_request_headers(client : String) -> Map[String, String] {
 }
 
 ///|
-/// Build the per-request Zen headers: stable session id, fresh request id.
-fn zen_request_headers() -> Map[String, String] {
-  opencode_request_headers("opencode-zen")
+/// Internal test-facing helper for Zen's client identity.
+fn zen_request_headers(session_id : String) -> Map[String, String] {
+  opencode_request_headers("opencode-zen", session_id)
 }
 
+///|
 ///|
 /// Mint a v4 UUID using the process RNG. The result is suitable for the
 /// opaque routing identifiers expected by the Zen gateway; it is not intended

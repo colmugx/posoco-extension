@@ -138,12 +138,15 @@ pub fn OpenCodeZenConfig::with_reasoning_effort(
 ///|
 /// Bearer auth plus JSON content type, then the per-request OpenCode routing
 /// metadata.
-fn build_headers(config : OpenCodeZenConfig) -> @http.Headers {
+fn build_headers(
+  config : OpenCodeZenConfig,
+  scope : @posoco.InvocationScope,
+) -> @http.Headers {
   let headers : @http.Headers = {
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",
   }
-  for key, value in opencode_request_headers(config.client_id) {
+  for key, value in opencode_request_headers(config.client_id, scope.session_id.to_string()) {
     headers[@http.CaseInsensitiveString(key)] = value
   }
   headers
@@ -153,13 +156,16 @@ fn build_headers(config : OpenCodeZenConfig) -> @http.Headers {
 /// Anthropic-plane auth: the gateway's Messages endpoint takes the key as
 /// `x-api-key` with an explicit `anthropic-version`, plus the same routing
 /// metadata as the OpenAI planes.
-fn build_messages_headers(config : OpenCodeZenConfig) -> @http.Headers {
+fn build_messages_headers(
+  config : OpenCodeZenConfig,
+  scope : @posoco.InvocationScope,
+) -> @http.Headers {
   let headers : @http.Headers = {
     "x-api-key": config.api_key,
     "Content-Type": "application/json",
     "anthropic-version": "2023-06-01",
   }
-  for key, value in opencode_request_headers(config.client_id) {
+  for key, value in opencode_request_headers(config.client_id, scope.session_id.to_string()) {
     headers[@http.CaseInsensitiveString(key)] = value
   }
   headers
