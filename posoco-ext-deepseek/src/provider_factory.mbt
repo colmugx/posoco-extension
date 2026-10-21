@@ -246,6 +246,23 @@ fn deepseek_setting_image_input(
 }
 
 ///|
+/// A typed provider-setting error is better than a constructor abort for
+/// contradictory user-specified V4 renderer and image capability.
+fn deepseek_setting_vision_profile(
+  source : @provider.ProviderConfigSource,
+) -> (String, Bool) raise @posoco.CompositionError {
+  let prompt_profile = deepseek_setting_prompt_profile(source)
+  let supports_images = deepseek_setting_image_input(source)
+  if prompt_profile == "v4" && supports_images {
+    raise @posoco.CompositionError::ManifestSchemaError(
+      manifest_id="posoco_ext_deepseek",
+      detail="image_input is unsupported for the explicit V4 prompt profile",
+    )
+  }
+  (prompt_profile, supports_images)
+}
+
+///|
 pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
   self : DeepSeekProvider,
   source : @provider.ProviderConfigSource,
@@ -275,6 +292,7 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
       detail="unsupported reasoning_effort: " + effort,
     )
   }
+  let (prompt_profile, supports_images) = deepseek_setting_vision_profile(source)
   let config = DeepSeekConfig(
     api_key,
     model~,
@@ -289,8 +307,8 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
       source,
     ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
-    supports_images=deepseek_setting_image_input(source),
-    prompt_profile=deepseek_setting_prompt_profile(source),
+    supports_images~,
+    prompt_profile~,
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
@@ -365,6 +383,7 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
       detail="unsupported reasoning_effort: " + requested_effort,
     )
   }
+  let (prompt_profile, supports_images) = deepseek_setting_vision_profile(source)
   let config = DeepSeekConfig(
     api_key,
     model~,
@@ -379,8 +398,8 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
       source,
     ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
-    supports_images=deepseek_setting_image_input(source),
-    prompt_profile=deepseek_setting_prompt_profile(source),
+    supports_images~,
+    prompt_profile~,
   )
   let models = fetch_deepseek_models(
     config.base_url,
