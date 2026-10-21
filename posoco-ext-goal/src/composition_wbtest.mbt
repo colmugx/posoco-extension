@@ -329,15 +329,16 @@ async test "unknown_tool_name_reported" {
   }
 }
 
-
 ///|
 /// The Goal tool is part of the stable catalog but cannot mutate dormant
 /// Goal state during ordinary Cetas chat or PlanMode.
 async test "dormant goal refuses plan rewrites" {
   let goal = goal_extension(goal_condition="not active yet")
-  let args = Json::object(Map::from_array([
-    ("items", Json::array([cw_plan_item("unexpected work", "in_progress")])),
-  ]))
+  let args = Json::object(
+    Map::from_array([
+      ("items", Json::array([cw_plan_item("unexpected work", "in_progress")])),
+    ]),
+  )
   let model = @posoco.ScriptedModel::ScriptedModel([
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_tool_call_response("goal_update_plan", "inactive-1", args),

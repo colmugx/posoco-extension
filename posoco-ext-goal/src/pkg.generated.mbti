@@ -135,7 +135,7 @@ pub(all) struct GoalResult {
 pub fn GoalResult::to_repr(Self) -> @debug.Repr
 
 pub struct GoalRunner {
-  options : GoalOptions
+  mut options : GoalOptions
   mut status : GoalStatus
   mut usage : GoalUsage
   mut history : Array[GoalHistoryEntry]
@@ -184,6 +184,7 @@ pub async fn GoalRunner::on_shutdown(Self) -> Unit
 pub async fn GoalRunner::on_start(Self) -> Unit
 pub fn GoalRunner::pause(Self) -> Unit
 pub fn GoalRunner::plan(Self) -> GoalPlan
+pub fn GoalRunner::prepare_goal(Self, String) -> Result[Unit, String]
 pub fn GoalRunner::restore_checkpoint(Self, Json) -> Result[Unit, String]
 pub fn GoalRunner::resume_goal(Self) -> Unit
 pub fn GoalRunner::set_decision_adviser(Self, &@port.DecisionPort) -> Unit

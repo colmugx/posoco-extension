@@ -254,10 +254,18 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
 
 ///|
 /// Configure a fresh goal only when no run is active or paused.
-pub fn GoalRunner::prepare_goal(self : GoalRunner, condition : String) -> Result[Unit, String] {
+pub fn GoalRunner::prepare_goal(
+  self : GoalRunner,
+  condition : String,
+) -> Result[Unit, String] {
   let goal = condition.trim().to_owned()
-  if goal == "" { return Err("goal must not be empty") }
-  if self.executing_loop || self.executing_turn || self.status == Running || self.status == Paused {
+  if goal == "" {
+    return Err("goal must not be empty")
+  }
+  if self.executing_loop ||
+    self.executing_turn ||
+    self.status == Running ||
+    self.status == Paused {
     return Err("stop the active goal before changing its objective")
   }
   self.clear()
