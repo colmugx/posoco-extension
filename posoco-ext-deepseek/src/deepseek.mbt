@@ -34,6 +34,19 @@ fn prefix_url(config : DeepSeekConfig) -> String {
 }
 
 ///|
+/// V4.1 renderer maps seven advertised levels onto three prompt values.
+/// Canonicalize only when the operator explicitly selected that profile;
+/// unknown hosted API aliases retain their original effort strings.
+fn deepseek_v41_canonical_effort(effort : String) -> String {
+  match effort {
+    "minimal" | "low" => "low"
+    "medium" | "high" | "xhigh" => "high"
+    "max" | "ultra" => "max"
+    other => other
+  }
+}
+
+///|
 /// DeepSeek's provider-owned thinking config. An empty `reasoning_effort`
 /// means thinking is switched off: the wire carries `{type: "disabled"}` and
 /// no `reasoning_effort` field.
@@ -43,7 +56,12 @@ fn DeepSeekModelPort::default_thinking_config(
   if self.config.reasoning_effort == "" {
     (Json::object({ "type": Json::string("disabled") }), None)
   } else {
-    (enabled_thinking_json(), Some(self.config.reasoning_effort))
+    let effort = if self.config.prompt_profile == "v4.1" {
+      deepseek_v41_canonical_effort(self.config.reasoning_effort)
+    } else {
+      self.config.reasoning_effort
+    }
+    (enabled_thinking_json(), Some(effort))
   }
 }
 
