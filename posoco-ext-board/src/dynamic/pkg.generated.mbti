@@ -4,6 +4,7 @@ package "colmugx/posoco-ext-board/dynamic"
 import {
   "colmugx/posoco-ext-board/backend",
   "colmugx/posoco-ext-board/coordinator",
+  "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/execution",
   "colmugx/posoco-ext-board/expansion",
   "colmugx/posoco-ext-board/orchestration",
@@ -60,7 +61,7 @@ pub async fn DynamicWorkflowController::reconcile_preparation(Self, task_id~ : S
 pub async fn DynamicWorkflowController::refresh_status(Self) -> Result[DynamicWorkflowStatus, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::resume_workflow(Self) -> Result[Unit, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::run_wave(Self) -> Result[Unit, DynamicWorkflowError]
-pub async fn DynamicWorkflowController::run_wave_scoped(Self, Array[@orchestration.ExecutionCandidate], authorize~ : () -> Bool) -> Result[Unit, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::run_wave_scoped(Self, Array[@orchestration.ExecutionCandidate], task_versions~ : Array[@domain.BoardTask], authorize~ : () -> Bool) -> Result[Unit, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn DynamicWorkflowController::start(Self) -> Result[Unit, DynamicWorkflowError]
 pub fn DynamicWorkflowController::status(Self) -> DynamicWorkflowStatus
