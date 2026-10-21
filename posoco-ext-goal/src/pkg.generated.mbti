@@ -28,11 +28,31 @@ pub fn scan_final_message(message~ : @kernel.Message, completion_marker~ : Strin
 // Errors
 
 // Types and methods
+pub struct DecisionGoalAdviser {
+  decision : &@port.DecisionPort
+}
+pub fn DecisionGoalAdviser::DecisionGoalAdviser(&@port.DecisionPort) -> Self
+pub async fn DecisionGoalAdviser::assess(Self, GoalVerificationRequest) -> Double?
+pub async fn DecisionGoalAdviser::assess_progress(Self, String, String, String, String) -> Double?
+
+pub(all) enum GoalAssessment {
+  Verified(Array[GoalEvidence])
+  Rejected(String)
+  Inconclusive(String)
+} derive(Eq, @debug.Debug)
+pub fn GoalAssessment::validated(Self, Array[String]) -> Self
+
 pub(all) struct GoalBudget {
   mut max_turns : Int32
   mut max_total_tokens : Int32
 } derive(@debug.Debug)
 pub fn GoalBudget::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GoalEvidence {
+  criterion : String
+  source : String
+  reference : String
+} derive(Eq, @debug.Debug)
 
 pub(all) struct GoalHistoryEntry {
   turn : Int32
@@ -55,6 +75,9 @@ pub(all) struct GoalOptions {
   mut max_verifier_rounds : Int32
   mut stall_repeat_threshold : Int32
   mut plan_tool_name : String
+  mut enable_semantic_advice : Bool
+  mut max_semantic_stall_deferrals : Int32
+  mut semantic_stall_threshold : Double
 } derive(@debug.Debug)
 pub fn GoalOptions::default(goal_condition~ : String) -> Self
 pub fn GoalOptions::to_repr(Self) -> @debug.Repr
@@ -100,6 +123,8 @@ pub(all) struct GoalResult {
   history : Array[GoalHistoryEntry]
   final_plan : GoalPlan
   stall_reason : String?
+  assessment : GoalAssessment
+  semantic_probability : Double?
 } derive(@debug.Debug)
 pub fn GoalResult::to_repr(Self) -> @debug.Repr
 
@@ -110,6 +135,9 @@ pub struct GoalRunner {
   mut history : Array[GoalHistoryEntry]
   mut current_turn : Int32
   mut last_total_tokens : Int32
+  mut turn_output_known : Bool
+  mut turn_output_tokens : Int32
+  mut turn_tool_count : Int32
   mut stall_count : Int32
   mut wrapup_sent : Bool
   mut plan : GoalPlan
@@ -125,21 +153,37 @@ pub struct GoalRunner {
   mut repeat_count : Int32
   mut plan_streak : Int32
   mut prev_plan_fp : String?
-} derive(@debug.Debug)
+  mut active_session_id : String?
+  mut active_run_id : String?
+  mut verifier : &GoalVerifier?
+  mut adviser : DecisionGoalAdviser?
+  mut assessment : GoalAssessment
+  mut semantic_probability : Double?
+  mut semantic_stall_deferrals : Int32
+  mut executing_loop : Bool
+  mut executing_turn : Bool
+}
 pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> Self
+pub fn GoalRunner::assessment(Self) -> GoalAssessment
+pub fn GoalRunner::checkpoint(Self) -> Result[Json, String]
 pub fn GoalRunner::clear(Self) -> Unit
 pub async fn GoalRunner::execute(Self, @posoco.Agent, String) -> GoalResult
 pub fn GoalRunner::extension_id(Self) -> String
 pub fn GoalRunner::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn GoalRunner::manifest(Self) -> @port.ExtensionManifest
+pub fn GoalRunner::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn GoalRunner::on_event(Self, @types.TurnEvent) -> Unit
-pub fn GoalRunner::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
+pub async fn GoalRunner::on_shutdown(Self) -> Unit
+pub async fn GoalRunner::on_start(Self) -> Unit
 pub fn GoalRunner::pause(Self) -> Unit
 pub fn GoalRunner::plan(Self) -> GoalPlan
+pub fn GoalRunner::restore_checkpoint(Self, Json) -> Result[Unit, String]
 pub fn GoalRunner::resume_goal(Self) -> Unit
+pub fn GoalRunner::set_decision_adviser(Self, &@port.DecisionPort) -> Unit
+pub fn GoalRunner::set_verifier(Self, &GoalVerifier) -> Unit
 pub fn GoalRunner::status(Self) -> GoalStatus
-pub fn GoalRunner::to_repr(Self) -> @debug.Repr
 pub impl @port.Extension for GoalRunner
+pub impl @port.Lifecycle for GoalRunner
 pub impl @port.Observer for GoalRunner
 pub impl @port.ToolProvider for GoalRunner
 
@@ -167,6 +211,13 @@ pub fn GoalUsage::equal(Self, Self) -> Bool
 pub fn GoalUsage::not_equal(Self, Self) -> Bool
 pub fn GoalUsage::to_repr(Self) -> @debug.Repr
 
+pub(all) struct GoalVerificationRequest {
+  goal : String
+  criteria : Array[String]
+  session_id : String
+  claim : String
+} derive(@debug.Debug)
+
 pub(all) enum TurnVerdict {
   NoSignal
   CompletionClaimed
@@ -179,3 +230,6 @@ pub fn TurnVerdict::to_repr(Self) -> @debug.Repr
 // Type aliases
 
 // Traits
+pub(open) trait GoalVerifier {
+  async fn verify(Self, GoalVerificationRequest) -> GoalAssessment
+}
