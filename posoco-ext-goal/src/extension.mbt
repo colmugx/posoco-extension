@@ -13,7 +13,7 @@ pub impl @posoco.Extension for GoalRunner with fn extension_id(_self) -> String 
 /// views share one state machine; goal-run turn inputs are driven by
 /// `execute`, not by a pipeline hook.
 pub impl @posoco.Extension for GoalRunner with fn manifest(self) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(id="posoco_ext_goal", tools=[self], observers=[self])
+  @posoco.ExtensionManifest(id="posoco_ext_goal", tools=[self], observers=[self], lifecycle=[self])
 }
 
 ///|
@@ -30,3 +30,22 @@ pub extend GoalRunner with @posoco.Extension::{extension_id, manifest}
 pub fn goal_extension(goal_condition~ : String) -> GoalRunner {
   GoalRunner(options=GoalOptions::default(goal_condition~))
 }
+
+///|
+/// Optional DecisionPort composition, never a required capability.
+/// Semantic evaluation is opt-in because it can disclose claim text to
+/// the configured provider. Unavailable providers are a normal state.
+pub impl @posoco.Lifecycle for GoalRunner with fn on_compose(
+  self : GoalRunner,
+  ctx : @posoco.CompositionView,
+) -> Unit raise @posoco.CompositionError {
+  if self.options.enable_semantic_advice {
+    match ctx.decision() {
+      Some(port) => self.set_decision_adviser(port)
+      None => ()
+    }
+  }
+}
+
+///|
+pub extend GoalRunner with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}
