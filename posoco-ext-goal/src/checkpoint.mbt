@@ -34,7 +34,8 @@ fn cp_int(obj : Map[String, Json], key : String) -> Result[Int32, String] {
 ///|
 fn cp_bool(obj : Map[String, Json], key : String) -> Result[Bool, String] {
   match obj.get(key) {
-    Some(Json::Boolean(b)) => Ok(b)
+    Some(Json::True) => Ok(true)
+    Some(Json::False) => Ok(false)
     _ => Err("checkpoint missing boolean: " + key)
   }
 }
