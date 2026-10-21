@@ -488,20 +488,11 @@ fn GoalRunner::near_budget_limit(self : GoalRunner) -> Bool {
 }
 
 ///|
-/// Choose this iteration's turn input: a verification prompt while a
-/// completion claim is being checked, a one-shot wrap-up prompt near the
-/// budget limit, otherwise the per-turn progress recitation. On the run's
-/// first working turn (verifier and wrap-up turns are not working turns),
+/// Choose a one-shot wrap-up prompt near the budget limit, otherwise the
+/// per-turn progress recitation. On the run's first working turn,
 /// the recitation is prefixed with the charter; a failed-verification
 /// retraction, when present, comes first of all.
 fn GoalRunner::build_turn_prompt(self : GoalRunner) -> String {
-  if self.verifying {
-    return build_verification_prompt(
-      checklist=self.options.completion_checklist,
-      completion_marker=self.options.completion_marker,
-      blocked_marker=self.options.blocked_marker,
-    )
-  }
   if self.charter_delivered && self.near_budget_limit() && !self.wrapup_sent {
     self.wrapup_sent = true
     return build_wrapup_prompt(
@@ -616,7 +607,7 @@ fn GoalRunner::result(self : GoalRunner, final_status : GoalStatus) -> GoalResul
 /// Run the goal-driven autonomous loop.
 ///
 /// Loops agent.run_turn() until:
-/// - the model outputs the completion marker and a verifier turn confirms → Completed
+/// - the model claims completion and an independent verifier provides evidence → Completed
 /// - the model outputs the blocked marker → Blocked(reason)
 /// - budget exhausted (turns or tokens) → BudgetExhausted
 /// - the run stalls (low output, repeated identical tool calls, frozen plan) → Paused
@@ -736,70 +727,55 @@ pub async fn GoalRunner::execute(
       }
     }
 
-    // Gate: route completion/blocked claims through the verifier protocol.
+    // The worker only submits a claim. Verification is performed directly
+    // by a separate host-owned authority; another model turn repeating the
+    // marker adds no proof and is never required.
     match verdict {
       CompletionClaimed => {
         self.completion_claimed = true
-        if self.verifying {
-          // A second claim from the same model is only another claim.
-          self.verifying = false
-          let request : GoalVerificationRequest = {
-            goal: self.options.goal_condition,
-            criteria: self.options.completion_checklist.copy(),
-            session_id: match self.active_session_id {
-              Some(v) => v
-              None => session_id
-            },
-            claim: text_of_message(turn_result.message),
-          }
-          let outcome = match self.verifier {
-            Some(v) => v.verify(request)
-            None => GoalAssessment::Inconclusive(
-              "no independent GoalVerifier configured",
-            )
-          }
-          self.assessment = outcome.validated(self.options.completion_checklist)
-          match self.assessment {
-            Verified(_) => {
-              self.status = Completed
-              break
-            }
-            Rejected(reason) => {
-              self.last_retraction = Some(reason)
-              continue
-            }
-            Inconclusive(_) => {
-              // An unknown completion claim is never silently promoted
-              // to success or blindly retried until the budget is gone.
-              self.status = Paused
-              self.last_stall_reason = Some("completion requires verified evidence")
-              break
-            }
-          }
-        } else if self.verifier_rounds >= self.options.max_verifier_rounds {
-          self.status = Blocked("verification budget exhausted")
+        if self.verifier_rounds >= self.options.max_verifier_rounds {
+          self.assessment = Inconclusive("independent verification budget exhausted")
+          self.status = Paused
+          self.last_stall_reason = Some("verification budget exhausted")
           break
-        } else {
-          self.verifier_rounds = self.verifier_rounds + 1
-          self.verifying = true
-          continue
+        }
+        self.verifier_rounds += 1
+        let request : GoalVerificationRequest = {
+          goal: self.options.goal_condition,
+          criteria: self.options.completion_checklist.copy(),
+          session_id: match self.active_session_id {
+            Some(v) => v
+            None => session_id
+          },
+          claim: text_of_message(turn_result.message),
+        }
+        let outcome = match self.verifier {
+          Some(verifier) => verifier.verify(request)
+          None =>
+            GoalAssessment::Inconclusive("no independent GoalVerifier configured")
+        }
+        self.assessment = outcome.validated(self.options.completion_checklist)
+        match self.assessment {
+          Verified(_) => {
+            self.status = Completed
+            break
+          }
+          Rejected(reason) => {
+            self.last_retraction = Some(reason)
+            continue
+          }
+          Inconclusive(_) => {
+            self.status = Paused
+            self.last_stall_reason = Some("completion requires verified evidence")
+            break
+          }
         }
       }
-      BlockedClaimed(reason~) =>
-        if self.verifying {
-          // Verifier rejected the claim: retract and go back to work.
-          self.verifying = false
-          self.last_retraction = Some(reason)
-          continue
-        } else {
-          self.status = Blocked(reason)
-          break
-        }
-      NoSignal =>
-        // Ambiguous verifier answer: back to work, fall through to stall checks.
-        if self.verifying {
-          self.verifying = false
-        }
+      BlockedClaimed(reason~) => {
+        self.status = Blocked(reason)
+        break
+      }
+      NoSignal => ()
     }
 
     // Stall detection: only on work turns that did not end the run.
