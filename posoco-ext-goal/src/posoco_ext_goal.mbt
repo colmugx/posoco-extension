@@ -152,6 +152,7 @@ pub struct GoalRunner {
   // Scope and re-entrancy guard: only events emitted by this runner's
   // current agent.run_turn belong in its budget and repetition counters.
   mut active_session_id : String?
+  mut active_run_id : String?
   mut executing_loop : Bool
   mut executing_turn : Bool
 } derive(Debug)
@@ -228,6 +229,7 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
     plan_streak: 0,
     prev_plan_fp: None,
     active_session_id: None,
+    active_run_id: None,
     executing_loop: false,
     executing_turn: false,
   }
@@ -411,6 +413,12 @@ pub impl @posoco.Observer for GoalRunner with fn on_event_at(
   }
   match (scope, self.active_session_id) {
     (Some(s), Some(session)) if s.session_id.to_string() == session => {
+      let run = s.run_id.to_string()
+      match self.active_run_id {
+        Some(expected) if expected != run => return
+        None => self.active_run_id = Some(run)
+        _ => ()
+      }
       self.on_event(event)
       match event {
         @posoco.TurnEvent::SessionRedirect(to~, ..) =>
@@ -548,6 +556,7 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.charter_delivered = false
   self.charter = ""
   self.active_session_id = None
+  self.active_run_id = None
   self.executing_turn = false
 }
 
@@ -631,6 +640,7 @@ pub async fn GoalRunner::execute(
     self.turn_output_known = false
     self.turn_output_tokens = 0
     self.turn_tool_count = 0
+    self.active_run_id = None
     self.executing_turn = true
     let outcome : Result[@posoco.TurnResult, String] = Ok(
       agent.run_turn(input, current_session),
