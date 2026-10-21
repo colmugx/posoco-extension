@@ -1,0 +1,13 @@
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-kit-provider" @provider,
+  "colmugx/posoco-ext-deepseek",
+  "posoco/devkit",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+} for "test"
+
+supported_targets = "native"

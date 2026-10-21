@@ -191,6 +191,10 @@ pub fn RouterModelPort::select_effort(
       )
   }
   self.active_effort = Some(effort)
+  // The status bar's model segment embeds the effort; republish it so any
+  // direct caller (restore, ACP/config switches) updates the bar, not just
+  // the /effort command path.
+  self.publish_model_status()
   self.publish_model_selection()
 }
 
