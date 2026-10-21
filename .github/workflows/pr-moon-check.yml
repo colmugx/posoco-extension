@@ -28,3 +28,9 @@ jobs:
 
       - name: moon check (js)
         run: moon check --target js --output-json
+
+      - name: DeepSeek adapter unit tests (native)
+        run: moon test --target native -p colmugx/posoco-ext-deepseek
+
+      - name: DeepSeek adapter unit tests (js)
+        run: moon test --target js -p colmugx/posoco-ext-deepseek
