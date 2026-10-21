@@ -2256,3 +2256,40 @@ test "summary wire request keeps tool schemas and reasoning in prefix" {
   guard wire[1] is Object(msg) else { fail("expected assistant") }
   assert_json_field_string(msg, "reasoning_content", "reasoning history")
 }
+
+///|
+test "compaction summary body keeps identical tool and message prefix" {
+  let tool : @posoco.ToolDef = {
+    name: @posoco.ToolName::unchecked("read_file"),
+    description: "Read a file",
+    input_schema: Json::empty_object(),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+    policy: @posoco.ExecutionPolicy::Sequential,
+    provenance: Some("posoco_ext_deepseek"),
+  }
+  let tools = [tool]
+  let head = [user_msg("first"), assistant_msg("answer")]
+  let port = DeepSeekModelPort(DeepSeekConfig("sk-test"))
+  let compact = port.ds_compact_request_body(head, tools, chat_options())
+  let (thinking, effort) = port.default_thinking_config()
+  let routed = build_chat_request(
+    @devkit.ExtContext::default(), head, tools, chat_options(),
+    "deepseek-flash", false, thinking, effort, false,
+  )
+  guard compact is Object(c) && routed is Object(r) else {
+    fail("expected request objects")
+  }
+  assert_true(c.get("tools") == r.get("tools"))
+  assert_true(c.get("thinking") == r.get("thinking"))
+  assert_true(c.get("reasoning_effort") == r.get("reasoning_effort"))
+  guard c.get("messages") is Some(Array(cm)) else {
+    fail("expected compact messages")
+  }
+  guard r.get("messages") is Some(Array(rm)) else {
+    fail("expected routed messages")
+  }
+  assert_eq(cm.length(), rm.length() + 1)
+  for i in 0..<rm.length() {
+    assert_true(cm[i] == rm[i])
+  }
+}
