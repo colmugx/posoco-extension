@@ -34,6 +34,7 @@ async test "list_tools_description_names_exe_and_syntax" {
   assert_true(pwsh_defs[0].description.contains("Select-String"))
   assert_true(pwsh_defs[0].description.contains("$env:NAME"))
   assert_true(pwsh_defs[0].description.contains("&&"))
+  assert_true(pwsh_defs[0].description.contains("Start-Process"))
   let ps51_defs = PowerShellTools(exe="powershell").list_tools()
   assert_true(ps51_defs[0].description.contains("NOT supported"))
   assert_true(ps51_defs[0].description.contains("if ($?)"))
@@ -158,6 +159,8 @@ test "windows_guidance_pwsh_flavor" {
   assert_true(text.contains("backslashes"))
   assert_true(text.contains("C:\\repo\\src\\main.rs"))
   assert_true(text.contains("pipeline chains are supported"))
+  assert_true(text.contains("Start-Process"))
+  assert_true(text.contains("foreground"))
 }
 
 ///|
@@ -301,4 +304,81 @@ test "ps1_model_output_caps_long_output_and_keeps_head_tail" {
   assert_true(out.has_prefix("HEAD-"))
   assert_true(out.contains("…[cut]…"))
   assert_true(out.has_suffix("-TAIL"))
+}
+
+///|
+async test "cancel_without_in_flight_child_reports_not_propagated" {
+  let tools = PowerShellTools(exe="pwsh")
+  let disposition = tools.cancel(
+    @kernel.EffectId::{ value: 404, },
+    @kernel.CancelReason::DeadlineReached,
+  )
+  assert_true(disposition is @kernel.CancelDisposition::NotPropagated)
+}
+
+///|
+/// Hang regression: a foreground command that never exits must be rescuable
+/// through the registered cancellable facet — `cancel` kills the child and
+/// the pending execute settles as ToolReportedError instead of pinning the
+/// tool call forever. PS1_LIVE=1: spawns the real pwsh.
+async test "never_exiting_command_is_rescued_by_cancel" {
+  if !ps1_live_enabled() {
+    return
+  }
+  let tools = PowerShellTools(exe="pwsh")
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_hang"),
+    name: @posoco.ToolName::unchecked("powershell"),
+    arguments: Json::object(
+      Map::from_array([("cmd", Json::string("Start-Sleep -Seconds 600"))]),
+    ),
+  }
+  @async.with_task_group(async fn(group) {
+    let execution = group.spawn(async fn() {
+      Ok(tools.execute(test_ctx(call))) catch {
+        error => Err(error)
+      }
+    })
+    @async.sleep(1500)
+    let disposition = tools.cancel(
+      @kernel.EffectId::{ value: 1, },
+      @kernel.CancelReason::HostRequested(detail=Some("test")),
+    )
+    assert_true(disposition is @kernel.CancelDisposition::Propagated)
+    match execution.wait() {
+      Ok(@posoco.ToolOutcome::ToolReportedError(..)) => ()
+      _ => fail("expected the cancelled hang to settle as ToolReportedError")
+    }
+  })
+}
+
+///|
+/// Pipe-inheritance hang regression: after the foreground command exits, a
+/// detached grandchild holding the inherited output pipe must not block the
+/// call — buffered output returns after the drain grace while the
+/// grandchild keeps running. PS1_LIVE=1: spawns the real pwsh.
+async test "grandchild_holding_pipe_returns_after_grace" {
+  if !ps1_live_enabled() {
+    return
+  }
+  let tools = PowerShellTools(exe="pwsh")
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("tc_pipe"),
+    name: @posoco.ToolName::unchecked("powershell"),
+    arguments: Json::object(
+      Map::from_array([
+        (
+          "cmd",
+          Json::string(
+            "Start-Process pwsh -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 60' -NoNewWindow; Start-Sleep -Milliseconds 300; Write-Output drained",
+          ),
+        ),
+      ]),
+    ),
+  }
+  match tools.execute(test_ctx(call)) {
+    Success(content~, ..) => assert_true(content.contains("drained"))
+    _ =>
+      fail("expected buffered output despite the grandchild holding the pipe")
+  }
 }

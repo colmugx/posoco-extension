@@ -18,11 +18,13 @@ pub fn ps1_extension() -> PowerShellTools
 // Errors
 
 // Types and methods
-pub(all) struct PowerShellTools {
+pub struct PowerShellTools {
   exe : String
   anchor : @devkit.WorkspaceAnchor?
+  in_flight : Map[Int32, Ps1ChildHandle]
 }
 pub fn PowerShellTools::PowerShellTools(exe? : String, anchor? : @devkit.WorkspaceAnchor?) -> Self
+pub async fn PowerShellTools::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
 pub async fn PowerShellTools::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
 pub fn PowerShellTools::extension_id(Self) -> String
 pub fn PowerShellTools::list_tools(Self) -> Array[@kernel.ToolDef]
@@ -30,7 +32,10 @@ pub fn PowerShellTools::manifest(Self) -> @port.ExtensionManifest
 pub fn PowerShellTools::system_prompt(Self) -> String
 pub impl @port.Extension for PowerShellTools
 pub impl @port.SystemPromptContributor for PowerShellTools
+pub impl @port.ToolCancellable for PowerShellTools
 pub impl @port.ToolProvider for PowerShellTools
+
+type Ps1ChildHandle
 
 // Type aliases
 

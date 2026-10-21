@@ -8,12 +8,25 @@
 /// session with its working directory pinned to the anchor root; when unset,
 /// the child inherits the host process working directory.
 ///
-/// On native and wasm, executes via `@process.collect_output_merged`.
-/// On js, executes via node:child_process (runs under both bun and node). On wasm-gc, the tool is not listed and
-/// execute raises `RuntimeError::InvocationFailed`.
-pub(all) struct PowerShellTools {
+/// On native and wasm, executes via `@process` spawn in a task group. On js,
+/// executes via node:child_process (runs under both bun and node). On
+/// wasm-gc, the tool is not listed and execute raises
+/// `RuntimeError::InvocationFailed`.
+///
+/// The provider is also `ToolCancellable`: executions register their child
+/// under the call's `effect_id` via `ToolCallContext.register_cancel`, so an
+/// aborted turn kills the child (signal → grace window → hard kill) instead
+/// of letting a never-exiting command pin the tool call forever. After a
+/// child exits, output is drained only for a bounded idle window, so a
+/// detached grandchild inheriting the output pipe cannot stall the call
+/// either — buffered output is returned and the grandchild is left running.
+pub struct PowerShellTools {
   exe : String
   anchor : @devkit.WorkspaceAnchor?
+  /// Live PowerShell children keyed by effect id. Entries whose execute path
+  /// already completed are dropped; unwind-only cleanup may leave a stale
+  /// exited entry, pruned by the next cancel.
+  in_flight : Map[Int32, Ps1ChildHandle]
 }
 
 ///|
@@ -22,7 +35,55 @@ pub fn PowerShellTools::PowerShellTools(
   exe~ : String = "pwsh",
   anchor~ : @devkit.WorkspaceAnchor? = None,
 ) -> PowerShellTools {
-  PowerShellTools::{ exe: resolve_exe(exe), anchor, }
+  PowerShellTools::{
+    exe: resolve_exe(exe),
+    anchor,
+    in_flight: Map::from_array([]),
+  }
+}
+
+///|
+/// Grace window between the interrupt signal and the hard kill, matching the
+/// native spawn's `graceful_cancel` timeout so both escalation paths agree.
+let ps1_cancel_grace_ms : Int32 = 2000
+
+///|
+/// Idle window the output drain may stay silent after the child has exited
+/// before buffered output is returned anyway: a detached grandchild can hold
+/// the inherited pipe write-end open forever.
+let ps1_drain_grace_ms : Int32 = 1000
+
+///|
+/// Terminate a registered PowerShell child: signal, wait out the grace
+/// period, then hard-kill. Stale exited entries left by unwind-only cleanup
+/// are pruned first. Reports `Propagated` when a live child was handled.
+pub impl @posoco.ToolCancellable for PowerShellTools with fn cancel(
+  self,
+  effect_id : @kernel.EffectId,
+  _reason : @kernel.CancelReason,
+) -> @kernel.CancelDisposition {
+  let stale : Array[Int32] = []
+  for key, handle in self.in_flight {
+    if handle.exited {
+      stale.push(key)
+    }
+  }
+  for key in stale {
+    self.in_flight.remove(key)
+  }
+  let key = effect_id.to_int()
+  match self.in_flight.get(key) {
+    Some(handle) => {
+      ps1_child_interrupt(handle)
+      let exited = ps1_child_await_exit(handle, ps1_cancel_grace_ms + 500)
+      if !exited {
+        ps1_child_hard_kill(handle)
+      }
+      self.in_flight.remove(key)
+      @kernel.CancelDisposition::Propagated
+    }
+    None => @kernel.CancelDisposition::NotPropagated
+  }
 }
 
 ///|
@@ -139,7 +200,7 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("powershell"),
-      description: "Run a PowerShell command via \{exe} (-NoProfile -NonInteractive) on Windows. This is PowerShell, not bash — use PowerShell syntax and cmdlets (Select-String, Get-ChildItem, $env:NAME). \{chaining} Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root.",
+      description: "Run a PowerShell command via \{exe} (-NoProfile -NonInteractive) on Windows. This is PowerShell, not bash — use PowerShell syntax and cmdlets (Select-String, Get-ChildItem, $env:NAME). \{chaining} Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root. Long-running processes (dev servers, watchers) must be started detached (e.g. `Start-Process npm run dev`) so the command returns immediately; a foreground command that never exits blocks the tool until it is cancelled.",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_ps1"),
       policy: @posoco.ExecutionPolicy::Parallel,

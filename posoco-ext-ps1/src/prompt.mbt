@@ -36,6 +36,9 @@ fn windows_guidance(exe : String, platform_detail : String) -> String {
   lines.push(
     "- Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls.",
   )
+  lines.push(
+    "- Long-running processes (dev servers, watchers) never run in the foreground: start them detached (e.g. `Start-Process npm run dev`) and let the command return immediately, or the tool call blocks until the process exits. Poll readiness with a bounded loop, not an infinite one.",
+  )
   lines.join("\n")
 }
 
