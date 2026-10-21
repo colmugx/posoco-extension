@@ -66,6 +66,9 @@ fn DeepSeekModelPort::default_thinking_config(
 }
 
 ///|
+/// The public ModelPort chat entry: request-shape decisions (thinking
+/// config, message materialization) plus mode dispatch. The HTTP loops live
+/// in `chat_nonstream.mbt` and `chat_stream.mbt`.
 pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   self : DeepSeekModelPort,
   _scope : @posoco.InvocationScope,
@@ -77,224 +80,14 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn chat(
   let (thinking_json, effort_str) = self.default_thinking_config()
   let messages_owned = messages.to_owned()
   match stream {
-    NoStream => {
-      // Retry only an entirely non-actionable length-limited response.
-      // No prior stream chunks or tool calls have reached the host.
-      let mut retry = false
-      let mut attempts = 0
-      while attempts < 2 {
-        let selected_effort = if retry { Some("low") } else { effort_str }
-        let selected_thinking = if retry {
-          enabled_thinking_json()
-        } else {
-          thinking_json
-        }
-        let body = build_chat_request(
-          self.ctx,
-          messages_owned,
-          tools,
-          options,
-          self.config.model,
-          false,
-          selected_thinking,
-          selected_effort,
-          self.config.supports_images,
-        )
-        let headers = build_headers(self.config)
-        let url = chat_url(self.config)
-        let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
-          err =>
-            raise @posoco.ModelError::Transport(
-              "DeepSeek transport failure (stage=post): " + err.to_string(),
-            )
-        }
-        if !is_deepseek_http_success(response.code) {
-          match
-            classify_deepseek_http_status(
-              "chat.http_status",
-              response.code,
-              BodyBytesUtf8(body_data.binary().length()),
-            ) {
-            Some(err) => raise err
-            None => ()
-          }
-        }
-        let body_text = body_data.text() catch {
-          _ =>
-            raise @posoco.ModelError::ResponseParse(
-              "DeepSeek response parse failure (stage=decode_utf8, category=invalid_utf8, body_bytes=\\{body_data.binary().length()})",
-            )
-        }
-        let resp_json : Json = @json.parse(body_text) catch {
-          _ =>
-            raise @posoco.ModelError::ResponseParse(
-              "DeepSeek response parse failure (stage=json, category=malformed, body_chars=\\{body_text.length()})",
-            )
-        }
-        let completion = decode_chat_response(resp_json)
-        if self.config.recover_on_reasoning_exhaustion &&
-          attempts == 0 &&
-          deepseek_can_retry_reasoning_exhaustion(completion) {
-          self.ctx.warn(
-            source="posoco-ext-deepseek",
-            code="deepseek.reasoning_exhaustion_recovery",
-            message="Retrying nonstream reasoning-only length cutoff once at low effort",
-          )
-          attempts += 1
-          retry = true
-          continue
-        }
-        return @posoco.ModelCallResult::{
-          completion,
-          processed_messages: messages_owned,
-        }
-      }
-      raise @posoco.ModelError::Transport(
-        "DeepSeek recovery exhausted its bounded retry attempts",
+    NoStream =>
+      DeepSeekModelPort::chat_nonstream(
+        self, messages_owned, tools, options, thinking_json, effort_str,
       )
-    }
-    Stream(on_chunk) => {
-      let body = build_chat_request(
-        self.ctx,
-        messages_owned,
-        tools,
-        options,
-        self.config.model,
-        true,
-        thinking_json,
-        effort_str,
-        self.config.supports_images,
+    Stream(on_chunk) =>
+      DeepSeekModelPort::chat_stream(
+        self, messages_owned, tools, options, thinking_json, effort_str, on_chunk,
       )
-      let headers = build_headers(self.config)
-      let url = chat_url(self.config)
-      let client = @http.post_stream(url, headers~) catch {
-        err =>
-          raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=post_stream): " + err.to_string(),
-          )
-      }
-      client.write(body.stringify()) catch {
-        err => {
-          client.close()
-          raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=write_body): " + err.to_string(),
-          )
-        }
-      }
-      let response = client.end_request() catch {
-        err => {
-          client.close()
-          raise @posoco.ModelError::Transport(
-            "DeepSeek transport failure (stage=end_request): " + err.to_string(),
-          )
-        }
-      }
-      if !is_deepseek_http_success(response.code) {
-        let err_summary = read_error_body_summary(client) catch {
-          _ => BodyUnavailable
-        }
-        client.close()
-        match
-          classify_deepseek_http_status(
-            "chat_stream.http_status",
-            response.code,
-            err_summary,
-          ) {
-          Some(err) => raise err
-          None => ()
-        }
-      }
-      let acc = @posoco.StreamAccumulator::StreamAccumulator()
-      // Forward typed StreamChunks directly to the host callback. The
-      // accumulator is owned by process_deepseek_sse, which pushes every chunk
-      // exactly once; pushing here too would double every text/reasoning delta.
-      let mut done = false
-      let mut data_buffer = ""
-      let mut last_yield = @async.now()
-      while !done {
-        let line = client.read_until("\n") catch {
-          err => {
-            client.close()
-            raise @posoco.ModelError::Transport(
-              "DeepSeek transport failure (stage=read_stream): " +
-              err.to_string(),
-            )
-          }
-        }
-        match line {
-          Some(data) => {
-            let trimmed = data.trim()
-            if trimmed.has_prefix("data:") {
-              let payload = trimmed[5:].trim().to_owned()
-              if payload.length() > 0 {
-                data_buffer = payload
-                done = process_deepseek_sse(payload, acc, on_chunk)
-                match self.config.repeated_reasoning_span_chars {
-                  Some(span) =>
-                    if !done &&
-                      acc.text().length() == 0 &&
-                      deepseek_has_repeated_reasoning_suffix(
-                        acc.reasoning(),
-                        span,
-                      ) {
-                      self.ctx.warn(
-                        source="posoco-ext-deepseek",
-                        code="deepseek.reasoning_repetition_detected",
-                        message="Repeated reasoning suffix detected; aborting stream",
-                      )
-                      client.close()
-                      raise @posoco.ModelError::Transport(
-                        "DeepSeek stream reasoning repetition detected (stage=read_stream, category=reasoning_repetition)",
-                      )
-                    }
-                  None => ()
-                }
-                match self.config.max_reasoning_chars {
-                  Some(limit) =>
-                    if deepseek_reasoning_limit_exceeded(
-                        acc.reasoning().length(),
-                        limit,
-                      ) {
-                      client.close()
-                      raise @posoco.ModelError::Transport(
-                        "DeepSeek reasoning stream exceeded configured max_reasoning_chars (stage=read_stream, category=reasoning_budget_exceeded)",
-                      )
-                    }
-                  None => ()
-                }
-              }
-            } else if trimmed == "" && data_buffer.length() > 0 {
-              data_buffer = ""
-            }
-          }
-          None => {
-            client.close()
-            match classify_deepseek_stream_termination(CleanEof) {
-              Some(err) => raise err
-              None => done = true
-            }
-          }
-        }
-        // Yield at most every 16ms so the event loop can breathe during a
-        // buffered SSE burst; task cancellation also lands on this pause.
-        let now = @async.now()
-        if now - last_yield >= 16L {
-          @async.pause()
-          last_yield = now
-        }
-      }
-      client.close()
-      match classify_deepseek_stream_termination(ExplicitTerminal) {
-        Some(err) => raise err
-        None => ()
-      }
-      validate_deepseek_stream_tool_calls(acc)
-      let completion = acc.to_completion()
-      @posoco.ModelCallResult::{
-        completion,
-        processed_messages: messages_owned,
-      }
-    }
   }
 }
 
