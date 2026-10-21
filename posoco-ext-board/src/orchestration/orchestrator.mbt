@@ -5,6 +5,7 @@
 /// serializes its own admission: one dispatch in flight at a time.
 priv struct OrchestratorControlScope {
   candidates : Array[ExecutionCandidate]
+  task_versions : Array[@domain.BoardTask]
   authorize : () -> Bool
 }
 
@@ -27,14 +28,7 @@ pub fn BoardOrchestrator::BoardOrchestrator(
   resolver~ : &BoardExecutionInputResolver,
   policy~ : ExecutionPolicy = ExecutionPolicy(),
 ) -> BoardOrchestrator {
-  {
-    owner,
-    policy,
-    resolver,
-    busy: false,
-    closed: false,
-    control_scope: None,
-  }
+  { owner, policy, resolver, busy: false, closed: false, control_scope: None, }
 }
 
 ///|
@@ -44,6 +38,7 @@ pub fn BoardOrchestrator::BoardOrchestrator(
 pub fn BoardOrchestrator::set_control_scope(
   self : BoardOrchestrator,
   candidates : Array[ExecutionCandidate]?,
+  task_versions~ : Array[@domain.BoardTask] = [],
   authorize~ : () -> Bool,
 ) -> Bool {
   let status = self.owner.status()
@@ -53,12 +48,22 @@ pub fn BoardOrchestrator::set_control_scope(
   match candidates {
     None => self.control_scope = None
     Some(values) => {
-      if values.is_empty() || values.length() > 8 ||
-        values.any(c => c.task_id.is_empty() || c.attempt_id.is_empty()) ||
+      if values.is_empty() ||
+        values.length() > 8 ||
+        task_versions.length() != values.length() ||
+        values.any(c => {
+          !task_versions.any(t => t.id.value == c.task_id) ||
+          c.task_id.is_empty() ||
+          c.attempt_id.is_empty()
+        }) ||
         !authorize() {
         return false
       }
-      self.control_scope = Some({ candidates: values.copy(), authorize, })
+      self.control_scope = Some({
+        candidates: values.copy(),
+        task_versions: task_versions.map(t => t.copy_detached()),
+        authorize,
+      })
     }
   }
   true
@@ -149,10 +154,16 @@ fn BoardOrchestrator::plan_state(
   match self.control_scope {
     Some(control) => {
       let eligible = scoped.eligible.filter(candidate => {
-        control.candidates.contains(candidate)
+        control.candidates.contains(candidate) &&
+        state.tasks.iter().find_first(t => t.id.value == candidate.task_id) ==
+        control.task_versions
+        .iter()
+        .find_first(t => t.id.value == candidate.task_id)
       })
       let blocked = scoped.blocked.filter(row => {
-        control.candidates.any(c => row.task_id == c.task_id && row.attempt_id == Some(c.attempt_id))
+        control.candidates.any(c => {
+          row.task_id == c.task_id && row.attempt_id == Some(c.attempt_id)
+        })
       })
       { ..scoped, eligible, blocked, }
     }
@@ -390,7 +401,14 @@ pub async fn BoardOrchestrator::dispatch_next(
             if !authorized {
               stopped = true
             }
-            authorized && control.candidates.contains(candidate)
+            authorized &&
+            control.candidates.contains(candidate) &&
+            snapshot.tasks
+            .iter()
+            .find_first(t => t.id.value == candidate.task_id) ==
+            control.task_versions
+            .iter()
+            .find_first(t => t.id.value == candidate.task_id)
           }
           None => true
         }

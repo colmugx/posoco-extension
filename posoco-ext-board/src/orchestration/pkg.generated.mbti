@@ -38,7 +38,7 @@ pub fn BoardOrchestrator::cancel_active(Self, String) -> Result[Unit, @execution
 pub async fn BoardOrchestrator::dispatch_next(Self, candidate? : ExecutionCandidate, planning_revision? : Int64, task_scope? : Array[String], admission_guard? : () -> Bool, execution_timeout_ms? : Int32, on_admitted? : (@execution.BoardExecutionHandle) -> Unit) -> Result[ExecutionDispatch, OrchestrationError]
 pub fn BoardOrchestrator::owner_status(Self) -> @execution.BoardExecutionOwnerStatus
 pub async fn BoardOrchestrator::plan(Self, task_scope? : Array[String]) -> Result[ExecutionPlan, OrchestrationError]
-pub fn BoardOrchestrator::set_control_scope(Self, Array[ExecutionCandidate]?, authorize~ : () -> Bool) -> Bool
+pub fn BoardOrchestrator::set_control_scope(Self, Array[ExecutionCandidate]?, task_versions? : Array[@domain.BoardTask], authorize~ : () -> Bool) -> Bool
 pub async fn BoardOrchestrator::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn BoardOrchestrator::status(Self, task_scope? : Array[String]) -> Result[OrchestrationStatus, OrchestrationError]
 

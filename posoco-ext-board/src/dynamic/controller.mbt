@@ -403,12 +403,14 @@ pub async fn DynamicWorkflowController::run_wave(
 pub async fn DynamicWorkflowController::run_wave_scoped(
   self : DynamicWorkflowController,
   candidates : Array[@orchestration.ExecutionCandidate],
+  task_versions~ : Array[@domain.BoardTask],
   authorize~ : () -> Bool,
 ) -> Result[Unit, DynamicWorkflowError] {
   let scope = self.runner.authorized_scope()
   if candidates.any(c => !scope.contains(c.task_id)) ||
     !self.orchestrator.set_control_scope(
       Some(candidates),
+      task_versions~,
       authorize~,
     ) {
     return Err(TaskOutOfScope)
