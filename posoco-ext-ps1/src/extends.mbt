@@ -8,4 +8,7 @@
 pub extend PowerShellTools with @posoco.ToolProvider::{execute, list_tools}
 
 ///|
+pub extend PowerShellTools with @posoco.ToolCancellable::{cancel}
+
+///|
 pub extend PowerShellTools with @posoco.SystemPromptContributor::{system_prompt}
