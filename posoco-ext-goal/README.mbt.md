@@ -109,6 +109,17 @@ options.enable_semantic_advice = true
 let goal = @goal.GoalRunner(options~)
 ```
 
+
+When deterministic stall detection would pause an otherwise running goal,
+the adviser can also answer a typed `goal_continue_has_value` question.
+A probability at least `semantic_stall_threshold` (default 0.75)
+defers the stall for one more *ordinary, budgeted* work turn. The default
+`max_semantic_stall_deferrals = 1` is an absolute per-run cap on this
+behavior and is persisted in checkpoint format **v2**. Budget exhaustion
+always wins; absent, malformed or failed decision responses use the
+deterministic Pause path. These thresholds are conservative policy
+defaults, **not calibrated guarantees** of semantic correctness.
+
 On a completion claim, a typed `DecisionQuestion::Boolean` estimates
 semantic satisfaction. Its validated probability is attached as
 advisory telemetry; malformed responses and provider failures produce
