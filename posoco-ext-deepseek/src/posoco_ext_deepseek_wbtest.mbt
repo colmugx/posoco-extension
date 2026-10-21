@@ -2295,7 +2295,7 @@ test "compaction summary body keeps identical tool and message prefix" {
 }
 
 ///|
-test "tool schema serialization is deterministic and preserves caller order" {
+test "tool schema serialization is deterministic across caller permutations" {
   let read : @posoco.ToolDef = {
     name: @posoco.ToolName::unchecked("read_file"),
     description: "Read a file",
@@ -2316,7 +2316,7 @@ test "tool schema serialization is deterministic and preserves caller order" {
   let replay = encode_tools([read, write])
   let reversed = encode_tools([write, read])
   assert_true(first == replay)
-  assert_false(first == reversed)
+  assert_true(first == reversed)
   guard first is Array(defs) else { fail("expected tool definitions") }
   guard defs[0] is Object(first_tool) else { fail("expected tool") }
   guard first_tool.get("function") is Some(Object(fun)) else {
