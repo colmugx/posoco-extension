@@ -2250,7 +2250,7 @@ test "OpenCode Go reasoning survives SSE tool call replay" {
   }
   match assistant_wire.get("reasoning_content") {
     Some(String(text)) => assert_eq(text, "consider the file")
-    _ => fail("OpenCode dialect reasoning must be replayed unchanged"),
+    _ => fail("OpenCode dialect reasoning must be replayed unchanged")
   }
   guard assistant_wire.get("tool_calls") is Some(Array(calls)) else {
     fail("expected original assistant tool calls")
