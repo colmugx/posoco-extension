@@ -1558,4 +1558,19 @@ test "selection changes publish a structured model_selection event" {
   let with_effort = router_selection_events(capture.events)
   assert_eq(with_effort.length(), 1)
   router_selection_payload(with_effort[0], "one/a", Json::string("high"))
+  // Direct callers (restore, ACP/config) must refresh the status bar too.
+  let visible = router_visible_events(capture)
+  assert_eq(visible.length(), 1)
+  assert_eq(
+    @devkit.decode_status_op(visible[0]),
+    Some(
+      @devkit.StatusOp::Register(
+        segment="model",
+        label=None,
+        priority=20,
+        value=Some("model-a:high"),
+        color=None,
+      ),
+    ),
+  )
 }
