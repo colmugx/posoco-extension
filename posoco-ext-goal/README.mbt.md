@@ -98,8 +98,9 @@ validated `Verified` assessment.
 Semantic judgement is **opt-in**. Set
 `options.enable_semantic_advice = true` *before composing the Agent*.
 When a DecisionPort is installed, the Lifecycle port discovers it through
-`CompositionView::decision`. No capability is in the extension's
-`requires` list; Cetas JS and other hosts without a decision provider
+`CompositionView::decision`. Opting in declares `Capability::Decision`
+in the manifest so the curated view exposes an installed provider; the
+capability remains **optional** and Cetas JS hosts without a provider
 still compose and run normally.
 
 ```moonbit nocheck
