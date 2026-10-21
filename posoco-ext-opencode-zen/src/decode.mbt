@@ -70,13 +70,23 @@ fn decode_chat_response(
   }
   // reasoning_content: optional. Surface when present and non-empty; servers
   // that do not emit it simply omit reasoning on the resulting Completion.
+  // The OpenCode Go gateway names the field `reasoning` (same dialect as its
+  // `delta.reasoning` stream), so that spelling is the fallback.
   let reasoning : String? = match msg.get("reasoning_content") {
     Some(String(s)) => if s == "" { None } else { Some(s) }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
         "opencode-zen response parse failure (stage=message.reasoning_content, category=wrong_type)",
       )
-    None => None
+    None =>
+      match msg.get("reasoning") {
+        Some(String(s)) => if s == "" { None } else { Some(s) }
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "opencode-zen response parse failure (stage=message.reasoning, category=wrong_type)",
+          )
+        None => None
+      }
   }
   let tool_calls : Array[@posoco.ToolCall] = match msg.get("tool_calls") {
     Some(Array(tcs)) => {

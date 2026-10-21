@@ -2092,3 +2092,99 @@ impl @devkit.BusSubscriber for SpendCapture with fn on_bus_event(
 ) -> Unit {
   self.events.push(event)
 }
+
+///|
+test "zen stream normalizes the gateway delta.reasoning dialect" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let on_chunk = fn(chunk : @posoco.StreamChunk) -> Unit { chunks.push(chunk) }
+  let reasoning_chunk =
+    #|{"choices":[{"delta":{"reasoning":"think"},"finish_reason":null}]}
+  assert_false(process_zen_sse(reasoning_chunk, acc, on_chunk))
+  match chunks[0] {
+    @posoco.StreamChunk::ReasoningDelta(token~) => assert_eq(token, "think")
+    _ => fail("expected a reasoning delta")
+  }
+  let text_chunk =
+    #|{"choices":[{"delta":{"content":"he"},"finish_reason":null}]}
+  assert_false(process_zen_sse(text_chunk, acc, on_chunk))
+  let stop_chunk =
+    #|{"choices":[{"delta":{},"finish_reason":"stop"}]}
+  assert_true(process_zen_sse(stop_chunk, acc, on_chunk))
+  let completion = acc.to_completion()
+  match completion.message.reasoning {
+    Some(reasoning) => assert_eq(reasoning.content, "think")
+    None => fail("expected reasoning from the delta.reasoning dialect")
+  }
+}
+
+///|
+test "zen stream keeps standard reasoning_content untouched" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let on_chunk = fn(chunk : @posoco.StreamChunk) -> Unit { chunks.push(chunk) }
+  let both_chunk =
+    #|{"choices":[{"delta":{"reasoning_content":"real","reasoning":"decoy"},"finish_reason":null}]}
+  assert_false(process_zen_sse(both_chunk, acc, on_chunk))
+  match chunks[0] {
+    @posoco.StreamChunk::ReasoningDelta(token~) => assert_eq(token, "real")
+    _ => fail("expected a reasoning delta")
+  }
+  let stop_chunk =
+    #|{"choices":[{"delta":{},"finish_reason":"stop"}]}
+  assert_true(process_zen_sse(stop_chunk, acc, on_chunk))
+  let completion = acc.to_completion()
+  match completion.message.reasoning {
+    Some(reasoning) => assert_eq(reasoning.content, "real")
+    None => fail("expected reasoning")
+  }
+}
+
+///|
+test "zen dialect normalization passes non-dialect payloads through" {
+  let plain =
+    #|{"choices":[{"delta":{"content":"hi"}}]}
+  assert_eq(normalize_zen_reasoning_dialect(plain), plain)
+  // Malformed JSON is not rewritten here; the shared kit raises its own
+  // labeled parse failure for the original bytes.
+  let broken =
+    #|{"choices":[{"delta":{"reasoning":
+  assert_eq(normalize_zen_reasoning_dialect(broken), broken)
+  // Already-standard reasoning_content passes through byte-identical.
+  let standard =
+    #|{"choices":[{"delta":{"reasoning_content":"r"}}]}
+  assert_eq(normalize_zen_reasoning_dialect(standard), standard)
+}
+
+///|
+test "zen decode falls back to message.reasoning" {
+  let with_reasoning : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","reasoning":"deep thought"},"finish_reason":"stop"}]}
+    ),
+  )
+  let completion = decode_chat_response(with_reasoning)
+  match completion.message.reasoning {
+    Some(reasoning) => assert_eq(reasoning.content, "deep thought")
+    None => fail("expected reasoning from message.reasoning")
+  }
+  // Empty reasoning text stays None — a placeholder, not semantics.
+  let empty_payload : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","reasoning":""},"finish_reason":"stop"}]}
+    ),
+  )
+  let empty = decode_chat_response(empty_payload)
+  assert_true(empty.message.reasoning is None)
+  // The standard field wins when both spellings appear.
+  let both_payload : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","reasoning_content":"real","reasoning":"decoy"},"finish_reason":"stop"}]}
+    ),
+  )
+  let both = decode_chat_response(both_payload)
+  match both.message.reasoning {
+    Some(reasoning) => assert_eq(reasoning.content, "real")
+    None => fail("expected reasoning")
+  }
+}
