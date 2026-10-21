@@ -1,10 +1,34 @@
 ///|
+/// Trusted test-only verifier: fixture references stand in for externally
+/// checked acceptance records. Production must supply its own verifier.
+struct TestGoalVerifier {}
+
+///|
+pub impl GoalVerifier for TestGoalVerifier with async fn verify(
+  _self : TestGoalVerifier,
+  request : GoalVerificationRequest,
+) -> GoalAssessment {
+  let names = if request.criteria.is_empty() {
+    ["goal"]
+  } else {
+    request.criteria
+  }
+  Verified(names.map(fn(name) {
+    GoalEvidence::{ criterion: name, source: "test-fixture", reference: "ok", }
+  }))
+}
+
+///|
 /// Compose model + sessions + one GoalRunner into an Agent (testkit shape).
 fn gate_build_agent(
   goal : GoalRunner,
   model : @posoco.ScriptedModel,
   store : @posoco.RecordingSessionStore,
+  verified~ : Bool = true,
 ) -> @posoco.Agent {
+  if verified {
+    goal.set_verifier(TestGoalVerifier::{})
+  }
   @posoco.Agent(
     exts=[
       @posoco.tk_ext(id="model", model=Some(model)),
@@ -362,3 +386,27 @@ async test "goal execute rejects foreign resume session without resetting state"
   assert_eq(goal.history.length(), 1)
   assert_eq(model.call_count(), 1)
 }
+
+///|
+/// Without an independent verifier, repeating the completion marker
+/// produces an inconclusive result, never Completed.
+async test "unverified_claim_pauses_not_completes" {
+  let goal = goal_extension(goal_condition="cannot self-certify")
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("<goal-complete/>"),
+    ),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = gate_build_agent(goal, model, store, verified=false)
+  let result = goal.execute(agent, "unverified_session")
+  assert_true(result.final_status == Paused)
+  match result.assessment {
+    Inconclusive(reason) => assert_true(reason.contains("no independent"))
+    other => fail("expected Inconclusive, got \{other}")
+  }
+}
+
