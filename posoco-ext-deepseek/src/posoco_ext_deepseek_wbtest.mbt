@@ -2343,3 +2343,29 @@ test "panic explicit V4 prompt profile disallows image input" {
     "sk-test", prompt_profile="v4", supports_images=true,
   ))
 }
+
+///|
+test "V4.1 canonical effort reuses the same reasoning prompt prefix" {
+  let minimal = DeepSeekModelPort(DeepSeekConfig(
+    "sk-test", reasoning_effort="minimal", prompt_profile="v4.1",
+  ))
+  let low = DeepSeekModelPort(DeepSeekConfig(
+    "sk-test", reasoning_effort="low", prompt_profile="v4.1",
+  ))
+  let medium = DeepSeekModelPort(DeepSeekConfig(
+    "sk-test", reasoning_effort="medium", prompt_profile="v4.1",
+  ))
+  let xhigh = DeepSeekModelPort(DeepSeekConfig(
+    "sk-test", reasoning_effort="xhigh", prompt_profile="v4.1",
+  ))
+  let ultra = DeepSeekModelPort(DeepSeekConfig(
+    "sk-test", reasoning_effort="ultra", prompt_profile="v4.1",
+  ))
+  assert_true(minimal.default_thinking_config() == low.default_thinking_config())
+  assert_true(medium.default_thinking_config() == xhigh.default_thinking_config())
+  assert_eq(ultra.default_thinking_config().1, Some("max"))
+  let unknown = DeepSeekModelPort(DeepSeekConfig(
+    "sk-test", reasoning_effort="medium",
+  ))
+  assert_eq(unknown.default_thinking_config().1, Some("medium"))
+}
