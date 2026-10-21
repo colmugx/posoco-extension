@@ -17,6 +17,23 @@ fn go_base_config() -> @zen.OpenCodeZenConfig {
 }
 
 ///|
+/// Go shares OpenCode's wire implementation with Zen, but must supply its
+/// own product identity and the calling agent's *conversation* identity.
+/// Two Go agents in one process must never collapse into one gateway session.
+test "Go gateway routing keeps independent per-agent session identity" {
+  let first = @zen.opencode_request_headers("opencode-go", "go-agent-a")
+  let next = @zen.opencode_request_headers("opencode-go", "go-agent-a")
+  let other = @zen.opencode_request_headers("opencode-go", "go-agent-b")
+  assert_eq(first["x-opencode-client"], "opencode-go")
+  assert_eq(first["User-Agent"], "posoco/opencode-go")
+  assert_eq(first["x-opencode-session"], "go-agent-a")
+  assert_eq(next["x-opencode-session"], first["x-opencode-session"])
+  assert_eq(other["x-opencode-session"], "go-agent-b")
+  assert_true(first["x-opencode-session"] != other["x-opencode-session"])
+  assert_true(first["x-opencode-request"] != next["x-opencode-request"])
+}
+
+///|
 test "resolve_go_wire follows the vendor Go endpoints table" {
   // The Go-plane overrides where the family rule disagrees.
   assert_eq(resolve_go_wire("qwen3.8-max"), @zen.Messages)
