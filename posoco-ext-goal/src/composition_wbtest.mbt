@@ -11,6 +11,7 @@ fn cw_compose_agent(
   goal : GoalRunner,
   observers~ : Array[&@posoco.Observer] = [],
 ) -> @posoco.Agent {
+  goal.set_verifier(TestGoalVerifier::{})
   @posoco.Agent(
     exts=[
       @posoco.tk_ext(id="model", model=Some(model as &@posoco.ModelPort)),
