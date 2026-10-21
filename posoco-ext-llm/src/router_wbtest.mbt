@@ -205,6 +205,8 @@ test "replace_provider_slots falls back when the active slot disappears" {
   router.select_effort("one/a", "high") catch {
     _ => fail("unexpected effort selection failure")
   }
+  // Assert only the events emitted by the replacement, not the setup effort.
+  capture.events.clear()
   let replacements = [
     router_test_slot("one/x", "one", "model-x", []),
     router_test_slot("one/y", "one", "model-y", []),
@@ -384,6 +386,8 @@ test "model response publishes cache and model segments" {
   router.select_effort("slot-a", "high") catch {
     _ => fail("unexpected effort selection failure")
   }
+  // Effort selection publishes model status itself; isolate the response.
+  capture.events.clear()
   router.on_event_at(
     Some(router_test_scope("s")),
     @posoco.TurnEvent::ModelResponseReceived(
