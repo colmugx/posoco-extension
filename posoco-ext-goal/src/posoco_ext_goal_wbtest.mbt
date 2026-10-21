@@ -226,22 +226,22 @@ test "scoped observer rejects foreign sessions and out-of-turn events" {
     run_id: @kernel.RunId::unchecked("r1"),
     turn_id: @kernel.TurnId::unchecked("t1"),
   }
-  let local : @posoco.EventScope = {
+  let local_scope : @posoco.EventScope = {
     session_id: @kernel.SessionId::unchecked("s1"),
     run_id: @kernel.RunId::unchecked("r1"),
     turn_id: @kernel.TurnId::unchecked("t1"),
   }
-  goal.on_event_at(Some(local), event)
+  goal.on_event_at(Some(local_scope), event)
   assert_eq(goal.usage.total_tokens, 0)
   goal.executing_turn = true
   goal.on_event_at(Some(foreign), event)
   goal.on_event_at(None, event)
   assert_eq(goal.usage.total_tokens, 0)
-  goal.on_event_at(Some(local), event)
+  goal.on_event_at(Some(local_scope), event)
   assert_eq(goal.usage.total_tokens, 10)
   goal.on_event_at(Some(foreign), @posoco.TurnEvent::TurnCompleted)
   assert_eq(goal.usage.turns, 0)
-  goal.on_event_at(Some(local), @posoco.TurnEvent::TurnCompleted)
+  goal.on_event_at(Some(local_scope), @posoco.TurnEvent::TurnCompleted)
   assert_eq(goal.usage.turns, 1)
 }
 
