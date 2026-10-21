@@ -156,7 +156,7 @@ pub fn GoalRunner::restore_checkpoint(
   // and protocol cannot silently change across a resumed checkpoint.
   let saved_criteria = match fields.get("criteria") {
     Some(Json::Array(items)) => items
-    _ => return Err("checkpoint criteria are missing"),
+    _ => return Err("checkpoint criteria are missing")
   }
   if saved_criteria.length() != self.options.completion_checklist.length() {
     return Err("checkpoint acceptance contract mismatch")
