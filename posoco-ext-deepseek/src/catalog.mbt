@@ -57,6 +57,7 @@ fn deepseek_catalog_slot(
         recover_on_reasoning_exhaustion=config.recover_on_reasoning_exhaustion,
         repeated_reasoning_span_chars=config.repeated_reasoning_span_chars,
         supports_images=config.supports_images,
+        prompt_profile=config.prompt_profile,
       )
       deepseek_catalog_slot(rebuilt_config, ctx, api_key)
     }),
@@ -94,6 +95,11 @@ fn deepseek_catalog_slot_from_info(
     // models must not inherit its image_in advertisement (same scoping as
     // the configured context_window above).
     supports_images=info.id == base_config.model && base_config.supports_images,
+    prompt_profile=if info.id == base_config.model {
+      base_config.prompt_profile
+    } else {
+      "unknown"
+    },
   )
   deepseek_catalog_slot(config, ctx, api_key)
 }

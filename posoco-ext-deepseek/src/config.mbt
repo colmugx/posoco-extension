@@ -34,6 +34,9 @@ pub(all) struct DeepSeekConfig {
   /// `image_in`. Opt-in via the `image_input` setting: the /models endpoint
   /// carries no modality metadata, so the host declares image capability.
   supports_images : Bool
+  /// Explicit reference renderer version; unknown avoids inferring support
+  /// from mutable hosted model aliases.
+  prompt_profile : String
 } derive(Eq, Debug)
 
 ///|
@@ -54,7 +57,15 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   recover_on_reasoning_exhaustion~ : Bool = true,
   repeated_reasoning_span_chars~ : Int32? = Some(256),
   supports_images~ : Bool = false,
+  prompt_profile~ : String = "unknown",
 ) -> DeepSeekConfig {
+  if prompt_profile != "unknown" && prompt_profile != "v4" &&
+    prompt_profile != "v4.1" {
+    abort("posoco-ext-deepseek: unsupported prompt_profile: " + prompt_profile)
+  }
+  if prompt_profile == "v4" && supports_images {
+    abort("posoco-ext-deepseek: V4 renderer cannot accept image input")
+  }
   if reasoning_effort != "" &&
     !deepseek_reasoning_efforts().contains(reasoning_effort) {
     abort(
@@ -95,6 +106,7 @@ pub fn DeepSeekConfig::DeepSeekConfig(
     recover_on_reasoning_exhaustion,
     repeated_reasoning_span_chars,
     supports_images,
+    prompt_profile,
   }
 }
 
