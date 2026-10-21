@@ -534,3 +534,72 @@ test "opted in goal composes without decision capability" {
   ignore(agent)
   assert_true(goal.adviser is None)
 }
+
+
+///|
+/// A composed DecisionPort is discovered only when explicitly enabled. It
+/// remains advisory: the trusted GoalVerifier is still the sole completion
+/// authority.
+async test "composed decision provider gives optional semantic advice" {
+  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::BooleanAnswer(
+          id="goal_satisfied",
+          probability_true=0.75,
+        ),
+      ],
+      model: Some("scripted-semantic-judge"),
+      usage: None,
+    }),
+  ])
+  let goal = goal_extension(goal_condition="semantic composition")
+  goal.options.enable_semantic_advice = true
+  goal.set_verifier(TestGoalVerifier::{ calls: 0, reject_first: false, })
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = @posoco.Agent(
+    exts=[
+      @posoco.tk_ext(id="model", model=Some(model)),
+      @posoco.tk_ext(id="decision", decision=Some(decision)),
+      @posoco.tk_ext(id="io", sessions=[store]),
+      goal,
+    ],
+    config=@posoco.tk_config(),
+  ) catch {
+    e => abort("composition failed: \{e}")
+  }
+  let result = goal.execute(agent, "composition_semantic")
+  assert_true(result.final_status == Completed)
+  assert_eq(result.semantic_probability, Some(0.75))
+  assert_eq(decision.call_count(), 1)
+}
+
+///|
+/// A failing DecisionPort is a missing advisory signal, not a hard
+/// dependency or a reason to discard authoritative verifier evidence.
+async test "decision provider failure falls back without changing verdict" {
+  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Fail(
+      @posoco.DecisionError::Transport("provider unavailable"),
+    ),
+  ])
+  let goal = goal_extension(goal_condition="decision service down")
+  goal.set_decision_adviser(decision)
+  goal.set_verifier(TestGoalVerifier::{ calls: 0, reject_first: false, })
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = gate_build_agent(goal, model, store, verified=false)
+  let result = goal.execute(agent, "semantic_failure")
+  assert_true(result.final_status == Completed)
+  assert_eq(result.semantic_probability, None)
+  assert_eq(decision.call_count(), 1)
+}
