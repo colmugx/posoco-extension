@@ -705,3 +705,26 @@ async test "semantic adviser cannot override an exhausted turn budget" {
   assert_eq(decision.call_count(), 0)
   assert_eq(goal.semantic_stall_deferrals, 0)
 }
+
+
+///|
+/// A matching goal string is not enough to authorize restoring changed
+/// user acceptance criteria; the restore remains atomic.
+test "checkpoint rejects modified acceptance criteria" {
+  let original = goal_extension(goal_condition="same text")
+  original.options.completion_checklist.push("all tests pass")
+  original.status = Paused
+  original.active_session_id = Some("acceptance_session")
+  let snapshot = match original.checkpoint() {
+    Ok(v) => v
+    Err(e) => fail("checkpoint failed: \{e}")
+  }
+  let modified = goal_extension(goal_condition="same text")
+  modified.options.completion_checklist.push("looks good")
+  match modified.restore_checkpoint(snapshot) {
+    Err(reason) => assert_true(reason.contains("acceptance contract"))
+    Ok(_) => fail("changed acceptance criteria must not restore")
+  }
+  assert_true(modified.status == Idle)
+  assert_eq(modified.current_turn, 0)
+}
