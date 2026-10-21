@@ -2324,3 +2324,22 @@ test "tool schema serialization is deterministic and preserves caller order" {
   }
   assert_json_field_string(fun, "name", "read_file")
 }
+
+///|
+test "DeepSeek explicit prompt profiles preserve unknown by default" {
+  let unknown = DeepSeekConfig("sk-test")
+  assert_eq(unknown.prompt_profile, "unknown")
+  let modern = DeepSeekConfig(
+    "sk-test", prompt_profile="v4.1", supports_images=true,
+  )
+  assert_eq(modern.prompt_profile, "v4.1")
+  let legacy = DeepSeekConfig("sk-test", prompt_profile="v4")
+  assert_false(legacy.supports_images)
+}
+
+///|
+test "panic explicit V4 prompt profile disallows image input" {
+  ignore(DeepSeekConfig(
+    "sk-test", prompt_profile="v4", supports_images=true,
+  ))
+}

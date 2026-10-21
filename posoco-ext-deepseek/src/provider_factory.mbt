@@ -209,6 +209,25 @@ fn deepseek_setting_recover_on_exhaustion(
 }
 
 ///|
+/// Prompt profile is explicit because `/models` does not advertise a
+/// version. Do not infer the renderer version from mutable model aliases.
+fn deepseek_setting_prompt_profile(
+  source : @provider.ProviderConfigSource,
+) -> String raise @posoco.CompositionError {
+  match source.setting("prompt_profile") {
+    None => "unknown"
+    Some(String("unknown")) => "unknown"
+    Some(String("v4")) => "v4"
+    Some(String("v4.1")) => "v4.1"
+    _ =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_deepseek",
+        detail="prompt_profile must be one of unknown, v4, v4.1",
+      )
+  }
+}
+
+///|
 /// Image-input opt-in. The /models endpoint carries no modality metadata,
 /// so the host declares it per settings; default false keeps every image
 /// block on the explicit placeholder downgrade.
@@ -271,6 +290,7 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
     ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
     supports_images=deepseek_setting_image_input(source),
+    prompt_profile=deepseek_setting_prompt_profile(source),
   )
   let port = DeepSeekModelPort(config, ctx=self.ctx)
   // Host-cached records from a previous refresh expand into the full
@@ -360,6 +380,7 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
     ),
     repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
     supports_images=deepseek_setting_image_input(source),
+    prompt_profile=deepseek_setting_prompt_profile(source),
   )
   let models = fetch_deepseek_models(
     config.base_url,
