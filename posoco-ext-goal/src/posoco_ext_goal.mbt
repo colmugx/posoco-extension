@@ -108,6 +108,8 @@ pub(all) struct GoalResult {
   history : Array[GoalHistoryEntry]
   final_plan : GoalPlan
   stall_reason : String?
+  assessment : GoalAssessment
+  semantic_probability : Double?
 } derive(Debug)
 
 ///|
@@ -153,6 +155,10 @@ pub struct GoalRunner {
   // current agent.run_turn belong in its budget and repetition counters.
   mut active_session_id : String?
   mut active_run_id : String?
+  mut verifier : &GoalVerifier?
+  mut adviser : DecisionGoalAdviser?
+  mut assessment : GoalAssessment
+  mut semantic_probability : Double?
   mut executing_loop : Bool
   mut executing_turn : Bool
 } derive(Debug)
@@ -230,6 +236,10 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
     prev_plan_fp: None,
     active_session_id: None,
     active_run_id: None,
+    verifier: None,
+    adviser: None,
+    assessment: Inconclusive("not assessed"),
+    semantic_probability: None,
     executing_loop: false,
     executing_turn: false,
   }
@@ -237,6 +247,28 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
 
 ///|
 /// Current plan (defensive copy of the items).
+///|
+/// Install a verifier implementing the host's authorized acceptance policy.
+/// This is the only source of a Verified outcome. No verifier means unknown.
+pub fn GoalRunner::set_verifier(self : GoalRunner, verifier : &GoalVerifier) -> Unit {
+  self.verifier = Some(verifier)
+}
+
+///|
+/// The decision port is optional and advisory, never completion authority.
+pub fn GoalRunner::set_decision_adviser(
+  self : GoalRunner,
+  decision : &@posoco.DecisionPort,
+) -> Unit {
+  self.adviser = Some(DecisionGoalAdviser(decision~))
+}
+
+///|
+pub fn GoalRunner::assessment(self : GoalRunner) -> GoalAssessment {
+  self.assessment
+}
+
+///|
 pub fn GoalRunner::plan(self : GoalRunner) -> GoalPlan {
   GoalPlan::{ items: self.plan.items.copy(), }
 }
@@ -557,6 +589,8 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.charter = ""
   self.active_session_id = None
   self.active_run_id = None
+  self.assessment = Inconclusive("not assessed")
+  self.semantic_probability = None
   self.executing_turn = false
 }
 
@@ -573,6 +607,8 @@ fn GoalRunner::result(self : GoalRunner, final_status : GoalStatus) -> GoalResul
     history: self.history.copy(),
     final_plan: GoalPlan::{ items: self.plan.items.copy(), },
     stall_reason: self.last_stall_reason,
+    assessment: self.assessment,
+    semantic_probability: self.semantic_probability,
   }
 }
 
@@ -684,9 +720,41 @@ pub async fn GoalRunner::execute(
       CompletionClaimed => {
         self.completion_claimed = true
         if self.verifying {
+          // A second claim from the same model is only another claim.
           self.verifying = false
-          self.status = Completed
-          break
+          let request : GoalVerificationRequest = {
+            goal: self.options.goal_condition,
+            criteria: self.options.completion_checklist.copy(),
+            session_id: match self.active_session_id {
+              Some(v) => v
+              None => session_id
+            },
+            claim: text_of_message(turn_result.message),
+          }
+          let outcome = match self.verifier {
+            Some(v) => v.verify(request)
+            None => GoalAssessment::Inconclusive(
+              "no independent GoalVerifier configured",
+            )
+          }
+          self.assessment = outcome.validated(self.options.completion_checklist)
+          match self.assessment {
+            Verified(_) => {
+              self.status = Completed
+              break
+            }
+            Rejected(reason) => {
+              self.last_retraction = Some(reason)
+              continue
+            }
+            Inconclusive(_) => {
+              // An unknown completion claim is never silently promoted
+              // to success or blindly retried until the budget is gone.
+              self.status = Paused
+              self.last_stall_reason = Some("completion requires verified evidence")
+              break
+            }
+          }
         } else if self.verifier_rounds >= self.options.max_verifier_rounds {
           self.status = Blocked("verification budget exhausted")
           break
@@ -711,6 +779,27 @@ pub async fn GoalRunner::execute(
         if self.verifying {
           self.verifying = false
         }
+    }
+
+    // The optional decision provider is invoked only when the model claims
+    // completion, never on every working turn. It informs the next review;
+    // it never overwrites the independent verifier's result.
+    if self.completion_claimed && self.semantic_probability is None {
+      match self.adviser {
+        Some(adviser) => {
+          let request : GoalVerificationRequest = {
+            goal: self.options.goal_condition,
+            criteria: self.options.completion_checklist.copy(),
+            session_id: match self.active_session_id {
+              Some(v) => v
+              None => session_id
+            },
+            claim: text_of_message(turn_result.message),
+          }
+          self.semantic_probability = adviser.assess(request)
+        }
+        None => ()
+      }
     }
 
     // Stall detection: only on work turns that did not end the run.
