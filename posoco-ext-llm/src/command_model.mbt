@@ -469,7 +469,7 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
               err =>
                 return @posoco.CommandOutcome::Failure(reason=err.to_string())
             }
-            self.publish_model_status()
+            // select_effort already republishes model status and selection.
             self.publish_provider_event()
             // Immediate probe: the switch may land on a different provider.
             self.refresh_quota_now()
