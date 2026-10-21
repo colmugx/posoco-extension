@@ -161,11 +161,9 @@ pub struct GoalRunner {
   mut semantic_probability : Double?
   mut executing_loop : Bool
   mut executing_turn : Bool
-} derive(Debug)
+}
 
 ///|
-pub extend GoalRunner with @moonbitlang/core/debug.Debug::{to_repr}
-
 ///|
 /// Default options for a goal condition: 20 turns (0 explicitly opts into unlimited), standard
 /// `<goal-complete/>` / `<goal-blocked/>` markers, wrap-up at 90% of the
@@ -260,7 +258,7 @@ pub fn GoalRunner::set_decision_adviser(
   self : GoalRunner,
   decision : &@posoco.DecisionPort,
 ) -> Unit {
-  self.adviser = Some(DecisionGoalAdviser(decision~))
+  self.adviser = Some(DecisionGoalAdviser(decision))
 }
 
 ///|
