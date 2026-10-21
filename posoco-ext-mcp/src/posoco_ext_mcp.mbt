@@ -319,26 +319,22 @@ async fn MCPToolBridge::fetch_tools(
   record_challenges~ : Bool = true,
 ) -> Result[Array[@posoco.ToolDef], ListToolsFailure] {
   let attempt = async fn() {
-    match client.list_tools() {
-      Ok(result) => Ok(result.tools.map(fn(t) { convert_tool_def(t, server) }))
-      Err(e) => {
+    try client.list_tools() catch {
+      @types.MCPError::_ as e => {
         if record_challenges {
           self.record_auth_challenge(server, e.message())
         }
         Err(ListToolsFailure::Failed)
       }
+      error => raise error
+    } noraise {
+      result => Ok(result.tools.map(fn(t) { convert_tool_def(t, server) }))
     }
   }
   if timeout_ms > 0 {
     @async.with_timeout(timeout_ms, attempt) catch {
-      error => {
-        if @async.is_being_cancelled() {
-          raise error
-        }
-        // Only the with_timeout sentinel arrives here: list_tools maps every
-        // transport raise into its Result.
-        Err(ListToolsFailure::TimedOut(timeout_ms))
-      }
+      @async.TimeoutError => Err(ListToolsFailure::TimedOut(timeout_ms))
+      error => raise error
     }
   } else {
     attempt()
@@ -360,24 +356,22 @@ async fn call_tool_attempt(
   args_str : String,
 ) -> Result[@client.CallToolResult, MCPCallFailure] {
   let attempt = async fn() {
-    match client.call_tool(tool_name, arguments=args_str) {
-      Ok(result) => Ok(result)
-      Err(e) =>
+    try client.call_tool(tool_name, arguments=args_str) catch {
+      @types.MCPError::_ as e =>
         if is_connection_level_error(e) {
           Err(MCPCallFailure::TransportFailure)
         } else {
           Err(MCPCallFailure::RemoteFailure)
         }
+      error => raise error
+    } noraise {
+      result => Ok(result)
     }
   }
   if timeout_ms > 0 {
     @async.with_timeout(timeout_ms, attempt) catch {
-      error => {
-        if @async.is_being_cancelled() {
-          raise error
-        }
-        Err(MCPCallFailure::TimedOut(timeout_ms))
-      }
+      @async.TimeoutError => Err(MCPCallFailure::TimedOut(timeout_ms))
+      error => raise error
     }
   } else {
     attempt()
@@ -852,7 +846,7 @@ async fn MCPToolBridge::open_client(
   match config.transport {
     @transport.AnyTransport::StdioClient(t) => {
       let (cmd, args, extra_env) = stdio_cmd(t)
-      match
+      try
         @client.MCPClient::connect_stdio(
           cmd~,
           args~,
@@ -861,14 +855,17 @@ async fn MCPToolBridge::open_client(
           extra_env~,
           group~,
           era=config.era,
-        ) {
-        Ok(client) => Ok(client)
-        Err(e) => {
+        )
+      catch {
+        @types.MCPError::_ as e => {
           self.record_auth_challenge(config.name, e.message())
           Err(
             "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=handshake, error=\{e.message()})",
           )
         }
+        error => raise error
+      } noraise {
+        client => Ok(client)
       }
     }
     @transport.AnyTransport::HttpClient(t) => {
@@ -879,7 +876,7 @@ async fn MCPToolBridge::open_client(
         static_token,
       )
       let handshake = async fn() {
-        match
+        try
           @client.MCPClient::connect_http(
             url~,
             name=config.name,
@@ -887,26 +884,26 @@ async fn MCPToolBridge::open_client(
             auth_token~,
             extra_headers~,
             era=config.era,
-          ) {
-          Ok(client) => Ok(client)
-          Err(e) => {
+          )
+        catch {
+          @types.MCPError::_ as e => {
             self.record_auth_challenge(config.name, e.message())
             Err(
               "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=handshake, error=\{e.message()})",
             )
           }
+          error => raise error
+        } noraise {
+          client => Ok(client)
         }
       }
       if config.timeout_ms > 0 {
         @async.with_timeout(config.timeout_ms, handshake) catch {
-          error => {
-            if @async.is_being_cancelled() {
-              raise error
-            }
+          @async.TimeoutError =>
             Err(
               "MCP connect failed for '\{@devkit.sanitize_label(config.name)}' (stage=timeout, timeout_ms=\{config.timeout_ms})",
             )
-          }
+          error => raise error
         }
       } else {
         handshake()
@@ -1566,8 +1563,8 @@ pub impl @posoco.ToolProvider for MCPToolBridge with fn execute(
   let args_str = ctx.arguments.stringify()
   let attempted = self.invoke_mcp_tool(conn_idx, original_name, args_str) catch {
     _ =>
-      // invoke_mcp_tool raises only while the task is being cancelled (its
-      // timeout wrapper re-raises cancellation untouched, and no
+      // invoke_mcp_tool raises only a propagated cancellation or a non-MCP
+      // SDK raise (its timeout wrapper re-raises both untouched, and no
       // reconnect/retry runs on that path). This trait slot only allows
       // RuntimeError, so the raw cancellation error cannot pass through
       // unchanged: raise a dedicated marker instead of re-labeling it as a

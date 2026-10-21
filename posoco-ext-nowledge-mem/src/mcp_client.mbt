@@ -128,14 +128,12 @@ async fn LazyNmemMcp::ensure_connected(
         )
     }
   }
-  let connected = connect() catch {
-    err =>
-      return Err("nowledge-mem mcp connect raised (\{url}): " + err.to_string())
-  }
-  let connected = match connected {
-    Ok(client) => client
-    Err(err) =>
+  let connected = try connect() catch {
+    @types.MCPError::_ as err =>
       return Err("nowledge-mem mcp connect failed (\{url}): " + err.message())
+    error => raise error
+  } noraise {
+    client => client
   }
   // Concurrent first calls may both pass the None check; the loser closes so
   // exactly one client survives.
@@ -202,29 +200,16 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
   timeout_ms~ : Int32,
 ) -> Result[McpCallOutcome, NmemCallError] {
   @async.with_timeout(timeout_ms, () => {
-    let connected = self.ensure_connected() catch {
-      err =>
-        return Err(
-          NotSent(message="nowledge-mem mcp raised: " + err.to_string()),
-        )
-    }
+    let connected = self.ensure_connected()
     let client = match connected {
       Ok(client) => client
       Err(message) => return Err(NotSent(message~))
     }
-    let result = client.call_tool(tool, arguments=args.stringify()) catch {
-      err => {
-        self.drop_connection()
-        return Err(
-          MaybePersisted(
-            message="mcp call '\{tool}' raised: " + err.to_string(),
-          ),
-        )
-      }
-    }
-    let result = match result {
-      Ok(result) => result
-      Err(err) => {
+    let result = try client.call_tool(tool, arguments=args.stringify()) catch {
+      @types.MCPError::_ as err => {
+        // A server JSON-RPC error is a genuine answer and keeps the
+        // connection; a wire-level break drops it so the next call
+        // reconnects.
         if is_connection_level_error(err) {
           self.drop_connection()
         }
@@ -232,6 +217,9 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
           MaybePersisted(message="mcp call '\{tool}' failed: " + err.message()),
         )
       }
+      error => raise error
+    } noraise {
+      result => result
     }
     Ok({
       is_error: result.is_error.unwrap_or(false),
@@ -246,16 +234,7 @@ pub impl NmemMcp for LazyNmemMcp with fn call_tool(
         ),
       )
     }
-    err => {
-      if @async.is_being_cancelled() {
-        raise err
-      }
-      Err(
-        MaybePersisted(
-          message="nowledge-mem mcp call raised: " + err.to_string(),
-        ),
-      )
-    }
+    error => raise error
   }
 }
 
@@ -265,27 +244,21 @@ pub impl NmemMcp for LazyNmemMcp with fn probe(
   timeout_ms~ : Int32,
 ) -> Result[String, String] {
   @async.with_timeout(timeout_ms, () => {
-    let connected = self.ensure_connected() catch {
-      err => return Err("nowledge-mem mcp raised: " + err.to_string())
-    }
+    let connected = self.ensure_connected()
     let client = match connected {
       Ok(client) => client
       Err(message) => return Err(message)
     }
-    let listed = client.list_tools() catch {
-      err => {
-        self.drop_connection()
-        return Err("nowledge-mem mcp list_tools raised: " + err.to_string())
-      }
-    }
-    let listed = match listed {
-      Ok(listed) => listed
-      Err(err) => {
+    let listed = try client.list_tools() catch {
+      @types.MCPError::_ as err => {
         if is_connection_level_error(err) {
           self.drop_connection()
         }
         return Err("nowledge-mem mcp list_tools failed: " + err.message())
       }
+      error => raise error
+    } noraise {
+      listed => listed
     }
     let identity = match client.server_info {
       Some(info) => "\{info.name} \{info.version}"
@@ -297,12 +270,7 @@ pub impl NmemMcp for LazyNmemMcp with fn probe(
       self.drop_connection()
       Err("nowledge-mem mcp probe timed out (timeout_ms=\{timeout_ms})")
     }
-    err => {
-      if @async.is_being_cancelled() {
-        raise err
-      }
-      Err("nowledge-mem mcp probe raised: " + err.to_string())
-    }
+    error => raise error
   }
 }
 
