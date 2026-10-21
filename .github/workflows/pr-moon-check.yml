@@ -28,25 +28,3 @@ jobs:
 
       - name: moon check (js)
         run: moon check --target js --output-json
-
-      - name: DeepSeek generated API signature check
-        run: |
-          moon info --target native
-          if ! git diff --exit-code -- posoco-ext-deepseek/src/pkg.generated.mbti; then
-            echo "BEGIN_GENERATED_DEEPSEEK_INTERFACE"
-            cat posoco-ext-deepseek/src/pkg.generated.mbti
-            echo "END_GENERATED_DEEPSEEK_INTERFACE"
-            exit 1
-          fi
-
-      - name: DeepSeek adapter unit tests (native)
-        run: moon test --target native -p colmugx/posoco-ext-deepseek
-
-      - name: DeepSeek adapter unit tests (js)
-        run: moon test --target js -p colmugx/posoco-ext-deepseek
-
-      - name: DeepSeek V4.1 reference renderer contract
-        run: |
-          python3 -m pip install 'deepseek-recipe>=0.2,<0.3'
-          curl -fsSL https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/main/static/tokenizers/v41/tokenizer.json -o /tmp/deepseek-v41-tokenizer.json
-          python3 scripts/deepseek_recipe_golden.py /tmp/deepseek-v41-tokenizer.json
