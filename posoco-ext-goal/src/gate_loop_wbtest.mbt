@@ -1,13 +1,20 @@
 ///|
 /// Trusted test-only verifier: fixture references stand in for externally
 /// checked acceptance records. Production must supply its own verifier.
-struct TestGoalVerifier {}
+struct TestGoalVerifier {
+  mut calls : Int32
+  reject_first : Bool
+}
 
 ///|
 pub impl GoalVerifier for TestGoalVerifier with fn verify(
-  _self : TestGoalVerifier,
+  self : TestGoalVerifier,
   request : GoalVerificationRequest,
 ) -> GoalAssessment {
+  self.calls += 1
+  if self.reject_first && self.calls == 1 {
+    return Rejected("the acceptance check failed")
+  }
   let names = if request.criteria.is_empty() {
     ["goal"]
   } else {
@@ -25,9 +32,13 @@ fn gate_build_agent(
   model : @posoco.ScriptedModel,
   store : @posoco.RecordingSessionStore,
   verified~ : Bool = true,
+  reject_first_verification~ : Bool = false,
 ) -> @posoco.Agent {
   if verified {
-    goal.set_verifier(TestGoalVerifier::{})
+    goal.set_verifier(TestGoalVerifier::{
+      calls: 0,
+      reject_first: reject_first_verification,
+    })
   }
   @posoco.Agent(
     exts=[
@@ -105,9 +116,6 @@ async test "gate_confirm_completes" {
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("done\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let goal = goal_extension(goal_condition="make the build green")
@@ -117,9 +125,9 @@ async test "gate_confirm_completes" {
     Completed => ()
     other => fail("expected Completed, got \{other}")
   }
-  assert_eq(result.turns_completed, 3)
-  assert_eq(result.history.length(), 3)
-  assert_eq(model.call_count(), 3)
+  assert_eq(result.turns_completed, 2)
+  assert_eq(result.history.length(), 2)
+  assert_eq(model.call_count(), 2)
 }
 
 ///|
@@ -132,28 +140,22 @@ async test "gate_retract_then_confirm" {
       @posoco.tk_stop_response("claim\n<goal-complete/>"),
     ),
     @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("item 1 failed\n<goal-blocked/>"),
-    ),
-    @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("fixed\n<goal-complete/>"),
-    ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
     ),
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let goal = goal_extension(goal_condition="make the build green")
-  let agent = gate_build_agent(goal, model, store)
+  let agent = gate_build_agent(goal, model, store, reject_first_verification=true)
   let result = goal.execute(agent, "session_gate_retract")
   match result.final_status {
     Completed => ()
     other => fail("expected Completed, got \{other}")
   }
-  assert_eq(result.turns_completed, 5)
-  assert_eq(result.history.length(), 5)
+  assert_eq(result.turns_completed, 3)
+  assert_eq(result.history.length(), 3)
   // One model call per turn here; index 3 is the turn after the rejection.
-  assert_eq(model.received_messages.length(), 5)
-  assert_true(gate_model_input_text(model, 3).contains("failed verification"))
+  assert_eq(model.received_messages.length(), 3)
+  assert_true(gate_model_input_text(model, 2).contains("failed verification"))
 }
 
 ///|
@@ -172,8 +174,8 @@ async test "verifier_budget_exhausted" {
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "session_gate_no_verifier")
   match result.final_status {
-    Blocked(reason) => assert_eq(reason, "verification budget exhausted")
-    other => fail("expected Blocked, got \{other}")
+    Paused => ()
+    other => fail("expected Paused, got \{other}")
   }
   assert_eq(result.turns_completed, 1)
 }
@@ -189,9 +191,6 @@ async test "verifier_turns_count_against_budget" {
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("claim\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let agent = gate_build_agent(goal, model, store)
@@ -200,8 +199,8 @@ async test "verifier_turns_count_against_budget" {
     Completed => ()
     other => fail("expected Completed, got \{other}")
   }
-  assert_eq(result.turns_completed, 2)
-  assert_eq(model.call_count(), 2)
+  assert_eq(result.turns_completed, 1)
+  assert_eq(model.call_count(), 1)
 }
 
 ///|
@@ -221,9 +220,6 @@ async test "wrapup_updates_plan_and_claims" {
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("updated\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let agent = gate_build_agent(goal, model, store)
@@ -236,8 +232,8 @@ async test "wrapup_updates_plan_and_claims" {
   assert_eq(result.final_plan.items[0].status, InProgress)
   assert_eq(result.final_plan.items[0].title, "fix parser")
   assert_true(goal.wrapup_sent)
-  assert_eq(result.turns_completed, 3)
-  assert_eq(model.call_count(), 4) // work + (plan tool + finish) + verifier
+  assert_eq(result.turns_completed, 2)
+  assert_eq(model.call_count(), 3) // work + (plan tool + finish) + verifier
 }
 
 ///|
@@ -338,9 +334,6 @@ async test "goal resume preserves charter, history and turn budget" {
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("done\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let goal = goal_extension(goal_condition="test resume")
@@ -359,9 +352,9 @@ async test "goal resume preserves charter, history and turn budget" {
   goal.resume_goal()
   let second = goal.execute(agent, "resume_session")
   assert_true(second.final_status == Completed)
-  assert_eq(second.turns_completed, 3)
-  assert_eq(second.history.length(), 3)
-  assert_eq(model.call_count(), 3)
+  assert_eq(second.turns_completed, 2)
+  assert_eq(second.history.length(), 2)
+  assert_eq(model.call_count(), 2)
   assert_true(!gate_model_input_text(model, 1).contains("<goal-context>"))
 }
 
@@ -441,17 +434,14 @@ async test "goal checkpoint round trip resumes on a new runner" {
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("done\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
   ])
   let next_agent = gate_build_agent(next_goal, next_model, store)
   next_goal.resume_goal()
   let result = next_goal.execute(next_agent, "durable_session")
   assert_true(result.final_status == Completed)
-  assert_eq(result.turns_completed, 3)
-  assert_eq(result.history.length(), 3)
-  assert_eq(next_model.call_count(), 2)
+  assert_eq(result.turns_completed, 2)
+  assert_eq(result.history.length(), 2)
+  assert_eq(next_model.call_count(), 1)
   let restored_messages = next_model.received_messages[0]
   let latest_prompt = text_of_message(
     restored_messages[restored_messages.length() - 1],
