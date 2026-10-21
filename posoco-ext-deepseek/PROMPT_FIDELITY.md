@@ -79,3 +79,54 @@ depends on server-side constrained decoding, not merely prompt text.
 - Compare real API runs at the same model, efforts, tools and prompts, using
   cache-hit tokens, prompt tokens, TTFT, cost, and tool-call correctness.
 - No live-API success or performance gain is claimed without measured data.
+
+## Implementation and operator controls
+
+The extension now supports `prompt_profile` in generic ProviderFactory settings
+and `DeepSeekConfig(prompt_profile=...)` in direct MoonBit construction:
+
+| Profile | Effect |
+| --- | --- |
+| `unknown` (default) | No model alias inference; original effort strings are sent unchanged |
+| `v4` | Explicitly rejects `image_input=true`, consistent with the recipe renderer |
+| `v4.1` | Canonicalizes V4.1 effort equivalents for a more stable rendered prefix, enables opt-in structured JSON Schema completion |
+
+V4.1 effort canonicalization: `minimal/low -> low`,
+`medium/high/xhigh -> high`, and `max/ultra -> max`.
+This is based on the reference recipe, **not a claim** that any particular
+hosted API or custom model alias has exactly the same mapping.
+
+Tool definitions are sorted by name (then description/schema for ties) in
+the **outgoing request only**; the host's registration and dispatch order
+does not change. This is intentional: identical sets of tools with different
+host enumeration order produce the same rendered tool preamble. For systems
+that deliberately rely on provider tool presentation order, compare behavior
+before opting into this version of the adapter.
+
+The explicit `DeepSeekModelPort::json_schema_completion(messages, name, schema)`
+method builds a Chat Completions `response_format` with
+`type=json_schema` and `strict=true`. It requires `prompt_profile=v4.1`,
+rejects tool responses, and parses JSON output as an object. The code does
+not locally validate the output against the whole JSON Schema: this must be
+enforced by the remote backend. Unsupported formats cause visible errors.
+
+The opt-in `image_input=true` remains per configured model, never inherited
+by discovered sibling models. The V4 profile rejects images with a typed
+provider configuration error. The V4.1 profile does **not** guarantee a
+particular hosted API supports image input; the operator must verify that
+independently. The library does not reproduce OpenCV image preprocessing
+or expand image tokens client-side.
+
+## Reproducible verification
+
+PR CI runs MoonBit native and JS checks and DeepSeek adapter tests. It also
+runs `scripts/deepseek_recipe_golden.py` with the official
+`deepseek-recipe` Python package and the matching upstream V4.1 tokenizer
+to verify renderer-specific tool/effort/reasoning differences and the
+tokenization overhead. This script is independent of API keys and does not
+claim to measure real hosted prompt-cache hits.
+
+For hosted API rollout, record `prompt_cache_hit_tokens` and
+`prompt_cache_miss_tokens` across identical tool sets with varied host tool
+order, before/after compaction, and varied effort strings. Reject regressions
+in answer quality and tool-selection behavior, not only token counts.
