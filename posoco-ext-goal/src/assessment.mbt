@@ -113,7 +113,7 @@ pub async fn DecisionGoalAdviser::assess(
       input,
       context=@posoco.DecisionCallContext::make(
         purpose="goal_semantic_advice",
-        scope=Some({ session: request.session_id, }),
+        scope={ session: request.session_id, },
         failure_mode=@posoco.DecisionFailureMode::Fallback,
       ),
     ),
