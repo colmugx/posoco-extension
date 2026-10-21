@@ -452,9 +452,11 @@ async test "goal checkpoint round trip resumes on a new runner" {
   assert_eq(result.turns_completed, 3)
   assert_eq(result.history.length(), 3)
   assert_eq(next_model.call_count(), 2)
-  assert_false(gate_model_input_text(next_model, 0).contains(
-    "<goal-context type=\"charter\"",
-  ))
+  let restored_messages = next_model.received_messages[0]
+  let latest_prompt = text_of_message(
+    restored_messages[restored_messages.length() - 1],
+  )
+  assert_false(latest_prompt.contains("<goal-context type=\"charter\""))
 }
 
 ///|
