@@ -93,6 +93,12 @@ pub fn GoalRunner::checkpoint(self : GoalRunner) -> Result[Json, String] {
       Map::from_array([
         ("version", Json::number(1.0)),
         ("goal", Json::string(self.options.goal_condition)),
+        ("criteria", Json::array(self.options.completion_checklist.map(fn(item) {
+          Json::string(item)
+        }))),
+        ("completion_marker", Json::string(self.options.completion_marker)),
+        ("blocked_marker", Json::string(self.options.blocked_marker)),
+        ("plan_tool_name", Json::string(self.options.plan_tool_name)),
         ("session", Json::string(session)),
         ("turn", Json::number(self.current_turn.to_double())),
         ("reported_turns", Json::number(self.usage.turns.to_double())),
@@ -145,6 +151,41 @@ pub fn GoalRunner::restore_checkpoint(
   }
   if goal != self.options.goal_condition {
     return Err("checkpoint goal contract mismatch")
+  }
+  // A goal text match is insufficient: the user-owned acceptance criteria
+  // and protocol cannot silently change across a resumed checkpoint.
+  let saved_criteria = match fields.get("criteria") {
+    Some(Json::Array(items)) => items
+    _ => return Err("checkpoint criteria are missing"),
+  }
+  if saved_criteria.length() != self.options.completion_checklist.length() {
+    return Err("checkpoint acceptance contract mismatch")
+  }
+  for i, item in saved_criteria {
+    match item {
+      Json::String(value) =>
+        if value != self.options.completion_checklist[i] {
+          return Err("checkpoint acceptance contract mismatch")
+        }
+      _ => return Err("checkpoint criterion is malformed")
+    }
+  }
+  let completion = match cp_string(fields, "completion_marker") {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
+  let blocked = match cp_string(fields, "blocked_marker") {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
+  let tool_name = match cp_string(fields, "plan_tool_name") {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
+  if completion != self.options.completion_marker ||
+    blocked != self.options.blocked_marker ||
+    tool_name != self.options.plan_tool_name {
+    return Err("checkpoint protocol contract mismatch")
   }
   let session = match cp_string(fields, "session") {
     Ok(v) if v != "" => v
