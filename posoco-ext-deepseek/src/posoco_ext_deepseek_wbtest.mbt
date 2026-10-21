@@ -2293,3 +2293,34 @@ test "compaction summary body keeps identical tool and message prefix" {
     assert_true(cm[i] == rm[i])
   }
 }
+
+///|
+test "tool schema serialization is deterministic and preserves caller order" {
+  let read : @posoco.ToolDef = {
+    name: @posoco.ToolName::unchecked("read_file"),
+    description: "Read a file",
+    input_schema: Json::empty_object(),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+    policy: @posoco.ExecutionPolicy::Sequential,
+    provenance: Some("posoco_ext_deepseek"),
+  }
+  let write : @posoco.ToolDef = {
+    name: @posoco.ToolName::unchecked("write_file"),
+    description: "Write a file",
+    input_schema: Json::empty_object(),
+    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+    policy: @posoco.ExecutionPolicy::Sequential,
+    provenance: Some("posoco_ext_deepseek"),
+  }
+  let first = encode_tools([read, write])
+  let replay = encode_tools([read, write])
+  let reversed = encode_tools([write, read])
+  assert_true(first == replay)
+  assert_false(first == reversed)
+  guard first is Array(defs) else { fail("expected tool definitions") }
+  guard defs[0] is Object(first_tool) else { fail("expected tool") }
+  guard first_tool.get("function") is Some(Object(fun)) else {
+    fail("expected function")
+  }
+  assert_json_field_string(fun, "name", "read_file")
+}
