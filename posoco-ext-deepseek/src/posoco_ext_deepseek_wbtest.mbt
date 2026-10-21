@@ -2405,3 +2405,22 @@ test "V4.1 structured JSON schema does not silently activate on unknown aliases"
   ) catch { _ => Json::null() }
   assert_true(result == Json::null())
 }
+
+///|
+test "ProviderFactory rejects V4 profile with image input as typed error" {
+  let provider = DeepSeekProvider()
+  let factory : &@provider.ProviderFactory = provider
+  let source = @provider.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(Json::object(Map::from_array([
+      ("api_key", Json::string("sk-test")),
+      ("prompt_profile", Json::string("v4")),
+      ("image_input", Json::boolean(true)),
+    ]))),
+  )
+  let result = Ok(factory.build(source)) catch { err => Err(err) }
+  match result {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("image_input is unsupported"))
+    _ => fail("V4 image opt-in must fail at provider composition")
+  }
+}
