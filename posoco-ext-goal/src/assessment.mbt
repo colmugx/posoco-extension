@@ -141,3 +141,70 @@ pub async fn DecisionGoalAdviser::assess(
     }
   }
 }
+
+///|
+/// Advisory estimate that another bounded work turn is likely to make
+/// progress after a deterministic stall signal. It does not authorize
+/// bypassing budgets or change the goal's acceptance criteria.
+pub async fn DecisionGoalAdviser::assess_progress(
+  self : DecisionGoalAdviser,
+  goal : String,
+  session_id : String,
+  stall_reason : String,
+  last_response : String,
+) -> Double? {
+  let question = @posoco.DecisionQuestion::Boolean(
+    id="goal_continue_has_value",
+    instructions=Json::string(
+      "Given the goal, last assistant response, and deterministic stall " +
+      "signal, estimate the probability that exactly one more bounded " +
+      "working turn will make concrete progress toward the goal. " +
+      "Do not claim the goal is complete; no new permissions are granted.",
+    ),
+    true_criteria=Some(Json::string("One more turn is likely to produce progress")),
+    false_criteria=Some(Json::string("One more turn is unlikely to produce progress")),
+  )
+  let state = Json::object(
+    Map::from_array([
+      ("goal", Json::string(goal)),
+      ("session_id", Json::string(session_id)),
+      ("stall_reason", Json::string(stall_reason)),
+      ("last_response", Json::string(last_response)),
+    ]),
+  )
+  let input : @posoco.DecisionRequest = {
+    state,
+    questions: [question],
+  }
+  let output : Result[@posoco.DecisionResult, String] = Ok(
+    self.decision.evaluate_with_context(
+      input,
+      context=@posoco.DecisionCallContext::make(
+        purpose="goal_stall_deferral",
+        scope={ session: session_id, },
+        failure_mode=@posoco.DecisionFailureMode::Fallback,
+      ),
+    ),
+  ) catch {
+    e => Err(e.to_string())
+  }
+  match output {
+    Err(_) => None
+    Ok(response) => {
+      let valid : Result[Unit, String] = Ok(
+        response.validate_for(input),
+      ) catch {
+        e => Err(e.to_string())
+      }
+      match valid {
+        Err(_) => None
+        Ok(_) =>
+          match response.answers {
+            [@posoco.DecisionAnswer::BooleanAnswer(probability_true~, ..)] =>
+              Some(probability_true)
+            _ => None
+          }
+      }
+    }
+  }
+}
