@@ -1,8 +1,6 @@
 ///|
 /// A policy that denies all leaf calls, even after another hook approved.
-struct PtcDenyPolicy {
-  tag : Int32
-}
+struct PtcDenyPolicy {}
 
 ///|
 pub impl @posoco.PipelineHook for PtcDenyPolicy with fn before_tool(
@@ -27,10 +25,11 @@ async test "PTC final veto blocks approved native write execution" {
       @kernel.Success(content="edited", structured=None),
     ),
   })
-  let final_policy = PtcDenyPolicy::{ tag: 0, }
-  let guarded = PtcGuardedProvider(inner=actual as &@posoco.ToolProvider, guards=[
-    final_policy as &@posoco.PipelineHook,
-  ])
+  let final_policy = PtcDenyPolicy::{ }
+  let guarded = @posoco-ext-ptc.PtcGuardedProvider(
+    inner=actual as &@posoco.ToolProvider,
+    guards=[final_policy as &@posoco.PipelineHook],
+  )
   let dispatcher = @posoco.ScopedToolDispatch([guarded as &@posoco.ToolProvider])
   let result = dispatcher.call("edit", { "path": "test.mbt" })
   assert_true(result is @kernel.ToolReportedError(..))

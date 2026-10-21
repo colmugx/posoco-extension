@@ -1147,37 +1147,34 @@ async fn main {
   report.val.push("")
   report.val.push("## Session and routing")
   let route_a = ctx.get(path="/v1/magpie/route?session=posoco-live-probe", key~) catch {
-    error => (-1, None)
+    _ => (-1, None)
   }
   let route_b = ctx.get(path="/v1/magpie/route?session=posoco-live-other", key~) catch {
-    error => (-1, None)
+    _ => (-1, None)
   }
-  match (route_a, route_b) {
-    ((code_a, body_a), (code_b, body_b)) => {
-      let echo_ok = match body_b {
-        Some(Json::Object(fields)) =>
-          fields.get("session") is Some(Json::String("posoco-live-other"))
-        _ => false
-      }
-      let seq_a = match body_a {
-        Some(Json::Object(fields)) =>
-          match fields.get("seq") {
-            Some(Json::Number(n, ..)) => n.to_int()
-            _ => -1
-          }
+  let (code_a, body_a) = route_a
+  let (code_b, body_b) = route_b
+  let echo_ok = match body_b {
+    Some(Json::Object(fields)) =>
+      fields.get("session") is Some(Json::String("posoco-live-other"))
+    _ => false
+  }
+  let seq_a = match body_a {
+    Some(Json::Object(fields)) =>
+      match fields.get("seq") {
+        Some(Json::Number(n, ..)) => n.to_int()
         _ => -1
       }
-      if code_a == 200 && code_b == 200 && echo_ok {
-        ctx.pass(
-          "session isolation: distinct sessions tracked independently (seq A=\{seq_a})",
-        )
-      } else {
-        ctx.fail(
-          "session isolation: route answered \{code_a}/\{code_b}, echo=\{echo_ok}",
-        )
-      }
-    }
-    _ => ctx.fail("session isolation: route endpoint errored")
+    _ => -1
+  }
+  if code_a == 200 && code_b == 200 && echo_ok {
+    ctx.pass(
+      "session isolation: distinct sessions tracked independently (seq A=\{seq_a})",
+    )
+  } else {
+    ctx.fail(
+      "session isolation: route answered \{code_a}/\{code_b}, echo=\{echo_ok}",
+    )
   }
 
   // ---- Usage reconciliation (read-only) --------------------------------

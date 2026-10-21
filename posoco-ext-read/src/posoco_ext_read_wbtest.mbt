@@ -166,10 +166,8 @@ fn read_call_args(
 async fn run_read(
   tools : ReadTools,
   call : @posoco.ToolCall,
-) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute(test_ctx(call))) catch {
-    error => Err(error)
-  }
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  tools.execute(test_ctx(call))
 }
 
 ///|
@@ -195,7 +193,7 @@ async test "read_pages_with_line_numbers_and_footer" {
       read_call_args(path, limit=3),
     )
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+      @posoco.ToolOutcome::Success(content~, structured~) => {
         inspect(
           content,
           content="1|line-1\n2|line-2\n3|line-3\n… +7 lines; next=4",
@@ -221,7 +219,7 @@ async test "read_offset_starts_at_requested_line" {
       read_call_args(path, offset=4, limit=2),
     )
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         inspect(content, content="4|line-4\n5|line-5\n… +5 lines; next=6")
       _ => fail("expected offset read to succeed")
     }
@@ -242,7 +240,7 @@ async test "read_negative_offset_returns_tail_without_footer" {
       read_call_args(path, offset=-3),
     )
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         inspect(content, content="8|line-8\n9|line-9\n10|line-10")
       _ => fail("expected tail read to succeed")
     }
@@ -263,7 +261,7 @@ async test "read_offset_past_end_names_total_lines" {
       read_call_args(path, offset=99),
     )
     match outcome {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
         assert_true(content.contains("past the end"))
         assert_true(content.contains("10 lines"))
       }
@@ -284,7 +282,7 @@ async test "read_empty_file_is_a_notice" {
     @fs.write_file(path, "", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         inspect(content, content="(empty)")
       _ => fail("expected empty read to succeed with a notice")
     }
@@ -303,7 +301,7 @@ async test "read_truncates_long_lines_with_marker" {
     @fs.write_file(path, "a".repeat(3000) + "\n", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
+      @posoco.ToolOutcome::Success(content~, ..) => {
         assert_true(content.contains("…[cut]"))
         assert_true(content.has_prefix("1|"))
         assert_false(content.contains("a".repeat(2500)))
@@ -326,7 +324,7 @@ async test "read_byte_cap_cuts_implicit_page_with_footer" {
     @fs.write_file(path, content, create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+      @posoco.ToolOutcome::Success(content~, structured~) => {
         assert_true(content.has_prefix("1|"))
         assert_true(content.contains("lines; next="))
         assert_false(content.contains("60|"))
@@ -357,7 +355,7 @@ async test "read_explicit_range_over_byte_cap_returns_partial_page" {
       read_call_args(path, limit=60),
     )
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+      @posoco.ToolOutcome::Success(content~, structured~) => {
         assert_true(content.has_prefix("1|"))
         assert_true(content.contains("lines; next="))
         match structured {
@@ -379,12 +377,22 @@ async test "read_rejects_zero_offset_and_nonpositive_limit" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = write_ten_lines(dir)
-    match run_read(ReadTools::ReadTools(), read_call_args(path, offset=0)) {
+    let zero_offset = Ok(
+      run_read(ReadTools::ReadTools(), read_call_args(path, offset=0)),
+    ) catch {
+      error => Err(error)
+    }
+    match zero_offset {
       Err(@posoco.RuntimeError::UnknownTool(message)) =>
         assert_true(message.contains("'offset' must be nonzero"))
       _ => fail("expected zero offset to be rejected")
     }
-    match run_read(ReadTools::ReadTools(), read_call_args(path, limit=0)) {
+    let zero_limit = Ok(
+      run_read(ReadTools::ReadTools(), read_call_args(path, limit=0)),
+    ) catch {
+      error => Err(error)
+    }
+    match zero_limit {
       Err(@posoco.RuntimeError::UnknownTool(message)) =>
         assert_true(message.contains("'limit' must be > 0"))
       _ => fail("expected zero limit to be rejected")
@@ -404,7 +412,7 @@ async test "read_normalizes_crlf" {
     @fs.write_file(path, "alpha\r\nbeta\r\n", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         inspect(content, content="1|alpha\n2|beta")
       _ => fail("expected crlf read to succeed")
     }
@@ -424,7 +432,7 @@ async test "read_records_freshness_stamp_and_detects_change" {
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     let tools = ReadTools::ReadTools(freshness=ledger)
     match run_read(tools, read_call_args(path)) {
-      Ok(@posoco.ToolOutcome::Success(..)) => ()
+      @posoco.ToolOutcome::Success(..) => ()
       _ => fail("expected guarded read to succeed")
     }
     // Stamp unchanged since the read: fresh.
@@ -456,7 +464,7 @@ async test "read_anchored_relative_path_resolves_and_keys_canonically" {
     for rel in ["ten.txt", "./ten.txt"] {
       let outcome = run_read(tools, read_call_args(rel))
       match outcome {
-        Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+        @posoco.ToolOutcome::Success(content~, structured~) => {
           assert_true(content.contains("line-1"))
           // …and echo the argument, not the resolved absolute path.
           match structured {
@@ -626,7 +634,7 @@ async test "read_delegated_fs_serves_buffer_and_records_reads" {
     )
     let tools = ReadTools::ReadTools(fs=Some(fake as &@workspace.WorkspaceFs))
     match run_read(tools, read_call_args(path, limit=3)) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         inspect(
           content,
           content="1|buf-1\n2|buf-2\n3|buf-3\n… +7 lines; next=4",
@@ -634,7 +642,7 @@ async test "read_delegated_fs_serves_buffer_and_records_reads" {
       _ => fail("expected delegated paged read to succeed")
     }
     match run_read(tools, read_call_args(path, offset=-2)) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         inspect(content, content="9|buf-9\n10|buf-10")
       _ => fail("expected delegated tail read to succeed")
     }
@@ -665,7 +673,7 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
       fs=Some(fake as &@workspace.WorkspaceFs),
     )
     match run_read(tools, read_call_args(path)) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         inspect(content, content="1|served")
       _ => fail("expected delegated read to succeed")
     }
@@ -677,7 +685,7 @@ async test "read_delegated_fs_keeps_local_freshness_and_missing_split" {
       fs=Some(absent as &@workspace.WorkspaceFs),
     )
     match run_read(absent_tools, read_call_args(path)) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
         assert_true(content.contains("not found"))
       _ => fail("expected missing delegated file to be a reported error")
     }
@@ -710,12 +718,10 @@ async test "read_attaches_image_files_whole_for_vision" {
     @fs.write_file(path, "png-bytes-here", create_mode=CreateNew)
     let outcome = run_read(ReadTools::ReadTools(), read_call_args(path))
     match outcome {
-      Ok(
-        @posoco.ToolOutcome::SuccessWithAttachments(
-          content~,
-          structured=Some(_),
-          attachments~
-        )
+      @posoco.ToolOutcome::SuccessWithAttachments(
+        content~,
+        structured=Some(_),
+        attachments~
       ) => {
         assert_true(content.contains("shot.png"))
         assert_eq(attachments.length(), 1)
@@ -727,9 +733,7 @@ async test "read_attaches_image_files_whole_for_vision" {
           _ => fail("expected an image/png attachment block")
         }
       }
-      Ok(other) =>
-        fail("expected SuccessWithAttachments, got \{other.summary()}")
-      Err(error) => fail("image read must not raise: \{error.to_string()}")
+      other => fail("expected SuccessWithAttachments, got \{other.summary()}")
     }
   }
 }

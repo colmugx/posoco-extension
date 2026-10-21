@@ -7,6 +7,9 @@ struct TestGoalVerifier {
 }
 
 ///|
+pub extend TestGoalVerifier with GoalVerifier::{verify}
+
+///|
 pub impl GoalVerifier for TestGoalVerifier with fn verify(
   self : TestGoalVerifier,
   request : GoalVerificationRequest,

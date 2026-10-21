@@ -51,7 +51,7 @@ async fn ZcodeConn::request(
   self : ZcodeConn,
   method_name : String,
   params : Json?,
-) -> Result[Json, ZcodeError] raise ZcodeError {
+) -> Json raise ZcodeError {
   self.next_id = self.next_id + 1
   let id = Json::number(self.next_id.to_double())
   let queue : @aqueue.Queue[Result[Json, ZcodeError]] = @aqueue.Queue(
@@ -68,7 +68,10 @@ async fn ZcodeConn::request(
       )
   }
   let _ = self.pending.remove(id.stringify())
-  reply
+  match reply {
+    Ok(json) => json
+    Err(error) => raise error
+  }
 }
 
 ///|
@@ -460,45 +463,40 @@ async fn zcode_delegated(
   let registry_params = Json::object(
     Map::from_array([("workspace", workspace), ("registry", registry)]),
   )
-  match
-    conn.request("workspace/updateProviderRegistry", Some(registry_params)) {
-    Ok(_) => ()
-    Err(ZcodeRpc(code~, message~)) =>
+  let _ = conn.request(
+    "workspace/updateProviderRegistry",
+    Some(registry_params),
+  ) catch {
+    ZcodeRpc(code~, message~) =>
       if message.contains("Model config is missing") {
         raise ZcodeModelConfig(detail="\{message} (rpc code \{code})")
       } else {
         raise ZcodeRpc(code~, message~)
       }
-    Err(other) => raise other
+    other => raise other
   }
   let session_id = match session_id {
     Some(existing) => {
       let resume_params = Json::object(
         Map::from_array([("sessionId", Json::string(existing))]),
       )
-      match conn.request("session/resume", Some(resume_params)) {
-        Ok(result) =>
-          match zcode_session_id_of(result) {
-            Some(id) => id
-            None => existing
-          }
-        Err(e) => raise e
+      let result = conn.request("session/resume", Some(resume_params))
+      match zcode_session_id_of(result) {
+        Some(id) => id
+        None => existing
       }
     }
     None => {
       let create_params = Json::object(
         Map::from_array([("workspace", workspace), ("mode", Json::string(mode))]),
       )
-      match conn.request("session/create", Some(create_params)) {
-        Ok(result) =>
-          match zcode_session_id_of(result) {
-            Some(id) => id
-            None =>
-              raise ZcodeProtocol(
-                detail="session/create response has no session.sessionId",
-              )
-          }
-        Err(e) => raise e
+      let result = conn.request("session/create", Some(create_params))
+      match zcode_session_id_of(result) {
+        Some(id) => id
+        None =>
+          raise ZcodeProtocol(
+            detail="session/create response has no session.sessionId",
+          )
       }
     }
   }
@@ -510,23 +508,17 @@ async fn zcode_delegated(
       ("afterSeq", Json::number(0.0)),
     ]),
   )
-  match conn.request("session/subscribe", Some(subscribe_params)) {
-    Ok(_) => ()
-    Err(e) => raise e
-  }
+  conn.request("session/subscribe", Some(subscribe_params)) |> ignore
   let send_params = Json::object(
     Map::from_array([
       ("sessionId", Json::string(session_id)),
       ("content", Json::string(task)),
     ]),
   )
-  match conn.request("session/send", Some(send_params)) {
-    Ok(result) =>
-      match json_field(result, "accepted") {
-        Some(Json::True) => ()
-        _ => raise ZcodeProtocol(detail="session/send was not accepted")
-      }
-    Err(e) => raise e
+  let result = conn.request("session/send", Some(send_params))
+  match json_field(result, "accepted") {
+    Some(Json::True) => ()
+    _ => raise ZcodeProtocol(detail="session/send was not accepted")
   }
   // Event loop under the wall-clock ceiling.
   let turn : ZcodeTurn = {

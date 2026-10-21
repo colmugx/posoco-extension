@@ -98,13 +98,11 @@ async test "write_creates_missing_parents" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     }
     let path = dir + "/missing-parent/output.txt"
-    let outcome = Ok(
-      WriteTools::WriteTools().execute(test_ctx(write_call(path, "content"))),
-    ) catch {
-      error => Err(error)
-    }
+    let outcome = WriteTools::WriteTools().execute(
+      test_ctx(write_call(path, "content")),
+    )
     match outcome {
-      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+      @posoco.ToolOutcome::Success(content~, structured~) => {
         assert_eq(content, "ok")
         match structured {
           Some(Object(meta)) =>
@@ -123,10 +121,8 @@ async test "write_creates_missing_parents" {
 async fn run_write(
   tools : WriteTools,
   call : @posoco.ToolCall,
-) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute(test_ctx(call))) catch {
-    error => Err(error)
-  }
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  tools.execute(test_ctx(call))
 }
 
 ///|
@@ -142,7 +138,7 @@ async test "write_freshness_gate_rejects_unread_existing_file" {
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     let tools = WriteTools::WriteTools(freshness=ledger)
     match run_write(tools, write_call(path, "new")) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
         assert_true(content.contains("write: refused"))
         assert_true(content.contains("has not been read in this session"))
       }
@@ -170,7 +166,7 @@ async test "write_freshness_gate_rejects_modified_file" {
     })
     let tools = WriteTools::WriteTools(freshness=ledger)
     match run_write(tools, write_call(path, "new")) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
         assert_true(content.contains("changed since it was last read"))
       _ => fail("expected stale overwrite to be refused")
     }
@@ -191,7 +187,7 @@ async test "write_allows_fresh_file_and_updates_ledger" {
     ledger.note_read(path, FsIo::stat(NativeFsIo::{ }, path))
     let tools = WriteTools::WriteTools(freshness=ledger)
     match run_write(tools, write_call(path, "new")) {
-      Ok(@posoco.ToolOutcome::Success(..)) => ()
+      @posoco.ToolOutcome::Success(..) => ()
       _ => fail("expected fresh overwrite to succeed")
     }
     // The write itself refreshed the stamp, so an immediate follow-up edit
@@ -212,7 +208,7 @@ async test "write_without_ledger_allows_blind_overwrite" {
     let path = dir + "/target.txt"
     @fs.write_file(path, "old", create_mode=CreateNew)
     match run_write(WriteTools::WriteTools(), write_call(path, "new")) {
-      Ok(@posoco.ToolOutcome::Success(..)) => ()
+      @posoco.ToolOutcome::Success(..) => ()
       _ => fail("expected ledger-less overwrite to succeed")
     }
   }
@@ -229,7 +225,7 @@ async test "write_reports_utf8_bytes_in_structured_metadata" {
     let path = dir + "/utf8.txt"
     // 5 chars, 6 UTF-8 bytes (é is two bytes).
     match run_write(WriteTools::WriteTools(), write_call(path, "héllo")) {
-      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+      @posoco.ToolOutcome::Success(content~, structured~) => {
         assert_eq(content, "ok")
         match structured {
           Some(Object(meta)) =>
@@ -253,7 +249,7 @@ async test "write_size_cap_is_a_reported_error" {
     let path = dir + "/big.txt"
     let huge = "x".repeat(1_000_001)
     match run_write(WriteTools::WriteTools(), write_call(path, huge)) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
         assert_true(
           content.contains("1_000_001 bytes") ||
           content.contains("1000001 bytes"),
@@ -299,13 +295,13 @@ async test "write_anchored_relative_path_resolves_and_keys_canonically" {
     let tools = WriteTools::WriteTools(freshness=fresh, anchor=Some(anchor))
     // First write records the canonical (resolved) key.
     match run_write(tools, write_call("notes/a.txt", "v1")) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) => assert_eq(content, "ok")
+      @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "ok")
       _ => fail("expected anchored write to succeed")
     }
     assert_true(@fs.exists(dir + "/notes/a.txt"))
     // Overwrite through a different spelling hits the same ledger entry.
     match run_write(tools, write_call("./notes/a.txt", "v2")) {
-      Ok(@posoco.ToolOutcome::Success(..)) => ()
+      @posoco.ToolOutcome::Success(..) => ()
       _ => fail("expected overwrite via different spelling to pass the gate")
     }
     let text = @fs.read_file(dir + "/notes/a.txt").text() catch {

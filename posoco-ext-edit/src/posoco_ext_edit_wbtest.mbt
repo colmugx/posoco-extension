@@ -183,10 +183,8 @@ test "edit_diagnostic_path_is_bounded_and_single_line" {
 async fn run_edit(
   tools : EditTools,
   call : @posoco.ToolCall,
-) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute(test_ctx(call))) catch {
-    error => Err(error)
-  }
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  tools.execute(test_ctx(call))
 }
 
 ///|
@@ -226,7 +224,7 @@ async test "edit_unique_match_reports_line" {
         EditTools::EditTools(),
         edit_text_call(path, "beta", "BETA", None),
       ) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
+      @posoco.ToolOutcome::Success(content~, ..) => {
         assert_eq(content, "ok: 1 lines=2")
         let after = @fs.read_file(path).text()
         inspect(after, content="alpha\nBETA\ngamma\n")
@@ -248,7 +246,7 @@ async test "edit_ambiguous_match_lists_lines_and_is_rejected" {
     write_file_native(path, "x\nfoo\ny\nfoo\nz\n")
     match
       run_edit(EditTools::EditTools(), edit_text_call(path, "foo", "bar", None)) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
         assert_eq(
           content, "edit: 2 matches lines=2, 4; add context or replace_all=true",
         )
@@ -272,7 +270,7 @@ async test "edit_replace_all_replaces_every_occurrence" {
         EditTools::EditTools(),
         edit_text_call(path, "foo", "bar", Some(Json::boolean(true))),
       ) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) =>
+      @posoco.ToolOutcome::Success(content~, ..) =>
         assert_eq(content, "ok: 2 lines=2, 4")
       _ => fail("expected replace_all edit to succeed")
     }
@@ -293,7 +291,7 @@ async test "edit_not_found_guides_reread" {
     write_file_native(path, "alpha\n")
     match
       run_edit(EditTools::EditTools(), edit_text_call(path, "nope", "x", None)) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) => {
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
         assert_true(content.contains("old_text not found"))
         assert_true(content.contains("reread"))
       }
@@ -318,7 +316,7 @@ async test "edit_strips_line_number_prefixes_from_old_text" {
         EditTools::EditTools(),
         edit_text_call(path, "L2: beta", "BETA", None),
       ) {
-      Ok(@posoco.ToolOutcome::Success(content~, structured~)) => {
+      @posoco.ToolOutcome::Success(content~, structured~) => {
         assert_eq(content, "ok: 1 lines=2")
         match structured {
           Some(Object(meta)) =>
@@ -346,7 +344,7 @@ async test "edit_freshness_gate_rejects_unread_file" {
     let ledger = @devkit.FreshnessGuard::FreshnessGuard()
     let tools = EditTools::EditTools(freshness=ledger)
     match run_edit(tools, edit_text_call(path, "alpha", "beta", None)) {
-      Ok(@posoco.ToolOutcome::ToolReportedError(content~, ..)) =>
+      @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
         assert_true(content.contains("has not been read in this session"))
       _ => fail("expected unread edit to be refused")
     }
@@ -367,7 +365,7 @@ async test "edit_fresh_file_succeeds_and_ledger_stays_fresh" {
     ledger.note_read(path, FsIo::stat(NativeFsIo::{ }, path))
     let tools = EditTools::EditTools(freshness=ledger)
     match run_edit(tools, edit_text_call(path, "alpha", "beta", None)) {
-      Ok(@posoco.ToolOutcome::Success(..)) => ()
+      @posoco.ToolOutcome::Success(..) => ()
       _ => fail("expected fresh edit to succeed")
     }
     // The edit refreshed the stamp: a follow-up edit is not refused.
@@ -397,7 +395,7 @@ async test "edit_anchored_relative_path_resolves" {
     let anchor = @devkit.WorkspaceAnchor::WorkspaceAnchor(dir)
     let tools = EditTools::EditTools(anchor=Some(anchor))
     match run_edit(tools, edit_text_call("u.txt", "beta", "BETA", None)) {
-      Ok(@posoco.ToolOutcome::Success(content~, ..)) => {
+      @posoco.ToolOutcome::Success(content~, ..) => {
         assert_eq(content, "ok: 1 lines=2")
         assert_false(content.contains(dir))
         let after = @fs.read_file(dir + "/u.txt").text()

@@ -84,44 +84,45 @@ fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
 async fn try_wf(
   tools : WebFetchTools,
   call : @posoco.ToolCall,
-) -> Result[@posoco.ToolOutcome, @posoco.RuntimeError] {
-  Ok(tools.execute(test_ctx(call))) catch {
-    error => Err(error)
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  tools.execute(test_ctx(call))
+}
+
+///|
+fn try_args(args : Json) -> (ParsedUrl, Int32?) raise @posoco.RuntimeError {
+  extract_fetch_args(args)
+}
+
+///|
+fn args_error(args : Json) -> String raise {
+  try {
+    let _ = try_args(args)
+    fail("expected arguments to be rejected")
+  } catch {
+    @posoco.RuntimeError::UnknownTool(message) => message
+    other => fail("expected UnknownTool, got \{other}")
   }
 }
 
 ///|
-fn try_args(args : Json) -> Result[(ParsedUrl, Int32?), @posoco.RuntimeError] {
-  Ok(extract_fetch_args(args)) catch {
-    error => Err(error)
-  }
-}
-
-///|
-fn ok_page(
-  outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError],
-) -> (String, Json?) raise {
+fn ok_page(outcome : @posoco.ToolOutcome) -> (String, Json?) raise {
   match outcome {
-    Ok(@posoco.ToolOutcome::Success(content~, structured~)) =>
-      (content, structured)
+    @posoco.ToolOutcome::Success(content~, structured~) => (content, structured)
     _ => fail("expected a Success outcome")
   }
 }
 
 ///|
-fn err_page(
-  outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError],
-) -> String raise {
+fn err_page(outcome : @posoco.ToolOutcome) -> String raise {
   match outcome {
-    Ok(@posoco.ToolOutcome::ToolReportedError(content~, structured=_)) =>
-      content
+    @posoco.ToolOutcome::ToolReportedError(content~, structured=_) => content
     _ => fail("expected a ToolReportedError outcome")
   }
 }
 
 ///|
 fn ok_page_object(
-  outcome : Result[@posoco.ToolOutcome, @posoco.RuntimeError],
+  outcome : @posoco.ToolOutcome,
 ) -> (String, Map[String, Json]) raise {
   let (content, structured) = ok_page(outcome)
   match structured {
@@ -135,102 +136,73 @@ fn ok_page_object(
 
 ///|
 test "wf args rejects malformed input" {
-  let missing = try_args(Json::object(Map::from_array([])))
-  match missing {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: missing 'url'")
-    _ => fail("expected UnknownTool for missing url")
-  }
-  let wrong_type = try_args(
-    Json::object(Map::from_array([("url", Json::number(1.0))])),
+  inspect(
+    args_error(Json::object(Map::from_array([]))),
+    content="webfetch: missing 'url'",
   )
-  match wrong_type {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: 'url' must be a string")
-    _ => fail("expected UnknownTool for non-string url")
-  }
-  let not_object = try_args(Json::string("https://ex.com"))
-  match not_object {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: arguments must be an object")
-    _ => fail("expected UnknownTool for non-object arguments")
-  }
-  let bad_offset = try_args(
-    Json::object(
-      Map::from_array([
-        ("url", Json::string("https://ex.com")),
-        ("offset", Json::string("3")),
-      ]),
+  inspect(
+    args_error(Json::object(Map::from_array([("url", Json::number(1.0))]))),
+    content="webfetch: 'url' must be a string",
+  )
+  inspect(
+    args_error(Json::string("https://ex.com")),
+    content="webfetch: arguments must be an object",
+  )
+  inspect(
+    args_error(
+      Json::object(
+        Map::from_array([
+          ("url", Json::string("https://ex.com")),
+          ("offset", Json::string("3")),
+        ]),
+      ),
     ),
+    content="webfetch: 'offset' must be an integer",
   )
-  match bad_offset {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: 'offset' must be an integer")
-    _ => fail("expected UnknownTool for non-integer offset")
-  }
 }
 
 ///|
 test "wf args rejects bad url values" {
-  let negative = try_args(
-    Json::object(
-      Map::from_array([
-        ("url", Json::string("https://ex.com")),
-        ("offset", Json::number(-1.0)),
-      ]),
+  inspect(
+    args_error(
+      Json::object(
+        Map::from_array([
+          ("url", Json::string("https://ex.com")),
+          ("offset", Json::number(-1.0)),
+        ]),
+      ),
     ),
+    content="webfetch: 'offset' must be >= 0",
   )
-  match negative {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: 'offset' must be >= 0")
-    _ => fail("expected UnknownTool for negative offset")
-  }
   let long_url = "https://ex.com/" + "a".repeat(2000)
-  let too_long = try_args(
-    Json::object(Map::from_array([("url", Json::string(long_url))])),
+  inspect(
+    args_error(Json::object(Map::from_array([("url", Json::string(long_url))]))),
+    content="webfetch: 'url' too long",
   )
-  match too_long {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(message, content="webfetch: 'url' too long")
-    _ => fail("expected UnknownTool for over-long url")
-  }
-  let ftp = try_args(
-    Json::object(Map::from_array([("url", Json::string("ftp://ex.com/f"))])),
+  inspect(
+    args_error(
+      Json::object(Map::from_array([("url", Json::string("ftp://ex.com/f"))])),
+    ),
+    content="webfetch: 'url' must be an absolute http/https URL",
   )
-  match ftp {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(
-        message,
-        content="webfetch: 'url' must be an absolute http/https URL",
-      )
-    _ => fail("expected UnknownTool for non-http scheme")
-  }
-  let relative = try_args(
-    Json::object(Map::from_array([("url", Json::string("/just/a/path"))])),
+  inspect(
+    args_error(
+      Json::object(Map::from_array([("url", Json::string("/just/a/path"))])),
+    ),
+    content="webfetch: 'url' must be an absolute http/https URL",
   )
-  match relative {
-    Err(@posoco.RuntimeError::UnknownTool(message)) =>
-      inspect(
-        message,
-        content="webfetch: 'url' must be an absolute http/https URL",
-      )
-    _ => fail("expected UnknownTool for relative url")
-  }
 }
 
 ///|
 test "wf args parses url and offset" {
-  guard try_args(
-      Json::object(
-        Map::from_array([
-          ("url", Json::string("https://ex.com/p?q=1")),
-          ("offset", Json::number(7.0)),
-        ]),
-      ),
-    )
-    is Ok((parsed, offset)) else {
-    fail("expected arguments to parse")
-  }
+  let (parsed, offset) = try_args(
+    Json::object(
+      Map::from_array([
+        ("url", Json::string("https://ex.com/p?q=1")),
+        ("offset", Json::number(7.0)),
+      ]),
+    ),
+  )
   inspect(parsed.to_url_string(), content="https://ex.com/p?q=1")
   guard offset is Some(7) else { fail("expected offset 7") }
 }
