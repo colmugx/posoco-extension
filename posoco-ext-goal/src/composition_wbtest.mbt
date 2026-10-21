@@ -212,9 +212,6 @@ async test "charter_rides_first_work_turn_input" {
     @posoco.ScriptedModelStep::Respond(
       @posoco.tk_stop_response("done\n<goal-complete/>"),
     ),
-    @posoco.ScriptedModelStep::Respond(
-      @posoco.tk_stop_response("<goal-complete/>"),
-    ),
   ])
   let agent = cw_compose_agent(model, goal)
   let result = goal.execute(agent, "session_charter")
@@ -222,8 +219,8 @@ async test "charter_rides_first_work_turn_input" {
     Completed => ()
     other => fail("expected Completed, got \{other}")
   }
-  // work → claim → verifier: three model calls.
-  assert_eq(model.received_messages.length(), 3)
+  // work → claim → host verifier: two model calls.
+  assert_eq(model.received_messages.length(), 2)
 
   // First working turn: charter and progress merged into one user input.
   assert_eq(model.received_messages[0].length(), 1)
