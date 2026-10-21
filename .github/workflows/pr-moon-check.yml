@@ -34,3 +34,8 @@ jobs:
 
       - name: DeepSeek adapter unit tests (js)
         run: moon test --target js -p colmugx/posoco-ext-deepseek
+
+      - name: DeepSeek V4.1 reference renderer contract
+        run: |
+          python3 -m pip install 'deepseek-recipe>=0.2,<0.3'
+          python3 scripts/deepseek_recipe_golden.py
