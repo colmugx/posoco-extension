@@ -168,6 +168,7 @@ pub struct GoalRunner {
 }
 
 ///|
+
 ///|
 /// Default options for a goal condition: 20 turns (0 explicitly opts into unlimited), standard
 /// `<goal-complete/>` / `<goal-blocked/>` markers, wrap-up at 90% of the
@@ -253,10 +254,14 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
 
 ///|
 /// Current plan (defensive copy of the items).
+
 ///|
 /// Install a verifier implementing the host's authorized acceptance policy.
 /// This is the only source of a Verified outcome. No verifier means unknown.
-pub fn GoalRunner::set_verifier(self : GoalRunner, verifier : &GoalVerifier) -> Unit {
+pub fn GoalRunner::set_verifier(
+  self : GoalRunner,
+  verifier : &GoalVerifier,
+) -> Unit {
   self.verifier = Some(verifier)
 }
 
@@ -594,7 +599,10 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
 
 ///|
 /// Snapshot the current run without mutating the runner's state.
-fn GoalRunner::result(self : GoalRunner, final_status : GoalStatus) -> GoalResult {
+fn GoalRunner::result(
+  self : GoalRunner,
+  final_status : GoalStatus,
+) -> GoalResult {
   GoalResult::{
     final_status,
     total_usage: {
@@ -681,7 +689,9 @@ pub async fn GoalRunner::execute(
     Paused | Running =>
       match self.active_session_id {
         Some(saved) if saved != session_id =>
-          return self.result(Failed("cannot resume goal in a different session"))
+          return self.result(
+            Failed("cannot resume goal in a different session"),
+          )
         Some(_) => ()
         None => return self.result(Failed("goal has no active session"))
       }
@@ -778,7 +788,9 @@ pub async fn GoalRunner::execute(
       CompletionClaimed => {
         self.completion_claimed = true
         if self.verifier_rounds >= self.options.max_verifier_rounds {
-          self.assessment = Inconclusive("independent verification budget exhausted")
+          self.assessment = Inconclusive(
+            "independent verification budget exhausted",
+          )
           self.status = Paused
           self.last_stall_reason = Some("verification budget exhausted")
           break
@@ -796,7 +808,9 @@ pub async fn GoalRunner::execute(
         let outcome = match self.verifier {
           Some(verifier) => verifier.verify(request)
           None =>
-            GoalAssessment::Inconclusive("no independent GoalVerifier configured")
+            GoalAssessment::Inconclusive(
+              "no independent GoalVerifier configured",
+            )
         }
         self.assessment = outcome.validated(self.options.completion_checklist)
         match self.assessment {
@@ -810,7 +824,9 @@ pub async fn GoalRunner::execute(
           }
           Inconclusive(_) => {
             self.status = Paused
-            self.last_stall_reason = Some("completion requires verified evidence")
+            self.last_stall_reason = Some(
+              "completion requires verified evidence",
+            )
             break
           }
         }
@@ -833,7 +849,8 @@ pub async fn GoalRunner::execute(
     // Stall detection: deterministic by default, with an optional,
     // bounded semantic reconsideration only after a stall is detected.
     if self.status == Running {
-      if self.turn_output_known && self.turn_tool_count == 0 &&
+      if self.turn_output_known &&
+        self.turn_tool_count == 0 &&
         self.turn_output_tokens < self.options.stall_min_tokens {
         self.stall_count += 1
       } else {

@@ -46,7 +46,8 @@ pub fn GoalAssessment::validated(
       for criterion in needed {
         let mut found = false
         for item in evidence {
-          if item.criterion == criterion && item.source != "" &&
+          if item.criterion == criterion &&
+            item.source != "" &&
             item.reference != "" {
             found = true
           }
@@ -98,16 +99,10 @@ pub async fn DecisionGoalAdviser::assess(
       ("goal", Json::string(request.goal)),
       ("session_id", Json::string(request.session_id)),
       ("claim", Json::string(request.claim)),
-      (
-        "criteria",
-        Json::array(request.criteria.map(fn(s) { Json::string(s) })),
-      ),
+      ("criteria", Json::array(request.criteria.map(fn(s) { Json::string(s) }))),
     ]),
   )
-  let input : @posoco.DecisionRequest = {
-    state,
-    questions: [question],
-  }
+  let input : @posoco.DecisionRequest = { state, questions: [question], }
   let answer : Result[@posoco.DecisionResult, String] = Ok(
     self.decision.evaluate_with_context(
       input,
@@ -124,9 +119,7 @@ pub async fn DecisionGoalAdviser::assess(
     Err(_) => None
     Ok(result) => {
       // Reject malformed providers instead of trusting arbitrary numbers.
-      let validated : Result[Unit, String] = Ok(
-        result.validate_for(input),
-      ) catch {
+      let validated : Result[Unit, String] = Ok(result.validate_for(input)) catch {
         e => Err(e.to_string())
       }
       match validated {
@@ -161,8 +154,12 @@ pub async fn DecisionGoalAdviser::assess_progress(
       "working turn will make concrete progress toward the goal. " +
       "Do not claim the goal is complete; no new permissions are granted.",
     ),
-    true_criteria=Some(Json::string("One more turn is likely to produce progress")),
-    false_criteria=Some(Json::string("One more turn is unlikely to produce progress")),
+    true_criteria=Some(
+      Json::string("One more turn is likely to produce progress"),
+    ),
+    false_criteria=Some(
+      Json::string("One more turn is unlikely to produce progress"),
+    ),
   )
   let state = Json::object(
     Map::from_array([
@@ -172,10 +169,7 @@ pub async fn DecisionGoalAdviser::assess_progress(
       ("last_response", Json::string(last_response)),
     ]),
   )
-  let input : @posoco.DecisionRequest = {
-    state,
-    questions: [question],
-  }
+  let input : @posoco.DecisionRequest = { state, questions: [question], }
   let output : Result[@posoco.DecisionResult, String] = Ok(
     self.decision.evaluate_with_context(
       input,
@@ -191,9 +185,7 @@ pub async fn DecisionGoalAdviser::assess_progress(
   match output {
     Err(_) => None
     Ok(response) => {
-      let valid : Result[Unit, String] = Ok(
-        response.validate_for(input),
-      ) catch {
+      let valid : Result[Unit, String] = Ok(response.validate_for(input)) catch {
         e => Err(e.to_string())
       }
       match valid {

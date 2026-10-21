@@ -60,11 +60,13 @@ pub impl @posoco.Lifecycle for GoalRunner with fn on_compose(
 }
 
 ///|
-pub impl @posoco.Lifecycle for GoalRunner with fn on_shutdown(
-  self : GoalRunner,
-) -> Unit {
+pub impl @posoco.Lifecycle for GoalRunner with fn on_shutdown(self : GoalRunner) -> Unit {
   self.adviser = None
 }
 
 ///|
-pub extend GoalRunner with @posoco.Lifecycle::{on_compose, on_start, on_shutdown}
+pub extend GoalRunner with @posoco.Lifecycle::{
+  on_compose,
+  on_start,
+  on_shutdown,
+}

@@ -195,12 +195,12 @@ test "clear_keeps_options_derived_charter" {
 }
 
 ///|
-
 test "goal default has a bounded turn budget" {
   let goal = goal_extension(goal_condition="bounded by default")
   assert_true(goal.options.budget.max_turns > 0)
 }
 
+///|
 test "scoped observer rejects foreign sessions and out-of-turn events" {
   let goal = goal_extension(goal_condition="scope")
   goal.status = Running
@@ -252,6 +252,7 @@ test "scoped observer rejects foreign sessions and out-of-turn events" {
   assert_eq(goal.usage.turns, 1)
 }
 
+///|
 test "clearing a running execution cannot destroy its state" {
   let goal = goal_extension(goal_condition="guard")
   goal.status = Running

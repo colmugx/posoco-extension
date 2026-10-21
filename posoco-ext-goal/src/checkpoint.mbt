@@ -41,7 +41,10 @@ fn cp_bool(obj : Map[String, Json], key : String) -> Result[Bool, String] {
 }
 
 ///|
-fn cp_maybe_string(obj : Map[String, Json], key : String) -> Result[String?, String] {
+fn cp_maybe_string(
+  obj : Map[String, Json],
+  key : String,
+) -> Result[String?, String] {
   match obj.get(key) {
     Some(Json::String(s)) => Ok(Some(s))
     Some(Json::Null) => Ok(None)
@@ -93,9 +96,14 @@ pub fn GoalRunner::checkpoint(self : GoalRunner) -> Result[Json, String] {
       Map::from_array([
         ("version", Json::number(2.0)),
         ("goal", Json::string(self.options.goal_condition)),
-        ("criteria", Json::array(self.options.completion_checklist.map(fn(item) {
-          Json::string(item)
-        }))),
+        (
+          "criteria",
+          Json::array(
+            self.options.completion_checklist.map(fn(item) {
+              Json::string(item)
+            }),
+          ),
+        ),
         ("completion_marker", Json::string(self.options.completion_marker)),
         ("blocked_marker", Json::string(self.options.blocked_marker)),
         ("plan_tool_name", Json::string(self.options.plan_tool_name)),
@@ -117,7 +125,10 @@ pub fn GoalRunner::checkpoint(self : GoalRunner) -> Result[Json, String] {
         ("repeat_count", Json::number(self.repeat_count.to_double())),
         ("stall_count", Json::number(self.stall_count.to_double())),
         ("plan_streak", Json::number(self.plan_streak.to_double())),
-        ("semantic_stall_deferrals", Json::number(self.semantic_stall_deferrals.to_double())),
+        (
+          "semantic_stall_deferrals",
+          Json::number(self.semantic_stall_deferrals.to_double()),
+        ),
         ("prev_plan_fp", cp_optional_string(self.prev_plan_fp)),
       ]),
     ),
@@ -196,8 +207,7 @@ pub fn GoalRunner::restore_checkpoint(
     Ok(v) => v
     Err(e) => return Err(e)
   }
-  if self.options.budget.max_turns > 0 &&
-    turn > self.options.budget.max_turns {
+  if self.options.budget.max_turns > 0 && turn > self.options.budget.max_turns {
     return Err("checkpoint exceeds configured turn budget")
   }
   let reported_turns = match cp_int(fields, "reported_turns") {
@@ -214,7 +224,7 @@ pub fn GoalRunner::restore_checkpoint(
   }
   let history : Array[GoalHistoryEntry] = []
   match fields.get("history") {
-    Some(Json::Array(items)) => {
+    Some(Json::Array(items)) =>
       for item in items {
         let row = match cp_obj(item, "history item") {
           Ok(v) => v
@@ -236,9 +246,12 @@ pub fn GoalRunner::restore_checkpoint(
           Ok(v) => v
           Err(e) => return Err(e)
         }
-        history.push({ turn: n, usage: { turns: t, total_tokens: tok, }, summary, })
+        history.push({
+          turn: n,
+          usage: { turns: t, total_tokens: tok, },
+          summary,
+        })
       }
-    }
     _ => return Err("checkpoint history is invalid")
   }
   if history.length() != turn {
@@ -246,9 +259,10 @@ pub fn GoalRunner::restore_checkpoint(
   }
   let plan = match fields.get("plan") {
     Some(Json::Array(items)) =>
-      match GoalPlan::from_tool_args(
-        Json::object(Map::from_array([("items", Json::array(items))])),
-      ) {
+      match
+        GoalPlan::from_tool_args(
+          Json::object(Map::from_array([("items", Json::array(items))])),
+        ) {
         Ok(v) => v
         Err(_) =>
           if items.is_empty() {
@@ -307,7 +321,8 @@ pub fn GoalRunner::restore_checkpoint(
     Ok(v) => v
     Err(e) => return Err(e)
   }
-  let semantic_stall_deferrals = match cp_int(fields, "semantic_stall_deferrals") {
+  let semantic_stall_deferrals = match
+    cp_int(fields, "semantic_stall_deferrals") {
     Ok(v) if v <= self.options.max_semantic_stall_deferrals => v
     _ => return Err("checkpoint semantic stall deferrals are invalid")
   }

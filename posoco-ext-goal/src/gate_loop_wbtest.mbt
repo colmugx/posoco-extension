@@ -20,9 +20,15 @@ pub impl GoalVerifier for TestGoalVerifier with fn verify(
   } else {
     request.criteria
   }
-  Verified(names.map(fn(name) {
-    GoalEvidence::{ criterion: name, source: "test-fixture", reference: "ok", }
-  }))
+  Verified(
+    names.map(fn(name) {
+      GoalEvidence::{
+        criterion: name,
+        source: "test-fixture",
+        reference: "ok",
+      }
+    }),
+  )
 }
 
 ///|
@@ -145,7 +151,12 @@ async test "gate_retract_then_confirm" {
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let goal = goal_extension(goal_condition="make the build green")
-  let agent = gate_build_agent(goal, model, store, reject_first_verification=true)
+  let agent = gate_build_agent(
+    goal,
+    model,
+    store,
+    reject_first_verification=true,
+  )
   let result = goal.execute(agent, "session_gate_retract")
   match result.final_status {
     Completed => ()
@@ -326,7 +337,6 @@ async test "budget exhaustion stops without consuming extra model steps" {
   assert_eq(model.call_count(), 2)
 }
 
-
 ///|
 async test "goal resume preserves charter, history and turn budget" {
   let model = @posoco.ScriptedModel::ScriptedModel([
@@ -403,7 +413,6 @@ async test "unverified_claim_pauses_not_completes" {
   }
 }
 
-
 ///|
 /// A paused goal survives a runner restart when a host persists the
 /// checkpoint together with the original session store.
@@ -467,7 +476,6 @@ test "checkpoint rejects another goal without touching runner state" {
   assert_eq(other.current_turn, 0)
 }
 
-
 ///|
 /// Semantic DecisionPort advice cannot certify the goal on its own.
 async test "decision adviser is optional and not completion authority" {
@@ -509,7 +517,11 @@ async test "decision adviser is optional and not completion authority" {
 /// Evidence must cover every explicit criterion, with nonempty provenance.
 test "partial evidence never validates as completed" {
   let evidence = Verified([
-    GoalEvidence::{ criterion: "tests", source: "test-command", reference: "run42", },
+    GoalEvidence::{
+      criterion: "tests",
+      source: "test-command",
+      reference: "run42",
+    },
   ])
   match evidence.validated(["tests", "build"]) {
     Inconclusive(reason) => assert_true(reason.contains("build"))
@@ -534,7 +546,6 @@ test "opted in goal composes without decision capability" {
   ignore(agent)
   assert_true(goal.adviser is None)
 }
-
 
 ///|
 /// A composed DecisionPort is discovered only when explicitly enabled. It
@@ -603,7 +614,6 @@ async test "decision provider failure falls back without changing verdict" {
   assert_eq(result.semantic_probability, None)
   assert_eq(decision.call_count(), 1)
 }
-
 
 ///|
 /// A high confidence semantic prediction can defer one deterministic stall,
@@ -674,7 +684,9 @@ async test "semantic stall deferral count is strictly bounded" {
   goal.set_decision_adviser(decision)
   let model = @posoco.ScriptedModel::ScriptedModel([
     @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("thinking")),
-    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("still thinking")),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("still thinking"),
+    ),
   ])
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let agent = gate_build_agent(goal, model, store)
@@ -705,7 +717,6 @@ async test "semantic adviser cannot override an exhausted turn budget" {
   assert_eq(decision.call_count(), 0)
   assert_eq(goal.semantic_stall_deferrals, 0)
 }
-
 
 ///|
 /// A matching goal string is not enough to authorize restoring changed
