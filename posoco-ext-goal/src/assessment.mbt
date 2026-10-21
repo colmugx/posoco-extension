@@ -8,11 +8,23 @@ pub(all) struct GoalEvidence {
 } derive(Eq, Debug)
 
 ///|
+pub extend GoalEvidence with Eq::{not_equal, equal}
+
+///|
+pub extend GoalEvidence with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub(all) enum GoalAssessment {
   Verified(Array[GoalEvidence])
   Rejected(String)
   Inconclusive(String)
 } derive(Eq, Debug)
+
+///|
+pub extend GoalAssessment with Eq::{not_equal, equal}
+
+///|
+pub extend GoalAssessment with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub(all) struct GoalVerificationRequest {
@@ -21,6 +33,9 @@ pub(all) struct GoalVerificationRequest {
   session_id : String
   claim : String
 } derive(Debug)
+
+///|
+pub extend GoalVerificationRequest with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// An application-owned verifier MUST derive Verified only from externally

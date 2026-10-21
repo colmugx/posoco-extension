@@ -40,6 +40,9 @@ pub(all) enum GoalAssessment {
   Rejected(String)
   Inconclusive(String)
 } derive(Eq, @debug.Debug)
+pub fn GoalAssessment::equal(Self, Self) -> Bool
+pub fn GoalAssessment::not_equal(Self, Self) -> Bool
+pub fn GoalAssessment::to_repr(Self) -> @debug.Repr
 pub fn GoalAssessment::validated(Self, Array[String]) -> Self
 
 pub(all) struct GoalBudget {
@@ -53,6 +56,9 @@ pub(all) struct GoalEvidence {
   source : String
   reference : String
 } derive(Eq, @debug.Debug)
+pub fn GoalEvidence::equal(Self, Self) -> Bool
+pub fn GoalEvidence::not_equal(Self, Self) -> Bool
+pub fn GoalEvidence::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalHistoryEntry {
   turn : Int32
@@ -173,6 +179,7 @@ pub fn GoalRunner::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn GoalRunner::manifest(Self) -> @port.ExtensionManifest
 pub fn GoalRunner::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
 pub fn GoalRunner::on_event(Self, @types.TurnEvent) -> Unit
+pub fn GoalRunner::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn GoalRunner::on_shutdown(Self) -> Unit
 pub async fn GoalRunner::on_start(Self) -> Unit
 pub fn GoalRunner::pause(Self) -> Unit
@@ -217,6 +224,7 @@ pub(all) struct GoalVerificationRequest {
   session_id : String
   claim : String
 } derive(@debug.Debug)
+pub fn GoalVerificationRequest::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TurnVerdict {
   NoSignal

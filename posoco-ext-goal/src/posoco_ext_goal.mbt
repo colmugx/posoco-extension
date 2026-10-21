@@ -474,6 +474,9 @@ pub impl @posoco.Observer for GoalRunner with fn on_event_at(
 }
 
 ///|
+pub extend GoalRunner with @posoco.Observer::{on_event_at}
+
+///|
 fn GoalRunner::is_budget_exhausted(self : GoalRunner) -> Bool {
   let b = self.options.budget
   if b.max_turns > 0 && self.current_turn >= b.max_turns {
