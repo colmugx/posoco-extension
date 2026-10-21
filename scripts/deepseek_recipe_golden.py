@@ -3,7 +3,8 @@
 Install: python -m pip install 'deepseek-recipe>=0.2,<0.3'
 Run:     python3 scripts/deepseek_recipe_golden.py
 """
-from deepseek_recipe import ChatCompletionRequest, ConversionOptions, DeepseekV41Encoding
+from deepseek_recipe import ChatCompletionRequest, ConversionOptions, DeepseekV41Encoding, Tokenizer
+import sys
 
 MODEL = "DeepSeek-V4.1-Flash"
 ENCODING = DeepseekV41Encoding()
@@ -65,6 +66,27 @@ def check():
     assert "Reasoning Effort: 75" in high
     assert "Reasoning Effort: 100" in ultra
     assert render(history, tools=tools) == render(history, tools=tools)
+    if len(sys.argv) == 2:
+        tokenizer = Tokenizer.from_file(sys.argv[1])
+        encoding = DeepseekV41Encoding().with_tokenizer(tokenizer)
+        def tokens(active_tools):
+            request = ChatCompletionRequest({
+                "model": MODEL,
+                "messages": history,
+                "tools": active_tools,
+                "reasoning_effort": "high",
+                "thinking": {"type": "enabled"},
+            })
+            conversation = request.convert(ConversionOptions()).conversation
+            return encoding.encode(conversation)
+        with_tools = tokens(tools)
+        without_tools = tokens([])
+        assert len(with_tools) > len(without_tools)
+        assert all(isinstance(token, int) for token in with_tools)
+        print(
+            f"V4.1 exact reference token counts: tools={len(with_tools)}, "
+            f"no_tools={len(without_tools)}"
+        )
     print("DeepSeek V4.1 reference-renderer golden assertions passed")
 
 
