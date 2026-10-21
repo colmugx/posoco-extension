@@ -4,6 +4,8 @@
 pub using @service {
   type BoardWorkflows,
   type BoardWorkflowPolicy,
+  type BoardWorkflowControl,
+  type BoardWorkflowControlResult,
   type BoardWorkflowView,
   type BoardWorkflowError,
   type WorkflowAgentPurpose,

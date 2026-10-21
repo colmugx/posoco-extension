@@ -3,12 +3,19 @@
 /// persistence remain owned by the supplied owner, whether it is a single-slot
 /// (S4A) or capacity-bounded multi-slot (S4D) owner. This facade still
 /// serializes its own admission: one dispatch in flight at a time.
+priv struct OrchestratorControlScope {
+  candidates : Array[ExecutionCandidate]
+  authorize : () -> Bool
+}
+
+///|
 pub struct BoardOrchestrator {
   priv owner : @execution.BoardExecutionOwner
   priv policy : ExecutionPolicy
   priv resolver : &BoardExecutionInputResolver
   priv mut busy : Bool
   priv mut closed : Bool
+  priv mut control_scope : OrchestratorControlScope?
 }
 
 ///|
@@ -20,7 +27,41 @@ pub fn BoardOrchestrator::BoardOrchestrator(
   resolver~ : &BoardExecutionInputResolver,
   policy~ : ExecutionPolicy = ExecutionPolicy(),
 ) -> BoardOrchestrator {
-  { owner, policy, resolver, busy: false, closed: false, }
+  {
+    owner,
+    policy,
+    resolver,
+    busy: false,
+    closed: false,
+    control_scope: None,
+  }
+}
+
+///|
+/// Narrow an already host-authorized dispatch scope for one joined controlled
+/// operation. It never extends the runner's or host's scope and is checked at
+/// planning and the live Owner admission guard.
+pub fn BoardOrchestrator::set_control_scope(
+  self : BoardOrchestrator,
+  candidates : Array[ExecutionCandidate]?,
+  authorize~ : () -> Bool,
+) -> Bool {
+  let status = self.owner.status()
+  if self.busy || status.admission_busy || !status.active_bindings.is_empty() {
+    return false
+  }
+  match candidates {
+    None => self.control_scope = None
+    Some(values) => {
+      if values.is_empty() || values.length() > 8 ||
+        values.any(c => c.task_id.is_empty() || c.attempt_id.is_empty()) ||
+        !authorize() {
+        return false
+      }
+      self.control_scope = Some({ candidates: values.copy(), authorize, })
+    }
+  }
+  true
 }
 
 ///|
@@ -104,7 +145,19 @@ fn BoardOrchestrator::plan_state(
       })
     }
   }
-  scope_filter({ ..plan, eligible, blocked, }, task_scope)
+  let scoped = scope_filter({ ..plan, eligible, blocked, }, task_scope)
+  match self.control_scope {
+    Some(control) => {
+      let eligible = scoped.eligible.filter(candidate => {
+        control.candidates.contains(candidate)
+      })
+      let blocked = scoped.blocked.filter(row => {
+        control.candidates.any(c => row.task_id == c.task_id && row.attempt_id == Some(c.attempt_id))
+      })
+      { ..scoped, eligible, blocked, }
+    }
+    None => scoped
+  }
 }
 
 ///|
@@ -331,8 +384,19 @@ pub async fn BoardOrchestrator::dispatch_next(
           None => true
           Some(ids) => ids.contains(candidate.task_id)
         }
+        let control_selected = match self.control_scope {
+          Some(control) => {
+            let authorized = (control.authorize)()
+            if !authorized {
+              stopped = true
+            }
+            authorized && control.candidates.contains(candidate)
+          }
+          None => true
+        }
         let selected = authorized &&
           in_scope &&
+          control_selected &&
           !self.closed &&
           plan_execution(snapshot, self.policy, [
             {

@@ -8,19 +8,49 @@ priv struct CapturedExecutionResult {
 }
 
 ///|
+/// What a one-shot capture channel accepts. Planning defaults to tool-free;
+/// trusted hosts may explicitly opt in after successful tool use.
+pub(all) enum ExecutionCaptureStrategy {
+  ToolFreeFinal
+  FinalAfterSuccessfulTools
+} derive(Eq, @debug.Debug)
+
+///|
+pub extend ExecutionCaptureStrategy with Eq::{equal, not_equal}
+
+///|
+pub extend ExecutionCaptureStrategy with @debug.Debug::{to_repr}
+
+///|
 /// Opt-in, single-use in-memory output. It is never part of the execution
-/// journal. Use a fresh channel for a planning request and consume only after
-/// the owner has durably settled that exact execution.
+/// journal. Consume only after the owner has durably settled that exact run.
 pub struct BoardExecutionResultChannel {
   priv max_chars : Int32
+  priv mut strategy : ExecutionCaptureStrategy
   priv mut result : CapturedExecutionResult?
 }
 
 ///|
 pub fn BoardExecutionResultChannel::BoardExecutionResultChannel(
   max_chars~ : Int32,
+  strategy~ : ExecutionCaptureStrategy = ToolFreeFinal,
 ) -> BoardExecutionResultChannel {
-  { max_chars, result: None, }
+  { max_chars, strategy, result: None, }
+}
+
+///|
+///|
+/// Change strategy only while no unread result is held; callers must separately
+/// ensure the owning adapter is quiescent.
+pub fn BoardExecutionResultChannel::set_strategy(
+  self : BoardExecutionResultChannel,
+  strategy : ExecutionCaptureStrategy,
+) -> Bool {
+  if self.result is Some(_) {
+    return false
+  }
+  self.strategy = strategy
+  true
 }
 
 ///|
@@ -37,7 +67,14 @@ fn BoardExecutionResultChannel::capture(
   run : BoardExecutionRun,
   result : @posoco.TurnResult,
 ) -> Bool {
-  if !self.available() || !result.tool_results.is_empty() {
+  if !self.available() {
+    return false
+  }
+  if self.strategy is ToolFreeFinal && !result.tool_results.is_empty() {
+    return false
+  }
+  if self.strategy is FinalAfterSuccessfulTools &&
+    result.tool_results.any(outcome => outcome.is_failure()) {
     return false
   }
   let content = match result.message {

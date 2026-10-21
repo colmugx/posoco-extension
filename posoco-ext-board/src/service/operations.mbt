@@ -3,6 +3,7 @@ pub async fn BoardWorkflows::start(
   self : BoardWorkflows,
   title~ : String,
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
+  if self.control_issued { return Err(Busy) }
   self.perform(() => {
     if title.trim().is_empty() || title.length() > 256 {
       raise WorkflowFault(InvalidConfiguration)
@@ -72,6 +73,7 @@ pub async fn BoardWorkflows::propose(
   parent~ : String,
   requirements~ : String,
 ) -> Result[Json, BoardWorkflowError] {
+  if self.control_issued { return Err(Busy) }
   self.perform(() => {
     if requirements.trim().is_empty() || requirements.length() > 16384 {
       raise WorkflowFault(InvalidConfiguration)
@@ -166,6 +168,7 @@ pub async fn BoardWorkflows::graph_decision(
   self : BoardWorkflows,
   grant~ : Bool,
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
+  if self.control_issued { return Err(Busy) }
   self.perform(() => {
     let controller = self.running()
     guard self.preview_ is Some(preview) else {
@@ -195,6 +198,7 @@ pub async fn BoardWorkflows::scope_decision(
   expansion_id~ : String,
   grant~ : Bool,
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
+  if self.control_issued { return Err(Busy) }
   self.perform(() => {
     let controller = self.running()
     if !grant {
@@ -245,6 +249,7 @@ pub async fn BoardWorkflows::prepare(
   task_id~ : String,
   input~ : String,
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
+  if self.control_issued { return Err(Busy) }
   self.perform(() => {
     let controller = self.running()
     if input.trim().is_empty() || input.length() > 32768 {
@@ -286,6 +291,7 @@ pub async fn BoardWorkflows::prepare(
 pub async fn BoardWorkflows::run_wave(
   self : BoardWorkflows,
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
+  if self.control_issued { return Err(Busy) }
   self.perform(() => {
     let controller = self.running()
     self.confirm(
@@ -301,6 +307,9 @@ pub async fn BoardWorkflows::run_wave(
 pub async fn BoardWorkflows::wait_boundary(
   self : BoardWorkflows,
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
+  // A controlled host must consume its exact results before manual wait may
+  // discard result channels. Pause/stop/cancel remain available independently.
+  if self.control_issued { return Err(Busy) }
   self.perform(
     () => {
       ignore(controller_result(self.running().wait_boundary()))
@@ -369,6 +378,7 @@ pub async fn BoardWorkflows::move_task(
   stage~ : @domain.BoardStage,
   evidence~ : String,
 ) -> Result[BoardWorkflowView, BoardWorkflowError] {
+  if self.control_issued { return Err(Busy) }
   self.perform(() => {
     let controller = self.running()
     if evidence.trim().is_empty() || evidence.length() > 4096 {

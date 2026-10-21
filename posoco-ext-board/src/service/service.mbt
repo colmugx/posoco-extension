@@ -30,6 +30,7 @@ pub struct BoardWorkflows {
   priv mut uncertain : Bool
   priv mut deadline : Int64?
   priv mut counter : Int32
+  priv mut control_issued : Bool
 }
 
 ///|
@@ -74,6 +75,7 @@ pub fn BoardWorkflows::BoardWorkflows(
     uncertain: false,
     deadline: None,
     counter: 0,
+    control_issued: false,
   }
 }
 
