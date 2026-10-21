@@ -207,12 +207,14 @@ fn ds_compact_summary_text(completion : @posoco.Completion) -> String {
 async fn DeepSeekModelPort::ds_compact_completion(
   self : DeepSeekModelPort,
   head : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
 ) -> @posoco.Completion raise @posoco.ModelError {
   let (thinking_json, effort_str) = self.default_thinking_config()
   let request_messages : Array[@posoco.Message] = []
-  // Byte-for-byte replay of the head: genuine prefix of the last routed
-  // request, so the KV cache survives.
+  // Preserve the same message head AND tool definitions as the routed chat.
+  // DeepSeek V4.1 renders tool schemas into the leading system prompt;
+  // dropping tools here invalidates the prefix, even when messages match.
   for message in head {
     request_messages.push(message)
   }
@@ -224,7 +226,7 @@ async fn DeepSeekModelPort::ds_compact_completion(
   let body = build_chat_request(
     self.ctx,
     request_messages,
-    [],
+    tools,
     options,
     self.config.model,
     false,
@@ -265,7 +267,15 @@ async fn DeepSeekModelPort::ds_compact_completion(
         "DeepSeek compact parse failure (stage=json, category=malformed)",
       )
   }
-  decode_chat_response(resp_json)
+  let completion = decode_chat_response(resp_json)
+  // The compaction instruction requests text. Never treat a tool-call response
+  // as a valid checkpoint: no tools are executed by this auxiliary request.
+  if completion.tool_calls().length() > 0 {
+    raise @posoco.ModelError::ResponseParse(
+      "DeepSeek compact returned tool calls instead of a checkpoint",
+    )
+  }
+  completion
 }
 
 ///|
@@ -337,6 +347,7 @@ fn ds_evict_result(evicted : @evict.EvictResult) -> @posoco.CompactResult {
 async fn DeepSeekModelPort::ds_compact_summarize(
   self : DeepSeekModelPort,
   messages : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   let (head, tail) = match ds_compact_split(messages) {
@@ -346,7 +357,7 @@ async fn DeepSeekModelPort::ds_compact_summarize(
         "DeepSeek compact has nothing to summarize",
       )
   }
-  let completion = self.ds_compact_completion(head, options)
+  let completion = self.ds_compact_completion(head, tools, options)
   let summary = ds_compact_summary_text(completion)
   if summary.length() == 0 {
     raise @posoco.ModelError::ResponseParse(
@@ -381,13 +392,13 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
   self : DeepSeekModelPort,
   scope : @posoco.InvocationScope,
   messages : ArrayView[@posoco.Message],
-  _tools : Array[@posoco.ToolDef],
+  tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
   trigger : @posoco.CompactTrigger,
 ) -> @posoco.CompactResult raise @posoco.ModelError {
   let owned = messages.to_owned()
   match trigger {
-    Manual => self.ds_compact_summarize(owned, options)
+    Manual => self.ds_compact_summarize(owned, tools, options)
     Auto => {
       let evicted = @evict.evict_old_tool_results(owned)
       let window = match scope.pressure {
@@ -404,11 +415,11 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
         None => None
       }
       match ds_auto_plan(evicted, window, exact) {
-        SummarizeOnly => self.ds_compact_summarize(owned, options)
+        SummarizeOnly => self.ds_compact_summarize(owned, tools, options)
         EvictOnly => ds_evict_result(evicted)
         EvictAndSummarize =>
           match ds_compact_split(evicted.messages) {
-            Some(_) => self.ds_compact_summarize(evicted.messages, options)
+            Some(_) => self.ds_compact_summarize(evicted.messages, tools, options)
             None => ds_evict_result(evicted)
           }
       }
