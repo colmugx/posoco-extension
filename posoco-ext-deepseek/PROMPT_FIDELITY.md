@@ -117,14 +117,13 @@ particular hosted API supports image input; the operator must verify that
 independently. The library does not reproduce OpenCV image preprocessing
 or expand image tokens client-side.
 
-## Reproducible verification
+## Verification record
 
-PR CI runs MoonBit native and JS checks and DeepSeek adapter tests. It also
-runs `scripts/deepseek_recipe_golden.py` with the official
-`deepseek-recipe` Python package and the matching upstream V4.1 tokenizer
-to verify renderer-specific tool/effort/reasoning differences and the
-tokenization overhead. This script is independent of API keys and does not
-claim to measure real hosted prompt-cache hits.
+Before removing the temporary validation machinery, PR #140 passed MoonBit
+native/JS checks, extension tests, and an official V4.1 recipe/tokenizer
+reference-renderer check. The one-off script and its additional CI steps were
+removed after verification; the repository's original PR CI remains intact.
+These offline checks do not establish real hosted API cache-hit improvements.
 
 For hosted API rollout, record `prompt_cache_hit_tokens` and
 `prompt_cache_miss_tokens` across identical tool sets with varied host tool
