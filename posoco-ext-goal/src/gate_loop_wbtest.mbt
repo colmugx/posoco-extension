@@ -410,3 +410,67 @@ async test "unverified_claim_pauses_not_completes" {
   }
 }
 
+
+///|
+/// A paused goal survives a runner restart when a host persists the
+/// checkpoint together with the original session store.
+async test "goal checkpoint round trip resumes on a new runner" {
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let first_model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("step one")),
+  ])
+  let first_goal = goal_extension(goal_condition="durable goal")
+  first_goal.options.stall_turn_threshold = 1
+  first_goal.options.stall_min_tokens = 1000000
+  let first_agent = gate_build_agent(first_goal, first_model, store)
+  let paused = first_goal.execute(first_agent, "durable_session")
+  assert_true(paused.final_status == Paused)
+  let saved = match first_goal.checkpoint() {
+    Ok(v) => v
+    Err(e) => fail("checkpoint failed: \{e}")
+  }
+  let next_goal = goal_extension(goal_condition="durable goal")
+  match next_goal.restore_checkpoint(saved) {
+    Ok(_) => ()
+    Err(e) => fail("restore failed: \{e}")
+  }
+  assert_eq(next_goal.current_turn, 1)
+  assert_eq(next_goal.history.length(), 1)
+  assert_true(next_goal.charter_delivered)
+  let next_model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("<goal-complete/>"),
+    ),
+  ])
+  let next_agent = gate_build_agent(next_goal, next_model, store)
+  next_goal.resume_goal()
+  let result = next_goal.execute(next_agent, "durable_session")
+  assert_true(result.final_status == Completed)
+  assert_eq(result.turns_completed, 3)
+  assert_eq(result.history.length(), 3)
+  assert_eq(next_model.call_count(), 2)
+  assert_false(gate_model_input_text(next_model, 0).contains(
+    "<goal-context type=\"charter\"",
+  ))
+}
+
+///|
+test "checkpoint rejects another goal without touching runner state" {
+  let original = goal_extension(goal_condition="same contract")
+  original.status = Paused
+  original.active_session_id = Some("original")
+  let snapshot = match original.checkpoint() {
+    Ok(v) => v
+    Err(e) => fail("checkpoint failed: \{e}")
+  }
+  let other = goal_extension(goal_condition="different contract")
+  match other.restore_checkpoint(snapshot) {
+    Err(reason) => assert_true(reason.contains("contract mismatch"))
+    Ok(_) => fail("must reject a foreign contract")
+  }
+  assert_true(other.status == Idle)
+  assert_eq(other.current_turn, 0)
+}
