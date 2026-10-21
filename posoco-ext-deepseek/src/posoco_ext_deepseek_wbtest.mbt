@@ -2369,3 +2369,39 @@ test "V4.1 canonical effort reuses the same reasoning prompt prefix" {
   ))
   assert_eq(unknown.default_thinking_config().1, Some("medium"))
 }
+
+///|
+test "V4.1 structured JSON schema is explicit and strict" {
+  let model = DeepSeekModelPort(DeepSeekConfig(
+    "sk-test", prompt_profile="v4.1",
+  ))
+  let schema = Json::object({
+    "type": Json::string("object"),
+    "properties": Json::object({
+      "ok": Json::object({ "type": Json::string("boolean") }),
+    }),
+  })
+  let body = model.ds_json_schema_body(
+    [user_msg("Return a JSON object")], "answer", schema,
+  )
+  guard body is Object(root) else { fail("expected object") }
+  guard root.get("response_format") is Some(Object(format)) else {
+    fail("expected schema response format")
+  }
+  assert_json_field_string(format, "type", "json_schema")
+  guard format.get("json_schema") is Some(Object(spec)) else {
+    fail("expected schema metadata")
+  }
+  assert_true(spec.get("strict") == Some(Json::boolean(true)))
+  assert_true(spec.get("schema") == Some(schema))
+}
+
+///|
+test "V4.1 structured JSON schema does not silently activate on unknown aliases" {
+  let model = DeepSeekModelPort(DeepSeekConfig("sk-test"))
+  let schema = Json::object({ "type": Json::string("object") })
+  let result = model.ds_json_schema_body(
+    [user_msg("Return a JSON object")], "answer", schema,
+  ) catch { _ => Json::Null }
+  assert_true(result == Json::Null)
+}
