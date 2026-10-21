@@ -209,20 +209,17 @@ fn ds_compact_summary_text(completion : @posoco.Completion) -> String {
 }
 
 ///|
-/// One non-streaming chat call with the replayed head plus the trailing
-/// instruction: same transport, headers, thinking resolution and error
-/// classification as `chat`, with an empty toolset.
-async fn DeepSeekModelPort::ds_compact_completion(
+/// Construct the summary request using the same wire encoder and toolset
+/// as a normal agent request. Having a pure request builder makes prefix
+/// parity testable without sending a live API request.
+fn DeepSeekModelPort::ds_compact_request_body(
   self : DeepSeekModelPort,
   head : Array[@posoco.Message],
   tools : Array[@posoco.ToolDef],
   options : @posoco.ChatOptions,
-) -> @posoco.Completion raise @posoco.ModelError {
+) -> Json {
   let (thinking_json, effort_str) = self.default_thinking_config()
   let request_messages : Array[@posoco.Message] = []
-  // Preserve the same message head AND tool definitions as the routed chat.
-  // DeepSeek V4.1 renders tool schemas into the leading system prompt;
-  // dropping tools here invalidates the prefix, even when messages match.
   for message in head {
     request_messages.push(message)
   }
@@ -231,7 +228,7 @@ async fn DeepSeekModelPort::ds_compact_completion(
       @posoco.Content::Text(DEEPSEEK_COMPACTION_INSTRUCTION),
     ]),
   )
-  let body = build_chat_request(
+  build_chat_request(
     self.ctx,
     request_messages,
     tools,
@@ -240,10 +237,20 @@ async fn DeepSeekModelPort::ds_compact_completion(
     false,
     thinking_json,
     effort_str,
-    // Byte-for-byte replay requires the same image encoding the routed chat
-    // request used, so the compacted prefix stays a genuine prefix.
     self.config.supports_images,
   )
+}
+
+///|
+/// One non-streaming summary call. Keep the original tool prefix to avoid
+/// changing V4.1 rendering; reject tool calls rather than executing them.
+async fn DeepSeekModelPort::ds_compact_completion(
+  self : DeepSeekModelPort,
+  head : Array[@posoco.Message],
+  tools : Array[@posoco.ToolDef],
+  options : @posoco.ChatOptions,
+) -> @posoco.Completion raise @posoco.ModelError {
+  let body = self.ds_compact_request_body(head, tools, options)
   let headers = build_headers(self.config)
   let url = chat_url(self.config)
   let (response, body_data) = @http.post(url, body.stringify(), headers~) catch {
