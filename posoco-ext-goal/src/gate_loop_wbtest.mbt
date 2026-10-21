@@ -701,7 +701,7 @@ async test "semantic adviser cannot override an exhausted turn budget" {
   let store = @posoco.RecordingSessionStore::RecordingSessionStore()
   let agent = gate_build_agent(goal, model, store)
   let result = goal.execute(agent, "hard_budget")
-  assert_true(result.final_status == Paused)
+  assert_true(result.final_status == BudgetExhausted)
   assert_eq(decision.call_count(), 0)
   assert_eq(goal.semantic_stall_deferrals, 0)
 }
