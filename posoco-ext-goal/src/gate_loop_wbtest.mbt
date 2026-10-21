@@ -4,7 +4,7 @@
 struct TestGoalVerifier {}
 
 ///|
-pub impl GoalVerifier for TestGoalVerifier with async fn verify(
+pub impl GoalVerifier for TestGoalVerifier with fn verify(
   _self : TestGoalVerifier,
   request : GoalVerificationRequest,
 ) -> GoalAssessment {
@@ -406,7 +406,7 @@ async test "unverified_claim_pauses_not_completes" {
   assert_true(result.final_status == Paused)
   match result.assessment {
     Inconclusive(reason) => assert_true(reason.contains("no independent"))
-    other => fail("expected Inconclusive, got \{other}")
+    other => fail("expected Inconclusive, got \{Repr(other)}")
   }
 }
 
