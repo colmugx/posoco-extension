@@ -115,6 +115,8 @@ test "goal_clear_resets_state" {
 ///|
 async test "goal_runner_plan_accessor" {
   let goal = goal_extension(goal_condition="plan accessor")
+  goal.status = Running
+  goal.executing_turn = true
   let args = Json::object(
     Map::from_array([
       (
@@ -195,12 +197,12 @@ test "clear_keeps_options_derived_charter" {
 }
 
 ///|
+
 test "goal default has a bounded turn budget" {
   let goal = goal_extension(goal_condition="bounded by default")
   assert_true(goal.options.budget.max_turns > 0)
 }
 
-///|
 test "scoped observer rejects foreign sessions and out-of-turn events" {
   let goal = goal_extension(goal_condition="scope")
   goal.status = Running
@@ -252,7 +254,6 @@ test "scoped observer rejects foreign sessions and out-of-turn events" {
   assert_eq(goal.usage.turns, 1)
 }
 
-///|
 test "clearing a running execution cannot destroy its state" {
   let goal = goal_extension(goal_condition="guard")
   goal.status = Running
@@ -302,4 +303,21 @@ test "unknown output usage remains unknown" {
   assert_false(goal.turn_output_known)
   assert_eq(goal.turn_output_tokens, 0)
   assert_eq(goal.usage.total_tokens, 0)
+}
+
+///|
+
+test "host prepares a goal only from a stopped state" {
+  let goal = goal_extension(goal_condition="original")
+  match goal.prepare_goal("  next objective  ") {
+    Ok(_) => ()
+    Err(reason) => fail("unexpected: \{reason}")
+  }
+  assert_eq(goal.options.goal_condition, "next objective")
+  goal.status = Paused
+  match goal.prepare_goal("override live") {
+    Err(_) => ()
+    Ok(_) => fail("active goal contract was overwritten")
+  }
+  assert_eq(goal.options.goal_condition, "next objective")
 }

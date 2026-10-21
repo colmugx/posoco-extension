@@ -130,7 +130,7 @@ pub extend GoalResult with @moonbitlang/core/debug.Debug::{to_repr}
 /// `pause`, `resume_goal`, `plan` and `clear`; the mutable bookkeeping stays
 /// package-private.
 pub struct GoalRunner {
-  options : GoalOptions
+  mut options : GoalOptions
   mut status : GoalStatus
   mut usage : GoalUsage
   mut history : Array[GoalHistoryEntry]
@@ -253,6 +253,21 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
 }
 
 ///|
+/// Configure a fresh goal only when no run is active or paused.
+pub fn GoalRunner::prepare_goal(self : GoalRunner, condition : String) -> Result[Unit, String] {
+  let goal = condition.trim().to_owned()
+  if goal == "" { return Err("goal must not be empty") }
+  if self.executing_loop || self.executing_turn || self.status == Running || self.status == Paused {
+    return Err("stop the active goal before changing its objective")
+  }
+  self.clear()
+  let next = GoalOptions::default(goal_condition=goal)
+  next.enable_semantic_advice = self.options.enable_semantic_advice
+  self.options = next
+  Ok(())
+}
+
+///|
 /// Current plan (defensive copy of the items).
 
 ///|
@@ -368,6 +383,15 @@ pub impl @posoco.ToolProvider for GoalRunner with fn execute(
   if name != self.options.plan_tool_name {
     return @posoco.ToolOutcome::ToolReportedError(
       content="unknown tool",
+      structured=None,
+    )
+  }
+  // Cetas keeps the tool catalog stable for the Agent lifetime.
+  // Reject non-goal invocations rather than allowing ordinary chat or
+  // PlanMode to silently mutate a dormant goal's plan.
+  if !self.executing_turn || self.status != Running {
+    return @posoco.ToolOutcome::ToolReportedError(
+      content="goal_update_plan is available only during an active goal run",
       structured=None,
     )
   }

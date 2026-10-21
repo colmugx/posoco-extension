@@ -149,6 +149,9 @@ async test "plan_tool_in_catalog" {
 ///|
 async test "update_plan_tool_rewrites_state_through_agent" {
   let goal = goal_extension(goal_condition="rewrite through agent")
+  // Test the tool provider inside an explicitly active Goal turn.
+  goal.status = Running
+  goal.executing_turn = true
   let args = Json::object(
     Map::from_array([
       (
@@ -263,6 +266,8 @@ async test "charter_rides_first_work_turn_input" {
 /// sees its rejected call on the next step.
 async test "bad_tool_args_reported_not_crashed" {
   let goal = goal_extension(goal_condition="bad args recovery")
+  goal.status = Running
+  goal.executing_turn = true
   let args = Json::object(Map::from_array([("items", Json::array([]))]))
   let model = @posoco.ScriptedModel([
     @posoco.ScriptedModelStep::Respond(
@@ -321,5 +326,30 @@ async test "unknown_tool_name_reported" {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_eq(content, "unknown tool")
     _ => fail("expected ToolReportedError for a name the provider does not own")
+  }
+}
+
+
+///|
+/// The Goal tool is part of the stable catalog but cannot mutate dormant
+/// Goal state during ordinary Cetas chat or PlanMode.
+async test "dormant goal refuses plan rewrites" {
+  let goal = goal_extension(goal_condition="not active yet")
+  let args = Json::object(Map::from_array([
+    ("items", Json::array([cw_plan_item("unexpected work", "in_progress")])),
+  ]))
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_tool_call_response("goal_update_plan", "inactive-1", args),
+    ),
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("ignored")),
+  ])
+  let agent = cw_compose_agent(model, goal)
+  let turn = cw_run_turn(agent, "normal chat", "no_goal")
+  assert_eq(goal.plan().items.length(), 0)
+  match turn.tool_results[0] {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("only during an active goal"))
+    other => fail("expected inactive tool rejection: \{Repr(other)}")
   }
 }
