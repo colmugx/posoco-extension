@@ -474,3 +474,71 @@ test "checkpoint rejects another goal without touching runner state" {
   assert_true(other.status == Idle)
   assert_eq(other.current_turn, 0)
 }
+
+
+///|
+/// Semantic DecisionPort advice cannot certify the goal on its own.
+async test "decision adviser is optional and not completion authority" {
+  let decision = @posoco.ScriptedDecisionPort::ScriptedDecisionPort([
+    @posoco.ScriptedDecisionStep::Return({
+      answers: [
+        @posoco.DecisionAnswer::BooleanAnswer(
+          id="goal_satisfied",
+          probability_true=0.99,
+        ),
+      ],
+      model: Some("fake-judge"),
+      usage: None,
+    }),
+  ])
+  let goal = goal_extension(goal_condition="no evidence despite confidence")
+  goal.set_decision_adviser(decision)
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("done\n<goal-complete/>"),
+    ),
+    @posoco.ScriptedModelStep::Respond(
+      @posoco.tk_stop_response("<goal-complete/>"),
+    ),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = gate_build_agent(goal, model, store, verified=false)
+  let result = goal.execute(agent, "semantic_session")
+  assert_true(result.final_status == Paused)
+  assert_eq(decision.call_count(), 1)
+  assert_eq(result.semantic_probability, Some(0.99))
+  match result.assessment {
+    Inconclusive(_) => ()
+    _ => fail("semantic probability must not become verified completion")
+  }
+}
+
+///|
+/// Evidence must cover every explicit criterion, with nonempty provenance.
+test "partial evidence never validates as completed" {
+  let evidence = Verified([
+    GoalEvidence::{ criterion: "tests", source: "test-command", reference: "run42", },
+  ])
+  match evidence.validated(["tests", "build"]) {
+    Inconclusive(reason) => assert_true(reason.contains("build"))
+    _ => fail("unverified acceptance item was accepted")
+  }
+  match GoalAssessment::Verified([]).validated(["tests"]) {
+    Inconclusive(_) => ()
+    _ => fail("empty evidence was accepted")
+  }
+}
+
+///|
+/// Semantic fallback does not require a composed DecisionPort.
+test "opted in goal composes without decision capability" {
+  let goal = goal_extension(goal_condition="plain Cetas JS host")
+  goal.options.enable_semantic_advice = true
+  let model = @posoco.ScriptedModel::ScriptedModel([
+    @posoco.ScriptedModelStep::Respond(@posoco.tk_stop_response("fine")),
+  ])
+  let store = @posoco.RecordingSessionStore::RecordingSessionStore()
+  let agent = gate_build_agent(goal, model, store)
+  ignore(agent)
+  assert_true(goal.adviser is None)
+}
