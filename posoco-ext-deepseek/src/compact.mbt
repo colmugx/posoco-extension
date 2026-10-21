@@ -434,7 +434,8 @@ pub impl @posoco.ModelPort for DeepSeekModelPort with fn compact(
         EvictOnly => ds_evict_result(evicted)
         EvictAndSummarize =>
           match ds_compact_split(evicted.messages) {
-            Some(_) => self.ds_compact_summarize(evicted.messages, tools, options)
+            Some(_) =>
+              self.ds_compact_summarize(evicted.messages, tools, options)
             None => ds_evict_result(evicted)
           }
       }

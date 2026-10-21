@@ -25,8 +25,14 @@ fn DeepSeekModelPort::ds_json_schema_body(
   }
   let (thinking_json, effort_str) = self.default_thinking_config()
   let request = build_chat_request(
-    self.ctx, messages, [], @posoco.ChatOptions::{ temperature: None, max_output_tokens: None, },
-    self.config.model, false, thinking_json, effort_str,
+    self.ctx,
+    messages,
+    [],
+    @posoco.ChatOptions::{ temperature: None, max_output_tokens: None, },
+    self.config.model,
+    false,
+    thinking_json,
+    effort_str,
     self.config.supports_images,
   )
   guard request is Object(body) else {
@@ -59,7 +65,9 @@ pub async fn DeepSeekModelPort::json_schema_completion(
   let body = self.ds_json_schema_body(messages, schema_name, schema)
   let headers = build_headers(self.config)
   let (response, body_data) = @http.post(
-    chat_url(self.config), body.stringify(), headers~,
+    chat_url(self.config),
+    body.stringify(),
+    headers~,
   ) catch {
     err =>
       raise @posoco.ModelError::Transport(
@@ -67,11 +75,12 @@ pub async fn DeepSeekModelPort::json_schema_completion(
       )
   }
   if !is_deepseek_http_success(response.code) {
-    match classify_deepseek_http_status(
-      "json_schema.http_status",
-      response.code,
-      BodyBytesUtf8(body_data.binary().length()),
-    ) {
+    match
+      classify_deepseek_http_status(
+        "json_schema.http_status",
+        response.code,
+        BodyBytesUtf8(body_data.binary().length()),
+      ) {
       Some(err) => raise err
       None => ()
     }

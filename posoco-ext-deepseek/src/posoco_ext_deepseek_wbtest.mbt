@@ -2197,7 +2197,6 @@ test "DeepSeek default protections are active and explicitly opt-out" {
   assert_true(port.repeated_reasoning_span_chars is None)
 }
 
- 
 ///|
 test "compaction estimate includes the assistant reasoning transcript" {
   let plain : @posoco.Message = @posoco.Message::AssistantMessage(
@@ -2232,18 +2231,27 @@ test "summary wire request keeps tool schemas and reasoning in prefix" {
     }),
     finish_reason=@posoco.FinishReason::Stop,
   )
-  let tools : Array[@posoco.ToolDef] = [{
-    name: @posoco.ToolName::unchecked("read_file"),
-    description: "Read a file",
-    input_schema: Json::empty_object(),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
-    policy: @posoco.ExecutionPolicy::Sequential,
-    provenance: Some("posoco_ext_deepseek"),
-  }]
+  let tools : Array[@posoco.ToolDef] = [
+    {
+      name: @posoco.ToolName::unchecked("read_file"),
+      description: "Read a file",
+      input_schema: Json::empty_object(),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_deepseek"),
+      policy: @posoco.ExecutionPolicy::Sequential,
+      provenance: Some("posoco_ext_deepseek"),
+    },
+  ]
   let messages = [user_msg("first"), history, user_msg("second")]
   let body = build_chat_request(
-    @devkit.ExtContext::default(), messages, tools, chat_options(),
-    "deepseek-flash", false, enabled_thinking_json(), Some("high"), false,
+    @devkit.ExtContext::default(),
+    messages,
+    tools,
+    chat_options(),
+    "deepseek-flash",
+    false,
+    enabled_thinking_json(),
+    Some("high"),
+    false,
   )
   guard body is Object(root) else { fail("expected request object") }
   guard root.get("tools") is Some(Array(defs)) else {
@@ -2273,8 +2281,15 @@ test "compaction summary body keeps identical tool and message prefix" {
   let compact = port.ds_compact_request_body(head, tools, chat_options())
   let (thinking, effort) = port.default_thinking_config()
   let routed = build_chat_request(
-    @devkit.ExtContext::default(), head, tools, chat_options(),
-    "deepseek-flash", false, thinking, effort, false,
+    @devkit.ExtContext::default(),
+    head,
+    tools,
+    chat_options(),
+    "deepseek-flash",
+    false,
+    thinking,
+    effort,
+    false,
   )
   guard compact is Object(c) && routed is Object(r) else {
     fail("expected request objects")
@@ -2330,7 +2345,9 @@ test "DeepSeek explicit prompt profiles preserve unknown by default" {
   let unknown = DeepSeekConfig("sk-test")
   assert_eq(unknown.prompt_profile, "unknown")
   let modern = DeepSeekConfig(
-    "sk-test", prompt_profile="v4.1", supports_images=true,
+    "sk-test",
+    prompt_profile="v4.1",
+    supports_images=true,
   )
   assert_eq(modern.prompt_profile, "v4.1")
   let legacy = DeepSeekConfig("sk-test", prompt_profile="v4")
@@ -2339,42 +2356,44 @@ test "DeepSeek explicit prompt profiles preserve unknown by default" {
 
 ///|
 test "panic explicit V4 prompt profile disallows image input" {
-  ignore(DeepSeekConfig(
-    "sk-test", prompt_profile="v4", supports_images=true,
-  ))
+  ignore(DeepSeekConfig("sk-test", prompt_profile="v4", supports_images=true))
 }
 
 ///|
 test "V4.1 canonical effort reuses the same reasoning prompt prefix" {
-  let minimal = DeepSeekModelPort(DeepSeekConfig(
-    "sk-test", reasoning_effort="minimal", prompt_profile="v4.1",
-  ))
-  let low = DeepSeekModelPort(DeepSeekConfig(
-    "sk-test", reasoning_effort="low", prompt_profile="v4.1",
-  ))
-  let medium = DeepSeekModelPort(DeepSeekConfig(
-    "sk-test", reasoning_effort="medium", prompt_profile="v4.1",
-  ))
-  let xhigh = DeepSeekModelPort(DeepSeekConfig(
-    "sk-test", reasoning_effort="xhigh", prompt_profile="v4.1",
-  ))
-  let ultra = DeepSeekModelPort(DeepSeekConfig(
-    "sk-test", reasoning_effort="ultra", prompt_profile="v4.1",
-  ))
-  assert_true(minimal.default_thinking_config() == low.default_thinking_config())
-  assert_true(medium.default_thinking_config() == xhigh.default_thinking_config())
+  let minimal = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", reasoning_effort="minimal", prompt_profile="v4.1"),
+  )
+  let low = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", reasoning_effort="low", prompt_profile="v4.1"),
+  )
+  let medium = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", reasoning_effort="medium", prompt_profile="v4.1"),
+  )
+  let xhigh = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", reasoning_effort="xhigh", prompt_profile="v4.1"),
+  )
+  let ultra = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", reasoning_effort="ultra", prompt_profile="v4.1"),
+  )
+  assert_true(
+    minimal.default_thinking_config() == low.default_thinking_config(),
+  )
+  assert_true(
+    medium.default_thinking_config() == xhigh.default_thinking_config(),
+  )
   assert_eq(ultra.default_thinking_config().1, Some("max"))
-  let unknown = DeepSeekModelPort(DeepSeekConfig(
-    "sk-test", reasoning_effort="medium",
-  ))
+  let unknown = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", reasoning_effort="medium"),
+  )
   assert_eq(unknown.default_thinking_config().1, Some("medium"))
 }
 
 ///|
 test "V4.1 structured JSON schema is explicit and strict" {
-  let model = DeepSeekModelPort(DeepSeekConfig(
-    "sk-test", prompt_profile="v4.1",
-  ))
+  let model = DeepSeekModelPort(
+    DeepSeekConfig("sk-test", prompt_profile="v4.1"),
+  )
   let schema = Json::object({
     "type": Json::string("object"),
     "properties": Json::object({
@@ -2382,7 +2401,9 @@ test "V4.1 structured JSON schema is explicit and strict" {
     }),
   })
   let body = model.ds_json_schema_body(
-    [user_msg("Return a JSON object")], "answer", schema,
+    [user_msg("Return a JSON object")],
+    "answer",
+    schema,
   )
   guard body is Object(root) else { fail("expected object") }
   guard root.get("response_format") is Some(Object(format)) else {
@@ -2401,8 +2422,12 @@ test "V4.1 structured JSON schema does not silently activate on unknown aliases"
   let model = DeepSeekModelPort(DeepSeekConfig("sk-test"))
   let schema = Json::object({ "type": Json::string("object") })
   let result = model.ds_json_schema_body(
-    [user_msg("Return a JSON object")], "answer", schema,
-  ) catch { _ => Json::null() }
+    [user_msg("Return a JSON object")],
+    "answer",
+    schema,
+  ) catch {
+    _ => Json::null()
+  }
   assert_true(result == Json::null())
 }
 
@@ -2411,11 +2436,15 @@ test "ProviderFactory rejects V4 profile with image input as typed error" {
   let provider = DeepSeekProvider()
   let factory : &@provider.ProviderFactory = provider
   let source = @provider.ProviderConfigSource::ProviderConfigSource(
-    settings=Some(Json::object(Map::from_array([
-      ("api_key", Json::string("sk-test")),
-      ("prompt_profile", Json::string("v4")),
-      ("image_input", Json::boolean(true)),
-    ]))),
+    settings=Some(
+      Json::object(
+        Map::from_array([
+          ("api_key", Json::string("sk-test")),
+          ("prompt_profile", Json::string("v4")),
+          ("image_input", Json::boolean(true)),
+        ]),
+      ),
+    ),
   )
   let result = Ok(factory.build(source)) catch { err => Err(err) }
   match result {

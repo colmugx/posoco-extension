@@ -292,7 +292,9 @@ pub impl @provider.ProviderFactory for DeepSeekProvider with fn build(
       detail="unsupported reasoning_effort: " + effort,
     )
   }
-  let (prompt_profile, supports_images) = deepseek_setting_vision_profile(source)
+  let (prompt_profile, supports_images) = deepseek_setting_vision_profile(
+    source,
+  )
   let config = DeepSeekConfig(
     api_key,
     model~,
@@ -383,7 +385,9 @@ pub impl @provider.RefreshableProviderFactory for DeepSeekProvider with fn refre
       detail="unsupported reasoning_effort: " + requested_effort,
     )
   }
-  let (prompt_profile, supports_images) = deepseek_setting_vision_profile(source)
+  let (prompt_profile, supports_images) = deepseek_setting_vision_profile(
+    source,
+  )
   let config = DeepSeekConfig(
     api_key,
     model~,

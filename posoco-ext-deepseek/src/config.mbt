@@ -59,7 +59,8 @@ pub fn DeepSeekConfig::DeepSeekConfig(
   supports_images~ : Bool = false,
   prompt_profile~ : String = "unknown",
 ) -> DeepSeekConfig {
-  if prompt_profile != "unknown" && prompt_profile != "v4" &&
+  if prompt_profile != "unknown" &&
+    prompt_profile != "v4" &&
     prompt_profile != "v4.1" {
     abort("posoco-ext-deepseek: unsupported prompt_profile: " + prompt_profile)
   }
