@@ -80,6 +80,7 @@ pub(all) struct GoalOptions {
   mut max_verifier_rounds : Int32 // completion claims routed to a verifier turn
   mut stall_repeat_threshold : Int32 // consecutive identical tool calls
   mut plan_tool_name : String
+  mut enable_semantic_advice : Bool // opt-in; may disclose claim context to DecisionPort
 } derive(Debug)
 
 ///|
@@ -182,6 +183,7 @@ pub fn GoalOptions::default(goal_condition~ : String) -> GoalOptions {
     max_verifier_rounds: 2,
     stall_repeat_threshold: 3,
     plan_tool_name: "goal_update_plan",
+    enable_semantic_advice: false,
   }
 }
 
