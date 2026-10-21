@@ -38,4 +38,5 @@ jobs:
       - name: DeepSeek V4.1 reference renderer contract
         run: |
           python3 -m pip install 'deepseek-recipe>=0.2,<0.3'
-          python3 scripts/deepseek_recipe_golden.py
+          curl -fsSL https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/main/static/tokenizers/v41/tokenizer.json -o /tmp/deepseek-v41-tokenizer.json
+          python3 scripts/deepseek_recipe_golden.py /tmp/deepseek-v41-tokenizer.json
