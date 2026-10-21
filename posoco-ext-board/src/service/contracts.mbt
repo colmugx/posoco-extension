@@ -233,6 +233,9 @@ impl @orchestration.BoardExecutionInputResolver for WorkflowInputs with fn resol
   self,
   candidate,
 ) {
+  // Scope is checked in `availability` at planning and is rechecked by the
+  // orchestrator's live admission guard before the owner's model gate. Resolve
+  // only issues the already-selected candidate's explicit host input.
   match self.values.get(candidate.attempt_id) {
     Some((task, input)) if task == candidate.task_id =>
       @orchestration.Authorized(input)

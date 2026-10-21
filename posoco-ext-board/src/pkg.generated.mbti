@@ -54,6 +54,10 @@ pub impl @port.Lifecycle for BoardExtension
 pub impl @port.Observer for BoardExtension
 
 // Type aliases
+pub using @service {type BoardWorkflowControl}
+
+pub using @service {type BoardWorkflowControlResult}
+
 pub using @service {type BoardWorkflowError}
 
 pub using @service {type BoardWorkflowPolicy}

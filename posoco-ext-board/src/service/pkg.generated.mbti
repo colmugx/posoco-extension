@@ -6,6 +6,7 @@ import {
   "colmugx/posoco-ext-board/domain",
   "colmugx/posoco-ext-board/dynamic",
   "colmugx/posoco-ext-board/execution",
+  "colmugx/posoco-ext-board/orchestration",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/async",
@@ -17,6 +18,21 @@ import {
 // Errors
 
 // Types and methods
+pub struct BoardWorkflowControl {
+  // private fields
+}
+pub async fn BoardWorkflowControl::plan(Self) -> Result[@orchestration.ExecutionPlan, BoardWorkflowError]
+pub async fn BoardWorkflowControl::prepare(Self, task_id~ : String, input~ : String, expected_revision~ : Int64) -> Result[String, BoardWorkflowError]
+pub fn BoardWorkflowControl::revoke(Self) -> Unit
+pub async fn BoardWorkflowControl::run_wave(Self) -> Result[Unit, BoardWorkflowError]
+pub async fn BoardWorkflowControl::take_results(Self) -> Result[Array[BoardWorkflowControlResult], BoardWorkflowError]
+pub async fn BoardWorkflowControl::transition(Self, task_id~ : String, to~ : @domain.BoardStage, expected_revision~ : Int64) -> Result[Int64, BoardWorkflowError]
+
+pub(all) struct BoardWorkflowControlResult {
+  binding : @execution.BoardExecutionBinding
+  assistant_text : String?
+}
+
 pub(all) enum BoardWorkflowError {
   Disabled
   InvalidConfiguration
@@ -73,6 +89,7 @@ pub struct BoardWorkflows {
   // private fields
 }
 pub fn BoardWorkflows::BoardWorkflows(directory~ : String, agents~ : &WorkflowAgentFactory, group~ : @async.TaskGroup[Unit], policy? : BoardWorkflowPolicy, now_ms? : () -> Int64, authorize? : () -> Bool) -> Self
+pub async fn BoardWorkflows::authorize_control(Self, workflow_id~ : String, task_ids~ : Array[String], expected_revision~ : Int64, max_runs~ : Int32, deadline_ms~ : Int64, authorize? : () -> Bool, capture_after_successful_tools? : Bool) -> Result[BoardWorkflowControl, BoardWorkflowError]
 pub fn BoardWorkflows::cancel(Self) -> Unit
 pub fn BoardWorkflows::commands(Self) -> Array[@port.CommandDef]
 pub fn BoardWorkflows::extension_id(Self) -> String

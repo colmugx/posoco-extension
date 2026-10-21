@@ -114,8 +114,9 @@ pub(all) struct BoardExecutionRequest {
 pub struct BoardExecutionResultChannel {
   // private fields
 }
-pub fn BoardExecutionResultChannel::BoardExecutionResultChannel(max_chars~ : Int32) -> Self
+pub fn BoardExecutionResultChannel::BoardExecutionResultChannel(max_chars~ : Int32, strategy? : ExecutionCaptureStrategy) -> Self
 pub fn BoardExecutionResultChannel::discard(Self) -> Unit
+pub fn BoardExecutionResultChannel::set_strategy(Self, ExecutionCaptureStrategy) -> Bool
 pub fn BoardExecutionResultChannel::take(Self, BoardExecutionBinding) -> String?
 
 pub(all) struct BoardExecutionRun {
@@ -126,6 +127,14 @@ pub(all) struct BoardExecutionRun {
 pub fn BoardExecutionRun::equal(Self, Self) -> Bool
 pub fn BoardExecutionRun::not_equal(Self, Self) -> Bool
 pub fn BoardExecutionRun::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ExecutionCaptureStrategy {
+  ToolFreeFinal
+  FinalAfterSuccessfulTools
+} derive(Eq, @debug.Debug)
+pub fn ExecutionCaptureStrategy::equal(Self, Self) -> Bool
+pub fn ExecutionCaptureStrategy::not_equal(Self, Self) -> Bool
+pub fn ExecutionCaptureStrategy::to_repr(Self) -> @debug.Repr
 
 pub struct MemoryBoardExecutionStore {
   // private fields

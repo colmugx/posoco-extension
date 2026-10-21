@@ -13,6 +13,7 @@ import {
   "colmugx/posoco-ext-board/orchestration",
   "colmugx/posoco-ext-board/parallel",
   "colmugx/posoco-ext-board/store",
+  "colmugx/posoco-ext-board/workflow",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/debug",

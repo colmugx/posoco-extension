@@ -43,9 +43,11 @@ pub struct DynamicWorkflowController {
 pub fn DynamicWorkflowController::approve(Self, preview~ : @expansion.ExpansionApprovalPreview, approver~ : &@expansion.ExpansionApprover) -> Result[@expansion.ExpansionApproval, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::authorize_scope_extension(Self, workflow_id~ : String, expansion_id~ : String, approved_task_ids~ : Array[String], expected_revision~ : Int64, approver~ : &ScopeExtensionApprover) -> Result[Unit, DynamicWorkflowError]
 pub fn DynamicWorkflowController::cancel(Self) -> Unit
+pub fn DynamicWorkflowController::clear_control_scope(Self) -> Unit
 pub async fn DynamicWorkflowController::commit(Self, approval~ : @expansion.ExpansionApproval) -> Result[Unit, DynamicWorkflowError]
 pub fn DynamicWorkflowController::create(owner~ : @execution.BoardExecutionOwner, backend~ : @backend.BoardBackend, resolver~ : &@orchestration.BoardExecutionInputResolver, group~ : @async.TaskGroup[Unit], spec~ : DynamicWorkflowSpec, now_ms? : () -> Int64) -> Result[Self, DynamicWorkflowError]
 pub fn DynamicWorkflowController::discard_proposal(Self) -> Unit
+pub async fn DynamicWorkflowController::execution_plan(Self, Array[String]) -> Result[@orchestration.ExecutionPlan, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::generate_plan(Self, request~ : @execution.BoardExecutionRequest, channel~ : @execution.BoardExecutionResultChannel, authorization_id~ : String, workflow_parent~ : String, permitted_existing_dependencies? : Array[String], deadline_ms~ : Int64, max_tasks? : Int32, max_edges? : Int32) -> Result[Unit, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::outlook(Self, expansion_id~ : String) -> Result[Array[@expansion.GeneratedTaskOutlook], DynamicWorkflowError]
 pub fn DynamicWorkflowController::pause(Self) -> Bool
@@ -58,6 +60,7 @@ pub async fn DynamicWorkflowController::reconcile_preparation(Self, task_id~ : S
 pub async fn DynamicWorkflowController::refresh_status(Self) -> Result[DynamicWorkflowStatus, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::resume_workflow(Self) -> Result[Unit, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::run_wave(Self) -> Result[Unit, DynamicWorkflowError]
+pub async fn DynamicWorkflowController::run_wave_scoped(Self, Array[@orchestration.ExecutionCandidate], authorize~ : () -> Bool) -> Result[Unit, DynamicWorkflowError]
 pub async fn DynamicWorkflowController::shutdown(Self, timeout_ms? : Int32) -> Bool
 pub async fn DynamicWorkflowController::start(Self) -> Result[Unit, DynamicWorkflowError]
 pub fn DynamicWorkflowController::status(Self) -> DynamicWorkflowStatus

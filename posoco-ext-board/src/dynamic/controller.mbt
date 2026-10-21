@@ -397,6 +397,85 @@ pub async fn DynamicWorkflowController::run_wave(
 }
 
 ///|
+/// Run one controlled wave through an exact host-authorized Task subset. The
+/// transient admission restriction remains active until clear_control_scope,
+/// which the joined host operation must call in a defer.
+pub async fn DynamicWorkflowController::run_wave_scoped(
+  self : DynamicWorkflowController,
+  candidates : Array[@orchestration.ExecutionCandidate],
+  authorize~ : () -> Bool,
+) -> Result[Unit, DynamicWorkflowError] {
+  let scope = self.runner.authorized_scope()
+  if candidates.any(c => !scope.contains(c.task_id)) ||
+    !self.orchestrator.set_control_scope(
+      Some(candidates),
+      authorize~,
+    ) {
+    return Err(TaskOutOfScope)
+  }
+  if self.busy || self.op is Some(_) || self.uncertain is Some(_) {
+    ignore(self.orchestrator.set_control_scope(None, authorize=() => true))
+    return Err(Busy)
+  }
+  match self.at_boundary() {
+    Err(e) => {
+      ignore(self.orchestrator.set_control_scope(None, authorize=() => true))
+      return Err(e)
+    }
+    Ok(_) => ()
+  }
+  if self.partials.any(r => r.uncertain) {
+    ignore(self.orchestrator.set_control_scope(None, authorize=() => true))
+    return Err(PreparationBlocked)
+  }
+  match self.refresh_status() {
+    Err(e) => {
+      ignore(self.orchestrator.set_control_scope(None, authorize=() => true))
+      return Err(e)
+    }
+    Ok(_) => ()
+  }
+  match self.at_boundary() {
+    Err(e) => {
+      ignore(self.orchestrator.set_control_scope(None, authorize=() => true))
+      return Err(e)
+    }
+    Ok(_) => ()
+  }
+  if !self.runner.resume_workflow() {
+    ignore(self.orchestrator.set_control_scope(None, authorize=() => true))
+    return Err(NotQuiescent)
+  }
+  Ok(())
+}
+
+///|
+/// Read the existing planner; this does not reserve or dispatch an Attempt.
+pub async fn DynamicWorkflowController::execution_plan(
+  self : DynamicWorkflowController,
+  task_ids : Array[String],
+) -> Result[@orchestration.ExecutionPlan, DynamicWorkflowError] {
+  match self.at_boundary() {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  if task_ids.any(id => !self.runner.authorized_scope().contains(id)) {
+    return Err(TaskOutOfScope)
+  }
+  match self.orchestrator.plan(task_scope=task_ids.copy()) {
+    Ok(plan) => Ok(plan)
+    Err(_) => Err(BoardUnavailable)
+  }
+}
+
+///|
+pub fn DynamicWorkflowController::clear_control_scope(
+  self : DynamicWorkflowController,
+) -> Unit {
+  ignore(self.orchestrator.set_control_scope(None, authorize=() => true))
+}
+
+///|
 pub async fn DynamicWorkflowController::wait_boundary(
   self : DynamicWorkflowController,
 ) -> Result[DynamicWorkflowStatus, DynamicWorkflowError] {
