@@ -81,6 +81,8 @@ pub(all) struct GoalOptions {
   mut stall_repeat_threshold : Int32 // consecutive identical tool calls
   mut plan_tool_name : String
   mut enable_semantic_advice : Bool // opt-in; may disclose claim context to DecisionPort
+  mut max_semantic_stall_deferrals : Int32 // bounded rescue attempts, default 1
+  mut semantic_stall_threshold : Double // strictly advisory probability gate
 } derive(Debug)
 
 ///|
@@ -160,6 +162,7 @@ pub struct GoalRunner {
   mut adviser : DecisionGoalAdviser?
   mut assessment : GoalAssessment
   mut semantic_probability : Double?
+  mut semantic_stall_deferrals : Int32
   mut executing_loop : Bool
   mut executing_turn : Bool
 }
@@ -184,6 +187,8 @@ pub fn GoalOptions::default(goal_condition~ : String) -> GoalOptions {
     stall_repeat_threshold: 3,
     plan_tool_name: "goal_update_plan",
     enable_semantic_advice: false,
+    max_semantic_stall_deferrals: 1,
+    semantic_stall_threshold: 0.75,
   }
 }
 
@@ -240,6 +245,7 @@ pub fn GoalRunner::GoalRunner(options~ : GoalOptions) -> GoalRunner {
     adviser: None,
     assessment: Inconclusive("not assessed"),
     semantic_probability: None,
+    semantic_stall_deferrals: 0,
     executing_loop: false,
     executing_turn: false,
   }
@@ -582,6 +588,7 @@ pub fn GoalRunner::clear(self : GoalRunner) -> Unit {
   self.active_run_id = None
   self.assessment = Inconclusive("not assessed")
   self.semantic_probability = None
+  self.semantic_stall_deferrals = 0
   self.executing_turn = false
 }
 
@@ -600,6 +607,43 @@ fn GoalRunner::result(self : GoalRunner, final_status : GoalStatus) -> GoalResul
     stall_reason: self.last_stall_reason,
     assessment: self.assessment,
     semantic_probability: self.semantic_probability,
+  }
+}
+
+///|
+/// A semantic assessment may defer *one bounded stall*, never completion,
+/// permissions or budgets. Provider errors and invalid probabilities fail
+/// back to deterministic pausing.
+async fn GoalRunner::should_defer_stall(
+  self : GoalRunner,
+  reason : String,
+  session_id : String,
+  summary : String,
+) -> Bool {
+  if self.semantic_stall_deferrals >= self.options.max_semantic_stall_deferrals ||
+    self.is_budget_exhausted() {
+    return false
+  }
+  match self.adviser {
+    None => false
+    Some(adviser) => {
+      let probability = adviser.assess_progress(
+        self.options.goal_condition,
+        session_id,
+        reason,
+        summary,
+      )
+      match probability {
+        Some(p) if p >= self.options.semantic_stall_threshold => {
+          self.semantic_stall_deferrals += 1
+          self.stall_count = 0
+          self.repeat_count = 0
+          self.plan_streak = 0
+          true
+        }
+        _ => false
+      }
+    }
   }
 }
 
@@ -778,45 +822,51 @@ pub async fn GoalRunner::execute(
       NoSignal => ()
     }
 
-    // Stall detection: only on work turns that did not end the run.
-    if self.status == Running && !self.verifying {
-      // Missing usage is unknown, never evidence of low model output.
-      // Input/prefill tokens also do not establish work, so only count
-      // reported output tokens. Tools are concrete activity and suppress
-      // the short-output heuristic for their turn.
+    // Stall detection: deterministic by default, with an optional,
+    // bounded semantic reconsideration only after a stall is detected.
+    if self.status == Running {
       if self.turn_output_known && self.turn_tool_count == 0 &&
         self.turn_output_tokens < self.options.stall_min_tokens {
-        self.stall_count = self.stall_count + 1
+        self.stall_count += 1
       } else {
         self.stall_count = 0
       }
-      if self.stall_count >= self.options.stall_turn_threshold {
-        self.status = Paused
-        self.last_stall_reason = Some("token output below threshold")
-        break
-      }
-      if self.repeat_count >= self.options.stall_repeat_threshold {
-        self.status = Paused
-        self.last_stall_reason = Some("repeated identical tool calls")
-        break
-      }
-      // A stable plan is normal while the agent performs tool work.
-      // Only count tool-free turns with an unchanged plan as potentially
-      // stale. Successful tool actions are not proof of progress, but
-      // they must not be classified as *inactivity* by this heuristic.
       let fp = GoalPlan::fingerprint(self.plan)
       if self.turn_tool_count > 0 {
         self.plan_streak = 0
       } else if Some(fp) == self.prev_plan_fp {
-        self.plan_streak = self.plan_streak + 1
+        self.plan_streak += 1
       } else {
         self.plan_streak = 1
       }
       self.prev_plan_fp = Some(fp)
-      if self.plan_streak >= self.options.stall_turn_threshold {
-        self.status = Paused
-        self.last_stall_reason = Some("plan unchanged")
-        break
+
+      let reason : String? = if self.options.stall_turn_threshold > 0 &&
+        self.stall_count >= self.options.stall_turn_threshold {
+        Some("token output below threshold")
+      } else if self.options.stall_repeat_threshold > 0 &&
+        self.repeat_count >= self.options.stall_repeat_threshold {
+        Some("repeated identical tool calls")
+      } else if self.options.stall_turn_threshold > 0 &&
+        self.plan_streak >= self.options.stall_turn_threshold {
+        Some("plan unchanged")
+      } else {
+        None
+      }
+      match reason {
+        Some(reason) => {
+          let sid = match self.active_session_id {
+            Some(v) => v
+            None => session_id
+          }
+          if self.should_defer_stall(reason, sid, summary) {
+            continue
+          }
+          self.status = Paused
+          self.last_stall_reason = Some(reason)
+          break
+        }
+        None => ()
       }
     }
     self.last_total_tokens = self.usage.total_tokens
