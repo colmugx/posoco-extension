@@ -35,12 +35,13 @@ fn go_binding_reset(usage : GoUsage) -> Int64? {
 async fn go_enrich_rate_limit(
   base_url : String,
   api_key : String,
+  extra_headers~ : Map[String, String] = Map::from_array([]),
   info : @posoco.RateLimitInfo,
 ) -> @posoco.ModelError {
   match info.reset_at_ms {
     Some(_) => @posoco.ModelError::RateLimited(info)
     None =>
-      match fetch_go_usage(base_url, api_key) {
+      match fetch_go_usage(base_url, api_key, extra_headers~) {
         Ok(usage) =>
           match go_binding_reset(usage) {
             Some(reset_at_ms) =>
@@ -62,6 +63,8 @@ pub(all) struct GoRateLimitModelPort {
   inner : &@posoco.ModelPort
   base_url : String
   api_key : String
+  /// Probe headers (a grant's organisation id).
+  extra_headers : Map[String, String]
 }
 
 ///|
@@ -69,8 +72,9 @@ pub fn GoRateLimitModelPort::GoRateLimitModelPort(
   inner~ : &@posoco.ModelPort,
   base_url~ : String,
   api_key~ : String,
+  extra_headers~ : Map[String, String] = Map::from_array([]),
 ) -> GoRateLimitModelPort {
-  { inner, base_url, api_key, }
+  { inner, base_url, api_key, extra_headers, }
 }
 
 ///|
@@ -88,7 +92,12 @@ pub impl @posoco.ModelPort for GoRateLimitModelPort with fn chat(
   match result {
     Ok(value) => value
     Err(@posoco.ModelError::RateLimited(info)) => {
-      let enriched = go_enrich_rate_limit(self.base_url, self.api_key, info) catch {
+      let enriched = go_enrich_rate_limit(
+        self.base_url,
+        self.api_key,
+        extra_headers=self.extra_headers,
+        info,
+      ) catch {
         _ => @posoco.ModelError::RateLimited(info)
       }
       raise enriched

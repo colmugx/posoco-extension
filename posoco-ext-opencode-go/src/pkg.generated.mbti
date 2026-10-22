@@ -15,17 +15,47 @@ import {
 }
 
 // Values
-pub async fn fetch_go_usage(String, String, now_ms? : () -> Int64) -> Result[GoUsage, String]
+pub fn choose_go_org(Array[GoOrg], String?, Map[String, String], Bool) -> Result[GoOrgChoice, String]
+
+pub async fn fetch_go_usage(String, String, extra_headers? : Map[String, String], now_ms? : () -> Int64) -> Result[GoUsage, String]
+
+pub fn go_extra_headers(String?) -> Map[String, String]
 
 pub fn go_model_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, Array[@posoco-ext-opencode-zen.ZenModelInfo], String, Map[String, @posoco-ext-opencode-zen.ZenModelMeta], &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String], policy? : @posoco-kit-deepseek.DeepSeekPolicy?, ctx? : @devkit.ExtContext) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
 pub fn go_monthly_allowance(String, GoPlan) -> Double?
 
+pub fn go_normalize_api_base(String) -> String?
+
+pub fn go_oauth_credential_from_login(GoOAuthToken, String, org~ : GoOrg, api_base? : String?, email? : String?, now_secs~ : Int32) -> @ext-oauth.Credential
+
+pub fn go_oauth_error_text(@ext-oauth.OAuthError) -> String
+
+pub fn go_oauth_is_expiring(GoOAuthSession, Int32) -> Bool
+
+pub async fn go_oauth_login(&@ext-oauth.AuthInteraction, server? : String) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
+
+pub async fn go_oauth_refresh(@ext-oauth.Credential) -> @ext-oauth.Credential raise @ext-oauth.OAuthError
+
+pub fn go_oauth_refreshed_credential(@ext-oauth.Credential, GoOAuthToken, now_secs~ : Int32) -> @ext-oauth.Credential
+
+pub fn go_oauth_session(@ext-oauth.Credential) -> GoOAuthSession?
+
 pub fn go_plan_of_setting(String) -> GoPlan raise @error.CompositionError
+
+pub fn go_resolve_verification_url(String, String) -> String?
 
 pub fn go_static_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String], policy? : @posoco-kit-deepseek.DeepSeekPolicy?, ctx? : @devkit.ExtContext) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
 pub fn go_usage_url(String) -> String
+
+pub fn parse_go_config_api(Json) -> String?
+
+pub fn parse_go_device_auth(String, Json) -> Result[GoDeviceAuth, String]
+
+pub fn parse_go_orgs(Json) -> Array[GoOrg]
+
+pub fn parse_go_token_poll(Int32, Json) -> GoTokenPoll
 
 pub fn parse_go_usage(Json, fetched_at_ms~ : Int64) -> Result[GoUsage, String]
 
@@ -34,6 +64,55 @@ pub fn resolve_go_wire(String, npm? : String?, overrides? : Map[String, String])
 // Errors
 
 // Types and methods
+pub(all) struct GoDeviceAuth {
+  device_code : String
+  user_code : String
+  verification_url : String
+  expires_in : Int32
+  interval : Int32
+} derive(Eq, @debug.Debug)
+pub fn GoDeviceAuth::equal(Self, Self) -> Bool
+pub fn GoDeviceAuth::not_equal(Self, Self) -> Bool
+pub fn GoDeviceAuth::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GoOAuthSession {
+  access_token : String
+  refresh_token : String
+  expires_at : Int32
+  server : String
+  org_id : String?
+  api_base : String?
+} derive(Eq, @debug.Debug)
+pub fn GoOAuthSession::equal(Self, Self) -> Bool
+pub fn GoOAuthSession::not_equal(Self, Self) -> Bool
+pub fn GoOAuthSession::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GoOAuthToken {
+  access_token : String
+  refresh_token : String
+  expires_in : Int32
+  org_id : String?
+} derive(Eq, @debug.Debug)
+pub fn GoOAuthToken::equal(Self, Self) -> Bool
+pub fn GoOAuthToken::not_equal(Self, Self) -> Bool
+pub fn GoOAuthToken::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GoOrg {
+  id : String
+  name : String
+} derive(Eq, @debug.Debug)
+pub fn GoOrg::equal(Self, Self) -> Bool
+pub fn GoOrg::not_equal(Self, Self) -> Bool
+pub fn GoOrg::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GoOrgChoice {
+  org : GoOrg
+  api_base : String?
+} derive(Eq, @debug.Debug)
+pub fn GoOrgChoice::equal(Self, Self) -> Bool
+pub fn GoOrgChoice::not_equal(Self, Self) -> Bool
+pub fn GoOrgChoice::to_repr(Self) -> @debug.Repr
+
 pub(all) enum GoPlan {
   Go
   GoPlus
@@ -46,12 +125,23 @@ pub(all) struct GoRateLimitModelPort {
   inner : &@port.ModelPort
   base_url : String
   api_key : String
+  extra_headers : Map[String, String]
 }
-pub fn GoRateLimitModelPort::GoRateLimitModelPort(inner~ : &@port.ModelPort, base_url~ : String, api_key~ : String) -> Self
+pub fn GoRateLimitModelPort::GoRateLimitModelPort(inner~ : &@port.ModelPort, base_url~ : String, api_key~ : String, extra_headers? : Map[String, String]) -> Self
 pub async fn GoRateLimitModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub async fn GoRateLimitModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn GoRateLimitModelPort::provider_config(Self) -> @port.ProviderConfig
 pub impl @port.ModelPort for GoRateLimitModelPort
+
+pub(all) enum GoTokenPoll {
+  Pending
+  SlowDown
+  Granted(GoOAuthToken)
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub fn GoTokenPoll::equal(Self, Self) -> Bool
+pub fn GoTokenPoll::not_equal(Self, Self) -> Bool
+pub fn GoTokenPoll::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoUsage {
   rolling : GoUsageWindow
@@ -66,9 +156,10 @@ pub fn GoUsage::to_repr(Self) -> @debug.Repr
 pub(all) struct GoUsageQuotaSource {
   base_url : String
   api_key : String
+  extra_headers : Map[String, String]
   now_ms : () -> Int64
 }
-pub fn GoUsageQuotaSource::GoUsageQuotaSource(base_url~ : String, api_key~ : String, now_ms? : () -> Int64) -> Self
+pub fn GoUsageQuotaSource::GoUsageQuotaSource(base_url~ : String, api_key~ : String, extra_headers? : Map[String, String], now_ms? : () -> Int64) -> Self
 pub async fn GoUsageQuotaSource::read(Self) -> Result[Array[@devkit.QuotaReading], String]
 pub impl @devkit.QuotaSource for GoUsageQuotaSource
 
@@ -91,6 +182,7 @@ pub async fn OpenCodeGoProvider::login(Self, &@ext-oauth.AuthPromptInteraction) 
 pub fn OpenCodeGoProvider::provider_id(Self) -> String
 pub async fn OpenCodeGoProvider::refresh(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
 pub impl @posoco-kit-provider.ApiKeyFactory for OpenCodeGoProvider
+pub impl @posoco-kit-provider.OAuthFactory for OpenCodeGoProvider
 pub impl @posoco-kit-provider.ProviderFactory for OpenCodeGoProvider
 pub impl @posoco-kit-provider.RefreshableProviderFactory for OpenCodeGoProvider
 

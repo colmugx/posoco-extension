@@ -278,6 +278,8 @@ fn zen_config_for_model(
         rates~,
         client_id=base.client_id,
         spend_source=base.spend_source,
+        extra_headers=base.extra_headers,
+        bearer_auth=base.bearer_auth,
       )
     _ =>
       OpenCodeZenConfig(
@@ -292,6 +294,8 @@ fn zen_config_for_model(
         rates~,
         client_id=base.client_id,
         spend_source=base.spend_source,
+        extra_headers=base.extra_headers,
+        bearer_auth=base.bearer_auth,
       )
   }
 }

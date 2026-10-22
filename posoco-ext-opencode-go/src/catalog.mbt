@@ -157,6 +157,7 @@ fn go_rate_limited_port(
     inner=wire_port,
     base_url=config.base_url,
     api_key=config.api_key,
+    extra_headers=config.extra_headers,
   )
 }
 
@@ -262,6 +263,25 @@ fn go_catalog_slot(
       }
       go_catalog_slot(rebuilt_config, surface, api_key, policy~, ctx~)
     }),
+    rebuild_on_credential=Some(fn(credential) {
+      match go_oauth_session(credential) {
+        Some(session) => {
+          let base_url = match session.api_base {
+            Some(value) => value
+            None => config.base_url
+          }
+          let rebuilt_config : @zen.OpenCodeZenConfig = {
+            ..config,
+            api_key: session.access_token,
+            base_url,
+            extra_headers: go_extra_headers(session.org_id),
+            bearer_auth: true,
+          }
+          go_catalog_slot(rebuilt_config, surface, api_key, policy~, ctx~)
+        }
+        None => go_catalog_slot(config, surface, api_key, policy~, ctx~)
+      }
+    }),
     rebuild_on_effort~,
   )
 }
@@ -341,6 +361,8 @@ fn go_config_for_model(
         rates~,
         client_id=base.client_id,
         spend_source=base.spend_source,
+        extra_headers=base.extra_headers,
+        bearer_auth=base.bearer_auth,
       )
     _ =>
       @zen.OpenCodeZenConfig(
@@ -355,6 +377,8 @@ fn go_config_for_model(
         rates~,
         client_id=base.client_id,
         spend_source=base.spend_source,
+        extra_headers=base.extra_headers,
+        bearer_auth=base.bearer_auth,
       )
   }
 }

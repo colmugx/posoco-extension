@@ -1599,7 +1599,7 @@ test "DeepSeek replay integrity is scoped to selected model and thinking" {
 }
 
 ///|
-test "DeepSeek tool completions require actual replayable reasoning" {
+test "DeepSeek dialect accepts reasoning-less tool completions (hybrid thinking skips)" {
   let port = OpenCodeZenModelPort(
     OpenCodeZenConfig(
       "test",
@@ -1621,20 +1621,15 @@ test "DeepSeek tool completions require actual replayable reasoning" {
     finish_reason=@posoco.FinishReason::ToolCalls,
     usage=None,
   )
-  try
-    @compatible.resolve(port.config.model).validate_completion(
-      completion,
-      true,
-      port.config.thinking,
-      port.config.reasoning_effort,
-    )
-  catch {
-    @posoco.ModelError::ResponseParse(message) =>
-      assert_true(message.contains("reasoning_content"))
-    _ => fail("expected a local replay-integrity failure")
-  } noraise {
-    _ => fail("reasoning-less tool completion must fail")
-  }
+  // Hybrid thinking models skip reasoning on many tool-call turns (60/102
+  // streams in the 2026-10-22 wire capture) and the upstream accepts the
+  // reasoning-less replay — such completions must flow through untouched.
+  @compatible.resolve(port.config.model).validate_completion(
+    completion,
+    true,
+    port.config.thinking,
+    port.config.reasoning_effort,
+  )
   let nondeepseek = OpenCodeZenModelPort(
     OpenCodeZenConfig(
       "test",
@@ -1652,7 +1647,7 @@ test "DeepSeek tool completions require actual replayable reasoning" {
 }
 
 ///|
-test "DeepSeek blocks missing reasoning even for plain assistant history when tools exist" {
+test "DeepSeek dialect accepts reasoning-less assistant history (upstream-verified)" {
   let port = OpenCodeZenModelPort(
     OpenCodeZenConfig(
       "test",
@@ -1677,24 +1672,12 @@ test "DeepSeek blocks missing reasoning even for plain assistant history when to
     reasoning=None,
     finish_reason=@posoco.FinishReason::Stop,
   )
-  try
-    @compatible.resolve(port.config.model).validate_history(
-      [zen_user_msg("task"), bad],
-      !tools.is_empty(),
-      port.config.thinking,
-      port.config.reasoning_effort,
-    )
-  catch {
-    @posoco.ModelError::ResponseParse(message) =>
-      assert_true(message.contains("index=1"))
-    _ => fail("expected local replay failure for missing assistant reasoning")
-  } noraise {
-    _ => fail("DeepSeek tools request must not replay missing thinking")
-  }
-  // Without tools, DeepSeek permits omission of historical reasoning.
+  // A history whose assistant turns lack reasoning flows through untouched:
+  // the model legitimately skips thinking, and replaying those turns
+  // verbatim is what the upstream expects (2026-10-22 wire capture).
   @compatible.resolve(port.config.model).validate_history(
     [zen_user_msg("task"), bad],
-    false,
+    !tools.is_empty(),
     port.config.thinking,
     port.config.reasoning_effort,
   )
@@ -2706,4 +2689,55 @@ test "zen stream labels parse failures with the caller plane identity" {
   } noraise {
     _ => fail("expected to raise")
   }
+}
+
+///|
+test "provider-owned headers reach every wire header set" {
+  let scope = zen_flaky_scope()
+  let account_config = OpenCodeZenConfig(
+    "account-token",
+    base_url="https://opencode.ai/inference/go/v1",
+    model="glm-5.3-flash",
+    extra_headers=Map::from_array([("x-opencode-org-id", "org_123")]),
+    bearer_auth=true,
+  )
+  let chat_headers = build_headers(account_config, scope)
+  assert_eq(
+    chat_headers[@http.CaseInsensitiveString("x-opencode-org-id")],
+    "org_123",
+  )
+  assert_eq(
+    chat_headers[@http.CaseInsensitiveString("Authorization")],
+    "Bearer account-token",
+  )
+  let messages_headers = build_messages_headers(account_config, scope)
+  assert_eq(
+    messages_headers[@http.CaseInsensitiveString("x-opencode-org-id")],
+    "org_123",
+  )
+  assert_eq(
+    messages_headers[@http.CaseInsensitiveString("Authorization")],
+    "Bearer account-token",
+  )
+  assert_false(
+    messages_headers.contains(@http.CaseInsensitiveString("x-api-key")),
+  )
+}
+
+///|
+test "API-key credentials keep the Messages x-api-key scheme" {
+  let scope = zen_flaky_scope()
+  let key_config = OpenCodeZenConfig(
+    "sk-key",
+    base_url="https://opencode.ai/inference/go/v1",
+    model="glm-5.3-flash",
+  )
+  let messages_headers = build_messages_headers(key_config, scope)
+  assert_eq(
+    messages_headers[@http.CaseInsensitiveString("x-api-key")],
+    "sk-key",
+  )
+  assert_false(
+    messages_headers.contains(@http.CaseInsensitiveString("Authorization")),
+  )
 }

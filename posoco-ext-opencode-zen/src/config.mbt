@@ -54,6 +54,10 @@ pub(all) struct OpenCodeZenConfig {
   client_id : String
   /// The status source this port records its spend estimate under.
   spend_source : String
+  /// Extra headers on every wire request; empty by default.
+  extra_headers : Map[String, String]
+  /// Messages plane uses `Authorization: Bearer` instead of `x-api-key`.
+  bearer_auth : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -80,6 +84,8 @@ pub fn OpenCodeZenConfig::OpenCodeZenConfig(
   rates~ : ZenCostRates? = None,
   client_id~ : String = "opencode-zen",
   spend_source~ : String = "posoco_ext_opencode_zen",
+  extra_headers~ : Map[String, String] = Map::from_array([]),
+  bearer_auth~ : Bool = false,
 ) -> OpenCodeZenConfig {
   {
     api_key,
@@ -97,6 +103,8 @@ pub fn OpenCodeZenConfig::OpenCodeZenConfig(
     rates,
     client_id,
     spend_source,
+    extra_headers,
+    bearer_auth,
   }
 }
 
@@ -138,7 +146,8 @@ pub fn OpenCodeZenConfig::with_reasoning_effort(
 
 ///|
 /// Bearer auth plus JSON content type, then the per-request OpenCode routing
-/// metadata.
+/// metadata, then provider-owned headers (an explicit provider value wins
+/// over the shared defaults).
 fn build_headers(
   config : OpenCodeZenConfig,
   scope : @posoco.InvocationScope,
@@ -154,27 +163,42 @@ fn build_headers(
     ) {
     headers[@http.CaseInsensitiveString(key)] = value
   }
+  for key, value in config.extra_headers {
+    headers[@http.CaseInsensitiveString(key)] = value
+  }
   headers
 }
 
 ///|
-/// Anthropic-plane auth: the gateway's Messages endpoint takes the key as
-/// `x-api-key` with an explicit `anthropic-version`, plus the same routing
-/// metadata as the OpenAI planes.
+/// Anthropic-plane auth: the gateway's Messages endpoint takes an API key as
+/// `x-api-key` and a Console account token as `Authorization: Bearer`, with
+/// an explicit `anthropic-version` and the same routing metadata as the
+/// OpenAI planes. Provider-owned headers are applied last.
 fn build_messages_headers(
   config : OpenCodeZenConfig,
   scope : @posoco.InvocationScope,
 ) -> @http.Headers {
-  let headers : @http.Headers = {
-    "x-api-key": config.api_key,
-    "Content-Type": "application/json",
-    "anthropic-version": "2023-06-01",
+  let headers : @http.Headers = if config.bearer_auth {
+    {
+      "Authorization": "Bearer \{config.api_key}",
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+    }
+  } else {
+    {
+      "x-api-key": config.api_key,
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+    }
   }
   for
     key, value in opencode_request_headers(
       config.client_id,
       scope.session_id.to_string(),
     ) {
+    headers[@http.CaseInsensitiveString(key)] = value
+  }
+  for key, value in config.extra_headers {
     headers[@http.CaseInsensitiveString(key)] = value
   }
   headers

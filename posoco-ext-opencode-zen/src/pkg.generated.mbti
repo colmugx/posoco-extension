@@ -15,7 +15,7 @@ import {
 // Values
 pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @error.ModelError
 
-pub async fn fetch_zen_models(String, String, endpoint_prefix? : String) -> Array[ZenModelInfo] raise @error.ModelError
+pub async fn fetch_zen_models(String, String, endpoint_prefix? : String, extra_headers? : Map[String, String]) -> Array[ZenModelInfo] raise @error.ModelError
 
 pub fn opencode_anchored_compact_port(OpenCodeZenConfig, inspector? : ((@types.StreamAccumulator, Bool) -> StreamVerdict)?) -> &@port.ModelPort
 
@@ -78,8 +78,10 @@ pub(all) struct OpenCodeZenConfig {
   rates : ZenCostRates?
   client_id : String
   spend_source : String
+  extra_headers : Map[String, String]
+  bearer_auth : Bool
 } derive(Eq, @debug.Debug)
-pub fn OpenCodeZenConfig::OpenCodeZenConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, supports_images? : Bool, wire? : WireKind, max_output_tokens? : Int32, rates? : ZenCostRates?, client_id? : String, spend_source? : String) -> Self
+pub fn OpenCodeZenConfig::OpenCodeZenConfig(String, base_url~ : String, model~ : String, endpoint_prefix? : String, thinking? : Bool, reasoning_effort? : String?, thinking_efforts? : Array[String], context_window? : Int32?, compact_threshold? : Double?, supports_images? : Bool, wire? : WireKind, max_output_tokens? : Int32, rates? : ZenCostRates?, client_id? : String, spend_source? : String, extra_headers? : Map[String, String], bearer_auth? : Bool) -> Self
 pub fn OpenCodeZenConfig::equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::not_equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::to_repr(Self) -> @debug.Repr

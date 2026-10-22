@@ -90,7 +90,9 @@ Each wire owns its dialect:
   on); standard OpenAI shape for the other completions models (no `thinking`
   object, `reasoning_effort` only when a level is selected).
 - **Messages** (`posoco-kit-messages`) — `x-api-key` +
-  `anthropic-version: 2023-06-01`; effort levels map onto `thinking`
+  `anthropic-version: 2023-06-01`; a config with `bearer_auth=true` (an
+  OpenCode Console account token, which the Go plane stores) sends
+  `Authorization: Bearer` instead. Effort levels map onto `thinking`
   budget tokens (`none`/`off` disable, the bare `on` toggle uses the
   default budget); `max_output_tokens` (settings-overridable, default
   32768) carries the required `max_tokens`.
@@ -102,6 +104,12 @@ Each wire owns its dialect:
 Only the SSE line parsing, 429 classification, and content-encoding helpers
 are shared with the other chat-completions providers (via
 `posoco-kit-chat-completions`); every dialect spelling lives in this package.
+
+`OpenCodeZenConfig.extra_headers` carries provider-owned request headers
+into every wire and model-listing request (the Go plane uses it for the
+Console grant's `x-opencode-org-id`); `bearer_auth` switches the Messages
+credential scheme as described above. Both default to empty/false, so an
+API-key configuration is unchanged.
 
 ## Metadata, spend, and quota
 

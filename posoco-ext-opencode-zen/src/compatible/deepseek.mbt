@@ -3,54 +3,19 @@
 /// selected deepseek* Chat Completions models in Go/Zen). Never applied to
 /// GLM, Kimi, Messages, Responses, or the standard OpenAI-compatible kit.
 ///
-/// Missing historical reasoning cannot be reconstructed by inventing empty
-/// or whitespace reasoning_content: fail locally with the message index.
+/// No replay gates. The hybrid thinking models on this route legitimately
+/// skip thinking on a large share of tool-call turns (60/102 streams in the
+/// 2026-10-22 business-run wire capture), and the upstream accepts
+/// reasoning-less assistant turns replayed back — all 60 skip-replay cycles
+/// completed without a 400. An earlier pair of gates rejected turns whose
+/// completion or history lacked reasoning_content, on the static assumption
+/// that a missing reasoning replay 400s; that premise holds only for turns
+/// where reasoning was produced and lost (the alias-normalization fix in
+/// `sse.mbt` addresses that root cause), not for turns where the model
+/// never thought. Enforcing the stricter invariant turned legitimate
+/// upstream behavior into unrecoverable local failures.
 fn ds_thinking_enabled(thinking : Bool, effort : String?) -> Bool {
   thinking && effort != Some("none")
-}
-
-///|
-fn ds_check_history(
-  messages : Array[@posoco.Message],
-  tools_present : Bool,
-  thinking : Bool,
-  effort : String?,
-) -> Unit raise @posoco.ModelError {
-  if !ds_thinking_enabled(thinking, effort) || !tools_present {
-    return
-  }
-  for i in 0..<messages.length() {
-    match messages[i] {
-      @posoco.Message::AssistantMessage(reasoning~, ..) =>
-        match reasoning {
-          Some(r) if r.content.length() > 0 => ()
-          _ =>
-            raise @posoco.ModelError::ResponseParse(
-              "DeepSeek replay blocked: assistant history lacks reasoning_content (index=\{i}); use a clean conversation or safe compaction",
-            )
-        }
-      _ => ()
-    }
-  }
-}
-
-///|
-fn ds_check_completion(
-  completion : @posoco.Completion,
-  tools_present : Bool,
-  thinking : Bool,
-  effort : String?,
-) -> Unit raise @posoco.ModelError {
-  if ds_thinking_enabled(thinking, effort) &&
-    (tools_present || completion.has_tool_calls()) {
-    match completion.message.reasoning {
-      Some(r) if r.content.length() > 0 => ()
-      _ =>
-        raise @posoco.ModelError::ResponseParse(
-          "DeepSeek replay integrity failure: completion lacks reasoning_content",
-        )
-    }
-  }
 }
 
 ///|
@@ -71,8 +36,8 @@ pub fn deepseek() -> ChatCompatibility {
         }
       }
     },
-    check_history: ds_check_history,
-    check_completion: ds_check_completion,
+    check_history: fn(_messages, _tools, _thinking, _effort) { () },
+    check_completion: fn(_completion, _tools, _thinking, _effort) { () },
     explicit_terminal: ds_thinking_enabled,
   }
 }

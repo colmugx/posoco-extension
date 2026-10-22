@@ -15,17 +15,20 @@ pub fn go_usage_url(base_url : String) -> String {
 }
 
 ///|
-/// Fetch and decode the live `/usage` reading. A Zen key on this endpoint
-/// answers `403 EntitlementError` — surfaced verbatim so a misconfigured
-/// credential is diagnosable, never rendered as fake zero-percent windows.
+/// Fetch and decode `/usage`. A Zen key answers `403 EntitlementError` here;
+/// a grant needs its organisation header.
 pub async fn fetch_go_usage(
   base_url : String,
   api_key : String,
+  extra_headers~ : Map[String, String] = Map::from_array([]),
   now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> Result[GoUsage, String] {
   let headers : @http.Headers = {
     "Authorization": "Bearer " + api_key,
     "Accept": "application/json",
+  }
+  for key, value in extra_headers {
+    headers[@http.CaseInsensitiveString(key)] = value
   }
   let fetched_at_ms = now_ms()
   let (response, body_data) = @async.with_timeout(10000, () => {
@@ -60,6 +63,8 @@ pub async fn fetch_go_usage(
 pub(all) struct GoUsageQuotaSource {
   base_url : String
   api_key : String
+  /// Grant organisation id.
+  extra_headers : Map[String, String]
   now_ms : () -> Int64
 }
 
@@ -67,9 +72,10 @@ pub(all) struct GoUsageQuotaSource {
 pub fn GoUsageQuotaSource::GoUsageQuotaSource(
   base_url~ : String,
   api_key~ : String,
+  extra_headers~ : Map[String, String] = Map::from_array([]),
   now_ms~ : () -> Int64 = fn() { @async.now() },
 ) -> GoUsageQuotaSource {
-  { base_url, api_key, now_ms, }
+  { base_url, api_key, extra_headers, now_ms, }
 }
 
 ///|
@@ -92,7 +98,12 @@ fn go_window_reading(
 pub impl @devkit.QuotaSource for GoUsageQuotaSource with fn read(
   self : GoUsageQuotaSource,
 ) -> Result[Array[@devkit.QuotaReading], String] {
-  let usage = fetch_go_usage(self.base_url, self.api_key, now_ms=self.now_ms)
+  let usage = fetch_go_usage(
+    self.base_url,
+    self.api_key,
+    extra_headers=self.extra_headers,
+    now_ms=self.now_ms,
+  )
   match usage {
     Err(message) => Err(message)
     Ok(usage) => {

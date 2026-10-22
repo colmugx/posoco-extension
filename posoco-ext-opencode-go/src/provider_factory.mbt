@@ -1,9 +1,9 @@
 ///|
 /// Provider-owned configuration source and catalog contribution for OpenCode
-/// Go: the endpoint, the catalog decode, the API-key login prompt, and the
-/// `/usage` quota source. The wire machinery and identity conventions come
-/// from `posoco-ext-opencode-zen`; this factory is the Go plane's product
-/// seam.
+/// Go: the endpoint, the catalog decode, both login methods (Console account
+/// grant and API key), and the `/usage` quota source. The wire machinery and
+/// identity conventions come from `posoco-ext-opencode-zen`; this factory is
+/// the Go plane's product seam.
 
 ///|
 pub(all) struct OpenCodeGoProvider {
@@ -45,34 +45,66 @@ fn go_setting_string(
 }
 
 ///|
-/// Resolve the API key from the credential store or settings; an OAuth
-/// credential is a typed failure — this plane is API-key only.
-fn go_resolve_api_key(
+/// Resolved auth: API-key secret or grant token, plus the grant's workspace
+/// routing.
+priv struct GoAuth {
+  api_key : String
+  oauth : Bool
+  org_id : String?
+  api_base : String?
+}
+
+///|
+/// Resolve the tagged credential, else the `api_key` setting; a grant without
+/// an access token is a composition error.
+fn go_resolve_auth(
   source : @llm.ProviderConfigSource,
-) -> String? raise @posoco.CompositionError {
-  let credential = source.effective_credential(go_provider_id)
-  match credential {
-    Some(@oauth.ProviderCredential::OAuth(_)) =>
-      raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_opencode_go",
-        detail="OAuth credential is not supported for provider " +
-          go_provider_id,
-      )
+) -> GoAuth? raise @posoco.CompositionError {
+  match source.effective_credential(go_provider_id) {
+    Some(@oauth.ProviderCredential::OAuth(credential)) =>
+      match go_oauth_session(credential) {
+        Some(session) =>
+          Some({
+            api_key: session.access_token,
+            oauth: true,
+            org_id: session.org_id,
+            api_base: session.api_base,
+          })
+        None =>
+          raise @posoco.CompositionError::ManifestSchemaError(
+            manifest_id="posoco_ext_opencode_go",
+            detail="OpenCode Go OAuth credential is missing its access token; run /login opencode-go",
+          )
+      }
     Some(@oauth.ProviderCredential::ApiKey(credential)) =>
-      Some(credential.secret)
-    None => go_setting_string(source, "api_key")
+      Some({
+        api_key: credential.secret,
+        oauth: false,
+        org_id: None,
+        api_base: None,
+      })
+    None =>
+      match go_setting_string(source, "api_key") {
+        Some(value) =>
+          Some({ api_key: value, oauth: false, org_id: None, api_base: None, })
+        None => None
+      }
   }
 }
 
 ///|
-/// Resolve the Go base URL, applying the conventional default when settings
-/// omit it.
+/// `base_url` setting, then a grant's workspace base, then the default.
 fn go_resolve_base_url(
   source : @llm.ProviderConfigSource,
+  auth : GoAuth,
 ) -> String raise @posoco.CompositionError {
   match go_setting_string(source, "base_url") {
     Some(value) => value
-    None => go_default_base_url
+    None =>
+      match auth.api_base {
+        Some(value) => value
+        None => go_default_base_url
+      }
   }
 }
 
@@ -154,8 +186,16 @@ fn go_deepseek_policy(
 /// `/status` command and the model picker read the three windows live at
 /// command time. Every configured build/refresh re-registers, so the
 /// registry holds the latest credential snapshot.
-fn go_register_quota_source(base_url : String, api_key : String) -> Unit {
-  let source : &@devkit.QuotaSource = GoUsageQuotaSource(base_url~, api_key~)
+fn go_register_quota_source(
+  base_url : String,
+  api_key : String,
+  extra_headers~ : Map[String, String] = Map::from_array([]),
+) -> Unit {
+  let source : &@devkit.QuotaSource = GoUsageQuotaSource(
+    base_url~,
+    api_key~,
+    extra_headers~,
+  )
   @devkit.quota_registry_register(go_provider_id, source)
 }
 
@@ -181,21 +221,24 @@ pub impl @llm.ProviderFactory for OpenCodeGoProvider with fn build(
   self : OpenCodeGoProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
-  let api_key = match go_resolve_api_key(source) {
+  let auth = match go_resolve_auth(source) {
     Some(value) => value
     None => return @llm.ProviderBuildResult::Unconfigured
   }
-  let base_url = go_resolve_base_url(source)
+  let base_url = go_resolve_base_url(source, auth)
   let model = go_resolve_model(source)
   let _plan = go_resolve_plan(source)
   let overrides = go_protocol_overrides(source)
   let policy = go_deepseek_policy(source)
+  let extra_headers = go_extra_headers(auth.org_id)
   let config = @zen.OpenCodeZenConfig(
-    api_key,
+    auth.api_key,
     base_url~,
     model~,
     client_id="opencode-go",
     spend_source="posoco_ext_opencode_go",
+    extra_headers~,
+    bearer_auth=auth.oauth,
   )
   let api_key_factory : &@llm.ApiKeyFactory = self
   let catalog = match @zen.parse_opencode_cached_models(source.cached_models) {
@@ -219,7 +262,7 @@ pub impl @llm.ProviderFactory for OpenCodeGoProvider with fn build(
         ctx=self.ctx,
       )
   }
-  go_register_quota_source(base_url, api_key)
+  go_register_quota_source(base_url, auth.api_key, extra_headers~)
   @llm.ProviderBuildResult::Ready(catalog)
 }
 
@@ -262,6 +305,29 @@ pub impl @llm.ApiKeyFactory for OpenCodeGoProvider with fn login(
 
 ///|
 pub extend OpenCodeGoProvider with @posoco/ext-llm.ApiKeyFactory::{login}
+
+///|
+/// Console account login (RFC 8628 device grant).
+pub impl @llm.OAuthFactory for OpenCodeGoProvider with fn provider_id(
+  _self : OpenCodeGoProvider,
+) -> String {
+  go_provider_id
+}
+
+///|
+pub impl @llm.OAuthFactory for OpenCodeGoProvider with fn credential_id(
+  _self : OpenCodeGoProvider,
+) -> String {
+  go_provider_id
+}
+
+///|
+pub impl @llm.OAuthFactory for OpenCodeGoProvider with fn login(
+  _self : OpenCodeGoProvider,
+  interaction : &@oauth.AuthInteraction,
+) -> @oauth.Credential raise @oauth.OAuthError {
+  go_oauth_login(interaction)
+}
 
 ///|
 pub impl @llm.RefreshableProviderFactory for OpenCodeGoProvider with fn provider_id(

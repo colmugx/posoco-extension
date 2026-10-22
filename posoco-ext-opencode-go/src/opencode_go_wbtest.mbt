@@ -271,8 +271,13 @@ test "go factory settings resolve with typed failures" {
       ),
     ),
   )
-  assert_eq(go_resolve_api_key(source), Some("sk-go-1"))
-  assert_eq(go_resolve_base_url(source), go_default_base_url)
+  let auth = match go_resolve_auth(source) {
+    Some(auth) => auth
+    None => abort("expected an API-key auth")
+  }
+  assert_eq(auth.api_key, "sk-go-1")
+  assert_false(auth.oauth)
+  assert_eq(go_resolve_base_url(source, auth), go_default_base_url)
   assert_eq(go_resolve_model(source), "kimi-k3")
   assert_eq(go_resolve_plan(source), GoPlus)
   // An unknown plan is a typed composition failure.
@@ -285,7 +290,7 @@ test "go factory settings resolve with typed failures" {
   assert_true(result is Err(_))
   // Without settings the provider is unconfigured.
   let empty = @llm.ProviderConfigSource::ProviderConfigSource()
-  assert_eq(go_resolve_api_key(empty), None)
+  assert_true(go_resolve_auth(empty) is None)
 }
 
 //|
@@ -474,4 +479,239 @@ test "deepseek slots keep the catalog shape next to other models" {
   assert_eq(guarded.slots()[0].display_group, Some("go"))
   assert_eq(guarded.slots()[1].id, "opencode-go/glm-5.3-flash")
   assert_eq(guarded.slots()[1].label, "Go / glm-5.3-flash")
+}
+
+///|
+fn go_test_json(text : String) -> Json {
+  @json.parse(text) catch {
+    _ => abort("invalid JSON fixture: " + text)
+  }
+}
+
+///|
+fn go_test_device(
+  server~ : String = "https://opencode.ai/console",
+) -> GoDeviceAuth {
+  let payload = go_test_json(
+    "{\"device_code\":\"dev-1\",\"user_code\":\"ABCD-1234\",\"verification_uri_complete\":\"/console/device?code=ABCD-1234\",\"expires_in\":600,\"interval\":5}",
+  )
+  match parse_go_device_auth(server, payload) {
+    Ok(device) => device
+    Err(message) => abort(message)
+  }
+}
+
+///|
+test "Console device answer keeps the origin of a relative verification URL" {
+  let device = go_test_device()
+  assert_eq(device.device_code, "dev-1")
+  assert_eq(device.user_code, "ABCD-1234")
+  assert_eq(
+    device.verification_url,
+    "https://opencode.ai/console/device?code=ABCD-1234",
+  )
+  assert_eq(device.expires_in, 600)
+  assert_eq(device.interval, 5)
+  assert_eq(
+    go_resolve_verification_url(
+      "https://opencode.ai/console", "https://opencode.ai/console/device?code=X",
+    ),
+    Some("https://opencode.ai/console/device?code=X"),
+  )
+  assert_eq(
+    go_resolve_verification_url(
+      "https://opencode.ai/console", "javascript:alert(1)",
+    ),
+    None,
+  )
+}
+
+///|
+test "device-token polls separate pending, throttling, grants, and refusals" {
+  assert_true(
+    parse_go_token_poll(
+      400,
+      go_test_json("{\"error\":\"authorization_pending\"}"),
+    )
+    is Pending,
+  )
+  assert_true(
+    parse_go_token_poll(400, go_test_json("{\"error\":\"slow_down\"}"))
+    is SlowDown,
+  )
+  // Transient gateway fault.
+  assert_true(
+    parse_go_token_poll(503, go_test_json("{\"error\":\"server_error\"}"))
+    is Pending,
+  )
+  assert_true(
+    parse_go_token_poll(400, go_test_json("{\"error\":\"access_denied\"}"))
+    is Failed("access_denied"),
+  )
+  match
+    parse_go_token_poll(
+      200,
+      go_test_json(
+        "{\"access_token\":\"at-1\",\"refresh_token\":\"rt-1\",\"expires_in\":2592000,\"org_id\":\"org_1\"}",
+      ),
+    ) {
+    Granted(token) => {
+      assert_eq(token.access_token, "at-1")
+      assert_eq(token.refresh_token, "rt-1")
+      assert_eq(token.expires_in, 2592000)
+      assert_eq(token.org_id, Some("org_1"))
+    }
+    _ => fail("expected a granted token")
+  }
+}
+
+///|
+test "organization choice prefers the Go-carrying workspace" {
+  let orgs = [
+    GoOrg::{ id: "org_b", name: "Beta", },
+    GoOrg::{ id: "org_a", name: "Alpha", },
+  ]
+  let apis : Map[String, String] = Map::from_array([
+    ("org_b", "https://opencode.ai/inference/go/v1"),
+  ])
+  match choose_go_org(orgs, None, apis, true) {
+    Ok(choice) => {
+      assert_eq(choice.org.id, "org_b")
+      assert_eq(choice.api_base, Some("https://opencode.ai/inference/go/v1"))
+    }
+    Err(message) => abort(message)
+  }
+  // A scoped grant wins over the Go-carrying workspace.
+  match choose_go_org(orgs, Some("org_a"), apis, true) {
+    Ok(choice) => assert_eq(choice.org.id, "org_a")
+    Err(message) => abort(message)
+  }
+  // All probes answered, none carries Go.
+  match choose_go_org(orgs, None, Map::from_array([]), true) {
+    Ok(_) => fail("expected a no-Go failure")
+    Err(message) =>
+      assert_true(message.contains("no organisation with OpenCode Go"))
+  }
+  // A failed probe does not block the login.
+  match choose_go_org(orgs, None, Map::from_array([]), false) {
+    Ok(choice) => assert_eq(choice.org.id, "org_a")
+    Err(message) => abort(message)
+  }
+}
+
+///|
+test "Console config payloads yield the versioned inference base" {
+  let v2 = go_test_json(
+    "{\"providers\":{\"opencode-go\":{\"settings\":{\"baseURL\":\"https://opencode.ai/inference/go/openai/v1\"}}}}",
+  )
+  assert_eq(
+    parse_go_config_api(v2),
+    Some("https://opencode.ai/inference/go/v1"),
+  )
+  let legacy = go_test_json(
+    "{\"config\":{\"provider\":{\"opencode-go\":{\"api\":\"https://example.test/go/openai/v1/\"}}}}",
+  )
+  assert_eq(parse_go_config_api(legacy), Some("https://example.test/go/v1"))
+  assert_eq(parse_go_config_api(go_test_json("{}")), None)
+  assert_eq(
+    go_normalize_api_base("https://opencode.ai/inference/go/v1"),
+    Some("https://opencode.ai/inference/go/v1"),
+  )
+  assert_eq(go_normalize_api_base("file:///etc/passwd"), None)
+}
+
+///|
+test "account grants project into the Go plane without losing routing" {
+  let token = GoOAuthToken::{
+    access_token: "at-1",
+    refresh_token: "rt-1",
+    expires_in: 3600,
+    org_id: Some("org_1"),
+  }
+  let credential = go_oauth_credential_from_login(
+    token,
+    "https://opencode.ai/console",
+    org=GoOrg::{ id: "org_1", name: "Team", },
+    api_base=Some("https://opencode.ai/inference/go/v1"),
+    email=Some("dev@example.test"),
+    now_secs=1000,
+  )
+  assert_eq(credential.access_token, "at-1")
+  assert_eq(credential.expires_at, 4600)
+  assert_eq(credential.metadata_value("org_id"), Some("org_1"))
+  assert_eq(
+    credential.metadata_value("api_base"),
+    Some("https://opencode.ai/inference/go/v1"),
+  )
+  let session = match go_oauth_session(credential) {
+    Some(session) => session
+    None => abort("expected a usable grant")
+  }
+  assert_eq(session.org_id, Some("org_1"))
+  assert_eq(session.server, "https://opencode.ai/console")
+  // Margin is 300s.
+  assert_false(go_oauth_is_expiring(session, 4299))
+  assert_true(go_oauth_is_expiring(session, 4300))
+  let rotated = go_oauth_refreshed_credential(
+    credential,
+    GoOAuthToken::{
+      access_token: "at-2",
+      refresh_token: "rt-2",
+      expires_in: 3600,
+      org_id: None,
+    },
+    now_secs=5000,
+  )
+  assert_eq(rotated.access_token, "at-2")
+  assert_eq(rotated.refresh_token, "rt-2")
+  assert_eq(rotated.expires_at, 8600)
+  assert_eq(rotated.metadata_value("org_id"), Some("org_1"))
+  assert_eq(rotated.metadata_value("email"), Some("dev@example.test"))
+  assert_eq(go_extra_headers(Some("org_1"))["x-opencode-org-id"], "org_1")
+  assert_true(go_extra_headers(None).is_empty())
+}
+
+///|
+test "an OAuth credential composes a Go catalog with its organization" {
+  let credential = go_oauth_credential_from_login(
+    GoOAuthToken::{
+      access_token: "at-1",
+      refresh_token: "rt-1",
+      expires_in: 3600,
+      org_id: Some("org_1"),
+    },
+    "https://opencode.ai/console",
+    org=GoOrg::{ id: "org_1", name: "Team", },
+    api_base=Some("https://opencode.ai/inference/go/v1"),
+    now_secs=1000,
+  )
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    provider_credential=Some(@oauth.ProviderCredential::OAuth(credential)),
+  )
+  let auth = match go_resolve_auth(source) {
+    Some(auth) => auth
+    None => abort("expected a configured auth")
+  }
+  assert_true(auth.oauth)
+  assert_eq(auth.org_id, Some("org_1"))
+  assert_eq(auth.api_base, Some("https://opencode.ai/inference/go/v1"))
+  assert_eq(
+    go_resolve_base_url(source, auth),
+    "https://opencode.ai/inference/go/v1",
+  )
+  let provider = OpenCodeGoProvider()
+  match @llm.ProviderFactory::build(provider, source) {
+    @llm.ProviderBuildResult::Ready(catalog) => {
+      assert_eq(catalog.slots().length(), 1)
+      match catalog.slots()[0].rebuild_on_credential {
+        Some(rebuild) => {
+          let rebuilt_slot = rebuild(credential)
+          assert_eq(rebuilt_slot.id, catalog.slots()[0].id)
+        }
+        None => fail("expected an OAuth credential rebuild hook")
+      }
+    }
+    @llm.ProviderBuildResult::Unconfigured =>
+      fail("expected a configured Go catalog")
+  }
 }

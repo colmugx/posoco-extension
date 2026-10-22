@@ -12,7 +12,9 @@ extension publishes the catalog as the `opencode-go` provider
 (`/login opencode-go`, `/model`), dispatches every model to the wire it is
 served on, reads the live `/usage` three-window quota, and feeds typed
 rate-limit verdicts with authoritative reset times to the host's automatic
-recovery.
+recovery. Two login methods are first-class: a personal/service API key, or
+an OpenCode Console account grant obtained through the Console's OAuth
+device flow — no personal API key has to be created for the latter.
 
 The wire machinery, protocol derivation, models.dev metadata, identity
 headers, anchored compact, and spend accounting live in
@@ -25,7 +27,8 @@ product seam over them.
 |--------|------|----------------|
 | `OpenCodeGoProvider` | `llm.ProviderFactory` | static `build`: a no-network catalog over the resolved credential/endpoint/model (expanded offline from host-cached records when available) |
 | `OpenCodeGoProvider` | `llm.RefreshableProviderFactory` | live `refresh`: one authenticated `/models` call, one slot per discovered model, enriched from the models.dev mirror |
-| `OpenCodeGoProvider` | `llm.ApiKeyFactory` | the `/login opencode-go` secret prompt |
+| `OpenCodeGoProvider` | `llm.ApiKeyFactory` | the `/login opencode-go` secret prompt (personal or service-account key) |
+| `OpenCodeGoProvider` | `llm.OAuthFactory` | the Console account login: RFC 8628 device grant, organisation resolution, and the inference base that organisation named |
 | `GoUsageQuotaSource` | devkit `QuotaSource` | the live `/usage` reading: `5h` / `weekly` / `monthly` percentages, reset times, and the endpoint's own rate-limited verdict |
 | `GoRateLimitModelPort` | `ModelPort` (slot decorator) | fills `reset_at_ms` on `RateLimited` verdicts from the `/usage` probe so the host's rate-limit guard schedules automatic recovery |
 | `go_monthly_allowance` | lookup | the vendor table's per-model monthly dollar allowance for the configured plan (`go` / `go_plus`); `None` = Unlimited or unknown — never a guessed figure |
@@ -47,7 +50,10 @@ held as a top-level extension by the Agent.
 - **Credential isolation** — a Zen (`oc_sk_…`) key on the Go plane answers
   `403 EntitlementError`; the two planes never share a credential seam, and
   a misconfigured key surfaces verbatim instead of rendering as fake
-  zero-percent quota rows.
+  zero-percent quota rows. A Console account token is not an API key: the
+  public API-key host refuses it, so a grant resolves to the inference base
+  the Console named for its organisation and every request carries that
+  organisation in `x-opencode-org-id`.
 - **Identity** — the same OpenCode routing headers as the zen plane with
   this plane's client (`x-opencode-client: opencode-go`,
   `User-Agent: posoco/opencode-go`, process-stable `x-opencode-session`).
@@ -69,7 +75,9 @@ invents them. The readings map onto the shared quota vocabulary:
 `window="5h"|"weekly"|"monthly"`, `used_percent`, `reset_at_ms`, and
 `available = !rate_limited`. A malformed or missing window is a typed error
 — three fabricated `0%` rows would read as a measurement the payload never
-made.
+made. For a Console account grant the endpoint answers only when the request
+carries the grant's organisation header; without it the Console answers
+`403`.
 
 ## Rate limit: automatic recovery
 
@@ -104,9 +112,9 @@ designed probing backoff — never a fabricated reset time.
 
 | Field | Required | Default | Meaning |
 |---|---|---|---|
-| `api_key` | no | — | Also injectable via `/login opencode-go`; persisted to `~/.cetas/credentials/opencode-go.json`. With neither, the provider is Unconfigured (no slot, no error) |
+| `api_key` | no | — | Also injectable via `/login opencode-go`; persisted to `~/.cetas/credentials/opencode-go.json`. With neither a key nor a Console grant, the provider is Unconfigured (no slot, no error) |
 | `model` | no | `glm-5.3-flash` | The vendor's cheap high-allowance coding slot ($60/month on Go) as the pre-refresh default |
-| `base_url` | no | `https://opencode.ai/inference/go/v1` | Override for mirrors; the legacy `zen/go/v1` spelling keeps working |
+| `base_url` | no | the grant's organisation base, else `https://opencode.ai/inference/go/v1` | Override for mirrors; the legacy `zen/go/v1` spelling keeps working. An explicit setting wins over the base a Console login discovered |
 | `plan` | no | `go` | `go` or `go_plus` — the vendor publishes no way to probe the tier, so the allowance lookup stays a setting; an unknown value is a typed composition failure |
 | `protocol_overrides` | no | — | Same contract as the zen plane |
 | `max_reasoning_chars` | no | `120000` | DeepSeek reasoning ceiling in streamed characters (not tokens); `null` disables the guard |
@@ -135,8 +143,36 @@ model.
 ## `/login` and `/model`
 
 ```bash
-/login opencode-go             # prompts "OpenCode Go API key"
+/login opencode-go             # choose: Console account, or API key
 ```
+
+Two methods are offered because both are first-class at the vendor:
+
+- **OpenCode Console account** — the Console's public OAuth client is
+  `opencode-cli` and the grant is the RFC 8628 device flow:
+  `POST https://opencode.ai/console/auth/device/code`
+  (`client_id=opencode-cli`, `supports_org_scope=true`), then the host shows
+  the embedded verification URL and code while the flow polls
+  `/auth/device/token`. No personal API key is created and nothing is pasted
+  back into the terminal. After approval the login reads `/api/user` and
+  `/api/orgs`, then probes each workspace's Console config (`/api/config`,
+  falling back to `/api/v2/config`) for an `opencode-go` entry. The first
+  workspace that carries Go supplies the inference base; a grant the Console
+  scoped to an organisation keeps that organisation. When every probe
+  answered and none carries Go, the login fails with that reason instead of
+  surfacing as a later `403`; when a probe cannot answer, the login falls
+  back to the conventional base rather than blocking on an undocumented
+  endpoint.
+- **API key** — the historical secret prompt, unchanged.
+
+Grants live 30 days and refresh through a rotating refresh token: every
+refresh returns a new pair and voids the old one, so `/model refresh`
+renews a grant that is within five minutes of expiry and writes the rotated
+record back through the host's credential store. A rejected refresh token is
+`invalid_grant` and asks for a new `/login opencode-go`. Every request from
+an account grant carries `x-opencode-org-id`, and the Messages wire sends
+the token as `Authorization: Bearer` instead of the API-key `x-api-key`
+scheme.
 
 The static build never touches the network (single slot, or the offline
 expansion of the host cache). `/model refresh` performs the authenticated
@@ -156,13 +192,13 @@ compaction recovers the same way.
 
 - **This extension**: the Go plane's provider seam — settings/plan, the
   Go wire table, `/usage` fetch/decode/quota-source, the rate-limit reset
-  decorator, the allowance table, and the `/login` prompt.
+  decorator, the allowance table, both login methods, and grant renewal.
 - **`posoco-ext-opencode-zen`**: the shared wire ports, protocol
   derivation, models.dev metadata, identity headers, anchored compact, and
   spend accounting.
 - **`cetas-core`**: registers `OpenCodeGoProvider` into
   `provider_factories()` / `refreshable_factories()` /
-  `api_key_factories()` — one place.
+  `api_key_factories()` / `oauth_factories()` — one place.
 
 ## Dependencies
 
@@ -173,6 +209,6 @@ compaction recovers the same way.
   reset-timestamp parsing
 - `colmugx/posoco-kit-deepseek` — the DeepSeek serving contract mounted on
   the `deepseek*` chat-completions slots
-- `posoco/ext-llm` — `ProviderFactory` / `RefreshableProviderFactory` / `ApiKeyFactory` / `ProviderModelCatalog` / `ModelSlot`
-- `posoco/ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
+- `posoco/ext-llm` — `ProviderFactory` / `RefreshableProviderFactory` / `ApiKeyFactory` / `OAuthFactory` / `ProviderModelCatalog` / `ModelSlot`
+- `posoco/ext-oauth` — `Credential` / `ProviderCredential` / `AuthInteraction` / `AuthPromptInteraction`
 - `moonbitlang/async/http` — `/models`, `/usage`, and chat transport

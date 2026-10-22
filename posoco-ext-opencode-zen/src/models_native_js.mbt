@@ -15,10 +15,14 @@ pub async fn fetch_zen_models(
   base_url : String,
   api_key : String,
   endpoint_prefix~ : String = "",
+  extra_headers~ : Map[String, String] = Map::from_array([]),
 ) -> Array[ZenModelInfo] raise @posoco.ModelError {
   let headers : @http.Headers = {
     "Authorization": "Bearer " + api_key,
     "Accept": "application/json",
+  }
+  for key, value in extra_headers {
+    headers[@http.CaseInsensitiveString(key)] = value
   }
   let (response, body_data) = @async.with_timeout(30000, () => {
     @http.get(zen_models_url(base_url, endpoint_prefix), headers~)

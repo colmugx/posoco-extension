@@ -27,6 +27,7 @@ options(
     // and the rate-limit decorator live in unrestricted core files; only
     // the live fetches compile on the HTTP backends.
     "models_native_js.mbt": [ "native", "wasm", "js" ],
+    "oauth_login_native_js.mbt": [ "native", "wasm", "js" ],
     "quota_usage_native_js.mbt": [ "native", "wasm", "js" ],
     "rate_limit_native_js.mbt": [ "native", "wasm", "js" ],
     "refresh_native_js.mbt": [ "native", "wasm", "js" ],
