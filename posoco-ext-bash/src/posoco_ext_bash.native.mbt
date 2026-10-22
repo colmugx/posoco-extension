@@ -47,16 +47,10 @@ async fn shell_child_hard_kill(handle : ShellChildHandle) -> Unit noraise {
 }
 
 ///|
-pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
-  _self : ShellTools,
-) -> Array[@posoco.ToolDef] {
-  shared_list_tools()
-}
-
-///|
-pub impl @posoco.ToolProvider for ShellTools with fn execute(
+async fn bash_foreground(
   self : ShellTools,
   ctx : @posoco.ToolCallContext,
+  session~ : ShellSession? = None,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let cmd = extract_command(ctx.arguments)
   let timeout_ms = bash_timeout_ms(ctx.arguments)
@@ -80,41 +74,42 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   let attempted : Result[(Int32, String, Bool)?, Error] = Ok(
     @async.with_timeout_opt(timeout_ms, async fn() {
       @async.with_task_group(async fn(group) {
-        defer reader.close()
-        let proc = @process.spawn(
-          group,
-          "sh",
-          ["-c", cmd],
-          stdout=writer,
-          stderr=writer,
-          cwd?,
-          cancel_handler=@process.graceful_cancel(timeout=shell_cancel_grace_ms),
-        )
-        let handle : ShellChildHandle = { proc, exited: false, }
-        self.in_flight[key] = handle
-        let drain = group.spawn(async fn() { bash_drain_native(reader) })
-        let exit_code = proc.wait()
-        handle.exited = true
-        self.in_flight.remove(key)
-        // A detached grandchild may still hold the write end open.
-        let drained : Bytes? = @async.with_timeout_opt(BASH_DRAIN_GRACE_MS, async fn() {
-          drain.wait()
-        })
-        let output = match drained {
-          Some(data) => data
-          None => {
-            reader.close()
-            Bytes::from_array([])
-          }
+      defer reader.close()
+      let proc = @process.spawn(
+        group,
+        "sh",
+        ["-c", cmd],
+        stdout=writer,
+        stderr=writer,
+        cwd?,
+        cancel_handler=@process.graceful_cancel(timeout=shell_cancel_grace_ms),
+      )
+      let handle : ShellChildHandle = { proc, exited: false, }
+      self.in_flight[key] = handle
+      let drain = group.spawn(async fn() { bash_drain_native(reader, session~) })
+      let exit_code = proc.wait()
+      handle.exited = true
+      self.in_flight.remove(key)
+      // A detached grandchild may still hold the write end open.
+      let drained : Bytes? = @async.with_timeout_opt(
+        BASH_DRAIN_GRACE_MS,
+        async fn() { drain.wait() },
+      )
+      let output = match drained {
+        Some(data) => data
+        None => {
+          reader.close()
+          Bytes::from_array([])
         }
-        let mut decode_failed = false
-        let content = @utf8.decode(output) catch {
-          _ => {
-            decode_failed = true
-            ""
-          }
+      }
+      let mut decode_failed = false
+      let content = @utf8.decode(output) catch {
+        _ => {
+          decode_failed = true
+          ""
         }
-        (exit_code, content, decode_failed)
+      }
+      (exit_code, content, decode_failed)
       })
     }),
   ) catch {
@@ -155,25 +150,35 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
 /// Drain concurrently with the child's execution to avoid a full-pipe
 /// deadlock (a child blocked writing cannot reach process exit).
 /// Retain only a bounded tail; always consume further chunks.
-async fn bash_drain_native(reader : @process.ReadFromProcess) -> Bytes {
+async fn bash_drain_native(
+  reader : @process.ReadFromProcess,
+  session~ : ShellSession? = None,
+) -> Bytes {
   let bytes : Array[Byte] = []
   for ;; {
     let chunk = reader.read_some(max_len=8192) catch { _ => None }
     match chunk {
       None => break
-      Some(data) =>
+      Some(data) => {
+        match session {
+          Some(active) => {
+            let partial = @utf8.decode(data) catch { _ => "" }
+            active.append(partial)
+          }
+          None => ()
+        }
         for byte in data {
           if bytes.length() < BASH_OUTPUT_CHAR_CAP {
             bytes.push(byte)
           }
         }
+      }
     }
   }
   Bytes::from_array(bytes)
 }
 
 ///|
-
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
 fn bash_decode_failure(_exit_code : Int32) -> String {

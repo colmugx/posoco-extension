@@ -4,7 +4,7 @@ async test "list_tools_contains_bash" {
   let tool_defs = tools.list_tools()
   let names = tool_defs.map(fn(t) { t.name.to_string() })
   assert_true(names.contains("bash"))
-  assert_eq(tool_defs.length(), 1)
+  assert_eq(tool_defs.length(), 4)
 }
 
 ///|
@@ -141,6 +141,7 @@ test "bash_model_output_counts_unicode_as_characters" {
   assert_true(out.has_suffix("尾"))
 }
 
+
 ///|
 test "bash timeout defaults to five minutes" {
   assert_eq(bash_timeout_ms(Json::object(Map::from_array([]))), 300000)
@@ -149,9 +150,9 @@ test "bash timeout defaults to five minutes" {
 ///|
 test "bash timeout accepts valid hard deadlines" {
   for n in [1, 10000, 300000, 3600000] {
-    let args = Json::object(
-      Map::from_array([("timeout_ms", Json::number(n.to_double()))]),
-    )
+    let args = Json::object(Map::from_array([
+      ("timeout_ms", Json::number(n.to_double())),
+    ]))
     assert_eq(bash_timeout_ms(args), n)
   }
 }
@@ -187,4 +188,107 @@ test "streaming shell output remains bounded" {
   assert_true(bash_char_count(output) <= BASH_OUTPUT_CHAR_CAP)
   assert_true(output.has_prefix("012345"))
   assert_true(output.contains("…[cut]…"))
+}
+
+
+///|
+test "bash session argument validation" {
+  assert_false(bash_background_requested(Json::object(Map::from_array([]))))
+  assert_true(bash_background_requested(Json::object(Map::from_array([
+    ("background", Json::boolean(true)),
+  ]))))
+  assert_eq(
+    bash_field_int(Json::object(Map::from_array([])), "yield_time_ms", 0, 60000),
+    0,
+  )
+}
+
+///|
+test "bash session cursors expose bounded incremental output" {
+  let session : ShellSession = {
+    id: "probe",
+    effect_id: @kernel.EffectId::{ value: -10 },
+    started_at_ms: @async.now(),
+    last_output_at_ms: @async.now(),
+    ended_at_ms: None,
+    status: "running",
+    output: "",
+    base_cursor: 0L,
+    next_cursor: 0L,
+    outcome: None,
+    worker: None,
+    kill_requested: false,
+  }
+  session.append("abc")
+  let snapshot = session.snapshot(1L)
+  match snapshot {
+    Json::Object(fields) => {
+      assert_eq(fields["output"], Json::string("bc"))
+      assert_eq(fields["cursor"], Json::number(3.0))
+    }
+    _ => fail("expected session snapshot object")
+  }
+  session.append("x".repeat(40000))
+  assert_true(bash_char_count(session.output) <= BASH_OUTPUT_CHAR_CAP)
+  assert_true(session.base_cursor > 0L)
+}
+
+
+///|
+fn bash_session_test_ctx(
+  tool : String,
+  arguments : Json,
+  number : Int32,
+) -> @posoco.ToolCallContext {
+  {
+    effect_id: @kernel.EffectId::{ value: number },
+    call_id: @posoco.CallId::unchecked("tc_background"),
+    name: @posoco.ToolName::unchecked(tool),
+    arguments,
+    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+  }
+}
+
+///|
+async test "bash session: background returns id and can be polled to completion" {
+  @async.with_task_group(async fn(group) {
+    let bash = ShellTools()
+    bash.attach(group)
+    let arguments = Json::object(Map::from_array([
+      ("cmd", Json::string("sleep 1; echo background-done")),
+      ("yield_time_ms", Json::number(10.0)),
+      ("timeout_ms", Json::number(4000.0)),
+    ]))
+    let result = bash.execute(bash_session_test_ctx("bash", arguments, 991))
+    let id = match result {
+      @posoco.ToolOutcome::Success(content~, ..) => {
+        let json = @json.parse(content) catch { _ => Json::null() }
+        match json {
+          Json::Object(fields) =>
+            match fields.get("session_id") {
+              Some(Json::String(value)) => value
+              _ => fail("missing session id")
+            }
+          _ => fail("not a session snapshot")
+        }
+      }
+      _ => fail("expected background session")
+    }
+    let waited = bash.execute(bash_session_test_ctx(
+      "bash_wait",
+      Json::object(Map::from_array([
+        ("session_id", Json::string(id)),
+        ("timeout_ms", Json::number(3000.0)),
+      ])),
+      992,
+    ))
+    match waited {
+      @posoco.ToolOutcome::Success(content~, ..) => {
+        assert_true(content.contains("background-done"))
+        assert_true(content.contains("completed"))
+      }
+      _ => fail("expected completed session snapshot")
+    }
+    bash.shutdown()
+  })
 }
