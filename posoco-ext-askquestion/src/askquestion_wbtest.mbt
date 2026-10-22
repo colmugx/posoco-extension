@@ -145,3 +145,12 @@ test "ask_question_parent_face_names_tool_ask_question_child" {
   )
   assert_eq(defs[0].input_schema.stringify().contains("parent agent"), true)
 }
+
+///|
+test "select_ui_options_appends_escape_slot_once" {
+  assert_eq(select_ui_options(["A", "B"]), ["A", "B", OTHER_ANSWER_OPTION])
+  assert_eq(select_ui_options(["A", OTHER_ANSWER_OPTION]), [
+    "A",
+    OTHER_ANSWER_OPTION,
+  ])
+}

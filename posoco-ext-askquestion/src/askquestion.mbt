@@ -363,6 +363,62 @@ fn AskQuestionTools::face(self : AskQuestionTools) -> (String, String, String) {
 }
 
 ///|
+/// Trailing select option that swaps the ask into a manual input, so a
+/// select never traps the user between model-chosen choices. UI-only: it
+/// never enters `spec.options`, and a `Selected` index below
+/// `spec.options.length()` keeps its original meaning.
+const OTHER_ANSWER_OPTION : String = "其他回答"
+
+///|
+/// Second line of the follow-up input prompt; the first line restates the
+/// question so the swap from options to input loses no context.
+const OTHER_ANSWER_PROMPT : String = "其他回答 — 请输入你的回答"
+
+///|
+/// Select UI options: the model's options plus the trailing escape slot,
+/// skipped when the model already offers that label itself.
+fn select_ui_options(options : Array[String]) -> Array[String] {
+  let ui_options : Array[String] = []
+  for option in options {
+    ui_options.push(option)
+  }
+  if !ui_options.contains(OTHER_ANSWER_OPTION) {
+    ui_options.push(OTHER_ANSWER_OPTION)
+  }
+  ui_options
+}
+
+///|
+/// Map a failed human UI request onto the tool outcome — the exact mapping
+/// the ask path has always used ("ui unavailable: …", recoverable cancel,
+/// raised protocol / I-O errors).
+fn ui_error_outcome(
+  tool_name~ : String,
+  error : @posoco.UiError,
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  match error {
+    @posoco.UiError::Unsupported(detail~) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="ui unavailable: " + detail,
+        structured=None,
+      )
+    @posoco.UiError::Cancelled =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="cancelled",
+        structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
+      )
+    @posoco.UiError::InvalidRequest(detail~) =>
+      raise @posoco.RuntimeError::InvocationFailed(
+        "\{tool_name}: invalid UI: " + detail,
+      )
+    @posoco.UiError::IoFailure(detail~) =>
+      raise @posoco.RuntimeError::InvocationFailed(
+        "\{tool_name}: UI: " + detail,
+      )
+  }
+}
+
+///|
 pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
   self : AskQuestionTools,
 ) -> Array[@posoco.ToolDef] {
@@ -420,25 +476,48 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
             structured=None,
           )
       }
-      ui.request(spec.request()) catch {
-        @posoco.UiError::Unsupported(detail~) =>
-          return @posoco.ToolOutcome::ToolReportedError(
-            content="ui unavailable: " + detail,
-            structured=None,
+      // Selects carry the trailing 其他回答 slot: picking it re-asks as a
+      // manual input whose text becomes the answer. An empty or cancelled
+      // input cancels the ask, mirroring plan review's feedback prompt.
+      let ui_options : Array[String]? = match spec.prompt_type {
+        "select" => Some(select_ui_options(spec.options))
+        _ => None
+      }
+      let request = match ui_options {
+        Some(options) =>
+          @posoco.UiRequest::Select(
+            prompt=spec.question,
+            options~,
+            default=spec.default_index,
           )
-        @posoco.UiError::Cancelled =>
-          return @posoco.ToolOutcome::ToolReportedError(
-            content="cancelled",
-            structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
-          )
-        @posoco.UiError::InvalidRequest(detail~) =>
-          raise @posoco.RuntimeError::InvocationFailed(
-            "\{tool_name}: invalid UI: " + detail,
-          )
-        @posoco.UiError::IoFailure(detail~) =>
-          raise @posoco.RuntimeError::InvocationFailed(
-            "\{tool_name}: UI: " + detail,
-          )
+        None => spec.request()
+      }
+      let response = ui.request(request) catch {
+        error => return ui_error_outcome(tool_name~, error)
+      }
+      let picked_other = match (ui_options, response) {
+        (Some(options), @posoco.UiResponse::Selected(index)) =>
+          // Only the appended slot — the model may offer the label itself,
+          // in which case nothing was appended and this guard is false.
+          options.length() > spec.options.length() &&
+          index == options.length() - 1
+        _ => false
+      }
+      if !picked_other {
+        response
+      } else {
+        let follow = @posoco.UiRequest::Input(
+          prompt=spec.question + "\n" + OTHER_ANSWER_PROMPT,
+          default=Some(""),
+        )
+        let answer = ui.request(follow) catch {
+          error => return ui_error_outcome(tool_name~, error)
+        }
+        match answer {
+          @posoco.UiResponse::Text(text) if text.trim().length() == 0 =>
+            @posoco.UiResponse::Cancelled
+          answer => answer
+        }
       }
     }
     ParentAgent => {

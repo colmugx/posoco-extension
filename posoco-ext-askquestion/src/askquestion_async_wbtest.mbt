@@ -285,3 +285,174 @@ async test "ask_question_faces_reject_cross_face_names" {
     _ => fail("expected human face to reject the parent tool name")
   }
 }
+
+///|
+/// UI that replays a scripted response per request and logs every request,
+/// for the two-step 其他回答 flow (select → manual input).
+priv struct QueuedUi {
+  responses : Array[@posoco.UiResponse]
+  mut served : Int32
+  requests : Array[@posoco.UiRequest]
+}
+
+///|
+fn QueuedUi::QueuedUi(responses : Array[@posoco.UiResponse]) -> QueuedUi {
+  { responses, served: 0, requests: [], }
+}
+
+///|
+impl @posoco.UiPort for QueuedUi with fn ui_descriptor(_self : QueuedUi) -> @posoco.UiDescriptor {
+  @posoco.UiDescriptor::empty()
+}
+
+///|
+impl @posoco.UiPort for QueuedUi with fn render(
+  _self : QueuedUi,
+  _intent : @posoco.UiRender,
+) -> Unit {
+  ()
+}
+
+///|
+impl @posoco.UiPort for QueuedUi with fn request(
+  self : QueuedUi,
+  req : @posoco.UiRequest,
+) -> @posoco.UiResponse raise @posoco.UiError {
+  self.requests.push(req)
+  let index = if self.served < self.responses.length() {
+    let current = self.served
+    self.served = current + 1
+    current
+  } else {
+    self.responses.length() - 1
+  }
+  self.responses[index]
+}
+
+///|
+fn select_args(options : Array[String]) -> Json {
+  let values : Array[Json] = []
+  for option in options {
+    values.push(Json::string(option))
+  }
+  Json::object({
+    "question": Json::string("Choose"),
+    "type": Json::string("select"),
+    "options": Json::array(values),
+  })
+}
+
+///|
+async test "ask_question_select_offers_other_answer_escape" {
+  let ui = QueuedUi([@posoco.UiResponse::Selected(0)])
+  let tools = AskQuestionTools()
+  tools.ui = Some(ui as &@posoco.UiPort)
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(ask_call(select_args(["A", "B"]))),
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(content~, ..) => assert_eq(content, "A")
+    _ => fail("expected select success")
+  }
+  assert_eq(ui.requests.length(), 1)
+  match ui.requests[0] {
+    @posoco.UiRequest::Select(options~, ..) =>
+      assert_eq(options, ["A", "B", OTHER_ANSWER_OPTION])
+    _ => fail("expected select request with the escape slot")
+  }
+}
+
+///|
+async test "ask_question_select_other_answer_reasks_manual_input" {
+  let ui = QueuedUi([
+    @posoco.UiResponse::Selected(2),
+    @posoco.UiResponse::Text("都不行，用 C"),
+  ])
+  let tools = AskQuestionTools()
+  tools.ui = Some(ui as &@posoco.UiPort)
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(ask_call(select_args(["A", "B"]))),
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(content~, structured~) => {
+      assert_eq(content, "都不行，用 C")
+      let payload = match structured {
+        Some(payload) => payload.stringify()
+        None => fail("expected structured payload")
+      }
+      assert_true(payload.contains("\"input\""))
+    }
+    _ => fail("expected custom answer success")
+  }
+  assert_eq(ui.requests.length(), 2)
+  match ui.requests[1] {
+    @posoco.UiRequest::Input(prompt~, ..) => {
+      assert_true(prompt.contains("Choose"))
+      assert_true(prompt.contains(OTHER_ANSWER_PROMPT))
+    }
+    _ => fail("expected follow-up input request")
+  }
+}
+
+///|
+async test "ask_question_select_other_answer_empty_cancels" {
+  let ui = QueuedUi([
+    @posoco.UiResponse::Selected(2),
+    @posoco.UiResponse::Text("   "),
+  ])
+  let tools = AskQuestionTools()
+  tools.ui = Some(ui as &@posoco.UiPort)
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(ask_call(select_args(["A", "B"]))),
+  )
+  match outcome {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_eq(content, "cancelled")
+    _ => fail("expected empty custom answer to cancel")
+  }
+  assert_eq(ui.requests.length(), 2)
+}
+
+///|
+async test "ask_question_select_other_answer_cancelled_input_cancels" {
+  let ui = QueuedUi([
+    @posoco.UiResponse::Selected(2),
+    @posoco.UiResponse::Cancelled,
+  ])
+  let tools = AskQuestionTools()
+  tools.ui = Some(ui as &@posoco.UiPort)
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(ask_call(select_args(["A", "B"]))),
+  )
+  match outcome {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_eq(content, "cancelled")
+    _ => fail("expected cancelled input to cancel")
+  }
+}
+
+///|
+async test "ask_question_select_model_supplied_other_label_passes_through" {
+  let ui = QueuedUi([@posoco.UiResponse::Selected(1)])
+  let tools = AskQuestionTools()
+  tools.ui = Some(ui as &@posoco.UiPort)
+  let outcome = @posoco.ToolProvider::execute(
+    tools,
+    test_ctx(ask_call(select_args(["A", OTHER_ANSWER_OPTION]))),
+  )
+  match outcome {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_eq(content, OTHER_ANSWER_OPTION)
+    _ => fail("expected the model's own label to pass through")
+  }
+  assert_eq(ui.requests.length(), 1)
+  match ui.requests[0] {
+    @posoco.UiRequest::Select(options~, ..) =>
+      assert_eq(options, ["A", OTHER_ANSWER_OPTION])
+    _ => fail("expected no duplicated escape slot")
+  }
+}
