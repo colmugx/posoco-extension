@@ -20,7 +20,7 @@ pub struct ShellTools {
   /// exited entry, pruned by the next cancel.
   in_flight : Map[Int32, ShellChildHandle]
   /// Background work must be hosted by an explicit owner task group.
-  host_group : @async.TaskGroup[Unit]?
+  mut host_group : @async.TaskGroup[Unit]?
   sessions : Map[String, ShellSession]
   mut next_session : Int32
   mut closed : Bool
@@ -180,7 +180,7 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
     }
   }
   running < BASH_MAX_RUNNING_SESSIONS &&
-  self.sessions.to_array().length() < BASH_MAX_RETAINED_SESSIONS
+  self.sessions.keys().length() < BASH_MAX_RETAINED_SESSIONS
 }
 
 
