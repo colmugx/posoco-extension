@@ -101,9 +101,10 @@ async fn ShellTools::bash_foreground(
         handle.exited = true
         self.in_flight.remove(key)
         // A detached grandchild may still hold the write end open.
-        let drained : (String, Bool)? = @async.with_timeout_opt(BASH_DRAIN_GRACE_MS, async fn() {
-          drain.wait()
-        })
+        let drained : (String, Bool)? = @async.with_timeout_opt(
+          BASH_DRAIN_GRACE_MS,
+          async fn() { drain.wait() },
+        )
         let (content, decode_failed) = match drained {
           Some(data) => data
           None => {
@@ -231,6 +232,7 @@ async fn bash_drain_native(
 }
 
 ///|
+
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
 fn bash_decode_failure(_exit_code : Int32) -> String {

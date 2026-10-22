@@ -708,10 +708,12 @@ fn bash_outcome_timed_out(outcome : @posoco.ToolOutcome) -> Bool {
 
 ///|
 fn bash_timeout_detail(timeout_ms : Int32) -> Json {
-  Json::object(Map::from_array([
-    ("timed_out", Json::boolean(true)),
-    ("timeout_ms", Json::number(timeout_ms.to_double())),
-  ]))
+  Json::object(
+    Map::from_array([
+      ("timed_out", Json::boolean(true)),
+      ("timeout_ms", Json::number(timeout_ms.to_double())),
+    ]),
+  )
 }
 
 ///|

@@ -383,7 +383,7 @@ test "stopping sessions still occupy capacity and require settlement" {
     let id = "s" + i.to_string()
     let session : ShellSession = {
       id,
-      effect_id: @kernel.EffectId::{ value: 1000 + i },
+      effect_id: @kernel.EffectId::{ value: 1000 + i, },
       started_at_ms: now,
       last_output_at_ms: now,
       ended_at_ms: None,
@@ -408,7 +408,7 @@ async test "bash wait does not claim a stopping session is finished" {
   let bash = ShellTools()
   let session : ShellSession = {
     id: "stopping",
-    effect_id: @kernel.EffectId::{ value: 1001 },
+    effect_id: @kernel.EffectId::{ value: 1001, },
     started_at_ms: now,
     last_output_at_ms: now,
     ended_at_ms: None,
@@ -423,28 +423,43 @@ async test "bash wait does not claim a stopping session is finished" {
   }
   bash.sessions["stopping"] = session
   let before = @async.now()
-  ignore(bash.execute(bash_session_test_ctx(
-    "bash_wait",
-    Json::object(Map::from_array([
-      ("session_id", Json::string("stopping")),
-      ("timeout_ms", Json::number(100.0)),
-    ])),
-    1091,
-  )))
+  ignore(
+    bash.execute(
+      bash_session_test_ctx(
+        "bash_wait",
+        Json::object(
+          Map::from_array([
+            ("session_id", Json::string("stopping")),
+            ("timeout_ms", Json::number(100.0)),
+          ]),
+        ),
+        1091,
+      ),
+    ),
+  )
   assert_true(@async.now() - before >= 50L)
 }
 
 ///|
 async test "bash large output retains the final diagnostic" {
   let bash = ShellTools()
-  let result = bash.execute(bash_session_test_ctx(
-    "bash",
-    Json::object(Map::from_array([
-      ("cmd", Json::string("awk 'BEGIN { for (i=0; i<50000; i++) print \"noise\"; print \"FINAL_DIAGNOSTIC_012345\" }'")),
-      ("timeout_ms", Json::number(10000.0)),
-    ])),
-    1092,
-  ))
+  let result = bash.execute(
+    bash_session_test_ctx(
+      "bash",
+      Json::object(
+        Map::from_array([
+          (
+            "cmd",
+            Json::string(
+              "awk 'BEGIN { for (i=0; i<50000; i++) print \"noise\"; print \"FINAL_DIAGNOSTIC_012345\" }'",
+            ),
+          ),
+          ("timeout_ms", Json::number(10000.0)),
+        ]),
+      ),
+      1092,
+    ),
+  )
   match result {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(content.contains("FINAL_DIAGNOSTIC_012345"))
