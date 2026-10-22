@@ -88,6 +88,10 @@ async fn ShellTools::bash_foreground(
       self.in_flight[key] = handle
       let drain = group.spawn(async fn() { bash_drain_native(reader, session~) })
       let exit_code = proc.wait()
+      match session {
+        Some(active) => active.exit_code = Some(exit_code)
+        None => ()
+      }
       handle.exited = true
       self.in_flight.remove(key)
       // A detached grandchild may still hold the write end open.
