@@ -4,7 +4,7 @@ async test "list_tools_contains_bash" {
   let tool_defs = tools.list_tools()
   let names = tool_defs.map(fn(t) { t.name.to_string() })
   assert_true(names.contains("bash"))
-  assert_eq(tool_defs.length(), 1)
+  assert_eq(tool_defs.length(), 4)
 }
 
 ///|
@@ -188,4 +188,47 @@ test "streaming shell output remains bounded" {
   assert_true(bash_char_count(output) <= BASH_OUTPUT_CHAR_CAP)
   assert_true(output.has_prefix("012345"))
   assert_true(output.contains("…[cut]…"))
+}
+
+
+///|
+test "bash session argument validation" {
+  assert_false(bash_background_requested(Json::object(Map::from_array([]))))
+  assert_true(bash_background_requested(Json::object(Map::from_array([
+    ("background", Json::boolean(true)),
+  ]))))
+  assert_eq(
+    bash_field_int(Json::object(Map::from_array([])), "yield_time_ms", 0, 60000),
+    0,
+  )
+}
+
+///|
+test "bash session cursors expose bounded incremental output" {
+  let session : ShellSession = {
+    id: "probe",
+    effect_id: @kernel.EffectId::{ value: -10 },
+    started_at_ms: @async.now(),
+    last_output_at_ms: @async.now(),
+    ended_at_ms: None,
+    status: "running",
+    output: "",
+    base_cursor: 0L,
+    next_cursor: 0L,
+    outcome: None,
+    worker: None,
+    kill_requested: false,
+  }
+  session.append("abc")
+  let snapshot = session.snapshot(1L)
+  match snapshot {
+    Json::Object(fields) => {
+      assert_eq(fields["output"], Json::string("bc"))
+      assert_eq(fields["cursor"], Json::number(3.0))
+    }
+    _ => fail("expected session snapshot object")
+  }
+  session.append("x".repeat(40000))
+  assert_true(bash_char_count(session.output) <= BASH_OUTPUT_CHAR_CAP)
+  assert_true(session.base_cursor > 0L)
 }
