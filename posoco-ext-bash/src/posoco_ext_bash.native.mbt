@@ -109,7 +109,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         }
       }
       let mut decode_failed = false
-      let content = output.text() catch {
+      let content = @utf8.decode(output) catch {
         _ => {
           decode_failed = true
           ""
