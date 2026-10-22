@@ -21,6 +21,7 @@ pub struct ShellTools {
   in_flight : Map[Int32, ShellChildHandle]
   /// Background work must be hosted by an explicit owner task group.
   mut host_group : @async.TaskGroup[Unit]?
+  bus : @devkit.EventBus?
   sessions : Map[String, ShellSession]
   mut next_session : Int32
   mut closed : Bool
@@ -30,11 +31,13 @@ pub struct ShellTools {
 /// Canonical constructor. Use this everywhere.
 pub fn ShellTools::ShellTools(
   anchor~ : @devkit.WorkspaceAnchor? = None,
+  bus~ : @devkit.EventBus? = None,
 ) -> ShellTools {
   ShellTools::{
     anchor,
     in_flight: Map::from_array([]),
     host_group: None,
+    bus,
     sessions: Map::from_array([]),
     next_session: 0,
     closed: false,
@@ -579,6 +582,47 @@ fn ShellTools::read_session(
   }
 }
 
+
+///|
+/// Completion events are advisory, not an alternative to session snapshots.
+/// A host can subscribe to bash.session.finished and bash.session.stall.
+fn ShellTools::emit_session(
+  self : ShellTools,
+  session : ShellSession,
+  topic : String,
+) -> Unit {
+  match self.bus {
+    Some(bus) => bus.publish({
+      source: "posoco_ext_bash",
+      topic,
+      data: session.snapshot(session.next_cursor),
+    })
+    None => ()
+  }
+}
+
+///|
+/// Watch only for *suspected* stalls, not definitive deadlock. This watcher
+/// belongs to the host group and stops once the command leaves running state.
+async fn ShellTools::watch_stall(
+  self : ShellTools,
+  session : ShellSession,
+) -> Unit {
+  let mut warned = false
+  while session.status == "running" {
+    let idle = @async.now() - session.last_output_at_ms
+    if idle >= BASH_STALL_WARNING_MS {
+      if !warned {
+        self.emit_session(session, "bash.session.stall")
+        warned = true
+      }
+    } else {
+      warned = false
+    }
+    @async.sleep(1000)
+  }
+}
+
 ///|
 fn bash_session_outcome(snapshot : Json) -> @posoco.ToolOutcome {
   @posoco.ToolOutcome::Success(content=snapshot.stringify(), structured=Some(snapshot))
@@ -669,6 +713,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
             session.status = if session.kill_requested { "killed" } else { "cancelled" }
             session.ended_at_ms = Some(@async.now())
           }
+          self.emit_session(session, "bash.session.finished")
         }
         // Detached from the model effect's cancellation registration.
         let background_ctx : @posoco.ToolCallContext = {
@@ -706,6 +751,8 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         session.ended_at_ms = Some(@async.now())
       })
       session.worker = Some(worker)
+      self.emit_session(session, "bash.session.started")
+      ignore(group.spawn(async fn() { self.watch_stall(session) }))
       if !background && yield_ms > 0 {
         let deadline = @async.now() + yield_ms.to_int64()
         while session.status == "running" && @async.now() < deadline {
