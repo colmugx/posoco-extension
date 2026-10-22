@@ -47,7 +47,7 @@ async fn shell_child_hard_kill(handle : ShellChildHandle) -> Unit noraise {
 }
 
 ///|
-async fn bash_foreground(
+async fn ShellTools::bash_foreground(
   self : ShellTools,
   ctx : @posoco.ToolCallContext,
   session~ : ShellSession? = None,
