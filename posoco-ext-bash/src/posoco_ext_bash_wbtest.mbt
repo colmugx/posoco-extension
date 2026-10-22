@@ -179,17 +179,6 @@ test "bash timeout rejects malformed or unsafe values" {
 }
 
 ///|
-test "streaming shell output remains bounded" {
-  let mut output = ""
-  for _ in 0..<100 {
-    output = bash_append_output(output, "0123456789".repeat(100))
-  }
-  assert_true(bash_char_count(output) <= BASH_OUTPUT_CHAR_CAP)
-  assert_true(output.has_prefix("012345"))
-  assert_true(output.contains("…[cut]…"))
-}
-
-///|
 test "bash session argument validation" {
   assert_false(bash_background_requested(Json::object(Map::from_array([]))))
   assert_true(

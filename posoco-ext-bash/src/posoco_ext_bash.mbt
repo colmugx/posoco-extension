@@ -238,28 +238,6 @@ const BASH_DEFAULT_TIMEOUT_MS = 300_000
 const BASH_MAX_TIMEOUT_MS = 3_600_000
 
 ///|
-/// Descendants may hold inherited pipe handles after the direct child exits.
-const BASH_DRAIN_GRACE_MS = 1_000
-
-///|
-/// Bound accumulated output *during* streaming rather than only when returning.
-fn bash_append_output(previous : String, chunk : String) -> String {
-  let combined = previous + chunk
-  let chars = bash_char_count(combined)
-  if chars <= BASH_OUTPUT_CHAR_CAP {
-    return combined
-  }
-  let marker = "\n…[cut]…\n"
-  bash_take_chars(combined, BASH_OUTPUT_HEAD_CHARS) +
-  marker +
-  bash_tail_chars(
-    combined,
-    chars,
-    BASH_OUTPUT_CHAR_CAP - BASH_OUTPUT_HEAD_CHARS - bash_char_count(marker),
-  )
-}
-
-///|
 /// Validate the optional process runtime cap, rejecting invalid arguments.
 fn bash_timeout_ms(args : Json) -> Int32 raise @posoco.RuntimeError {
   match args {

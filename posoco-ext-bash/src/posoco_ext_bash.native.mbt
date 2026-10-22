@@ -1,4 +1,8 @@
 ///|
+/// Descendants may hold inherited pipe handles after the direct child exits.
+const BASH_DRAIN_GRACE_MS = 1_000
+
+///|
 /// Native child handle. Teardown escalation (signal → grace → hard kill)
 /// lives in the spawn's `graceful_cancel` handler, which the local task
 /// group runs when the effect task is cancelled; `ShellTools::cancel` only
