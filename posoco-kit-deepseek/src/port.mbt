@@ -109,20 +109,25 @@ pub impl @posoco.ModelPort for DeepSeekPolicyPort with fn chat(
               code="deepseek.reasoning_exhaustion_recovery",
               message="Retrying nonstream reasoning-only length cutoff once at low effort",
             )
-            strip_temporary_guidance(retry().chat(
-              scope,
-              wire_messages[:],
-              wire_tools,
-              options,
-              @posoco.StreamMode::NoStream,
-            ))
+            strip_temporary_guidance(
+              retry().chat(
+                scope,
+                wire_messages[:],
+                wire_tools,
+                options,
+                @posoco.StreamMode::NoStream,
+              ),
+            )
           } else {
             strip_temporary_guidance(first)
           }
         None => strip_temporary_guidance(first)
       }
     }
-    mode => strip_temporary_guidance(self.inner.chat(scope, wire_messages[:], wire_tools, options, mode))
+    mode =>
+      strip_temporary_guidance(
+        self.inner.chat(scope, wire_messages[:], wire_tools, options, mode),
+      )
   }
 }
 

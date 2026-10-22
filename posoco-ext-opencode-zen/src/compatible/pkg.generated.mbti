@@ -1,0 +1,36 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-opencode-zen/compatible"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+}
+
+// Values
+pub fn deepseek() -> ChatCompatibility
+
+pub fn glm() -> ChatCompatibility
+
+pub fn resolve(String) -> ChatCompatibility
+
+pub fn standard() -> ChatCompatibility
+
+// Errors
+
+// Types and methods
+pub(all) struct ChatCompatibility {
+  id : String
+  accepts : (String) -> Bool
+  apply_params : (Map[String, Json], Bool, String?) -> Unit
+  check_history : (Array[@kernel.Message], Bool, Bool, String?) -> Unit raise @error.ModelError
+  check_completion : (@kernel.Completion, Bool, Bool, String?) -> Unit raise @error.ModelError
+  explicit_terminal : (Bool, String?) -> Bool
+}
+pub fn ChatCompatibility::apply_request(Self, Map[String, Json], Bool, String?) -> Unit
+pub fn ChatCompatibility::requires_terminal(Self, Bool, String?) -> Bool
+pub fn ChatCompatibility::validate_completion(Self, @kernel.Completion, Bool, Bool, String?) -> Unit raise @error.ModelError
+pub fn ChatCompatibility::validate_history(Self, Array[@kernel.Message], Bool, Bool, String?) -> Unit raise @error.ModelError
+
+// Type aliases
+
+// Traits

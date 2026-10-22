@@ -19,7 +19,6 @@ fn run_sse(
   (done, acc, chunks)
 }
 
-
 ///|
 test "standard SSE consumes final content and reasoning before finish" {
   let (done, acc, chunks) = run_sse(

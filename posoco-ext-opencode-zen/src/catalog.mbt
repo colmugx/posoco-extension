@@ -105,7 +105,11 @@ fn zen_catalog_slot(
   let retry_at_low : (() -> &@posoco.ModelPort)? = if applies &&
     config.thinking_efforts.contains("low") {
     let low_config = config.with_reasoning_effort("low") catch {
-      err => abort("Zen DeepSeek low-effort recovery configuration failed: " + err.to_string())
+      err =>
+        abort(
+          "Zen DeepSeek low-effort recovery configuration failed: " +
+          err.to_string(),
+        )
     }
     Some(fn() {
       zen_anchored_compact_port(

@@ -2,7 +2,7 @@ import {
   "colmugx/posoco",
   "colmugx/posoco-ext-opencode-zen" @zen,
   "colmugx/posoco-kit-deepseek" @ds,
-  "colmugx/posoco-ext-opencode-zen/compatible" @compatible,
+  "colmugx/posoco-ext-opencode-zen/compatible",
   "posoco/devkit",
   "colmugx/posoco-kit-rate-limit" @ratelimit,
   "posoco/ext-llm" @llm,

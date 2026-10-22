@@ -24,9 +24,10 @@ fn ds_check_history(
       @posoco.Message::AssistantMessage(reasoning~, ..) =>
         match reasoning {
           Some(r) if r.content.length() > 0 => ()
-          _ => raise @posoco.ModelError::ResponseParse(
-            "DeepSeek replay blocked: assistant history lacks reasoning_content (index=\{i}); use a clean conversation or safe compaction",
-          )
+          _ =>
+            raise @posoco.ModelError::ResponseParse(
+              "DeepSeek replay blocked: assistant history lacks reasoning_content (index=\{i}); use a clean conversation or safe compaction",
+            )
         }
       _ => ()
     }
@@ -44,9 +45,10 @@ fn ds_check_completion(
     (tools_present || completion.has_tool_calls()) {
     match completion.message.reasoning {
       Some(r) if r.content.length() > 0 => ()
-      _ => raise @posoco.ModelError::ResponseParse(
-        "DeepSeek replay integrity failure: completion lacks reasoning_content",
-      )
+      _ =>
+        raise @posoco.ModelError::ResponseParse(
+          "DeepSeek replay integrity failure: completion lacks reasoning_content",
+        )
     }
   }
 }

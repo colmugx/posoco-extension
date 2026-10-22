@@ -78,7 +78,9 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
   let compatibility = @compatible.resolve(self.config.model)
   compatibility.validate_history(
-    messages, !tools.is_empty(), self.config.thinking,
+    messages,
+    !tools.is_empty(),
+    self.config.thinking,
     self.config.reasoning_effort,
   )
   match stream {
@@ -96,7 +98,9 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
       let resp_json = self.zen_post_chat_json(body, "chat", scope)
       let completion = decode_chat_response(resp_json)
       compatibility.validate_completion(
-        completion, !tools.is_empty(), self.config.thinking,
+        completion,
+        !tools.is_empty(),
+        self.config.thinking,
         self.config.reasoning_effort,
       )
       @posoco.ModelCallResult::{ completion, processed_messages: messages, }
@@ -199,8 +203,9 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
           None => {
             client.close()
             if compatibility.requires_terminal(
-              self.config.thinking, self.config.reasoning_effort,
-            ) {
+                self.config.thinking,
+                self.config.reasoning_effort,
+              ) {
               raise @posoco.ModelError::ResponseParse(
                 "DeepSeek SSE truncated: missing explicit terminal marker",
               )
@@ -237,7 +242,9 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
       validate_zen_stream_tool_calls(acc)
       let completion = acc.to_completion()
       compatibility.validate_completion(
-        completion, !tools.is_empty(), self.config.thinking,
+        completion,
+        !tools.is_empty(),
+        self.config.thinking,
         self.config.reasoning_effort,
       )
       @posoco.ModelCallResult::{ completion, processed_messages: messages, }

@@ -39,7 +39,6 @@ pub fn BoardExecutionResultChannel::BoardExecutionResultChannel(
 }
 
 ///|
-///|
 /// Change strategy only while no unread result is held; callers must separately
 /// ensure the owning adapter is quiescent.
 pub fn BoardExecutionResultChannel::set_strategy(

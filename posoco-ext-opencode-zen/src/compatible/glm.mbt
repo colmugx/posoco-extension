@@ -6,9 +6,7 @@ pub fn glm() -> ChatCompatibility {
     accepts: fn(model) { model.has_prefix("glm-") },
     apply_params: fn(body, thinking, effort) {
       if thinking {
-        body["thinking"] = Json::object({
-          "type": Json::string("enabled"),
-        })
+        body["thinking"] = Json::object({ "type": Json::string("enabled") })
         match effort {
           Some(value) => body["reasoning_effort"] = Json::string(value)
           None => ()

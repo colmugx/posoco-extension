@@ -11,11 +11,7 @@ impl @posoco.Extension for ToolCaptureAgent with fn extension_id(_) {
 
 ///|
 impl @posoco.Extension for ToolCaptureAgent with fn manifest(self) {
-  @posoco.ExtensionManifest(
-    id="tool-capture-agent",
-    models=[self],
-    tools=[self],
-  )
+  @posoco.ExtensionManifest(id="tool-capture-agent", models=[self], tools=[self])
 }
 
 ///|
@@ -36,11 +32,13 @@ impl @posoco.ModelPort for ToolCaptureAgent with fn chat(
   let completion = if self.calls == 1 {
     @kernel.Completion(
       content=[],
-      tool_calls=[{
-        call_id: @kernel.CallId::unchecked("capture-call"),
-        name: @kernel.ToolName::unchecked("capture_tool"),
-        arguments: {},
-      }],
+      tool_calls=[
+        {
+          call_id: @kernel.CallId::unchecked("capture-call"),
+          name: @kernel.ToolName::unchecked("capture_tool"),
+          arguments: {},
+        },
+      ],
       reasoning=None,
       finish_reason=@kernel.ToolCalls,
       usage=None,
