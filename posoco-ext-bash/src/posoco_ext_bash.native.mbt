@@ -50,6 +50,7 @@ async fn shell_child_hard_kill(handle : ShellChildHandle) -> Unit noraise {
 async fn bash_foreground(
   self : ShellTools,
   ctx : @posoco.ToolCallContext,
+  session~ : ShellSession? = None,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let cmd = extract_command(ctx.arguments)
   let timeout_ms = bash_timeout_ms(ctx.arguments)
@@ -85,7 +86,7 @@ async fn bash_foreground(
       )
       let handle : ShellChildHandle = { proc, exited: false, }
       self.in_flight[key] = handle
-      let drain = group.spawn(async fn() { bash_drain_native(reader) })
+      let drain = group.spawn(async fn() { bash_drain_native(reader, session~) })
       let exit_code = proc.wait()
       handle.exited = true
       self.in_flight.remove(key)
@@ -149,13 +150,23 @@ async fn bash_foreground(
 /// Drain concurrently with the child's execution to avoid a full-pipe
 /// deadlock (a child blocked writing cannot reach process exit).
 /// Retain only a bounded tail; always consume further chunks.
-async fn bash_drain_native(reader : @process.ReadFromProcess) -> Bytes {
+async fn bash_drain_native(
+  reader : @process.ReadFromProcess,
+  session~ : ShellSession? = None,
+) -> Bytes {
   let bytes : Array[Byte] = []
   for ;; {
     let chunk = reader.read_some(max_len=8192) catch { _ => None }
     match chunk {
       None => break
       Some(data) => {
+        match session {
+          Some(active) => {
+            let partial = @utf8.decode(data) catch { _ => "" }
+            active.append(partial)
+          }
+          None => ()
+        }
         for byte in data {
           if bytes.length() < BASH_OUTPUT_CHAR_CAP {
             bytes.push(byte)
