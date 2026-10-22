@@ -26,44 +26,77 @@ extern "js" fn node_spawn_shell(
   spawn : (String, FixedArray[String], NodeSpawnOptions) -> ShellProc,
   cmd : String,
   cwd : String,
+  timeout_ms : Int32,
 ) -> ShellProc =
-  #| (spawn, cmd, cwd) => {
-  #|   const grouped = process.platform !== "win32"
-  #|   const proc = spawn("sh", ["-c", cmd], { detached: grouped, stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) })
+  #| (spawn, cmd, cwd, timeoutMs) => {
+  #|   const grouped = process.platform !== "win32";
+  #|   const proc = spawn("sh", ["-c", cmd], { detached: grouped, stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) });
   #|   const kill = (signal) => {
-  #|     if (!proc.pid) return
-  #|     if (grouped) process.kill(-proc.pid, signal)
-  #|     else proc.kill(signal)
-  #|   }
-  #|   // Fatal host exits cannot rely on MoonBit coroutine unwinding.
-  #|   const key = Symbol.for("posoco.bash.activeChildren")
-  #|   let children = globalThis[key]
+  #|     if (!proc.pid) return;
+  #|     try { if (grouped) process.kill(-proc.pid, signal); else proc.kill(signal); } catch {}
+  #|   };
+  #|   const key = Symbol.for("posoco.bash.activeChildren");
+  #|   let children = globalThis[key];
   #|   if (!children) {
-  #|     children = globalThis[key] = new Set()
+  #|     children = globalThis[key] = new Set();
   #|     process.once("exit", () => {
-  #|       for (const terminate of children) {
-  #|         try { terminate("SIGKILL") } catch {}
-  #|       }
-  #|     })
+  #|       for (const terminate of children) { try { terminate("SIGKILL"); } catch {} }
+  #|     });
   #|   }
-  #|   children.add(kill)
-  #|   proc.once("close", () => children.delete(kill))
-  #|   const drain = (stream) => stream
-  #|     ? new Promise((resolve) => {
-  #|         let text = ""
-  #|         const finish = () => resolve(text)
-  #|         stream.setEncoding("utf8")
-  #|         stream.on("data", (chunk) => { text += chunk })
-  #|         stream.on("end", finish)
-  #|         stream.on("close", finish)
-  #|         stream.on("error", finish)
-  #|       })
-  #|     : Promise.resolve("")
-  #|   const exited = new Promise((resolve) => {
-  #|     proc.on("close", (code) => resolve(code ?? -1))
-  #|     proc.on("error", () => resolve(-1))
-  #|   })
-  #|   return { proc, kill, exited, stdoutText: drain(proc.stdout), stderrText: drain(proc.stderr) }
+  #|   children.add(kill);
+  #|   let timedOut = false;
+  #|   let settled = false;
+  #|   let cancelTimer;
+  #|   let watchdog;
+  #|   const outputLimit = 32768;
+  #|   const keepHead = 4096;
+  #|   const marker = "\n…[cut]…\n";
+  #|   // Pipe data is consumed immediately; bounded head/tail buffering prevents OOM.
+  #|   const drain = (stream) => {
+  #|     let text = "", truncated = false, done;
+  #|     const closed = new Promise(resolve => { done = resolve; });
+  #|     if (!stream) { done(); return { text: () => "", closed }; }
+  #|     stream.setEncoding("utf8");
+  #|     stream.on("data", chunk => {
+  #|       text += chunk;
+  #|       if (text.length > outputLimit) {
+  #|         truncated = true;
+  #|         text = text.slice(0, keepHead) + marker + text.slice(-(outputLimit - keepHead - marker.length));
+  #|       }
+  #|     });
+  #|     stream.once("end", done);
+  #|     stream.once("close", done);
+  #|     stream.once("error", done);
+  #|     return { text: () => text, closed };
+  #|   };
+  #|   const out = drain(proc.stdout), err = drain(proc.stderr);
+  #|   // 'exit' reports child termination, 'close' may be held open by grandchildren.
+  #|   const exitCode = new Promise(resolve => {
+  #|     const finish = code => {
+  #|       if (settled) return;
+  #|       settled = true;
+  #|       clearTimeout(watchdog);
+  #|       clearTimeout(cancelTimer);
+  #|       children.delete(kill);
+  #|       resolve(code);
+  #|     };
+  #|     proc.once("exit", code => finish(code ?? -1));
+  #|     proc.once("error", () => finish(-1));
+  #|   });
+  #|   watchdog = setTimeout(() => {
+  #|     if (settled) return;
+  #|     timedOut = true;
+  #|     kill("SIGTERM");
+  #|     cancelTimer = setTimeout(() => kill("SIGKILL"), 2000);
+  #|     cancelTimer.unref?.();
+  #|   }, timeoutMs);
+  #|   watchdog.unref?.();
+  #|   const exited = exitCode.then(async code => {
+  #|     // Reap the direct child even if descendants retain inherited output pipes.
+  #|     await Promise.race([Promise.all([out.closed, err.closed]), new Promise(resolve => setTimeout(resolve, 1000))]);
+  #|     return { code, timedOut, stdout: out.text(), stderr: err.text() };
+  #|   });
+  #|   return { proc, kill, exited };
   #| }
 
 ///|
@@ -71,22 +104,29 @@ extern "js" fn node_spawn_shell(
 /// failed spawn resolves -1.
 extern "js" fn ShellProc::exit_code(
   self : ShellProc,
-) -> @js_async.Promise[Int32] =
+) -> @js_async.Promise[ShellCollected] =
   #| (handle) => handle.exited
 
 ///|
-/// The drain promise started at spawn, so reading after exit still returns the
-/// full buffered output.
-extern "js" fn ShellProc::stdout_text(
-  self : ShellProc,
-) -> @js_async.Promise[String] =
-  #| (handle) => handle.stdoutText
+///|
+#external
+priv type ShellCollected
 
 ///|
-extern "js" fn ShellProc::stderr_text(
-  self : ShellProc,
-) -> @js_async.Promise[String] =
-  #| (handle) => handle.stderrText
+extern "js" fn ShellCollected::stdout_text(self : ShellCollected) -> String =
+  #| (result) => result.stdout
+
+///|
+extern "js" fn ShellCollected::stderr_text(self : ShellCollected) -> String =
+  #| (result) => result.stderr
+
+///|
+extern "js" fn ShellCollected::exit_code(self : ShellCollected) -> Int32 =
+  #| (result) => result.code
+
+///|
+extern "js" fn ShellCollected::timed_out(self : ShellCollected) -> Bool =
+  #| (result) => result.timedOut
 
 ///|
 extern "js" fn ShellProc::kill(self : ShellProc, signal : String) -> Unit =
@@ -116,9 +156,9 @@ async fn shell_child_await_exit(
 ) -> Bool {
   // The exit promise is memoized; waiting it again from the cancellation
   // path is safe and resolves once the signalled child dies.
-  let outcome : Int32? = @async.with_timeout_opt(timeout_ms, async fn() {
+  let outcome : ShellCollected? = @async.with_timeout_opt(timeout_ms, async fn() {
     handle.proc.exit_code().wait() catch {
-      _ => -1
+      _ => raise Failure::Failure("bash: wait failed")
     }
   })
   match outcome {
@@ -158,7 +198,8 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     Some(anchor) => anchor.root
     None => ""
   }
-  let proc = node_spawn_shell(cp_spawn, cmd, cwd)
+  let timeout_ms = bash_timeout_ms(ctx.arguments)
+  let proc = node_spawn_shell(cp_spawn, cmd, cwd, timeout_ms)
   let handle : ShellChildHandle = { proc, exited: false, }
   let key = ctx.effect_id.to_int()
   self.in_flight[key] = handle
@@ -171,7 +212,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
   // hang until the child exits on its own. With the controller, the
   // suspension unwinds on cancellation and the deferred kill above runs.
   let wait_controller = @js_async.AbortController::new()
-  let waited : Result[Int32, Error] = Ok(
+  let waited : Result[ShellCollected, Error] = Ok(
     proc.exit_code().wait(abort_controller=wait_controller),
   ) catch {
     error => Err(error)
@@ -182,11 +223,12 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       self.in_flight.remove(key)
       raise @posoco.RuntimeError::InvocationFailed("bash: process failed")
     }
-    Ok(exit_code) => {
+    Ok(collected) => {
+      let exit_code = collected.exit_code()
       handle.exited = true
       self.in_flight.remove(key)
-      let stdout = proc.stdout_text().wait() catch { _ => "" }
-      let stderr = proc.stderr_text().wait() catch { _ => "" }
+      let stdout = collected.stdout_text()
+      let stderr = collected.stderr_text()
       let content = if stderr.length() > 0 {
         if stdout.length() > 0 {
           stdout + "\n" + stderr
@@ -197,7 +239,9 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         stdout
       }
       let content = bash_model_output(content, exit_code)
-      if exit_code != 0 {
+      if collected.timed_out() {
+        @posoco.ToolOutcome::ToolReportedError(content="bash: timed out after \{timeout_ms}ms\n" + content, structured=None)
+      } else if exit_code != 0 {
         @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
       } else {
         @posoco.ToolOutcome::Success(content~, structured=None)
