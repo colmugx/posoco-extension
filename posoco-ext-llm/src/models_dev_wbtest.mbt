@@ -577,3 +577,78 @@ test "legacy context-window helper entry points remain available" {
     ),
   )
 }
+
+///|
+async test "metadata fetch falls back to the next source when one fails" {
+  let fallback : Json = metadata_fixture()
+  let attempted : Array[String] = []
+  let value = fetch_first_metadata(urls=["models.dev", "mirror"], fetch_one=fn(
+    url,
+  ) raise {
+    attempted.push(url)
+    if url == "models.dev" {
+      fail("blocked")
+    }
+    fallback
+  })
+  assert_true(
+    attempted.length() == 2 &&
+    attempted[0] == "models.dev" &&
+    attempted[1] == "mirror",
+  )
+  guard value is Json::Object(_) else { fail("expected the mirror payload") }
+}
+
+///|
+async test "metadata fetch fails only after every source failed" {
+  let mut attempted = 0
+  let outcome : Result[Json, Error] = Ok(
+    fetch_first_metadata(urls=["models.dev", "mirror"], fetch_one=fn(
+      _url,
+    ) raise {
+      attempted += 1
+      fail("offline")
+    }),
+  ) catch {
+    error => Err(error)
+  }
+  assert_eq(attempted, 2)
+  assert_true(outcome is Err(_))
+}
+
+///|
+/// Startup must not wait on the metadata fetch: with an attached group,
+/// `on_start` returns before the background fetch has even started, and the
+/// reading lands afterwards (first session falls back to 500k, later
+/// readings see the real window).
+async test "on_start with an attached group defers the fetch to the background" {
+  let transport = MetadataTestTransport::{
+    calls: 0,
+    payload: metadata_fixture(),
+    broken: false,
+  }
+  let metadata = ModelMetadata(transport~, store=None)
+  let router = RouterModelPort::RouterModelPort(
+    slots=[
+      router_test_slot(
+        "deepseek/deepseek-flash",
+        "deepseek",
+        "deepseek-flash",
+        [],
+      ),
+    ],
+    model_metadata=Some(metadata),
+  )
+  assert_true(metadata.lookup("deepseek", "deepseek-flash").tokens == 500_000)
+  @async.with_task_group(group => {
+    router.attach_background(group)
+    @posoco.Lifecycle::on_start(router)
+    // Inline execution would have started the fetch before returning.
+    assert_eq(transport.calls, 0)
+    @async.sleep(200)
+    assert_eq(transport.calls, 1)
+    assert_true(
+      metadata.lookup("deepseek", "deepseek-flash").tokens == 1_000_000,
+    )
+  })
+}

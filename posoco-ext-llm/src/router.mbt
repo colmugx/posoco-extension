@@ -48,6 +48,9 @@ pub(all) struct RouterModelPort {
   priv mut quota_failed_at : Int64
   /// Quota segment names this router currently has published on the bar.
   priv mut quota_shown : Array[String]
+  /// Host task group for background lifecycle work, attached via
+  /// `attach_background`. `None` keeps every lifecycle await inline.
+  priv mut background_group : @async.TaskGroup[Unit]?
 }
 
 ///|
@@ -129,6 +132,7 @@ pub fn RouterModelPort::RouterModelPort(
     quota_fetched_at: 0L,
     quota_failed_at: 0L,
     quota_shown: [],
+    background_group: None,
   }
   match bus {
     Some(bus) => bus.subscribe(router as &@devkit.BusSubscriber)
@@ -194,6 +198,18 @@ pub fn RouterModelPort::from_catalogs(
 /// visible user state, not an invariant violation.
 fn RouterModelPort::active_slot_opt(self : RouterModelPort) -> ModelSlot? {
   self.slots.get(self.active_id)
+}
+
+///|
+/// Hand the router the host's long-lived task group so lifecycle work can
+/// run in the background instead of blocking `on_start` — startup must not
+/// wait on metadata network fetches. Call inside the host's
+/// `with_task_group` scope; the group stays open for the agent's lifetime.
+pub fn RouterModelPort::attach_background(
+  self : RouterModelPort,
+  group : @async.TaskGroup[Unit],
+) -> Unit {
+  self.background_group = Some(group)
 }
 
 ///|

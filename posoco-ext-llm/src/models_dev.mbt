@@ -10,21 +10,49 @@ pub(open) trait ModelMetadataStore {
 }
 
 ///|
+/// Metadata sources, tried in order. basellm's llm-metadata mirror is
+/// primary: it serves the same provider → models → limit.context shape and
+/// stays reachable where models.dev is blocked (China, Russia). models.dev
+/// remains the second source for coverage basellm lacks.
+let metadata_source_urls : Array[String] = [
+  "https://basellm.github.io/llm-metadata/api/all.json", "https://models.dev/api.json",
+]
+
+///|
+async fn fetch_metadata_url(url : String) -> Json {
+  let (response, body) = @async.with_timeout(10_000, () => {
+    @http.get(url, headers={ "Accept": "application/json" })
+  })
+  if response.code < 200 || response.code >= 300 {
+    fail("metadata source HTTP status: \{response.code}")
+  }
+  @json.parse(body.text())
+}
+
+///|
+async fn fetch_first_metadata(
+  urls~ : Array[String],
+  fetch_one~ : async (String) -> Json,
+) -> Json {
+  let mut last_error = "no metadata source attempted"
+  for url in urls {
+    try {
+      return fetch_one(url)
+    } catch {
+      err => last_error = "\{url}: \{err.to_string()}"
+    }
+  }
+  fail(last_error)
+}
+
+///|
 priv struct HttpModelMetadataTransport {}
 
 ///|
 impl ModelMetadataTransport for HttpModelMetadataTransport with fn fetch(
   _self : HttpModelMetadataTransport,
 ) -> Json {
-  let (response, body) = @async.with_timeout(10_000, () => {
-    @http.get("https://models.dev/api.json", headers={
-      "Accept": "application/json",
-    })
-  })
-  if response.code < 200 || response.code >= 300 {
-    fail("models.dev HTTP status: \{response.code}")
-  }
-  @json.parse(body.text())
+  fetch_first_metadata(urls=metadata_source_urls, fetch_one=fetch_metadata_url)
 }
 
 ///|

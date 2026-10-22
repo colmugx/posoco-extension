@@ -8,6 +8,7 @@ import {
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
   "colmugx/posoco/types",
+  "moonbitlang/async",
   "moonbitlang/core/debug",
   "posoco/devkit",
   "posoco/ext-oauth",
@@ -61,6 +62,7 @@ pub fn RouterModelPort::RouterModelPort(slots~ : Array[@posoco-kit-provider.Mode
 pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_selection(Self) -> @posoco-kit-model-management.ManagerSelection
 pub fn RouterModelPort::active_slot_id(Self) -> String
+pub fn RouterModelPort::attach_background(Self, @async.TaskGroup[Unit]) -> Unit
 pub async fn RouterModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub fn RouterModelPort::commands(Self) -> Array[@port.CommandDef]
 pub async fn RouterModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
