@@ -27,8 +27,9 @@ extern "js" fn node_spawn_shell(
   cmd : String,
   cwd : String,
   timeout_ms : Int32,
+  on_chunk : (String) -> Unit,
 ) -> ShellProc =
-  #| (spawn, cmd, cwd, timeoutMs) => {
+  #| (spawn, cmd, cwd, timeoutMs, onChunk) => {
   #|   const grouped = process.platform !== "win32";
   #|   const proc = spawn("sh", ["-c", cmd], { detached: grouped, stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) });
   #|   const kill = (signal) => {
@@ -59,6 +60,7 @@ extern "js" fn node_spawn_shell(
   #|     stream.setEncoding("utf8");
   #|     stream.on("data", chunk => {
   #|       text += chunk;
+  #|       onChunk(chunk);
   #|       if (text.length > outputLimit) {
   #|         text = text.slice(0, keepHead) + marker + text.slice(-(outputLimit - keepHead - marker.length));
   #|       }
@@ -94,7 +96,12 @@ extern "js" fn node_spawn_shell(
   #|     await Promise.race([Promise.all([out.closed, err.closed]), new Promise(resolve => setTimeout(resolve, 1000))]);
   #|     return { code, timedOut, stdout: out.text(), stderr: err.text() };
   #|   });
-  #|   return { proc, kill, exited };
+  #|   const requestStop = () => {
+  #|     kill("SIGTERM");
+  #|     const escalation = setTimeout(() => kill("SIGKILL"), 2000);
+  #|     escalation.unref?.();
+  #|   };
+  #|   return { proc, kill, requestStop, exited };
   #| }
 
 ///|
@@ -106,7 +113,6 @@ extern "js" fn ShellProc::exit_code(
   #| (handle) => handle.exited
 
 ///|
-
 ///|
 #external
 priv type ShellCollected
@@ -133,7 +139,7 @@ extern "js" fn ShellProc::kill(self : ShellProc, signal : String) -> Unit =
 
 ///|
 extern "js" fn ShellProc::kill_default(self : ShellProc) -> Unit =
-  #| (handle) => { try { handle.kill("SIGTERM") } catch {} }
+  #| (handle) => { try { handle.requestStop() } catch {} }
 
 ///|
 /// JS child handle; `exited` marks a settled exit promise so unwind cleanup
@@ -175,16 +181,10 @@ fn shell_child_hard_kill(handle : ShellChildHandle) -> Unit noraise {
 }
 
 ///|
-pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
-  _self : ShellTools,
-) -> Array[@posoco.ToolDef] {
-  shared_list_tools()
-}
-
-///|
-pub impl @posoco.ToolProvider for ShellTools with fn execute(
+async fn bash_foreground(
   self : ShellTools,
   ctx : @posoco.ToolCallContext,
+  session~ : ShellSession? = None,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let cmd = extract_command(ctx.arguments)
   if cmd == "" {
@@ -198,7 +198,11 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     None => ""
   }
   let timeout_ms = bash_timeout_ms(ctx.arguments)
-  let proc = node_spawn_shell(cp_spawn, cmd, cwd, timeout_ms)
+  let on_chunk : (String) -> Unit = match session {
+    Some(active) => fn(chunk) { active.append(chunk) }
+    None => fn(_) { () }
+  }
+  let proc = node_spawn_shell(cp_spawn, cmd, cwd, timeout_ms, on_chunk)
   let handle : ShellChildHandle = { proc, exited: false, }
   let key = ctx.effect_id.to_int()
   self.in_flight[key] = handle
@@ -239,10 +243,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       }
       let content = bash_model_output(content, exit_code)
       if collected.timed_out() {
-        @posoco.ToolOutcome::ToolReportedError(
-          content="bash: timed out after \{timeout_ms}ms\n" + content,
-          structured=None,
-        )
+        @posoco.ToolOutcome::ToolReportedError(content="bash: timed out after \{timeout_ms}ms\n" + content, structured=None)
       } else if exit_code != 0 {
         @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
       } else {
