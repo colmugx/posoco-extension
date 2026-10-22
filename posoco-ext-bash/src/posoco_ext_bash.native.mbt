@@ -47,14 +47,7 @@ async fn shell_child_hard_kill(handle : ShellChildHandle) -> Unit noraise {
 }
 
 ///|
-pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
-  _self : ShellTools,
-) -> Array[@posoco.ToolDef] {
-  shared_list_tools()
-}
-
-///|
-pub impl @posoco.ToolProvider for ShellTools with fn execute(
+async fn bash_foreground(
   self : ShellTools,
   ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
