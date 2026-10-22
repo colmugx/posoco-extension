@@ -9,7 +9,7 @@ test "resolver isolates DeepSeek, GLM and standard OpenAI compatibility" {
 
 ///|
 test "standard OpenAI-compatible request never receives vendor thinking" {
-  let body : Map[String, Json] = {}
+  let body : Map[String, Json] = Map([])
   resolve("generic-chat").apply_request(body, false, None)
   assert_true(body.get("thinking") is None)
   assert_true(body.get("reasoning_effort") is None)
@@ -20,10 +20,10 @@ test "standard OpenAI-compatible request never receives vendor thinking" {
 
 ///|
 test "DeepSeek thinking is explicit; its rules never apply to GLM" {
-  let ds_body : Map[String, Json] = {}
+  let ds_body : Map[String, Json] = Map([])
   resolve("deepseek-r1").apply_request(ds_body, false, None)
   assert_eq(ds_body["thinking"].stringify(), "{\"type\":\"disabled\"}")
-  let glm_body : Map[String, Json] = {}
+  let glm_body : Map[String, Json] = Map([])
   resolve("glm-5").apply_request(glm_body, false, None)
   assert_true(glm_body.get("thinking") is None)
 }
