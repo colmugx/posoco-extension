@@ -123,28 +123,32 @@ async test "policy port sorts tools and appends tail guidance once" {
     repeated,
   ]
   let tools = [write, read]
-  ignore(
-    port.chat(
-      test_scope(),
-      messages[:],
-      tools,
-      test_options(),
-      @posoco.StreamMode::NoStream,
-    ),
+  let result = port.chat(
+    test_scope(),
+    messages[:],
+    tools,
+    test_options(),
+    @posoco.StreamMode::NoStream,
   )
   // The caller's arrays are untouched.
   assert_eq(messages.length(), 4)
   assert_eq(tools[0].name.to_string(), "write_file")
-  // The inner port sees one extra, trailing system message.
+  // Only the wire sees a transient tail user message; session history does not.
+  assert_eq(result.processed_messages.length(), messages.length())
+  match result.processed_messages[result.processed_messages.length() - 1] {
+    @posoco.Message::AssistantMessage(..) => ()
+    _ => fail("original history must be preserved without injected user hint")
+  }
+  // The inner port sees one extra, trailing user message.
   assert_eq(inner.last_messages.length(), 5)
   match inner.last_messages[4] {
-    @posoco.Message::SystemMessage(content~) =>
+    @posoco.Message::UserMessage(content~) =>
       match content[0] {
         @posoco.Content::Text(text) =>
           assert_eq(text, convergence_instruction())
         @posoco.Content::Image(..) => fail("guidance is text")
       }
-    _ => fail("expected a trailing system message")
+    _ => fail("expected a transient trailing user message")
   }
   // Tools reach the wire in canonical order.
   assert_eq(inner.last_tools[0].name.to_string(), "read_file")

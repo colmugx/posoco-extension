@@ -76,6 +76,11 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
   options : @posoco.ChatOptions,
   stream : @posoco.StreamMode,
 ) -> @posoco.ModelCallResult raise @posoco.ModelError {
+  let compatibility = @compatible.resolve(self.config.model)
+  compatibility.validate_history(
+    messages, !tools.is_empty(), self.config.thinking,
+    self.config.reasoning_effort,
+  )
   match stream {
     NoStream => {
       let body = build_chat_request(
@@ -87,10 +92,13 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         self.config.thinking,
         self.config.reasoning_effort,
         self.config.supports_images,
-        glm_flavor=zen_glm_flavored(self.config.model),
       )
       let resp_json = self.zen_post_chat_json(body, "chat", scope)
       let completion = decode_chat_response(resp_json)
+      compatibility.validate_completion(
+        completion, !tools.is_empty(), self.config.thinking,
+        self.config.reasoning_effort,
+      )
       @posoco.ModelCallResult::{ completion, processed_messages: messages, }
     }
     Stream(on_chunk) => {
@@ -103,7 +111,6 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         self.config.thinking,
         self.config.reasoning_effort,
         self.config.supports_images,
-        glm_flavor=zen_glm_flavored(self.config.model),
       )
       let headers = build_headers(self.config, scope)
       let url = chat_url(self.config)
@@ -191,6 +198,13 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
           }
           None => {
             client.close()
+            if compatibility.requires_terminal(
+              self.config.thinking, self.config.reasoning_effort,
+            ) {
+              raise @posoco.ModelError::ResponseParse(
+                "DeepSeek SSE truncated: missing explicit terminal marker",
+              )
+            }
             if zen_eof_tolerable(acc) {
               let chunk = @posoco.StreamChunk::Finish(reason="tool_calls")
               on_chunk(chunk)
@@ -222,6 +236,10 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
       }
       validate_zen_stream_tool_calls(acc)
       let completion = acc.to_completion()
+      compatibility.validate_completion(
+        completion, !tools.is_empty(), self.config.thinking,
+        self.config.reasoning_effort,
+      )
       @posoco.ModelCallResult::{ completion, processed_messages: messages, }
     }
   }

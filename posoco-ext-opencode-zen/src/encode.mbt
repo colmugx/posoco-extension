@@ -7,8 +7,9 @@
 /// `reasoning_effort` field verbatim, and enabling thinking without a level
 /// sends the object form `thinking: {"type": "enabled"}`. A bare boolean is
 /// never sent — strict gateways (OpenCode Zen's upstream) only accept the
-/// object form. When thinking is off, both fields are omitted entirely so
-/// the endpoint applies its own default. Tool call arguments are JSON
+/// object form. Generic OpenAI-compatible models omit thinking fields when
+/// off; selected DeepSeek models instead use an explicit disabled object
+/// because DeepSeek defaults to thinking enabled. Tool call arguments are JSON
 /// strings (OpenAI convention). Message order is append-only.
 
 ///|
@@ -125,7 +126,6 @@ fn build_chat_request(
   thinking : Bool,
   reasoning_effort : String?,
   supports_images : Bool,
-  glm_flavor~ : Bool = false,
 ) -> Json {
   let body : Map[String, Json] = {
     "model": Json::string(model),
@@ -146,26 +146,9 @@ fn build_chat_request(
     Some(n) => body["max_tokens"] = Json::number(n.to_double())
     None => ()
   }
-  // Reasoning surface per dialect. GLM flavor: thinking off omits both
-  // fields so the endpoint applies its own default; thinking on uses the
-  // object form (never a bare boolean, which strict gateways reject) with
-  // the selected level verbatim as `reasoning_effort`. Standard shape: no
-  // `thinking` object; `reasoning_effort` only when a real level is selected.
-  if thinking && glm_flavor {
-    body["thinking"] = Json::object({ "type": Json::string("enabled") })
-    match reasoning_effort {
-      Some(effort) => body["reasoning_effort"] = Json::string(effort)
-      None => ()
-    }
-  } else if thinking {
-    match reasoning_effort {
-      Some(effort) =>
-        if effort != "none" {
-          body["reasoning_effort"] = Json::string(effort)
-        }
-      None => ()
-    }
-  }
+  // Vendor request shaping is owned by the selected compatibility module;
+  // this standard Chat Completions builder never handles model dialects.
+  @compatible.resolve(model).apply_request(body, thinking, reasoning_effort)
   if stream {
     body["stream"] = Json::boolean(true)
     body["stream_options"] = Json::object({

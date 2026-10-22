@@ -23,7 +23,8 @@ pub(all) struct OpenCodeZenConfig {
   endpoint_prefix : String
   /// Model id used for chat.
   model : String
-  /// Thinking toggle; false omits the wire fields entirely.
+  /// Thinking toggle; false omits fields on generic wires, while the
+  /// DeepSeek Chat Completions dialect explicitly sends thinking=disabled.
   thinking : Bool
   /// Selected effort level, sent verbatim while thinking is enabled.
   reasoning_effort : String?
@@ -177,13 +178,6 @@ fn build_messages_headers(
     headers[@http.CaseInsensitiveString(key)] = value
   }
   headers
-}
-
-///|
-/// Whether the chat-completions model speaks the GLM-flavored dialect (the
-/// `thinking` object + verbatim `reasoning_effort`). GLM upstreams only.
-fn zen_glm_flavored(model_id : String) -> Bool {
-  model_id.has_prefix("glm-")
 }
 
 ///|

@@ -19,6 +19,42 @@ fn run_sse(
   (done, acc, chunks)
 }
 
+
+///|
+test "standard SSE consumes final content and reasoning before finish" {
+  let (done, acc, chunks) = run_sse(
+    "{\"choices\":[{\"delta\":{\"content\":\"answer\",\"reasoning_content\":\"last thought\"},\"finish_reason\":\"stop\"}]}",
+  )
+  assert_true(done)
+  assert_eq(chunks.length(), 3)
+  let completion = acc.to_completion()
+  match completion.message.content[0] {
+    @posoco.Content::Text(text) => assert_eq(text, "answer")
+    _ => fail("expected the final content delta")
+  }
+  match completion.message.reasoning {
+    Some(r) => assert_eq(r.content, "last thought")
+    None => fail("expected the final reasoning delta")
+  }
+}
+
+///|
+test "standard SSE ignores vendor-specific reasoning aliases" {
+  // Provider-specific aliases are normalized by each gateway adapter,
+  // NEVER by the shared OpenAI-compatible parser.
+  let (done, acc, chunks) = run_sse(
+    "{\"choices\":[{\"delta\":{\"reasoning\":\"vendor-private\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}",
+  )
+  assert_true(done)
+  assert_eq(chunks.length(), 2)
+  let completion = acc.to_completion()
+  assert_true(completion.message.reasoning is None)
+  match completion.message.content[0] {
+    @posoco.Content::Text(text) => assert_eq(text, "ok")
+    _ => fail("standard content must survive")
+  }
+}
+
 ///|
 test "[DONE] finishes the stream" {
   let (done, _, chunks) = run_sse("[DONE]")

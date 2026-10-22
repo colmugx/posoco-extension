@@ -2,6 +2,8 @@ import {
   "colmugx/posoco",
   "posoco/devkit",
   "colmugx/posoco-kit-rate-limit" @ratelimit,
+  "colmugx/posoco-kit-deepseek" @ds,
+  "colmugx/posoco-ext-opencode-zen/compatible" @compatible,
   "colmugx/posoco-kit-messages" @messages,
   "colmugx/posoco-kit-responses" @responses,
   "posoco/ext-llm" @llm,

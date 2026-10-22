@@ -1,7 +1,7 @@
 ///|
 /// Convergence guidance for a tool-call loop.
 ///
-/// The instruction is appended as one extra system message at the very end of
+/// The instruction is appended as one request-local user message at the very end of
 /// the outgoing request — never spliced into the middle. Appending keeps the
 /// conversation prefix byte-identical, so the server's cached KV prefix is
 /// still reusable for this turn; rewriting history would invalidate it.
@@ -13,6 +13,7 @@
 /// ordinary retries.
 pub fn repeated_tool_calls(messages : Array[@posoco.Message]) -> Bool {
   let mut previous = ""
+  let mut previous_result : @posoco.ToolOutcome? = None
   let mut streak = 0
   for i = messages.length() - 1; i >= 0; i = i - 1 {
     match messages[i] {
@@ -35,7 +36,11 @@ pub fn repeated_tool_calls(messages : Array[@posoco.Message]) -> Bool {
           break
         }
       }
-      @posoco.Message::ToolMessage(..) => ()
+      @posoco.Message::ToolMessage(outcome~, ..) =>
+        match previous_result {
+          Some(last) => if last != outcome { break }
+          None => previous_result = Some(outcome)
+        }
       @posoco.Message::SystemMessage(..) => ()
     }
   }

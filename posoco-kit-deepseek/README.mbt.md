@@ -4,7 +4,7 @@
 
 The client-side half of DeepSeek's serving contract, shared by every plane that
 serves a DeepSeek model: the direct API extension (`posoco-ext-deepseek`) and
-gateway planes such as OpenCode Go. Nothing here is a generic model guardrail —
+gateway planes such as OpenCode Go and OpenCode Zen, on selected DeepSeek Chat Completions slots only. Nothing here is a generic model guardrail —
 each rule exists because of how DeepSeek's serving engine behaves.
 
 ## Why these rules exist
@@ -20,7 +20,7 @@ suffix is prefilled. Two things follow, and both are obligations on the client:
 | Fail-closed reasoning ceiling | Decode ends when the server stops thinking; a client that never bounds reasoning pays for the stream and then for the compaction it triggers. |
 | Exact repeated-suffix detection | A degenerate decode is deterministic in its suffix shape; the check is deliberately narrow and never claims semantics. |
 | One bounded low-effort retry | A `length` cutoff with no text and no tool calls is the only response that can be replayed without retracting anything that reached the host. |
-| One-shot convergence guidance | Three identical tool calls in one user turn are a loop, and telling the model so is cheaper than another round trip. |
+| Request-only convergence guidance | Three syntactically identical tool calls may indicate no progress. The request-only user hint asks for reconsideration; effectiveness must be measured, and legitimate polling must not be prohibited. |
 
 ## API
 

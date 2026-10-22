@@ -1394,7 +1394,6 @@ test "zen wire sends the GLM thinking object and verbatim reasoning_effort" {
     true,
     Some("low"),
     false,
-    glm_flavor=true,
   )
   guard with_effort is Object(with_fields) else {
     fail("expected request to be an object")
@@ -1421,7 +1420,6 @@ test "zen wire sends the GLM thinking object and verbatim reasoning_effort" {
     true,
     None,
     false,
-    glm_flavor=true,
   )
   guard toggle_on is Object(on_fields) else {
     fail("expected request to be an object")
@@ -1448,7 +1446,6 @@ test "zen wire sends the GLM thinking object and verbatim reasoning_effort" {
     false,
     None,
     false,
-    glm_flavor=true,
   )
   guard toggle_off is Object(off_fields) else {
     fail("expected request to be an object")
@@ -1506,6 +1503,203 @@ test "zen wire keeps reasoning_content on assistant messages (keep-all)" {
   }
 }
 
+
+
+///|
+test "Zen attaches DeepSeek kit only to selected Chat Completions model" {
+  let deepseek = OpenCodeZenConfig(
+    "test",
+    base_url="https://test.invalid",
+    model="deepseek-v4.1-flash",
+  )
+  assert_true(zen_deepseek_applies(deepseek))
+  let glm : OpenCodeZenConfig = { ..deepseek, model: "glm-5.3-flash", }
+  assert_false(zen_deepseek_applies(glm))
+  let kimi : OpenCodeZenConfig = { ..deepseek, model: "kimi-k3", }
+  assert_false(zen_deepseek_applies(kimi))
+  let responses : OpenCodeZenConfig = { ..deepseek, wire: Responses, }
+  assert_false(zen_deepseek_applies(responses))
+  let messages : OpenCodeZenConfig = { ..deepseek, wire: Messages, }
+  assert_false(zen_deepseek_applies(messages))
+}
+
+///|
+///|
+test "DeepSeek replay integrity is scoped to selected model and thinking" {
+  let deepseek = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="deepseek-v4.1-flash",
+      thinking=true,
+    ),
+  )
+  assert_true(@compatible.resolve(deepseek.config.model).requires_terminal(deepseek.config.thinking, deepseek.config.reasoning_effort))
+  let glm = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="glm-5.3-flash",
+      thinking=true,
+    ),
+  )
+  assert_false(@compatible.resolve(glm.config.model).requires_terminal(glm.config.thinking, glm.config.reasoning_effort))
+  let kimi = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="kimi-k3",
+      thinking=true,
+    ),
+  )
+  assert_false(@compatible.resolve(kimi.config.model).requires_terminal(kimi.config.thinking, kimi.config.reasoning_effort))
+  let off = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="deepseek-v4.1-flash",
+      thinking=false,
+    ),
+  )
+  assert_false(@compatible.resolve(off.config.model).requires_terminal(off.config.thinking, off.config.reasoning_effort))
+  let messages_wire = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="deepseek-v4.1-flash",
+      thinking=true,
+      wire=Messages,
+    ),
+  )
+  assert_false(@compatible.standard().requires_terminal(messages_wire.config.thinking, messages_wire.config.reasoning_effort))
+}
+
+///|
+test "DeepSeek tool completions require actual replayable reasoning" {
+  let port = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="deepseek-v4.1-flash",
+      thinking=true,
+    ),
+  )
+  let completion = @posoco.Completion::Completion(
+    content=[],
+    tool_calls=[{
+      call_id: @posoco.CallId::unchecked("call_x"),
+      name: @posoco.ToolName::unchecked("read"),
+      arguments: Json::object(Map::from_array([])),
+    }],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::ToolCalls,
+    usage=None,
+  )
+  try @compatible.resolve(port.config.model).validate_completion(completion, true, port.config.thinking, port.config.reasoning_effort) catch {
+    @posoco.ModelError::ResponseParse(message) =>
+      assert_true(message.contains("reasoning_content"))
+    _ => fail("expected a local replay-integrity failure")
+  } noraise {
+    _ => fail("reasoning-less tool completion must fail")
+  }
+  let nondeepseek = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="glm-5.3-flash",
+      thinking=true,
+    ),
+  )
+  @compatible.resolve(nondeepseek.config.model).validate_completion(completion, true, nondeepseek.config.thinking, nondeepseek.config.reasoning_effort)
+}
+
+
+
+///|
+test "DeepSeek blocks missing reasoning even for plain assistant history when tools exist" {
+  let port = OpenCodeZenModelPort(
+    OpenCodeZenConfig(
+      "test",
+      base_url="https://test.invalid",
+      model="deepseek-v4.1-flash",
+      thinking=true,
+    ),
+  )
+  let tools = [@posoco.ToolDef::ToolDef(
+    name=@posoco.ToolName::unchecked("read"),
+    description="read file",
+    input_schema=Json::object(Map::from_array([])),
+    owner=@posoco.OwnerId::unchecked("test"),
+    policy=@posoco.ExecutionPolicy::Sequential,
+    provenance=None,
+  )]
+  let bad : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("plain answer")],
+    tool_calls=[],
+    reasoning=None,
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  try @compatible.resolve(port.config.model).validate_history([zen_user_msg("task"), bad], !tools.is_empty(), port.config.thinking, port.config.reasoning_effort) catch {
+    @posoco.ModelError::ResponseParse(message) =>
+      assert_true(message.contains("index=1"))
+    _ => fail("expected local replay failure for missing assistant reasoning")
+  } noraise {
+    _ => fail("DeepSeek tools request must not replay missing thinking")
+  }
+  // Without tools, DeepSeek permits omission of historical reasoning.
+  @compatible.resolve(port.config.model).validate_history([zen_user_msg("task"), bad], false, port.config.thinking, port.config.reasoning_effort)
+  let valid : @posoco.Message = @posoco.Message::AssistantMessage(
+    content=[@posoco.Content::Text("plain answer")],
+    tool_calls=[],
+    reasoning=Some(@posoco.Reasoning::{ content: "actual thought", raw: None, }),
+    finish_reason=@posoco.FinishReason::Stop,
+  )
+  @compatible.resolve(port.config.model).validate_history([zen_user_msg("task"), valid], !tools.is_empty(), port.config.thinking, port.config.reasoning_effort)
+}
+
+///|
+///|
+test "DeepSeek thinking controls are explicit only on the selected dialect" {
+  let messages : Array[@posoco.Message] = [zen_user_msg("hello")]
+  let opts = zen_flaky_options()
+  let off = build_chat_request(
+    messages, [], opts, "deepseek-v4.1-flash",
+    false, false, None, false,
+  )
+  guard off is Object(off_obj) else { fail("expected DeepSeek body") }
+  match off_obj.get("thinking") {
+    Some(Object(t)) => assert_eq(t["type"].stringify(), "\"disabled\"")
+    _ => fail("explicit DeepSeek off must not enable default thinking")
+  }
+  let on = build_chat_request(
+    messages, [], opts, "deepseek-v4.1-flash",
+    false, true, Some("high"), false,
+  )
+  guard on is Object(on_obj) else { fail("expected DeepSeek body") }
+  match on_obj.get("thinking") {
+    Some(Object(t)) => assert_eq(t["type"].stringify(), "\"enabled\"")
+    _ => fail("expected DeepSeek thinking object")
+  }
+  assert_eq(on_obj["reasoning_effort"].stringify(), "\"high\"")
+  let none = build_chat_request(
+    messages, [], opts, "deepseek-v4.1-flash",
+    false, true, Some("none"), false,
+  )
+  guard none is Object(none_obj) else { fail("expected DeepSeek body") }
+  match none_obj.get("thinking") {
+    Some(Object(t)) => assert_eq(t["type"].stringify(), "\"disabled\"")
+    _ => fail("effort none must disable DeepSeek thinking")
+  }
+  assert_true(none_obj.get("reasoning_effort") is None)
+  let standard = build_chat_request(
+    messages, [], opts, "generic-compatible",
+    false, false, None, false,
+  )
+  guard standard is Object(standard_obj) else { fail("expected generic body") }
+  assert_true(standard_obj.get("thinking") is None)
+}
+
+///|
 ///|
 /// Streaming requests always opt into usage accounting — without
 /// `stream_options.include_usage` the gateway omits the usage frame entirely.
@@ -1871,6 +2065,17 @@ test "http classifier types free tier and protocol-unsupported verdicts" {
     fail("expected a transport error")
   }
   assert_false(plain_message.contains("category="))
+  // OpenCode may use HTTP 429 for a backend outage. This is not model quota.
+  let outage = classify_zen_http_status(
+    "chat.http_status",
+    429,
+    BodyText("{\"error\":{\"message\":\"Endpoint is unavailable\"}}"),
+    now_ms=0L,
+  )
+  guard outage is Some(@posoco.ModelError::Transport(outage_message)) else {
+    fail("gateway backend outage must remain transport, not RateLimited")
+  }
+  assert_true(outage_message.contains("category=endpoint_unavailable"))
 }
 
 ///|
@@ -2189,6 +2394,45 @@ test "zen decode falls back to message.reasoning" {
   match both.message.reasoning {
     Some(reasoning) => assert_eq(reasoning.content, "real")
     None => fail("expected reasoning")
+  }
+}
+
+
+///|
+test "OpenCode-only reasoning_text alias survives SSE including terminal event" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let on_chunk = fn(chunk : @posoco.StreamChunk) -> Unit { chunks.push(chunk) }
+  let event =
+    #|{"choices":[{"delta":{"reasoning_text":"native gateway alias","content":"ok"},"finish_reason":"stop"}]}
+  assert_true(process_zen_sse(event, acc, on_chunk))
+  let completion = acc.to_completion()
+  match completion.message.reasoning {
+    Some(r) => assert_eq(r.content, "native gateway alias")
+    None => fail("OpenCode adapter must preserve the provided reasoning text")
+  }
+  assert_eq(chunks.length(), 3)
+  // The adapter cannot overwrite an explicit standard field.
+  let standard =
+    #|{"choices":[{"delta":{"reasoning_content":"real","reasoning_text":"ignored"},"finish_reason":"stop"}]}
+  let next = @posoco.StreamAccumulator::StreamAccumulator()
+  assert_true(process_zen_sse(standard, next, fn(_chunk) { () }))
+  match next.to_completion().message.reasoning {
+    Some(r) => assert_eq(r.content, "real")
+    None => fail("standard reasoning_content should take precedence")
+  }
+}
+
+///|
+test "OpenCode nonstream decoder accepts its reasoning_text alias" {
+  let payload : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","reasoning_text":"gateway thought"},"finish_reason":"stop"}]}
+    ),
+  )
+  match decode_chat_response(payload).message.reasoning {
+    Some(r) => assert_eq(r.content, "gateway thought")
+    None => fail("missing OpenCode gateway reasoning_text")
   }
 }
 

@@ -142,8 +142,8 @@ fn go_protocol_overrides(
 /// `deepseek*` model is selected.
 fn go_deepseek_policy(
   source : @llm.ProviderConfigSource,
-) -> @dk.DeepSeekPolicy raise @posoco.CompositionError {
-  @dk.DeepSeekPolicy::from_settings(
+) -> @ds.DeepSeekPolicy raise @posoco.CompositionError {
+  @ds.DeepSeekPolicy::from_settings(
     source.settings,
     manifest_id="posoco_ext_opencode_go",
   )

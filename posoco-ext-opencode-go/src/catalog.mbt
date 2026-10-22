@@ -108,24 +108,24 @@ fn go_model_surface(
 
 ///|
 /// Whether the DeepSeek serving contract applies to this slot. The
-/// convergence system message and the stream inspector are chat-completions
-/// affordances; the Messages wire rejects a system message inside the
-/// transcript.
+/// request-local user guidance and the stream inspector are only
+/// enabled for selected DeepSeek Chat Completions model slots.
 fn go_deepseek_applies(config : @zen.OpenCodeZenConfig) -> Bool {
-  config.model.has_prefix("deepseek") && config.wire == @zen.ChatCompletions
+  config.wire == @zen.ChatCompletions &&
+  @compatible.resolve(config.model).id == "deepseek"
 }
 
 ///|
 /// Relay the kit's stream bounds onto the shared wire's inspector seam.
 fn go_deepseek_inspector(
-  policy : @dk.DeepSeekPolicy,
+  policy : @ds.DeepSeekPolicy,
   ctx : @devkit.ExtContext,
 ) -> (@posoco.StreamAccumulator, Bool) -> @zen.StreamVerdict {
   fn(acc, done) {
     match policy.observe(acc, done~) {
       None => @zen.StreamVerdict::Continue
       Some(breach) => {
-        if breach == @dk.ReasoningBreach::RepetitionDetected {
+        if breach == @ds.ReasoningBreach::RepetitionDetected {
           ctx.warn(
             source="posoco-ext-opencode-go",
             code="deepseek.reasoning_repetition_detected",
@@ -169,7 +169,7 @@ fn go_catalog_slot(
   config : @zen.OpenCodeZenConfig,
   surface : @zen.ZenReasoningSurface?,
   api_key : &@llm.ApiKeyFactory,
-  policy~ : @dk.DeepSeekPolicy? = None,
+  policy~ : @ds.DeepSeekPolicy? = None,
   ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> @llm.ModelSlot {
   let applies = go_deepseek_applies(config)
@@ -191,7 +191,7 @@ fn go_catalog_slot(
   let rate_port = go_rate_limited_port(config, inspector)
   let port : &@posoco.ModelPort = match policy {
     Some(p) if applies =>
-      @dk.deepseek_policy_port(
+      @ds.deepseek_policy_port(
         inner=rate_port,
         policy=p,
         retry_at_low~,
@@ -367,7 +367,7 @@ pub fn go_static_catalog(
   config : @zen.OpenCodeZenConfig,
   api_key : &@llm.ApiKeyFactory,
   overrides~ : Map[String, String] = Map::from_array([]),
-  policy~ : @dk.DeepSeekPolicy? = None,
+  policy~ : @ds.DeepSeekPolicy? = None,
   ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   @llm.ProviderModelCatalog::ProviderModelCatalog(
@@ -411,7 +411,7 @@ pub fn go_model_catalog(
   metas : Map[String, @zen.ZenModelMeta],
   api_key : &@llm.ApiKeyFactory,
   overrides~ : Map[String, String] = Map::from_array([]),
-  policy~ : @dk.DeepSeekPolicy? = None,
+  policy~ : @ds.DeepSeekPolicy? = None,
   ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   if models.is_empty() {
