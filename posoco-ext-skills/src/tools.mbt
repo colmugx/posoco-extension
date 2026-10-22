@@ -1,7 +1,4 @@
 ///|
-const SEMANTIC_SKILL_MIN_PROBABILITY = 0.6
-
-///|
 const SKILL_SEARCH_TOOL_NAME = "skill_search"
 
 ///|
@@ -13,7 +10,7 @@ const SKILL_DESCRIPTION_PREVIEW_CHARS = 1024
 fn Skills::search_tool_def(self : Skills) -> @posoco.ToolDef {
   @posoco.ToolDef::{
     name: @posoco.ToolName::unchecked(SKILL_SEARCH_TOOL_NAME),
-    description: "Find relevant skills by task/capability. Returns names plus short descriptions; activate an exact returned name with " +
+    description: "Find relevant skills by task or capability. Returns names plus short descriptions; activate an exact returned name with " +
     self.config.activate_tool_name +
     ".",
     input_schema: Json::object({
@@ -34,27 +31,6 @@ fn Skills::search_tool_def(self : Skills) -> @posoco.ToolDef {
 }
 
 ///|
-fn skill_search_tokens(query : String) -> Array[String] {
-  query
-  .to_lower()
-  .split(" ")
-  .filter(fn(view) { view != "" })
-  .map(fn(view) { view.to_owned() })
-  .to_array()
-}
-
-///|
-fn skill_matches_query(skill : SkillDescriptor, tokens : Array[String]) -> Bool {
-  let haystack = (skill.name + " " + skill.description).to_lower()
-  for token in tokens {
-    if !haystack.contains(token) {
-      return false
-    }
-  }
-  true
-}
-
-///|
 fn skill_search_json(skill : SkillDescriptor) -> Json {
   Json::object({
     "name": Json::string(skill.name),
@@ -66,6 +42,7 @@ fn skill_search_json(skill : SkillDescriptor) -> Json {
 fn skill_search_success(
   skills : Array[SkillDescriptor],
   query : String,
+  indexed : Int32,
 ) -> @posoco.ToolOutcome {
   let values : Array[Json] = []
   let lines : Array[String] = []
@@ -75,7 +52,14 @@ fn skill_search_success(
       "\{skill.name}: \{unicode_scalar_preview(skill.description, SKILL_DESCRIPTION_PREVIEW_CHARS)}",
     )
   }
-  let content = if skills.is_empty() { "(no skills)" } else { lines.join("\n") }
+  // Distinguish "nothing matched this query" from "no skills exist": the tool
+  // is only registered for a non-empty catalog, so the model should retry with
+  // different keywords rather than conclude the catalog is empty.
+  let content = if skills.is_empty() {
+    "(no match among \{indexed} skills)"
+  } else {
+    lines.join("\n")
+  }
   @posoco.ToolOutcome::Success(
     content~,
     structured=Some(
@@ -88,128 +72,13 @@ fn skill_search_success(
 }
 
 ///|
-fn selected_skill_probability(
-  probabilities : Array[@posoco.DecisionNamedProbability],
-  selected : String,
-) -> Double? {
-  for entry in probabilities {
-    if entry.id == selected {
-      return Some(entry.probability)
-    }
-  }
-  None
-}
-
-///|
-async fn Skills::semantic_skill_match(
-  self : Skills,
-  query : String,
-) -> SkillDescriptor? noraise {
-  let decision = match self.decision {
-    Some(decision) => decision
-    None => return None
-  }
-  if self.catalog.skills.is_empty() {
-    return None
-  }
-  if self.catalog.skills.length() == 1 {
-    let skill = self.catalog.skills[0]
-    let request : @posoco.DecisionRequest = {
-      state: Json::object({
-        "query": Json::string(query),
-        "skill": skill_search_json(skill),
-      }),
-      questions: [
-        @posoco.DecisionQuestion::Boolean(
-          id="skills.relevance",
-          instructions=Json::string(
-            "Is this discovered skill semantically relevant to the user's task or capability query? Judge relevance only; do not activate the skill or grant authority.",
-          ),
-          true_criteria=None,
-          false_criteria=None,
-        ),
-      ],
-    }
-    let result = decision.evaluate(request) catch { _ => return None }
-    result.validate_for(request) catch {
-      _ => return None
-    }
-    for answer in result.answers {
-      match answer {
-        @posoco.DecisionAnswer::BooleanAnswer(
-          id="skills.relevance",
-          probability_true~
-        ) if probability_true >= SEMANTIC_SKILL_MIN_PROBABILITY =>
-          return Some(skill)
-        _ => ()
-      }
-    }
-    return None
-  }
-  let options : Array[@posoco.DecisionOption] = []
-  for skill in self.catalog.skills {
-    options.push({
-      id: skill.name,
-      description: Some(skill_search_json(skill)),
-    })
-  }
-  let request : @posoco.DecisionRequest = {
-    state: Json::object({ "query": Json::string(query) }),
-    questions: [
-      @posoco.DecisionQuestion::Choice(
-        id="skills.relevance",
-        instructions=Json::string(
-          "Choose the single discovered skill most semantically relevant to this task or capability query. Judge relevance only; do not activate the skill or grant authority.",
-        ),
-        options~,
-      ),
-    ],
-  }
-  let result = decision.evaluate(request) catch { _ => return None }
-  result.validate_for(request) catch {
-    _ => return None
-  }
-  for answer in result.answers {
-    match answer {
-      @posoco.DecisionAnswer::ChoiceAnswer(
-        id="skills.relevance",
-        selected~,
-        probabilities~,
-        ..
-      ) =>
-        match selected_skill_probability(probabilities, selected) {
-          Some(probability) if probability >= SEMANTIC_SKILL_MIN_PROBABILITY =>
-            return self.catalog.find(selected)
-          _ => ()
-        }
-      _ => ()
-    }
-  }
-  None
-}
-
-///|
-async fn Skills::search(
-  self : Skills,
-  query : String,
-) -> @posoco.ToolOutcome noraise {
-  let tokens = skill_search_tokens(query)
+fn Skills::search(self : Skills, query : String) -> @posoco.ToolOutcome {
+  let indexed = self.catalog.skills.length()
+  let tokens = query_tokens(query)
   if tokens.is_empty() {
-    return skill_search_success([], query)
+    return skill_search_success([], query, indexed)
   }
-  let lexical : Array[SkillDescriptor] = []
-  for skill in self.catalog.skills {
-    if skill_matches_query(skill, tokens) && lexical.length() < 8 {
-      lexical.push(skill)
-    }
-  }
-  if !lexical.is_empty() {
-    return skill_search_success(lexical, query)
-  }
-  match self.semantic_skill_match(query) {
-    Some(skill) => skill_search_success([skill], query)
-    None => skill_search_success([], query)
-  }
+  skill_search_success(self.rank_skills(tokens), query, indexed)
 }
 
 ///|

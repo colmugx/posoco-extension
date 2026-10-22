@@ -579,8 +579,8 @@ test "manifest: populated extension composes tools and optional prompt" {
   assert_eq(manifest.id, "posoco_ext_skills")
   assert_eq(manifest.tools.length(), 1)
   assert_eq(manifest.prompt_contributors.length(), 1)
-  assert_eq(manifest.lifecycle.length(), 1)
-  assert_true(manifest.requires.contains(@posoco.Capability::Decision))
+  assert_eq(manifest.lifecycle.length(), 0)
+  assert_eq(manifest.requires.length(), 0)
   let tools_only = must_skills(fs, catalog, config=SkillsConfig::{
     ..SkillsConfig::default(),
     contribute_prompt: false,
@@ -2179,7 +2179,7 @@ async test "registration constructor: empty environment still registers with dia
 }
 
 ///|
-async test "skill_search keeps lexical matches deterministic before decision fallback" {
+async test "skill_search keeps lexical matches deterministic" {
   let fs = FakeFs()
   let skills = must_skills(
     fs,
@@ -2188,18 +2188,7 @@ async test "skill_search keeps lexical matches deterministic before decision fal
       descriptor("slides", "Create presentation slides", "/skills/slides"),
     ]),
   )
-  let decision = @posoco.ScriptedDecisionPort([])
-  let model = @posoco.ScriptedModel([])
-  let ui = @posoco.NoopUiPort()
-  (skills as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
-  let call = @posoco.ToolCall::{
+  let call : @posoco.ToolCall = {
     call_id: @posoco.CallId::unchecked("search-1"),
     name: @posoco.ToolName::unchecked("skill_search"),
     arguments: Json::object({ "query": Json::string("pdf documents") }),
@@ -2211,63 +2200,10 @@ async test "skill_search keeps lexical matches deterministic before decision fal
     }
     _ => fail("expected skill search success")
   }
-  assert_eq(decision.call_count(), 0)
 }
 
 ///|
-async test "skill_search uses decision port only after lexical miss" {
-  let fs = FakeFs()
-  let skills = must_skills(
-    fs,
-    catalog_of([
-      descriptor("pdf", "Create and inspect PDF documents", "/skills/pdf"),
-      descriptor("slides", "Create presentation slides", "/skills/slides"),
-    ]),
-  )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
-      answers: [
-        @posoco.DecisionAnswer::ChoiceAnswer(
-          id="skills.relevance",
-          selected="slides",
-          probabilities=[
-            { id: "pdf", probability: 0.1, },
-            { id: "slides", probability: 0.9, },
-          ],
-          confidence=Some(0.9),
-        ),
-      ],
-      model: None,
-      usage: None,
-    }),
-  ])
-  let model = @posoco.ScriptedModel([])
-  let ui = @posoco.NoopUiPort()
-  (skills as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
-  let call = @posoco.ToolCall::{
-    call_id: @posoco.CallId::unchecked("search-2"),
-    name: @posoco.ToolName::unchecked("skill_search"),
-    arguments: Json::object({ "query": Json::string("pitch deck") }),
-  }
-  match skills.execute(test_ctx(call)) {
-    @posoco.ToolOutcome::Success(content~, ..) => {
-      assert_true(content.contains("slides"))
-      assert_false(content.contains("pdf"))
-    }
-    _ => fail("expected semantic skill search success")
-  }
-  assert_eq(decision.call_count(), 1)
-}
-
-///|
-async test "skill_search never auto-activates and fails closed on low relevance" {
+async test "skill_search reports no match instead of inventing a skill" {
   let fs = FakeFs()
   let skills = must_skills(
     fs,
@@ -2276,44 +2212,97 @@ async test "skill_search never auto-activates and fails closed on low relevance"
       descriptor("slides", "Create slides", "/skills/slides"),
     ]),
   )
-  let decision = @posoco.ScriptedDecisionPort([
-    @posoco.ScriptedDecisionStep::Return({
-      answers: [
-        @posoco.DecisionAnswer::ChoiceAnswer(
-          id="skills.relevance",
-          selected="pdf",
-          probabilities=[
-            { id: "pdf", probability: 0.55, },
-            { id: "slides", probability: 0.45, },
-          ],
-          confidence=None,
-        ),
-      ],
-      model: None,
-      usage: None,
-    }),
-  ])
-  let model = @posoco.ScriptedModel([])
-  let ui = @posoco.NoopUiPort()
-  (skills as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
-  let call = @posoco.ToolCall::{
-    call_id: @posoco.CallId::unchecked("search-3"),
+  let call : @posoco.ToolCall = {
+    call_id: @posoco.CallId::unchecked("search-2"),
     name: @posoco.ToolName::unchecked("skill_search"),
     arguments: Json::object({ "query": Json::string("unrelated capability") }),
   }
   match skills.execute(test_ctx(call)) {
     @posoco.ToolOutcome::Success(content~, ..) =>
-      assert_eq(content, "(no skills)")
+      assert_eq(content, "(no match among 2 skills)")
     _ => fail("expected conservative no-match result")
   }
-  assert_eq(decision.call_count(), 1)
+}
+
+///|
+async test "skill_search splits separators and accepts partial coverage" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor(
+        "alpha-beta-guide", "Guide for writing and testing alpha projects. Use when working in alpha modules.",
+        "/skills/alpha-beta-guide",
+      ),
+      descriptor(
+        "alpha-orientation", "Use this skill when the user needs help with alpha language or toolchain questions.",
+        "/skills/alpha-orientation",
+      ),
+      descriptor("gamma", "Use when writing a release body.", "/skills/gamma"),
+    ]),
+  )
+  // The hyphenated keyword must split into `alpha` + `orientation`, and a
+  // keyword that no descriptor shares must not veto the whole query.
+  match skills.search("alpha beta guide alpha-orientation") {
+    @posoco.ToolOutcome::Success(content~, structured~) => {
+      assert_true(content.has_prefix("alpha-beta-guide: "))
+      assert_true(content.contains("alpha-orientation"))
+      match structured {
+        Some(Object(meta)) =>
+          match meta.get("skills") {
+            Some(Array(items)) => assert_eq(items.length(), 2)
+            _ => fail("expected skill array")
+          }
+        _ => fail("expected search metadata")
+      }
+    }
+    _ => fail("expected search success")
+  }
+}
+
+///|
+async test "skill_search matches CJK bigrams inside descriptions" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor(
+        "pipeline", "Orchestrate multi-part work as a pipeline. Use when the user mentions \"流水线\" or \"并行推进\".",
+        "/skills/pipeline",
+      ),
+      descriptor(
+        "release", "Build release packages and validate checksums.", "/skills/release",
+      ),
+    ]),
+  )
+  // CJK has no word separators, so the query is indexed as 2-grams: 流水 and
+  // 水线 both appear in the description without a segmenter.
+  match skills.search("帮我编排一下流水线") {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.has_prefix("pipeline: "))
+      assert_false(content.contains("release"))
+    }
+    _ => fail("expected search success")
+  }
+}
+
+///|
+async test "skill_search drops query stopwords" {
+  let fs = FakeFs()
+  let skills = must_skills(
+    fs,
+    catalog_of([
+      descriptor("alpha", "Create and inspect alpha documents", "/skills/alpha"),
+      descriptor("beta", "Create presentation slides", "/skills/beta"),
+    ]),
+  )
+  match skills.search("please help me with the alpha") {
+    @posoco.ToolOutcome::Success(content~, ..) => {
+      assert_true(content.has_prefix("alpha: "))
+      assert_false(content.contains("beta"))
+    }
+    _ => fail("expected search success")
+  }
 }
 
 ///|

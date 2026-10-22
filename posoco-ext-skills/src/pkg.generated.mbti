@@ -119,7 +119,6 @@ pub struct Skills {
   fs : &@posoco-ext-workspace.WorkspaceFs
   catalog : SkillCatalog
   config : SkillsConfig
-  // private fields
 }
 pub async fn Skills::activate_skill(Self, String) -> @kernel.ToolOutcome noraise
 pub fn Skills::catalog(Self) -> SkillCatalog
@@ -132,14 +131,10 @@ pub fn Skills::from_catalog(&@posoco-ext-workspace.WorkspaceFs, catalog~ : Skill
 pub async fn Skills::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn Skills::list_tools(Self) -> Array[@kernel.ToolDef]
 pub fn Skills::manifest(Self) -> @port.ExtensionManifest
-pub fn Skills::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
-pub async fn Skills::on_shutdown(Self) -> Unit
-pub async fn Skills::on_start(Self) -> Unit
 pub async fn Skills::read_skill_resource(Self, String, String) -> @kernel.ToolOutcome noraise
 pub fn Skills::system_prompt(Self) -> String
 pub impl @port.CommandPort for Skills
 pub impl @port.Extension for Skills
-pub impl @port.Lifecycle for Skills
 pub impl @port.SystemPromptContributor for Skills
 pub impl @port.ToolProvider for Skills
 
