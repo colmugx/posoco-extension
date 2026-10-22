@@ -629,7 +629,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       let yield_ms = bash_field_int(ctx.arguments, "yield_time_ms", 0, 60000)
       ignore(bash_timeout_ms(ctx.arguments))
       if !background && yield_ms == 0 {
-        return bash_foreground(self, ctx)
+        return self.bash_foreground(ctx)
       }
       if self.closed || self.host_group is None {
         raise @posoco.RuntimeError::InvocationFailed(
@@ -676,14 +676,14 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
           arguments: ctx.arguments,
           register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
         }
-        let answer = Ok(bash_foreground(self, background_ctx, session=Some(session))) catch {
+        let answer = Ok(self.bash_foreground(background_ctx, session=Some(session))) catch {
           error => Err(error)
         }
         match answer {
           Ok(outcome) => {
             session.outcome = Some(outcome)
             match outcome {
-              @posoco.ToolOutcome::Success(content~, ..) => {
+              @posoco.ToolOutcome::Success(..) => {
                 session.status = "completed"
               }
               @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
