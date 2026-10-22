@@ -45,3 +45,5 @@ let bash = ShellTools()
 - Silence for 60 seconds sets `suspected_stall=true` but does not prove deadlock.
 
 The host's shutdown lifecycle cancels live workers. Session IDs are in-memory and are not restored across restarts.
+
+Event notification (optional): pass a shared `@devkit.EventBus` to `ShellTools(bus=Some(bus))` and subscribe to `bash.session.started`, `bash.session.stall`, and `bash.session.finished`. Stall notifications are advisory; they do not kill a command automatically.
