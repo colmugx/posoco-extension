@@ -137,6 +137,19 @@ fn go_protocol_overrides(
 }
 
 ///|
+/// Resolve the DeepSeek serving contract from the provider settings. Parsed
+/// on every composition, so a malformed key is a typed failure even when no
+/// `deepseek*` model is selected.
+fn go_deepseek_policy(
+  source : @llm.ProviderConfigSource,
+) -> @dk.DeepSeekPolicy raise @posoco.CompositionError {
+  @dk.DeepSeekPolicy::from_settings(
+    source.settings,
+    manifest_id="posoco_ext_opencode_go",
+  )
+}
+
+///|
 /// Register the pull-style `/usage` reading under the provider id so the
 /// `/status` command and the model picker read the three windows live at
 /// command time. Every configured build/refresh re-registers, so the
@@ -168,7 +181,6 @@ pub impl @llm.ProviderFactory for OpenCodeGoProvider with fn build(
   self : OpenCodeGoProvider,
   source : @llm.ProviderConfigSource,
 ) -> @llm.ProviderBuildResult raise @posoco.CompositionError {
-  let _ = self
   let api_key = match go_resolve_api_key(source) {
     Some(value) => value
     None => return @llm.ProviderBuildResult::Unconfigured
@@ -177,6 +189,7 @@ pub impl @llm.ProviderFactory for OpenCodeGoProvider with fn build(
   let model = go_resolve_model(source)
   let _plan = go_resolve_plan(source)
   let overrides = go_protocol_overrides(source)
+  let policy = go_deepseek_policy(source)
   let config = @zen.OpenCodeZenConfig(
     api_key,
     base_url~,
@@ -194,8 +207,17 @@ pub impl @llm.ProviderFactory for OpenCodeGoProvider with fn build(
         Map::from_array([]),
         api_key_factory,
         overrides~,
+        policy=Some(policy),
+        ctx=self.ctx,
       )
-    None => go_static_catalog(config, api_key_factory, overrides~)
+    None =>
+      go_static_catalog(
+        config,
+        api_key_factory,
+        overrides~,
+        policy=Some(policy),
+        ctx=self.ctx,
+      )
   }
   go_register_quota_source(base_url, api_key)
   @llm.ProviderBuildResult::Ready(catalog)

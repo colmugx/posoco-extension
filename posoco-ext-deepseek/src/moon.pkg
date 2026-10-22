@@ -1,6 +1,7 @@
 import {
   "colmugx/posoco",
   "colmugx/posoco-kit-provider" @provider,
+  "colmugx/posoco-kit-deepseek" @dk,
   "posoco/devkit",
   "posoco/kit-chat-completions" @chatkit,
   "colmugx/posoco-kit-compact-evict" @evict,

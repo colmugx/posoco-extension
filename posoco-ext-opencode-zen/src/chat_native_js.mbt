@@ -27,8 +27,10 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
   let result = match self.config.wire {
     ChatCompletions =>
       self.chat_chat_completions(scope, messages_owned, tools, options, stream)
-    Messages => self.chat_messages(scope, messages_owned, tools, options, stream)
-    Responses => self.chat_responses(scope, messages_owned, tools, options, stream)
+    Messages =>
+      self.chat_messages(scope, messages_owned, tools, options, stream)
+    Responses =>
+      self.chat_responses(scope, messages_owned, tools, options, stream)
     GoogleGenai | SystemOne | MistralDialect =>
       raise @posoco.ModelError::Transport(
         "opencode-zen unsupported wire (stage=chat, category=wire_not_served, model=\{self.config.model}, wire=\{self.config.wire.to_id()}, reason=\{wire_exclusion_reason(self.config.wire)})",
@@ -175,6 +177,13 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
                 }
                 data_buffer = payload
                 done = process_zen_sse(payload, acc, on_chunk)
+                match zen_apply_verdict(self.inspector, acc, done~) {
+                  Some(err) => {
+                    client.close()
+                    raise err
+                  }
+                  None => ()
+                }
               }
             } else if trimmed == "" && data_buffer.length() > 0 {
               data_buffer = ""

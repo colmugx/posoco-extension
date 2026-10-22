@@ -79,7 +79,7 @@ test "DeepSeek provider settings propagate ceiling to all model slots" {
     fail("expected a ready DeepSeek catalog")
   }
   assert_eq(catalog.slots().length(), 2)
-  assert_eq(deepseek_setting_max_reasoning_chars(source), Some(120000))
+  assert_eq(deepseek_policy(source).max_reasoning_chars, Some(120000))
   // A direct port and its catalog rebuild retain the same configuration.
   let config = DeepSeekConfig("test-key", max_reasoning_chars=Some(120000))
   let rebuilt = config.with_reasoning_effort("low")

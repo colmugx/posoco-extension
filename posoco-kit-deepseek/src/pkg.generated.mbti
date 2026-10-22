@@ -1,0 +1,63 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-kit-deepseek"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/types",
+  "moonbitlang/core/debug",
+  "posoco/devkit",
+}
+
+// Values
+pub fn can_retry_reasoning_exhaustion(@kernel.Completion) -> Bool
+
+pub fn canonical_tool_order(Array[@kernel.ToolDef]) -> Array[@kernel.ToolDef]
+
+pub fn convergence_instruction() -> String
+
+pub fn deepseek_policy_port(inner~ : &@port.ModelPort, policy~ : DeepSeekPolicy, retry_at_low? : (() -> &@port.ModelPort)?, inject_convergence? : Bool, ctx? : @devkit.ExtContext, source? : String) -> &@port.ModelPort
+
+pub fn has_repeated_reasoning_suffix(String, Int32) -> Bool
+
+pub fn reasoning_limit_exceeded(Int32, Int32) -> Bool
+
+pub fn repeated_tool_calls(Array[@kernel.Message]) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) struct DeepSeekPolicy {
+  max_reasoning_chars : Int32?
+  repeated_reasoning_span_chars : Int32?
+  recover_on_reasoning_exhaustion : Bool
+} derive(Eq, @debug.Debug)
+pub fn DeepSeekPolicy::DeepSeekPolicy(max_reasoning_chars~ : Int32?, repeated_reasoning_span_chars~ : Int32?, recover_on_reasoning_exhaustion~ : Bool) -> Self
+pub fn DeepSeekPolicy::default_protections() -> Self
+pub fn DeepSeekPolicy::disabled() -> Self
+pub fn DeepSeekPolicy::equal(Self, Self) -> Bool
+pub fn DeepSeekPolicy::from_settings(Json?, manifest_id~ : String, defaults? : Self) -> Self raise @error.CompositionError
+pub fn DeepSeekPolicy::not_equal(Self, Self) -> Bool
+pub fn DeepSeekPolicy::observe(Self, @types.StreamAccumulator, done~ : Bool) -> ReasoningBreach?
+pub fn DeepSeekPolicy::to_repr(Self) -> @debug.Repr
+
+type DeepSeekPolicyPort
+pub async fn DeepSeekPolicyPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
+pub async fn DeepSeekPolicyPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
+pub fn DeepSeekPolicyPort::provider_config(Self) -> @port.ProviderConfig
+pub impl @port.ModelPort for DeepSeekPolicyPort
+
+pub(all) enum ReasoningBreach {
+  BudgetExceeded
+  RepetitionDetected
+} derive(Eq, @debug.Debug)
+pub fn ReasoningBreach::category(Self) -> String
+pub fn ReasoningBreach::equal(Self, Self) -> Bool
+pub fn ReasoningBreach::message(Self) -> String
+pub fn ReasoningBreach::not_equal(Self, Self) -> Bool
+pub fn ReasoningBreach::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

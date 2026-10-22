@@ -3,6 +3,7 @@ package "colmugx/posoco-ext-opencode-go"
 
 import {
   "colmugx/posoco-ext-opencode-zen",
+  "colmugx/posoco-kit-deepseek",
   "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
@@ -16,13 +17,13 @@ import {
 // Values
 pub async fn fetch_go_usage(String, String, now_ms? : () -> Int64) -> Result[GoUsage, String]
 
-pub fn go_model_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, Array[@posoco-ext-opencode-zen.ZenModelInfo], String, Map[String, @posoco-ext-opencode-zen.ZenModelMeta], &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn go_model_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, Array[@posoco-ext-opencode-zen.ZenModelInfo], String, Map[String, @posoco-ext-opencode-zen.ZenModelMeta], &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String], policy? : @posoco-kit-deepseek.DeepSeekPolicy?, ctx? : @devkit.ExtContext) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
 pub fn go_monthly_allowance(String, GoPlan) -> Double?
 
 pub fn go_plan_of_setting(String) -> GoPlan raise @error.CompositionError
 
-pub fn go_static_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String]) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
+pub fn go_static_catalog(@posoco-ext-opencode-zen.OpenCodeZenConfig, &@posoco-kit-provider.ApiKeyFactory, overrides? : Map[String, String], policy? : @posoco-kit-deepseek.DeepSeekPolicy?, ctx? : @devkit.ExtContext) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
 pub fn go_usage_url(String) -> String
 

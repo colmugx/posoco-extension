@@ -93,7 +93,10 @@ designed probing backoff — never a fabricated reset time.
     "opencode-go": {
       "api_key": "sk-...",
       "model": "glm-5.3-flash",
-      "plan": "go"
+      "plan": "go",
+      "max_reasoning_chars": 120000,
+      "repeated_reasoning_span_chars": 256,
+      "recover_on_reasoning_exhaustion": true
     }
   }
 }
@@ -106,6 +109,28 @@ designed probing backoff — never a fabricated reset time.
 | `base_url` | no | `https://opencode.ai/inference/go/v1` | Override for mirrors; the legacy `zen/go/v1` spelling keeps working |
 | `plan` | no | `go` | `go` or `go_plus` — the vendor publishes no way to probe the tier, so the allowance lookup stays a setting; an unknown value is a typed composition failure |
 | `protocol_overrides` | no | — | Same contract as the zen plane |
+| `max_reasoning_chars` | no | `120000` | DeepSeek reasoning ceiling in streamed characters (not tokens); `null` disables the guard |
+| `repeated_reasoning_span_chars` | no | `256` | Exact repeated reasoning suffix span in characters, minimum `128`; `null` disables the collapse guard |
+| `recover_on_reasoning_exhaustion` | no | `true` | One bounded nonstream retry at low effort after a reasoning-only length cutoff; `false` disables it |
+
+The three DeepSeek keys are parsed on every build and refresh — a malformed
+value is a typed composition failure even when no `deepseek*` model is
+selected, never a silent fallback.
+
+## DeepSeek serving contract
+
+The `deepseek*` models are served on the chat-completions wire, so the Go
+plane mounts the DeepSeek serving contract (`colmugx/posoco-kit-deepseek`)
+on those slots only: canonical tool order, tail convergence guidance, one
+bounded nonstream recovery at low effort, and the two stream guards. The
+guards are fail-closed — a collapsing or over-budget reasoning stream is
+aborted and surfaces as a typed transport error carrying
+`reasoning_repetition` or `reasoning_budget_exceeded`, never a truncated
+completion. Models on the Messages wire (and every non-`deepseek` id) are
+untouched: the convergence system message is a chat-completions affordance
+only. The same key names configure the direct `deepseek` provider, so one
+host configuration describes the contract whichever endpoint serves the
+model.
 
 ## `/login` and `/model`
 
@@ -146,6 +171,8 @@ compaction recovers the same way.
 - `posoco/devkit` — `ExtContext`, quota registry
 - `colmugx/posoco-kit-rate-limit` — shared quota-verdict classification and
   reset-timestamp parsing
+- `colmugx/posoco-kit-deepseek` — the DeepSeek serving contract mounted on
+  the `deepseek*` chat-completions slots
 - `posoco/ext-llm` — `ProviderFactory` / `RefreshableProviderFactory` / `ApiKeyFactory` / `ProviderModelCatalog` / `ModelSlot`
 - `posoco/ext-oauth` — `ApiKeyCredential` / `AuthPromptInteraction`
 - `moonbitlang/async/http` — `/models`, `/usage`, and chat transport

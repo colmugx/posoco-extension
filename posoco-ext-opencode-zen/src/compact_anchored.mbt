@@ -156,6 +156,9 @@ pub extend ZenAnchoredCompactPort with @posoco.ModelPort::{
 /// keeps downstream products from reaching for the private pieces.
 pub fn opencode_anchored_compact_port(
   config : OpenCodeZenConfig,
+  inspector~ : ((@posoco.StreamAccumulator, Bool) -> StreamVerdict)? = None,
 ) -> &@posoco.ModelPort {
-  zen_anchored_compact_port(OpenCodeZenModelPort(config))
+  zen_anchored_compact_port(
+    OpenCodeZenModelPort(config).with_inspector(inspector~),
+  )
 }

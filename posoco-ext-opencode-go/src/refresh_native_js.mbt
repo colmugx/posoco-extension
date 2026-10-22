@@ -21,6 +21,7 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeGoProvider with fn refresh(
   let base_url = go_resolve_base_url(source)
   let preferred = go_resolve_model(source)
   let overrides = go_protocol_overrides(source)
+  let policy = go_deepseek_policy(source)
   let config = @zen.OpenCodeZenConfig(
     api_key,
     base_url~,
@@ -49,6 +50,8 @@ pub impl @llm.RefreshableProviderFactory for OpenCodeGoProvider with fn refresh(
     metas,
     api_key_factory,
     overrides~,
+    policy=Some(policy),
+    ctx=self.ctx,
   )
   go_register_quota_source(base_url, api_key)
   @llm.ProviderBuildResult::Ready(catalog)

@@ -59,6 +59,7 @@ members = [
   "./posoco-kit-compact-prune",
   "./posoco-kit-compact-summary",
   "./posoco-kit-compact-trim",
+  "./posoco-kit-deepseek",
   "./posoco-kit-delegation",
   "./posoco-kit-lody",
   "./posoco-kit-messages",

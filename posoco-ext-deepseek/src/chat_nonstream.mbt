@@ -86,7 +86,7 @@ async fn DeepSeekModelPort::chat_nonstream(
     )
     if self.config.recover_on_reasoning_exhaustion &&
       attempts == 0 &&
-      deepseek_can_retry_reasoning_exhaustion(completion) {
+      @dk.can_retry_reasoning_exhaustion(completion) {
       self.ctx.warn(
         source="posoco-ext-deepseek",
         code="deepseek.reasoning_exhaustion_recovery",

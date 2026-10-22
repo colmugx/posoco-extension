@@ -107,27 +107,12 @@ fn outcome_to_wire_text(outcome : @posoco.ToolOutcome) -> String {
 }
 
 ///|
-/// Encode kernel ToolDef array into DeepSeek tool definitions.
+/// Encode kernel ToolDef array into DeepSeek tool definitions, in the
+/// provider's canonical order (see `posoco-kit-deepseek`): equal tool sets
+/// then share one rendered prompt prefix, whatever their registration order.
 fn encode_tools(tools : Array[@posoco.ToolDef]) -> Json {
-  // OpenAI function tools are looked up by name, not declaration index.
-  // Canonicalize the *wire* order only: host execution and registrations are
-  // unchanged. Equal tool sets then share the V4.1 system prompt prefix.
-  let ordered = tools.copy()
-  ordered.sort_by((a, b) => {
-    let by_name = a.name.to_string().compare(b.name.to_string())
-    if by_name != 0 {
-      by_name
-    } else {
-      let by_description = a.description.compare(b.description)
-      if by_description != 0 {
-        by_description
-      } else {
-        a.input_schema.stringify().compare(b.input_schema.stringify())
-      }
-    }
-  })
   Json::array(
-    ordered.map(fn(t) {
+    @dk.canonical_tool_order(tools).map(fn(t) {
       Json::object({
         "type": Json::string("function"),
         "function": Json::object({
@@ -164,11 +149,11 @@ fn build_chat_request(
       )
     },
   )
-  if tools.length() > 0 && deepseek_repeated_tool_calls(messages) {
+  if tools.length() > 0 && @dk.repeated_tool_calls(messages) {
     wire_messages.push(
       Json::object({
         "role": Json::string("system"),
-        "content": Json::string(deepseek_convergence_instruction()),
+        "content": Json::string(@dk.convergence_instruction()),
       }),
     )
   }

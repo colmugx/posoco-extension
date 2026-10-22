@@ -146,7 +146,11 @@ fn build_headers(
     "Authorization": "Bearer \{config.api_key}",
     "Content-Type": "application/json",
   }
-  for key, value in opencode_request_headers(config.client_id, scope.session_id.to_string()) {
+  for
+    key, value in opencode_request_headers(
+      config.client_id,
+      scope.session_id.to_string(),
+    ) {
     headers[@http.CaseInsensitiveString(key)] = value
   }
   headers
@@ -165,7 +169,11 @@ fn build_messages_headers(
     "Content-Type": "application/json",
     "anthropic-version": "2023-06-01",
   }
-  for key, value in opencode_request_headers(config.client_id, scope.session_id.to_string()) {
+  for
+    key, value in opencode_request_headers(
+      config.client_id,
+      scope.session_id.to_string(),
+    ) {
     headers[@http.CaseInsensitiveString(key)] = value
   }
   headers
@@ -208,13 +216,22 @@ fn chat_url(config : OpenCodeZenConfig) -> String {
 /// The Zen ModelPort implementation.
 pub(all) struct OpenCodeZenModelPort {
   config : OpenCodeZenConfig
+  inspector : ((@posoco.StreamAccumulator, Bool) -> StreamVerdict)?
 }
 
 ///|
 pub fn OpenCodeZenModelPort::OpenCodeZenModelPort(
   config : OpenCodeZenConfig,
 ) -> OpenCodeZenModelPort {
-  { config, }
+  { config, inspector: None, }
+}
+
+///|
+pub fn OpenCodeZenModelPort::with_inspector(
+  self : OpenCodeZenModelPort,
+  inspector~ : ((@posoco.StreamAccumulator, Bool) -> StreamVerdict)?,
+) -> OpenCodeZenModelPort {
+  { ..self, inspector, }
 }
 
 ///|

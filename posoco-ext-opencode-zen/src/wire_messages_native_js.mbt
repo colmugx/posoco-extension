@@ -308,6 +308,13 @@ async fn OpenCodeZenModelPort::chat_messages(
                 on_chunk~,
                 state~,
               )
+              match zen_apply_verdict(self.inspector, acc, done~) {
+                Some(err) => {
+                  client.close()
+                  raise err
+                }
+                None => ()
+              }
             }
           None => {
             client.close()

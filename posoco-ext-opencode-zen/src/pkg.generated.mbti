@@ -17,9 +17,9 @@ pub async fn fetch_models_dev_meta() -> Map[String, ZenModelMeta] raise @error.M
 
 pub async fn fetch_zen_models(String, String, endpoint_prefix? : String) -> Array[ZenModelInfo] raise @error.ModelError
 
-pub fn opencode_anchored_compact_port(OpenCodeZenConfig) -> &@port.ModelPort
+pub fn opencode_anchored_compact_port(OpenCodeZenConfig, inspector? : ((@types.StreamAccumulator, Bool) -> StreamVerdict)?) -> &@port.ModelPort
 
-pub fn opencode_request_headers(String) -> Map[String, String]
+pub fn opencode_request_headers(String, String) -> Map[String, String]
 
 pub fn parse_models_dev_meta(Json) -> Map[String, ZenModelMeta] raise @error.ModelError
 
@@ -87,11 +87,13 @@ pub fn OpenCodeZenConfig::with_reasoning_effort(Self, String) -> Self raise @err
 
 pub(all) struct OpenCodeZenModelPort {
   config : OpenCodeZenConfig
+  inspector : ((@types.StreamAccumulator, Bool) -> StreamVerdict)?
 }
 pub fn OpenCodeZenModelPort::OpenCodeZenModelPort(OpenCodeZenConfig) -> Self
 pub async fn OpenCodeZenModelPort::chat(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @types.StreamMode) -> @kernel.ModelCallResult raise @error.ModelError
 pub async fn OpenCodeZenModelPort::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], @types.ChatOptions, @kernel.CompactTrigger) -> @kernel.CompactResult raise @error.ModelError
 pub fn OpenCodeZenModelPort::provider_config(Self) -> @port.ProviderConfig
+pub fn OpenCodeZenModelPort::with_inspector(Self, inspector~ : ((@types.StreamAccumulator, Bool) -> StreamVerdict)?) -> Self
 pub impl @port.ModelPort for OpenCodeZenModelPort
 
 pub(all) struct OpenCodeZenProvider {
@@ -106,6 +108,11 @@ pub async fn OpenCodeZenProvider::refresh(Self, @posoco-kit-provider.ProviderCon
 pub impl @posoco-kit-provider.ApiKeyFactory for OpenCodeZenProvider
 pub impl @posoco-kit-provider.ProviderFactory for OpenCodeZenProvider
 pub impl @posoco-kit-provider.RefreshableProviderFactory for OpenCodeZenProvider
+
+pub(all) enum StreamVerdict {
+  Continue
+  Abort(category~ : String, message~ : String)
+}
 
 pub(all) enum WireKind {
   ChatCompletions

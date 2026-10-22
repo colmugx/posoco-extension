@@ -287,3 +287,191 @@ test "go factory settings resolve with typed failures" {
   let empty = @llm.ProviderConfigSource::ProviderConfigSource()
   assert_eq(go_resolve_api_key(empty), None)
 }
+
+//|
+//| DeepSeek serving contract (mounted on the `deepseek*` chat-completions
+//| slots only).
+//|
+
+///|
+fn go_settings_source(
+  extra : Array[(String, Json)],
+) -> @llm.ProviderConfigSource {
+  let fields : Map[String, Json] = Map::from_array([
+    ("api_key", Json::string("sk-go-1")),
+  ])
+  for entry in extra {
+    fields[entry.0] = entry.1
+  }
+  @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(Json::object(fields)),
+  )
+}
+
+///|
+test "go_deepseek_applies is deepseek ids on the chat-completions wire" {
+  let chat = @zen.OpenCodeZenConfig(
+    "sk-go-test",
+    base_url="https://opencode.ai/inference/go/v1",
+    model="deepseek-v4.1-flash",
+  )
+  assert_true(go_deepseek_applies(chat))
+  // The Messages wire rejects a system message inside the transcript, so the
+  // convergence injection and the inspector stay off it.
+  let on_messages : @zen.OpenCodeZenConfig = { ..chat, wire: @zen.Messages, }
+  assert_false(go_deepseek_applies(on_messages))
+  let other_model : @zen.OpenCodeZenConfig = { ..chat, model: "glm-5.3-flash", }
+  assert_false(go_deepseek_applies(other_model))
+}
+
+///|
+test "go_deepseek_policy resolves defaults, opt-outs, and typed failures" {
+  // `build` parses the contract even though the default model is a glm slot.
+  let bare = go_settings_source([])
+  let built = Ok(OpenCodeGoProvider().build(bare)) catch { error => Err(error) }
+  assert_true(built is Ok(_))
+  let defaults = go_deepseek_policy(bare)
+  assert_eq(defaults, @dk.DeepSeekPolicy::default_protections())
+  assert_eq(defaults.max_reasoning_chars, Some(120000))
+  assert_eq(defaults.repeated_reasoning_span_chars, Some(256))
+  assert_true(defaults.recover_on_reasoning_exhaustion)
+  let opt_out = go_settings_source([
+    ("max_reasoning_chars", Json::null()),
+    ("repeated_reasoning_span_chars", Json::null()),
+    ("recover_on_reasoning_exhaustion", Json::boolean(false)),
+  ])
+  assert_eq(go_deepseek_policy(opt_out), @dk.DeepSeekPolicy::disabled())
+  // A malformed value is a typed composition failure, never a silent fallback.
+  let malformed = go_settings_source([
+    ("max_reasoning_chars", Json::string("lots")),
+  ])
+  let result = Ok(OpenCodeGoProvider().build(malformed)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("max_reasoning_chars"))
+    _ => fail("expected a typed composition failure for a malformed key")
+  }
+}
+
+///|
+fn go_reasoning_accumulator(
+  reasoning : String,
+) -> @posoco.StreamAccumulator raise {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  acc.push(@posoco.StreamChunk::ReasoningDelta(token=reasoning))
+  acc
+}
+
+///|
+test "go_deepseek_inspector relays the kit's stream bounds" {
+  let budget = @dk.DeepSeekPolicy::DeepSeekPolicy(
+    max_reasoning_chars=Some(64),
+    repeated_reasoning_span_chars=None,
+    recover_on_reasoning_exhaustion=false,
+  )
+  let ctx = @devkit.ExtContext::default()
+  let inspect_budget = go_deepseek_inspector(budget, ctx)
+  assert_true(
+    inspect_budget(go_reasoning_accumulator("thinking"), false)
+    is @zen.StreamVerdict::Continue,
+  )
+  match inspect_budget(go_reasoning_accumulator("x".repeat(65)), false) {
+    @zen.StreamVerdict::Continue => fail("expected a budget abort")
+    @zen.StreamVerdict::Abort(category~, message~) => {
+      assert_eq(category, "reasoning_budget_exceeded")
+      assert_eq(
+        message, "DeepSeek reasoning stream exceeded configured max_reasoning_chars",
+      )
+    }
+  }
+  let repetition = @dk.DeepSeekPolicy::DeepSeekPolicy(
+    max_reasoning_chars=Some(120000),
+    repeated_reasoning_span_chars=Some(128),
+    recover_on_reasoning_exhaustion=false,
+  )
+  let inspect_repetition = go_deepseek_inspector(repetition, ctx)
+  let span = "y".repeat(128)
+  match
+    inspect_repetition(go_reasoning_accumulator(span + span + span), false) {
+    @zen.StreamVerdict::Continue => fail("expected a repetition abort")
+    @zen.StreamVerdict::Abort(category~, message~) => {
+      assert_eq(category, "reasoning_repetition")
+      assert_eq(message, "DeepSeek stream reasoning repetition detected")
+    }
+  }
+  // A completed stream is never re-judged: a finished answer that happens to
+  // end repetitively is legitimate.
+  assert_true(
+    inspect_repetition(go_reasoning_accumulator(span + span + span), true)
+    is @zen.StreamVerdict::Continue,
+  )
+}
+
+///|
+test "deepseek slots keep the catalog shape next to other models" {
+  let provider = OpenCodeGoProvider()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let models = @zen.parse_zen_models(
+    Json::object(
+      Map::from_array([
+        ("object", Json::string("list")),
+        (
+          "data",
+          Json::array([
+            Json::object(
+              Map::from_array([
+                ("id", Json::string("deepseek-v4.1-flash")),
+                ("object", Json::string("model")),
+                ("owned_by", Json::string("opencode")),
+              ]),
+            ),
+            Json::object(
+              Map::from_array([
+                ("id", Json::string("glm-5.3-flash")),
+                ("object", Json::string("model")),
+                ("owned_by", Json::string("opencode")),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  )
+  let policy = @dk.DeepSeekPolicy::default_protections()
+  let guarded = go_model_catalog(
+    go_base_config(),
+    models,
+    "deepseek-v4.1-flash",
+    Map::from_array([]),
+    api_key_factory,
+    policy=Some(policy),
+  )
+  let plain = go_model_catalog(
+    go_base_config(),
+    models,
+    "deepseek-v4.1-flash",
+    Map::from_array([]),
+    api_key_factory,
+  )
+  inspect(guarded.slots().length(), content="2")
+  // The contract is a port decorator: the slot surface is byte-identical.
+  assert_eq(
+    guarded.slots().map(slot => slot.id),
+    plain.slots().map(slot => slot.id),
+  )
+  assert_eq(
+    guarded.slots().map(slot => slot.label),
+    plain.slots().map(slot => slot.label),
+  )
+  assert_eq(
+    guarded.slots().map(slot => slot.capabilities),
+    plain.slots().map(slot => slot.capabilities),
+  )
+  assert_eq(guarded.slots()[0].id, "opencode-go/deepseek-v4.1-flash")
+  assert_eq(guarded.slots()[0].label, "Go / deepseek-v4.1-flash")
+  assert_eq(guarded.slots()[0].display_group, Some("go"))
+  assert_eq(guarded.slots()[1].id, "opencode-go/glm-5.3-flash")
+  assert_eq(guarded.slots()[1].label, "Go / glm-5.3-flash")
+}

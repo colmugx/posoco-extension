@@ -2192,7 +2192,6 @@ test "zen decode falls back to message.reasoning" {
   }
 }
 
-
 ///|
 /// OpenCode Go's delta.reasoning alias must survive decoding and the next
 /// Chat Completions tool-result turn. This is a provider dialect contract:
@@ -2228,7 +2227,10 @@ test "OpenCode Go reasoning survives SSE tool call replay" {
   let tool_reply : @posoco.Message = @posoco.Message::ToolMessage(
     call_id=@posoco.CallId::unchecked("call_1"),
     tool_name=@posoco.ToolName::unchecked("read"),
-    outcome=@posoco.ToolOutcome::Success(content="file contents", structured=None),
+    outcome=@posoco.ToolOutcome::Success(
+      content="file contents",
+      structured=None,
+    ),
   )
   let request = build_chat_request(
     [zen_user_msg("read the file"), assistant, tool_reply],
@@ -2260,4 +2262,88 @@ test "OpenCode Go reasoning survives SSE tool call replay" {
     fail("expected tool result message")
   }
   assert_eq(tool_wire["tool_call_id"], Json::string("call_1"))
+}
+
+///|
+/// The stream observation seam: no inspector and `Continue` stay silent, and
+/// an `Abort` becomes a Transport error naming both the category and the
+/// inspector's message. The loop's `done` flag is forwarded verbatim.
+test "stream verdict relays inspector decisions" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  assert_true(zen_apply_verdict(None, acc, done=false) is None)
+  let seen_done : Array[Bool] = []
+  let continue_inspector : (@posoco.StreamAccumulator, Bool) -> StreamVerdict = fn(
+    _acc,
+    done,
+  ) {
+    seen_done.push(done)
+    StreamVerdict::Continue
+  }
+  assert_true(
+    zen_apply_verdict(Some(continue_inspector), acc, done=false) is None,
+  )
+  assert_true(
+    zen_apply_verdict(Some(continue_inspector), acc, done=true) is None,
+  )
+  assert_eq(seen_done, [false, true])
+  let abort_inspector : (@posoco.StreamAccumulator, Bool) -> StreamVerdict = fn(
+    _acc,
+    _done,
+  ) {
+    StreamVerdict::Abort(
+      category="stream_bound",
+      message="event budget exhausted",
+    )
+  }
+  match zen_apply_verdict(Some(abort_inspector), acc, done=false) {
+    Some(@posoco.ModelError::Transport(text)) => {
+      assert_true(text.contains("stream_bound"))
+      assert_true(text.contains("event budget exhausted"))
+    }
+    Some(_) => fail("expected the abort verdict to surface as Transport")
+    None => fail("expected the abort verdict to surface an error")
+  }
+}
+
+///|
+/// `with_inspector` keeps the config and the provider metadata intact, and a
+/// port built without an inspector judges nothing.
+test "with_inspector preserves config and the no-inspector path" {
+  let config = OpenCodeZenConfig(
+    "sk-test",
+    base_url="https://opencode.ai/inference/v1",
+    model="glm-5.2",
+    context_window=Some(128_000),
+    compact_threshold=Some(0.8),
+    supports_images=true,
+    spend_source="opencode-zen-test",
+  )
+  let plain = OpenCodeZenModelPort(config)
+  assert_true(plain.inspector is None)
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  assert_true(zen_apply_verdict(plain.inspector, acc, done=false) is None)
+  let legacy_metadata = plain.provider_config()
+  assert_eq(legacy_metadata.context_window, Some(128_000))
+  assert_eq(legacy_metadata.compact_threshold, Some(0.8))
+  let inspector : (@posoco.StreamAccumulator, Bool) -> StreamVerdict = fn(
+    _acc,
+    _done,
+  ) {
+    StreamVerdict::Continue
+  }
+  let observed = plain.with_inspector(inspector=Some(inspector))
+  assert_true(observed.inspector is Some(_))
+  assert_eq(observed.config.model, config.model)
+  assert_eq(observed.config.base_url, config.base_url)
+  assert_eq(observed.config.supports_images, config.supports_images)
+  assert_eq(observed.config.spend_source, config.spend_source)
+  assert_eq(observed.provider_config(), legacy_metadata)
+  // The product-facing port accepts the inspector through the same seam.
+  let plain_port = opencode_anchored_compact_port(config)
+  assert_eq(plain_port.provider_config(), legacy_metadata)
+  let observed_port = opencode_anchored_compact_port(
+    config,
+    inspector=Some(inspector),
+  )
+  assert_eq(observed_port.provider_config(), legacy_metadata)
 }

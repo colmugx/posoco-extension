@@ -35,6 +35,7 @@ fn zen_request_headers(session_id : String) -> Map[String, String] {
 }
 
 ///|
+
 ///|
 /// Mint a v4 UUID using the process RNG. The result is suitable for the
 /// opaque routing identifiers expected by the Zen gateway; it is not intended

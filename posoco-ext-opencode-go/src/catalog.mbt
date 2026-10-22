@@ -107,24 +107,100 @@ fn go_model_surface(
 }
 
 ///|
-/// Build one catalog slot for a Go model: the shared wire port wrapped in
-/// the rate-limit recovery decorator (fills `reset_at_ms` from the
-/// `/usage` probe so the host's guard schedules automatic recovery), then
-/// the anchored-compact wrapper, carrying this plane's identity and spend
-/// source.
-fn go_catalog_slot(
+/// Whether the DeepSeek serving contract applies to this slot. The
+/// convergence system message and the stream inspector are chat-completions
+/// affordances; the Messages wire rejects a system message inside the
+/// transcript.
+fn go_deepseek_applies(config : @zen.OpenCodeZenConfig) -> Bool {
+  config.model.has_prefix("deepseek") && config.wire == @zen.ChatCompletions
+}
+
+///|
+/// Relay the kit's stream bounds onto the shared wire's inspector seam.
+fn go_deepseek_inspector(
+  policy : @dk.DeepSeekPolicy,
+  ctx : @devkit.ExtContext,
+) -> (@posoco.StreamAccumulator, Bool) -> @zen.StreamVerdict {
+  fn(acc, done) {
+    match policy.observe(acc, done~) {
+      None => @zen.StreamVerdict::Continue
+      Some(breach) => {
+        if breach == @dk.ReasoningBreach::RepetitionDetected {
+          ctx.warn(
+            source="posoco-ext-opencode-go",
+            code="deepseek.reasoning_repetition_detected",
+            message="Repeated reasoning suffix detected; aborting stream",
+          )
+        }
+        @zen.StreamVerdict::Abort(
+          category=breach.category(),
+          message=breach.message(),
+        )
+      }
+    }
+  }
+}
+
+///|
+/// The shared wire port behind the rate-limit recovery decorator, which
+/// fills `reset_at_ms` from the `/usage` probe so the host's guard schedules
+/// automatic recovery.
+fn go_rate_limited_port(
   config : @zen.OpenCodeZenConfig,
-  surface : @zen.ZenReasoningSurface?,
-  api_key : &@llm.ApiKeyFactory,
-) -> @llm.ModelSlot {
+  inspector : ((@posoco.StreamAccumulator, Bool) -> @zen.StreamVerdict)?,
+) -> &@posoco.ModelPort {
   let wire_port : &@posoco.ModelPort = @zen.opencode_anchored_compact_port(
     config,
+    inspector~,
   )
-  let port : &@posoco.ModelPort = GoRateLimitModelPort(
+  GoRateLimitModelPort(
     inner=wire_port,
     base_url=config.base_url,
     api_key=config.api_key,
   )
+}
+
+///|
+/// Build one catalog slot for a Go model: the anchored-compact wire port
+/// wrapped in the rate-limit recovery decorator, and — on the `deepseek*`
+/// chat-completions slots — the DeepSeek contract outermost, so request-side
+/// ordering and the reset enrichment apply on every attempt.
+fn go_catalog_slot(
+  config : @zen.OpenCodeZenConfig,
+  surface : @zen.ZenReasoningSurface?,
+  api_key : &@llm.ApiKeyFactory,
+  policy~ : @dk.DeepSeekPolicy? = None,
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
+) -> @llm.ModelSlot {
+  let applies = go_deepseek_applies(config)
+  let inspector : ((@posoco.StreamAccumulator, Bool) -> @zen.StreamVerdict)? = match
+    policy {
+    Some(p) if applies => Some(go_deepseek_inspector(p, ctx))
+    _ => None
+  }
+  let retry_at_low : (() -> &@posoco.ModelPort)? = if applies &&
+    config.thinking_efforts.contains("low") {
+    let low_config = config.with_reasoning_effort("low") catch {
+      err =>
+        abort("OpenCode Go catalog effort rebuild failed: " + err.to_string())
+    }
+    Some(fn() { go_rate_limited_port(low_config, inspector) })
+  } else {
+    None
+  }
+  let rate_port = go_rate_limited_port(config, inspector)
+  let port : &@posoco.ModelPort = match policy {
+    Some(p) if applies =>
+      @dk.deepseek_policy_port(
+        inner=rate_port,
+        policy=p,
+        retry_at_low~,
+        inject_convergence=true,
+        ctx~,
+        source="posoco_ext_opencode_go",
+      )
+    _ => rate_port
+  }
   let slot_id = go_provider_id + "/" + config.model
   let slot_efforts : Array[String] = match surface {
     None => ["off", "on"]
@@ -158,7 +234,7 @@ fn go_catalog_slot(
         err =>
           abort("OpenCode Go catalog effort rebuild failed: " + err.to_string())
       }
-      go_catalog_slot(rebuilt_config, surface, api_key)
+      go_catalog_slot(rebuilt_config, surface, api_key, policy~, ctx~)
     })
   } else {
     None
@@ -184,7 +260,7 @@ fn go_catalog_slot(
         ..config,
         api_key: credential.secret,
       }
-      go_catalog_slot(rebuilt_config, surface, api_key)
+      go_catalog_slot(rebuilt_config, surface, api_key, policy~, ctx~)
     }),
     rebuild_on_effort~,
   )
@@ -291,6 +367,8 @@ pub fn go_static_catalog(
   config : @zen.OpenCodeZenConfig,
   api_key : &@llm.ApiKeyFactory,
   overrides~ : Map[String, String] = Map::from_array([]),
+  policy~ : @dk.DeepSeekPolicy? = None,
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=go_provider_id,
@@ -311,6 +389,8 @@ pub fn go_static_catalog(
         ),
         None,
         api_key,
+        policy~,
+        ctx~,
       ),
     ],
     capabilities=["chat", "streaming", "api_key"],
@@ -331,6 +411,8 @@ pub fn go_model_catalog(
   metas : Map[String, @zen.ZenModelMeta],
   api_key : &@llm.ApiKeyFactory,
   overrides~ : Map[String, String] = Map::from_array([]),
+  policy~ : @dk.DeepSeekPolicy? = None,
+  ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
   if models.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
@@ -364,7 +446,7 @@ pub fn go_model_catalog(
       metas.get(info.id),
       overrides~,
     )
-    slots.push(go_catalog_slot(config, surface, api_key))
+    slots.push(go_catalog_slot(config, surface, api_key, policy~, ctx~))
   }
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=go_provider_id,

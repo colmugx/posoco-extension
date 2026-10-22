@@ -1,0 +1,11 @@
+import {
+  "colmugx/posoco",
+  "posoco/devkit",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+warnings = "-unused_value-unused_constructor"

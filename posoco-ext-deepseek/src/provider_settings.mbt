@@ -82,82 +82,16 @@ fn deepseek_setting_effort_supported(effort : String) -> Bool {
 }
 
 ///|
-/// Provider-owned ceiling parser. Both factory build and authenticated
-/// refresh use the same strict validation. No host-specific settings schema.
-fn deepseek_setting_max_reasoning_chars(
+/// The provider's limit contract, resolved by the shared DeepSeek kit so both
+/// planes parse identically. Both factory build and authenticated refresh use
+/// this one entry; no host-specific settings schema.
+fn deepseek_policy(
   source : @provider.ProviderConfigSource,
-) -> Int32? raise @posoco.CompositionError {
-  match source.setting("max_reasoning_chars") {
-    None => Some(120000)
-    Some(Json::Null) => None
-    Some(Json::Number(number, ..)) => {
-      if number.is_nan() ||
-        number.is_inf() ||
-        number <= 0.0 ||
-        number > 2147483647.0 {
-        raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_deepseek",
-          detail="max_reasoning_chars must be a positive integer within Int range",
-        )
-      }
-      let value = number.to_int()
-      if value.to_double() != number {
-        raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_deepseek",
-          detail="max_reasoning_chars must be a positive integer within Int range",
-        )
-      }
-      Some(value)
-    }
-    Some(_) =>
-      raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_deepseek",
-        detail="max_reasoning_chars must be a positive integer within Int range",
-      )
-  }
-}
-
-///|
-fn deepseek_setting_repeated_span(
-  source : @provider.ProviderConfigSource,
-) -> Int32? raise @posoco.CompositionError {
-  match source.setting("repeated_reasoning_span_chars") {
-    None => Some(256)
-    Some(Json::Null) => None
-    Some(Json::Number(n, ..)) => {
-      if n.is_nan() ||
-        n.is_inf() ||
-        n < 128.0 ||
-        n > 715827882.0 ||
-        n.to_int().to_double() != n {
-        raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_deepseek",
-          detail="repeated_reasoning_span_chars must be an integer from 128 to 715827882",
-        )
-      }
-      Some(n.to_int())
-    }
-    Some(_) =>
-      raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_deepseek",
-        detail="repeated_reasoning_span_chars must be an integer from 128 to 715827882",
-      )
-  }
-}
-
-///|
-fn deepseek_setting_recover_on_exhaustion(
-  source : @provider.ProviderConfigSource,
-) -> Bool raise @posoco.CompositionError {
-  match source.setting("recover_on_reasoning_exhaustion") {
-    None | Some(Json::True) => true
-    Some(Json::False) => false
-    Some(_) =>
-      raise @posoco.CompositionError::ManifestSchemaError(
-        manifest_id="posoco_ext_deepseek",
-        detail="recover_on_reasoning_exhaustion must be a boolean",
-      )
-  }
+) -> @dk.DeepSeekPolicy raise @posoco.CompositionError {
+  @dk.DeepSeekPolicy::from_settings(
+    source.settings,
+    manifest_id="posoco_ext_deepseek",
+  )
 }
 
 ///|
@@ -253,6 +187,7 @@ fn deepseek_provider_config(
   let (prompt_profile, supports_images) = deepseek_setting_vision_profile(
     source,
   )
+  let policy = deepseek_policy(source)
   Some(
     DeepSeekConfig(
       api_key,
@@ -263,11 +198,9 @@ fn deepseek_provider_config(
       context_window=source.context_window_setting(
         manifest_id="posoco_ext_deepseek",
       ),
-      max_reasoning_chars=deepseek_setting_max_reasoning_chars(source),
-      recover_on_reasoning_exhaustion=deepseek_setting_recover_on_exhaustion(
-        source,
-      ),
-      repeated_reasoning_span_chars=deepseek_setting_repeated_span(source),
+      max_reasoning_chars=policy.max_reasoning_chars,
+      recover_on_reasoning_exhaustion=policy.recover_on_reasoning_exhaustion,
+      repeated_reasoning_span_chars=policy.repeated_reasoning_span_chars,
       supports_images~,
       prompt_profile~,
     ),

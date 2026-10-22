@@ -132,6 +132,18 @@ pub fn DeepSeekConfig::with_reasoning_effort(
 }
 
 ///|
+/// Project the configured limits onto the shared DeepSeek policy. The adapter
+/// keeps the same three fields it always exposed; the rules themselves live in
+/// `posoco-kit-deepseek`.
+fn DeepSeekConfig::policy(self : DeepSeekConfig) -> @dk.DeepSeekPolicy {
+  @dk.DeepSeekPolicy::DeepSeekPolicy(
+    max_reasoning_chars=self.max_reasoning_chars,
+    repeated_reasoning_span_chars=self.repeated_reasoning_span_chars,
+    recover_on_reasoning_exhaustion=self.recover_on_reasoning_exhaustion,
+  )
+}
+
+///|
 pub(all) struct DeepSeekModelPort {
   config : DeepSeekConfig
   ctx : @devkit.ExtContext
