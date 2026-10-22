@@ -5,7 +5,7 @@ pub impl @posoco.Extension for ShellTools with fn extension_id(_self) -> String 
 
 ///|
 pub impl @posoco.Extension for ShellTools with fn manifest(self) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(id="posoco_ext_bash", tools=[self])
+  @posoco.ExtensionManifest(id="posoco_ext_bash", tools=[self], lifecycle=[self])
 }
 
 ///|
