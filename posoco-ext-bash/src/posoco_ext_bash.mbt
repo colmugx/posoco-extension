@@ -19,6 +19,11 @@ pub struct ShellTools {
   /// already completed are dropped; unwind-only cleanup may leave a stale
   /// exited entry, pruned by the next cancel.
   in_flight : Map[Int32, ShellChildHandle]
+  /// Background work must be hosted by an explicit owner task group.
+  host_group : @async.TaskGroup[Unit]?
+  sessions : Map[String, ShellSession]
+  mut next_session : Int32
+  mut closed : Bool
 }
 
 ///|
@@ -26,7 +31,14 @@ pub struct ShellTools {
 pub fn ShellTools::ShellTools(
   anchor~ : @devkit.WorkspaceAnchor? = None,
 ) -> ShellTools {
-  ShellTools::{ anchor, in_flight: Map::from_array([]), }
+  ShellTools::{
+    anchor,
+    in_flight: Map::from_array([]),
+    host_group: None,
+    sessions: Map::from_array([]),
+    next_session: 0,
+    closed: false,
+  }
 }
 
 ///|
@@ -34,6 +46,143 @@ pub fn ShellTools::ShellTools(
 /// the native spawn's `graceful_cancel` timeout so both escalation paths
 /// agree.
 let shell_cancel_grace_ms : Int32 = 2000
+
+///|
+/// Host-owned background sessions. This is deliberately separate from effect
+/// cancellation: tool calls may settle while their commands keep running.
+pub struct ShellSession {
+  id : String
+  effect_id : @kernel.EffectId
+  started_at_ms : Int64
+  mut last_output_at_ms : Int64
+  mut ended_at_ms : Int64?
+  mut status : String
+  mut output : String
+  mut base_cursor : Int64
+  mut next_cursor : Int64
+  mut outcome : @posoco.ToolOutcome?
+  mut worker : @async.Task[Unit]?
+  mut kill_requested : Bool
+}
+
+///|
+/// Attach a task group owned by the host, with a lifetime longer than tool
+/// calls. Detached execution is disabled until the host explicitly attaches.
+pub fn ShellTools::attach(
+  self : ShellTools,
+  group : @async.TaskGroup[Unit],
+) -> Unit {
+  self.host_group = Some(group)
+}
+
+///|
+const BASH_MAX_RUNNING_SESSIONS = 8
+
+///|
+const BASH_MAX_RETAINED_SESSIONS = 32
+
+///|
+const BASH_SESSION_TTL_MS = 600_000L
+
+///|
+const BASH_STALL_WARNING_MS = 60_000L
+
+///|
+fn bash_drop_chars(text : String, count : Int64) -> String {
+  let output : Array[Char] = []
+  let mut at = 0L
+  for ch in text {
+    if at >= count {
+      output.push(ch)
+    }
+    at += 1L
+  }
+  String::from_array(output)
+}
+
+///|
+/// A finite tail window with monotonic character cursors. Old output drops
+/// without accumulating indefinitely, and clients can detect missing logs.
+fn ShellSession::append(self : ShellSession, chunk : String) -> Unit {
+  if chunk == "" {
+    return
+  }
+  self.last_output_at_ms = @async.now()
+  self.next_cursor += bash_char_count(chunk).to_int64()
+  let combined = self.output + chunk
+  let count = bash_char_count(combined)
+  if count > BASH_OUTPUT_CHAR_CAP {
+    self.output = bash_tail_chars(combined, count, BASH_OUTPUT_CHAR_CAP)
+    self.base_cursor = self.next_cursor - BASH_OUTPUT_CHAR_CAP.to_int64()
+  } else {
+    self.output = combined
+  }
+}
+
+///|
+fn ShellSession::snapshot(self : ShellSession, cursor : Int64) -> Json {
+  let now = @async.now()
+  let offset = if cursor < self.base_cursor {
+    0L
+  } else if cursor > self.next_cursor {
+    (self.next_cursor - self.base_cursor)
+  } else {
+    cursor - self.base_cursor
+  }
+  let idle_ms = if self.status == "running" {
+    (now - self.last_output_at_ms).max(0L)
+  } else {
+    0L
+  }
+  let suspected_stall = self.status == "running" &&
+    idle_ms >= BASH_STALL_WARNING_MS &&
+    now - self.started_at_ms >= BASH_STALL_WARNING_MS
+  let fields : Map[String, Json] = Map::from_array([
+    ("session_id", Json::string(self.id)),
+    ("status", Json::string(self.status)),
+    ("output", Json::string(bash_drop_chars(self.output, offset))),
+    ("cursor", Json::number(self.next_cursor.to_double())),
+    ("truncated", Json::boolean(cursor < self.base_cursor)),
+    ("idle_ms", Json::number(idle_ms.to_double())),
+    ("suspected_stall", Json::boolean(suspected_stall)),
+  ])
+  match self.outcome {
+    Some(@posoco.ToolOutcome::Success(..)) =>
+      fields["exit_code"] = Json::number(0.0)
+    Some(@posoco.ToolOutcome::ToolReportedError(..)) =>
+      fields["failed"] = Json::boolean(true)
+    _ => ()
+  }
+  Json::object(fields)
+}
+
+///|
+fn ShellTools::prune_sessions(self : ShellTools) -> Unit {
+  let old : Array[String] = []
+  for id, session in self.sessions {
+    if session.ended_at_ms is Some(at) &&
+      @async.now() - at >= BASH_SESSION_TTL_MS {
+      old.push(id)
+    }
+  }
+  for id in old {
+    self.sessions.remove(id)
+  }
+}
+
+///|
+fn ShellTools::session_capacity(self : ShellTools) -> Bool {
+  self.prune_sessions()
+  let mut running = 0
+  for _, session in self.sessions {
+    if session.status == "running" {
+      running += 1
+    }
+  }
+  running < BASH_MAX_RUNNING_SESSIONS &&
+  self.sessions.size() < BASH_MAX_RETAINED_SESSIONS
+}
+
 
 ///|
 /// Terminate a registered shell child: signal, wait out the grace period,
