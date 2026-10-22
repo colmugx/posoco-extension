@@ -75,8 +75,7 @@ extern "js" fn node_spawn_shell(
   #|       if (settled) return;
   #|       settled = true;
   #|       clearTimeout(watchdog);
-  #|       clearTimeout(cancelTimer);
-  #|       children.delete(kill);
+  #|       if (!timedOut) { clearTimeout(cancelTimer); children.delete(kill); }
   #|       resolve(code);
   #|     };
   #|     proc.once("exit", code => finish(code ?? -1));
@@ -86,7 +85,7 @@ extern "js" fn node_spawn_shell(
   #|     if (settled) return;
   #|     timedOut = true;
   #|     kill("SIGTERM");
-  #|     cancelTimer = setTimeout(() => kill("SIGKILL"), 2000);
+  #|     cancelTimer = setTimeout(() => { kill("SIGKILL"); children.delete(kill); }, 2000);
   #|     cancelTimer.unref?.();
   #|   }, timeoutMs);
   #|   watchdog.unref?.();
