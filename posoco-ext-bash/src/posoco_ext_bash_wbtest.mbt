@@ -140,3 +140,52 @@ test "bash_model_output_counts_unicode_as_characters" {
   assert_true(out.has_prefix("头"))
   assert_true(out.has_suffix("尾"))
 }
+
+
+///|
+test "bash timeout defaults to five minutes" {
+  assert_eq(bash_timeout_ms(Json::object(Map::from_array([]))), 300000)
+}
+
+///|
+test "bash timeout accepts valid hard deadlines" {
+  for n in [1, 10000, 300000, 3600000] {
+    let args = Json::object(Map::from_array([
+      ("timeout_ms", Json::number(n.to_double())),
+    ]))
+    assert_eq(bash_timeout_ms(args), n)
+  }
+}
+
+///|
+test "bash timeout rejects malformed or unsafe values" {
+  let candidates = [
+    Json::number(0.0),
+    Json::number(-1.0),
+    Json::number(3600001.0),
+    Json::number(3.5),
+    Json::string("forever"),
+    Json::boolean(true),
+    Json::null(),
+  ]
+  for bad in candidates {
+    let args = Json::object(Map::from_array([("timeout_ms", bad)]))
+    let result = Ok(bash_timeout_ms(args)) catch { error => Err(error) }
+    match result {
+      Err(@posoco.RuntimeError::UnknownTool(message)) =>
+        assert_true(message.contains("timeout_ms"))
+      _ => fail("expected invalid timeout to be rejected")
+    }
+  }
+}
+
+///|
+test "streaming shell output remains bounded" {
+  let mut output = ""
+  for _ in 0..<100 {
+    output = bash_append_output(output, "0123456789".repeat(100))
+  }
+  assert_true(bash_char_count(output) <= BASH_OUTPUT_CHAR_CAP)
+  assert_true(output.has_prefix("012345"))
+  assert_true(output.contains("…[cut]…"))
+}
