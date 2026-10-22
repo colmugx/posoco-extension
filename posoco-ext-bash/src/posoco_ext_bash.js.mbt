@@ -228,6 +228,10 @@ async fn ShellTools::bash_foreground(
     }
     Ok(collected) => {
       let exit_code = collected.exit_code()
+      match session {
+        Some(active) => active.exit_code = Some(exit_code)
+        None => ()
+      }
       handle.exited = true
       self.in_flight.remove(key)
       let stdout = collected.stdout_text()
