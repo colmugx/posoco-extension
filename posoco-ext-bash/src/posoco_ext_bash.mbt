@@ -180,7 +180,7 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
     }
   }
   running < BASH_MAX_RUNNING_SESSIONS &&
-  self.sessions.keys().length() < BASH_MAX_RETAINED_SESSIONS
+  self.sessions.length() < BASH_MAX_RETAINED_SESSIONS
 }
 
 
