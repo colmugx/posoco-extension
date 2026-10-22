@@ -293,3 +293,58 @@ async test "bash session: background returns id and can be polled to completion"
     bash.shutdown()
   })
 }
+
+
+///|
+async test "bash: hard deadline terminates a sleeping child" {
+  let bash = ShellTools()
+  let outcome = bash.execute(bash_session_test_ctx(
+    "bash",
+    Json::object(Map::from_array([
+      ("cmd", Json::string("sleep 20")),
+      ("timeout_ms", Json::number(150.0)),
+    ])),
+    993,
+  ))
+  match outcome {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
+      assert_true(content.contains("timed out after 150ms"))
+    _ => fail("expected timeout tool error")
+  }
+}
+
+///|
+async test "bash: background requires an explicit host owner" {
+  let bash = ShellTools()
+  let attempted = Ok(bash.execute(bash_session_test_ctx(
+    "bash",
+    Json::object(Map::from_array([
+      ("cmd", Json::string("sleep 20")),
+      ("background", Json::boolean(true)),
+    ])),
+    994,
+  ))) catch { error => Err(error) }
+  match attempted {
+    Err(@posoco.RuntimeError::InvocationFailed(message)) =>
+      assert_true(message.contains("attach"))
+    _ => fail("expected rejection without host task group")
+  }
+}
+
+///|
+async test "bash: large output is drained without blocking" {
+  let bash = ShellTools()
+  let result = bash.execute(bash_session_test_ctx(
+    "bash",
+    Json::object(Map::from_array([
+      ("cmd", Json::string("awk 'BEGIN { for(i=0;i<60000;i++) print \"x\" }'")),
+      ("timeout_ms", Json::number(10000.0)),
+    ])),
+    995,
+  ))
+  match result {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(bash_char_count(content) <= BASH_OUTPUT_CHAR_CAP)
+    _ => fail("large output should not cause a deadlock")
+  }
+}
