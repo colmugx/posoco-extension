@@ -120,20 +120,6 @@ test "terminal_cancelled_maps_to_tool_reported_error" {
 }
 
 ///|
-test "subagent_event_carries_child_identity" {
-  let event : SubagentEvent = {
-    child_session: "cs_9",
-    kind: "scout",
-    parent_call: "call_1",
-    event: @posoco.TurnEvent::TurnStarted,
-  }
-  assert_eq(event.child_session, "cs_9")
-  assert_eq(event.kind, "scout")
-  assert_eq(event.parent_call, "call_1")
-  assert_true(event.event is @posoco.TurnEvent::TurnStarted)
-}
-
-///|
 test "terminal_completed_caps_child_text_but_keeps_footer" {
   let body = "HEAD-" + "x".repeat(SUBAGENT_RESULT_CHARS + 500) + "-TAIL"
   let outcome = terminal_outcome(

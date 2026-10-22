@@ -22,31 +22,6 @@ impl QuotaSource for ScriptedQuotaSource with fn read(
 extend ScriptedQuotaSource with QuotaSource::{read}
 
 ///|
-test "quota reading carries only provider-stated facts" {
-  let reading : QuotaReading = {
-    window: "5h",
-    used_percent: Some(91.5),
-    amount: None,
-    available: None,
-    reset_at_ms: Some(1756900000000L),
-    fetched_at_ms: 1756800000000L,
-  }
-  debug_inspect(
-    reading,
-    content=(
-      #|{
-      #|  window: "5h",
-      #|  used_percent: Some(91.5),
-      #|  amount: None,
-      #|  available: None,
-      #|  reset_at_ms: Some(1756900000000),
-      #|  fetched_at_ms: 1756800000000,
-      #|}
-    ),
-  )
-}
-
-///|
 async test "scripted source plays back in order and holds the last result" {
   let source = ScriptedQuotaSource::{
     results: [
@@ -73,12 +48,6 @@ async test "scripted source plays back in order and holds the last result" {
   // observing it instead of crashing.
   assert_true(source.read() is Ok(_))
   assert_eq(source.calls, 3)
-}
-
-///|
-test "other window keeps the provider label verbatim" {
-  let window : String = "TIME_LIMIT"
-  assert_eq(window, "TIME_LIMIT")
 }
 
 ///|

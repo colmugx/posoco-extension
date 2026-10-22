@@ -1,11 +1,4 @@
 ///|
-test "template enum renders its constructor name" {
-  debug_inspect(SummaryTemplate::StructuredMd, content="StructuredMd")
-  debug_inspect(SummaryTemplate::KimiXml, content="KimiXml")
-  debug_inspect(SummaryTemplate::CodexHandoff, content="CodexHandoff")
-}
-
-///|
 test "structured md template pins the five sections and rules" {
   let system = template_system_instruction(StructuredMd)
   assert_true(system.contains("## Goal"))

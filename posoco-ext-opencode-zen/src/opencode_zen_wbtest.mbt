@@ -2671,3 +2671,39 @@ test "with_inspector preserves config and the no-inspector path" {
   )
   assert_eq(observed_port.provider_config(), legacy_metadata)
 }
+
+///|
+test "zen stream tolerates explicit delta.tool_calls null" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let chunks : Array[@posoco.StreamChunk] = []
+  let on_chunk = fn(chunk : @posoco.StreamChunk) -> Unit { chunks.push(chunk) }
+  let text_chunk =
+    #|{"choices":[{"delta":{"content":"he","tool_calls":null},"finish_reason":null}]}
+  assert_false(process_zen_sse(text_chunk, acc, on_chunk))
+  assert_eq(chunks.length(), 1)
+  let stop_chunk =
+    #|{"choices":[{"delta":{"tool_calls":null},"finish_reason":"stop"}]}
+  assert_true(process_zen_sse(stop_chunk, acc, on_chunk))
+  let completion = acc.to_completion()
+  assert_eq(completion.message.content[0], @posoco.Content::Text("he"))
+}
+
+///|
+test "zen stream labels parse failures with the caller plane identity" {
+  let acc = @posoco.StreamAccumulator::StreamAccumulator()
+  let malformed =
+    #|{"choices":[{"delta":{"tool_calls":{"index":0}}}]}
+  try
+    process_zen_sse(provider="opencode-go", malformed, acc, fn(_chunk) { () })
+  catch {
+    @posoco.ModelError::ResponseParse(msg) =>
+      assert_true(
+        msg.contains(
+          "opencode-go SSE parse failure (stage=delta.tool_calls, category=wrong_type)",
+        ),
+      )
+    _ => fail("expected ResponseParse")
+  } noraise {
+    _ => fail("expected to raise")
+  }
+}

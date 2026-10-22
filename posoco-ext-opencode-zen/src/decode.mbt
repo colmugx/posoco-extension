@@ -9,22 +9,25 @@
 
 ///|
 /// Decode a non-streaming chat completion response into a Completion.
+/// `provider` labels every raised parse failure; the caller pins the plane
+/// identity (zen vs go) so errors are attributable per plane.
 fn decode_chat_response(
+  provider~ : String = "opencode-zen",
   json : Json,
 ) -> @posoco.Completion raise @posoco.ModelError {
   guard json is Object(root) else {
     raise @posoco.ModelError::ResponseParse(
-      "opencode-zen response parse failure (stage=response, category=not_object)",
+      "\{provider} response parse failure (stage=response, category=not_object)",
     )
   }
   match root.get("error") {
     Some(Object(_)) =>
       raise @posoco.ModelError::Transport(
-        "opencode-zen API error (stage=response.error, category=structured)",
+        "\{provider} API error (stage=response.error, category=structured)",
       )
     Some(_) =>
       raise @posoco.ModelError::Transport(
-        "opencode-zen API error (stage=response.error, category=wrong_type)",
+        "\{provider} API error (stage=response.error, category=wrong_type)",
       )
     None => ()
   }
@@ -32,32 +35,32 @@ fn decode_chat_response(
     Some(Array(choices)) => choices
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=choices, category=wrong_type)",
+        "\{provider} response parse failure (stage=choices, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=choices, category=missing)",
+        "\{provider} response parse failure (stage=choices, category=missing)",
       )
   }
   if choices.length() == 0 {
     raise @posoco.ModelError::ResponseParse(
-      "opencode-zen response parse failure (stage=choices, category=empty)",
+      "\{provider} response parse failure (stage=choices, category=empty)",
     )
   }
   guard choices[0] is Object(choice) else {
     raise @posoco.ModelError::ResponseParse(
-      "opencode-zen response parse failure (stage=choice, category=not_object)",
+      "\{provider} response parse failure (stage=choice, category=not_object)",
     )
   }
   let msg = match choice.get("message") {
     Some(Object(msg)) => msg
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=message, category=wrong_type)",
+        "\{provider} response parse failure (stage=message, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=message, category=missing)",
+        "\{provider} response parse failure (stage=message, category=missing)",
       )
   }
   let text = match msg.get("content") {
@@ -65,7 +68,7 @@ fn decode_chat_response(
     Some(Null) | None => ""
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=message.content, category=wrong_type)",
+        "\{provider} response parse failure (stage=message.content, category=wrong_type)",
       )
   }
   // reasoning_content: optional. Surface when present and non-empty; servers
@@ -76,21 +79,21 @@ fn decode_chat_response(
     Some(String(s)) => if s == "" { None } else { Some(s) }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=message.reasoning_content, category=wrong_type)",
+        "\{provider} response parse failure (stage=message.reasoning_content, category=wrong_type)",
       )
     None =>
       match msg.get("reasoning") {
         Some(String(s)) => if s == "" { None } else { Some(s) }
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
-            "opencode-zen response parse failure (stage=message.reasoning, category=wrong_type)",
+            "\{provider} response parse failure (stage=message.reasoning, category=wrong_type)",
           )
         None =>
           match msg.get("reasoning_text") {
             Some(String(s)) => if s == "" { None } else { Some(s) }
             Some(_) =>
               raise @posoco.ModelError::ResponseParse(
-                "opencode-zen response parse failure (stage=message.reasoning_text, category=wrong_type)",
+                "\{provider} response parse failure (stage=message.reasoning_text, category=wrong_type)",
               )
             None => None
           }
@@ -106,15 +109,15 @@ fn decode_chat_response(
               Some(String(s)) if s != "" => s
               Some(String(_)) =>
                 raise @posoco.ModelError::ResponseParse(
-                  "opencode-zen response parse failure (stage=tool.id, category=empty)",
+                  "\{provider} response parse failure (stage=tool.id, category=empty)",
                 )
               Some(_) =>
                 raise @posoco.ModelError::ResponseParse(
-                  "opencode-zen response parse failure (stage=tool.id, category=wrong_type)",
+                  "\{provider} response parse failure (stage=tool.id, category=wrong_type)",
                 )
               None =>
                 raise @posoco.ModelError::ResponseParse(
-                  "opencode-zen response parse failure (stage=tool.id, category=missing)",
+                  "\{provider} response parse failure (stage=tool.id, category=missing)",
                 )
             }
             let (name, args_str) = match o.get("function") {
@@ -123,43 +126,43 @@ fn decode_chat_response(
                   Some(String(s)) if s != "" => s
                   Some(String(_)) =>
                     raise @posoco.ModelError::ResponseParse(
-                      "opencode-zen response parse failure (stage=tool.name, category=empty)",
+                      "\{provider} response parse failure (stage=tool.name, category=empty)",
                     )
                   Some(_) =>
                     raise @posoco.ModelError::ResponseParse(
-                      "opencode-zen response parse failure (stage=tool.name, category=wrong_type)",
+                      "\{provider} response parse failure (stage=tool.name, category=wrong_type)",
                     )
                   None =>
                     raise @posoco.ModelError::ResponseParse(
-                      "opencode-zen response parse failure (stage=tool.name, category=missing)",
+                      "\{provider} response parse failure (stage=tool.name, category=missing)",
                     )
                 }
                 let a = match f.get("arguments") {
                   Some(String(s)) => s
                   Some(_) =>
                     raise @posoco.ModelError::ResponseParse(
-                      "opencode-zen response parse failure (stage=tool.arguments, category=wrong_type)",
+                      "\{provider} response parse failure (stage=tool.arguments, category=wrong_type)",
                     )
                   None =>
                     raise @posoco.ModelError::ResponseParse(
-                      "opencode-zen response parse failure (stage=tool.arguments, category=missing)",
+                      "\{provider} response parse failure (stage=tool.arguments, category=missing)",
                     )
                 }
                 (n, a)
               }
               Some(_) =>
                 raise @posoco.ModelError::ResponseParse(
-                  "opencode-zen response parse failure (stage=tool.function, category=wrong_type)",
+                  "\{provider} response parse failure (stage=tool.function, category=wrong_type)",
                 )
               None =>
                 raise @posoco.ModelError::ResponseParse(
-                  "opencode-zen response parse failure (stage=tool.function, category=missing)",
+                  "\{provider} response parse failure (stage=tool.function, category=missing)",
                 )
             }
             let args : Json = @json.parse(args_str) catch {
               _ =>
                 raise @posoco.ModelError::ResponseParse(
-                  "opencode-zen response parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
+                  "\{provider} response parse failure (stage=tool.arguments_json, category=malformed, payload_chars=\{args_str.length()})",
                 )
             }
             result.push({
@@ -170,7 +173,7 @@ fn decode_chat_response(
           }
           _ =>
             raise @posoco.ModelError::ResponseParse(
-              "opencode-zen response parse failure (stage=tool, category=not_object)",
+              "\{provider} response parse failure (stage=tool, category=not_object)",
             )
         }
       }
@@ -178,14 +181,14 @@ fn decode_chat_response(
     }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=message.tool_calls, category=wrong_type)",
+        "\{provider} response parse failure (stage=message.tool_calls, category=wrong_type)",
       )
     None => []
   }
   let finish : @posoco.FinishReason = match choice.get("finish_reason") {
     Some(String("")) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=finish_reason, category=empty)",
+        "\{provider} response parse failure (stage=finish_reason, category=empty)",
       )
     Some(String(s)) =>
       match s {
@@ -196,18 +199,18 @@ fn decode_chat_response(
       }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=finish_reason, category=wrong_type)",
+        "\{provider} response parse failure (stage=finish_reason, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=finish_reason, category=missing)",
+        "\{provider} response parse failure (stage=finish_reason, category=missing)",
       )
   }
   let usage : @posoco.Usage? = match root.get("usage") {
-    Some(Object(_)) => Some(extract_usage(root))
+    Some(Object(_)) => Some(extract_usage(provider~, root))
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen response parse failure (stage=usage, category=wrong_type)",
+        "\{provider} response parse failure (stage=usage, category=wrong_type)",
       )
     None => None
   }
@@ -235,6 +238,7 @@ fn decode_chat_response(
 /// `prompt_tokens`/`completion_tokens`/`total_tokens` (OpenAI) and the same
 /// keys DeepSeek uses are accepted; missing fields map to None.
 fn extract_usage(
+  provider~ : String = "opencode-zen",
   root : Map[String, Json],
 ) -> @posoco.Usage raise @posoco.ModelError {
   match root.get("usage") {
@@ -243,7 +247,7 @@ fn extract_usage(
         Some(Number(n, ..)) => Some(n.to_int())
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
-            "opencode-zen parse failure (stage=usage.prompt_tokens, category=wrong_type)",
+            "\{provider} parse failure (stage=usage.prompt_tokens, category=wrong_type)",
           )
         None => None
       }
@@ -251,7 +255,7 @@ fn extract_usage(
         Some(Number(n, ..)) => Some(n.to_int())
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
-            "opencode-zen parse failure (stage=usage.completion_tokens, category=wrong_type)",
+            "\{provider} parse failure (stage=usage.completion_tokens, category=wrong_type)",
           )
         None => None
       }
@@ -259,7 +263,7 @@ fn extract_usage(
         Some(Number(n, ..)) => Some(n.to_int())
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
-            "opencode-zen parse failure (stage=usage.total_tokens, category=wrong_type)",
+            "\{provider} parse failure (stage=usage.total_tokens, category=wrong_type)",
           )
         None => None
       }
@@ -273,11 +277,11 @@ fn extract_usage(
     }
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen parse failure (stage=usage, category=wrong_type)",
+        "\{provider} parse failure (stage=usage, category=wrong_type)",
       )
     None =>
       raise @posoco.ModelError::ResponseParse(
-        "opencode-zen parse failure (stage=usage, category=missing)",
+        "\{provider} parse failure (stage=usage, category=missing)",
       )
   }
 }

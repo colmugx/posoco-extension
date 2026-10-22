@@ -268,11 +268,14 @@ pub fn process_chat_completions_sse(
                 )
             }
           }
+        // Same null-tolerance as delta.content and the per-tool id/name
+        // fields: some compatible servers serialize absent continuation
+        // fields as explicit null, so "tool_calls": null is a missing key.
+        Some(Null) | None => ()
         Some(_) =>
           raise @posoco.ModelError::ResponseParse(
             "\{provider} SSE parse failure (stage=delta.tool_calls, category=wrong_type)",
           )
-        None => ()
       }
     }
     // A choice with neither delta nor finish_reason carries no content;

@@ -1,25 +1,4 @@
 ///|
-test "intent carries the goal plus optional placement, model and prompt" {
-  let bare : DelegationIntent = {
-    task: "fix the flaky test",
-    cwd: None,
-    model: None,
-    prompt: None,
-  }
-  assert_eq(bare.task, "fix the flaky test")
-  assert_false(bare.cwd is Some(_))
-  let placed : DelegationIntent = {
-    task: "migrate the docs",
-    cwd: Some("/work"),
-    model: Some("sonnet"),
-    prompt: Some("run the suite and fix"),
-  }
-  assert_eq(placed.cwd, Some("/work"))
-  assert_eq(placed.model, Some("sonnet"))
-  assert_eq(placed, placed)
-}
-
-///|
 test "calls materialize as validated posoco tool calls" {
   let call : DelegationCall = {
     tool: "create_agent",

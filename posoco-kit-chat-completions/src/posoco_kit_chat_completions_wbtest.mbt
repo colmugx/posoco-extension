@@ -491,3 +491,50 @@ test "is_prompt_cache_key_rejection stays false without both phrases" {
     assert_false(is_prompt_cache_key_rejection(body))
   }
 }
+
+///|
+test "delta.tool_calls explicit null is a missing key" {
+  let (done, acc, chunks) = run_sse(
+    "{\"choices\":[{\"delta\":{\"content\":\"hi\",\"tool_calls\":null},\"finish_reason\":null}]}",
+  )
+  assert_false(done)
+  assert_eq(chunks.length(), 1)
+  assert_eq(acc.to_completion().message.content[0], @posoco.Content::Text("hi"))
+}
+
+///|
+test "delta.tool_calls explicit null alone carries nothing" {
+  let (done, acc, chunks) = run_sse(
+    "{\"choices\":[{\"delta\":{\"tool_calls\":null},\"finish_reason\":\"stop\"}]}",
+  )
+  assert_true(done)
+  assert_eq(chunks.length(), 1)
+  assert_eq(acc.to_completion().message.content.length(), 0)
+}
+
+///|
+test "delta.tool_calls non-array non-null still raises wrong_type" {
+  try
+    run_sse("{\"choices\":[{\"delta\":{\"tool_calls\":{\"index\":0}}}]}")
+  catch {
+    @posoco.ModelError::ResponseParse(msg) =>
+      assert_true(
+        msg.contains(
+          "testprov SSE parse failure (stage=delta.tool_calls, category=wrong_type)",
+        ),
+      )
+    _ => fail("expected ResponseParse")
+  } noraise {
+    _ => fail("expected to raise")
+  }
+}
+
+///|
+test "delta.tool_calls array parsing is unchanged by null tolerance" {
+  let (done, acc, chunks) = run_sse(
+    "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+  )
+  assert_true(done)
+  assert_true(chunks.length() >= 1)
+  assert_eq(acc.to_completion().message.tool_calls.length(), 1)
+}

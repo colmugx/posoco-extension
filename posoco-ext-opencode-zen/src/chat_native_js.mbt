@@ -33,7 +33,7 @@ pub impl @posoco.ModelPort for OpenCodeZenModelPort with fn chat(
       self.chat_responses(scope, messages_owned, tools, options, stream)
     GoogleGenai | SystemOne | MistralDialect =>
       raise @posoco.ModelError::Transport(
-        "opencode-zen unsupported wire (stage=chat, category=wire_not_served, model=\{self.config.model}, wire=\{self.config.wire.to_id()}, reason=\{wire_exclusion_reason(self.config.wire)})",
+        "\{self.config.client_id} unsupported wire (stage=chat, category=wire_not_served, model=\{self.config.model}, wire=\{self.config.wire.to_id()}, reason=\{wire_exclusion_reason(self.config.wire)})",
       )
   }
   self.zen_record_spend(scope, result.completion.usage)
@@ -96,7 +96,10 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         self.config.supports_images,
       )
       let resp_json = self.zen_post_chat_json(body, "chat", scope)
-      let completion = decode_chat_response(resp_json)
+      let completion = decode_chat_response(
+        provider=self.config.client_id,
+        resp_json,
+      )
       compatibility.validate_completion(
         completion,
         !tools.is_empty(),
@@ -121,7 +124,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
       let client = @http.post_stream(url, headers~) catch {
         err =>
           raise @posoco.ModelError::Transport(
-            "opencode-zen transport failure (stage=post_stream): " +
+            "\{self.config.client_id} transport failure (stage=post_stream): " +
             err.to_string(),
           )
       }
@@ -129,7 +132,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "opencode-zen transport failure (stage=write_body): " +
+            "\{self.config.client_id} transport failure (stage=write_body): " +
             err.to_string(),
           )
         }
@@ -138,7 +141,7 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
         err => {
           client.close()
           raise @posoco.ModelError::Transport(
-            "opencode-zen transport failure (stage=end_request): " +
+            "\{self.config.client_id} transport failure (stage=end_request): " +
             err.to_string(),
           )
         }
@@ -187,7 +190,12 @@ async fn OpenCodeZenModelPort::chat_chat_completions(
                   None => ()
                 }
                 data_buffer = payload
-                done = process_zen_sse(payload, acc, on_chunk)
+                done = process_zen_sse(
+                  provider=self.config.client_id,
+                  payload,
+                  acc,
+                  on_chunk,
+                )
                 match zen_apply_verdict(self.inspector, acc, done~) {
                   Some(err) => {
                     client.close()

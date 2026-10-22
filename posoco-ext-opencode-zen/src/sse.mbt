@@ -2,10 +2,11 @@
 /// SSE streaming for standard OpenAI Chat Completions.
 ///
 /// The parser is shared across chat-completions providers in
-/// posoco-kit-chat-completions; this wrapper pins the "opencode-zen"
-/// prefix used in every raised message. See the kit for the tolerance policy.
-/// Before delegating, the OpenCode gateway reasoning dialect is normalized
-/// onto the standard shape (see `normalize_zen_reasoning_dialect`).
+/// posoco-kit-chat-completions; this wrapper forwards the caller's plane
+/// identity as the provider prefix used in every raised message. See the
+/// kit for the tolerance policy. Before delegating, the OpenCode gateway
+/// reasoning dialect is normalized onto the standard shape (see
+/// `normalize_zen_reasoning_dialect`).
 
 ///|
 /// Normalize the OpenCode gateway reasoning dialect onto the standard Chat
@@ -69,13 +70,16 @@ fn normalize_zen_reasoning_dialect(data : String) -> String {
 ///|
 /// Parse one SSE data line into StreamChunk(s) and feed to accumulator.
 /// Returns true when the stream is finished ([DONE] or finish_reason present).
+/// `provider` labels every raised parse failure; the caller pins the
+/// plane identity (zen vs go) so errors are attributable per plane.
 fn process_zen_sse(
+  provider~ : String = "opencode-zen",
   data : String,
   acc : @posoco.StreamAccumulator,
   on_chunk : (@posoco.StreamChunk) -> Unit,
 ) -> Bool raise @posoco.ModelError {
   @chatkit.process_chat_completions_sse(
-    provider="opencode-zen",
+    provider~,
     normalize_zen_reasoning_dialect(data),
     acc,
     on_chunk,
