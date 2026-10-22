@@ -22,3 +22,26 @@ Both native and Bun execution paths use the same shared output formatter, so the
 - Foreground turn cancellation remains independent of command timeout.
 
 True background sessions are not part of this patch. Background execution requires a host-owned task group with a lifetime beyond the tool call, session lookup, incremental logs, kill semantics and host-shutdown cleanup. Appending shell `&` is not equivalent.
+
+## Host-owned background sessions (opt-in)
+
+Existing `bash({"cmd":"echo hello"})` remains a normal foreground call. Background mode requires an explicit host task group that outlives individual tool invocations:
+
+```moonbit
+let bash = ShellTools()
+@async.with_task_group(group => {
+  bash.attach(group)
+  // Host runs its tool/agent loop here. Call bash.shutdown() before returning.
+})
+```
+
+`bash` accepts `background` (default false) and `yield_time_ms` (default zero, max 60000). The former starts a detached session; the latter waits briefly before returning a session for a long-running command. Both honor the hard `timeout_ms` deadline.
+
+- `bash_status({"session_id":"...","cursor":0})`: read status and bounded incremental output.
+- `bash_wait({"session_id":"...","timeout_ms":1000})`: bounded wait and return a snapshot.
+- `bash_kill({"session_id":"..."})`: request termination.
+- Sessions retain 32,768 output characters and include cursor/truncation information.
+- Maximum 8 concurrently running and 32 retained sessions per provider; terminal sessions expire after 10 minutes.
+- Silence for 60 seconds sets `suspected_stall=true` but does not prove deadlock.
+
+The host's shutdown lifecycle cancels live workers. Session IDs are in-memory and are not restored across restarts.
