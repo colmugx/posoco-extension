@@ -131,17 +131,6 @@ pub fn NowledgeMem::NowledgeMem(
 }
 
 ///|
-/// Agent boot (inside the first `run_turn`), gated on the host lifecycle
-/// group: only an attached composition resolves config and sync timeout
-/// (env + home config file through the platform seam), hands the resolved
-/// MCP endpoint to the lazy client (it connects on first use — nothing pays
-/// for a connection until a tool, probe, or passive read actually needs
-/// one), and drains once. Compositions that never attach — tests — never
-/// touch the env or the home config file and stay fully network- and
-/// config-inert (`config` stays None, which also disarms the downstream
-/// `config is None` gates). The session inbound read is gated the same way:
-/// a session's first model call performs it (not boot). The system-prompt
-/// contribution is static guidance and needs no IO here.
 pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) -> Unit {
   if self.attached {
     let config = NmemConfig::resolve(
@@ -158,7 +147,6 @@ pub impl @posoco.Lifecycle for NowledgeMem with fn on_start(self : NowledgeMem) 
       auth_token=config.api_key,
       name=config.source_app,
     )
-    self.engine.drain_once(self.transport, timeout_ms=self.timeout_ms)
   }
   self.last_drain_ms = @async.now()
 }

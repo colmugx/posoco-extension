@@ -113,8 +113,6 @@ extern "js" fn ShellProc::exit_code(
   #| (handle) => handle.exited
 
 ///|
-
-///|
 #external
 priv type ShellCollected
 
