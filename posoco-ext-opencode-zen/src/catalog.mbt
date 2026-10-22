@@ -62,6 +62,15 @@ fn zen_model_surface(
 }
 
 ///|
+/// DeepSeek policy attaches to selected DeepSeek Chat Completions slots only.
+/// The wire is resolved first; name alone must never override a Messages or
+/// Responses endpoint selected by this gateway's routing table.
+fn zen_deepseek_applies(config : OpenCodeZenConfig) -> Bool {
+  config.wire == ChatCompletions &&
+  @compatible.resolve(config.model).id == "deepseek"
+}
+
+///|
 /// Build one catalog slot for a Zen model. `surface` drives the picker:
 /// a level-bearing reasoning surface shows `off` (when thinking can be
 /// disabled) followed by its declared levels; a reasoning model without
@@ -72,9 +81,51 @@ fn zen_catalog_slot(
   surface : ZenReasoningSurface?,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
-  let port : &@posoco.ModelPort = zen_anchored_compact_port(
-    OpenCodeZenModelPort(config),
+  // Install DeepSeek-only policy on this exact selected Chat Completions
+  // model slot. GLM/Kimi/Messages/Responses keep their original ports.
+  let applies = zen_deepseek_applies(config)
+  let policy = @ds.DeepSeekPolicy::default_protections()
+  let inspector : ((@posoco.StreamAccumulator, Bool) -> StreamVerdict)? = if applies {
+    Some(fn(acc, done) {
+      match policy.observe(acc, done~) {
+        None => StreamVerdict::Continue
+        Some(breach) =>
+          StreamVerdict::Abort(
+            category=breach.category(),
+            message=breach.message(),
+          )
+      }
+    })
+  } else {
+    None
+  }
+  let inner : &@posoco.ModelPort = zen_anchored_compact_port(
+    OpenCodeZenModelPort(config).with_inspector(inspector~),
   )
+  let retry_at_low : (() -> &@posoco.ModelPort)? = if applies &&
+    config.thinking_efforts.contains("low") {
+    let low_config = config.with_reasoning_effort("low") catch {
+      err => abort("Zen DeepSeek low-effort recovery configuration failed: " + err.to_string())
+    }
+    Some(fn() {
+      zen_anchored_compact_port(
+        OpenCodeZenModelPort(low_config).with_inspector(inspector~),
+      )
+    })
+  } else {
+    None
+  }
+  let port : &@posoco.ModelPort = if applies {
+    @ds.deepseek_policy_port(
+      inner~,
+      policy~,
+      retry_at_low~,
+      inject_convergence=true,
+      source="posoco_ext_opencode_zen",
+    )
+  } else {
+    inner
+  }
   let slot_id = zen_provider_id + "/" + config.model
   let slot_efforts : Array[String] = match surface {
     None => ["off", "on"]

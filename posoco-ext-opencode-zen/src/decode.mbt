@@ -85,7 +85,15 @@ fn decode_chat_response(
           raise @posoco.ModelError::ResponseParse(
             "opencode-zen response parse failure (stage=message.reasoning, category=wrong_type)",
           )
-        None => None
+        None =>
+          match msg.get("reasoning_text") {
+            Some(String(s)) => if s == "" { None } else { Some(s) }
+            Some(_) =>
+              raise @posoco.ModelError::ResponseParse(
+                "opencode-zen response parse failure (stage=message.reasoning_text, category=wrong_type)",
+              )
+            None => None
+          }
       }
   }
   let tool_calls : Array[@posoco.ToolCall] = match msg.get("tool_calls") {

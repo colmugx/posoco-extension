@@ -142,48 +142,11 @@ pub fn process_chat_completions_sse(
       "\{provider} SSE parse failure (stage=choice, category=not_object)",
     )
   }
-  match choice.get("finish_reason") {
-    Some(String(reason)) =>
-      if reason != "" {
-        match root.get("usage") {
-          Some(Object(_)) => {
-            let usage = extract_stream_usage(
-              provider,
-              root,
-              usage_fields_required~,
-            )
-            let usage_chunk = @posoco.StreamChunk::Usage(
-              input_tokens=usage.input_tokens.unwrap_or(0),
-              output_tokens=usage.output_tokens.unwrap_or(0),
-              total_tokens=usage.total_tokens.unwrap_or(0),
-              cached_input_tokens=usage.cached_input_tokens,
-              uncached_input_tokens=usage.uncached_input_tokens,
-            )
-            on_chunk(usage_chunk)
-            acc.push(usage_chunk)
-          }
-          // Explicit "usage": null on the finish chunk = no usage reported.
-          Some(Null) | None => ()
-          Some(_) =>
-            raise @posoco.ModelError::ResponseParse(
-              "\{provider} SSE parse failure (stage=usage, category=wrong_type)",
-            )
-        }
-        let chunk = @posoco.StreamChunk::Finish(reason~)
-        on_chunk(chunk)
-        acc.push(chunk)
-        return true
-      } else {
-        raise @posoco.ModelError::ResponseParse(
-          "\{provider} SSE parse failure (stage=finish_reason, category=empty)",
-        )
-      }
-    Some(Null) | None => ()
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "\{provider} SSE parse failure (stage=finish_reason, category=wrong_type)",
-      )
-  }
+  // Always consume all deltas before the terminal marker in the SAME
+  // standards-compliant Chat Completions choice. Some servers coalesce
+  // final content/tool fragments and finish_reason in one SSE event.
+  // This changes only event ordering; provider-specific reasoning aliases
+  // remain exclusively in provider adapters.
   match choice.get("delta") {
     Some(Object(delta)) => {
       match delta.get("content") {
@@ -320,6 +283,49 @@ pub fn process_chat_completions_sse(
         "\{provider} SSE parse failure (stage=delta, category=wrong_type)",
       )
   }
+  match choice.get("finish_reason") {
+    Some(String(reason)) =>
+      if reason != "" {
+        match root.get("usage") {
+          Some(Object(_)) => {
+            let usage = extract_stream_usage(
+              provider,
+              root,
+              usage_fields_required~,
+            )
+            let usage_chunk = @posoco.StreamChunk::Usage(
+              input_tokens=usage.input_tokens.unwrap_or(0),
+              output_tokens=usage.output_tokens.unwrap_or(0),
+              total_tokens=usage.total_tokens.unwrap_or(0),
+              cached_input_tokens=usage.cached_input_tokens,
+              uncached_input_tokens=usage.uncached_input_tokens,
+            )
+            on_chunk(usage_chunk)
+            acc.push(usage_chunk)
+          }
+          // Explicit "usage": null on the finish chunk = no usage reported.
+          Some(Null) | None => ()
+          Some(_) =>
+            raise @posoco.ModelError::ResponseParse(
+              "\{provider} SSE parse failure (stage=usage, category=wrong_type)",
+            )
+        }
+        let chunk = @posoco.StreamChunk::Finish(reason~)
+        on_chunk(chunk)
+        acc.push(chunk)
+        return true
+      } else {
+        raise @posoco.ModelError::ResponseParse(
+          "\{provider} SSE parse failure (stage=finish_reason, category=empty)",
+        )
+      }
+    Some(Null) | None => ()
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "\{provider} SSE parse failure (stage=finish_reason, category=wrong_type)",
+      )
+  }
+
   false
 }
 

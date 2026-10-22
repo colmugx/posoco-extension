@@ -45,6 +45,35 @@ test "the cycle detector needs three identical calls in one user turn" {
   assert_false(repeated_tool_calls([a, a, user_turn("new"), a]))
 }
 
+
+///|
+fn tool_result_message(content : String) -> @posoco.Message {
+  @posoco.Message::ToolMessage(
+    call_id=@posoco.CallId::unchecked("unique-id"),
+    tool_name=@posoco.ToolName::unchecked("read_file"),
+    outcome=@posoco.ToolOutcome::Success(content~, structured=None),
+  )
+}
+
+///|
+test "new tool evidence interrupts repeated-call convergence guidance" {
+  let a = tool_call_message("/tmp/build.log")
+  let same = tool_result_message("unchanged")
+  let fresh = tool_result_message("build completed")
+  assert_true(repeated_tool_calls([
+    user_turn("monitor build"),
+    a, same,
+    a, same,
+    a, same,
+  ]))
+  assert_false(repeated_tool_calls([
+    user_turn("monitor build"),
+    a, same,
+    a, fresh,
+    a, fresh,
+  ]))
+}
+
 ///|
 test "canonical tool order makes equal tool sets share one prefix" {
   let read = work_tool("read_file", "read a file")

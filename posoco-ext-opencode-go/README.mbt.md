@@ -119,9 +119,9 @@ selected, never a silent fallback.
 
 ## DeepSeek serving contract
 
-The `deepseek*` models are served on the chat-completions wire, so the Go
+The selected `deepseek*` models are served on the chat-completions wire, so the Go
 plane mounts the DeepSeek serving contract (`colmugx/posoco-kit-deepseek`)
-on those slots only: canonical tool order, tail convergence guidance, one
+on those slots only: canonical tool order, request-local user convergence guidance, one
 bounded nonstream recovery at low effort, and the two stream guards. The
 guards are fail-closed — a collapsing or over-budget reasoning stream is
 aborted and surfaces as a typed transport error carrying

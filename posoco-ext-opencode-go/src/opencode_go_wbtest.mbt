@@ -331,7 +331,7 @@ test "go_deepseek_policy resolves defaults, opt-outs, and typed failures" {
   let built = Ok(OpenCodeGoProvider().build(bare)) catch { error => Err(error) }
   assert_true(built is Ok(_))
   let defaults = go_deepseek_policy(bare)
-  assert_eq(defaults, @dk.DeepSeekPolicy::default_protections())
+  assert_eq(defaults, @ds.DeepSeekPolicy::default_protections())
   assert_eq(defaults.max_reasoning_chars, Some(120000))
   assert_eq(defaults.repeated_reasoning_span_chars, Some(256))
   assert_true(defaults.recover_on_reasoning_exhaustion)
@@ -340,7 +340,7 @@ test "go_deepseek_policy resolves defaults, opt-outs, and typed failures" {
     ("repeated_reasoning_span_chars", Json::null()),
     ("recover_on_reasoning_exhaustion", Json::boolean(false)),
   ])
-  assert_eq(go_deepseek_policy(opt_out), @dk.DeepSeekPolicy::disabled())
+  assert_eq(go_deepseek_policy(opt_out), @ds.DeepSeekPolicy::disabled())
   // A malformed value is a typed composition failure, never a silent fallback.
   let malformed = go_settings_source([
     ("max_reasoning_chars", Json::string("lots")),
@@ -366,7 +366,7 @@ fn go_reasoning_accumulator(
 
 ///|
 test "go_deepseek_inspector relays the kit's stream bounds" {
-  let budget = @dk.DeepSeekPolicy::DeepSeekPolicy(
+  let budget = @ds.DeepSeekPolicy::DeepSeekPolicy(
     max_reasoning_chars=Some(64),
     repeated_reasoning_span_chars=None,
     recover_on_reasoning_exhaustion=false,
@@ -386,7 +386,7 @@ test "go_deepseek_inspector relays the kit's stream bounds" {
       )
     }
   }
-  let repetition = @dk.DeepSeekPolicy::DeepSeekPolicy(
+  let repetition = @ds.DeepSeekPolicy::DeepSeekPolicy(
     max_reasoning_chars=Some(120000),
     repeated_reasoning_span_chars=Some(128),
     recover_on_reasoning_exhaustion=false,
@@ -439,7 +439,7 @@ test "deepseek slots keep the catalog shape next to other models" {
       ]),
     ),
   )
-  let policy = @dk.DeepSeekPolicy::default_protections()
+  let policy = @ds.DeepSeekPolicy::default_protections()
   let guarded = go_model_catalog(
     go_base_config(),
     models,

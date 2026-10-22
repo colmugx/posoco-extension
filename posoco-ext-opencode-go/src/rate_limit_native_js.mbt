@@ -87,6 +87,12 @@ pub impl @posoco.ModelPort for GoRateLimitModelPort with fn chat(
   }
   match result {
     Ok(value) => value
+    Err(@posoco.ModelError::RateLimited(info)) => {
+      let enriched = go_enrich_rate_limit(self.base_url, self.api_key, info) catch {
+        _ => @posoco.ModelError::RateLimited(info)
+      }
+      raise enriched
+    }
     Err(error) => raise error
   }
 }

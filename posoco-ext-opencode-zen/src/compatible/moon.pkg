@@ -1,0 +1,9 @@
+import {
+  "colmugx/posoco",
+}
+
+import {
+  "colmugx/posoco",
+} for "wbtest"
+
+warnings = "-unused_value-unused_constructor"

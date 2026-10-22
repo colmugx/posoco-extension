@@ -14,8 +14,7 @@ struct DeepSeekPolicyPort {
   /// The same endpoint rebuilt at low effort, used for the single bounded
   /// recovery attempt. `None` when the model declares no `low` level.
   retry_at_low : (() -> &@posoco.ModelPort)?
-  /// Appending a system message is a Chat Completions affordance only; the
-  /// Messages wire rejects a system message inside the transcript.
+  /// Optional request-local user guidance, never persisted in the session.
   inject_convergence : Bool
   ctx : @devkit.ExtContext
   source : String
@@ -44,7 +43,7 @@ pub fn deepseek_policy_port(
 
 ///|
 /// Request-side obligations, applied to a private copy of the transcript:
-/// canonical tool order, then one tail convergence message when the current
+/// canonical tool order, then one request-local tail user guidance message when the current
 /// user turn has been repeating a single tool call. The caller's arrays are
 /// never mutated.
 fn DeepSeekPolicyPort::apply_request(
@@ -58,7 +57,7 @@ fn DeepSeekPolicyPort::apply_request(
     ordered.length() > 0 &&
     repeated_tool_calls(messages) {
     wire_messages.push(
-      @posoco.Message::SystemMessage(content=[
+      @posoco.Message::UserMessage(content=[
         @posoco.Content::Text(convergence_instruction()),
       ]),
     )
@@ -79,6 +78,19 @@ pub impl @posoco.ModelPort for DeepSeekPolicyPort with fn chat(
     messages.to_owned(),
     tools,
   )
+  let strip_temporary_guidance = fn(result : @posoco.ModelCallResult) {
+    if wire_messages.length() == messages.length() {
+      result
+    } else {
+      // The injected user hint is request-local, never canonical session data.
+      // Both OpenCode chat wires return the request transcript unchanged.
+      // Return the canonical caller-owned history, never the wire-only hint.
+      @posoco.ModelCallResult::{
+        completion: result.completion,
+        processed_messages: messages.to_owned(),
+      }
+    }
+  }
   match stream {
     @posoco.StreamMode::NoStream => {
       let first = self.inner.chat(
@@ -97,20 +109,20 @@ pub impl @posoco.ModelPort for DeepSeekPolicyPort with fn chat(
               code="deepseek.reasoning_exhaustion_recovery",
               message="Retrying nonstream reasoning-only length cutoff once at low effort",
             )
-            retry().chat(
+            strip_temporary_guidance(retry().chat(
               scope,
               wire_messages[:],
               wire_tools,
               options,
               @posoco.StreamMode::NoStream,
-            )
+            ))
           } else {
-            first
+            strip_temporary_guidance(first)
           }
-        None => first
+        None => strip_temporary_guidance(first)
       }
     }
-    mode => self.inner.chat(scope, wire_messages[:], wire_tools, options, mode)
+    mode => strip_temporary_guidance(self.inner.chat(scope, wire_messages[:], wire_tools, options, mode))
   }
 }
 

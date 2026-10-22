@@ -36,12 +36,27 @@ fn normalize_zen_reasoning_dialect(data : String) -> String {
         }
       _ => continue
     }
-    match (delta.get("reasoning_content"), delta.get("reasoning")) {
-      (None, Some(String(text))) => {
-        delta["reasoning_content"] = Json::string(text)
-        changed = true
+    // OpenCode gateway aliases are normalized here, not in the shared
+    // OpenAI-compatible SSE kit. Standard reasoning_content always wins.
+    match delta.get("reasoning_content") {
+      Some(_) => ()
+      None => {
+        let fallback = match delta.get("reasoning") {
+          Some(String(text)) => Some(text)
+          _ =>
+            match delta.get("reasoning_text") {
+              Some(String(text)) => Some(text)
+              _ => None
+            }
+        }
+        match fallback {
+          Some(text) => {
+            delta["reasoning_content"] = Json::string(text)
+            changed = true
+          }
+          None => ()
+        }
       }
-      _ => ()
     }
   }
   if changed {

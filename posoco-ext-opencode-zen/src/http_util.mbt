@@ -96,6 +96,16 @@ fn classify_zen_http_status(
       ),
     )
   }
+  // OpenCode gateways occasionally report a *backend outage* as HTTP 429.
+  // Only the gateway's explicit "Endpoint is unavailable" marker bypasses
+  // quota classification; other 429 responses retain their existing parser.
+  if status == 429 && body_text.contains("Endpoint is unavailable") {
+    return Some(
+      @posoco.ModelError::Transport(
+        "opencode-zen upstream unavailable (stage=\{stage}, category=endpoint_unavailable, status=429, body=\{cap_zen_error_body(body_text)})",
+      ),
+    )
+  }
   if status == 429 {
     let verdict = @ratelimit.classify_rate_limit_error(
       status,
