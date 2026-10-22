@@ -164,11 +164,9 @@ async fn bash_drain_native(reader : @process.ReadFromProcess) -> Bytes {
       None => break
       Some(data) => {
         for byte in data {
-          bytes.push(byte)
-        }
-        if bytes.length() > BASH_OUTPUT_CHAR_CAP {
-          let overflow = bytes.length() - BASH_OUTPUT_CHAR_CAP
-          bytes.splice(0, overflow)
+          if bytes.length() < BASH_OUTPUT_CHAR_CAP {
+            bytes.push(byte)
+          }
         }
       }
     }
