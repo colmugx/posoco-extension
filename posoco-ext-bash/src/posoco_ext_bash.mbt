@@ -666,7 +666,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
           arguments: ctx.arguments,
           register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
         }
-        let answer = Ok(bash_foreground(self, background_ctx)) catch {
+        let answer = Ok(bash_foreground(self, background_ctx, session=Some(session))) catch {
           error => Err(error)
         }
         match answer {
@@ -674,11 +674,9 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
             session.outcome = Some(outcome)
             match outcome {
               @posoco.ToolOutcome::Success(content~, ..) => {
-                session.append(content)
                 session.status = "completed"
               }
               @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
-                session.append(content)
                 session.status = if content.contains("timed out after") {
                   "timed_out"
                 } else {
