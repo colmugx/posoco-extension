@@ -60,7 +60,6 @@ extern "js" fn node_spawn_shell(
   #|     stream.on("data", chunk => {
   #|       text += chunk;
   #|       if (text.length > outputLimit) {
-  #|         truncated = true;
   #|         text = text.slice(0, keepHead) + marker + text.slice(-(outputLimit - keepHead - marker.length));
   #|       }
   #|     });
