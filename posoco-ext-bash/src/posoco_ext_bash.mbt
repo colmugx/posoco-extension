@@ -61,6 +61,7 @@ pub struct ShellSession {
   mut base_cursor : Int64
   mut next_cursor : Int64
   mut outcome : @posoco.ToolOutcome?
+  mut exit_code : Int32?
   mut worker : @async.Task[Unit]?
   mut kill_requested : Bool
 }
@@ -146,12 +147,12 @@ fn ShellSession::snapshot(self : ShellSession, cursor : Int64) -> Json {
     ("idle_ms", Json::number(idle_ms.to_double())),
     ("suspected_stall", Json::boolean(suspected_stall)),
   ])
-  match self.outcome {
-    Some(@posoco.ToolOutcome::Success(..)) =>
-      fields["exit_code"] = Json::number(0.0)
-    Some(@posoco.ToolOutcome::ToolReportedError(..)) =>
-      fields["failed"] = Json::boolean(true)
-    _ => ()
+  match self.exit_code {
+    Some(code) => fields["exit_code"] = Json::number(code.to_double())
+    None => ()
+  }
+  if self.status == "failed" || self.status == "timed_out" {
+    fields["failed"] = Json::boolean(true)
   }
   Json::object(fields)
 }
@@ -655,6 +656,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         base_cursor: 0L,
         next_cursor: 0L,
         outcome: None,
+        exit_code: None,
         worker: None,
         kill_requested: false,
       }
