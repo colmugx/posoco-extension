@@ -124,6 +124,11 @@ fn ShellSession::append(self : ShellSession, chunk : String) -> Unit {
 }
 
 ///|
+fn ShellSession::active(self : ShellSession) -> Bool {
+  self.status == "running" || self.status == "stopping"
+}
+
+///|
 fn ShellSession::snapshot(self : ShellSession, cursor : Int64) -> Json {
   let now = @async.now()
   let offset = if cursor < self.base_cursor {
@@ -179,7 +184,7 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
   self.prune_sessions()
   let mut running = 0
   for _, session in self.sessions {
-    if session.status == "running" {
+    if session.active() {
       running += 1
     }
   }
@@ -639,6 +644,7 @@ fn ShellTools::read_session(
   self : ShellTools,
   args : Json,
 ) -> ShellSession raise @posoco.RuntimeError {
+  self.prune_sessions()
   let id = bash_field_str(args, "session_id")
   match self.sessions.get(id) {
     Some(session) => session
@@ -688,6 +694,27 @@ async fn ShellTools::watch_stall(
 }
 
 ///|
+/// A command printing "timed out after" is not evidence of a deadline.
+/// Only the runner's structured diagnostic can identify a real timeout.
+fn bash_outcome_timed_out(outcome : @posoco.ToolOutcome) -> Bool {
+  match outcome {
+    @posoco.ToolOutcome::ToolReportedError(
+      structured=Some(Json::Object(fields)),
+      ..
+    ) => fields.get("timed_out") is Some(Json::True)
+    _ => false
+  }
+}
+
+///|
+fn bash_timeout_detail(timeout_ms : Int32) -> Json {
+  Json::object(Map::from_array([
+    ("timed_out", Json::boolean(true)),
+    ("timeout_ms", Json::number(timeout_ms.to_double())),
+  ]))
+}
+
+///|
 fn bash_session_outcome(snapshot : Json) -> @posoco.ToolOutcome {
   @posoco.ToolOutcome::Success(
     content=snapshot.stringify(),
@@ -712,7 +739,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       let cursor = bash_field_int(ctx.arguments, "cursor", 0, 2147483647)
       let ms = bash_field_int(ctx.arguments, "timeout_ms", 1000, 60000)
       let deadline = @async.now() + ms.to_int64()
-      while session.status == "running" && @async.now() < deadline {
+      while session.active() && @async.now() < deadline {
         @async.sleep(50)
       }
       bash_session_outcome(session.snapshot(cursor.to_int64()))
@@ -801,8 +828,8 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
             session.outcome = Some(outcome)
             match outcome {
               @posoco.ToolOutcome::Success(..) => session.status = "completed"
-              @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
-                session.status = if content.contains("timed out after") {
+              @posoco.ToolOutcome::ToolReportedError(..) =>
+                session.status = if bash_outcome_timed_out(outcome) {
                   "timed_out"
                 } else {
                   "failed"
@@ -841,7 +868,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
 pub fn ShellTools::shutdown(self : ShellTools) -> Unit {
   self.closed = true
   for _, session in self.sessions {
-    if session.status == "running" || session.status == "stopping" {
+    if session.active() {
       session.kill_requested = true
       session.status = "stopping"
       match session.worker {

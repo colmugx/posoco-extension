@@ -118,3 +118,25 @@ async test "anchored_shell_resolves_relative_paths_from_root" {
     _ => fail("expected Success for cd etc and pwd")
   }
 }
+
+///|
+test "native pipe UTF8 decoder tolerates a split multibyte character" {
+  let (empty, used, ok) = bash_utf8_complete_prefix([b'\xe7', b'\x95'])
+  assert_true(ok)
+  assert_eq(used, 0)
+  assert_eq(empty, "")
+  let (decoded, consumed, ready) = bash_utf8_complete_prefix([
+    b'\xe7', b'\x95', b'\x8c', b'\x21',
+  ])
+  assert_true(ready)
+  assert_eq(consumed, 4)
+  assert_eq(decoded, "界!")
+}
+
+///|
+test "native pipe UTF8 decoder rejects invalid interior bytes" {
+  let (_, _, ready) = bash_utf8_complete_prefix([
+    b'\x61', b'\xff', b'\x62', b'\x63', b'\x64', b'\x65',
+  ])
+  assert_false(ready)
+}

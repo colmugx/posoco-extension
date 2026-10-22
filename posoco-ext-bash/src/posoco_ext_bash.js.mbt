@@ -248,7 +248,7 @@ async fn ShellTools::bash_foreground(
       if collected.timed_out() {
         @posoco.ToolOutcome::ToolReportedError(
           content="bash: timed out after \{timeout_ms}ms\n" + content,
-          structured=None,
+          structured=Some(bash_timeout_detail(timeout_ms)),
         )
       } else if exit_code != 0 {
         @posoco.ToolOutcome::ToolReportedError(content~, structured=None)

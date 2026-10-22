@@ -360,3 +360,94 @@ async test "bash: large output is drained without blocking" {
     _ => fail("large output should not cause a deadlock")
   }
 }
+
+///|
+test "shell timeout provenance cannot be forged by ordinary command output" {
+  let forged = @posoco.ToolOutcome::ToolReportedError(
+    content="bash: timed out after 100ms",
+    structured=None,
+  )
+  assert_false(bash_outcome_timed_out(forged))
+  let actual = @posoco.ToolOutcome::ToolReportedError(
+    content="bash: timed out after 100ms",
+    structured=Some(bash_timeout_detail(100)),
+  )
+  assert_true(bash_outcome_timed_out(actual))
+}
+
+///|
+test "stopping sessions still occupy capacity and require settlement" {
+  let now = @async.now()
+  let bash = ShellTools()
+  for i in 0..<BASH_MAX_RUNNING_SESSIONS {
+    let id = "s" + i.to_string()
+    let session : ShellSession = {
+      id,
+      effect_id: @kernel.EffectId::{ value: 1000 + i },
+      started_at_ms: now,
+      last_output_at_ms: now,
+      ended_at_ms: None,
+      status: "stopping",
+      output: "",
+      base_cursor: 0L,
+      next_cursor: 0L,
+      outcome: None,
+      exit_code: None,
+      worker: None,
+      kill_requested: true,
+    }
+    bash.sessions[id] = session
+    assert_true(session.active())
+  }
+  assert_false(bash.session_capacity())
+}
+
+///|
+async test "bash wait does not claim a stopping session is finished" {
+  let now = @async.now()
+  let bash = ShellTools()
+  let session : ShellSession = {
+    id: "stopping",
+    effect_id: @kernel.EffectId::{ value: 1001 },
+    started_at_ms: now,
+    last_output_at_ms: now,
+    ended_at_ms: None,
+    status: "stopping",
+    output: "",
+    base_cursor: 0L,
+    next_cursor: 0L,
+    outcome: None,
+    exit_code: None,
+    worker: None,
+    kill_requested: true,
+  }
+  bash.sessions["stopping"] = session
+  let before = @async.now()
+  ignore(bash.execute(bash_session_test_ctx(
+    "bash_wait",
+    Json::object(Map::from_array([
+      ("session_id", Json::string("stopping")),
+      ("timeout_ms", Json::number(100.0)),
+    ])),
+    1091,
+  )))
+  assert_true(@async.now() - before >= 50L)
+}
+
+///|
+async test "bash large output retains the final diagnostic" {
+  let bash = ShellTools()
+  let result = bash.execute(bash_session_test_ctx(
+    "bash",
+    Json::object(Map::from_array([
+      ("cmd", Json::string("awk 'BEGIN { for (i=0; i<50000; i++) print \"noise\"; print \"FINAL_DIAGNOSTIC_012345\" }'")),
+      ("timeout_ms", Json::number(10000.0)),
+    ])),
+    1092,
+  ))
+  match result {
+    @posoco.ToolOutcome::Success(content~, ..) =>
+      assert_true(content.contains("FINAL_DIAGNOSTIC_012345"))
+    _ => fail("flooded command should finish successfully")
+  }
+}
