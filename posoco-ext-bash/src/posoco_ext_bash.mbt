@@ -607,10 +607,13 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     }
     "bash_kill" => {
       let session = self.read_session(ctx.arguments)
-      session.kill_requested = true
+      if session.status == "running" {
+        session.kill_requested = true
+        session.status = "stopping"
+      }
       match session.worker {
         Some(worker) =>
-          if session.status == "running" {
+          if session.status == "stopping" {
             worker.cancel()
           }
         None => ()
@@ -658,6 +661,13 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       self.sessions[id] = session
       let group = self.host_group.unwrap()
       let worker = group.spawn(async fn() {
+        defer {
+          self.in_flight.remove(session.effect_id.to_int())
+          if session.status == "running" || session.status == "stopping" {
+            session.status = if session.kill_requested { "killed" } else { "cancelled" }
+            session.ended_at_ms = Some(@async.now())
+          }
+        }
         // Detached from the model effect's cancellation registration.
         let background_ctx : @posoco.ToolCallContext = {
           effect_id: session.effect_id,
@@ -707,4 +717,33 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
     }
     _ => raise @posoco.RuntimeError::UnknownTool("bash: unknown tool " + tool)
   }
+}
+
+///|
+/// Host shutdown requests cancellation for every session. The host's
+/// attached task group remains responsible for joining its child tasks.
+pub fn ShellTools::shutdown(self : ShellTools) -> Unit {
+  self.closed = true
+  for _, session in self.sessions {
+    if session.status == "running" || session.status == "stopping" {
+      session.kill_requested = true
+      session.status = "stopping"
+      match session.worker {
+        Some(worker) => worker.cancel()
+        None => ()
+      }
+    }
+  }
+}
+
+///|
+pub impl @posoco.Lifecycle for ShellTools with fn on_shutdown(self) -> Unit {
+  self.shutdown()
+}
+
+///|
+pub extend ShellTools with @posoco.Lifecycle::{
+  on_compose,
+  on_start,
+  on_shutdown,
 }
