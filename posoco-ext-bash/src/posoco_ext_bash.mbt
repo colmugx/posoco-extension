@@ -129,7 +129,7 @@ fn ShellSession::snapshot(self : ShellSession, cursor : Int64) -> Json {
   let offset = if cursor < self.base_cursor {
     0L
   } else if cursor > self.next_cursor {
-    (self.next_cursor - self.base_cursor)
+    self.next_cursor - self.base_cursor
   } else {
     cursor - self.base_cursor
   }
@@ -186,7 +186,6 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
   running < BASH_MAX_RUNNING_SESSIONS &&
   self.sessions.length() < BASH_MAX_RETAINED_SESSIONS
 }
-
 
 ///|
 /// Terminate a registered shell child: signal, wait out the grace period,
@@ -286,7 +285,6 @@ fn bash_timeout_ms(args : Json) -> Int32 raise @posoco.RuntimeError {
   }
 }
 
-
 ///|
 fn bash_char_count(text : String) -> Int32 {
   let mut count = 0
@@ -377,29 +375,47 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
             ),
             (
               "background",
-              Json::object(Map::from_array([
-                ("type", Json::string("boolean")),
-                ("description", Json::string("Start a host-owned background session and return immediately.")),
-              ])),
+              Json::object(
+                Map::from_array([
+                  ("type", Json::string("boolean")),
+                  (
+                    "description",
+                    Json::string(
+                      "Start a host-owned background session and return immediately.",
+                    ),
+                  ),
+                ]),
+              ),
             ),
             (
               "yield_time_ms",
-              Json::object(Map::from_array([
-                ("type", Json::string("integer")),
-                ("minimum", Json::number(0.0)),
-                ("maximum", Json::number(60000.0)),
-                ("description", Json::string("Foreground wait slice; returns a session if the child continues.")),
-              ])),
+              Json::object(
+                Map::from_array([
+                  ("type", Json::string("integer")),
+                  ("minimum", Json::number(0.0)),
+                  ("maximum", Json::number(60000.0)),
+                  (
+                    "description",
+                    Json::string(
+                      "Foreground wait slice; returns a session if the child continues.",
+                    ),
+                  ),
+                ]),
+              ),
             ),
             (
               "timeout_ms",
               Json::object(
                 Map::from_array([
                   ("type", Json::string("integer")),
-                  ("description", Json::string("Hard runtime cap in milliseconds (default 300000, maximum 3600000).")),
+                  (
+                    "description",
+                    Json::string(
+                      "Hard runtime cap in milliseconds (default 300000, maximum 3600000).",
+                    ),
+                  ),
                   ("minimum", Json::number(1.0)),
                   ("maximum", Json::number(3600000.0)),
-
                 ]),
               ),
             ),
@@ -421,11 +437,31 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash_status"),
       description: "Read the status and incremental output for a background Bash session.",
-      input_schema: Json::object(Map::from_array([
-        ("type", Json::string("object")),
-        ("properties", Json::object(Map::from_array([("session_id", Json::object(Map::from_array([("type", Json::string("string"))]))),("cursor", Json::object(Map::from_array([("type", Json::string("integer"))])))]))),
-        ("required", Json::array([Json::string("session_id")])),
-      ])),
+      input_schema: Json::object(
+        Map::from_array([
+          ("type", Json::string("object")),
+          (
+            "properties",
+            Json::object(
+              Map::from_array([
+                (
+                  "session_id",
+                  Json::object(
+                    Map::from_array([("type", Json::string("string"))]),
+                  ),
+                ),
+                (
+                  "cursor",
+                  Json::object(
+                    Map::from_array([("type", Json::string("integer"))]),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          ("required", Json::array([Json::string("session_id")])),
+        ]),
+      ),
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
       provenance: Some("posoco_ext_bash"),
@@ -433,11 +469,37 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash_wait"),
       description: "Wait a bounded time for a background Bash session.",
-      input_schema: Json::object(Map::from_array([
-        ("type", Json::string("object")),
-        ("properties", Json::object(Map::from_array([("session_id", Json::object(Map::from_array([("type", Json::string("string"))]))),("cursor", Json::object(Map::from_array([("type", Json::string("integer"))]))),("timeout_ms", Json::object(Map::from_array([("type", Json::string("integer"))])))]))),
-        ("required", Json::array([Json::string("session_id")])),
-      ])),
+      input_schema: Json::object(
+        Map::from_array([
+          ("type", Json::string("object")),
+          (
+            "properties",
+            Json::object(
+              Map::from_array([
+                (
+                  "session_id",
+                  Json::object(
+                    Map::from_array([("type", Json::string("string"))]),
+                  ),
+                ),
+                (
+                  "cursor",
+                  Json::object(
+                    Map::from_array([("type", Json::string("integer"))]),
+                  ),
+                ),
+                (
+                  "timeout_ms",
+                  Json::object(
+                    Map::from_array([("type", Json::string("integer"))]),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          ("required", Json::array([Json::string("session_id")])),
+        ]),
+      ),
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
       provenance: Some("posoco_ext_bash"),
@@ -445,11 +507,25 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash_kill"),
       description: "Stop a background Bash session and its shell child.",
-      input_schema: Json::object(Map::from_array([
-        ("type", Json::string("object")),
-        ("properties", Json::object(Map::from_array([("session_id", Json::object(Map::from_array([("type", Json::string("string"))])))]))),
-        ("required", Json::array([Json::string("session_id")])),
-      ])),
+      input_schema: Json::object(
+        Map::from_array([
+          ("type", Json::string("object")),
+          (
+            "properties",
+            Json::object(
+              Map::from_array([
+                (
+                  "session_id",
+                  Json::object(
+                    Map::from_array([("type", Json::string("string"))]),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          ("required", Json::array([Json::string("session_id")])),
+        ]),
+      ),
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
       provenance: Some("posoco_ext_bash"),
@@ -521,14 +597,23 @@ pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
 }
 
 ///|
-fn bash_field_str(args : Json, name : String) -> String raise @posoco.RuntimeError {
+fn bash_field_str(
+  args : Json,
+  name : String,
+) -> String raise @posoco.RuntimeError {
   match args {
     Json::Object(fields) =>
       match fields.get(name) {
         Some(Json::String(value)) => value
-        _ => raise @posoco.RuntimeError::UnknownTool("bash: missing or invalid " + name)
+        _ =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "bash: missing or invalid " + name,
+          )
       }
-    _ => raise @posoco.RuntimeError::UnknownTool("bash: arguments must be an object")
+    _ =>
+      raise @posoco.RuntimeError::UnknownTool(
+        "bash: arguments must be an object",
+      )
   }
 }
 
@@ -544,7 +629,8 @@ fn bash_field_int(
       match fields.get(name) {
         None => default
         Some(Json::Number(number, ..)) =>
-          if number.floor() == number && number >= 0.0 &&
+          if number.floor() == number &&
+            number >= 0.0 &&
             number <= limit.to_double() {
             number.to_int()
           } else {
@@ -582,7 +668,6 @@ fn ShellTools::read_session(
   }
 }
 
-
 ///|
 /// Completion events are advisory, not an alternative to session snapshots.
 /// A host can subscribe to bash.session.finished and bash.session.stall.
@@ -592,11 +677,12 @@ fn ShellTools::emit_session(
   topic : String,
 ) -> Unit {
   match self.bus {
-    Some(bus) => bus.publish({
-      source: "posoco_ext_bash",
-      topic,
-      data: session.snapshot(session.next_cursor),
-    })
+    Some(bus) =>
+      bus.publish({
+        source: "posoco_ext_bash",
+        topic,
+        data: session.snapshot(session.next_cursor),
+      })
     None => ()
   }
 }
@@ -625,7 +711,10 @@ async fn ShellTools::watch_stall(
 
 ///|
 fn bash_session_outcome(snapshot : Json) -> @posoco.ToolOutcome {
-  @posoco.ToolOutcome::Success(content=snapshot.stringify(), structured=Some(snapshot))
+  @posoco.ToolOutcome::Success(
+    content=snapshot.stringify(),
+    structured=Some(snapshot),
+  )
 }
 
 ///|
@@ -657,10 +746,7 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         session.status = "stopping"
       }
       match session.worker {
-        Some(worker) =>
-          if session.status == "stopping" {
-            worker.cancel()
-          }
+        Some(worker) => if session.status == "stopping" { worker.cancel() }
         None => ()
       }
       bash_session_outcome(session.snapshot(session.next_cursor))
@@ -710,7 +796,11 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
         defer {
           self.in_flight.remove(session.effect_id.to_int())
           if session.status == "running" || session.status == "stopping" {
-            session.status = if session.kill_requested { "killed" } else { "cancelled" }
+            session.status = if session.kill_requested {
+              "killed"
+            } else {
+              "cancelled"
+            }
             session.ended_at_ms = Some(@async.now())
           }
           self.emit_session(session, "bash.session.finished")
@@ -723,23 +813,22 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
           arguments: ctx.arguments,
           register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
         }
-        let answer = Ok(self.bash_foreground(background_ctx, session=Some(session))) catch {
+        let answer = Ok(
+          self.bash_foreground(background_ctx, session=Some(session)),
+        ) catch {
           error => Err(error)
         }
         match answer {
           Ok(outcome) => {
             session.outcome = Some(outcome)
             match outcome {
-              @posoco.ToolOutcome::Success(..) => {
-                session.status = "completed"
-              }
-              @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+              @posoco.ToolOutcome::Success(..) => session.status = "completed"
+              @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
                 session.status = if content.contains("timed out after") {
                   "timed_out"
                 } else {
                   "failed"
                 }
-              }
               _ => session.status = "failed"
             }
           }

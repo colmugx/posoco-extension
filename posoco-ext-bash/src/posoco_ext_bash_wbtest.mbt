@@ -141,7 +141,6 @@ test "bash_model_output_counts_unicode_as_characters" {
   assert_true(out.has_suffix("尾"))
 }
 
-
 ///|
 test "bash timeout defaults to five minutes" {
   assert_eq(bash_timeout_ms(Json::object(Map::from_array([]))), 300000)
@@ -150,9 +149,9 @@ test "bash timeout defaults to five minutes" {
 ///|
 test "bash timeout accepts valid hard deadlines" {
   for n in [1, 10000, 300000, 3600000] {
-    let args = Json::object(Map::from_array([
-      ("timeout_ms", Json::number(n.to_double())),
-    ]))
+    let args = Json::object(
+      Map::from_array([("timeout_ms", Json::number(n.to_double()))]),
+    )
     assert_eq(bash_timeout_ms(args), n)
   }
 }
@@ -190,13 +189,14 @@ test "streaming shell output remains bounded" {
   assert_true(output.contains("…[cut]…"))
 }
 
-
 ///|
 test "bash session argument validation" {
   assert_false(bash_background_requested(Json::object(Map::from_array([]))))
-  assert_true(bash_background_requested(Json::object(Map::from_array([
-    ("background", Json::boolean(true)),
-  ]))))
+  assert_true(
+    bash_background_requested(
+      Json::object(Map::from_array([("background", Json::boolean(true))])),
+    ),
+  )
   assert_eq(
     bash_field_int(Json::object(Map::from_array([])), "yield_time_ms", 0, 60000),
     0,
@@ -207,7 +207,7 @@ test "bash session argument validation" {
 test "bash session cursors expose bounded incremental output" {
   let session : ShellSession = {
     id: "probe",
-    effect_id: @kernel.EffectId::{ value: -10 },
+    effect_id: @kernel.EffectId::{ value: -10, },
     started_at_ms: @async.now(),
     last_output_at_ms: @async.now(),
     ended_at_ms: None,
@@ -234,7 +234,6 @@ test "bash session cursors expose bounded incremental output" {
   assert_true(session.base_cursor > 0L)
 }
 
-
 ///|
 fn bash_session_test_ctx(
   tool : String,
@@ -242,7 +241,7 @@ fn bash_session_test_ctx(
   number : Int32,
 ) -> @posoco.ToolCallContext {
   {
-    effect_id: @kernel.EffectId::{ value: number },
+    effect_id: @kernel.EffectId::{ value: number, },
     call_id: @posoco.CallId::unchecked("tc_background"),
     name: @posoco.ToolName::unchecked(tool),
     arguments,
@@ -255,11 +254,13 @@ async test "bash session: background returns id and can be polled to completion"
   @async.with_task_group(async fn(group) {
     let bash = ShellTools()
     bash.attach(group)
-    let arguments = Json::object(Map::from_array([
-      ("cmd", Json::string("sleep 1; echo background-done")),
-      ("yield_time_ms", Json::number(10.0)),
-      ("timeout_ms", Json::number(4000.0)),
-    ]))
+    let arguments = Json::object(
+      Map::from_array([
+        ("cmd", Json::string("sleep 1; echo background-done")),
+        ("yield_time_ms", Json::number(10.0)),
+        ("timeout_ms", Json::number(4000.0)),
+      ]),
+    )
     let result = bash.execute(bash_session_test_ctx("bash", arguments, 991))
     let id = match result {
       @posoco.ToolOutcome::Success(content~, ..) => {
@@ -275,14 +276,18 @@ async test "bash session: background returns id and can be polled to completion"
       }
       _ => fail("expected background session")
     }
-    let waited = bash.execute(bash_session_test_ctx(
-      "bash_wait",
-      Json::object(Map::from_array([
-        ("session_id", Json::string(id)),
-        ("timeout_ms", Json::number(3000.0)),
-      ])),
-      992,
-    ))
+    let waited = bash.execute(
+      bash_session_test_ctx(
+        "bash_wait",
+        Json::object(
+          Map::from_array([
+            ("session_id", Json::string(id)),
+            ("timeout_ms", Json::number(3000.0)),
+          ]),
+        ),
+        992,
+      ),
+    )
     match waited {
       @posoco.ToolOutcome::Success(content~, ..) => {
         assert_true(content.contains("background-done"))
@@ -294,18 +299,21 @@ async test "bash session: background returns id and can be polled to completion"
   })
 }
 
-
 ///|
 async test "bash: hard deadline terminates a sleeping child" {
   let bash = ShellTools()
-  let outcome = bash.execute(bash_session_test_ctx(
-    "bash",
-    Json::object(Map::from_array([
-      ("cmd", Json::string("sleep 20")),
-      ("timeout_ms", Json::number(150.0)),
-    ])),
-    993,
-  ))
+  let outcome = bash.execute(
+    bash_session_test_ctx(
+      "bash",
+      Json::object(
+        Map::from_array([
+          ("cmd", Json::string("sleep 20")),
+          ("timeout_ms", Json::number(150.0)),
+        ]),
+      ),
+      993,
+    ),
+  )
   match outcome {
     @posoco.ToolOutcome::ToolReportedError(content~, ..) =>
       assert_true(content.contains("timed out after 150ms"))
@@ -316,14 +324,22 @@ async test "bash: hard deadline terminates a sleeping child" {
 ///|
 async test "bash: background requires an explicit host owner" {
   let bash = ShellTools()
-  let attempted = Ok(bash.execute(bash_session_test_ctx(
-    "bash",
-    Json::object(Map::from_array([
-      ("cmd", Json::string("sleep 20")),
-      ("background", Json::boolean(true)),
-    ])),
-    994,
-  ))) catch { error => Err(error) }
+  let attempted = Ok(
+    bash.execute(
+      bash_session_test_ctx(
+        "bash",
+        Json::object(
+          Map::from_array([
+            ("cmd", Json::string("sleep 20")),
+            ("background", Json::boolean(true)),
+          ]),
+        ),
+        994,
+      ),
+    ),
+  ) catch {
+    error => Err(error)
+  }
   match attempted {
     Err(@posoco.RuntimeError::InvocationFailed(message)) =>
       assert_true(message.contains("attach"))
@@ -334,14 +350,21 @@ async test "bash: background requires an explicit host owner" {
 ///|
 async test "bash: large output is drained without blocking" {
   let bash = ShellTools()
-  let result = bash.execute(bash_session_test_ctx(
-    "bash",
-    Json::object(Map::from_array([
-      ("cmd", Json::string("awk 'BEGIN { for(i=0;i<60000;i++) print \"x\" }'")),
-      ("timeout_ms", Json::number(10000.0)),
-    ])),
-    995,
-  ))
+  let result = bash.execute(
+    bash_session_test_ctx(
+      "bash",
+      Json::object(
+        Map::from_array([
+          (
+            "cmd",
+            Json::string("awk 'BEGIN { for(i=0;i<60000;i++) print \"x\" }'"),
+          ),
+          ("timeout_ms", Json::number(10000.0)),
+        ]),
+      ),
+      995,
+    ),
+  )
   match result {
     @posoco.ToolOutcome::Success(content~, ..) =>
       assert_true(bash_char_count(content) <= BASH_OUTPUT_CHAR_CAP)

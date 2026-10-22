@@ -74,46 +74,47 @@ async fn ShellTools::bash_foreground(
   let attempted : Result[(Int32, String, Bool)?, Error] = Ok(
     @async.with_timeout_opt(timeout_ms, async fn() {
       @async.with_task_group(async fn(group) {
-      defer reader.close()
-      let proc = @process.spawn(
-        group,
-        "sh",
-        ["-c", cmd],
-        stdout=writer,
-        stderr=writer,
-        cwd?,
-        cancel_handler=@process.graceful_cancel(timeout=shell_cancel_grace_ms),
-      )
-      let handle : ShellChildHandle = { proc, exited: false, }
-      self.in_flight[key] = handle
-      let drain = group.spawn(async fn() { bash_drain_native(reader, session~) })
-      let exit_code = proc.wait()
-      match session {
-        Some(active) => active.exit_code = Some(exit_code)
-        None => ()
-      }
-      handle.exited = true
-      self.in_flight.remove(key)
-      // A detached grandchild may still hold the write end open.
-      let drained : Bytes? = @async.with_timeout_opt(
-        BASH_DRAIN_GRACE_MS,
-        async fn() { drain.wait() },
-      )
-      let output = match drained {
-        Some(data) => data
-        None => {
-          reader.close()
-          Bytes::from_array([])
+        defer reader.close()
+        let proc = @process.spawn(
+          group,
+          "sh",
+          ["-c", cmd],
+          stdout=writer,
+          stderr=writer,
+          cwd?,
+          cancel_handler=@process.graceful_cancel(timeout=shell_cancel_grace_ms),
+        )
+        let handle : ShellChildHandle = { proc, exited: false, }
+        self.in_flight[key] = handle
+        let drain = group.spawn(async fn() {
+          bash_drain_native(reader, session~)
+        })
+        let exit_code = proc.wait()
+        match session {
+          Some(active) => active.exit_code = Some(exit_code)
+          None => ()
         }
-      }
-      let mut decode_failed = false
-      let content = @utf8.decode(output) catch {
-        _ => {
-          decode_failed = true
-          ""
+        handle.exited = true
+        self.in_flight.remove(key)
+        // A detached grandchild may still hold the write end open.
+        let drained : Bytes? = @async.with_timeout_opt(BASH_DRAIN_GRACE_MS, async fn() {
+          drain.wait()
+        })
+        let output = match drained {
+          Some(data) => data
+          None => {
+            reader.close()
+            Bytes::from_array([])
+          }
         }
-      }
-      (exit_code, content, decode_failed)
+        let mut decode_failed = false
+        let content = @utf8.decode(output) catch {
+          _ => {
+            decode_failed = true
+            ""
+          }
+        }
+        (exit_code, content, decode_failed)
       })
     }),
   ) catch {
@@ -183,6 +184,7 @@ async fn bash_drain_native(
 }
 
 ///|
+
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
 fn bash_decode_failure(_exit_code : Int32) -> String {
