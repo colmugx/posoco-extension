@@ -141,7 +141,6 @@ test "bash_model_output_counts_unicode_as_characters" {
   assert_true(out.has_suffix("尾"))
 }
 
-
 ///|
 test "bash timeout defaults to five minutes" {
   assert_eq(bash_timeout_ms(Json::object(Map::from_array([]))), 300000)
@@ -150,9 +149,9 @@ test "bash timeout defaults to five minutes" {
 ///|
 test "bash timeout accepts valid hard deadlines" {
   for n in [1, 10000, 300000, 3600000] {
-    let args = Json::object(Map::from_array([
-      ("timeout_ms", Json::number(n.to_double())),
-    ]))
+    let args = Json::object(
+      Map::from_array([("timeout_ms", Json::number(n.to_double()))]),
+    )
     assert_eq(bash_timeout_ms(args), n)
   }
 }

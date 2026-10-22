@@ -133,7 +133,6 @@ fn bash_timeout_ms(args : Json) -> Int32 raise @posoco.RuntimeError {
   }
 }
 
-
 ///|
 fn bash_char_count(text : String) -> Int32 {
   let mut count = 0
@@ -230,10 +229,14 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
               Json::object(
                 Map::from_array([
                   ("type", Json::string("integer")),
-                  ("description", Json::string("Hard runtime cap in milliseconds (default 300000, maximum 3600000).")),
+                  (
+                    "description",
+                    Json::string(
+                      "Hard runtime cap in milliseconds (default 300000, maximum 3600000).",
+                    ),
+                  ),
                   ("minimum", Json::number(1.0)),
                   ("maximum", Json::number(3600000.0)),
-
                 ]),
               ),
             ),

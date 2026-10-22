@@ -106,6 +106,7 @@ extern "js" fn ShellProc::exit_code(
   #| (handle) => handle.exited
 
 ///|
+
 ///|
 #external
 priv type ShellCollected
@@ -238,7 +239,10 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
       }
       let content = bash_model_output(content, exit_code)
       if collected.timed_out() {
-        @posoco.ToolOutcome::ToolReportedError(content="bash: timed out after \{timeout_ms}ms\n" + content, structured=None)
+        @posoco.ToolOutcome::ToolReportedError(
+          content="bash: timed out after \{timeout_ms}ms\n" + content,
+          structured=None,
+        )
       } else if exit_code != 0 {
         @posoco.ToolOutcome::ToolReportedError(content~, structured=None)
       } else {
