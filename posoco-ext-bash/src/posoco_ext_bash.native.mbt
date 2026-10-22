@@ -101,21 +101,14 @@ async fn ShellTools::bash_foreground(
         handle.exited = true
         self.in_flight.remove(key)
         // A detached grandchild may still hold the write end open.
-        let drained : Bytes? = @async.with_timeout_opt(BASH_DRAIN_GRACE_MS, async fn() {
+        let drained : (String, Bool)? = @async.with_timeout_opt(BASH_DRAIN_GRACE_MS, async fn() {
           drain.wait()
         })
-        let output = match drained {
+        let (content, decode_failed) = match drained {
           Some(data) => data
           None => {
             reader.close()
-            Bytes::from_array([])
-          }
-        }
-        let mut decode_failed = false
-        let content = @utf8.decode(output) catch {
-          _ => {
-            decode_failed = true
-            ""
+            ("", false)
           }
         }
         (exit_code, content, decode_failed)
@@ -137,7 +130,7 @@ async fn ShellTools::bash_foreground(
       self.in_flight.remove(key)
       @posoco.ToolOutcome::ToolReportedError(
         content="bash: timed out after \{timeout_ms}ms",
-        structured=None,
+        structured=Some(bash_timeout_detail(timeout_ms)),
       )
     }
     Ok(Some((exit_code, content, decode_failed))) => {
@@ -156,39 +149,74 @@ async fn ShellTools::bash_foreground(
 }
 
 ///|
-/// Drain concurrently with the child's execution to avoid a full-pipe
-/// deadlock (a child blocked writing cannot reach process exit).
-/// Retain only a bounded tail; always consume further chunks.
+/// UTF-8 can be split across pipe reads. Decode the largest complete prefix
+/// while retaining up to three trailing bytes for the next read. An invalid
+/// sequence elsewhere marks the command as a decode failure.
+fn bash_utf8_complete_prefix(data : Array[Byte]) -> (String, Int32, Bool) {
+  let mut used = data.length()
+  let mut drop = 0
+  while drop <= 3 && used >= 0 {
+    let chunk = Bytes::from_array(data[0:used])
+    let decoded : Result[String, Error] = Ok(@utf8.decode(chunk)) catch {
+      error => Err(error)
+    }
+    match decoded {
+      Ok(text) => return (text, used, true)
+      Err(_) => {
+        used -= 1
+        drop += 1
+      }
+    }
+  }
+  ("", 0, false)
+}
+
+///|
+/// Drain while the child is still running. Keep bounded head-and-tail text
+/// rather than the first 32 KiB, since test failures usually occur at the end.
 async fn bash_drain_native(
   reader : @process.ReadFromProcess,
   session~ : ShellSession? = None,
-) -> Bytes {
-  let bytes : Array[Byte] = []
+) -> (String, Bool) {
+  let mut output = ""
+  let mut pending : Array[Byte] = []
+  let mut decode_failed = false
   for ;; {
     let chunk = reader.read_some(max_len=8192) catch { _ => None }
     match chunk {
       None => break
       Some(data) => {
+        if decode_failed {
+          continue
+        }
+        let joined = pending.copy()
+        for byte in data {
+          joined.push(byte)
+        }
+        let (text, used, valid) = bash_utf8_complete_prefix(joined)
+        if !valid {
+          decode_failed = true
+          continue
+        }
+        output = bash_append_output(output, text)
         match session {
-          Some(active) => {
-            let partial = @utf8.decode(data) catch { _ => "" }
-            active.append(partial)
-          }
+          Some(active) => active.append(text)
           None => ()
         }
-        for byte in data {
-          if bytes.length() < BASH_OUTPUT_CHAR_CAP {
-            bytes.push(byte)
-          }
+        pending = []
+        for i in used..<joined.length() {
+          pending.push(joined[i])
         }
       }
     }
   }
-  Bytes::from_array(bytes)
+  if !pending.is_empty() {
+    decode_failed = true
+  }
+  (output, decode_failed)
 }
 
 ///|
-
 ///|
 /// Native decode failure — non-UTF-8 output must not masquerade as success.
 fn bash_decode_failure(_exit_code : Int32) -> String {
