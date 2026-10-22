@@ -79,6 +79,62 @@ const BASH_OUTPUT_CHAR_CAP = 32_768
 const BASH_OUTPUT_HEAD_CHARS = 4_096
 
 ///|
+/// Hard wall-clock deadline for every shell command (5 minutes by default).
+const BASH_DEFAULT_TIMEOUT_MS = 300_000
+
+///|
+const BASH_MAX_TIMEOUT_MS = 3_600_000
+
+///|
+/// Descendants may hold inherited pipe handles after the direct child exits.
+const BASH_DRAIN_GRACE_MS = 1_000
+
+///|
+/// Bound accumulated output *during* streaming rather than only when returning.
+fn bash_append_output(previous : String, chunk : String) -> String {
+  let combined = previous + chunk
+  let chars = bash_char_count(combined)
+  if chars <= BASH_OUTPUT_CHAR_CAP {
+    return combined
+  }
+  let marker = "\n…[cut]…\n"
+  bash_take_chars(combined, BASH_OUTPUT_HEAD_CHARS) +
+  marker +
+  bash_tail_chars(
+    combined,
+    chars,
+    BASH_OUTPUT_CHAR_CAP - BASH_OUTPUT_HEAD_CHARS - bash_char_count(marker),
+  )
+}
+
+///|
+/// Validate the optional process runtime cap, rejecting invalid arguments.
+fn bash_timeout_ms(args : Json) -> Int32 raise @posoco.RuntimeError {
+  match args {
+    Json::Object(map) =>
+      match map.get("timeout_ms") {
+        None => BASH_DEFAULT_TIMEOUT_MS
+        Some(Json::Number(value, ..)) =>
+          if value < 1.0 ||
+            value > BASH_MAX_TIMEOUT_MS.to_double() ||
+            value.floor() != value {
+            raise @posoco.RuntimeError::UnknownTool(
+              "bash: timeout_ms must be an integer between 1 and 3600000",
+            )
+          } else {
+            value.to_int()
+          }
+        _ =>
+          raise @posoco.RuntimeError::UnknownTool(
+            "bash: timeout_ms must be an integer between 1 and 3600000",
+          )
+      }
+    _ => BASH_DEFAULT_TIMEOUT_MS
+  }
+}
+
+
+///|
 fn bash_char_count(text : String) -> Int32 {
   let mut count = 0
   for _ in text {
@@ -169,6 +225,18 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
                 ]),
               ),
             ),
+            (
+              "timeout_ms",
+              Json::object(
+                Map::from_array([
+                  ("type", Json::string("integer")),
+                  ("description", Json::string("Hard runtime cap in milliseconds (default 300000, maximum 3600000).")),
+                  ("minimum", Json::number(1.0)),
+                  ("maximum", Json::number(3600000.0)),
+
+                ]),
+              ),
+            ),
           ]),
         ),
       ),
@@ -178,7 +246,7 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
     @posoco.ToolDef::{
       name: @posoco.ToolName::unchecked("bash"),
-      description: "Run a shell command for builds, tests, git, or pipelines. Fresh shell at workspace root; `cd` does not persist.",
+      description: "Run a shell command for builds, tests, git, or pipelines. Fresh shell at workspace root; `cd` does not persist. Hard runtime timeout defaults to 300000ms; override using timeout_ms.",
       input_schema: cmd_schema,
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
