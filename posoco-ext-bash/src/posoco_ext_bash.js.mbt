@@ -27,8 +27,9 @@ extern "js" fn node_spawn_shell(
   cmd : String,
   cwd : String,
   timeout_ms : Int32,
+  on_chunk : (String) -> Unit,
 ) -> ShellProc =
-  #| (spawn, cmd, cwd, timeoutMs) => {
+  #| (spawn, cmd, cwd, timeoutMs, onChunk) => {
   #|   const grouped = process.platform !== "win32";
   #|   const proc = spawn("sh", ["-c", cmd], { detached: grouped, stdio: ["ignore", "pipe", "pipe"], ...(cwd ? { cwd } : {}) });
   #|   const kill = (signal) => {
@@ -59,6 +60,7 @@ extern "js" fn node_spawn_shell(
   #|     stream.setEncoding("utf8");
   #|     stream.on("data", chunk => {
   #|       text += chunk;
+  #|       onChunk(chunk);
   #|       if (text.length > outputLimit) {
   #|         text = text.slice(0, keepHead) + marker + text.slice(-(outputLimit - keepHead - marker.length));
   #|       }
@@ -177,6 +179,7 @@ fn shell_child_hard_kill(handle : ShellChildHandle) -> Unit noraise {
 async fn bash_foreground(
   self : ShellTools,
   ctx : @posoco.ToolCallContext,
+  session~ : ShellSession? = None,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   let cmd = extract_command(ctx.arguments)
   if cmd == "" {
@@ -190,7 +193,11 @@ async fn bash_foreground(
     None => ""
   }
   let timeout_ms = bash_timeout_ms(ctx.arguments)
-  let proc = node_spawn_shell(cp_spawn, cmd, cwd, timeout_ms)
+  let on_chunk : (String) -> Unit = match session {
+    Some(active) => fn(chunk) { active.append(chunk) }
+    None => fn(_) { () }
+  }
+  let proc = node_spawn_shell(cp_spawn, cmd, cwd, timeout_ms, on_chunk)
   let handle : ShellChildHandle = { proc, exited: false, }
   let key = ctx.effect_id.to_int()
   self.in_flight[key] = handle
