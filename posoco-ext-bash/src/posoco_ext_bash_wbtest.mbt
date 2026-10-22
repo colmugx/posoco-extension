@@ -216,6 +216,7 @@ test "bash session cursors expose bounded incremental output" {
     base_cursor: 0L,
     next_cursor: 0L,
     outcome: None,
+    exit_code: None,
     worker: None,
     kill_requested: false,
   }
