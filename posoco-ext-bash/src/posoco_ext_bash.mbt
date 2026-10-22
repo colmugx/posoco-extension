@@ -180,7 +180,7 @@ fn ShellTools::session_capacity(self : ShellTools) -> Bool {
     }
   }
   running < BASH_MAX_RUNNING_SESSIONS &&
-  self.sessions.size() < BASH_MAX_RETAINED_SESSIONS
+  self.sessions.to_array().length() < BASH_MAX_RETAINED_SESSIONS
 }
 
 
@@ -355,9 +355,6 @@ fn bash_model_output(content : String, exit_code : Int32) -> String {
 /// Shared tool list (bash only). Both native and js ShellTools expose the
 /// same single tool definition; only `execute` differs per target.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
-  // OpenAI/DeepSeek tool schema requires `parameters` to be a JSON Schema with
-  // `type: "object"`; strict servers otherwise reject with HTTP 400
-  // (`invalid_union_discriminator`).
   let cmd_schema : Json = Json::object(
     Map::from_array([
       ("type", Json::string("object")),
@@ -373,6 +370,22 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
                   ("description", Json::string("Shell command")),
                 ]),
               ),
+            ),
+            (
+              "background",
+              Json::object(Map::from_array([
+                ("type", Json::string("boolean")),
+                ("description", Json::string("Start a host-owned background session and return immediately.")),
+              ])),
+            ),
+            (
+              "yield_time_ms",
+              Json::object(Map::from_array([
+                ("type", Json::string("integer")),
+                ("minimum", Json::number(0.0)),
+                ("maximum", Json::number(60000.0)),
+                ("description", Json::string("Foreground wait slice; returns a session if the child continues.")),
+              ])),
             ),
             (
               "timeout_ms",
@@ -397,6 +410,42 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
       name: @posoco.ToolName::unchecked("bash"),
       description: "Run a shell command for builds, tests, git, or pipelines. Fresh shell at workspace root; `cd` does not persist. Hard runtime timeout defaults to 300000ms; override using timeout_ms.",
       input_schema: cmd_schema,
+      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_bash"),
+    },
+    @posoco.ToolDef::{
+      name: @posoco.ToolName::unchecked("bash_status"),
+      description: "Read the status and incremental output for a background Bash session.",
+      input_schema: Json::object(Map::from_array([
+        ("type", Json::string("object")),
+        ("properties", Json::object(Map::from_array([("session_id", Json::object(Map::from_array([("type", Json::string("string"))]))),("cursor", Json::object(Map::from_array([("type", Json::string("integer"))])))]))),
+        ("required", Json::array([Json::string("session_id")])),
+      ])),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_bash"),
+    },
+    @posoco.ToolDef::{
+      name: @posoco.ToolName::unchecked("bash_wait"),
+      description: "Wait a bounded time for a background Bash session.",
+      input_schema: Json::object(Map::from_array([
+        ("type", Json::string("object")),
+        ("properties", Json::object(Map::from_array([("session_id", Json::object(Map::from_array([("type", Json::string("string"))]))),("cursor", Json::object(Map::from_array([("type", Json::string("integer"))]))),("timeout_ms", Json::object(Map::from_array([("type", Json::string("integer"))])))]))),
+        ("required", Json::array([Json::string("session_id")])),
+      ])),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy: @posoco.ExecutionPolicy::Parallel,
+      provenance: Some("posoco_ext_bash"),
+    },
+    @posoco.ToolDef::{
+      name: @posoco.ToolName::unchecked("bash_kill"),
+      description: "Stop a background Bash session and its shell child.",
+      input_schema: Json::object(Map::from_array([
+        ("type", Json::string("object")),
+        ("properties", Json::object(Map::from_array([("session_id", Json::object(Map::from_array([("type", Json::string("string"))])))]))),
+        ("required", Json::array([Json::string("session_id")])),
+      ])),
       owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
       policy: @posoco.ExecutionPolicy::Parallel,
       provenance: Some("posoco_ext_bash"),
@@ -456,3 +505,208 @@ let _process_import_keeper : Unit = ignore(@process.unimplemented)
 // unimplemented alert is noise for a value that is never evaluated.
 #warnings("-alert_unimplemented")
 let _js_async_import_keeper : Unit = ignore(@js_async.AbortController::new)
+
+///|
+/// Session operations are independent of the cancelled foreground effect.
+/// A background session can outlive a tool call only if the host explicitly
+/// provided a task group. Detached sessions remain scoped to that host.
+pub impl @posoco.ToolProvider for ShellTools with fn list_tools(
+  _self : ShellTools,
+) -> Array[@posoco.ToolDef] {
+  shared_list_tools()
+}
+
+///|
+fn bash_field_str(args : Json, name : String) -> String raise @posoco.RuntimeError {
+  match args {
+    Json::Object(fields) =>
+      match fields.get(name) {
+        Some(Json::String(value)) => value
+        _ => raise @posoco.RuntimeError::UnknownTool("bash: missing or invalid " + name)
+      }
+    _ => raise @posoco.RuntimeError::UnknownTool("bash: arguments must be an object")
+  }
+}
+
+///|
+fn bash_field_int(
+  args : Json,
+  name : String,
+  default : Int32,
+  limit : Int32,
+) -> Int32 raise @posoco.RuntimeError {
+  match args {
+    Json::Object(fields) =>
+      match fields.get(name) {
+        None => default
+        Some(Json::Number(number, ..)) =>
+          if number.floor() == number && number >= 0.0 &&
+            number <= limit.to_double() {
+            number.to_int()
+          } else {
+            raise @posoco.RuntimeError::UnknownTool("bash: invalid " + name)
+          }
+        _ => raise @posoco.RuntimeError::UnknownTool("bash: invalid " + name)
+      }
+    _ => default
+  }
+}
+
+///|
+fn bash_background_requested(args : Json) -> Bool raise @posoco.RuntimeError {
+  match args {
+    Json::Object(fields) =>
+      match fields.get("background") {
+        None => false
+        Some(Json::True) => true
+        Some(Json::False) => false
+        _ => raise @posoco.RuntimeError::UnknownTool("bash: invalid background")
+      }
+    _ => false
+  }
+}
+
+///|
+fn ShellTools::read_session(
+  self : ShellTools,
+  args : Json,
+) -> ShellSession raise @posoco.RuntimeError {
+  let id = bash_field_str(args, "session_id")
+  match self.sessions.get(id) {
+    Some(session) => session
+    None => raise @posoco.RuntimeError::UnknownTool("bash: unknown session_id")
+  }
+}
+
+///|
+fn bash_session_outcome(snapshot : Json) -> @posoco.ToolOutcome {
+  @posoco.ToolOutcome::Success(content=snapshot.stringify(), structured=Some(snapshot))
+}
+
+///|
+pub impl @posoco.ToolProvider for ShellTools with fn execute(
+  self : ShellTools,
+  ctx : @posoco.ToolCallContext,
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  let tool = ctx.name.to_string()
+  match tool {
+    "bash_status" => {
+      let session = self.read_session(ctx.arguments)
+      let cursor = bash_field_int(ctx.arguments, "cursor", 0, 2147483647)
+      bash_session_outcome(session.snapshot(cursor.to_int64()))
+    }
+    "bash_wait" => {
+      let session = self.read_session(ctx.arguments)
+      let cursor = bash_field_int(ctx.arguments, "cursor", 0, 2147483647)
+      let ms = bash_field_int(ctx.arguments, "timeout_ms", 1000, 60000)
+      let deadline = @async.now() + ms.to_int64()
+      while session.status == "running" && @async.now() < deadline {
+        @async.sleep(50)
+      }
+      bash_session_outcome(session.snapshot(cursor.to_int64()))
+    }
+    "bash_kill" => {
+      let session = self.read_session(ctx.arguments)
+      session.kill_requested = true
+      match session.worker {
+        Some(worker) =>
+          if session.status == "running" {
+            worker.cancel()
+          }
+        None => ()
+      }
+      bash_session_outcome(session.snapshot(session.next_cursor))
+    }
+    "bash" => {
+      let cmd = extract_command(ctx.arguments)
+      if cmd == "" {
+        raise bash_empty_command_failure()
+      }
+      let background = bash_background_requested(ctx.arguments)
+      let yield_ms = bash_field_int(ctx.arguments, "yield_time_ms", 0, 60000)
+      ignore(bash_timeout_ms(ctx.arguments))
+      if !background && yield_ms == 0 {
+        return bash_foreground(self, ctx)
+      }
+      if self.closed || self.host_group is None {
+        raise @posoco.RuntimeError::InvocationFailed(
+          "bash: background sessions require ShellTools.attach(host_group)",
+        )
+      }
+      if !self.session_capacity() {
+        raise @posoco.RuntimeError::InvocationFailed(
+          "bash: too many background sessions",
+        )
+      }
+      self.next_session += 1
+      let number = self.next_session
+      let id = "bash_" + @async.now().to_string() + "_" + number.to_string()
+      let session : ShellSession = {
+        id,
+        effect_id: @kernel.EffectId::{ value: -number - 1000000, },
+        started_at_ms: @async.now(),
+        last_output_at_ms: @async.now(),
+        ended_at_ms: None,
+        status: "running",
+        output: "",
+        base_cursor: 0L,
+        next_cursor: 0L,
+        outcome: None,
+        worker: None,
+        kill_requested: false,
+      }
+      self.sessions[id] = session
+      let group = self.host_group.unwrap()
+      let worker = group.spawn(async fn() {
+        // Detached from the model effect's cancellation registration.
+        let background_ctx : @posoco.ToolCallContext = {
+          effect_id: session.effect_id,
+          call_id: ctx.call_id,
+          name: @posoco.ToolName::unchecked("bash"),
+          arguments: ctx.arguments,
+          register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
+        }
+        let answer = Ok(bash_foreground(self, background_ctx)) catch {
+          error => Err(error)
+        }
+        match answer {
+          Ok(outcome) => {
+            session.outcome = Some(outcome)
+            match outcome {
+              @posoco.ToolOutcome::Success(content~, ..) => {
+                session.append(content)
+                session.status = "completed"
+              }
+              @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+                session.append(content)
+                session.status = if content.contains("timed out after") {
+                  "timed_out"
+                } else {
+                  "failed"
+                }
+              }
+              _ => session.status = "failed"
+            }
+          }
+          Err(error) => {
+            session.append(error.to_string())
+            session.status = "failed"
+          }
+        }
+        session.ended_at_ms = Some(@async.now())
+      })
+      session.worker = Some(worker)
+      if !background && yield_ms > 0 {
+        let deadline = @async.now() + yield_ms.to_int64()
+        while session.status == "running" && @async.now() < deadline {
+          @async.sleep(50)
+        }
+        if session.status != "running" && session.outcome is Some(outcome) {
+          return outcome
+        }
+      }
+      bash_session_outcome(session.snapshot(0L))
+    }
+    _ => raise @posoco.RuntimeError::UnknownTool("bash: unknown tool " + tool)
+  }
+}
