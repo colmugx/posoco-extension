@@ -59,9 +59,18 @@ fn write_blocked_hint(model : Model) -> String? {
       Connecting => Some("Connecting to the board.")
       Reconnecting =>
         Some("Reconnecting. The board is read-only until it returns.")
-      Offline => Some("Offline. Open this page from the Board host to connect.")
+      Offline =>
+        if model.can_connect {
+          Some("Offline. Use Retry above to reconnect.")
+        } else {
+          Some("Offline. Open this page from the Board host to connect.")
+        }
       ProtocolError(_) =>
-        Some("Connection stopped. Reload after checking the host version.")
+        if model.can_connect {
+          Some("Connection stopped. Use Retry above after checking the host.")
+        } else {
+          Some("Connection stopped. Reload after checking the host version.")
+        }
     }
   }
 }
@@ -128,6 +137,35 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       live_chip(model),
       @html.button(
         type_="button",
+        class="btn btn-sm",
+        title="Open the ticket inbox",
+        disabled=!model.ticket_available,
+        on_click=emit(TicketDrawerToggled),
+        [
+          @html.span("Inbox"),
+          @html.span(
+            class="ticket-badge",
+            if ticket_inbox_count(model) == 0 {
+              ""
+            } else {
+              ticket_inbox_count(model).to_string()
+            },
+          ),
+        ],
+      ),
+      @html.button(
+        type_="button",
+        class="btn btn-sm",
+        title="Run the next Ready ticket as a background worker",
+        disabled=!model.can_connect ||
+          !model.ticket_available ||
+          model.ticket_sending ||
+          ready_ticket_count(model) == 0,
+        on_click=emit(TicketRunReady),
+        "Run next",
+      ),
+      @html.button(
+        type_="button",
         class="btn btn-primary new-task",
         title=match hint {
           Some(text) => text
@@ -151,7 +189,25 @@ fn banner(text : String) -> @html.Html {
 }
 
 ///|
-fn connection_banner(model : Model) -> @html.Html {
+fn banner_retry(text : String, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  @html.div(
+    class="banner",
+    attrs=@html.Attrs::build().role("status").aria_live("polite"),
+    [
+      @html.span(class="banner-dot", ""),
+      @html.span(text),
+      @html.button(
+        type_="button",
+        class="btn btn-sm banner-action",
+        on_click=emit(ManualReconnect),
+        "Retry",
+      ),
+    ],
+  )
+}
+
+///|
+fn connection_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   match model.connection {
     Online if model.replica.has_snapshot() => @html.nothing
     Online => banner("Waiting for the board.")
@@ -162,9 +218,18 @@ fn connection_banner(model : Model) -> @html.Html {
       } else {
         banner("Reconnecting.")
       }
-    Offline => banner("Offline. Open this page from the Board host to connect.")
+    Offline =>
+      if model.can_connect {
+        banner_retry("Offline. The connection stopped.", emit)
+      } else {
+        banner("Offline. Open this page from the Board host to connect.")
+      }
     ProtocolError(_) =>
-      banner("Connection stopped. Reload after checking the host version.")
+      if model.can_connect {
+        banner_retry("Connection stopped. Retry after checking the host.", emit)
+      } else {
+        banner("Connection stopped. Reload after checking the host version.")
+      }
   }
 }
 
@@ -475,6 +540,16 @@ fn task_card(
   let locked = !mutations_allowed(model) || draft_open(model)
   let selected = model.selected_task == Some(task.id)
   let primary = primary_move(task.stage)
+  let primary_message = if task.stage == @client.Ready && model.ticket_available {
+    TicketRun(task.id)
+  } else {
+    MoveRequested(task.id, primary)
+  }
+  let primary_title = if task.stage == @client.Ready && model.ticket_available {
+    "Run this ticket in the background"
+  } else {
+    "Move to " + ui_stage_label(primary)
+  }
   let alternatives = move_suggestions(task.stage).filter(to => to != primary)
   @html.article(
     class=if selected {
@@ -511,10 +586,10 @@ fn task_card(
       ]),
       @html.div(class="card-actions", [
         card_action(
-          MoveRequested(task.id, primary),
+          primary_message,
           emit,
           class="btn btn-sm card-primary",
-          title="Move to \{ui_stage_label(primary)}",
+          title=primary_title,
           disabled=locked,
           label=primary_action_label(task.stage),
         ),
@@ -779,7 +854,7 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   @html.main_(class="app", [
     topbar(model, emit),
     toolbar(model, emit),
-    connection_banner(model),
+    connection_banner(model, emit),
     match model.editor {
       Some(editor) =>
         match editor.mode {
@@ -792,12 +867,16 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     // overlay sheet, so it never squeezes the lane grid into unreadable
     // columns.
     @html.div(
-      class=if inspector_open(model) {
+      class=if inspector_open(model) || model.ticket_drawer {
         "workspace has-sheet"
       } else {
         "workspace"
       },
-      [board(model, emit), inspector_panel(model, emit)],
+      [
+        board(model, emit),
+        inspector_panel(model, emit),
+        ticket_drawer(model, emit),
+      ],
     ),
     notice_toast(model.notice, emit),
   ])

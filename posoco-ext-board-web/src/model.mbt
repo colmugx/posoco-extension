@@ -31,6 +31,43 @@ priv struct TaskFilter {
 } derive(Eq)
 
 ///|
+priv struct TicketQuestion {
+  id : String
+  task_id : String
+  question : String
+  kind : String
+  options : Array[String]
+  asked_at : Int64
+} derive(Eq)
+
+///|
+priv struct TicketRun {
+  task_id : String
+  session_id : String
+  status : String
+  error : String?
+  result : String?
+} derive(Eq)
+
+///|
+priv struct TicketState {
+  questions : Array[TicketQuestion]
+  runs : Array[TicketRun]
+} derive(Eq)
+
+///|
+fn TicketState::empty() -> TicketState {
+  { questions: [], runs: [], }
+}
+
+///|
+priv enum TicketAnswer {
+  TicketText(String)
+  TicketConfirm(Bool)
+  TicketSelect(Int32)
+}
+
+///|
 /// Correlation record for the single in-flight mutation. It retains the
 /// command id, the mutation kind and the expected revision; the command
 /// payload itself is never stored, so a reconnect cannot resend it.
@@ -114,6 +151,7 @@ priv struct Notice {
 priv struct Model {
   replica : @client.BoardReplica
   connection : ConnectionState
+  can_connect : Bool
   baseline : BaselineState
   retry_attempt : Int32
   generation : Int32
@@ -128,6 +166,11 @@ priv struct Model {
   finish_draft : FinishDraft?
   review_draft : ReviewDraft?
   task_filter : TaskFilter
+  tickets : TicketState
+  ticket_available : Bool
+  ticket_drawer : Bool
+  ticket_drafts : Map[String, String]
+  ticket_sending : Bool
 } derive(Eq)
 
 ///|
@@ -136,6 +179,7 @@ priv enum Msg {
   TransportFailed(Int32)
   Retry(Int32)
   ConnectionStable(Int32)
+  ManualReconnect
   SendFailed(Int32, String)
   CreateOpened
   EditOpened(String)
@@ -175,6 +219,13 @@ priv enum Msg {
   FilterPriorityChanged(String)
   FilterStageChanged(String)
   FiltersCleared
+  TicketDrawerToggled
+  TicketDraftChanged(String, String)
+  TicketAnswered(String, TicketAnswer)
+  TicketRun(String)
+  TicketRunReady
+  TicketResultDismissed(String)
+  TicketResult(Bool, String?, TicketState?)
   NoticeDismissed
 }
 
@@ -192,6 +243,7 @@ fn Model::empty(available : Bool) -> Model {
     } else {
       Offline
     },
+    can_connect: available,
     baseline: AwaitingFirst,
     retry_attempt: 0,
     generation: 0,
@@ -210,6 +262,11 @@ fn Model::empty(available : Bool) -> Model {
     finish_draft: None,
     review_draft: None,
     task_filter: TaskFilter::none(),
+    tickets: TicketState::empty(),
+    ticket_available: false,
+    ticket_drawer: false,
+    ticket_drafts: Map([]),
+    ticket_sending: false,
   }
 }
 

@@ -112,6 +112,9 @@ pub async fn BoardWorkflows::start(Self, title~ : String) -> Result[BoardWorkflo
 pub fn BoardWorkflows::stop_after_wave(Self) -> Unit
 pub async fn BoardWorkflows::view(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
 pub async fn BoardWorkflows::wait_boundary(Self) -> Result[BoardWorkflowView, BoardWorkflowError]
+pub async fn BoardWorkflows::wire_command(Self, String) -> Result[String, BoardWorkflowError]
+pub async fn BoardWorkflows::wire_ready(Self) -> Result[Unit, BoardWorkflowError]
+pub async fn BoardWorkflows::wire_snapshot(Self) -> Result[String, BoardWorkflowError]
 pub impl @port.CommandPort for BoardWorkflows
 pub impl @port.Extension for BoardWorkflows
 pub impl @port.Lifecycle for BoardWorkflows

@@ -7,6 +7,23 @@ fn reconnect(model : Model, emit : @rabbita.Emit[Msg]) -> (Model, @rabbita.Cmd) 
     model.connection is Offline {
     return (model, @rabbita.none)
   }
+  if model.retry_attempt >= 6 {
+    return (
+      {
+        ..model,
+        connection: Offline,
+        retry_pending: false,
+        last_status: "Connection failed; retry when the host is ready",
+        notice: Some(
+          notice(
+            Warning,
+            "Board connection failed. Retry when the host is ready.",
+          ),
+        ),
+      },
+      @rabbita.none,
+    )
+  }
   let delay = retry_delay(model.retry_attempt)
   let baseline = if model.replica.has_snapshot() {
     Retained
@@ -68,6 +85,32 @@ fn update(
         ({ ..model, retry_attempt: 0, }, @rabbita.none)
       } else {
         (model, @rabbita.none)
+      }
+    ManualReconnect =>
+      if !model.can_connect || model.pending is Some(_) {
+        (model, @rabbita.none)
+      } else {
+        let generation = model.generation + 1
+        (
+          {
+            ..model,
+            generation,
+            connection: Connecting,
+            baseline: if model.replica.has_snapshot() {
+              Retained
+            } else {
+              AwaitingFirst
+            },
+            retry_attempt: 0,
+            retry_pending: false,
+            notice: None,
+            last_status: "Reconnecting after a manual retry",
+          },
+          @rabbita.batch([
+            @websocket.close("board"),
+            connect(env.url, generation, emit),
+          ]),
+        )
       }
     TransportFailed(generation) =>
       if generation != model.generation {
@@ -162,6 +205,16 @@ fn update(
             reconnect(model, emit)
           }
         Message(text) => {
+          match ticket_frame(text) {
+            Some(TicketSnapshot(tickets)) =>
+              return (apply_ticket_state(model, tickets), @rabbita.none)
+            Some(TicketOutcome(ok, reason, tickets)) =>
+              return (
+                apply_ticket_outcome(model, ok, reason, tickets),
+                @rabbita.none,
+              )
+            None => ()
+          }
           // Keep the previous Rabbita model immutable so equality can detect
           // changes even when only a nested task/attempt record changes.
           let replica = model.replica.copy()
@@ -358,6 +411,64 @@ fn update(
       )
     FiltersCleared =>
       ({ ..model, task_filter: TaskFilter::none(), }, @rabbita.none)
+    TicketDrawerToggled =>
+      ({ ..model, ticket_drawer: !model.ticket_drawer, }, @rabbita.none)
+    TicketDraftChanged(question_id, value) => {
+      let drafts = model.ticket_drafts.copy()
+      drafts[question_id] = value
+      ({ ..model, ticket_drafts: drafts, }, @rabbita.none)
+    }
+    TicketAnswered(question_id, answer) =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else {
+        (
+          { ..model, ticket_sending: true, },
+          ticket_answer(question_id, answer, emit),
+        )
+      }
+    TicketRun(task_id) =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else {
+        (
+          {
+            ..model,
+            ticket_sending: true,
+            last_status: "Starting ticket " + task_id,
+          },
+          ticket_run(task_id, emit),
+        )
+      }
+    TicketRunReady =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else if ready_ticket_count(model) == 0 {
+        (
+          {
+            ..model,
+            notice: Some(notice(Warning, "No Ready ticket is waiting.")),
+          },
+          @rabbita.none,
+        )
+      } else {
+        (
+          {
+            ..model,
+            ticket_sending: true,
+            last_status: "Starting the next Ready ticket",
+          },
+          ticket_run_ready(emit),
+        )
+      }
+    TicketResultDismissed(task_id) =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else {
+        ({ ..model, ticket_sending: true, }, ticket_dismiss(task_id, emit))
+      }
+    TicketResult(ok, reason, tickets) =>
+      (apply_ticket_outcome(model, ok, reason, tickets), @rabbita.none)
     NoticeDismissed => ({ ..model, notice: None, }, @rabbita.none)
     TaskSelected(_)
     | InspectorClosed

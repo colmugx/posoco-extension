@@ -358,6 +358,118 @@ a {
   flex: 0 0 auto;
 }
 
+.banner-action {
+  margin-left: auto;
+}
+
+/* Ticket question drawer */
+
+.ticket-badge {
+  min-width: 14px;
+  color: var(--accent);
+  font: 10px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-drawer {
+  position: fixed;
+  top: var(--topbar);
+  right: 0;
+  bottom: 0;
+  z-index: 55;
+  width: min(var(--sheet), 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-sheet);
+  overflow-wrap: anywhere;
+}
+
+.ticket-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ticket-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 24px;
+}
+
+.ticket-question {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ticket-question-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--faint);
+  font: 10.5px/1.4 var(--font-mono);
+}
+
+.ticket-question-task {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-question-kind {
+  flex: 0 0 auto;
+  text-transform: uppercase;
+}
+
+.ticket-question-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ticket-result-text {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.ticket-result .ticket-question-kind {
+  color: var(--ok);
+}
+
+.ticket-answers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ticket-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .ticket-drawer {
+    top: auto;
+    left: 0;
+    width: 100%;
+    max-height: 72vh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+}
+
 /* Composer */
 
 .composer {

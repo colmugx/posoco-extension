@@ -99,6 +99,7 @@ fn inspector_next_action(
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
   let target = primary_move(task.stage)
+  let ready = task.stage == @client.Ready && model.ticket_available
   let hint = create_unavailable_hint(model)
   let locked = hint is Some(_)
   @html.div(class="inspector-next", [
@@ -107,17 +108,33 @@ fn inspector_next_action(
       class="btn btn-primary inspector-next-action",
       title=match hint {
         Some(text) => text
-        None => "Move to \{ui_stage_label(target)}"
+        None =>
+          if ready {
+            "Run this ticket in the background"
+          } else {
+            "Move to " + ui_stage_label(target)
+          }
       },
       disabled=locked,
-      on_click=emit(MoveRequested(task.id, target)),
+      on_click=emit(
+        if ready {
+          TicketRun(task.id)
+        } else {
+          MoveRequested(task.id, target)
+        },
+      ),
       primary_action_label(task.stage),
     ),
     @html.p(
       class="inspector-next-hint",
       match hint {
         Some(text) => text
-        None => "Moves to \{ui_stage_label(target)}"
+        None =>
+          if ready {
+            "Starts a worker session in the background."
+          } else {
+            "Moves to " + ui_stage_label(target)
+          }
       },
     ),
   ])

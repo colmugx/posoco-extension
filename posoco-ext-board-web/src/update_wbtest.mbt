@@ -65,6 +65,35 @@ test "stable retained connection resets bounded backoff" {
 }
 
 ///|
+test "manual reconnect resets the bounded backoff" {
+  let model = {
+    ..Model::empty(true),
+    connection: Offline,
+    retry_attempt: 6,
+    can_connect: true,
+  }
+  let (next, _) = update(model, ManualReconnect, test_emit, test_env())
+  assert_eq(next.generation, 1)
+  assert_true(next.connection is Connecting)
+  assert_eq(next.retry_attempt, 0)
+  assert_false(next.retry_pending)
+}
+
+///|
+test "connection failures stop retrying after the bounded window" {
+  let model = {
+    ..Model::empty(true),
+    connection: Reconnecting,
+    retry_attempt: 6,
+  }
+  let (stopped, _) = update(model, TransportFailed(0), test_emit, test_env())
+  assert_true(stopped.connection is Offline)
+  assert_false(stopped.retry_pending)
+  assert_eq(stopped.retry_attempt, 6)
+  assert_true(stopped.notice is Some(_))
+}
+
+///|
 fn test_emit(_msg : Msg) -> @rabbita.Cmd {
   @rabbita.none
 }
