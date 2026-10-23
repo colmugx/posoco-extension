@@ -2462,6 +2462,51 @@ test "zen decode falls back to message.reasoning" {
 }
 
 ///|
+test "zen decode tolerates explicit null tool_calls and reasoning fields" {
+  // The OpenCode gateway serializes absent fields as explicit null; compact
+  // responses carry "tool_calls": null, which must decode as no tool calls.
+  let null_tool_calls : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","tool_calls":null},"finish_reason":"stop"}]}
+    ),
+  )
+  let completion = decode_chat_response(null_tool_calls)
+  assert_true(completion.message.tool_calls is [])
+  // Null reasoning fields behave as absent and keep the fallback chain.
+  let null_reasoning : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","reasoning_content":null,"reasoning":"deep thought"},"finish_reason":"stop"}]}
+    ),
+  )
+  let fallback = decode_chat_response(null_reasoning)
+  match fallback.message.reasoning {
+    Some(reasoning) => assert_eq(reasoning.content, "deep thought")
+    None => fail("expected fallback reasoning after explicit null")
+  }
+  let all_null : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","reasoning_content":null,"reasoning":null,"reasoning_text":null,"tool_calls":null},"finish_reason":"stop"}]}
+    ),
+  )
+  let bare = decode_chat_response(all_null)
+  assert_true(bare.message.reasoning is None)
+  assert_true(bare.message.tool_calls is [])
+  // A non-array, non-null tool_calls value is still a parse failure.
+  let wrong_type : Json = @json.parse(
+    (
+      #|{"choices":[{"message":{"content":"hi","tool_calls":"oops"},"finish_reason":"stop"}]}
+    ),
+  )
+  try decode_chat_response(wrong_type) catch {
+    @posoco.ModelError::ResponseParse(msg) =>
+      assert_true(msg.contains("stage=message.tool_calls, category=wrong_type"))
+    _ => fail("expected ResponseParse for string tool_calls")
+  } noraise {
+    _ => fail("expected tool_calls wrong_type failure")
+  }
+}
+
+///|
 test "OpenCode-only reasoning_text alias survives SSE including terminal event" {
   let acc = @posoco.StreamAccumulator::StreamAccumulator()
   let chunks : Array[@posoco.StreamChunk] = []

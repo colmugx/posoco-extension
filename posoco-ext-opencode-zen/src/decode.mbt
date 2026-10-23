@@ -77,27 +77,29 @@ fn decode_chat_response(
   // `delta.reasoning` stream), so that spelling is the fallback.
   let reasoning : String? = match msg.get("reasoning_content") {
     Some(String(s)) => if s == "" { None } else { Some(s) }
-    Some(_) =>
-      raise @posoco.ModelError::ResponseParse(
-        "\{provider} response parse failure (stage=message.reasoning_content, category=wrong_type)",
-      )
-    None =>
+    // Explicit nulls mean "absent" here: some compatible servers serialize
+    // absent fields as null, so the dialect fallback chain still applies.
+    Some(Null) | None =>
       match msg.get("reasoning") {
         Some(String(s)) => if s == "" { None } else { Some(s) }
-        Some(_) =>
-          raise @posoco.ModelError::ResponseParse(
-            "\{provider} response parse failure (stage=message.reasoning, category=wrong_type)",
-          )
-        None =>
+        Some(Null) | None =>
           match msg.get("reasoning_text") {
             Some(String(s)) => if s == "" { None } else { Some(s) }
+            Some(Null) | None => None
             Some(_) =>
               raise @posoco.ModelError::ResponseParse(
                 "\{provider} response parse failure (stage=message.reasoning_text, category=wrong_type)",
               )
-            None => None
           }
+        Some(_) =>
+          raise @posoco.ModelError::ResponseParse(
+            "\{provider} response parse failure (stage=message.reasoning, category=wrong_type)",
+          )
       }
+    Some(_) =>
+      raise @posoco.ModelError::ResponseParse(
+        "\{provider} response parse failure (stage=message.reasoning_content, category=wrong_type)",
+      )
   }
   let tool_calls : Array[@posoco.ToolCall] = match msg.get("tool_calls") {
     Some(Array(tcs)) => {
@@ -179,11 +181,13 @@ fn decode_chat_response(
       }
       result
     }
+    // Same null-tolerance as message.content: some compatible servers
+    // serialize absent fields as explicit null, so null means no tool calls.
+    Some(Null) | None => []
     Some(_) =>
       raise @posoco.ModelError::ResponseParse(
         "\{provider} response parse failure (stage=message.tool_calls, category=wrong_type)",
       )
-    None => []
   }
   let finish : @posoco.FinishReason = match choice.get("finish_reason") {
     Some(String("")) =>
