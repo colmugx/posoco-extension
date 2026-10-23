@@ -9,6 +9,8 @@ import {
 // Values
 pub fn app() -> @rabbita.App
 
+pub fn archive_lanes() -> Array[@client.ClientBoardStage]
+
 pub fn attempt_count(@client.BoardReplica, String) -> Int32
 
 pub fn attempt_finishable(@client.ClientAttemptStatus) -> Bool
@@ -18,6 +20,8 @@ pub fn attempt_indicator(@client.BoardReplica, String) -> String
 pub fn attempt_kinds() -> Array[@client.ClientAttemptKind]
 
 pub fn attempt_outcomes() -> Array[@client.ClientAttemptOutcome]
+
+pub fn attempt_short(@client.BoardReplica, String) -> String
 
 pub fn attempt_startable(@client.ClientAttemptStatus) -> Bool
 
@@ -31,6 +35,8 @@ pub fn empty_message(@client.BoardReplica) -> String?
 
 pub fn finish_review_pending(@client.ClientAttempt) -> Bool
 
+pub fn flow_lanes() -> Array[@client.ClientBoardStage]
+
 pub fn lanes() -> Array[@client.ClientBoardStage]
 
 pub fn move_suggestions(@client.ClientBoardStage) -> Array[@client.ClientBoardStage]
@@ -39,9 +45,17 @@ pub fn ordered_tasks(@client.BoardReplica) -> Array[@client.ClientBoardTask]
 
 pub fn outcome_label(@client.ClientAttemptOutcome) -> String
 
+pub fn primary_action_label(@client.ClientBoardStage) -> String
+
+pub fn primary_move(@client.ClientBoardStage) -> @client.ClientBoardStage
+
 pub fn priorities() -> Array[@client.ClientBoardPriority]
 
 pub fn priority_label(@client.ClientBoardPriority) -> String
+
+pub fn priority_short(@client.ClientBoardPriority) -> String
+
+pub fn priority_tone(@client.ClientBoardPriority) -> String
 
 pub fn queue_attempt_id_valid(@client.BoardReplica, String) -> Bool
 
@@ -56,6 +70,8 @@ pub fn review_recordable(@client.ClientAttempt) -> Bool
 pub fn stage_label(@client.ClientBoardStage) -> String
 
 pub fn tasks_in_lane(@client.BoardReplica, @client.ClientBoardStage) -> Array[@client.ClientBoardTask]
+
+pub fn ui_stage_label(@client.ClientBoardStage) -> String
 
 // Errors
 

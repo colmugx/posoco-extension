@@ -61,6 +61,14 @@ fn update(
       let model = { ..model, generation, retry_pending: false, }
       (model, connect(env.url, generation, emit))
     }
+    ConnectionStable(generation) =>
+      if generation == model.generation &&
+        model.connection is Online &&
+        !model.retry_pending {
+        ({ ..model, retry_attempt: 0, }, @rabbita.none)
+      } else {
+        (model, @rabbita.none)
+      }
     TransportFailed(generation) =>
       if generation != model.generation {
         (model, @rabbita.none)
@@ -108,25 +116,38 @@ fn update(
           } else {
             "Waiting for the first authoritative snapshot"
           }
-          (
-            {
-              ..model,
-              connection: if retained {
-                Online
-              } else {
-                model.connection
-              },
-              baseline: if retained {
-                Retained
-              } else {
-                model.baseline
-              },
-              last_status,
+          let next = {
+            ..model,
+            connection: if retained {
+              Online
+            } else {
+              model.connection
             },
-            @websocket.send("board", Text(hello_payload(model.replica)), failed=_ => {
-              emit(TransportFailed(generation))
-            }),
+            baseline: if retained {
+              Retained
+            } else {
+              model.baseline
+            },
+            last_status,
+          }
+          let send = @websocket.send(
+            "board",
+            Text(hello_payload(model.replica)),
+            failed=_ => emit(TransportFailed(generation)),
           )
+          // A retained baseline may legitimately receive zero frames, so an
+          // open socket is not proof by itself. Only a connection that stays
+          // open for a moment resets the bounded reconnect delay; a server
+          // that accepts and immediately drops keeps escalating.
+          let cmds = if retained {
+            @rabbita.batch([
+              send,
+              @rabbita.delay(emit(ConnectionStable(generation)), 1000),
+            ])
+          } else {
+            send
+          }
+          (next, cmds)
         }
         Closed(_) | Errored =>
           // With a command in flight the baseline is unconfirmed and the
@@ -337,6 +358,7 @@ fn update(
       )
     FiltersCleared =>
       ({ ..model, task_filter: TaskFilter::none(), }, @rabbita.none)
+    NoticeDismissed => ({ ..model, notice: None, }, @rabbita.none)
     TaskSelected(_)
     | InspectorClosed
     | DependenciesOpened

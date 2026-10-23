@@ -323,3 +323,39 @@ test "queue attempt ids validate live against the authoritative replica" {
   assert_false(@src.queue_attempt_id_valid(unknown, "attempt-2"))
   assert_false(@src.queue_attempt_id_valid(unknown, ""))
 }
+
+///|
+test "priority shorthand, lane split, and compact attempt text" {
+  assert_eq(@src.priority_short(@client.Critical), "P0")
+  assert_eq(@src.priority_short(@client.High), "P1")
+  assert_eq(@src.priority_short(@client.Normal), "P2")
+  assert_eq(@src.priority_short(@client.Low), "P3")
+  assert_eq(@src.flow_lanes().map(stage => @src.ui_stage_label(stage)), [
+    "Backlog", "Shaping", "Ready", "In progress", "In review",
+  ])
+  assert_eq(@src.archive_lanes().map(stage => @src.ui_stage_label(stage)), [
+    "Done", "Paused",
+  ])
+  let replica = @client.BoardReplica::empty()
+  assert_true(
+    replica.apply_snapshot({
+      protocol_version: 1,
+      last_seq: 0L,
+      board_revision: 1L,
+      payload: {
+        "board": {
+          "revision": 1,
+          "tasks": [task_json("t", "running")],
+          "attempts": [
+            attempt_json("attempt-1", "t", "succeeded", 1234),
+            attempt_json("attempt-2", "t", "running", 2234),
+          ],
+        },
+        "events": [],
+      },
+    })
+    is @client.Applied,
+  )
+  assert_eq(@src.attempt_short(replica, "t"), "running")
+  assert_eq(@src.attempt_short(replica, "missing"), "no runs")
+}

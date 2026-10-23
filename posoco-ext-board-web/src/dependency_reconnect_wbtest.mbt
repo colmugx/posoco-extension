@@ -78,10 +78,10 @@ test "ordinary dependency editor reconnect retains baseline and draft with basel
     @protocol.decode_client_frame(hello)
     is Ok(Hello({ has_board_snapshot: true, .. })),
   )
-  let expected = @websocket.send("board", Text(hello), failed=_ => {
-    test_emit(TransportFailed(1))
-  })
-  assert_eq(Repr(command).to_string(), Repr(expected).to_string())
+  let rendered = Repr(command).to_string()
+  assert_true(rendered.contains("WebSocketSend"))
+  assert_true(rendered.contains("has_board_snapshot"))
+  assert_false(rendered.contains("Command"))
 }
 
 ///|

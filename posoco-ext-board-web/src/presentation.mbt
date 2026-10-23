@@ -4,6 +4,117 @@ pub fn lanes() -> Array[@client.ClientBoardStage] {
 }
 
 ///|
+/// The five stages that form the flow. Done and Suspended are archive states,
+/// rendered by the archive drawer instead of consuming flow columns.
+pub fn flow_lanes() -> Array[@client.ClientBoardStage] {
+  [Created, Refining, Ready, Running, Review]
+}
+
+///|
+pub fn archive_lanes() -> Array[@client.ClientBoardStage] {
+  [Done, Suspended]
+}
+
+///|
+/// Working vocabulary for the board surface. The wire/domain labels stay
+/// available through `stage_label`; the UI says what a person does, not what
+/// the enum is called.
+pub fn ui_stage_label(stage : @client.ClientBoardStage) -> String {
+  match stage {
+    Created => "Backlog"
+    Refining => "Shaping"
+    Ready => "Ready"
+    Running => "In progress"
+    Review => "In review"
+    Done => "Done"
+    Suspended => "Paused"
+  }
+}
+
+///|
+/// The forward transition for a stage. This is the card's primary intent; the
+/// remaining legal transitions live in the card menu.
+pub fn primary_move(
+  stage : @client.ClientBoardStage,
+) -> @client.ClientBoardStage {
+  match stage {
+    Created => Refining
+    Refining => Ready
+    Ready => Running
+    Running => Review
+    Review => Done
+    Done => Refining
+    Suspended => Ready
+  }
+}
+
+///|
+pub fn primary_action_label(stage : @client.ClientBoardStage) -> String {
+  match stage {
+    Created => "Start shaping"
+    Refining => "Mark ready"
+    Ready => "Start work"
+    Running => "Request review"
+    Review => "Mark done"
+    Done => "Reopen"
+    Suspended => "Resume"
+  }
+}
+
+///|
+/// Compact priority marker for scanned cards. This is deliberately a short
+/// ordinal, not a pill badge.
+pub fn priority_short(priority : @client.ClientBoardPriority) -> String {
+  match priority {
+    Low => "P3"
+    Normal => "P2"
+    High => "P1"
+    Critical => "P0"
+  }
+}
+
+///|
+pub fn priority_tone(priority : @client.ClientBoardPriority) -> String {
+  match priority {
+    Low => "low"
+    Normal => "normal"
+    High => "high"
+    Critical => "critical"
+  }
+}
+
+///|
+/// One-word attempt state for the card meta row. The inspector keeps the full
+/// vocabulary; the board only needs enough to scan.
+pub fn attempt_short(
+  replica : @client.BoardReplica,
+  task_id : String,
+) -> String {
+  let attempts = replica
+    .attempts()
+    .filter(attempt => attempt.task_id == task_id)
+  if attempts.any(attempt => attempt.status is Running) {
+    return "running"
+  }
+  match latest_attempt(attempts) {
+    None => "no runs"
+    Some(attempt) => "last \{attempt_status_short(attempt.status)}"
+  }
+}
+
+///|
+fn attempt_status_short(status : @client.ClientAttemptStatus) -> String {
+  match status {
+    Queued => "queued"
+    Running => "running"
+    Succeeded => "succeeded"
+    Failed => "failed"
+    Cancelled => "cancelled"
+    Interrupted => "interrupted"
+  }
+}
+
+///|
 pub fn stage_label(stage : @client.ClientBoardStage) -> String {
   match stage {
     Created => "Created"

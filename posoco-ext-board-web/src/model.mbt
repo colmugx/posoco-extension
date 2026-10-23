@@ -135,6 +135,7 @@ priv enum Msg {
   SocketEvent(Int32, @websocket.Event)
   TransportFailed(Int32)
   Retry(Int32)
+  ConnectionStable(Int32)
   SendFailed(Int32, String)
   CreateOpened
   EditOpened(String)
@@ -174,6 +175,7 @@ priv enum Msg {
   FilterPriorityChanged(String)
   FilterStageChanged(String)
   FiltersCleared
+  NoticeDismissed
 }
 
 ///|

@@ -49,6 +49,22 @@ test "opened sends baseline-aware Hello and empty replay settles reconnect" {
 }
 
 ///|
+test "stable retained connection resets bounded backoff" {
+  let model = {
+    ..seeded_online("t", "ready"),
+    connection: Reconnecting,
+    retry_attempt: 5,
+  }
+  let (opened, _) = update(model, SocketEvent(0, Opened), test_emit, test_env())
+  assert_true(opened.connection is Online)
+  assert_eq(opened.retry_attempt, 5)
+  let (stable, _) = update(opened, ConnectionStable(0), test_emit, test_env())
+  assert_eq(stable.retry_attempt, 0)
+  let (stale, _) = update(opened, ConnectionStable(1), test_emit, test_env())
+  assert_eq(stale.retry_attempt, 5)
+}
+
+///|
 fn test_emit(_msg : Msg) -> @rabbita.Cmd {
   @rabbita.none
 }

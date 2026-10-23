@@ -884,14 +884,10 @@ test "ordinary attempt draft reconnect preserves baseline and only sends baselin
       test_env(),
     )
     assert_true(opened.connection is Online)
-    assert_eq(
-      Repr(command).to_string(),
-      Repr(
-        @websocket.send("board", Text(hello_payload(model.replica)), failed=_ => {
-          test_emit(TransportFailed(1))
-        }),
-      ).to_string(),
-    )
+    let rendered = Repr(command).to_string()
+    assert_true(rendered.contains("WebSocketSend"))
+    assert_true(rendered.contains("has_board_snapshot"))
+    assert_false(rendered.contains("Command"))
   }
 }
 

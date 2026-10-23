@@ -1,57 +1,37 @@
 ///|
-test "operational vocabulary distinguishes manual stages decisions and execution" {
-  let explanation = manual_lifecycle_note()
-  assert_true(explanation.contains("Agent execution: Not connected"))
-  assert_true(
-    explanation.contains("Task Done does not verify execution success"),
-  )
-  assert_true(
-    explanation.contains("Review Approved does not finish an attempt"),
-  )
-  let model = submitted_review()
-  let before = model.replica.copy()
-  assert_true(model.pending is Some(_))
-  assert_true(
-    mutation_availability_note(model)
-    .unwrap()
-    .contains("until this command settles"),
-  )
-  assert_true(model.replica == before)
+test "working vocabulary names stages by what a person does" {
+  assert_eq(ui_stage_label(Created), "Backlog")
+  assert_eq(ui_stage_label(Refining), "Shaping")
+  assert_eq(ui_stage_label(Running), "In progress")
+  assert_eq(ui_stage_label(Review), "In review")
+  assert_eq(ui_stage_label(Suspended), "Paused")
+  assert_eq(primary_action_label(Ready), "Start work")
+  assert_eq(primary_action_label(Review), "Mark done")
+  assert_eq(primary_action_label(Suspended), "Resume")
+  assert_true(primary_move(Review) == Done)
+  assert_true(primary_move(Suspended) == Ready)
 }
 
 ///|
-test "unavailable mutation reasons distinguish retained state and terminal user action" {
+test "write hints distinguish connection states without leaking detail" {
   let model = seeded_online("t", "ready")
-  assert_true(mutation_availability_note(model) is None)
+  assert_true(write_blocked_hint(model) is None)
   assert_true(
-    mutation_availability_note(Model::empty(true))
-    .unwrap()
-    .contains("connecting"),
+    write_blocked_hint(Model::empty(true)).unwrap().contains("Connecting"),
   )
   let retained = { ..model, connection: Reconnecting, }
-  assert_true(
-    mutation_availability_note(retained)
-    .unwrap()
-    .contains("reference, not as live state"),
-  )
-  let invalidated = { ..retained, replica: @client.BoardReplica::empty(), }
-  assert_true(
-    mutation_availability_note(invalidated)
-    .unwrap()
-    .contains("fresh authoritative snapshot"),
-  )
+  assert_true(write_blocked_hint(retained).unwrap().contains("Reconnecting"))
   let terminal = {
     ..model,
     connection: ProtocolError("secret transport payload"),
   }
-  let message = mutation_availability_note(terminal).unwrap()
-  assert_true(message.contains("check host compatibility"))
-  assert_true(message.contains("before reloading"))
+  let message = write_blocked_hint(terminal).unwrap()
+  assert_true(message.contains("Connection stopped"))
   assert_false(message.contains("secret transport payload"))
   assert_true(
-    mutation_availability_note({ ..model, connection: Offline, })
+    write_blocked_hint({ ..model, connection: Offline, })
     .unwrap()
-    .contains("offline"),
+    .contains("Offline"),
   )
 }
 
@@ -74,9 +54,10 @@ test "hidden inspector notice and section navigation do not mutate intent" {
   assert_true(hidden.replica == model.replica)
   assert_true(hidden.dependency_editor == model.dependency_editor)
   assert_eq(inspector_sections(), [
-    ("inspector-task-details", "Task details"),
     ("inspector-dependencies", "Dependencies"),
-    ("inspector-attempts", "Attempts and reviews"),
+    ("inspector-dod", "Definition of done"),
+    ("inspector-attempts", "Runs"),
+    ("inspector-task-details", "Details"),
   ])
   let invalidated = { ..hidden, replica: @client.BoardReplica::empty(), }
   assert_true(selection_filter_note(invalidated) is None)

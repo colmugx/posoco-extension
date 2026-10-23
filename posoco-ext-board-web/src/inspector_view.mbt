@@ -90,6 +90,40 @@ fn inspector_body(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
+/// The next stage move, expressed as a person's intent. It mirrors the card's
+/// primary action so the inspector is a complete working surface, not a
+/// read-only view.
+fn inspector_next_action(
+  model : Model,
+  task : @client.ClientBoardTask,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let target = primary_move(task.stage)
+  let hint = create_unavailable_hint(model)
+  let locked = hint is Some(_)
+  @html.div(class="inspector-next", [
+    @html.button(
+      type_="button",
+      class="btn btn-primary inspector-next-action",
+      title=match hint {
+        Some(text) => text
+        None => "Move to \{ui_stage_label(target)}"
+      },
+      disabled=locked,
+      on_click=emit(MoveRequested(task.id, target)),
+      primary_action_label(task.stage),
+    ),
+    @html.p(
+      class="inspector-next-hint",
+      match hint {
+        Some(text) => text
+        None => "Moves to \{ui_stage_label(target)}"
+      },
+    ),
+  ])
+}
+
+///|
 fn task_details(
   model : Model,
   task : @client.ClientBoardTask,
@@ -115,6 +149,14 @@ fn task_details(
           "Close",
         ),
       ]),
+      @html.p(class="inspector-stage", [
+        @html.span(ui_stage_label(task.stage)),
+        @html.span(class="dot", ""),
+        @html.span(
+          "\{priority_short(task.priority)} \{priority_label(task.priority)}",
+        ),
+      ]),
+      inspector_next_action(model, task, emit),
       @html.nav(
         class="inspector-nav",
         attrs=@html.Attrs::build().aria_label("Inspector sections"),
@@ -132,34 +174,33 @@ fn task_details(
           )
         None => @html.nothing
       },
-      @html.h3(id="inspector-task-details", "Task details"),
-      task_fields(task),
-      @html.h3("Description"),
-      if task.description == "" {
-        @html.p(class="inspector-empty", "No description.")
-      } else {
-        @html.p(task.description)
-      },
-      @html.h3("Definition of done"),
-      task_dod(task),
       @html.h3(id="inspector-dependencies", "Dependencies"),
       task_dependencies(model, task, draft, emit),
-      @html.h3(id="inspector-attempts", "Attempts and reviews"),
+      @html.h3(id="inspector-dod", "Definition of done"),
+      task_dod(task),
+      @html.h3(id="inspector-attempts", "Runs (manual)"),
       task_attempts(model, emit),
+      @html.details(id="inspector-task-details", class="inspector-fold", [
+        @html.summary(class="inspector-fold-summary", "Details"),
+        @html.h3("Description"),
+        if task.description == "" {
+          @html.p(class="inspector-empty", "No description.")
+        } else {
+          @html.p(task.description)
+        },
+        task_fields(task),
+      ]),
     ],
   )
 }
 
 ///|
-/// Read-only field grid; every timestamp the client record carries is shown.
+/// Read-only field grid for the collapsed Details section. Stage and priority
+/// live in the inspector header, so they are not repeated here.
 fn task_fields(task : @client.ClientBoardTask) -> @html.Html {
   let rows = [
     @html.dt("ID"),
     @html.dd(task.id),
-    @html.dt("Task stage"),
-    @html.dd(stage_label(task.stage)),
-    @html.dt("Priority"),
-    @html.dd(priority_label(task.priority)),
     @html.dt("Created"),
     @html.dd(utc_timestamp(task.created_at_ms)),
     @html.dt("Updated"),
@@ -358,7 +399,7 @@ fn dependency_editor_panel(
 fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let attempts = inspector_attempts(model)
   let list = if attempts.is_empty() {
-    @html.p(class="inspector-empty", "No attempts yet.")
+    @html.p(class="inspector-empty", "No runs yet.")
   } else {
     @html.ul(
       class="attempt-list",
@@ -366,13 +407,6 @@ fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     )
   }
   @html.fragment([
-    @html.p(
-      class="inspector-status",
-      // Names all four manual notions so statuses are never confused: these
-      // controls move attempt status and record review decisions only —
-      // never a task stage and never an Agent run.
-      "Manual Board lifecycle only: these controls change attempt status and record review decisions. They never run an Agent and never change a task's stage.",
-    ),
     list,
     attempt_queue_form(model, emit),
     review_form(model, emit),
