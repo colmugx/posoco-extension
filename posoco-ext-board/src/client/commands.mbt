@@ -363,3 +363,17 @@ pub fn move_task_command(
     args: { "id": Json(id), "to": Json(to.to_wire()) },
   }
 }
+
+///|
+pub fn delete_task_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.task.delete",
+    args: { "id": Json(id) },
+  }
+}

@@ -37,6 +37,26 @@ test "ticket state records questions without forcing the drawer" {
 }
 
 ///|
+test "failed runs stay in the inbox with their error" {
+  let state : TicketState = {
+    questions: [],
+    runs: [
+      {
+        task_id: "t1",
+        session_id: "s1",
+        phase: "work",
+        status: "failed",
+        error: Some("provider timed out"),
+        result: None,
+      },
+    ],
+  }
+  let model = apply_ticket_state(Model::empty(true), state)
+  assert_eq(ticket_inbox_count(model), 1)
+  assert_true(model.tickets.runs[0].error is Some(_))
+}
+
+///|
 test "ticket commands stay inert until the host advertises the inbox" {
   let model = Model::empty(true)
   let (inert, _) = update(model, TicketRun("t"), test_emit, test_env())
@@ -46,7 +66,6 @@ test "ticket commands stay inert until the host advertises the inbox" {
   assert_true(started.ticket_sending)
 }
 
-///|
 ///|
 test "already-running rejection opens the inbox with a readable reason" {
   let model = apply_ticket_outcome(

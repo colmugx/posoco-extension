@@ -4,7 +4,7 @@
 /// decoder is total, synchronous and side-effect free: it reads only the
 /// frame and the caller-supplied `at_ms`, never a clock, the store or the
 /// domain state. Validation is purely structural — frame identity, the fixed
-/// eight-name table and the per-command args schema. Every semantic rule
+/// nine-name table and the per-command args schema. Every semantic rule
 /// (existence, transitions, cycles, duplicates, empty identifiers, no-op
 /// updates) stays with the domain's `propose`.
 
@@ -303,6 +303,17 @@ fn decode_move_task(
 }
 
 ///|
+fn decode_delete_task(
+  fields : Map[String, Json],
+  at_ms : Int64,
+  expected_revision : Int64,
+) -> @domain.BoardCommand raise SchemaError {
+  args_allowlist(fields, ["id"])
+  let id = args_task_id(fields, "id")
+  @domain.DeleteTask(id~, at_ms~, expected_revision~)
+}
+
+///|
 fn decode_queue_attempt(
   fields : Map[String, Json],
   at_ms : Int64,
@@ -361,6 +372,7 @@ fn command_parser(
     "board.task.update" => Some(decode_update_task)
     "board.task.set_dependencies" => Some(decode_set_dependencies)
     "board.task.move" => Some(decode_move_task)
+    "board.task.delete" => Some(decode_delete_task)
     "board.attempt.queue" => Some(decode_queue_attempt)
     "board.attempt.start" => Some(decode_start_attempt)
     "board.attempt.finish" => Some(decode_finish_attempt)

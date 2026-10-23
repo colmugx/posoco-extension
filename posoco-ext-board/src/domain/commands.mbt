@@ -35,6 +35,9 @@ pub(all) enum BoardCommand {
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
+  /// Remove a non-running task. Used when shaping replaces one oversized
+  /// ticket with independently executable tickets.
+  DeleteTask(id~ : BoardTaskId, at_ms~ : Int64, expected_revision~ : Int64)
   QueueAttempt(
     id~ : AttemptId,
     task~ : BoardTaskId,
@@ -81,6 +84,7 @@ fn BoardCommand::expected_revision(self : BoardCommand) -> Int64 {
     | UpdateTask(expected_revision~, ..)
     | SetDependencies(expected_revision~, ..)
     | MoveTask(expected_revision~, ..)
+    | DeleteTask(expected_revision~, ..)
     | QueueAttempt(expected_revision~, ..)
     | StartAttempt(expected_revision~, ..)
     | FinishAttempt(expected_revision~, ..)
@@ -171,6 +175,7 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
         expected_revision~,
       )
     MoveTask(..)
+    | DeleteTask(..)
     | QueueAttempt(..)
     | StartAttempt(..)
     | FinishAttempt(..)

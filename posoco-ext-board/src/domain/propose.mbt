@@ -115,6 +115,7 @@ pub fn BoardDomain::propose(
     SetDependencies(id~, dependencies~, at_ms~, ..) =>
       propose_set_dependencies(state, id, dependencies, at_ms)
     MoveTask(id~, to~, at_ms~, ..) => propose_move(state, id, to, at_ms)
+    DeleteTask(id~, at_ms~, ..) => propose_delete(state, id, at_ms)
     QueueAttempt(id~, task~, kind~, at_ms~, ..) =>
       propose_queue_attempt(state, id, task, kind, at_ms)
     StartAttempt(id~, at_ms~, ..) => propose_start_attempt(state, id, at_ms)
@@ -314,6 +315,60 @@ fn propose_move(
   next.put_task({ ..task, stage: to, updated_at_ms: at_ms, ready_since_ms, })
   next.bump_revision()
   Ok({ next_state: next, events: [TaskStageChanged(id~, from~, to~, at_ms~)], })
+}
+
+///|
+/// Delete is deliberately narrower than move: a ticket that is already
+/// running, under review, done, or suspended is not removed. Shaping uses
+/// this only for a source ticket it has just replaced with Ready children.
+fn propose_delete(
+  state : BoardState,
+  id : BoardTaskId,
+  at_ms : Int64,
+) -> Result[BoardProposal, BoardError] {
+  if id.value == "" {
+    return Err(InvalidInput(reason="task id must not be empty"))
+  }
+  if invalid_time(at_ms) {
+    return Err(InvalidInput(reason="updated_at_ms must not be negative"))
+  }
+  let task = match state.task(id) {
+    Some(task) => task
+    None => return Err(TaskMissing(task=id))
+  }
+  match task.stage {
+    Created | Refining | Ready => ()
+    _ =>
+      return Err(
+        InvalidInput(
+          reason="only Backlog, Shaping, or Ready tickets can be deleted",
+        ),
+      )
+  }
+  for other in state.tasks() {
+    if other.dependencies.contains(id) {
+      return Err(
+        InvalidInput(
+          reason="task is still a dependency of another task ('" +
+            other.id.value +
+            "')",
+        ),
+      )
+    }
+  }
+  for attempt in state.attempts() {
+    if attempt.task_id == id {
+      return Err(
+        InvalidInput(
+          reason="task still has an attempt ('" + attempt.id.value + "')",
+        ),
+      )
+    }
+  }
+  let next = state.clone_detached()
+  next.remove_task(id)
+  next.bump_revision()
+  Ok({ next_state: next, events: [TaskDeleted(id~, at_ms~)], })
 }
 
 ///|

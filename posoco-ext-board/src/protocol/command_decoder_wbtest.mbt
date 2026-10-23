@@ -1,5 +1,5 @@
 ///|
-/// Decoder tests for the fixed eight-command wire surface. Every rejection
+/// Decoder tests for the fixed nine-command wire surface. Every rejection
 /// test goes through the shared helpers so correlation, the stable code and
 /// the reason non-emptiness are pinned on every case, not just once.
 
@@ -50,6 +50,7 @@ fn decoder_valid_fields(name : String) -> Map[String, Json] raise {
       fields["id"] = Json::string("t-1")
       fields["to"] = Json::string("ready")
     }
+    "board.task.delete" => fields["id"] = Json::string("t-1")
     "board.attempt.queue" => {
       fields["id"] = Json::string("a-1")
       fields["task_id"] = Json::string("t-1")
@@ -249,6 +250,14 @@ test "board.task.set_dependencies and board.task.move decode strictly" {
       expected_revision=7L,
     ),
   )
+  decoder_ok(
+    decoder_wire("board.task.delete", decoder_valid_args("board.task.delete")),
+    @domain.DeleteTask(
+      id=decoder_task_id("t-1"),
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
   // set_dependencies: missing id, missing array, array of the wrong shape.
   decoder_args_error(
     decoder_wire("board.task.set_dependencies", Json::object({})),
@@ -286,6 +295,14 @@ test "board.task.set_dependencies and board.task.move decode strictly" {
         "to": Json::string("ready"),
         "from": Json::string("created"),
       }),
+    ),
+  )
+  // delete: missing id and an extra stage field.
+  decoder_args_error(decoder_wire("board.task.delete", Json::object({})))
+  decoder_args_error(
+    decoder_wire(
+      "board.task.delete",
+      Json::object({ "id": Json::string("t-1"), "to": Json::string("done") }),
     ),
   )
 }
@@ -458,7 +475,8 @@ test "args must be a JSON object for every known name" {
   for
     name in [
       "board.task.create", "board.task.update", "board.task.set_dependencies", "board.task.move",
-      "board.attempt.queue", "board.attempt.start", "board.attempt.finish", "board.review.record",
+      "board.task.delete", "board.attempt.queue", "board.attempt.start", "board.attempt.finish",
+      "board.review.record",
     ] {
     for
       args in [
@@ -554,7 +572,8 @@ test "enum strings are strict, lowercase snake_case and case sensitive" {
 test "no payload can inject a timestamp or a revision" {
   let names : Array[String] = [
     "board.task.create", "board.task.update", "board.task.set_dependencies", "board.task.move",
-    "board.attempt.queue", "board.attempt.start", "board.attempt.finish", "board.review.record",
+    "board.task.delete", "board.attempt.queue", "board.attempt.start", "board.attempt.finish",
+    "board.review.record",
   ]
   for name in names {
     for

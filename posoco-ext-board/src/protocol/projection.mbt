@@ -256,6 +256,11 @@ pub fn project_event(
         ("to", wire_stage(to)),
         ("at_ms", wire_number(at_ms)),
       ])
+    TaskDeleted(id~, at_ms~) =>
+      wire_event(kind="board.task.deleted", payload=[
+        ("task_id", Json::string(id.value)),
+        ("at_ms", wire_number(at_ms)),
+      ])
     AttemptQueued(id~, task_id~, kind~, at_ms~) =>
       wire_event(kind="board.attempt.queued", payload=[
         ("attempt_id", Json::string(id.value)),

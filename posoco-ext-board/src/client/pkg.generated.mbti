@@ -10,6 +10,8 @@ pub fn create_task_command(String, Int64, id~ : String, title~ : String, descrip
 
 pub fn decode_board_snapshot(@protocol.BoardSnapshot) -> Result[DecodedBoardSnapshot, ClientError]
 
+pub fn delete_task_command(String, Int64, id~ : String) -> @protocol.BoardClientCommand
+
 pub fn finish_attempt_command(String, Int64, id~ : String, outcome~ : ClientAttemptOutcome) -> @protocol.BoardClientCommand
 
 pub fn move_task_command(String, Int64, id~ : String, to~ : ClientBoardStage) -> @protocol.BoardClientCommand

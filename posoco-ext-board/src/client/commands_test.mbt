@@ -135,6 +135,21 @@ test "move command emits only id and to and does not validate the server FSM" {
 }
 
 ///|
+test "delete command emits only the task id" {
+  let command = @client.delete_task_command("cmd-delete", 10L, id="task-1")
+  assert_eq(command.command_id, "cmd-delete")
+  assert_eq(command.expected_revision, 10L)
+  assert_eq(command.name, "board.task.delete")
+  assert_eq(command.args, { "id": "task-1" })
+  assert_eq(
+    @protocol.decode_client_frame(
+      @protocol.encode_client_frame(@protocol.Command(command)),
+    ),
+    Ok(@protocol.Command(command)),
+  )
+}
+
+///|
 test "command array inputs and separate commands never share mutable JSON arrays" {
   let dod = ["Original DoD"]
   let dependencies = ["task-dependency"]

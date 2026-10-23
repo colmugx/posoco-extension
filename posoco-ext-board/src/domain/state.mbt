@@ -166,6 +166,11 @@ fn BoardState::put_task(self : BoardState, task : BoardTask) -> Unit {
 }
 
 ///|
+fn BoardState::remove_task(self : BoardState, id : BoardTaskId) -> Unit {
+  self.tasks.remove(id)
+}
+
+///|
 fn BoardState::put_attempt(self : BoardState, attempt : Attempt) -> Unit {
   self.attempts[attempt.id] = attempt
 }

@@ -15,6 +15,7 @@ pub(all) enum BoardEvent {
     to~ : BoardStage,
     at_ms~ : Int64
   )
+  TaskDeleted(id~ : BoardTaskId, at_ms~ : Int64)
   AttemptQueued(
     id~ : AttemptId,
     task_id~ : BoardTaskId,

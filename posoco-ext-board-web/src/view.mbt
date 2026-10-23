@@ -611,7 +611,8 @@ fn task_card(
           @html.div(
             class="menu",
             [
-              if model.ticket_available && task.stage == @client.Refining {
+              if model.ticket_available &&
+                (task.stage == @client.Refining || task.stage == @client.Ready) {
                 card_action(
                   TicketShape(task.id),
                   emit,

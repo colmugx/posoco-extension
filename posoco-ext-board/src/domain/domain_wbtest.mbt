@@ -39,6 +39,11 @@ fn move_cmd(
 }
 
 ///|
+fn delete_cmd(id : String, rev : Int64, at~ : Int64 = 3000L) -> BoardCommand {
+  DeleteTask(id=tid(id), at_ms=at, expected_revision=rev)
+}
+
+///|
 fn accept(state : BoardState, command : BoardCommand) -> BoardProposal raise {
   match BoardDomain::propose(state, command) {
     Ok(proposal) => proposal
@@ -107,6 +112,43 @@ test "create task lands on the created stage and bumps revision once" {
   assert_eq(task.updated_at_ms, 1000L)
   assert_eq(task.ready_since_ms, None)
   assert_eq(next.attempt(aid("a1")), None)
+}
+
+///|
+test "delete removes a refining ticket and records one event" {
+  let state = task_at(Refining)
+  let revision = state.revision()
+  let proposal = accept(state, delete_cmd("t", revision))
+  assert_eq(proposal.next_state.task(tid("t")), None)
+  assert_eq(proposal.next_state.revision(), revision + 1L)
+  assert_eq(proposal.events, [TaskDeleted(id=tid("t"), at_ms=3000L)])
+}
+
+///|
+test "delete rejects a running ticket" {
+  let state = task_at(Running)
+  let error = rejection_of(state, delete_cmd("t", state.revision()))
+  match error {
+    InvalidInput(reason~) => assert_true(reason.contains("can be deleted"))
+    _ => fail("expected a guarded deletion rejection")
+  }
+}
+
+///|
+test "delete rejects a ticket another task still depends on" {
+  let state = task_at(Refining)
+  let created = accept(
+    state,
+    create_cmd("child", state.revision(), deps=[tid("t")]),
+  )
+  let error = rejection_of(
+    created.next_state,
+    delete_cmd("t", created.next_state.revision()),
+  )
+  match error {
+    InvalidInput(reason~) => assert_true(reason.contains("dependency"))
+    _ => fail("expected a dependency rejection")
+  }
 }
 
 ///|

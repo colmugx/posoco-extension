@@ -176,9 +176,9 @@ fn ticket_answer(
 
 ///|
 fn ticket_task_running(model : Model, task_id : String) -> Bool {
-  model.tickets.runs.any(run =>
+  model.tickets.runs.any(run => {
     run.task_id == task_id && run.status == "running"
-  )
+  })
 }
 
 ///|
@@ -189,7 +189,9 @@ fn ticket_question_count(model : Model) -> Int32 {
 ///|
 fn ticket_inbox_count(model : Model) -> Int32 {
   ticket_question_count(model) +
-  model.tickets.runs.filter(run => run.result is Some(_)).length()
+  model.tickets.runs
+  .filter(run => run.result is Some(_) || run.error is Some(_))
+  .length()
 }
 
 ///|
@@ -226,10 +228,18 @@ fn ticket_result_card(
       @html.span(class="ticket-question-kind", run.status),
     ]),
     @html.div(
-      class="ticket-result-text",
+      class=if run.error is Some(_) {
+        "ticket-result-text ticket-result-error"
+      } else {
+        "ticket-result-text"
+      },
       match run.result {
         Some(text) => text
-        None => "No result recorded."
+        None =>
+          match run.error {
+            Some(text) => text
+            None => "No result recorded."
+          }
       },
     ),
     @html.div(class="ticket-answers", [
@@ -254,7 +264,7 @@ fn ticket_rejection_text(reason : String?) -> String {
   match reason {
     Some("ticket is already running") =>
       "This ticket is already running. Check Inbox for a question, or wait for it to finish."
-    Some("ticket must be Backlog or Shaping before it can be shaped") =>
+    Some("ticket must be Backlog, Shaping, or Ready before it can be shaped") =>
       "Move the ticket back to Backlog or Shaping before shaping it again."
     Some("ticket must be Ready before it can run") =>
       "Shape the ticket and move it to Ready before starting work."
@@ -401,7 +411,7 @@ fn ticket_drawer(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           items.push(ticket_question_card(model, question, emit))
         }
         for run in model.tickets.runs {
-          if run.result is Some(_) {
+          if run.result is Some(_) || run.error is Some(_) {
             items.push(ticket_result_card(model, run, emit))
           }
         }

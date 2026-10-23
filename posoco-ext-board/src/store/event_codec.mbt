@@ -25,6 +25,11 @@ fn event_json(event : @domain.BoardEvent) -> Json {
       f["to"] = stage_json(to)
       f["at_ms"] = number(at_ms)
     }
+    TaskDeleted(id~, at_ms~) => {
+      f["type"] = "TaskDeleted"
+      f["id"] = Json::string(id.value)
+      f["at_ms"] = number(at_ms)
+    }
     AttemptQueued(id~, task_id~, kind~, at_ms~) => {
       f["type"] = "AttemptQueued"
       f["id"] = Json::string(id.value)
@@ -86,7 +91,7 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
   }
   let keys = ["schema_version", "type", "at_ms"]
   match tag {
-    "TaskCreated" | "TaskUpdated" => keys.push("id")
+    "TaskCreated" | "TaskUpdated" | "TaskDeleted" => keys.push("id")
     "DependenciesSet" => {
       keys.push("id")
       keys.push("dependencies")
@@ -131,6 +136,7 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
   match tag {
     "TaskCreated" => TaskCreated(id=task_id(f["id"]), at_ms~)
     "TaskUpdated" => TaskUpdated(id=task_id(f["id"]), at_ms~)
+    "TaskDeleted" => TaskDeleted(id=task_id(f["id"]), at_ms~)
     "DependenciesSet" =>
       DependenciesSet(
         id=task_id(f["id"]),

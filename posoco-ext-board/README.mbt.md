@@ -520,7 +520,7 @@ history; gate-protected lifecycle, Hello/security checks, snapshot bootstrap
 and overflow resync are unchanged. Every domain timestamp is stamped by the
 backend from its own `now_ms` — clients never send clocks.
 
-Eight commands are accepted, each keyed by `expected_revision` for optimistic
+Nine commands are accepted, each keyed by `expected_revision` for optimistic
 concurrency and using the stable `board.*` wire names decoded in `protocol`:
 
 | Command | Args |
@@ -529,6 +529,7 @@ concurrency and using the stable `board.*` wire names decoded in `protocol`:
 | `board.task.update` | required `id`; optional `title`, `description`, `priority`, `definition_of_done` |
 | `board.task.set_dependencies` | `id`, `dependencies` |
 | `board.task.move` | `id`, `to` |
+| `board.task.delete` | `id` (only Created/Refining/Ready, and no dependents) |
 | `board.attempt.queue` | `id`, `task_id`, `kind` |
 | `board.attempt.start` | `id` |
 | `board.attempt.finish` | `id`, `outcome` |

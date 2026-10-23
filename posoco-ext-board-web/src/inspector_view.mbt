@@ -105,7 +105,9 @@ fn inspector_next_action(
     Some(text) => Some(text)
     None =>
       if ticket_task_running(model, task.id) {
-        Some("This ticket is already running. Check Inbox for a question or wait for it to finish.")
+        Some(
+          "This ticket is already running. Check Inbox for a question or wait for it to finish.",
+        )
       } else {
         None
       }
