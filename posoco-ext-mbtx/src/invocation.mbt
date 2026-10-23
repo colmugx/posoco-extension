@@ -13,7 +13,7 @@ async fn communicate(
   process : &GuestProcess,
   input : Json,
   tools : Array[String],
-  invoker : &ToolInvoker?,
+  on_call : (async (String, Json) -> Outcome)?,
   frame_limit : Int32,
   max_pending : Int32,
   max_calls : Int32,
@@ -90,14 +90,14 @@ async fn communicate(
                     structured=None,
                   )
                 } else {
-                  match invoker {
+                  match on_call {
                     None =>
                       @protocol.Failure(
                         code="ToolInvocationUnavailable",
                         content="Posoco scoped tool invocation is not connected",
                         structured=None,
                       )
-                    Some(invoker) => invoker.invoke(name, arguments)
+                    Some(handle) => handle(name, arguments)
                   }
                 }
                 calls.push({ request_id: id, name, arguments, outcome, })
@@ -159,7 +159,7 @@ async fn Runtime::execute(
   input : Json,
   invocation_id~ : String,
   tools~ : Array[String] = [],
-  invoker? : &ToolInvoker,
+  on_call? : async (String, Json) -> Outcome,
   timeout_ms~ : Int32 = 120000,
   handshake_ms~ : Int32 = 5000,
   max_frame_bytes~ : Int32 = 65536,
@@ -264,7 +264,7 @@ async fn Runtime::execute(
               true,
               process => {
                 communicate(
-                  process, input, tools, invoker, max_frame_bytes, max_pending, max_calls,
+                  process, input, tools, on_call, max_frame_bytes, max_pending, max_calls,
                   max_output_bytes, handshake_ms,
                 )
               },

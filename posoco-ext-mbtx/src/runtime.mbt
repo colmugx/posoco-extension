@@ -17,12 +17,6 @@ pub suberror RuntimeError {
 pub extend RuntimeError with Debug::{to_repr}
 
 ///|
-/// Reserved for the future Posoco-scoped adapter. This port does not implement governance.
-pub(open) trait ToolInvoker {
-  async fn invoke(Self, name : String, arguments : Json) -> Outcome
-}
-
-///|
 pub(all) struct Diagnostic {
   level : String
   content : String

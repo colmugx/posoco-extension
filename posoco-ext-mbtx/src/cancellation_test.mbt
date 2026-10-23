@@ -5,11 +5,12 @@ struct BlockingInvoker {
 }
 
 ///|
-impl @posoco-ext-mbtx.ToolInvoker for BlockingInvoker with fn invoke(
-  self,
-  _name,
-  _arguments,
-) {
+/// Test double whose call blocks until cancelled, recording settlement.
+async fn BlockingInvoker::invoke(
+  self : BlockingInvoker,
+  _name : String,
+  _arguments : Json,
+) -> @protocol.Outcome {
   @async.with_task_group(group => {
     group.add_defer(() => self.settled = true)
     self.entered.put(())
@@ -33,13 +34,10 @@ async test "cancellation joins pending calls and the same invocation id can be r
       settled: false,
     }
     let call = group.spawn(allow_failure=true, () => {
-      runtime.run_file(
-        artifact,
-        {},
-        invocation_id="retry",
-        tools=["read"],
-        invoker~,
-      )
+      runtime.run_file(artifact, {}, invocation_id="retry", tools=["read"], on_call=(
+        name,
+        args,
+      ) => invoker.invoke(name, args))
     })
     @async.with_timeout(5000, () => invoker.entered.get())
     let cancellation_started = @async.now()
@@ -54,12 +52,13 @@ async test "cancellation joins pending calls and the same invocation id can be r
     assert_true(@async.now() - cancellation_started < 3000L)
     assert_true(invoker.settled)
     assert_false(runtime.cancel("retry"))
+    let retry_invoker = EchoInvoker::{ calls: [], }
     let retry = runtime.run_file(
       artifact,
       { "value": 2 },
       invocation_id="retry",
       tools=["read"],
-      invoker=EchoInvoker::{ calls: [], },
+      on_call=(name, args) => retry_invoker.invoke(name, args),
     )
     assert_eq(
       retry.outcome,

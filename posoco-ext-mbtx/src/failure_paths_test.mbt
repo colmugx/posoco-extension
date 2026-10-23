@@ -88,7 +88,7 @@ async test "output and child call budgets fail closed without disabling later in
         {},
         invocation_id="calls",
         tools=["read"],
-        invoker=EchoInvoker::{ calls: [], },
+        on_call=(name, args) => EchoInvoker::{ calls: [], }.invoke(name, args),
         max_calls=1,
       )
     catch {
@@ -133,9 +133,11 @@ async test "an abandoned in-flight request exits promptly without a fabricated o
         {},
         invocation_id="abandoned",
         tools=["read"],
-        invoker=BlockingInvoker::{
-          entered: @aqueue.Queue(kind=Blocking(1)),
-          settled: false,
+        on_call=(name, args) => {
+          BlockingInvoker::{
+            entered: @aqueue.Queue(kind=Blocking(1)),
+            settled: false,
+          }.invoke(name, args)
         },
       )
     catch {

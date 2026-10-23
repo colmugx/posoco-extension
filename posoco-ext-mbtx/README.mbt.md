@@ -26,7 +26,8 @@ status bus and unregisters the segment on success. The optional Posoco
 
 For isolated testing or forced managed installation, pass \`prefer_system=false\` to Runtime or MbtxExtension. Explicit custom launcher paths retain their previous behavior without automatic
 installation. The guest SDK imports are still resolved through MoonBit, not
-bundled by the host. ToolInvoker/Posoco governance integration remains separate.
+bundled by the host. Guest call frames are handed to the caller's `on_call`
+handler; Posoco governance integration lives in posoco-ext-ptc, not here.
 
 ## Host API
 
@@ -92,12 +93,14 @@ single-writer registry owns request ids, pending waiters and settlement; I/O sta
 on structured tasks outside the actor. Unknown or duplicate replies fail explicitly.
 
 `ctx.call(name, arguments)` returns a structured Outcome. Requests outside the
-effective tool-name set return `CapabilityDenied`. Without the future Posoco
-adapter, otherwise allowed calls return `ToolInvocationUnavailable`.
+effective tool-name set return `CapabilityDenied`. Without an `on_call`
+handler, otherwise allowed calls return `ToolInvocationUnavailable`.
 
-`ToolInvoker` is a trusted integration seam, **not** a governance implementation.
+The `on_call` handler is a trusted integration seam, **not** a governance
+implementation: the runtime is tool-agnostic and only forwards call frames.
 Do not implement it by directly calling a ToolProvider or fabricating child
-effects. Tests use fakes and do not certify Posoco permissions or scheduling.
+effects — the governed seam (`ToolInvoker`) lives in posoco-ext-ptc. Tests
+use fakes and do not certify Posoco permissions or scheduling.
 
 ## Protocol, isolation and limits
 

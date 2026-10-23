@@ -4,11 +4,13 @@ struct EchoInvoker {
 }
 
 ///|
-impl @posoco-ext-mbtx.ToolInvoker for EchoInvoker with fn invoke(
-  self,
-  name,
-  arguments,
-) {
+/// Test double that records call names; sleeps on `{"value":1}` so a
+/// concurrent request can overtake it.
+async fn EchoInvoker::invoke(
+  self : EchoInvoker,
+  name : String,
+  arguments : Json,
+) -> @protocol.Outcome {
   self.calls.push(name)
   if arguments is { "value": 1, .. } {
     @async.sleep(20)
@@ -42,7 +44,7 @@ async test "concurrent guest requests remain correlated and are constrained by c
       {},
       invocation_id="join",
       tools=["read"],
-      invoker~,
+      on_call=(name, args) => invoker.invoke(name, args),
     )
     assert_eq(
       result.outcome,
@@ -66,11 +68,11 @@ struct ReversedInvoker {
 }
 
 ///|
-impl @posoco-ext-mbtx.ToolInvoker for ReversedInvoker with fn invoke(
-  self,
-  name,
-  arguments,
-) {
+async fn ReversedInvoker::invoke(
+  self : ReversedInvoker,
+  name : String,
+  arguments : Json,
+) -> @protocol.Outcome {
   self.calls.push(name)
   if arguments is { "value": 1, .. } {
     @async.sleep(90)
@@ -116,7 +118,7 @@ async test "concurrent out-of-order replies stay correlated per request" {
       {},
       invocation_id="reversed",
       tools=["read"],
-      invoker~,
+      on_call=(name, args) => invoker.invoke(name, args),
     )
     assert_eq(
       result.outcome,

@@ -103,7 +103,7 @@ async test "moonx cancellation settles child calls and permits retry" {
         { "block": true },
         invocation_id="cancel",
         tools=["read"],
-        invoker~,
+        on_call=(name, args) => invoker.invoke(name, args),
       )
     })
     @async.with_timeout(30000, () => invoker.entered.get())
