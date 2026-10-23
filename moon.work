@@ -37,7 +37,7 @@ members = [
   "./posoco-ext-pi-adaptor",
   "./posoco-ext-plan",
   "./posoco-ext-profiles",
-  "./posoco-ext-ptc",
+  "./posoco-ext-bunraku",
   "./posoco-ext-ps1",
   "./posoco-ext-qwen",
   "./posoco-ext-ratelimit",
