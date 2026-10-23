@@ -241,12 +241,7 @@ fn ticket_question_count(model : Model) -> Int32 {
 
 ///|
 fn ticket_inbox_count(model : Model) -> Int32 {
-  ticket_question_count(model) +
-  model.tickets.runs
-  .filter(run => {
-    run.status == "running" || run.result is Some(_) || run.error is Some(_)
-  })
-  .length()
+  ticket_question_count(model)
 }
 
 ///|
@@ -270,7 +265,7 @@ fn ticket_dismiss(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
 ///|
 fn ticket_activity_list(activities : Array[TicketActivity]) -> @html.Html {
   let items : Array[@html.Html] = []
-  let start = if activities.length() > 8 { activities.length() - 8 } else { 0 }
+  let start = if activities.length() > 20 { activities.length() - 20 } else { 0 }
   for index in start..<activities.length() {
     let activity = activities[index]
     items.push(
@@ -287,7 +282,6 @@ fn ticket_activity_list(activities : Array[TicketActivity]) -> @html.Html {
 fn ticket_run_card(
   model : Model,
   run : TicketRun,
-  emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
   let title = match task_by_id(model.replica, run.task_id) {
     Some(task) => task.title
@@ -322,14 +316,6 @@ fn ticket_run_card(
       class="ticket-run-foot",
       "Step \{run.steps} · updates automatically while the worker runs.",
     ),
-    @html.div(class="ticket-answers", [
-      @html.button(
-        type_="button",
-        class="btn btn-sm",
-        on_click=emit(TicketDrawerToggled),
-        "Close",
-      ),
-    ]),
   ])
 }
 
@@ -389,7 +375,7 @@ fn apply_ticket_state(model : Model, state : TicketState) -> Model {
 fn ticket_rejection_text(reason : String?) -> String {
   match reason {
     Some("ticket is already running") =>
-      "This ticket is already running. Check Inbox for a question, or wait for it to finish."
+      "This ticket is already running. Open its Activity dialog to inspect progress."
     Some("ticket must be Backlog, Shaping, or Ready before it can be shaped") =>
       "Move the ticket back to Backlog or Shaping before shaping it again."
     Some("ticket must be Ready before it can run") =>
@@ -397,7 +383,7 @@ fn ticket_rejection_text(reason : String?) -> String {
     Some("ticket_runtime_unavailable") =>
       "The Board ticket runtime is unavailable. Restart Cetas with workflows enabled."
     Some("ticket_start_failed") | Some("ticket_shape_failed") =>
-      "The ticket could not start. Open Inbox for the failure detail."
+      "The ticket could not start. Open its Activity dialog for the failure detail."
     Some(text) if text != "" => text
     _ => "The ticket command was rejected."
   }
@@ -421,8 +407,16 @@ fn apply_ticket_outcome(
     let already_running = reason == Some("ticket is already running")
     {
       ..next,
-      ticket_drawer: next.ticket_drawer || already_running,
-      notice: Some(notice(Warning, ticket_rejection_text(reason))),
+      notice: Some(
+        notice(
+          Warning,
+          if already_running {
+            "This ticket is already running. Open its Activity dialog to inspect progress."
+          } else {
+            ticket_rejection_text(reason)
+          },
+        ),
+      ),
     }
   }
 }
@@ -534,50 +528,156 @@ fn ticket_question_card(
 }
 
 ///|
-fn ticket_drawer(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  if !model.ticket_drawer {
-    return @html.nothing
+/// Per-ticket Activity dialog: live and finished runs belong to the ticket,
+/// not to the question inbox.
+fn ticket_activity_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let task_id = match model.ticket_activity_task {
+    Some(task_id) => task_id
+    None => return @html.nothing
   }
-  @html.div(class="ticket-drawer", [
-    @html.div(class="ticket-drawer-head", [
-      @html.div([
-        @html.div(class="inspector-title", "Ticket inbox"),
+  let task = task_by_id(model.replica, task_id)
+  let title = match task {
+    Some(task) => task.title
+    None => task_id
+  }
+  let runs = model.tickets.runs.filter(run => run.task_id == task_id)
+  let run_label = if runs.length() == 1 {
+    "1 run"
+  } else {
+    "\{runs.length()} runs"
+  }
+  @html.dialog(
+    id="ticket-activity-dialog",
+    class="dialog sheet-dialog",
+    on_close=_ => emit(TicketActivityClosed),
+    attrs=@html.Attrs::build().aria_label("Ticket activity"),
+    [
+      @html.div(class="sheet", [
+        @html.header(class="sheet-head", [
+          @html.div(class="sheet-heading", [
+            @html.nav(
+              class="crumbs",
+              attrs=@html.Attrs::build().aria_label("Breadcrumb"),
+              [
+                @html.button(
+                  type_="button",
+                  class="crumb-link",
+                  attrs=@html.Attrs::build().on_click(_ => {
+                    ui_close("ticket-activity-dialog")
+                    @rabbita.none
+                  }),
+                  "Board",
+                ),
+                @html.span(class="crumb-sep", "/"),
+                @html.span(class="crumb-here", title),
+                @html.span(class="crumb-sep", "/"),
+                @html.span(class="crumb-here", "Activity"),
+              ],
+            ),
+            @html.h2(class="sheet-title", "Activity"),
+            @html.p(class="sheet-meta", [
+              @html.span(
+                class="chip",
+                if runs.is_empty() {
+                  "No runs yet"
+                } else {
+                  run_label
+                },
+              ),
+              @html.span(class="chip is-quiet", task_id),
+            ]),
+          ]),
+          close_button("ticket-activity-dialog"),
+        ]),
         @html.div(
-          class="inspector-subtitle",
-          "Answer ticket questions, inspect live worker activity, and review completed results here.",
+          class="sheet-body ticket-activity-body",
+          if runs.is_empty() {
+            [
+              @html.div(
+                class="empty-line",
+                "No agent activity yet. Shape or run this ticket to start.",
+              ),
+            ]
+          } else {
+            runs.map(run => {
+              if run.status == "running" {
+                ticket_run_card(model, run)
+              } else {
+                ticket_result_card(model, run, emit)
+              }
+            })
+          },
         ),
       ]),
-      @html.button(
-        type_="button",
-        class="btn btn-sm",
-        on_click=emit(TicketDrawerToggled),
-        "Close",
-      ),
-    ]),
-    @html.div(
-      class="ticket-drawer-body",
-      {
-        let items : Array[@html.Html] = []
-        for question in model.tickets.questions {
-          items.push(ticket_question_card(model, question, emit))
-        }
-        for run in model.tickets.runs {
-          if run.status == "running" {
-            items.push(ticket_run_card(model, run, emit))
-          } else if run.result is Some(_) || run.error is Some(_) {
-            items.push(ticket_result_card(model, run, emit))
-          }
-        }
-        if items.is_empty() {
-          items.push(
-            @html.div(
-              class="empty-line",
-              "No open questions or completed tickets.",
+    ],
+  )
+}
+
+///|
+/// The inbox is for questions only. Live and finished run detail lives on the
+/// ticket's own Activity dialog.
+fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let question_count = model.tickets.questions.length()
+  @html.dialog(
+    id="inbox-dialog",
+    class="dialog sheet-dialog",
+    on_close=_ => emit(TicketDrawerClosed),
+    attrs=@html.Attrs::build().aria_label("Ticket inbox"),
+    [
+      @html.div(class="sheet", [
+        @html.header(class="sheet-head", [
+          @html.div(class="sheet-heading", [
+            @html.nav(
+              class="crumbs",
+              attrs=@html.Attrs::build().aria_label("Breadcrumb"),
+              [
+                @html.button(
+                  type_="button",
+                  class="crumb-link",
+                  attrs=@html.Attrs::build().on_click(_ => {
+                    ui_close("inbox-dialog")
+                    @rabbita.none
+                  }),
+                  "Board",
+                ),
+                @html.span(class="crumb-sep", "/"),
+                @html.span(class="crumb-here", "Inbox"),
+              ],
             ),
-          )
-        }
-        items
-      },
-    ),
-  ])
+            @html.h2(class="sheet-title", "Inbox"),
+            @html.p(
+              class="sheet-meta",
+              if question_count == 0 {
+                @html.span(class="chip is-quiet", "No open questions")
+              } else {
+                @html.span(
+                  class="chip is-accent",
+                  "\{question_count} awaiting an answer",
+                )
+              },
+            ),
+          ]),
+          close_button("inbox-dialog"),
+        ]),
+        @html.div(
+          class="sheet-body inbox-body",
+          {
+            let items : Array[@html.Html] = []
+            for question in model.tickets.questions {
+              items.push(ticket_question_card(model, question, emit))
+            }
+            if items.is_empty() {
+              items.push(
+                @html.div(
+                  class="empty-line",
+                  "No open questions.",
+                ),
+              )
+            }
+            items
+          },
+        ),
+      ]),
+    ],
+  )
 }

@@ -53,12 +53,6 @@ test "hidden inspector notice and section navigation do not mutate intent" {
   assert_true(inspector_task(hidden) is Some(_))
   assert_true(hidden.replica == model.replica)
   assert_true(hidden.dependency_editor == model.dependency_editor)
-  assert_eq(inspector_sections(), [
-    ("inspector-dependencies", "Dependencies"),
-    ("inspector-dod", "Definition of done"),
-    ("inspector-attempts", "Runs"),
-    ("inspector-task-details", "Details"),
-  ])
   let invalidated = { ..hidden, replica: @client.BoardReplica::empty(), }
   assert_true(selection_filter_note(invalidated) is None)
   assert_true(inspector_task(invalidated) is None)

@@ -32,6 +32,59 @@ pub fn ui_stage_label(stage : @client.ClientBoardStage) -> String {
 }
 
 ///|
+/// One-line meaning of each flow stage, used under the lane title so the
+/// pipeline explains itself instead of relying on enum trivia.
+pub fn stage_hint(stage : @client.ClientBoardStage) -> String {
+  match stage {
+    Created => "A rough idea. Shape it before anyone can start."
+    Refining => "An agent or a person clarifies scope and acceptance."
+    Ready => "Scoped and waiting for a worker."
+    Running => "Work in progress."
+    Review => "Check the result, record a decision, then close it."
+    Done => "Closed."
+    Suspended => "Parked without losing its history."
+  }
+}
+
+///|
+/// One-based pipeline position. Archive stages sit outside the flow.
+pub fn stage_step(stage : @client.ClientBoardStage) -> Int32? {
+  match stage {
+    Created => Some(1)
+    Refining => Some(2)
+    Ready => Some(3)
+    Running => Some(4)
+    Review => Some(5)
+    Done | Suspended => None
+  }
+}
+
+///|
+/// A pipeline step is offered only when the v1 FSM allows that move.
+pub fn step_reachable(
+  from : @client.ClientBoardStage,
+  to : @client.ClientBoardStage,
+) -> Bool {
+  move_suggestions(from).contains(to)
+}
+
+///|
+/// Grammar-safe dependency count for the card meta row.
+pub fn dependency_count_label(count : Int32) -> String {
+  if count == 1 {
+    "1 dep"
+  } else {
+    "\{count} deps"
+  }
+}
+
+///|
+/// The last segment of the pipeline, used to label the closing step.
+pub fn done_stage() -> @client.ClientBoardStage {
+  Done
+}
+
+///|
 /// The forward transition for a stage. This is the card's primary intent; the
 /// remaining legal transitions live in the card menu.
 pub fn primary_move(

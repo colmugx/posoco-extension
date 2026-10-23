@@ -161,6 +161,42 @@ priv struct Notice {
 } derive(Eq)
 
 ///|
+/// One irreversible step waiting for confirmation. The intent carries only
+/// identities; the command is rebuilt at confirm time from live state.
+priv enum ConfirmIntent {
+  ConfirmDone(task_id~ : String)
+  ConfirmReview
+} derive(Eq)
+
+///|
+/// The confirmation states the consequence at the moment of action instead
+/// of asking a generic "are you sure".
+fn ConfirmIntent::title(self : ConfirmIntent) -> String {
+  match self {
+    ConfirmDone(_) => "Mark this task done?"
+    ConfirmReview => "Record this review decision?"
+  }
+}
+
+///|
+fn ConfirmIntent::body(self : ConfirmIntent) -> String {
+  match self {
+    ConfirmDone(_) =>
+      "Done is the end of the pipeline. The task leaves the flow lanes and moves to the archive."
+    ConfirmReview =>
+      "A recorded decision is final: it cannot be changed or cleared, and it does not move the task by itself."
+  }
+}
+
+///|
+fn ConfirmIntent::action(self : ConfirmIntent) -> String {
+  match self {
+    ConfirmDone(_) => "Mark done"
+    ConfirmReview => "Record decision"
+  }
+}
+
+///|
 priv struct Model {
   replica : @client.BoardReplica
   connection : ConnectionState
@@ -174,6 +210,7 @@ priv struct Model {
   editor : Editor?
   notice : Notice?
   selected_task : String?
+  ticket_activity_task : String?
   dependency_editor : DependencyDraft?
   attempt_draft : AttemptDraft?
   finish_draft : FinishDraft?
@@ -184,6 +221,8 @@ priv struct Model {
   ticket_drawer : Bool
   ticket_drafts : Map[String, String]
   ticket_sending : Bool
+  confirm : ConfirmIntent?
+  archive_open : Bool
 } derive(Eq)
 
 ///|
@@ -232,7 +271,10 @@ priv enum Msg {
   FilterPriorityChanged(String)
   FilterStageChanged(String)
   FiltersCleared
-  TicketDrawerToggled
+  TicketDrawerOpened
+  TicketDrawerClosed
+  TicketActivityOpened(String)
+  TicketActivityClosed
   TicketDraftChanged(String, String)
   TicketAnswered(String, TicketAnswer)
   TicketShape(String)
@@ -240,6 +282,12 @@ priv enum Msg {
   TicketRunReady
   TicketResultDismissed(String)
   TicketResult(Bool, String?, TicketState?)
+  ArchiveOpened
+  ArchiveClosed
+  DoneRequested(String)
+  ReviewDecide(String, String)
+  ConfirmAccepted
+  ConfirmDismissed
   NoticeDismissed
 }
 
@@ -271,6 +319,7 @@ fn Model::empty(available : Bool) -> Model {
     editor: None,
     notice: None,
     selected_task: None,
+    ticket_activity_task: None,
     dependency_editor: None,
     attempt_draft: None,
     finish_draft: None,
@@ -281,6 +330,8 @@ fn Model::empty(available : Bool) -> Model {
     ticket_drawer: false,
     ticket_drafts: Map([]),
     ticket_sending: false,
+    confirm: None,
+    archive_open: false,
   }
 }
 

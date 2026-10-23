@@ -37,12 +37,12 @@ test "ticket state records questions without forcing the drawer" {
 }
 
 ///|
-test "running ticket activity stays in the inbox" {
+test "running ticket activity belongs to the ticket, not the question inbox" {
   let text = "{\"type\":\"ticket_state\",\"state\":{\"questions\":[],\"runs\":[{\"task_id\":\"t1\",\"session_id\":\"s1\",\"phase\":\"shape\",\"status\":\"running\",\"error\":null,\"result\":null,\"steps\":1,\"current_tool\":\"read\",\"preview\":\"Looking at the files\",\"reasoning\":\"Need context\",\"activities\":[{\"at_ms\":1,\"kind\":\"tool\",\"text\":\"Tool · read · src/main.mbt\"}]}]}}"
   match ticket_frame(text) {
     Some(TicketSnapshot(state)) => {
       let model = apply_ticket_state(Model::empty(true), state)
-      assert_eq(ticket_inbox_count(model), 1)
+      assert_eq(ticket_inbox_count(model), 0)
       assert_eq(state.runs[0].steps, 1)
       assert_eq(state.runs[0].activities.length(), 1)
       assert_eq(state.runs[0].activities[0].kind, "tool")
@@ -52,7 +52,7 @@ test "running ticket activity stays in the inbox" {
 }
 
 ///|
-test "failed runs stay in the inbox with their error" {
+test "failed runs belong to the ticket, not the question inbox" {
   let state : TicketState = {
     questions: [],
     runs: [
@@ -72,8 +72,21 @@ test "failed runs stay in the inbox with their error" {
     ],
   }
   let model = apply_ticket_state(Model::empty(true), state)
-  assert_eq(ticket_inbox_count(model), 1)
+  assert_eq(ticket_inbox_count(model), 0)
   assert_true(model.tickets.runs[0].error is Some(_))
+}
+
+///|
+test "opening ticket activity tracks the selected ticket" {
+  let (opened, _) = update(
+    Model::empty(true),
+    TicketActivityOpened("t1"),
+    test_emit,
+    test_env(),
+  )
+  assert_eq(opened.ticket_activity_task, Some("t1"))
+  let (closed, _) = update(opened, TicketActivityClosed, test_emit, test_env())
+  assert_eq(closed.ticket_activity_task, None)
 }
 
 ///|
@@ -87,16 +100,16 @@ test "ticket commands stay inert until the host advertises the inbox" {
 }
 
 ///|
-test "already-running rejection opens the inbox with a readable reason" {
+test "already-running rejection points at the ticket activity dialog" {
   let model = apply_ticket_outcome(
     Model::empty(true),
     false,
     Some("ticket is already running"),
     None,
   )
-  assert_true(model.ticket_drawer)
+  assert_false(model.ticket_drawer)
   match model.notice {
-    Some(notice) => assert_true(notice.text.contains("already running"))
+    Some(notice) => assert_true(notice.text.contains("Activity"))
     None => fail("expected a rejection notice")
   }
 }

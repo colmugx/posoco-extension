@@ -304,7 +304,9 @@ fn update(
       }
     }
     CreateOpened =>
-      if draft_open(model) || !mutations_allowed(model) {
+      if !mutations_allowed(model) || draft_open(model) {
+        // One editor at a time. A create draft retained after a rejected
+        // command is reopened by the view from the same state.
         (model, @rabbita.none)
       } else {
         ({ ..model, editor: Some(Editor::create()), }, @rabbita.none)
@@ -411,8 +413,12 @@ fn update(
       )
     FiltersCleared =>
       ({ ..model, task_filter: TaskFilter::none(), }, @rabbita.none)
-    TicketDrawerToggled =>
-      ({ ..model, ticket_drawer: !model.ticket_drawer, }, @rabbita.none)
+    TicketDrawerOpened => ({ ..model, ticket_drawer: true, }, @rabbita.none)
+    TicketDrawerClosed => ({ ..model, ticket_drawer: false, }, @rabbita.none)
+    TicketActivityOpened(task_id) =>
+      ({ ..model, ticket_activity_task: Some(task_id), }, @rabbita.none)
+    TicketActivityClosed =>
+      ({ ..model, ticket_activity_task: None, }, @rabbita.none)
     TicketDraftChanged(question_id, value) => {
       let drafts = model.ticket_drafts.copy()
       drafts[question_id] = value
@@ -482,6 +488,37 @@ fn update(
       }
     TicketResult(ok, reason, tickets) =>
       (apply_ticket_outcome(model, ok, reason, tickets), @rabbita.none)
+    ArchiveOpened => ({ ..model, archive_open: true, }, @rabbita.none)
+    ArchiveClosed => ({ ..model, archive_open: false, }, @rabbita.none)
+    DoneRequested(task_id) =>
+      // Done leaves the flow; it is confirmed with its consequence instead
+      // of firing straight from a card button.
+      match task_by_id(model.replica, task_id) {
+        Some(task) if step_reachable(task.stage, Done) && mutations_allowed(model) =>
+          ({ ..model, confirm: Some(ConfirmDone(task_id~)), }, @rabbita.none)
+        _ => (model, @rabbita.none)
+      }
+    ConfirmDismissed => {
+      // Dismissing a review confirmation drops the draft it created: the
+      // decision was never sent.
+      let review_draft = match model.confirm {
+        Some(ConfirmReview) => None
+        _ => model.review_draft
+      }
+      ({ ..model, confirm: None, review_draft, }, @rabbita.none)
+    }
+    ConfirmAccepted =>
+      match model.confirm {
+        Some(ConfirmDone(task_id~)) => {
+          let model = { ..model, confirm: None, }
+          submit_move(model, task_id, Done, emit, env)
+        }
+        Some(ConfirmReview) => {
+          let model = { ..model, confirm: None, }
+          submit_review(model, emit, env)
+        }
+        None => (model, @rabbita.none)
+      }
     NoticeDismissed => ({ ..model, notice: None, }, @rabbita.none)
     TaskSelected(_)
     | InspectorClosed
@@ -504,6 +541,7 @@ fn update(
     | AttemptOutcomeChanged(_)
     | AttemptFinishSubmitted
     | ReviewOpened(_)
+    | ReviewDecide(_, _)
     | ReviewCancelled
     | ReviewDecisionChanged(_)
     | ReviewDraftReturned

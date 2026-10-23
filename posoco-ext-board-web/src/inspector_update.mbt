@@ -175,6 +175,32 @@ fn update_inspector(
         @rabbita.none,
       )
     }
+    ReviewDecide(attempt_id, value) => {
+      // One click fills the outcome and opens the confirmation; submission
+      // still clears every gate the draft form cleared.
+      guard attempt_controls_allowed(model) &&
+        attempt_by_id(model.replica, attempt_id) is Some(attempt) &&
+        model.selected_task == Some(attempt.task_id) &&
+        task_by_id(model.replica, attempt.task_id) is Some(_) &&
+        review_recordable(attempt) else {
+        return (model, @rabbita.none)
+      }
+      guard review_decision_from_wire(value) is Some(decision) else {
+        return (model, @rabbita.none)
+      }
+      (
+        {
+          ..model,
+          review_draft: Some({
+            task_id: attempt.task_id,
+            attempt_id,
+            decision: Some(decision),
+          }),
+          confirm: Some(ConfirmReview),
+        },
+        @rabbita.none,
+      )
+    }
     ReviewCancelled =>
       if model.pending is Some(_) {
         (model, @rabbita.none)

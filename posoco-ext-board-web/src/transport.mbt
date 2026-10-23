@@ -81,6 +81,18 @@ pub fn app() -> @rabbita.App {
   @rabbita.new(() => {
     let (model, emit) = @rabbita.create_state_with_init(
       init=emit => {
+        // Opening a layer is a DOM effect, so the keyboard path shows the
+        // dialog here and lets update own the state.
+        install_shortcuts(key => {
+          match key {
+            "new-task" => {
+              ui_show("create-dialog")
+              ignore(emit(CreateOpened))
+            }
+            "search" => ui_focus("#board-search")
+            _ => ()
+          }
+        })
         let model = Model::empty(env.url != "")
         (
           model,

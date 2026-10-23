@@ -77,11 +77,7 @@ fn write_blocked_hint(model : Model) -> String? {
 
 ///|
 fn create_unavailable_hint(model : Model) -> String? {
-  if draft_open(model) {
-    Some("Finish or cancel the open editor first.")
-  } else {
-    write_blocked_hint(model)
-  }
+  write_blocked_hint(model)
 }
 
 ///|
@@ -90,12 +86,22 @@ fn can_create(model : Model) -> Bool {
 }
 
 ///|
-fn inspector_open(model : Model) -> Bool {
-  model.selected_task is Some(_) ||
-  model.dependency_editor is Some(_) ||
-  model.attempt_draft is Some(_) ||
-  model.finish_draft is Some(_) ||
-  model.review_draft is Some(_)
+/// Why a stage move or ticket action is unavailable right now. Rendered
+/// under the control, so the reason is never tooltip-only.
+fn action_blocked_hint(model : Model, task_id : String) -> String? {
+  match write_blocked_hint(model) {
+    Some(text) => Some(text)
+    None =>
+      if draft_open(model) {
+        Some("Finish or discard the open draft first.")
+      } else if ticket_task_running(model, task_id) {
+        Some(
+          "This ticket is already running. Open its Activity dialog to inspect progress.",
+        )
+      } else {
+        None
+      }
+  }
 }
 
 ///|
@@ -129,22 +135,50 @@ fn live_chip(model : Model) -> @html.Html {
 }
 
 ///|
+fn archive_count(model : Model) -> Int32 {
+  model.replica.tasks().filter(task => {
+    task.stage is @client.Done || task.stage is @client.Suspended
+  }).length()
+}
+
+///|
 fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let hint = create_unavailable_hint(model)
+  let archived = archive_count(model)
   @html.header(class="topbar", [
-    @html.div(class="brand", "Board"),
+    @html.div(class="brand", [
+      @html.span(class="brand-mark", "Board"),
+      @html.span(class="brand-flow", "Backlog → Shaping → Ready → Work → Review → Done"),
+    ]),
     @html.div(class="topbar-actions", [
       live_chip(model),
+      if archived == 0 {
+        @html.nothing
+      } else {
+        @html.button(
+          type_="button",
+          class="btn btn-sm",
+          title="Open the archive: Done and Paused tasks",
+          attrs=@html.Attrs::build().on_click(_ => {
+            ui_show("archive-dialog")
+            emit(ArchiveOpened)
+          }),
+          [@html.span("Archive"), @html.span(class="count-badge", archived.to_string())],
+        )
+      },
       @html.button(
         type_="button",
         class="btn btn-sm",
         title="Open the ticket inbox",
         disabled=!model.ticket_available,
-        on_click=emit(TicketDrawerToggled),
+        attrs=@html.Attrs::build().on_click(_ => {
+          ui_show("inbox-dialog")
+          emit(TicketDrawerOpened)
+        }),
         [
           @html.span("Inbox"),
           @html.span(
-            class="ticket-badge",
+            class="count-badge",
             if ticket_inbox_count(model) == 0 {
               ""
             } else {
@@ -172,7 +206,10 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           None => "Create a task (N)"
         },
         disabled=!can_create(model),
-        on_click=emit(CreateOpened),
+        attrs=@html.Attrs::build().on_click(_ => {
+          ui_show("create-dialog")
+          emit(CreateOpened)
+        }),
         [@html.span("New task"), @html.kbd(class="kbd", "N")],
       ),
     ]),
@@ -273,6 +310,7 @@ fn toolbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     @html.div(class="filters", [
       @html.input(
         input_type=Search,
+        id="board-search",
         class="filter-search",
         placeholder="Search tasks",
         value=filter.query,
@@ -309,152 +347,47 @@ fn toolbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-fn composer_panel(
-  model : Model,
-  editor : Editor,
-  emit : @rabbita.Emit[Msg],
-) -> @html.Html {
-  let blocked = write_blocked_hint(model)
-  let locked = blocked is Some(_)
-  @html.section(
-    class="composer",
-    attrs=@html.Attrs::build().aria_label("New task"),
-    [
-      @html.div(class="composer-head", [
-        @html.h2(class="composer-heading", "New task"),
-        @html.span(class="composer-stage", "Backlog"),
-      ]),
-      @html.div(class="composer-row", [
-        @html.div(
-          class="composer-input-wrap",
-          on_keydown=event => {
-            if event.key() == "Enter" {
-              emit(SubmitRequested)
-            } else if event.key() == "Escape" {
-              emit(EditorCancelled)
-            } else {
-              @rabbita.none
-            }
-          },
-          [
-            @html.input(
-              input_type=Text,
-              class="composer-input",
-              placeholder="Task title",
-              value=editor.title,
-              autofocus=true,
-              attrs=@html.Attrs::build()
-                .disabled(locked)
-                .aria_label("Task title"),
-              on_input=value => emit(TitleChanged(value)),
-            ),
-          ],
-        ),
-        @html.button(
-          type_="button",
-          class="btn btn-primary",
-          disabled=locked || editor.title.trim().is_empty(),
-          on_click=emit(SubmitRequested),
-          "Create",
-        ),
-        @html.button(
-          type_="button",
-          class="btn btn-ghost",
-          disabled=model.pending is Some(_),
-          on_click=emit(EditorCancelled),
-          "Cancel",
-        ),
-      ]),
-      @html.details(class="composer-details", [
-        @html.summary(class="composer-more", "Details"),
-        @html.div(class="composer-grid", [
-          labeled_field(
-            "composer-priority",
-            "Priority",
-            @html.select(
-              id="composer-priority",
-              name="priority",
-              disabled=locked,
-              on_change=value => emit(PriorityChanged(value)),
-              priorities().map(priority => {
-                @html.option(
-                  value=priority.to_wire(),
-                  selected=priority == editor.priority,
-                  priority_label(priority),
-                )
-              }),
-            ),
-          ),
-          labeled_field(
-            "composer-description",
-            "Description",
-            @html.textarea(
-              id="composer-description",
-              name="description",
-              rows=2,
-              placeholder="Optional context",
-              value=editor.description,
-              disabled=locked,
-              on_input=value => emit(DescriptionChanged(value)),
-              @html.fragment([]),
-            ),
-          ),
-          labeled_field(
-            "composer-dod",
-            "Definition of done",
-            @html.textarea(
-              id="composer-dod",
-              name="definition_of_done",
-              rows=3,
-              placeholder="One item per line",
-              value=editor.definition_of_done,
-              disabled=locked,
-              on_input=value => emit(DefinitionOfDoneChanged(value)),
-              @html.fragment([]),
-            ),
-          ),
-        ]),
-      ]),
-      match blocked {
-        Some(text) => @html.p(class="composer-hint", text)
-        None => @html.nothing
-      },
-    ],
-  )
-}
-
-///|
-fn editor_panel(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+/// The create and edit dialog body. It always renders a form so the dialog
+/// has content the moment it opens; the title tracks the editor mode.
+fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   match model.editor {
     None => @html.nothing
     Some(editor) => {
       let locked = !mutations_allowed(model)
       let id = "board-editor"
-      let priority_options = priorities().map(priority => {
-        @html.option(
-          value=priority.to_wire(),
-          selected=priority == editor.priority,
-          priority_label(priority),
-        )
-      })
-      @html.section(
-        class="editor",
-        attrs=@html.Attrs::build().aria_label(editor_title(editor)),
-        [
-          @html.h2(editor_title(editor)),
-          @html.div(class="editor-grid", [
-            labeled_field(
-              "\{id}-title",
-              "Title",
-              @html.input(
-                input_type=Text,
-                id="\{id}-title",
-                name="title",
-                value=editor.title,
-                attrs=@html.Attrs::build().disabled(locked),
-                on_input=value => emit(TitleChanged(value)),
-              ),
+      @html.div(class="dialog-form", [
+        @html.div(class="dialog-grid", [
+          labeled_field(
+            "\{id}-title",
+            "Title",
+            @html.input(
+              input_type=Text,
+              id="\{id}-title",
+              name="title",
+              class="dialog-title-input",
+              value=editor.title,
+              attrs=@html.Attrs::build()
+                .disabled(locked)
+                .aria_label("Task title")
+                .data_set("autofocus", "true"),
+              on_input=value => emit(TitleChanged(value)),
             ),
+          ),
+          labeled_field(
+            "\{id}-description",
+            "Description",
+            @html.textarea(
+              id="\{id}-description",
+              name="description",
+              rows=3,
+              value=editor.description,
+              placeholder="Optional context",
+              disabled=locked,
+              on_input=value => emit(DescriptionChanged(value)),
+              @html.fragment([]),
+            ),
+          ),
+          @html.div(class="dialog-pair", [
             labeled_field(
               "\{id}-priority",
               "Priority",
@@ -463,68 +396,293 @@ fn editor_panel(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
                 name="priority",
                 disabled=locked,
                 on_change=value => emit(PriorityChanged(value)),
-                priority_options,
+                priorities().map(priority => {
+                  @html.option(
+                    value=priority.to_wire(),
+                    selected=priority == editor.priority,
+                    "\{priority_short(priority)} \{priority_label(priority)}",
+                  )
+                }),
               ),
             ),
-            labeled_field(
-              "\{id}-description",
-              "Description",
-              @html.textarea(
-                id="\{id}-description",
-                name="description",
-                rows=3,
-                value=editor.description,
-                disabled=locked,
-                on_input=value => emit(DescriptionChanged(value)),
-                @html.fragment([]),
-              ),
-            ),
-            labeled_field(
-              "\{id}-dod",
-              "Definition of done",
-              @html.textarea(
-                id="\{id}-dod",
-                name="definition_of_done",
-                rows=4,
-                placeholder="One entry per line",
-                value=editor.definition_of_done,
-                disabled=locked,
-                on_input=value => emit(DefinitionOfDoneChanged(value)),
-                @html.fragment([]),
-              ),
-            ),
+            @html.div(class="dialog-stage", [
+              @html.span(class="dialog-stage-label", "Lands in"),
+              @html.span(class="dialog-stage-value", "Backlog"),
+            ]),
           ]),
-          @html.div(class="editor-actions", [
-            @html.button(
-              type_="button",
-              class="btn btn-ghost",
+          labeled_field(
+            "\{id}-dod",
+            "Definition of done",
+            @html.textarea(
+              id="\{id}-dod",
+              name="definition_of_done",
+              rows=4,
+              value=editor.definition_of_done,
+              placeholder="One entry per line",
               disabled=locked,
-              on_click=emit(EditorCancelled),
-              "Cancel",
+              on_input=value => emit(DefinitionOfDoneChanged(value)),
+              @html.fragment([]),
             ),
-            @html.button(
-              type_="button",
-              class="btn btn-primary",
-              disabled=locked || editor.title.trim().is_empty(),
-              on_click=emit(SubmitRequested),
-              match editor.mode {
-                CreateMode => "Create task"
-                EditMode(_) => "Save changes"
-              },
-            ),
-          ]),
-        ],
-      )
+          ),
+        ]),
+      ])
     }
   }
 }
 
 ///|
-/// The create editor's title is used by the live region on the section.
-fn editor_title(editor : Editor) -> String {
-  match editor.mode {
-    CreateMode => "New task"
-    EditMode(task_id~) => "Edit \{task_id}"
+/// Create and edit share one native dialog: the title, the primary label and
+/// the submit intent all follow the editor mode.
+fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let (heading, hint, submit_label) = match model.editor {
+    Some(editor) =>
+      match editor.mode {
+        CreateMode => ("New task", "", "Create task")
+        EditMode(task_id~) => ("Edit \{task_id}", "", "Save changes")
+      }
+    None => ("New task", "", "Create task")
+  }
+  let blocked = write_blocked_hint(model)
+  let title_empty = match model.editor {
+    Some(editor) => editor.title.trim().is_empty()
+    None => true
+  }
+  @html.dialog(
+    id="create-dialog",
+    class="dialog form-dialog",
+    on_close=_ => emit(EditorCancelled),
+    attrs=@html.Attrs::build().aria_label(heading),
+    [
+      @html.div(class="dialog-shell", [
+        @html.header(class="dialog-head", [
+          @html.div(class="dialog-titles", [
+            @html.h2(class="dialog-title", heading),
+            @html.p(
+              class="dialog-subtitle",
+              "One task per row of work. Shape it, scope it, then move it through the flow.",
+            ),
+          ]),
+          close_button("create-dialog"),
+        ]),
+        inline_notice(model),
+        @html.div(
+          class="dialog-body",
+          on_keydown=event => {
+            if event.key() == "Enter" && event.meta_key() {
+              emit(SubmitRequested)
+            } else if event.key() == "Enter" && event.ctrl_key() {
+              emit(SubmitRequested)
+            } else {
+              @rabbita.none
+            }
+          },
+          [editor_form(model, emit)],
+        ),
+        match blocked {
+          Some(text) => @html.p(class="dialog-hint", text)
+          None => @html.nothing
+        },
+        match hint {
+          "" => @html.nothing
+          text => @html.p(class="dialog-hint", text)
+        },
+        @html.footer(class="dialog-foot", [
+          @html.button(
+            type_="button",
+            class="btn",
+            attrs=@html.Attrs::build().on_click(_ => {
+              ui_close("create-dialog")
+              @rabbita.none
+            }),
+            "Cancel",
+          ),
+          @html.button(
+            type_="button",
+            class="btn btn-primary",
+            disabled=blocked is Some(_) || title_empty,
+            attrs=@html.Attrs::build().on_click(_ => {
+              ui_close("create-dialog")
+              emit(SubmitRequested)
+            }),
+            submit_label,
+          ),
+        ]),
+      ]),
+    ],
+  )
+}
+
+///|
+fn close_button(dialog_id : String) -> @html.Html {
+  @html.button(
+    type_="button",
+    class="icon-btn dialog-close",
+    title="Close",
+    attrs=@html.Attrs::build()
+      .aria_label("Close")
+      .on_click(_ => {
+        ui_close(dialog_id)
+        @rabbita.none
+      }),
+    "✕",
+  )
+}
+
+///|
+fn inline_notice(model : Model) -> @html.Html {
+  match model.notice {
+    None => @html.nothing
+    Some(value) =>
+      @html.div(
+        class="inline-notice \{notice_class(value.severity)}",
+        attrs=@html.Attrs::build().role("status").aria_live("polite"),
+        [@html.span(class="notice-dot", ""), @html.span(value.text)],
+      )
+  }
+}
+
+///|
+fn confirm_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let (title, body, action) = match model.confirm {
+    Some(intent) => (intent.title(), intent.body(), intent.action())
+    None => ("", "", "")
+  }
+  @html.dialog(
+    id="confirm-dialog",
+    class="dialog confirm-dialog",
+    on_close=_ => emit(ConfirmDismissed),
+    attrs=@html.Attrs::build().aria_label(title),
+    [
+      @html.div(class="dialog-shell confirm-shell", [
+        @html.h2(class="confirm-title", title),
+        @html.p(class="confirm-body", body),
+        @html.footer(class="dialog-foot", [
+          @html.button(
+            type_="button",
+            class="btn",
+            attrs=@html.Attrs::build().on_click(_ => {
+              ui_close("confirm-dialog")
+              @rabbita.none
+            }),
+            "Cancel",
+          ),
+          @html.button(
+            type_="button",
+            class="btn btn-primary",
+            attrs=@html.Attrs::build()
+              .data_set("autofocus", "true")
+              .on_click(_ => {
+                ui_close("confirm-dialog")
+                emit(ConfirmAccepted)
+              }),
+            action,
+          ),
+        ]),
+      ]),
+    ],
+  )
+}
+
+///|
+/// Pipeline stepper: every step is a move target, offered only when the v1
+/// flow allows it. It makes the whole journey legible at a glance.
+fn stage_stepper(
+  model : Model,
+  task : @client.ClientBoardTask,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let current = stage_step(task.stage)
+  let locked = !mutations_allowed(model) || draft_open(model)
+  @html.nav(
+    class="stepper",
+    attrs=@html.Attrs::build().aria_label("Pipeline stage"),
+    flow_lanes().map(stage => {
+      let step = stage_step(stage).unwrap_or(0)
+      let here = current == Some(step)
+      let reachable = step_reachable(task.stage, stage) && !locked
+      let classes = if here {
+        "step is-current"
+      } else if step < current.unwrap_or(0) {
+        "step is-done"
+      } else {
+        "step"
+      }
+      if reachable {
+        let attrs = if here {
+          @html.Attrs::build().aria_current("step")
+        } else {
+          @html.Attrs::build()
+        }
+        @html.button(
+          type_="button",
+          class="\{classes} is-link",
+          title="Move to \{ui_stage_label(stage)}",
+          attrs=attrs.on_click(event => {
+            card_action_click(event, MoveRequested(task.id, stage), emit)
+          }),
+          [
+            @html.span(class="step-index", step.to_string()),
+            @html.span(class="step-label", ui_stage_label(stage)),
+          ],
+        )
+      } else {
+        @html.div(class=classes, [
+          @html.span(class="step-index", step.to_string()),
+          @html.span(class="step-label", ui_stage_label(stage)),
+        ])
+      }
+    }),
+  )
+}
+
+///|
+/// Primary intent for one card, mirroring the stage FSM. Done is confirmed
+/// instead of fired: it is the only step that leaves the flow.
+fn primary_intent(
+  model : Model,
+  task : @client.ClientBoardTask,
+  emit : @rabbita.Emit[Msg],
+  disabled~ : Bool,
+  class~ : String,
+) -> @html.Html {
+  let shaping = model.ticket_available && task.stage == @client.Created
+  let running = model.ticket_available && task.stage == @client.Ready
+  if shaping {
+    card_action(
+      TicketShape(task.id),
+      emit,
+      class~,
+      title="Shape this ticket with an agent",
+      disabled~,
+      label=primary_action_label(task.stage),
+    )
+  } else if running {
+    card_action(
+      TicketRun(task.id),
+      emit,
+      class~,
+      title="Run this ticket in the background",
+      disabled~,
+      label=primary_action_label(task.stage),
+    )
+  } else if primary_move(task.stage) is @client.Done {
+    card_action(
+      DoneRequested(task.id),
+      emit,
+      class~,
+      title="Close this task and move it to Done",
+      disabled~,
+      label=primary_action_label(task.stage),
+    )
+  } else {
+    card_action(
+      MoveRequested(task.id, primary_move(task.stage)),
+      emit,
+      class~,
+      title="Move to " + ui_stage_label(primary_move(task.stage)),
+      disabled~,
+      label=primary_action_label(task.stage),
+    )
   }
 }
 
@@ -535,29 +693,16 @@ fn task_card(
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
   // Mutation controls are a convenience only: suggested targets mirror the
-  // Board stage FSM and the durable server stays authoritative. Opening the
-  // dependency editor parks them too; one editor at a time.
+  // Board stage FSM and the durable server stays authoritative.
   let locked = !mutations_allowed(model) ||
     draft_open(model) ||
     ticket_task_running(model, task.id)
   let selected = model.selected_task == Some(task.id)
-  let primary = primary_move(task.stage)
-  let shaping = model.ticket_available && task.stage == @client.Created
-  let primary_message = if shaping {
-    TicketShape(task.id)
-  } else if task.stage == @client.Ready && model.ticket_available {
-    TicketRun(task.id)
-  } else {
-    MoveRequested(task.id, primary)
-  }
-  let primary_title = if shaping {
-    "Shape this ticket with an agent"
-  } else if task.stage == @client.Ready && model.ticket_available {
-    "Run this ticket in the background"
-  } else {
-    "Move to " + ui_stage_label(primary)
-  }
-  let alternatives = move_suggestions(task.stage).filter(to => to != primary)
+  let alternatives = move_suggestions(task.stage).filter(to => {
+    to != primary_move(task.stage) && to != @client.Done
+  })
+  let attempt = attempt_short(model.replica, task.id)
+  let attempts = attempt_count(model.replica, task.id)
   @html.article(
     class=if selected {
       "card p-\{priority_tone(task.priority)} is-selected"
@@ -566,39 +711,61 @@ fn task_card(
     },
     [
       @html.span(class="sr-only", "\{priority_label(task.priority)} priority"),
-      @html.button(
-        type_="button",
-        class="card-title",
-        title="Inspect task",
-        attrs=@html.Attrs::build()
-          .aria_controls("task-inspector")
-          .aria_pressed(if selected { "true" } else { "false" }),
-        on_click=emit(TaskSelected(task.id)),
-        task.title,
-      ),
+      @html.div(class="card-top", [
+        @html.span(class="card-prio", priority_short(task.priority)),
+        @html.button(
+          type_="button",
+          class="card-title",
+          title="Open task",
+          attrs=@html.Attrs::build()
+            .aria_controls("task-detail")
+            .aria_pressed(if selected { "true" } else { "false" })
+            .on_click(_ => {
+              ui_show("detail-dialog")
+              emit(TaskSelected(task.id))
+            }),
+          task.title,
+        ),
+      ]),
       if task.description == "" {
         @html.nothing
       } else {
         @html.p(class="card-desc", task.description)
       },
-      @html.div(class="card-meta", [
-        @html.span(
-          class="prio-text p-\{priority_tone(task.priority)}",
-          priority_short(task.priority),
-        ),
-        @html.span(class="dot", ""),
-        @html.span("\{task.dependencies.length()} deps"),
-        @html.span(class="dot", ""),
-        @html.span(attempt_short(model.replica, task.id)),
-      ]),
-      @html.div(class="card-actions", [
-        card_action(
-          primary_message,
+      if task.dependencies.length() == 0 && attempts == 0 {
+        @html.nothing
+      } else {
+        @html.div(class="card-meta", [
+          if task.dependencies.length() == 0 {
+            @html.nothing
+          } else {
+            @html.span(class="chip", dependency_count_label(task.dependencies.length()))
+          },
+          if attempts == 0 {
+            @html.nothing
+          } else {
+            @html.span(class="chip is-attempt", attempt)
+          },
+        ])
+      },
+      @html.footer(class="card-foot", [
+        primary_intent(
+          model,
+          task,
           emit,
-          class="btn btn-sm card-primary",
-          title=primary_title,
           disabled=locked,
-          label=primary_action_label(task.stage),
+          class="card-next",
+        ),
+        @html.button(
+          type_="button",
+          class="btn btn-sm card-activity",
+          title="Open this ticket's activity",
+          attrs=@html.Attrs::build().on_click(event => {
+            event.stop_propagation()
+            ui_show("ticket-activity-dialog")
+            emit(TicketActivityOpened(task.id))
+          }),
+          "Activity",
         ),
         @html.details(class="card-menu", [
           @html.summary(
@@ -611,8 +778,7 @@ fn task_card(
           @html.div(
             class="menu",
             [
-              if model.ticket_available &&
-                (task.stage == @client.Refining || task.stage == @client.Ready) {
+              if model.ticket_available && task.stage == @client.Refining {
                 card_action(
                   TicketShape(task.id),
                   emit,
@@ -624,13 +790,17 @@ fn task_card(
               } else {
                 @html.nothing
               },
-              card_action(
-                EditOpened(task.id),
-                emit,
+              @html.button(
+                type_="button",
                 class="menu-item",
                 title="Edit this task",
                 disabled=locked,
-                label="Edit",
+                attrs=@html.Attrs::build().on_click(event => {
+                  event.stop_propagation()
+                  ui_show("create-dialog")
+                  emit(EditOpened(task.id))
+                }),
+                "Edit task",
               ),
               ..alternatives.map(to => {
                 card_action(
@@ -661,14 +831,17 @@ fn lane(
   let add = if stage is Created {
     @html.button(
       type_="button",
-      class="icon-btn lane-add",
+      class="btn btn-sm lane-add",
       title=match create_unavailable_hint(model) {
         Some(text) => text
         None => "New task"
       },
       disabled=!can_create(model),
-      on_click=emit(CreateOpened),
-      "+",
+      attrs=@html.Attrs::build().on_click(_ => {
+        ui_show("create-dialog")
+        emit(CreateOpened)
+      }),
+      "+ New",
     )
   } else {
     @html.nothing
@@ -678,6 +851,7 @@ fn lane(
     attrs=@html.Attrs::build().aria_labelledby("lane-\{stage.to_wire()}"),
     [
       @html.header(class="lane-head", [
+        @html.span(class="lane-step", stage_step(stage).unwrap_or(0).to_string()),
         @html.h2(id="lane-\{stage.to_wire()}", class="lane-title", [
           @html.span(ui_stage_label(stage)),
           @html.span(
@@ -720,6 +894,10 @@ fn loading_board() -> @html.Html {
         flow_lanes().map(stage => {
           @html.section(class="lane", [
             @html.header(class="lane-head", [
+              @html.span(
+                class="lane-step",
+                stage_step(stage).unwrap_or(0).to_string(),
+              ),
               @html.h2(class="lane-title", [
                 @html.span(ui_stage_label(stage)),
                 @html.span(class="lane-count", "—"),
@@ -738,20 +916,38 @@ fn empty_state(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let hint = create_unavailable_hint(model)
   @html.div(class="board-area", [
     @html.div(class="empty-state", [
+      @html.div(class="empty-flow", [
+        @html.span(class="empty-step", "1 Backlog"),
+        @html.span(class="empty-arrow", "→"),
+        @html.span(class="empty-step", "2 Shaping"),
+        @html.span(class="empty-arrow", "→"),
+        @html.span(class="empty-step", "3 Ready"),
+        @html.span(class="empty-arrow", "→"),
+        @html.span(class="empty-step", "4 Work"),
+        @html.span(class="empty-arrow", "→"),
+        @html.span(class="empty-step", "5 Review"),
+        @html.span(class="empty-arrow", "→"),
+        @html.span(class="empty-step is-end", "Done"),
+      ]),
       @html.h2("No tasks yet"),
-      @html.p("Create the first task to start the board."),
+      @html.p(
+        "Create the first task. It lands in Backlog, gets shaped, then moves right until it is done.",
+      ),
       @html.button(
         type_="button",
         class="btn btn-primary",
         disabled=!can_create(model),
-        on_click=emit(CreateOpened),
+        attrs=@html.Attrs::build().on_click(_ => {
+          ui_show("create-dialog")
+          emit(CreateOpened)
+        }),
         "New task",
       ),
       match hint {
         None =>
           @html.p(class="empty-hint", [
             @html.kbd(class="kbd", "N"),
-            @html.span(" to create"),
+            @html.span(" opens the composer"),
           ])
         Some(text) => @html.p(class="empty-hint", text)
       },
@@ -776,53 +972,6 @@ fn filtered_empty(_model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-fn archive_lane(
-  model : Model,
-  stage : @client.ClientBoardStage,
-  emit : @rabbita.Emit[Msg],
-) -> @html.Html {
-  let tasks = visible_lane_tasks(model.replica, stage, model.task_filter)
-  @html.section(class="lane archive-lane", [
-    @html.header(class="lane-head", [
-      @html.h2(class="lane-title", [
-        @html.span(ui_stage_label(stage)),
-        @html.span(class="lane-count", tasks.length().to_string()),
-      ]),
-    ]),
-    @html.div(class="lane-body", [
-      if tasks.is_empty() {
-        @html.p(class="lane-empty", "No tasks")
-      } else {
-        @html.nothing
-      },
-      @html.div(class="cards", tasks.map(task => task_card(model, task, emit))),
-    ]),
-  ])
-}
-
-///|
-fn archive_drawer(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  let done = visible_lane_tasks(model.replica, Done, model.task_filter)
-  let paused = visible_lane_tasks(model.replica, Suspended, model.task_filter)
-  if done.is_empty() && paused.is_empty() {
-    return @html.nothing
-  }
-  @html.details(class="archive", [
-    @html.summary(class="archive-summary", [
-      @html.span(class="archive-title", "Archive"),
-      @html.span(
-        class="archive-counts",
-        "\{done.length()} done · \{paused.length()} paused",
-      ),
-    ]),
-    @html.div(class="archive-body", [
-      archive_lane(model, Done, emit),
-      archive_lane(model, Suspended, emit),
-    ]),
-  ])
-}
-
-///|
 fn board(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let replica = model.replica
   if !replica.has_snapshot() {
@@ -841,7 +990,68 @@ fn board(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         flow_lanes().map(stage => lane(model, stage, emit)),
       ),
     ]),
-    archive_drawer(model, emit),
+  ])
+}
+
+///|
+/// Archive is a second-level directory: Done and Paused get the same card
+/// language as the flow, with room to breathe, instead of a status strip.
+fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let done = visible_lane_tasks(model.replica, Done, model.task_filter)
+  let paused = visible_lane_tasks(model.replica, Suspended, model.task_filter)
+  @html.dialog(
+    id="archive-dialog",
+    class="dialog directory-dialog",
+    on_close=_ => emit(ArchiveClosed),
+    attrs=@html.Attrs::build().aria_label("Archive"),
+    [
+      @html.div(class="dialog-shell", [
+        @html.header(class="dialog-head", [
+          @html.div(class="dialog-titles", [
+            @html.h2(class="dialog-title", "Archive"),
+            @html.p(
+              class="dialog-subtitle",
+              "\{done.length()} done · \{paused.length()} paused. Finished work leaves the flow.",
+            ),
+          ]),
+          close_button("archive-dialog"),
+        ]),
+        @html.div(class="directory-body", [
+          archive_section("Done", "Closed and accepted.", done, model, emit),
+          archive_section(
+            "Paused",
+            "Parked without losing history.",
+            paused,
+            model,
+            emit,
+          ),
+        ]),
+      ]),
+    ],
+  )
+}
+
+///|
+fn archive_section(
+  title : String,
+  hint : String,
+  tasks : Array[@client.ClientBoardTask],
+  model : Model,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  @html.section(class="directory-section", [
+    @html.header(class="directory-head", [
+      @html.h2(class="directory-title", [
+        @html.span(title),
+        @html.span(class="lane-count", tasks.length().to_string()),
+      ]),
+      @html.span(class="directory-hint", hint),
+    ]),
+    if tasks.is_empty() {
+      @html.p(class="lane-empty", "Nothing here.")
+    } else {
+      @html.div(class="cards", tasks.map(task => task_card(model, task, emit)))
+    },
   ])
 }
 
@@ -862,7 +1072,7 @@ fn notice_toast(notice : Notice?, emit : @rabbita.Emit[Msg]) -> @html.Html {
             title="Dismiss notification",
             attrs=@html.Attrs::build().aria_label("Dismiss notification"),
             on_click=emit(NoticeDismissed),
-            "×",
+            "✕",
           ),
         ],
       )
@@ -875,29 +1085,13 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     topbar(model, emit),
     toolbar(model, emit),
     connection_banner(model, emit),
-    match model.editor {
-      Some(editor) =>
-        match editor.mode {
-          CreateMode => composer_panel(model, editor, emit)
-          EditMode(_) => editor_panel(model, emit)
-        }
-      None => @html.nothing
-    },
-    // Lanes and the inspector share one workspace. The inspector is an
-    // overlay sheet, so it never squeezes the lane grid into unreadable
-    // columns.
-    @html.div(
-      class=if inspector_open(model) || model.ticket_drawer {
-        "workspace has-sheet"
-      } else {
-        "workspace"
-      },
-      [
-        board(model, emit),
-        inspector_panel(model, emit),
-        ticket_drawer(model, emit),
-      ],
-    ),
+    @html.div(class="workspace", [board(model, emit)]),
+    editor_dialog(model, emit),
+    detail_dialog(model, emit),
+    inbox_dialog(model, emit),
+    ticket_activity_dialog(model, emit),
+    archive_dialog(model, emit),
+    confirm_dialog(model, emit),
     notice_toast(model.notice, emit),
   ])
 }

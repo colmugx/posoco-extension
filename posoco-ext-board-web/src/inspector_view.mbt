@@ -1,159 +1,179 @@
 ///|
-fn inspector_panel(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  if model.selected_task is None &&
-    model.dependency_editor is None &&
-    model.attempt_draft is None &&
-    model.finish_draft is None &&
-    model.review_draft is None {
-    return @html.nothing
-  }
-  @html.aside(
-    id="task-inspector",
-    class="inspector",
-    attrs=@html.Attrs::build().aria_label("Task inspector"),
-    [
-      dependency_draft_banner(model, emit),
-      attempt_draft_banner(model, emit),
-      inspector_body(model, emit),
-    ],
+/// Level two of the board: one task, its position in the pipeline, the next
+/// step, its review, and its history. Rendered as a native dialog so the
+/// browser owns Esc, focus and the backdrop.
+fn detail_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  @html.dialog(
+    id="detail-dialog",
+    class="dialog sheet-dialog",
+    on_close=_ => emit(InspectorClosed),
+    attrs=@html.Attrs::build().aria_label("Task detail"),
+    [@html.div(class="sheet", [detail_body(model, emit)])],
   )
 }
 
 ///|
-/// Browsing or closing the inspector must not silently discard a draft.
-fn dependency_draft_banner(
-  model : Model,
-  emit : @rabbita.Emit[Msg],
-) -> @html.Html {
-  guard model.dependency_editor is Some(draft) else { return @html.nothing }
-  if model.selected_task == Some(draft.task_id) {
-    return @html.nothing
+fn detail_body(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  guard model.selected_task is Some(_) else {
+    return @html.div(class="sheet-empty", [
+      @html.p("No task is open."),
+    ])
   }
-  @html.div(
-    class="inspector-banner",
-    attrs=@html.Attrs::build().role("status").aria_live("polite"),
-    [
-      @html.p(
-        "Unsaved dependency draft for task \{draft.task_id} is kept while you browse other tasks.",
-      ),
-      @html.div(class="inspector-actions", [
-        @html.button(
-          type_="button",
-          class="task-action",
-          on_click=emit(DependencyDraftReturned),
-          "Return to draft",
-        ),
-        @html.button(
-          type_="button",
-          class="task-action",
-          disabled=model.pending is Some(_),
-          on_click=emit(DependenciesCancelled),
-          "Discard draft",
-        ),
-      ]),
-    ],
-  )
-}
-
-///|
-/// Without an authoritative baseline no entity or attempt data is rendered:
-/// the board is unknown, so the panel waits instead of going stale.
-fn inspector_body(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  guard model.selected_task is Some(_) else { return @html.nothing }
   if !model.replica.has_snapshot() {
-    return @html.section(
-      class="inspector-waiting",
-      attrs=@html.Attrs::build().role("status").aria_live("polite"),
-      [
-        @html.h2("Task inspector"),
-        @html.button(
-          type_="button",
-          class="task-action",
-          on_click=emit(InspectorClosed),
-          "Close inspector",
-        ),
-        @html.p(
-          "Waiting for Board state; task details appear after the authoritative snapshot arrives.",
-        ),
-      ],
-    )
+    return @html.div(class="sheet-head", [
+      @html.h2(class="sheet-title", "Waiting for the board"),
+      close_button("detail-dialog"),
+    ])
   }
   match inspector_task(model) {
     Some(task) => task_details(model, task, emit)
-    // Transient only: revalidation clears a selection whose task is gone.
     None =>
-      @html.section(class="inspector-waiting", [
-        @html.h2("Task inspector"),
-        @html.p("The selected task is no longer on the board."),
+      @html.div(class="sheet-head", [
+        @html.h2(class="sheet-title", "This task is no longer on the board"),
+        close_button("detail-dialog"),
       ])
   }
 }
 
 ///|
-/// The next stage move, expressed as a person's intent. It mirrors the card's
-/// primary action so the inspector is a complete working surface, not a
-/// read-only view.
-fn inspector_next_action(
+fn sheet_crumb(task : @client.ClientBoardTask) -> @html.Html {
+  @html.nav(
+    class="crumbs",
+    attrs=@html.Attrs::build().aria_label("Breadcrumb"),
+    [
+      @html.button(
+        type_="button",
+        class="crumb-link",
+        attrs=@html.Attrs::build().on_click(_ => {
+          ui_close("detail-dialog")
+          @rabbita.none
+        }),
+        "Board",
+      ),
+      @html.span(class="crumb-sep", "/"),
+      @html.span(class="crumb-here", ui_stage_label(task.stage)),
+    ],
+  )
+}
+
+///|
+/// The next move, expressed as the person's intent, plus the reason it is
+/// unavailable when it is. The primary intent mirrors the card exactly.
+fn detail_next_action(
   model : Model,
   task : @client.ClientBoardTask,
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
-  let target = primary_move(task.stage)
-  let shaping = task.stage == @client.Created && model.ticket_available
-  let ready = task.stage == @client.Ready && model.ticket_available
-  let hint = match create_unavailable_hint(model) {
-    Some(text) => Some(text)
+  let hint = action_blocked_hint(model, task.id)
+  let locked = hint is Some(_) || model.pending is Some(_)
+  let note = match hint {
+    Some(text) => text
     None =>
-      if ticket_task_running(model, task.id) {
-        Some(
-          "This ticket is already running. Check Inbox for a question or wait for it to finish.",
-        )
-      } else {
-        None
-      }
-  }
-  let locked = hint is Some(_)
-  @html.div(class="inspector-next", [
-    @html.button(
-      type_="button",
-      class="btn btn-primary inspector-next-action",
-      title=match hint {
-        Some(text) => text
-        None =>
-          if shaping {
-            "Shape this ticket with an agent"
-          } else if ready {
-            "Run this ticket in the background"
-          } else {
-            "Move to " + ui_stage_label(target)
-          }
-      },
-      disabled=locked,
-      on_click=emit(
-        if shaping {
-          TicketShape(task.id)
-        } else if ready {
-          TicketRun(task.id)
-        } else {
-          MoveRequested(task.id, target)
-        },
-      ),
-      primary_action_label(task.stage),
-    ),
-    @html.p(
-      class="inspector-next-hint",
-      match hint {
-        Some(text) => text
-        None =>
-          if shaping {
+      match task.stage {
+        Created =>
+          if model.ticket_available {
             "Clarifies the ticket and its acceptance criteria."
-          } else if ready {
+          } else {
+            "Moves to Shaping for scoping."
+          }
+        Refining => "Marks it scoped and ready to be picked up."
+        Ready =>
+          if model.ticket_available {
             "Starts a worker session in the background."
           } else {
-            "Moves to " + ui_stage_label(target)
+            "Moves it to In progress."
           }
-      },
+        Running => "Asks for a review before closing."
+        Review => "Closes the task. Done is final and moves it to the archive."
+        Done => "Sends a closed task back to Shaping."
+        Suspended => "Returns a paused task to Ready."
+      }
+  }
+  @html.section(class="next-block", [
+    primary_intent(
+      model,
+      task,
+      emit,
+      disabled=locked,
+      class="btn btn-primary btn-lg next-primary",
     ),
+    @html.p(
+      class=if hint is Some(_) { "next-note is-warn" } else { "next-note" },
+      note,
+    ),
+  ])
+}
+
+///|
+/// Review is the moment the pipeline exists for: a recorded decision is
+/// final, so it is confirmed and never bundled with the move.
+fn review_block(
+  model : Model,
+  task : @client.ClientBoardTask,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  match task.stage {
+    Review | Done => ()
+    _ => return @html.nothing
+  }
+  let attempts = inspector_attempts(model)
+  let open = attempts.filter(review_recordable)
+  let recordable = open.get(open.length() - 1)
+  let decided = attempts
+    .filter(attempt => attempt.review is Some(Approved) || attempt.review is Some(ChangesRequested))
+    .get(0)
+  let locked = !attempt_controls_allowed(model)
+  @html.section(class="detail-section", [
+    @html.h2(class="section-title", "Review"),
+    match recordable {
+      Some(attempt) =>
+        @html.div(class="review-open", [
+          @html.p(class="review-meta", [
+            @html.span(class="mono", attempt.id),
+            @html.span(class="review-state", "running"),
+            @html.span(class="review-pending", "decision pending"),
+          ]),
+          @html.div(class="review-actions", [
+            @html.button(
+              type_="button",
+              class="btn btn-primary",
+              disabled=locked,
+              attrs=@html.Attrs::build().on_click(_ => {
+                ui_show("confirm-dialog")
+                emit(ReviewDecide(attempt.id, "approved"))
+              }),
+              "Approve",
+            ),
+            @html.button(
+              type_="button",
+              class="btn",
+              disabled=locked,
+              attrs=@html.Attrs::build().on_click(_ => {
+                ui_show("confirm-dialog")
+                emit(ReviewDecide(attempt.id, "changes_requested"))
+              }),
+              "Request changes",
+            ),
+          ]),
+          @html.p(
+            class="section-note",
+            "A recorded decision is final. It does not move the task: close it with the action above.",
+          ),
+        ])
+      None =>
+        match decided {
+          Some(attempt) =>
+            @html.p(class="review-meta", [
+              @html.span(class="review-state is-decided", review_label(attempt.review.unwrap_or(Pending))),
+              @html.span(class="mono", attempt.id),
+            ])
+          None =>
+            @html.p(
+              class="section-note",
+              "No review attempt is recording a decision. Close the task with the action above, or send it back to Ready.",
+            )
+        }
+    },
   ])
 }
 
@@ -167,81 +187,76 @@ fn task_details(
     Some(draft) if draft.task_id == task.id => Some(draft)
     _ => None
   }
-  @html.section(
-    class="inspector-details",
-    attrs=@html.Attrs::build().aria_label("Task details"),
-    [
-      @html.div(class="inspector-head", [
-        @html.h2(task.title),
-        // Closing only clears the selection; a dependency draft survives it.
+  @html.fragment([
+    @html.header(class="sheet-head", [
+      @html.div(class="sheet-heading", [
+        sheet_crumb(task),
+        @html.h2(id="task-detail", class="sheet-title", task.title),
+        @html.p(class="sheet-meta", [
+          @html.span(class="chip", priority_short(task.priority) + " " + priority_label(task.priority)),
+          @html.span(class="chip", ui_stage_label(task.stage)),
+          @html.span(class="chip is-quiet", task.id),
+        ]),
+      ]),
+      @html.div(class="sheet-head-actions", [
         @html.button(
           type_="button",
-          class="task-action",
-          title="Close inspector",
-          attrs=@html.Attrs::build().aria_label("Close inspector"),
-          on_click=emit(InspectorClosed),
-          "Close",
+          class="btn btn-sm",
+          title="Open this ticket's activity",
+          attrs=@html.Attrs::build().on_click(_ => {
+            ui_show("ticket-activity-dialog")
+            emit(TicketActivityOpened(task.id))
+          }),
+          "Activity",
         ),
+        close_button("detail-dialog"),
       ]),
-      @html.p(class="inspector-stage", [
-        @html.span(ui_stage_label(task.stage)),
-        @html.span(class="dot", ""),
-        @html.span(
-          "\{priority_short(task.priority)} \{priority_label(task.priority)}",
+    ]),
+    @html.div(class="sheet-body", [
+      stage_stepper(model, task, emit),
+      detail_next_action(model, task, emit),
+      review_block(model, task, emit),
+      @html.section(class="detail-section", [
+        @html.h2(class="section-title", "Definition of done"),
+        task_dod(task),
+      ]),
+      @html.section(class="detail-section", [
+        @html.h2(class="section-title", "Dependencies"),
+        task_dependencies(model, task, draft, emit),
+      ]),
+      @html.section(class="detail-section", [
+        @html.h2(class="section-title", "Runs"),
+        @html.p(
+          class="section-note",
+          "Manual records: the board tracks the attempt, it does not run it.",
         ),
+        task_attempts(model, emit),
       ]),
-      inspector_next_action(model, task, emit),
-      @html.nav(
-        class="inspector-nav",
-        attrs=@html.Attrs::build().aria_label("Inspector sections"),
-        inspector_sections().map(section => {
-          let (id, label) = section
-          @html.a(href="#" + id, escape=true, label)
-        }),
-      ),
-      match selection_filter_note(model) {
-        Some(message) =>
-          @html.p(
-            class="inspector-status",
-            attrs=@html.Attrs::build().role("status").aria_live("polite"),
-            message,
-          )
-        None => @html.nothing
-      },
-      @html.h3(id="inspector-dependencies", "Dependencies"),
-      task_dependencies(model, task, draft, emit),
-      @html.h3(id="inspector-dod", "Definition of done"),
-      task_dod(task),
-      @html.h3(id="inspector-attempts", "Runs (manual)"),
-      task_attempts(model, emit),
-      @html.details(id="inspector-task-details", class="inspector-fold", [
-        @html.summary(class="inspector-fold-summary", "Details"),
-        @html.h3("Description"),
+      @html.details(id="inspector-task-details", class="detail-fold", [
+        @html.summary(class="fold-summary", "Description and details"),
         if task.description == "" {
-          @html.p(class="inspector-empty", "No description.")
+          @html.p(class="empty-line", "No description.")
         } else {
-          @html.p(task.description)
+          @html.p(class="detail-description", task.description)
         },
         task_fields(task),
       ]),
-    ],
-  )
+    ]),
+  ])
 }
 
 ///|
 /// Read-only field grid for the collapsed Details section. Stage and priority
-/// live in the inspector header, so they are not repeated here.
+/// live in the sheet header, so they are not repeated here.
 fn task_fields(task : @client.ClientBoardTask) -> @html.Html {
   let rows = [
-    @html.dt("ID"),
-    @html.dd(task.id),
     @html.dt("Created"),
     @html.dd(utc_timestamp(task.created_at_ms)),
     @html.dt("Updated"),
     @html.dd(utc_timestamp(task.updated_at_ms)),
   ]
   @html.dl(
-    class="inspector-fields",
+    class="detail-fields",
     match task.ready_since_ms {
       Some(at_ms) =>
         [..rows, @html.dt("Ready since"), @html.dd(utc_timestamp(at_ms))]
@@ -253,11 +268,11 @@ fn task_fields(task : @client.ClientBoardTask) -> @html.Html {
 ///|
 fn task_dod(task : @client.ClientBoardTask) -> @html.Html {
   if task.definition_of_done.is_empty() {
-    @html.p(class="inspector-empty", "No definition of done entries yet.")
+    @html.p(class="empty-line", "No definition of done yet.")
   } else {
     @html.ul(
-      class="inspector-list",
-      task.definition_of_done.map(entry => @html.li(entry)),
+      class="checklist",
+      task.definition_of_done.map(entry => @html.li(class="check", entry)),
     )
   }
 }
@@ -275,10 +290,10 @@ fn task_dependencies(
     Some(draft) => dependency_editor_panel(model, draft, emit)
     None => {
       let list = if task.dependencies.is_empty() {
-        @html.p(class="inspector-empty", "No dependencies.")
+        @html.p(class="empty-line", "No dependencies.")
       } else {
         @html.ul(
-          class="inspector-list",
+          class="plain-list",
           task.dependencies.map(id => {
             @html.li(dependency_entry_label(dependency_title(model, id), id))
           }),
@@ -288,7 +303,7 @@ fn task_dependencies(
         list,
         @html.button(
           type_="button",
-          class="task-action",
+          class="btn btn-sm",
           title="Edit this task's dependencies in a local draft",
           // Only one editor at a time, and only through the mutation gate.
           disabled=draft_open(model) || !mutations_allowed(model),
@@ -321,20 +336,18 @@ fn dependency_editor_panel(
     attrs=@html.Attrs::build().aria_label("Edit dependencies"),
     [
       @html.p(
-        class="inspector-status",
+        class="section-note",
         attrs=@html.Attrs::build().role("status").aria_live("polite"),
-        "Dependency draft: \{draft.dependencies.length()} selected",
+        "Draft: \{draft.dependencies.length()} selected",
       ),
       if dependency_conflict(model, draft) {
-        @html.div(class="inspector-conflict", [
+        @html.div(class="callout is-warn", [
           @html.p(
-            class="inspector-warning",
-            attrs=@html.Attrs::build().role("status").aria_live("polite"),
             "Dependencies changed on the board while this draft was open. Reload the latest dependencies before saving, or discard the draft.",
           ),
           @html.button(
             type_="button",
-            class="task-action",
+            class="btn btn-sm",
             disabled=!editable,
             on_click=emit(DependenciesRefreshed),
             "Reload latest dependencies",
@@ -344,10 +357,7 @@ fn dependency_editor_panel(
         @html.nothing
       },
       if candidates.is_empty() {
-        @html.p(
-          class="inspector-empty",
-          "No other tasks are available as dependencies.",
-        )
+        @html.p(class="empty-line", "No other tasks are available as dependencies.")
       } else {
         @html.nothing
       },
@@ -381,15 +391,13 @@ fn dependency_editor_panel(
         @html.nothing
       } else {
         @html.ul(
-          class="inspector-list",
+          class="plain-list",
           missing.map(id => {
             @html.li(class="dependency-missing", [
-              @html.span(
-                dependency_entry_label(dependency_title(model, id), id),
-              ),
+              @html.span(dependency_entry_label(dependency_title(model, id), id)),
               @html.button(
                 type_="button",
-                class="task-action",
+                class="btn btn-sm",
                 disabled=!editable,
                 on_click=emit(DependencyToggled(id, false)),
                 "Remove",
@@ -398,25 +406,24 @@ fn dependency_editor_panel(
           }),
         )
       },
-      @html.div(class="inspector-actions", [
+      @html.div(class="button-row", [
         @html.button(
           type_="button",
-          class="task-action",
+          class="btn",
           disabled=!editable || draft.dependencies.is_empty(),
           on_click=emit(DependenciesCleared),
           "Clear all",
         ),
-        // Discarding stays possible even when the target task vanished.
         @html.button(
           type_="button",
-          class="task-action",
+          class="btn",
           disabled=model.pending is Some(_),
           on_click=emit(DependenciesCancelled),
           "Discard draft",
         ),
         @html.button(
           type_="button",
-          class="task-action primary",
+          class="btn btn-primary",
           disabled=!dependency_save_allowed(model, draft),
           on_click=emit(DependenciesSubmitted),
           "Save dependencies",
@@ -433,7 +440,7 @@ fn dependency_editor_panel(
 fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let attempts = inspector_attempts(model)
   let list = if attempts.is_empty() {
-    @html.p(class="inspector-empty", "No runs yet.")
+    @html.p(class="empty-line", "No runs yet.")
   } else {
     @html.ul(
       class="attempt-list",
@@ -443,7 +450,6 @@ fn task_attempts(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   @html.fragment([
     list,
     attempt_queue_form(model, emit),
-    review_form(model, emit),
     finish_form(model, emit),
   ])
 }
@@ -454,8 +460,7 @@ fn attempt_row(
   attempt : @client.ClientAttempt,
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
-  // Status validation is live: start renders for queued attempts, review
-  // recording only for a running Review attempt still pending, and the
+  // Status validation is live: start renders for queued attempts, and the
   // explicit outcome choice for running ones; the durable server stays
   // authoritative over every transition.
   let locked = !attempt_controls_allowed(model)
@@ -464,58 +469,55 @@ fn attempt_row(
       [
         @html.button(
           type_="button",
-          class="task-action attempt-control",
+          class="btn btn-sm",
           title="Record that this queued attempt has started; no Agent is launched",
           disabled=locked,
           on_click=emit(AttemptStartRequested(attempt.id)),
           "Mark started",
         ),
       ]
-    Running => {
-      let actions : Array[@html.Html] = []
-      if review_recordable(attempt) {
-        actions.push(
-          @html.button(
-            type_="button",
-            class="task-action attempt-control",
-            title="Record Approved or Changes requested; the attempt keeps running and the decision cannot be changed",
-            disabled=locked,
-            on_click=emit(ReviewOpened(attempt.id)),
-            "Record review decision",
-          ),
-        )
-      }
-      actions.push(
+    Running =>
+      [
         @html.button(
           type_="button",
-          class="task-action attempt-control",
+          class="btn btn-sm",
           title="Choose how to finish this running attempt",
           disabled=locked,
           on_click=emit(AttemptFinishOpened(attempt.id)),
           "Finish…",
         ),
-      )
-      actions
-    }
+      ]
     Succeeded | Failed | Cancelled | Interrupted => []
   }
   @html.li(class="attempt-row", [
-    @html.span(class="entity-id", attempt.id),
     @html.div(class="attempt-line", [
+      @html.span(class="mono", attempt.id),
       @html.span(class="attempt-kind", attempt_kind_label(attempt.kind)),
-      @html.span(class="attempt-state", attempt_status_label(attempt.status)),
+      @html.span(class="state-chip is-\{attempt_state_tone(attempt.status)}", attempt_status_label(attempt.status)),
       match attempt.review {
-        Some(review) => @html.span(class="attempt-review", review_label(review))
+        Some(review) =>
+          @html.span(class="attempt-review", review_label(review))
         None => @html.nothing
       },
     ]),
     if lifecycle.is_empty() {
       @html.nothing
     } else {
-      @html.div(class="attempt-actions", lifecycle)
+      @html.div(class="button-row", lifecycle)
     },
     @html.p(class="attempt-when", attempt_times(attempt)),
   ])
+}
+
+///|
+fn attempt_state_tone(status : @client.ClientAttemptStatus) -> String {
+  match status {
+    Queued => "queued"
+    Running => "running"
+    Succeeded => "ok"
+    Failed => "bad"
+    Cancelled | Interrupted => "muted"
+  }
 }
 
 ///|
@@ -526,32 +528,22 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     None =>
       @html.button(
         type_="button",
-        class="task-action",
+        class="btn btn-sm",
         title="Open a local queue draft for this task",
         disabled=!attempt_controls_allowed(model),
         on_click=emit(AttemptQueueOpened),
-        // The ellipsis separates the opener from the submit button of the
-        // same name inside the draft, so no two controls read as one.
-        "Queue attempt…",
+        "Queue run…",
       )
     Some(draft) if model.selected_task == Some(draft.task_id) => {
       let editable = attempt_draft_editable(model, draft)
       @html.div(
         class="attempt-queue",
-        attrs=@html.Attrs::build().aria_label("Queue attempt"),
+        attrs=@html.Attrs::build().aria_label("Queue run"),
         [
-          @html.p(
-            class="inspector-status",
-            attrs=@html.Attrs::build().role("status").aria_live("polite"),
-            "Queue an attempt for task \{draft.task_id}.",
-          ),
-          @html.p(class="entity-id", "Attempt ID: \{draft.attempt_id}"),
+          @html.p(class="section-note", "Queue a run for task \{draft.task_id}."),
+          @html.p(class="mono attempt-id", draft.attempt_id),
           if !queue_attempt_id_valid(model.replica, draft.attempt_id) {
-            @html.p(
-              class="inspector-warning",
-              attrs=@html.Attrs::build().role("status").aria_live("polite"),
-              "This attempt ID already exists. Discard this draft to queue a new attempt.",
-            )
+            @html.p(class="callout is-warn", "This run ID already exists. Discard this draft to queue a new run.")
           } else {
             @html.nothing
           },
@@ -572,20 +564,20 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
               }),
             ),
           ),
-          @html.div(class="inspector-actions", [
+          @html.div(class="button-row", [
             @html.button(
               type_="button",
-              class="task-action",
+              class="btn",
               disabled=model.pending is Some(_),
               on_click=emit(AttemptQueueCancelled),
               "Cancel",
             ),
             @html.button(
               type_="button",
-              class="task-action primary",
+              class="btn btn-primary",
               disabled=!attempt_queue_submit_allowed(model, draft),
               on_click=emit(AttemptQueueSubmitted),
-              "Queue attempt",
+              "Queue run",
             ),
           ]),
         ],
@@ -692,49 +684,6 @@ fn padded(value : Int64, width : Int32) -> String {
 }
 
 ///|
-fn attempt_draft_banner(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  let (task_id, label, return_msg, cancel) = match
-    (model.attempt_draft, model.finish_draft, model.review_draft) {
-    (Some(draft), _, _) =>
-      (draft.task_id, "attempt", AttemptDraftReturned, AttemptQueueCancelled)
-    (_, Some(draft), _) =>
-      (draft.task_id, "attempt", AttemptDraftReturned, AttemptFinishCancelled)
-    (_, _, Some(draft)) =>
-      (draft.task_id, "review", ReviewDraftReturned, ReviewCancelled)
-    _ => return @html.nothing
-  }
-  if model.selected_task == Some(task_id) {
-    return @html.nothing
-  }
-  @html.div(
-    class="inspector-banner",
-    // The banner appears while another task is inspected; announcing it
-    // keeps the kept draft discoverable without hunting for it.
-    attrs=@html.Attrs::build().role("status").aria_live("polite"),
-    [
-      @html.p(
-        "Unsaved \{label} draft for task \{task_id} is kept while you browse.",
-      ),
-      @html.div(class="inspector-actions", [
-        @html.button(
-          type_="button",
-          class="task-action",
-          on_click=emit(return_msg),
-          "Return to draft",
-        ),
-        @html.button(
-          type_="button",
-          class="task-action",
-          disabled=model.pending is Some(_),
-          on_click=emit(cancel),
-          "Discard draft",
-        ),
-      ]),
-    ],
-  )
-}
-
-///|
 fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   guard model.finish_draft is Some(draft) &&
     model.selected_task == Some(draft.task_id) else {
@@ -745,19 +694,19 @@ fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     class="attempt-queue",
     attrs=@html.Attrs::build().aria_label("Finish attempt"),
     [
-      @html.p("Finish attempt \{draft.attempt_id}"),
+      @html.p(class="section-note", "Finish run \{draft.attempt_id}"),
       // A running Review attempt without a recorded decision warns but
       // never blocks: finishing and recording stay independent commands.
       match attempt_by_id(model.replica, draft.attempt_id) {
         Some(attempt) if finish_review_warning(attempt) is Some(warning) =>
-          @html.p(class="inspector-warning", warning)
+          @html.p(class="callout is-warn", warning)
         _ => @html.nothing
       },
       if !editable && model.pending is None && mutations_allowed(model) {
         @html.p(
-          class="inspector-warning",
+          class="callout is-warn",
           attrs=@html.Attrs::build().role("status").aria_live("polite"),
-          "This attempt is no longer running. Discard this draft; no command was resent.",
+          "This run is no longer running. Discard this draft; no command was resent.",
         )
       } else {
         @html.nothing
@@ -786,118 +735,20 @@ fn finish_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           ],
         ),
       ),
-      @html.div(class="inspector-actions", [
+      @html.div(class="button-row", [
         @html.button(
           type_="button",
-          class="task-action",
+          class="btn",
           disabled=model.pending is Some(_),
           on_click=emit(AttemptFinishCancelled),
           "Discard draft",
         ),
         @html.button(
           type_="button",
-          class="task-action primary",
+          class="btn btn-primary",
           disabled=!finish_submit_allowed(model, draft),
           on_click=emit(AttemptFinishSubmitted),
-          "Finish attempt",
-        ),
-      ]),
-    ],
-  )
-}
-
-///|
-/// Local review draft: only the target attempt's ID plus an explicit
-/// decision that starts absent. Nothing here sends anything; submission is
-/// a separate explicit action through the shared single-pending gate. The
-/// recorded decision is final on the server, so the irreversibility notice
-/// stays visible while the draft is open.
-fn review_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  guard model.review_draft is Some(draft) &&
-    model.selected_task == Some(draft.task_id) else {
-    return @html.nothing
-  }
-  let editable = review_draft_editable(model, draft)
-  @html.section(
-    class="attempt-queue",
-    attrs=@html.Attrs::build().aria_label("Record review decision"),
-    [
-      @html.p("Record review decision for attempt \{draft.attempt_id}"),
-      match attempt_by_id(model.replica, draft.attempt_id) {
-        Some(attempt) =>
-          @html.dl(class="inspector-fields", [
-            @html.dt("Current attempt status"),
-            @html.dd(attempt_status_label(attempt.status)),
-            @html.dt("Current review decision"),
-            @html.dd(
-              match attempt.review {
-                Some(decision) => review_label(decision)
-                None => "No review decision"
-              },
-            ),
-          ])
-        None =>
-          @html.p(
-            class="inspector-empty",
-            "Waiting for authoritative attempt state.",
-          )
-      },
-      @html.p(
-        class="inspector-status",
-        attrs=@html.Attrs::build().role("status").aria_live("polite"),
-        "Recording never changes the attempt status or the task stage.",
-      ),
-      if !editable && model.pending is None && mutations_allowed(model) {
-        @html.p(
-          class="inspector-warning",
-          attrs=@html.Attrs::build().role("status").aria_live("polite"),
-          "This attempt can no longer record a review decision. Discard this draft; no command was sent.",
-        )
-      } else {
-        @html.nothing
-      },
-      labeled_field(
-        "review-record-decision",
-        "Decision",
-        @html.select(
-          id="review-record-decision",
-          name="review_decision",
-          disabled=!editable,
-          on_change=value => emit(ReviewDecisionChanged(value)),
-          [
-            @html.option(
-              value="",
-              selected=draft.decision is None,
-              "Choose a decision…",
-            ),
-            ..review_decisions().map(decision => {
-              @html.option(
-                value=decision.to_wire(),
-                selected=draft.decision == Some(decision),
-                review_decision_label(decision),
-              )
-            }),
-          ],
-        ),
-      ),
-      @html.p(
-        class="inspector-status",
-        "A recorded decision is final; it cannot be changed or cleared.",
-      ),
-      @html.div(class="inspector-actions", [
-        @html.button(
-          type_="button",
-          class="task-action",
-          disabled=model.pending is Some(_),
-          on_click=emit(ReviewCancelled),
-          "Discard draft",
-        ),
-        @html.button(
-          type_="button",
-          class="task-action primary",
-          disabled=!review_submit_allowed(model, draft),
-          on_click=emit(ReviewSubmitted),
-          "Record decision",
+          "Finish run",
         ),
       ]),
     ],

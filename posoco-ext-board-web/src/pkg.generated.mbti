@@ -31,6 +31,10 @@ pub fn definition_of_done_lines(String) -> Array[String]
 
 pub fn definition_of_done_text(Array[String]) -> String
 
+pub fn dependency_count_label(Int32) -> String
+
+pub fn done_stage() -> @client.ClientBoardStage
+
 pub fn empty_message(@client.BoardReplica) -> String?
 
 pub fn finish_review_pending(@client.ClientAttempt) -> Bool
@@ -67,7 +71,13 @@ pub fn review_decisions() -> Array[@client.ClientRecordableReviewDecision]
 
 pub fn review_recordable(@client.ClientAttempt) -> Bool
 
+pub fn stage_hint(@client.ClientBoardStage) -> String
+
 pub fn stage_label(@client.ClientBoardStage) -> String
+
+pub fn stage_step(@client.ClientBoardStage) -> Int32?
+
+pub fn step_reachable(@client.ClientBoardStage, @client.ClientBoardStage) -> Bool
 
 pub fn tasks_in_lane(@client.BoardReplica, @client.ClientBoardStage) -> Array[@client.ClientBoardTask]
 
