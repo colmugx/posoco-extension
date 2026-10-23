@@ -4,7 +4,7 @@ struct PtcMockInvoker {
 }
 
 ///|
-impl @mbtx.ToolInvoker for PtcMockInvoker with fn invoke(
+impl @posoco-ext-ptc.ToolInvoker for PtcMockInvoker with fn invoke(
   self : PtcMockInvoker,
   name : String,
   args : Json,
@@ -159,4 +159,39 @@ async test "PTC complete script and inline code are mutually exclusive" {
     }),
   )
   assert_true(result is @posoco.ToolOutcome::ToolReportedError(..))
+}
+
+///|
+async test "run_code rejects a code argument that includes the ptc_run signature" {
+  let ptc = @posoco-ext-ptc.PtcExtension()
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Wrapped probe",
+      "code": "async fn ptc_run(ctx : PtcContext, input : Json) -> Json {\n  input\n}",
+    }),
+  )
+  match result {
+    @posoco.ToolOutcome::ToolReportedError(content~, structured=None) =>
+      assert_true(content.contains("body of async fn ptc_run"))
+    _ => fail("wrapped code was not rejected before building")
+  }
+}
+
+///|
+async test "run_code build failure carries compiler diagnostics" {
+  let ptc = @posoco-ext-ptc.PtcExtension()
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Broken probe",
+      "code": "let broken :",
+    }),
+  )
+  match result {
+    @posoco.ToolOutcome::ToolReportedError(content~, ..) => {
+      assert_true(content.contains("run_code build failed"))
+      assert_true(content.contains("the compiler"))
+      assert_true(content.length() > 120, msg=content)
+    }
+    _ => fail("build failure surfaced without diagnostics")
+  }
 }

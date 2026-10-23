@@ -8,7 +8,7 @@
 pub struct PtcExtension {
   priv runtime : @mbtx.Runtime
   priv tool_names : Array[String]
-  priv scoped_invoker : &@mbtx.ToolInvoker?
+  priv scoped_invoker : &ToolInvoker?
   priv max_output_bytes : Int32
   priv traces : Map[String, Array[@mbtx.ToolCallTrace]]
   priv mut tasks : @posoco.Tasks?
@@ -26,7 +26,7 @@ pub struct PtcExtension {
 /// Without it, ctx.call() is explicitly unavailable; pure code still runs.
 pub fn PtcExtension::PtcExtension(
   exposed~ : Array[@posoco.ToolDef] = [],
-  scoped_invoker? : &@mbtx.ToolInvoker,
+  scoped_invoker? : &ToolInvoker,
   bus? : @devkit.EventBus,
   home? : String,
   max_output_bytes~ : Int32 = 65536,
@@ -173,7 +173,15 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
         structured=None,
       )
     { "source": String(source), .. } => source
-    { "code": String(code), .. } => ptc_guest_source(code)
+    { "code": String(code), .. } =>
+      match reject_wrapped_code(code) {
+        Some(message) =>
+          return @posoco.ToolOutcome::ToolReportedError(
+            content=message,
+            structured=None,
+          )
+        None => ptc_guest_source(code)
+      }
     _ =>
       return @posoco.ToolOutcome::ToolReportedError(
         content="run_code: expected code or source",
@@ -267,14 +275,65 @@ async fn PtcExtension::execute_source(
   input : Json,
   invocation_id : String,
 ) -> @posoco.ToolOutcome {
+  // The tool-agnostic runtime forwards the guest's call frames to this
+  // handler; governance stays on this side of the seam.
+  let on_call : (async (String, Json) -> @mbtx.Outcome)? = match
+    self.scoped_invoker {
+    Some(invoker) => Some((name, args) => invoker.invoke(name, args))
+    None => None
+  }
   let result = self.runtime.run(
     source,
     input,
     invocation_id~,
     tools=self.tool_names,
-    invoker?=self.scoped_invoker,
+    on_call?,
     max_output_bytes=self.max_output_bytes,
   ) catch {
+    // Error payloads (build diagnostics, stderr, reasons) are the model's
+    // only self-correction signal, so each variant renders them verbatim;
+    // `Error::to_string` renders only the constructor path.
+    @mbtx.RuntimeError::BuildFailed(diagnostics) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code build failed — the program never ran; the output below is the compiler's:\n" +
+          diagnostics,
+        structured=None,
+      )
+    @mbtx.RuntimeError::TimedOut(phase) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code timed out during the \{phase} phase — nothing partial is returned",
+        structured=None,
+      )
+    @mbtx.RuntimeError::GuestFailure(message) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code guest process failed: " + message,
+        structured=None,
+      )
+    @mbtx.RuntimeError::ToolchainUnavailable(message) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code toolchain unavailable: " + message,
+        structured=None,
+      )
+    @mbtx.RuntimeError::ProtocolFailure(reason) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code protocol failure: " + reason,
+        structured=None,
+      )
+    @mbtx.RuntimeError::Invalid(reason) =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code invalid invocation: " + reason,
+        structured=None,
+      )
+    @mbtx.RuntimeError::Cancelled =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code was cancelled before completing; no result was produced",
+        structured=None,
+      )
+    @mbtx.RuntimeError::Closed =>
+      return @posoco.ToolOutcome::ToolReportedError(
+        content="run_code runtime is closed",
+        structured=None,
+      )
     error =>
       return @posoco.ToolOutcome::ToolReportedError(
         content="run_code failed: " + error.to_string(),

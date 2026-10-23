@@ -68,3 +68,17 @@ fn ptc_guest_source(code : String) -> String {
     #|}
   prefix + "\n" + code + "\n" + suffix
 }
+
+///|
+/// `code` is the body of `ptc_run`, whose signature the bootstrap supplies.
+/// A caller that includes the signature declares `ptc_run` twice and the
+/// build fails, so name that contract violation before building.
+fn reject_wrapped_code(code : String) -> String? {
+  let trimmed = code.trim()
+  if trimmed.has_prefix("async fn ptc_run") || trimmed.has_prefix("fn ptc_run") {
+    return Some(
+      "run_code: `code` must be the body of async fn ptc_run(ctx, input) — send the statements only, without the function signature, imports, or main. To run a complete program, pass it as `source` instead.",
+    )
+  }
+  None
+}

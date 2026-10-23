@@ -125,7 +125,7 @@ pub fn PtcScopedInvoker::PtcScopedInvoker(
 }
 
 ///|
-pub impl @mbtx.ToolInvoker for PtcScopedInvoker with fn invoke(
+pub impl ToolInvoker for PtcScopedInvoker with fn invoke(
   self : PtcScopedInvoker,
   name : String,
   arguments : Json,
@@ -149,7 +149,7 @@ pub impl @mbtx.ToolInvoker for PtcScopedInvoker with fn invoke(
 }
 
 ///|
-pub extend PtcScopedInvoker with @mbtx.ToolInvoker::{invoke}
+pub extend PtcScopedInvoker with ToolInvoker::{invoke}
 
 ///|
 pub impl @runtime.Runtime for PtcRuntime with fn call_model(

@@ -2,10 +2,14 @@
 package "colmugx/posoco-ext-ptc"
 
 import {
+  "colmugx/posoco",
   "colmugx/posoco-ext-mbtx",
+  "colmugx/posoco-ext-mbtx/protocol",
   "colmugx/posoco/error",
   "colmugx/posoco/kernel",
   "colmugx/posoco/port",
+  "colmugx/posoco/runtime",
+  "colmugx/posoco/types",
   "posoco/devkit",
 }
 
@@ -14,10 +18,18 @@ import {
 // Errors
 
 // Types and methods
+pub struct PtcCatalogSource {
+  // private fields
+}
+pub fn PtcCatalogSource::PtcCatalogSource() -> Self
+pub fn PtcCatalogSource::revision(Self) -> Int32
+pub fn PtcCatalogSource::tools(Self) -> Array[@kernel.ToolDef]
+pub impl @runtime.CatalogSource for PtcCatalogSource
+
 pub struct PtcExtension {
   // private fields
 }
-pub fn PtcExtension::PtcExtension(exposed? : Array[@kernel.ToolDef], scoped_invoker? : &@posoco-ext-mbtx.ToolInvoker, bus? : @devkit.EventBus, home? : String, max_output_bytes? : Int, build_cache? : String, task_session? : () -> String) -> Self
+pub fn PtcExtension::PtcExtension(exposed? : Array[@kernel.ToolDef], scoped_invoker? : &ToolInvoker, bus? : @devkit.EventBus, home? : String, max_output_bytes? : Int32, build_cache? : String, task_session? : () -> String) -> Self
 pub fn PtcExtension::allowed_tools(Self) -> Array[String]
 pub async fn PtcExtension::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
 pub async fn PtcExtension::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
@@ -36,6 +48,35 @@ pub impl @port.SystemPromptContributor for PtcExtension
 pub impl @port.ToolCancellable for PtcExtension
 pub impl @port.ToolProvider for PtcExtension
 
+pub struct PtcGuardedProvider {
+  // private fields
+}
+pub fn PtcGuardedProvider::PtcGuardedProvider(inner~ : &@port.ToolProvider, guards~ : Array[&@port.PipelineHook]) -> Self
+pub async fn PtcGuardedProvider::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn PtcGuardedProvider::list_tools(Self) -> Array[@kernel.ToolDef]
+pub impl @port.ToolProvider for PtcGuardedProvider
+
+pub struct PtcRuntime {
+  // private fields
+}
+pub fn PtcRuntime::PtcRuntime(fallback~ : &@runtime.Runtime, tools~ : Array[&@port.ToolProvider], hooks? : Array[&@port.PipelineHook], final_guards? : Array[&@port.PipelineHook], home? : String, bus? : @devkit.EventBus) -> Self raise @error.CompositionError
+pub async fn PtcRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
+pub async fn PtcRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
+pub async fn PtcRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
+pub async fn PtcRuntime::execute_tool(Self, @runtime.EffectContext) -> @kernel.ToolOutcome
+pub fn PtcRuntime::extension(Self) -> &@port.Extension
+pub impl @runtime.Runtime for PtcRuntime
+
+pub struct PtcScopedInvoker {
+  // private fields
+}
+pub fn PtcScopedInvoker::PtcScopedInvoker(dispatch~ : @posoco.ScopedToolDispatch) -> Self
+pub async fn PtcScopedInvoker::invoke(Self, String, Json) -> @protocol.Outcome
+pub impl ToolInvoker for PtcScopedInvoker
+
 // Type aliases
 
 // Traits
+pub(open) trait ToolInvoker {
+  async fn invoke(Self, String, Json) -> @protocol.Outcome
+}
