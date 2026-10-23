@@ -64,6 +64,27 @@ fn decode_ticket_question(value : Json) -> TicketQuestion? {
 }
 
 ///|
+fn decode_ticket_activity(value : Json) -> TicketActivity? {
+  let fields = match value {
+    Object(fields) => fields
+    _ => return None
+  }
+  let text = match fields.get("text") {
+    Some(String(value)) => value
+    _ => return None
+  }
+  let kind = match fields.get("kind") {
+    Some(String(value)) => value
+    _ => "step"
+  }
+  let at_ms = match fields.get("at_ms") {
+    Some(Number(value, ..)) => value.to_int64()
+    _ => 0L
+  }
+  Some({ at_ms, kind, text, })
+}
+
+///|
 fn decode_ticket_run(value : Json) -> TicketRun? {
   let fields = match value {
     Object(fields) => fields
@@ -93,7 +114,39 @@ fn decode_ticket_run(value : Json) -> TicketRun? {
     Some(String(value)) => Some(value)
     _ => None
   }
-  Some({ task_id, session_id, phase, status, error, result, })
+  let steps = match fields.get("steps") {
+    Some(Number(value, ..)) => value.to_int()
+    _ => 0
+  }
+  let current_tool = match fields.get("current_tool") {
+    Some(String(value)) => Some(value)
+    _ => None
+  }
+  let preview = match fields.get("preview") {
+    Some(String(value)) => value
+    _ => ""
+  }
+  let reasoning = match fields.get("reasoning") {
+    Some(String(value)) => value
+    _ => ""
+  }
+  let activities = match fields.get("activities") {
+    Some(Array(items)) => items.filter_map(decode_ticket_activity)
+    _ => []
+  }
+  Some({
+    task_id,
+    session_id,
+    phase,
+    status,
+    error,
+    result,
+    steps,
+    current_tool,
+    preview,
+    reasoning,
+    activities,
+  })
 }
 
 ///|
@@ -190,7 +243,9 @@ fn ticket_question_count(model : Model) -> Int32 {
 fn ticket_inbox_count(model : Model) -> Int32 {
   ticket_question_count(model) +
   model.tickets.runs
-  .filter(run => run.result is Some(_) || run.error is Some(_))
+  .filter(run => {
+    run.status == "running" || run.result is Some(_) || run.error is Some(_)
+  })
   .length()
 }
 
@@ -210,6 +265,72 @@ fn ticket_run(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
 fn ticket_dismiss(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
   let args : Json = { "task_id": Json::string(task_id) }
   send_ticket_command("board.ticket.dismiss", args, emit)
+}
+
+///|
+fn ticket_activity_list(activities : Array[TicketActivity]) -> @html.Html {
+  let items : Array[@html.Html] = []
+  let start = if activities.length() > 8 { activities.length() - 8 } else { 0 }
+  for index in start..<activities.length() {
+    let activity = activities[index]
+    items.push(
+      @html.div(
+        class="ticket-activity-row kind-\{activity.kind}",
+        @html.span(class="ticket-activity-text", activity.text),
+      ),
+    )
+  }
+  @html.div(class="ticket-activity-list", items)
+}
+
+///|
+fn ticket_run_card(
+  model : Model,
+  run : TicketRun,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let title = match task_by_id(model.replica, run.task_id) {
+    Some(task) => task.title
+    None => run.task_id
+  }
+  let phase = if run.phase == "shape" { "Shaping" } else { "Working" }
+  let tool = match run.current_tool {
+    Some(name) => " · " + name
+    None => ""
+  }
+  let preview = if run.preview == "" {
+    "Waiting for the first model response…"
+  } else {
+    run.preview
+  }
+  @html.div(class="ticket-question ticket-run", [
+    @html.div(class="ticket-question-meta", [
+      @html.span(class="ticket-question-task", title),
+      @html.span(class="ticket-question-kind", phase + tool),
+    ]),
+    @html.div(class="ticket-run-preview", preview),
+    if run.reasoning == "" {
+      @html.nothing
+    } else {
+      @html.details(class="ticket-reasoning", [
+        @html.summary("Reasoning"),
+        @html.div(class="ticket-reasoning-text", run.reasoning),
+      ])
+    },
+    ticket_activity_list(run.activities),
+    @html.div(
+      class="ticket-run-foot",
+      "Step \{run.steps} · updates automatically while the worker runs.",
+    ),
+    @html.div(class="ticket-answers", [
+      @html.button(
+        type_="button",
+        class="btn btn-sm",
+        on_click=emit(TicketDrawerToggled),
+        "Close",
+      ),
+    ]),
+  ])
 }
 
 ///|
@@ -242,6 +363,11 @@ fn ticket_result_card(
           }
       },
     ),
+    if run.activities.is_empty() {
+      @html.nothing
+    } else {
+      ticket_activity_list(run.activities)
+    },
     @html.div(class="ticket-answers", [
       @html.button(
         type_="button",
@@ -348,7 +474,32 @@ fn ticket_question_card(
           ),
         )
       }
-      @html.div(class="ticket-answers", buttons)
+      @html.div([
+        @html.div(class="ticket-answers", buttons),
+        @html.div(class="ticket-other", [
+          @html.div(class="ticket-other-label", "Other answer"),
+          @html.div(class="ticket-answers", [
+            @html.textarea(
+              id="ticket-other-\{question.id}",
+              name="ticket_other",
+              class="ticket-input",
+              rows=3,
+              value=draft,
+              placeholder="None of these fit? Write your answer…",
+              disabled=model.ticket_sending,
+              on_input=value => emit(TicketDraftChanged(question.id, value)),
+              @html.fragment([]),
+            ),
+            @html.button(
+              type_="button",
+              class="btn btn-sm btn-primary",
+              disabled=model.ticket_sending || draft.trim().is_empty(),
+              on_click=emit(TicketAnswered(question.id, TicketText(draft))),
+              "Send other",
+            ),
+          ]),
+        ]),
+      ])
     }
     _ =>
       @html.div(class="ticket-answers", [
@@ -393,7 +544,7 @@ fn ticket_drawer(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         @html.div(class="inspector-title", "Ticket inbox"),
         @html.div(
           class="inspector-subtitle",
-          "Answer ticket questions here; completed workers show their result below.",
+          "Answer ticket questions, inspect live worker activity, and review completed results here.",
         ),
       ]),
       @html.button(
@@ -411,7 +562,9 @@ fn ticket_drawer(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           items.push(ticket_question_card(model, question, emit))
         }
         for run in model.tickets.runs {
-          if run.result is Some(_) || run.error is Some(_) {
+          if run.status == "running" {
+            items.push(ticket_run_card(model, run, emit))
+          } else if run.result is Some(_) || run.error is Some(_) {
             items.push(ticket_result_card(model, run, emit))
           }
         }

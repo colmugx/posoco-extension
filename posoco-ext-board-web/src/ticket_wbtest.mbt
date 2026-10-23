@@ -37,6 +37,21 @@ test "ticket state records questions without forcing the drawer" {
 }
 
 ///|
+test "running ticket activity stays in the inbox" {
+  let text = "{\"type\":\"ticket_state\",\"state\":{\"questions\":[],\"runs\":[{\"task_id\":\"t1\",\"session_id\":\"s1\",\"phase\":\"shape\",\"status\":\"running\",\"error\":null,\"result\":null,\"steps\":1,\"current_tool\":\"read\",\"preview\":\"Looking at the files\",\"reasoning\":\"Need context\",\"activities\":[{\"at_ms\":1,\"kind\":\"tool\",\"text\":\"Tool · read · src/main.mbt\"}]}]}}"
+  match ticket_frame(text) {
+    Some(TicketSnapshot(state)) => {
+      let model = apply_ticket_state(Model::empty(true), state)
+      assert_eq(ticket_inbox_count(model), 1)
+      assert_eq(state.runs[0].steps, 1)
+      assert_eq(state.runs[0].activities.length(), 1)
+      assert_eq(state.runs[0].activities[0].kind, "tool")
+    }
+    _ => fail("expected a ticket state frame")
+  }
+}
+
+///|
 test "failed runs stay in the inbox with their error" {
   let state : TicketState = {
     questions: [],
@@ -48,6 +63,11 @@ test "failed runs stay in the inbox with their error" {
         status: "failed",
         error: Some("provider timed out"),
         result: None,
+        steps: 2,
+        current_tool: None,
+        preview: "",
+        reasoning: "",
+        activities: [],
       },
     ],
   }

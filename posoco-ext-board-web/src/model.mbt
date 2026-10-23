@@ -41,6 +41,13 @@ priv struct TicketQuestion {
 } derive(Eq)
 
 ///|
+priv struct TicketActivity {
+  at_ms : Int64
+  kind : String
+  text : String
+} derive(Eq)
+
+///|
 priv struct TicketRun {
   task_id : String
   session_id : String
@@ -48,6 +55,11 @@ priv struct TicketRun {
   status : String
   error : String?
   result : String?
+  steps : Int32
+  current_tool : String?
+  preview : String
+  reasoning : String
+  activities : Array[TicketActivity]
 } derive(Eq)
 
 ///|

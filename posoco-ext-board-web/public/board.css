@@ -446,6 +446,69 @@ a {
   color: var(--danger);
 }
 
+.ticket-run-preview {
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: 12px/1.5 var(--font-sans);
+  white-space: pre-wrap;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.ticket-reasoning {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ticket-reasoning-text {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--line-strong);
+  white-space: pre-wrap;
+  max-height: 96px;
+  overflow: auto;
+}
+
+.ticket-activity-list {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 192px;
+  overflow: auto;
+}
+
+.ticket-activity-row {
+  color: var(--muted);
+  font: 11px/1.45 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.ticket-activity-row.kind-error {
+  color: var(--danger);
+}
+
+.ticket-activity-row.kind-tool {
+  color: var(--ink-2);
+}
+
+.ticket-activity-row.kind-question {
+  color: var(--warn);
+}
+
+.ticket-run-foot {
+  margin-top: 6px;
+  color: var(--faint);
+  font-size: 10px;
+}
+
 .ticket-result .ticket-question-kind {
   color: var(--ok);
 }
@@ -455,6 +518,20 @@ a {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.ticket-other {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.ticket-other-label {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .ticket-input {
