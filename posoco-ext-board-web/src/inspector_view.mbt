@@ -99,6 +99,7 @@ fn inspector_next_action(
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
   let target = primary_move(task.stage)
+  let shaping = task.stage == @client.Created && model.ticket_available
   let ready = task.stage == @client.Ready && model.ticket_available
   let hint = create_unavailable_hint(model)
   let locked = hint is Some(_)
@@ -109,7 +110,9 @@ fn inspector_next_action(
       title=match hint {
         Some(text) => text
         None =>
-          if ready {
+          if shaping {
+            "Shape this ticket with an agent"
+          } else if ready {
             "Run this ticket in the background"
           } else {
             "Move to " + ui_stage_label(target)
@@ -117,7 +120,9 @@ fn inspector_next_action(
       },
       disabled=locked,
       on_click=emit(
-        if ready {
+        if shaping {
+          TicketShape(task.id)
+        } else if ready {
           TicketRun(task.id)
         } else {
           MoveRequested(task.id, target)
@@ -130,7 +135,9 @@ fn inspector_next_action(
       match hint {
         Some(text) => text
         None =>
-          if ready {
+          if shaping {
+            "Clarifies the ticket and its acceptance criteria."
+          } else if ready {
             "Starts a worker session in the background."
           } else {
             "Moves to " + ui_stage_label(target)

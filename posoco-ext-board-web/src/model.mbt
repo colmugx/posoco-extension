@@ -44,6 +44,7 @@ priv struct TicketQuestion {
 priv struct TicketRun {
   task_id : String
   session_id : String
+  phase : String
   status : String
   error : String?
   result : String?
@@ -222,6 +223,7 @@ priv enum Msg {
   TicketDrawerToggled
   TicketDraftChanged(String, String)
   TicketAnswered(String, TicketAnswer)
+  TicketShape(String)
   TicketRun(String)
   TicketRunReady
   TicketResultDismissed(String)

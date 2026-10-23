@@ -540,12 +540,17 @@ fn task_card(
   let locked = !mutations_allowed(model) || draft_open(model)
   let selected = model.selected_task == Some(task.id)
   let primary = primary_move(task.stage)
-  let primary_message = if task.stage == @client.Ready && model.ticket_available {
+  let shaping = model.ticket_available && task.stage == @client.Created
+  let primary_message = if shaping {
+    TicketShape(task.id)
+  } else if task.stage == @client.Ready && model.ticket_available {
     TicketRun(task.id)
   } else {
     MoveRequested(task.id, primary)
   }
-  let primary_title = if task.stage == @client.Ready && model.ticket_available {
+  let primary_title = if shaping {
+    "Shape this ticket with an agent"
+  } else if task.stage == @client.Ready && model.ticket_available {
     "Run this ticket in the background"
   } else {
     "Move to " + ui_stage_label(primary)
@@ -604,6 +609,18 @@ fn task_card(
           @html.div(
             class="menu",
             [
+              if model.ticket_available && task.stage == @client.Refining {
+                card_action(
+                  TicketShape(task.id),
+                  emit,
+                  class="menu-item",
+                  title="Clarify and refine this ticket with an agent",
+                  disabled=locked,
+                  label="Shape ticket",
+                )
+              } else {
+                @html.nothing
+              },
               card_action(
                 EditOpened(task.id),
                 emit,

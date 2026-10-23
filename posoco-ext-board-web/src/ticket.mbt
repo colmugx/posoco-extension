@@ -77,6 +77,10 @@ fn decode_ticket_run(value : Json) -> TicketRun? {
     Some(String(value)) => value
     _ => ""
   }
+  let phase = match fields.get("phase") {
+    Some(String(value)) => value
+    _ => "work"
+  }
   let status = match fields.get("status") {
     Some(String(value)) => value
     _ => "running"
@@ -89,7 +93,7 @@ fn decode_ticket_run(value : Json) -> TicketRun? {
     Some(String(value)) => Some(value)
     _ => None
   }
-  Some({ task_id, session_id, status, error, result, })
+  Some({ task_id, session_id, phase, status, error, result, })
 }
 
 ///|
@@ -179,6 +183,12 @@ fn ticket_question_count(model : Model) -> Int32 {
 fn ticket_inbox_count(model : Model) -> Int32 {
   ticket_question_count(model) +
   model.tickets.runs.filter(run => run.result is Some(_)).length()
+}
+
+///|
+fn ticket_shape(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
+  let args : Json = { "task_id": Json::string(task_id) }
+  send_ticket_command("board.ticket.shape", args, emit)
 }
 
 ///|

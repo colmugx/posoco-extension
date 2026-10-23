@@ -427,6 +427,19 @@ fn update(
           ticket_answer(question_id, answer, emit),
         )
       }
+    TicketShape(task_id) =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else {
+        (
+          {
+            ..model,
+            ticket_sending: true,
+            last_status: "Shaping ticket " + task_id,
+          },
+          ticket_shape(task_id, emit),
+        )
+      }
     TicketRun(task_id) =>
       if model.ticket_sending || !model.can_connect || !model.ticket_available {
         (model, @rabbita.none)
