@@ -162,7 +162,7 @@ async test "PTC complete script and inline code are mutually exclusive" {
 }
 
 ///|
-async test "run_code rejects a code argument that includes the ptc_run signature" {
+async test "run_code rejects a code argument that includes a function signature" {
   let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(name="run_code", arguments={
@@ -172,8 +172,26 @@ async test "run_code rejects a code argument that includes the ptc_run signature
   )
   match result {
     @posoco.ToolOutcome::ToolReportedError(content~, structured=None) =>
-      assert_true(content.contains("body of async fn ptc_run"))
+      assert_true(content.contains("must be the handler body"))
     _ => fail("wrapped code was not rejected before building")
+  }
+}
+
+///|
+async test "run_code rejects a complete program pasted as code" {
+  let ptc = @posoco-ext-bunraku.BunrakuExtension()
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Full program probe",
+      "code": "import { \"moonbitlang/async\" }\n\nasync fn main { println(1) }",
+    }),
+  )
+  match result {
+    @posoco.ToolOutcome::ToolReportedError(content~, structured=None) => {
+      assert_true(content.contains("must be the handler body"))
+      assert_true(content.contains("`source`"))
+    }
+    _ => fail("full program was not rejected before building")
   }
 }
 
