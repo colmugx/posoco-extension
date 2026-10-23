@@ -10,6 +10,7 @@ pub struct BunrakuRuntime {
   priv definitions : Array[@posoco.ToolDef]
   priv presentation : BunrakuExtension
   priv home : String?
+  priv call_observers : Array[(NestedCallEvent) -> Unit]
   priv active : Map[Int32, BunrakuExtension]
 }
 
@@ -20,6 +21,7 @@ pub fn BunrakuRuntime::BunrakuRuntime(
   hooks~ : Array[&@posoco.PipelineHook] = [],
   final_guards~ : Array[&@posoco.PipelineHook] = [],
   home? : String,
+  call_observers~ : Array[(NestedCallEvent) -> Unit] = [],
   bus? : @devkit.EventBus,
 ) -> BunrakuRuntime raise @posoco.CompositionError {
   let definitions : Array[@posoco.ToolDef] = []
@@ -69,8 +71,9 @@ pub fn BunrakuRuntime::BunrakuRuntime(
     tools: guarded_providers,
     hooks: hooks.copy(),
     definitions,
-    presentation: BunrakuExtension(exposed=definitions, home?),
+    presentation: BunrakuExtension(exposed=definitions, call_observers~, home?),
     home,
+    call_observers: call_observers.copy(),
     active: Map::from_array([]),
   }
 }
@@ -194,6 +197,7 @@ pub impl @runtime.Runtime for BunrakuRuntime with fn execute_tool(
   let ptc = BunrakuExtension(
     exposed=self.definitions,
     scoped_invoker=invoker,
+    call_observers=self.call_observers.copy(),
     home?=self.home,
   )
   let id = ctx.effect_id.to_int()

@@ -44,6 +44,35 @@ test "PTC model sees only run_code and a stable generated tool catalog" {
 }
 
 ///|
+async test "settled nested calls emit one append-only event each" {
+  let mock = BunrakuMockInvoker::{ calls: [], }
+  let observed : Array[@posoco-ext-bunraku.NestedCallEvent] = []
+  let ptc = @posoco-ext-bunraku.BunrakuExtension(
+    exposed=test_ptc_tools(),
+    scoped_invoker=mock,
+    call_observers=[fn(event) { observed.push(event) }],
+  )
+  let result = ptc.execute(
+    @posoco.tk_tool_call_ctx(name="run_code", arguments={
+      "description": "Trace probe",
+      "code": (
+        #|let value = ctx.call("read", {"path": "README.md"})
+        #|value
+      ),
+    }),
+  )
+  guard result is @posoco.ToolOutcome::Success(..) else {
+    fail("guest did not succeed")
+  }
+  assert_eq(mock.calls, ["read"])
+  assert_eq(observed.length(), 1)
+  let event = observed[0]
+  assert_eq(event.parent_call, "call_1")
+  assert_eq(event.name, "read")
+  assert_true(event.outcome is { "kind": "success", .. })
+}
+
+///|
 async test "PTC real MoonBit guest calls trusted bridge and filters result" {
   let mock = BunrakuMockInvoker::{ calls: [], }
   let ptc = @posoco-ext-bunraku.BunrakuExtension(

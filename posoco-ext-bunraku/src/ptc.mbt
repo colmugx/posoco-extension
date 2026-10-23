@@ -9,6 +9,7 @@ pub struct BunrakuExtension {
   priv runtime : @mbtx.Runtime
   priv tool_names : Array[String]
   priv scoped_invoker : &ToolInvoker?
+  priv call_observers : Array[(NestedCallEvent) -> Unit]
   priv max_output_bytes : Int32
   priv traces : Map[String, Array[@mbtx.ToolCallTrace]]
   priv mut tasks : @posoco.Tasks?
@@ -27,6 +28,7 @@ pub struct BunrakuExtension {
 pub fn BunrakuExtension::BunrakuExtension(
   exposed~ : Array[@posoco.ToolDef] = [],
   scoped_invoker? : &ToolInvoker,
+  call_observers~ : Array[(NestedCallEvent) -> Unit] = [],
   bus? : @devkit.EventBus,
   home? : String,
   max_output_bytes~ : Int32 = 65536,
@@ -55,6 +57,7 @@ pub fn BunrakuExtension::BunrakuExtension(
     ),
     tool_names,
     scoped_invoker,
+    call_observers: call_observers.copy(),
     max_output_bytes,
     traces: Map([]),
     tasks: None,
@@ -232,7 +235,12 @@ pub impl @posoco.ToolProvider for BunrakuExtension with fn execute(
       label,
       timeout_ms: Some(300000),
       run: async fn() {
-        let outcome = self.execute_source(source, input, invocation_id)
+        let outcome = self.execute_source(
+          source,
+          input,
+          invocation_id,
+          parent_call=ctx.call_id.to_string(),
+        )
         let content = match outcome {
           @kernel.ToolOutcome::Success(content~, structured=_) => content
           @kernel.ToolOutcome::ToolReportedError(content~, structured=_) =>
@@ -259,7 +267,12 @@ pub impl @posoco.ToolProvider for BunrakuExtension with fn execute(
   }
   let invocation_id = ctx.effect_id.to_string()
   (ctx.register_cancel)(self as &@posoco.ToolCancellable)
-  self.execute_source(source, input, invocation_id) catch {
+  self.execute_source(
+    source,
+    input,
+    invocation_id,
+    parent_call=ctx.call_id.to_string(),
+  ) catch {
     error =>
       @posoco.ToolOutcome::ToolReportedError(
         content="run_code failed: " + error.to_string(),
@@ -276,6 +289,7 @@ async fn BunrakuExtension::execute_source(
   source : String,
   input : Json,
   invocation_id : String,
+  parent_call~ : String,
 ) -> @posoco.ToolOutcome {
   // The tool-agnostic runtime forwards the guest's call frames to this
   // handler; governance stays on this side of the seam.
@@ -343,6 +357,21 @@ async fn BunrakuExtension::execute_source(
       )
   }
   self.traces[invocation_id] = result.calls.copy()
+  // One append-only terminal fact per nested call: the enclosing run_code
+  // call is the visible observer node, and these hang beneath it so flow
+  // renderers can draw the guest's fan-out without fabricating states.
+  for call in result.calls {
+    let event : NestedCallEvent = {
+      parent_call,
+      request_id: call.request_id,
+      name: call.name,
+      arguments: call.arguments,
+      outcome: call.outcome.to_json(),
+    }
+    for observer in self.call_observers {
+      observer(event)
+    }
+  }
   match result.outcome {
     @protocol.Success(content~, structured~) =>
       @posoco.ToolOutcome::Success(content~, structured~)
