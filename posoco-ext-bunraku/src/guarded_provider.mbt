@@ -3,29 +3,29 @@
 /// ScopedToolDispatch has resolved any rewrites and validated arguments.
 /// Unlike the default approval lattice, a guard rejection can never be
 /// overridden by a previous ApproveAfterConsent (e.g. plan-mode writes).
-pub struct PtcGuardedProvider {
+pub struct BunrakuGuardedProvider {
   priv inner : &@posoco.ToolProvider
   priv guards : Array[&@posoco.PipelineHook]
 }
 
 ///|
-pub fn PtcGuardedProvider::PtcGuardedProvider(
+pub fn BunrakuGuardedProvider::BunrakuGuardedProvider(
   inner~ : &@posoco.ToolProvider,
   guards~ : Array[&@posoco.PipelineHook],
-) -> PtcGuardedProvider {
+) -> BunrakuGuardedProvider {
   { inner, guards: guards.copy(), }
 }
 
 ///|
-pub impl @posoco.ToolProvider for PtcGuardedProvider with fn list_tools(
-  self : PtcGuardedProvider,
+pub impl @posoco.ToolProvider for BunrakuGuardedProvider with fn list_tools(
+  self : BunrakuGuardedProvider,
 ) -> Array[@kernel.ToolDef] {
   self.inner.list_tools()
 }
 
 ///|
-pub impl @posoco.ToolProvider for PtcGuardedProvider with fn execute(
-  self : PtcGuardedProvider,
+pub impl @posoco.ToolProvider for BunrakuGuardedProvider with fn execute(
+  self : BunrakuGuardedProvider,
   ctx : @posoco.ToolCallContext,
 ) -> @kernel.ToolOutcome raise @posoco.RuntimeError {
   let call : @kernel.ToolCall = {
@@ -66,4 +66,7 @@ pub impl @posoco.ToolProvider for PtcGuardedProvider with fn execute(
 }
 
 ///|
-pub extend PtcGuardedProvider with @posoco.ToolProvider::{list_tools, execute}
+pub extend BunrakuGuardedProvider with @posoco.ToolProvider::{
+  list_tools,
+  execute,
+}

@@ -1,0 +1,82 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-bunraku"
+
+import {
+  "colmugx/posoco",
+  "colmugx/posoco-ext-mbtx",
+  "colmugx/posoco-ext-mbtx/protocol",
+  "colmugx/posoco/error",
+  "colmugx/posoco/kernel",
+  "colmugx/posoco/port",
+  "colmugx/posoco/runtime",
+  "colmugx/posoco/types",
+  "posoco/devkit",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct BunrakuCatalogSource {
+  // private fields
+}
+pub fn BunrakuCatalogSource::BunrakuCatalogSource() -> Self
+pub fn BunrakuCatalogSource::revision(Self) -> Int32
+pub fn BunrakuCatalogSource::tools(Self) -> Array[@kernel.ToolDef]
+pub impl @runtime.CatalogSource for BunrakuCatalogSource
+
+pub struct BunrakuExtension {
+  // private fields
+}
+pub fn BunrakuExtension::BunrakuExtension(exposed? : Array[@kernel.ToolDef], scoped_invoker? : &ToolInvoker, bus? : @devkit.EventBus, home? : String, max_output_bytes? : Int32, build_cache? : String, task_session? : () -> String) -> Self
+pub fn BunrakuExtension::allowed_tools(Self) -> Array[String]
+pub async fn BunrakuExtension::cancel(Self, @kernel.EffectId, @kernel.CancelReason) -> @kernel.CancelDisposition
+pub async fn BunrakuExtension::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn BunrakuExtension::extension_id(Self) -> String
+pub fn BunrakuExtension::list_tools(Self) -> Array[@kernel.ToolDef]
+pub fn BunrakuExtension::manifest(Self) -> @port.ExtensionManifest
+pub fn BunrakuExtension::on_compose(Self, @port.CompositionView) -> Unit raise @error.CompositionError
+pub async fn BunrakuExtension::on_shutdown(Self) -> Unit
+pub async fn BunrakuExtension::on_start(Self) -> Unit
+pub fn BunrakuExtension::system_prompt(Self) -> String
+pub fn BunrakuExtension::toolchain_status(Self) -> String
+pub fn BunrakuExtension::trace(Self, String) -> Array[@posoco-ext-mbtx.ToolCallTrace]
+pub impl @port.Extension for BunrakuExtension
+pub impl @port.Lifecycle for BunrakuExtension
+pub impl @port.SystemPromptContributor for BunrakuExtension
+pub impl @port.ToolCancellable for BunrakuExtension
+pub impl @port.ToolProvider for BunrakuExtension
+
+pub struct BunrakuGuardedProvider {
+  // private fields
+}
+pub fn BunrakuGuardedProvider::BunrakuGuardedProvider(inner~ : &@port.ToolProvider, guards~ : Array[&@port.PipelineHook]) -> Self
+pub async fn BunrakuGuardedProvider::execute(Self, @port.ToolCallContext) -> @kernel.ToolOutcome raise @error.RuntimeError
+pub fn BunrakuGuardedProvider::list_tools(Self) -> Array[@kernel.ToolDef]
+pub impl @port.ToolProvider for BunrakuGuardedProvider
+
+pub struct BunrakuRuntime {
+  // private fields
+}
+pub fn BunrakuRuntime::BunrakuRuntime(fallback~ : &@runtime.Runtime, tools~ : Array[&@port.ToolProvider], hooks? : Array[&@port.PipelineHook], final_guards? : Array[&@port.PipelineHook], home? : String, bus? : @devkit.EventBus) -> Self raise @error.CompositionError
+pub async fn BunrakuRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, ((@types.StreamChunk) -> Unit)?) -> Result[@kernel.ModelCallResult, @kernel.ModelFailure]
+pub async fn BunrakuRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
+pub async fn BunrakuRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
+pub async fn BunrakuRuntime::execute_tool(Self, @runtime.EffectContext) -> @kernel.ToolOutcome
+pub fn BunrakuRuntime::extension(Self) -> &@port.Extension
+pub impl @runtime.Runtime for BunrakuRuntime
+
+pub struct BunrakuScopedInvoker {
+  // private fields
+}
+pub fn BunrakuScopedInvoker::BunrakuScopedInvoker(dispatch~ : @posoco.ScopedToolDispatch) -> Self
+pub async fn BunrakuScopedInvoker::invoke(Self, String, Json) -> @protocol.Outcome
+pub impl ToolInvoker for BunrakuScopedInvoker
+
+// Type aliases
+
+// Traits
+pub(open) trait ToolInvoker {
+  async fn invoke(Self, String, Json) -> @protocol.Outcome
+}

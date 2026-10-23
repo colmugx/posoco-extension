@@ -26,7 +26,7 @@ async test "PTC final veto blocks approved native write execution" {
     ),
   })
   let final_policy = PtcDenyPolicy::{ }
-  let guarded = @posoco-ext-ptc.PtcGuardedProvider(
+  let guarded = @posoco-ext-bunraku.BunrakuGuardedProvider(
     inner=actual as &@posoco.ToolProvider,
     guards=[final_policy as &@posoco.PipelineHook],
   )

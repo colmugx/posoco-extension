@@ -1,6 +1,10 @@
-# posoco-ext-ptc
+# posoco-ext-bunraku
 
-Programmatic Tool Calling for Posoco, using `posoco-ext-mbtx` as a private MoonBit Wasm guest runtime.
+Bunraku（文楽）is the puppet theater where the handlers stand visible on
+stage — fitting for the one Posoco extension named for its role rather than
+its technology: it drives guest MoonBit programs that act on the host's
+tools. It is the model-facing PTC (Programmatic Tool Calling) transport,
+using `posoco-ext-mbtx` as a private MoonBit Wasm guest runtime.
 
 This is a real `run_code` ToolProvider with stable SystemPromptContributor, an automatically generated MoonBit guest wrapper, an explicit nested-call capability list, bounded final output and effect cancellation. No LLM-side selection is needed *within a PTC agent*: the manifest exposes exactly one model tool. Do not also compose the original end-tool extensions into the same PTC agent.
 
@@ -30,7 +34,7 @@ Supply-chain caveats from the stacked MBTX auto-provisioning PR apply to the fir
 ## Developer composition
 
 ```moonbit
-let ptc = @ptc.PtcExtension(
+let ptc = @ptc.BunrakuExtension(
   exposed=approved_tool_definitions,
   // scoped_invoker must be Kernel-governed; not a raw provider.
   scoped_invoker=kernel_scoped_invoker,
@@ -46,8 +50,8 @@ The `exposed` definitions drive only prompt discoverability and the MBTX guest a
 ```sh
 moon check --target native
 moon check --target js
-moon test --target native -p colmugx/posoco-ext-ptc --output-json
-moon test --target js -p colmugx/posoco-ext-ptc --output-json
+moon test --target native -p colmugx/posoco-ext-bunraku --output-json
+moon test --target js -p colmugx/posoco-ext-bunraku --output-json
 ```
 
 Tests cover manifest tool presentation, stable SDK prompt, actual MoonBit guest program execution, tool-call transport with fake invoker, fail-closed no-invoker and invalid code, across Native and JS.

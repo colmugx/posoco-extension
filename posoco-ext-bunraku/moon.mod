@@ -1,4 +1,4 @@
-name = "colmugx/posoco-ext-ptc"
+name = "colmugx/posoco-ext-bunraku"
 
 version = "0.1.0"
 
@@ -13,9 +13,16 @@ readme = "README.mbt.md"
 
 license = "Apache-2.0"
 
-keywords = [ "posoco", "ptc", "programmatic-tools", "code-mode", "moonbit" ]
+keywords = [
+  "posoco",
+  "ptc",
+  "bunraku",
+  "programmatic-tools",
+  "code-mode",
+  "moonbit",
+]
 
-description = "PTC model-facing program execution over MBTX with capability-gated nested tool calls"
+description = "Bunraku: model-facing PTC program execution over MBTX with capability-gated nested tool calls"
 
 source = "src"
 

@@ -2,7 +2,7 @@
 /// Read-only PTC advanced-runtime proof fixtures. These intentionally avoid
 /// compiler/network dependencies and test the narrow runtime seam directly.
 test "PTC catalog advertises only run_code" {
-  let catalog = @posoco-ext-ptc.PtcCatalogSource()
+  let catalog = @posoco-ext-bunraku.BunrakuCatalogSource()
   let defs = catalog.tools()
   assert_eq(defs.length(), 1)
   assert_eq(defs[0].name.to_string(), "run_code")
@@ -32,7 +32,7 @@ async test "PTC nested dispatch allows read and rejects other tool names" {
     ),
   })
   let dispatch = @posoco.ScopedToolDispatch([recording as &@posoco.ToolProvider])
-  let invoker = @posoco-ext-ptc.PtcScopedInvoker(dispatch~)
+  let invoker = @posoco-ext-bunraku.BunrakuScopedInvoker(dispatch~)
   let good = invoker.invoke("read", { "path": "README.md" })
   assert_true(good is @protocol.Success(..))
   let denied = invoker.invoke("write", { "path": "README.md" })

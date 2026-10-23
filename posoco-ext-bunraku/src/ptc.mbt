@@ -5,7 +5,7 @@
 /// \`scoped_invoker\` is an externally injected, trusted integration point.
 /// A missing bridge is a hard fail-closed state for nested calls, never
 /// permission to invoke wrapped ToolProviders directly.
-pub struct PtcExtension {
+pub struct BunrakuExtension {
   priv runtime : @mbtx.Runtime
   priv tool_names : Array[String]
   priv scoped_invoker : &ToolInvoker?
@@ -24,7 +24,7 @@ pub struct PtcExtension {
 /// Tool definitions are for SDK discoverability, NOT authority. Only the
 /// supplied scoped invoker can execute nested calls under host governance.
 /// Without it, ctx.call() is explicitly unavailable; pure code still runs.
-pub fn PtcExtension::PtcExtension(
+pub fn BunrakuExtension::BunrakuExtension(
   exposed~ : Array[@posoco.ToolDef] = [],
   scoped_invoker? : &ToolInvoker,
   bus? : @devkit.EventBus,
@@ -32,7 +32,7 @@ pub fn PtcExtension::PtcExtension(
   max_output_bytes~ : Int32 = 65536,
   build_cache? : String,
   task_session? : () -> String,
-) -> PtcExtension {
+) -> BunrakuExtension {
   let tool_names : Array[String] = []
   for def in exposed {
     let name = def.name.to_string()
@@ -64,20 +64,22 @@ pub fn PtcExtension::PtcExtension(
 }
 
 ///|
-pub fn PtcExtension::allowed_tools(self : PtcExtension) -> Array[String] {
+pub fn BunrakuExtension::allowed_tools(
+  self : BunrakuExtension,
+) -> Array[String] {
   self.tool_names.copy()
 }
 
 ///|
-pub fn PtcExtension::toolchain_status(self : PtcExtension) -> String {
+pub fn BunrakuExtension::toolchain_status(self : BunrakuExtension) -> String {
   self.runtime.toolchain_status()
 }
 
 ///|
 /// Snapshot of completed nested tool requests for one enclosing effect.
 /// This diagnostic channel is not included in the model-facing final result.
-pub fn PtcExtension::trace(
-  self : PtcExtension,
+pub fn BunrakuExtension::trace(
+  self : BunrakuExtension,
   effect_id : String,
 ) -> Array[@mbtx.ToolCallTrace] {
   match self.traces.get(effect_id) {
@@ -87,18 +89,18 @@ pub fn PtcExtension::trace(
 }
 
 ///|
-pub impl @posoco.Extension for PtcExtension with fn extension_id(
-  _self : PtcExtension,
+pub impl @posoco.Extension for BunrakuExtension with fn extension_id(
+  _self : BunrakuExtension,
 ) -> String {
-  "posoco_ext_ptc"
+  "posoco_ext_bunraku"
 }
 
 ///|
-pub impl @posoco.Extension for PtcExtension with fn manifest(
-  self : PtcExtension,
+pub impl @posoco.Extension for BunrakuExtension with fn manifest(
+  self : BunrakuExtension,
 ) -> @posoco.ExtensionManifest {
   @posoco.ExtensionManifest(
-    id="posoco_ext_ptc",
+    id="posoco_ext_bunraku",
     tools=[self],
     prompt_contributors=[self],
     lifecycle=[self],
@@ -107,11 +109,11 @@ pub impl @posoco.Extension for PtcExtension with fn manifest(
 }
 
 ///|
-pub extend PtcExtension with @posoco.Extension::{manifest, extension_id}
+pub extend BunrakuExtension with @posoco.Extension::{manifest, extension_id}
 
 ///|
-pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
-  _self : PtcExtension,
+pub impl @posoco.ToolProvider for BunrakuExtension with fn list_tools(
+  _self : BunrakuExtension,
 ) -> Array[@posoco.ToolDef] {
   [
     {
@@ -126,11 +128,11 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
           },
           "source": {
             "type": "string",
-            "description": "Full MoonBit .mbtx source; import the MBTX SDK and use @mbtx.serve(run). Exclusive with code.",
+            "description": "Full MoonBit .mbtx source: import posoco/ears@0.1.0 and use @ears.serve(run). Exclusive with code.",
           },
           "code": {
             "type": "string",
-            "description": "Body of async fn ptc_run(ctx: PtcContext, input: Json) -> Json. Call ctx.call(name, args), inspect results, return a JSON value. Exclusive with source.",
+            "description": "Body of the run_code guest handler: statements using ctx.call(name, args) and input. Exclusive with source.",
           },
           "input": { "description": "JSON input supplied to the program" },
           "description": {
@@ -141,19 +143,19 @@ pub impl @posoco.ToolProvider for PtcExtension with fn list_tools(
         "required": ["description"],
         "additionalProperties": false,
       },
-      owner: @posoco.OwnerId::unchecked("posoco_ext_ptc"),
+      owner: @posoco.OwnerId::unchecked("posoco_ext_bunraku"),
       policy: @posoco.ExecutionPolicy::Sequential,
-      provenance: Some("posoco_ext_ptc"),
+      provenance: Some("posoco_ext_bunraku"),
     },
   ]
 }
 
 ///|
-pub extend PtcExtension with @posoco.ToolProvider::{list_tools, execute}
+pub extend BunrakuExtension with @posoco.ToolProvider::{list_tools, execute}
 
 ///|
-pub impl @posoco.ToolProvider for PtcExtension with fn execute(
-  self : PtcExtension,
+pub impl @posoco.ToolProvider for BunrakuExtension with fn execute(
+  self : BunrakuExtension,
   ctx : @posoco.ToolCallContext,
 ) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
   if ctx.name.to_string() != "run_code" {
@@ -180,7 +182,7 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
             content=message,
             structured=None,
           )
-        None => ptc_guest_source(code)
+        None => inline_guest_source(code)
       }
     _ =>
       return @posoco.ToolOutcome::ToolReportedError(
@@ -269,8 +271,8 @@ pub impl @posoco.ToolProvider for PtcExtension with fn execute(
 ///|
 /// This helper is shared by foreground ToolProvider execution and Agent-owned
 /// background tasks; each receives a unique invocation ID.
-async fn PtcExtension::execute_source(
-  self : PtcExtension,
+async fn BunrakuExtension::execute_source(
+  self : BunrakuExtension,
   source : String,
   input : Json,
   invocation_id : String,
@@ -353,8 +355,8 @@ async fn PtcExtension::execute_source(
 }
 
 ///|
-pub impl @posoco.ToolCancellable for PtcExtension with fn cancel(
-  self : PtcExtension,
+pub impl @posoco.ToolCancellable for BunrakuExtension with fn cancel(
+  self : BunrakuExtension,
   effect_id : @kernel.EffectId,
   _reason : @kernel.CancelReason,
 ) -> @kernel.CancelDisposition {
@@ -366,25 +368,25 @@ pub impl @posoco.ToolCancellable for PtcExtension with fn cancel(
 }
 
 ///|
-pub extend PtcExtension with @posoco.ToolCancellable::{cancel}
+pub extend BunrakuExtension with @posoco.ToolCancellable::{cancel}
 
 ///|
-pub impl @posoco.Lifecycle for PtcExtension with fn on_compose(
-  self : PtcExtension,
+pub impl @posoco.Lifecycle for BunrakuExtension with fn on_compose(
+  self : BunrakuExtension,
   ctx : @posoco.CompositionView,
 ) -> Unit {
   self.tasks = ctx.tasks()
 }
 
 ///|
-pub impl @posoco.Lifecycle for PtcExtension with fn on_shutdown(
-  self : PtcExtension,
+pub impl @posoco.Lifecycle for BunrakuExtension with fn on_shutdown(
+  self : BunrakuExtension,
 ) -> Unit {
   self.runtime.close()
 }
 
 ///|
-pub extend PtcExtension with @posoco.Lifecycle::{
+pub extend BunrakuExtension with @posoco.Lifecycle::{
   on_shutdown,
   on_start,
   on_compose,

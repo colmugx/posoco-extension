@@ -3,29 +3,29 @@
 /// The enclosing run_code is a normal reducer-owned Effect. Nested requests
 /// deliberately remain private to the MBTX invocation; they are NOT kernel
 /// child Effects. Provider capabilities are supplied explicitly by the host.
-pub struct PtcRuntime {
+pub struct BunrakuRuntime {
   priv fallback : &@runtime.Runtime
   priv tools : Array[&@posoco.ToolProvider]
   priv hooks : Array[&@posoco.PipelineHook]
   priv definitions : Array[@posoco.ToolDef]
-  priv presentation : PtcExtension
+  priv presentation : BunrakuExtension
   priv home : String?
-  priv active : Map[Int32, PtcExtension]
+  priv active : Map[Int32, BunrakuExtension]
 }
 
 ///|
-pub fn PtcRuntime::PtcRuntime(
+pub fn BunrakuRuntime::BunrakuRuntime(
   fallback~ : &@runtime.Runtime,
   tools~ : Array[&@posoco.ToolProvider],
   hooks~ : Array[&@posoco.PipelineHook] = [],
   final_guards~ : Array[&@posoco.PipelineHook] = [],
   home? : String,
   bus? : @devkit.EventBus,
-) -> PtcRuntime raise @posoco.CompositionError {
+) -> BunrakuRuntime raise @posoco.CompositionError {
   let definitions : Array[@posoco.ToolDef] = []
   if tools.is_empty() {
     raise @posoco.CompositionError::ManifestSchemaError(
-      manifest_id="posoco_ext_ptc",
+      manifest_id="posoco_ext_bunraku",
       detail="PTC requires an explicit provider set",
     )
   }
@@ -34,7 +34,7 @@ pub fn PtcRuntime::PtcRuntime(
       let name = definition.name.to_string()
       if name == "run_code" || name == "" {
         raise @posoco.CompositionError::ManifestSchemaError(
-          manifest_id="posoco_ext_ptc",
+          manifest_id="posoco_ext_bunraku",
           detail="PTC scope excludes recursive or unnamed tool '" + name + "'",
         )
       }
@@ -46,7 +46,7 @@ pub fn PtcRuntime::PtcRuntime(
   let guarded_providers : Array[&@posoco.ToolProvider] = []
   for provider in tools {
     guarded_providers.push(
-      PtcGuardedProvider(inner=provider, guards=final_guards)
+      BunrakuGuardedProvider(inner=provider, guards=final_guards)
       as &@posoco.ToolProvider,
     )
   }
@@ -58,7 +58,7 @@ pub fn PtcRuntime::PtcRuntime(
   match bus {
     Some(bus) =>
       bus.publish({
-        source: "posoco_ext_ptc",
+        source: "posoco_ext_bunraku",
         topic: "tool_exemptions",
         data: { "tools": ["run_code"] },
       })
@@ -69,64 +69,64 @@ pub fn PtcRuntime::PtcRuntime(
     tools: guarded_providers,
     hooks: hooks.copy(),
     definitions,
-    presentation: PtcExtension(exposed=definitions, home?),
+    presentation: BunrakuExtension(exposed=definitions, home?),
     home,
     active: Map::from_array([]),
   }
 }
 
 ///|
-/// Compose this extension, not the unscoped PtcExtension from the old recipe.
-pub fn PtcRuntime::extension(self : PtcRuntime) -> &@posoco.Extension {
+/// Compose this extension, not the unscoped BunrakuExtension from the old recipe.
+pub fn BunrakuRuntime::extension(self : BunrakuRuntime) -> &@posoco.Extension {
   self.presentation as &@posoco.Extension
 }
 
 ///|
 /// Only run_code is advertised, independently of the fallback's dynamic catalog.
-pub struct PtcCatalogSource {
+pub struct BunrakuCatalogSource {
   priv revision_ : Int32
 }
 
 ///|
-pub fn PtcCatalogSource::PtcCatalogSource() -> PtcCatalogSource {
+pub fn BunrakuCatalogSource::BunrakuCatalogSource() -> BunrakuCatalogSource {
   { revision_: 0, }
 }
 
 ///|
-pub impl @runtime.CatalogSource for PtcCatalogSource with fn revision(
-  self : PtcCatalogSource,
+pub impl @runtime.CatalogSource for BunrakuCatalogSource with fn revision(
+  self : BunrakuCatalogSource,
 ) -> Int32 {
   self.revision_
 }
 
 ///|
-pub impl @runtime.CatalogSource for PtcCatalogSource with fn tools(
-  _self : PtcCatalogSource,
+pub impl @runtime.CatalogSource for BunrakuCatalogSource with fn tools(
+  _self : BunrakuCatalogSource,
 ) -> Array[@posoco.ToolDef] {
-  PtcExtension().list_tools()
+  BunrakuExtension().list_tools()
 }
 
 ///|
-pub extend PtcCatalogSource with @runtime.CatalogSource::{revision, tools}
+pub extend BunrakuCatalogSource with @runtime.CatalogSource::{revision, tools}
 
 ///|
 /// Per-invocation MBTX adapter. It owns a fresh dispatch, never a process-wide
 /// invoker or a borrowed raw provider. The dispatch's fixed catalog is the
 /// maximum set of operations that any Hook may approve or rewrite to.
-pub struct PtcScopedInvoker {
+pub struct BunrakuScopedInvoker {
   priv dispatch : @posoco.ScopedToolDispatch
 }
 
 ///|
-pub fn PtcScopedInvoker::PtcScopedInvoker(
+pub fn BunrakuScopedInvoker::BunrakuScopedInvoker(
   dispatch~ : @posoco.ScopedToolDispatch,
-) -> PtcScopedInvoker {
+) -> BunrakuScopedInvoker {
   { dispatch, }
 }
 
 ///|
-pub impl ToolInvoker for PtcScopedInvoker with fn invoke(
-  self : PtcScopedInvoker,
+pub impl ToolInvoker for BunrakuScopedInvoker with fn invoke(
+  self : BunrakuScopedInvoker,
   name : String,
   arguments : Json,
 ) -> @protocol.Outcome {
@@ -149,11 +149,11 @@ pub impl ToolInvoker for PtcScopedInvoker with fn invoke(
 }
 
 ///|
-pub extend PtcScopedInvoker with ToolInvoker::{invoke}
+pub extend BunrakuScopedInvoker with ToolInvoker::{invoke}
 
 ///|
-pub impl @runtime.Runtime for PtcRuntime with fn call_model(
-  self : PtcRuntime,
+pub impl @runtime.Runtime for BunrakuRuntime with fn call_model(
+  self : BunrakuRuntime,
   scope : @kernel.InvocationScope,
   messages : ArrayView[@kernel.Message],
   tool_definitions : Array[@kernel.ToolDef],
@@ -167,12 +167,12 @@ pub impl @runtime.Runtime for PtcRuntime with fn call_model(
 }
 
 ///|
-pub impl @runtime.Runtime for PtcRuntime with fn execute_tool(
-  self : PtcRuntime,
+pub impl @runtime.Runtime for BunrakuRuntime with fn execute_tool(
+  self : BunrakuRuntime,
   ctx : @runtime.EffectContext,
 ) -> @kernel.ToolOutcome {
   if ctx.tool_name.to_string() != "run_code" ||
-    ctx.owner.to_string() != "posoco_ext_ptc" {
+    ctx.owner.to_string() != "posoco_ext_bunraku" {
     return self.fallback.execute_tool(ctx)
   }
   // A detached background task has no enclosing Effect lifetime or cancel
@@ -190,8 +190,8 @@ pub impl @runtime.Runtime for PtcRuntime with fn execute_tool(
         message=error.to_string(),
       )
   }
-  let invoker = PtcScopedInvoker(dispatch~)
-  let ptc = PtcExtension(
+  let invoker = BunrakuScopedInvoker(dispatch~)
+  let ptc = BunrakuExtension(
     exposed=self.definitions,
     scoped_invoker=invoker,
     home?=self.home,
@@ -224,8 +224,8 @@ pub impl @runtime.Runtime for PtcRuntime with fn execute_tool(
 }
 
 ///|
-pub impl @runtime.Runtime for PtcRuntime with fn cancel_effects(
-  self : PtcRuntime,
+pub impl @runtime.Runtime for BunrakuRuntime with fn cancel_effects(
+  self : BunrakuRuntime,
   effect_ids : Array[@kernel.EffectId],
   reason : @kernel.CancelReason,
 ) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)] {
@@ -260,8 +260,8 @@ pub impl @runtime.Runtime for PtcRuntime with fn cancel_effects(
 }
 
 ///|
-pub impl @runtime.Runtime for PtcRuntime with fn compact(
-  self : PtcRuntime,
+pub impl @runtime.Runtime for BunrakuRuntime with fn compact(
+  self : BunrakuRuntime,
   scope : @kernel.InvocationScope,
   messages : ArrayView[@kernel.Message],
   tools : Array[@kernel.ToolDef],
@@ -272,7 +272,7 @@ pub impl @runtime.Runtime for PtcRuntime with fn compact(
 }
 
 ///|
-pub extend PtcRuntime with @runtime.Runtime::{
+pub extend BunrakuRuntime with @runtime.Runtime::{
   call_model,
   execute_tool,
   cancel_effects,

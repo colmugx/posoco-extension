@@ -1,11 +1,11 @@
 ///|
-struct PtcMockInvoker {
+struct BunrakuMockInvoker {
   calls : Array[String]
 }
 
 ///|
-impl @posoco-ext-ptc.ToolInvoker for PtcMockInvoker with fn invoke(
-  self : PtcMockInvoker,
+impl @posoco-ext-bunraku.ToolInvoker for BunrakuMockInvoker with fn invoke(
+  self : BunrakuMockInvoker,
   name : String,
   args : Json,
 ) -> @protocol.Outcome {
@@ -32,7 +32,7 @@ fn test_ptc_tools() -> Array[@posoco.ToolDef] {
 
 ///|
 test "PTC model sees only run_code and a stable generated tool catalog" {
-  let ptc = @posoco-ext-ptc.PtcExtension(exposed=test_ptc_tools())
+  let ptc = @posoco-ext-bunraku.BunrakuExtension(exposed=test_ptc_tools())
   assert_eq(ptc.manifest().tools.length(), 1)
   let defs = ptc.list_tools()
   assert_eq(defs.length(), 1)
@@ -45,8 +45,8 @@ test "PTC model sees only run_code and a stable generated tool catalog" {
 
 ///|
 async test "PTC real MoonBit guest calls trusted bridge and filters result" {
-  let mock = PtcMockInvoker::{ calls: [], }
-  let ptc = @posoco-ext-ptc.PtcExtension(
+  let mock = BunrakuMockInvoker::{ calls: [], }
+  let ptc = @posoco-ext-bunraku.BunrakuExtension(
     exposed=test_ptc_tools(),
     scoped_invoker=mock,
   )
@@ -74,7 +74,7 @@ async test "PTC real MoonBit guest calls trusted bridge and filters result" {
 
 ///|
 async test "PTC refuses nested tool use without trusted bridge" {
-  let ptc = @posoco-ext-ptc.PtcExtension(exposed=test_ptc_tools())
+  let ptc = @posoco-ext-bunraku.BunrakuExtension(exposed=test_ptc_tools())
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Fail closed",
@@ -95,8 +95,8 @@ async test "PTC refuses nested tool use without trusted bridge" {
 
 ///|
 async test "PTC rejects names outside exposed capabilities before invoking bridge" {
-  let mock = PtcMockInvoker::{ calls: [], }
-  let ptc = @posoco-ext-ptc.PtcExtension(
+  let mock = BunrakuMockInvoker::{ calls: [], }
+  let ptc = @posoco-ext-bunraku.BunrakuExtension(
     exposed=test_ptc_tools(),
     scoped_invoker=mock,
   )
@@ -121,7 +121,7 @@ async test "PTC rejects names outside exposed capabilities before invoking bridg
 
 ///|
 async test "PTC rejects invalid code without spawning a guest" {
-  let ptc = @posoco-ext-ptc.PtcExtension()
+  let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Invalid",
@@ -133,7 +133,7 @@ async test "PTC rejects invalid code without spawning a guest" {
 
 ///|
 async test "PTC background mode fails closed when no Agent task scope exists" {
-  let ptc = @posoco-ext-ptc.PtcExtension()
+  let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Schedule a program",
@@ -150,7 +150,7 @@ async test "PTC background mode fails closed when no Agent task scope exists" {
 
 ///|
 async test "PTC complete script and inline code are mutually exclusive" {
-  let ptc = @posoco-ext-ptc.PtcExtension()
+  let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Reject ambiguous source",
@@ -163,7 +163,7 @@ async test "PTC complete script and inline code are mutually exclusive" {
 
 ///|
 async test "run_code rejects a code argument that includes the ptc_run signature" {
-  let ptc = @posoco-ext-ptc.PtcExtension()
+  let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Wrapped probe",
@@ -179,7 +179,7 @@ async test "run_code rejects a code argument that includes the ptc_run signature
 
 ///|
 async test "run_code build failure carries compiler diagnostics" {
-  let ptc = @posoco-ext-ptc.PtcExtension()
+  let ptc = @posoco-ext-bunraku.BunrakuExtension()
   let result = ptc.execute(
     @posoco.tk_tool_call_ctx(name="run_code", arguments={
       "description": "Broken probe",
