@@ -377,7 +377,7 @@ a {
   right: 0;
   bottom: 0;
   z-index: 55;
-  width: min(var(--sheet), 92vw);
+  width: min(520px, 94vw);
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -454,8 +454,22 @@ a {
 }
 
 .ticket-input {
-  flex: 1 1 180px;
+  flex: 1 1 240px;
   min-width: 0;
+  min-height: 88px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: 12px/1.45 var(--font-sans);
+  resize: vertical;
+}
+
+.ticket-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
 }
 
 @media (max-width: 720px) {

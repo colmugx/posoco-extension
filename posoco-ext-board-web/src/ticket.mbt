@@ -175,6 +175,13 @@ fn ticket_answer(
 }
 
 ///|
+fn ticket_task_running(model : Model, task_id : String) -> Bool {
+  model.tickets.runs.any(run =>
+    run.task_id == task_id && run.status == "running"
+  )
+}
+
+///|
 fn ticket_question_count(model : Model) -> Int32 {
   model.tickets.questions.length()
 }
@@ -243,6 +250,24 @@ fn apply_ticket_state(model : Model, state : TicketState) -> Model {
 }
 
 ///|
+fn ticket_rejection_text(reason : String?) -> String {
+  match reason {
+    Some("ticket is already running") =>
+      "This ticket is already running. Check Inbox for a question, or wait for it to finish."
+    Some("ticket must be Backlog or Shaping before it can be shaped") =>
+      "Move the ticket back to Backlog or Shaping before shaping it again."
+    Some("ticket must be Ready before it can run") =>
+      "Shape the ticket and move it to Ready before starting work."
+    Some("ticket_runtime_unavailable") =>
+      "The Board ticket runtime is unavailable. Restart Cetas with workflows enabled."
+    Some("ticket_start_failed") | Some("ticket_shape_failed") =>
+      "The ticket could not start. Open Inbox for the failure detail."
+    Some(text) if text != "" => text
+    _ => "The ticket command was rejected."
+  }
+}
+
+///|
 fn apply_ticket_outcome(
   model : Model,
   ok : Bool,
@@ -257,17 +282,11 @@ fn apply_ticket_outcome(
   if ok {
     { ..next, last_status: "Ticket updated", }
   } else {
+    let already_running = reason == Some("ticket is already running")
     {
       ..next,
-      notice: Some(
-        notice(
-          Warning,
-          match reason {
-            Some(text) if text != "" => text
-            _ => "The ticket command was rejected."
-          },
-        ),
-      ),
+      ticket_drawer: next.ticket_drawer || already_running,
+      notice: Some(notice(Warning, ticket_rejection_text(reason))),
     }
   }
 }
@@ -323,13 +342,16 @@ fn ticket_question_card(
     }
     _ =>
       @html.div(class="ticket-answers", [
-        @html.input(
-          input_type=Text,
-          class="filter-search ticket-input",
+        @html.textarea(
+          id="ticket-answer-\{question.id}",
+          name="ticket_answer",
+          class="ticket-input",
+          rows=4,
           value=draft,
-          placeholder="Type an answer",
-          attrs=@html.Attrs::build().disabled(model.ticket_sending),
+          placeholder="Write your answer or feedback…",
+          disabled=model.ticket_sending,
           on_input=value => emit(TicketDraftChanged(question.id, value)),
+          @html.fragment([]),
         ),
         @html.button(
           type_="button",

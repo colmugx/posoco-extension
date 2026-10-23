@@ -537,7 +537,9 @@ fn task_card(
   // Mutation controls are a convenience only: suggested targets mirror the
   // Board stage FSM and the durable server stays authoritative. Opening the
   // dependency editor parks them too; one editor at a time.
-  let locked = !mutations_allowed(model) || draft_open(model)
+  let locked = !mutations_allowed(model) ||
+    draft_open(model) ||
+    ticket_task_running(model, task.id)
   let selected = model.selected_task == Some(task.id)
   let primary = primary_move(task.stage)
   let shaping = model.ticket_available && task.stage == @client.Created

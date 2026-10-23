@@ -101,7 +101,15 @@ fn inspector_next_action(
   let target = primary_move(task.stage)
   let shaping = task.stage == @client.Created && model.ticket_available
   let ready = task.stage == @client.Ready && model.ticket_available
-  let hint = create_unavailable_hint(model)
+  let hint = match create_unavailable_hint(model) {
+    Some(text) => Some(text)
+    None =>
+      if ticket_task_running(model, task.id) {
+        Some("This ticket is already running. Check Inbox for a question or wait for it to finish.")
+      } else {
+        None
+      }
+  }
   let locked = hint is Some(_)
   @html.div(class="inspector-next", [
     @html.button(

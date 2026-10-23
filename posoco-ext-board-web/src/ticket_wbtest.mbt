@@ -47,13 +47,17 @@ test "ticket commands stay inert until the host advertises the inbox" {
 }
 
 ///|
-test "ticket result carries a rejection reason" {
-  let text = "{\"type\":\"ticket_result\",\"ok\":false,\"reason\":\"ticket is already running\"}"
-  match ticket_frame(text) {
-    Some(TicketOutcome(ok, reason, _)) => {
-      assert_false(ok)
-      assert_eq(reason, Some("ticket is already running"))
-    }
-    _ => fail("expected a ticket result frame")
+///|
+test "already-running rejection opens the inbox with a readable reason" {
+  let model = apply_ticket_outcome(
+    Model::empty(true),
+    false,
+    Some("ticket is already running"),
+    None,
+  )
+  assert_true(model.ticket_drawer)
+  match model.notice {
+    Some(notice) => assert_true(notice.text.contains("already running"))
+    None => fail("expected a rejection notice")
   }
 }
