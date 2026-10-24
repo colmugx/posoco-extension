@@ -1,4 +1,20 @@
 ///|
+/// Bound compiler diagnostics returned to the model. The full build output
+/// remains host-side; repeated model retries must not carry 30KB+ diagnostics.
+pub fn ptc_bounded_diagnostics(value : String) -> String {
+  let limit = 8192
+  let chars : Array[Char] = []
+  for char in value {
+    if chars.length() >= limit {
+      return String::from_array(chars) +
+        "\\n...[compiler diagnostics truncated at 8192 characters]"
+    }
+    chars.push(char)
+  }
+  value
+}
+
+///|
 /// Model-facing PTC wrapper over the extension-owned MBTX guest runtime.
 ///
 /// IMPORTANT: Posoco 0.22.1 has no governed nested-tool invocation port.
@@ -312,7 +328,7 @@ async fn BunrakuExtension::execute_source(
     @mbtx.RuntimeError::BuildFailed(diagnostics) =>
       return @posoco.ToolOutcome::ToolReportedError(
         content="run_code build failed — the program never ran; the output below is the compiler's:\n" +
-          diagnostics,
+          ptc_bounded_diagnostics(diagnostics),
         structured=None,
       )
     @mbtx.RuntimeError::TimedOut(phase) =>
