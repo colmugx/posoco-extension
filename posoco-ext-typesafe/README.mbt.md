@@ -1,4 +1,4 @@
-# posoco-ext-jev
+# posoco-ext-typesafe
 
 > **Targets: native + js (hosted HTTP); wasm/wasm-gc compiles to a typed transport failure**
 
@@ -12,7 +12,7 @@ Jev's hosted System One API and decodes the typed response back.
 | Port | Contribution |
 |------|--------------|
 | `DecisionPort` | `evaluate` — one System One HTTPS request per `DecisionRequest` |
-| `Extension` | composes into `Agent(exts=[...])` as a decision extension (manifest id `posoco_ext_jev`) |
+| `Extension` | composes into `Agent(exts=[...])` as a decision extension (manifest id `posoco_ext_typesafe`) |
 
 The extension is intentionally thin: it does not know about LazyTools, Skills,
 model routing, permission policy, thresholds, or authority. Composition allows
@@ -23,26 +23,26 @@ no decision provider omit this extension entirely —
 ## Usage
 
 ```bash
-moon add colmugx/posoco-ext-jev
+moon add colmugx/posoco-ext-typesafe
 ```
 
 ```moonbit
-// moon.pkg: "colmugx/posoco-ext-jev" @jev
+// moon.pkg: "colmugx/posoco-ext-typesafe" @typesafe
 
-let decision = @jev.JevDecisionPort(
-  @jev.JevConfig::stored(),
+let decision = @typesafe.TypesafeDecisionPort(
+  @typesafe.TypesafeConfig::stored(),
   credential_store=Some(store as &@oauth.ProviderCredentialStore),
 )
 let agent = @posoco.Agent(exts=[decision, ..other_extensions], config~)
 ```
 
 Production hosts should inject the provider-neutral
-`@oauth.ProviderCredentialStore`. Jev reads the canonical `typesafe` record
+`@oauth.ProviderCredentialStore`. The extension reads the canonical `typesafe` record
 and accepts only `ProviderCredential::ApiKey`. The store is authoritative:
 when it contains a credential, that tagged method wins over any direct fallback;
 an OAuth record is rejected instead of silently falling back to an API key.
 
-`posoco-ext-jev` deliberately does not depend on
+`posoco-ext-typesafe` deliberately does not depend on
 `posoco-ext-credentials` or any filesystem/keychain backend. Products such as
 Cetas can reuse their existing `FileProviderCredentialStore` and choose the
 durable location (for Cetas, `~/.cetas/credentials`).
@@ -50,20 +50,20 @@ durable location (for Cetas, `~/.cetas/credentials`).
 Standalone hosts may continue passing a direct key as a fallback:
 
 ```moonbit
-let decision = @jev.JevDecisionPort(@jev.JevConfig(api_key))
+let decision = @typesafe.TypesafeDecisionPort(@typesafe.TypesafeConfig(api_key))
 ```
 
 A stored API-key credential takes precedence over that fallback. If neither is
 configured, `evaluate` raises `DecisionError::RequestBuild`.
 
-### JevConfig arguments
+### TypesafeConfig arguments
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
-| `api_key` | `String` | positional; may be empty via `JevConfig::stored()` | direct TypeSafe API-key fallback |
+| `api_key` | `String` | positional; may be empty via `TypesafeConfig::stored()` | direct TypeSafe API-key fallback |
 | `model~` | `String` | `"jev-latest"` | Jev model id; `jev-latest` tracks the current hosted model |
 | `base_url~` | `String` | `"https://api.typesafe.ai"` | API base URL without the endpoint path |
-| `timeout_ms~` | `Int` | `30000` | per-request timeout in milliseconds |
+| `timeout_ms~` | `Int32` | `30000` | per-request timeout in milliseconds |
 
 Invalid `model` / `base_url`, non-positive `timeout_ms`, or an empty
 credential id fail at construction. Credential resolution happens at

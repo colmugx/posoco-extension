@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "colmugx/posoco-ext-typesafe"
+
+import {
+  "colmugx/posoco/error",
+  "colmugx/posoco/port",
+  "moonbitlang/core/debug",
+  "posoco/ext-oauth",
+}
+
+// Values
+pub fn typesafe_credential_id() -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct TypesafeConfig {
+  api_key : String
+  model : String
+  base_url : String
+  timeout_ms : Int32
+} derive(Eq, @debug.Debug)
+pub fn TypesafeConfig::TypesafeConfig(String, model? : String, base_url? : String, timeout_ms? : Int32) -> Self
+pub fn TypesafeConfig::stored(model? : String, base_url? : String, timeout_ms? : Int32) -> Self
+
+pub(all) struct TypesafeDecisionPort {
+  config : TypesafeConfig
+  credential_store : &@ext-oauth.ProviderCredentialStore?
+  credential_id : String
+}
+pub fn TypesafeDecisionPort::TypesafeDecisionPort(TypesafeConfig, credential_store? : &@ext-oauth.ProviderCredentialStore?, credential_id? : String) -> Self
+pub fn TypesafeDecisionPort::extension_id(Self) -> String
+pub fn TypesafeDecisionPort::manifest(Self) -> @port.ExtensionManifest
+pub impl @port.DecisionPort for TypesafeDecisionPort
+pub impl @port.Extension for TypesafeDecisionPort
+
+// Type aliases
+
+// Traits

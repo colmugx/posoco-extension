@@ -2,7 +2,7 @@
 /// Hosted TypeSafe Jev DecisionPort implementation for native, wasm, and js.
 
 ///|
-fn jev_url(config : JevConfig) -> String {
+fn jev_url(config : TypesafeConfig) -> String {
   let base = match config.base_url.strip_suffix("/") {
     Some(value) => value.to_owned()
     None => config.base_url
@@ -20,10 +20,7 @@ fn jev_headers(api_key : String) -> @http.Headers {
 }
 
 ///|
-fn jev_http_error(
-  status : Int,
-  body_bytes : Int,
-) -> @posoco.DecisionError {
+fn jev_http_error(status : Int32, body_bytes : Int32) -> @posoco.DecisionError {
   if status == 429 {
     @posoco.DecisionError::RateLimited({
       message: "TypeSafe Jev rate limited",
@@ -47,14 +44,18 @@ fn jev_http_error(
 }
 
 ///|
-pub impl @posoco.DecisionPort for JevDecisionPort with fn evaluate(
-  self : JevDecisionPort,
+pub impl @posoco.DecisionPort for TypesafeDecisionPort with fn evaluate(
+  self : TypesafeDecisionPort,
   request : @posoco.DecisionRequest,
 ) -> @posoco.DecisionResult raise @posoco.DecisionError {
   let api_key = self.resolve_api_key()
   let body = build_jev_request(request, self.config.model)
   let (response, body_data) = @async.with_timeout(self.config.timeout_ms, () => {
-    @http.post(jev_url(self.config), body.stringify(), headers=jev_headers(api_key))
+    @http.post(
+      jev_url(self.config),
+      body.stringify(),
+      headers=jev_headers(api_key),
+    )
   }) catch {
     @async.TimeoutError =>
       raise @posoco.DecisionError::Transport(

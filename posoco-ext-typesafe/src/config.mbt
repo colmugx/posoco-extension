@@ -1,14 +1,14 @@
 ///|
 /// Canonical credential-store key for the hosted TypeSafe service.
-pub fn jev_credential_id() -> String {
+pub fn typesafe_credential_id() -> String {
   "typesafe"
 }
 
 ///|
 /// Configuration for the TypeSafe Jev Decision API.
-pub(all) struct JevConfig {
+pub(all) struct TypesafeConfig {
   /// Optional direct API-key fallback for standalone hosts. When a canonical
-  /// ProviderCredentialStore is injected into JevDecisionPort, a stored
+  /// ProviderCredentialStore is injected into TypesafeDecisionPort, a stored
   /// credential takes precedence over this value.
   api_key : String
   /// Jev model identifier. "jev-latest" tracks the current hosted model.
@@ -16,24 +16,24 @@ pub(all) struct JevConfig {
   /// API base URL without the endpoint path.
   base_url : String
   /// Per-request timeout in milliseconds.
-  timeout_ms : Int
+  timeout_ms : Int32
 } derive(Eq, Debug)
 
 ///|
-pub fn JevConfig::JevConfig(
+pub fn TypesafeConfig::TypesafeConfig(
   api_key : String,
-  model? : String = "jev-latest",
-  base_url? : String = "https://api.typesafe.ai",
-  timeout_ms? : Int = 30000,
-) -> JevConfig {
+  model~ : String = "jev-latest",
+  base_url~ : String = "https://api.typesafe.ai",
+  timeout_ms~ : Int32 = 30000,
+) -> TypesafeConfig {
   if model.trim().length() == 0 {
-    abort("posoco-ext-jev: model must not be empty")
+    abort("posoco-ext-typesafe: model must not be empty")
   }
   if base_url.trim().length() == 0 {
-    abort("posoco-ext-jev: base_url must not be empty")
+    abort("posoco-ext-typesafe: base_url must not be empty")
   }
   if timeout_ms <= 0 {
-    abort("posoco-ext-jev: timeout_ms must be positive")
+    abort("posoco-ext-typesafe: timeout_ms must be positive")
   }
   { api_key, model, base_url, timeout_ms, }
 }
@@ -41,32 +41,32 @@ pub fn JevConfig::JevConfig(
 ///|
 /// Construct a Jev config that resolves its secret exclusively from an
 /// injected ProviderCredentialStore.
-pub fn JevConfig::stored(
-  model? : String = "jev-latest",
-  base_url? : String = "https://api.typesafe.ai",
-  timeout_ms? : Int = 30000,
-) -> JevConfig {
-  JevConfig("", model~, base_url~, timeout_ms~)
+pub fn TypesafeConfig::stored(
+  model~ : String = "jev-latest",
+  base_url~ : String = "https://api.typesafe.ai",
+  timeout_ms~ : Int32 = 30000,
+) -> TypesafeConfig {
+  TypesafeConfig("", model~, base_url~, timeout_ms~)
 }
 
 ///|
 /// Thin provider adapter. Consumer policy stays outside this type. Credential
 /// persistence is host-owned and injected through the provider-neutral oauth
 /// package; this extension never depends on a concrete file/keychain backend.
-pub(all) struct JevDecisionPort {
-  config : JevConfig
+pub(all) struct TypesafeDecisionPort {
+  config : TypesafeConfig
   credential_store : &@oauth.ProviderCredentialStore?
   credential_id : String
 }
 
 ///|
-pub fn JevDecisionPort::JevDecisionPort(
-  config : JevConfig,
-  credential_store? : &@oauth.ProviderCredentialStore? = None,
-  credential_id? : String = "typesafe",
-) -> JevDecisionPort {
+pub fn TypesafeDecisionPort::TypesafeDecisionPort(
+  config : TypesafeConfig,
+  credential_store~ : &@oauth.ProviderCredentialStore? = None,
+  credential_id~ : String = "typesafe",
+) -> TypesafeDecisionPort {
   if credential_id.trim().length() == 0 {
-    abort("posoco-ext-jev: credential_id must not be empty")
+    abort("posoco-ext-typesafe: credential_id must not be empty")
   }
   { config, credential_store, credential_id, }
 }
@@ -76,8 +76,8 @@ pub fn JevDecisionPort::JevDecisionPort(
 /// A canonical tagged credential is authoritative when present. In particular,
 /// an explicitly stored OAuth credential must not silently fall back to a
 /// stale config API key.
-async fn JevDecisionPort::resolve_api_key(
-  self : JevDecisionPort,
+async fn TypesafeDecisionPort::resolve_api_key(
+  self : TypesafeDecisionPort,
 ) -> String raise @posoco.DecisionError {
   match self.credential_store {
     Some(store) => {

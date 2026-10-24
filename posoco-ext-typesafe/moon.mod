@@ -1,4 +1,4 @@
-name = "colmugx/posoco-ext-jev"
+name = "colmugx/posoco-ext-typesafe"
 
 version = "0.1.0"
 
@@ -14,12 +14,12 @@ license = "Apache-2.0"
 
 keywords = [
   "posoco",
-  "jev",
   "typesafe",
+  "jev",
   "decision-port",
   "semantic-judgement",
 ]
 
-description = "Posoco Jev Extension — TypeSafe Jev DecisionPort adapter"
+description = "Posoco TypeSafe Extension — TypeSafe Jev DecisionPort adapter"
 
 source = "src"

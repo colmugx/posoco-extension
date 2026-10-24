@@ -1,9 +1,7 @@
 ///|
 fn jev_test_request() -> @posoco.DecisionRequest {
   {
-    state: Json::object({
-      "query": Json::string("review the ticket"),
-    }),
+    state: Json::object({ "query": Json::string("review the ticket") }),
     questions: [
       @posoco.DecisionQuestion::Boolean(
         id="safe",
@@ -35,9 +33,7 @@ fn jev_test_request() -> @posoco.DecisionRequest {
 ///|
 test "jev encodes boolean choice and score in one System One request" {
   let payload = build_jev_request(jev_test_request(), "jev-latest")
-  guard payload is Object(root) else {
-    fail("expected request object")
-  }
+  guard payload is Object(root) else { fail("expected request object") }
   assert_true(root.get("model") is Some(String("jev-latest")))
   guard root.get("questions") is Some(Object(questions)) else {
     fail("expected questions object")
@@ -115,7 +111,10 @@ test "jev decodes official System One response shape" {
   })
   let result = decode_jev_response(payload, request)
   assert_eq(result.model, Some("speed_v12_snowy_flower"))
-  assert_eq(result.usage, Some({ input_tokens: Some(120), output_tokens: Some(15), }))
+  assert_eq(
+    result.usage,
+    Some({ input_tokens: Some(120), output_tokens: Some(15), }),
+  )
   match result.answers[0] {
     @posoco.DecisionAnswer::BooleanAnswer(id~, probability_true~) => {
       assert_eq(id, "safe")
@@ -128,7 +127,7 @@ test "jev decodes official System One response shape" {
       id~,
       selected~,
       probabilities~,
-      confidence~,
+      confidence~
     ) => {
       assert_eq(id, "route")
       assert_eq(selected, "deep")
@@ -142,7 +141,7 @@ test "jev decodes official System One response shape" {
       id~,
       score~,
       probabilities~,
-      confidence~,
+      confidence~
     ) => {
       assert_eq(id, "effort")
       assert_eq(score, 1.7)
@@ -176,9 +175,9 @@ test "jev rejects provider-incompatible primitive state locally" {
 
 ///|
 test "jev manifest contributes exactly one decision port" {
-  let port = JevDecisionPort(JevConfig("test-key"))
+  let port = TypesafeDecisionPort(TypesafeConfig("test-key"))
   let manifest = port.manifest()
-  assert_eq(manifest.id, "posoco_ext_jev")
+  assert_eq(manifest.id, "posoco_ext_typesafe")
   assert_eq(manifest.decisions.length(), 1)
   assert_eq(manifest.models.length(), 0)
   assert_eq(manifest.tools.length(), 0)
@@ -232,8 +231,8 @@ async test "jev credential store API key overrides config fallback" {
       ),
     ),
   }
-  let port = JevDecisionPort(
-    JevConfig("fallback-key"),
+  let port = TypesafeDecisionPort(
+    TypesafeConfig("fallback-key"),
     credential_store=Some(store as &@oauth.ProviderCredentialStore),
   )
   assert_eq(port.resolve_api_key(), "stored-key")
@@ -242,8 +241,8 @@ async test "jev credential store API key overrides config fallback" {
 ///|
 async test "jev credential store miss falls back to config API key" {
   let store = JevTestCredentialStore::{ value: None, }
-  let port = JevDecisionPort(
-    JevConfig("fallback-key"),
+  let port = TypesafeDecisionPort(
+    TypesafeConfig("fallback-key"),
     credential_store=Some(store as &@oauth.ProviderCredentialStore),
   )
   assert_eq(port.resolve_api_key(), "fallback-key")
@@ -262,8 +261,8 @@ async test "jev stored OAuth credential never falls back to config API key" {
       ),
     ),
   }
-  let port = JevDecisionPort(
-    JevConfig("fallback-key"),
+  let port = TypesafeDecisionPort(
+    TypesafeConfig("fallback-key"),
     credential_store=Some(store as &@oauth.ProviderCredentialStore),
   )
   let mut rejected = false
@@ -277,8 +276,8 @@ async test "jev stored OAuth credential never falls back to config API key" {
 ///|
 async test "jev missing store credential and fallback reports RequestBuild" {
   let store = JevTestCredentialStore::{ value: None, }
-  let port = JevDecisionPort(
-    JevConfig::stored(),
+  let port = TypesafeDecisionPort(
+    TypesafeConfig::stored(),
     credential_store=Some(store as &@oauth.ProviderCredentialStore),
   )
   let mut rejected = false

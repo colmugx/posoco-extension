@@ -89,7 +89,9 @@ fn build_jev_request(
 
 ///|
 fn response_parse(message : String) -> @posoco.DecisionError {
-  @posoco.DecisionError::ResponseParse("TypeSafe Jev response parse failure: " + message)
+  @posoco.DecisionError::ResponseParse(
+    "TypeSafe Jev response parse failure: " + message,
+  )
 }
 
 ///|
@@ -138,7 +140,13 @@ fn require_answer_type(
   let actual = require_string(answer, "type", "answers." + id)
   if actual != expected {
     raise response_parse(
-      "answers." + id + ".type expected '" + expected + "' but got '" + actual + "'",
+      "answers." +
+      id +
+      ".type expected '" +
+      expected +
+      "' but got '" +
+      actual +
+      "'",
     )
   }
 }
@@ -167,8 +175,7 @@ fn decode_choice_answer(
     Some(Object(values)) => values
     Some(_) =>
       raise response_parse("answers." + id + ".probabilities must be an object")
-    None =>
-      raise response_parse("answers." + id + ".probabilities is missing")
+    None => raise response_parse("answers." + id + ".probabilities is missing")
   }
   let entries : Array[@posoco.DecisionNamedProbability] = []
   for option in options {
@@ -207,8 +214,7 @@ fn decode_score_answer(
     Some(Object(values)) => values
     Some(_) =>
       raise response_parse("answers." + id + ".probabilities must be an object")
-    None =>
-      raise response_parse("answers." + id + ".probabilities is missing")
+    None => raise response_parse("answers." + id + ".probabilities is missing")
   }
   let values : Array[Double] = []
   for i in 0..<levels.length() {
@@ -245,7 +251,9 @@ fn decode_usage(
   }
   {
     input_tokens: Some(require_number(usage, "input_tokens", "usage").to_int()),
-    output_tokens: Some(require_number(usage, "output_tokens", "usage").to_int()),
+    output_tokens: Some(
+      require_number(usage, "output_tokens", "usage").to_int(),
+    ),
   }
 }
 
