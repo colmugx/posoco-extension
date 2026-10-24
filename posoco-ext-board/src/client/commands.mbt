@@ -186,6 +186,138 @@ pub fn set_task_model_command(
 }
 
 ///|
+/// Canonical v1 review evidence kind spelling.
+///
+/// ```mbt check
+/// test {
+///   let kind : @client.ClientReviewEvidenceKind = @client.Test
+///   assert_eq(kind.to_wire(), "test")
+/// }
+/// ```
+pub fn ClientReviewEvidenceKind::to_wire(
+  self : ClientReviewEvidenceKind,
+) -> String {
+  match self {
+    Command => "command"
+    Test => "test"
+    Manual => "manual"
+    Artifact => "artifact"
+  }
+}
+
+///|
+/// Canonical v1 review evidence result spelling; `not_run` keeps an
+/// unobserved check explicit instead of reporting it as passed.
+///
+/// ```mbt check
+/// test {
+///   let result : @client.ClientReviewEvidenceResult = @client.NotRun
+///   assert_eq(result.to_wire(), "not_run")
+/// }
+/// ```
+pub fn ClientReviewEvidenceResult::to_wire(
+  self : ClientReviewEvidenceResult,
+) -> String {
+  match self {
+    Passed => "passed"
+    Failed => "failed"
+    NotRun => "not_run"
+    Unknown => "unknown"
+  }
+}
+
+///|
+/// Canonical v1 review artifact kind spelling.
+///
+/// ```mbt check
+/// test {
+///   let kind : @client.ClientReviewArtifactKind = @client.File
+///   assert_eq(kind.to_wire(), "file")
+/// }
+/// ```
+pub fn ClientReviewArtifactKind::to_wire(
+  self : ClientReviewArtifactKind,
+) -> String {
+  match self {
+    File => "file"
+    Diff => "diff"
+    Log => "log"
+    Screenshot => "screenshot"
+    Url => "url"
+  }
+}
+
+///|
+/// Full report on the wire: every curated field, order preserved, fresh
+/// arrays only — never the caller's.
+fn review_report_wire(report : ClientReviewReport) -> Json {
+  Json::object({
+    "outcome": Json(report.outcome),
+    "summary": Json(report.summary),
+    "changes": Json(report.changes.copy()),
+    "verification": Json::array(
+      report.verification.map(evidence => {
+        Json::object({
+          "kind": Json(evidence.kind.to_wire()),
+          "label": Json(evidence.label),
+          "result": Json(evidence.result.to_wire()),
+          "detail": Json(evidence.detail),
+        })
+      }),
+    ),
+    "risks": Json(report.risks.copy()),
+    "notes": Json(report.notes.copy()),
+    "open_questions": Json(report.open_questions.copy()),
+    "artifacts": Json::array(
+      report.artifacts.map(artifact => {
+        Json::object({
+          "kind": Json(artifact.kind.to_wire()),
+          "label": Json(artifact.label),
+          "uri_or_digest": Json(artifact.uri_or_digest),
+        })
+      }),
+    ),
+  })
+}
+
+///|
+/// Replace one ticket's curated review handoff, or clear it with `None`.
+/// Only the ticket id and the complete report are sent; timestamps and
+/// semantic validation belong to the server.
+///
+/// ```mbt check
+/// test {
+///   let wire = @client.set_task_review_report_command(
+///     "cmd-report",
+///     3L,
+///     id="task-1",
+///     review=None,
+///   )
+///   assert_eq(wire.name, "board.task.set_review_report")
+///   assert_eq(wire.args, { "id": "task-1", "review": Json::null() })
+/// }
+/// ```
+pub fn set_task_review_report_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+  review~ : ClientReviewReport?,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.task.set_review_report",
+    args: {
+      "id": Json(id),
+      "review": match review {
+        Some(report) => review_report_wire(report)
+        None => Json::null()
+      },
+    },
+  }
+}
+
+///|
 /// Canonical v1 attempt kind spelling, shared by every attempt builder.
 ///
 /// ```mbt check

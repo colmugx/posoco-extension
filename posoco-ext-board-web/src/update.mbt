@@ -459,6 +459,22 @@ fn update(
           ticket_run(task_id, emit),
         )
       }
+    TicketRetry(task_id) =>
+      // Retry never resumes the old child session: the host starts a fresh run.
+      // It stays inert while a command is in flight, the socket cannot carry
+      // it, the runtime is not advertised or this ticket still has a live run.
+      if ticket_retry_blocked(model, task_id) {
+        (model, @rabbita.none)
+      } else {
+        (
+          {
+            ..model,
+            ticket_sending: true,
+            last_status: "Retrying ticket " + task_id,
+          },
+          ticket_retry(task_id, emit),
+        )
+      }
     TicketSetModel(task_id, model_choice) =>
       // No optimistic model state: the control keeps rendering the
       // authoritative `task.model` until the host answers with a new state.

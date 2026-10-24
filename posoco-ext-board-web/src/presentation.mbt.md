@@ -23,9 +23,10 @@ copy of Board state.
 
 ```moonbit check
 ///|
-test "seven lanes and wire-independent labels" {
-  assert_eq(@src.lanes().length(), 7)
+test "eight lanes and wire-independent labels" {
+  assert_eq(@src.lanes().length(), 8)
   assert_eq(@src.stage_label(@client.Created), "Created")
+  assert_eq(@src.stage_label(@client.Cancelled), "Cancelled")
   assert_eq(@src.stage_label(@client.Suspended), "Suspended")
   assert_eq(@src.priority_label(@client.Critical), "Critical")
   let replica = @client.BoardReplica::empty()
@@ -68,13 +69,20 @@ durable server stays authoritative and may still reject a suggested move.
 test "stage fsm suggestions" {
   assert_true(
     @src.move_suggestions(@client.Created) ==
-    [@client.Refining, @client.Suspended],
+    [@client.Refining, @client.Suspended, @client.Cancelled],
   )
   assert_true(
     @src.move_suggestions(@client.Review) ==
-    [@client.Done, @client.Ready, @client.Refining, @client.Suspended],
+    [
+      @client.Done,
+      @client.Ready,
+      @client.Refining,
+      @client.Suspended,
+      @client.Cancelled,
+    ],
   )
   assert_eq(@src.move_suggestions(@client.Done).length(), 1)
+  assert_eq(@src.move_suggestions(@client.Cancelled).length(), 0)
 }
 ```
 

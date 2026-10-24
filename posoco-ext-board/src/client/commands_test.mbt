@@ -354,3 +354,155 @@ test "set model command pins and clears through explicit null" {
     Ok(@protocol.Command(cleared)),
   )
 }
+
+///|
+fn report_command_fixture() -> @client.ClientReviewReport {
+  @client.ClientReviewReport::ClientReviewReport(
+    outcome="Ticket carries a curated review handoff.",
+    summary="Adds the report write command.",
+    changes=["Client can set and clear a report."],
+    verification=[
+      @client.ClientReviewEvidence::ClientReviewEvidence(
+        kind=@client.ClientReviewEvidenceKind::Command,
+        label="moon test src/client",
+        result=@client.ClientReviewEvidenceResult::Passed,
+        detail="",
+      ),
+      @client.ClientReviewEvidence::ClientReviewEvidence(
+        kind=@client.ClientReviewEvidenceKind::Manual,
+        label="restart drill",
+        result=@client.ClientReviewEvidenceResult::NotRun,
+        detail="no host",
+      ),
+    ],
+    risks=["Reports are worker-derived."],
+    notes=[],
+    open_questions=["Does a retry replace it?"],
+    artifacts=[
+      @client.ClientReviewArtifact::ClientReviewArtifact(
+        kind=@client.ClientReviewArtifactKind::File,
+        label="commands.mbt",
+        uri_or_digest="src/client/commands.mbt",
+      ),
+    ],
+  )
+}
+
+///|
+test "set review report command sends a full report or an explicit null" {
+  let report = report_command_fixture()
+  let set = @client.set_task_review_report_command(
+    "cmd-report",
+    8L,
+    id="ticket-1",
+    review=Some(report),
+  )
+  assert_eq(set.command_id, "cmd-report")
+  assert_eq(set.expected_revision, 8L)
+  assert_eq(set.name, "board.task.set_review_report")
+  assert_eq(set.args, {
+    "id": "ticket-1",
+    "review": {
+      "outcome": "Ticket carries a curated review handoff.",
+      "summary": "Adds the report write command.",
+      "changes": ["Client can set and clear a report."],
+      "verification": [
+        {
+          "kind": "command",
+          "label": "moon test src/client",
+          "result": "passed",
+          "detail": "",
+        },
+        {
+          "kind": "manual",
+          "label": "restart drill",
+          "result": "not_run",
+          "detail": "no host",
+        },
+      ],
+      "risks": ["Reports are worker-derived."],
+      "notes": [],
+      "open_questions": ["Does a retry replace it?"],
+      "artifacts": [
+        {
+          "kind": "file",
+          "label": "commands.mbt",
+          "uri_or_digest": "src/client/commands.mbt",
+        },
+      ],
+    },
+  })
+  // The encoder never aliases the caller's arrays.
+  report.changes.push("late")
+  report.artifacts.clear()
+  match set.args {
+    Json::Object(fields) =>
+      match fields["review"] {
+        Json::Object(review) => {
+          assert_eq(
+            review["changes"],
+            Json::array([Json::string("Client can set and clear a report.")]),
+          )
+          assert_eq(
+            review["artifacts"],
+            Json::array([
+              Json::object({
+                "kind": Json::string("file"),
+                "label": Json::string("commands.mbt"),
+                "uri_or_digest": Json::string("src/client/commands.mbt"),
+              }),
+            ]),
+          )
+        }
+        _ => fail("expected review object")
+      }
+    _ => fail("expected args object")
+  }
+  let cleared = @client.set_task_review_report_command(
+    "cmd-clear-report",
+    9L,
+    id="ticket-1",
+    review=None,
+  )
+  assert_eq(cleared.args, { "id": "ticket-1", "review": Json::null() })
+  for command in [set, cleared] {
+    assert_eq(
+      @protocol.decode_client_frame(
+        @protocol.encode_client_frame(@protocol.Command(command)),
+      ),
+      Ok(@protocol.Command(command)),
+    )
+  }
+}
+
+///|
+test "review evidence artifact and result vocabulary has one wire spelling" {
+  let evidence_kinds : Array[(@client.ClientReviewEvidenceKind, String)] = [
+    (@client.Command, "command"),
+    (@client.Test, "test"),
+    (@client.Manual, "manual"),
+    (@client.Artifact, "artifact"),
+  ]
+  for (kind, wire) in evidence_kinds {
+    assert_eq(kind.to_wire(), wire)
+  }
+  let results : Array[(@client.ClientReviewEvidenceResult, String)] = [
+    (@client.Passed, "passed"),
+    (@client.Failed, "failed"),
+    (@client.NotRun, "not_run"),
+    (@client.Unknown, "unknown"),
+  ]
+  for (result, wire) in results {
+    assert_eq(result.to_wire(), wire)
+  }
+  let artifact_kinds : Array[(@client.ClientReviewArtifactKind, String)] = [
+    (@client.File, "file"),
+    (@client.Diff, "diff"),
+    (@client.Log, "log"),
+    (@client.Screenshot, "screenshot"),
+    (@client.Url, "url"),
+  ]
+  for (kind, wire) in artifact_kinds {
+    assert_eq(kind.to_wire(), wire)
+  }
+}

@@ -688,6 +688,30 @@ test "model changes project the committed task and pinned selection" {
 }
 
 ///|
+test "review report set projects the committed task and the report" {
+  let report = projection_report()
+  let reviewed = projection_task(stage=@domain.Review, review=Some(report))
+  let event = project_event(
+    projection_snapshot(tasks=[reviewed]),
+    @domain.ReviewReportSet(id=projection_id(), review=Some(report), at_ms=40L),
+  )
+  assert_eq(event.kind, "board.task.review_report_set")
+  assert_eq(object_field(event.payload, "task"), task_to_json(reviewed))
+  assert_eq(object_field(event.payload, "review"), expected_review_json())
+  assert_eq(object_field(event.payload, "at_ms"), Json::number(40))
+  // A clear projects the committed task without a report as explicit null.
+  let cleared = projection_task(stage=@domain.Running, review=None)
+  let clear_event = project_event(
+    projection_snapshot(tasks=[cleared]),
+    @domain.ReviewReportSet(id=projection_id(), review=None, at_ms=41L),
+  )
+  assert_eq(clear_event.kind, "board.task.review_report_set")
+  assert_eq(object_field(clear_event.payload, "task"), task_to_json(cleared))
+  assert_eq(object_field(clear_event.payload, "review"), Json::null())
+  assert_eq(object_field(clear_event.payload, "at_ms"), Json::number(41))
+}
+
+///|
 test "wire enums render every variant in stable snake case" {
   let stages : Array[(@domain.BoardStage, String)] = [
     (@domain.Created, "created"),

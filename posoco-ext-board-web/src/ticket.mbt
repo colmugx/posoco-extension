@@ -263,17 +263,24 @@ fn ticket_frame(text : String) -> TicketFrame? {
 }
 
 ///|
-fn send_ticket_command(
-  name : String,
-  args : Json,
-  emit : @rabbita.Emit[Msg],
-) -> @rabbita.Cmd {
+/// Wire frame for one ticket command. Kept separate from the socket send so
+/// tests can pin the exact command name and arguments.
+fn ticket_command_frame(name : String, args : Json) -> String {
   let frame : Json = {
     "type": "ticket_command",
     "name": Json::string(name),
     "args": args,
   }
-  @websocket.send("board", Text(frame.stringify()), failed=_ => {
+  frame.stringify()
+}
+
+///|
+fn send_ticket_command(
+  name : String,
+  args : Json,
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
+  @websocket.send("board", Text(ticket_command_frame(name, args)), failed=_ => {
     emit(
       TicketResult(false, Some("The ticket command could not be sent."), None),
     )
@@ -335,6 +342,96 @@ fn ticket_shape(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
 fn ticket_run(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
   let args : Json = { "task_id": Json::string(task_id) }
   send_ticket_command("board.ticket.run", args, emit)
+}
+
+///|
+/// Wire arguments for one retry. The host resolves them to a brand-new run for
+/// the ticket; nothing about the previous child session travels on the wire.
+fn ticket_retry_args(task_id : String) -> Json {
+  { "task_id": Json::string(task_id) }
+}
+
+///|
+fn ticket_retry(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
+  send_ticket_command("board.ticket.retry", ticket_retry_args(task_id), emit)
+}
+
+///|
+/// Finished run statuses that left no live worker behind. Only these offer
+/// Retry work: a succeeded run is a result to review, not a lost session, and
+/// a running one is still owned by its worker.
+fn ticket_run_retryable(status : String) -> Bool {
+  match status {
+    "failed" | "interrupted" | "sync_failed" => true
+    _ => false
+  }
+}
+
+///|
+/// A retry is a ticket command like any other: it waits for the in-flight
+/// command to clear and never fires while this ticket already has a live run.
+fn ticket_retry_blocked(model : Model, task_id : String) -> Bool {
+  model.ticket_sending ||
+  !model.can_connect ||
+  !model.ticket_available ||
+  ticket_task_running(model, task_id)
+}
+
+///|
+fn ticket_retry_note() -> String {
+  "Retry starts a new run from the current ticket. It does not resume the lost session, so the previous worker's context is gone."
+}
+
+///|
+/// Retry work plus the note that states its consequence. The ticket stays in
+/// place: unlike Resume, this action starts a run instead of moving a stage.
+fn ticket_retry_action(
+  model : Model,
+  task_id : String,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  @html.div(class="ticket-retry", [
+    @html.div(class="ticket-answers", [
+      @html.button(
+        type_="button",
+        class="btn btn-sm btn-primary",
+        title="Start a fresh run for this ticket",
+        disabled=ticket_retry_blocked(model, task_id),
+        on_click=emit(TicketRetry(task_id)),
+        "Retry work",
+      ),
+    ]),
+    @html.p(class="ticket-retry-note", ticket_retry_note()),
+  ])
+}
+
+///|
+/// The retry offer for one finished run card, or nothing when that run still
+/// holds a live worker or already produced a result worth keeping.
+fn ticket_run_retry_action(
+  model : Model,
+  run : TicketRun,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  guard ticket_run_retryable(run.status) else { return @html.nothing }
+  ticket_retry_action(model, run.task_id, emit)
+}
+
+///|
+/// A paused ticket that never started a run has no card to retry, so the
+/// dialog still offers Retry work next to the ticket's own Resume move.
+fn ticket_stage_retry_action(
+  model : Model,
+  task : @client.ClientBoardTask?,
+  task_id : String,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let has_run = model.tickets.runs.any(run => run.task_id == task_id)
+  match task {
+    Some(task) if task.stage is @client.Suspended && !has_run =>
+      ticket_retry_action(model, task_id, emit)
+    _ => @html.nothing
+  }
 }
 
 ///|
@@ -466,6 +563,7 @@ fn ticket_result_card(
     } else {
       ticket_activity_list(run.activities)
     },
+    ticket_run_retry_action(model, run, emit),
     @html.div(class="ticket-answers", [
       @html.button(
         type_="button",
@@ -721,6 +819,7 @@ fn ticket_activity_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Htm
                 class="empty-line",
                 "No agent activity yet. Shape or run this ticket to start.",
               ),
+              ticket_stage_retry_action(model, task, task_id, emit),
             ]
           } else {
             runs.map(run => {

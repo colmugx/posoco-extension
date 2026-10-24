@@ -1308,3 +1308,244 @@ test "board task review is optional and survives a detached copy" {
   assert_eq(task.review.unwrap().changes, ["Task gains an optional review."])
   assert_eq(task.review.unwrap().artifacts.length(), 1)
 }
+
+///|
+fn review_cmd(
+  id : String,
+  rev : Int64,
+  review : ReviewReport?,
+  at~ : Int64 = 5000L,
+) -> BoardCommand {
+  SetReviewReport(id=tid(id), review~, at_ms=at, expected_revision=rev)
+}
+
+///|
+/// Minimal report builder for the rejection cases: everything the fixture
+/// carries is optional here except the two identifying texts.
+fn report_with(
+  outcome~ : String = "Task carries a review report.",
+  summary~ : String = "Adds the durable write path.",
+  verification~ : Array[ReviewEvidence] = [],
+  artifacts~ : Array[ReviewArtifact] = [],
+) -> ReviewReport {
+  ReviewReport::from_record(
+    outcome~,
+    summary~,
+    changes=[],
+    verification~,
+    risks=[],
+    notes=[],
+    open_questions=[],
+    artifacts~,
+  )
+}
+
+///|
+test "set review report stores a detached report and emits one event" {
+  let state = task_at(Running)
+  let revision = state.revision()
+  let report = review_report_fixture()
+  let proposal = accept(state, review_cmd("t", revision, Some(report)))
+  assert_eq(proposal.next_state.revision(), revision + 1L)
+  assert_eq(proposal.events.length(), 1)
+  assert_eq(proposal.events, [
+    ReviewReportSet(id=tid("t"), review=Some(report), at_ms=5000L),
+  ])
+  let task = proposal.next_state.task(tid("t")).unwrap()
+  assert_eq(task.review, Some(report))
+  assert_eq(task.stage, Running)
+  assert_eq(task.updated_at_ms, 5000L)
+  // The committed record and the event are detached from the command input:
+  // a caller that keeps mutating its arrays cannot reach either.
+  report.changes.push("late")
+  report.verification.clear()
+  report.artifacts.clear()
+  assert_eq(task.review.unwrap().changes, ["Task gains an optional review."])
+  assert_eq(task.review.unwrap().verification.length(), 1)
+  assert_eq(task.review.unwrap().artifacts.length(), 1)
+  match proposal.events[0] {
+    ReviewReportSet(review~, ..) => {
+      assert_eq(review.unwrap().changes, ["Task gains an optional review."])
+      assert_eq(review.unwrap().artifacts.length(), 1)
+    }
+    _ => fail("expected ReviewReportSet")
+  }
+}
+
+///|
+test "clearing a review report on a review ticket records one event" {
+  let running = task_at(Running)
+  let report = review_report_fixture()
+  let set = accept(
+    running,
+    review_cmd("t", running.revision(), Some(report), at=1000L),
+  )
+  let cleared = accept(
+    set.next_state,
+    review_cmd("t", set.next_state.revision(), None, at=1100L),
+  )
+  assert_eq(cleared.next_state.revision(), running.revision() + 2L)
+  assert_eq(cleared.events.length(), 1)
+  assert_eq(cleared.events, [
+    ReviewReportSet(id=tid("t"), review=None, at_ms=1100L),
+  ])
+  let task = cleared.next_state.task(tid("t")).unwrap()
+  assert_eq(task.review, None)
+  assert_eq(task.updated_at_ms, 1100L)
+  // Clearing never touches the stage.
+  assert_eq(task.stage, Running)
+}
+
+///|
+test "review report is rejected outside running and review" {
+  let report = report_with()
+  for stage in [Created, Refining, Ready, Done, Suspended, Cancelled] {
+    let state = task_at(stage)
+    assert_eq(
+      rejection_of(state, review_cmd("t", state.revision(), Some(report))),
+      InvalidInput(reason="a review report requires a Running or Review ticket"),
+    )
+    assert_eq(
+      rejection_of(state, review_cmd("t", state.revision(), None)),
+      InvalidInput(reason="a review report requires a Running or Review ticket"),
+    )
+  }
+}
+
+///|
+test "review report requires an outcome summary and labelled entries" {
+  let state = task_at(Review)
+  let revision = state.revision()
+  let unlabelled_evidence = ReviewEvidence::from_record(
+    kind=ReviewEvidenceKind::Test,
+    label="",
+    result=ReviewEvidenceResult::Passed,
+    detail="",
+  )
+  let unlabelled_artifact = ReviewArtifact::from_record(
+    kind=ReviewArtifactKind::File,
+    label="",
+    uri_or_digest="src/domain/propose.mbt",
+  )
+  let unaddressed_artifact = ReviewArtifact::from_record(
+    kind=ReviewArtifactKind::File,
+    label="propose.mbt",
+    uri_or_digest="",
+  )
+  let cases : Array[(ReviewReport, BoardError)] = [
+    (
+      report_with(outcome=""),
+      InvalidInput(reason="review outcome must not be empty"),
+    ),
+    (
+      report_with(summary=""),
+      InvalidInput(reason="review summary must not be empty"),
+    ),
+    (
+      report_with(verification=[unlabelled_evidence]),
+      InvalidInput(reason="review evidence label must not be empty"),
+    ),
+    (
+      report_with(artifacts=[unlabelled_artifact]),
+      InvalidInput(reason="review artifact label must not be empty"),
+    ),
+    (
+      report_with(artifacts=[unaddressed_artifact]),
+      InvalidInput(reason="review artifact uri_or_digest must not be empty"),
+    ),
+  ]
+  for case in cases {
+    let (report, expected) = case
+    assert_eq(
+      rejection_of(state, review_cmd("t", revision, Some(report))),
+      expected,
+    )
+  }
+  // A rejection never advances the revision.
+  assert_eq(state.revision(), revision)
+}
+
+///|
+test "review report validates the revision first and the task second" {
+  let state = task_at(Running)
+  let report = report_with(outcome="")
+  assert_eq(
+    rejection_of(state, review_cmd("t", state.revision() + 1L, Some(report))),
+    RevisionConflict(expected=state.revision() + 1L, actual=state.revision()),
+  )
+  assert_eq(
+    rejection_of(state, review_cmd("ghost", state.revision(), Some(report))),
+    TaskMissing(task=tid("ghost")),
+  )
+  assert_eq(
+    rejection_of(
+      state,
+      SetReviewReport(
+        id=tid("ghost"),
+        review=None,
+        at_ms=-1L,
+        expected_revision=state.revision(),
+      ),
+    ),
+    TaskMissing(task=tid("ghost")),
+  )
+  assert_eq(
+    rejection_of(state, review_cmd("t", state.revision(), Some(report), at=-1L)),
+    InvalidInput(reason="updated_at_ms must not be negative"),
+  )
+}
+
+///|
+test "review report survives detached state copies" {
+  let state = task_at(Running)
+  let report = review_report_fixture()
+  let proposal = accept(state, review_cmd("t", state.revision(), Some(report)))
+  let copy = proposal.next_state.snapshot()
+  copy.tasks[0].review.unwrap().changes.push("snapshot only")
+  copy.tasks[0].review.unwrap().artifacts.clear()
+  let stored = proposal.next_state.task(tid("t")).unwrap().review.unwrap()
+  assert_eq(stored.changes, ["Task gains an optional review."])
+  assert_eq(stored.artifacts.length(), 1)
+}
+
+///|
+test "review report command and event copies detach the nested report" {
+  let report = review_report_fixture()
+  let command = review_cmd("t", 0L, Some(report))
+  let detached = command.copy_detached()
+  // Unrelated commands keep their identity; the report command re-copies.
+  assert_eq(delete_cmd("t", 0L).copy_detached(), delete_cmd("t", 0L))
+  report.changes.push("late")
+  report.verification.clear()
+  report.artifacts.clear()
+  assert_eq(detached, review_cmd("t", 0L, Some(review_report_fixture())))
+  match detached {
+    SetReviewReport(review~, ..) => {
+      assert_eq(review.unwrap().changes, ["Task gains an optional review."])
+      assert_eq(review.unwrap().verification.length(), 1)
+      assert_eq(review.unwrap().artifacts.length(), 1)
+    }
+    _ => fail("expected SetReviewReport")
+  }
+  let event = ReviewReportSet(
+    id=tid("t"),
+    review=Some(review_report_fixture()),
+    at_ms=10L,
+  )
+  let event_copy = event.copy_detached()
+  assert_eq(event_copy, event)
+  match event_copy {
+    ReviewReportSet(review~, ..) => {
+      review.unwrap().changes.push("copy only")
+      review.unwrap().artifacts.clear()
+    }
+    _ => fail("expected ReviewReportSet")
+  }
+  match event {
+    ReviewReportSet(review~, ..) => {
+      assert_eq(review.unwrap().changes, ["Task gains an optional review."])
+      assert_eq(review.unwrap().artifacts.length(), 1)
+    }
+    _ => fail("expected ReviewReportSet")
+  }
+}

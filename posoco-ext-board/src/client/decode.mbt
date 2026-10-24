@@ -331,6 +331,7 @@ fn event_entity(
     | "board.task.updated"
     | "board.task.dependencies_changed"
     | "board.task.model_changed"
+    | "board.task.review_report_set"
     | "board.task.stage_changed" => {
       let entity = task(required(obj, "task"))
       guard text(required(obj, "task_id")) == entity.id else {

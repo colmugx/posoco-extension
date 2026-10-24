@@ -96,16 +96,12 @@ pub fn has_repeated_reasoning_suffix(
   // (e.g. emoji). Fixed UTF-16 offsets can bisect their surrogate pairs;
   // exact_view would panic and terminate the host. A split window cannot
   // prove exact repetition, so skip this observation instead.
-  guard reasoning.get_view(
-    start=n - span_chars * 3,
-    end=n - span_chars * 2,
-  ) is Some(a) else {
+  guard reasoning.get_view(start=n - span_chars * 3, end=n - span_chars * 2)
+    is Some(a) else {
     return false
   }
-  guard reasoning.get_view(
-    start=n - span_chars * 2,
-    end=n - span_chars,
-  ) is Some(b) else {
+  guard reasoning.get_view(start=n - span_chars * 2, end=n - span_chars)
+    is Some(b) else {
     return false
   }
   guard reasoning.get_view(start=n - span_chars) is Some(c) else {

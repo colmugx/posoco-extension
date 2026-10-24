@@ -1372,3 +1372,32 @@ test "task review records must be complete and strictly typed" {
     assert_false(replica.has_snapshot())
   }
 }
+
+///|
+test "review report set event decodes the committed task review" {
+  let replica = @client.BoardReplica::empty()
+  let task = wire_task(stage="review", review=wire_review())
+  let frame = snapshot_frame(revision=1L, last_seq=0L, tasks=[task])
+  assert_eq_eq(replica.apply_snapshot(frame), @client.Applied)
+  assert_true(replica.tasks()[0].review is Some(_))
+  let event = task_event(
+    seq=1L,
+    revision=1L,
+    kind="board.task.review_report_set",
+    task~,
+    task_id="t1",
+  )
+  assert_eq_eq(replica.apply_event(event), @client.Applied)
+  assert_true(replica.tasks()[0].review is Some(_))
+  // A clear arrives as the same kind with the committed task carrying null.
+  let cleared = task_event(
+    seq=2L,
+    revision=2L,
+    kind="board.task.review_report_set",
+    task=wire_task(stage="running", review=Json::null()),
+    task_id="t1",
+  )
+  assert_eq_eq(replica.apply_event(cleared), @client.Applied)
+  assert_eq_eq(replica.tasks()[0].review, None)
+  assert_eq_eq(replica.tasks()[0].stage, @client.Running)
+}

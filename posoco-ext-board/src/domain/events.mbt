@@ -10,6 +10,9 @@ pub(all) enum BoardEvent {
     at_ms~ : Int64
   )
   TaskModelChanged(id~ : BoardTaskId, model~ : ModelSelection?, at_ms~ : Int64)
+  /// The ticket's curated review handoff was replaced (`Some`) or cleared
+  /// (`None`). The report is durable data of the ticket, not attempt activity.
+  ReviewReportSet(id~ : BoardTaskId, review~ : ReviewReport?, at_ms~ : Int64)
   TaskStageChanged(
     id~ : BoardTaskId,
     from~ : BoardStage,
@@ -64,6 +67,15 @@ pub fn BoardEvent::copy_detached(self : BoardEvent) -> BoardEvent {
     DependenciesSet(id~, dependencies~, at_ms~) =>
       DependenciesSet(id~, dependencies=dependencies.copy(), at_ms~)
     TaskModelChanged(..) => self
+    ReviewReportSet(id~, review~, at_ms~) =>
+      ReviewReportSet(
+        id~,
+        review=match review {
+          Some(report) => Some(report.copy_detached())
+          None => None
+        },
+        at_ms~,
+      )
     GraphExpanded(
       expansion~,
       tasks~,

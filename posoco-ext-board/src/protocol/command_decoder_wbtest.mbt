@@ -1,5 +1,5 @@
 ///|
-/// Decoder tests for the fixed nine-command wire surface. Every rejection
+/// Decoder tests for the fixed ten-command wire surface. Every rejection
 /// test goes through the shared helpers so correlation, the stable code and
 /// the reason non-emptiness are pinned on every case, not just once.
 
@@ -53,6 +53,10 @@ fn decoder_valid_fields(name : String) -> Map[String, Json] raise {
         "effort": Json::string("high"),
       })
     }
+    "board.task.set_review_report" => {
+      fields["id"] = Json::string("t-1")
+      fields["review"] = decoder_report()
+    }
     "board.task.move" => {
       fields["id"] = Json::string("t-1")
       fields["to"] = Json::string("ready")
@@ -88,6 +92,102 @@ fn decoder_create_args(exclude : String) -> Json raise {
   let fields = decoder_valid_fields("board.task.create")
   fields.remove(exclude)
   Json::object(fields)
+}
+
+///|
+/// A complete, schema-valid review report on the wire.
+fn decoder_report() -> Json {
+  Json::object({
+    "outcome": Json::string("Board tickets keep a curated review handoff."),
+    "summary": Json::string("Adds the report write path to the protocol."),
+    "changes": Json::array([Json::string("Decodes the nested report strictly.")]),
+    "verification": Json::array([
+      Json::object({
+        "kind": Json::string("command"),
+        "label": Json::string("moon test src/protocol"),
+        "result": Json::string("passed"),
+        "detail": Json::string(""),
+      }),
+      Json::object({
+        "kind": Json::string("manual"),
+        "label": Json::string("restart drill"),
+        "result": Json::string("not_run"),
+        "detail": Json::string("no host"),
+      }),
+    ]),
+    "risks": Json::array([Json::string("Reports are worker-derived.")]),
+    "notes": Json::array([]),
+    "open_questions": Json::array([Json::string("Should a retry replace it?")]),
+    "artifacts": Json::array([
+      Json::object({
+        "kind": Json::string("file"),
+        "label": Json::string("command_decoder.mbt"),
+        "uri_or_digest": Json::string("src/protocol/command_decoder.mbt"),
+      }),
+    ]),
+  })
+}
+
+///|
+fn decoder_domain_report() -> @domain.ReviewReport {
+  @domain.ReviewReport::from_record(
+    outcome="Board tickets keep a curated review handoff.",
+    summary="Adds the report write path to the protocol.",
+    changes=["Decodes the nested report strictly."],
+    verification=[
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Command,
+        label="moon test src/protocol",
+        result=@domain.ReviewEvidenceResult::Passed,
+        detail="",
+      ),
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Manual,
+        label="restart drill",
+        result=@domain.ReviewEvidenceResult::NotRun,
+        detail="no host",
+      ),
+    ],
+    risks=["Reports are worker-derived."],
+    notes=[],
+    open_questions=["Should a retry replace it?"],
+    artifacts=[
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::File,
+        label="command_decoder.mbt",
+        uri_or_digest="src/protocol/command_decoder.mbt",
+      ),
+    ],
+  )
+}
+
+///|
+/// The valid set-review-report args with one nested key dropped or replaced.
+fn decoder_report_args(
+  mutate : (Map[String, Json]) -> Unit raise,
+) -> Json raise {
+  let fields = decoder_valid_fields("board.task.set_review_report")
+  match fields.get("review") {
+    Some(Json::Object(report)) => mutate(report)
+    _ => fail("expected a review object in the fixture")
+  }
+  Json::object(fields)
+}
+
+///|
+/// The first nested entry of one review section, detached for mutation.
+fn decoder_report_entry(
+  report : Map[String, Json],
+  section : String,
+) -> Map[String, Json] raise {
+  match report.get(section) {
+    Some(Json::Array(entries)) =>
+      match entries[0] {
+        Json::Object(entry) => entry
+        _ => fail("expected an object entry in \{section}")
+      }
+    _ => fail("expected an array in \{section}")
+  }
 }
 
 ///|
@@ -284,6 +384,207 @@ test "board.task.set_model decodes a pin, a clear and rejects malformed shapes" 
       }),
     ),
   )
+}
+
+///|
+test "board.task.set_review_report decodes a full report, a clear and rejects shapes" {
+  decoder_ok(
+    decoder_wire(
+      "board.task.set_review_report",
+      decoder_valid_args("board.task.set_review_report"),
+    ),
+    @domain.SetReviewReport(
+      id=decoder_task_id("t-1"),
+      review=Some(decoder_domain_report()),
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
+  decoder_ok(
+    decoder_wire(
+      "board.task.set_review_report",
+      Json::object({ "id": Json::string("t-1"), "review": Json::null() }),
+    ),
+    @domain.SetReviewReport(
+      id=decoder_task_id("t-1"),
+      review=None,
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
+  // Emptiness is a domain concern: the wire schema only pins the shape.
+  let empty = decoder_report_args(mutate => {
+    mutate["outcome"] = Json::string("")
+    mutate["summary"] = Json::string("")
+    decoder_report_entry(mutate, "verification")["label"] = Json::string("")
+    decoder_report_entry(mutate, "artifacts")["uri_or_digest"] = Json::string(
+      "",
+    )
+  })
+  decoder_ok(
+    decoder_wire("board.task.set_review_report", empty),
+    @domain.SetReviewReport(
+      id=decoder_task_id("t-1"),
+      review=Some(
+        @domain.ReviewReport::from_record(
+          outcome="",
+          summary="",
+          changes=["Decodes the nested report strictly."],
+          verification=[
+            @domain.ReviewEvidence::from_record(
+              kind=@domain.ReviewEvidenceKind::Command,
+              label="",
+              result=@domain.ReviewEvidenceResult::Passed,
+              detail="",
+            ),
+            @domain.ReviewEvidence::from_record(
+              kind=@domain.ReviewEvidenceKind::Manual,
+              label="restart drill",
+              result=@domain.ReviewEvidenceResult::NotRun,
+              detail="no host",
+            ),
+          ],
+          risks=["Reports are worker-derived."],
+          notes=[],
+          open_questions=["Should a retry replace it?"],
+          artifacts=[
+            @domain.ReviewArtifact::from_record(
+              kind=@domain.ReviewArtifactKind::File,
+              label="command_decoder.mbt",
+              uri_or_digest="",
+            ),
+          ],
+        ),
+      ),
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
+  // Missing keys at the top level and at every nested level.
+  decoder_args_error(
+    decoder_wire(
+      "board.task.set_review_report",
+      Json::object({ "id": Json::string("t-1") }),
+    ),
+  )
+  for
+    key in [
+      "outcome", "summary", "changes", "verification", "risks", "notes", "open_questions",
+      "artifacts",
+    ] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        decoder_report_args(mutate => ignore(mutate.remove(key))),
+      ),
+    )
+  }
+  for key in ["kind", "label", "result", "detail"] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        decoder_report_args(mutate => {
+          ignore(decoder_report_entry(mutate, "verification").remove(key))
+        }),
+      ),
+    )
+  }
+  for key in ["kind", "label", "uri_or_digest"] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        decoder_report_args(mutate => {
+          ignore(decoder_report_entry(mutate, "artifacts").remove(key))
+        }),
+      ),
+    )
+  }
+  // Unknown fields are rejected in the report and in every nested record.
+  decoder_args_error(
+    decoder_wire(
+      "board.task.set_review_report",
+      decoder_report_args(mutate => mutate["extra"] = Json::string("x")),
+    ),
+  )
+  decoder_args_error(
+    decoder_wire(
+      "board.task.set_review_report",
+      decoder_report_args(mutate => {
+        decoder_report_entry(mutate, "verification")["extra"] = Json::string(
+          "x",
+        )
+      }),
+    ),
+  )
+  decoder_args_error(
+    decoder_wire(
+      "board.task.set_review_report",
+      decoder_report_args(mutate => {
+        decoder_report_entry(mutate, "artifacts")["extra"] = Json::string("x")
+      }),
+    ),
+  )
+  // Wrong container and entry types.
+  for review in [Json::string("report"), Json::number(1), Json::array([])] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        Json::object({ "id": Json::string("t-1"), "review": review }),
+      ),
+    )
+  }
+  for
+    (section, poison) in [
+      ("changes", Json::null()),
+      ("changes", Json::array([Json::number(1)])),
+      ("verification", Json::object({})),
+      ("verification", Json::array([Json::string("passed")])),
+      ("notes", Json::number(2)),
+      ("artifacts", Json::object({})),
+      ("artifacts", Json::array([Json::string("file")])),
+    ] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        decoder_report_args(mutate => mutate[section] = poison),
+      ),
+    )
+  }
+  // Enum strings stay strict, lowercase and case sensitive at both levels.
+  for kind in ["Command", "check", ""] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        decoder_report_args(mutate => {
+          decoder_report_entry(mutate, "verification")["kind"] = Json::string(
+            kind,
+          )
+        }),
+      ),
+    )
+  }
+  for result in ["passed ", "PASSED", "skipped", ""] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        decoder_report_args(mutate => {
+          decoder_report_entry(mutate, "verification")["result"] = Json::string(
+            result,
+          )
+        }),
+      ),
+    )
+  }
+  for kind in ["File", "image", ""] {
+    decoder_args_error(
+      decoder_wire(
+        "board.task.set_review_report",
+        decoder_report_args(mutate => {
+          decoder_report_entry(mutate, "artifacts")["kind"] = Json::string(kind)
+        }),
+      ),
+    )
+  }
 }
 
 ///|
@@ -551,7 +852,7 @@ test "args must be a JSON object for every known name" {
     name in [
       "board.task.create", "board.task.update", "board.task.set_dependencies", "board.task.move",
       "board.task.delete", "board.attempt.queue", "board.attempt.start", "board.attempt.finish",
-      "board.review.record",
+      "board.review.record", "board.task.set_review_report",
     ] {
     for
       args in [
@@ -648,7 +949,7 @@ test "no payload can inject a timestamp or a revision" {
   let names : Array[String] = [
     "board.task.create", "board.task.update", "board.task.set_dependencies", "board.task.move",
     "board.task.delete", "board.attempt.queue", "board.attempt.start", "board.attempt.finish",
-    "board.review.record",
+    "board.review.record", "board.task.set_review_report",
   ]
   for name in names {
     for

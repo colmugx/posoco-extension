@@ -1518,6 +1518,170 @@ dialog.sheet-dialog {
   gap: 8px;
 }
 
+/* the Review-stage note that no curated report exists; it warns, it does not
+ * hide the decision controls */
+.review-report-missing {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* work report — decision first, evidence toned */
+
+.review-report {
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.review-outcome {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.review-report-section {
+  display: grid;
+  gap: 6px;
+}
+
+.review-report-label {
+  margin: 0;
+  color: var(--faint);
+  font: 10.5px/1.4 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.review-report .plain-list {
+  overflow-wrap: anywhere;
+}
+
+/* one row per check; the result word and the left border carry the tone */
+.review-evidence {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-evidence-row {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--line-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface);
+}
+
+.review-evidence-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-evidence-result {
+  color: var(--muted);
+  font: 10.5px/1.5 var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.review-evidence-kind {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.review-evidence-label {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.review-evidence-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.review-evidence-row.is-passed {
+  border-left-color: var(--ok);
+}
+
+.review-evidence-row.is-passed .review-evidence-result {
+  color: var(--ok);
+}
+
+.review-evidence-row.is-failed {
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.review-evidence-row.is-failed .review-evidence-result {
+  color: var(--danger);
+}
+
+.review-evidence-row.is-not_run {
+  border-left-color: var(--warn);
+}
+
+.review-evidence-row.is-not_run .review-evidence-result {
+  color: var(--warn);
+}
+
+.review-evidence-row.is-unknown {
+  border-left-color: var(--line-strong);
+}
+
+.review-evidence-row.is-unknown .review-evidence-result {
+  color: var(--muted);
+}
+
+.review-artifact-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-artifact-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.review-artifact-kind {
+  color: var(--faint);
+  font: 10.5px/1.4 var(--font-mono);
+  text-transform: uppercase;
+}
+
+.review-artifact-label {
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+/* a digest or URI may be one long token: it wraps instead of overflowing */
+.review-artifact-ref {
+  color: var(--muted);
+  font: 10.5px/1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* checklist (definition of done) */
 
 .checklist {
@@ -1935,6 +2099,23 @@ dialog.sheet-dialog {
   color: var(--danger);
 }
 
+/* Retry work: a fresh run for a ticket whose last one was lost. The block is
+   separated from the card body so the action never reads as a stage move. */
+.ticket-retry {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.ticket-retry-note {
+  margin: 0;
+  color: var(--faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
 .ticket-activity-body {
   gap: 12px;
 }
@@ -2068,6 +2249,25 @@ dialog.sheet-dialog {
   .board {
     grid-auto-columns: 84vw;
     gap: 12px;
+  }
+
+  /* the report keeps its decision-first read on a phone: tighter padding,
+   * evidence rows stack their meta line instead of relying on wrap */
+  .review-report {
+    padding: 10px;
+  }
+
+  .review-outcome {
+    font-size: 14px;
+  }
+
+  .review-evidence-row {
+    padding: 8px;
+  }
+
+  .review-evidence-head {
+    flex-direction: column;
+    gap: 2px;
   }
 
   .lane {

@@ -353,6 +353,13 @@ pub fn project_event(
         ("model", wire_optional_model(model)),
         ("at_ms", wire_number(at_ms)),
       ])
+    ReviewReportSet(id~, review~, at_ms~) =>
+      wire_event(kind="board.task.review_report_set", payload=[
+        ("task_id", Json::string(id.value)),
+        ("task", task_to_json(committed_task(snapshot, id))),
+        ("review", wire_optional_review(review)),
+        ("at_ms", wire_number(at_ms)),
+      ])
     TaskStageChanged(id~, from~, to~, at_ms~) =>
       wire_event(kind="board.task.stage_changed", payload=[
         ("task_id", Json::string(id.value)),

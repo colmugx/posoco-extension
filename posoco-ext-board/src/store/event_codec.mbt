@@ -24,6 +24,12 @@ fn event_json(event : @domain.BoardEvent) -> Json {
       f["model"] = model_json(model)
       f["at_ms"] = number(at_ms)
     }
+    ReviewReportSet(id~, review~, at_ms~) => {
+      f["type"] = "ReviewReportSet"
+      f["id"] = Json::string(id.value)
+      f["review"] = review_json(review)
+      f["at_ms"] = number(at_ms)
+    }
     TaskStageChanged(id~, from~, to~, at_ms~) => {
       f["type"] = "TaskStageChanged"
       f["id"] = Json::string(id.value)
@@ -106,6 +112,10 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
       keys.push("id")
       keys.push("model")
     }
+    "ReviewReportSet" => {
+      keys.push("id")
+      keys.push("review")
+    }
     "TaskStageChanged" => {
       keys.push("id")
       keys.push("from")
@@ -155,6 +165,8 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
       )
     "TaskModelChanged" =>
       TaskModelChanged(id=task_id(f["id"]), model=model(f["model"]), at_ms~)
+    "ReviewReportSet" =>
+      ReviewReportSet(id=task_id(f["id"]), review=review(f["review"]), at_ms~)
     "TaskStageChanged" =>
       TaskStageChanged(
         id=task_id(f["id"]),

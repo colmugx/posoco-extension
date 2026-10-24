@@ -211,6 +211,222 @@ fn model_picker(
 }
 
 ///|
+/// One verification record as rendered data. The tone stays the client's own
+/// wire spelling, so a check that was never run never borrows the pass style.
+priv struct ReviewEvidenceRow {
+  tone : String
+  result : String
+  kind : String
+  label : String
+  detail : String
+}
+
+///|
+/// One referenced artifact as rendered data: kind, label and the URI or
+/// digest the report carries. The client never renders an artifact body.
+priv struct ReviewArtifactRow {
+  kind : String
+  label : String
+  reference : String
+}
+
+///|
+fn review_evidence_result_label(
+  result : @client.ClientReviewEvidenceResult,
+) -> String {
+  match result {
+    Passed => "Passed"
+    Failed => "Failed"
+    NotRun => "Not run"
+    Unknown => "Unknown"
+  }
+}
+
+///|
+fn review_evidence_kind_label(
+  kind : @client.ClientReviewEvidenceKind,
+) -> String {
+  match kind {
+    Command => "Command"
+    Test => "Test"
+    Manual => "Manual"
+    Artifact => "Artifact"
+  }
+}
+
+///|
+fn review_artifact_kind_label(
+  kind : @client.ClientReviewArtifactKind,
+) -> String {
+  match kind {
+    File => "File"
+    Diff => "Diff"
+    Log => "Log"
+    Screenshot => "Screenshot"
+    Url => "URL"
+  }
+}
+
+///|
+/// The result tone is the client's canonical wire spelling, so the report
+/// styling and the record vocabulary cannot drift apart.
+fn review_evidence_tone(
+  result : @client.ClientReviewEvidenceResult,
+) -> String {
+  result.to_wire()
+}
+
+///|
+fn review_evidence_row(
+  evidence : @client.ClientReviewEvidence,
+) -> ReviewEvidenceRow {
+  {
+    tone: review_evidence_tone(evidence.result),
+    result: review_evidence_result_label(evidence.result),
+    kind: review_evidence_kind_label(evidence.kind),
+    label: evidence.label,
+    detail: evidence.detail,
+  }
+}
+
+///|
+fn review_artifact_row(
+  artifact : @client.ClientReviewArtifact,
+) -> ReviewArtifactRow {
+  {
+    kind: review_artifact_kind_label(artifact.kind),
+    label: artifact.label,
+    reference: artifact.uri_or_digest,
+  }
+}
+
+///|
+/// The outcome sentence is the report's headline. A report that somehow lost
+/// it says so instead of borrowing the summary or a stage label.
+fn review_outcome_text(report : @client.ClientReviewReport) -> String {
+  let outcome = report.outcome.trim().to_owned()
+  if outcome.is_empty() {
+    "No outcome recorded."
+  } else {
+    outcome
+  }
+}
+
+///|
+/// The note a Review-stage task carries while no curated report exists. It is
+/// never a stand-in report: the decision controls stay available, but nobody
+/// has to guess what the worker handed over.
+fn review_missing_report_note() -> String {
+  "No work report recorded yet. Ask the worker to record one before you decide."
+}
+
+///|
+/// Only a task waiting in Review is expected to carry a work report; Done
+/// keeps whatever it was closed with.
+fn review_report_missing(task : @client.ClientBoardTask) -> Bool {
+  task.stage is Review && task.review is None
+}
+
+///|
+/// One labelled bullet section of the report. Blank entries and empty
+/// sections render nothing, so the report shows only what was recorded.
+fn review_text_section(
+  label : String,
+  name : String,
+  items : Array[String],
+) -> @html.Html {
+  let present = items.filter(item => !item.trim().is_empty())
+  if present.is_empty() {
+    return @html.nothing
+  }
+  @html.div(class="review-report-section review-\{name}", [
+    @html.h3(class="review-report-label", label),
+    @html.ul(class="plain-list", present.map(item => @html.li(item))),
+  ])
+}
+
+///|
+/// Verification evidence: the result word and the tone border carry the
+/// outcome, so passed, failed, not run and unknown never collapse into one
+/// another. A report with no evidence says so rather than staying silent.
+fn review_verification_section(
+  verification : Array[@client.ClientReviewEvidence],
+) -> @html.Html {
+  let body = if verification.is_empty() {
+    @html.p(class="empty-line", "No verification recorded.")
+  } else {
+    @html.ul(class="review-evidence", verification.map(evidence => {
+      let row = review_evidence_row(evidence)
+      @html.li(class="review-evidence-row is-\{row.tone}", [
+        @html.div(class="review-evidence-head", [
+          @html.span(class="review-evidence-result", row.result),
+          @html.span(class="review-evidence-kind", row.kind),
+          @html.span(class="review-evidence-label", row.label),
+        ]),
+        if row.detail.trim().is_empty() {
+          @html.nothing
+        } else {
+          @html.p(class="review-evidence-detail", row.detail)
+        },
+      ])
+    }))
+  }
+  @html.div(class="review-report-section review-verification", [
+    @html.h3(class="review-report-label", "Verification"),
+    body,
+  ])
+}
+
+///|
+fn review_artifact_section(
+  artifacts : Array[@client.ClientReviewArtifact],
+) -> @html.Html {
+  if artifacts.is_empty() {
+    return @html.nothing
+  }
+  @html.div(class="review-report-section review-artifacts", [
+    @html.h3(class="review-report-label", "Artifacts"),
+    @html.ul(class="review-artifact-list", artifacts.map(artifact => {
+      let row = review_artifact_row(artifact)
+      @html.li(class="review-artifact-row", [
+        @html.span(class="review-artifact-kind", row.kind),
+        @html.span(class="review-artifact-label", row.label),
+        @html.code(class="review-artifact-ref", row.reference),
+      ])
+    })),
+  ])
+}
+
+///|
+/// The recorded work report, decision first: outcome, summary, what changed,
+/// how it was verified, risks, notes, open questions and artifacts. It shows
+/// only the curated record — the raw run log stays in the Activity dialog.
+fn review_report_block(task : @client.ClientBoardTask) -> @html.Html {
+  guard task.review is Some(report) else {
+    return @html.nothing
+  }
+  @html.section(class="detail-section review-report", [
+    @html.h2(class="section-title", "Work report"),
+    @html.p(class="review-outcome", review_outcome_text(report)),
+    review_text_section("Summary", "summary", [report.summary]),
+    review_text_section("What changed", "changes", report.changes),
+    review_verification_section(report.verification),
+    review_text_section("Risks", "risks", report.risks),
+    review_text_section("Notes", "notes", report.notes),
+    review_text_section("Open questions", "questions", report.open_questions),
+    review_artifact_section(report.artifacts),
+  ])
+}
+
+///|
+/// The recordable decisions the Review controls offer, in render order. The
+/// work report above them informs a decision; it never replaces or reorders
+/// the choices.
+fn review_decision_controls() -> Array[@client.ClientRecordableReviewDecision] {
+  review_decisions()
+}
+
+///|
 /// Review is the moment the pipeline exists for: a recorded decision is
 /// final, so it is confirmed and never bundled with the move.
 fn review_block(
@@ -231,6 +447,17 @@ fn review_block(
   let locked = !attempt_controls_allowed(model)
   @html.section(class="detail-section", [
     @html.h2(class="section-title", "Review"),
+    // A Review-stage task without a report is not blocked from a decision,
+    // but the reviewer must see that nothing curated was handed over.
+    if review_report_missing(task) {
+      @html.p(
+        class="callout is-warn review-report-missing",
+        attrs=@html.Attrs::build().role("status").aria_live("polite"),
+        review_missing_report_note(),
+      )
+    } else {
+      @html.nothing
+    },
     match recordable {
       Some(attempt) =>
         @html.div(class="review-open", [
@@ -239,28 +466,25 @@ fn review_block(
             @html.span(class="review-state", "running"),
             @html.span(class="review-pending", "decision pending"),
           ]),
-          @html.div(class="review-actions", [
-            @html.button(
-              type_="button",
-              class="btn btn-primary",
-              disabled=locked,
-              attrs=@html.Attrs::build().on_click(_ => {
-                ui_show("confirm-dialog")
-                emit(ReviewDecide(attempt.id, "approved"))
-              }),
-              "Approve",
-            ),
-            @html.button(
-              type_="button",
-              class="btn",
-              disabled=locked,
-              attrs=@html.Attrs::build().on_click(_ => {
-                ui_show("confirm-dialog")
-                emit(ReviewDecide(attempt.id, "changes_requested"))
-              }),
-              "Request changes",
-            ),
-          ]),
+          @html.div(
+            class="review-actions",
+            review_decision_controls().map(decision => {
+              @html.button(
+                type_="button",
+                class=if decision is Approved {
+                  "btn btn-primary"
+                } else {
+                  "btn"
+                },
+                disabled=locked,
+                attrs=@html.Attrs::build().on_click(_ => {
+                  ui_show("confirm-dialog")
+                  emit(ReviewDecide(attempt.id, decision.to_wire()))
+                }),
+                review_decision_label(decision),
+              )
+            }),
+          ),
           @html.p(
             class="section-note",
             "A recorded decision is final. It does not move the task: close it with the action above.",
@@ -323,6 +547,8 @@ fn task_details(
       stage_stepper(model, task, emit),
       detail_next_action(model, task, emit),
       model_block(model, task, emit),
+      // The report is what the decision below is about, so it leads.
+      review_report_block(task),
       review_block(model, task, emit),
       @html.section(class="detail-section", [
         @html.h2(class="section-title", "Definition of done"),

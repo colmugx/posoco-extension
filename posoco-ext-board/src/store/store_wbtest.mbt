@@ -107,6 +107,12 @@ fn all_events() -> Array[@domain.BoardEvent] {
       ),
       at_ms=9L,
     ),
+    @domain.ReviewReportSet(
+      id=tid("a"),
+      review=Some(sample_review()),
+      at_ms=10L,
+    ),
+    @domain.ReviewReportSet(id=tid("a"), review=None, at_ms=11L),
   ]
 }
 
@@ -1049,6 +1055,34 @@ test "task codec accepts a legacy record without the review key" {
   assert_eq(legacy_v1.revision, 1L)
   assert_eq(legacy_v1.tasks[0].review, None)
   assert_eq(legacy_v1.expansions, [])
+}
+
+///|
+test "review report event round trips and rejects a malformed report" {
+  let set = @domain.ReviewReportSet(
+    id=tid("a"),
+    review=Some(sample_review()),
+    at_ms=12L,
+  )
+  let wire = encode_event(set).unwrap()
+  assert_true(wire.contains("ReviewReportSet"))
+  assert_true(wire.contains("open_questions"))
+  assert_eq(decode_event(wire), Ok(set))
+  let cleared = @domain.ReviewReportSet(id=tid("a"), review=None, at_ms=13L)
+  assert_eq(decode_event(encode_event(cleared).unwrap()), Ok(cleared))
+  // The nested report is decoded strictly, exactly like a stored task report.
+  invalid(decode_event(wire.replace(old="\"moon test src/store\"", new="\"\"")))
+  invalid(
+    decode_event(
+      wire.replace(old="\"ReviewReportSet\"", new="\"TaskReportSet\""),
+    ),
+  )
+  invalid(decode_event(wire.replace(old="\"review\":", new="\"reviews\":")))
+  let record = { schema_version: 1, revision: 14L, event: set, }
+  assert_eq(
+    decode_journal_record(encode_journal_record(record).unwrap()),
+    Ok(record),
+  )
 }
 
 ///|

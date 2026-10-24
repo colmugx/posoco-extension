@@ -124,6 +124,8 @@ pub fn BoardDomain::propose(
       propose_set_dependencies(state, id, dependencies, at_ms)
     SetTaskModel(id~, model~, at_ms~, ..) =>
       propose_set_model(state, id, model, at_ms)
+    SetReviewReport(id~, review~, at_ms~, ..) =>
+      propose_set_review_report(state, id, review, at_ms)
     MoveTask(id~, to~, at_ms~, ..) => propose_move(state, id, to, at_ms)
     DeleteTask(id~, at_ms~, ..) => propose_delete(state, id, at_ms)
     QueueAttempt(id~, task~, kind~, at_ms~, ..) =>
@@ -336,6 +338,92 @@ fn propose_set_model(
   next.put_task({ ..task, model, updated_at_ms: at_ms, })
   next.bump_revision()
   Ok({ next_state: next, events: [TaskModelChanged(id~, model~, at_ms~)], })
+}
+
+///|
+/// Structural validation of one curated review report: the handoff is only
+/// useful when it says what is now true (`outcome`), what it means
+/// (`summary`) and which evidence/artifacts it references by name. Free-form
+/// text stays free-form; only the identifying fields must be present.
+fn validate_review_report(report : ReviewReport) -> Result[Unit, BoardError] {
+  if report.outcome.is_empty() {
+    return Err(InvalidInput(reason="review outcome must not be empty"))
+  }
+  if report.summary.is_empty() {
+    return Err(InvalidInput(reason="review summary must not be empty"))
+  }
+  for evidence in report.verification {
+    if evidence.label.is_empty() {
+      return Err(InvalidInput(reason="review evidence label must not be empty"))
+    }
+  }
+  for artifact in report.artifacts {
+    if artifact.label.is_empty() {
+      return Err(InvalidInput(reason="review artifact label must not be empty"))
+    }
+    if artifact.uri_or_digest.is_empty() {
+      return Err(
+        InvalidInput(reason="review artifact uri_or_digest must not be empty"),
+      )
+    }
+  }
+  Ok(())
+}
+
+///|
+/// Replace or clear the ticket's curated review handoff. Only a ticket that
+/// is being worked on or is under review carries a report: a report is the
+/// evidence of work, so Created/Refining/Ready tickets (nothing produced yet)
+/// and terminal ones (Done/Cancelled) cannot set or clear it. `None` is an
+/// explicit clear, never a fallback for a rejected report.
+fn propose_set_review_report(
+  state : BoardState,
+  id : BoardTaskId,
+  review : ReviewReport?,
+  at_ms : Int64,
+) -> Result[BoardProposal, BoardError] {
+  let task = match state.task(id) {
+    Some(task) => task
+    None => return Err(TaskMissing(task=id))
+  }
+  if invalid_time(at_ms) {
+    return Err(InvalidInput(reason="updated_at_ms must not be negative"))
+  }
+  match task.stage {
+    Running | Review => ()
+    _ =>
+      return Err(
+        InvalidInput(
+          reason="a review report requires a Running or Review ticket",
+        ),
+      )
+  }
+  let detached = match review {
+    Some(report) => {
+      match validate_review_report(report) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      Some(report.copy_detached())
+    }
+    None => None
+  }
+  let next = state.clone_detached()
+  next.put_task({ ..task, review: detached, updated_at_ms: at_ms, })
+  next.bump_revision()
+  Ok({
+    next_state: next,
+    events: [
+      ReviewReportSet(
+        id~,
+        review=match detached {
+          Some(report) => Some(report.copy_detached())
+          None => None
+        },
+        at_ms~,
+      ),
+    ],
+  })
 }
 
 ///|

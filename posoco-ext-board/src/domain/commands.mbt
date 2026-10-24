@@ -35,6 +35,15 @@ pub(all) enum BoardCommand {
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
+  /// Replace the curated review handoff of one ticket with `Some`, or clear
+  /// it with `None`. Only a ticket that is being worked on (Running) or is
+  /// already under review (Review) carries a report.
+  SetReviewReport(
+    id~ : BoardTaskId,
+    review~ : ReviewReport?,
+    at_ms~ : Int64,
+    expected_revision~ : Int64
+  )
   MoveTask(
     id~ : BoardTaskId,
     to~ : BoardStage,
@@ -90,6 +99,7 @@ fn BoardCommand::expected_revision(self : BoardCommand) -> Int64 {
     | UpdateTask(expected_revision~, ..)
     | SetDependencies(expected_revision~, ..)
     | SetTaskModel(expected_revision~, ..)
+    | SetReviewReport(expected_revision~, ..)
     | MoveTask(expected_revision~, ..)
     | DeleteTask(expected_revision~, ..)
     | QueueAttempt(expected_revision~, ..)
@@ -178,6 +188,16 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
         candidates=candidates.map(candidate => candidate.copy_detached()),
         parent~,
         workflow~,
+        at_ms~,
+        expected_revision~,
+      )
+    SetReviewReport(id~, review~, at_ms~, expected_revision~) =>
+      SetReviewReport(
+        id~,
+        review=match review {
+          Some(report) => Some(report.copy_detached())
+          None => None
+        },
         at_ms~,
         expected_revision~,
       )

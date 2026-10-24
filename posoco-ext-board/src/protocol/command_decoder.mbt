@@ -4,7 +4,7 @@
 /// decoder is total, synchronous and side-effect free: it reads only the
 /// frame and the caller-supplied `at_ms`, never a clock, the store or the
 /// domain state. Validation is purely structural — frame identity, the fixed
-/// nine-name table and the per-command args schema. Every semantic rule
+/// ten-name table and the per-command args schema. Every semantic rule
 /// (existence, transitions, cycles, duplicates, empty identifiers, no-op
 /// updates) stays with the domain's `propose`.
 
@@ -331,12 +331,144 @@ fn decode_set_task_model(
 }
 
 ///|
+
+///|
+/// Strict nested review report: every curated field is required, unknown
+/// fields are rejected at each level, and each enum is a fixed wire string.
+/// Empty outcome/summary/labels stay legal here — that is a domain concern.
+fn args_review_evidence(
+  value : Json,
+) -> @domain.ReviewEvidence raise SchemaError {
+  let fields = match value {
+    Json::Object(fields) => fields
+    _ => raise Schema("review verification entries must be objects")
+  }
+  args_allowlist(fields, ["kind", "label", "result", "detail"])
+  let kind = match args_string(fields, "kind") {
+    "command" => @domain.ReviewEvidenceKind::Command
+    "test" => @domain.ReviewEvidenceKind::Test
+    "manual" => @domain.ReviewEvidenceKind::Manual
+    "artifact" => @domain.ReviewEvidenceKind::Artifact
+    _ =>
+      raise Schema(
+        "field 'review.verification.kind' must be one of: command, test, manual, artifact",
+      )
+  }
+  let result = match args_string(fields, "result") {
+    "passed" => @domain.ReviewEvidenceResult::Passed
+    "failed" => @domain.ReviewEvidenceResult::Failed
+    "not_run" => @domain.ReviewEvidenceResult::NotRun
+    "unknown" => @domain.ReviewEvidenceResult::Unknown
+    _ =>
+      raise Schema(
+        "field 'review.verification.result' must be one of: passed, failed, not_run, unknown",
+      )
+  }
+  @domain.ReviewEvidence::from_record(
+    kind~,
+    label=args_string(fields, "label"),
+    result~,
+    detail=args_string(fields, "detail"),
+  )
+}
+
+///|
+fn args_review_evidence_array(
+  fields : Map[String, Json],
+  key : String,
+) -> Array[@domain.ReviewEvidence] raise SchemaError {
+  let values = match fields.get(key) {
+    Some(Json::Array(values)) => values
+    Some(_) => raise Schema("field '\{key}' must be an array of objects")
+    None => raise Schema("missing field '\{key}'")
+  }
+  values.map(value => args_review_evidence(value))
+}
+
+///|
+fn args_review_artifact(
+  value : Json,
+) -> @domain.ReviewArtifact raise SchemaError {
+  let fields = match value {
+    Json::Object(fields) => fields
+    _ => raise Schema("review artifact entries must be objects")
+  }
+  args_allowlist(fields, ["kind", "label", "uri_or_digest"])
+  let kind = match args_string(fields, "kind") {
+    "file" => @domain.ReviewArtifactKind::File
+    "diff" => @domain.ReviewArtifactKind::Diff
+    "log" => @domain.ReviewArtifactKind::Log
+    "screenshot" => @domain.ReviewArtifactKind::Screenshot
+    "url" => @domain.ReviewArtifactKind::Url
+    _ =>
+      raise Schema(
+        "field 'review.artifacts.kind' must be one of: file, diff, log, screenshot, url",
+      )
+  }
+  @domain.ReviewArtifact::from_record(
+    kind~,
+    label=args_string(fields, "label"),
+    uri_or_digest=args_string(fields, "uri_or_digest"),
+  )
+}
+
+///|
+/// `null` is an explicit clear; an object is a full report, never a patch.
+fn args_review(
+  fields : Map[String, Json],
+  key : String,
+) -> @domain.ReviewReport? raise SchemaError {
+  let report = match fields.get(key) {
+    Some(Json::Null) => return None
+    Some(Json::Object(report)) => report
+    Some(_) => raise Schema("field '\{key}' must be an object or null")
+    None => raise Schema("missing field '\{key}'")
+  }
+  args_allowlist(report, [
+    "outcome", "summary", "changes", "verification", "risks", "notes", "open_questions",
+    "artifacts",
+  ])
+  let artifacts = match report.get("artifacts") {
+    Some(Json::Array(values)) =>
+      values.map(value => args_review_artifact(value))
+    Some(_) =>
+      raise Schema("field 'review.artifacts' must be an array of objects")
+    None => raise Schema("missing field 'review.artifacts'")
+  }
+  Some(
+    @domain.ReviewReport::from_record(
+      outcome=args_string(report, "outcome"),
+      summary=args_string(report, "summary"),
+      changes=args_string_array(report, "changes"),
+      verification=args_review_evidence_array(report, "verification"),
+      risks=args_string_array(report, "risks"),
+      notes=args_string_array(report, "notes"),
+      open_questions=args_string_array(report, "open_questions"),
+      artifacts~,
+    ),
+  )
+}
+
+///|
+fn decode_set_review_report(
+  fields : Map[String, Json],
+  at_ms : Int64,
+  expected_revision : Int64,
+) -> @domain.BoardCommand raise SchemaError {
+  args_allowlist(fields, ["id", "review"])
+  let id = args_task_id(fields, "id")
+  let review = args_review(fields, "review")
+  @domain.SetReviewReport(id~, review~, at_ms~, expected_revision~)
+}
+
+///|
 fn decode_move_task(
   fields : Map[String, Json],
   at_ms : Int64,
   expected_revision : Int64,
 ) -> @domain.BoardCommand raise SchemaError {
   args_allowlist(fields, ["id", "to"])
+
   let id = args_task_id(fields, "id")
   let to = args_stage(fields, "to")
   @domain.MoveTask(id~, to~, at_ms~, expected_revision~)
@@ -412,6 +544,7 @@ fn command_parser(
     "board.task.update" => Some(decode_update_task)
     "board.task.set_dependencies" => Some(decode_set_dependencies)
     "board.task.set_model" => Some(decode_set_task_model)
+    "board.task.set_review_report" => Some(decode_set_review_report)
     "board.task.move" => Some(decode_move_task)
     "board.task.delete" => Some(decode_delete_task)
     "board.attempt.queue" => Some(decode_queue_attempt)
@@ -430,7 +563,7 @@ fn command_parser(
 /// accepts no timestamp or revision from the payload. Rejections correlate:
 /// both cases carry the frame's `command_id`, so a caller can always answer
 /// the exact frame, even when that id is empty. The command name must be one
-/// of the eight fixed names; an empty `command_id` or an unknown name is
+/// of the ten fixed names; an empty `command_id` or an unknown name is
 /// `InvalidCommand` (no schema can be selected), every args schema deviation
 /// is `InvalidArguments`.
 ///

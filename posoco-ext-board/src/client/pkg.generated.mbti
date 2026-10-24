@@ -24,6 +24,8 @@ pub fn set_task_dependencies_command(String, Int64, id~ : String, dependencies~ 
 
 pub fn set_task_model_command(String, Int64, id~ : String, model~ : ClientModelSelection?) -> @protocol.BoardClientCommand
 
+pub fn set_task_review_report_command(String, Int64, id~ : String, review~ : ClientReviewReport?) -> @protocol.BoardClientCommand
+
 pub fn start_attempt_command(String, Int64, id~ : String) -> @protocol.BoardClientCommand
 
 pub fn update_task_command(String, Int64, id~ : String, title? : String, description? : String, priority? : ClientBoardPriority, definition_of_done? : Array[String]) -> @protocol.BoardClientCommand
@@ -185,6 +187,7 @@ pub(all) enum ClientReviewArtifactKind {
 } derive(Eq)
 pub fn ClientReviewArtifactKind::equal(Self, Self) -> Bool
 pub fn ClientReviewArtifactKind::not_equal(Self, Self) -> Bool
+pub fn ClientReviewArtifactKind::to_wire(Self) -> String
 
 pub(all) enum ClientReviewDecision {
   Pending
@@ -212,6 +215,7 @@ pub(all) enum ClientReviewEvidenceKind {
 } derive(Eq)
 pub fn ClientReviewEvidenceKind::equal(Self, Self) -> Bool
 pub fn ClientReviewEvidenceKind::not_equal(Self, Self) -> Bool
+pub fn ClientReviewEvidenceKind::to_wire(Self) -> String
 
 pub(all) enum ClientReviewEvidenceResult {
   Passed
@@ -221,6 +225,7 @@ pub(all) enum ClientReviewEvidenceResult {
 } derive(Eq)
 pub fn ClientReviewEvidenceResult::equal(Self, Self) -> Bool
 pub fn ClientReviewEvidenceResult::not_equal(Self, Self) -> Bool
+pub fn ClientReviewEvidenceResult::to_wire(Self) -> String
 
 pub struct ClientReviewReport {
   outcome : String
