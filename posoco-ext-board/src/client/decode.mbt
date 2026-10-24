@@ -134,6 +134,101 @@ fn review(value : Json) -> ClientReviewDecision? raise DecodeFailure {
 }
 
 ///|
+fn model(value : Json) -> ClientModelSelection? raise DecodeFailure {
+  match value {
+    Null => None
+    Object(obj) => {
+      let effort = match obj.get("effort") {
+        None | Some(Null) => None
+        Some(value) => Some(text(value))
+      }
+      Some({ slot: text(required(obj, "slot")), effort, })
+    }
+    _ => raise DecodeFailure("expected model object or null")
+  }
+}
+
+///|
+fn review_evidence_kind(
+  value : Json,
+) -> ClientReviewEvidenceKind raise DecodeFailure {
+  match text(value) {
+    "command" => Command
+    "test" => Test
+    "manual" => Manual
+    "artifact" => Artifact
+    _ => raise DecodeFailure("unknown review evidence kind")
+  }
+}
+
+///|
+fn review_evidence_result(
+  value : Json,
+) -> ClientReviewEvidenceResult raise DecodeFailure {
+  match text(value) {
+    "passed" => Passed
+    "failed" => Failed
+    "not_run" => NotRun
+    "unknown" => Unknown
+    _ => raise DecodeFailure("unknown review evidence result")
+  }
+}
+
+///|
+fn review_artifact_kind(
+  value : Json,
+) -> ClientReviewArtifactKind raise DecodeFailure {
+  match text(value) {
+    "file" => File
+    "diff" => Diff
+    "log" => Log
+    "screenshot" => Screenshot
+    "url" => Url
+    _ => raise DecodeFailure("unknown review artifact kind")
+  }
+}
+
+///|
+fn review_evidence(value : Json) -> ClientReviewEvidence raise DecodeFailure {
+  let obj = fields(value)
+  {
+    kind: review_evidence_kind(required(obj, "kind")),
+    label: text(required(obj, "label")),
+    result: review_evidence_result(required(obj, "result")),
+    detail: text(required(obj, "detail")),
+  }
+}
+
+///|
+fn review_artifact(value : Json) -> ClientReviewArtifact raise DecodeFailure {
+  let obj = fields(value)
+  {
+    kind: review_artifact_kind(required(obj, "kind")),
+    label: text(required(obj, "label")),
+    uri_or_digest: text(required(obj, "uri_or_digest")),
+  }
+}
+
+///|
+fn review_report(value : Json) -> ClientReviewReport raise DecodeFailure {
+  let obj = fields(value)
+  {
+    outcome: text(required(obj, "outcome")),
+    summary: text(required(obj, "summary")),
+    changes: strings(required(obj, "changes")),
+    verification: items(required(obj, "verification")).map(value => {
+      review_evidence(value)
+    }),
+    risks: strings(required(obj, "risks")),
+    notes: strings(required(obj, "notes")),
+    open_questions: strings(required(obj, "open_questions")),
+    artifacts: items(required(obj, "artifacts")).map(value => {
+      review_artifact(value)
+    }),
+  }
+}
+
+///|
 fn task(value : Json) -> ClientBoardTask raise DecodeFailure {
   let obj = fields(value)
   {
@@ -147,6 +242,14 @@ fn task(value : Json) -> ClientBoardTask raise DecodeFailure {
     created_at_ms: integer(required(obj, "created_at_ms")),
     updated_at_ms: integer(required(obj, "updated_at_ms")),
     ready_since_ms: nullable_integer(required(obj, "ready_since_ms")),
+    model: match obj.get("model") {
+      Some(value) => model(value)
+      None => None
+    },
+    review: match obj.get("review") {
+      None | Some(Null) => None
+      Some(value) => Some(review_report(value))
+    },
   }
 }
 
@@ -227,6 +330,7 @@ fn event_entity(
     "board.task.created"
     | "board.task.updated"
     | "board.task.dependencies_changed"
+    | "board.task.model_changed"
     | "board.task.stage_changed" => {
       let entity = task(required(obj, "task"))
       guard text(required(obj, "task_id")) == entity.id else {

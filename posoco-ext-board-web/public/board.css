@@ -649,6 +649,68 @@ button {
   background: var(--warn);
 }
 
+/* Model chip: inheriting is the quiet default and must never look pinned;
+   pinned is a deliberate choice, so it earns weight without a button. */
+.model-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-chip.is-inherit {
+  background: transparent;
+  color: var(--faint);
+  padding-inline: 0;
+  font-style: italic;
+}
+
+.model-chip.is-inherit::before {
+  content: "↳";
+  font-style: normal;
+}
+
+.model-chip.is-pinned {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.model-chip.is-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* Model picker: chips and selects share one block; both wrap on narrow
+   sheets instead of squeezing two controls into one row. */
+.model-section {
+  gap: 10px;
+}
+
+.model-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.model-picker > .field {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.model-picker-note {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.model-picker-note.is-warn {
+  color: var(--warn);
+}
+
 .card-foot {
   display: flex;
   align-items: center;

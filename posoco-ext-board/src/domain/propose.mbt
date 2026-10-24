@@ -122,6 +122,8 @@ pub fn BoardDomain::propose(
       )
     SetDependencies(id~, dependencies~, at_ms~, ..) =>
       propose_set_dependencies(state, id, dependencies, at_ms)
+    SetTaskModel(id~, model~, at_ms~, ..) =>
+      propose_set_model(state, id, model, at_ms)
     MoveTask(id~, to~, at_ms~, ..) => propose_move(state, id, to, at_ms)
     DeleteTask(id~, at_ms~, ..) => propose_delete(state, id, at_ms)
     QueueAttempt(id~, task~, kind~, at_ms~, ..) =>
@@ -189,6 +191,8 @@ fn propose_create(
     created_at_ms: at_ms,
     updated_at_ms: at_ms,
     ready_since_ms: None,
+    model: None,
+    review: None,
   }
   next.put_task(task)
   next.bump_revision()
@@ -287,6 +291,51 @@ fn propose_set_dependencies(
     // command inputs just like the committed state.
     events: [DependenciesSet(id~, dependencies=dependencies.copy(), at_ms~)],
   })
+}
+
+///|
+/// Pin or clear the work item's model. The domain validates shape only; the
+/// host validates the slot against the current modelport catalog.
+fn propose_set_model(
+  state : BoardState,
+  id : BoardTaskId,
+  model : ModelSelection?,
+  at_ms : Int64,
+) -> Result[BoardProposal, BoardError] {
+  if id.value == "" {
+    return Err(InvalidInput(reason="task id must not be empty"))
+  }
+  if invalid_time(at_ms) {
+    return Err(InvalidInput(reason="updated_at_ms must not be negative"))
+  }
+  let task = match state.task(id) {
+    Some(task) => task
+    None => return Err(TaskMissing(task=id))
+  }
+  match task.stage {
+    Done | Cancelled =>
+      return Err(
+        InvalidInput(reason="a terminal ticket cannot change its model"),
+      )
+    _ => ()
+  }
+  match model {
+    Some(selection) => {
+      if selection.slot.trim().is_empty() {
+        return Err(InvalidInput(reason="model slot must not be empty"))
+      }
+      match selection.effort {
+        Some(effort) if effort.trim().is_empty() =>
+          return Err(InvalidInput(reason="model effort must not be empty"))
+        _ => ()
+      }
+    }
+    None => ()
+  }
+  let next = state.clone_detached()
+  next.put_task({ ..task, model, updated_at_ms: at_ms, })
+  next.bump_revision()
+  Ok({ next_state: next, events: [TaskModelChanged(id~, model~, at_ms~)], })
 }
 
 ///|
@@ -665,6 +714,8 @@ fn propose_expand_graph(
       created_at_ms: at_ms,
       updated_at_ms: at_ms,
       ready_since_ms: None,
+      model: None,
+      review: None,
     }
     next.put_task(task)
     tasks.push(task.copy_detached())

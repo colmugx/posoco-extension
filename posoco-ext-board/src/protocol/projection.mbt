@@ -116,9 +116,104 @@ fn wire_optional_decision(value : @domain.ReviewDecision?) -> Json {
 }
 
 ///|
-/// Full committed task on the wire: all ten record fields, snake_case enum
-/// strings and JSON null for the absent `ready_since_ms`. The nested arrays
-/// are re-allocated, never aliased from the domain record.
+fn wire_optional_model(value : @domain.ModelSelection?) -> Json {
+  match value {
+    Some(model) =>
+      Json::object({
+        "slot": Json::string(model.slot),
+        "effort": match model.effort {
+          Some(effort) => Json::string(effort)
+          None => Json::null()
+        },
+      })
+    None => Json::null()
+  }
+}
+
+///|
+fn wire_evidence_kind(value : @domain.ReviewEvidenceKind) -> Json {
+  Json::string(
+    match value {
+      Command => "command"
+      Test => "test"
+      Manual => "manual"
+      Artifact => "artifact"
+    },
+  )
+}
+
+///|
+fn wire_evidence_result(value : @domain.ReviewEvidenceResult) -> Json {
+  Json::string(
+    match value {
+      Passed => "passed"
+      Failed => "failed"
+      NotRun => "not_run"
+      Unknown => "unknown"
+    },
+  )
+}
+
+///|
+fn wire_artifact_kind(value : @domain.ReviewArtifactKind) -> Json {
+  Json::string(
+    match value {
+      File => "file"
+      Diff => "diff"
+      Log => "log"
+      Screenshot => "screenshot"
+      Url => "url"
+    },
+  )
+}
+
+///|
+fn wire_strings(values : Array[String]) -> Json {
+  Json::array(values.map(value => Json::string(value)))
+}
+
+///|
+fn wire_evidence(evidence : @domain.ReviewEvidence) -> Json {
+  Json::object({
+    "kind": wire_evidence_kind(evidence.kind),
+    "label": Json::string(evidence.label),
+    "result": wire_evidence_result(evidence.result),
+    "detail": Json::string(evidence.detail),
+  })
+}
+
+///|
+fn wire_artifact(artifact : @domain.ReviewArtifact) -> Json {
+  Json::object({
+    "kind": wire_artifact_kind(artifact.kind),
+    "label": Json::string(artifact.label),
+    "uri_or_digest": Json::string(artifact.uri_or_digest),
+  })
+}
+
+///|
+fn wire_optional_review(value : @domain.ReviewReport?) -> Json {
+  match value {
+    Some(report) =>
+      Json::object({
+        "outcome": Json::string(report.outcome),
+        "summary": Json::string(report.summary),
+        "changes": wire_strings(report.changes),
+        "verification": Json::array(report.verification.map(wire_evidence)),
+        "risks": wire_strings(report.risks),
+        "notes": wire_strings(report.notes),
+        "open_questions": wire_strings(report.open_questions),
+        "artifacts": Json::array(report.artifacts.map(wire_artifact)),
+      })
+    None => Json::null()
+  }
+}
+
+///|
+/// Full committed task on the wire: all record fields, snake_case enum
+/// strings and JSON null for the absent `ready_since_ms`, `model` and
+/// `review`. The nested arrays are re-allocated, never aliased from the
+/// domain record.
 pub fn task_to_json(task : @domain.BoardTask) -> Json {
   Json::object({
     "id": Json::string(task.id.value),
@@ -133,6 +228,8 @@ pub fn task_to_json(task : @domain.BoardTask) -> Json {
     "created_at_ms": wire_number(task.created_at_ms),
     "updated_at_ms": wire_number(task.updated_at_ms),
     "ready_since_ms": wire_optional_number(task.ready_since_ms),
+    "model": wire_optional_model(task.model),
+    "review": wire_optional_review(task.review),
   })
 }
 
@@ -247,6 +344,13 @@ pub fn project_event(
         ("task_id", Json::string(id.value)),
         ("task", task_to_json(committed_task(snapshot, id))),
         ("dependencies", wire_ids(dependencies)),
+        ("at_ms", wire_number(at_ms)),
+      ])
+    TaskModelChanged(id~, model~, at_ms~) =>
+      wire_event(kind="board.task.model_changed", payload=[
+        ("task_id", Json::string(id.value)),
+        ("task", task_to_json(committed_task(snapshot, id))),
+        ("model", wire_optional_model(model)),
         ("at_ms", wire_number(at_ms)),
       ])
     TaskStageChanged(id~, from~, to~, at_ms~) =>

@@ -29,6 +29,12 @@ pub(all) enum BoardCommand {
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
+  SetTaskModel(
+    id~ : BoardTaskId,
+    model~ : ModelSelection?,
+    at_ms~ : Int64,
+    expected_revision~ : Int64
+  )
   MoveTask(
     id~ : BoardTaskId,
     to~ : BoardStage,
@@ -83,6 +89,7 @@ fn BoardCommand::expected_revision(self : BoardCommand) -> Int64 {
     CreateTask(expected_revision~, ..)
     | UpdateTask(expected_revision~, ..)
     | SetDependencies(expected_revision~, ..)
+    | SetTaskModel(expected_revision~, ..)
     | MoveTask(expected_revision~, ..)
     | DeleteTask(expected_revision~, ..)
     | QueueAttempt(expected_revision~, ..)
@@ -176,6 +183,7 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       )
     MoveTask(..)
     | DeleteTask(..)
+    | SetTaskModel(..)
     | QueueAttempt(..)
     | StartAttempt(..)
     | FinishAttempt(..)

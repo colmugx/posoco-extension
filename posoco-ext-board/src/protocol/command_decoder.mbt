@@ -292,6 +292,45 @@ fn decode_set_dependencies(
 }
 
 ///|
+fn args_model(
+  fields : Map[String, Json],
+  key : String,
+) -> @domain.ModelSelection? raise SchemaError {
+  match fields.get(key) {
+    Some(Json::Null) => None
+    Some(Json::Object(model)) => {
+      for field in model.keys() {
+        if field != "slot" && field != "effort" {
+          raise Schema("field '\{key}' has unknown field '\{field}'")
+        }
+      }
+      let slot = args_string(model, "slot")
+      let effort = match model.get("effort") {
+        Some(Json::Null) | None => None
+        Some(Json::String(value)) => Some(value)
+        Some(_) =>
+          raise Schema("field '\{key}.effort' must be a string or null")
+      }
+      Some(@domain.ModelSelection::ModelSelection(slot~, effort~))
+    }
+    Some(_) => raise Schema("field '\{key}' must be an object or null")
+    None => raise Schema("missing field '\{key}'")
+  }
+}
+
+///|
+fn decode_set_task_model(
+  fields : Map[String, Json],
+  at_ms : Int64,
+  expected_revision : Int64,
+) -> @domain.BoardCommand raise SchemaError {
+  args_allowlist(fields, ["id", "model"])
+  let id = args_task_id(fields, "id")
+  let model = args_model(fields, "model")
+  @domain.SetTaskModel(id~, model~, at_ms~, expected_revision~)
+}
+
+///|
 fn decode_move_task(
   fields : Map[String, Json],
   at_ms : Int64,
@@ -372,6 +411,7 @@ fn command_parser(
     "board.task.create" => Some(decode_create_task)
     "board.task.update" => Some(decode_update_task)
     "board.task.set_dependencies" => Some(decode_set_dependencies)
+    "board.task.set_model" => Some(decode_set_task_model)
     "board.task.move" => Some(decode_move_task)
     "board.task.delete" => Some(decode_delete_task)
     "board.attempt.queue" => Some(decode_queue_attempt)

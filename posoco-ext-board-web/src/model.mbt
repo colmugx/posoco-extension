@@ -63,14 +63,61 @@ priv struct TicketRun {
 } derive(Eq)
 
 ///|
+/// One selectable model as the host advertises it in `ticket_state`. The
+/// catalog is runtime state: it is never persisted with the ticket journal,
+/// and every field except the stable slot id may be missing.
+priv struct ModelOption {
+  id : String
+  label : String
+  provider : String
+  model : String
+  efforts : Array[String]
+  default_effort : String?
+  context_window : Int64?
+  capabilities : Array[String]
+} derive(Eq)
+
+///|
+/// The host's per-ticket model catalog. An absent catalog and
+/// `selectable=false` both mean the picker stays read-only, so a pinned
+/// ticket keeps the model it already has instead of silently falling back.
+priv struct ModelCatalog {
+  selectable : Bool
+  kind : String
+  models : Array[ModelOption]
+} derive(Eq)
+
+///|
+fn ModelCatalog::unavailable() -> ModelCatalog {
+  { selectable: false, kind: "", models: [] }
+}
+
+///|
+fn ModelCatalog::find(self : ModelCatalog, slot : String) -> ModelOption? {
+  self.models.filter(model => model.id == slot).get(0)
+}
+
+///|
+/// One ticket's model choice: the stable slot id plus an optional effort.
+/// `None` in `Msg::TicketSetModel` (and on the wire) means inherit the
+/// current Cetas model and keep following `/model`.
+priv struct ModelChoice {
+  slot : String
+  effort : String?
+} derive(Eq)
+
+///|
 priv struct TicketState {
   questions : Array[TicketQuestion]
   runs : Array[TicketRun]
+  /// Absent when this frame did not carry a catalog; the previous catalog is
+  /// retained so a `ticket_result` cannot blank the picker mid-edit.
+  model_selection : ModelCatalog?
 } derive(Eq)
 
 ///|
 fn TicketState::empty() -> TicketState {
-  { questions: [], runs: [], }
+  { questions: [], runs: [], model_selection: None }
 }
 
 ///|
@@ -279,6 +326,7 @@ priv enum Msg {
   TicketAnswered(String, TicketAnswer)
   TicketShape(String)
   TicketRun(String)
+  TicketSetModel(String, ModelChoice?)
   TicketRunReady
   TicketResultDismissed(String)
   TicketResult(Bool, String?, TicketState?)

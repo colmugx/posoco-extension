@@ -156,6 +156,36 @@ pub fn set_task_dependencies_command(
 }
 
 ///|
+/// Pin or clear one ticket's model. The host validates the slot against the
+/// current modelport catalog; `model=None` is an explicit clear.
+pub fn set_task_model_command(
+  command_id : String,
+  expected_revision : Int64,
+  id~ : String,
+  model~ : ClientModelSelection?,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.task.set_model",
+    args: {
+      "id": Json(id),
+      "model": match model {
+        Some(value) =>
+          Json::object({
+            "slot": Json(value.slot),
+            "effort": match value.effort {
+              Some(effort) => Json(effort)
+              None => Json::null()
+            },
+          })
+        None => Json::null()
+      },
+    },
+  }
+}
+
+///|
 /// Canonical v1 attempt kind spelling, shared by every attempt builder.
 ///
 /// ```mbt check

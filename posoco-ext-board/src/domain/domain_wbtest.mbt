@@ -44,6 +44,16 @@ fn delete_cmd(id : String, rev : Int64, at~ : Int64 = 3000L) -> BoardCommand {
 }
 
 ///|
+fn set_model_cmd(
+  id : String,
+  rev : Int64,
+  model : ModelSelection?,
+  at~ : Int64 = 4000L,
+) -> BoardCommand {
+  SetTaskModel(id=tid(id), model~, at_ms=at, expected_revision=rev)
+}
+
+///|
 fn accept(state : BoardState, command : BoardCommand) -> BoardProposal raise {
   match BoardDomain::propose(state, command) {
     Ok(proposal) => proposal
@@ -982,6 +992,8 @@ test "queries return deep copies that never alias committed state" {
         created_at_ms: 1000L,
         updated_at_ms: 1000L,
         ready_since_ms: None,
+        model: None,
+        review: None,
       },
     ],
     attempts: [],
@@ -1158,4 +1170,141 @@ test "review recording is independent of attempt finish" {
   assert_eq(done.review, Some(Approved))
   assert_eq(done.started_at_ms, Some(1900L))
   assert_eq(done.finished_at_ms, Some(2000L))
+}
+
+///|
+test "set model pins and clears a ticket without changing its stage" {
+  let state = task_at(Refining)
+  let revision = state.revision()
+  let model = ModelSelection::ModelSelection(
+    slot="openai/gpt-5.2",
+    effort=Some("high"),
+  )
+  let proposal = accept(state, set_model_cmd("t", revision, Some(model)))
+  let task = proposal.next_state.task(tid("t")).unwrap()
+  assert_eq(task.stage, Refining)
+  assert_eq(task.model, Some(model))
+  assert_eq(task.updated_at_ms, 4000L)
+  assert_eq(proposal.next_state.revision(), revision + 1L)
+  assert_eq(proposal.events, [
+    TaskModelChanged(id=tid("t"), model=Some(model), at_ms=4000L),
+  ])
+  let cleared = accept(
+    proposal.next_state,
+    set_model_cmd("t", revision + 1L, None, at=4100L),
+  )
+  assert_eq(cleared.next_state.task(tid("t")).unwrap().model, None)
+  assert_eq(cleared.events, [
+    TaskModelChanged(id=tid("t"), model=None, at_ms=4100L),
+  ])
+}
+
+///|
+test "invalid or terminal model changes are rejected" {
+  let state = task_at(Ready)
+  assert_eq(
+    rejection_of(
+      state,
+      set_model_cmd(
+        "t",
+        state.revision(),
+        Some(ModelSelection::ModelSelection(slot="")),
+      ),
+    ),
+    InvalidInput(reason="model slot must not be empty"),
+  )
+  let done = task_at(Done)
+  assert_eq(
+    rejection_of(
+      done,
+      set_model_cmd(
+        "t",
+        done.revision(),
+        Some(ModelSelection::ModelSelection(slot="openai/gpt-5.2")),
+      ),
+    ),
+    InvalidInput(reason="a terminal ticket cannot change its model"),
+  )
+}
+
+///|
+test "model survives a stage move" {
+  let state = task_at(Ready)
+  let model = ModelSelection::ModelSelection(slot="openai/gpt-5.2")
+  let pinned = accept(state, set_model_cmd("t", state.revision(), Some(model)))
+  let moved = accept(
+    pinned.next_state,
+    move_cmd("t", pinned.next_state.revision(), Running),
+  )
+  assert_eq(moved.next_state.task(tid("t")).unwrap().model, Some(model))
+}
+
+///|
+fn review_report_fixture() -> ReviewReport {
+  ReviewReport::from_record(
+    outcome="Task carries a review report.",
+    summary="Adds the durable schema only.",
+    changes=["Task gains an optional review."],
+    verification=[
+      ReviewEvidence::from_record(
+        kind=ReviewEvidenceKind::Test,
+        label="domain suite",
+        result=ReviewEvidenceResult::Passed,
+        detail="43 tests",
+      ),
+    ],
+    risks=["Nothing consumes the report yet."],
+    notes=[],
+    open_questions=["When does the runtime set it?"],
+    artifacts=[
+      ReviewArtifact::from_record(
+        kind=ReviewArtifactKind::File,
+        label="types.mbt",
+        uri_or_digest="src/domain/types.mbt",
+      ),
+    ],
+  )
+}
+
+///|
+test "board task review is optional and survives a detached copy" {
+  let base = BoardTask::from_record(
+    id=tid("t1"),
+    title="task t1",
+    description="",
+    stage=Created,
+    priority=Normal,
+    definition_of_done=[],
+    dependencies=[],
+    created_at_ms=1000L,
+    updated_at_ms=1000L,
+    ready_since_ms=None,
+  )
+  assert_eq(base.review, None)
+  let changes : Array[String] = ["Task gains an optional review."]
+  let report = review_report_fixture()
+  let task = BoardTask::from_record(
+    id=tid("t1"),
+    title="task t1",
+    description="",
+    stage=Created,
+    priority=Normal,
+    definition_of_done=[],
+    dependencies=[],
+    created_at_ms=1000L,
+    updated_at_ms=1000L,
+    ready_since_ms=None,
+    review=Some(report),
+  )
+  assert_eq(task.review.unwrap().changes, ["Task gains an optional review."])
+  // The report is detached on construction: mutating the caller array after
+  // the fact cannot reach the record.
+  changes.push("late")
+  assert_eq(task.review.unwrap().changes, ["Task gains an optional review."])
+  let copy = task.copy_detached()
+  assert_eq(copy, task)
+  copy.review.unwrap().changes.push("copy only")
+  copy.review.unwrap().artifacts.clear()
+  assert_eq(task.review.unwrap().changes, ["Task gains an optional review."])
+  assert_eq(task.review.unwrap().artifacts.length(), 1)
 }

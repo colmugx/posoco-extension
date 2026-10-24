@@ -262,6 +262,239 @@ fn ids_json(value : Array[@domain.BoardTaskId]) -> Json {
 }
 
 ///|
+fn optional_fields(
+  value : Json,
+  required : Array[String],
+  optional : Array[String],
+) -> Map[String, Json] raise CodecError {
+  let object = match value {
+    Json::Object(object) => object
+    _ => raise Bad("expected object")
+  }
+  for key in required {
+    if !object.contains(key) {
+      bad("missing field '\{key}'")
+    }
+  }
+  for key in object.keys() {
+    if !required.contains(key) && !optional.contains(key) {
+      bad("unexpected field '\{key}'")
+    }
+  }
+  object
+}
+
+///|
+fn model_json(value : @domain.ModelSelection?) -> Json {
+  match value {
+    Some(model) =>
+      Json::object({
+        "slot": Json::string(model.slot),
+        "effort": match model.effort {
+          Some(effort) => Json::string(effort)
+          None => Json::null()
+        },
+      })
+    None => Json::null()
+  }
+}
+
+///|
+fn model(value : Json) -> @domain.ModelSelection? raise CodecError {
+  match value {
+    Json::Null => None
+    Json::Object(object) => {
+      for key in object.keys() {
+        if key != "slot" && key != "effort" {
+          bad("unexpected model field '\{key}'")
+        }
+      }
+      let slot = match object.get("slot") {
+        Some(value) => nonempty(value)
+        None => raise Bad("model is missing slot")
+      }
+      let effort = match object.get("effort") {
+        Some(Json::Null) | None => None
+        Some(value) => Some(nonempty(value))
+      }
+      Some(@domain.ModelSelection::ModelSelection(slot~, effort~))
+    }
+    _ => raise Bad("expected model object or null")
+  }
+}
+
+///|
+fn evidence_kind_json(value : @domain.ReviewEvidenceKind) -> Json {
+  Json::string(
+    match value {
+      Command => "Command"
+      Test => "Test"
+      Manual => "Manual"
+      Artifact => "Artifact"
+    },
+  )
+}
+
+///|
+fn evidence_kind(value : Json) -> @domain.ReviewEvidenceKind raise CodecError {
+  match text(value) {
+    "Command" => Command
+    "Test" => Test
+    "Manual" => Manual
+    "Artifact" => Artifact
+    _ => raise Bad("unknown review evidence kind")
+  }
+}
+
+///|
+fn evidence_result_json(value : @domain.ReviewEvidenceResult) -> Json {
+  Json::string(
+    match value {
+      Passed => "Passed"
+      Failed => "Failed"
+      NotRun => "NotRun"
+      Unknown => "Unknown"
+    },
+  )
+}
+
+///|
+fn evidence_result(
+  value : Json,
+) -> @domain.ReviewEvidenceResult raise CodecError {
+  match text(value) {
+    "Passed" => Passed
+    "Failed" => Failed
+    "NotRun" => NotRun
+    "Unknown" => Unknown
+    _ => raise Bad("unknown review evidence result")
+  }
+}
+
+///|
+fn artifact_kind_json(value : @domain.ReviewArtifactKind) -> Json {
+  Json::string(
+    match value {
+      File => "File"
+      Diff => "Diff"
+      Log => "Log"
+      Screenshot => "Screenshot"
+      Url => "Url"
+    },
+  )
+}
+
+///|
+fn artifact_kind(value : Json) -> @domain.ReviewArtifactKind raise CodecError {
+  match text(value) {
+    "File" => File
+    "Diff" => Diff
+    "Log" => Log
+    "Screenshot" => Screenshot
+    "Url" => Url
+    _ => raise Bad("unknown review artifact kind")
+  }
+}
+
+///|
+fn strings_json(values : Array[String]) -> Json {
+  Json::array(values.map(Json::string))
+}
+
+///|
+fn strings(value : Json) -> Array[String] raise CodecError {
+  array(value).map(text)
+}
+
+///|
+/// Review evidence keeps free-form label/detail text; the identifiers and
+/// enum names are the only strictly validated parts.
+fn evidence_json(evidence : @domain.ReviewEvidence) -> Json {
+  Json::object({
+    "kind": evidence_kind_json(evidence.kind),
+    "label": Json::string(evidence.label),
+    "result": evidence_result_json(evidence.result),
+    "detail": Json::string(evidence.detail),
+  })
+}
+
+///|
+fn evidence_decode(value : Json) -> @domain.ReviewEvidence raise CodecError {
+  let f = fields(value, ["kind", "label", "result", "detail"])
+  @domain.ReviewEvidence::from_record(
+    kind=evidence_kind(f["kind"]),
+    label=nonempty(f["label"]),
+    result=evidence_result(f["result"]),
+    detail=text(f["detail"]),
+  )
+}
+
+///|
+fn artifact_json(artifact : @domain.ReviewArtifact) -> Json {
+  Json::object({
+    "kind": artifact_kind_json(artifact.kind),
+    "label": Json::string(artifact.label),
+    "uri_or_digest": Json::string(artifact.uri_or_digest),
+  })
+}
+
+///|
+fn artifact_decode(value : Json) -> @domain.ReviewArtifact raise CodecError {
+  let f = fields(value, ["kind", "label", "uri_or_digest"])
+  @domain.ReviewArtifact::from_record(
+    kind=artifact_kind(f["kind"]),
+    label=nonempty(f["label"]),
+    uri_or_digest=nonempty(f["uri_or_digest"]),
+  )
+}
+
+///|
+/// The report is durable data, not activity: only the curated fields are
+/// persisted, each ordered exactly as the writer produced it.
+fn review_json(report : @domain.ReviewReport?) -> Json {
+  match report {
+    Some(report) =>
+      Json::object({
+        "outcome": Json::string(report.outcome),
+        "summary": Json::string(report.summary),
+        "changes": strings_json(report.changes),
+        "verification": Json::array(report.verification.map(evidence_json)),
+        "risks": strings_json(report.risks),
+        "notes": strings_json(report.notes),
+        "open_questions": strings_json(report.open_questions),
+        "artifacts": Json::array(report.artifacts.map(artifact_json)),
+      })
+    None => Json::null()
+  }
+}
+
+///|
+fn review(value : Json) -> @domain.ReviewReport? raise CodecError {
+  match value {
+    Json::Null => None
+    Json::Object(_) => {
+      let f = fields(value, [
+        "outcome", "summary", "changes", "verification", "risks", "notes", "open_questions",
+        "artifacts",
+      ])
+      Some(
+        @domain.ReviewReport::from_record(
+          outcome=nonempty(f["outcome"]),
+          summary=text(f["summary"]),
+          changes=strings(f["changes"]),
+          verification=array(f["verification"]).map(evidence_decode),
+          risks=strings(f["risks"]),
+          notes=strings(f["notes"]),
+          open_questions=strings(f["open_questions"]),
+          artifacts=array(f["artifacts"]).map(artifact_decode),
+        ),
+      )
+    }
+    _ => raise Bad("expected review object or null")
+  }
+}
+
+///|
 fn task_json(task : @domain.BoardTask) -> Json {
   Json::object({
     "id": Json::string(task.id.value),
@@ -274,15 +507,23 @@ fn task_json(task : @domain.BoardTask) -> Json {
     "created_at_ms": number(task.created_at_ms),
     "updated_at_ms": number(task.updated_at_ms),
     "ready_since_ms": optional_number(task.ready_since_ms),
+    "model": model_json(task.model),
+    "review": review_json(task.review),
   })
 }
 
 ///|
+/// `model` and `review` are optional keys so every pre-existing store keeps
+/// decoding with both absent.
 fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
-  let f = fields(value, [
-    "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
-    "created_at_ms", "updated_at_ms", "ready_since_ms",
-  ])
+  let f = optional_fields(
+    value,
+    [
+      "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
+      "created_at_ms", "updated_at_ms", "ready_since_ms",
+    ],
+    ["model", "review"],
+  )
   @domain.BoardTask::from_record(
     id=task_id(f["id"]),
     title=nonempty(f["title"]),
@@ -294,6 +535,14 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     created_at_ms=integer(f["created_at_ms"]),
     updated_at_ms=integer(f["updated_at_ms"]),
     ready_since_ms=optional_integer(f["ready_since_ms"]),
+    model=match f.get("model") {
+      Some(value) => model(value)
+      None => None
+    },
+    review=match f.get("review") {
+      Some(value) => review(value)
+      None => None
+    },
   )
 }
 

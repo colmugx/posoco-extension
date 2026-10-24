@@ -97,6 +97,16 @@ fn all_events() -> Array[@domain.BoardEvent] {
       decision=@domain.Approved,
       at_ms=8L,
     ),
+    @domain.TaskModelChanged(
+      id=tid("a"),
+      model=Some(
+        @domain.ModelSelection::ModelSelection(
+          slot="openai/gpt-5.2",
+          effort=Some("high"),
+        ),
+      ),
+      at_ms=9L,
+    ),
   ]
 }
 
@@ -833,12 +843,317 @@ test "from domain snapshot converts every field and detaches arrays" {
       "created_at_ms": "123",
       "updated_at_ms": "123",
       "ready_since_ms": Json::null(),
+      "model": Json::null(),
+      "review": Json::null(),
     }),
   )
   task.definition_of_done.push("late")
   source.tasks.clear()
   assert_eq(converted.tasks[0].definition_of_done, ["done"])
   assert_eq(converted.revision, 1L)
+}
+
+///|
+test "task codec roundtrips a pinned model and accepts a pre-model record" {
+  let model = @domain.ModelSelection::ModelSelection(
+    slot="openai/gpt-5.2",
+    effort=Some("high"),
+  )
+  let task = @domain.BoardTask::from_record(
+    id=tid("m1"),
+    title="Model task",
+    description="",
+    stage=@domain.Ready,
+    priority=@domain.Normal,
+    definition_of_done=[],
+    dependencies=[],
+    created_at_ms=1L,
+    updated_at_ms=2L,
+    ready_since_ms=Some(2L),
+    model=Some(model),
+  )
+  assert_eq(task_decode(task_json(task)).model, Some(model))
+  let legacy = match task_json(task) {
+    Json::Object(fields) => {
+      ignore(fields.remove("model"))
+      Json::object(fields)
+    }
+    _ => fail("expected task object")
+  }
+  let decoded = task_decode(legacy)
+  assert_eq(decoded.model, None)
+  assert_eq(decoded.id, tid("m1"))
+}
+
+///|
+fn sample_review() -> @domain.ReviewReport {
+  @domain.ReviewReport::from_record(
+    outcome="Batches survive a restart.",
+    summary="Persists the curated review report with the task.",
+    changes=["Task JSON carries review.", "Legacy stores decode as None."],
+    verification=[
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Command,
+        label="moon test src/store",
+        result=@domain.ReviewEvidenceResult::Passed,
+        detail="54 tests",
+      ),
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Manual,
+        label="restart drill",
+        result=@domain.ReviewEvidenceResult::Failed,
+        detail="journal replay rewound once",
+      ),
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Artifact,
+        label="log",
+        result=@domain.ReviewEvidenceResult::NotRun,
+        detail="",
+      ),
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Test,
+        label="unknown evidence",
+        result=@domain.ReviewEvidenceResult::Unknown,
+        detail="",
+      ),
+    ],
+    risks=["Schema is additive only; v1 stores stay readable."],
+    notes=["Evidence order is preserved verbatim."],
+    open_questions=["Should a retry keep the previous report?"],
+    artifacts=[
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::File,
+        label="codec.mbt",
+        uri_or_digest="src/store/codec.mbt",
+      ),
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::Diff,
+        label="patch",
+        uri_or_digest="sha256:abc123",
+      ),
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::Log,
+        label="run log",
+        uri_or_digest="log/2026-05-01.txt",
+      ),
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::Screenshot,
+        label="review surface",
+        uri_or_digest="sha256:def456",
+      ),
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::Url,
+        label="issue",
+        uri_or_digest="https://example.test/issues/7",
+      ),
+    ],
+  )
+}
+
+///|
+fn review_task(
+  id~ : String = "r1",
+  review~ : @domain.ReviewReport?,
+) -> @domain.BoardTask {
+  @domain.BoardTask::from_record(
+    id=tid(id),
+    title="Reviewed task",
+    description="",
+    stage=@domain.Ready,
+    priority=@domain.Normal,
+    definition_of_done=[],
+    dependencies=[],
+    created_at_ms=1L,
+    updated_at_ms=2L,
+    ready_since_ms=Some(2L),
+    review~,
+  )
+}
+
+///|
+test "task codec roundtrips a review report and keeps null as none" {
+  let report = sample_review()
+  let task = review_task(review=Some(report))
+  assert_eq(task_decode(task_json(task)).review, Some(report))
+  assert_eq(task_decode(task_json(review_task(review=None))).review, None)
+  let snapshot : @domain.BoardStateSnapshot = {
+    revision: 3L,
+    tasks: [task, review_task(id="r2", review=None)],
+    attempts: [],
+    expansions: [],
+  }
+  assert_eq(decode_snapshot(encode_snapshot(snapshot).unwrap()), Ok(snapshot))
+  let encoded = encode_snapshot(snapshot).unwrap()
+  assert_true(encoded.contains("open_questions"))
+  assert_true(encoded.contains("uri_or_digest"))
+}
+
+///|
+test "task codec accepts a legacy record without the review key" {
+  let value = match task_json(review_task(review=Some(sample_review()))) {
+    Json::Object(fields) => {
+      ignore(fields.remove("review"))
+      Json::object(fields)
+    }
+    _ => fail("expected task object")
+  }
+  let decoded = task_decode(value)
+  assert_eq(decoded.review, None)
+  assert_eq(decoded.id, tid("r1"))
+  let snapshot = match snapshot_json(fixture()) {
+    Json::Object(fields) => {
+      let tasks = match fields["tasks"] {
+        Json::Array(tasks) => tasks
+        _ => fail("expected tasks")
+      }
+      match tasks[0] {
+        Json::Object(task_fields) => {
+          ignore(task_fields.remove("review"))
+          Json::object(fields)
+        }
+        _ => fail("expected task object")
+      }
+    }
+    _ => fail("expected snapshot object")
+  }
+  let restored = decode_snapshot(snapshot.stringify()).unwrap()
+  assert_eq(restored.tasks.length(), 2)
+  assert_eq(restored.tasks[0].review, None)
+  // A pre-review schema v1 store carries neither expansions nor review and
+  // still loads unchanged.
+  let v1 = match
+    snapshot_json({
+      revision: 1L,
+      tasks: [review_task(review=Some(sample_review()))],
+      attempts: [],
+      expansions: [],
+    }) {
+    Json::Object(fields) => {
+      fields["schema_version"] = Json::number(1)
+      ignore(fields.remove("expansions"))
+      let tasks = match fields["tasks"] {
+        Json::Array(tasks) => tasks
+        _ => fail("expected tasks")
+      }
+      match tasks[0] {
+        Json::Object(task_fields) => {
+          ignore(task_fields.remove("review"))
+          Json::object(fields)
+        }
+        _ => fail("expected task object")
+      }
+    }
+    _ => fail("expected snapshot object")
+  }
+  let legacy_v1 = decode_snapshot(v1.stringify()).unwrap()
+  assert_eq(legacy_v1.revision, 1L)
+  assert_eq(legacy_v1.tasks[0].review, None)
+  assert_eq(legacy_v1.expansions, [])
+}
+
+///|
+/// The review section of the sample report task, detached for mutation.
+fn sample_review_object() -> Map[String, Json] {
+  match task_json(review_task(review=Some(sample_review()))) {
+    Json::Object(fields) =>
+      match fields["review"] {
+        Json::Object(review) => review
+        _ => abort("expected review object")
+      }
+    _ => abort("expected task object")
+  }
+}
+
+///|
+/// Decode a fresh task whose review section is `review`; true means the codec
+/// accepted it.
+fn review_accepted(review : Map[String, Json]) -> Bool {
+  let fields = match task_json(review_task(review=None)) {
+    Json::Object(fields) => fields
+    _ => abort("expected task object")
+  }
+  fields["review"] = Json::object(review)
+  try {
+    ignore(task_decode(Json::object(fields)))
+    true
+  } catch {
+    _ => false
+  }
+}
+
+///|
+/// First entry of a nested review section, detached for mutation.
+fn review_entry(
+  review : Map[String, Json],
+  section : String,
+) -> Map[String, Json] {
+  match review.get(section) {
+    Some(Json::Array(entries)) =>
+      match entries[0] {
+        Json::Object(entry) => entry
+        _ => abort("expected \{section} object")
+      }
+    _ => abort("expected \{section} array")
+  }
+}
+
+///|
+test "review report rejects unknown enums and malformed nested records" {
+  assert_true(review_accepted(sample_review_object()))
+  let empty_outcome = sample_review_object()
+  empty_outcome["outcome"] = Json::string("")
+  assert_false(review_accepted(empty_outcome))
+  for
+    key in [
+      "outcome", "summary", "changes", "verification", "risks", "notes", "open_questions",
+      "artifacts",
+    ] {
+    let review = sample_review_object()
+    ignore(review.remove(key))
+    assert_false(review_accepted(review))
+  }
+  let extra = sample_review_object()
+  extra["extra"] = Json::string("x")
+  assert_false(review_accepted(extra))
+  let wrong_summary = sample_review_object()
+  wrong_summary["summary"] = Json::number(1)
+  assert_false(review_accepted(wrong_summary))
+  let wrong_changes = sample_review_object()
+  wrong_changes["changes"] = Json::string("x")
+  assert_false(review_accepted(wrong_changes))
+  for
+    (section, key) in [
+      ("verification", "kind"),
+      ("verification", "label"),
+      ("verification", "result"),
+      ("verification", "detail"),
+      ("artifacts", "kind"),
+      ("artifacts", "label"),
+      ("artifacts", "uri_or_digest"),
+    ] {
+    let review = sample_review_object()
+    ignore(review_entry(review, section).remove(key))
+    assert_false(review_accepted(review))
+  }
+  for
+    (section, key) in [
+      ("verification", "kind"),
+      ("verification", "result"),
+      ("artifacts", "kind"),
+    ] {
+    let review = sample_review_object()
+    review_entry(review, section)[key] = Json::string("nope")
+    assert_false(review_accepted(review))
+  }
+  let extra_evidence = sample_review_object()
+  review_entry(extra_evidence, "verification")["extra"] = Json::string("x")
+  assert_false(review_accepted(extra_evidence))
+  let empty_label = sample_review_object()
+  review_entry(empty_label, "verification")["label"] = Json::string("")
+  assert_false(review_accepted(empty_label))
+  let empty_digest = sample_review_object()
+  review_entry(empty_digest, "artifacts")["uri_or_digest"] = Json::string("")
+  assert_false(review_accepted(empty_digest))
 }
 
 ///|

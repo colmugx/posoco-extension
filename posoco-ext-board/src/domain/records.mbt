@@ -1,6 +1,54 @@
 ///|
 /// Construct a detached snapshot record, not a committed state or a domain
 /// transition. All fields are preserved verbatim; storage validates records.
+pub fn ReviewEvidence::from_record(
+  kind~ : ReviewEvidenceKind,
+  label~ : String,
+  result~ : ReviewEvidenceResult,
+  detail~ : String,
+) -> ReviewEvidence {
+  { kind, label, result, detail, }
+}
+
+///|
+/// Construct a detached snapshot record, not a committed state or a domain
+/// transition. All fields are preserved verbatim; storage validates records.
+pub fn ReviewArtifact::from_record(
+  kind~ : ReviewArtifactKind,
+  label~ : String,
+  uri_or_digest~ : String,
+) -> ReviewArtifact {
+  { kind, label, uri_or_digest, }
+}
+
+///|
+/// Construct a detached snapshot record, not a committed state or a domain
+/// transition. All fields are preserved verbatim; storage validates records.
+pub fn ReviewReport::from_record(
+  outcome~ : String,
+  summary~ : String,
+  changes~ : Array[String],
+  verification~ : Array[ReviewEvidence],
+  risks~ : Array[String],
+  notes~ : Array[String],
+  open_questions~ : Array[String],
+  artifacts~ : Array[ReviewArtifact],
+) -> ReviewReport {
+  {
+    outcome,
+    summary,
+    changes: changes.copy(),
+    verification: verification.copy(),
+    risks: risks.copy(),
+    notes: notes.copy(),
+    open_questions: open_questions.copy(),
+    artifacts: artifacts.copy(),
+  }
+}
+
+///|
+/// Construct a detached snapshot record, not a committed state or a domain
+/// transition. All fields are preserved verbatim; storage validates records.
 pub fn BoardTask::from_record(
   id~ : BoardTaskId,
   title~ : String,
@@ -12,6 +60,8 @@ pub fn BoardTask::from_record(
   created_at_ms~ : Int64,
   updated_at_ms~ : Int64,
   ready_since_ms~ : Int64?,
+  model~ : ModelSelection? = None,
+  review~ : ReviewReport? = None,
 ) -> BoardTask {
   {
     id,
@@ -24,6 +74,11 @@ pub fn BoardTask::from_record(
     created_at_ms,
     updated_at_ms,
     ready_since_ms,
+    model,
+    review: match review {
+      Some(report) => Some(report.copy_detached())
+      None => None
+    },
   }
 }
 

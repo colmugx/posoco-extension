@@ -119,6 +119,98 @@ fn detail_next_action(
 }
 
 ///|
+/// The ticket's model: the compact chip plus, when the host offers a
+/// selectable catalog, the slot/effort picker. `Inherit current` is both the
+/// default and the explicit clear action, and nothing here changes state
+/// optimistically: the controls keep rendering the authoritative task model
+/// until the host answers.
+fn model_block(
+  model : Model,
+  task : @client.ClientBoardTask,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let catalog = ticket_model_catalog(model)
+  @html.section(class="detail-section model-section", [
+    @html.h2(class="section-title", "Model"),
+    model_chip(catalog, task.model),
+    if !catalog.selectable {
+      // Keep the pinned model visible read-only instead of hiding the fact
+      // that this host cannot offer a picker.
+      @html.p(class="section-note", model_unavailable_note(task.model))
+    } else {
+      model_picker(model, task, catalog, emit)
+    },
+  ])
+}
+
+///|
+/// One model per ticket. The slot select takes stable slot ids as values, and
+/// the effort select only appears once the chosen slot advertises efforts.
+fn model_picker(
+  model : Model,
+  task : @client.ClientBoardTask,
+  catalog : ModelCatalog,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let blocked = model_picker_blocked(model, task.id)
+  let locked = blocked is Some(_)
+  let selection = task.model
+  let pinned = match selection {
+    Some(selection) => catalog.find(selection.slot)
+    None => None
+  }
+  let effort = match pinned {
+    Some(option) =>
+      if option.efforts.length() == 0 {
+        @html.nothing
+      } else {
+        labeled_field(
+          "ticket-model-effort",
+          "Effort",
+          @html.select(
+            id="ticket-model-effort",
+            name="ticket_model_effort",
+            disabled=locked,
+            on_change=value => emit(TicketSetModel(task.id, Some(model_choice_with_effort(option.id, value)))),
+            model_select_html(model_effort_options(option, match selection {
+              Some(selection) => selection.effort
+              None => None
+            })),
+          ),
+        )
+      }
+    None => @html.nothing
+  }
+  @html.div(class="model-picker", [
+    labeled_field(
+      "ticket-model-slot",
+      "Model",
+      @html.select(
+        id="ticket-model-slot",
+        name="ticket_model",
+        disabled=locked,
+        on_change=value => emit(TicketSetModel(task.id, model_choice_from_slot(value))),
+        model_select_html(model_slot_options(catalog, selection)),
+      ),
+    ),
+    effort,
+    @html.p(
+      class=if locked {
+        "model-picker-note is-warn"
+      } else {
+        "model-picker-note"
+      },
+      attrs=@html.Attrs::build().role("status").aria_live("polite"),
+      match blocked {
+        Some(text) => text
+        None =>
+          "Inherit follows the current Cetas model. A pinned model keeps its slot and effort."
+      },
+    ),
+  ])
+}
+
+///|
 /// Review is the moment the pipeline exists for: a recorded decision is
 /// final, so it is confirmed and never bundled with the move.
 fn review_block(
@@ -209,6 +301,7 @@ fn task_details(
         @html.p(class="sheet-meta", [
           @html.span(class="chip", priority_short(task.priority) + " " + priority_label(task.priority)),
           @html.span(class="chip", ui_stage_label(task.stage)),
+          model_chip(ticket_model_catalog(model), task.model),
           @html.span(class="chip is-quiet", task.id),
         ]),
       ]),
@@ -229,6 +322,7 @@ fn task_details(
     @html.div(class="sheet-body", [
       stage_stepper(model, task, emit),
       detail_next_action(model, task, emit),
+      model_block(model, task, emit),
       review_block(model, task, emit),
       @html.section(class="detail-section", [
         @html.h2(class="section-title", "Definition of done"),

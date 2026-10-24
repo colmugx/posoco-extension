@@ -23,6 +23,8 @@ fn wire_task(
   created~ : Json = Json::number(1000),
   updated~ : Json = Json::number(2000),
   ready~ : Json = Json::null(),
+  model~ : Json = Json::null(),
+  review~ : Json = Json::null(),
 ) -> Json {
   Json::object({
     "id": Json::string(id),
@@ -35,6 +37,8 @@ fn wire_task(
     "created_at_ms": created,
     "updated_at_ms": updated,
     "ready_since_ms": ready,
+    "model": model,
+    "review": review,
   })
 }
 
@@ -1162,4 +1166,209 @@ test "copy records are detached from the original's records" {
   assert_eq_eq(replica.tasks()[0].definition_of_done, ["unit tests"])
   assert_eq_eq(copy, replica)
   assert_eq_eq(replica.copy(), replica)
+}
+
+///|
+test "task model decodes a pinned selection and accepts the model event" {
+  let replica = @client.BoardReplica::empty()
+  let task = wire_task(
+    model=Json::object({
+      "slot": Json::string("openai/gpt-5.2"),
+      "effort": Json::string("high"),
+    }),
+  )
+  let frame = snapshot_frame(revision=1L, last_seq=0L, tasks=[task])
+  assert_eq_eq(replica.apply_snapshot(frame), @client.Applied)
+  assert_eq_eq(
+    replica.tasks()[0].model,
+    Some(
+      @client.ClientModelSelection::ClientModelSelection(
+        slot="openai/gpt-5.2",
+        effort=Some("high"),
+      ),
+    ),
+  )
+  let changed = task_event(
+    seq=1L,
+    revision=1L,
+    kind="board.task.model_changed",
+    task~,
+    task_id="t1",
+  )
+  assert_eq_eq(replica.apply_event(changed), @client.Applied)
+  assert_eq_eq(replica.tasks()[0].model.unwrap().slot, "openai/gpt-5.2")
+}
+
+///|
+fn wire_verification(
+  kind~ : String = "command",
+  result~ : String = "passed",
+) -> Json {
+  Json::object({
+    "kind": Json::string(kind),
+    "label": Json::string("moon test src/client"),
+    "result": Json::string(result),
+    "detail": Json::string("69 tests"),
+  })
+}
+
+///|
+fn wire_artifact(kind~ : String = "file") -> Json {
+  Json::object({
+    "kind": Json::string(kind),
+    "label": Json::string("client.mbt"),
+    "uri_or_digest": Json::string("src/client/client.mbt"),
+  })
+}
+
+///|
+fn wire_review(
+  verification~ : Array[Json] = [wire_verification()],
+  artifacts~ : Array[Json] = [wire_artifact()],
+) -> Json {
+  Json::object({
+    "outcome": Json::string("Review shows the curated handoff."),
+    "summary": Json::string("Adds a durable review report read model."),
+    "changes": Json::array([
+      Json::string("Task wire carries review."),
+      Json::string("Legacy is null."),
+    ]),
+    "verification": Json::array(verification),
+    "risks": Json::array([Json::string("Evidence is worker-derived.")]),
+    "notes": Json::array([Json::string("Order is preserved verbatim.")]),
+    "open_questions": Json::array([Json::string("Does a retry keep it?")]),
+    "artifacts": Json::array(artifacts),
+  })
+}
+
+///|
+test "task review decodes nested evidence and artifacts" {
+  let replica = @client.BoardReplica::empty()
+  let task = wire_task(
+    review=wire_review(
+      verification=[
+        wire_verification(),
+        wire_verification(kind="manual", result="not_run"),
+        wire_verification(kind="artifact", result="unknown"),
+      ],
+      artifacts=[wire_artifact(), wire_artifact(kind="screenshot")],
+    ),
+  )
+  let frame = snapshot_frame(revision=1L, last_seq=0L, tasks=[task])
+  assert_eq_eq(replica.apply_snapshot(frame), @client.Applied)
+  assert_eq_eq(
+    replica.tasks()[0].review,
+    Some(
+      @client.ClientReviewReport::ClientReviewReport(
+        outcome="Review shows the curated handoff.",
+        summary="Adds a durable review report read model.",
+        changes=["Task wire carries review.", "Legacy is null."],
+        verification=[
+          @client.ClientReviewEvidence::ClientReviewEvidence(
+            kind=@client.ClientReviewEvidenceKind::Command,
+            label="moon test src/client",
+            result=@client.ClientReviewEvidenceResult::Passed,
+            detail="69 tests",
+          ),
+          @client.ClientReviewEvidence::ClientReviewEvidence(
+            kind=@client.ClientReviewEvidenceKind::Manual,
+            label="moon test src/client",
+            result=@client.ClientReviewEvidenceResult::NotRun,
+            detail="69 tests",
+          ),
+          @client.ClientReviewEvidence::ClientReviewEvidence(
+            kind=@client.ClientReviewEvidenceKind::Artifact,
+            label="moon test src/client",
+            result=@client.ClientReviewEvidenceResult::Unknown,
+            detail="69 tests",
+          ),
+        ],
+        risks=["Evidence is worker-derived."],
+        notes=["Order is preserved verbatim."],
+        open_questions=["Does a retry keep it?"],
+        artifacts=[
+          @client.ClientReviewArtifact::ClientReviewArtifact(
+            kind=@client.ClientReviewArtifactKind::File,
+            label="client.mbt",
+            uri_or_digest="src/client/client.mbt",
+          ),
+          @client.ClientReviewArtifact::ClientReviewArtifact(
+            kind=@client.ClientReviewArtifactKind::Screenshot,
+            label="client.mbt",
+            uri_or_digest="src/client/client.mbt",
+          ),
+        ],
+      ),
+    ),
+  )
+}
+
+///|
+test "task review is none for a null or an absent field" {
+  let replica = @client.BoardReplica::empty()
+  assert_eq_eq(
+    replica.apply_snapshot(
+      snapshot_frame(revision=1L, last_seq=0L, tasks=[
+        wire_task(review=Json::null()),
+      ]),
+    ),
+    @client.Applied,
+  )
+  assert_eq_eq(replica.tasks()[0].review, None)
+  let absent = wire_task()
+  guard absent is Json::Object(fields) else { abort("object") }
+  ignore(fields.remove("review"))
+  assert_eq_eq(
+    replica.apply_snapshot(
+      snapshot_frame(revision=1L, last_seq=0L, tasks=[absent]),
+    ),
+    @client.Applied,
+  )
+  assert_eq_eq(replica.tasks()[0].review, None)
+}
+
+///|
+test "task review records must be complete and strictly typed" {
+  let replica = @client.BoardReplica::empty()
+  let no_review = wire_review()
+  guard no_review is Json::Object(review_fields) else { abort("object") }
+  ignore(review_fields.remove("open_questions"))
+  let missing_evidence_field = wire_review()
+  guard missing_evidence_field is Json::Object(evidence_outer) else {
+    abort("object")
+  }
+  guard evidence_outer["verification"] is Json::Array(evidence_entries) else {
+    abort("array")
+  }
+  guard evidence_entries[0] is Json::Object(evidence_fields) else {
+    abort("object")
+  }
+  ignore(evidence_fields.remove("detail"))
+  let unknown_artifact = wire_review()
+  guard unknown_artifact is Json::Object(artifact_outer) else {
+    abort("object")
+  }
+  guard artifact_outer["artifacts"] is Json::Array(artifact_entries) else {
+    abort("array")
+  }
+  guard artifact_entries[0] is Json::Object(artifact_fields) else {
+    abort("object")
+  }
+  artifact_fields["kind"] = Json::string("photo")
+  let invalid_reviews : Array[Json] = [
+    no_review,
+    missing_evidence_field,
+    unknown_artifact,
+    wire_review(verification=[wire_verification(kind="shell")]),
+    wire_review(verification=[wire_verification(result="maybe")]),
+    wire_review(verification=[Json::string("command")]),
+    wire_review(artifacts=[Json::string("src/client/client.mbt")]),
+  ]
+  for review in invalid_reviews {
+    let frame = snapshot_frame(revision=1L, last_seq=0L, tasks=[
+      wire_task(review~),
+    ])
+    assert_true(replica.apply_snapshot(frame) is @client.NeedsSnapshot(_))
+    assert_false(replica.has_snapshot())
+  }
 }

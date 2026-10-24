@@ -758,22 +758,21 @@ fn task_card(
       } else {
         @html.p(class="card-desc", task.description)
       },
-      if task.dependencies.length() == 0 && attempts == 0 {
-        @html.nothing
-      } else {
-        @html.div(class="card-meta", [
-          if task.dependencies.length() == 0 {
-            @html.nothing
-          } else {
-            @html.span(class="chip", dependency_count_label(task.dependencies.length()))
-          },
-          if attempts == 0 {
-            @html.nothing
-          } else {
-            @html.span(class="chip is-attempt", attempt)
-          },
-        ])
-      },
+      // The model chip is always present: every ticket has a model, and
+      // "Inherit" is information, not an empty cell.
+      @html.div(class="card-meta", [
+        model_chip(ticket_model_catalog(model), task.model),
+        if task.dependencies.length() == 0 {
+          @html.nothing
+        } else {
+          @html.span(class="chip", dependency_count_label(task.dependencies.length()))
+        },
+        if attempts == 0 {
+          @html.nothing
+        } else {
+          @html.span(class="chip is-attempt", attempt)
+        },
+      ]),
       @html.footer(class="card-foot", [
         primary_intent(
           model,

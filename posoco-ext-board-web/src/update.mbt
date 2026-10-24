@@ -459,6 +459,27 @@ fn update(
           ticket_run(task_id, emit),
         )
       }
+    TicketSetModel(task_id, model_choice) =>
+      // No optimistic model state: the control keeps rendering the
+      // authoritative `task.model` until the host answers with a new state.
+      // A running ticket, an in-flight command, an unavailable runtime or a
+      // non-selectable catalog all block the command instead of queueing it.
+      if model.ticket_sending ||
+        !model.can_connect ||
+        !model.ticket_available ||
+        ticket_task_running(model, task_id) ||
+        !ticket_model_catalog(model).selectable {
+        (model, @rabbita.none)
+      } else {
+        (
+          {
+            ..model,
+            ticket_sending: true,
+            last_status: "Updating the model for ticket " + task_id,
+          },
+          ticket_set_model(task_id, model_choice, emit),
+        )
+      }
     TicketRunReady =>
       if model.ticket_sending || !model.can_connect || !model.ticket_available {
         (model, @rabbita.none)

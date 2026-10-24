@@ -9,6 +9,7 @@ pub(all) enum BoardEvent {
     dependencies~ : Array[BoardTaskId],
     at_ms~ : Int64
   )
+  TaskModelChanged(id~ : BoardTaskId, model~ : ModelSelection?, at_ms~ : Int64)
   TaskStageChanged(
     id~ : BoardTaskId,
     from~ : BoardStage,
@@ -62,6 +63,7 @@ pub fn BoardEvent::copy_detached(self : BoardEvent) -> BoardEvent {
   match self {
     DependenciesSet(id~, dependencies~, at_ms~) =>
       DependenciesSet(id~, dependencies=dependencies.copy(), at_ms~)
+    TaskModelChanged(..) => self
     GraphExpanded(
       expansion~,
       tasks~,

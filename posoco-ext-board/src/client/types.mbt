@@ -85,6 +85,141 @@ pub extend ClientRecordableReviewDecision with Eq::{equal, not_equal}
 
 ///|
 /// Read-only record. Arrays returned by the replica are detached.
+pub struct ClientModelSelection {
+  slot : String
+  effort : String?
+} derive(Eq)
+
+///|
+pub extend ClientModelSelection with Eq::{equal, not_equal}
+
+///|
+pub fn ClientModelSelection::ClientModelSelection(
+  slot~ : String,
+  effort~ : String? = None,
+) -> ClientModelSelection {
+  { slot, effort, }
+}
+
+///|
+/// Client-owned evidence kind. Wire strings are stable
+/// (`command`, `test`, `manual`, `artifact`).
+pub(all) enum ClientReviewEvidenceKind {
+  Command
+  Test
+  Manual
+  Artifact
+} derive(Eq)
+
+///|
+pub extend ClientReviewEvidenceKind with Eq::{equal, not_equal}
+
+///|
+pub(all) enum ClientReviewEvidenceResult {
+  Passed
+  Failed
+  NotRun
+  Unknown
+} derive(Eq)
+
+///|
+pub extend ClientReviewEvidenceResult with Eq::{equal, not_equal}
+
+///|
+pub(all) enum ClientReviewArtifactKind {
+  File
+  Diff
+  Log
+  Screenshot
+  Url
+} derive(Eq)
+
+///|
+pub extend ClientReviewArtifactKind with Eq::{equal, not_equal}
+
+///|
+/// Read-only record. Arrays returned by the replica are detached.
+pub struct ClientReviewEvidence {
+  kind : ClientReviewEvidenceKind
+  label : String
+  result : ClientReviewEvidenceResult
+  detail : String
+} derive(Eq)
+
+///|
+pub extend ClientReviewEvidence with Eq::{equal, not_equal}
+
+///|
+pub fn ClientReviewEvidence::ClientReviewEvidence(
+  kind~ : ClientReviewEvidenceKind,
+  label~ : String,
+  result~ : ClientReviewEvidenceResult,
+  detail~ : String,
+) -> ClientReviewEvidence {
+  { kind, label, result, detail, }
+}
+
+///|
+/// Read-only record. Arrays returned by the replica are detached.
+pub struct ClientReviewArtifact {
+  kind : ClientReviewArtifactKind
+  label : String
+  uri_or_digest : String
+} derive(Eq)
+
+///|
+pub extend ClientReviewArtifact with Eq::{equal, not_equal}
+
+///|
+pub fn ClientReviewArtifact::ClientReviewArtifact(
+  kind~ : ClientReviewArtifactKind,
+  label~ : String,
+  uri_or_digest~ : String,
+) -> ClientReviewArtifact {
+  { kind, label, uri_or_digest, }
+}
+
+///|
+/// Read-only record. Arrays returned by the replica are detached.
+pub struct ClientReviewReport {
+  outcome : String
+  summary : String
+  changes : Array[String]
+  verification : Array[ClientReviewEvidence]
+  risks : Array[String]
+  notes : Array[String]
+  open_questions : Array[String]
+  artifacts : Array[ClientReviewArtifact]
+} derive(Eq)
+
+///|
+pub extend ClientReviewReport with Eq::{equal, not_equal}
+
+///|
+pub fn ClientReviewReport::ClientReviewReport(
+  outcome~ : String,
+  summary~ : String,
+  changes~ : Array[String],
+  verification~ : Array[ClientReviewEvidence],
+  risks~ : Array[String],
+  notes~ : Array[String],
+  open_questions~ : Array[String],
+  artifacts~ : Array[ClientReviewArtifact],
+) -> ClientReviewReport {
+  {
+    outcome,
+    summary,
+    changes: changes.copy(),
+    verification: verification.copy(),
+    risks: risks.copy(),
+    notes: notes.copy(),
+    open_questions: open_questions.copy(),
+    artifacts: artifacts.copy(),
+  }
+}
+
+///|
+/// Read-only record. Arrays returned by the replica are detached.
 pub struct ClientBoardTask {
   id : String
   title : String
@@ -96,6 +231,8 @@ pub struct ClientBoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  model : ClientModelSelection?
+  review : ClientReviewReport?
 } derive(Eq)
 
 ///|
@@ -173,5 +310,25 @@ fn ClientBoardTask::copy_detached(self : ClientBoardTask) -> ClientBoardTask {
     ..self,
     definition_of_done: self.definition_of_done.copy(),
     dependencies: self.dependencies.copy(),
+    review: match self.review {
+      Some(report) => Some(report.copy_detached())
+      None => None
+    },
+  }
+}
+
+///|
+fn ClientReviewReport::copy_detached(
+  self : ClientReviewReport,
+) -> ClientReviewReport {
+  {
+    outcome: self.outcome,
+    summary: self.summary,
+    changes: self.changes.copy(),
+    verification: self.verification.copy(),
+    risks: self.risks.copy(),
+    notes: self.notes.copy(),
+    open_questions: self.open_questions.copy(),
+    artifacts: self.artifacts.copy(),
   }
 }

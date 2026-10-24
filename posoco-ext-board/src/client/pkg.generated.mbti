@@ -22,6 +22,8 @@ pub fn record_review_command(String, Int64, id~ : String, decision~ : ClientReco
 
 pub fn set_task_dependencies_command(String, Int64, id~ : String, dependencies~ : Array[String]) -> @protocol.BoardClientCommand
 
+pub fn set_task_model_command(String, Int64, id~ : String, model~ : ClientModelSelection?) -> @protocol.BoardClientCommand
+
 pub fn start_attempt_command(String, Int64, id~ : String) -> @protocol.BoardClientCommand
 
 pub fn update_task_command(String, Int64, id~ : String, title? : String, description? : String, priority? : ClientBoardPriority, definition_of_done? : Array[String]) -> @protocol.BoardClientCommand
@@ -136,6 +138,8 @@ pub struct ClientBoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  model : ClientModelSelection?
+  review : ClientReviewReport?
 } derive(Eq)
 pub fn ClientBoardTask::equal(Self, Self) -> Bool
 pub fn ClientBoardTask::not_equal(Self, Self) -> Bool
@@ -147,6 +151,14 @@ pub(all) enum ClientError {
 pub fn ClientError::equal(Self, Self) -> Bool
 pub fn ClientError::not_equal(Self, Self) -> Bool
 
+pub struct ClientModelSelection {
+  slot : String
+  effort : String?
+} derive(Eq)
+pub fn ClientModelSelection::ClientModelSelection(slot~ : String, effort? : String?) -> Self
+pub fn ClientModelSelection::equal(Self, Self) -> Bool
+pub fn ClientModelSelection::not_equal(Self, Self) -> Bool
+
 pub(all) enum ClientRecordableReviewDecision {
   Approved
   ChangesRequested
@@ -155,6 +167,25 @@ pub fn ClientRecordableReviewDecision::equal(Self, Self) -> Bool
 pub fn ClientRecordableReviewDecision::not_equal(Self, Self) -> Bool
 pub fn ClientRecordableReviewDecision::to_wire(Self) -> String
 
+pub struct ClientReviewArtifact {
+  kind : ClientReviewArtifactKind
+  label : String
+  uri_or_digest : String
+} derive(Eq)
+pub fn ClientReviewArtifact::ClientReviewArtifact(kind~ : ClientReviewArtifactKind, label~ : String, uri_or_digest~ : String) -> Self
+pub fn ClientReviewArtifact::equal(Self, Self) -> Bool
+pub fn ClientReviewArtifact::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientReviewArtifactKind {
+  File
+  Diff
+  Log
+  Screenshot
+  Url
+} derive(Eq)
+pub fn ClientReviewArtifactKind::equal(Self, Self) -> Bool
+pub fn ClientReviewArtifactKind::not_equal(Self, Self) -> Bool
+
 pub(all) enum ClientReviewDecision {
   Pending
   Approved
@@ -162,6 +193,48 @@ pub(all) enum ClientReviewDecision {
 } derive(Eq)
 pub fn ClientReviewDecision::equal(Self, Self) -> Bool
 pub fn ClientReviewDecision::not_equal(Self, Self) -> Bool
+
+pub struct ClientReviewEvidence {
+  kind : ClientReviewEvidenceKind
+  label : String
+  result : ClientReviewEvidenceResult
+  detail : String
+} derive(Eq)
+pub fn ClientReviewEvidence::ClientReviewEvidence(kind~ : ClientReviewEvidenceKind, label~ : String, result~ : ClientReviewEvidenceResult, detail~ : String) -> Self
+pub fn ClientReviewEvidence::equal(Self, Self) -> Bool
+pub fn ClientReviewEvidence::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientReviewEvidenceKind {
+  Command
+  Test
+  Manual
+  Artifact
+} derive(Eq)
+pub fn ClientReviewEvidenceKind::equal(Self, Self) -> Bool
+pub fn ClientReviewEvidenceKind::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientReviewEvidenceResult {
+  Passed
+  Failed
+  NotRun
+  Unknown
+} derive(Eq)
+pub fn ClientReviewEvidenceResult::equal(Self, Self) -> Bool
+pub fn ClientReviewEvidenceResult::not_equal(Self, Self) -> Bool
+
+pub struct ClientReviewReport {
+  outcome : String
+  summary : String
+  changes : Array[String]
+  verification : Array[ClientReviewEvidence]
+  risks : Array[String]
+  notes : Array[String]
+  open_questions : Array[String]
+  artifacts : Array[ClientReviewArtifact]
+} derive(Eq)
+pub fn ClientReviewReport::ClientReviewReport(outcome~ : String, summary~ : String, changes~ : Array[String], verification~ : Array[ClientReviewEvidence], risks~ : Array[String], notes~ : Array[String], open_questions~ : Array[String], artifacts~ : Array[ClientReviewArtifact]) -> Self
+pub fn ClientReviewReport::equal(Self, Self) -> Bool
+pub fn ClientReviewReport::not_equal(Self, Self) -> Bool
 
 pub struct DecodedBoardSnapshot {
   revision : Int64

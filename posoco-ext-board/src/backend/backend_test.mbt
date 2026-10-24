@@ -64,6 +64,8 @@ async test "headless backend serves commands snapshots and subscriptions without
             "created_at_ms": Json::number(1234),
             "updated_at_ms": Json::number(1234),
             "ready_since_ms": Json::null(),
+            "model": Json::null(),
+            "review": Json::null(),
           },
         ],
         "attempts": [],

@@ -75,6 +75,7 @@ pub(all) enum BoardCommand {
   CreateTask(id~ : BoardTaskId, title~ : String, description~ : String, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], at_ms~ : Int64, expected_revision~ : Int64)
   UpdateTask(id~ : BoardTaskId, title~ : String?, description~ : String?, priority~ : BoardPriority?, definition_of_done~ : Array[String]?, at_ms~ : Int64, expected_revision~ : Int64)
   SetDependencies(id~ : BoardTaskId, dependencies~ : Array[BoardTaskId], at_ms~ : Int64, expected_revision~ : Int64)
+  SetTaskModel(id~ : BoardTaskId, model~ : ModelSelection?, at_ms~ : Int64, expected_revision~ : Int64)
   MoveTask(id~ : BoardTaskId, to~ : BoardStage, at_ms~ : Int64, expected_revision~ : Int64)
   DeleteTask(id~ : BoardTaskId, at_ms~ : Int64, expected_revision~ : Int64)
   QueueAttempt(id~ : AttemptId, task~ : BoardTaskId, kind~ : AttemptKind, at_ms~ : Int64, expected_revision~ : Int64)
@@ -118,6 +119,7 @@ pub(all) enum BoardEvent {
   TaskCreated(id~ : BoardTaskId, at_ms~ : Int64)
   TaskUpdated(id~ : BoardTaskId, at_ms~ : Int64)
   DependenciesSet(id~ : BoardTaskId, dependencies~ : Array[BoardTaskId], at_ms~ : Int64)
+  TaskModelChanged(id~ : BoardTaskId, model~ : ModelSelection?, at_ms~ : Int64)
   TaskStageChanged(id~ : BoardTaskId, from~ : BoardStage, to~ : BoardStage, at_ms~ : Int64)
   TaskDeleted(id~ : BoardTaskId, at_ms~ : Int64)
   AttemptQueued(id~ : AttemptId, task_id~ : BoardTaskId, kind~ : AttemptKind, at_ms~ : Int64)
@@ -197,10 +199,12 @@ pub struct BoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  model : ModelSelection?
+  review : ReviewReport?
 } derive(Eq, @debug.Debug)
 pub fn BoardTask::copy_detached(Self) -> Self
 pub fn BoardTask::equal(Self, Self) -> Bool
-pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?) -> Self
+pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?, model? : ModelSelection?, review? : ReviewReport?) -> Self
 pub fn BoardTask::not_equal(Self, Self) -> Bool
 pub fn BoardTask::to_repr(Self) -> @debug.Repr
 
@@ -269,6 +273,36 @@ pub fn GraphTask::from_record(id~ : BoardTaskId, title~ : String, description~ :
 pub fn GraphTask::not_equal(Self, Self) -> Bool
 pub fn GraphTask::to_repr(Self) -> @debug.Repr
 
+pub struct ModelSelection {
+  slot : String
+  effort : String?
+} derive(Eq, @debug.Debug)
+pub fn ModelSelection::ModelSelection(slot~ : String, effort? : String?) -> Self
+pub fn ModelSelection::equal(Self, Self) -> Bool
+pub fn ModelSelection::not_equal(Self, Self) -> Bool
+pub fn ModelSelection::to_repr(Self) -> @debug.Repr
+
+pub struct ReviewArtifact {
+  kind : ReviewArtifactKind
+  label : String
+  uri_or_digest : String
+} derive(Eq, @debug.Debug)
+pub fn ReviewArtifact::equal(Self, Self) -> Bool
+pub fn ReviewArtifact::from_record(kind~ : ReviewArtifactKind, label~ : String, uri_or_digest~ : String) -> Self
+pub fn ReviewArtifact::not_equal(Self, Self) -> Bool
+pub fn ReviewArtifact::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ReviewArtifactKind {
+  File
+  Diff
+  Log
+  Screenshot
+  Url
+} derive(Eq, @debug.Debug)
+pub fn ReviewArtifactKind::equal(Self, Self) -> Bool
+pub fn ReviewArtifactKind::not_equal(Self, Self) -> Bool
+pub fn ReviewArtifactKind::to_repr(Self) -> @debug.Repr
+
 pub(all) enum ReviewDecision {
   Pending
   Approved
@@ -277,6 +311,53 @@ pub(all) enum ReviewDecision {
 pub fn ReviewDecision::equal(Self, Self) -> Bool
 pub fn ReviewDecision::not_equal(Self, Self) -> Bool
 pub fn ReviewDecision::to_repr(Self) -> @debug.Repr
+
+pub struct ReviewEvidence {
+  kind : ReviewEvidenceKind
+  label : String
+  result : ReviewEvidenceResult
+  detail : String
+} derive(Eq, @debug.Debug)
+pub fn ReviewEvidence::equal(Self, Self) -> Bool
+pub fn ReviewEvidence::from_record(kind~ : ReviewEvidenceKind, label~ : String, result~ : ReviewEvidenceResult, detail~ : String) -> Self
+pub fn ReviewEvidence::not_equal(Self, Self) -> Bool
+pub fn ReviewEvidence::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ReviewEvidenceKind {
+  Command
+  Test
+  Manual
+  Artifact
+} derive(Eq, @debug.Debug)
+pub fn ReviewEvidenceKind::equal(Self, Self) -> Bool
+pub fn ReviewEvidenceKind::not_equal(Self, Self) -> Bool
+pub fn ReviewEvidenceKind::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ReviewEvidenceResult {
+  Passed
+  Failed
+  NotRun
+  Unknown
+} derive(Eq, @debug.Debug)
+pub fn ReviewEvidenceResult::equal(Self, Self) -> Bool
+pub fn ReviewEvidenceResult::not_equal(Self, Self) -> Bool
+pub fn ReviewEvidenceResult::to_repr(Self) -> @debug.Repr
+
+pub struct ReviewReport {
+  outcome : String
+  summary : String
+  changes : Array[String]
+  verification : Array[ReviewEvidence]
+  risks : Array[String]
+  notes : Array[String]
+  open_questions : Array[String]
+  artifacts : Array[ReviewArtifact]
+} derive(Eq, @debug.Debug)
+pub fn ReviewReport::copy_detached(Self) -> Self
+pub fn ReviewReport::equal(Self, Self) -> Bool
+pub fn ReviewReport::from_record(outcome~ : String, summary~ : String, changes~ : Array[String], verification~ : Array[ReviewEvidence], risks~ : Array[String], notes~ : Array[String], open_questions~ : Array[String], artifacts~ : Array[ReviewArtifact]) -> Self
+pub fn ReviewReport::not_equal(Self, Self) -> Bool
+pub fn ReviewReport::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

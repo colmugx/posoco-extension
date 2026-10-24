@@ -18,6 +18,12 @@ fn event_json(event : @domain.BoardEvent) -> Json {
       f["dependencies"] = ids_json(dependencies)
       f["at_ms"] = number(at_ms)
     }
+    TaskModelChanged(id~, model~, at_ms~) => {
+      f["type"] = "TaskModelChanged"
+      f["id"] = Json::string(id.value)
+      f["model"] = model_json(model)
+      f["at_ms"] = number(at_ms)
+    }
     TaskStageChanged(id~, from~, to~, at_ms~) => {
       f["type"] = "TaskStageChanged"
       f["id"] = Json::string(id.value)
@@ -96,6 +102,10 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
       keys.push("id")
       keys.push("dependencies")
     }
+    "TaskModelChanged" => {
+      keys.push("id")
+      keys.push("model")
+    }
     "TaskStageChanged" => {
       keys.push("id")
       keys.push("from")
@@ -143,6 +153,8 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
         dependencies=ids(f["dependencies"]),
         at_ms~,
       )
+    "TaskModelChanged" =>
+      TaskModelChanged(id=task_id(f["id"]), model=model(f["model"]), at_ms~)
     "TaskStageChanged" =>
       TaskStageChanged(
         id=task_id(f["id"]),

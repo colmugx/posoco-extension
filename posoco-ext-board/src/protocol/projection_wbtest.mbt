@@ -16,6 +16,8 @@ fn projection_task(
     projection_id(value="t2"),
     projection_id(value="t3"),
   ],
+  model~ : @domain.ModelSelection? = None,
+  review~ : @domain.ReviewReport? = None,
 ) -> @domain.BoardTask {
   @domain.BoardTask::from_record(
     id=projection_id(),
@@ -28,6 +30,8 @@ fn projection_task(
     created_at_ms=10L,
     updated_at_ms=20L,
     ready_since_ms~,
+    model~,
+    review~,
   )
 }
 
@@ -135,6 +139,8 @@ fn expected_task_t1(stage~ : String, ready_since~ : Json) -> Json {
     "created_at_ms": Json::number(10),
     "updated_at_ms": Json::number(20),
     "ready_since_ms": ready_since,
+    "model": Json::null(),
+    "review": Json::null(),
   }
 }
 
@@ -386,6 +392,302 @@ test "attempt and review events project the full committed attempt under stable 
 }
 
 ///|
+fn projection_report() -> @domain.ReviewReport {
+  @domain.ReviewReport::from_record(
+    outcome="Board tickets use a per-ticket model and keep it across work.",
+    summary="Adds an optional (slot, effort) selection to the work item.",
+    changes=[
+      "Work item stores an optional (slot, effort).", "Split children inherit the source selection.",
+    ],
+    verification=[
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Command,
+        label="moon test src/domain",
+        result=@domain.ReviewEvidenceResult::Passed,
+        detail="43 tests",
+      ),
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Manual,
+        label="real-provider mixed-model check",
+        result=@domain.ReviewEvidenceResult::NotRun,
+        detail="no provider credentials",
+      ),
+      @domain.ReviewEvidence::from_record(
+        kind=@domain.ReviewEvidenceKind::Artifact,
+        label="execution log",
+        result=@domain.ReviewEvidenceResult::Unknown,
+        detail="",
+      ),
+    ],
+    risks=[
+      "A removed provider slot fails the run visibly; it never falls back.",
+    ],
+    notes=["Effort is optional and defaults to the slot default."],
+    open_questions=["Should split children inherit effort as well?"],
+    artifacts=[
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::File,
+        label="records.mbt",
+        uri_or_digest="src/domain/records.mbt",
+      ),
+      @domain.ReviewArtifact::from_record(
+        kind=@domain.ReviewArtifactKind::Diff,
+        label="patch",
+        uri_or_digest="sha256:5f0c9a",
+      ),
+    ],
+  )
+}
+
+///|
+fn expected_review_json() -> Json {
+  {
+    "outcome": "Board tickets use a per-ticket model and keep it across work.",
+    "summary": "Adds an optional (slot, effort) selection to the work item.",
+    "changes": [
+      "Work item stores an optional (slot, effort).", "Split children inherit the source selection.",
+    ],
+    "verification": [
+      {
+        "kind": "command",
+        "label": "moon test src/domain",
+        "result": "passed",
+        "detail": "43 tests",
+      },
+      {
+        "kind": "manual",
+        "label": "real-provider mixed-model check",
+        "result": "not_run",
+        "detail": "no provider credentials",
+      },
+      {
+        "kind": "artifact",
+        "label": "execution log",
+        "result": "unknown",
+        "detail": "",
+      },
+    ],
+    "risks": [
+      "A removed provider slot fails the run visibly; it never falls back.",
+    ],
+    "notes": ["Effort is optional and defaults to the slot default."],
+    "open_questions": ["Should split children inherit effort as well?"],
+    "artifacts": [
+      {
+        "kind": "file",
+        "label": "records.mbt",
+        "uri_or_digest": "src/domain/records.mbt",
+      },
+      { "kind": "diff", "label": "patch", "uri_or_digest": "sha256:5f0c9a" },
+    ],
+  }
+}
+
+///|
+test "task review projects nested evidence and artifacts, absence is null" {
+  assert_eq(
+    object_field(task_to_json(projection_task()), "review"),
+    Json::null(),
+  )
+  let reviewed = projection_task(review=Some(projection_report()))
+  assert_eq(
+    object_field(task_to_json(reviewed), "review"),
+    expected_review_json(),
+  )
+  let event = project_event(
+    projection_snapshot(tasks=[reviewed]),
+    @domain.TaskUpdated(id=projection_id(), at_ms=20L),
+  )
+  assert_eq(object_field(object_field(event.payload, "task"), "review"), {
+    "outcome": "Board tickets use a per-ticket model and keep it across work.",
+    "summary": "Adds an optional (slot, effort) selection to the work item.",
+    "changes": [
+      "Work item stores an optional (slot, effort).", "Split children inherit the source selection.",
+    ],
+    "verification": [
+      {
+        "kind": "command",
+        "label": "moon test src/domain",
+        "result": "passed",
+        "detail": "43 tests",
+      },
+      {
+        "kind": "manual",
+        "label": "real-provider mixed-model check",
+        "result": "not_run",
+        "detail": "no provider credentials",
+      },
+      {
+        "kind": "artifact",
+        "label": "execution log",
+        "result": "unknown",
+        "detail": "",
+      },
+    ],
+    "risks": [
+      "A removed provider slot fails the run visibly; it never falls back.",
+    ],
+    "notes": ["Effort is optional and defaults to the slot default."],
+    "open_questions": ["Should split children inherit effort as well?"],
+    "artifacts": [
+      {
+        "kind": "file",
+        "label": "records.mbt",
+        "uri_or_digest": "src/domain/records.mbt",
+      },
+      { "kind": "diff", "label": "patch", "uri_or_digest": "sha256:5f0c9a" },
+    ],
+  })
+}
+
+///|
+test "projected review arrays are detached from the committed task" {
+  let report = projection_report()
+  let task = projection_task(review=Some(report))
+  let json = task_to_json(task)
+  array_field(object_field(json, "review"), "changes").push(
+    Json::string("tampered"),
+  )
+  array_field(object_field(json, "review"), "verification").push(Json::null())
+  array_field(object_field(json, "review"), "artifacts").clear()
+  assert_eq(task.review.unwrap().changes.length(), 2)
+  assert_eq(task.review.unwrap().verification.length(), 3)
+  assert_eq(task.review.unwrap().artifacts.length(), 2)
+  assert_eq(object_field(task_to_json(task), "review"), expected_review_json())
+}
+
+///|
+test "every review enum renders one stable wire string" {
+  let evidence_kinds : Array[(@domain.ReviewEvidenceKind, String)] = [
+    (@domain.ReviewEvidenceKind::Command, "command"),
+    (@domain.ReviewEvidenceKind::Test, "test"),
+    (@domain.ReviewEvidenceKind::Manual, "manual"),
+    (@domain.ReviewEvidenceKind::Artifact, "artifact"),
+  ]
+  for (kind, name) in evidence_kinds {
+    let report = @domain.ReviewReport::from_record(
+      outcome="o",
+      summary="s",
+      changes=[],
+      verification=[
+        @domain.ReviewEvidence::from_record(
+          kind~,
+          label="l",
+          result=@domain.ReviewEvidenceResult::Passed,
+          detail="",
+        ),
+      ],
+      risks=[],
+      notes=[],
+      open_questions=[],
+      artifacts=[],
+    )
+    let json = object_field(
+      task_to_json(projection_task(review=Some(report))),
+      "review",
+    )
+    assert_eq(
+      object_field(array_field(json, "verification")[0], "kind"),
+      Json::string(name),
+    )
+  }
+  let evidence_results : Array[(@domain.ReviewEvidenceResult, String)] = [
+    (@domain.ReviewEvidenceResult::Passed, "passed"),
+    (@domain.ReviewEvidenceResult::Failed, "failed"),
+    (@domain.ReviewEvidenceResult::NotRun, "not_run"),
+    (@domain.ReviewEvidenceResult::Unknown, "unknown"),
+  ]
+  for (result, name) in evidence_results {
+    let report = @domain.ReviewReport::from_record(
+      outcome="o",
+      summary="s",
+      changes=[],
+      verification=[
+        @domain.ReviewEvidence::from_record(
+          kind=@domain.ReviewEvidenceKind::Test,
+          label="l",
+          result~,
+          detail="",
+        ),
+      ],
+      risks=[],
+      notes=[],
+      open_questions=[],
+      artifacts=[],
+    )
+    let json = object_field(
+      task_to_json(projection_task(review=Some(report))),
+      "review",
+    )
+    assert_eq(
+      object_field(array_field(json, "verification")[0], "result"),
+      Json::string(name),
+    )
+  }
+  let artifact_kinds : Array[(@domain.ReviewArtifactKind, String)] = [
+    (@domain.ReviewArtifactKind::File, "file"),
+    (@domain.ReviewArtifactKind::Diff, "diff"),
+    (@domain.ReviewArtifactKind::Log, "log"),
+    (@domain.ReviewArtifactKind::Screenshot, "screenshot"),
+    (@domain.ReviewArtifactKind::Url, "url"),
+  ]
+  for (kind, name) in artifact_kinds {
+    let report = @domain.ReviewReport::from_record(
+      outcome="o",
+      summary="s",
+      changes=[],
+      verification=[],
+      risks=[],
+      notes=[],
+      open_questions=[],
+      artifacts=[
+        @domain.ReviewArtifact::from_record(kind~, label="l", uri_or_digest="d"),
+      ],
+    )
+    let json = object_field(
+      task_to_json(projection_task(review=Some(report))),
+      "review",
+    )
+    assert_eq(
+      object_field(array_field(json, "artifacts")[0], "kind"),
+      Json::string(name),
+    )
+  }
+}
+
+///|
+test "model changes project the committed task and pinned selection" {
+  let pinned = projection_task(
+    model=Some(
+      @domain.ModelSelection::ModelSelection(
+        slot="openai/gpt-5.2",
+        effort=Some("high"),
+      ),
+    ),
+  )
+  let event = project_event(
+    projection_snapshot(tasks=[pinned]),
+    @domain.TaskModelChanged(
+      id=projection_id(),
+      model=Some(
+        @domain.ModelSelection::ModelSelection(
+          slot="openai/gpt-5.2",
+          effort=Some("high"),
+        ),
+      ),
+      at_ms=30L,
+    ),
+  )
+  assert_eq(event.kind, "board.task.model_changed")
+  assert_eq(object_field(event.payload, "task"), task_to_json(pinned))
+  assert_eq(object_field(event.payload, "model"), {
+    "slot": "openai/gpt-5.2",
+    "effort": "high",
+  })
+  assert_eq(object_field(event.payload, "at_ms"), Json::number(30))
+}
+
+///|
 test "wire enums render every variant in stable snake case" {
   let stages : Array[(@domain.BoardStage, String)] = [
     (@domain.Created, "created"),
@@ -504,7 +806,7 @@ test "wire payloads carry no schema or store metadata" {
   assert_eq(schema_keys, [])
   assert_eq(keys_of(task_to_json(projection_task())), [
     "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
-    "created_at_ms", "updated_at_ms", "ready_since_ms",
+    "created_at_ms", "updated_at_ms", "ready_since_ms", "model", "review",
   ])
   assert_eq(keys_of(attempt_to_json(projection_attempt())), [
     "id", "task_id", "kind", "status", "review", "created_at_ms", "started_at_ms",
@@ -613,6 +915,8 @@ test "snapshot payload renders the whole committed board verbatim" {
           "created_at_ms": Json::number(11),
           "updated_at_ms": Json::number(11),
           "ready_since_ms": Json::null(),
+          "model": Json::null(),
+          "review": Json::null(),
         },
       ],
       "attempts": [

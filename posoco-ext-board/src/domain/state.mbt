@@ -133,6 +133,24 @@ pub fn BoardTask::copy_detached(self : BoardTask) -> BoardTask {
     ..self,
     definition_of_done: self.definition_of_done.copy(),
     dependencies: self.dependencies.copy(),
+    review: match self.review {
+      Some(report) => Some(report.copy_detached())
+      None => None
+    },
+  }
+}
+
+///|
+pub fn ReviewReport::copy_detached(self : ReviewReport) -> ReviewReport {
+  {
+    outcome: self.outcome,
+    summary: self.summary,
+    changes: self.changes.copy(),
+    verification: self.verification.copy(),
+    risks: self.risks.copy(),
+    notes: self.notes.copy(),
+    open_questions: self.open_questions.copy(),
+    artifacts: self.artifacts.copy(),
   }
 }
 

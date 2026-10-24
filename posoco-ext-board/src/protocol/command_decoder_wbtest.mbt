@@ -46,6 +46,13 @@ fn decoder_valid_fields(name : String) -> Map[String, Json] raise {
       fields["id"] = Json::string("t-1")
       fields["dependencies"] = Json::array([Json::string("t-2")])
     }
+    "board.task.set_model" => {
+      fields["id"] = Json::string("t-1")
+      fields["model"] = Json::object({
+        "slot": Json::string("openai/gpt-5.2"),
+        "effort": Json::string("high"),
+      })
+    }
     "board.task.move" => {
       fields["id"] = Json::string("t-1")
       fields["to"] = Json::string("ready")
@@ -225,6 +232,58 @@ test "board.task.update treats absence as unchanged and null as invalid" {
     fields[key] = value
     decoder_args_error(decoder_wire("board.task.update", Json::object(fields)))
   }
+}
+
+///|
+test "board.task.set_model decodes a pin, a clear and rejects malformed shapes" {
+  decoder_ok(
+    decoder_wire(
+      "board.task.set_model",
+      decoder_valid_args("board.task.set_model"),
+    ),
+    @domain.SetTaskModel(
+      id=decoder_task_id("t-1"),
+      model=Some(
+        @domain.ModelSelection::ModelSelection(
+          slot="openai/gpt-5.2",
+          effort=Some("high"),
+        ),
+      ),
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
+  decoder_ok(
+    decoder_wire(
+      "board.task.set_model",
+      Json::object({ "id": Json::string("t-1"), "model": Json::null() }),
+    ),
+    @domain.SetTaskModel(
+      id=decoder_task_id("t-1"),
+      model=None,
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
+  decoder_args_error(decoder_wire("board.task.set_model", Json::object({})))
+  decoder_args_error(
+    decoder_wire(
+      "board.task.set_model",
+      Json::object({
+        "id": Json::string("t-1"),
+        "model": Json::object({ "slot": Json::string("openai/gpt-5.2"), "x": 1 }),
+      }),
+    ),
+  )
+  decoder_args_error(
+    decoder_wire(
+      "board.task.set_model",
+      Json::object({
+        "id": Json::string("t-1"),
+        "model": Json::object({ "slot": Json::null() }),
+      }),
+    ),
+  )
 }
 
 ///|

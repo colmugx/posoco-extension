@@ -321,3 +321,36 @@ test "record review command emits only the attempt id and terminal decision" {
     )
   }
 }
+
+///|
+test "set model command pins and clears through explicit null" {
+  let pinned = @client.set_task_model_command(
+    "cmd-model",
+    6L,
+    id="ticket-1",
+    model=Some(
+      @client.ClientModelSelection::ClientModelSelection(
+        slot="openai/gpt-5.2",
+        effort=Some("high"),
+      ),
+    ),
+  )
+  assert_eq(pinned.name, "board.task.set_model")
+  assert_eq(pinned.args, {
+    "id": "ticket-1",
+    "model": { "slot": "openai/gpt-5.2", "effort": "high" },
+  })
+  let cleared = @client.set_task_model_command(
+    "cmd-clear",
+    7L,
+    id="ticket-1",
+    model=None,
+  )
+  assert_eq(cleared.args, { "id": "ticket-1", "model": Json::null() })
+  assert_eq(
+    @protocol.decode_client_frame(
+      @protocol.encode_client_frame(@protocol.Command(cleared)),
+    ),
+    Ok(@protocol.Command(cleared)),
+  )
+}

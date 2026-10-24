@@ -21,7 +21,88 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Some(Array(items)) => items.filter_map(decode_ticket_run)
     _ => []
   }
-  { questions, runs, }
+  // Runtime catalog: absent, null and unknown shapes all decode to "no
+  // catalog in this frame" and never fail the snapshot that carries them.
+  let model_selection = match fields.get("model_selection") {
+    Some(value) => decode_model_catalog(value)
+    None => None
+  }
+  { questions, runs, model_selection }
+}
+
+///|
+/// Decode the optional `model_selection` projection. `selectable` defaults to
+/// false: a malformed or partial catalog can only ever make the picker
+/// read-only, never make a model look selectable.
+fn decode_model_catalog(value : Json) -> ModelCatalog? {
+  let fields = match value {
+    Object(fields) => fields
+    _ => return None
+  }
+  let selectable = match fields.get("selectable") {
+    Some(True) => true
+    _ => false
+  }
+  let kind = match fields.get("kind") {
+    Some(String(value)) => value
+    _ => ""
+  }
+  let models = match fields.get("models") {
+    Some(Array(items)) => items.filter_map(decode_model_option)
+    _ => []
+  }
+  Some({ selectable, kind, models })
+}
+
+///|
+/// One catalog entry. Only the stable slot id is required; labels, efforts
+/// and capability hints are optional so a partial host projection still
+/// renders instead of disappearing.
+fn decode_model_option(value : Json) -> ModelOption? {
+  let fields = match value {
+    Object(fields) => fields
+    _ => return None
+  }
+  let id = match fields.get("id") {
+    Some(String(value)) if value != "" => value
+    _ => return None
+  }
+  let text = name => {
+    match fields.get(name) {
+      Some(String(value)) => value
+      _ => ""
+    }
+  }
+  let strings = name => {
+    match fields.get(name) {
+      Some(Array(items)) =>
+        items.filter_map(item => {
+          match item {
+            String(value) if value != "" => Some(value)
+            _ => None
+          }
+        })
+      _ => []
+    }
+  }
+  let default_effort = match fields.get("default_effort") {
+    Some(String(value)) if value != "" => Some(value)
+    _ => None
+  }
+  let context_window = match fields.get("context_window") {
+    Some(Number(value, ..)) => Some(value.to_int64())
+    _ => None
+  }
+  Some({
+    id,
+    label: text("label"),
+    provider: text("provider"),
+    model: text("model"),
+    efforts: strings("efforts"),
+    default_effort,
+    context_window,
+    capabilities: strings("capabilities"),
+  })
 }
 
 ///|
@@ -257,6 +338,37 @@ fn ticket_run(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
 }
 
 ///|
+/// Wire arguments for one ticket model change. Kept separate from the send so
+/// tests can pin the exact payload: the stable slot id (not the model id) and
+/// an explicit `null` model when the ticket returns to inherit.
+fn ticket_set_model_args(task_id : String, model : ModelChoice?) -> Json {
+  let payload : Json = match model {
+    Some(choice) => {
+      "slot": Json::string(choice.slot),
+      "effort": match choice.effort {
+        Some(effort) => Json::string(effort)
+        None => Json::null()
+      },
+    }
+    None => Json::null()
+  }
+  { "task_id": Json::string(task_id), "model": payload }
+}
+
+///|
+fn ticket_set_model(
+  task_id : String,
+  model : ModelChoice?,
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
+  send_ticket_command(
+    "board.ticket.set_model",
+    ticket_set_model_args(task_id, model),
+    emit,
+  )
+}
+
+///|
 fn ticket_dismiss(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
   let args : Json = { "task_id": Json::string(task_id) }
   send_ticket_command("board.ticket.dismiss", args, emit)
@@ -368,7 +480,19 @@ fn ticket_result_card(
 
 ///|
 fn apply_ticket_state(model : Model, state : TicketState) -> Model {
-  { ..model, tickets: state, ticket_available: true, ticket_sending: false, }
+  // The catalog is runtime projection, not ticket journal state: a frame that
+  // omitted it (for example a `ticket_result`) keeps the last known catalog
+  // instead of disabling a picker the user is looking at.
+  let model_selection = match state.model_selection {
+    Some(_) => state.model_selection
+    None => model.tickets.model_selection
+  }
+  {
+    ..model,
+    tickets: { ..state, model_selection },
+    ticket_available: true,
+    ticket_sending: false,
+  }
 }
 
 ///|

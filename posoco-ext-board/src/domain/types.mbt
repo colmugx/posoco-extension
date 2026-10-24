@@ -109,6 +109,127 @@ pub extend ReviewDecision with Eq::{equal, not_equal}
 pub extend ReviewDecision with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
+/// A pinned model for one work item. `slot` is the modelport's slot id, not
+/// the model name; the same model may be served by different providers.
+pub struct ModelSelection {
+  slot : String
+  effort : String?
+} derive(Eq, Debug)
+
+///|
+pub extend ModelSelection with Eq::{equal, not_equal}
+
+///|
+pub extend ModelSelection with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub fn ModelSelection::ModelSelection(
+  slot~ : String,
+  effort~ : String? = None,
+) -> ModelSelection {
+  { slot, effort, }
+}
+
+///|
+/// What produced one piece of review evidence.
+pub(all) enum ReviewEvidenceKind {
+  Command
+  Test
+  Manual
+  Artifact
+} derive(Eq, Debug)
+
+///|
+pub extend ReviewEvidenceKind with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewEvidenceKind with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// Result of one verification step. `NotRun` is explicit: an unobserved
+/// check is never recorded as passed.
+pub(all) enum ReviewEvidenceResult {
+  Passed
+  Failed
+  NotRun
+  Unknown
+} derive(Eq, Debug)
+
+///|
+pub extend ReviewEvidenceResult with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewEvidenceResult with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// Kind of artifact a review report references.
+pub(all) enum ReviewArtifactKind {
+  File
+  Diff
+  Log
+  Screenshot
+  Url
+} derive(Eq, Debug)
+
+///|
+pub extend ReviewArtifactKind with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewArtifactKind with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// One verification record: what was checked, how, and with which result.
+pub struct ReviewEvidence {
+  kind : ReviewEvidenceKind
+  label : String
+  result : ReviewEvidenceResult
+  detail : String
+} derive(Eq, Debug)
+
+///|
+pub extend ReviewEvidence with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewEvidence with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// A referenced artifact identified by a URI or a content digest — never
+/// the artifact body itself.
+pub struct ReviewArtifact {
+  kind : ReviewArtifactKind
+  label : String
+  uri_or_digest : String
+} derive(Eq, Debug)
+
+///|
+pub extend ReviewArtifact with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewArtifact with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// Curated review handoff for one work item: what is now true, what changed,
+/// how it was verified, what could bite, and what still needs a decision.
+/// Every array is owned by the report, so a retry replaces the report
+/// instead of mutating it.
+pub struct ReviewReport {
+  outcome : String
+  summary : String
+  changes : Array[String]
+  verification : Array[ReviewEvidence]
+  risks : Array[String]
+  notes : Array[String]
+  open_questions : Array[String]
+  artifacts : Array[ReviewArtifact]
+} derive(Eq, Debug)
+
+///|
+pub extend ReviewReport with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewReport with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// Product/business lifecycle record. Timestamps are explicit command
 /// inputs; the domain owns no clock. `ready_since_ms` is set when the task
 /// enters Ready and cleared when it leaves.
@@ -123,6 +244,12 @@ pub struct BoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  /// `None` inherits the current Cetas model at execution time; `Some`
+  /// pins the slot/effort for this work item.
+  model : ModelSelection?
+  /// The curated review report of the attempt that produced this work item;
+  /// `None` until a report exists. Durable, immutable per attempt.
+  review : ReviewReport?
 } derive(Eq, Debug)
 
 ///|
