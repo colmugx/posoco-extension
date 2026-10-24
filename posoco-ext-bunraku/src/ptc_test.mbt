@@ -245,7 +245,11 @@ async test "run_code build failure carries compiler diagnostics" {
 
 ///|
 test "PTC compiler diagnostics bounded to avoid prompt growth" {
-  let too_long = "a".repeat(20000)
+  let chars : Array[String] = []
+  for _ in 0..<20000 {
+    chars.push("a")
+  }
+  let too_long = chars.join("")
   let clipped = @posoco-ext-bunraku.ptc_bounded_diagnostics(too_long)
   assert_true(clipped.length() < too_long.length())
   assert_true(clipped.contains("truncated"))
