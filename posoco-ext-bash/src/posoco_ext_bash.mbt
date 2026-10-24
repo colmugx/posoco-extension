@@ -405,7 +405,12 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           ]),
         ),
       ),
-      ("required", Json::array([Json::string("cmd")])),
+      // The executor accepts either name. Advertise both names to the schema
+      // validator so it does not reject `command` before execute() can run.
+      ("anyOf", Json::array([
+        Json::object({ "required": Json::array([Json::string("cmd")]) }),
+        Json::object({ "required": Json::array([Json::string("command")]) }),
+      ])),
     ]),
   )
   [
