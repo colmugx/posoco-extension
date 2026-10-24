@@ -136,8 +136,14 @@ pub impl ToolInvoker for BunrakuScopedInvoker with fn invoke(
   match self.dispatch.call(name, arguments) {
     @kernel.Success(content~, structured~) =>
       @protocol.Success(content~, structured~)
-    @kernel.SuccessWithAttachments(content~, structured~, ..) =>
-      @protocol.Success(content~, structured~)
+    // Protocol 1 of ears has no attachment frame. Do not claim success
+    // while silently discarding images: report the unsupported transport.
+    @kernel.SuccessWithAttachments(..) =>
+      @protocol.Failure(
+        code="AttachmentTransportUnsupported",
+        content="Nested ctx.call returned attachments that ears protocol 1 cannot carry; use a model-visible native tool or change the workflow.",
+        structured=None,
+      )
     @kernel.ToolReportedError(content~, structured~) =>
       @protocol.Failure(code="ToolRejected", content~, structured~)
     @kernel.RuntimeFailure(error_category~, message~) =>
