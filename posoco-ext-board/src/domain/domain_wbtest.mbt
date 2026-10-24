@@ -71,6 +71,7 @@ fn path_to(stage : BoardStage) -> Array[BoardStage] {
     Review => [Refining, Ready, Running, Review]
     Done => [Refining, Ready, Running, Review, Done]
     Suspended => [Suspended]
+    Cancelled => [Cancelled]
   }
 }
 
@@ -171,6 +172,12 @@ test "central fsm accepts exactly the baseline transitions" {
     (Suspended, Created),
     (Suspended, Refining),
     (Suspended, Ready),
+    (Created, Cancelled),
+    (Refining, Cancelled),
+    (Ready, Cancelled),
+    (Running, Cancelled),
+    (Review, Cancelled),
+    (Suspended, Cancelled),
   ]
   for (from, to) in edges {
     let state = task_at(from)
@@ -215,10 +222,19 @@ test "central fsm rejects moves outside the table" {
     (Done, Running),
     (Done, Review),
     (Done, Done),
+    (Done, Cancelled),
     (Suspended, Running),
     (Suspended, Review),
     (Suspended, Done),
     (Suspended, Suspended),
+    (Cancelled, Created),
+    (Cancelled, Refining),
+    (Cancelled, Ready),
+    (Cancelled, Running),
+    (Cancelled, Review),
+    (Cancelled, Done),
+    (Cancelled, Suspended),
+    (Cancelled, Cancelled),
   ]
   for (from, to) in rejected {
     let state = task_at(from)
@@ -231,6 +247,62 @@ test "central fsm rejects moves outside the table" {
     assert_eq(task.stage, from)
     assert_eq(state.revision(), revision)
   }
+}
+
+///|
+test "cancellation is reachable from every non-terminal stage" {
+  let cancellable : Array[BoardStage] = [
+    Created,
+    Refining,
+    Ready,
+    Running,
+    Review,
+    Suspended,
+  ]
+  for from in cancellable {
+    let state = task_at(from)
+    let revision = state.revision()
+    let proposal = accept(state, move_cmd("t", revision, Cancelled, at=9100L))
+    let task = proposal.next_state.task(tid("t")).unwrap()
+    assert_eq(task.stage, Cancelled)
+    assert_eq(task.updated_at_ms, 9100L)
+    // Cancelling out of Ready clears the stamp like any other exit.
+    assert_eq(task.ready_since_ms, None)
+    assert_eq(proposal.next_state.revision(), revision + 1L)
+    assert_eq(proposal.events, [
+      TaskStageChanged(id=tid("t"), from~, to=Cancelled, at_ms=9100L),
+    ])
+  }
+}
+
+///|
+test "cancelled is terminal and done cannot be cancelled" {
+  let state = task_at(Cancelled)
+  let revision = state.revision()
+  for
+    to in [
+      Created,
+      Refining,
+      Ready,
+      Running,
+      Review,
+      Done,
+      Suspended,
+      Cancelled,
+    ] {
+    assert_eq(
+      rejection_of(state, move_cmd("t", revision, to, at=9200L)),
+      InvalidTransition(from=Cancelled, to~),
+    )
+  }
+  assert_eq(state.task(tid("t")).unwrap().stage, Cancelled)
+  assert_eq(state.revision(), revision)
+  let done = task_at(Done)
+  assert_eq(
+    rejection_of(done, move_cmd("t", done.revision(), Cancelled, at=9200L)),
+    InvalidTransition(from=Done, to=Cancelled),
+  )
+  assert_eq(done.task(tid("t")).unwrap().stage, Done)
 }
 
 ///|

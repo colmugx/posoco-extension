@@ -250,6 +250,22 @@ test "board.task.set_dependencies and board.task.move decode strictly" {
       expected_revision=7L,
     ),
   )
+  // Cancelled is the terminal wire stage and must decode like every other.
+  decoder_ok(
+    decoder_wire(
+      "board.task.move",
+      Json::object({
+        "id": Json::string("t-1"),
+        "to": Json::string("cancelled"),
+      }),
+    ),
+    @domain.MoveTask(
+      id=decoder_task_id("t-1"),
+      to=@domain.Cancelled,
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
   decoder_ok(
     decoder_wire("board.task.delete", decoder_valid_args("board.task.delete")),
     @domain.DeleteTask(

@@ -57,6 +57,12 @@ fn sheet_crumb(task : @client.ClientBoardTask) -> @html.Html {
 }
 
 ///|
+/// The fixed note a cancelled task carries instead of a next action.
+fn cancelled_note() -> String {
+  "Cancelled; kept for history."
+}
+
+///|
 /// The next move, expressed as the person's intent, plus the reason it is
 /// unavailable when it is. The primary intent mirrors the card exactly.
 fn detail_next_action(
@@ -64,6 +70,13 @@ fn detail_next_action(
   task : @client.ClientBoardTask,
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
+  // Cancelled is terminal: there is no next action to offer, only the note
+  // that explains why the task stayed on the board.
+  if !has_primary_intent(task.stage) {
+    return @html.section(class="next-block", [
+      @html.p(class="next-note is-terminal", cancelled_note()),
+    ])
+  }
   let hint = action_blocked_hint(model, task.id)
   let locked = hint is Some(_) || model.pending is Some(_)
   let note = match hint {
@@ -87,6 +100,7 @@ fn detail_next_action(
         Review => "Closes the task. Done is final and moves it to the archive."
         Done => "Sends a closed task back to Shaping."
         Suspended => "Returns a paused task to Ready."
+        Cancelled => cancelled_note()
       }
   }
   @html.section(class="next-block", [

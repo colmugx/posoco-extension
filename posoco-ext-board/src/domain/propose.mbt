@@ -23,19 +23,27 @@ pub(all) struct BoardProposal {
 /// baseline is Created->Refining/Suspended; Refining->Ready/Suspended;
 /// Ready->Running/Refining/Suspended; Running->Review/Suspended;
 /// Review->Done/Ready/Refining/Suspended; Done->Refining;
-/// Suspended->Created/Refining/Ready.
+/// Suspended->Created/Refining/Ready. Every non-terminal stage may cancel;
+/// Cancelled is terminal and Done cannot be cancelled.
 fn stage_allowed(from : BoardStage, to : BoardStage) -> Bool {
   match (from, to) {
-    (Created, Refining) | (Created, Suspended) => true
-    (Refining, Ready) | (Refining, Suspended) => true
-    (Ready, Running) | (Ready, Refining) | (Ready, Suspended) => true
-    (Running, Review) | (Running, Suspended) => true
+    (Created, Refining) | (Created, Suspended) | (Created, Cancelled) => true
+    (Refining, Ready) | (Refining, Suspended) | (Refining, Cancelled) => true
+    (Ready, Running)
+    | (Ready, Refining)
+    | (Ready, Suspended)
+    | (Ready, Cancelled) => true
+    (Running, Review) | (Running, Suspended) | (Running, Cancelled) => true
     (Review, Done)
     | (Review, Ready)
     | (Review, Refining)
-    | (Review, Suspended) => true
+    | (Review, Suspended)
+    | (Review, Cancelled) => true
     (Done, Refining) => true
-    (Suspended, Created) | (Suspended, Refining) | (Suspended, Ready) => true
+    (Suspended, Created)
+    | (Suspended, Refining)
+    | (Suspended, Ready)
+    | (Suspended, Cancelled) => true
     _ => false
   }
 }

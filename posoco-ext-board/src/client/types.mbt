@@ -8,6 +8,7 @@ pub(all) enum ClientBoardStage {
   Review
   Done
   Suspended
+  Cancelled
 } derive(Eq)
 
 ///|

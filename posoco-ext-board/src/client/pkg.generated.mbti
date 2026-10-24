@@ -119,6 +119,7 @@ pub(all) enum ClientBoardStage {
   Review
   Done
   Suspended
+  Cancelled
 } derive(Eq)
 pub fn ClientBoardStage::equal(Self, Self) -> Bool
 pub fn ClientBoardStage::not_equal(Self, Self) -> Bool

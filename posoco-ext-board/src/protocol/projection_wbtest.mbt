@@ -395,6 +395,7 @@ test "wire enums render every variant in stable snake case" {
     (@domain.Review, "review"),
     (@domain.Done, "done"),
     (@domain.Suspended, "suspended"),
+    (@domain.Cancelled, "cancelled"),
   ]
   for (stage, name) in stages {
     let task = projection_task(stage~)

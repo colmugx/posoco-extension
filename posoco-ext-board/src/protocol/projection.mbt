@@ -42,6 +42,7 @@ fn wire_stage(value : @domain.BoardStage) -> Json {
       Review => "review"
       Done => "done"
       Suspended => "suspended"
+      Cancelled => "cancelled"
     },
   )
 }

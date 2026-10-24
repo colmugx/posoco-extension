@@ -1,18 +1,19 @@
 ///|
 pub fn lanes() -> Array[@client.ClientBoardStage] {
-  [Created, Refining, Ready, Running, Review, Done, Suspended]
+  [Created, Refining, Ready, Running, Review, Done, Suspended, Cancelled]
 }
 
 ///|
-/// The five stages that form the flow. Done and Suspended are archive states,
-/// rendered by the archive drawer instead of consuming flow columns.
+/// The five stages that form the flow. Done, Suspended and Cancelled are
+/// archive states, rendered by the archive drawer instead of consuming flow
+/// columns.
 pub fn flow_lanes() -> Array[@client.ClientBoardStage] {
   [Created, Refining, Ready, Running, Review]
 }
 
 ///|
 pub fn archive_lanes() -> Array[@client.ClientBoardStage] {
-  [Done, Suspended]
+  [Done, Suspended, Cancelled]
 }
 
 ///|
@@ -28,6 +29,7 @@ pub fn ui_stage_label(stage : @client.ClientBoardStage) -> String {
     Review => "In review"
     Done => "Done"
     Suspended => "Paused"
+    Cancelled => "Cancelled"
   }
 }
 
@@ -43,6 +45,7 @@ pub fn stage_hint(stage : @client.ClientBoardStage) -> String {
     Review => "Check the result, record a decision, then close it."
     Done => "Closed."
     Suspended => "Parked without losing its history."
+    Cancelled => "Superseded or abandoned; kept for history."
   }
 }
 
@@ -55,7 +58,7 @@ pub fn stage_step(stage : @client.ClientBoardStage) -> Int32? {
     Ready => Some(3)
     Running => Some(4)
     Review => Some(5)
-    Done | Suspended => None
+    Done | Suspended | Cancelled => None
   }
 }
 
@@ -86,7 +89,8 @@ pub fn done_stage() -> @client.ClientBoardStage {
 
 ///|
 /// The forward transition for a stage. This is the card's primary intent; the
-/// remaining legal transitions live in the card menu.
+/// remaining legal transitions live in the card menu. Cancelled is terminal,
+/// so it maps to itself: no view ever renders a primary action for it.
 pub fn primary_move(
   stage : @client.ClientBoardStage,
 ) -> @client.ClientBoardStage {
@@ -98,10 +102,13 @@ pub fn primary_move(
     Review => Done
     Done => Refining
     Suspended => Ready
+    Cancelled => Cancelled
   }
 }
 
 ///|
+/// The label of the primary intent. A cancelled task has no next stage, so
+/// its label is the terminal word itself and never a command.
 pub fn primary_action_label(stage : @client.ClientBoardStage) -> String {
   match stage {
     Created => "Start shaping"
@@ -111,6 +118,7 @@ pub fn primary_action_label(stage : @client.ClientBoardStage) -> String {
     Review => "Mark done"
     Done => "Reopen"
     Suspended => "Resume"
+    Cancelled => "Cancelled"
   }
 }
 
@@ -177,6 +185,7 @@ pub fn stage_label(stage : @client.ClientBoardStage) -> String {
     Review => "Review"
     Done => "Done"
     Suspended => "Suspended"
+    Cancelled => "Cancelled"
   }
 }
 
@@ -288,18 +297,20 @@ pub fn queue_attempt_id_valid(
 /// Move suggestions are a UX convenience mirroring the Board v1 stage FSM;
 /// the durable server stays authoritative and may still reject a move. The
 /// table covers every stage so the view can render a control row for any
-/// card.
+/// card. Every non-terminal stage may cancel, Done is never cancelled, and
+/// Cancelled is terminal, so it suggests nothing.
 pub fn move_suggestions(
   stage : @client.ClientBoardStage,
 ) -> Array[@client.ClientBoardStage] {
   match stage {
-    Created => [Refining, Suspended]
-    Refining => [Ready, Suspended]
-    Ready => [Running, Refining, Suspended]
-    Running => [Review, Suspended]
-    Review => [Done, Ready, Refining, Suspended]
+    Created => [Refining, Suspended, Cancelled]
+    Refining => [Ready, Suspended, Cancelled]
+    Ready => [Running, Refining, Suspended, Cancelled]
+    Running => [Review, Suspended, Cancelled]
+    Review => [Done, Ready, Refining, Suspended, Cancelled]
     Done => [Refining]
-    Suspended => [Created, Refining, Ready]
+    Suspended => [Created, Refining, Ready, Cancelled]
+    Cancelled => []
   }
 }
 

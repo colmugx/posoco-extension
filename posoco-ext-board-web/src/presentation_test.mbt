@@ -35,12 +35,13 @@ fn attempt_json(
 }
 
 ///|
-test "seven lanes labels grouping counts and empty state" {
+test "eight lanes labels grouping counts and empty state" {
   let replica = @client.BoardReplica::empty()
   assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
-  assert_eq(@src.lanes().length(), 7)
+  assert_eq(@src.lanes().length(), 8)
   let stages = [
     "created", "refining", "ready", "running", "review", "done", "suspended",
+    "cancelled",
   ]
   let tasks : Array[Json] = []
   for i, stage in stages {
@@ -56,10 +57,11 @@ test "seven lanes labels grouping counts and empty state" {
     },
   })
   assert_true(outcome is @client.Applied)
-  assert_eq(replica.tasks().length(), 7)
+  assert_eq(replica.tasks().length(), 8)
   assert_eq(@src.empty_message(replica), None)
   let labels = [
     "Created", "Refining", "Ready", "Running", "Review", "Done", "Suspended",
+    "Cancelled",
   ]
   for i, stage in @src.lanes() {
     assert_eq(@src.stage_label(stage), labels[i])
@@ -219,21 +221,36 @@ test "move suggestions mirror the v1 stage fsm as ux only" {
   let expectations : Array[
     (@client.ClientBoardStage, Array[@client.ClientBoardStage]),
   ] = [
-    (@client.Created, [@client.Refining, @client.Suspended]),
-    (@client.Refining, [@client.Ready, @client.Suspended]),
-    (@client.Ready, [@client.Running, @client.Refining, @client.Suspended]),
-    (@client.Running, [@client.Review, @client.Suspended]),
+    (@client.Created, [@client.Refining, @client.Suspended, @client.Cancelled]),
+    (@client.Refining, [@client.Ready, @client.Suspended, @client.Cancelled]),
+    (
+      @client.Ready,
+      [@client.Running, @client.Refining, @client.Suspended, @client.Cancelled],
+    ),
+    (@client.Running, [@client.Review, @client.Suspended, @client.Cancelled]),
     (
       @client.Review,
-      [@client.Done, @client.Ready, @client.Refining, @client.Suspended],
+      [
+        @client.Done,
+        @client.Ready,
+        @client.Refining,
+        @client.Suspended,
+        @client.Cancelled,
+      ],
     ),
     (@client.Done, [@client.Refining]),
-    (@client.Suspended, [@client.Created, @client.Refining, @client.Ready]),
+    (
+      @client.Suspended,
+      [@client.Created, @client.Refining, @client.Ready, @client.Cancelled],
+    ),
+    (@client.Cancelled, []),
   ]
   for pair in expectations {
     let (stage, expected) = pair
     assert_true(@src.move_suggestions(stage) == expected)
   }
+  // Done is never cancelled: it is the accepted end of the flow.
+  assert_false(@src.move_suggestions(@client.Done).contains(@client.Cancelled))
   // Every lane is covered and no lane ever suggests itself.
   for stage in @src.lanes() {
     for target in @src.move_suggestions(stage) {
@@ -334,7 +351,7 @@ test "priority shorthand, lane split, and compact attempt text" {
     "Backlog", "Shaping", "Ready", "In progress", "In review",
   ])
   assert_eq(@src.archive_lanes().map(stage => @src.ui_stage_label(stage)), [
-    "Done", "Paused",
+    "Done", "Paused", "Cancelled",
   ])
   let replica = @client.BoardReplica::empty()
   assert_true(

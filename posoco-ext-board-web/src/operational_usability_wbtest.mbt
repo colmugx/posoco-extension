@@ -5,11 +5,14 @@ test "working vocabulary names stages by what a person does" {
   assert_eq(ui_stage_label(Running), "In progress")
   assert_eq(ui_stage_label(Review), "In review")
   assert_eq(ui_stage_label(Suspended), "Paused")
+  assert_eq(ui_stage_label(Cancelled), "Cancelled")
   assert_eq(primary_action_label(Ready), "Start work")
   assert_eq(primary_action_label(Review), "Mark done")
   assert_eq(primary_action_label(Suspended), "Resume")
   assert_true(primary_move(Review) == Done)
   assert_true(primary_move(Suspended) == Ready)
+  // Cancelled is terminal: no forward move, so the views render no action.
+  assert_true(primary_move(Cancelled) == Cancelled)
 }
 
 ///|

@@ -106,6 +106,7 @@ fn stage_json(value : @domain.BoardStage) -> Json {
       Review => "Review"
       Done => "Done"
       Suspended => "Suspended"
+      Cancelled => "Cancelled"
     },
   )
 }
@@ -120,6 +121,7 @@ fn stage(value : Json) -> @domain.BoardStage raise CodecError {
     "Review" => Review
     "Done" => Done
     "Suspended" => Suspended
+    "Cancelled" => Cancelled
     _ => raise Bad("unknown task stage")
   }
 }

@@ -207,7 +207,9 @@ pub impl @posoco.CommandPort for BoardWorkflows with fn invoke(self, id, args) {
         )
         let name = self.choose(
           "Legal Task transition only; never automatic Review approval",
-          ["Refining", "Ready", "Running", "Review", "Done", "Suspended"],
+          [
+            "Refining", "Ready", "Running", "Review", "Done", "Suspended", "Cancelled",
+          ],
         )
         let stage = match name {
           "Refining" => @domain.Refining
@@ -215,6 +217,7 @@ pub impl @posoco.CommandPort for BoardWorkflows with fn invoke(self, id, args) {
           "Running" => @domain.Running
           "Review" => @domain.Review
           "Done" => @domain.Done
+          "Cancelled" => @domain.Cancelled
           _ => @domain.Suspended
         }
         let evidence = self.input(

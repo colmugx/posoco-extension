@@ -210,6 +210,7 @@ test "decode_board_snapshot maps every client enum value strictly" {
     wire_task(id="t5", stage="review"),
     wire_task(id="t6", stage="done"),
     wire_task(id="t7", stage="suspended"),
+    wire_task(id="t8", stage="cancelled"),
   ]
   let attempts = [
     wire_attempt(id="a1", kind="discuss", status="queued"),
@@ -249,12 +250,14 @@ test "decode_board_snapshot maps every client enum value strictly" {
     @client.Review,
     @client.Done,
     @client.Suspended,
+    @client.Cancelled,
   ])
   assert_eq_eq(decoded.tasks.map(task => task.priority), [
     @client.Low,
     @client.Normal,
     @client.High,
     @client.Critical,
+    @client.Normal,
     @client.Normal,
     @client.Normal,
     @client.Normal,

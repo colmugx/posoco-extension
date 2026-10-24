@@ -79,6 +79,7 @@ fn stage(value : Json) -> ClientBoardStage raise DecodeFailure {
     "review" => Review
     "done" => Done
     "suspended" => Suspended
+    "cancelled" => Cancelled
     _ => raise DecodeFailure("unknown task stage")
   }
 }

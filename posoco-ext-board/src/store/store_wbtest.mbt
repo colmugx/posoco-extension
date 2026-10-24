@@ -132,6 +132,7 @@ test "all task stages priorities attempt kinds statuses and optional reviews" {
     Review,
     Done,
     Suspended,
+    Cancelled,
   ]
   let priorities : Array[@domain.BoardPriority] = [Low, Normal, High, Critical]
   let kinds : Array[@domain.AttemptKind] = [Discuss, Execute, Review]
@@ -242,6 +243,7 @@ test "every domain event and enum payload round trips without Debug persistence"
       Review,
       Done,
       Suspended,
+      Cancelled,
     ] {
     let event = @domain.TaskStageChanged(id=tid("a"), from~, to=from, at_ms=3L)
     assert_eq(decode_event(encode_event(event).unwrap()), Ok(event))

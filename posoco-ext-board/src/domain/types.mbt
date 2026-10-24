@@ -10,6 +10,7 @@ pub(all) enum BoardStage {
   Review
   Done
   Suspended
+  Cancelled
 } derive(Eq, Debug)
 
 ///|

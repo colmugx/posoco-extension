@@ -17,6 +17,7 @@ test "command enum encodings are the canonical priority and stage vocabulary" {
     (@client.Review, "review"),
     (@client.Done, "done"),
     (@client.Suspended, "suspended"),
+    (@client.Cancelled, "cancelled"),
   ]
   for (value, wire) in stages {
     assert_eq(value.to_wire(), wire)

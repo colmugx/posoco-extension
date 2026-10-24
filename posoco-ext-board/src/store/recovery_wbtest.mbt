@@ -59,6 +59,7 @@ test "recovery leaves every non-running stage and status unchanged and detached"
       Review,
       Done,
       Suspended,
+      Cancelled,
     ] {
     for
       status in [

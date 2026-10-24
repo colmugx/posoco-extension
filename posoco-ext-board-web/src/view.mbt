@@ -137,7 +137,9 @@ fn live_chip(model : Model) -> @html.Html {
 ///|
 fn archive_count(model : Model) -> Int32 {
   model.replica.tasks().filter(task => {
-    task.stage is @client.Done || task.stage is @client.Suspended
+    task.stage is @client.Done ||
+    task.stage is @client.Suspended ||
+    task.stage is @client.Cancelled
   }).length()
 }
 
@@ -157,7 +159,7 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         @html.button(
           type_="button",
           class="btn btn-sm",
-          title="Open the archive: Done and Paused tasks",
+          title="Open the archive: Done, Paused and Cancelled tasks",
           attrs=@html.Attrs::build().on_click(_ => {
             ui_show("archive-dialog")
             emit(ArchiveOpened)
@@ -635,6 +637,14 @@ fn stage_stepper(
 }
 
 ///|
+/// Cancelled is terminal: the task keeps its place in the archive and the
+/// card menu, but it has no next stage to offer. Done and Suspended keep
+/// their reopen and resume actions.
+fn has_primary_intent(stage : @client.ClientBoardStage) -> Bool {
+  !(stage is @client.Cancelled)
+}
+
+///|
 /// Primary intent for one card, mirroring the stage FSM. Done is confirmed
 /// instead of fired: it is the only step that leaves the flow.
 fn primary_intent(
@@ -644,6 +654,7 @@ fn primary_intent(
   disabled~ : Bool,
   class~ : String,
 ) -> @html.Html {
+  guard has_primary_intent(task.stage) else { return @html.nothing }
   let shaping = model.ticket_available && task.stage == @client.Created
   let running = model.ticket_available && task.stage == @client.Ready
   if shaping {
@@ -692,6 +703,18 @@ fn primary_intent(
 }
 
 ///|
+/// The card menu's move targets: everything the FSM allows except the primary
+/// intent, which is already a button, and Done, which is confirmed through its
+/// own dialog. A cancelled card has no moves at all.
+fn card_alternatives(
+  stage : @client.ClientBoardStage,
+) -> Array[@client.ClientBoardStage] {
+  move_suggestions(stage).filter(to => {
+    to != primary_move(stage) && to != @client.Done
+  })
+}
+
+///|
 fn task_card(
   model : Model,
   task : @client.ClientBoardTask,
@@ -703,9 +726,7 @@ fn task_card(
     draft_open(model) ||
     ticket_task_running(model, task.id)
   let selected = model.selected_task == Some(task.id)
-  let alternatives = move_suggestions(task.stage).filter(to => {
-    to != primary_move(task.stage) && to != @client.Done
-  })
+  let alternatives = card_alternatives(task.stage)
   let attempt = attempt_short(model.replica, task.id)
   let attempts = attempt_count(model.replica, task.id)
   @html.article(
@@ -999,11 +1020,17 @@ fn board(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-/// Archive is a second-level directory: Done and Paused get the same card
-/// language as the flow, with room to breathe, instead of a status strip.
+/// Archive is a second-level directory: Done, Paused and Cancelled get the
+/// same card language as the flow, with room to breathe, instead of a status
+/// strip.
 fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let done = visible_lane_tasks(model.replica, Done, model.task_filter)
   let paused = visible_lane_tasks(model.replica, Suspended, model.task_filter)
+  let cancelled = visible_lane_tasks(
+    model.replica,
+    Cancelled,
+    model.task_filter,
+  )
   @html.dialog(
     id="archive-dialog",
     class="dialog directory-dialog",
@@ -1016,7 +1043,7 @@ fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
             @html.h2(class="dialog-title", "Archive"),
             @html.p(
               class="dialog-subtitle",
-              "\{done.length()} done · \{paused.length()} paused. Finished work leaves the flow.",
+              "\{done.length()} done · \{paused.length()} paused · \{cancelled.length()} cancelled. Finished work leaves the flow.",
             ),
           ]),
           close_button("archive-dialog"),
@@ -1027,6 +1054,13 @@ fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
             "Paused",
             "Parked without losing history.",
             paused,
+            model,
+            emit,
+          ),
+          archive_section(
+            "Cancelled",
+            stage_hint(Cancelled),
+            cancelled,
             model,
             emit,
           ),

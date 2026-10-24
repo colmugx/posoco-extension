@@ -155,6 +155,7 @@ pub(all) enum BoardStage {
   Review
   Done
   Suspended
+  Cancelled
 } derive(Eq, @debug.Debug)
 pub fn BoardStage::equal(Self, Self) -> Bool
 pub fn BoardStage::not_equal(Self, Self) -> Bool

@@ -34,6 +34,7 @@ pub fn ClientBoardStage::to_wire(self : ClientBoardStage) -> String {
     Review => "review"
     Done => "done"
     Suspended => "suspended"
+    Cancelled => "cancelled"
   }
 }
 

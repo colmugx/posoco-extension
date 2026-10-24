@@ -168,9 +168,10 @@ fn args_stage(
     "review" => Review
     "done" => Done
     "suspended" => Suspended
+    "cancelled" => Cancelled
     _ =>
       raise Schema(
-        "field '\{key}' must be one of: created, refining, ready, running, review, done, suspended",
+        "field '\{key}' must be one of: created, refining, ready, running, review, done, suspended, cancelled",
       )
   }
 }
