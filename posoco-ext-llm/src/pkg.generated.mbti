@@ -85,6 +85,7 @@ pub fn RouterModelPort::on_event(Self, @types.TurnEvent) -> Unit
 pub fn RouterModelPort::on_event_at(Self, @types.EventScope?, @types.TurnEvent) -> Unit
 pub async fn RouterModelPort::on_shutdown(Self) -> Unit
 pub async fn RouterModelPort::on_start(Self) -> Unit
+pub fn RouterModelPort::picker_catalog_json(Self) -> Array[Json]
 pub fn RouterModelPort::provider_config(Self) -> @port.ProviderConfig
 pub async fn RouterModelPort::refresh_model_metadata(Self) -> Unit noraise
 pub fn RouterModelPort::replace_provider_slots(Self, String, Array[@posoco-kit-provider.ModelSlot]) -> Unit raise @error.CompositionError

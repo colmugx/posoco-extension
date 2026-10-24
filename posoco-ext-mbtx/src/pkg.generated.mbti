@@ -12,6 +12,8 @@ import {
 // Values
 pub const MBTX_TOOLCHAIN_VERSION : String = "0.10.15+943464bfa"
 
+pub fn syntax_primer() -> String
+
 // Errors
 pub suberror RuntimeError {
   ToolchainUnavailable(String)
@@ -57,8 +59,10 @@ pub fn MbtxExtension::extension_id(Self) -> String
 pub async fn MbtxExtension::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn MbtxExtension::manifest(Self) -> @port.ExtensionManifest
 pub fn MbtxExtension::runtime(Self) -> Runtime
+pub fn MbtxExtension::system_prompt(Self) -> String
 pub impl @port.CommandPort for MbtxExtension
 pub impl @port.Extension for MbtxExtension
+pub impl @port.SystemPromptContributor for MbtxExtension
 
 pub(all) struct ResolvedToolchain {
   origin : ToolchainOrigin

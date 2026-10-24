@@ -28,5 +28,6 @@ options(
     "command_model_pick_wbtest.mbt": [ "native" ],
     "command_model_quick_wbtest.mbt": [ "native" ],
     "command_login_wbtest.mbt": [ "native" ],
+    "picker_catalog_wbtest.mbt": [ "native" ],
   },
 )

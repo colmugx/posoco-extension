@@ -31,7 +31,9 @@ pub impl @posoco.Extension for MbtxExtension with fn extension_id(
 pub impl @posoco.Extension for MbtxExtension with fn manifest(
   self : MbtxExtension,
 ) -> @posoco.ExtensionManifest {
-  @posoco.ExtensionManifest(id="posoco_ext_mbtx", commands=[self])
+  @posoco.ExtensionManifest(id="posoco_ext_mbtx", commands=[self], prompt_contributors=[
+    self,
+  ])
 }
 
 ///|
