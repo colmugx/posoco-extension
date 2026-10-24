@@ -86,12 +86,30 @@ pub fn has_repeated_reasoning_suffix(
   reasoning : String,
   span_chars : Int32,
 ) -> Bool {
-  if span_chars < 128 || reasoning.length() < span_chars * 3 {
+  let n = reasoning.length()
+  // String.length counts UTF-16 code units. Avoid multiplying a user-supplied
+  // span before checking it: large spans can overflow Int32.
+  if span_chars < 128 || span_chars > n / 3 {
     return false
   }
-  let n = reasoning.length()
-  let a = reasoning.exact_view(start=n - span_chars * 3, end=n - span_chars * 2)
-  let b = reasoning.exact_view(start=n - span_chars * 2, end=n - span_chars)
-  let c = reasoning.exact_view(start=n - span_chars)
+  // A streamed reasoning suffix may contain supplementary Unicode characters
+  // (e.g. emoji). Fixed UTF-16 offsets can bisect their surrogate pairs;
+  // exact_view would panic and terminate the host. A split window cannot
+  // prove exact repetition, so skip this observation instead.
+  guard reasoning.get_view(
+    start=n - span_chars * 3,
+    end=n - span_chars * 2,
+  ) is Some(a) else {
+    return false
+  }
+  guard reasoning.get_view(
+    start=n - span_chars * 2,
+    end=n - span_chars,
+  ) is Some(b) else {
+    return false
+  }
+  guard reasoning.get_view(start=n - span_chars) is Some(c) else {
+    return false
+  }
   a == b && b == c
 }
