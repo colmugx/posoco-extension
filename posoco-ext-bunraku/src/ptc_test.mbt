@@ -242,3 +242,12 @@ async test "run_code build failure carries compiler diagnostics" {
     _ => fail("build failure surfaced without diagnostics")
   }
 }
+
+///|
+test "PTC compiler diagnostics bounded to avoid prompt growth" {
+  let too_long = "a".repeat(20000)
+  let clipped = @posoco-ext-bunraku.ptc_bounded_diagnostics(too_long)
+  assert_true(clipped.length() < too_long.length())
+  assert_true(clipped.contains("truncated"))
+  assert_eq(@posoco-ext-bunraku.ptc_bounded_diagnostics("error: line 1"), "error: line 1")
+}
