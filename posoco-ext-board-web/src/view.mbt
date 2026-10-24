@@ -147,8 +147,7 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let archived = archive_count(model)
   @html.header(class="topbar", [
     @html.div(class="brand", [
-      @html.span(class="brand-mark", "Board"),
-      @html.span(class="brand-flow", "Backlog → Shaping → Ready → Work → Review → Done"),
+      @html.span(class="brand-mark", "Posoco Board"),
     ]),
     @html.div(class="topbar-actions", [
       live_chip(model),
@@ -666,13 +665,19 @@ fn primary_intent(
       label=primary_action_label(task.stage),
     )
   } else if primary_move(task.stage) is @client.Done {
-    card_action(
-      DoneRequested(task.id),
-      emit,
+    // Done leaves the flow, so it opens the consequence dialog before any
+    // command exists; the command is rebuilt from live state at confirm.
+    @html.button(
+      type_="button",
       class~,
       title="Close this task and move it to Done",
       disabled~,
-      label=primary_action_label(task.stage),
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        ui_show("confirm-dialog")
+        emit(DoneRequested(task.id))
+      }),
+      primary_action_label(task.stage),
     )
   } else {
     card_action(
@@ -756,17 +761,6 @@ fn task_card(
           disabled=locked,
           class="card-next",
         ),
-        @html.button(
-          type_="button",
-          class="btn btn-sm card-activity",
-          title="Open this ticket's activity",
-          attrs=@html.Attrs::build().on_click(event => {
-            event.stop_propagation()
-            ui_show("ticket-activity-dialog")
-            emit(TicketActivityOpened(task.id))
-          }),
-          "Activity",
-        ),
         @html.details(class="card-menu", [
           @html.summary(
             class="icon-btn",
@@ -778,6 +772,17 @@ fn task_card(
           @html.div(
             class="menu",
             [
+              @html.button(
+                type_="button",
+                class="menu-item",
+                title="Open this ticket's activity",
+                attrs=@html.Attrs::build().on_click(event => {
+                  event.stop_propagation()
+                  ui_show("ticket-activity-dialog")
+                  emit(TicketActivityOpened(task.id))
+                }),
+                "Activity",
+              ),
               if model.ticket_available && task.stage == @client.Refining {
                 card_action(
                   TicketShape(task.id),
