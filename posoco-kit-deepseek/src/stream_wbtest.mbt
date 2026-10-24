@@ -35,6 +35,27 @@ fn guarded_accumulator(reasoning : String) -> @posoco.StreamAccumulator raise {
 }
 
 ///|
+test "suffix detection does not panic when a UTF-16 window splits an emoji" {
+  // UTF-16 boundaries for n=768, span=256: 0, 256, 512, 768.
+  // The emoji occupies code units [511, 513), so offset 512 splits the pair.
+  let reasoning = "a".repeat(511) + "\u{1F600}" + "b".repeat(255)
+  assert_eq(reasoning.length(), 768)
+  assert_false(has_repeated_reasoning_suffix(reasoning, 256))
+}
+
+///|
+test "suffix detection still finds repetition with aligned emoji boundaries" {
+  let suffix = "a".repeat(254) + "\u{1F600}"
+  assert_eq(suffix.length(), 256)
+  assert_true(has_repeated_reasoning_suffix(suffix + suffix + suffix, 256))
+}
+
+///|
+test "suffix detection rejects span sizes that overflow a 32-bit product" {
+  assert_false(has_repeated_reasoning_suffix("x".repeat(768), 2147483647))
+}
+
+///|
 test "observe reports a budget breach past the ceiling" {
   let policy = DeepSeekPolicy(
     max_reasoning_chars=Some(10),
