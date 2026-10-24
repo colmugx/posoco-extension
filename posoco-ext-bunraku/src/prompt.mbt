@@ -13,7 +13,7 @@ pub impl @posoco.SystemPromptContributor for BunrakuExtension with fn system_pro
     #|
     #|## Writing good guest programs
     #|Batch the deterministic fan-out, fold results into one small summary, and let intermediate JSON stay in the guest.
-    #|Keep handlers small and single-purpose; probe unfamiliar APIs with one tiny program per hypothesis — independent probes run in one round-trip and one failure never blocks the others.
+    #|Keep handlers small and single-purpose. Avoid run_code for a single ctx.call unless you must filter its large output. For multiple independent reads, batch and return a small aggregate.\n    #|Use MoonBit JSON object syntax, e.g. ctx.call("bash", {"cmd": "pwd"}), NOT record syntax { cmd: "pwd" }.\n    #|Treat a returned {"error": "..."} as a failed tool call; inspect and branch, not a successful operation.\n    #|Images and other attachments cannot cross the current JSON-only ctx.call bridge: use direct read for visual inspection when the tool is visible, otherwise report the limitation rather than assuming image bytes reached the model.
     #|Prefer structured reads (glob/read) over printing whole files; truncate or summarize before returning.
   let sections = sections + "\n" + @mbtx.syntax_primer()
   let names = if self.tool_names.is_empty() {
