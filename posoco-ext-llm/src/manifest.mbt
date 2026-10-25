@@ -21,7 +21,6 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
     observers=[self],
     lifecycle=[self],
     commands=[self],
-    requires=[@posoco.Capability::Decision],
   )
 }
 
@@ -30,12 +29,18 @@ pub impl @posoco.Extension for RouterModelPort with fn manifest(
 /// composition. `ctx` has no reading before core's first projection, so any
 /// stale registration is unregistered instead of publishing a placeholder —
 /// the segment first appears when a real reading arrives.
+///
+/// The decision capability is NOT taken from the composition view: the router
+/// resolves it from the active decision slot (`/decision` selection) owned by
+/// that slot's provider extension, so a missing/unconfigured decision model
+/// turns decision off explicitly instead of silently borrowing another
+/// backend.
 pub impl @posoco.Lifecycle for RouterModelPort with fn on_compose(
   self : RouterModelPort,
-  ctx : @posoco.CompositionView,
+  _ctx : @posoco.CompositionView,
 ) -> Unit raise @posoco.CompositionError {
-  self.decision = ctx.decision()
   self.publish_model_status()
+  self.publish_decision_selection()
   self.publish_provider_event()
   match self.bus {
     Some(bus) =>
@@ -68,11 +73,12 @@ pub impl @posoco.Lifecycle for RouterModelPort with fn on_start(
 }
 
 ///|
-/// Nothing to release: the router holds no resources beyond its slots.
+/// The router's slots own their ports; the decision capability rides the
+/// active decision slot and needs no release here.
 pub impl @posoco.Lifecycle for RouterModelPort with fn on_shutdown(
   self : RouterModelPort,
 ) -> Unit {
-  self.decision = None
+  self |> ignore
 }
 
 ///|

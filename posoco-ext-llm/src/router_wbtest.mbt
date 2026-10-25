@@ -1156,6 +1156,29 @@ async test "status invoke failure backs off without clearing old segments" {
 }
 
 ///|
+/// A `kind = Decision` slot whose provider owns the decision port; the base
+/// for every decision-selection test below.
+fn router_decision_slot(
+  id : String,
+  provider_id : String,
+  model_id : String,
+  decision : @posoco.ScriptedDecisionPort,
+) -> ModelSlot {
+  let port : &@posoco.ModelPort = RouterTestPort::{
+    reasoning_effort_values: [],
+  }
+  ModelSlot::ModelSlot(
+    id~,
+    label=id,
+    provider_id~,
+    model_id~,
+    port~,
+    kind=ModelKind::Decision,
+    decision_port=Some(decision),
+  )
+}
+
+///|
 async test "decision port selects per-call reasoning effort without mutating selection" {
   let low_port : &@posoco.ModelPort = RouterTestPort::{
     reasoning_effort_values: ["low", "high"],
@@ -1195,7 +1218,6 @@ async test "decision port selects per-call reasoning effort without mutating sel
       }
     }),
   )
-  let router = RouterModelPort(slots=[low_slot])
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Return({
       answers: [
@@ -1210,15 +1232,16 @@ async test "decision port selects per-call reasoning effort without mutating sel
       usage: None,
     }),
   ])
-  let ui = @posoco.NoopUiPort()
-  (router as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model=low_port,
-      decision=Some(decision),
-      ui~,
-    ),
+  let decision_slot = router_decision_slot(
+    "judge", "test", "judge-model", decision,
   )
+  let router = RouterModelPort(slots=[low_slot, decision_slot])
+  // The decision capability rides the /decision selection: the judge slot's
+  // provider owns the port, and no composition view is consulted.
+  router.switch_decision_slot("judge") catch {
+    _ => fail("unexpected decision switch failure")
+  }
+  assert_eq(router.active_decision_slot_id(), "judge")
   let messages = [
     @posoco.Message::UserMessage(content=[
       @posoco.Content::Text("prove this race condition"),
@@ -1230,29 +1253,22 @@ async test "decision port selects per-call reasoning effort without mutating sel
   }
   assert_true(router.active_effort() is None)
   assert_eq(router.current_model_id(), "low-model")
+  assert_eq(router.active_slot_id(), "auto")
   assert_eq(decision.call_count(), 1)
 }
 
 ///|
 async test "explicit reasoning effort suppresses decision port auto selection" {
   let base = router_effort_slot("slot", "test", "model")
-  let router = RouterModelPort(slots=[base])
+  let decision = @posoco.ScriptedDecisionPort([])
+  let judge = router_decision_slot("judge", "test", "judge-model", decision)
+  let router = RouterModelPort(slots=[base, judge])
+  router.switch_decision_slot("judge") catch {
+    _ => fail("unexpected decision switch failure")
+  }
   router.select_effort("slot", "high") catch {
     _ => fail("unexpected explicit effort selection failure")
   }
-  let decision = @posoco.ScriptedDecisionPort([])
-  let model : &@posoco.ModelPort = RouterTestPort::{
-    reasoning_effort_values: [],
-  }
-  let ui = @posoco.NoopUiPort()
-  (router as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
   let messages = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("complex task")]),
   ]
@@ -1262,31 +1278,28 @@ async test "explicit reasoning effort suppresses decision port auto selection" {
 }
 
 ///|
-test "router manifest declares optional decision capability" {
+test "router manifest leaves the decision capability to the active decision slot" {
   let slot = router_test_slot("slot", "test", "model", [])
   let router = RouterModelPort(slots=[slot])
   let manifest = router.manifest()
-  assert_true(manifest.requires.contains(@posoco.Capability::Decision))
+  // The router no longer claims or borrows a composed decision port: the
+  // capability resolves from the /decision selection, so a missing or
+  // unconfigured judge turns decision off instead of sharing another
+  // provider's backend.
+  assert_true(manifest.requires.is_empty())
+  assert_eq(manifest.decisions.length(), 0)
   assert_eq(manifest.lifecycle.length(), 1)
 }
 
 ///|
 async test "decision effort is not recomputed after the user-ended model round" {
   let slot = router_effort_slot("slot", "test", "model")
-  let router = RouterModelPort(slots=[slot])
   let decision = @posoco.ScriptedDecisionPort([])
-  let model : &@posoco.ModelPort = RouterTestPort::{
-    reasoning_effort_values: [],
+  let judge = router_decision_slot("judge", "test", "judge-model", decision)
+  let router = RouterModelPort(slots=[slot, judge])
+  router.switch_decision_slot("judge") catch {
+    _ => fail("unexpected decision switch failure")
   }
-  let ui = @posoco.NoopUiPort()
-  (router as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
   let messages = [
     @posoco.Message::UserMessage(content=[@posoco.Content::Text("complex task")]),
     router_test_message(),
@@ -1298,7 +1311,6 @@ async test "decision effort is not recomputed after the user-ended model round" 
 ///|
 async test "low-confidence decision effort falls back to the active slot" {
   let slot = router_effort_slot("slot", "test", "model")
-  let router = RouterModelPort(slots=[slot])
   let decision = @posoco.ScriptedDecisionPort([
     @posoco.ScriptedDecisionStep::Return({
       answers: [
@@ -1313,18 +1325,11 @@ async test "low-confidence decision effort falls back to the active slot" {
       usage: None,
     }),
   ])
-  let model : &@posoco.ModelPort = RouterTestPort::{
-    reasoning_effort_values: [],
+  let judge = router_decision_slot("judge", "test", "judge-model", decision)
+  let router = RouterModelPort(slots=[slot, judge])
+  router.switch_decision_slot("judge") catch {
+    _ => fail("unexpected decision switch failure")
   }
-  let ui = @posoco.NoopUiPort()
-  (router as &@posoco.Lifecycle).on_compose(
-    @posoco.tk_view(
-      requires=[@posoco.Capability::Decision],
-      model~,
-      decision=Some(decision),
-      ui~,
-    ),
-  )
   let messages = [
     @posoco.Message::UserMessage(content=[
       @posoco.Content::Text("ambiguous task"),
@@ -1332,6 +1337,212 @@ async test "low-confidence decision effort falls back to the active slot" {
   ]
   assert_true(router.decision_slot_for_chat(messages[:], 0) is None)
   assert_eq(decision.call_count(), 1)
+}
+
+///|
+test "decision selection starts explicitly off and publishes that state" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let router = RouterModelPort(
+    slots=[router_test_slot("chat", "one", "model-a", [])],
+    bus=Some(bus),
+  )
+  assert_eq(router.active_decision_slot_id(), "")
+  let events = router_decision_selection_events(capture.events)
+  assert_eq(events.length(), 1)
+  match events[0] {
+    Json::Object(fields) => {
+      assert_eq(fields.get("slot_id"), Some(Json::string("")))
+      assert_eq(fields.get("available"), Some(Json::boolean(false)))
+      match fields.get("reason") {
+        Some(Json::String(reason)) =>
+          assert_true(reason.contains("no decision model selected"))
+        _ => fail("expected an explicit off reason")
+      }
+    }
+    _ => fail("expected a decision_selection payload object")
+  }
+}
+
+///|
+test "switch_decision_slot only moves among decision slots" {
+  let chat = router_test_slot("chat", "one", "model-a", [])
+  let decision = router_decision_slot(
+    "judge",
+    "two",
+    "judge-model",
+    @posoco.ScriptedDecisionPort([]),
+  )
+  let router = RouterModelPort(slots=[chat, decision])
+  let wrong_kind = Ok(router.switch_decision_slot("chat")) catch {
+    error => Err(error)
+  }
+  match wrong_kind {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(
+        detail.contains("slot is a chat model; switch it with /model"),
+      )
+    _ => fail("a chat slot must never become the decision target")
+  }
+  let unknown = Ok(router.switch_decision_slot("ghost")) catch {
+    error => Err(error)
+  }
+  match unknown {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("unknown decision model slot: ghost"))
+    _ => fail("an unknown slot must fail the decision switch")
+  }
+  router.switch_decision_slot("judge") catch {
+    _ => fail("unexpected decision switch failure")
+  }
+  assert_eq(router.active_decision_slot_id(), "judge")
+  assert_eq(router.active_slot_id(), "chat")
+}
+
+///|
+test "a decision slot never becomes the conversation default" {
+  let decision = router_decision_slot(
+    "judge",
+    "two",
+    "judge-model",
+    @posoco.ScriptedDecisionPort([]),
+  )
+  let result = Ok(RouterModelPort(slots=[decision])) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("no chat model slot"))
+    _ => fail("a decision-only catalog cannot serve the conversation selection")
+  }
+}
+
+///|
+test "default decision slot validates kind and presence" {
+  let chat = router_test_slot("chat", "one", "model-a", [])
+  let wrong_kind = Ok(
+    RouterModelPort(slots=[chat], default_decision_slot_id="chat"),
+  ) catch {
+    error => Err(error)
+  }
+  match wrong_kind {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(
+        detail.contains("default decision slot is not a decision model"),
+      )
+    _ => fail("a chat slot must not seed the decision selection")
+  }
+  let unknown = Ok(
+    RouterModelPort(slots=[chat], default_decision_slot_id="gone/judge"),
+  ) catch {
+    error => Err(error)
+  }
+  match unknown {
+    Err(@posoco.CompositionError::ManifestSchemaError(detail~, ..)) =>
+      assert_true(detail.contains("unknown default decision slot: gone/judge"))
+    _ => fail("an unknown decision default must fail without the pending flag")
+  }
+}
+
+///|
+test "a pending decision default stays selected and reads as off" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let chat = router_test_slot("chat", "one", "model-a", [])
+  let router = RouterModelPort(
+    slots=[chat],
+    default_decision_slot_id="gone/judge",
+    allow_missing_decision_default=true,
+    bus=Some(bus),
+  )
+  // The persisted id is kept verbatim instead of silently re-picking a
+  // backend; until the slot appears the decision capability is off.
+  assert_eq(router.active_decision_slot_id(), "gone/judge")
+  assert_eq(
+    router.decision_off_reason(),
+    Some("decision model 'gone/judge' is not configured (persisted selection)"),
+  )
+  let events = router_decision_selection_events(capture.events)
+  assert_eq(events.length(), 1)
+  match events[0] {
+    Json::Object(fields) => {
+      assert_eq(fields.get("slot_id"), Some(Json::string("gone/judge")))
+      assert_eq(fields.get("available"), Some(Json::boolean(false)))
+    }
+    _ => fail("expected a decision_selection payload object")
+  }
+}
+
+///|
+test "switching decision republishes the decision_selection event" {
+  let bus = @devkit.EventBus()
+  let capture = StatusCapture::StatusCapture()
+  bus.subscribe(capture)
+  let chat = router_test_slot("chat", "one", "model-a", [])
+  let judge = router_decision_slot(
+    "judge",
+    "two",
+    "judge-model",
+    @posoco.ScriptedDecisionPort([]),
+  )
+  let router = RouterModelPort(slots=[chat, judge], bus=Some(bus))
+  capture.events.clear()
+  router.switch_decision_slot("judge") catch {
+    _ => fail("unexpected decision switch failure")
+  }
+  let events = router_decision_selection_events(capture.events)
+  assert_eq(events.length(), 1)
+  match events[0] {
+    Json::Object(fields) => {
+      assert_eq(fields.get("slot_id"), Some(Json::string("judge")))
+      assert_eq(fields.get("available"), Some(Json::boolean(true)))
+      assert_true(fields.get("reason") is Some(Json::Null))
+    }
+    _ => fail("expected a decision_selection payload object")
+  }
+}
+
+///|
+test "decision selection rides the pending rule through provider replacement" {
+  let chat = router_test_slot("one/a", "one", "model-a", [])
+  let judge = router_decision_slot(
+    "one/judge",
+    "one",
+    "judge-model",
+    @posoco.ScriptedDecisionPort([]),
+  )
+  let router = RouterModelPort(slots=[chat, judge])
+  router.switch_decision_slot("one/judge") catch {
+    _ => fail("unexpected decision switch failure")
+  }
+  // Case 1: the provider refresh drops the decision slot entirely; the
+  // decision selection keeps the id (no silent re-pick) and reads as off.
+  let replacements = [router_test_slot("one/a", "one", "model-a2", [])]
+  router.replace_provider_slots("one", replacements) catch {
+    _ => fail("unexpected replacement failure")
+  }
+  assert_eq(router.active_decision_slot_id(), "one/judge")
+  match router.decision_off_reason() {
+    Some(reason) =>
+      assert_true(reason.contains("is not configured (persisted selection)"))
+    None => fail("decision must read as off without a decision slot")
+  }
+  // Case 2: the refresh provides a chat-shaped slot under the same id; the
+  // capability stays off because the slot is no longer decision kind.
+  let swap = [
+    router_test_slot("one/a", "one", "model-a3", []),
+    router_test_slot("one/judge", "one", "judge-chat", []),
+  ]
+  router.replace_provider_slots("one", swap) catch {
+    _ => fail("unexpected replacement failure")
+  }
+  assert_eq(router.active_decision_slot_id(), "one/judge")
+  match router.decision_off_reason() {
+    Some(reason) => assert_true(reason.contains("is not a decision slot"))
+    None => fail("a chat-shaped slot must not serve decisions")
+  }
 }
 
 // ------------------------------------------------------- pending defaults
@@ -1500,12 +1711,28 @@ fn router_selection_events(events : Array[@devkit.BusEvent]) -> Array[Json] {
 
 ///|
 /// The bus traffic the status-protocol tests assert on: everything except
-/// the structured `model_selection` events the selection channel adds.
+/// the structured `model_selection` and `decision_selection` events the
+/// selection channels add.
 fn router_visible_events(capture : StatusCapture) -> Array[@devkit.BusEvent] {
   let out : Array[@devkit.BusEvent] = []
   for event in capture.events {
-    if event.topic != "model_selection" {
+    if event.topic != "model_selection" && event.topic != "decision_selection" {
       out.push(event)
+    }
+  }
+  out
+}
+
+///|
+/// Extract the payload of every `decision_selection` event published by the
+/// router, mirroring `router_selection_events` for the decision channel.
+fn router_decision_selection_events(
+  events : Array[@devkit.BusEvent],
+) -> Array[Json] {
+  let out : Array[Json] = []
+  for event in events {
+    if event.source == "posoco_ext_llm" && event.topic == "decision_selection" {
+      out.push(event.data)
     }
   }
   out

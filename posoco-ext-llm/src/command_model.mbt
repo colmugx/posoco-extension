@@ -18,7 +18,7 @@ fn RouterModelPort::slot_catalog_json(
   pricing~ : Map[String, @devkit.PricingPhase]? = None,
 ) -> Json {
   let entries : Array[Json] = []
-  for slot in self.list_slots() {
+  for slot in self.list_chat_slots() {
     let window = self.context_window_reading(slot)
     let effort_values : Array[Json] = []
     for effort in slot.thinking_efforts {
@@ -162,10 +162,11 @@ fn effort_command_selection(args : Json) -> String? raise @posoco.CommandError {
 }
 
 ///|
-/// Select a provider-advertised reasoning effort on one slot through its
+/// Select a provider-advertised reasoning effort on one chat slot through its
 /// rebuild hook. Public so hosts can restore a persisted effort at composition
 /// and apply ACP/config-driven effort switches; the `/effort` command remains
-/// the interactive entry point.
+/// the interactive entry point. Decision slots are rejected: effort belongs
+/// to the conversation selection.
 pub fn RouterModelPort::select_effort(
   self : RouterModelPort,
   slot_id : String,
@@ -177,6 +178,11 @@ pub fn RouterModelPort::select_effort(
       raise @posoco.CommandError::InvalidArgs(
         reason="unknown model slot: " + slot_id,
       )
+  }
+  if slot.is_decision() {
+    raise @posoco.CommandError::InvalidArgs(
+      reason="slot is a decision model; switch it with /decision: " + slot_id,
+    )
   }
   if !slot.thinking_efforts.contains(effort) {
     raise @posoco.CommandError::InvalidArgs(
@@ -203,8 +209,12 @@ pub impl @posoco.CommandPort for RouterModelPort with fn commands(
   self : RouterModelPort,
 ) -> Array[@posoco.CommandDef] {
   let slot_choices : Array[String] = [quick_pick_keyword]
-  for id in self.list_slot_ids() {
-    slot_choices.push(id)
+  for slot in self.list_chat_slots() {
+    slot_choices.push(slot.id)
+  }
+  let decision_choices : Array[String] = []
+  for slot in self.list_decision_slots() {
+    decision_choices.push(slot.id)
   }
   [
     @posoco.CommandDef::{
@@ -318,6 +328,30 @@ pub impl @posoco.CommandPort for RouterModelPort with fn commands(
       visible: true,
       metadata: None,
     },
+    @posoco.CommandDef::{
+      id: "decision",
+      label: "Switch Decision Model",
+      description: "Show or switch the active decision model; omit to list decision models",
+      category: "model",
+      ctype: @posoco.CommandType::Select,
+      params: [
+        @posoco.CommandParam::{
+          name: "slot",
+          label: "Decision Model",
+          description: "Target decision slot id; omit to list available decision models",
+          ptype: @posoco.ParamType::Str,
+          required: false,
+          default: None,
+          choices: Some(decision_choices),
+          positional: true,
+        },
+      ],
+      aliases: [],
+      shortcut: None,
+      icon: None,
+      visible: true,
+      metadata: None,
+    },
   ]
 }
 
@@ -392,6 +426,16 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
           } else if !self.slots.contains(slot_id) {
             @posoco.CommandOutcome::Failure(
               reason="unknown model slot: " + slot_id,
+            )
+          } else if (match self.slots.get(slot_id) {
+              Some(slot) => slot.is_decision()
+              None => false
+            }) {
+            // The conversation selection never crosses kinds: a decision
+            // slot is reachable only through /decision.
+            @posoco.CommandOutcome::Failure(
+              reason="slot is a decision model; switch it with /decision: " +
+                slot_id,
             )
           } else {
             match effort {
@@ -526,6 +570,26 @@ pub impl @posoco.CommandPort for RouterModelPort with fn invoke(
       }
       result
     }
+    "decision" =>
+      match decision_command_selection(args) {
+        None =>
+          @posoco.CommandOutcome::Success(
+            feedback=self.decision_listing_feedback(),
+            structured=Some(self.decision_slot_catalog_json()),
+            ui_hint=Some(@posoco.UiHint::None),
+          )
+        Some(slot_id) => {
+          self.switch_decision_slot(slot_id) catch {
+            err =>
+              return @posoco.CommandOutcome::Failure(reason=err.to_string())
+          }
+          @posoco.CommandOutcome::Success(
+            feedback="switched decision model: " + slot_id,
+            structured=Some(self.decision_slot_catalog_json()),
+            ui_hint=Some(@posoco.UiHint::None),
+          )
+        }
+      }
     other => raise @posoco.CommandError::NotFound(other)
   }
 }

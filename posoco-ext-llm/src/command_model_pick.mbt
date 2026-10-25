@@ -235,7 +235,10 @@ async fn RouterModelPort::run_provider_pick(
       )
   }
   let slots : Array[PickSlotFacts] = []
-  for slot in self.list_slots() {
+  // The pick path ends in a chat-slot switch, so only chat slots are
+  // eligible; a decision model must never be auto-selected as the
+  // conversation target.
+  for slot in self.list_chat_slots() {
     slots.push({
       slot_id: slot.id,
       provider_id: slot.provider_id,

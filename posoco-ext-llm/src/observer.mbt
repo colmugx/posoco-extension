@@ -83,6 +83,36 @@ fn RouterModelPort::publish_provider_event(self : RouterModelPort) -> Unit {
 }
 
 ///|
+/// Machine-readable decision-selection state, published on every selection
+/// change and at composition. `slot_id` is the selected `kind = Decision`
+/// slot (`""` = nothing selected); `available` states whether the decision
+/// capability can actually serve calls right now, and `reason` explains an
+/// off state (no selection, pending persisted id, or a provider that does
+/// not serve decisions) so hosts can surface it instead of guessing.
+fn RouterModelPort::publish_decision_selection(self : RouterModelPort) -> Unit {
+  let available = self.decision_off_reason() is None
+  let reason = match self.decision_off_reason() {
+    Some(text) => Json::string(text)
+    None => Json::null()
+  }
+  match self.bus {
+    Some(bus) =>
+      bus.publish({
+        source: "posoco_ext_llm",
+        topic: "decision_selection",
+        data: Json::object(
+          Map::from_array([
+            ("slot_id", Json::string(self.active_decision_id)),
+            ("available", Json::boolean(available)),
+            ("reason", reason),
+          ]),
+        ),
+      })
+    None => ()
+  }
+}
+
+///|
 /// Compact token count: raw below 1K, one-decimal K/M above.
 fn fmt_ctx_tokens(n : Int32) -> String {
   if n >= 1000000 {

@@ -44,6 +44,7 @@ pub(all) struct RouterModelPort {
   slots : Map[String, @posoco-kit-provider.ModelSlot]
   slot_order : Array[String]
   mut active_id : String
+  mut active_decision_id : String
   mut active_effort : String?
   bus : @devkit.EventBus?
   model_metadata : ModelMetadata?
@@ -58,7 +59,8 @@ pub(all) struct RouterModelPort {
   extra_quota_sources : Map[String, &@devkit.QuotaSource]
   // private fields
 }
-pub fn RouterModelPort::RouterModelPort(slots~ : Array[@posoco-kit-provider.ModelSlot], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource]) -> Self raise @error.CompositionError
+pub fn RouterModelPort::RouterModelPort(slots~ : Array[@posoco-kit-provider.ModelSlot], default_slot_id? : String, allow_missing_default? : Bool, default_decision_slot_id? : String, allow_missing_decision_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource]) -> Self raise @error.CompositionError
+pub fn RouterModelPort::active_decision_slot_id(Self) -> String
 pub fn RouterModelPort::active_effort(Self) -> String?
 pub fn RouterModelPort::active_selection(Self) -> @posoco-kit-model-management.ManagerSelection
 pub fn RouterModelPort::active_slot_id(Self) -> String
@@ -70,9 +72,11 @@ pub fn RouterModelPort::context_window_reading(Self, @posoco-kit-provider.ModelS
 pub fn RouterModelPort::current_model_id(Self) -> String
 pub fn RouterModelPort::current_provider_id(Self) -> String
 pub fn RouterModelPort::extension_id(Self) -> String
-pub fn RouterModelPort::from_catalogs(Array[@posoco-kit-provider.ProviderModelCatalog], default_slot_id? : String, allow_missing_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource], transient_retry? : TransientRetryPolicy?) -> Self raise @error.CompositionError
+pub fn RouterModelPort::from_catalogs(Array[@posoco-kit-provider.ProviderModelCatalog], default_slot_id? : String, allow_missing_default? : Bool, default_decision_slot_id? : String, allow_missing_decision_default? : Bool, bus? : @devkit.EventBus?, model_metadata? : ModelMetadata?, provider_credential_store? : &@ext-oauth.ProviderCredentialStore?, cred_store? : &@ext-oauth.CredentialStore?, auth_interaction? : &@ext-oauth.AuthInteraction?, api_key_store? : &@ext-oauth.ApiKeyStore?, auth_prompt? : &@ext-oauth.AuthPromptInteraction?, extra_quota_sources? : Map[String, &@devkit.QuotaSource], transient_retry? : TransientRetryPolicy?) -> Self raise @error.CompositionError
 pub async fn RouterModelPort::invoke(Self, String, Json) -> @port.CommandOutcome raise @error.CommandError
 pub fn RouterModelPort::list_auth_capabilities(Self) -> Json
+pub fn RouterModelPort::list_chat_slots(Self) -> Array[@posoco-kit-provider.ModelSlot]
+pub fn RouterModelPort::list_decision_slots(Self) -> Array[@posoco-kit-provider.ModelSlot]
 pub fn RouterModelPort::list_models(Self) -> Array[@posoco-kit-model-management.ManagerModelInfo]
 pub fn RouterModelPort::list_oauth_provider_ids(Self) -> Array[String]
 pub fn RouterModelPort::list_slot_ids(Self) -> Array[String]
@@ -91,6 +95,8 @@ pub async fn RouterModelPort::refresh_model_metadata(Self) -> Unit noraise
 pub fn RouterModelPort::replace_provider_slots(Self, String, Array[@posoco-kit-provider.ModelSlot]) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::select_effort(Self, String, String) -> Unit raise @error.CommandError
 pub fn RouterModelPort::select_model(Self, String) -> Unit raise @posoco-kit-model-management.ModelManagerError
+pub fn RouterModelPort::status_json(Self) -> Json
+pub fn RouterModelPort::switch_decision_slot(Self, String) -> Unit raise @error.CompositionError
 pub fn RouterModelPort::switch_slot(Self, String) -> Unit raise @error.CompositionError
 pub impl @posoco-kit-model-management.ModelManagerControl for RouterModelPort
 pub impl @port.CommandPort for RouterModelPort
@@ -115,6 +121,8 @@ pub fn TransientRetryPolicy::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 pub using @posoco-kit-provider {type AuthMethod}
+
+pub using @posoco-kit-provider {type ModelKind}
 
 pub using @posoco-kit-provider {type ModelSlot}
 

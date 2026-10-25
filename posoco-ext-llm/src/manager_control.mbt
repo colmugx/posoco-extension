@@ -40,7 +40,9 @@ fn project_slot_metadata(slot : ModelSlot) -> @modelmgmt.ManagerModelInfo {
 pub impl @modelmgmt.ModelManagerControl for RouterModelPort with fn list_models(
   self : RouterModelPort,
 ) -> Array[@modelmgmt.ManagerModelInfo] {
-  self.list_slots().map(project_slot_metadata)
+  // The manager surface is the conversation selection's metadata view;
+  // decision slots are offered only through /decision.
+  self.list_chat_slots().map(project_slot_metadata)
 }
 
 ///|

@@ -35,4 +35,7 @@ pub using @provider {type AuthMethod}
 pub using @provider {type ModelSlot}
 
 ///|
+pub using @provider {type ModelKind}
+
+///|
 pub using @provider {type ProviderModelCatalog}

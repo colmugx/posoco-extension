@@ -16,12 +16,16 @@ catalogs advertise effort choices and provide a rebuild hook, so
 `/model {slot, effort}` validates and applies effort without the host knowing
 provider request fields.
 
-When a composed `DecisionPort` is available and the active slot advertises
-multiple reasoning efforts, the router may classify the current user request
-and choose a **temporary per-call effort**. This semantic judgement does not
+When the active decision slot (`/decision` selection) carries its
+provider-owned `DecisionPort` and the active chat slot advertises multiple
+reasoning efforts, the router may classify the current user request and
+choose a **temporary per-call effort**. This semantic judgement does not
 choose a provider or model and does not mutate the router's active selection.
 An explicit user-selected effort always wins; missing/failed/invalid decision
-results fall back to the existing active slot unchanged.
+results fall back to the existing active slot unchanged. With no decision
+model selected — or a selected one whose slot is absent or whose provider
+does not serve decisions — the decision capability is explicitly off; the
+router never borrows another backend's `DecisionPort`.
 
 The router also declares these commands:
 
@@ -60,6 +64,16 @@ The router also declares these commands:
   provider, or an empty eligible pool fails the command — never a fallback
   pick (`src/command_model_pick.mbt`, intercept at
   `src/command_model.mbt:367-390`).
+- `/decision [slot]` lists the `kind = Decision` slots — each entry carries
+  the slot id, provider/model facts, and the `active` marker — or switches
+  the active decision model. The listing states why decision is off when it
+  is (nothing selected, a pending persisted id, or a provider that does not
+  serve decisions); a chat slot is rejected with a pointer back to `/model`,
+  and `/model` refuses decision slots symmetrically. The selection is
+  persisted as the top-level `decision_model` key next to `model`, and the
+  router publishes a **`decision_selection`** bus event
+  (`{"slot_id", "available", "reason"}`) on every change so hosts can
+  surface the capability state instead of guessing.
 - `/login [provider]` lists provider authentication capabilities or runs the
   selected injected provider login flow. Use
   `/login {provider: "kimi", method: "oauth"}` or
@@ -174,8 +188,9 @@ The router implements the shared, provider-neutral control contract from
 hosts can drive it — or any future peer Model Manager — through a plain
 `&ModelManagerControl` trait reference. The adapter owns no routing logic:
 `manager_id` is the constant `"posoco_ext_llm"`; `list_models`/`active_selection`
-project `list_slots`/`active_slot_id`/`active_effort` verbatim (slot ids stay
-opaque; a provider-declared `None` context window stays unknown); and
+project `list_chat_slots`/`active_slot_id`/`active_effort` verbatim (slot ids stay
+opaque; decision slots belong to the `/decision` selection and never appear
+as manager models; a provider-declared `None` context window stays unknown); and
 `select_model`/`select_effort` delegate to `switch_slot`/`select_effort`, so
 the shared contract inherits their validation, effort-reset, status-publication,
 provider-event, and quota-invalidation invariants without duplicating them.

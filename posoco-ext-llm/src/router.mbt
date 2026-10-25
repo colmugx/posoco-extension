@@ -10,6 +10,11 @@ pub(all) struct RouterModelPort {
   slots : Map[String, ModelSlot]
   slot_order : Array[String]
   mut active_id : String
+  /// Active decision model selection: a `kind = Decision` slot id, or `""`
+  /// when no decision model is selected (decision capability off). A
+  /// persisted id absent from the catalogs stays selected as a pending
+  /// decision default instead of silently switching backends.
+  mut active_decision_id : String
   mut active_effort : String?
   /// Devkit status bus for the model/ctx/cache status segments; `None`
   /// disables publication entirely.
@@ -34,8 +39,6 @@ pub(all) struct RouterModelPort {
   /// provider path double-publish "5h"/"weekly" segments against the codex
   /// status publisher.
   extra_quota_sources : Map[String, &@devkit.QuotaSource]
-  /// Optional semantic judgement capability used for per-call effort selection.
-  priv mut decision : &@posoco.DecisionPort?
   /// Latest value per status segment observed on the shared bus; `/status`
   /// surfaces the provider-published quota windows ("5h", "weekly") from it.
   priv status_segments : Map[String, String]
@@ -56,17 +59,23 @@ pub(all) struct RouterModelPort {
 ///|
 /// Construct a router from a non-empty, uniquely keyed slot list.
 ///
-/// An empty default id selects the first slot in insertion order. A
+/// An empty default id selects the first `kind = Chat` slot in insertion
+/// order (decision slots never become the conversation default). A
 /// non-empty default that is absent from `slots` raises, unless
 /// `allow_missing_default` is set: hosts then keep the persisted selection
 /// as a *pending* active id — requests to it fail visibly until the slot
 /// appears (login/refresh) instead of silently moving to another model.
-/// Composition failures are raised before the router is returned, so
-/// callers never see a partially populated routing table.
+/// `default_decision_slot_id` seeds the decision selection the same way,
+/// except that an empty value means "no decision model": the decision
+/// capability starts explicitly off. Composition failures are raised before
+/// the router is returned, so callers never see a partially populated
+/// routing table.
 pub fn RouterModelPort::RouterModelPort(
   slots~ : Array[ModelSlot],
   default_slot_id~ : String = "",
   allow_missing_default~ : Bool = false,
+  default_decision_slot_id~ : String = "",
+  allow_missing_decision_default~ : Bool = false,
   bus~ : @devkit.EventBus? = None,
   model_metadata~ : ModelMetadata? = None,
   provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
@@ -98,7 +107,19 @@ pub fn RouterModelPort::RouterModelPort(
     slot_order.push(slot.id)
   }
   let active_id = if default_slot_id.length() == 0 {
-    slot_order[0]
+    let first_chat = slot_order.filter(fn(id) {
+      match slot_map.get(id) {
+        Some(slot) => slot.is_chat()
+        None => false
+      }
+    })
+    if first_chat.is_empty() {
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_llm",
+        detail="no chat model slot: the conversation selection needs at least one kind=chat slot",
+      )
+    }
+    first_chat[0]
   } else if !slot_map.contains(default_slot_id) && allow_missing_default {
     default_slot_id
   } else {
@@ -108,12 +129,43 @@ pub fn RouterModelPort::RouterModelPort(
         detail="unknown default model slot: " + default_slot_id,
       )
     }
-    default_slot_id
+    match slot_map.get(default_slot_id) {
+      Some(slot) if slot.is_chat() => default_slot_id
+      _ =>
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_llm",
+          detail="default model slot is a decision model; select it with /decision and persist decision_model instead: " +
+            default_slot_id,
+        )
+    }
+  }
+  // Decision defaults never auto-pick: an empty value keeps the decision
+  // capability explicitly off rather than quietly choosing a backend.
+  let active_decision_id = if default_decision_slot_id.length() == 0 {
+    ""
+  } else if slot_map.contains(default_decision_slot_id) {
+    match slot_map.get(default_decision_slot_id) {
+      Some(slot) if slot.is_decision() => default_decision_slot_id
+      _ =>
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_llm",
+          detail="default decision slot is not a decision model: " +
+            default_decision_slot_id,
+        )
+    }
+  } else if allow_missing_decision_default {
+    default_decision_slot_id
+  } else {
+    raise @posoco.CompositionError::ManifestSchemaError(
+      manifest_id="posoco_ext_llm",
+      detail="unknown default decision slot: " + default_decision_slot_id,
+    )
   }
   let router : RouterModelPort = {
     slots: slot_map,
     slot_order,
     active_id,
+    active_decision_id,
     active_effort: None,
     bus,
     model_metadata,
@@ -126,7 +178,6 @@ pub fn RouterModelPort::RouterModelPort(
     credentials: Map::from_array([]),
     api_key_credentials: Map::from_array([]),
     extra_quota_sources,
-    decision: None,
     status_segments: Map::from_array([]),
     quota_readings: [],
     quota_fetched_at: 0L,
@@ -139,6 +190,7 @@ pub fn RouterModelPort::RouterModelPort(
     None => ()
   }
   router.publish_model_selection()
+  router.publish_decision_selection()
   router
 }
 
@@ -150,6 +202,8 @@ pub fn RouterModelPort::from_catalogs(
   catalogs : Array[ProviderModelCatalog],
   default_slot_id~ : String = "",
   allow_missing_default~ : Bool = false,
+  default_decision_slot_id~ : String = "",
+  allow_missing_decision_default~ : Bool = false,
   bus~ : @devkit.EventBus? = None,
   model_metadata~ : ModelMetadata? = None,
   provider_credential_store~ : &@oauth.ProviderCredentialStore? = None,
@@ -181,6 +235,8 @@ pub fn RouterModelPort::from_catalogs(
     slots~,
     default_slot_id~,
     allow_missing_default~,
+    default_decision_slot_id~,
+    allow_missing_decision_default~,
     bus~,
     model_metadata~,
     provider_credential_store~,
@@ -259,6 +315,24 @@ pub fn RouterModelPort::list_slots(self : RouterModelPort) -> Array[ModelSlot] {
 }
 
 ///|
+/// Conversation-selectable slots (`kind = Chat`) in composition order. Every
+/// `/model` surface projects this list: decision slots belong to the
+/// `/decision` selection and never appear as chat candidates.
+pub fn RouterModelPort::list_chat_slots(
+  self : RouterModelPort,
+) -> Array[ModelSlot] {
+  self.list_slots().filter(fn(slot) { slot.is_chat() })
+}
+
+///|
+/// Decision-selectable slots (`kind = Decision`) in composition order.
+pub fn RouterModelPort::list_decision_slots(
+  self : RouterModelPort,
+) -> Array[ModelSlot] {
+  self.list_slots().filter(fn(slot) { slot.is_decision() })
+}
+
+///|
 /// Return all slot ids in composition order.
 pub fn RouterModelPort::list_slot_ids(self : RouterModelPort) -> Array[String] {
   self.slot_order.copy()
@@ -267,6 +341,92 @@ pub fn RouterModelPort::list_slot_ids(self : RouterModelPort) -> Array[String] {
 ///|
 pub fn RouterModelPort::active_slot_id(self : RouterModelPort) -> String {
   self.active_id
+}
+
+///|
+/// Active decision selection: a `kind = Decision` slot id, or `""` when no
+/// decision model is selected (the empty value is the explicit-off state,
+/// never an implicit pick).
+pub fn RouterModelPort::active_decision_slot_id(
+  self : RouterModelPort,
+) -> String {
+  self.active_decision_id
+}
+
+///|
+/// The active decision slot when it exists and can serve decisions. A
+/// pending selection (persisted id absent from the catalogs) and a slot
+/// without its provider-owned decision port both read as `None`: the
+/// decision capability is explicitly off in both states.
+fn RouterModelPort::active_decision_slot_opt(
+  self : RouterModelPort,
+) -> ModelSlot? {
+  match self.slots.get(self.active_decision_id) {
+    Some(slot) if slot.is_decision() && slot.decision_port is Some(_) =>
+      Some(slot)
+    _ => None
+  }
+}
+
+///|
+/// Why the decision capability is off right now: `None` when an available
+/// decision slot is active, otherwise a short reason for the visible
+/// decision-selection event.
+fn RouterModelPort::decision_off_reason(self : RouterModelPort) -> String? {
+  if self.active_decision_id.length() == 0 {
+    return Some("no decision model selected")
+  }
+  match self.slots.get(self.active_decision_id) {
+    None =>
+      Some(
+        "decision model '" +
+        self.active_decision_id +
+        "' is not configured (persisted selection)",
+      )
+    Some(slot) =>
+      if slot.is_decision() {
+        match slot.decision_port {
+          Some(_) => None
+          None =>
+            Some(
+              "provider of decision model '" +
+              self.active_decision_id +
+              "' does not support decision calls",
+            )
+        }
+      } else {
+        Some(
+          "selected decision model '" +
+          self.active_decision_id +
+          "' is not a decision slot",
+        )
+      }
+  }
+}
+
+///|
+/// Switch the active decision model. The target must be a `kind = Decision`
+/// slot of the current catalogs; unknown or chat slots fail with a typed
+/// error so the two selections never blur into each other.
+pub fn RouterModelPort::switch_decision_slot(
+  self : RouterModelPort,
+  slot_id : String,
+) -> Unit raise @posoco.CompositionError {
+  match self.slots.get(slot_id) {
+    Some(slot) if slot.is_decision() => ()
+    Some(_) =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_llm",
+        detail="slot is a chat model; switch it with /model: " + slot_id,
+      )
+    None =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_llm",
+        detail="unknown decision model slot: " + slot_id,
+      )
+  }
+  self.active_decision_id = slot_id
+  self.publish_decision_selection()
 }
 
 ///|
@@ -291,16 +451,25 @@ pub fn RouterModelPort::active_effort(self : RouterModelPort) -> String? {
 }
 
 ///|
-/// Select a slot without rebuilding its ModelPort.
+/// Select a chat slot without rebuilding its ModelPort. Decision slots are
+/// rejected: the conversation selection only ever moves among `kind = Chat`
+/// slots, so a decision model can never become the chat target.
 pub fn RouterModelPort::switch_slot(
   self : RouterModelPort,
   slot_id : String,
 ) -> Unit raise @posoco.CompositionError {
-  if !self.slots.contains(slot_id) {
-    raise @posoco.CompositionError::ManifestSchemaError(
-      manifest_id="posoco_ext_llm",
-      detail="unknown model slot: " + slot_id,
-    )
+  match self.slots.get(slot_id) {
+    Some(slot) if slot.is_decision() =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_llm",
+        detail="slot is a decision model; switch it with /decision: " + slot_id,
+      )
+    Some(_) => ()
+    None =>
+      raise @posoco.CompositionError::ManifestSchemaError(
+        manifest_id="posoco_ext_llm",
+        detail="unknown model slot: " + slot_id,
+      )
   }
   self.active_id = slot_id
   self.active_effort = None
@@ -396,11 +565,25 @@ pub fn RouterModelPort::replace_provider_slots(
   self.slot_order.clear()
   self.slot_order.append(replaced_order)
   if had_active && !self.slots.contains(old_active_id) {
-    self.active_id = slots[0].id
-    self.active_effort = None
-    self.publish_provider_event()
-    self.publish_model_selection()
+    // Fall back to the provider's first replacement *chat* slot; a pending
+    // chat selection must never heal onto a decision model. When the
+    // replacement carries no chat slot at all, keep the old id pending —
+    // requests fail visibly instead of silently changing kind.
+    let fallback = slots.filter(fn(slot) { slot.is_chat() })
+    if fallback.is_empty() {
+      self.publish_provider_event()
+      self.publish_model_selection()
+    } else {
+      self.active_id = fallback[0].id
+      self.active_effort = None
+      self.publish_provider_event()
+      self.publish_model_selection()
+    }
   }
+  // The decision selection rides the same pending rule: an id that the
+  // replacement no longer provides stays selected (decision off) instead of
+  // silently moving to another decision backend.
+  self.publish_decision_selection()
   // Last, and only once the active id is guaranteed valid again: the model
   // segment render reads the active slot.
   self.publish_model_status()
@@ -458,8 +641,11 @@ fn highest_probability_index(probabilities : Array[Double]) -> Int32? {
 
 ///|
 /// Return a temporary slot rebuilt at a DecisionPort-selected reasoning
-/// effort. This never mutates the router's active slot or sticky effort. Any
-/// DecisionPort failure falls back to the current deterministic selection.
+/// effort. The decision capability is resolved from the active decision slot
+/// (`/decision` selection): no selection, a pending selection, or a slot
+/// whose provider does not serve decisions reads as off, and the call falls
+/// back to the current deterministic selection. This never mutates the
+/// router's active slot or sticky effort.
 async fn RouterModelPort::decision_slot_for_chat(
   self : RouterModelPort,
   messages : ArrayView[@posoco.Message],
@@ -468,8 +654,12 @@ async fn RouterModelPort::decision_slot_for_chat(
   if self.active_effort is Some(_) {
     return None
   }
-  let decision = match self.decision {
-    Some(decision) => decision
+  let decision_slot = match self.active_decision_slot_opt() {
+    Some(slot) => slot
+    None => return None
+  }
+  let decision = match decision_slot.decision_port {
+    Some(port) => port
     None => return None
   }
   let slot = match self.active_slot_opt() {

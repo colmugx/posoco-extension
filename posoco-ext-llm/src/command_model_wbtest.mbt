@@ -76,7 +76,7 @@ async test "model command reports an unknown slot" {
 async test "model command declares dynamic slot choices" {
   let router = command_test_router()
   let defs = router.commands()
-  assert_eq(defs.length(), 4)
+  assert_eq(defs.length(), 5)
   assert_eq(defs[0].id, "model")
   assert_true(defs[0].ctype is @posoco.CommandType::Select)
   match defs[0].params[0].choices {
@@ -90,6 +90,13 @@ async test "model command declares dynamic slot choices" {
   match defs[2].params[0].choices {
     Some(choices) => assert_eq(choices, [])
     None => fail("expected effort choices")
+  }
+  assert_eq(defs[3].id, "status")
+  assert_eq(defs[4].id, "decision")
+  assert_true(defs[4].ctype is @posoco.CommandType::Select)
+  match defs[4].params[0].choices {
+    Some(choices) => assert_eq(choices, [])
+    None => fail("expected decision slot choices")
   }
 }
 

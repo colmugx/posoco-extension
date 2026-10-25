@@ -34,6 +34,15 @@ fn expect_no_args(args : Json) -> Unit raise @posoco.CommandError {
 }
 
 ///|
+/// Public read-only `/status` payload for host projections such as the Board
+/// Live panel. Same provider/model/effort/context/quota facts as the command;
+/// no state is changed and no quota pull is performed here.
+pub fn RouterModelPort::status_json(self : RouterModelPort) -> Json {
+  let (_, structured) = self.status_report()
+  structured
+}
+
+///|
 /// Provider-stated percentages render without trailing `.0` noise.
 fn format_status_percent(value : Double) -> String {
   if value >= 0.0 && value == value.floor() && value < 1000000000.0 {

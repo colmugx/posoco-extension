@@ -7,7 +7,8 @@
 /// pricing and group tabs). Hosts that project the router catalog into a
 /// non-command surface — the Board ticket model picker — need the same
 /// selection facts without the interactive extras, so this helper stays a
-/// projection of `list_slots()` and never re-derives a slot's identity.
+/// projection of `list_chat_slots()` and never re-derives a slot's identity.
+/// Decision slots are excluded: they are reachable only through `/decision`.
 ///
 /// Field facts:
 /// - `id` is the slot id and is the only value a caller may pin; it is opaque
@@ -20,7 +21,7 @@ pub fn RouterModelPort::picker_catalog_json(
   self : RouterModelPort,
 ) -> Array[Json] {
   let entries : Array[Json] = []
-  for slot in self.list_slots() {
+  for slot in self.list_chat_slots() {
     entries.push(
       Json::object({
         "id": Json::string(slot.id),
