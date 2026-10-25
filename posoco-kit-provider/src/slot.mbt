@@ -1,4 +1,41 @@
 ///|
+/// Slot role in the selection vocabulary. `Chat` slots feed the conversation
+/// selection (`/model`); `Decision` slots feed the semantic-judgement
+/// selection (`/decision`). The two kinds are different models: a provider
+/// advertises a slot as decision only when its extension also serves the
+/// `DecisionPort` for it.
+pub(all) enum ModelKind {
+  Chat
+  Decision
+} derive(Eq, Debug)
+
+///|
+pub extend ModelKind with Eq::{not_equal, equal}
+
+///|
+pub extend ModelKind with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+/// Stable wire id used by setup JSON and catalog projections.
+pub fn ModelKind::to_id(self : ModelKind) -> String {
+  match self {
+    Chat => "chat"
+    Decision => "decision"
+  }
+}
+
+///|
+/// Parse the wire id. `None` = not a kind name; callers decide whether that
+/// is a composition failure or a default.
+pub fn ModelKind::parse(text : String) -> ModelKind? {
+  match text {
+    "chat" => Some(Chat)
+    "decision" => Some(Decision)
+    _ => None
+  }
+}
+
+///|
 /// A selectable model slot.
 ///
 /// The router owns selection state only. Hosts and provider extensions build
@@ -10,6 +47,13 @@ pub(all) struct ModelSlot {
   provider_id : String
   model_id : String
   port : &@posoco.ModelPort
+  /// Slot role. Defaults to `Chat`; absent-from-JSON entries are read as
+  /// chat so every existing catalog stays valid.
+  kind : ModelKind
+  /// DecisionPort owned by the slot's provider extension. `Some` only on
+  /// `kind = Decision` slots; the router resolves the active decision
+  /// capability from this field and never from another backend.
+  decision_port : &@posoco.DecisionPort?
   oauth : &@oauth.OAuthProvider?
   api_key : &ApiKeyFactory?
   thinking_efforts : Array[String]
@@ -43,6 +87,8 @@ pub fn ModelSlot::ModelSlot(
   provider_id~ : String,
   model_id~ : String,
   port~ : &@posoco.ModelPort,
+  kind~ : ModelKind = ModelKind::Chat,
+  decision_port~ : &@posoco.DecisionPort? = None,
   oauth~ : &@oauth.OAuthProvider? = None,
   api_key~ : &ApiKeyFactory? = None,
   thinking_efforts~ : Array[String] = [],
@@ -62,6 +108,8 @@ pub fn ModelSlot::ModelSlot(
     provider_id,
     model_id,
     port,
+    kind,
+    decision_port,
     oauth,
     api_key,
     thinking_efforts,
@@ -75,4 +123,16 @@ pub fn ModelSlot::ModelSlot(
     rebuild_on_api_key,
     rebuild_on_effort,
   }
+}
+
+///|
+/// `true` when the slot feeds the decision selection (`/decision`).
+pub fn ModelSlot::is_decision(self : ModelSlot) -> Bool {
+  self.kind is ModelKind::Decision
+}
+
+///|
+/// `true` when the slot feeds the conversation selection (`/model`).
+pub fn ModelSlot::is_chat(self : ModelSlot) -> Bool {
+  self.kind is ModelKind::Chat
 }

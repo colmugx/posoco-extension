@@ -43,6 +43,22 @@ pub fn ProviderModelCatalog::ProviderModelCatalog(
         detail="slot provider id does not match catalog provider: " + slot.id,
       )
     }
+    // Kind coherence: a decision slot without its provider-owned port could
+    // never serve `/decision`, and a chat slot carrying one claims a
+    // capability the conversation selection must not route to.
+    match (slot.kind, slot.decision_port) {
+      (ModelKind::Decision, None) =>
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_llm",
+          detail="decision slot must carry a decision port: " + slot.id,
+        )
+      (ModelKind::Chat, Some(_)) =>
+        raise @posoco.CompositionError::ManifestSchemaError(
+          manifest_id="posoco_ext_llm",
+          detail="chat slot must not carry a decision port: " + slot.id,
+        )
+      (_, _) => ()
+    }
     if seen.contains(slot.id) {
       raise @posoco.CompositionError::ManifestSchemaError(
         manifest_id="posoco_ext_llm",

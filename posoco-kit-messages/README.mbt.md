@@ -16,6 +16,11 @@ and feature negotiation), invokes these codecs, and supervises cancellation.
   incremental SSE framing, event processing, completion, and usage projection.
 - `count_tokens_request`, `parse_count_tokens_response`:
   the protocol's token-counting request and result shapes.
+- `ThinkingConfig::Enabled(None)` emits `{"type":"enabled"}` without
+  `budget_tokens` — the budget-free enabled dialect of endpoints that scale
+  thinking through their own effort controls; every budgeted validation
+  (floor, `< max_tokens`, temperature 1.0, forced tool_choice) applies only
+  when a budget is present.
 - `MessagesUsage`: native counters with an explicit canonical projection.
 - `Reasoning.raw` replay envelope: the codec tag, version, fingerprint and
   opaque blocks are verified before replay.

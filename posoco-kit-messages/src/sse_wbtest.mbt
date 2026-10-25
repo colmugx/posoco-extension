@@ -702,8 +702,11 @@ test "incomplete tool arguments reject at block completion" {
     error => Err(error)
   }
   match result {
-    Err(@posoco.ModelError::ResponseParse(message)) =>
+    Err(@posoco.ModelError::ResponseParse(message)) => {
       assert_true(message.contains("tool.arguments"))
+      assert_true(message.contains("payload_chars=5"))
+      assert_true(message.contains("payload_head={\"a\":"))
+    }
     _ => fail("expected incomplete tool arguments rejection")
   }
 }

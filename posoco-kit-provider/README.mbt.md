@@ -46,3 +46,8 @@ Compatibility notes:
 - `ModelSlot` keeps its provider-owned `rebuild_on_effort` /
   `rebuild_on_credential` / `rebuild_on_api_key` hooks and offline
   cached-window restoration unchanged.
+- `ModelSlot` gained a `kind` field (`Chat` default / `Decision`) and a
+  `decision_port` field. A provider labels a slot `Decision` only when its
+  own extension serves the `DecisionPort` for it; the catalog constructor
+  rejects a decision slot without its port and a chat slot carrying one, so
+  the `/model` and `/decision` selections can never blur into each other.

@@ -2,6 +2,7 @@
 package "colmugx/posoco-ext-typesafe"
 
 import {
+  "colmugx/posoco-kit-provider",
   "colmugx/posoco/error",
   "colmugx/posoco/port",
   "moonbitlang/core/debug",
@@ -33,6 +34,16 @@ pub fn TypesafeDecisionPort::extension_id(Self) -> String
 pub fn TypesafeDecisionPort::manifest(Self) -> @port.ExtensionManifest
 pub impl @port.DecisionPort for TypesafeDecisionPort
 pub impl @port.Extension for TypesafeDecisionPort
+
+pub(all) struct TypesafeProvider {
+}
+pub fn TypesafeProvider::TypesafeProvider() -> Self
+pub fn TypesafeProvider::build(Self, @posoco-kit-provider.ProviderConfigSource) -> @posoco-kit-provider.ProviderBuildResult raise @error.CompositionError
+pub fn TypesafeProvider::credential_id(Self) -> String
+pub async fn TypesafeProvider::login(Self, &@ext-oauth.AuthPromptInteraction) -> @ext-oauth.ApiKeyCredential raise @ext-oauth.OAuthError
+pub fn TypesafeProvider::provider_id(Self) -> String
+pub impl @posoco-kit-provider.ApiKeyFactory for TypesafeProvider
+pub impl @posoco-kit-provider.ProviderFactory for TypesafeProvider
 
 // Type aliases
 

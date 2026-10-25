@@ -25,12 +25,24 @@ pub fn AuthMethod::not_equal(Self, Self) -> Bool
 pub fn AuthMethod::to_id(Self) -> String
 pub fn AuthMethod::to_repr(Self) -> @debug.Repr
 
+pub(all) enum ModelKind {
+  Chat
+  Decision
+} derive(Eq, @debug.Debug)
+pub fn ModelKind::equal(Self, Self) -> Bool
+pub fn ModelKind::not_equal(Self, Self) -> Bool
+pub fn ModelKind::parse(String) -> Self?
+pub fn ModelKind::to_id(Self) -> String
+pub fn ModelKind::to_repr(Self) -> @debug.Repr
+
 pub(all) struct ModelSlot {
   id : String
   label : String
   provider_id : String
   model_id : String
   port : &@port.ModelPort
+  kind : ModelKind
+  decision_port : &@port.DecisionPort?
   oauth : &@ext-oauth.OAuthProvider?
   api_key : &ApiKeyFactory?
   thinking_efforts : Array[String]
@@ -44,7 +56,9 @@ pub(all) struct ModelSlot {
   rebuild_on_api_key : ((@ext-oauth.ApiKeyCredential) -> ModelSlot)?
   rebuild_on_effort : ((String) -> ModelSlot)?
 }
-pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, oauth? : &@ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int32?, context_window_source? : String, metadata_provider_id? : String?, capabilities? : Array[String], default_effort? : String?, display_group? : String?, rebuild_on_credential? : ((@ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
+pub fn ModelSlot::ModelSlot(id~ : String, label~ : String, provider_id~ : String, model_id~ : String, port~ : &@port.ModelPort, kind? : ModelKind, decision_port? : &@port.DecisionPort?, oauth? : &@ext-oauth.OAuthProvider?, api_key? : &ApiKeyFactory?, thinking_efforts? : Array[String], context_window? : Int32?, context_window_source? : String, metadata_provider_id? : String?, capabilities? : Array[String], default_effort? : String?, display_group? : String?, rebuild_on_credential? : ((@ext-oauth.Credential) -> Self)?, rebuild_on_api_key? : ((@ext-oauth.ApiKeyCredential) -> Self)?, rebuild_on_effort? : ((String) -> Self)?) -> Self
+pub fn ModelSlot::is_chat(Self) -> Bool
+pub fn ModelSlot::is_decision(Self) -> Bool
 
 pub(all) enum ProviderBuildResult {
   Ready(ProviderModelCatalog)
