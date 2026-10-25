@@ -705,7 +705,9 @@ test "incomplete tool arguments reject at block completion" {
     Err(@posoco.ModelError::ResponseParse(message)) => {
       assert_true(message.contains("tool.arguments"))
       assert_true(message.contains("payload_chars=5"))
+      assert_true(message.contains("parse_error=Unexpected end of file"))
       assert_true(message.contains("payload_head={\"a\":"))
+      assert_true(message.contains("payload_tail={\"a\":"))
     }
     _ => fail("expected incomplete tool arguments rejection")
   }

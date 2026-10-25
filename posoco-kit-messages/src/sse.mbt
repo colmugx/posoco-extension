@@ -803,14 +803,19 @@ pub fn process_messages_event(
             Json::object({})
           } else {
             @json.parse(args_text) catch {
-              _ => {
+              err => {
                 let head = if args_text.length() <= 80 {
                   args_text
                 } else {
                   args_text[:80].to_owned()
                 }
+                let tail = if args_text.length() <= 80 {
+                  args_text
+                } else {
+                  args_text[args_text.length() - 80:].to_owned()
+                }
                 raise @posoco.ModelError::ResponseParse(
-                  "\{provider} SSE parse failure (stage=tool.arguments, category=malformed, payload_chars=\{args_text.length()}, payload_head=\{head})",
+                  "\{provider} SSE parse failure (stage=tool.arguments, category=malformed, parse_error=\{err}, payload_chars=\{args_text.length()}, payload_head=\{head}, payload_tail=\{tail})",
                 )
               }
             }
