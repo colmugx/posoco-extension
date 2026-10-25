@@ -76,11 +76,37 @@ fn zen_deepseek_applies(config : OpenCodeZenConfig) -> Bool {
 /// disabled) followed by its declared levels; a reasoning model without
 /// levels, and a model whose surface is unknown, fall back to the safe
 /// `off` / `on` toggle; a plain chat model shows no selector at all.
+/// Models on the SystemOne wire are decision models instead: the slot is
+/// `kind = Decision` with the provider-owned decision port, carries no
+/// effort picker, and never appears in the conversation selection.
 fn zen_catalog_slot(
   config : OpenCodeZenConfig,
   surface : ZenReasoningSurface?,
   api_key : &@llm.ApiKeyFactory,
 ) -> @llm.ModelSlot {
+  if wire_is_decision(config.wire) {
+    let port : &@posoco.ModelPort = OpenCodeZenModelPort(config)
+    let decision_port : &@posoco.DecisionPort = OpenCodeZenDecisionPort(config)
+    return @llm.ModelSlot::ModelSlot(
+      id=zen_provider_id + "/" + config.model,
+      label="Zen / " + config.model,
+      provider_id=zen_provider_id,
+      model_id=config.model,
+      port~,
+      kind=@llm.ModelKind::Decision,
+      decision_port=Some(decision_port),
+      api_key=Some(api_key),
+      capabilities=["decision", "api_key"],
+      display_group=Some("zen"),
+      rebuild_on_api_key=Some(fn(credential) {
+        let rebuilt_config : OpenCodeZenConfig = {
+          ..config,
+          api_key: credential.secret,
+        }
+        zen_catalog_slot(rebuilt_config, surface, api_key)
+      }),
+    )
+  }
   // Install DeepSeek-only policy on this exact selected Chat Completions
   // model slot. GLM/Kimi/Messages/Responses keep their original ports.
   let applies = zen_deepseek_applies(config)
@@ -312,28 +338,35 @@ pub fn zen_static_catalog(
   api_key : &@llm.ApiKeyFactory,
   overrides~ : Map[String, String] = Map::from_array([]),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
+  let slot = zen_catalog_slot(
+    zen_config_for_model(
+      config,
+      ZenModelInfo::{
+        id: config.model,
+        owned_by: "",
+        cached_efforts: [],
+        context_window: config.context_window,
+        supports_images: config.supports_images,
+      },
+      None,
+      None,
+      overrides~,
+    ),
+    None,
+    api_key,
+  )
+  // Provider-level capability labels: the gateway serves chat regardless of
+  // what the offline snapshot pinned; decision appears only when the pinned
+  // slot is itself a decision model.
+  let capabilities : Array[String] = if slot.is_decision() {
+    ["chat", "streaming", "api_key", "decision"]
+  } else {
+    ["chat", "streaming", "api_key"]
+  }
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=zen_provider_id,
-    slots=[
-      zen_catalog_slot(
-        zen_config_for_model(
-          config,
-          ZenModelInfo::{
-            id: config.model,
-            owned_by: "",
-            cached_efforts: [],
-            context_window: config.context_window,
-            supports_images: config.supports_images,
-          },
-          None,
-          None,
-          overrides~,
-        ),
-        None,
-        api_key,
-      ),
-    ],
-    capabilities=["chat", "streaming", "api_key"],
+    slots=[slot],
+    capabilities~,
   )
 }
 
@@ -342,11 +375,12 @@ pub fn zen_static_catalog(
 /// `metas` carries the models.dev-derived metadata (surface, window, images,
 /// SDK wire signal); a model the map does not cover falls back to its
 /// host-cached picker and window, and finally to the safe defaults. Models
-/// resolving to an unserved wire (Google Generative AI, SystemOne, the
-/// Mistral dialect) are excluded from the catalog rather than offered on a
-/// wire that would answer `400 ModelProtocolUnsupported`. Raises on an empty
-/// list so a transient gateway glitch surfaces as a typed composition
-/// failure rather than a silently empty picker.
+/// resolving to the SystemOne wire become `kind = Decision` slots (`/decision`
+/// candidates); models on an unserved wire (Google Generative AI, the Mistral
+/// dialect) are excluded from the catalog rather than offered on a wire that
+/// would answer `400 ModelProtocolUnsupported`. Raises on an empty list so a
+/// transient gateway glitch surfaces as a typed composition failure rather
+/// than a silently empty picker.
 pub fn zen_model_catalog(
   base_config : OpenCodeZenConfig,
   models : Array[ZenModelInfo],
@@ -367,7 +401,8 @@ pub fn zen_model_catalog(
       Some(meta) => meta.provider_npm
       None => None
     }
-    if wire_servable(resolve_zen_wire(info.id, npm~, overrides~)) {
+    let wire = resolve_zen_wire(info.id, npm~, overrides~)
+    if wire_servable(wire) || wire_is_decision(wire) {
       servable.push(info)
     }
   }
@@ -378,6 +413,7 @@ pub fn zen_model_catalog(
     )
   }
   let slots : Array[@llm.ModelSlot] = []
+  let mut has_decision = false
   for info in servable {
     let surface = zen_model_surface(info, metas)
     let config = zen_config_for_model(
@@ -387,11 +423,19 @@ pub fn zen_model_catalog(
       metas.get(info.id),
       overrides~,
     )
+    if wire_is_decision(config.wire) {
+      has_decision = true
+    }
     slots.push(zen_catalog_slot(config, surface, api_key))
+  }
+  let capabilities : Array[String] = if has_decision {
+    ["chat", "streaming", "api_key", "decision"]
+  } else {
+    ["chat", "streaming", "api_key"]
   }
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=zen_provider_id,
     slots~,
-    capabilities=["chat", "streaming", "api_key"],
+    capabilities~,
   )
 }

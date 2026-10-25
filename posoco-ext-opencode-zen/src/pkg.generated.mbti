@@ -21,6 +21,8 @@ pub fn opencode_anchored_compact_port(OpenCodeZenConfig, inspector? : ((@types.S
 
 pub fn opencode_request_headers(String, String) -> Map[String, String]
 
+pub fn opencode_session_uuid() -> String
+
 pub fn parse_models_dev_meta(Json) -> Map[String, ZenModelMeta] raise @error.ModelError
 
 pub fn parse_models_dev_surfaces(Json) -> Map[String, ZenReasoningSurface] raise @error.ModelError
@@ -33,11 +35,17 @@ pub fn parse_zen_models(Json) -> Array[ZenModelInfo] raise @error.ModelError
 
 pub fn resolve_zen_wire(String, npm? : String?, overrides? : Map[String, String]) -> WireKind
 
+pub fn systemone_parse_response(Json, @port.DecisionRequest) -> @port.DecisionResult raise @error.DecisionError
+
+pub fn systemone_request_json(@port.DecisionRequest, String) -> Json raise @error.DecisionError
+
 pub fn wire_exclusion_reason(WireKind) -> String
 
 pub fn wire_from_family(String) -> WireKind?
 
 pub fn wire_from_models_dev_npm(String?) -> WireKind?
+
+pub fn wire_is_decision(WireKind) -> Bool
 
 pub fn wire_kind_of_id(String) -> WireKind?
 
@@ -86,6 +94,14 @@ pub fn OpenCodeZenConfig::equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::not_equal(Self, Self) -> Bool
 pub fn OpenCodeZenConfig::to_repr(Self) -> @debug.Repr
 pub fn OpenCodeZenConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+pub(all) struct OpenCodeZenDecisionPort {
+  config : OpenCodeZenConfig
+}
+pub fn OpenCodeZenDecisionPort::OpenCodeZenDecisionPort(OpenCodeZenConfig) -> Self
+pub async fn OpenCodeZenDecisionPort::evaluate(Self, @port.DecisionRequest) -> @port.DecisionResult raise @error.DecisionError
+pub async fn OpenCodeZenDecisionPort::evaluate_with_context(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
+pub impl @port.DecisionPort for OpenCodeZenDecisionPort
 
 pub(all) struct OpenCodeZenModelPort {
   config : OpenCodeZenConfig

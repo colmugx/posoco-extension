@@ -20,6 +20,7 @@ anchored compact, and spend accounting all live here.
 | Struct | Port | Responsibility |
 |--------|------|----------------|
 | `OpenCodeZenModelPort` | `ModelPort` | chat and streaming chat, dispatched per model over the Chat Completions / Responses / Messages wires; reports `context_window` / `compact_threshold` to the Agent's auto-compact policy |
+| `OpenCodeZenDecisionPort` | `posoco.DecisionPort` | structured semantic judgement for `jev-*` (SystemOne) slots: one POST to `{base}/systemone`, provider-owned credential and headers, typed `DecisionError` with provider+model on every failure |
 | `OpenCodeZenProvider` | `llm.ProviderFactory` | static `build`: a no-network catalog over the resolved credential/endpoint/model (expanded offline from host-cached records when available) |
 | `OpenCodeZenProvider` | `llm.RefreshableProviderFactory` | live `refresh`: one authenticated `/models` call, one slot per discovered model, enriched from the models.dev mirror |
 | `OpenCodeZenProvider` | `llm.ApiKeyFactory` | the `/login opencode` secret prompt |
@@ -75,10 +76,16 @@ model, never stored. Precedence:
    Responses, `qwen*` → Messages, `gemini-*` → Google, `jev-*` → SystemOne.
 5. **Gateway default** — Chat Completions.
 
-Models resolving to an **unserved wire** (Google Generative AI, Jev
-SystemOne, the Mistral dialect) are excluded from the catalog rather than
-offered on a wire that would fail; a hand-built config raises a typed
-`wire_not_served` error. A gateway `FreeTierError` (the free tier refuses
+Models resolving to an **unserved wire** (Google Generative AI, the Mistral
+dialect) are excluded from the catalog rather than offered on a wire that
+would fail; a hand-built config raises a typed `wire_not_served` error.
+SystemOne is the structured **decision** wire: `jev-*` models are catalogued
+as `kind = Decision` slots — `/decision` candidates with this extension's own
+decision port, never `/model` chat entries. The decision call is one
+authenticated POST to `{base}/systemone` (same credential, routing headers,
+and endpoint family as the chat wires); failures surface as typed
+`DecisionError`s naming `provider=opencode` and the model, never a fallback
+to another decision backend. A gateway `FreeTierError` (the free tier refuses
 every credential a request can carry) and `ModelProtocolUnsupported` both
 surface as typed transport markers, never generic failures.
 

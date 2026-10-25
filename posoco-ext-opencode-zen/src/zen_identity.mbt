@@ -35,6 +35,14 @@ fn zen_request_headers(session_id : String) -> Map[String, String] {
 }
 
 ///|
+/// Mint an opaque routing identifier for calls that carry no explicit
+/// session fact (e.g. a bare decision call). The gateways use it for request
+/// routing, never identity; it is not a cryptographic identifier.
+pub fn opencode_session_uuid() -> String {
+  zen_random_uuid_v4()
+}
+
+///|
 
 ///|
 /// Mint a v4 UUID using the process RNG. The result is suitable for the

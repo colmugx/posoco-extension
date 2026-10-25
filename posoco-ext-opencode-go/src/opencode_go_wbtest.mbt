@@ -715,3 +715,45 @@ test "an OAuth credential composes a Go catalog with its organization" {
       fail("expected a configured Go catalog")
   }
 }
+
+///|
+test "go_model_catalog drops SystemOne ids from the live catalog" {
+  let provider = OpenCodeGoProvider()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let payload = Json::object(
+    Map::from_array([
+      ("object", Json::string("list")),
+      (
+        "data",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              ("id", Json::string("jev-1.13")),
+              ("object", Json::string("model")),
+              ("owned_by", Json::string("opencode")),
+            ]),
+          ),
+          Json::object(
+            Map::from_array([
+              ("id", Json::string("glm-5.3-flash")),
+              ("object", Json::string("model")),
+              ("owned_by", Json::string("opencode")),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  let catalog = go_model_catalog(
+    go_base_config(),
+    @zen.parse_zen_models(payload),
+    "glm-5.3-flash",
+    Map::from_array([]),
+    api_key_factory,
+  )
+  let slots = catalog.slots()
+  assert_eq(slots.length(), 1)
+  assert_eq(slots[0].model_id, "glm-5.3-flash")
+  assert_true(slots[0].is_chat())
+  assert_false(catalog.capabilities().contains("decision"))
+}

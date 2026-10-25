@@ -24,8 +24,8 @@ options(
   targets: {
     // HTTP-backed adaptors: native+wasm+js (moonbitlang/async/http is
     // unavailable on wasm-gc). Catalog/factory/protocol/limits/quota-parse
-    // and the rate-limit decorator live in unrestricted core files; only
-    // the live fetches compile on the HTTP backends.
+    // and the rate-limit decorator live in unrestricted core files; only the
+    // live fetches compile on the HTTP backends.
     "models_native_js.mbt": [ "native", "wasm", "js" ],
     "oauth_login_native_js.mbt": [ "native", "wasm", "js" ],
     "quota_usage_native_js.mbt": [ "native", "wasm", "js" ],

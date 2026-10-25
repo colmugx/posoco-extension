@@ -10,10 +10,12 @@
 /// endpoints tables, then the models.dev `provider.npm` signal, then family
 /// fallback by id prefix, then the gateway default (Chat Completions).
 ///
-/// `GoogleGenai`, `SystemOne`, and the Mistral Conversations dialect have no
-/// posoco kit yet (Google is planned for v2): models resolving to them are
-/// excluded from the catalog with a typed reason instead of being offered on
-/// a wire that answers `400 ModelProtocolUnsupported`.
+/// `GoogleGenai`, and the Mistral Conversations dialect have no posoco kit yet
+/// (Google is planned for v2): models resolving to them are excluded from the
+/// catalog with a typed reason instead of being offered on a wire that
+/// answers `400 ModelProtocolUnsupported`. `SystemOne` is the structured
+/// decision wire: those models are catalogued as `kind = Decision` slots
+/// served by the provider-owned decision port, never as chat models.
 
 ///|
 /// The wire structure a model is served on.
@@ -61,13 +63,23 @@ pub fn wire_kind_of_id(id : String) -> WireKind? {
 }
 
 ///|
-/// Whether this extension can serve the wire at all. The three unserved
-/// kinds are excluded from the catalog; the reason is `wire_exclusion_reason`.
+/// Whether this extension can serve the wire as a *chat* wire. The two
+/// unserved kinds are excluded from the conversation catalog; the reason is
+/// `wire_exclusion_reason`. `SystemOne` is not a chat wire either — but it is
+/// served as decision slots (`wire_is_decision`), so it is not "unserved".
 pub fn wire_servable(kind : WireKind) -> Bool {
   match kind {
     ChatCompletions | Messages | Responses => true
     GoogleGenai | SystemOne | MistralDialect => false
   }
+}
+
+///|
+/// Whether the wire is the structured decision endpoint. Models resolving
+/// here are catalogued as `kind = Decision` slots (`/decision` candidates)
+/// backed by the provider-owned decision port, and never as chat models.
+pub fn wire_is_decision(kind : WireKind) -> Bool {
+  kind is SystemOne
 }
 
 ///|

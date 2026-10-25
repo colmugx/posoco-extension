@@ -60,9 +60,10 @@ held as a top-level extension by the Agent.
 - **Spend** — Go pays the same token prices as the pay-as-you-go plane, so
   the shared rates-backed estimate records into this plane's own tracker
   (`posoco_ext_opencode_go`) and publishes the statusbar `spent` segment.
-- **Unserved wires** — Google Generative AI / SystemOne models are excluded
-  from the catalog; unknown ids default to chat completions and a wrong
-  endpoint surfaces as a typed `model_protocol_unsupported` marker.
+- **Unserved wires** — Google Generative AI, the Mistral dialect, and
+  SystemOne models are excluded from the catalog; unknown ids default to chat
+  completions and a wrong endpoint surfaces as a typed
+  `model_protocol_unsupported` marker.
 
 ## Quota: the `/usage` contract
 

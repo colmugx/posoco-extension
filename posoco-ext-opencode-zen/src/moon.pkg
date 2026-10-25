@@ -33,11 +33,13 @@ options(
     // protocol table, and the zen-owned wire layer (config, encode, decode,
     // SSE wrapper, error classification, provider_config) live in
     // unrestricted core files and compile on every backend. The three
-    // per-wire transports (chat completions, messages, responses) and the
-    // refresh/models.dev fetch compile on native+wasm+js.
+    // per-wire transports (chat completions, messages, responses), the
+    // SystemOne decision transport, and the refresh/models.dev fetch compile
+    // on native+wasm+js.
     "chat_native_js.mbt": [ "native", "wasm", "js" ],
     "wire_messages_native_js.mbt": [ "native", "wasm", "js" ],
     "wire_responses_native_js.mbt": [ "native", "wasm", "js" ],
+    "decision_native_js.mbt": [ "native", "wasm", "js" ],
     "compact_native_js.mbt": [ "native", "wasm", "js" ],
     "models_native_js.mbt": [ "native", "wasm", "js" ],
     "refresh_native_js.mbt": [ "native", "wasm", "js" ],

@@ -394,40 +394,42 @@ pub fn go_static_catalog(
   policy~ : @ds.DeepSeekPolicy? = None,
   ctx~ : @devkit.ExtContext = @devkit.ExtContext::default(),
 ) -> @llm.ProviderModelCatalog raise @posoco.CompositionError {
+  let slot = go_catalog_slot(
+    go_config_for_model(
+      config,
+      @zen.ZenModelInfo::{
+        id: config.model,
+        owned_by: "",
+        cached_efforts: [],
+        context_window: config.context_window,
+        supports_images: config.supports_images,
+      },
+      None,
+      None,
+      overrides~,
+    ),
+    None,
+    api_key,
+    policy~,
+    ctx~,
+  )
+  // Provider-level capability labels: the gateway serves chat regardless of
+  // what the offline snapshot pinned.
+  let capabilities : Array[String] = ["chat", "streaming", "api_key"]
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id=go_provider_id,
-    slots=[
-      go_catalog_slot(
-        go_config_for_model(
-          config,
-          @zen.ZenModelInfo::{
-            id: config.model,
-            owned_by: "",
-            cached_efforts: [],
-            context_window: config.context_window,
-            supports_images: config.supports_images,
-          },
-          None,
-          None,
-          overrides~,
-        ),
-        None,
-        api_key,
-        policy~,
-        ctx~,
-      ),
-    ],
-    capabilities=["chat", "streaming", "api_key"],
+    slots=[slot],
+    capabilities~,
   )
 }
 
 ///|
 /// Build a multi-slot catalog from the gateway's live `/models` response.
 /// `metas` carries the models.dev-derived metadata (the mirror has no Go
-/// section, so Go-only ids degrade to the safe fallbacks). Models resolving
-/// to an unserved wire are excluded rather than offered on a wire that
-/// would answer `400 ModelProtocolUnsupported`. Raises on an empty list so
-/// a transient glitch surfaces as a typed composition failure.
+/// section, so Go-only ids degrade to the safe fallbacks). Models on an
+/// unserved wire are excluded rather than offered on a wire that would answer
+/// `400 ModelProtocolUnsupported`. Raises on an empty list so a transient
+/// glitch surfaces as a typed composition failure.
 pub fn go_model_catalog(
   base_config : @zen.OpenCodeZenConfig,
   models : Array[@zen.ZenModelInfo],
@@ -450,7 +452,8 @@ pub fn go_model_catalog(
       Some(meta) => meta.provider_npm
       None => None
     }
-    if @zen.wire_servable(resolve_go_wire(info.id, npm~, overrides~)) {
+    let wire = resolve_go_wire(info.id, npm~, overrides~)
+    if @zen.wire_servable(wire) {
       servable.push(info)
     }
   }

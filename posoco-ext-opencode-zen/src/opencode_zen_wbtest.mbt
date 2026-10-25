@@ -2786,3 +2786,255 @@ test "API-key credentials keep the Messages x-api-key scheme" {
     messages_headers.contains(@http.CaseInsensitiveString("Authorization")),
   )
 }
+
+///|
+test "jev family resolves to the decision wire and never a chat wire" {
+  guard wire_from_family("jev-1.13") is Some(family_wire) else {
+    fail("expected the jev family rule")
+  }
+  assert_true(wire_is_decision(family_wire))
+  assert_true(wire_is_decision(resolve_zen_wire("jev-1.13")))
+  assert_true(
+    wire_is_decision(
+      resolve_zen_wire(
+        "anything-else",
+        overrides=Map::from_array([("anything-else", "system_one")]),
+      ),
+    ),
+  )
+  // Chat and unserved wires stay out of the decision classification.
+  assert_false(wire_is_decision(resolve_zen_wire("glm-5.2")))
+  assert_false(wire_is_decision(GoogleGenai))
+  assert_false(wire_is_decision(MistralDialect))
+}
+
+///|
+test "zen_model_catalog serves jev models as decision slots and chat models as chat slots" {
+  let provider = OpenCodeZenProvider()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let payload = Json::object(
+    Map::from_array([
+      ("object", Json::string("list")),
+      (
+        "data",
+        Json::array([
+          Json::object(
+            Map::from_array([
+              ("id", Json::string("jev-1.13")),
+              ("object", Json::string("model")),
+              ("owned_by", Json::string("opencode")),
+            ]),
+          ),
+          Json::object(
+            Map::from_array([
+              ("id", Json::string("glm-5.2")),
+              ("object", Json::string("model")),
+              ("owned_by", Json::string("opencode")),
+            ]),
+          ),
+        ]),
+      ),
+    ]),
+  )
+  let catalog = zen_model_catalog(
+    zen_base_config(),
+    parse_zen_models(payload),
+    "glm-5.2",
+    Map::from_array([]),
+    api_key_factory,
+  )
+  let slots = catalog.slots()
+  assert_eq(slots.length(), 2)
+  // The preferred (chat) model stays pinned first.
+  let chat = slots[0]
+  assert_eq(chat.model_id, "glm-5.2")
+  assert_true(chat.is_chat())
+  assert_false(chat.is_decision())
+  assert_true(chat.decision_port is None)
+  let decision = slots[1]
+  assert_eq(decision.model_id, "jev-1.13")
+  assert_eq(decision.id, "opencode/jev-1.13")
+  assert_true(decision.is_decision())
+  assert_false(decision.is_chat())
+  assert_true(decision.decision_port is Some(_))
+  // A decision model carries no effort picker and never claims chat.
+  assert_eq(decision.thinking_efforts, [])
+  assert_false(decision.capabilities.contains("chat"))
+  assert_true(decision.capabilities.contains("decision"))
+  // Provider-level capability labels name the decision surface.
+  assert_true(catalog.capabilities().contains("decision"))
+}
+
+///|
+test "zen static catalog classifies a pinned jev model as a decision slot" {
+  let provider = OpenCodeZenProvider()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let config = OpenCodeZenConfig(
+    "sk-test",
+    base_url="https://opencode.ai/inference/v1",
+    model="jev-1.13",
+  )
+  let catalog = zen_static_catalog(config, api_key_factory)
+  let slots = catalog.slots()
+  assert_eq(slots.length(), 1)
+  assert_true(slots[0].is_decision())
+  assert_true(slots[0].decision_port is Some(_))
+  assert_true(catalog.capabilities().contains("decision"))
+  // The cached-records path (offline expansion) classifies identically.
+  let cached = Json::array([
+    Json::object(
+      Map::from_array([
+        ("model_id", Json::string("jev-1.13")),
+        ("thinking_efforts", Json::array([])),
+      ]),
+    ),
+  ])
+  guard parse_opencode_cached_models(Some(cached)) is Some(cached_models) else {
+    fail("expected cached records to decode")
+  }
+  let expanded = zen_model_catalog(
+    config,
+    cached_models,
+    "jev-1.13",
+    Map::from_array([]),
+    api_key_factory,
+  )
+  assert_true(expanded.slots()[0].is_decision())
+}
+
+///|
+test "zen decision slot rebuild keeps the decision kind and port under a new key" {
+  let provider = OpenCodeZenProvider()
+  let api_key_factory : &@llm.ApiKeyFactory = provider
+  let config = OpenCodeZenConfig(
+    "sk-test",
+    base_url="https://opencode.ai/inference/v1",
+    model="jev-1.13",
+  )
+  let slot = zen_static_catalog(config, api_key_factory).slots()[0]
+  guard slot.rebuild_on_api_key is Some(rebuild) else {
+    fail("expected a credential rebuild hook")
+  }
+  let rebuilt = rebuild(
+    @oauth.ApiKeyCredential::ApiKeyCredential(secret="sk-next"),
+  )
+  assert_true(rebuilt.is_decision())
+  assert_true(rebuilt.decision_port is Some(_))
+}
+
+///|
+test "zen decision port posts to the gateway systemone endpoint" {
+  let port = OpenCodeZenDecisionPort(
+    OpenCodeZenConfig(
+      "sk-test",
+      base_url="https://opencode.ai/inference/v1",
+      model="jev-1.13",
+    ),
+  )
+  assert_eq(port.decision_url(), "https://opencode.ai/inference/v1/systemone")
+}
+
+///|
+test "zen decision encoder speaks the System One envelope" {
+  let request : @posoco.DecisionRequest = {
+    state: Json::object({ "task": Json::string("route a turn") }),
+    questions: [
+      @posoco.DecisionQuestion::Boolean(
+        id="safe",
+        instructions=Json::string("Is it safe?"),
+        true_criteria=Some(Json::string("no side effects")),
+        false_criteria=None,
+      ),
+      @posoco.DecisionQuestion::Choice(
+        id="route",
+        instructions=Json::string("Pick one"),
+        options=[
+          { id: "fast", description: None, },
+          { id: "deep", description: None, },
+        ],
+      ),
+    ],
+  }
+  let payload = systemone_request_json(request, "jev-1.13")
+  guard payload is Object(root) else { fail("expected request object") }
+  assert_true(root.get("model") is Some(String("jev-1.13")))
+  assert_true(root.get("state") is Some(Object(_)))
+  guard root.get("questions") is Some(Object(questions)) else {
+    fail("expected questions object")
+  }
+  guard questions.get("safe") is Some(Object(safe)) else {
+    fail("expected boolean question")
+  }
+  assert_true(safe.get("type") is Some(String("noul")))
+  guard questions.get("route") is Some(Object(route)) else {
+    fail("expected choice question")
+  }
+  assert_true(route.get("type") is Some(String("choice")))
+  guard route.get("criteria") is Some(Object(options)) else {
+    fail("expected choice criteria")
+  }
+  guard options.get("fast") is Some(Json::Null) else {
+    fail("expected a null choice criterion")
+  }
+}
+
+///|
+test "zen decision decoder validates the official System One response" {
+  let request : @posoco.DecisionRequest = {
+    state: Json::null(),
+    questions: [
+      @posoco.DecisionQuestion::Boolean(
+        id="safe",
+        instructions=Json::string("Is it safe?"),
+        true_criteria=None,
+        false_criteria=None,
+      ),
+    ],
+  }
+  let payload = Json::object({
+    "model": Json::string("jev-1.13"),
+    "answers": Json::object({
+      "safe": Json::object({
+        "type": Json::string("noul"),
+        "noul": Json::number(0.9),
+      }),
+    }),
+    "usage": Json::object({
+      "input_tokens": Json::number(12.0),
+      "output_tokens": Json::number(3.0),
+    }),
+  })
+  let result = systemone_parse_response(payload, request)
+  assert_eq(result.model, Some("jev-1.13"))
+  assert_eq(
+    result.usage,
+    Some({ input_tokens: Some(12), output_tokens: Some(3), }),
+  )
+  match result.answers[0] {
+    @posoco.DecisionAnswer::BooleanAnswer(id~, probability_true~) => {
+      assert_eq(id, "safe")
+      assert_eq(probability_true, 0.9)
+    }
+    _ => fail("expected BooleanAnswer")
+  }
+}
+
+///|
+test "zen decision errors name the provider and the model" {
+  let rate = systemone_http_error("opencode", "jev-1.13", 429, 0)
+  assert_true(rate is @posoco.DecisionError::RateLimited(_))
+  assert_true(rate.to_string().contains("provider=opencode"))
+  assert_true(rate.to_string().contains("model=jev-1.13"))
+  let bad = systemone_http_error(
+    "opencode",
+    "jev-1.13",
+    400,
+    10,
+    body=Some("bad question"),
+  )
+  assert_true(bad is @posoco.DecisionError::RequestBuild(_))
+  assert_true(bad.to_string().contains("model=jev-1.13"))
+  let down = systemone_http_error("opencode", "jev-1.13", 503, 0)
+  assert_true(down is @posoco.DecisionError::Transport(_))
+  assert_true(down.to_string().contains("provider=opencode"))
+}
