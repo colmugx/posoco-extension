@@ -4,11 +4,14 @@
 
 ///|
 /// Show one dialog and move focus to the element marked `data-autofocus`.
+/// The previously focused element is remembered on the dialog so the close
+/// listener can hand focus back to the trigger.
 extern "js" fn ui_show(id : String) -> Unit =
   #|(id) => {
   #|  const dialog = document.getElementById(id);
   #|  if (!dialog) return;
   #|  if (!dialog.open) {
+  #|    dialog.__boardReturn = document.activeElement;
   #|    try { dialog.showModal(); } catch (_) { dialog.setAttribute("open", ""); }
   #|  }
   #|  requestAnimationFrame(() => {
@@ -34,6 +37,49 @@ extern "js" fn ui_focus(selector : String) -> Unit =
   #|}
 
 ///|
+/// True while the keyboard focus sits in a text entry control, so window
+/// shortcuts must stand down.
+extern "js" fn keyboard_in_text_entry() -> Bool =
+  #|() => {
+  #|  const target = document.activeElement;
+  #|  return Boolean(target) && (target.isContentEditable ||
+  #|    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+  #|}
+
+///|
+extern "js" fn keyboard_dialog_open() -> Bool =
+  #|() => Boolean(document.querySelector("dialog[open]"))
+
+///|
+/// Focus the selected card's title and report whether there is one. Focusing
+/// before the sheet opens hands the close-time focus return the right target.
+extern "js" fn keyboard_selection_open() -> Bool =
+  #|() => {
+  #|  const title = document.querySelector(".card.is-selected .card-title");
+  #|  if (title && typeof title.focus === "function") {
+  #|    title.focus();
+  #|    return true;
+  #|  }
+  #|  return false;
+  #|}
+
+///|
+/// When any dialog closes — button, Esc or programmatic — focus goes back to
+/// the element that opened it. The `close` event does not bubble, so this
+/// listens in the capture phase.
+extern "js" fn install_focus_return() -> Unit =
+  #|() => {
+  #|  if (window.__boardFocusReturn) return;
+  #|  window.__boardFocusReturn = true;
+  #|  document.addEventListener("close", (event) => {
+  #|    const dialog = event.target;
+  #|    const back = dialog && dialog.__boardReturn;
+  #|    if (back && typeof back.focus === "function") back.focus();
+  #|    dialog.__boardReturn = null;
+  #|  }, true);
+  #|}
+
+///|
 /// Close an open card menu when the click lands outside it, or after one of
 /// its menu items was chosen. The menu itself is a native <details>, so this
 /// only removes the open attribute; the button semantics stay unchanged.
@@ -48,30 +94,6 @@ extern "js" fn install_menu_dismiss() -> Unit =
   #|      if (!menu.contains(target) || (item && menu.contains(item))) {
   #|        menu.removeAttribute("open");
   #|      }
-  #|    }
-  #|  }, true);
-  #|}
-
-///|
-/// One window-level key listener. It reports only keys that are unambiguous
-/// outside text entry; open dialogs keep their native Esc and consume keys.
-extern "js" fn install_shortcuts(on_key : (String) -> Unit) -> Unit =
-  #|(onKey) => {
-  #|  if (window.__boardShortcuts) return;
-  #|  window.__boardShortcuts = true;
-  #|  window.addEventListener("keydown", (event) => {
-  #|    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-  #|    if (document.querySelector("dialog[open]")) return;
-  #|    const target = event.target;
-  #|    const typing = Boolean(target) && (target.isContentEditable ||
-  #|      ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-  #|    if (typing) return;
-  #|    if (event.key === "n" || event.key === "N") {
-  #|      event.preventDefault();
-  #|      onKey("new-task");
-  #|    } else if (event.key === "/") {
-  #|      event.preventDefault();
-  #|      onKey("search");
   #|    }
   #|  }, true);
   #|}

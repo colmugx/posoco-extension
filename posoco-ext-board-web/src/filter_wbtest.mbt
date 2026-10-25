@@ -127,7 +127,9 @@ test "task order is deterministic created ascending with id ties" {
   // by the smaller ID first.
   assert_eq(once, ["a", "b", "z", "c"])
   assert_eq(once, ordered_tasks(replica).map(task => task.id))
-  let lanes = visible_lane_tasks(replica, @client.Ready, TaskFilter::none())
+  let lanes = visible_tasks(replica, TaskFilter::none()).filter(task => {
+    task.stage == @client.Ready
+  })
   assert_eq(lanes.map(task => task.id), once)
 }
 
@@ -301,7 +303,34 @@ test "count summaries report visible of total only while filtering" {
   assert_eq(task_count_summary(replica, TaskFilter::none()), "3 tasks")
   let filter = { ..TaskFilter::none(), query: "urgent", }
   assert_eq(task_count_summary(replica, filter), "1 of 3 tasks")
-  assert_eq(lane_count_summary(replica, @client.Ready, TaskFilter::none()), "1")
-  assert_eq(lane_count_summary(replica, @client.Ready, filter), "1 of 1")
-  assert_eq(lane_count_summary(replica, @client.Created, filter), "0 of 1")
+  assert_eq(
+    lane_count_label(
+      replica,
+      visible_tasks(replica, TaskFilter::none()),
+      @client.Ready,
+      None,
+      TaskFilter::none(),
+    ),
+    "1",
+  )
+  assert_eq(
+    lane_count_label(
+      replica,
+      visible_tasks(replica, filter),
+      @client.Ready,
+      None,
+      filter,
+    ),
+    "1 of 1",
+  )
+  assert_eq(
+    lane_count_label(
+      replica,
+      visible_tasks(replica, filter),
+      @client.Created,
+      None,
+      filter,
+    ),
+    "0 of 1",
+  )
 }

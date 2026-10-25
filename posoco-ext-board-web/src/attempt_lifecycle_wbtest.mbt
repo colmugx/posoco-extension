@@ -555,7 +555,9 @@ test "matching accepted attempt result without its event forces an authoritative
       test_env(),
     )
     assert_true(settled.pending is None)
-    assert_false(settled.replica.has_snapshot())
+    // The mismatching revision brings up the veil over the retained board.
+    assert_true(settled.replica.has_snapshot())
+    assert_true(settled.stale)
     assert_true(settled.retry_pending)
     assert_true(settled.attempt_draft is None && settled.finish_draft is None)
   }
@@ -589,7 +591,7 @@ test "attempt stable rejections retain drafts and map safe notices without retri
 }
 
 ///|
-test "attempt conflict and stale revisions refresh without replay and keep local drafts" {
+test "attempt conflict and stale revisions keep the board under the veil" {
   for kind in ["queue", "start", "finish"] {
     for
       code in [
@@ -603,7 +605,8 @@ test "attempt conflict and stale revisions refresh without replay and keep local
         test_emit,
         test_env(),
       )
-      assert_false(stale.replica.has_snapshot())
+      assert_true(stale.replica.has_snapshot())
+      assert_true(stale.stale)
       assert_true(stale.pending is None)
       assert_true(
         stale.attempt_draft == pending.attempt_draft &&
@@ -616,11 +619,12 @@ test "attempt conflict and stale revisions refresh without replay and keep local
         test_emit,
         test_env(),
       )
-      let expected = @websocket.send(
-        "board",
-        Text(hello_payload(@client.BoardReplica::empty())),
-        failed=_ => test_emit(TransportFailed(1)),
-      )
+      let expected = @rabbita.batch([
+        @websocket.send("board", Text(hello_payload(stale.replica)), failed=_ => {
+          test_emit(TransportFailed(1))
+        }),
+        @rabbita.delay(test_emit(ConnectionStable(1)), 1000),
+      ])
       assert_eq(Repr(command).to_string(), Repr(expected).to_string())
       assert_true(opened.pending is None)
     }

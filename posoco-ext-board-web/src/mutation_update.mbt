@@ -7,7 +7,38 @@ fn force_snapshot_resync(
   model : Model,
   emit : @rabbita.Emit[Msg],
 ) -> (Model, @rabbita.Cmd) {
-  reconnect({ ..model, replica: @client.BoardReplica::empty(), }, emit)
+  reconnect(
+    {
+      ..model,
+      replica: @client.BoardReplica::empty(),
+      stale: false,
+      optimistic: None,
+    },
+    emit,
+  )
+}
+
+///|
+/// A revision conflict or uncertain durability keeps the last good snapshot
+/// under the stale veil instead of blanking the board: the reconnect reuses
+/// the baseline-aware Hello, the server replays the missed contiguous frames,
+/// and the next applied frame clears the flag. The pending record and the
+/// move overlay die with the rejected command.
+fn keep_baseline_and_resync(
+  model : Model,
+  notice : Notice,
+  emit : @rabbita.Emit[Msg],
+) -> (Model, @rabbita.Cmd) {
+  reconnect(
+    {
+      ..model,
+      pending: None,
+      stale: true,
+      optimistic: None,
+      notice: Some(notice),
+    },
+    emit,
+  )
 }
 
 ///|
@@ -17,7 +48,12 @@ fn drop_pending_and_resync(
   emit : @rabbita.Emit[Msg],
 ) -> (Model, @rabbita.Cmd) {
   force_snapshot_resync(
-    { ..model, pending: None, notice: Some(notice(Warning, text)), },
+    {
+      ..model,
+      pending: None,
+      optimistic: None,
+      notice: Some(notice(Warning, text)),
+    },
     emit,
   )
 }
@@ -115,6 +151,13 @@ fn submit_move(
       @rabbita.none,
     )
   }
+  // The move renders optimistically from the task's current stage; the
+  // replica itself only changes when the authoritative stream says so.
+  let model = match task_by_id(model.replica, task_id) {
+    Some(task) if task.stage != to =>
+      { ..model, optimistic: Some({ task_id, from: task.stage, to, }), }
+    _ => model
+  }
   dispatch_command(
     model,
     move_command(uuid, model.replica.revision(), task_id, to),
@@ -139,11 +182,19 @@ fn settle_command(
   if result.command_id != pending.command_id {
     return (model, @rabbita.none)
   }
-  let model = { ..model, pending: None, }
+  // The move overlay projected a stage the stream has now confirmed or
+  // refused; either way the replica is the only visible truth again.
+  let settled_move = model.optimistic
+  let model = { ..model, pending: None, optimistic: None, }
   let replica_stale = result.current_revision is Some(rev) &&
     rev != model.replica.revision()
   if result.accepted {
     let settled = "\{accepted_text(pending.kind)} "
+    let text = if replica_stale {
+      "\{settled}Refreshing authoritative board state."
+    } else {
+      "\{settled}The board updates from the authoritative stream."
+    }
     let model = {
       ..model,
       editor: close_matching_editor(model.editor, pending.kind),
@@ -154,24 +205,41 @@ fn settle_command(
       attempt_draft: settle_attempt_draft(model.attempt_draft, pending.kind),
       finish_draft: settle_finish_draft(model.finish_draft, pending.kind),
       review_draft: settle_review_draft(model.review_draft, pending.kind),
-      notice: Some(
-        notice(
-          Success,
-          if replica_stale {
-            "\{settled}Refreshing authoritative board state."
-          } else {
-            "\{settled}The board updates from the authoritative stream."
-          },
-        ),
-      ),
+      notice: Some(move_undo_notice(pending, settled_move, text, replica_stale)),
     }
     if replica_stale {
-      force_snapshot_resync(model, emit)
+      keep_baseline_and_resync(model, model.notice.unwrap(), emit)
     } else {
       (model, @rabbita.none)
     }
   } else {
     reject_command(model, result, emit)
+  }
+}
+
+///|
+/// An accepted move offers its own undo when the board's FSM allows stepping
+/// straight back to where the task came from; every other command settles
+/// with a plain success notice, and a stale board never offers an undo that
+/// the resync is about to supersede.
+fn move_undo_notice(
+  pending : PendingCommand,
+  optimistic : OptimisticMove?,
+  text : String,
+  replica_stale : Bool,
+) -> Notice {
+  match (pending.kind, optimistic) {
+    (PendingMove(..), Some(pending_move)) if !replica_stale &&
+      step_reachable(pending_move.to, pending_move.from) =>
+      {
+        ..notice(Success, text),
+        action: Some({
+          label: "Undo",
+          task_id: pending_move.task_id,
+          move_to: pending_move.from,
+        }),
+      }
+    _ => notice(Success, text)
   }
 }
 
@@ -204,15 +272,23 @@ fn reject_command(
         @rabbita.none,
       )
     } else {
-      drop_pending_and_resync(
-        model, "The board could not confirm whether this change was saved. Refreshing authoritative state.",
+      keep_baseline_and_resync(
+        model,
+        notice(
+          Warning,
+          "The board could not confirm whether this change was saved. Refreshing authoritative state.",
+        ),
         emit,
       )
     }
   } else if result.error is Some("revision_conflict") ||
     (!confirmed && result.current_revision is Some(_)) {
-    drop_pending_and_resync(
-      model, "The board changed while this change was in flight. Refreshing authoritative state.",
+    keep_baseline_and_resync(
+      model,
+      notice(
+        Warning,
+        "The board changed while this change was in flight. Refreshing authoritative state.",
+      ),
       emit,
     )
   } else {

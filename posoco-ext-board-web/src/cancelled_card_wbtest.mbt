@@ -59,21 +59,28 @@ test "cancelled card is archived without a primary action or a move" {
   // A cancelled task never occupies a flow column.
   for stage in flow_lanes() {
     assert_eq(
-      visible_lane_tasks(model.replica, stage, model.task_filter).length(),
+      visible_tasks(model.replica, model.task_filter)
+      .filter(task => task.stage == stage)
+      .length(),
       0,
     )
   }
-  let cancelled = visible_lane_tasks(
-      model.replica,
-      Cancelled,
-      model.task_filter,
-    )[0]
+  let cancelled = visible_tasks(model.replica, model.task_filter).filter(task => {
+      task.stage == Cancelled
+    })[0]
   assert_eq(cancelled.id, "gone")
   assert_eq(stage_step(cancelled.stage), None)
   assert_false(has_primary_intent(cancelled.stage))
   // The card renders no primary button and the menu offers no move.
   assert_true(
-    primary_intent(model, cancelled, emit, disabled=false, class="card-next") ==
+    primary_intent(
+      model,
+      cancelled,
+      emit,
+      shown=cancelled.stage,
+      disabled=false,
+      class="card-next",
+    ) ==
     @html.nothing,
   )
   assert_eq(move_suggestions(cancelled.stage).length(), 0)
@@ -82,10 +89,19 @@ test "cancelled card is archived without a primary action or a move" {
   assert_true(detail_next_action(model, cancelled, emit) != @html.nothing)
   assert_eq(cancelled_note(), "Cancelled; kept for history.")
   // Done is untouched: it keeps its reopen action and never offers Cancelled.
-  let closed = visible_lane_tasks(model.replica, Done, model.task_filter)[0]
+  let closed = visible_tasks(model.replica, model.task_filter).filter(task => {
+      task.stage == Done
+    })[0]
   assert_true(has_primary_intent(closed.stage))
   assert_true(
-    primary_intent(model, closed, emit, disabled=false, class="card-next") !=
+    primary_intent(
+      model,
+      closed,
+      emit,
+      shown=closed.stage,
+      disabled=false,
+      class="card-next",
+    ) !=
     @html.nothing,
   )
   assert_false(card_alternatives(closed.stage).contains(Cancelled))

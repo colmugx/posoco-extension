@@ -107,7 +107,8 @@ test "dependency conflict reconciles with Hello only and requires explicit lates
     test_env(),
   )
   assert_true(conflicted.pending is None)
-  assert_false(conflicted.replica.has_snapshot())
+  assert_true(conflicted.replica.has_snapshot())
+  assert_true(conflicted.stale)
   assert_true(conflicted.dependency_editor == submitted.dependency_editor)
   assert_true(conflicted.retry_pending)
   let (retrying, _) = update(conflicted, Retry(0), test_emit, test_env())
@@ -117,11 +118,12 @@ test "dependency conflict reconciles with Hello only and requires explicit lates
     test_emit,
     test_env(),
   )
-  let expected = @websocket.send(
-    "board",
-    Text(hello_payload(@client.BoardReplica::empty())),
-    failed=_ => test_emit(TransportFailed(1)),
-  )
+  let expected = @rabbita.batch([
+    @websocket.send("board", Text(hello_payload(conflicted.replica)), failed=_ => {
+      test_emit(TransportFailed(1))
+    }),
+    @rabbita.delay(test_emit(ConnectionStable(1)), 1000),
+  ])
   assert_eq(Repr(command).to_string(), Repr(expected).to_string())
   let (fresh, _) = update(
     opened,
@@ -206,7 +208,10 @@ test "dependency durability uncertainty never rolls back an event applied projec
     test_emit,
     test_env(),
   )
-  assert_false(mismatch.replica.has_snapshot())
+  // The mismatching revision keeps the event-applied projection under the
+  // stale veil instead of blanking the board.
+  assert_true(mismatch.replica.has_snapshot())
+  assert_true(mismatch.stale)
   assert_true(mismatch.retry_pending)
   assert_true(mismatch.dependency_editor == submitted.dependency_editor)
 }
@@ -223,7 +228,8 @@ test "accepted dependency result with mismatching revision still refreshes witho
     test_emit,
     test_env(),
   )
-  assert_false(settled.replica.has_snapshot())
+  assert_true(settled.replica.has_snapshot())
+  assert_true(settled.stale)
   assert_true(settled.pending is None)
   assert_true(settled.dependency_editor is None)
   assert_true(settled.retry_pending)

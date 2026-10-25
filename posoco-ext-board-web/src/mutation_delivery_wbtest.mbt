@@ -23,7 +23,9 @@ test "ordinary rejections still reconcile any reported stale revision" {
       env,
     )
     assert_true(settled.pending is None)
-    assert_false(settled.replica.has_snapshot())
+    // A stale reported revision keeps the last good board under the veil.
+    assert_true(settled.replica.has_snapshot())
+    assert_true(settled.stale)
     assert_true(settled.retry_pending)
     assert_true(settled.editor == pending.editor)
     let (retrying, _) = update(settled, Retry(0), test_emit, env)
@@ -31,10 +33,10 @@ test "ordinary rejections still reconcile any reported stale revision" {
     assert_eq(
       Repr(sent).to_string(),
       Repr(
-        @websocket.send(
-          "board",
-          Text(hello_payload(@client.BoardReplica::empty())),
-        ),
+        @rabbita.batch([
+          @websocket.send("board", Text(hello_payload(settled.replica))),
+          @rabbita.delay(test_emit(ConnectionStable(1)), 1000),
+        ]),
       ).to_string(),
     )
   }

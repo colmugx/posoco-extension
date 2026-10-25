@@ -429,12 +429,70 @@ fn visible_tasks(
 }
 
 ///|
-fn visible_lane_tasks(
-  replica : @client.BoardReplica,
-  stage : @client.ClientBoardStage,
-  filter : TaskFilter,
-) -> Array[@client.ClientBoardTask] {
-  visible_tasks(replica, filter).filter(task => task.stage == stage)
+/// The stage a task renders at: an in-flight move shows its target stage
+/// while the authoritative record still holds the origin.
+fn staged_stage(
+  task : @client.ClientBoardTask,
+  optimistic : OptimisticMove?,
+) -> @client.ClientBoardStage {
+  match optimistic {
+    Some(pending_move) if pending_move.task_id == task.id => pending_move.to
+    _ => task.stage
+  }
+}
+
+///|
+/// Whether one pending command visibly belongs to a task. Moves, edits,
+/// dependency saves and attempt queues name their task directly; attempt
+/// start/finish/review surface their in-flight state in the inspector
+/// instead of on the card.
+fn pending_for_task(pending : PendingCommand?, task_id : String) -> Bool {
+  match pending {
+    None => false
+    Some(pending) => pending_task_id(pending.kind) == task_id
+  }
+}
+
+///|
+/// The task a pending command visibly belongs to; attempt start/finish/review
+/// only name their attempt and stay in the inspector instead.
+fn pending_task_id(kind : PendingKind) -> String {
+  match kind {
+    PendingCreate => ""
+    PendingEdit(task_id~)
+    | PendingDependencies(task_id~)
+    | PendingMove(task_id~, ..)
+    | PendingAttemptQueue(task_id~, ..) => task_id
+    PendingAttemptStart(_) | PendingAttemptFinish(_) | PendingReview(_) => ""
+  }
+}
+
+///|
+/// Wall-clock relative label: "just now", minutes, hours, then days, after
+/// which the caller keeps the absolute UTC stamp. Pure so tests can pin it.
+pub fn relative_at(at_ms : Int64, now_ms : Int64) -> String {
+  let delta = now_ms - at_ms
+  if delta < 0L {
+    return utc_timestamp(at_ms)
+  }
+  let minutes = delta / 60000L
+  if minutes < 1L {
+    "just now"
+  } else if minutes < 60L {
+    "\{minutes}m ago"
+  } else {
+    let hours = minutes / 60L
+    if hours < 24L {
+      "\{hours}h ago"
+    } else {
+      let days = hours / 24L
+      if days < 30L {
+        "\{days}d ago"
+      } else {
+        utc_timestamp(at_ms)
+      }
+    }
+  }
 }
 
 ///|
@@ -464,16 +522,22 @@ fn task_count_summary(
 }
 
 ///|
-fn lane_count_summary(
+/// The lane head count: shown tasks at the staged stage, with the
+/// `visible of total` form while a filter is active.
+fn lane_count_label(
   replica : @client.BoardReplica,
+  visible : Array[@client.ClientBoardTask],
   stage : @client.ClientBoardStage,
+  optimistic : OptimisticMove?,
   filter : TaskFilter,
 ) -> String {
-  let total = tasks_in_lane(replica, stage).length()
+  let shown = visible
+    .filter(task => staged_stage(task, optimistic) == stage)
+    .length()
   if task_filter_active(filter) {
-    "\{visible_lane_tasks(replica, stage, filter).length()} of \{total}"
+    "\{shown} of \{tasks_in_lane(replica, stage).length()}"
   } else {
-    "\{total}"
+    "\{shown}"
   }
 }
 
@@ -513,13 +577,53 @@ fn filter_stage_from_wire(
 
 ///|
 /// The header status line. An in-flight command outranks everything because
-/// it is the only state the user can act on; otherwise the connection and
-/// baseline transitions own the text.
+/// it is the only state the user can act on; the stale veil follows, then the
+/// connection and baseline transitions own the text.
 fn status_text(model : Model) -> String {
   if model.pending is Some(_) {
     "Saving change; waiting for authoritative confirmation."
+  } else if model.stale {
+    "The board is out of date. Reconnecting for fresh state."
   } else {
     model.last_status
+  }
+}
+
+///|
+/// The next/previous visible task in flow order, honouring the current
+/// filters and an in-flight move's target lane. `J` with nothing selected
+/// picks the first card, `K` the last; the ends do not wrap.
+fn adjacent_task(model : Model, step : Int32) -> String? {
+  let visible = visible_tasks(model.replica, model.task_filter)
+  let order : Array[String] = []
+  for stage in flow_lanes() {
+    for task in visible {
+      if staged_stage(task, model.optimistic) == stage {
+        order.push(task.id)
+      }
+    }
+  }
+  guard order.length() > 0 else { return None }
+  let mut current = -1
+  for i, id_in_order in order {
+    if model.selected_task == Some(id_in_order) {
+      current = i
+      break
+    }
+  }
+  if current < 0 {
+    if step > 0 {
+      Some(order[0])
+    } else {
+      Some(order[order.length() - 1])
+    }
+  } else {
+    let next = current + step
+    if next >= 0 && next < order.length() {
+      Some(order[next])
+    } else {
+      None
+    }
   }
 }
 

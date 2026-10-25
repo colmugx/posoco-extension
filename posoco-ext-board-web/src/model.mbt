@@ -242,10 +242,32 @@ priv enum NoticeSeverity {
 
 ///|
 /// Notices carry mapped safe text only; wire codes and protocol details are
-/// resolved to stable human phrasing before they reach this record.
+/// resolved to stable human phrasing before they reach this record. An
+/// action offers one follow-up intent (today: undoing a move); it is data,
+/// not a closure, so the notice stays comparable.
 priv struct Notice {
   severity : NoticeSeverity
   text : String
+  action : NoticeAction?
+} derive(Eq)
+
+///|
+/// One follow-up action attached to a notice. `move_to` names the stage the
+/// board should move the task back to when the action fires.
+priv struct NoticeAction {
+  label : String
+  task_id : String
+  move_to : @client.ClientBoardStage
+} derive(Eq)
+
+///|
+/// The locally projected stage of one in-flight move. The replica stays
+/// untouched — the overlay lives one render above it and dies with the
+/// pending command, so the authoritative record is never rewritten.
+priv struct OptimisticMove {
+  task_id : String
+  from : @client.ClientBoardStage
+  to : @client.ClientBoardStage
 } derive(Eq)
 
 ///|
@@ -295,6 +317,13 @@ priv struct Model {
   retry_pending : Bool
   last_status : String
   pending : PendingCommand?
+  /// The locally projected stage of one in-flight move; the replica itself
+  /// is never rewritten ahead of the authoritative stream.
+  optimistic : OptimisticMove?
+  /// True after a revision conflict or uncertain durability: the retained
+  /// baseline is shown under a stale veil while the reconnect replays the
+  /// missed frames. Cleared by the next applied frame.
+  stale : Bool
   editor : Editor?
   notice : Notice?
   selected_task : String?
@@ -382,6 +411,8 @@ priv enum Msg {
   LiveOpened
   LiveClosed
   DoneRequested(String)
+  NoticeActionInvoked
+  KeyboardMove(Int32)
   ReviewDecide(String, String)
   ConfirmAccepted
   ConfirmDismissed
@@ -413,6 +444,8 @@ fn Model::empty(available : Bool) -> Model {
       "Open this client from a Board host with an instance token"
     },
     pending: None,
+    optimistic: None,
+    stale: false,
     editor: None,
     notice: None,
     selected_task: None,

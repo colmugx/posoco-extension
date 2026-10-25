@@ -9,12 +9,14 @@ priv struct Env {
 }
 
 ///|
-/// A mutation may only enter the wire while the replica is authoritative and
-/// no command is in flight: online, holding a snapshot, with no pending
-/// command. The revision stamped onto the command is read live at submit.
+/// A mutation may only enter the wire while the replica is authoritative,
+/// not stale and no command is in flight: online, holding a snapshot, with
+/// no pending command and no unresolved conflict veil. The revision stamped
+/// onto the command is read live at submit.
 fn mutations_allowed(model : Model) -> Bool {
   model.connection is Online &&
   model.replica.has_snapshot() &&
+  !model.stale &&
   model.pending is None
 }
 
@@ -205,7 +207,7 @@ fn priority_from_wire(value : String) -> @client.ClientBoardPriority? {
 
 ///|
 fn notice(severity : NoticeSeverity, text : String) -> Notice {
-  { severity, text, }
+  { severity, text, action: None, }
 }
 
 ///|

@@ -85,6 +85,7 @@ fn detail_next_action(
       model,
       task,
       emit,
+      shown=task.stage,
       disabled=locked,
       class="btn btn-primary btn-lg next-primary",
     ),
@@ -969,7 +970,7 @@ fn attempt_row(
     } else {
       @html.div(class="button-row", lifecycle)
     },
-    @html.p(class="attempt-when", attempt_times(attempt)),
+    @html.p(class="attempt-when", attempt_times(attempt, board_now_ms())),
   ])
 }
 
@@ -1062,15 +1063,15 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 
 ///|
 /// The row carries only the events that tell the attempt's story — when the
-/// work started and how it ended. Created/updated bookkeeping stays in the
-/// wire, not on the screen.
-fn attempt_times(attempt : @client.ClientAttempt) -> String {
+/// work started and how it ended — as relative labels against the render
+/// clock. Created/updated bookkeeping stays in the wire, not on the screen.
+fn attempt_times(attempt : @client.ClientAttempt, now_ms : Int64) -> String {
   let parts = match attempt.started_at_ms {
-    Some(at_ms) => ["started \{utc_timestamp(at_ms)}"]
-    None => ["queued \{utc_timestamp(attempt.created_at_ms)}"]
+    Some(at_ms) => ["started \{relative_at(at_ms, now_ms)}"]
+    None => ["queued \{relative_at(attempt.created_at_ms, now_ms)}"]
   }
   let parts = match attempt.finished_at_ms {
-    Some(at_ms) => [..parts, "finished \{utc_timestamp(at_ms)}"]
+    Some(at_ms) => [..parts, "finished \{relative_at(at_ms, now_ms)}"]
     None => parts
   }
   parts.join(" · ")

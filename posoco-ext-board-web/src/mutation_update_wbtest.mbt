@@ -144,7 +144,7 @@ test "accepted correlated result clears pending closes the editor and never muta
 }
 
 ///|
-test "accepted result with a foreign revision still saves but resynchronizes" {
+test "accepted result with a foreign revision still saves but keeps the board under the veil" {
   let env = test_env()
   let model = seeded_online("t", "ready")
   let (opened, _) = update(model, CreateOpened, test_emit, env)
@@ -168,20 +168,23 @@ test "accepted result with a foreign revision still saves but resynchronizes" {
     }
     None => fail("expected saved-and-refresh notice")
   }
-  assert_false(settled.replica.has_snapshot())
-  assert_eq(settled.replica.tasks().length(), 0)
+  // The last good board stays readable under the stale veil instead of
+  // blanking; the retained baseline Hello asks the server to replay.
+  assert_true(settled.replica.has_snapshot())
+  assert_eq(settled.replica.tasks().length(), 1)
+  assert_true(settled.stale)
   assert_true(settled.connection is Reconnecting)
   assert_true(settled.retry_pending)
-  // Reconnect continues from Hello only; the original command is never sent
-  // again.
+  // Mutations stay gated while the veil is up.
+  assert_false(mutations_allowed(settled))
   let (retried, _) = update(settled, Retry(0), test_emit, env)
   let (resumed, _) = update(retried, SocketEvent(1, Opened), test_emit, env)
   match @protocol.decode_client_frame(hello_payload(resumed.replica)) {
-    Ok(Hello(hello)) => {
-      assert_false(hello.has_board_snapshot)
-      assert_eq(hello.last_seq, 0L)
-    }
-    _ => fail("expected Hello only")
+    Ok(Hello(hello)) =>
+      // The retained baseline replays the missed frames instead of
+      // refetching a full snapshot; the original command is never resent.
+      assert_true(hello.has_board_snapshot)
+    _ => fail("expected a baseline-aware Hello")
   }
   assert_true(resumed.pending is None)
 }
@@ -243,7 +246,7 @@ test "rejected result keeps the draft and baseline without rollback" {
 }
 
 ///|
-test "revision conflict forces snapshot resync without resend" {
+test "revision conflict keeps the board under the veil without resend" {
   let env = test_env()
   let model = seeded_online("t", "ready")
   let (edit, _) = update(model, EditOpened("t"), test_emit, env)
@@ -270,8 +273,11 @@ test "revision conflict forces snapshot resync without resend" {
     Some(_) => ()
     None => fail("the draft must survive a conflict")
   }
-  assert_false(settled.replica.has_snapshot())
-  assert_eq(settled.replica.tasks().length(), 0)
+  // The conflict keeps the last good board under the stale veil instead of
+  // blanking it; the reconnect replays the missed contiguous frames.
+  assert_true(settled.replica.has_snapshot())
+  assert_eq(settled.replica.tasks().length(), 1)
+  assert_true(settled.stale)
   assert_true(settled.connection is Reconnecting)
   assert_true(settled.retry_pending)
   match settled.notice {
@@ -281,15 +287,13 @@ test "revision conflict forces snapshot resync without resend" {
     }
     None => fail("expected explanatory notice")
   }
-  // The reconnect socket sends ONLY Hello: no original command is replayed.
+  // The reconnect socket sends only the baseline-aware Hello: the original
+  // command is never replayed.
   let (retried, _) = update(settled, Retry(0), test_emit, env)
   let (resumed, _) = update(retried, SocketEvent(1, Opened), test_emit, env)
   match @protocol.decode_client_frame(hello_payload(resumed.replica)) {
-    Ok(Hello(hello)) => {
-      assert_false(hello.has_board_snapshot)
-      assert_eq(hello.last_seq, 0L)
-    }
-    _ => fail("expected Hello only")
+    Ok(Hello(hello)) => assert_true(hello.has_board_snapshot)
+    _ => fail("expected a baseline-aware Hello")
   }
   assert_true(resumed.pending is None)
 }
@@ -327,6 +331,7 @@ test "persistence failure at the same revision keeps the baseline" {
       {
         severity: Error,
         text: "The board could not save this change. Nothing was retried.",
+        ..
       }
     ),
   )
@@ -386,7 +391,10 @@ test "durability uncertainty retains a matching baseline and resyncs a stale one
     env,
   )
   assert_true(stale.pending is None)
-  assert_false(stale.replica.has_snapshot())
+  // The stale revision keeps the last good board under the veil, with the
+  // draft intact, while the reconnect replays what was missed.
+  assert_true(stale.replica.has_snapshot())
+  assert_true(stale.stale)
   assert_true(stale.connection is Reconnecting)
   assert_true(stale.editor is Some(_))
 }
@@ -675,7 +683,9 @@ test "editor lifecycle prefills drafts and closes on missing authoritative targe
   assert_true(missing.editor is None)
   assert_true(
     missing.notice
-    is Some({ severity: Error, text: "That task is no longer on the board.", }),
+    is Some(
+      { severity: Error, text: "That task is no longer on the board.", .. }
+    ),
   )
   // A snapshot without the target closes the draft with the same notice.
   let (edit_again, _) = update(model, EditOpened("t"), test_emit, env)
@@ -693,7 +703,9 @@ test "editor lifecycle prefills drafts and closes on missing authoritative targe
   assert_true(replaced.editor is None)
   assert_true(
     replaced.notice
-    is Some({ severity: Error, text: "That task is no longer on the board.", }),
+    is Some(
+      { severity: Error, text: "That task is no longer on the board.", .. }
+    ),
   )
   // An empty reconciliation baseline never closes the draft on its own.
   let (edit_once_more, _) = update(

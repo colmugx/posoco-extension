@@ -647,15 +647,18 @@ fn has_primary_intent(stage : @client.ClientBoardStage) -> Bool {
 
 ///|
 /// Primary intent for one card, mirroring the stage FSM. Done is confirmed
-/// instead of fired: it is the only step that leaves the flow.
+/// instead of fired: it is the only step that leaves the flow. `shown` is
+/// the stage the card renders at — the authoritative stage, or the target of
+/// an in-flight move.
 fn primary_intent(
   model : Model,
   task : @client.ClientBoardTask,
   emit : @rabbita.Emit[Msg],
+  shown~ : @client.ClientBoardStage,
   disabled~ : Bool,
   class~ : String,
 ) -> @html.Html {
-  guard has_primary_intent(task.stage) else { return @html.nothing }
+  guard has_primary_intent(shown) else { return @html.nothing }
   // A failed/interrupted run stays in its lane. Its primary action is run
   // recovery, never the stage move that would turn the card into Paused.
   if ticket_task_failed(model, task.id) {
@@ -679,8 +682,8 @@ fn primary_intent(
       label="Retry work",
     )
   }
-  let shaping = model.ticket_available && task.stage == @client.Created
-  let running = model.ticket_available && task.stage == @client.Ready
+  let shaping = model.ticket_available && shown == @client.Created
+  let running = model.ticket_available && shown == @client.Ready
   if shaping {
     card_action(
       TicketShape(task.id),
@@ -688,7 +691,7 @@ fn primary_intent(
       class~,
       title="Shape this ticket with an agent",
       disabled~,
-      label=primary_action_label(task.stage),
+      label=primary_action_label(shown),
     )
   } else if running {
     card_action(
@@ -697,9 +700,9 @@ fn primary_intent(
       class~,
       title="Run this ticket in the background",
       disabled~,
-      label=primary_action_label(task.stage),
+      label=primary_action_label(shown),
     )
-  } else if primary_move(task.stage) is @client.Done {
+  } else if primary_move(shown) is @client.Done {
     // Done leaves the flow, so it opens the consequence dialog before any
     // command exists; the command is rebuilt from live state at confirm.
     @html.button(
@@ -712,16 +715,16 @@ fn primary_intent(
         ui_show("confirm-dialog")
         emit(DoneRequested(task.id))
       }),
-      primary_action_label(task.stage),
+      primary_action_label(shown),
     )
   } else {
     card_action(
-      MoveRequested(task.id, primary_move(task.stage)),
+      MoveRequested(task.id, primary_move(shown)),
       emit,
       class~,
-      title="Move to " + ui_stage_label(primary_move(task.stage)),
+      title="Move to " + ui_stage_label(primary_move(shown)),
       disabled~,
-      label=primary_action_label(task.stage),
+      label=primary_action_label(shown),
     )
   }
 }
@@ -749,8 +752,11 @@ fn task_card(
   let locked = !mutations_allowed(model) ||
     draft_open(model) ||
     ticket_task_running(model, task.id)
+  // An in-flight move renders at its target stage; every stage-facing label
+  // follows it while the authoritative record stays untouched.
+  let shown = staged_stage(task, model.optimistic)
   let selected = model.selected_task == Some(task.id)
-  let alternatives = card_alternatives(task.stage)
+  let alternatives = card_alternatives(shown)
   let attempt = attempt_short(model.replica, task.id)
   let attempts = attempt_count(model.replica, task.id)
   let failed_run = if ticket_task_failed(model, task.id) {
@@ -812,6 +818,11 @@ fn task_card(
       } else {
         @html.span(class="chip is-attempt", attempt)
       },
+      if pending_for_task(model.pending, task.id) {
+        @html.span(class="chip is-running", "saving")
+      } else {
+        @html.nothing
+      },
     ]),
     match failed_run {
       Some(run) =>
@@ -826,7 +837,14 @@ fn task_card(
       None => @html.nothing
     },
     @html.footer(class="card-foot", [
-      primary_intent(model, task, emit, disabled=locked, class="card-next"),
+      primary_intent(
+        model,
+        task,
+        emit,
+        shown~,
+        disabled=locked,
+        class="card-next",
+      ),
       @html.details(class="card-menu", [
         @html.summary(
           class="icon-btn",
@@ -849,7 +867,7 @@ fn task_card(
               }),
               "Activity",
             ),
-            if model.ticket_available && task.stage == @client.Refining {
+            if model.ticket_available && shown == @client.Refining {
               card_action(
                 TicketShape(task.id),
                 emit,
@@ -891,13 +909,28 @@ fn task_card(
 }
 
 ///|
+
+///|
+/// One pass over the replica per render: the visible, deterministically
+/// ordered tasks feed every lane, the counts and the archive, and each task
+/// is placed by its staged (optimistic) stage.
 fn lane(
   model : Model,
   stage : @client.ClientBoardStage,
+  visible : Array[@client.ClientBoardTask],
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
   let replica = model.replica
-  let tasks = visible_lane_tasks(replica, stage, model.task_filter)
+  let tasks = visible.filter(task => {
+    staged_stage(task, model.optimistic) == stage
+  })
+  let count = lane_count_label(
+    replica,
+    visible,
+    stage,
+    model.optimistic,
+    model.task_filter,
+  )
   let add = if stage is Created {
     @html.button(
       type_="button",
@@ -927,10 +960,7 @@ fn lane(
         ),
         @html.h2(id="lane-\{stage.to_wire()}", class="lane-title", [
           @html.span(ui_stage_label(stage)),
-          @html.span(
-            class="lane-count",
-            lane_count_summary(replica, stage, model.task_filter),
-          ),
+          @html.span(class="lane-count", count),
         ]),
         add,
       ]),
@@ -1056,11 +1086,27 @@ fn board(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   if filters_hide_all(replica, model.task_filter) {
     return filtered_empty(model, emit)
   }
+  // One visible computation per render feeds every lane; the stale veil sits
+  // above the board while the reconnect replays the missed frames.
+  let visible = visible_tasks(replica, model.task_filter)
   @html.div(class="board-area", [
+    if model.stale {
+      @html.div(class="stale-veil", attrs=@html.Attrs::build().role("status"), [
+        @html.p("The board is out of date. Reconnecting for fresh state."),
+        @html.button(
+          type_="button",
+          class="btn btn-sm",
+          on_click=emit(ManualReconnect),
+          "Refresh",
+        ),
+      ])
+    } else {
+      @html.nothing
+    },
     @html.div(class="board-scroll", [
       @html.div(
         class="board",
-        flow_lanes().map(stage => lane(model, stage, emit)),
+        flow_lanes().map(stage => lane(model, stage, visible, emit)),
       ),
     ]),
   ])
@@ -1071,13 +1117,13 @@ fn board(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 /// same card language as the flow, with room to breathe, instead of a status
 /// strip.
 fn archive_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  let done = visible_lane_tasks(model.replica, Done, model.task_filter)
-  let paused = visible_lane_tasks(model.replica, Suspended, model.task_filter)
-  let cancelled = visible_lane_tasks(
-    model.replica,
-    Cancelled,
-    model.task_filter,
-  )
+  let visible = visible_tasks(model.replica, model.task_filter)
+  let archived = stage => {
+    visible.filter(task => staged_stage(task, model.optimistic) == stage)
+  }
+  let done = archived(Done)
+  let paused = archived(Suspended)
+  let cancelled = archived(Cancelled)
   @html.dialog(
     id="archive-dialog",
     class="dialog directory-dialog",
@@ -1138,27 +1184,45 @@ fn archive_section(
 }
 
 ///|
+/// The live region is persistent: it is always in the DOM and only its
+/// content changes, so assistive tech hears the first notice too. An action
+/// (today: undoing a move) rides inside the toast.
 fn notice_toast(notice : Notice?, emit : @rabbita.Emit[Msg]) -> @html.Html {
-  match notice {
-    None => @html.nothing
-    Some(value) =>
-      @html.div(
-        class="toast \{notice_class(value.severity)}",
-        attrs=@html.Attrs::build().role("status").aria_live("polite"),
-        [
-          @html.span(class="toast-dot", ""),
-          @html.span(class="toast-text", value.text),
-          @html.button(
-            type_="button",
-            class="toast-close",
-            title="Dismiss notification",
-            attrs=@html.Attrs::build().aria_label("Dismiss notification"),
-            on_click=emit(NoticeDismissed),
-            "✕",
-          ),
-        ],
-      )
-  }
+  @html.div(
+    class="toast-region",
+    attrs=@html.Attrs::build().role("status").aria_live("polite"),
+    [
+      match notice {
+        None => @html.nothing
+        Some(value) =>
+          @html.div(class="toast \{notice_class(value.severity)}", [
+            @html.span(class="toast-dot", ""),
+            @html.span(class="toast-text", value.text),
+            match value.action {
+              Some(action) =>
+                @html.button(
+                  type_="button",
+                  class="btn btn-sm toast-action",
+                  attrs=@html.Attrs::build().aria_label(
+                    "\{action.label}: move the task back to \{ui_stage_label(action.move_to)}",
+                  ),
+                  on_click=emit(NoticeActionInvoked),
+                  action.label,
+                )
+              None => @html.nothing
+            },
+            @html.button(
+              type_="button",
+              class="toast-close",
+              title="Dismiss notification",
+              attrs=@html.Attrs::build().aria_label("Dismiss notification"),
+              on_click=emit(NoticeDismissed),
+              "✕",
+            ),
+          ])
+      },
+    ],
+  )
 }
 
 ///|

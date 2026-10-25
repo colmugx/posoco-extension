@@ -97,17 +97,8 @@ pub fn app() -> @rabbita.App {
       init=emit => {
         // Opening a layer is a DOM effect, so the keyboard path shows the
         // dialog here and lets update own the state.
-        install_shortcuts(key => {
-          match key {
-            "new-task" => {
-              ui_show("create-dialog")
-              ignore(emit(CreateOpened))
-            }
-            "search" => ui_focus("#board-search")
-            _ => ()
-          }
-        })
         install_menu_dismiss()
+        install_focus_return()
         let model = Model::empty(env.url != "")
         (
           model,
@@ -119,6 +110,39 @@ pub fn app() -> @rabbita.App {
         )
       },
       update=(model, msg, emit) => update(model, msg, emit, env),
+      // Window-level keyboard shortcuts ride a Rabbita subscription: the
+      // document keydown listener is installed once and its emitted Cmds run
+      // on the scheduler, so every message reaches the update loop.
+      subscriptions=(_model, emit) => {
+        @sub.on_key_down(key => {
+          if keyboard_in_text_entry() ||
+            keyboard_dialog_open() ||
+            key.is_composing() {
+            @rabbita.none
+          } else {
+            match key.key() {
+              "n" | "N" => {
+                ui_show("create-dialog")
+                emit(CreateOpened)
+              }
+              "/" => {
+                ui_focus("#board-search")
+                @rabbita.none
+              }
+              "j" | "J" => emit(KeyboardMove(1))
+              "k" | "K" => emit(KeyboardMove(-1))
+              "Enter" =>
+                if keyboard_selection_open() {
+                  ui_show("detail-dialog")
+                  @rabbita.none
+                } else {
+                  @rabbita.none
+                }
+              _ => @rabbita.none
+            }
+          }
+        })
+      },
     )
     model.view(model => view(model, emit))
   })

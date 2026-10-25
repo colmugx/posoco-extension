@@ -450,7 +450,10 @@ test "accepted review result without its event forces an authoritative refresh" 
     test_env(),
   )
   assert_true(settled.pending is None)
-  assert_false(settled.replica.has_snapshot())
+  // The reported revision disagrees, so the veil comes up over the retained
+  // board while the reconnect replays the missed frames.
+  assert_true(settled.replica.has_snapshot())
+  assert_true(settled.stale)
   assert_true(settled.retry_pending)
   assert_true(settled.review_draft is None)
   assert_true(
@@ -505,7 +508,7 @@ test "review rejections map safe text and keep the draft without retries" {
 }
 
 ///|
-test "review conflict and stale revisions resync through Hello-only reconnect" {
+test "review conflict and stale revisions keep the board under the veil" {
   for
     code in ["revision_conflict", "durability_uncertain", "persistence_failed"] {
     let pending = submitted_review()
@@ -515,7 +518,8 @@ test "review conflict and stale revisions resync through Hello-only reconnect" {
       test_emit,
       test_env(),
     )
-    assert_false(stale.replica.has_snapshot())
+    assert_true(stale.replica.has_snapshot())
+    assert_true(stale.stale)
     assert_true(stale.pending is None)
     assert_true(stale.review_draft == pending.review_draft)
     let (retrying, _) = update(stale, Retry(0), test_emit, test_env())
@@ -528,11 +532,12 @@ test "review conflict and stale revisions resync through Hello-only reconnect" {
     assert_eq(
       Repr(command).to_string(),
       Repr(
-        @websocket.send(
-          "board",
-          Text(hello_payload(@client.BoardReplica::empty())),
-          failed=_ => test_emit(TransportFailed(1)),
-        ),
+        @rabbita.batch([
+          @websocket.send("board", Text(hello_payload(stale.replica)), failed=_ => {
+            test_emit(TransportFailed(1))
+          }),
+          @rabbita.delay(test_emit(ConnectionStable(1)), 1000),
+        ]),
       ).to_string(),
     )
   }

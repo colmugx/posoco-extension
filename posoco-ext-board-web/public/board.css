@@ -454,6 +454,33 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* The stale veil sits above the retained board while the reconnect replays
+ * the missed frames: the last good state stays readable, nothing is claimable. */
+.stale-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--canvas) 72%, transparent);
+  color: var(--ink-2);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+.stale-veil p {
+  margin: 0;
+}
+
+.toast-region:empty {
+  display: none;
 }
 
 .board-scroll {
@@ -934,6 +961,11 @@ button {
 .toast-text {
   min-width: 0;
   color: var(--ink-2);
+}
+
+.toast-action {
+  flex: 0 0 auto;
+  margin-left: 2px;
 }
 
 .toast-close {

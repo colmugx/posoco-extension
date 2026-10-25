@@ -237,6 +237,9 @@ fn update(
                 } else {
                   model.baseline
                 },
+                // Authoritative frames are the truth the stale veil waits
+                // for; the first applied frame ends it.
+                stale: false,
                 retry_attempt: if snapshot {
                   0
                 } else {
@@ -596,6 +599,19 @@ fn update(
         None => (model, @rabbita.none)
       }
     NoticeDismissed => ({ ..model, notice: None, }, @rabbita.none)
+    NoticeActionInvoked =>
+      // The undo re-enters the same guarded submit path as any move: gates
+      // are re-checked against the live revision, never against the notice.
+      match model.notice {
+        Some({ action: Some(action), .. }) =>
+          submit_move(model, action.task_id, action.move_to, emit, env)
+        _ => (model, @rabbita.none)
+      }
+    KeyboardMove(step) =>
+      match adjacent_task(model, step) {
+        Some(id) => ({ ..model, selected_task: Some(id), }, @rabbita.none)
+        None => (model, @rabbita.none)
+      }
     TaskSelected(_)
     | InspectorClosed
     | DependenciesOpened
