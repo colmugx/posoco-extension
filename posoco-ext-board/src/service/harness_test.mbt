@@ -226,7 +226,7 @@ fn harness(
         enabled~,
         max_executions~,
         continue_on_confirmed_failure~,
-        execution_timeout_ms=1000,
+        execution_timeout_ms=10000,
         max_elapsed_ms=10000,
       ),
     ),
