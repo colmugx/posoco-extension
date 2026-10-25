@@ -54,6 +54,7 @@ fn wbtest_ticket_model(
   apply_ticket_state(Model::empty(true), {
     questions: [],
     runs,
+    progress: [],
     model_selection,
   })
 }
@@ -138,6 +139,7 @@ test "a ticket frame that omits the catalog keeps the last known one" {
   let disabled = apply_ticket_state(outcome, {
     questions: [],
     runs: [],
+    progress: [],
     model_selection: Some({
       selectable: false,
       kind: "magpie",

@@ -63,6 +63,20 @@ priv struct TicketRun {
 } derive(Eq)
 
 ///|
+/// One non-blocking worker update from `ticket_state.progress`. It is
+/// information only: it carries no question, no answer and no stage, so the
+/// inbox renders it and never offers a reply, a resolve or a move.
+priv struct TicketProgress {
+  task_id : String
+  /// Bounded tone: `normal`, `milestone`, `attention` or `blocked`. Anything
+  /// outside that set reads as `normal` rather than inventing a tone the
+  /// stylesheet cannot colour.
+  kind : String
+  message : String
+  at_ms : Int64
+} derive(Eq)
+
+///|
 /// One selectable model as the host advertises it in `ticket_state`. The
 /// catalog is runtime state: it is never persisted with the ticket journal,
 /// and every field except the stable slot id may be missing.
@@ -110,6 +124,9 @@ priv struct ModelChoice {
 priv struct TicketState {
   questions : Array[TicketQuestion]
   runs : Array[TicketRun]
+  /// Non-blocking worker updates. They are shown in the inbox and never own a
+  /// question, an answer or a stage move of their own.
+  progress : Array[TicketProgress]
   /// Absent when this frame did not carry a catalog; the previous catalog is
   /// retained so a `ticket_result` cannot blank the picker mid-edit.
   model_selection : ModelCatalog?
@@ -117,7 +134,7 @@ priv struct TicketState {
 
 ///|
 fn TicketState::empty() -> TicketState {
-  { questions: [], runs: [], model_selection: None }
+  { questions: [], runs: [], progress: [], model_selection: None }
 }
 
 ///|
@@ -279,6 +296,10 @@ priv struct Model {
   ticket_drawer : Bool
   ticket_drafts : Map[String, String]
   ticket_sending : Bool
+  /// Identities of the worker updates the inbox has already shown. It only
+  /// tracks what the user looked at; the authoritative list stays in
+  /// `tickets.progress`.
+  ticket_seen_updates : Map[String, Bool]
   confirm : ConfirmIntent?
   archive_open : Bool
 } derive(Eq)
@@ -396,6 +417,7 @@ fn Model::empty(available : Bool) -> Model {
     ticket_drawer: false,
     ticket_drafts: Map([]),
     ticket_sending: false,
+    ticket_seen_updates: Map([]),
     confirm: None,
     archive_open: false,
   }

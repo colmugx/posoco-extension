@@ -34,6 +34,20 @@ fn browser_uuid() -> String? {
 }
 
 ///|
+/// Wall-clock milliseconds for the relative labels on worker updates. Only the
+/// views read it; a host without `Date` degrades to the epoch instead of
+/// failing the render.
+extern "js" fn browser_now_ms() -> Double =
+  #|() => {
+  #|  try { return Date.now(); } catch (_) { return 0; }
+  #|}
+
+///|
+fn board_now_ms() -> Int64 {
+  browser_now_ms().to_int64()
+}
+
+///|
 fn connect(
   url : String,
   generation : Int32,

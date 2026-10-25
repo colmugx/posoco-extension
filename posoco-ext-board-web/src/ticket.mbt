@@ -21,13 +21,19 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Some(Array(items)) => items.filter_map(decode_ticket_run)
     _ => []
   }
+  // Worker progress: absent reads as empty and every malformed entry is
+  // dropped on its own, so one bad update never hides the rest of the inbox.
+  let progress = match fields.get("progress") {
+    Some(Array(items)) => items.filter_map(decode_ticket_progress)
+    _ => []
+  }
   // Runtime catalog: absent, null and unknown shapes all decode to "no
   // catalog in this frame" and never fail the snapshot that carries them.
   let model_selection = match fields.get("model_selection") {
     Some(value) => decode_model_catalog(value)
     None => None
   }
-  { questions, runs, model_selection }
+  { questions, runs, progress, model_selection }
 }
 
 ///|
@@ -142,6 +148,174 @@ fn decode_ticket_question(value : Json) -> TicketQuestion? {
     _ => 0L
   }
   Some({ id, task_id, question, kind, options, asked_at, })
+}
+
+///|
+/// One worker progress update. `task_id` and a non-blank `message` are the only
+/// required fields: without them there is nothing to show, so the entry is
+/// dropped instead of failing the snapshot that carries it. An unknown `kind`
+/// falls back to `normal`, and a missing or non-numeric `at_ms` reads as the
+/// epoch, matching the question decode.
+fn decode_ticket_progress(value : Json) -> TicketProgress? {
+  let fields = match value {
+    Object(fields) => fields
+    _ => return None
+  }
+  let task_id = match fields.get("task_id") {
+    Some(String(value)) if value != "" => value
+    _ => return None
+  }
+  let message = match fields.get("message") {
+    Some(String(value)) if value.trim() != "" => value
+    _ => return None
+  }
+  let kind = match fields.get("kind") {
+    Some(String(value)) => ticket_progress_kind(value)
+    _ => "normal"
+  }
+  let at_ms = match fields.get("at_ms") {
+    Some(Number(value, ..)) => value.to_int64()
+    _ => 0L
+  }
+  Some({ task_id, kind, message, at_ms, })
+}
+
+///|
+/// Bounded tone set of the host contract. An unrecognised kind is still a
+/// perfectly good update, so it renders with the neutral tone instead of being
+/// dropped or given a colour the stylesheet does not define.
+fn ticket_progress_kind(kind : String) -> String {
+  match kind {
+    "milestone" | "attention" | "blocked" => kind
+    _ => "normal"
+  }
+}
+
+///|
+/// Human label of one update tone. The word carries the meaning, so colour is
+/// never the only signal.
+fn ticket_progress_kind_label(kind : String) -> String {
+  match kind {
+    "milestone" => "Milestone"
+    "attention" => "Attention"
+    "blocked" => "Blocked"
+    _ => "Update"
+  }
+}
+
+///|
+/// Identity of one update for seen tracking. The host may rewrite its bounded
+/// progress list between snapshots, so updates are matched by content rather
+/// than by index: the same update delivered twice is still one update.
+fn ticket_progress_key(update : TicketProgress) -> String {
+  "\{update.task_id}|\{update.at_ms}|\{update.kind}|\{update.message}"
+}
+
+///|
+/// The progress list newest first. The replica's own array is detached, so
+/// ordering never leaks into a previous model.
+fn ticket_progress_latest_first(
+  updates : Array[TicketProgress],
+) -> Array[TicketProgress] {
+  let ordered = updates.copy()
+  ordered.sort_by((left, right) => right.at_ms.compare(left.at_ms))
+  ordered
+}
+
+///|
+/// Seen set for a set of updates. It is rebuilt from the current list instead
+/// of accumulated, so identities the host dropped never linger.
+fn ticket_progress_seen(updates : Array[TicketProgress]) -> Map[String, Bool] {
+  let seen : Map[String, Bool] = Map([])
+  for update in updates {
+    seen[ticket_progress_key(update)] = true
+  }
+  seen
+}
+
+///|
+/// Keep only the seen identities that are still in the authoritative list. A
+/// torn-down worker's updates leave the inbox and their keys leave the model.
+fn ticket_progress_retain_seen(
+  seen : Map[String, Bool],
+  updates : Array[TicketProgress],
+) -> Map[String, Bool] {
+  let kept : Map[String, Bool] = Map([])
+  for update in updates {
+    let key = ticket_progress_key(update)
+    if seen.contains(key) {
+      kept[key] = true
+    }
+  }
+  kept
+}
+
+///|
+/// Short "how long ago" label for one update. The observation time is passed
+/// in so the inbox stays a pure projection and tests can pin it; anything older
+/// than a month falls back to UTC civil time instead of an implausible count.
+fn ticket_progress_age(at_ms : Int64, now_ms : Int64) -> String {
+  let age = now_ms - at_ms
+  if age < 3600000L {
+    if age < 60000L {
+      "just now"
+    } else {
+      "\{age / 60000L}m ago"
+    }
+  } else if age < 86400000L {
+    "\{age / 3600000L}h ago"
+  } else if age < 2592000000L {
+    "\{age / 86400000L}d ago"
+  } else {
+    utc_timestamp(at_ms)
+  }
+}
+
+///|
+/// One inbox update row with everything the renderer needs already resolved.
+/// Keeping this projection pure lets tests pin the rendered text and tone
+/// without a DOM.
+priv struct InboxUpdate {
+  task_id : String
+  /// Ticket title, or the id when the replica cannot resolve the task.
+  title : String
+  kind : String
+  kind_label : String
+  message : String
+  at_ms : Int64
+  time_label : String
+  unseen : Bool
+}
+
+///|
+/// The update rows the inbox renders, newest first.
+fn inbox_updates(model : Model, now_ms : Int64) -> Array[InboxUpdate] {
+  ticket_progress_latest_first(model.tickets.progress).map(update => {
+    let seen = model.ticket_seen_updates.contains(ticket_progress_key(update))
+    {
+      task_id: update.task_id,
+      title: match task_by_id(model.replica, update.task_id) {
+        Some(task) => task.title
+        None => update.task_id
+      },
+      kind: update.kind,
+      kind_label: ticket_progress_kind_label(update.kind),
+      message: update.message,
+      at_ms: update.at_ms,
+      time_label: ticket_progress_age(update.at_ms, now_ms),
+      unseen: !seen,
+    }
+  })
+}
+
+///|
+/// The most recent update of one ticket, if its worker reported any. The
+/// Activity dialog shows it above the live run so progress is visible where
+/// the run is inspected.
+fn ticket_latest_update(model : Model, task_id : String) -> TicketProgress? {
+  ticket_progress_latest_first(model.tickets.progress)
+    .filter(update => update.task_id == task_id)
+    .get(0)
 }
 
 ///|
@@ -328,8 +502,42 @@ fn ticket_question_count(model : Model) -> Int32 {
 }
 
 ///|
+/// Worker updates the user has not looked at yet. Opening the inbox records the
+/// list that was on screen as seen; anything a worker reports afterwards is
+/// unseen again until the next open.
+fn ticket_unseen_update_count(model : Model) -> Int32 {
+  model.tickets.progress.filter(update => {
+    !model.ticket_seen_updates.contains(ticket_progress_key(update))
+  }).length()
+}
+
+///|
+/// The inbox badge counts both things waiting for a human: open questions that
+/// need an answer, and worker updates that arrived since the inbox was opened.
 fn ticket_inbox_count(model : Model) -> Int32 {
-  ticket_question_count(model)
+  ticket_question_count(model) + ticket_unseen_update_count(model)
+}
+
+///|
+/// Header and section wording for the unseen updates. Plain words, never a raw
+/// count with no noun.
+fn ticket_update_count_label(count : Int32) -> String {
+  if count == 1 {
+    "1 new update"
+  } else {
+    "\{count} new updates"
+  }
+}
+
+///|
+/// Total update count for the header chip, separate from the unseen count so
+/// the inbox still reports how much the workers said when nothing is new.
+fn ticket_update_total_label(count : Int32) -> String {
+  if count == 1 {
+    "1 update"
+  } else {
+    "\{count} updates"
+  }
 }
 
 ///|
@@ -698,6 +906,19 @@ fn ticket_run_card(
       @html.span(class="ticket-question-task", title),
       @html.span(class="ticket-question-kind", phase + tool),
     ]),
+    // The newest worker update sits above the live preview: it is the same
+    // information the inbox shows, repeated where the run is inspected.
+    match ticket_latest_update(model, run.task_id) {
+      Some(update) =>
+        @html.div(class="ticket-update is-compact kind-\{update.kind}", [
+          @html.span(
+            class="ticket-update-kind",
+            ticket_progress_kind_label(update.kind),
+          ),
+          @html.span(class="ticket-update-text", update.message),
+        ])
+      None => @html.nothing
+    },
     @html.div(class="ticket-run-preview", preview),
     if run.reasoning == "" {
       @html.nothing
@@ -775,6 +996,12 @@ fn apply_ticket_state(model : Model, state : TicketState) -> Model {
   {
     ..model,
     tickets: { ..state, model_selection },
+    // Only the updates still on the wire stay "seen": a worker that tore down
+    // takes its updates with it, so its identities must not linger.
+    ticket_seen_updates: ticket_progress_retain_seen(
+      model.ticket_seen_updates,
+      state.progress,
+    ),
     ticket_available: true,
     ticket_sending: false,
   }
@@ -1024,10 +1251,84 @@ fn ticket_activity_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Htm
 }
 
 ///|
-/// The inbox is for questions only. Live and finished run detail lives on the
-/// ticket's own Activity dialog.
+/// One inbox update row. It is information only: no answer control, no stage
+/// move and no dismiss, because the worker owns the run and the host owns the
+/// list.
+fn ticket_update_card(update : InboxUpdate) -> @html.Html {
+  let unseen = if update.unseen { " is-unseen" } else { "" }
+  @html.article(class="ticket-update kind-\{update.kind}\{unseen}", [
+    @html.div(class="ticket-update-meta", [
+      @html.span(
+        class="ticket-update-task",
+        title=update.task_id,
+        update.title,
+      ),
+      @html.span(class="ticket-update-kind", update.kind_label),
+      if update.unseen {
+        @html.span(class="ticket-update-new", "New")
+      } else {
+        @html.nothing
+      },
+      @html.span(
+        class="ticket-update-time",
+        title=utc_timestamp(update.at_ms),
+        update.time_label,
+      ),
+    ]),
+    @html.p(class="ticket-update-text", update.message),
+  ])
+}
+
+///|
+/// The Updates block. It sits above the questions because it is the freshest
+/// thing the workers said, and it states in words that no reply is expected so
+/// an update never reads as an unanswered question.
+fn ticket_updates_section(
+  updates : Array[InboxUpdate],
+  unseen_count : Int32,
+) -> @html.Html {
+  @html.section(
+    class="inbox-updates",
+    attrs=@html.Attrs::build().aria_label("Worker updates"),
+    [
+      @html.header(class="inbox-section-head", [
+        @html.h3(class="inbox-section-title", "Updates"),
+        @html.span(
+          class="inbox-section-hint",
+          if unseen_count == 0 {
+            "Information only — no reply needed."
+          } else {
+            "Information only — \{ticket_update_count_label(unseen_count)} since you last opened the inbox."
+          },
+        ),
+      ]),
+      @html.div(
+        class="inbox-update-list",
+        updates.map(update => ticket_update_card(update)),
+      ),
+    ],
+  )
+}
+
+///|
+/// The inbox holds two different things: questions that need a human answer,
+/// and worker updates that need nothing. Live and finished run detail lives on
+/// the ticket's own Activity dialog.
 fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let question_count = model.tickets.questions.length()
+  let update_count = model.tickets.progress.length()
+  let unseen_count = ticket_unseen_update_count(model)
+  let updates = inbox_updates(model, board_now_ms())
+  let items : Array[@html.Html] = []
+  if !updates.is_empty() {
+    items.push(ticket_updates_section(updates, unseen_count))
+  }
+  for question in model.tickets.questions {
+    items.push(ticket_question_card(model, question, emit))
+  }
+  if question_count == 0 {
+    items.push(@html.div(class="empty-line", "No open questions."))
+  }
   @html.dialog(
     id="inbox-dialog",
     class="dialog sheet-dialog",
@@ -1055,8 +1356,7 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
               ],
             ),
             @html.h2(class="sheet-title", "Inbox"),
-            @html.p(
-              class="sheet-meta",
+            @html.p(class="sheet-meta", [
               if question_count == 0 {
                 @html.span(class="chip is-quiet", "No open questions")
               } else {
@@ -1065,27 +1365,29 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
                   "\{question_count} awaiting an answer",
                 )
               },
-            ),
+              if update_count == 0 {
+                @html.nothing
+              } else {
+                @html.span(
+                  class="chip is-quiet",
+                  ticket_update_total_label(update_count),
+                )
+              },
+              if unseen_count == 0 {
+                @html.nothing
+              } else {
+                @html.span(
+                  class="chip is-running",
+                  ticket_update_count_label(unseen_count),
+                )
+              },
+            ]),
           ]),
           close_button("inbox-dialog"),
         ]),
         @html.div(
           class="sheet-body inbox-body",
-          {
-            let items : Array[@html.Html] = []
-            for question in model.tickets.questions {
-              items.push(ticket_question_card(model, question, emit))
-            }
-            if items.is_empty() {
-              items.push(
-                @html.div(
-                  class="empty-line",
-                  "No open questions.",
-                ),
-              )
-            }
-            items
-          },
+          items,
         ),
       ]),
     ],

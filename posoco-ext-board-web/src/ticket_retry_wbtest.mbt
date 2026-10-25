@@ -31,6 +31,7 @@ fn retry_ticket_model(runs : Array[TicketRun]) -> Model {
   apply_ticket_state(Model::empty(true), {
     questions: [],
     runs,
+    progress: [],
     model_selection: None,
   })
 }
@@ -206,6 +207,7 @@ test "a suspended ticket without a run still offers retry work" {
     tickets: {
       questions: [],
       runs: [retry_run("t1", "failed")],
+      progress: [],
       model_selection: None,
     },
   }

@@ -415,7 +415,18 @@ fn update(
       )
     FiltersCleared =>
       ({ ..model, task_filter: TaskFilter::none(), }, @rabbita.none)
-    TicketDrawerOpened => ({ ..model, ticket_drawer: true, }, @rabbita.none)
+    // Opening the inbox is what marks the visible worker updates as seen, so
+    // the badge then counts only questions. Updates that arrive while it stays
+    // open are unseen again until the next open.
+    TicketDrawerOpened =>
+      (
+        {
+          ..model,
+          ticket_drawer: true,
+          ticket_seen_updates: ticket_progress_seen(model.tickets.progress),
+        },
+        @rabbita.none,
+      )
     TicketDrawerClosed => ({ ..model, ticket_drawer: false, }, @rabbita.none)
     TicketActivityOpened(task_id) =>
       ({ ..model, ticket_activity_task: Some(task_id), }, @rabbita.none)

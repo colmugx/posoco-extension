@@ -1992,6 +1992,147 @@ dialog.sheet-dialog {
   gap: 12px;
 }
 
+/* Worker updates: information only, so they read lighter than a question —
+   no buttons, no answer field, and no accent fill behind the message. */
+.inbox-updates {
+  display: grid;
+  gap: 8px;
+}
+
+.inbox-section-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inbox-section-title {
+  margin: 0;
+  color: var(--muted);
+  font: 11px/1.4 var(--font-mono);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.inbox-section-hint {
+  min-width: 0;
+  color: var(--faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.inbox-update-list {
+  display: grid;
+  gap: 6px;
+}
+
+.ticket-update {
+  display: grid;
+  gap: 4px;
+  padding: 9px 11px;
+  border-left: 2px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.ticket-update-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ticket-update-task {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-update-kind {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font: 10px/1.4 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ticket-update-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--faint);
+  font: 10px/1.4 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ticket-update-text {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* An update that landed after the inbox was opened keeps its own word, so
+   "unseen" never depends on a colour or a shadow alone. */
+.ticket-update-new {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 9.5px/1.5 var(--font-mono);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ticket-update.kind-milestone {
+  border-left-color: var(--ok);
+}
+
+.ticket-update.kind-attention {
+  border-left-color: var(--warn);
+}
+
+.ticket-update.kind-attention .ticket-update-kind {
+  color: var(--warn);
+}
+
+.ticket-update.kind-blocked {
+  border-left-color: var(--danger);
+}
+
+.ticket-update.kind-blocked .ticket-update-kind {
+  color: var(--danger);
+}
+
+/* An update the user has not looked at yet sits on the raised surface the
+   questions use, so the list reads newest-and-unread first. */
+.ticket-update.is-unseen {
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* The same update repeated above a live run: one row, no meta lines, so the
+   Activity dialog stays about the run. */
+.ticket-update.is-compact {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 9px;
+}
+
+.ticket-update.is-compact .ticket-update-text {
+  font-size: 12px;
+}
+
 .ticket-question {
   display: grid;
   gap: 10px;
