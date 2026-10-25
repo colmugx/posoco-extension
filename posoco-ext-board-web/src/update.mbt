@@ -251,7 +251,9 @@ fn update(
                 },
               }
               (
-                revalidate_inspector(close_missing_edit_target(model)),
+                close_settled_request_changes(
+                  revalidate_inspector(close_missing_edit_target(model)),
+                ),
                 @rabbita.none,
               )
             }
@@ -599,7 +601,11 @@ fn update(
     | ReviewCancelled
     | ReviewDecisionChanged(_)
     | ReviewDraftReturned
-    | ReviewSubmitted => update_inspector(model, msg, emit, env)
+    | ReviewSubmitted
+    | RequestChangesOpened(_)
+    | RequestChangesFeedbackChanged(_)
+    | RequestChangesSubmitted
+    | RequestChangesCancelled => update_inspector(model, msg, emit, env)
   }
 }
 

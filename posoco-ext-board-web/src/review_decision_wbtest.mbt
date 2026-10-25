@@ -397,7 +397,7 @@ test "submission reads the live revision and sends the correlated record command
   )
   let (chosen, _) = update(
     live,
-    ReviewDecisionChanged("changes_requested"),
+    ReviewDecisionChanged("approved"),
     test_emit,
     test_env(),
   )
@@ -406,7 +406,7 @@ test "submission reads the live revision and sends the correlated record command
     "cmd-uuid-1",
     2L,
     id="a",
-    decision=@client.ChangesRequested,
+    decision=@client.Approved,
   )
   assert_eq(
     Repr(sent).to_string(),

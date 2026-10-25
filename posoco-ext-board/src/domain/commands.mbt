@@ -73,6 +73,15 @@ pub(all) enum BoardCommand {
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
+  /// One reviewer decision that changes two records atomically: the attempt
+  /// records ChangesRequested and the ticket stores the durable feedback and
+  /// returns to Ready for another attempt.
+  RequestChanges(
+    id~ : AttemptId,
+    feedback~ : String,
+    at_ms~ : Int64,
+    expected_revision~ : Int64
+  )
   /// S4E1 atomic additive graph expansion: all detached candidate tasks in
   /// stage Created, one durable expansion record and one GraphExpanded
   /// event. Existing tasks, edges and attempts are never touched.
@@ -106,6 +115,7 @@ fn BoardCommand::expected_revision(self : BoardCommand) -> Int64 {
     | StartAttempt(expected_revision~, ..)
     | FinishAttempt(expected_revision~, ..)
     | RecordReview(expected_revision~, ..)
+    | RequestChanges(expected_revision~, ..)
     | ExpandGraph(expected_revision~, ..) => expected_revision
   }
 }
@@ -207,6 +217,7 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
     | QueueAttempt(..)
     | StartAttempt(..)
     | FinishAttempt(..)
-    | RecordReview(..) => self
+    | RecordReview(..)
+    | RequestChanges(..) => self
   }
 }

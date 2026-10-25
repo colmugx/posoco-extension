@@ -1,5 +1,5 @@
 ///|
-/// Decoder tests for the fixed ten-command wire surface. Every rejection
+/// Decoder tests for the fixed command-name wire surface. Every rejection
 /// test goes through the shared helpers so correlation, the stable code and
 /// the reason non-emptiness are pinned on every case, not just once.
 
@@ -56,6 +56,10 @@ fn decoder_valid_fields(name : String) -> Map[String, Json] raise {
     "board.task.set_review_report" => {
       fields["id"] = Json::string("t-1")
       fields["review"] = decoder_report()
+    }
+    "board.task.request_changes" => {
+      fields["id"] = Json::string("a-1")
+      fields["feedback"] = Json::string("Add the missing regression test.")
     }
     "board.task.move" => {
       fields["id"] = Json::string("t-1")
@@ -733,6 +737,18 @@ test "attempt and review commands decode with strict ids and enums" {
       expected_revision=7L,
     ),
   )
+  decoder_ok(
+    decoder_wire(
+      "board.task.request_changes",
+      decoder_valid_args("board.task.request_changes"),
+    ),
+    @domain.RequestChanges(
+      id=decoder_attempt_id("a-1"),
+      feedback="Add the missing regression test.",
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
   // queue: missing task_id, wrong task_id type, domain label `task` alone
   // is not on the wire.
   decoder_args_error(
@@ -805,6 +821,36 @@ test "attempt and review commands decode with strict ids and enums" {
       Json::object({ "id": Json::string("a-1"), "decision": Json::number(1) }),
     ),
   )
+  // request changes: missing feedback, null feedback, wrong feedback type,
+  // and a task id where the attempt id belongs.
+  decoder_args_error(
+    decoder_wire(
+      "board.task.request_changes",
+      Json::object({ "id": Json::string("a-1") }),
+    ),
+  )
+  decoder_args_error(
+    decoder_wire(
+      "board.task.request_changes",
+      Json::object({ "id": Json::string("a-1"), "feedback": Json::null() }),
+    ),
+  )
+  decoder_args_error(
+    decoder_wire(
+      "board.task.request_changes",
+      Json::object({ "id": Json::string("a-1"), "feedback": Json::number(3) }),
+    ),
+  )
+  decoder_args_error(
+    decoder_wire(
+      "board.task.request_changes",
+      Json::object({
+        "id": Json::string("a-1"),
+        "task_id": Json::string("t-1"),
+        "feedback": Json::string("fix it"),
+      }),
+    ),
+  )
 }
 
 ///|
@@ -852,7 +898,7 @@ test "args must be a JSON object for every known name" {
     name in [
       "board.task.create", "board.task.update", "board.task.set_dependencies", "board.task.move",
       "board.task.delete", "board.attempt.queue", "board.attempt.start", "board.attempt.finish",
-      "board.review.record", "board.task.set_review_report",
+      "board.review.record", "board.task.set_review_report", "board.task.request_changes",
     ] {
     for
       args in [
@@ -949,7 +995,7 @@ test "no payload can inject a timestamp or a revision" {
   let names : Array[String] = [
     "board.task.create", "board.task.update", "board.task.set_dependencies", "board.task.move",
     "board.task.delete", "board.attempt.queue", "board.attempt.start", "board.attempt.finish",
-    "board.review.record", "board.task.set_review_report",
+    "board.review.record", "board.task.set_review_report", "board.task.request_changes",
   ]
   for name in names {
     for
@@ -1015,6 +1061,20 @@ test "the decoder performs no domain business validation" {
       priority=@domain.Critical,
       definition_of_done=[],
       dependencies=[decoder_task_id("")],
+      at_ms=1000L,
+      expected_revision=7L,
+    ),
+  )
+  // Empty feedback is a well-formed string too: the domain owns the
+  // non-empty and length rules.
+  decoder_ok(
+    decoder_wire(
+      "board.task.request_changes",
+      Json::object({ "id": Json::string(""), "feedback": Json::string("") }),
+    ),
+    @domain.RequestChanges(
+      id=decoder_attempt_id(""),
+      feedback="",
       at_ms=1000L,
       expected_revision=7L,
     ),

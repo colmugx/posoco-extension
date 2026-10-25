@@ -39,6 +39,15 @@ pub(all) enum BoardEvent {
     decision~ : ReviewDecision,
     at_ms~ : Int64
   )
+  /// The atomic request-changes decision: the review attempt recorded
+  /// ChangesRequested and its ticket carries the durable feedback and is back
+  /// in Ready for another attempt.
+  ReviewChangesRequested(
+    task_id~ : BoardTaskId,
+    attempt_id~ : AttemptId,
+    feedback~ : String,
+    at_ms~ : Int64
+  )
   /// The one authoritative fact of an accepted graph expansion: the new
   /// task exists in stage Created and the durable expansion record binds
   /// the expansion identity, the lineage and the local_ref mapping. The

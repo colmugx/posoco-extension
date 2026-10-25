@@ -207,11 +207,9 @@ test "recorded work report leaves the review decision controls untouched" {
     report_task_json("review", Json::null()),
     attempts=[review_attempt_json("running", "pending")],
   )
-  assert_eq(review_decision_controls().map(review_decision_label), [
-    "Approve", "Request changes",
-  ])
+  assert_eq(review_decision_controls().map(review_decision_label), ["Approve"])
   assert_eq(review_decision_controls().map(decision => decision.to_wire()), [
-    "approved", "changes_requested",
+    "approved",
   ])
   for model in [with_report, without_report] {
     let task = inspector_task(model).unwrap()

@@ -187,6 +187,16 @@ priv struct ReviewDraft {
 } derive(Eq)
 
 ///|
+/// Local Request changes draft: the reviewed ticket plus the reviewer's note.
+/// Opening it sends nothing and the decision is never recorded through the
+/// attempt; submission is a `board.ticket.request_changes` command and stays
+/// impossible while the note is blank.
+priv struct RequestChangesDraft {
+  task_id : String
+  feedback : String
+} derive(Eq)
+
+///|
 priv enum EditorMode {
   CreateMode
   EditMode(task_id~ : String)
@@ -262,6 +272,7 @@ priv struct Model {
   attempt_draft : AttemptDraft?
   finish_draft : FinishDraft?
   review_draft : ReviewDraft?
+  request_changes_draft : RequestChangesDraft?
   task_filter : TaskFilter
   tickets : TicketState
   ticket_available : Bool
@@ -314,6 +325,10 @@ priv enum Msg {
   ReviewDecisionChanged(String)
   ReviewDraftReturned
   ReviewSubmitted
+  RequestChangesOpened(String)
+  RequestChangesFeedbackChanged(String)
+  RequestChangesSubmitted
+  RequestChangesCancelled
   FilterQueryChanged(String)
   FilterPriorityChanged(String)
   FilterStageChanged(String)
@@ -374,6 +389,7 @@ fn Model::empty(available : Bool) -> Model {
     attempt_draft: None,
     finish_draft: None,
     review_draft: None,
+    request_changes_draft: None,
     task_filter: TaskFilter::none(),
     tickets: TicketState::empty(),
     ticket_available: false,

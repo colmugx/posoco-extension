@@ -419,16 +419,97 @@ fn review_report_block(task : @client.ClientBoardTask) -> @html.Html {
 }
 
 ///|
-/// The recordable decisions the Review controls offer, in render order. The
-/// work report above them informs a decision; it never replaces or reorders
-/// the choices.
+/// The one-click decisions the Review controls offer. Approve is the only one
+/// left: the work report above it informs the decision, and Request changes
+/// left this set when it became a feedback flow on the ticket contract.
 fn review_decision_controls() -> Array[@client.ClientRecordableReviewDecision] {
-  review_decisions()
+  review_decisions().filter(decision => decision is Approved)
+}
+
+///|
+fn review_feedback_label() -> String {
+  "Reviewer feedback"
+}
+
+///|
+fn review_feedback_note() -> String {
+  "The next run must address this feedback."
+}
+
+///|
+/// The note the last Request changes round left on the ticket. It leads the
+/// Review section, because it is what the next run is judged against.
+fn review_feedback_block(feedback : String) -> @html.Html {
+  @html.div(class="review-feedback", [
+    @html.h3(class="review-feedback-label", review_feedback_label()),
+    @html.p(class="review-feedback-note", review_feedback_note()),
+    @html.p(class="review-feedback-text", feedback),
+  ])
+}
+
+///|
+fn request_changes_note() -> String {
+  "The ticket goes back to Ready with this note attached and the host starts a fresh run."
+}
+
+///|
+/// Request changes collects the note before anything is sent: the decision is
+/// no longer recordable in one click, so the editor states the consequence and
+/// the reason its submit is unavailable.
+fn request_changes_editor(
+  model : Model,
+  draft : RequestChangesDraft,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let id = "review-request-changes"
+  @html.div(class="review-feedback-editor", [
+    labeled_field(
+      id,
+      "What must the next run change?",
+      @html.textarea(
+        id~,
+        name="review_feedback",
+        class="review-feedback-input",
+        rows=4,
+        value=draft.feedback,
+        placeholder="Name the gap: what is missing, wrong, or unverified.",
+        disabled=model.ticket_sending,
+        attrs=@html.Attrs::build().aria_label(
+          "Reviewer feedback the next run must address",
+        ),
+        on_input=value => emit(RequestChangesFeedbackChanged(value)),
+        @html.fragment([]),
+      ),
+    ),
+    @html.p(
+      class="review-feedback-hint",
+      match ticket_request_changes_hint(model, draft.feedback) {
+        Some(text) => text
+        None => request_changes_note()
+      },
+    ),
+    @html.div(class="review-feedback-actions", [
+      @html.button(
+        type_="button",
+        class="btn btn-sm",
+        attrs=@html.Attrs::build().on_click(_ => emit(RequestChangesCancelled)),
+        "Cancel",
+      ),
+      @html.button(
+        type_="button",
+        class="btn btn-sm btn-primary",
+        disabled=ticket_request_changes_blocked(model, draft.feedback),
+        attrs=@html.Attrs::build().on_click(_ => emit(RequestChangesSubmitted)),
+        "Send back for changes",
+      ),
+    ]),
+  ])
 }
 
 ///|
 /// Review is the moment the pipeline exists for: a recorded decision is
-/// final, so it is confirmed and never bundled with the move.
+/// final, so it is confirmed and never bundled with the move. Request changes
+/// left that decision set: it is now a feedback flow on the ticket contract.
 fn review_block(
   model : Model,
   task : @client.ClientBoardTask,
@@ -447,6 +528,12 @@ fn review_block(
   let locked = !attempt_controls_allowed(model)
   @html.section(class="detail-section", [
     @html.h2(class="section-title", "Review"),
+    // The note the last round left is what this review is against, so it is
+    // stated before any control.
+    match task.review_feedback {
+      Some(feedback) => review_feedback_block(feedback)
+      None => @html.nothing
+    },
     // A Review-stage task without a report is not blocked from a decision,
     // but the reviewer must see that nothing curated was handed over.
     if review_report_missing(task) {
@@ -468,23 +555,46 @@ fn review_block(
           ]),
           @html.div(
             class="review-actions",
-            review_decision_controls().map(decision => {
-              @html.button(
-                type_="button",
-                class=if decision is Approved {
-                  "btn btn-primary"
-                } else {
-                  "btn"
-                },
-                disabled=locked,
-                attrs=@html.Attrs::build().on_click(_ => {
-                  ui_show("confirm-dialog")
-                  emit(ReviewDecide(attempt.id, decision.to_wire()))
-                }),
-                review_decision_label(decision),
-              )
-            }),
+            [
+              ..review_decision_controls().map(decision => {
+                @html.button(
+                  type_="button",
+                  class=if decision is Approved {
+                    "btn btn-primary"
+                  } else {
+                    "btn"
+                  },
+                  disabled=locked,
+                  attrs=@html.Attrs::build().on_click(_ => {
+                    ui_show("confirm-dialog")
+                    emit(ReviewDecide(attempt.id, decision.to_wire()))
+                  }),
+                  review_decision_label(decision),
+                )
+              }),
+              // Request changes opens the feedback editor instead of recording
+              // a decision; the editor replaces the button while it is open.
+              if request_changes_open(model, task.id) {
+                @html.nothing
+              } else {
+                @html.button(
+                  type_="button",
+                  class="btn",
+                  title="Send this ticket back with feedback for the next run",
+                  disabled=locked,
+                  attrs=@html.Attrs::build().on_click(_ => {
+                    emit(RequestChangesOpened(task.id))
+                  }),
+                  "Request changes",
+                )
+              },
+            ],
           ),
+          match model.request_changes_draft {
+            Some(draft) if draft.task_id == task.id =>
+              request_changes_editor(model, draft, emit)
+            _ => @html.nothing
+          },
           @html.p(
             class="section-note",
             "A recorded decision is final. It does not move the task: close it with the action above.",

@@ -156,6 +156,22 @@ pub fn BoardReplica::apply_event(
         None => self.attempt_records.push(entity)
       }
     }
+    TaskAndAttempt(task, attempt) => {
+      let task_index = self.task_records.search_by(record => {
+        record.id == task.id
+      })
+      match task_index {
+        Some(index) => self.task_records[index] = task
+        None => self.task_records.push(task)
+      }
+      let attempt_index = self.attempt_records.search_by(record => {
+        record.id == attempt.id
+      })
+      match attempt_index {
+        Some(index) => self.attempt_records[index] = attempt
+        None => self.attempt_records.push(attempt)
+      }
+    }
   }
   self.board_revision = event.board_revision
   self.sequence = event.seq

@@ -851,6 +851,7 @@ test "from domain snapshot converts every field and detaches arrays" {
       "ready_since_ms": Json::null(),
       "model": Json::null(),
       "review": Json::null(),
+      "review_feedback": Json::null(),
     }),
   )
   task.definition_of_done.push("late")
@@ -1304,4 +1305,110 @@ test "recovery changed is explicit with exactly one revision and supplied time" 
   assert_false(second.changed)
   assert_eq(second.snapshot, first.snapshot)
   assert_eq(second.events, [])
+}
+
+///|
+fn feedback_task() -> @domain.BoardTask {
+  @domain.BoardTask::from_record(
+    id=tid("c1"),
+    title="Changes requested",
+    description="",
+    stage=@domain.Ready,
+    priority=@domain.Normal,
+    definition_of_done=[],
+    dependencies=[],
+    created_at_ms=1L,
+    updated_at_ms=3L,
+    ready_since_ms=Some(3L),
+    review_feedback=Some("Add the missing regression test."),
+  )
+}
+
+///|
+test "task codec roundtrips review feedback and accepts a legacy record" {
+  assert_eq(
+    task_decode(task_json(feedback_task())).review_feedback,
+    Some("Add the missing regression test."),
+  )
+  assert_eq(
+    task_decode(task_json(review_task(review=None))).review_feedback,
+    None,
+  )
+  let snapshot : @domain.BoardStateSnapshot = {
+    revision: 4L,
+    tasks: [feedback_task(), review_task(id="r2", review=None)],
+    attempts: [],
+    expansions: [],
+  }
+  assert_eq(decode_snapshot(encode_snapshot(snapshot).unwrap()), Ok(snapshot))
+  let encoded = encode_snapshot(snapshot).unwrap()
+  assert_true(encoded.contains("review_feedback"))
+  // The key is additive: a record written before it existed decodes as None.
+  let legacy = match task_json(feedback_task()) {
+    Json::Object(fields) => {
+      ignore(fields.remove("review_feedback"))
+      Json::object(fields)
+    }
+    _ => fail("expected task object")
+  }
+  let decoded = task_decode(legacy)
+  assert_eq(decoded.review_feedback, None)
+  assert_eq(decoded.id, tid("c1"))
+  // An explicit null is the same as the absent key.
+  let nulled = match task_json(review_task(review=None)) {
+    Json::Object(fields) => {
+      fields["review_feedback"] = Json::null()
+      Json::object(fields)
+    }
+    _ => fail("expected task object")
+  }
+  assert_eq(task_decode(nulled).review_feedback, None)
+  // Like every other durable text, an empty body is rejected, not stored.
+  let empty = match task_json(feedback_task()) {
+    Json::Object(fields) => {
+      fields["review_feedback"] = Json::string("")
+      Json::object(fields)
+    }
+    _ => fail("expected task object")
+  }
+  assert_false(
+    try {
+      ignore(task_decode(empty))
+      true
+    } catch {
+      _ => false
+    },
+  )
+}
+
+///|
+test "review changes requested event round trips and rejects malformed payloads" {
+  let event = @domain.ReviewChangesRequested(
+    task_id=tid("t"),
+    attempt_id=@domain.AttemptId("a"),
+    feedback="Add the missing regression test.",
+    at_ms=21L,
+  )
+  let wire = encode_event(event).unwrap()
+  assert_true(wire.contains("ReviewChangesRequested"))
+  assert_true(wire.contains("feedback"))
+  assert_eq(decode_event(wire), Ok(event))
+  let record = { schema_version: 1, revision: 22L, event, }
+  assert_eq(
+    decode_journal_record(encode_journal_record(record).unwrap()),
+    Ok(record),
+  )
+  // Empty feedback is rejected exactly like every other stored decision.
+  invalid(
+    decode_event(
+      wire.replace(old="\"Add the missing regression test.\"", new="\"\""),
+    ),
+  )
+  // So is an unknown tag or an extra key.
+  invalid(
+    decode_event(
+      wire.replace(old="\"ReviewChangesRequested\"", new="\"ReviewChanged\""),
+    ),
+  )
+  invalid(decode_event(wire.replace(old="\"feedback\":", new="\"reason\":")))
 }

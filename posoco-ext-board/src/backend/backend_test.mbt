@@ -66,6 +66,7 @@ async test "headless backend serves commands snapshots and subscriptions without
             "ready_since_ms": Json::null(),
             "model": Json::null(),
             "review": Json::null(),
+            "review_feedback": Json::null(),
           },
         ],
         "attempts": [],

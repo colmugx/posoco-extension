@@ -370,6 +370,56 @@ fn ticket_resume(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
 }
 
 ///|
+/// Wire arguments for one Request changes round: which ticket is going back and
+/// the reviewer note the next run must address. The note is the reason the
+/// command exists, so it is trimmed and never empty when it leaves here.
+fn ticket_request_changes_args(task_id : String, feedback : String) -> Json {
+  {
+    "task_id": Json::string(task_id),
+    "feedback": Json::string(feedback.trim().to_owned()),
+  }
+}
+
+///|
+/// Request changes is a ticket command, not an attempt decision: the host
+/// records ChangesRequested, moves the task Review → Ready and starts a fresh
+/// work run from the feedback.
+fn ticket_request_changes(
+  task_id : String,
+  feedback : String,
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
+  send_ticket_command(
+    "board.ticket.request_changes",
+    ticket_request_changes_args(task_id, feedback),
+    emit,
+  )
+}
+
+///|
+/// Why Request changes cannot be sent right now, in the same order the gate
+/// checks it. The host rejects a blank note, so the editor states every reason
+/// instead of leaving the submit button silently disabled.
+fn ticket_request_changes_hint(model : Model, feedback : String) -> String? {
+  if model.ticket_sending {
+    Some("Wait for the current ticket command to finish.")
+  } else if !model.can_connect {
+    Some("Reconnect to the board before sending feedback.")
+  } else if !model.ticket_available {
+    Some(ticket_rejection_text(Some("ticket_runtime_unavailable")))
+  } else if feedback.trim().is_empty() {
+    Some("Write the feedback the next run must address.")
+  } else {
+    None
+  }
+}
+
+///|
+fn ticket_request_changes_blocked(model : Model, feedback : String) -> Bool {
+  ticket_request_changes_hint(model, feedback) is Some(_)
+}
+
+///|
 /// Finished run statuses that left no live worker behind. Only these offer
 /// Retry work: a succeeded run is a result to review, not a lost session, and
 /// a running one is still owned by its worker.

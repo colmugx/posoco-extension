@@ -83,6 +83,7 @@ pub(all) enum BoardCommand {
   StartAttempt(id~ : AttemptId, at_ms~ : Int64, expected_revision~ : Int64)
   FinishAttempt(id~ : AttemptId, outcome~ : AttemptOutcome, at_ms~ : Int64, expected_revision~ : Int64)
   RecordReview(id~ : AttemptId, decision~ : ReviewDecision, at_ms~ : Int64, expected_revision~ : Int64)
+  RequestChanges(id~ : AttemptId, feedback~ : String, at_ms~ : Int64, expected_revision~ : Int64)
   ExpandGraph(expansion~ : ExpansionId, candidates~ : Array[GraphTask], parent~ : BoardTaskId, workflow~ : String, at_ms~ : Int64, expected_revision~ : Int64)
 } derive(Eq, @debug.Debug)
 pub fn BoardCommand::copy_detached(Self) -> Self
@@ -128,6 +129,7 @@ pub(all) enum BoardEvent {
   AttemptStarted(id~ : AttemptId, task_id~ : BoardTaskId, at_ms~ : Int64)
   AttemptFinished(id~ : AttemptId, task_id~ : BoardTaskId, outcome~ : AttemptOutcome, at_ms~ : Int64)
   ReviewRecorded(id~ : AttemptId, task_id~ : BoardTaskId, decision~ : ReviewDecision, at_ms~ : Int64)
+  ReviewChangesRequested(task_id~ : BoardTaskId, attempt_id~ : AttemptId, feedback~ : String, at_ms~ : Int64)
   GraphExpanded(expansion~ : ExpansionId, tasks~ : Array[BoardTask], parent~ : BoardTaskId, workflow~ : String, mapping~ : Array[ExpansionMapping], digest~ : String, at_ms~ : Int64)
 } derive(Eq, @debug.Debug)
 pub fn BoardEvent::copy_detached(Self) -> Self
@@ -203,10 +205,11 @@ pub struct BoardTask {
   ready_since_ms : Int64?
   model : ModelSelection?
   review : ReviewReport?
+  review_feedback : String?
 } derive(Eq, @debug.Debug)
 pub fn BoardTask::copy_detached(Self) -> Self
 pub fn BoardTask::equal(Self, Self) -> Bool
-pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?, model? : ModelSelection?, review? : ReviewReport?) -> Self
+pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?, model? : ModelSelection?, review? : ReviewReport?, review_feedback? : String?) -> Self
 pub fn BoardTask::not_equal(Self, Self) -> Bool
 pub fn BoardTask::to_repr(Self) -> @debug.Repr
 

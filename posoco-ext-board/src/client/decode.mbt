@@ -250,6 +250,10 @@ fn task(value : Json) -> ClientBoardTask raise DecodeFailure {
       None | Some(Null) => None
       Some(value) => Some(review_report(value))
     },
+    review_feedback: match obj.get("review_feedback") {
+      None | Some(Null) => None
+      Some(value) => Some(text(value))
+    },
   }
 }
 
@@ -319,6 +323,8 @@ pub fn decode_board_snapshot(
 priv enum EntityUpdate {
   Task(ClientBoardTask)
   Attempt(ClientAttempt)
+  /// One committed fact that changes a ticket and its attempt together.
+  TaskAndAttempt(ClientBoardTask, ClientAttempt)
 }
 
 ///|
@@ -338,6 +344,18 @@ fn event_entity(
         raise DecodeFailure("task metadata mismatch")
       }
       Task(entity)
+    }
+    "board.task.review_changes_requested" => {
+      let entity = task(required(obj, "task"))
+      let attempt = attempt(required(obj, "attempt"))
+      guard text(required(obj, "task_id")) == entity.id &&
+        text(required(obj, "attempt_id")) == attempt.id &&
+        attempt.task_id == entity.id &&
+        entity.stage == Ready &&
+        entity.review_feedback == Some(text(required(obj, "feedback"))) else {
+        raise DecodeFailure("request-changes metadata mismatch")
+      }
+      TaskAndAttempt(entity, attempt)
     }
     "board.attempt.queued"
     | "board.attempt.started"

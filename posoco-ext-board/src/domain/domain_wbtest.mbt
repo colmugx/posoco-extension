@@ -994,6 +994,7 @@ test "queries return deep copies that never alias committed state" {
         ready_since_ms: None,
         model: None,
         review: None,
+        review_feedback: None,
       },
     ],
     attempts: [],
@@ -1548,4 +1549,290 @@ test "review report command and event copies detach the nested report" {
     }
     _ => fail("expected ReviewReportSet")
   }
+}
+
+///|
+/// A ticket at `stage` with one started Review attempt `r1` whose review is
+/// still Pending — the only state a request-changes decision may act on.
+fn request_changes_state(stage~ : BoardStage = Review) -> BoardState raise {
+  let state = task_at(stage)
+  let queued = accept(
+    state,
+    QueueAttempt(
+      id=aid("r1"),
+      task=tid("t"),
+      kind=Review,
+      at_ms=6000L,
+      expected_revision=state.revision(),
+    ),
+  )
+  accept(
+    queued.next_state,
+    StartAttempt(
+      id=aid("r1"),
+      at_ms=6100L,
+      expected_revision=queued.next_state.revision(),
+    ),
+  ).next_state
+}
+
+///|
+test "request changes folds the decision and the ticket feedback into one revision" {
+  let state = request_changes_state()
+  let revision = state.revision()
+  assert_eq(state.task(tid("t")).unwrap().review_feedback, None)
+  let proposal = accept(
+    state,
+    RequestChanges(
+      id=aid("r1"),
+      feedback="  add a regression test\n",
+      at_ms=7000L,
+      expected_revision=revision,
+    ),
+  )
+  // One decision, one revision: the attempt and its ticket move together.
+  assert_eq(proposal.next_state.revision(), revision + 1L)
+  assert_eq(proposal.events, [
+    ReviewChangesRequested(
+      task_id=tid("t"),
+      attempt_id=aid("r1"),
+      feedback="add a regression test",
+      at_ms=7000L,
+    ),
+  ])
+  let attempt = proposal.next_state.attempt(aid("r1")).unwrap()
+  assert_eq(attempt.review, Some(ChangesRequested))
+  // Review independence: the decision never closes the attempt.
+  assert_eq(attempt.status, Running)
+  assert_eq(attempt.finished_at_ms, None)
+  assert_eq(attempt.updated_at_ms, 7000L)
+  let task = proposal.next_state.task(tid("t")).unwrap()
+  assert_eq(task.stage, Ready)
+  assert_eq(task.review_feedback, Some("add a regression test"))
+  assert_eq(task.updated_at_ms, 7000L)
+  // Entering Ready stamps the queue time exactly like an explicit move.
+  assert_eq(task.ready_since_ms, Some(7000L))
+  // The input state was never mutated.
+  assert_eq(state.task(tid("t")).unwrap().stage, Review)
+  assert_eq(state.task(tid("t")).unwrap().review_feedback, None)
+  assert_eq(state.attempt(aid("r1")).unwrap().review, Some(Pending))
+  // The ticket is immediately re-admissible and keeps the feedback.
+  let mut reopened = proposal.next_state
+  reopened = accept(
+      reopened,
+      move_cmd("t", reopened.revision(), Running, at=7100L),
+    ).next_state
+  let running = reopened.task(tid("t")).unwrap()
+  assert_eq(running.stage, Running)
+  assert_eq(running.ready_since_ms, None)
+  assert_eq(running.review_feedback, Some("add a regression test"))
+  // A second decision replaces the durable feedback instead of appending.
+  let mut second = accept(
+      reopened,
+      move_cmd("t", reopened.revision(), Review, at=7200L),
+    ).next_state
+  let queued = accept(
+      second,
+      QueueAttempt(
+        id=aid("r2"),
+        task=tid("t"),
+        kind=Review,
+        at_ms=7300L,
+        expected_revision=second.revision(),
+      ),
+    ).next_state
+  second = accept(
+      queued,
+      StartAttempt(
+        id=aid("r2"),
+        at_ms=7400L,
+        expected_revision=queued.revision(),
+      ),
+    ).next_state
+  let replaced = accept(
+      second,
+      RequestChanges(
+        id=aid("r2"),
+        feedback="one more test",
+        at_ms=7500L,
+        expected_revision=second.revision(),
+      ),
+    ).next_state
+  let updated = replaced.task(tid("t")).unwrap()
+  assert_eq(updated.review_feedback, Some("one more test"))
+  assert_eq(updated.stage, Ready)
+  assert_eq(updated.ready_since_ms, Some(7500L))
+  assert_eq(replaced.attempt(aid("r1")).unwrap().review, Some(ChangesRequested))
+  assert_eq(replaced.attempt(aid("r2")).unwrap().review, Some(ChangesRequested))
+}
+
+///|
+test "request changes rejects empty oversized and misdirected decisions" {
+  let state = request_changes_state()
+  let revision = state.revision()
+  // Whitespace is not feedback.
+  for feedback in ["", "   ", "\n\t "] {
+    assert_eq(
+      rejection_of(
+        state,
+        RequestChanges(
+          id=aid("r1"),
+          feedback~,
+          at_ms=7000L,
+          expected_revision=revision,
+        ),
+      ),
+      InvalidInput(reason="review feedback must not be empty"),
+    )
+  }
+  // The cap keeps one durable record bounded; exactly 4000 still fits.
+  let oversized = StringBuilder()
+  for i = 0; i < 4001; i = i + 1 {
+    oversized.write_string("x")
+  }
+  assert_eq(
+    rejection_of(
+      state,
+      RequestChanges(
+        id=aid("r1"),
+        feedback=oversized.to_string(),
+        at_ms=7000L,
+        expected_revision=revision,
+      ),
+    ),
+    InvalidInput(reason="review feedback must be at most 4000 characters"),
+  )
+  let capped = StringBuilder()
+  for i = 0; i < 4000; i = i + 1 {
+    capped.write_string("x")
+  }
+  let accepted = accept(
+    state,
+    RequestChanges(
+      id=aid("r1"),
+      feedback=capped.to_string(),
+      at_ms=7000L,
+      expected_revision=revision,
+    ),
+  )
+  assert_eq(
+    accepted.next_state.task(tid("t")).unwrap().review_feedback
+    .unwrap()
+    .length(),
+    4000,
+  )
+  // An unknown attempt is a typed miss, not a silent no-op.
+  assert_eq(
+    rejection_of(
+      state,
+      RequestChanges(
+        id=aid("ghost"),
+        feedback="fix it",
+        at_ms=7000L,
+        expected_revision=revision,
+      ),
+    ),
+    AttemptMissing(attempt=aid("ghost")),
+  )
+  // Only a Review attempt carries a review decision.
+  let discussing = accept(
+      state,
+      QueueAttempt(
+        id=aid("d1"),
+        task=tid("t"),
+        kind=Discuss,
+        at_ms=7000L,
+        expected_revision=revision,
+      ),
+    ).next_state
+  let discussing = accept(
+      discussing,
+      StartAttempt(
+        id=aid("d1"),
+        at_ms=7100L,
+        expected_revision=discussing.revision(),
+      ),
+    ).next_state
+  assert_eq(
+    rejection_of(
+      discussing,
+      RequestChanges(
+        id=aid("d1"),
+        feedback="fix it",
+        at_ms=7200L,
+        expected_revision=discussing.revision(),
+      ),
+    ),
+    InvalidInput(reason="requesting changes requires an attempt of kind Review"),
+  )
+  // A queued review attempt has no decision to change yet.
+  let queued_only = accept(
+      state,
+      QueueAttempt(
+        id=aid("q1"),
+        task=tid("t"),
+        kind=Review,
+        at_ms=7000L,
+        expected_revision=revision,
+      ),
+    ).next_state
+  assert_eq(
+    rejection_of(
+      queued_only,
+      RequestChanges(
+        id=aid("q1"),
+        feedback="fix it",
+        at_ms=7100L,
+        expected_revision=queued_only.revision(),
+      ),
+    ),
+    InvalidReviewTransition(
+      attempt=aid("q1"),
+      current=None,
+      requested=ChangesRequested,
+    ),
+  )
+  // A terminal attempt can no longer be reviewed.
+  let finished = accept(
+      state,
+      FinishAttempt(
+        id=aid("r1"),
+        outcome=Succeeded,
+        at_ms=7000L,
+        expected_revision=revision,
+      ),
+    ).next_state
+  assert_eq(
+    rejection_of(
+      finished,
+      RequestChanges(
+        id=aid("r1"),
+        feedback="fix it",
+        at_ms=7100L,
+        expected_revision=finished.revision(),
+      ),
+    ),
+    InvalidReviewTransition(
+      attempt=aid("r1"),
+      current=Some(Pending),
+      requested=ChangesRequested,
+    ),
+  )
+  // A decision needs the ticket under review, not merely a review attempt.
+  let not_under_review = request_changes_state(stage=Running)
+  assert_eq(
+    rejection_of(
+      not_under_review,
+      RequestChanges(
+        id=aid("r1"),
+        feedback="fix it",
+        at_ms=7000L,
+        expected_revision=not_under_review.revision(),
+      ),
+    ),
+    InvalidInput(reason="requesting changes requires a ticket under review"),
+  )
+  // Rejections never advance the committed revision.
+  assert_eq(state.revision(), revision)
+  assert_eq(state.task(tid("t")).unwrap().review_feedback, None)
 }

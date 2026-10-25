@@ -69,6 +69,13 @@ fn event_json(event : @domain.BoardEvent) -> Json {
       f["decision"] = decision_json(decision)
       f["at_ms"] = number(at_ms)
     }
+    ReviewChangesRequested(task_id~, attempt_id~, feedback~, at_ms~) => {
+      f["type"] = "ReviewChangesRequested"
+      f["task_id"] = Json::string(task_id.value)
+      f["attempt_id"] = Json::string(attempt_id.value)
+      f["feedback"] = Json::string(feedback)
+      f["at_ms"] = number(at_ms)
+    }
     GraphExpanded(
       expansion~,
       tasks~,
@@ -140,6 +147,11 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
       keys.push("task_id")
       keys.push("decision")
     }
+    "ReviewChangesRequested" => {
+      keys.push("task_id")
+      keys.push("attempt_id")
+      keys.push("feedback")
+    }
     "GraphExpanded" => {
       keys.push("expansion_id")
       keys.push("tasks")
@@ -199,6 +211,13 @@ fn event_decode(value : Json) -> @domain.BoardEvent raise CodecError {
         id=attempt_id(f["id"]),
         task_id=task_id(f["task_id"]),
         decision=decision(f["decision"]),
+        at_ms~,
+      )
+    "ReviewChangesRequested" =>
+      ReviewChangesRequested(
+        task_id=task_id(f["task_id"]),
+        attempt_id=attempt_id(f["attempt_id"]),
+        feedback=nonempty(f["feedback"]),
         at_ms~,
       )
     "GraphExpanded" => {

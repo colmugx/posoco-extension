@@ -20,6 +20,8 @@ pub fn queue_attempt_command(String, Int64, id~ : String, task_id~ : String, kin
 
 pub fn record_review_command(String, Int64, id~ : String, decision~ : ClientRecordableReviewDecision) -> @protocol.BoardClientCommand
 
+pub fn request_changes_command(String, Int64, attempt_id~ : String, feedback~ : String) -> @protocol.BoardClientCommand
+
 pub fn set_task_dependencies_command(String, Int64, id~ : String, dependencies~ : Array[String]) -> @protocol.BoardClientCommand
 
 pub fn set_task_model_command(String, Int64, id~ : String, model~ : ClientModelSelection?) -> @protocol.BoardClientCommand
@@ -142,6 +144,7 @@ pub struct ClientBoardTask {
   ready_since_ms : Int64?
   model : ClientModelSelection?
   review : ClientReviewReport?
+  review_feedback : String?
 } derive(Eq)
 pub fn ClientBoardTask::equal(Self, Self) -> Bool
 pub fn ClientBoardTask::not_equal(Self, Self) -> Bool

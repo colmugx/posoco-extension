@@ -233,6 +233,9 @@ pub struct ClientBoardTask {
   ready_since_ms : Int64?
   model : ClientModelSelection?
   review : ClientReviewReport?
+  /// Durable reviewer feedback of the latest request-changes decision;
+  /// `None` when no decision ever requested changes.
+  review_feedback : String?
 } derive(Eq)
 
 ///|

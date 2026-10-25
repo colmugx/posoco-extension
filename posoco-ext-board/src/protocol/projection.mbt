@@ -116,6 +116,14 @@ fn wire_optional_decision(value : @domain.ReviewDecision?) -> Json {
 }
 
 ///|
+fn wire_optional_text(value : String?) -> Json {
+  match value {
+    Some(value) => Json::string(value)
+    None => Json::null()
+  }
+}
+
+///|
 fn wire_optional_model(value : @domain.ModelSelection?) -> Json {
   match value {
     Some(model) =>
@@ -211,9 +219,9 @@ fn wire_optional_review(value : @domain.ReviewReport?) -> Json {
 
 ///|
 /// Full committed task on the wire: all record fields, snake_case enum
-/// strings and JSON null for the absent `ready_since_ms`, `model` and
-/// `review`. The nested arrays are re-allocated, never aliased from the
-/// domain record.
+/// strings and JSON null for the absent `ready_since_ms`, `model`, `review`
+/// and `review_feedback`. The nested arrays are re-allocated, never aliased
+/// from the domain record.
 pub fn task_to_json(task : @domain.BoardTask) -> Json {
   Json::object({
     "id": Json::string(task.id.value),
@@ -230,6 +238,7 @@ pub fn task_to_json(task : @domain.BoardTask) -> Json {
     "ready_since_ms": wire_optional_number(task.ready_since_ms),
     "model": wire_optional_model(task.model),
     "review": wire_optional_review(task.review),
+    "review_feedback": wire_optional_text(task.review_feedback),
   })
 }
 
@@ -402,6 +411,15 @@ pub fn project_event(
         ("task_id", Json::string(task_id.value)),
         ("attempt", attempt_to_json(committed_attempt(snapshot, id))),
         ("decision", wire_decision(decision)),
+        ("at_ms", wire_number(at_ms)),
+      ])
+    ReviewChangesRequested(task_id~, attempt_id~, feedback~, at_ms~) =>
+      wire_event(kind="board.task.review_changes_requested", payload=[
+        ("task_id", Json::string(task_id.value)),
+        ("task", task_to_json(committed_task(snapshot, task_id))),
+        ("attempt_id", Json::string(attempt_id.value)),
+        ("attempt", attempt_to_json(committed_attempt(snapshot, attempt_id))),
+        ("feedback", Json::string(feedback)),
         ("at_ms", wire_number(at_ms)),
       ])
     GraphExpanded(

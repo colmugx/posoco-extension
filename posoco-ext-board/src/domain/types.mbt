@@ -250,6 +250,9 @@ pub struct BoardTask {
   /// The curated review report of the attempt that produced this work item;
   /// `None` until a report exists. Durable, immutable per attempt.
   review : ReviewReport?
+  /// The reviewer feedback of the most recent request-changes decision;
+  /// `None` before any decision ever requested changes.
+  review_feedback : String?
 } derive(Eq, Debug)
 
 ///|

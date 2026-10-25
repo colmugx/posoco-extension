@@ -1518,6 +1518,70 @@ dialog.sheet-dialog {
   gap: 8px;
 }
 
+/* the note the last Request changes round left: what the next run is judged
+ * against, so it reads as the lead of the Review section */
+.review-feedback {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.review-feedback-label {
+  margin: 0;
+  color: var(--accent);
+  font: 10.5px/1.4 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.review-feedback-note {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.review-feedback-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Request changes collects the note here instead of recording a blind
+ * decision; it sits under the actions it replaced */
+.review-feedback-editor {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.review-feedback-input {
+  min-height: 96px;
+}
+
+.review-feedback-hint {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.review-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 /* the Review-stage note that no curated report exists; it warns, it does not
  * hide the decision controls */
 .review-report-missing {
@@ -2290,6 +2354,15 @@ dialog.sheet-dialog {
   .review-evidence-head {
     flex-direction: column;
     gap: 2px;
+  }
+
+  /* the feedback editor keeps both actions reachable with a thumb */
+  .review-feedback-actions {
+    justify-content: stretch;
+  }
+
+  .review-feedback-actions .btn {
+    flex: 1 1 auto;
   }
 
   .lane {

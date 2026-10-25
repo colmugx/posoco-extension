@@ -4,7 +4,7 @@
 /// decoder is total, synchronous and side-effect free: it reads only the
 /// frame and the caller-supplied `at_ms`, never a clock, the store or the
 /// domain state. Validation is purely structural — frame identity, the fixed
-/// ten-name table and the per-command args schema. Every semantic rule
+/// command-name table and the per-command args schema. Every semantic rule
 /// (existence, transitions, cycles, duplicates, empty identifiers, no-op
 /// updates) stays with the domain's `propose`.
 
@@ -534,6 +534,21 @@ fn decode_record_review(
 }
 
 ///|
+/// `board.task.request_changes`: the attempt is addressed by `id`; the
+/// feedback text stays opaque here (emptiness and the length cap are
+/// domain rules).
+fn decode_request_changes(
+  fields : Map[String, Json],
+  at_ms : Int64,
+  expected_revision : Int64,
+) -> @domain.BoardCommand raise SchemaError {
+  args_allowlist(fields, ["id", "feedback"])
+  let id = args_attempt_id(fields, "id")
+  let feedback = args_string(fields, "feedback")
+  @domain.RequestChanges(id~, feedback~, at_ms~, expected_revision~)
+}
+
+///|
 /// The fixed wire surface. One row per command name; the parsers reject
 /// every schema deviation as `InvalidArguments`.
 fn command_parser(
@@ -545,6 +560,7 @@ fn command_parser(
     "board.task.set_dependencies" => Some(decode_set_dependencies)
     "board.task.set_model" => Some(decode_set_task_model)
     "board.task.set_review_report" => Some(decode_set_review_report)
+    "board.task.request_changes" => Some(decode_request_changes)
     "board.task.move" => Some(decode_move_task)
     "board.task.delete" => Some(decode_delete_task)
     "board.attempt.queue" => Some(decode_queue_attempt)
@@ -563,7 +579,7 @@ fn command_parser(
 /// accepts no timestamp or revision from the payload. Rejections correlate:
 /// both cases carry the frame's `command_id`, so a caller can always answer
 /// the exact frame, even when that id is empty. The command name must be one
-/// of the ten fixed names; an empty `command_id` or an unknown name is
+/// of the fixed names; an empty `command_id` or an unknown name is
 /// `InvalidCommand` (no schema can be selected), every args schema deviation
 /// is `InvalidArguments`.
 ///

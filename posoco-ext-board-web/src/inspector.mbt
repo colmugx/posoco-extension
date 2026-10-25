@@ -105,11 +105,14 @@ fn revalidate_inspector(model : Model) -> Model {
       task_by_id(model.replica, draft.task_id) is None ||
       attempt_by_id(model.replica, draft.attempt_id) is None
     )
+  let request_changes_missing = model.request_changes_draft is Some(draft) &&
+    task_by_id(model.replica, draft.task_id) is None
   if selected_missing ||
     draft_missing ||
     attempt_draft_missing ||
     finish_missing ||
-    review_missing {
+    review_missing ||
+    request_changes_missing {
     {
       ..model,
       selected_task: if selected_missing {
@@ -136,6 +139,11 @@ fn revalidate_inspector(model : Model) -> Model {
         None
       } else {
         model.review_draft
+      },
+      request_changes_draft: if request_changes_missing {
+        None
+      } else {
+        model.request_changes_draft
       },
       notice: Some(
         notice(Warning, "The inspected task or draft target no longer exists."),
@@ -213,12 +221,39 @@ fn draft_open(model : Model) -> Bool {
   model.dependency_editor is Some(_) ||
   model.attempt_draft is Some(_) ||
   model.finish_draft is Some(_) ||
-  model.review_draft is Some(_)
+  model.review_draft is Some(_) ||
+  model.request_changes_draft is Some(_)
 }
 
 ///|
 fn attempt_controls_allowed(model : Model) -> Bool {
   mutations_allowed(model) && !draft_open(model)
+}
+
+///|
+/// Whether the Request changes editor is the open draft for this ticket.
+fn request_changes_open(model : Model, task_id : String) -> Bool {
+  match model.request_changes_draft {
+    Some(draft) => draft.task_id == task_id
+    None => false
+  }
+}
+
+///|
+/// The Request changes editor belongs to the Review stage: once the ticket
+/// leaves it, the note lives on the ticket itself and the draft closes. A
+/// vanished task is `revalidate_inspector`'s business, and a missing snapshot
+/// keeps the draft because the stage is unknown without authoritative state.
+fn close_settled_request_changes(model : Model) -> Model {
+  match model.request_changes_draft {
+    Some(draft) =>
+      match task_by_id(model.replica, draft.task_id) {
+        Some(task) if !(task.stage is Review) =>
+          ({ ..model, request_changes_draft: None, } : Model)
+        _ => model
+      }
+    None => model
+  }
 }
 
 ///|

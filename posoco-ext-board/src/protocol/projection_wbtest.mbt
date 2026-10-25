@@ -18,6 +18,7 @@ fn projection_task(
   ],
   model~ : @domain.ModelSelection? = None,
   review~ : @domain.ReviewReport? = None,
+  review_feedback~ : String? = None,
 ) -> @domain.BoardTask {
   @domain.BoardTask::from_record(
     id=projection_id(),
@@ -32,6 +33,7 @@ fn projection_task(
     ready_since_ms~,
     model~,
     review~,
+    review_feedback~,
   )
 }
 
@@ -127,7 +129,11 @@ fn keys_of(value : Json) -> Array[String] {
 }
 
 ///|
-fn expected_task_t1(stage~ : String, ready_since~ : Json) -> Json {
+fn expected_task_t1(
+  stage~ : String,
+  ready_since~ : Json,
+  review_feedback~ : Json = Json::null(),
+) -> Json {
   {
     "id": "t1",
     "title": "Task t1",
@@ -141,6 +147,7 @@ fn expected_task_t1(stage~ : String, ready_since~ : Json) -> Json {
     "ready_since_ms": ready_since,
     "model": Json::null(),
     "review": Json::null(),
+    "review_feedback": review_feedback,
   }
 }
 
@@ -712,6 +719,57 @@ test "review report set projects the committed task and the report" {
 }
 
 ///|
+test "request changes projects the committed ticket and attempt together" {
+  let task = projection_task(
+    stage=@domain.Ready,
+    ready_since_ms=Some(50L),
+    review_feedback=Some("add a regression test"),
+  )
+  let attempt = projection_attempt(
+    kind=@domain.Review,
+    status=@domain.Running,
+    review=Some(@domain.ChangesRequested),
+    started_at_ms=Some(30L),
+    updated_at_ms=50L,
+  )
+  let event = project_event(
+    projection_snapshot(tasks=[task], attempts=[attempt]),
+    @domain.ReviewChangesRequested(
+      task_id=projection_id(),
+      attempt_id=projection_attempt_id(),
+      feedback="add a regression test",
+      at_ms=50L,
+    ),
+  )
+  assert_eq(event.kind, "board.task.review_changes_requested")
+  assert_eq(event.board_revision, 7L)
+  assert_eq(event.payload, {
+    "task_id": "t1",
+    "task": expected_task_t1(
+      stage="ready",
+      ready_since=Json::number(50),
+      review_feedback=Json::string("add a regression test"),
+    ),
+    "attempt_id": "a1",
+    "attempt": expected_attempt(
+      kind="review",
+      status="running",
+      review="changes_requested",
+      started_at_ms=Json::number(30),
+      finished_at_ms=Json::null(),
+      updated_at_ms=50,
+    ),
+    "feedback": "add a regression test",
+    "at_ms": Json::number(50),
+  })
+  // A ticket without feedback still renders the field, as explicit null.
+  assert_eq(
+    object_field(task_to_json(projection_task()), "review_feedback"),
+    Json::null(),
+  )
+}
+
+///|
 test "wire enums render every variant in stable snake case" {
   let stages : Array[(@domain.BoardStage, String)] = [
     (@domain.Created, "created"),
@@ -830,7 +888,7 @@ test "wire payloads carry no schema or store metadata" {
   assert_eq(schema_keys, [])
   assert_eq(keys_of(task_to_json(projection_task())), [
     "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
-    "created_at_ms", "updated_at_ms", "ready_since_ms", "model", "review",
+    "created_at_ms", "updated_at_ms", "ready_since_ms", "model", "review", "review_feedback",
   ])
   assert_eq(keys_of(attempt_to_json(projection_attempt())), [
     "id", "task_id", "kind", "status", "review", "created_at_ms", "started_at_ms",
@@ -941,6 +999,7 @@ test "snapshot payload renders the whole committed board verbatim" {
           "ready_since_ms": Json::null(),
           "model": Json::null(),
           "review": Json::null(),
+          "review_feedback": Json::null(),
         },
       ],
       "attempts": [

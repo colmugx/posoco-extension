@@ -506,3 +506,39 @@ test "review evidence artifact and result vocabulary has one wire spelling" {
     assert_eq(kind.to_wire(), wire)
   }
 }
+
+///|
+test "request changes command sends the attempt id and the reviewer body" {
+  let command = @client.request_changes_command(
+    "cmd-changes",
+    6L,
+    attempt_id="attempt-1",
+    feedback="  Add the missing regression test.  ",
+  )
+  assert_eq(command.command_id, "cmd-changes")
+  assert_eq(command.expected_revision, 6L)
+  assert_eq(command.name, "board.task.request_changes")
+  // Trimming and the length cap belong to the durable server, so the body is
+  // forwarded verbatim and no timestamp or revision can enter the args.
+  assert_eq(command.args, {
+    "id": "attempt-1",
+    "feedback": "  Add the missing regression test.  ",
+  })
+  assert_eq(
+    @protocol.decode_client_frame(
+      @protocol.encode_client_frame(@protocol.Command(command)),
+    ),
+    Ok(@protocol.Command(command)),
+  )
+  assert_eq(
+    @protocol.decode_board_command(command, 1234L),
+    Ok(
+      @domain.RequestChanges(
+        id=@domain.AttemptId("attempt-1"),
+        feedback="  Add the missing regression test.  ",
+        at_ms=1234L,
+        expected_revision=6L,
+      ),
+    ),
+  )
+}

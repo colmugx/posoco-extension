@@ -177,7 +177,9 @@ fn update_inspector(
     }
     ReviewDecide(attempt_id, value) => {
       // One click fills the outcome and opens the confirmation; submission
-      // still clears every gate the draft form cleared.
+      // still clears every gate the draft form cleared. Approve is the only
+      // one-click decision left: Request changes collects feedback and leaves
+      // through its own ticket command, so it can never be recorded blind.
       guard attempt_controls_allowed(model) &&
         attempt_by_id(model.replica, attempt_id) is Some(attempt) &&
         model.selected_task == Some(attempt.task_id) &&
@@ -185,7 +187,7 @@ fn update_inspector(
         review_recordable(attempt) else {
         return (model, @rabbita.none)
       }
-      guard review_decision_from_wire(value) is Some(decision) else {
+      guard review_decision_from_wire(value) is Some(Approved) else {
         return (model, @rabbita.none)
       }
       (
@@ -194,7 +196,7 @@ fn update_inspector(
           review_draft: Some({
             task_id: attempt.task_id,
             attempt_id,
-            decision: Some(decision),
+            decision: Some(Approved),
           }),
           confirm: Some(ConfirmReview),
         },
@@ -229,6 +231,54 @@ fn update_inspector(
         None => (model, @rabbita.none)
       }
     ReviewSubmitted => submit_review(model, emit, env)
+    RequestChangesOpened(task_id) =>
+      // Review feedback shares the one-editor gate with every other draft, and
+      // it only targets a ticket the Review section is actually showing.
+      match task_by_id(model.replica, task_id) {
+        Some(task) if task.stage is Review && attempt_controls_allowed(model) =>
+          (
+            {
+              ..model,
+              request_changes_draft: Some({ task_id, feedback: "", }),
+            },
+            @rabbita.none,
+          )
+        _ => (model, @rabbita.none)
+      }
+    RequestChangesFeedbackChanged(value) =>
+      // Typing is local; the note exists only in this draft until submit.
+      match model.request_changes_draft {
+        Some(draft) =>
+          (
+            {
+              ..model,
+              request_changes_draft: Some({ ..draft, feedback: value, }),
+            },
+            @rabbita.none,
+          )
+        None => (model, @rabbita.none)
+      }
+    RequestChangesCancelled =>
+      // Cancel closes the editor without a mutation: nothing was sent, so
+      // nothing is cleared on the host.
+      ({ ..model, request_changes_draft: None, }, @rabbita.none)
+    RequestChangesSubmitted =>
+      // Submit sends the ticket command, never a review decision, and the live
+      // gate re-checks the same state the disabled button shows.
+      match model.request_changes_draft {
+        Some(draft) if !ticket_request_changes_blocked(model, draft.feedback) =>
+          (
+            {
+              ..model,
+              ticket_sending: true,
+              last_status: "Sending feedback for ticket " + draft.task_id,
+            },
+            // The command trims the note; the draft keeps it as typed so a
+            // rejection leaves the reviewer's own wording intact.
+            ticket_request_changes(draft.task_id, draft.feedback, emit),
+          )
+        _ => (model, @rabbita.none)
+      }
     _ => (model, @rabbita.none)
   }
 }
@@ -409,11 +459,13 @@ fn submit_attempt_finish(
 }
 
 ///|
-/// Record one explicit Approved/Changes-requested decision on a running
-/// Review attempt that is still Pending. The decision never changes the
-/// attempt status or the task stage; the durable server stays authoritative
-/// and re-checks the window, so a stale draft is quietly refused here and
-/// mapped safely if the server still rejects it.
+/// Record the one review decision still offered: Approved. Request changes no
+/// longer travels through the record-review command — it is a ticket command
+/// carrying the reviewer's feedback — so a draft that somehow holds
+/// Changes-requested is refused here instead of being sent blind. The decision
+/// never changes the attempt status or the task stage; the durable server stays
+/// authoritative and re-checks the window, so a stale draft is quietly refused
+/// here and mapped safely if the server still rejects it.
 fn submit_review(
   model : Model,
   emit : @rabbita.Emit[Msg],
@@ -421,7 +473,7 @@ fn submit_review(
 ) -> (Model, @rabbita.Cmd) {
   guard model.review_draft is Some(draft) &&
     review_submit_allowed(model, draft) &&
-    draft.decision is Some(decision) else {
+    draft.decision is Some(Approved) else {
     return (model, @rabbita.none)
   }
   guard (env.uuid)() is Some(uuid) && uuid != "" else {
@@ -429,7 +481,7 @@ fn submit_review(
   }
   dispatch_command(
     model,
-    review_command(uuid, model.replica.revision(), draft.attempt_id, decision),
+    review_command(uuid, model.replica.revision(), draft.attempt_id, Approved),
     PendingReview(attempt_id=draft.attempt_id),
     emit,
   )

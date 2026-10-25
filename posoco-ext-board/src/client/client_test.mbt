@@ -25,6 +25,7 @@ fn wire_task(
   ready~ : Json = Json::null(),
   model~ : Json = Json::null(),
   review~ : Json = Json::null(),
+  review_feedback~ : Json = Json::null(),
 ) -> Json {
   Json::object({
     "id": Json::string(id),
@@ -39,6 +40,7 @@ fn wire_task(
     "ready_since_ms": ready,
     "model": model,
     "review": review,
+    "review_feedback": review_feedback,
   })
 }
 
@@ -1400,4 +1402,146 @@ test "review report set event decodes the committed task review" {
   assert_eq_eq(replica.apply_event(cleared), @client.Applied)
   assert_eq_eq(replica.tasks()[0].review, None)
   assert_eq_eq(replica.tasks()[0].stage, @client.Running)
+}
+
+///|
+test "snapshot decodes review feedback and treats the key as additive" {
+  let frame = snapshot_frame(revision=2L, last_seq=0L, tasks=[
+    wire_task(
+      id="t1",
+      stage="ready",
+      ready=Json::number(9000),
+      review_feedback=Json::string("Add the missing regression test."),
+    ),
+    wire_task(id="t2", stage="ready"),
+  ])
+  guard @client.decode_board_snapshot(frame) is Ok(decoded) else {
+    abort("expected a valid snapshot")
+  }
+  assert_eq_eq(
+    decoded.tasks[0].review_feedback,
+    Some("Add the missing regression test."),
+  )
+  assert_eq_eq(decoded.tasks[1].review_feedback, None)
+  // A task record written before the field existed still decodes as None.
+  let legacy = wire_task(id="t3")
+  guard legacy is Json::Object(legacy_fields) else { abort("object") }
+  ignore(legacy_fields.remove("review_feedback"))
+  let frame = snapshot_frame(revision=2L, last_seq=0L, tasks=[legacy])
+  guard @client.decode_board_snapshot(frame) is Ok(decoded) else {
+    abort("expected a valid snapshot")
+  }
+  assert_eq_eq(decoded.tasks[0].review_feedback, None)
+  // A non-string body is a decode failure, never a silent None.
+  let frame = snapshot_frame(revision=2L, last_seq=0L, tasks=[
+    wire_task(id="t4", review_feedback=Json::number(1)),
+  ])
+  assert_eq_eq(
+    @client.decode_board_snapshot(frame),
+    Err(@client.InvalidData("expected string")),
+  )
+}
+
+///|
+/// The one wire event that changes a ticket and its attempt together.
+fn request_changes_payload(
+  task~ : Json = wire_task(
+    stage="ready",
+    ready=Json::number(9000),
+    review_feedback=Json::string("Add the missing regression test."),
+  ),
+  attempt~ : Json = wire_attempt(
+    kind="review",
+    status="running",
+    review=Json::string("changes_requested"),
+    started=Json::number(8000),
+  ),
+  feedback~ : String = "Add the missing regression test.",
+) -> Json {
+  Json::object({
+    "task_id": Json::string("t1"),
+    "task": task,
+    "attempt_id": Json::string("a1"),
+    "attempt": attempt,
+    "feedback": Json::string(feedback),
+    "at_ms": Json::number(9000),
+  })
+}
+
+///|
+test "review changes requested event projects the ticket and the attempt" {
+  let replica = seeded()
+  assert_eq_eq(
+    replica.apply_event({
+      seq: 2L,
+      board_revision: 2L,
+      kind: "board.task.review_changes_requested",
+      scope: None,
+      payload: request_changes_payload(),
+    }),
+    @client.Applied,
+  )
+  assert_eq_eq(replica.revision(), 2L)
+  assert_eq_eq(replica.last_seq(), 2L)
+  let task = replica.tasks()[0]
+  assert_eq_eq(task.stage, @client.Ready)
+  assert_eq_eq(task.ready_since_ms, Some(9000L))
+  assert_eq_eq(task.review_feedback, Some("Add the missing regression test."))
+  // The decision lands on the attempt in the same revision.
+  let attempt = replica.attempts()[0]
+  assert_eq_eq(attempt.status, @client.Running)
+  assert_eq_eq(attempt.review, Some(@client.ChangesRequested))
+  assert_eq_eq(attempt.finished_at_ms, None)
+  // Every derived value is cross-checked: a ticket that is not Ready, or a
+  // body that disagrees with the task, invalidates instead of misprojecting.
+  let not_ready = seeded()
+  assert_eq_eq(
+    not_ready.apply_event({
+      seq: 2L,
+      board_revision: 2L,
+      kind: "board.task.review_changes_requested",
+      scope: None,
+      payload: request_changes_payload(
+        task=wire_task(
+          stage="review",
+          review_feedback=Json::string("Add the missing regression test."),
+        ),
+      ),
+    }),
+    @client.NeedsSnapshot("request-changes metadata mismatch"),
+  )
+  let disagreeing = seeded()
+  assert_eq_eq(
+    disagreeing.apply_event({
+      seq: 2L,
+      board_revision: 2L,
+      kind: "board.task.review_changes_requested",
+      scope: None,
+      payload: request_changes_payload(
+        task=wire_task(
+          stage="ready",
+          review_feedback=Json::string("Something else entirely."),
+        ),
+      ),
+    }),
+    @client.NeedsSnapshot("request-changes metadata mismatch"),
+  )
+  let wrong_attempt = seeded()
+  assert_eq_eq(
+    wrong_attempt.apply_event({
+      seq: 2L,
+      board_revision: 2L,
+      kind: "board.task.review_changes_requested",
+      scope: None,
+      payload: request_changes_payload(
+        attempt=wire_attempt(
+          id="a2",
+          kind="review",
+          status="running",
+          review=Json::string("changes_requested"),
+        ),
+      ),
+    }),
+    @client.NeedsSnapshot("request-changes metadata mismatch"),
+  )
 }

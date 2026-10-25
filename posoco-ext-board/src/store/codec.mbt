@@ -509,12 +509,16 @@ fn task_json(task : @domain.BoardTask) -> Json {
     "ready_since_ms": optional_number(task.ready_since_ms),
     "model": model_json(task.model),
     "review": review_json(task.review),
+    "review_feedback": match task.review_feedback {
+      Some(value) => Json::string(value)
+      None => Json::null()
+    },
   })
 }
 
 ///|
-/// `model` and `review` are optional keys so every pre-existing store keeps
-/// decoding with both absent.
+/// `model`, `review` and `review_feedback` are optional keys so every
+/// pre-existing store keeps decoding with them absent.
 fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
   let f = optional_fields(
     value,
@@ -522,7 +526,7 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
       "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
       "created_at_ms", "updated_at_ms", "ready_since_ms",
     ],
-    ["model", "review"],
+    ["model", "review", "review_feedback"],
   )
   @domain.BoardTask::from_record(
     id=task_id(f["id"]),
@@ -542,6 +546,10 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     review=match f.get("review") {
       Some(value) => review(value)
       None => None
+    },
+    review_feedback=match f.get("review_feedback") {
+      Some(Json::Null) | None => None
+      Some(value) => Some(nonempty(value))
     },
   )
 }

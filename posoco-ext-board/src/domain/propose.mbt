@@ -135,6 +135,8 @@ pub fn BoardDomain::propose(
       propose_finish_attempt(state, id, outcome, at_ms)
     RecordReview(id~, decision~, at_ms~, ..) =>
       propose_record_review(state, id, decision, at_ms)
+    RequestChanges(id~, feedback~, at_ms~, ..) =>
+      propose_request_changes(state, id, feedback, at_ms)
     ExpandGraph(expansion~, candidates~, parent~, workflow~, at_ms~, ..) =>
       propose_expand_graph(
         state, expansion, candidates, parent, workflow, at_ms,
@@ -195,6 +197,7 @@ fn propose_create(
     ready_since_ms: None,
     model: None,
     review: None,
+    review_feedback: None,
   }
   next.put_task(task)
   next.bump_revision()
@@ -689,6 +692,97 @@ fn propose_record_review(
 }
 
 ///|
+/// Reviewer feedback is durable text, so it is normalized once at the
+/// boundary: the decision reads and stores the trimmed text, and an empty
+/// or oversized body is rejected instead of persisted.
+fn review_feedback_text(feedback : String) -> Result[String, BoardError] {
+  let trimmed = feedback.trim()
+  if trimmed.is_empty() {
+    return Err(InvalidInput(reason="review feedback must not be empty"))
+  }
+  if trimmed.length() > 4000 {
+    return Err(
+      InvalidInput(reason="review feedback must be at most 4000 characters"),
+    )
+  }
+  Ok(trimmed.to_owned())
+}
+
+///|
+/// Request changes for one Running Review attempt whose review is still
+/// Pending. Unlike `RecordReview` this is a coupled decision: the attempt
+/// records ChangesRequested and the ticket stores the durable feedback and
+/// returns Review -> Ready in the same revision, so a fresh attempt can pick
+/// the work item up without a second command. The attempt status stays
+/// Running; the reviewer still finishes it separately (review independence).
+fn propose_request_changes(
+  state : BoardState,
+  id : AttemptId,
+  feedback : String,
+  at_ms : Int64,
+) -> Result[BoardProposal, BoardError] {
+  if id.value == "" {
+    return Err(InvalidInput(reason="attempt id must not be empty"))
+  }
+  if invalid_time(at_ms) {
+    return Err(InvalidInput(reason="updated_at_ms must not be negative"))
+  }
+  let feedback = match review_feedback_text(feedback) {
+    Ok(text) => text
+    Err(error) => return Err(error)
+  }
+  let attempt = match state.attempt(id) {
+    Some(attempt) => attempt
+    None => return Err(AttemptMissing(attempt=id))
+  }
+  if !(attempt.kind is Review) {
+    return Err(
+      InvalidInput(
+        reason="requesting changes requires an attempt of kind Review",
+      ),
+    )
+  }
+  if !(attempt.status is Running) || !(attempt.review is Some(Pending)) {
+    return Err(
+      InvalidReviewTransition(
+        attempt=id,
+        current=attempt.review,
+        requested=ChangesRequested,
+      ),
+    )
+  }
+  let task = match state.task(attempt.task_id) {
+    Some(task) => task
+    None => return Err(TaskMissing(task=attempt.task_id))
+  }
+  if !(task.stage is Review) {
+    return Err(
+      InvalidInput(reason="requesting changes requires a ticket under review"),
+    )
+  }
+  let next = state.clone_detached()
+  next.put_attempt({
+    ..attempt,
+    review: Some(ChangesRequested),
+    updated_at_ms: at_ms,
+  })
+  next.put_task({
+    ..task,
+    stage: Ready,
+    ready_since_ms: Some(at_ms),
+    review_feedback: Some(feedback),
+    updated_at_ms: at_ms,
+  })
+  next.bump_revision()
+  Ok({
+    next_state: next,
+    events: [
+      ReviewChangesRequested(task_id=task.id, attempt_id=id, feedback~, at_ms~),
+    ],
+  })
+}
+
+///|
 /// Existence, self-reference, duplicate-edge and cycle validation for one
 /// candidate dependency list of `root`. Ready never requires dependencies
 /// to be Done, so no stage checks happen here.
@@ -804,6 +898,7 @@ fn propose_expand_graph(
       ready_since_ms: None,
       model: None,
       review: None,
+      review_feedback: None,
     }
     next.put_task(task)
     tasks.push(task.copy_detached())

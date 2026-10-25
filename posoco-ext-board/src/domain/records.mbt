@@ -62,6 +62,7 @@ pub fn BoardTask::from_record(
   ready_since_ms~ : Int64?,
   model~ : ModelSelection? = None,
   review~ : ReviewReport? = None,
+  review_feedback~ : String? = None,
 ) -> BoardTask {
   {
     id,
@@ -79,6 +80,7 @@ pub fn BoardTask::from_record(
       Some(report) => Some(report.copy_detached())
       None => None
     },
+    review_feedback,
   }
 }
 

@@ -500,6 +500,40 @@ pub fn record_review_command(
 }
 
 ///|
+/// Request changes on one running Review attempt. The feedback text is the
+/// durable body the reviewer wrote; the server owns trimming, the length cap
+/// and the atomic Review -> Ready task transition.
+///
+/// ```mbt check
+/// test {
+///   let wire = @client.request_changes_command(
+///     "cmd-changes",
+///     6L,
+///     attempt_id="attempt-1",
+///     feedback="Please add a regression test.",
+///   )
+///   assert_eq(wire.name, "board.task.request_changes")
+///   assert_eq(wire.args, {
+///     "id": "attempt-1",
+///     "feedback": "Please add a regression test.",
+///   })
+/// }
+/// ```
+pub fn request_changes_command(
+  command_id : String,
+  expected_revision : Int64,
+  attempt_id~ : String,
+  feedback~ : String,
+) -> @protocol.BoardClientCommand {
+  {
+    command_id,
+    expected_revision,
+    name: "board.task.request_changes",
+    args: { "id": Json(attempt_id), "feedback": Json(feedback) },
+  }
+}
+
+///|
 /// Request a stage transition; the durable server remains authoritative.
 ///
 /// ```mbt check

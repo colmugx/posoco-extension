@@ -333,3 +333,127 @@ async test "recovered Interrupted review remains pending but cannot accept a new
     recovered.shutdown()
   })
 }
+
+///|
+async test "request changes commits the decision and returns the ticket to ready in one event" {
+  let clock = Ref(100L)
+  let store = @store.MemoryBoardStore()
+  let backend = @backend.BoardBackend(store~, now_ms=() => clock.val)
+  @async.with_task_group(group => {
+    backend.attach(group)
+    let replica = @client.BoardReplica::empty()
+    review_service_seed(backend, replica, @client.Review)
+    lifecycle_accept(
+      backend,
+      replica,
+      @client.start_attempt_command("start", 2L, id="a"),
+    )
+    let mut revision = 3L
+    for
+      stage in [
+        @client.Refining,
+        @client.Ready,
+        @client.Running,
+        @client.Review,
+      ] {
+      lifecycle_accept(
+        backend,
+        replica,
+        @client.move_task_command("move", revision, id="t", to=stage),
+      )
+      revision += 1L
+    }
+    assert_true(replica.tasks()[0].stage is @client.Review)
+    clock.val = 1234L
+    // Whitespace-only feedback is not a decision: the domain rejects it and
+    // the stream stays untouched.
+    let empty = backend.handle_command(
+      @client.request_changes_command(
+        "empty",
+        revision,
+        attempt_id="a",
+        feedback="   ",
+      ),
+    )
+    assert_false(empty.accepted)
+    assert_eq(empty.error, Some("invalid_input"))
+    assert_eq(empty.current_revision, Some(revision))
+    assert_eq(backend.current_seq(), revision)
+    lifecycle_accept(
+      backend,
+      replica,
+      @client.request_changes_command(
+        "changes",
+        revision,
+        attempt_id="a",
+        feedback="  Add the missing regression test.\n",
+      ),
+    )
+    let event = backend.event_history().last().unwrap()
+    assert_eq(event.kind, "board.task.review_changes_requested")
+    assert_eq(event.board_revision, revision + 1L)
+    assert_eq(event.payload, {
+      "task_id": "t",
+      "task": {
+        "id": "t",
+        "title": "Manual review",
+        "description": "",
+        "stage": "ready",
+        "priority": "normal",
+        "definition_of_done": [],
+        "dependencies": [],
+        "created_at_ms": 100,
+        "updated_at_ms": 1234,
+        "ready_since_ms": 1234,
+        "model": Json::null(),
+        "review": Json::null(),
+        "review_feedback": "Add the missing regression test.",
+      },
+      "attempt_id": "a",
+      "attempt": {
+        "id": "a",
+        "task_id": "t",
+        "kind": "review",
+        "status": "running",
+        "review": "changes_requested",
+        "created_at_ms": 100,
+        "started_at_ms": 100,
+        "finished_at_ms": Json::null(),
+        "updated_at_ms": 1234,
+      },
+      "feedback": "Add the missing regression test.",
+      "at_ms": 1234,
+    })
+    // lifecycle_accept applied that single event: both records moved.
+    let task = replica.tasks()[0]
+    assert_true(task.stage is @client.Ready)
+    assert_eq(task.review_feedback, Some("Add the missing regression test."))
+    assert_eq(task.ready_since_ms, Some(1234L))
+    let attempt = replica.attempts()[0]
+    assert_true(attempt.review is Some(@client.ChangesRequested))
+    assert_true(attempt.status is @client.Running)
+    // One revision settled the whole decision, so there is nothing left to
+    // request again on this attempt.
+    let second = backend.handle_command(
+      @client.request_changes_command(
+        "second",
+        revision + 1L,
+        attempt_id="a",
+        feedback="one more test",
+      ),
+    )
+    assert_eq(second.error, Some("invalid_review_transition"))
+    assert_eq(backend.current_seq(), revision + 1L)
+    // The durable snapshot keeps the feedback with the returned ticket.
+    let saved = store.load().unwrap()
+    assert_eq(saved.snapshot.revision, revision + 1L)
+    assert_eq(saved.snapshot.tasks[0].stage, @domain.Ready)
+    assert_eq(saved.snapshot.tasks[0].ready_since_ms, Some(1234L))
+    assert_eq(
+      saved.snapshot.tasks[0].review_feedback,
+      Some("Add the missing regression test."),
+    )
+    assert_eq(saved.snapshot.attempts[0].review, Some(@domain.ChangesRequested))
+    backend.shutdown()
+  })
+}
