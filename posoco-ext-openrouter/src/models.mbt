@@ -291,19 +291,28 @@ pub fn openrouter_model_catalog(
   }
   let prompt_cache_key_rejection_state : Ref[Bool] = Ref(false)
   let slots : Array[@llm.ModelSlot] = []
+  let mut has_decision = false
   for info in openrouter_preferred_models(models, preferred_id) {
     let config = openrouter_config_for_info(
       api_key, base_url, info, http_referer, title,
     )
+    if openrouter_is_decision_model(info.id) {
+      has_decision = true
+    }
     slots.push(
       openrouter_catalog_slot(
         config, api_key_factory, prompt_cache_key_rejection_state,
       ),
     )
   }
+  let capabilities : Array[String] = if has_decision {
+    ["chat", "streaming", "reasoning", "api_key", "decision"]
+  } else {
+    ["chat", "streaming", "reasoning", "api_key"]
+  }
   @llm.ProviderModelCatalog::ProviderModelCatalog(
     provider_id="openrouter",
     slots~,
-    capabilities=["chat", "streaming", "reasoning", "api_key"],
+    capabilities~,
   )
 }

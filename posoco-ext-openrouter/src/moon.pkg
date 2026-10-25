@@ -28,6 +28,7 @@ options(
     // complete mbti. #cfg-guarded fallbacks (chat/compact/refresh
     // _wasm_fallback.mbt) satisfy the trait on wasm-gc.
     "chat_native_js.mbt": [ "native", "wasm", "js" ],
+    "decision_native_js.mbt": [ "native", "wasm", "js" ],
     "compact_native_js.mbt": [ "native", "wasm", "js" ],
     "models_native_js.mbt": [ "native", "wasm", "js" ],
     "refresh_native_js.mbt": [ "native", "wasm", "js" ],

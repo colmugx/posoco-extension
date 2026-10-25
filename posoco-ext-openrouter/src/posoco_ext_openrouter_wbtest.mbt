@@ -1385,3 +1385,203 @@ test "vision capability flows from discovery to slot to encoder" {
   assert_true(downgraded.contains("look"))
   assert_true(downgraded.contains("[Attached image/png"))
 }
+
+///|
+fn openrouter_jev_info() -> OpenRouterModelInfo {
+  {
+    id: "typesafe/jev-router",
+    context_length: Some(1000000),
+    reasoning_supported: false,
+    supported_efforts: [],
+    default_effort: None,
+    default_enabled: false,
+    supports_images: false,
+  }
+}
+
+///|
+test "openrouter classifies the typesafe/jev family as decision models" {
+  assert_true(openrouter_is_decision_model("typesafe/jev-router"))
+  assert_true(openrouter_is_decision_model("typesafe/jev-latest"))
+  assert_false(openrouter_is_decision_model("anthropic/claude-sonnet-4.5"))
+  assert_false(openrouter_is_decision_model("jev-router"))
+  assert_false(openrouter_is_decision_model("typesafe/other"))
+}
+
+///|
+test "openrouter_model_catalog serves jev models as decision slots only" {
+  let factory : &@llm.ApiKeyFactory = OpenRouterApiKeyFactory()
+  let models = [
+    {
+      id: "a/first",
+      context_length: Some(1000),
+      reasoning_supported: true,
+      supported_efforts: ["low", "high"],
+      default_effort: Some("high"),
+      default_enabled: true,
+      supports_images: false,
+    },
+    openrouter_jev_info(),
+  ]
+  let catalog = openrouter_model_catalog(
+    "sk-or-v1-test", "https://openrouter.ai/api/v1", models, "a/first", factory,
+  )
+  let slots = catalog.slots()
+  assert_eq(slots.length(), 2)
+  assert_eq(slots[0].model_id, "a/first")
+  assert_true(slots[0].is_chat())
+  assert_true(slots[0].decision_port is None)
+  let decision = slots[1]
+  assert_eq(decision.model_id, "typesafe/jev-router")
+  assert_eq(decision.id, "openrouter/typesafe/jev-router")
+  assert_true(decision.is_decision())
+  assert_false(decision.is_chat())
+  assert_true(decision.decision_port is Some(_))
+  // A decision model carries no effort picker and never claims chat.
+  assert_eq(decision.thinking_efforts, [])
+  assert_eq(decision.default_effort, None)
+  assert_false(decision.capabilities.contains("chat"))
+  assert_true(decision.capabilities.contains("decision"))
+  assert_true(catalog.capabilities().contains("decision"))
+}
+
+///|
+test "openrouter static build with a jev model yields a decision-only catalog" {
+  let provider = OpenRouterProvider()
+  let source = @llm.ProviderConfigSource::ProviderConfigSource(
+    settings=Some(
+      Json::object(
+        Map::from_array([
+          ("model", Json::string("typesafe/jev-router")),
+          ("api_key", Json::string("sk-or-v1-test")),
+        ]),
+      ),
+    ),
+  )
+  let catalog = match provider.build(source) {
+    @llm.ProviderBuildResult::Ready(catalog) => catalog
+    @llm.ProviderBuildResult::Unconfigured => fail("expected a ready catalog")
+  }
+  let slots = catalog.slots()
+  assert_eq(slots.length(), 1)
+  assert_true(slots[0].is_decision())
+  assert_true(slots[0].decision_port is Some(_))
+  assert_true(catalog.capabilities().contains("decision"))
+  // Credential rebuilds keep the decision kind and its provider-owned port.
+  let rebuilt = match slots[0].rebuild_on_api_key {
+    Some(rebuild) =>
+      rebuild(@oauth.ApiKeyCredential::ApiKeyCredential(secret="sk-or-v1-next"))
+    None => fail("expected a credential rebuild hook")
+  }
+  assert_true(rebuilt.is_decision())
+  assert_true(rebuilt.decision_port is Some(_))
+}
+
+///|
+test "openrouter decision port owns its systemone endpoint" {
+  let port = OpenRouterDecisionPort(
+    OpenRouterConfig(
+      "sk-or-v1-test",
+      model="typesafe/jev-router",
+      base_url="https://openrouter.ai/api/v1/",
+    ),
+  )
+  assert_eq(port.decision_url(), "https://openrouter.ai/api/v1/systemone")
+}
+
+///|
+test "openrouter decision encoder speaks the System One envelope" {
+  let request : @posoco.DecisionRequest = {
+    state: Json::object({ "task": Json::string("route a turn") }),
+    questions: [
+      @posoco.DecisionQuestion::Score(
+        id="effort",
+        instructions=Json::string("How much effort?"),
+        levels=[Json::string("low"), Json::string("high")],
+      ),
+    ],
+  }
+  let payload = openrouter_decision_request_json(request, "typesafe/jev-router")
+  guard payload is Object(root) else { fail("expected request object") }
+  assert_true(root.get("model") is Some(String("typesafe/jev-router")))
+  guard root.get("questions") is Some(Object(questions)) else {
+    fail("expected questions object")
+  }
+  guard questions.get("effort") is Some(Object(effort)) else {
+    fail("expected score question")
+  }
+  assert_true(effort.get("type") is Some(String("score")))
+}
+
+///|
+test "openrouter decision decoder validates the official System One response" {
+  let request : @posoco.DecisionRequest = {
+    state: Json::null(),
+    questions: [
+      @posoco.DecisionQuestion::Choice(
+        id="route",
+        instructions=Json::string("Pick one"),
+        options=[
+          { id: "fast", description: None, },
+          { id: "deep", description: None, },
+        ],
+      ),
+    ],
+  }
+  let payload = Json::object({
+    "model": Json::string("typesafe/jev-router"),
+    "answers": Json::object({
+      "route": Json::object({
+        "type": Json::string("choice"),
+        "choice": Json::string("deep"),
+        "confidence": Json::number(0.8),
+        "probabilities": Json::object({
+          "fast": Json::number(0.2),
+          "deep": Json::number(0.8),
+        }),
+      }),
+    }),
+    "usage": Json::object({
+      "input_tokens": Json::number(9.0),
+      "output_tokens": Json::number(2.0),
+    }),
+  })
+  let result = openrouter_decision_response_json(payload, request)
+  assert_eq(result.model, Some("typesafe/jev-router"))
+  assert_eq(
+    result.usage,
+    Some({ input_tokens: Some(9), output_tokens: Some(2), }),
+  )
+  match result.answers[0] {
+    @posoco.DecisionAnswer::ChoiceAnswer(
+      id~,
+      selected~,
+      probabilities~,
+      confidence~
+    ) => {
+      assert_eq(id, "route")
+      assert_eq(selected, "deep")
+      assert_eq(probabilities.length(), 2)
+      assert_eq(confidence, Some(0.8))
+    }
+    _ => fail("expected ChoiceAnswer")
+  }
+}
+
+///|
+test "openrouter decision errors name the provider and the model" {
+  let rate = openrouter_decision_http_error("typesafe/jev-router", 429, 0)
+  assert_true(rate is @posoco.DecisionError::RateLimited(_))
+  assert_true(rate.to_string().contains("provider=openrouter"))
+  assert_true(rate.to_string().contains("model=typesafe/jev-router"))
+  let bad = openrouter_decision_http_error(
+    "typesafe/jev-router",
+    400,
+    10,
+    body=Some("Model typesafe/jev-router does not exist"),
+  )
+  assert_true(bad is @posoco.DecisionError::RequestBuild(_))
+  let down = openrouter_decision_http_error("typesafe/jev-router", 503, 0)
+  assert_true(down is @posoco.DecisionError::Transport(_))
+  assert_true(down.to_string().contains("provider=openrouter"))
+}

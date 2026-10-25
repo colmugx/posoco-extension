@@ -16,6 +16,8 @@ import {
 // Values
 pub async fn fetch_openrouter_models(String, String) -> Array[OpenRouterModelInfo] raise @error.ModelError
 
+pub fn openrouter_is_decision_model(String) -> Bool
+
 pub fn openrouter_model_catalog(String, String, Array[OpenRouterModelInfo], String, &@posoco-kit-provider.ApiKeyFactory, http_referer? : String?, title? : String?) -> @posoco-kit-provider.ProviderModelCatalog raise @error.CompositionError
 
 pub fn parse_cached_openrouter_models(Json?) -> Array[OpenRouterModelInfo]?
@@ -53,6 +55,14 @@ pub fn OpenRouterConfig::equal(Self, Self) -> Bool
 pub fn OpenRouterConfig::not_equal(Self, Self) -> Bool
 pub fn OpenRouterConfig::to_repr(Self) -> @debug.Repr
 pub fn OpenRouterConfig::with_reasoning_effort(Self, String) -> Self raise @error.CompositionError
+
+pub(all) struct OpenRouterDecisionPort {
+  config : OpenRouterConfig
+}
+pub fn OpenRouterDecisionPort::OpenRouterDecisionPort(OpenRouterConfig) -> Self
+pub async fn OpenRouterDecisionPort::evaluate(Self, @port.DecisionRequest) -> @port.DecisionResult raise @error.DecisionError
+pub async fn OpenRouterDecisionPort::evaluate_with_context(Self, @port.DecisionRequest, context~ : @port.DecisionCallContext) -> @port.DecisionResult raise @error.DecisionError
+pub impl @port.DecisionPort for OpenRouterDecisionPort
 
 pub(all) struct OpenRouterModelInfo {
   id : String

@@ -21,7 +21,8 @@ vocabulary, heartbeat/usage streaming semantics) is tuned for this endpoint.
 |--------|------|--------------|
 | `OpenRouterModelPort` | `ModelPort` | chat with optional streaming plus a summarize-based compact, over `/api/v1/chat/completions` |
 | `OpenRouterModelPort` | `Extension` | self-reports one model in manifest `posoco_ext_openrouter` |
-| `OpenRouterProvider` | `llm.ProviderFactory` / `llm.RefreshableProviderFactory` | settings → offline catalog snapshot; live `GET /models` catalog refresh |
+| `OpenRouterDecisionPort` | `posoco.DecisionPort` | structured semantic judgement for `typesafe/jev-*` slots: one POST to `{base_url}/systemone`, the same ApiKey credential and attribution headers as chat; typed `DecisionError` with provider+model on every failure |
+| `OpenRouterProvider` | `llm.ProviderFactory` / `llm.RefreshableProviderFactory` | settings → offline catalog snapshot; live `GET /models` catalog refresh. Jev-class slugs (`typesafe/jev-*`) become `kind = Decision` slots — `/decision` candidates, never `/model` chat entries — on the static and refresh paths alike |
 | `OpenRouterApiKeyFactory` | `llm.ApiKeyFactory` | ApiKey login (the host's `/login openrouter method:api_key` path) |
 
 ## Usage

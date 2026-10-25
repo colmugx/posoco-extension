@@ -132,7 +132,10 @@ fn openrouter_effort_label(config : OpenRouterConfig) -> String {
 
 ///|
 /// All rebuild hooks funnel back here and retain both the explicit cache-key
-/// policy and the provider-scoped rejection state.
+/// policy and the provider-scoped rejection state. Jev-class models
+/// (`typesafe/jev-*`) become `kind = Decision` slots with the provider-owned
+/// decision port: they are `/decision` candidates only, carry no effort
+/// picker, and never appear in the conversation selection.
 fn openrouter_catalog_slot(
   config : OpenRouterConfig,
   api_key : &@llm.ApiKeyFactory,
@@ -140,6 +143,35 @@ fn openrouter_catalog_slot(
 ) -> @llm.ModelSlot {
   let slot_id = "openrouter/" + config.model
   let label = "openrouter / " + config.model
+  if openrouter_is_decision_model(config.model) {
+    let port : &@posoco.ModelPort = openrouter_model_port_with_prompt_cache_rejection_state(
+      config, prompt_cache_key_rejection_state,
+    )
+    let decision_port : &@posoco.DecisionPort = OpenRouterDecisionPort(config)
+    return @llm.ModelSlot::ModelSlot(
+      id=slot_id,
+      label~,
+      provider_id="openrouter",
+      model_id=config.model,
+      port~,
+      kind=@llm.ModelKind::Decision,
+      decision_port=Some(decision_port),
+      api_key=Some(api_key),
+      capabilities=["decision", "api_key"],
+      rebuild_on_api_key=Some(fn(credential) {
+        let rebuilt_config = OpenRouterConfig(
+          credential.secret,
+          model=config.model,
+          base_url=config.base_url,
+          http_referer=config.http_referer,
+          title=config.title,
+        )
+        openrouter_catalog_slot(
+          rebuilt_config, api_key, prompt_cache_key_rejection_state,
+        )
+      }),
+    )
+  }
   let slot_efforts = openrouter_slot_efforts(config)
   let default_effort = Some(openrouter_effort_label(config))
   let port : &@posoco.ModelPort = openrouter_model_port_with_prompt_cache_rejection_state(
@@ -377,7 +409,11 @@ pub impl @llm.ProviderFactory for OpenRouterProvider with fn build(
           self.prompt_cache_key_rejection_state,
         ),
       ],
-      capabilities=["chat", "streaming", "reasoning", "api_key"],
+      capabilities=if openrouter_is_decision_model(model) {
+        ["chat", "streaming", "reasoning", "api_key", "decision"]
+      } else {
+        ["chat", "streaming", "reasoning", "api_key"]
+      },
     ),
   )
 }
