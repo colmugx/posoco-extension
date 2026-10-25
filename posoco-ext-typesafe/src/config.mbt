@@ -20,6 +20,12 @@ pub(all) struct TypesafeConfig {
 } derive(Eq, Debug)
 
 ///|
+pub extend TypesafeConfig with Eq::{not_equal, equal}
+
+///|
+pub extend TypesafeConfig with @debug.Debug::{to_repr}
+
+///|
 pub fn TypesafeConfig::TypesafeConfig(
   api_key : String,
   model~ : String = "jev-latest",

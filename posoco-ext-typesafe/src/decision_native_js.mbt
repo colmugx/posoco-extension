@@ -44,6 +44,12 @@ fn jev_http_error(status : Int32, body_bytes : Int32) -> @posoco.DecisionError {
 }
 
 ///|
+pub extend TypesafeDecisionPort with @posoco.DecisionPort::{
+  evaluate,
+  evaluate_with_context,
+}
+
+///|
 pub impl @posoco.DecisionPort for TypesafeDecisionPort with fn evaluate(
   self : TypesafeDecisionPort,
   request : @posoco.DecisionRequest,

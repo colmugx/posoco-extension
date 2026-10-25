@@ -5,6 +5,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/json",
+  "moonbitlang/core/debug",
 }
 
 warnings = "-unused_package-unused_value-unused_constructor"
