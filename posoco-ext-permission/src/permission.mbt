@@ -184,8 +184,8 @@ pub fn PermissionPolicy::PermissionPolicy(
     // the read class too (these are the skills extension's default tool
     // names; a host that renames them must classify its own names).
     read_tools: [
-      "read", "webfetch", "grep", "glob", "ask_question", "activate_skill", "read_skill_resource",
-      "skill_search",
+      "read", "webfetch", "grep", "glob", "ask_question", "ask_question_child", "report_progress",
+      "submit_work_report", "activate_skill", "read_skill_resource", "skill_search",
     ],
     write_tools: ["write", "edit", "apply_patch"],
     shell_tools: ["bash", "shell", "sh", "zsh", "cmd", "powershell"],
