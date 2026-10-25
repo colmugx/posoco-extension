@@ -20,6 +20,10 @@ let workflow_actions : Array[(String, String)] = [
 ]
 
 ///|
+/// Internal command surface of the Board workflow runtime. Every definition
+/// stays registered and callable by canonical id — the host and the dashboard
+/// invoke them directly — but none is user-discoverable: `/board` is a
+/// terminal-local route, not a command, and no `/workflow` alias exists.
 pub impl @posoco.CommandPort for BoardWorkflows with fn commands(_) {
   let definitions = workflow_actions.map(action => @posoco.CommandDef::{
     id: "board.workflow." + action.0,
@@ -31,7 +35,7 @@ pub impl @posoco.CommandPort for BoardWorkflows with fn commands(_) {
     aliases: [],
     shortcut: None,
     icon: None,
-    visible: true,
+    visible: false,
     metadata: None,
   })
   definitions.push(@posoco.CommandDef::{
@@ -41,10 +45,10 @@ pub impl @posoco.CommandPort for BoardWorkflows with fn commands(_) {
     category: "board",
     ctype: @posoco.CommandType::Action,
     params: [],
-    aliases: ["workflow"],
+    aliases: [],
     shortcut: None,
     icon: None,
-    visible: true,
+    visible: false,
     metadata: None,
   })
   definitions
@@ -121,7 +125,7 @@ pub impl @posoco.CommandPort for BoardWorkflows with fn invoke(self, id, args) {
     )
   }
   try {
-    let selected = if id == "board.workflow" || id == "workflow" {
+    let selected = if id == "board.workflow" {
       let label = self.choose(
         "Board workflow — select an explicit operation",
         workflow_actions.map(a => a.1),
