@@ -199,15 +199,9 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           ),
         ],
       ),
-      // Run Ready is the board's action when there is something to run;
-      // with an empty Ready lane it recedes behind the create action.
       @html.button(
         type_="button",
-        class=if ready_ticket_count(model) > 0 {
-          "btn btn-primary"
-        } else {
-          "btn btn-ghost"
-        },
+        class="btn btn-primary",
         title="Run every Ready ticket as background workers",
         disabled=!model.can_connect ||
           !model.ticket_available ||
@@ -217,23 +211,6 @@ fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         [
           @html.span(class="btn-icon", "▶"),
           @html.span(class="btn-label", "Run Ready"),
-        ],
-      ),
-      @html.button(
-        type_="button",
-        class="btn btn-primary",
-        title=match create_unavailable_hint(model) {
-          Some(text) => text
-          None => "New task"
-        },
-        disabled=!can_create(model),
-        attrs=@html.Attrs::build().on_click(_ => {
-          ui_show("create-dialog")
-          emit(CreateOpened)
-        }),
-        [
-          @html.span(class="btn-label", "New task"),
-          @html.span(class="kbd", "N"),
         ],
       ),
     ]),

@@ -994,7 +994,10 @@ dialog.sheet-dialog {
   margin: 0 0 0 auto;
   height: 100dvh;
   max-height: none;
-  max-width: fit-content;
+  /* fit-content inside hard bounds: an empty inbox must not collapse to its
+   * one-line intrinsic width, and wide content must not eat the board. */
+  min-width: min(400px, 96vw);
+  max-width: min(640px, 96vw);
   width: fit-content;
   animation: sheet-in 200ms var(--ease);
 }
@@ -2451,10 +2454,6 @@ dialog.sheet-dialog {
   }
 
   .topbar-actions .btn:not(.btn-primary) .btn-label {
-    display: none;
-  }
-
-  .topbar-actions .kbd {
     display: none;
   }
 
