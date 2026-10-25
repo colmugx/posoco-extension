@@ -2116,6 +2116,28 @@ dialog.sheet-dialog {
   line-height: 1.5;
 }
 
+/* Resume/Retry on an interrupted run: Resume continues the durable session and
+   stays primary, while Retry work sits beside it as the way to start over. The
+   note spells out that only Retry clears the session. */
+.ticket-run-actions {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.ticket-run-actions .ticket-answers {
+  gap: 8px;
+}
+
+.ticket-run-actions-note {
+  margin: 0;
+  color: var(--faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
 .ticket-activity-body {
   gap: 12px;
 }

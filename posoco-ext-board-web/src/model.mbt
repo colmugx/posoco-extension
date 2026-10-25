@@ -327,6 +327,7 @@ priv enum Msg {
   TicketShape(String)
   TicketRun(String)
   TicketRetry(String)
+  TicketResume(String)
   TicketSetModel(String, ModelChoice?)
   TicketRunReady
   TicketResultDismissed(String)

@@ -357,6 +357,19 @@ fn ticket_retry(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
 }
 
 ///|
+/// Wire arguments for one resume. The host continues the durable child session
+/// the interrupted run already owns, so only the ticket identity travels: the
+/// session itself stays authoritative on the host.
+fn ticket_resume_args(task_id : String) -> Json {
+  { "task_id": Json::string(task_id) }
+}
+
+///|
+fn ticket_resume(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
+  send_ticket_command("board.ticket.resume", ticket_resume_args(task_id), emit)
+}
+
+///|
 /// Finished run statuses that left no live worker behind. Only these offer
 /// Retry work: a succeeded run is a result to review, not a lost session, and
 /// a running one is still owned by its worker.
@@ -368,13 +381,35 @@ fn ticket_run_retryable(status : String) -> Bool {
 }
 
 ///|
-/// A retry is a ticket command like any other: it waits for the in-flight
-/// command to clear and never fires while this ticket already has a live run.
-fn ticket_retry_blocked(model : Model, task_id : String) -> Bool {
+/// A run only survives a host restart as `interrupted`, and only then keeps the
+/// durable session Resume run continues. A failed or sync-failed run has nothing
+/// left to continue, so it can only be retried.
+fn ticket_run_resumable(run : TicketRun) -> Bool {
+  run.status == "interrupted" && run.session_id != ""
+}
+
+///|
+/// Every ticket command waits for the in-flight one to clear, needs a socket
+/// that can carry it and an advertised runtime, and never fires while this
+/// ticket already has a live run.
+fn ticket_command_blocked(model : Model, task_id : String) -> Bool {
   model.ticket_sending ||
   !model.can_connect ||
   !model.ticket_available ||
   ticket_task_running(model, task_id)
+}
+
+///|
+/// Retry work shares the ticket-command gate with every other ticket command.
+fn ticket_retry_blocked(model : Model, task_id : String) -> Bool {
+  ticket_command_blocked(model, task_id)
+}
+
+///|
+/// Resume run is gated exactly like Retry: the two offers sit in the same block
+/// and must never race each other.
+fn ticket_resume_blocked(model : Model, task_id : String) -> Bool {
+  ticket_command_blocked(model, task_id)
 }
 
 ///|
@@ -406,15 +441,117 @@ fn ticket_retry_action(
 }
 
 ///|
-/// The retry offer for one finished run card, or nothing when that run still
-/// holds a live worker or already produced a result worth keeping.
-fn ticket_run_retry_action(
+/// The action one finished run offers under its card. Resume run continues the
+/// durable session the interrupted run already owns; Retry starts a new run and
+/// clears it.
+priv enum TicketRunAction {
+  ResumeRun
+  RetryRun
+}
+
+///|
+/// The actions one finished run offers, primary first. An interrupted run that
+/// still holds a session prefers continuing it, so Resume run comes first and
+/// Retry follows as the escape hatch; a failed or sync-failed run has no
+/// session left and only offers Retry, while a running run is still owned by
+/// its worker.
+fn ticket_run_actions(run : TicketRun) -> Array[TicketRunAction] {
+  let actions : Array[TicketRunAction] = []
+  if ticket_run_resumable(run) {
+    actions.push(ResumeRun)
+  }
+  if ticket_run_retryable(run.status) {
+    actions.push(RetryRun)
+  }
+  actions
+}
+
+///|
+/// Resume run and Retry mean different things, so the interrupted card states
+/// both consequences instead of leaving the user to guess which one keeps
+/// context. The label keeps "run" so it never reads as the ticket's own
+/// Suspended → Ready Resume move.
+fn ticket_resume_note() -> String {
+  "Resume run continues the durable session where it stopped. Retry starts a new run and clears it."
+}
+
+///|
+/// The visible label of one finished-run action. Resume run stays distinct from
+/// the card's own Suspended → Ready Resume stage move.
+fn ticket_run_action_label(action : TicketRunAction) -> String {
+  match action {
+    ResumeRun => "Resume run"
+    RetryRun => "Retry work"
+  }
+}
+
+///|
+fn ticket_run_action_button(
+  model : Model,
+  task_id : String,
+  action : TicketRunAction,
+  primary : Bool,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  let button_class = if primary {
+    "btn btn-sm btn-primary"
+  } else {
+    "btn btn-sm"
+  }
+  match action {
+    ResumeRun =>
+      @html.button(
+        type_="button",
+        class=button_class,
+        title="Resume run: continue this run's durable session",
+        disabled=ticket_resume_blocked(model, task_id),
+        on_click=emit(TicketResume(task_id)),
+        ticket_run_action_label(action),
+      )
+    RetryRun =>
+      @html.button(
+        type_="button",
+        class=button_class,
+        title="Start a fresh run for this ticket",
+        disabled=ticket_retry_blocked(model, task_id),
+        on_click=emit(TicketRetry(task_id)),
+        ticket_run_action_label(action),
+      )
+  }
+}
+
+///|
+/// Resume and Retry for one finished run card, or nothing when that run still
+/// holds a live worker or already produced a result worth keeping. The gate only
+/// disables the buttons: an interrupted run keeps offering both while the
+/// socket reconnects.
+fn ticket_run_action_block(
   model : Model,
   run : TicketRun,
   emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
-  guard ticket_run_retryable(run.status) else { return @html.nothing }
-  ticket_retry_action(model, run.task_id, emit)
+  let actions = ticket_run_actions(run)
+  if actions.is_empty() {
+    return @html.nothing
+  }
+  let buttons : Array[@html.Html] = []
+  for index, action in actions {
+    buttons.push(
+      ticket_run_action_button(model, run.task_id, action, index == 0, emit),
+    )
+  }
+  let resumable = actions.any(action => action is ResumeRun)
+  @html.div(class="ticket-run-actions", [
+    @html.div(class="ticket-answers", buttons),
+    @html.p(
+      class="ticket-run-actions-note",
+      if resumable {
+        ticket_resume_note()
+      } else {
+        ticket_retry_note()
+      },
+    ),
+  ])
 }
 
 ///|
@@ -563,7 +700,7 @@ fn ticket_result_card(
     } else {
       ticket_activity_list(run.activities)
     },
-    ticket_run_retry_action(model, run, emit),
+    ticket_run_action_block(model, run, emit),
     @html.div(class="ticket-answers", [
       @html.button(
         type_="button",

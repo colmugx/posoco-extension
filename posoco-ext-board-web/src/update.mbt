@@ -475,6 +475,23 @@ fn update(
           ticket_retry(task_id, emit),
         )
       }
+    TicketResume(task_id) =>
+      // Resume continues the durable child session the interrupted run already
+      // owns, while Retry starts a fresh run and clears it. It is gated like
+      // every other ticket command; the host still rejects a resume when no
+      // session survived.
+      if ticket_resume_blocked(model, task_id) {
+        (model, @rabbita.none)
+      } else {
+        (
+          {
+            ..model,
+            ticket_sending: true,
+            last_status: "Resuming ticket " + task_id,
+          },
+          ticket_resume(task_id, emit),
+        )
+      }
     TicketSetModel(task_id, model_choice) =>
       // No optimistic model state: the control keeps rendering the
       // authoritative `task.model` until the host answers with a new state.

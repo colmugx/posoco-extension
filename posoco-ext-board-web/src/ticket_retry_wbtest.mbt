@@ -141,7 +141,7 @@ test "only lost runs offer retry work" {
   for status in ["failed", "interrupted", "sync_failed"] {
     assert_true(ticket_run_retryable(status))
     assert_true(
-      ticket_run_retry_action(model, retry_run("t1", status), emit) !=
+      ticket_run_action_block(model, retry_run("t1", status), emit) !=
       @html.nothing,
     )
   }
@@ -149,7 +149,7 @@ test "only lost runs offer retry work" {
   for status in ["succeeded", "shaped", "running", ""] {
     assert_false(ticket_run_retryable(status))
     assert_true(
-      ticket_run_retry_action(model, retry_run("t1", status), emit) ==
+      ticket_run_action_block(model, retry_run("t1", status), emit) ==
       @html.nothing,
     )
   }
@@ -170,7 +170,7 @@ test "a live run keeps retry work disabled" {
   // The failed card still renders the offer; the gate only disables it.
   let emit : @rabbita.Emit[Msg] = _msg => @rabbita.none
   assert_true(
-    ticket_run_retry_action(
+    ticket_run_action_block(
       running,
       retry_run("t1", "failed"),
       emit,
