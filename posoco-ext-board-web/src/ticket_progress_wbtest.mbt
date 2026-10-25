@@ -13,7 +13,7 @@ fn progress_update(
 
 ///|
 fn progress_state(progress : Array[TicketProgress]) -> TicketState {
-  { questions: [], runs: [], progress, model_selection: None }
+  { questions: [], runs: [], progress, live: None, model_selection: None, }
 }
 
 ///|
@@ -118,10 +118,7 @@ test "unseen worker updates count until the inbox is opened" {
   assert_eq(ticket_inbox_count(opened), 0)
   // A worker that speaks after the inbox was opened is unseen again.
   let third = progress_update(
-    "t1",
-    "attention",
-    "Needs a decision",
-    1700000120000L,
+    "t1", "attention", "Needs a decision", 1700000120000L,
   )
   let later = apply_ticket_state(opened, progress_state([first, second, third]))
   assert_eq(ticket_unseen_update_count(later), 1)
@@ -144,9 +141,8 @@ test "the inbox badge still counts open questions" {
   let model = apply_ticket_state(Model::empty(true), {
     questions: [question],
     runs: [],
-    progress: [
-      progress_update("t1", "normal", "Index built", 1700000000000L),
-    ],
+    progress: [progress_update("t1", "normal", "Index built", 1700000000000L)],
+    live: None,
     model_selection: None,
   })
   assert_eq(ticket_question_count(model), 1)
@@ -171,9 +167,8 @@ test "opening the inbox sends nothing and keeps the questions" {
       },
     ],
     runs: [],
-    progress: [
-      progress_update("t1", "normal", "Index built", 1700000000000L),
-    ],
+    progress: [progress_update("t1", "normal", "Index built", 1700000000000L)],
+    live: None,
     model_selection: None,
   })
   let (opened, command) = update(
@@ -201,16 +196,9 @@ test "inbox rows resolve title, tone and short time newest first" {
     1700000000000L + 55L * minute,
   )
   let unknown = progress_update(
-    "task-x",
-    "blocked",
-    "No worker",
-    1700000000000L,
+    "task-x", "blocked", "No worker", 1700000000000L,
   )
-  let model = progress_model("t1", "Ship the board", [
-    older,
-    newer,
-    unknown,
-  ])
+  let model = progress_model("t1", "Ship the board", [older, newer, unknown])
   let rows = inbox_updates(model, 1700000000000L + 60L * minute)
   assert_eq(rows.length(), 3)
   // Newest first, with the ticket title resolved from the replica.
@@ -262,10 +250,7 @@ test "seen updates are pruned when their worker stops reporting them" {
   assert_true(surviving.contains(ticket_progress_key(kept)))
   assert_false(surviving.contains(ticket_progress_key(dropped)))
   // After pruning, a re-delivery of the dropped update is unseen again.
-  let model = apply_ticket_state(
-    Model::empty(true),
-    progress_state([dropped]),
-  )
+  let model = apply_ticket_state(Model::empty(true), progress_state([dropped]))
   let pruned = { ..model, ticket_seen_updates: surviving, }
   assert_eq(ticket_unseen_update_count(pruned), 1)
 }
@@ -275,8 +260,14 @@ test "short time labels never invent a future age" {
   assert_eq(ticket_progress_age(1700000000000L, 1700000000000L), "just now")
   // A clock skew must not read as "in 3 minutes".
   assert_eq(ticket_progress_age(1700000180000L, 1700000000000L), "just now")
-  assert_eq(ticket_progress_age(1700000000000L, 1700000000000L + 60000L), "1m ago")
-  assert_eq(ticket_progress_age(1700000000000L, 1700000000000L + 3600000L), "1h ago")
+  assert_eq(
+    ticket_progress_age(1700000000000L, 1700000000000L + 60000L),
+    "1m ago",
+  )
+  assert_eq(
+    ticket_progress_age(1700000000000L, 1700000000000L + 3600000L),
+    "1h ago",
+  )
   assert_eq(
     ticket_progress_age(1700000000000L, 1700000000000L + 172800000L),
     "2d ago",

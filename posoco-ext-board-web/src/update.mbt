@@ -432,6 +432,14 @@ fn update(
       ({ ..model, ticket_activity_task: Some(task_id), }, @rabbita.none)
     TicketActivityClosed =>
       ({ ..model, ticket_activity_task: None, }, @rabbita.none)
+    TicketUpdatesDismissed =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else {
+        ({ ..model, ticket_sending: true, }, ticket_dismiss_updates(emit))
+      }
+    LiveOpened => ({ ..model, live_open: true, }, @rabbita.none)
+    LiveClosed => ({ ..model, live_open: false, }, @rabbita.none)
     TicketDraftChanged(question_id, value) => {
       let drafts = model.ticket_drafts.copy()
       drafts[question_id] = value
@@ -561,7 +569,8 @@ fn update(
       // Done leaves the flow; it is confirmed with its consequence instead
       // of firing straight from a card button.
       match task_by_id(model.replica, task_id) {
-        Some(task) if step_reachable(task.stage, Done) && mutations_allowed(model) =>
+        Some(task) if step_reachable(task.stage, Done) &&
+          mutations_allowed(model) =>
           ({ ..model, confirm: Some(ConfirmDone(task_id~)), }, @rabbita.none)
         _ => (model, @rabbita.none)
       }
@@ -596,10 +605,8 @@ fn update(
     | DependenciesRefreshed
     | DependenciesCancelled
     | DependenciesSubmitted
-    | DependencyDraftReturned
     | AttemptQueueOpened
     | AttemptQueueCancelled
-    | AttemptDraftReturned
     | AttemptFinishOpened(_)
     | AttemptFinishCancelled
     | AttemptKindChanged(_)
@@ -607,12 +614,7 @@ fn update(
     | AttemptStartRequested(_)
     | AttemptOutcomeChanged(_)
     | AttemptFinishSubmitted
-    | ReviewOpened(_)
     | ReviewDecide(_, _)
-    | ReviewCancelled
-    | ReviewDecisionChanged(_)
-    | ReviewDraftReturned
-    | ReviewSubmitted
     | RequestChangesOpened(_)
     | RequestChangesFeedbackChanged(_)
     | RequestChangesSubmitted

@@ -34,6 +34,25 @@ extern "js" fn ui_focus(selector : String) -> Unit =
   #|}
 
 ///|
+/// Close an open card menu when the click lands outside it, or after one of
+/// its menu items was chosen. The menu itself is a native <details>, so this
+/// only removes the open attribute; the button semantics stay unchanged.
+extern "js" fn install_menu_dismiss() -> Unit =
+  #|() => {
+  #|  if (window.__boardMenuDismiss) return;
+  #|  window.__boardMenuDismiss = true;
+  #|  document.addEventListener("click", (event) => {
+  #|    const target = event.target;
+  #|    for (const menu of document.querySelectorAll("details.card-menu[open]")) {
+  #|      const item = target && target.closest ? target.closest(".menu-item") : null;
+  #|      if (!menu.contains(target) || (item && menu.contains(item))) {
+  #|        menu.removeAttribute("open");
+  #|      }
+  #|    }
+  #|  }, true);
+  #|}
+
+///|
 /// One window-level key listener. It reports only keys that are unambiguous
 /// outside text entry; open dialogs keep their native Esc and consume keys.
 extern "js" fn install_shortcuts(on_key : (String) -> Unit) -> Unit =
@@ -56,4 +75,3 @@ extern "js" fn install_shortcuts(on_key : (String) -> Unit) -> Unit =
   #|    }
   #|  }, true);
   #|}
-

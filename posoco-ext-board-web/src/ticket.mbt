@@ -33,7 +33,11 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Some(value) => decode_model_catalog(value)
     None => None
   }
-  { questions, runs, progress, model_selection }
+  let live = match fields.get("live") {
+    Some(value) => decode_ticket_live(value)
+    None => None
+  }
+  { questions, runs, progress, live, model_selection, }
 }
 
 ///|
@@ -57,7 +61,7 @@ fn decode_model_catalog(value : Json) -> ModelCatalog? {
     Some(Array(items)) => items.filter_map(decode_model_option)
     _ => []
   }
-  Some({ selectable, kind, models })
+  Some({ selectable, kind, models, })
 }
 
 ///|
@@ -212,6 +216,73 @@ fn ticket_progress_key(update : TicketProgress) -> String {
 }
 
 ///|
+fn decode_ticket_live(value : Json) -> TicketLiveInfo? {
+  let fields = match value {
+    Object(fields) => fields
+    _ => return None
+  }
+  let manager = match fields.get("manager") {
+    Some(String(value)) => value
+    _ => ""
+  }
+  let active_model = match fields.get("active_model") {
+    Some(String(value)) => value
+    _ => ""
+  }
+  if manager == "" && active_model == "" {
+    return None
+  }
+  let active_effort = match fields.get("active_effort") {
+    Some(String(value)) if !value.trim().is_empty() => Some(value)
+    _ => None
+  }
+  let model_count = match fields.get("model_count") {
+    Some(Number(value, ..)) => value.to_int()
+    _ => 0
+  }
+  let status = match fields.get("status") {
+    Some(Object(status)) => status
+    _ => Map([])
+  }
+  let provider = match status.get("provider") {
+    Some(String(value)) => value
+    _ => ""
+  }
+  let status_model = match status.get("model") {
+    Some(String(value)) if !value.trim().is_empty() => value
+    _ => active_model
+  }
+  let status_effort = match status.get("effort") {
+    Some(String(value)) if !value.trim().is_empty() => Some(value)
+    _ => active_effort
+  }
+  let context_window = match status.get("context_window") {
+    Some(Number(value, ..)) if value > 0.0 => Some(value.to_int64())
+    _ => None
+  }
+  let quota_lines : Array[String] = []
+  match status.get("quota") {
+    Some(Object(quota)) =>
+      for key, value in quota {
+        match value {
+          String(text) => quota_lines.push("\{key}: \{text}")
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  Some({
+    manager,
+    active_model: status_model,
+    active_effort: status_effort,
+    provider,
+    context_window,
+    model_count,
+    quota_lines,
+  })
+}
+
+///|
 /// The progress list newest first. The replica's own array is detached, so
 /// ordering never leaks into a previous model.
 fn ticket_progress_latest_first(
@@ -314,8 +385,8 @@ fn inbox_updates(model : Model, now_ms : Int64) -> Array[InboxUpdate] {
 /// the run is inspected.
 fn ticket_latest_update(model : Model, task_id : String) -> TicketProgress? {
   ticket_progress_latest_first(model.tickets.progress)
-    .filter(update => update.task_id == task_id)
-    .get(0)
+  .filter(update => update.task_id == task_id)
+  .get(0)
 }
 
 ///|
@@ -490,6 +561,22 @@ fn ticket_answer(
 }
 
 ///|
+fn ticket_run_for(model : Model, task_id : String) -> TicketRun? {
+  model.tickets.runs.filter(run => run.task_id == task_id).get(0)
+}
+
+///|
+/// A run that failed in place is still Recovery C state: keep the ticket in its
+/// lane, paint it as an error, and offer Resume run/Retry work instead of a
+/// stage move to Paused.
+fn ticket_task_failed(model : Model, task_id : String) -> Bool {
+  match ticket_run_for(model, task_id) {
+    Some(run) => ticket_run_retryable(run.status)
+    None => false
+  }
+}
+
+///|
 fn ticket_task_running(model : Model, task_id : String) -> Bool {
   model.tickets.runs.any(run => {
     run.task_id == task_id && run.status == "running"
@@ -506,9 +593,11 @@ fn ticket_question_count(model : Model) -> Int32 {
 /// list that was on screen as seen; anything a worker reports afterwards is
 /// unseen again until the next open.
 fn ticket_unseen_update_count(model : Model) -> Int32 {
-  model.tickets.progress.filter(update => {
+  model.tickets.progress
+  .filter(update => {
     !model.ticket_seen_updates.contains(ticket_progress_key(update))
-  }).length()
+  })
+  .length()
 }
 
 ///|
@@ -639,11 +728,12 @@ fn ticket_run_retryable(status : String) -> Bool {
 }
 
 ///|
-/// A run only survives a host restart as `interrupted`, and only then keeps the
-/// durable session Resume run continues. A failed or sync-failed run has nothing
-/// left to continue, so it can only be retried.
+/// A finished run keeps its durable session in these states. A network or work
+/// failure is recoverable: Resume run continues the recorded session, while
+/// Retry remains the fresh-attempt escape hatch. A blank session id means there
+/// is nothing to continue.
 fn ticket_run_resumable(run : TicketRun) -> Bool {
-  run.status == "interrupted" && run.session_id != ""
+  ticket_run_retryable(run.status) && run.session_id != ""
 }
 
 ///|
@@ -708,11 +798,10 @@ priv enum TicketRunAction {
 }
 
 ///|
-/// The actions one finished run offers, primary first. An interrupted run that
-/// still holds a session prefers continuing it, so Resume run comes first and
-/// Retry follows as the escape hatch; a failed or sync-failed run has no
-/// session left and only offers Retry, while a running run is still owned by
-/// its worker.
+/// The actions one finished run offers, primary first. A recoverable run with a
+/// durable session prefers continuing it, so Resume run comes first and Retry
+/// follows as the fresh-attempt escape hatch; a run whose session did not
+/// survive only offers Retry.
 fn ticket_run_actions(run : TicketRun) -> Array[TicketRunAction] {
   let actions : Array[TicketRunAction] = []
   if ticket_run_resumable(run) {
@@ -835,13 +924,14 @@ fn ticket_stage_retry_action(
 /// an explicit `null` model when the ticket returns to inherit.
 fn ticket_set_model_args(task_id : String, model : ModelChoice?) -> Json {
   let payload : Json = match model {
-    Some(choice) => {
-      "slot": Json::string(choice.slot),
-      "effort": match choice.effort {
-        Some(effort) => Json::string(effort)
-        None => Json::null()
-      },
-    }
+    Some(choice) =>
+      {
+        "slot": Json::string(choice.slot),
+        "effort": match choice.effort {
+          Some(effort) => Json::string(effort)
+          None => Json::null()
+        },
+      }
     None => Json::null()
   }
   { "task_id": Json::string(task_id), "model": payload }
@@ -867,9 +957,22 @@ fn ticket_dismiss(task_id : String, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
 }
 
 ///|
+fn ticket_dismiss_updates(emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
+  send_ticket_command(
+    "board.ticket.dismiss_progress",
+    Json::object(Map([])),
+    emit,
+  )
+}
+
+///|
 fn ticket_activity_list(activities : Array[TicketActivity]) -> @html.Html {
   let items : Array[@html.Html] = []
-  let start = if activities.length() > 20 { activities.length() - 20 } else { 0 }
+  let start = if activities.length() > 20 {
+    activities.length() - 20
+  } else {
+    0
+  }
   for index in start..<activities.length() {
     let activity = activities[index]
     items.push(
@@ -883,10 +986,7 @@ fn ticket_activity_list(activities : Array[TicketActivity]) -> @html.Html {
 }
 
 ///|
-fn ticket_run_card(
-  model : Model,
-  run : TicketRun,
-) -> @html.Html {
+fn ticket_run_card(model : Model, run : TicketRun) -> @html.Html {
   let title = match task_by_id(model.replica, run.task_id) {
     Some(task) => task.title
     None => run.task_id
@@ -993,9 +1093,13 @@ fn apply_ticket_state(model : Model, state : TicketState) -> Model {
     Some(_) => state.model_selection
     None => model.tickets.model_selection
   }
+  let live = match state.live {
+    Some(_) => state.live
+    None => model.tickets.live
+  }
   {
     ..model,
-    tickets: { ..state, model_selection },
+    tickets: { ..state, live, model_selection, },
     // Only the updates still on the wire stay "seen": a worker that tore down
     // takes its updates with it, so its identities must not linger.
     ticket_seen_updates: ticket_progress_retain_seen(
@@ -1166,7 +1270,10 @@ fn ticket_question_card(
 ///|
 /// Per-ticket Activity dialog: live and finished runs belong to the ticket,
 /// not to the question inbox.
-fn ticket_activity_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+fn ticket_activity_dialog(
+  model : Model,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
   let task_id = match model.ticket_activity_task {
     Some(task_id) => task_id
     None => return @html.nothing
@@ -1258,11 +1365,7 @@ fn ticket_update_card(update : InboxUpdate) -> @html.Html {
   let unseen = if update.unseen { " is-unseen" } else { "" }
   @html.article(class="ticket-update kind-\{update.kind}\{unseen}", [
     @html.div(class="ticket-update-meta", [
-      @html.span(
-        class="ticket-update-task",
-        title=update.task_id,
-        update.title,
-      ),
+      @html.span(class="ticket-update-task", title=update.task_id, update.title),
       @html.span(class="ticket-update-kind", update.kind_label),
       if update.unseen {
         @html.span(class="ticket-update-new", "New")
@@ -1286,6 +1389,7 @@ fn ticket_update_card(update : InboxUpdate) -> @html.Html {
 fn ticket_updates_section(
   updates : Array[InboxUpdate],
   unseen_count : Int32,
+  emit : @rabbita.Emit[Msg],
 ) -> @html.Html {
   @html.section(
     class="inbox-updates",
@@ -1300,6 +1404,13 @@ fn ticket_updates_section(
           } else {
             "Information only — \{ticket_update_count_label(unseen_count)} since you last opened the inbox."
           },
+        ),
+        @html.button(
+          type_="button",
+          class="btn btn-sm inbox-dismiss",
+          title="Dismiss these updates",
+          attrs=@html.Attrs::build().on_click(_ => emit(TicketUpdatesDismissed)),
+          "Dismiss",
         ),
       ]),
       @html.div(
@@ -1321,7 +1432,7 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let updates = inbox_updates(model, board_now_ms())
   let items : Array[@html.Html] = []
   if !updates.is_empty() {
-    items.push(ticket_updates_section(updates, unseen_count))
+    items.push(ticket_updates_section(updates, unseen_count, emit))
   }
   for question in model.tickets.questions {
     items.push(ticket_question_card(model, question, emit))
@@ -1360,10 +1471,7 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
               if question_count == 0 {
                 @html.span(class="chip is-quiet", "No open questions")
               } else {
-                @html.span(
-                  class="chip is-accent",
-                  "\{question_count} awaiting an answer",
-                )
+                @html.span(class="chip", "\{question_count} awaiting an answer")
               },
               if update_count == 0 {
                 @html.nothing
@@ -1385,10 +1493,7 @@ fn inbox_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           ]),
           close_button("inbox-dialog"),
         ]),
-        @html.div(
-          class="sheet-body inbox-body",
-          items,
-        ),
+        @html.div(class="sheet-body inbox-body", items),
       ]),
     ],
   )

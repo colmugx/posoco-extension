@@ -107,6 +107,7 @@ pub fn app() -> @rabbita.App {
             _ => ()
           }
         })
+        install_menu_dismiss()
         let model = Model::empty(env.url != "")
         (
           model,

@@ -29,6 +29,7 @@ test "ticket state records questions without forcing the drawer" {
     ],
     runs: [],
     progress: [],
+    live: None,
     model_selection: None,
   }
   let model = apply_ticket_state(Model::empty(true), state)
@@ -73,6 +74,7 @@ test "failed runs belong to the ticket, not the question inbox" {
       },
     ],
     progress: [],
+    live: None,
     model_selection: None,
   }
   let model = apply_ticket_state(Model::empty(true), state)

@@ -28,12 +28,7 @@ fn model_chip_tone(
         Some(_) => "is-pinned"
         // An empty catalog means the host sent no projection at all, so the
         // chip has nothing to compare against and must not warn.
-        None =>
-          if catalog.models.is_empty() {
-            "is-pinned"
-          } else {
-            "is-warn"
-          }
+        None => if catalog.models.is_empty() { "is-pinned" } else { "is-warn" }
       }
   }
 }
@@ -66,7 +61,9 @@ fn model_chip_title(
 
 ///|
 /// One card/detail chip for the ticket's model. The chip is text, not a
-/// control: changing the model happens in the detail picker.
+/// control: changing the model happens in the detail picker. The label rides
+/// in an inner span so a long slot truncates with an ellipsis — text-overflow
+/// does not apply to the flex container itself.
 fn model_chip(
   catalog : ModelCatalog,
   selection : @client.ClientModelSelection?,
@@ -74,7 +71,7 @@ fn model_chip(
   @html.span(
     class="chip model-chip \{model_chip_tone(catalog, selection)}",
     title=model_chip_title(catalog, selection),
-    model_chip_label(selection),
+    [@html.span(class="chip-text", model_chip_label(selection))],
   )
 }
 
@@ -106,11 +103,7 @@ fn model_select_html(options : Array[ModelSelectOption]) -> Array[@html.Html] {
 
 ///|
 fn model_option_label(option : ModelOption) -> String {
-  let name = if option.label == "" {
-    option.id
-  } else {
-    option.label
-  }
+  let name = if option.label == "" { option.id } else { option.label }
   if option.provider == "" {
     name
   } else {
@@ -233,7 +226,7 @@ fn model_choice_from_slot(value : String) -> ModelChoice? {
   if value == "" {
     None
   } else {
-    Some({ slot: value, effort: None })
+    Some({ slot: value, effort: None, })
   }
 }
 
@@ -241,24 +234,16 @@ fn model_choice_from_slot(value : String) -> ModelChoice? {
 /// Resolve an effort `<select>` value for an already pinned slot. The empty
 /// value is the explicit `Auto/default`, which the host resolves.
 fn model_choice_with_effort(slot : String, value : String) -> ModelChoice {
-  {
-    slot,
-    effort: if value == "" {
-      None
-    } else {
-      Some(value)
-    },
-  }
+  { slot, effort: if value == "" { None } else { Some(value) }, }
 }
 
 ///|
 /// Why the picker cannot change the model right now. Rendered next to the
 /// controls, never only in a tooltip.
 fn model_picker_blocked(model : Model, task_id : String) -> String? {
+  let _ = task_id
   if !model.can_connect || !model.ticket_available {
     Some("The ticket runtime is unavailable; the model cannot be changed.")
-  } else if ticket_task_running(model, task_id) {
-    Some("This ticket is running. Change its model after the run finishes.")
   } else if model.ticket_sending {
     Some("Wait for the current ticket command to finish.")
   } else {
@@ -271,10 +256,9 @@ fn model_picker_blocked(model : Model, task_id : String) -> String? {
 /// selectable catalog. The pinned model itself stays visible as a chip.
 fn model_unavailable_note(selection : @client.ClientModelSelection?) -> String {
   match selection {
-    Some(_) =>
-      "This host does not offer per-ticket model selection. The pinned model stays visible and read-only."
+    Some(_) => "This host keeps the pinned model read-only."
     None =>
-      "This host does not offer per-ticket model selection. The ticket inherits the current Cetas model."
+      "No per-ticket picker on this host; the ticket inherits the host model."
   }
 }
 

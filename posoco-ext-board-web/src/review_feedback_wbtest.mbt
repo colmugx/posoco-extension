@@ -249,11 +249,13 @@ test "Approve stays the one one-click review decision" {
   }
   let (refused, command) = update(
     stale,
-    ReviewSubmitted,
+    ConfirmAccepted,
     test_emit,
     counting_env(),
   )
-  assert_true(refused == stale)
+  assert_true(refused.pending is None)
+  assert_true(refused.review_draft == stale.review_draft)
+  assert_true(refused.confirm is None)
   debug_inspect(command, content="[]")
 }
 

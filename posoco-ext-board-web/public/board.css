@@ -468,13 +468,17 @@ button {
   grid-auto-flow: column;
   grid-auto-columns: minmax(var(--lane), 1fr);
   gap: 16px;
-  align-items: start;
+  /* Lanes stretch to the scroll viewport so a short board does not leave
+   * the lower canvas dead; empty lane bodies stay quiet. */
+  min-height: 100%;
 }
 
 /* Lanes are structure, not boxes: no tinted columns, no borders. The rhythm
    comes from the sticky header and the card stack below it. */
 .lane {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .lane-head {
@@ -519,6 +523,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
 }
 
 .lane-empty {
@@ -635,12 +640,6 @@ button {
   padding-inline: 0;
 }
 
-.chip.is-accent {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .chip.is-running::before {
   content: "";
   width: 5px;
@@ -650,9 +649,16 @@ button {
 }
 
 /* Model chip: inheriting is the quiet default and must never look pinned;
-   pinned is a deliberate choice, so it earns weight without a button. */
+   pinned is a deliberate choice, so it earns a neutral outline without
+   spending the accent, which stays reserved for focus and selection. */
 .model-chip {
   max-width: 100%;
+  overflow: hidden;
+}
+
+.model-chip .chip-text {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -671,9 +677,10 @@ button {
 }
 
 .model-chip.is-pinned {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface-2);
+  color: var(--ink-2);
   font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 .model-chip.is-warn {
@@ -955,7 +962,7 @@ dialog.dialog {
   padding: 0;
   background: transparent;
   color: var(--ink);
-  max-width: calc(100vw - 32px);
+  max-width: fit-content;
 }
 
 /* The browser focuses the dialog element itself on showModal(); the outline
@@ -972,23 +979,23 @@ dialog.dialog::backdrop {
 }
 
 dialog.form-dialog {
-  width: min(560px, calc(100vw - 32px));
+  width: fit-content;
 }
 
 dialog.confirm-dialog {
-  width: min(420px, calc(100vw - 32px));
+  width: fit-content;
 }
 
 dialog.directory-dialog {
-  width: min(920px, calc(100vw - 32px));
+  width: fit-content;
 }
 
 dialog.sheet-dialog {
   margin: 0 0 0 auto;
   height: 100dvh;
   max-height: none;
-  max-width: min(var(--sheet), 94vw);
-  width: min(var(--sheet), 94vw);
+  max-width: fit-content;
+  width: fit-content;
   animation: sheet-in 200ms var(--ease);
 }
 
@@ -1525,14 +1532,13 @@ dialog.sheet-dialog {
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
-  border-left: 3px solid var(--accent);
   border-radius: var(--radius);
   background: var(--surface-2);
 }
 
 .review-feedback-label {
   margin: 0;
-  color: var(--accent);
+  color: var(--muted);
   font: 10.5px/1.4 var(--font-mono);
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1638,8 +1644,8 @@ dialog.sheet-dialog {
   display: grid;
   gap: 4px;
   padding: 8px 10px;
-  border-left: 3px solid var(--line-strong);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--surface);
 }
 
@@ -1746,37 +1752,8 @@ dialog.sheet-dialog {
   word-break: break-word;
 }
 
-/* checklist (definition of done) */
-
-.checklist {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.check {
-  padding: 7px 0;
-  border-bottom: 1px solid var(--line);
-  color: var(--ink-2);
-  font-size: 12.5px;
-}
-
-.check::before {
-  content: "";
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  margin-right: 8px;
-  border: 1.5px solid var(--line-strong);
-  border-radius: 3px;
-  vertical-align: -1px;
-}
-
-.check:last-child {
-  border-bottom: 0;
-}
+/* definition of done renders as a plain promise list: the browser has no
+ * verification semantics in v1, so no checkbox imagery */
 
 .plain-list {
   display: grid;
@@ -2031,7 +2008,7 @@ dialog.sheet-dialog {
   display: grid;
   gap: 4px;
   padding: 9px 11px;
-  border-left: 2px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
@@ -2442,17 +2419,47 @@ dialog.sheet-dialog {
 }
 
 @media (max-width: 720px) {
+  /* One top-bar row: neutral buttons go icon-only, the two primary labels
+   * survive, and the action group scrolls sideways if it still overflows. */
   .topbar {
     padding: 8px 12px;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
 
-  .brand-mark {
-    font-size: 13px;
+  .brand {
+    flex: 0 0 auto;
+  }
+
+  .topbar-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    min-width: 0;
+    /* Primaries lead so the thumb reaches New task and Run Ready without
+     * scrolling; the start edge stays reachable under overflow. */
+    justify-content: flex-start;
+  }
+
+  .topbar-actions .btn-primary {
+    order: -1;
   }
 
   .topbar-actions .btn {
     height: 32px;
-    padding: 0 10px;
+    padding: 0 8px;
+    flex: 0 0 auto;
+  }
+
+  .topbar-actions .btn:not(.btn-primary) .btn-label {
+    display: none;
+  }
+
+  .topbar-actions .kbd {
+    display: none;
+  }
+
+  .brand-mark {
+    font-size: 13px;
   }
 
   .toolbar {
@@ -2578,3 +2585,111 @@ dialog.sheet-dialog {
     min-height: 32px;
   }
 }
+
+.card.is-error {
+  border-color: var(--danger, #d33);
+  box-shadow: 0 0 0 1px var(--danger, #d33) inset;
+}
+
+.card-error {
+  margin: 8px 0 0;
+  color: var(--danger, #b42318);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.topbar-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1em;
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+.btn-inbox.is-alert .btn-icon {
+  color: var(--danger, #d33);
+  animation: inbox-pulse 1.8s ease-in-out infinite;
+}
+
+.btn-inbox.is-alert .count-badge {
+  background: var(--danger, #d33);
+  color: #fff;
+}
+
+@keyframes inbox-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-inbox.is-alert .btn-icon { animation: none; }
+}
+
+.card-menu .menu {
+  min-width: 220px;
+}
+
+.card-menu .menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  justify-content: flex-start;
+  cursor: pointer;
+}
+
+.form-dialog .dialog-shell {
+  width: min(860px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+}
+
+.directory-dialog .dialog-shell {
+  width: min(1180px, calc(100vw - 48px));
+  height: min(82vh, 900px);
+  max-height: calc(100vh - 48px);
+}
+
+.live-dialog .dialog-shell {
+  width: min(560px, calc(100vw - 48px));
+}
+
+.live-details {
+  display: grid;
+  gap: 10px;
+}
+
+.live-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+
+.live-row:last-child {
+  border-bottom: 0;
+}
+
+.live-key {
+  color: var(--muted, #6b7280);
+}
+
+.live-value {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.inbox-dismiss {
+  margin-left: auto;
+}
+

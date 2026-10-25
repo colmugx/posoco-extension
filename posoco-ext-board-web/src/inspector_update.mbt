@@ -53,12 +53,6 @@ fn update_inspector(
       } else {
         ({ ..model, dependency_editor: None, }, @rabbita.none)
       }
-    DependencyDraftReturned =>
-      match model.dependency_editor {
-        Some(draft) =>
-          ({ ..model, selected_task: Some(draft.task_id), }, @rabbita.none)
-        None => (model, @rabbita.none)
-      }
     DependenciesSubmitted => submit_dependencies(model, emit, env)
     AttemptQueueOpened =>
       // One draft at a time, through the same mutation gate.
@@ -89,14 +83,6 @@ fn update_inspector(
       } else {
         ({ ..model, attempt_draft: None, }, @rabbita.none)
       }
-    AttemptDraftReturned => {
-      let task_id = match (model.attempt_draft, model.finish_draft) {
-        (Some(draft), _) => Some(draft.task_id)
-        (_, Some(draft)) => Some(draft.task_id)
-        _ => None
-      }
-      ({ ..model, selected_task: task_id, }, @rabbita.none)
-    }
     AttemptKindChanged(value) =>
       (
         update_attempt_draft(model, draft => {
@@ -152,29 +138,6 @@ fn update_inspector(
       ({ ..model, finish_draft: Some({ ..draft, outcome, }), }, @rabbita.none)
     }
     AttemptFinishSubmitted => submit_attempt_finish(model, emit, env)
-    ReviewOpened(attempt_id) => {
-      // Same admission gate as finish: one draft, an online authoritative
-      // replica, the inspected task, and the attempt inside the record
-      // window — a Running Review attempt still Pending.
-      guard attempt_controls_allowed(model) &&
-        attempt_by_id(model.replica, attempt_id) is Some(attempt) &&
-        model.selected_task == Some(attempt.task_id) &&
-        task_by_id(model.replica, attempt.task_id) is Some(_) &&
-        review_recordable(attempt) else {
-        return (model, @rabbita.none)
-      }
-      (
-        {
-          ..model,
-          review_draft: Some({
-            task_id: attempt.task_id,
-            attempt_id,
-            decision: None,
-          }),
-        },
-        @rabbita.none,
-      )
-    }
     ReviewDecide(attempt_id, value) => {
       // One click fills the outcome and opens the confirmation; submission
       // still clears every gate the draft form cleared. Approve is the only
@@ -203,34 +166,6 @@ fn update_inspector(
         @rabbita.none,
       )
     }
-    ReviewCancelled =>
-      if model.pending is Some(_) {
-        (model, @rabbita.none)
-      } else {
-        ({ ..model, review_draft: None, }, @rabbita.none)
-      }
-    ReviewDecisionChanged(value) => {
-      guard model.review_draft is Some(draft) &&
-        review_draft_editable(model, draft) else {
-        return (model, @rabbita.none)
-      }
-      let decision = if value == "" {
-        None
-      } else {
-        guard review_decision_from_wire(value) is Some(decision) else {
-          return (model, @rabbita.none)
-        }
-        Some(decision)
-      }
-      ({ ..model, review_draft: Some({ ..draft, decision, }), }, @rabbita.none)
-    }
-    ReviewDraftReturned =>
-      match model.review_draft {
-        Some(draft) =>
-          ({ ..model, selected_task: Some(draft.task_id), }, @rabbita.none)
-        None => (model, @rabbita.none)
-      }
-    ReviewSubmitted => submit_review(model, emit, env)
     RequestChangesOpened(task_id) =>
       // Review feedback shares the one-editor gate with every other draft, and
       // it only targets a ticket the Review section is actually showing.

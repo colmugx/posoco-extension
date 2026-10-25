@@ -39,32 +39,6 @@ test "write hints distinguish connection states without leaking detail" {
 }
 
 ///|
-test "hidden inspector notice and section navigation do not mutate intent" {
-  let model = draft_model()
-  let (hidden, command) = update(
-    model,
-    FilterQueryChanged("no match"),
-    test_emit,
-    test_env(),
-  )
-  debug_inspect(command, content="[]")
-  assert_true(
-    selection_filter_note(hidden)
-    .unwrap()
-    .contains("details and drafts remain available"),
-  )
-  assert_true(inspector_task(hidden) is Some(_))
-  assert_true(hidden.replica == model.replica)
-  assert_true(hidden.dependency_editor == model.dependency_editor)
-  let invalidated = { ..hidden, replica: @client.BoardReplica::empty(), }
-  assert_true(selection_filter_note(invalidated) is None)
-  assert_true(inspector_task(invalidated) is None)
-  let (cleared, _) = update(hidden, FiltersCleared, test_emit, test_env())
-  assert_true(selection_filter_note(cleared) is None)
-  assert_eq(cleared.selected_task, model.selected_task)
-}
-
-///|
 test "authoritative task event changes filter membership without changing search intent" {
   let model = {
     ..filter_model(sample_filter_tasks()),

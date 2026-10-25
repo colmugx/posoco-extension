@@ -20,11 +20,7 @@ fn report_artifact_json(
   label : String,
   reference : String,
 ) -> Json {
-  {
-    "kind": Json(kind),
-    "label": Json(label),
-    "uri_or_digest": Json(reference),
-  }
+  { "kind": Json(kind), "label": Json(label), "uri_or_digest": Json(reference) }
 }
 
 ///|
@@ -199,14 +195,12 @@ test "review without a work report shows a blocking note and no report" {
 test "recorded work report leaves the review decision controls untouched" {
   // The same running Review attempt, with and without a curated report: the
   // report informs the decision, it never replaces or blocks it.
-  let with_report = report_model(
-    report_task_json("review", report_json()),
-    attempts=[review_attempt_json("running", "pending")],
-  )
-  let without_report = report_model(
-    report_task_json("review", Json::null()),
-    attempts=[review_attempt_json("running", "pending")],
-  )
+  let with_report = report_model(report_task_json("review", report_json()), attempts=[
+    review_attempt_json("running", "pending"),
+  ])
+  let without_report = report_model(report_task_json("review", Json::null()), attempts=[
+    review_attempt_json("running", "pending"),
+  ])
   assert_eq(review_decision_controls().map(review_decision_label), ["Approve"])
   assert_eq(review_decision_controls().map(decision => decision.to_wire()), [
     "approved",

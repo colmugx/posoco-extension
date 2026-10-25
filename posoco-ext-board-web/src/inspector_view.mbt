@@ -15,9 +15,7 @@ fn detail_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 ///|
 fn detail_body(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   guard model.selected_task is Some(_) else {
-    return @html.div(class="sheet-empty", [
-      @html.p("No task is open."),
-    ])
+    return @html.div(class="sheet-empty", [@html.p("No task is open.")])
   }
   if !model.replica.has_snapshot() {
     return @html.div(class="sheet-head", [
@@ -33,27 +31,6 @@ fn detail_body(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         close_button("detail-dialog"),
       ])
   }
-}
-
-///|
-fn sheet_crumb(task : @client.ClientBoardTask) -> @html.Html {
-  @html.nav(
-    class="crumbs",
-    attrs=@html.Attrs::build().aria_label("Breadcrumb"),
-    [
-      @html.button(
-        type_="button",
-        class="crumb-link",
-        attrs=@html.Attrs::build().on_click(_ => {
-          ui_close("detail-dialog")
-          @rabbita.none
-        }),
-        "Board",
-      ),
-      @html.span(class="crumb-sep", "/"),
-      @html.span(class="crumb-here", ui_stage_label(task.stage)),
-    ],
-  )
 }
 
 ///|
@@ -140,6 +117,14 @@ fn model_block(
     } else {
       model_picker(model, task, catalog, emit)
     },
+    if ticket_task_running(model, task.id) {
+      @html.p(
+        class="section-note",
+        "The current worker keeps its model. Changes apply to the next run.",
+      )
+    } else {
+      @html.nothing
+    },
   ])
 }
 
@@ -171,11 +156,23 @@ fn model_picker(
             id="ticket-model-effort",
             name="ticket_model_effort",
             disabled=locked,
-            on_change=value => emit(TicketSetModel(task.id, Some(model_choice_with_effort(option.id, value)))),
-            model_select_html(model_effort_options(option, match selection {
-              Some(selection) => selection.effort
-              None => None
-            })),
+            on_change=value => {
+              emit(
+                TicketSetModel(
+                  task.id,
+                  Some(model_choice_with_effort(option.id, value)),
+                ),
+              )
+            },
+            model_select_html(
+              model_effort_options(
+                option,
+                match selection {
+                  Some(selection) => selection.effort
+                  None => None
+                },
+              ),
+            ),
           ),
         )
       }
@@ -189,7 +186,9 @@ fn model_picker(
         id="ticket-model-slot",
         name="ticket_model",
         disabled=locked,
-        on_change=value => emit(TicketSetModel(task.id, model_choice_from_slot(value))),
+        on_change=value => {
+          emit(TicketSetModel(task.id, model_choice_from_slot(value)))
+        },
         model_select_html(model_slot_options(catalog, selection)),
       ),
     ),
@@ -270,9 +269,7 @@ fn review_artifact_kind_label(
 ///|
 /// The result tone is the client's canonical wire spelling, so the report
 /// styling and the record vocabulary cannot drift apart.
-fn review_evidence_tone(
-  result : @client.ClientReviewEvidenceResult,
-) -> String {
+fn review_evidence_tone(result : @client.ClientReviewEvidenceResult) -> String {
   result.to_wire()
 }
 
@@ -355,21 +352,24 @@ fn review_verification_section(
   let body = if verification.is_empty() {
     @html.p(class="empty-line", "No verification recorded.")
   } else {
-    @html.ul(class="review-evidence", verification.map(evidence => {
-      let row = review_evidence_row(evidence)
-      @html.li(class="review-evidence-row is-\{row.tone}", [
-        @html.div(class="review-evidence-head", [
-          @html.span(class="review-evidence-result", row.result),
-          @html.span(class="review-evidence-kind", row.kind),
-          @html.span(class="review-evidence-label", row.label),
-        ]),
-        if row.detail.trim().is_empty() {
-          @html.nothing
-        } else {
-          @html.p(class="review-evidence-detail", row.detail)
-        },
-      ])
-    }))
+    @html.ul(
+      class="review-evidence",
+      verification.map(evidence => {
+        let row = review_evidence_row(evidence)
+        @html.li(class="review-evidence-row is-\{row.tone}", [
+          @html.div(class="review-evidence-head", [
+            @html.span(class="review-evidence-result", row.result),
+            @html.span(class="review-evidence-kind", row.kind),
+            @html.span(class="review-evidence-label", row.label),
+          ]),
+          if row.detail.trim().is_empty() {
+            @html.nothing
+          } else {
+            @html.p(class="review-evidence-detail", row.detail)
+          },
+        ])
+      }),
+    )
   }
   @html.div(class="review-report-section review-verification", [
     @html.h3(class="review-report-label", "Verification"),
@@ -386,14 +386,17 @@ fn review_artifact_section(
   }
   @html.div(class="review-report-section review-artifacts", [
     @html.h3(class="review-report-label", "Artifacts"),
-    @html.ul(class="review-artifact-list", artifacts.map(artifact => {
-      let row = review_artifact_row(artifact)
-      @html.li(class="review-artifact-row", [
-        @html.span(class="review-artifact-kind", row.kind),
-        @html.span(class="review-artifact-label", row.label),
-        @html.code(class="review-artifact-ref", row.reference),
-      ])
-    })),
+    @html.ul(
+      class="review-artifact-list",
+      artifacts.map(artifact => {
+        let row = review_artifact_row(artifact)
+        @html.li(class="review-artifact-row", [
+          @html.span(class="review-artifact-kind", row.kind),
+          @html.span(class="review-artifact-label", row.label),
+          @html.code(class="review-artifact-ref", row.reference),
+        ])
+      }),
+    ),
   ])
 }
 
@@ -402,9 +405,7 @@ fn review_artifact_section(
 /// how it was verified, risks, notes, open questions and artifacts. It shows
 /// only the curated record — the raw run log stays in the Activity dialog.
 fn review_report_block(task : @client.ClientBoardTask) -> @html.Html {
-  guard task.review is Some(report) else {
-    return @html.nothing
-  }
+  guard task.review is Some(report) else { return @html.nothing }
   @html.section(class="detail-section review-report", [
     @html.h2(class="section-title", "Work report"),
     @html.p(class="review-outcome", review_outcome_text(report)),
@@ -523,7 +524,10 @@ fn review_block(
   let open = attempts.filter(review_recordable)
   let recordable = open.get(open.length() - 1)
   let decided = attempts
-    .filter(attempt => attempt.review is Some(Approved) || attempt.review is Some(ChangesRequested))
+    .filter(attempt => {
+      attempt.review is Some(Approved) ||
+      attempt.review is Some(ChangesRequested)
+    })
     .get(0)
   let locked = !attempt_controls_allowed(model)
   @html.section(class="detail-section", [
@@ -604,7 +608,10 @@ fn review_block(
         match decided {
           Some(attempt) =>
             @html.p(class="review-meta", [
-              @html.span(class="review-state is-decided", review_label(attempt.review.unwrap_or(Pending))),
+              @html.span(
+                class="review-state is-decided",
+                review_label(attempt.review.unwrap_or(Pending)),
+              ),
               @html.span(class="mono", attempt.id),
             ])
           None =>
@@ -630,13 +637,15 @@ fn task_details(
   @html.fragment([
     @html.header(class="sheet-head", [
       @html.div(class="sheet-heading", [
-        sheet_crumb(task),
         @html.h2(id="task-detail", class="sheet-title", task.title),
+        // The stepper below is the only stage read; the meta row keeps the
+        // facts the title does not carry.
         @html.p(class="sheet-meta", [
-          @html.span(class="chip", priority_short(task.priority) + " " + priority_label(task.priority)),
-          @html.span(class="chip", ui_stage_label(task.stage)),
+          @html.span(
+            class="chip",
+            priority_short(task.priority) + " " + priority_label(task.priority),
+          ),
           model_chip(ticket_model_catalog(model), task.model),
-          @html.span(class="chip is-quiet", task.id),
         ]),
       ]),
       @html.div(class="sheet-head-actions", [
@@ -672,7 +681,7 @@ fn task_details(
         @html.h2(class="section-title", "Runs"),
         @html.p(
           class="section-note",
-          "Manual records: the board tracks the attempt, it does not run it.",
+          "Manual records only; the board never runs anything.",
         ),
         task_attempts(model, emit),
       ]),
@@ -694,6 +703,8 @@ fn task_details(
 /// live in the sheet header, so they are not repeated here.
 fn task_fields(task : @client.ClientBoardTask) -> @html.Html {
   let rows = [
+    @html.dt("ID"),
+    @html.dd(task.id),
     @html.dt("Created"),
     @html.dd(utc_timestamp(task.created_at_ms)),
     @html.dt("Updated"),
@@ -710,13 +721,15 @@ fn task_fields(task : @client.ClientBoardTask) -> @html.Html {
 }
 
 ///|
+/// The definition of done is a promise list: the browser has no verification
+/// semantics in v1, so the entries render as text, never as checkboxes.
 fn task_dod(task : @client.ClientBoardTask) -> @html.Html {
   if task.definition_of_done.is_empty() {
     @html.p(class="empty-line", "No definition of done yet.")
   } else {
     @html.ul(
-      class="checklist",
-      task.definition_of_done.map(entry => @html.li(class="check", entry)),
+      class="plain-list",
+      task.definition_of_done.map(entry => @html.li(entry)),
     )
   }
 }
@@ -801,7 +814,10 @@ fn dependency_editor_panel(
         @html.nothing
       },
       if candidates.is_empty() {
-        @html.p(class="empty-line", "No other tasks are available as dependencies.")
+        @html.p(
+          class="empty-line",
+          "No other tasks are available as dependencies.",
+        )
       } else {
         @html.nothing
       },
@@ -838,7 +854,9 @@ fn dependency_editor_panel(
           class="plain-list",
           missing.map(id => {
             @html.li(class="dependency-missing", [
-              @html.span(dependency_entry_label(dependency_title(model, id), id)),
+              @html.span(
+                dependency_entry_label(dependency_title(model, id), id),
+              ),
               @html.button(
                 type_="button",
                 class="btn btn-sm",
@@ -937,10 +955,12 @@ fn attempt_row(
     @html.div(class="attempt-line", [
       @html.span(class="mono", attempt.id),
       @html.span(class="attempt-kind", attempt_kind_label(attempt.kind)),
-      @html.span(class="state-chip is-\{attempt_state_tone(attempt.status)}", attempt_status_label(attempt.status)),
+      @html.span(
+        class="state-chip is-\{attempt_state_tone(attempt.status)}",
+        attempt_status_label(attempt.status),
+      ),
       match attempt.review {
-        Some(review) =>
-          @html.span(class="attempt-review", review_label(review))
+        Some(review) => @html.span(class="attempt-review", review_label(review))
         None => @html.nothing
       },
     ]),
@@ -984,10 +1004,16 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
         class="attempt-queue",
         attrs=@html.Attrs::build().aria_label("Queue run"),
         [
-          @html.p(class="section-note", "Queue a run for task \{draft.task_id}."),
+          @html.p(
+            class="section-note",
+            "Queue a run for task \{draft.task_id}.",
+          ),
           @html.p(class="mono attempt-id", draft.attempt_id),
           if !queue_attempt_id_valid(model.replica, draft.attempt_id) {
-            @html.p(class="callout is-warn", "This run ID already exists. Discard this draft to queue a new run.")
+            @html.p(
+              class="callout is-warn",
+              "This run ID already exists. Discard this draft to queue a new run.",
+            )
           } else {
             @html.nothing
           },
@@ -1033,20 +1059,21 @@ fn attempt_queue_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 
 ///|
 /// Only the timestamps the record actually carries are rendered.
+
+///|
+/// The row carries only the events that tell the attempt's story — when the
+/// work started and how it ended. Created/updated bookkeeping stays in the
+/// wire, not on the screen.
 fn attempt_times(attempt : @client.ClientAttempt) -> String {
   let parts = match attempt.started_at_ms {
-    Some(at_ms) =>
-      [
-        "created \{utc_timestamp(attempt.created_at_ms)}",
-        "started \{utc_timestamp(at_ms)}",
-      ]
-    None => ["created \{utc_timestamp(attempt.created_at_ms)}"]
+    Some(at_ms) => ["started \{utc_timestamp(at_ms)}"]
+    None => ["queued \{utc_timestamp(attempt.created_at_ms)}"]
   }
   let parts = match attempt.finished_at_ms {
     Some(at_ms) => [..parts, "finished \{utc_timestamp(at_ms)}"]
     None => parts
   }
-  [..parts, "updated \{utc_timestamp(attempt.updated_at_ms)}"].join(" · ")
+  parts.join(" · ")
 }
 
 ///|

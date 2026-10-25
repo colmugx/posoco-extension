@@ -87,10 +87,10 @@ fn review_recorded_event(
 }
 
 ///|
-fn opened_review(env : Env) -> Model {
+fn review_ready_to_confirm(env : Env) -> Model {
   let (model, _) = update(
     review_model("running", "pending"),
-    ReviewOpened("a"),
+    ReviewDecide("a", "approved"),
     test_emit,
     env,
   )
@@ -98,21 +98,10 @@ fn opened_review(env : Env) -> Model {
 }
 
 ///|
-fn chosen_review(value : String) -> Model {
-  let (model, _) = update(
-    opened_review(counting_env()),
-    ReviewDecisionChanged(value),
-    test_emit,
-    test_env(),
-  )
-  model
-}
-
-///|
 fn submitted_review() -> Model {
   let (model, _) = update(
-    chosen_review("approved"),
-    ReviewSubmitted,
+    review_ready_to_confirm(counting_env()),
+    ConfirmAccepted,
     test_emit,
     counting_env(),
   )
@@ -157,52 +146,38 @@ test "review command schema rides the recordable decision enum only" {
 }
 
 ///|
-test "review draft opens ID-only with no decision and resolves explicit choices" {
-  let original = review_model("running", "pending")
-  let (opened, command) = update(
-    original,
-    ReviewOpened("a"),
+test "one click decides approved through confirmation and never blind" {
+  let model = review_model("running", "pending")
+  let (decided, cmd) = update(
+    model,
+    ReviewDecide("a", "approved"),
     test_emit,
     counting_env(),
   )
-  assert_true(opened.replica == original.replica)
-  assert_true(opened.pending is None)
   assert_true(
-    opened.review_draft
-    is Some({ task_id: "t", attempt_id: "a", decision: None, }),
+    decided.review_draft
+    is Some({ task_id: "t", attempt_id: "a", decision: Some(Approved), }),
   )
-  debug_inspect(command, content="[]")
-  let (approved, _) = update(
-    opened,
-    ReviewDecisionChanged("approved"),
-    test_emit,
-    test_env(),
-  )
-  assert_true(approved.review_draft.unwrap().decision is Some(Approved))
-  let (changes, _) = update(
-    opened,
-    ReviewDecisionChanged("changes_requested"),
-    test_emit,
-    test_env(),
-  )
-  assert_true(changes.review_draft.unwrap().decision is Some(ChangesRequested))
-  // Unknown values keep the draft; the empty value clears back to no choice.
-  for unknown in ["pending", "secret"] {
-    let (kept, _) = update(
-      approved,
-      ReviewDecisionChanged(unknown),
+  assert_true(decided.confirm is Some(ConfirmReview))
+  // Nothing is sent and no identifier is consumed until confirmation.
+  assert_true(decided.pending is None)
+  debug_inspect(cmd, content="[]")
+  // Any other wire value refuses to open the confirmation.
+  for value in ["changes_requested", "pending", "", "secret"] {
+    let (refused, cmd) = update(
+      model,
+      ReviewDecide("a", value),
       test_emit,
       test_env(),
     )
-    assert_true(kept == approved)
+    assert_true(refused == model)
+    debug_inspect(cmd, content="[]")
   }
-  let (cleared, _) = update(
-    approved,
-    ReviewDecisionChanged(""),
-    test_emit,
-    test_env(),
-  )
-  assert_true(cleared.review_draft.unwrap().decision is None)
+  // Dismissing the confirmation drops the draft it created.
+  let (dropped, _) = update(decided, ConfirmDismissed, test_emit, test_env())
+  assert_true(dropped.review_draft is None)
+  assert_true(dropped.confirm is None)
+  assert_true(dropped.replica == model.replica)
 }
 
 ///|
@@ -214,11 +189,17 @@ test "recording is eligible only for a running Review attempt still pending" {
       ] {
       for review in ["", "pending", "approved", "changes_requested"] {
         let model = review_model(status, review, kind~)
-        let (after, _) = update(model, ReviewOpened("a"), test_emit, test_env())
+        let (after, _) = update(
+          model,
+          ReviewDecide("a", "approved"),
+          test_emit,
+          test_env(),
+        )
         let expected = kind == "review" &&
           status == "running" &&
           review == "pending"
         assert_eq(after.review_draft is Some(_), expected)
+        assert_eq(after.confirm is Some(_), expected)
       }
     }
   }
@@ -237,7 +218,7 @@ test "review admission fails closed when offline unknown or misselected" {
     ] {
     let (blocked, cmd) = update(
       unavailable,
-      ReviewOpened("a"),
+      ReviewDecide("a", "approved"),
       test_emit,
       test_env(),
     )
@@ -245,24 +226,31 @@ test "review admission fails closed when offline unknown or misselected" {
     debug_inspect(cmd, content="[]")
   }
   for id in ["missing", ""] {
-    let (blocked, cmd) = update(model, ReviewOpened(id), test_emit, test_env())
+    let (blocked, cmd) = update(
+      model,
+      ReviewDecide(id, "approved"),
+      test_emit,
+      test_env(),
+    )
     assert_true(blocked == model)
     debug_inspect(cmd, content="[]")
   }
-  // Opening needs no identifier; only submission fails closed without one.
+  // Deciding needs no identifier; only submission fails closed without one.
   let (submitted, cmd) = update(
-    chosen_review("approved"),
-    ReviewSubmitted,
+    review_ready_to_confirm(test_env()),
+    ConfirmAccepted,
     test_emit,
     missing_uuid_env(),
   )
   assert_true(submitted.pending is None)
-  assert_true(submitted.review_draft == chosen_review("approved").review_draft)
+  assert_true(
+    submitted.review_draft == review_ready_to_confirm(test_env()).review_draft,
+  )
   assert_true(submitted.notice is Some({ severity: Error, .. }))
   debug_inspect(cmd, content="[]")
   let (blank, cmd) = update(
-    chosen_review("approved"),
-    ReviewSubmitted,
+    review_ready_to_confirm(test_env()),
+    ConfirmAccepted,
     test_emit,
     { url: "unused", uuid: () => Some(""), },
   )
@@ -271,25 +259,22 @@ test "review admission fails closed when offline unknown or misselected" {
 }
 
 ///|
-test "review draft survives browsing and close and returns or discards explicitly" {
+test "the review confirmation survives browsing and close until dismissed" {
   let original = review_model("running", "pending")
-  let (opened, _) = update(original, ReviewOpened("a"), test_emit, test_env())
-  let (switched, _) = update(opened, TaskSelected("b"), test_emit, test_env())
+  let (decided, _) = update(
+    original,
+    ReviewDecide("a", "approved"),
+    test_emit,
+    counting_env(),
+  )
+  let (switched, _) = update(decided, TaskSelected("b"), test_emit, test_env())
   assert_eq(switched.selected_task, Some("b"))
-  assert_true(switched.review_draft == opened.review_draft)
+  assert_true(switched.review_draft == decided.review_draft)
+  assert_true(switched.confirm == decided.confirm)
   let (closed, _) = update(switched, InspectorClosed, test_emit, test_env())
   assert_true(closed.selected_task is None)
-  assert_true(closed.review_draft == opened.review_draft)
-  let (returned, _) = update(closed, ReviewDraftReturned, test_emit, test_env())
-  assert_eq(returned.selected_task, Some("t"))
-  let (cancelled, _) = update(returned, ReviewCancelled, test_emit, test_env())
-  assert_true(cancelled.review_draft is None)
-  assert_true(cancelled.replica == original.replica)
-  // A pending command parks dismissal; the draft outlives the connection.
-  let gated = { ..opened, pending: Some(pending_probe()), }
-  let (parked, cmd) = update(gated, ReviewCancelled, test_emit, test_env())
-  assert_true(parked == gated)
-  debug_inspect(cmd, content="[]")
+  assert_true(closed.review_draft == decided.review_draft)
+  assert_true(closed.replica == original.replica)
 }
 
 ///|
@@ -302,14 +287,14 @@ test "every editor draft and pending command shares one admission gate with revi
     AttemptQueueOpened,
     AttemptStartRequested("a"),
     AttemptFinishOpened("a"),
-    ReviewOpened("a"),
+    ReviewDecide("a", "approved"),
   ]
   for
     model in [
       opened_queue(counting_env()),
       chosen_finish(),
       draft_model(),
-      opened_review(counting_env()),
+      review_ready_to_confirm(counting_env()),
     ] {
     for msg in open_messages {
       let (blocked, command) = update(model, msg, test_emit, test_env())
@@ -323,9 +308,6 @@ test "every editor draft and pending command shares one admission gate with revi
     DependenciesSubmitted,
     AttemptQueueSubmitted,
     AttemptFinishSubmitted,
-    ReviewSubmitted,
-    ReviewDecisionChanged("approved"),
-    ReviewCancelled,
   ]
   for kind in ["queue", "start", "finish"] {
     for msg in pending_messages {
@@ -353,55 +335,43 @@ test "one pending slot gates review controls and review gates every other editor
       AttemptQueueOpened,
       AttemptStartRequested("a"),
       AttemptFinishOpened("a"),
-      ReviewOpened("a"),
-      ReviewSubmitted,
-      ReviewDecisionChanged("changes_requested"),
-      ReviewCancelled,
+      ReviewDecide("a", "approved"),
     ] {
     let (blocked, cmd) = update(pending, msg, test_emit, test_env())
     assert_true(blocked == pending)
     debug_inspect(cmd, content="[]")
   }
-  // With the draft open, an unrelated pending command parks review edits too.
+  // With a pending command in flight, deciding again is parked too.
   let gated = {
-    ..opened_review(counting_env()),
+    ..review_ready_to_confirm(counting_env()),
     pending: Some(pending_probe()),
   }
-  for
-    msg in [
-      ReviewSubmitted,
-      ReviewDecisionChanged("approved"),
-      ReviewDecisionChanged(""),
-      ReviewCancelled,
-    ] {
-    let (parked, cmd) = update(gated, msg, test_emit, test_env())
-    assert_true(parked == gated)
-    debug_inspect(cmd, content="[]")
-  }
+  let (parked, cmd) = update(
+    gated,
+    ReviewDecide("a", "approved"),
+    test_emit,
+    test_env(),
+  )
+  assert_true(parked == gated)
+  debug_inspect(cmd, content="[]")
 }
 
 ///|
 test "submission reads the live revision and sends the correlated record command" {
   let env = counting_env()
-  let (opened, _) = update(
+  let (decided, _) = update(
     review_model("running", "pending"),
-    ReviewOpened("a"),
+    ReviewDecide("a", "approved"),
     test_emit,
     env,
   )
   let (live, _) = update(
-    opened,
+    decided,
     SocketEvent(0, Message(task_event_text("t", "ready", 1, 2))),
     test_emit,
     test_env(),
   )
-  let (chosen, _) = update(
-    live,
-    ReviewDecisionChanged("approved"),
-    test_emit,
-    test_env(),
-  )
-  let (submitted, sent) = update(chosen, ReviewSubmitted, test_emit, env)
+  let (submitted, sent) = update(live, ConfirmAccepted, test_emit, env)
   let expected = @client.record_review_command(
     "cmd-uuid-1",
     2L,
@@ -485,21 +455,21 @@ test "accepted review result without its event forces an authoritative refresh" 
   assert_true(settled.review_draft is None)
   assert_true(
     settle_review_draft(
-      chosen_review("approved").review_draft,
+      review_ready_to_confirm(test_env()).review_draft,
       PendingAttemptFinish(attempt_id="a"),
     )
     is Some(_),
   )
   assert_true(
     settle_review_draft(
-      chosen_review("approved").review_draft,
+      review_ready_to_confirm(test_env()).review_draft,
       PendingReview(attempt_id="other"),
     )
     is Some(_),
   )
   assert_true(
     settle_review_draft(
-      chosen_review("approved").review_draft,
+      review_ready_to_confirm(test_env()).review_draft,
       PendingReview(attempt_id="a"),
     )
     is None,
@@ -682,7 +652,7 @@ test "stale callbacks and terminal protocol errors never settle review commands"
 
 ///|
 test "external decisions and finishes disable the draft and a missing target closes it" {
-  let draft = opened_review(counting_env())
+  let draft = review_ready_to_confirm(counting_env())
   // An external authoritative decision consumes the record window.
   let (externally, _) = update(
     draft,
@@ -694,17 +664,20 @@ test "external decisions and finishes disable the draft and a missing target clo
   assert_false(
     review_draft_editable(externally, externally.review_draft.unwrap()),
   )
+  // Accepting the confirmation then refuses to send anything.
   let (blocked, cmd) = update(
     externally,
-    ReviewSubmitted,
+    ConfirmAccepted,
     test_emit,
     test_env(),
   )
-  assert_true(blocked == externally)
+  assert_true(blocked.pending is None)
+  assert_true(blocked.replica == externally.replica)
+  assert_true(blocked.review_draft == externally.review_draft)
   debug_inspect(cmd, content="[]")
   // An external authoritative finish leaves the record window too.
   let (finished, _) = update(
-    opened_review(counting_env()),
+    review_ready_to_confirm(counting_env()),
     SocketEvent(0, Message(lifecycle_event("cancelled"))),
     test_emit,
     test_env(),
@@ -726,7 +699,7 @@ test "external decisions and finishes disable the draft and a missing target clo
   assert_true(missing.notice is Some({ severity: Warning, .. }))
   // A replacement snapshot that still holds the pending attempt revalidates
   // the draft live instead of going stale.
-  let chosen = chosen_review("approved")
+  let chosen = review_ready_to_confirm(test_env())
   let (kept, _) = update(
     chosen,
     SocketEvent(

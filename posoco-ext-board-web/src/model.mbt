@@ -103,7 +103,7 @@ priv struct ModelCatalog {
 
 ///|
 fn ModelCatalog::unavailable() -> ModelCatalog {
-  { selectable: false, kind: "", models: [] }
+  { selectable: false, kind: "", models: [], }
 }
 
 ///|
@@ -118,6 +118,19 @@ fn ModelCatalog::find(self : ModelCatalog, slot : String) -> ModelOption? {
 priv struct ModelChoice {
   slot : String
   effort : String?
+}
+
+///|
+/// Host runtime facts for the Live popover. Quota is optional: a manager that
+/// does not expose it renders "not exposed", never a made-up number.
+priv struct TicketLiveInfo {
+  manager : String
+  active_model : String
+  active_effort : String?
+  provider : String
+  context_window : Int64?
+  model_count : Int32
+  quota_lines : Array[String]
 } derive(Eq)
 
 ///|
@@ -127,6 +140,7 @@ priv struct TicketState {
   /// Non-blocking worker updates. They are shown in the inbox and never own a
   /// question, an answer or a stage move of their own.
   progress : Array[TicketProgress]
+  live : TicketLiveInfo?
   /// Absent when this frame did not carry a catalog; the previous catalog is
   /// retained so a `ticket_result` cannot blank the picker mid-edit.
   model_selection : ModelCatalog?
@@ -134,7 +148,7 @@ priv struct TicketState {
 
 ///|
 fn TicketState::empty() -> TicketState {
-  { questions: [], runs: [], progress: [], model_selection: None }
+  { questions: [], runs: [], progress: [], live: None, model_selection: None, }
 }
 
 ///|
@@ -302,6 +316,7 @@ priv struct Model {
   ticket_seen_updates : Map[String, Bool]
   confirm : ConfirmIntent?
   archive_open : Bool
+  live_open : Bool
 } derive(Eq)
 
 ///|
@@ -330,10 +345,8 @@ priv enum Msg {
   DependenciesRefreshed
   DependenciesCancelled
   DependenciesSubmitted
-  DependencyDraftReturned
   AttemptQueueOpened
   AttemptQueueCancelled
-  AttemptDraftReturned
   AttemptFinishOpened(String)
   AttemptFinishCancelled
   AttemptKindChanged(String)
@@ -341,11 +354,6 @@ priv enum Msg {
   AttemptStartRequested(String)
   AttemptOutcomeChanged(String)
   AttemptFinishSubmitted
-  ReviewOpened(String)
-  ReviewCancelled
-  ReviewDecisionChanged(String)
-  ReviewDraftReturned
-  ReviewSubmitted
   RequestChangesOpened(String)
   RequestChangesFeedbackChanged(String)
   RequestChangesSubmitted
@@ -358,6 +366,7 @@ priv enum Msg {
   TicketDrawerClosed
   TicketActivityOpened(String)
   TicketActivityClosed
+  TicketUpdatesDismissed
   TicketDraftChanged(String, String)
   TicketAnswered(String, TicketAnswer)
   TicketShape(String)
@@ -370,6 +379,8 @@ priv enum Msg {
   TicketResult(Bool, String?, TicketState?)
   ArchiveOpened
   ArchiveClosed
+  LiveOpened
+  LiveClosed
   DoneRequested(String)
   ReviewDecide(String, String)
   ConfirmAccepted
@@ -420,6 +431,7 @@ fn Model::empty(available : Bool) -> Model {
     ticket_seen_updates: Map([]),
     confirm: None,
     archive_open: false,
+    live_open: false,
   }
 }
 

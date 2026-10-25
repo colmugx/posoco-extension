@@ -372,15 +372,8 @@ test "draft survives inspector switch and dismissal until explicit cancellation"
   let (closed, _) = update(other, InspectorClosed, test_emit, test_env())
   assert_true(closed.selected_task is None)
   assert_true(closed.dependency_editor == model.dependency_editor)
-  let (returned, _) = update(
-    closed,
-    DependencyDraftReturned,
-    test_emit,
-    test_env(),
-  )
-  assert_eq(returned.selected_task, Some("t"))
   let (cancelled, _) = update(
-    returned,
+    closed,
     DependenciesCancelled,
     test_emit,
     test_env(),

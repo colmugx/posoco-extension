@@ -32,6 +32,7 @@ fn retry_ticket_model(runs : Array[TicketRun]) -> Model {
     questions: [],
     runs,
     progress: [],
+    live: None,
     model_selection: None,
   })
 }
@@ -68,9 +69,7 @@ fn retry_task_model(id : String, stage : String) -> Model {
       "events": [],
     },
   })
-  guard applied is @client.Applied else {
-    abort("Invalid retry test snapshot")
-  }
+  guard applied is @client.Applied else { abort("Invalid retry test snapshot") }
   {
     ..apply_ticket_state(Model::empty(true), TicketState::empty()),
     replica,
@@ -94,8 +93,14 @@ test "retry work travels as a ticket command carrying only the task id" {
   ) catch {
     _ => abort("the retry frame must encode as JSON")
   }
-  assert_eq(retry_json_field(frame, "type"), Some(Json::string("ticket_command")))
-  assert_eq(retry_json_field(frame, "name"), Some(Json::string("board.ticket.retry")))
+  assert_eq(
+    retry_json_field(frame, "type"),
+    Some(Json::string("ticket_command")),
+  )
+  assert_eq(
+    retry_json_field(frame, "name"),
+    Some(Json::string("board.ticket.retry")),
+  )
   match retry_json_field(frame, "args") {
     Some(args) => {
       assert_eq(retry_json_field(args, "task_id"), Some(Json::string("t1")))
@@ -120,9 +125,9 @@ test "retry work is gated by the in-flight command, the socket and the runtime" 
   assert_eq(sent.last_status, "Retrying ticket t1")
   assert_true(sent.tickets == model.tickets)
   let blocked = [
-    { ..model, ticket_sending: true },
-    { ..model, can_connect: false },
-    { ..model, ticket_available: false },
+    { ..model, ticket_sending: true, },
+    { ..model, can_connect: false, },
+    { ..model, ticket_available: false, },
     retry_ticket_model([retry_run("t1", "running")]),
   ]
   for candidate in blocked {
@@ -165,17 +170,16 @@ test "a live run keeps retry work disabled" {
   assert_false(ticket_retry_blocked(running, "t2"))
   let finished = retry_ticket_model([retry_run("t1", "failed")])
   assert_false(ticket_retry_blocked(finished, "t1"))
-  assert_true(ticket_retry_blocked({ ..finished, ticket_sending: true }, "t1"))
-  assert_true(ticket_retry_blocked({ ..finished, can_connect: false }, "t1"))
-  assert_true(ticket_retry_blocked({ ..finished, ticket_available: false }, "t1"))
+  assert_true(ticket_retry_blocked({ ..finished, ticket_sending: true, }, "t1"))
+  assert_true(ticket_retry_blocked({ ..finished, can_connect: false, }, "t1"))
+  assert_true(
+    ticket_retry_blocked({ ..finished, ticket_available: false, }, "t1"),
+  )
   // The failed card still renders the offer; the gate only disables it.
   let emit : @rabbita.Emit[Msg] = _msg => @rabbita.none
   assert_true(
-    ticket_run_action_block(
-      running,
-      retry_run("t1", "failed"),
-      emit,
-    ) != @html.nothing,
+    ticket_run_action_block(running, retry_run("t1", "failed"), emit) !=
+    @html.nothing,
   )
 }
 
@@ -208,6 +212,7 @@ test "a suspended ticket without a run still offers retry work" {
       questions: [],
       runs: [retry_run("t1", "failed")],
       progress: [],
+      live: None,
       model_selection: None,
     },
   }

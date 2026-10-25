@@ -95,22 +95,19 @@ test "attempt timestamps render only what the record carries" {
     wbtest_attempt_model(1700000000000.0, null, null),
   )
   assert_eq(attempts.length(), 1)
-  inspect(
-    attempt_times(attempts[0]),
-    content="created 2023-11-14 22:13:20 UTC · updated 2023-11-14 22:14:20 UTC",
-  )
+  inspect(attempt_times(attempts[0]), content="queued 2023-11-14 22:13:20 UTC")
   let with_start = inspector_attempts(
     wbtest_attempt_model(1700000000000.0, 1700000010000, null),
   )
   inspect(
     attempt_times(with_start[0]),
-    content="created 2023-11-14 22:13:20 UTC · started 2023-11-14 22:13:30 UTC · updated 2023-11-14 22:14:20 UTC",
+    content="started 2023-11-14 22:13:30 UTC",
   )
   let with_finish = inspector_attempts(
     wbtest_attempt_model(1700000000000.0, 1700000010000, 1700000050000),
   )
   inspect(
     attempt_times(with_finish[0]),
-    content="created 2023-11-14 22:13:20 UTC · started 2023-11-14 22:13:30 UTC · finished 2023-11-14 22:14:10 UTC · updated 2023-11-14 22:14:20 UTC",
+    content="started 2023-11-14 22:13:30 UTC · finished 2023-11-14 22:14:10 UTC",
   )
 }

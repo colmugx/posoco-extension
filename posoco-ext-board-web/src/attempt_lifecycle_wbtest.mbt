@@ -371,15 +371,8 @@ test "queue and finish drafts survive browsing and explicit dismissal without pr
       test_env(),
     )
     assert_true(blocked == closed)
-    let (returned, _) = update(
-      closed,
-      AttemptDraftReturned,
-      test_emit,
-      test_env(),
-    )
-    assert_eq(returned.selected_task, Some("t"))
     let (cancelled, _) = update(
-      returned,
+      closed,
       if original.attempt_draft is Some(_) {
         AttemptQueueCancelled
       } else {

@@ -40,8 +40,7 @@ test "eight lanes labels grouping counts and empty state" {
   assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
   assert_eq(@src.lanes().length(), 8)
   let stages = [
-    "created", "refining", "ready", "running", "review", "done", "suspended",
-    "cancelled",
+    "created", "refining", "ready", "running", "review", "done", "suspended", "cancelled",
   ]
   let tasks : Array[Json] = []
   for i, stage in stages {
@@ -60,8 +59,7 @@ test "eight lanes labels grouping counts and empty state" {
   assert_eq(replica.tasks().length(), 8)
   assert_eq(@src.empty_message(replica), None)
   let labels = [
-    "Created", "Refining", "Ready", "Running", "Review", "Done", "Suspended",
-    "Cancelled",
+    "Created", "Refining", "Ready", "Running", "Review", "Done", "Suspended", "Cancelled",
   ]
   for i, stage in @src.lanes() {
     assert_eq(@src.stage_label(stage), labels[i])

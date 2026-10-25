@@ -55,6 +55,7 @@ fn wbtest_ticket_model(
     questions: [],
     runs,
     progress: [],
+    live: None,
     model_selection,
   })
 }
@@ -107,9 +108,7 @@ test "ticket state decodes the model catalog projection" {
 test "absent null and malformed model catalogs stay read-only" {
   // Absent, explicit null, a wrongly typed selectable flag and a non-object
   // projection all mean the host offers no picker, never a crash.
-  for json in [
-    "", "null", "{\"selectable\":\"yes\",\"models\":[]}", "[]", "42",
-  ] {
+  for json in ["", "null", "{\"selectable\":\"yes\",\"models\":[]}", "[]", "42"] {
     match ticket_frame(wbtest_ticket_state_text(json)) {
       Some(TicketSnapshot(state)) => {
         let model = apply_ticket_state(Model::empty(true), state)
@@ -140,11 +139,8 @@ test "a ticket frame that omits the catalog keeps the last known one" {
     questions: [],
     runs: [],
     progress: [],
-    model_selection: Some({
-      selectable: false,
-      kind: "magpie",
-      models: [],
-    }),
+    live: None,
+    model_selection: Some({ selectable: false, kind: "magpie", models: [], }),
   })
   assert_false(ticket_model_catalog(disabled).selectable)
   assert_eq(ticket_model_catalog(disabled).kind, "magpie")
@@ -173,9 +169,14 @@ test "model chip names inheritance and never fakes a pinned slot" {
     slot="openai/gpt-4",
   )
   assert_eq(model_chip_tone(catalog, Some(gone)), "is-warn")
-  assert_true(model_chip_title(catalog, Some(gone)).contains("no longer offers"))
+  assert_true(
+    model_chip_title(catalog, Some(gone)).contains("no longer offers"),
+  )
   // With no projection at all there is nothing to compare the pin against.
-  assert_eq(model_chip_tone(ModelCatalog::unavailable(), Some(gone)), "is-pinned")
+  assert_eq(
+    model_chip_tone(ModelCatalog::unavailable(), Some(gone)),
+    "is-pinned",
+  )
 }
 
 ///|
@@ -242,29 +243,31 @@ test "effort selector offers auto default plus advertised efforts" {
 test "select values resolve to the wire model choice" {
   let inherit_choice : ModelChoice? = model_choice_from_slot("")
   assert_true(inherit_choice is None)
-  assert_true(
-    model_choice_from_slot("openai/gpt-5.2") ==
-      Some({ slot: "openai/gpt-5.2", effort: None }),
-  )
-  assert_true(
-    model_choice_with_effort("openai/gpt-5.2", "") ==
-      { slot: "openai/gpt-5.2", effort: None },
-  )
-  assert_true(
-    model_choice_with_effort("openai/gpt-5.2", "high") ==
-      { slot: "openai/gpt-5.2", effort: Some("high") },
-  )
+  guard model_choice_from_slot("openai/gpt-5.2") is Some(bare) else {
+    fail("expected a bare slot choice")
+  }
+  assert_eq(bare.slot, "openai/gpt-5.2")
+  assert_true(bare.effort is None)
+  let defaulted = model_choice_with_effort("openai/gpt-5.2", "")
+  assert_eq(defaulted.slot, "openai/gpt-5.2")
+  assert_true(defaulted.effort is None)
+  let high = model_choice_with_effort("openai/gpt-5.2", "high")
+  assert_eq(high.slot, "openai/gpt-5.2")
+  assert_true(high.effort == Some("high"))
 }
 
 ///|
 test "ticket set model command args pin the stable slot and explicit inherit" {
   let inherit_args = ticket_set_model_args("t1", None)
-  assert_eq(wbtest_json_field(inherit_args, "task_id"), Some(Json::string("t1")))
+  assert_eq(
+    wbtest_json_field(inherit_args, "task_id"),
+    Some(Json::string("t1")),
+  )
   assert_eq(wbtest_json_field(inherit_args, "model"), Some(Json::null()))
-  let pinned = ticket_set_model_args("t1", Some({
-    slot: "openai/gpt-5.2",
-    effort: Some("high"),
-  }))
+  let pinned = ticket_set_model_args(
+    "t1",
+    Some({ slot: "openai/gpt-5.2", effort: Some("high"), }),
+  )
   match wbtest_json_field(pinned, "model") {
     Some(Object(fields)) => {
       assert_eq(fields.get("slot"), Some(Json::string("openai/gpt-5.2")))
@@ -273,20 +276,19 @@ test "ticket set model command args pin the stable slot and explicit inherit" {
     _ => fail("expected a model object")
   }
   // Effort "Auto/default" travels as an explicit null, not an empty string.
-  let auto = ticket_set_model_args("t1", Some({
-    slot: "openai/gpt-5.2",
-    effort: None,
-  }))
+  let auto = ticket_set_model_args(
+    "t1",
+    Some({ slot: "openai/gpt-5.2", effort: None, }),
+  )
   match wbtest_json_field(auto, "model") {
-    Some(Object(fields)) =>
-      assert_eq(fields.get("effort"), Some(Json::null()))
+    Some(Object(fields)) => assert_eq(fields.get("effort"), Some(Json::null()))
     _ => fail("expected a model object")
   }
 }
 
 ///|
 test "set model is disabled while the ticket runs or the catalog is read-only" {
-  let choice : ModelChoice? = Some({ slot: "openai/gpt-5.2", effort: None })
+  let choice : ModelChoice? = Some({ slot: "openai/gpt-5.2", effort: None, })
   let busy = wbtest_ticket_model(Some(wbtest_model_catalog()), [
     wbtest_running_run("t1"),
   ])
@@ -311,11 +313,10 @@ test "set model is disabled while the ticket runs or the catalog is read-only" {
   // No optimistic model state: only the sending gate changes.
   assert_true(sent.tickets == other.tickets)
   // A read-only catalog never sends a choice.
-  let read_only = wbtest_ticket_model(Some({
-    selectable: false,
-    kind: "magpie",
-    models: [],
-  }), [])
+  let read_only = wbtest_ticket_model(
+    Some({ selectable: false, kind: "magpie", models: [], }),
+    [],
+  )
   let (ignored, _) = update(
     read_only,
     TicketSetModel("t1", choice),
@@ -335,17 +336,15 @@ test "set model is disabled while the ticket runs or the catalog is read-only" {
 }
 
 ///|
-test "model picker explains why it is locked" {
+test "model picker stays available for the next run" {
   let ready = wbtest_ticket_model(Some(wbtest_model_catalog()), [])
   assert_eq(model_picker_blocked(ready, "t1"), None)
   let running = wbtest_ticket_model(Some(wbtest_model_catalog()), [
     wbtest_running_run("t1"),
   ])
-  match model_picker_blocked(running, "t1") {
-    Some(text) => assert_true(text.contains("running"))
-    None => fail("a running ticket must explain why the picker is locked")
-  }
-  match model_picker_blocked({ ..ready, ticket_sending: true }, "t1") {
+  // A running worker keeps its composed model; the picker changes the NEXT run.
+  assert_eq(model_picker_blocked(running, "t1"), None)
+  match model_picker_blocked({ ..ready, ticket_sending: true, }, "t1") {
     Some(text) => assert_true(text.to_lower().contains("wait"))
     None => fail("an in-flight command must explain why the picker is locked")
   }
@@ -353,13 +352,13 @@ test "model picker explains why it is locked" {
     Some(text) => assert_true(text.contains("unavailable"))
     None => fail("an unavailable runtime must explain why the picker is locked")
   }
-  assert_true(
-    model_unavailable_note(None).contains("inherits"),
-  )
+  assert_true(model_unavailable_note(None).contains("inherits"))
   assert_true(
     model_unavailable_note(
       Some(
-        @client.ClientModelSelection::ClientModelSelection(slot="openai/gpt-5.2"),
+        @client.ClientModelSelection::ClientModelSelection(
+          slot="openai/gpt-5.2",
+        ),
       ),
     ).contains("read-only"),
   )

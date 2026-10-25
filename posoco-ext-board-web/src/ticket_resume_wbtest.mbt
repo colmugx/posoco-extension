@@ -6,7 +6,7 @@ fn resume_run(
   status : String,
   session_id : String,
 ) -> TicketRun {
-  { ..retry_run(task_id, status), session_id: session_id }
+  { ..retry_run(task_id, status), session_id, }
 }
 
 ///|
@@ -24,7 +24,10 @@ test "resume travels as a ticket command carrying only the task id" {
   ) catch {
     _ => abort("the resume frame must encode as JSON")
   }
-  assert_eq(resume_json_field(frame, "type"), Some(Json::string("ticket_command")))
+  assert_eq(
+    resume_json_field(frame, "type"),
+    Some(Json::string("ticket_command")),
+  )
   assert_eq(
     resume_json_field(frame, "name"),
     Some(Json::string("board.ticket.resume")),
@@ -58,9 +61,9 @@ test "resume is gated by the command, the socket, the runtime and a live run" {
   // No optimistic run: the host owns what the resumed session does next.
   assert_true(sent.tickets == model.tickets)
   let blocked = [
-    { ..model, ticket_sending: true },
-    { ..model, can_connect: false },
-    { ..model, ticket_available: false },
+    { ..model, ticket_sending: true, },
+    { ..model, can_connect: false, },
+    { ..model, ticket_available: false, },
     retry_ticket_model([
       resume_run("t1", "interrupted", "s1"),
       resume_run("t1", "running", ""),
@@ -77,7 +80,7 @@ test "resume is gated by the command, the socket, the runtime and a live run" {
 }
 
 ///|
-test "only an interrupted run with a durable session offers resume" {
+test "a durable session makes failed and interrupted runs resumable" {
   let interrupted = resume_run("t1", "interrupted", "s1")
   assert_true(ticket_run_resumable(interrupted))
   // Resume run is primary and Retry follows as the way to start over.
@@ -93,10 +96,11 @@ test "only an interrupted run with a durable session offers resume" {
   assert_true(retry_only[0] is RetryRun)
   for status in ["failed", "sync_failed"] {
     let run = resume_run("t1", status, "s1")
-    assert_false(ticket_run_resumable(run))
+    assert_true(ticket_run_resumable(run))
     let actions = ticket_run_actions(run)
-    assert_eq(actions.length(), 1)
-    assert_true(actions[0] is RetryRun)
+    assert_eq(actions.length(), 2)
+    assert_true(actions[0] is ResumeRun)
+    assert_true(actions[1] is RetryRun)
   }
   // A running run is owned by its worker; a succeeded one is a result.
   for status in ["running", "succeeded", "shaped", ""] {
@@ -121,7 +125,9 @@ test "an interrupted run renders both actions while a failed run keeps retry" {
   let model = retry_ticket_model([])
   let emit : @rabbita.Emit[Msg] = _msg => @rabbita.none
   let interrupted = resume_run("t1", "interrupted", "s1")
-  assert_true(ticket_run_action_block(model, interrupted, emit) != @html.nothing)
+  assert_true(
+    ticket_run_action_block(model, interrupted, emit) != @html.nothing,
+  )
   let failed = resume_run("t1", "failed", "s1")
   assert_true(ticket_run_action_block(model, failed, emit) != @html.nothing)
   // Neither the live run nor the finished result carries an action block.
@@ -141,9 +147,13 @@ test "resume stays enabled until a run is live again" {
     resume_run("t1", "running", ""),
   ])
   assert_true(ticket_resume_blocked(live, "t1"))
-  assert_true(ticket_resume_blocked({ ..finished, ticket_sending: true }, "t1"))
-  assert_true(ticket_resume_blocked({ ..finished, can_connect: false }, "t1"))
-  assert_true(ticket_resume_blocked({ ..finished, ticket_available: false }, "t1"))
+  assert_true(
+    ticket_resume_blocked({ ..finished, ticket_sending: true, }, "t1"),
+  )
+  assert_true(ticket_resume_blocked({ ..finished, can_connect: false, }, "t1"))
+  assert_true(
+    ticket_resume_blocked({ ..finished, ticket_available: false, }, "t1"),
+  )
   // The gate only disables the buttons: the offer still renders.
   let emit : @rabbita.Emit[Msg] = _msg => @rabbita.none
   assert_true(

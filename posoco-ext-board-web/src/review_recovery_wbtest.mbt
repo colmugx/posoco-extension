@@ -70,7 +70,7 @@ test "review recovery revalidates preserved intent against Pending Approved Chan
 ///|
 test "external review choices preserve the user's draft but prevent overwrite and a missing parent closes it" {
   for decision in ["approved", "changes_requested"] {
-    let draft = chosen_review("approved")
+    let draft = review_ready_to_confirm(counting_env())
     let (externally, cmd) = update(
       draft,
       SocketEvent(0, Message(review_recorded_event(decision~, review=decision))),
@@ -94,14 +94,16 @@ test "external review choices preserve the user's draft but prevent overwrite an
     )
     let (blocked, sent) = update(
       externally,
-      ReviewSubmitted,
+      ConfirmAccepted,
       test_emit,
       test_env(),
     )
-    assert_true(blocked == externally)
+    assert_true(blocked.pending is None)
+    assert_true(blocked.review_draft == externally.review_draft)
+    assert_true(blocked.replica == externally.replica)
     debug_inspect(sent, content="[]")
   }
-  let draft = chosen_review("changes_requested")
+  let draft = review_ready_to_confirm(test_env())
   let (removed, _) = update(
     draft,
     SocketEvent(0, Message(inspector_snapshot([], revision=2L))),
@@ -119,7 +121,4 @@ test "review action labels describe intent separately from projected decision la
   assert_eq(review_decision_label(@client.ChangesRequested), "Request changes")
   assert_eq(review_label(@client.Approved), "Review approved")
   assert_eq(review_label(@client.ChangesRequested), "Review changes requested")
-  let draft = opened_review(test_env())
-  assert_true(draft.review_draft.unwrap().decision is None)
-  assert_false(review_submit_allowed(draft, draft.review_draft.unwrap()))
 }
