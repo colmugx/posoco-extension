@@ -160,6 +160,7 @@ pub async fn PiHook::on_post_event(Self, @port.HookStage) -> Unit noraise
 pub async fn PiHook::on_post_event_at(Self, @types.EventScope?, @port.HookStage) -> Unit noraise
 pub async fn PiHook::on_turn_begin(Self) -> Unit
 pub async fn PiHook::on_turn_end(Self) -> Unit
+pub fn PiHook::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub impl @port.PipelineHook for PiHook
 
 pub(all) struct PiRuntime {
@@ -174,6 +175,7 @@ pub async fn PiRuntime::call_model(Self, @kernel.InvocationScope, ArrayView[@ker
 pub async fn PiRuntime::cancel_effects(Self, Array[@kernel.EffectId], @kernel.CancelReason) -> Array[(@kernel.EffectId, @kernel.CancelDisposition)]
 pub async fn PiRuntime::compact(Self, @kernel.InvocationScope, ArrayView[@kernel.Message], Array[@kernel.ToolDef], Json, @kernel.CompactTrigger) -> Result[@kernel.CompactResult, @kernel.ModelFailure]
 pub async fn PiRuntime::execute_tool(Self, @runtime.EffectContext) -> @kernel.ToolOutcome
+pub fn PiRuntime::supports_bound_tools(Self) -> Bool
 pub impl @runtime.Runtime for PiRuntime
 
 // Type aliases

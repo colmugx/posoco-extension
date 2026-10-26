@@ -38,6 +38,7 @@ pub async fn LazyTools::on_turn_begin(Self) -> Unit
 pub async fn LazyTools::on_turn_end(Self) -> Unit
 pub fn LazyTools::rewrap_call(@kernel.ToolCall, @kernel.ToolCall) -> @kernel.ToolCall
 pub fn LazyTools::system_prompt(Self) -> String
+pub fn LazyTools::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub fn LazyTools::unwrap_call(@kernel.ToolCall) -> (String, @kernel.ToolCall)
 pub impl @port.Extension for LazyTools
 pub impl @port.Lifecycle for LazyTools

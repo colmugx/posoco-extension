@@ -58,6 +58,7 @@ pub async fn Profiles::on_turn_begin(Self) -> Unit
 pub async fn Profiles::on_turn_end(Self) -> Unit
 pub fn Profiles::session_usage(Self, String) -> Array[(String, Int32)]
 pub fn Profiles::system_prompt(Self) -> String
+pub fn Profiles::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub fn Profiles::warnings(Self) -> Array[String]
 pub impl @port.CommandPort for Profiles
 pub impl @port.Extension for Profiles

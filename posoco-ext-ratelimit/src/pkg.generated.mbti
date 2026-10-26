@@ -42,6 +42,7 @@ pub async fn RateLimitGuard::snapshot(Self) -> Array[RateLimitPending]
 pub fn RateLimitGuard::spawn_monitor(Self, @async.TaskGroup[Unit]) -> Unit
 pub fn RateLimitGuard::start(Self, group~ : @async.TaskGroup[Unit], agent~ : @posoco.Agent) -> Unit
 pub fn RateLimitGuard::stop(Self) -> Unit
+pub fn RateLimitGuard::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub impl @port.Extension for RateLimitGuard
 pub impl @port.Lifecycle for RateLimitGuard
 pub impl @port.Observer for RateLimitGuard

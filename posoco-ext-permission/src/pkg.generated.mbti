@@ -71,6 +71,7 @@ pub async fn PermissionPolicy::on_shutdown(Self) -> Unit
 pub async fn PermissionPolicy::on_start(Self) -> Unit
 pub async fn PermissionPolicy::on_turn_begin(Self) -> Unit
 pub async fn PermissionPolicy::on_turn_end(Self) -> Unit
+pub fn PermissionPolicy::tool_exposure(Self, @kernel.ToolDef) -> @kernel.ToolExposure
 pub impl @port.CommandPort for PermissionPolicy
 pub impl @port.Extension for PermissionPolicy
 pub impl @port.Lifecycle for PermissionPolicy
