@@ -3,7 +3,7 @@ name = "colmugx/posoco-ext-qwen"
 version = "0.1.0"
 
 import {
-  "colmugx/posoco@0.22.3",
+  "colmugx/posoco@0.23.0",
   "posoco/devkit@0.4.1",
   "colmugx/posoco-kit-rate-limit@0.1.0",
   "posoco/kit-chat-completions@0.1.0",
