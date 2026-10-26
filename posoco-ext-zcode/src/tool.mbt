@@ -320,14 +320,14 @@ pub impl @posoco.ToolProvider for ZcodeTools with fn list_tools(
   _self : ZcodeTools,
 ) -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("zcode"),
-      description: "Delegate a task to the local zcode CLI (GLM coding-plan harness with its own plugins and skills); it plans, edits files and runs commands in its own session under the given cwd, then returns its final answer. Pass session_id from a previous result to continue that session. Long-running delegations: pass background: true for an immediate receipt; the result arrives as a follow-up turn. Default mode is edit; dangerous operations are denied by the bridge and reported in the result text.",
-      input_schema: zcode_tool_schema(),
-      owner: @posoco.OwnerId::unchecked("placeholder"),
-      policy: @posoco.ExecutionPolicy::Sequential,
-      provenance: Some("posoco_ext_zcode"),
-    },
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("zcode"),
+      description="Delegate a task to the local zcode CLI (GLM coding-plan harness with its own plugins and skills); it plans, edits files and runs commands in its own session under the given cwd, then returns its final answer. Pass session_id from a previous result to continue that session. Long-running delegations: pass background: true for an immediate receipt; the result arrives as a follow-up turn. Default mode is edit; dangerous operations are denied by the bridge and reported in the result text.",
+      input_schema=zcode_tool_schema(),
+      owner=@posoco.OwnerId::unchecked("placeholder"),
+      policy=@posoco.ExecutionPolicy::Sequential,
+      provenance=Some("posoco_ext_zcode"),
+    ),
   ]
 }
 

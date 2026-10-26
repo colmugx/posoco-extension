@@ -393,16 +393,18 @@ pub impl @posoco.ToolProvider for PiAdaptor with fn list_tools(
     if pi_tool_hidden(adaptor, name) {
       continue
     }
-    tools.push({
-      name: @posoco.ToolName::unchecked(name),
-      description: js_tool_description(adaptor.host, index),
-      input_schema: project_tool_schema(
-        parse_json_or_null(js_tool_schema_json(adaptor.host, index)),
+    tools.push(
+      @posoco.ToolDef(
+        name=@posoco.ToolName::unchecked(name),
+        description=js_tool_description(adaptor.host, index),
+        input_schema=project_tool_schema(
+          parse_json_or_null(js_tool_schema_json(adaptor.host, index)),
+        ),
+        owner=@posoco.OwnerId::unchecked("posoco_ext_pi_adaptor"),
+        policy=@posoco.ExecutionPolicy::Parallel,
+        provenance=Some("pi"),
       ),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_pi_adaptor"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("pi"),
-    })
+    )
   }
   tools
 }

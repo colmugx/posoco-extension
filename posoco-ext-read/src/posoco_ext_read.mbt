@@ -194,10 +194,10 @@ fn image_mime(path : String) -> String? {
 /// the same tool definition; only the IO adaptor differs per target.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("read"),
-      description: "Read numbered file lines as `line|text`. `offset` is 1-based (negative reads tail); `limit` defaults to 400. Truncated pages report `next=N`. Image files (png/jpg/gif/webp, ≤5 MB) attach inline for vision instead. Records freshness for write/edit.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("read"),
+      description="Read numbered file lines as `line|text`. `offset` is 1-based (negative reads tail); `limit` defaults to 400. Truncated pages report `next=N`. Image files (png/jpg/gif/webp, ≤5 MB) attach inline for vision instead. Records freshness for write/edit.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "path": Json::object({
@@ -217,10 +217,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("path")]),
       }),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_read"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_read"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_read"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_read"),
+    ),
   ]
 }
 

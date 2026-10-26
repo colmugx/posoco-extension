@@ -8,10 +8,10 @@
 /// The one model-visible meta tool. The description teaches menu-driven
 /// selection, the same-turn effect, idempotence, and the `all` fallback.
 fn activate_profile_def() -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked("activate_profile"),
-    description: "Activate a profile from the Profiles menu in the system prompt. Activation injects the profile's manual with the next model request and takes effect within the current turn; activating an already-active profile adds nothing. When no profile fits the task, activate the fallback id `all`.",
-    input_schema: Json::object(
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked("activate_profile"),
+    description="Activate a profile from the Profiles menu in the system prompt. Activation injects the profile's manual with the next model request and takes effect within the current turn; activating an already-active profile adds nothing. When no profile fits the task, activate the fallback id `all`.",
+    input_schema=Json::object(
       Map::from_array([
         ("type", Json::string("object")),
         (
@@ -38,10 +38,10 @@ fn activate_profile_def() -> @posoco.ToolDef {
         ("required", Json::array([Json::string("profile")])),
       ]),
     ),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_profiles"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_profiles"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_profiles"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_profiles"),
+  )
 }
 
 ///|

@@ -40,8 +40,8 @@ test "nine lanes labels grouping counts and empty state" {
   assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
   assert_eq(@src.lanes().length(), 9)
   let stages = [
-    "created", "refining", "ready", "running", "verification", "review", "done", "suspended",
-    "cancelled",
+    "created", "refining", "ready", "running", "verification", "review", "done",
+    "suspended", "cancelled",
   ]
   let tasks : Array[Json] = []
   for i, stage in stages {
@@ -227,7 +227,10 @@ test "move suggestions mirror the v1 stage fsm as ux only" {
       @client.Ready,
       [@client.Running, @client.Refining, @client.Suspended, @client.Cancelled],
     ),
-    (@client.Running, [@client.Verification, @client.Suspended, @client.Cancelled]),
+    (
+      @client.Running,
+      [@client.Verification, @client.Suspended, @client.Cancelled],
+    ),
     (
       @client.Verification,
       [

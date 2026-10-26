@@ -131,14 +131,14 @@ test "convert_content_to_string_audio_and_unknown" {
 
 ///|
 fn catalog_test_tool(name : String) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(name),
-    description: "test tool",
-    input_schema: Json::object(Map::from_array([])),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("mcp-test"),
-  }
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(name),
+    description="test tool",
+    input_schema=Json::object(Map::from_array([])),
+    owner=@posoco.OwnerId::unchecked("posoco_ext_mcp"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("mcp-test"),
+  )
 }
 
 ///|

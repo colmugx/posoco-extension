@@ -41,14 +41,14 @@ fn jlen(v : Json) -> Int32 {
 
 ///|
 fn codec_tool(name~ : String) -> @posoco.ToolDef {
-  {
-    name: @posoco.ToolName::unchecked(name),
-    description: "test tool \{name}",
-    input_schema: { "type": "object" },
-    owner: @posoco.OwnerId::unchecked("test"),
-    policy: @posoco.ExecutionPolicy::Sequential,
-    provenance: None,
-  }
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(name),
+    description="test tool \{name}",
+    input_schema={ "type": "object" },
+    owner=@posoco.OwnerId::unchecked("test"),
+    policy=@posoco.ExecutionPolicy::Sequential,
+    provenance=None,
+  )
 }
 
 ///|

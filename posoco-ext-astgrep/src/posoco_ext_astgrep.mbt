@@ -61,10 +61,10 @@ priv trait AstGrepSpawn {
 ///|
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("astgrep"),
-      description: "Structural code search with ast-grep patterns and meta-variables (`$NAME`, `$$$BODY`). Prefer over grep for code-shape queries in source files — where a function/class/method is defined, who calls it, method overrides, argument shapes. Returns compact file/line excerpts.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("astgrep"),
+      description="Structural code search with ast-grep patterns and meta-variables (`$NAME`, `$$$BODY`). Prefer over grep for code-shape queries in source files — where a function/class/method is defined, who calls it, method overrides, argument shapes. Returns compact file/line excerpts.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
@@ -94,10 +94,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("pattern")]),
       }),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_astgrep"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_astgrep"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_astgrep"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_astgrep"),
+    ),
   ]
 }
 

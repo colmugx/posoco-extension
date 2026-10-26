@@ -288,21 +288,21 @@ pub impl @posoco.ToolProvider for SubagentTools with fn list_tools(
   self : SubagentTools,
 ) -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("subagent"),
-      description: subagent_tool_description(self),
-      input_schema: subagent_tool_schema(),
-      owner: @posoco.OwnerId::unchecked("placeholder"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_subagent"),
-    },
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("answer_question"),
-      description: ANSWER_TOOL_DESCRIPTION,
-      input_schema: answer_question_schema(),
-      owner: @posoco.OwnerId::unchecked("placeholder"),
-      policy: @posoco.ExecutionPolicy::Sequential,
-      provenance: Some("posoco_ext_subagent"),
-    },
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("subagent"),
+      description=subagent_tool_description(self),
+      input_schema=subagent_tool_schema(),
+      owner=@posoco.OwnerId::unchecked("placeholder"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_subagent"),
+    ),
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("answer_question"),
+      description=ANSWER_TOOL_DESCRIPTION,
+      input_schema=answer_question_schema(),
+      owner=@posoco.OwnerId::unchecked("placeholder"),
+      policy=@posoco.ExecutionPolicy::Sequential,
+      provenance=Some("posoco_ext_subagent"),
+    ),
   ]
 }

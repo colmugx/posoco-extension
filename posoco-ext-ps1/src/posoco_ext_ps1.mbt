@@ -198,14 +198,14 @@ fn shared_list_tools(exe : String) -> Array[@posoco.ToolDef] {
     "Windows PowerShell 5.1 syntax: `&&` and `||` are NOT supported; chain statements with `;` or `if ($?)`."
   }
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("powershell"),
-      description: "Run a PowerShell command via \{exe} (-NoProfile -NonInteractive) on Windows. This is PowerShell, not bash — use PowerShell syntax and cmdlets (Select-String, Get-ChildItem, $env:NAME). \{chaining} Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root. Long-running processes (dev servers, watchers) must be started detached (e.g. `Start-Process npm run dev`) so the command returns immediately; a foreground command that never exits blocks the tool until it is cancelled.",
-      input_schema: cmd_schema,
-      owner: @posoco.OwnerId::unchecked("posoco_ext_ps1"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_ps1"),
-    },
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("powershell"),
+      description="Run a PowerShell command via \{exe} (-NoProfile -NonInteractive) on Windows. This is PowerShell, not bash — use PowerShell syntax and cmdlets (Select-String, Get-ChildItem, $env:NAME). \{chaining} Each call runs in a fresh PowerShell session in the workspace root; `cd` does not persist between calls. Use paths relative to the workspace root. Long-running processes (dev servers, watchers) must be started detached (e.g. `Start-Process npm run dev`) so the command returns immediately; a foreground command that never exits blocks the tool until it is cancelled.",
+      input_schema=cmd_schema,
+      owner=@posoco.OwnerId::unchecked("posoco_ext_ps1"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_ps1"),
+    ),
   ]
 }
 

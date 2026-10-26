@@ -491,8 +491,7 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       match editor.mode {
         CreateMode =>
           (
-            "New backlog item",
-            "A Refiner turns it into a user story and sets the initial priority.",
+            "New backlog item", "A Refiner turns it into a user story and sets the initial priority.",
             "Add to Backlog",
           )
         EditMode(task_id~) => ("Edit \{task_id}", "", "Save changes")

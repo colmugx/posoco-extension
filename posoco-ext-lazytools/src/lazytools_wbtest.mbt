@@ -3,10 +3,10 @@
 
 ///|
 fn deferred_def(name : String, description : String) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(name),
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(name),
     description,
-    input_schema: Json::object({
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "path": Json::object({
@@ -16,10 +16,10 @@ fn deferred_def(name : String, description : String) -> @posoco.ToolDef {
       }),
       "required": Json::array([Json::string("path")]),
     }),
-    owner: @posoco.OwnerId::unchecked("test_child"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("test_child"),
-  }
+    owner=@posoco.OwnerId::unchecked("test_child"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("test_child"),
+  )
 }
 
 ///|
@@ -142,14 +142,14 @@ test "meta_tool_descriptions_stay_compact" {
 ///|
 async test "tool_list_without_keyword_lists_every_group_with_schemas" {
   fn prov_def(name : String, prov : String) -> @posoco.ToolDef {
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked(name),
-      description: "A deferred tool",
-      input_schema: Json::object({ "type": Json::string("object") }),
-      owner: @posoco.OwnerId::unchecked(prov),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some(prov),
-    }
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked(name),
+      description="A deferred tool",
+      input_schema=Json::object({ "type": Json::string("object") }),
+      owner=@posoco.OwnerId::unchecked(prov),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some(prov),
+    )
   }
 
   let web = recording(
@@ -183,14 +183,14 @@ async test "tool_list_without_keyword_lists_every_group_with_schemas" {
 ///|
 async test "tool_list_keyword_returns_whole_matching_groups" {
   fn prov_def2(name : String, prov : String) -> @posoco.ToolDef {
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked(name),
-      description: "A deferred tool",
-      input_schema: Json::object({ "type": Json::string("object") }),
-      owner: @posoco.OwnerId::unchecked(prov),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some(prov),
-    }
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked(name),
+      description="A deferred tool",
+      input_schema=Json::object({ "type": Json::string("object") }),
+      owner=@posoco.OwnerId::unchecked(prov),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some(prov),
+    )
   }
 
   let nmem = recording(
@@ -255,14 +255,14 @@ async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
     description : String,
     source : String,
   ) -> @posoco.ToolDef {
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked(name),
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked(name),
       description,
-      input_schema: Json::object({ "type": Json::string("object") }),
-      owner: @posoco.OwnerId::unchecked(source),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some(source),
-    }
+      input_schema=Json::object({ "type": Json::string("object") }),
+      owner=@posoco.OwnerId::unchecked(source),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some(source),
+    )
   }
   let memory = recording(
     [
@@ -320,14 +320,14 @@ async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
 ///|
 async test "tool_list_semantic_fallback_is_conservative_on_low_probability" {
   fn prov(name : String, source : String) -> @posoco.ToolDef {
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked(name),
-      description: name + " operation",
-      input_schema: Json::object({ "type": Json::string("object") }),
-      owner: @posoco.OwnerId::unchecked(source),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some(source),
-    }
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked(name),
+      description=name + " operation",
+      input_schema=Json::object({ "type": Json::string("object") }),
+      owner=@posoco.OwnerId::unchecked(source),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some(source),
+    )
   }
   let a = recording([prov("alpha_tool", "alpha")], Map::from_array([]))
   let b = recording([prov("beta_tool", "beta")], Map::from_array([]))
@@ -429,17 +429,17 @@ async test "tool_execute_defaults_missing_arguments_to_empty_object" {
   ])
   let child = recording(
     [
-      @posoco.ToolDef::{
-        name: @posoco.ToolName::unchecked("list_all"),
-        description: "Takes no arguments",
-        input_schema: Json::object({
+      @posoco.ToolDef(
+        name=@posoco.ToolName::unchecked("list_all"),
+        description="Takes no arguments",
+        input_schema=Json::object({
           "type": Json::string("object"),
           "properties": Json::object({}),
         }),
-        owner: @posoco.OwnerId::unchecked("test_child"),
-        policy: @posoco.ExecutionPolicy::Parallel,
-        provenance: Some("test_child"),
-      },
+        owner=@posoco.OwnerId::unchecked("test_child"),
+        policy=@posoco.ExecutionPolicy::Parallel,
+        provenance=Some("test_child"),
+      ),
     ],
     outcomes,
   )

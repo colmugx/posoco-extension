@@ -111,16 +111,16 @@ fn convert_tool_def(
   mcp_tool : @types.ToolDefinition,
   server_name : String,
 ) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(
       namespaced_tool_name(server_name, mcp_tool.name),
     ),
-    description: mcp_tool.description.unwrap_or(""),
-    input_schema: sanitize_tool_schema(mcp_tool.input_schema),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_mcp"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_mcp:\{server_name}"),
-  }
+    description=mcp_tool.description.unwrap_or(""),
+    input_schema=sanitize_tool_schema(mcp_tool.input_schema),
+    owner=@posoco.OwnerId::unchecked("posoco_ext_mcp"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_mcp:\{server_name}"),
+  )
 }
 
 ///|

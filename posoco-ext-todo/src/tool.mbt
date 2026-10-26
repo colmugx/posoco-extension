@@ -13,10 +13,10 @@
 
 ///|
 fn write_tool_def() -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked("todo_write"),
-    description: "Write the session task list, replacing any previous list. Plan multi-step work (three or more steps) before starting and keep it current: exactly ONE task may be 'in_progress' at any time; mark 'completed' the moment tasks finish; append newly found steps as 'pending'. Skip for single straightforward actions. Empty array clears the list.",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked("todo_write"),
+    description="Write the session task list, replacing any previous list. Plan multi-step work (three or more steps) before starting and keep it current: exactly ONE task may be 'in_progress' at any time; mark 'completed' the moment tasks finish; append newly found steps as 'pending'. Skip for single straightforward actions. Empty array clears the list.",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "todos": Json::object({
@@ -47,25 +47,25 @@ fn write_tool_def() -> @posoco.ToolDef {
       }),
       "required": Json::array([Json::string("todos")]),
     }),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_todo"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_todo"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_todo"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_todo"),
+  )
 }
 
 ///|
 fn read_tool_def() -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked("todo_read"),
-    description: "Read the current task list. Use it to reorient after context loss or before deciding the next step; the list is empty until you call todo_write.",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked("todo_read"),
+    description="Read the current task list. Use it to reorient after context loss or before deciding the next step; the list is empty until you call todo_write.",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object(Map::from_array([])),
     }),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_todo"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_todo"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_todo"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_todo"),
+  )
 }
 
 ///|

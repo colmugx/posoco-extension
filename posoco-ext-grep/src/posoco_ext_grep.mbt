@@ -136,10 +136,10 @@ const GREP_BYTE_CAP = 40_000
 ///|
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("grep"),
-      description: "Literal file search; set `regex: true` to match a regular expression instead. Content mode returns file headers plus `line|text`; other modes return matching paths or counts. Skips hidden/ignored/binary files. For syntax-shaped code queries (definitions, call sites, AST patterns in source), prefer astgrep.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("grep"),
+      description="Literal file search; set `regex: true` to match a regular expression instead. Content mode returns file headers plus `line|text`; other modes return matching paths or counts. Skips hidden/ignored/binary files. For syntax-shaped code queries (definitions, call sites, AST patterns in source), prefer astgrep.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
@@ -179,10 +179,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("pattern")]),
       }),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_grep"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_grep"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_grep"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_grep"),
+    ),
   ]
 }
 

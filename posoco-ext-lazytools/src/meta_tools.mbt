@@ -10,10 +10,10 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
   let owner = @posoco.OwnerId::unchecked("posoco_ext_lazytools")
   let provenance : String? = Some("posoco_ext_lazytools")
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("tool_list"),
-      description: "Discover deferred tools and their schemas. Omit `keyword` to list all groups; otherwise search groups.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("tool_list"),
+      description="Discover deferred tools and their schemas. Omit `keyword` to list all groups; otherwise search groups.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "keyword": Json::object({
@@ -25,13 +25,13 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
         }),
       }),
       owner,
-      policy: @posoco.ExecutionPolicy::Parallel,
+      policy=@posoco.ExecutionPolicy::Parallel,
       provenance,
-    },
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("tool_execute"),
-      description: "Execute a deferred tool using a schema returned by `tool_list`.",
-      input_schema: Json::object({
+    ),
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("tool_execute"),
+      description="Execute a deferred tool using a schema returned by `tool_list`.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "tool": Json::object({
@@ -48,9 +48,9 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
         "required": Json::array([Json::string("tool")]),
       }),
       owner,
-      policy: @posoco.ExecutionPolicy::Sequential,
+      policy=@posoco.ExecutionPolicy::Sequential,
       provenance,
-    },
+    ),
   ]
 }
 

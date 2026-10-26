@@ -15,10 +15,10 @@
 
 ///|
 fn exit_tool_def(config : PlanModeConfig) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(config.exit_tool_name),
-    description: "Submit a completed implementation plan for user approval. Give the plan a short `name`; call this only while in plan mode, once the plan is concrete and step-by-step.",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(config.exit_tool_name),
+    description="Submit a completed implementation plan for user approval. Give the plan a short `name`; call this only while in plan mode, once the plan is concrete and step-by-step.",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "name": Json::object({
@@ -32,25 +32,25 @@ fn exit_tool_def(config : PlanModeConfig) -> @posoco.ToolDef {
       }),
       "required": Json::array([Json::string("name"), Json::string("plan")]),
     }),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_plan"),
-    policy: @posoco.ExecutionPolicy::Sequential,
-    provenance: Some("posoco_ext_plan"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_plan"),
+    policy=@posoco.ExecutionPolicy::Sequential,
+    provenance=Some("posoco_ext_plan"),
+  )
 }
 
 ///|
 fn enter_tool_def(config : PlanModeConfig) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(config.enter_tool_name),
-    description: "Enter plan mode: switch to investigation and produce a step-by-step plan before making any changes. Use for non-trivial tasks that modify the system. While planning you may write Markdown files anywhere in the workspace; every other change belongs in the plan.",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(config.enter_tool_name),
+    description="Enter plan mode: switch to investigation and produce a step-by-step plan before making any changes. Use for non-trivial tasks that modify the system. While planning you may write Markdown files anywhere in the workspace; every other change belongs in the plan.",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({}),
     }),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_plan"),
-    policy: @posoco.ExecutionPolicy::Sequential,
-    provenance: Some("posoco_ext_plan"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_plan"),
+    policy=@posoco.ExecutionPolicy::Sequential,
+    provenance=Some("posoco_ext_plan"),
+  )
 }
 
 ///|

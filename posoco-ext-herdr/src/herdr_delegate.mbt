@@ -136,10 +136,10 @@ fn herdr_delegate_gate(
 
 ///|
 fn herdr_delegate_tooldef() -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked("herdr_delegate"),
-    description: "Delegate one task to a fresh cetas-run child agent in a visible herdr pane; blocks until the child's completion marker or the timeout, then returns the child's answer. 'task' is the user-position slot — untrusted content may flow there, single line. Children are depth-1 leaves: they cannot delegate. The result footer carries 'peer_pane:' and 'child_session:' — pass child_session back via 'session' to continue that child (one work-stream = one child session; returned even on failure/timeout); omit 'session' for a new conversation. 'permission': readonly | write (write = --yolo); Omitted permission follows the parent posture. 'background: true' returns an immediate receipt (delegation_id); the result arrives as a follow-up turn. 'timeout_ms' default 1800000; 'direction' right|down; 'close_pane' default true. Cross-call policy (batching, readonly-first, artifact files) lives in the resident Herdr strategy prompt.",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked("herdr_delegate"),
+    description="Delegate one task to a fresh cetas-run child agent in a visible herdr pane; blocks until the child's completion marker or the timeout, then returns the child's answer. 'task' is the user-position slot — untrusted content may flow there, single line. Children are depth-1 leaves: they cannot delegate. The result footer carries 'peer_pane:' and 'child_session:' — pass child_session back via 'session' to continue that child (one work-stream = one child session; returned even on failure/timeout); omit 'session' for a new conversation. 'permission': readonly | write (write = --yolo); Omitted permission follows the parent posture. 'background: true' returns an immediate receipt (delegation_id); the result arrives as a follow-up turn. 'timeout_ms' default 1800000; 'direction' right|down; 'close_pane' default true. Cross-call policy (batching, readonly-first, artifact files) lives in the resident Herdr strategy prompt.",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "task": Json::object({
@@ -203,10 +203,10 @@ fn herdr_delegate_tooldef() -> @posoco.ToolDef {
       }),
       "required": Json::array([Json::string("task")]),
     }),
-    owner: @posoco.OwnerId::unchecked("placeholder"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_herdr"),
-  }
+    owner=@posoco.OwnerId::unchecked("placeholder"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_herdr"),
+  )
 }
 
 ///|

@@ -417,18 +417,18 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
     ]),
   )
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("bash"),
-      description: "Run a shell command for builds, tests, git, or pipelines. Fresh shell at workspace root; `cd` does not persist. Hard runtime timeout defaults to 300000ms; override using timeout_ms.",
-      input_schema: cmd_schema,
-      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_bash"),
-    },
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("bash_status"),
-      description: "Read the status and incremental output for a background Bash session.",
-      input_schema: Json::object(
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("bash"),
+      description="Run a shell command for builds, tests, git, or pipelines. Fresh shell at workspace root; `cd` does not persist. Hard runtime timeout defaults to 300000ms; override using timeout_ms.",
+      input_schema=cmd_schema,
+      owner=@posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_bash"),
+    ),
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("bash_status"),
+      description="Read the status and incremental output for a background Bash session.",
+      input_schema=Json::object(
         Map::from_array([
           ("type", Json::string("object")),
           (
@@ -453,14 +453,14 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           ("required", Json::array([Json::string("session_id")])),
         ]),
       ),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_bash"),
-    },
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("bash_wait"),
-      description: "Wait a bounded time for a background Bash session.",
-      input_schema: Json::object(
+      owner=@posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_bash"),
+    ),
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("bash_wait"),
+      description="Wait a bounded time for a background Bash session.",
+      input_schema=Json::object(
         Map::from_array([
           ("type", Json::string("object")),
           (
@@ -491,14 +491,14 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           ("required", Json::array([Json::string("session_id")])),
         ]),
       ),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_bash"),
-    },
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("bash_kill"),
-      description: "Stop a background Bash session and its shell child.",
-      input_schema: Json::object(
+      owner=@posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_bash"),
+    ),
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("bash_kill"),
+      description="Stop a background Bash session and its shell child.",
+      input_schema=Json::object(
         Map::from_array([
           ("type", Json::string("object")),
           (
@@ -517,10 +517,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           ("required", Json::array([Json::string("session_id")])),
         ]),
       ),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_bash"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_bash"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_bash"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_bash"),
+    ),
   ]
 }
 

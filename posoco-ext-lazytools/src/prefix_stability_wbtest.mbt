@@ -1,13 +1,13 @@
 ///|
 fn prefix_stability_def(name : String) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(name),
-    description: "Deferred test tool",
-    input_schema: Json::object({ "type": Json::string("object") }),
-    owner: @posoco.OwnerId::unchecked("prefix_stability_test"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("prefix_stability_test"),
-  }
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(name),
+    description="Deferred test tool",
+    input_schema=Json::object({ "type": Json::string("object") }),
+    owner=@posoco.OwnerId::unchecked("prefix_stability_test"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("prefix_stability_test"),
+  )
 }
 
 ///|

@@ -56,10 +56,10 @@ priv trait FsIo {
 /// expose the same tool definition; only the IO adaptor differs per target.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("write"),
-      description: "Write or fully replace a text file atomically. Existing files must be fresh from a prior read; use edit for targeted changes.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("write"),
+      description="Write or fully replace a text file atomically. Existing files must be fresh from a prior read; use edit for targeted changes.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "path": Json::object({
@@ -73,10 +73,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("path"), Json::string("content")]),
       }),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_write"),
-      policy: @posoco.ExecutionPolicy::Exclusive,
-      provenance: Some("posoco_ext_write"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_write"),
+      policy=@posoco.ExecutionPolicy::Exclusive,
+      provenance=Some("posoco_ext_write"),
+    ),
   ]
 }
 

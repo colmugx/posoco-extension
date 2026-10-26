@@ -424,27 +424,29 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
 ) -> Array[@posoco.ToolDef] {
   let (name, description, answerer) = self.face()
   let defs : Array[@posoco.ToolDef] = [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked(name),
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked(name),
       description,
-      input_schema: ask_question_schema(answerer~),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_askquestion"),
-      policy: @posoco.ExecutionPolicy::Exclusive,
-      provenance: Some("posoco_ext_askquestion"),
-    },
+      input_schema=ask_question_schema(answerer~),
+      owner=@posoco.OwnerId::unchecked("posoco_ext_askquestion"),
+      policy=@posoco.ExecutionPolicy::Exclusive,
+      provenance=Some("posoco_ext_askquestion"),
+    ),
   ]
   match self.audience {
     Human =>
-      defs.push(@posoco.ToolDef::{
-        name: @posoco.ToolName::unchecked(NOTIFY_USER_TOOL),
-        description: NOTIFY_USER_DESCRIPTION,
-        input_schema: notify_user_schema(),
-        owner: @posoco.OwnerId::unchecked("posoco_ext_askquestion"),
-        // It cannot interleave: Sequential already runs beside parallel
-        // work, and an Exclusive barrier would order it behind long tools.
-        policy: @posoco.ExecutionPolicy::Sequential,
-        provenance: Some("posoco_ext_askquestion"),
-      })
+      defs.push(
+        @posoco.ToolDef(
+          name=@posoco.ToolName::unchecked(NOTIFY_USER_TOOL),
+          description=NOTIFY_USER_DESCRIPTION,
+          input_schema=notify_user_schema(),
+          owner=@posoco.OwnerId::unchecked("posoco_ext_askquestion"),
+          // It cannot interleave: Sequential already runs beside parallel
+          // work, and an Exclusive barrier would order it behind long tools.
+          policy=@posoco.ExecutionPolicy::Sequential,
+          provenance=Some("posoco_ext_askquestion"),
+        ),
+      )
     ParentAgent => ()
   }
   defs

@@ -32,18 +32,18 @@ fn nmem_tool_def(
   properties~ : Map[String, Json],
   required~ : Array[String],
 ) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(name),
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(name),
     description,
-    input_schema: Json::object({
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object(properties),
       "required": Json::array(required.map(item => Json::string(item))),
     }),
-    owner: @posoco.OwnerId::unchecked("placeholder"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some(NMEM_EXTENSION_ID),
-  }
+    owner=@posoco.OwnerId::unchecked("placeholder"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some(NMEM_EXTENSION_ID),
+  )
 }
 
 ///|

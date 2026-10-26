@@ -1860,31 +1860,36 @@ test "request changes rejects empty oversized and misdirected decisions" {
 test "story contract fields survive the Verification path" {
   let created = accept(BoardState::BoardState(), create_cmd("story", 0L)).next_state
   let shaped = accept(
-    created,
-    UpdateTask(
-      id=tid("story"),
-      title=None,
-      description=Some("Detailed scope"),
-      priority=Some(High),
-      definition_of_done=Some(["Observable result"]),
-      user_story=Some("As a user, I want a story, so that it can be built."),
-      implementation_suggestions=Some("Start with the domain test."),
-      at_ms=2000L,
-      expected_revision=created.revision(),
-    ),
-  ).next_state
+      created,
+      UpdateTask(
+        id=tid("story"),
+        title=None,
+        description=Some("Detailed scope"),
+        priority=Some(High),
+        definition_of_done=Some(["Observable result"]),
+        user_story=Some("As a user, I want a story, so that it can be built."),
+        implementation_suggestions=Some("Start with the domain test."),
+        at_ms=2000L,
+        expected_revision=created.revision(),
+      ),
+    ).next_state
   let task = shaped.task(tid("story")).unwrap()
-  assert_eq(task.user_story, "As a user, I want a story, so that it can be built.")
+  assert_eq(
+    task.user_story,
+    "As a user, I want a story, so that it can be built.",
+  )
   assert_eq(task.implementation_suggestions, "Start with the domain test.")
   let refining = accept(shaped, move_cmd("story", shaped.revision(), Refining)).next_state
   let ready = accept(refining, move_cmd("story", refining.revision(), Ready)).next_state
   let running = accept(ready, move_cmd("story", ready.revision(), Running)).next_state
   let verifying = accept(
-    running, move_cmd("story", running.revision(), Verification),
-  ).next_state
+      running,
+      move_cmd("story", running.revision(), Verification),
+    ).next_state
   assert_eq(verifying.task(tid("story")).unwrap().stage, Verification)
   let review = accept(
-    verifying, move_cmd("story", verifying.revision(), Review),
-  ).next_state
+      verifying,
+      move_cmd("story", verifying.revision(), Review),
+    ).next_state
   assert_eq(review.task(tid("story")).unwrap().stage, Review)
 }

@@ -52,10 +52,10 @@ priv trait FsIo {
 /// the same tool definition; only the IO adaptor differs per target.
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("edit"),
-      description: "Exact text replacement in a fresh-read file. `old_text` must be unique unless `replace_all` is true; copied read line prefixes are accepted.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("edit"),
+      description="Exact text replacement in a fresh-read file. `old_text` must be unique unless `replace_all` is true; copied read line prefixes are accepted.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "path": Json::object({
@@ -81,10 +81,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
           Json::string("new_text"),
         ]),
       }),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_edit"),
-      policy: @posoco.ExecutionPolicy::Exclusive,
-      provenance: Some("posoco_ext_edit"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_edit"),
+      policy=@posoco.ExecutionPolicy::Exclusive,
+      provenance=Some("posoco_ext_edit"),
+    ),
   ]
 }
 

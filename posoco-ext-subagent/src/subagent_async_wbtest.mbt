@@ -1538,14 +1538,14 @@ impl @posoco.ToolProvider for AskParentTool with fn list_tools(
   _self : AskParentTool,
 ) -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("ask_parent"),
-      description: "test tool: ask the parent agent one question",
-      input_schema: Json::object(Map::from_array([])),
-      owner: @posoco.OwnerId::unchecked("wbtest"),
-      policy: @posoco.ExecutionPolicy::Exclusive,
-      provenance: None,
-    },
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("ask_parent"),
+      description="test tool: ask the parent agent one question",
+      input_schema=Json::object(Map::from_array([])),
+      owner=@posoco.OwnerId::unchecked("wbtest"),
+      policy=@posoco.ExecutionPolicy::Exclusive,
+      provenance=None,
+    ),
   ]
 }
 

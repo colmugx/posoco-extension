@@ -50,10 +50,10 @@ priv trait GlobScanner {
 ///|
 fn shared_list_tools() -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("glob"),
-      description: "Find files by glob pattern. Returns paths only, newest first; skips hidden/ignored entries. `limit` defaults to 100.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("glob"),
+      description="Find files by glob pattern. Returns paths only, newest first; skips hidden/ignored entries. `limit` defaults to 100.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "pattern": Json::object({
@@ -71,10 +71,10 @@ fn shared_list_tools() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("pattern")]),
       }),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_glob"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_glob"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_glob"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_glob"),
+    ),
   ]
 }
 

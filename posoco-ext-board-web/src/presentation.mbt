@@ -1,6 +1,16 @@
 ///|
 pub fn lanes() -> Array[@client.ClientBoardStage] {
-  [Created, Refining, Ready, Running, Verification, Review, Done, Suspended, Cancelled]
+  [
+    Created,
+    Refining,
+    Ready,
+    Running,
+    Verification,
+    Review,
+    Done,
+    Suspended,
+    Cancelled,
+  ]
 }
 
 ///|
@@ -300,9 +310,7 @@ pub fn queue_attempt_id_valid(
 ///|
 /// A work item may enter Ready only after a Refiner has written the full
 /// story contract. Backlog and Shaping are intentionally not gated.
-pub fn ready_blocked_hint(
-  task : @client.ClientBoardTask,
-) -> String? {
+pub fn ready_blocked_hint(task : @client.ClientBoardTask) -> String? {
   if task.user_story.trim().is_empty() {
     Some("A Refiner must add the user story before this can be Ready.")
   } else if task.description.trim().is_empty() {

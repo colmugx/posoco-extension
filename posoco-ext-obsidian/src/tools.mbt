@@ -30,18 +30,18 @@ fn tool_def(
   required~ : Array[String],
   policy~ : @posoco.ExecutionPolicy,
 ) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(name),
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(name),
     description,
-    input_schema: json_map([
+    input_schema=json_map([
       ("type", Json::string("object")),
       ("properties", json_map(properties)),
       ("required", json_str_array(required)),
     ]),
-    owner: @posoco.OwnerId::unchecked(OBSIDIAN_OWNER),
+    owner=@posoco.OwnerId::unchecked(OBSIDIAN_OWNER),
     policy,
-    provenance: Some(OBSIDIAN_OWNER),
-  }
+    provenance=Some(OBSIDIAN_OWNER),
+  )
 }
 
 ///|

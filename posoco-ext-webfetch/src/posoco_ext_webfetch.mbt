@@ -257,10 +257,10 @@ pub impl @posoco.ToolProvider for WebFetchTools with fn list_tools(
   _self : WebFetchTools,
 ) -> Array[@posoco.ToolDef] {
   [
-    @posoco.ToolDef::{
-      name: @posoco.ToolName::unchecked("webfetch"),
-      description: "Fetch http/https content as compact markdown. HTML is converted; text/markdown/JSON pass through. Use `offset` from a truncated result's `next=` footer. Cross-host redirects require an explicit follow-up fetch.",
-      input_schema: Json::object({
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("webfetch"),
+      description="Fetch http/https content as compact markdown. HTML is converted; text/markdown/JSON pass through. Use `offset` from a truncated result's `next=` footer. Cross-host redirects require an explicit follow-up fetch.",
+      input_schema=Json::object({
         "type": Json::string("object"),
         "properties": Json::object({
           "url": Json::object({
@@ -274,10 +274,10 @@ pub impl @posoco.ToolProvider for WebFetchTools with fn list_tools(
         }),
         "required": Json::array([Json::string("url")]),
       }),
-      owner: @posoco.OwnerId::unchecked("posoco_ext_webfetch"),
-      policy: @posoco.ExecutionPolicy::Parallel,
-      provenance: Some("posoco_ext_webfetch"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_webfetch"),
+      policy=@posoco.ExecutionPolicy::Parallel,
+      provenance=Some("posoco_ext_webfetch"),
+    ),
   ]
 }
 

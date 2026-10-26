@@ -8,12 +8,12 @@ const SKILL_DESCRIPTION_PREVIEW_CHARS = 1024
 
 ///|
 fn Skills::search_tool_def(self : Skills) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(SKILL_SEARCH_TOOL_NAME),
-    description: "Find relevant skills by task or capability. Returns names plus short descriptions; activate an exact returned name with " +
-    self.config.activate_tool_name +
-    ".",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(SKILL_SEARCH_TOOL_NAME),
+    description="Find relevant skills by task or capability. Returns names plus short descriptions; activate an exact returned name with " +
+      self.config.activate_tool_name +
+      ".",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "query": Json::object({
@@ -24,10 +24,10 @@ fn Skills::search_tool_def(self : Skills) -> @posoco.ToolDef {
       "required": Json::array([Json::string("query")]),
       "additionalProperties": Json::boolean(false),
     }),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_skills"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_skills"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_skills"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_skills"),
+  )
 }
 
 ///|
@@ -83,10 +83,10 @@ fn Skills::search(self : Skills, query : String) -> @posoco.ToolOutcome {
 
 ///|
 fn Skills::activate_tool_def(self : Skills) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(self.config.activate_tool_name),
-    description: "Activate one discovered Agent Skill. Returns the full SKILL.md instructions on demand and lists bundled resources without loading them. Use the exact skill name from the available-skills catalog.",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(self.config.activate_tool_name),
+    description="Activate one discovered Agent Skill. Returns the full SKILL.md instructions on demand and lists bundled resources without loading them. Use the exact skill name from the available-skills catalog.",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "name": Json::object({
@@ -97,18 +97,18 @@ fn Skills::activate_tool_def(self : Skills) -> @posoco.ToolDef {
       "required": Json::array([Json::string("name")]),
       "additionalProperties": Json::boolean(false),
     }),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_skills"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_skills"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_skills"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_skills"),
+  )
 }
 
 ///|
 fn Skills::read_resource_tool_def(self : Skills) -> @posoco.ToolDef {
-  @posoco.ToolDef::{
-    name: @posoco.ToolName::unchecked(self.config.read_resource_tool_name),
-    description: "Read one UTF-8 text resource belonging to a discovered Agent Skill. Use this after that skill's activated instructions identify a resource that is actually needed. The path is resolved inside the discovered skill directory and cannot escape it.",
-    input_schema: Json::object({
+  @posoco.ToolDef(
+    name=@posoco.ToolName::unchecked(self.config.read_resource_tool_name),
+    description="Read one UTF-8 text resource belonging to a discovered Agent Skill. Use this after that skill's activated instructions identify a resource that is actually needed. The path is resolved inside the discovered skill directory and cannot escape it.",
+    input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
         "name": Json::object({
@@ -125,10 +125,10 @@ fn Skills::read_resource_tool_def(self : Skills) -> @posoco.ToolDef {
       "required": Json::array([Json::string("name"), Json::string("path")]),
       "additionalProperties": Json::boolean(false),
     }),
-    owner: @posoco.OwnerId::unchecked("posoco_ext_skills"),
-    policy: @posoco.ExecutionPolicy::Parallel,
-    provenance: Some("posoco_ext_skills"),
-  }
+    owner=@posoco.OwnerId::unchecked("posoco_ext_skills"),
+    policy=@posoco.ExecutionPolicy::Parallel,
+    provenance=Some("posoco_ext_skills"),
+  )
 }
 
 ///|

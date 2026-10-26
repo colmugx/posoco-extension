@@ -471,7 +471,9 @@ fn update(
         )
       }
     TicketAnsweredAsRefiner(question_id, answer) =>
-      if model.ticket_sending || !model.can_connect || !model.ticket_available ||
+      if model.ticket_sending ||
+        !model.can_connect ||
+        !model.ticket_available ||
         answer.trim().is_empty() {
         (model, @rabbita.none)
       } else {
