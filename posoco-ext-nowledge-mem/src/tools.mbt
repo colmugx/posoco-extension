@@ -34,7 +34,7 @@ fn nmem_tool_def(
 ) -> @posoco.ToolDef {
   @posoco.ToolDef(
     name=@posoco.ToolName::unchecked(name),
-    description,
+    description~,
     input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object(properties),

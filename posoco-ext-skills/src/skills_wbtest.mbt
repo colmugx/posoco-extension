@@ -1180,13 +1180,13 @@ async test "tool provider: execute routes activation and resource reads through 
 ///|
 /// Effect context for provider calls (no-op registrar).
 fn test_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: call.call_id,
-    name: call.name,
-    arguments: call.arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=call.call_id,
+    name=call.name,
+    arguments=call.arguments,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|

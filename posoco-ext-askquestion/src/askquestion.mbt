@@ -426,7 +426,7 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn list_tools(
   let defs : Array[@posoco.ToolDef] = [
     @posoco.ToolDef(
       name=@posoco.ToolName::unchecked(name),
-      description,
+      description~,
       input_schema=ask_question_schema(answerer~),
       owner=@posoco.OwnerId::unchecked("posoco_ext_askquestion"),
       policy=@posoco.ExecutionPolicy::Exclusive,

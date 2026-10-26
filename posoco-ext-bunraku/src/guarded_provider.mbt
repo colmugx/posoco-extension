@@ -1,6 +1,7 @@
 ///|
 /// Final policy veto for a nested PTC leaf provider. It runs AFTER
-/// ScopedToolDispatch has resolved any rewrites and validated arguments.
+/// ScopedDispatch has resolved any rewrites. (Schema validation moved to the
+/// kernel pre-pass in posoco 0.23 and is no longer part of nested dispatch.)
 /// Unlike the default approval lattice, a guard rejection can never be
 /// overridden by a previous ApproveAfterConsent (e.g. plan-mode writes).
 pub struct BunrakuGuardedProvider {

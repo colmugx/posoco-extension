@@ -13,13 +13,13 @@ fn notify_call(id : String, arguments : Json) -> @posoco.ToolCall {
 
 ///|
 fn recorded_ctx(call : @posoco.ToolCall) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 0, },
-    call_id: call.call_id,
-    name: call.name,
-    arguments: call.arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 0, },
+    call_id=call.call_id,
+    name=call.name,
+    arguments=call.arguments,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|

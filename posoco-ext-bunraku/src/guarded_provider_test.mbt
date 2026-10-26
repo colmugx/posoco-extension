@@ -30,7 +30,7 @@ async test "PTC final veto blocks approved native write execution" {
     inner=actual as &@posoco.ToolProvider,
     guards=[final_policy as &@posoco.PipelineHook],
   )
-  let dispatcher = @posoco.ScopedToolDispatch([guarded as &@posoco.ToolProvider])
+  let dispatcher = ScopedDispatch::new(tools=[guarded as &@posoco.ToolProvider])
   let result = dispatcher.call("edit", { "path": "test.mbt" })
   assert_true(result is @kernel.ToolReportedError(..))
   assert_eq(actual.exec_records().length(), 0)

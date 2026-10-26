@@ -108,3 +108,9 @@ pub impl @posoco.SystemPromptContributor for ObsidianTools with fn system_prompt
   "- obsidian_move_note updates internal links automatically; prefer it over rewriting links by hand.\n" +
   "- Deletions go to the vault trash; permanent deletion and overwrites ask the user for consent."
 }
+
+///|
+/// Explicit promotion for the method the trait impl above exposes as a
+/// regular method (implicit impl-as-method promotion is deprecated in
+/// current MoonBit; see compiler warning implicit_impl_as_method).
+pub extend ObsidianTools with @posoco.PipelineHook::{tool_exposure}

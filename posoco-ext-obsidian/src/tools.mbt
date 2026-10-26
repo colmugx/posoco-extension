@@ -32,14 +32,14 @@ fn tool_def(
 ) -> @posoco.ToolDef {
   @posoco.ToolDef(
     name=@posoco.ToolName::unchecked(name),
-    description,
+    description~,
     input_schema=json_map([
       ("type", Json::string("object")),
       ("properties", json_map(properties)),
       ("required", json_str_array(required)),
     ]),
     owner=@posoco.OwnerId::unchecked(OBSIDIAN_OWNER),
-    policy,
+    policy~,
     provenance=Some(OBSIDIAN_OWNER),
   )
 }

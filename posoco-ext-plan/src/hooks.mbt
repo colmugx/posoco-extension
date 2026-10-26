@@ -300,3 +300,9 @@ pub impl @posoco.PipelineHook for PlanMode with fn before_model(
     }
   }
 }
+
+///|
+/// Explicit promotion for the method the trait impl above exposes as a
+/// regular method (implicit impl-as-method promotion is deprecated in
+/// current MoonBit; see compiler warning implicit_impl_as_method).
+pub extend PlanMode with @posoco.PipelineHook::{tool_exposure}

@@ -5,7 +5,7 @@
 fn deferred_def(name : String, description : String) -> @posoco.ToolDef {
   @posoco.ToolDef(
     name=@posoco.ToolName::unchecked(name),
-    description,
+    description~,
     input_schema=Json::object({
       "type": Json::string("object"),
       "properties": Json::object({
@@ -50,13 +50,13 @@ fn meta_call(name : String, args : Map[String, Json]) -> @posoco.ToolCall {
 ///|
 /// Effect context for meta-tool calls (no-op registrar).
 fn test_ctx(name : String, args : Map[String, Json]) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: @posoco.CallId::unchecked("meta-1"),
-    name: @posoco.ToolName::unchecked(name),
-    arguments: Json::object(args),
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=@posoco.CallId::unchecked("meta-1"),
+    name=@posoco.ToolName::unchecked(name),
+    arguments=Json::object(args),
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|
@@ -257,7 +257,7 @@ async test "tool_list_semantic_fallback_uses_decision_port_after_lexical_miss" {
   ) -> @posoco.ToolDef {
     @posoco.ToolDef(
       name=@posoco.ToolName::unchecked(name),
-      description,
+      description~,
       input_schema=Json::object({ "type": Json::string("object") }),
       owner=@posoco.OwnerId::unchecked(source),
       policy=@posoco.ExecutionPolicy::Parallel,

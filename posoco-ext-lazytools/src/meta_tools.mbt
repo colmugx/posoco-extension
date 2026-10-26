@@ -24,9 +24,9 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
           }),
         }),
       }),
-      owner,
+      owner~,
       policy=@posoco.ExecutionPolicy::Parallel,
-      provenance,
+      provenance~,
     ),
     @posoco.ToolDef(
       name=@posoco.ToolName::unchecked("tool_execute"),
@@ -47,9 +47,9 @@ fn meta_tool_defs() -> Array[@posoco.ToolDef] {
         }),
         "required": Json::array([Json::string("tool")]),
       }),
-      owner,
+      owner~,
       policy=@posoco.ExecutionPolicy::Sequential,
-      provenance,
+      provenance~,
     ),
   ]
 }

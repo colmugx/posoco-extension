@@ -1243,3 +1243,9 @@ pub impl @posoco.Lifecycle for PermissionPolicy with fn on_shutdown(
 
 ///|
 pub extend PermissionPolicy with @posoco.Extension::{extension_id, manifest}
+
+///|
+/// Explicit promotion for the method the trait impl above exposes as a
+/// regular method (implicit impl-as-method promotion is deprecated in
+/// current MoonBit; see compiler warning implicit_impl_as_method).
+pub extend PermissionPolicy with @posoco.PipelineHook::{tool_exposure}

@@ -821,13 +821,13 @@ pub impl @posoco.ToolProvider for ShellTools with fn execute(
           self.emit_session(session, "bash.session.finished")
         }
         // Detached from the model effect's cancellation registration.
-        let background_ctx : @posoco.ToolCallContext = {
-          effect_id: session.effect_id,
-          call_id: ctx.call_id,
-          name: @posoco.ToolName::unchecked("bash"),
-          arguments: ctx.arguments,
-          register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-        }
+        let background_ctx : @posoco.ToolCallContext = @posoco.ToolCallContext(
+          effect_id=session.effect_id,
+          call_id=ctx.call_id,
+          name=@posoco.ToolName::unchecked("bash"),
+          arguments=ctx.arguments,
+          register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+        )
         let answer = Ok(
           self.bash_foreground(background_ctx, session=Some(session)),
         ) catch {

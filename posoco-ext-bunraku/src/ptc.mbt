@@ -135,10 +135,10 @@ pub impl @posoco.ToolProvider for BunrakuExtension with fn list_tools(
   _self : BunrakuExtension,
 ) -> Array[@posoco.ToolDef] {
   [
-    {
-      name: @posoco.ToolName::unchecked("run_code"),
-      description: "Optional MoonBit batching. Select only when several predictable tool calls can run without further model judgment and keeping intermediate results local saves tokens. For single calls, uncertain next steps, or high compilation overhead, use the existing tools instead. Supply code or source, not both; return concise final JSON.",
-      input_schema: {
+    @posoco.ToolDef(
+      name=@posoco.ToolName::unchecked("run_code"),
+      description="Optional MoonBit batching. Select only when several predictable tool calls can run without further model judgment and keeping intermediate results local saves tokens. For single calls, uncertain next steps, or high compilation overhead, use the existing tools instead. Supply code or source, not both; return concise final JSON.",
+      input_schema={
         "type": "object",
         "properties": {
           "background": {
@@ -162,10 +162,10 @@ pub impl @posoco.ToolProvider for BunrakuExtension with fn list_tools(
         "required": ["description"],
         "additionalProperties": false,
       },
-      owner: @posoco.OwnerId::unchecked("posoco_ext_bunraku"),
-      policy: @posoco.ExecutionPolicy::Sequential,
-      provenance: Some("posoco_ext_bunraku"),
-    },
+      owner=@posoco.OwnerId::unchecked("posoco_ext_bunraku"),
+      policy=@posoco.ExecutionPolicy::Sequential,
+      provenance=Some("posoco_ext_bunraku"),
+    ),
   ]
 }
 

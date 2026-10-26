@@ -127,3 +127,9 @@ pub extend LazyTools with @posoco.PipelineHook::{
   before_tool,
   on_turn_end,
 }
+
+///|
+/// Explicit promotion for the method the trait impl above exposes as a
+/// regular method (implicit impl-as-method promotion is deprecated in
+/// current MoonBit; see compiler warning implicit_impl_as_method).
+pub extend LazyTools with @posoco.PipelineHook::{tool_exposure}

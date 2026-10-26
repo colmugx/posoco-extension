@@ -76,13 +76,13 @@ pub impl @runtime.Runtime for McpRuntime with fn execute_tool(
 ) -> @kernel.ToolOutcome {
   let name = context.tool_name.to_string()
   if self.handles(name) {
-    let ctx : @posoco.ToolCallContext = {
-      effect_id: context.effect_id,
-      call_id: context.call_id,
-      name: context.tool_name,
-      arguments: context.arguments,
-      register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-    }
+    let ctx : @posoco.ToolCallContext = @posoco.ToolCallContext(
+      effect_id=context.effect_id,
+      call_id=context.call_id,
+      name=context.tool_name,
+      arguments=context.arguments,
+      register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+    )
     // Every error-translating catch must re-raise while the task is being
     // cancelled: a cancellation injected at a suspension point inside the
     // bridge would otherwise be re-labeled `ToolProviderError` and lose the
@@ -161,3 +161,9 @@ pub extend McpRuntime with @runtime.Runtime::{
 
 ///|
 pub extend McpCatalogSource with @runtime.CatalogSource::{revision, tools}
+
+///|
+/// Explicit promotion for the method the trait impl above exposes as a
+/// regular method (implicit impl-as-method promotion is deprecated in
+/// current MoonBit; see compiler warning implicit_impl_as_method).
+pub extend McpRuntime with @runtime.Runtime::{supports_bound_tools}

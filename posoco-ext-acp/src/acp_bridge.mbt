@@ -510,7 +510,11 @@ fn AcpBridge::ingest(self : AcpBridge, event : @posoco.TurnEvent) -> Unit {
     | UserRequestFinished(..)
     // 0.22.0: the request-declaration anchor carries no ACP counterpart;
     // per-step timing is a host concern.
-    | ModelRequestStarted => ()
+    | ModelRequestStarted
+    // 0.23.0: tool child declaration and catalog changes carry no ACP
+    // counterpart; the bridge projects its own protocol surface.
+    | ToolChildDeclared(..)
+    | ToolCatalogChanged(..) => ()
   }
 }
 

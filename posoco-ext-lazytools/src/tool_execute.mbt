@@ -27,13 +27,13 @@ async fn LazyTools::execute_deferred(
       }
       // Same effect identity and registrar ride along, so an interruptible
       // child still registers its cancellable facet for THIS effect.
-      let inner_ctx : @posoco.ToolCallContext = {
-        effect_id: ctx.effect_id,
-        call_id: inner.call_id,
-        name: inner.name,
-        arguments: inner.arguments,
-        register_cancel: ctx.register_cancel,
-      }
+      let inner_ctx : @posoco.ToolCallContext = @posoco.ToolCallContext(
+        effect_id=ctx.effect_id,
+        call_id=inner.call_id,
+        name=inner.name,
+        arguments=inner.arguments,
+        register_cancel=ctx.register_cancel,
+      )
       provider.execute(inner_ctx)
     }
   }

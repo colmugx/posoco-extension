@@ -407,13 +407,13 @@ pub fn pi_adaptor_execute_effect_via_runtime(
 ) -> Unit {
   let task : async () -> Unit noraise = async fn() noraise {
     let arguments = @json.parse(arguments_json) catch { _ => Json::null() }
-    let context : @runtime.EffectContext = {
-      effect_id: @kernel.EffectId::{ value: effect_id, },
-      owner: @kernel.OwnerId::unchecked(pi_owner_id),
-      call_id: @kernel.CallId::unchecked(call_id),
-      tool_name: @kernel.ToolName::unchecked(name),
-      arguments,
-    }
+    let context : @runtime.EffectContext = @runtime.EffectContext(
+      effect_id=@kernel.EffectId::{ value: effect_id, },
+      owner=@kernel.OwnerId::unchecked(pi_owner_id),
+      call_id=@kernel.CallId::unchecked(call_id),
+      tool_name=@kernel.ToolName::unchecked(name),
+      arguments~,
+    )
     let outcome = execute_pi_effect(adaptor, context)
     let output = match outcome {
       @kernel.Success(content~, structured~) =>
@@ -485,3 +485,9 @@ pub fn pi_adaptor_execute_effect_via_runtime(
   // coroutine, so Promise-based waits cannot park there.
   ignore(@js_async.Promise::from_async(async fn() { task() }))
 }
+
+///|
+/// Explicit promotion for the method the trait impl above exposes as a
+/// regular method (implicit impl-as-method promotion is deprecated in
+/// current MoonBit; see compiler warning implicit_impl_as_method).
+pub extend PiRuntime with @runtime.Runtime::{supports_bound_tools}

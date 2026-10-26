@@ -52,7 +52,7 @@ pub fn BunrakuRuntime::BunrakuRuntime(
       as &@posoco.ToolProvider,
     )
   }
-  let _ = @posoco.ScopedToolDispatch(guarded_providers, hooks~)
+  let _ = ScopedDispatch::new(tools=guarded_providers, hooks~)
   // run_code is a transport, not a privileged operation. The permission
   // gate must inspect EVERY nested leaf call, not require a second blanket
   // approval for the enclosing tool. The hard capability gate above
@@ -117,12 +117,12 @@ pub extend BunrakuCatalogSource with @runtime.CatalogSource::{revision, tools}
 /// invoker or a borrowed raw provider. The dispatch's fixed catalog is the
 /// maximum set of operations that any Hook may approve or rewrite to.
 pub struct BunrakuScopedInvoker {
-  priv dispatch : @posoco.ScopedToolDispatch
+  priv dispatch : ScopedDispatch
 }
 
 ///|
 pub fn BunrakuScopedInvoker::BunrakuScopedInvoker(
-  dispatch~ : @posoco.ScopedToolDispatch,
+  dispatch~ : ScopedDispatch,
 ) -> BunrakuScopedInvoker {
   { dispatch, }
 }
@@ -192,7 +192,7 @@ pub impl @runtime.Runtime for BunrakuRuntime with fn execute_tool(
       structured=None,
     )
   }
-  let dispatch = @posoco.ScopedToolDispatch(self.tools, hooks=self.hooks) catch {
+  let dispatch = ScopedDispatch::new(tools=self.tools, hooks=self.hooks) catch {
     error =>
       return @kernel.RuntimeFailure(
         error_category="PtcDispatchComposition",
@@ -217,13 +217,13 @@ pub impl @runtime.Runtime for BunrakuRuntime with fn execute_tool(
   }
   self.active[id] = ptc
   defer self.active.remove(id)
-  let tool_ctx : @posoco.ToolCallContext = {
-    effect_id: ctx.effect_id,
-    call_id: ctx.call_id,
-    name: ctx.tool_name,
-    arguments: ctx.arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  let tool_ctx : @posoco.ToolCallContext = @posoco.ToolCallContext(
+    effect_id=ctx.effect_id,
+    call_id=ctx.call_id,
+    name=ctx.tool_name,
+    arguments=ctx.arguments,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
   ptc.execute(tool_ctx) catch {
     error =>
       @kernel.RuntimeFailure(
@@ -288,3 +288,9 @@ pub extend BunrakuRuntime with @runtime.Runtime::{
   cancel_effects,
   compact,
 }
+
+///|
+/// Explicit promotion for the method the trait impl above exposes as a
+/// regular method (implicit impl-as-method promotion is deprecated in
+/// current MoonBit; see compiler warning implicit_impl_as_method).
+pub extend BunrakuRuntime with @runtime.Runtime::{supports_bound_tools}

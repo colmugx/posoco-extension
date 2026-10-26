@@ -106,14 +106,14 @@ pub struct LazyTools {
 /// # Example
 /// ```mbt check
 /// test "lazytools exposes exactly the two meta tools" {
-///   let child_def : @posoco.ToolDef = {
-///     name: @posoco.ToolName::unchecked("github_create_issue"),
-///     description: "Create a GitHub issue",
-///     input_schema: Json::object({ "type": Json::string("object") }),
-///     owner: @posoco.OwnerId::unchecked("test_child"),
-///     policy: @posoco.ExecutionPolicy::Parallel,
-///     provenance: Some("test_child"),
-///   }
+///   let child_def : @posoco.ToolDef = @posoco.ToolDef(
+///     name=@posoco.ToolName::unchecked("github_create_issue"),
+///     description="Create a GitHub issue",
+///     input_schema=Json::object({ "type": Json::string("object") }),
+///     owner=@posoco.OwnerId::unchecked("test_child"),
+///     policy=@posoco.ExecutionPolicy::Parallel,
+///     provenance=Some("test_child"),
+///   )
 ///   let child = @posoco.RecordingToolProvider([child_def], Map::from_array([]))
 ///   let ext = match @posoco-ext-lazytools.LazyTools::build(providers=[child]) {
 ///     Ok(ext) => ext

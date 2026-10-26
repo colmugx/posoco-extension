@@ -96,13 +96,13 @@ async test "extract_command_wrong_type_raises_precise_error" {
 
 ///|
 async test "empty_command_is_compact_typed_failure" {
-  let ctx : @posoco.ToolCallContext = {
-    effect_id: @kernel.EffectId::{ value: 1, },
-    call_id: @posoco.CallId::unchecked("tc_empty"),
-    name: @posoco.ToolName::unchecked("bash"),
-    arguments: Json::object(Map::from_array([("cmd", Json::string(""))])),
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  let ctx : @posoco.ToolCallContext = @posoco.ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: 1, },
+    call_id=@posoco.CallId::unchecked("tc_empty"),
+    name=@posoco.ToolName::unchecked("bash"),
+    arguments=Json::object(Map::from_array([("cmd", Json::string(""))])),
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
   let result = Ok(ShellTools().execute(ctx)) catch { error => Err(error) }
   match result {
     Err(@posoco.RuntimeError::InvocationFailed(message)) =>
@@ -229,13 +229,13 @@ fn bash_session_test_ctx(
   arguments : Json,
   number : Int32,
 ) -> @posoco.ToolCallContext {
-  {
-    effect_id: @kernel.EffectId::{ value: number, },
-    call_id: @posoco.CallId::unchecked("tc_background"),
-    name: @posoco.ToolName::unchecked(tool),
-    arguments,
-    register_cancel: fn(_ : &@posoco.ToolCancellable) { () },
-  }
+  @posoco.ToolCallContext(
+    effect_id=@kernel.EffectId::{ value: number, },
+    call_id=@posoco.CallId::unchecked("tc_background"),
+    name=@posoco.ToolName::unchecked(tool),
+    arguments~,
+    register_cancel=fn(_ : &@posoco.ToolCancellable) { () },
+  )
 }
 
 ///|
