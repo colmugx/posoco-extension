@@ -35,12 +35,13 @@ fn attempt_json(
 }
 
 ///|
-test "eight lanes labels grouping counts and empty state" {
+test "nine lanes labels grouping counts and empty state" {
   let replica = @client.BoardReplica::empty()
   assert_eq(@src.empty_message(replica), Some("Waiting for Board state"))
-  assert_eq(@src.lanes().length(), 8)
+  assert_eq(@src.lanes().length(), 9)
   let stages = [
-    "created", "refining", "ready", "running", "review", "done", "suspended", "cancelled",
+    "created", "refining", "ready", "running", "verification", "review", "done", "suspended",
+    "cancelled",
   ]
   let tasks : Array[Json] = []
   for i, stage in stages {
@@ -56,10 +57,11 @@ test "eight lanes labels grouping counts and empty state" {
     },
   })
   assert_true(outcome is @client.Applied)
-  assert_eq(replica.tasks().length(), 8)
+  assert_eq(replica.tasks().length(), 9)
   assert_eq(@src.empty_message(replica), None)
   let labels = [
-    "Created", "Refining", "Ready", "Running", "Review", "Done", "Suspended", "Cancelled",
+    "Created", "Refining", "Ready", "Running", "Verification", "Review", "Done",
+    "Suspended", "Cancelled",
   ]
   for i, stage in @src.lanes() {
     assert_eq(@src.stage_label(stage), labels[i])
@@ -225,7 +227,17 @@ test "move suggestions mirror the v1 stage fsm as ux only" {
       @client.Ready,
       [@client.Running, @client.Refining, @client.Suspended, @client.Cancelled],
     ),
-    (@client.Running, [@client.Review, @client.Suspended, @client.Cancelled]),
+    (@client.Running, [@client.Verification, @client.Suspended, @client.Cancelled]),
+    (
+      @client.Verification,
+      [
+        @client.Review,
+        @client.Ready,
+        @client.Refining,
+        @client.Suspended,
+        @client.Cancelled,
+      ],
+    ),
     (
       @client.Review,
       [
@@ -346,7 +358,7 @@ test "priority shorthand, lane split, and compact attempt text" {
   assert_eq(@src.priority_short(@client.Normal), "P2")
   assert_eq(@src.priority_short(@client.Low), "P3")
   assert_eq(@src.flow_lanes().map(stage => @src.ui_stage_label(stage)), [
-    "Backlog", "Shaping", "Ready", "In progress", "In review",
+    "Backlog", "Shaping", "Ready", "In progress", "Verification", "In review",
   ])
   assert_eq(@src.archive_lanes().map(stage => @src.ui_stage_label(stage)), [
     "Done", "Paused", "Cancelled",

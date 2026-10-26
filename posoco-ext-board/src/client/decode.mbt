@@ -76,6 +76,7 @@ fn stage(value : Json) -> ClientBoardStage raise DecodeFailure {
     "refining" => Refining
     "ready" => Ready
     "running" => Running
+    "verification" => Verification
     "review" => Review
     "done" => Done
     "suspended" => Suspended
@@ -242,6 +243,14 @@ fn task(value : Json) -> ClientBoardTask raise DecodeFailure {
     created_at_ms: integer(required(obj, "created_at_ms")),
     updated_at_ms: integer(required(obj, "updated_at_ms")),
     ready_since_ms: nullable_integer(required(obj, "ready_since_ms")),
+    user_story: match obj.get("user_story") {
+      None => ""
+      Some(value) => text(value)
+    },
+    implementation_suggestions: match obj.get("implementation_suggestions") {
+      None => ""
+      Some(value) => text(value)
+    },
     model: match obj.get("model") {
       Some(value) => model(value)
       None => None

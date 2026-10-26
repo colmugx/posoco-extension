@@ -14,6 +14,8 @@ async test "public coordinator restores durable revision after restart" {
       priority=@domain.Normal,
       definition_of_done=[],
       dependencies=[],
+      user_story="",
+      implementation_suggestions="",
       at_ms=10L,
       expected_revision=0L,
     )

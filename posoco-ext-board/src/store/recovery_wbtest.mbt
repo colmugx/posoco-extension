@@ -160,6 +160,8 @@ test "domain conversion includes every attempt field and full review lifecycle" 
       priority=Normal,
       definition_of_done=[],
       dependencies=[],
+      user_story="",
+      implementation_suggestions="",
       at_ms=1L,
       expected_revision=0L,
     ),

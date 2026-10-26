@@ -23,6 +23,8 @@ fn create_cmd(
     priority=Normal,
     definition_of_done=dod,
     dependencies=deps,
+    user_story="",
+    implementation_suggestions="",
     at_ms=at,
     expected_revision=rev,
   )
@@ -78,8 +80,9 @@ fn path_to(stage : BoardStage) -> Array[BoardStage] {
     Refining => [Refining]
     Ready => [Refining, Ready]
     Running => [Refining, Ready, Running]
-    Review => [Refining, Ready, Running, Review]
-    Done => [Refining, Ready, Running, Review, Done]
+    Verification => [Refining, Ready, Running, Verification]
+    Review => [Refining, Ready, Running, Verification, Review]
+    Done => [Refining, Ready, Running, Verification, Review, Done]
     Suspended => [Suspended]
     Cancelled => [Cancelled]
   }
@@ -509,6 +512,8 @@ test "tasks list in priority then creation then id order" {
       priority~,
       definition_of_done=[],
       dependencies=[],
+      user_story="",
+      implementation_suggestions="",
       at_ms=at,
       expected_revision=revision,
     )
@@ -538,6 +543,8 @@ test "updates change single fields and reject no-op updates" {
       description=None,
       priority=Some(High),
       definition_of_done=Some(["write tests", "ship"]),
+      user_story=None,
+      implementation_suggestions=None,
       at_ms=6000L,
       expected_revision=1L,
     ),
@@ -559,6 +566,8 @@ test "updates change single fields and reject no-op updates" {
         description=None,
         priority=None,
         definition_of_done=None,
+        user_story=None,
+        implementation_suggestions=None,
         at_ms=6100L,
         expected_revision=2L,
       ),
@@ -574,6 +583,8 @@ test "updates change single fields and reject no-op updates" {
         description=None,
         priority=None,
         definition_of_done=None,
+        user_story=None,
+        implementation_suggestions=None,
         at_ms=6100L,
         expected_revision=2L,
       ),
@@ -869,6 +880,8 @@ test "structurally invalid input is rejected before existence checks" {
         priority=Low,
         definition_of_done=[],
         dependencies=[],
+        user_story="",
+        implementation_suggestions="",
         at_ms=1L,
         expected_revision=1L,
       ),
@@ -887,6 +900,8 @@ test "structurally invalid input is rejected before existence checks" {
         priority=Low,
         definition_of_done=[],
         dependencies=[],
+        user_story="",
+        implementation_suggestions="",
         at_ms=1L,
         expected_revision=1L,
       ),
@@ -992,6 +1007,8 @@ test "queries return deep copies that never alias committed state" {
         created_at_ms: 1000L,
         updated_at_ms: 1000L,
         ready_since_ms: None,
+        user_story: "",
+        implementation_suggestions: "",
         model: None,
         review: None,
         review_feedback: None,
@@ -1025,6 +1042,8 @@ test "command copy detaches array payloads from the caller" {
     priority=Normal,
     definition_of_done=dod,
     dependencies=deps,
+    user_story="",
+    implementation_suggestions="",
     at_ms=1000L,
     expected_revision=0L,
   )
@@ -1835,4 +1854,37 @@ test "request changes rejects empty oversized and misdirected decisions" {
   // Rejections never advance the committed revision.
   assert_eq(state.revision(), revision)
   assert_eq(state.task(tid("t")).unwrap().review_feedback, None)
+}
+
+///|
+test "story contract fields survive the Verification path" {
+  let created = accept(BoardState::BoardState(), create_cmd("story", 0L)).next_state
+  let shaped = accept(
+    created,
+    UpdateTask(
+      id=tid("story"),
+      title=None,
+      description=Some("Detailed scope"),
+      priority=Some(High),
+      definition_of_done=Some(["Observable result"]),
+      user_story=Some("As a user, I want a story, so that it can be built."),
+      implementation_suggestions=Some("Start with the domain test."),
+      at_ms=2000L,
+      expected_revision=created.revision(),
+    ),
+  ).next_state
+  let task = shaped.task(tid("story")).unwrap()
+  assert_eq(task.user_story, "As a user, I want a story, so that it can be built.")
+  assert_eq(task.implementation_suggestions, "Start with the domain test.")
+  let refining = accept(shaped, move_cmd("story", shaped.revision(), Refining)).next_state
+  let ready = accept(refining, move_cmd("story", refining.revision(), Ready)).next_state
+  let running = accept(ready, move_cmd("story", ready.revision(), Running)).next_state
+  let verifying = accept(
+    running, move_cmd("story", running.revision(), Verification),
+  ).next_state
+  assert_eq(verifying.task(tid("story")).unwrap().stage, Verification)
+  let review = accept(
+    verifying, move_cmd("story", verifying.revision(), Review),
+  ).next_state
+  assert_eq(review.task(tid("story")).unwrap().stage, Review)
 }

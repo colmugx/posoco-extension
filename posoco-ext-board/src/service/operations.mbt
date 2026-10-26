@@ -41,6 +41,8 @@ pub async fn BoardWorkflows::start(
         priority=@domain.Normal,
         definition_of_done=[],
         dependencies=[],
+        user_story="",
+        implementation_suggestions="",
         at_ms=(self.clock)(),
         expected_revision=snapshot.revision,
       ),

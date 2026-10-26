@@ -17,6 +17,8 @@ fn c_create(id : String, rev : Int64) -> @domain.BoardCommand {
     priority=@domain.Normal,
     definition_of_done=["draft"],
     dependencies=[],
+    user_story="",
+    implementation_suggestions="",
     at_ms=1000L,
     expected_revision=rev,
   )
@@ -240,6 +242,8 @@ fn c_create_dod(
     priority=@domain.Normal,
     definition_of_done=dod,
     dependencies=[],
+    user_story="",
+    implementation_suggestions="",
     at_ms=1000L,
     expected_revision=rev,
   )

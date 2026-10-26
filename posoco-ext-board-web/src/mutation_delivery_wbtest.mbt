@@ -81,7 +81,7 @@ test "returned mutation commands encode the current wire contract" {
     content=(
       #|WebSocketSend(
       #|  "board",
-      #|  Text("{\"type\":\"command\",\"command_id\":\"cmd-uuid-1\",\"name\":\"board.task.create\",\"expected_revision\":1,\"args\":{\"id\":\"task-uuid-1\",\"title\":\"Ship\",\"description\":\"\",\"priority\":\"normal\",\"definition_of_done\":[],\"dependencies\":[]}}"),
+      #|  Text("{\"type\":\"command\",\"command_id\":\"cmd-uuid-1\",\"name\":\"board.task.create\",\"expected_revision\":1,\"args\":{\"id\":\"task-uuid-1\",\"title\":\"Ship\",\"description\":\"\",\"priority\":\"normal\",\"definition_of_done\":[],\"dependencies\":[],\"user_story\":\"\",\"implementation_suggestions\":\"\"}}"),
       #|)
     ),
   )

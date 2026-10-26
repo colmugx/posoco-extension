@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn create_task_command(String, Int64, id~ : String, title~ : String, description~ : String, priority~ : ClientBoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[String]) -> @protocol.BoardClientCommand
+pub fn create_task_command(String, Int64, id~ : String, title~ : String, description~ : String, priority~ : ClientBoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[String], user_story? : String, implementation_suggestions? : String) -> @protocol.BoardClientCommand
 
 pub fn decode_board_snapshot(@protocol.BoardSnapshot) -> Result[DecodedBoardSnapshot, ClientError]
 
@@ -30,7 +30,7 @@ pub fn set_task_review_report_command(String, Int64, id~ : String, review~ : Cli
 
 pub fn start_attempt_command(String, Int64, id~ : String) -> @protocol.BoardClientCommand
 
-pub fn update_task_command(String, Int64, id~ : String, title? : String, description? : String, priority? : ClientBoardPriority, definition_of_done? : Array[String]) -> @protocol.BoardClientCommand
+pub fn update_task_command(String, Int64, id~ : String, title? : String, description? : String, priority? : ClientBoardPriority, definition_of_done? : Array[String], user_story? : String, implementation_suggestions? : String) -> @protocol.BoardClientCommand
 
 // Errors
 
@@ -122,6 +122,7 @@ pub(all) enum ClientBoardStage {
   Refining
   Ready
   Running
+  Verification
   Review
   Done
   Suspended
@@ -142,6 +143,8 @@ pub struct ClientBoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  user_story : String
+  implementation_suggestions : String
   model : ClientModelSelection?
   review : ClientReviewReport?
   review_feedback : String?

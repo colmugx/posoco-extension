@@ -7,6 +7,8 @@ fn backend_create(id : String, rev : Int64) -> @domain.BoardCommand {
     priority=@domain.Normal,
     definition_of_done=[],
     dependencies=[],
+    user_story="",
+    implementation_suggestions="",
     at_ms=1000L,
     expected_revision=rev,
   )

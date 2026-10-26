@@ -151,6 +151,20 @@ fn submit_move(
       @rabbita.none,
     )
   }
+  if to is @client.Ready {
+    match task_by_id(model.replica, task_id) {
+      Some(task) =>
+        match ready_blocked_hint(task) {
+          Some(hint) =>
+            return (
+              { ..model, notice: Some(notice(Error, hint)), },
+              @rabbita.none,
+            )
+          None => ()
+        }
+      None => ()
+    }
+  }
   // The move renders optimistically from the task's current stage; the
   // replica itself only changes when the authoritative stream says so.
   let model = match task_by_id(model.replica, task_id) {

@@ -145,6 +145,8 @@ fn expected_task_t1(
     "created_at_ms": Json::number(10),
     "updated_at_ms": Json::number(20),
     "ready_since_ms": ready_since,
+    "user_story": "",
+    "implementation_suggestions": "",
     "model": Json::null(),
     "review": Json::null(),
     "review_feedback": review_feedback,
@@ -888,7 +890,8 @@ test "wire payloads carry no schema or store metadata" {
   assert_eq(schema_keys, [])
   assert_eq(keys_of(task_to_json(projection_task())), [
     "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
-    "created_at_ms", "updated_at_ms", "ready_since_ms", "model", "review", "review_feedback",
+    "created_at_ms", "updated_at_ms", "ready_since_ms", "user_story", "implementation_suggestions",
+    "model", "review", "review_feedback",
   ])
   assert_eq(keys_of(attempt_to_json(projection_attempt())), [
     "id", "task_id", "kind", "status", "review", "created_at_ms", "started_at_ms",
@@ -997,6 +1000,8 @@ test "snapshot payload renders the whole committed board verbatim" {
           "created_at_ms": Json::number(11),
           "updated_at_ms": Json::number(11),
           "ready_since_ms": Json::null(),
+          "user_story": "",
+          "implementation_suggestions": "",
           "model": Json::null(),
           "review": Json::null(),
           "review_feedback": Json::null(),

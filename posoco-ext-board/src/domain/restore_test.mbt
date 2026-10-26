@@ -10,6 +10,8 @@ fn restore_seed() -> @domain.BoardState {
       priority=@domain.High,
       definition_of_done=["done"],
       dependencies=[],
+      user_story="",
+      implementation_suggestions="",
       at_ms=10L,
       expected_revision=0L,
     ),

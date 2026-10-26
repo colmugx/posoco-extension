@@ -4,6 +4,8 @@ test "create command schema carries every editor field" {
     mode: CreateMode,
     title: "  Ship it  ",
     description: "Body",
+    user_story: "",
+    implementation_suggestions: "",
     priority: High,
     definition_of_done: "Tests pass\n\n  Review clean \n",
   }
@@ -18,6 +20,8 @@ test "create command schema carries every editor field" {
     "priority": "high",
     "definition_of_done": ["Tests pass", "Review clean"],
     "dependencies": [],
+    "user_story": "",
+    "implementation_suggestions": "",
   })
 }
 
@@ -27,6 +31,8 @@ test "update command schema targets the edited task" {
     mode: EditMode(task_id="task-9"),
     title: "Renamed",
     description: "",
+    user_story: "As a user, I want it.",
+    implementation_suggestions: "Do it",
     priority: Low,
     definition_of_done: "",
   }
@@ -40,6 +46,8 @@ test "update command schema targets the edited task" {
     "description": "",
     "priority": "low",
     "definition_of_done": [],
+    "user_story": "As a user, I want it.",
+    "implementation_suggestions": "Do it",
   })
 }
 
@@ -119,6 +127,8 @@ test "accepted commands close only the matching editor" {
     mode: EditMode(task_id="t"),
     title: "T",
     description: "",
+    user_story: "",
+    implementation_suggestions: "",
     priority: Normal,
     definition_of_done: "",
   }

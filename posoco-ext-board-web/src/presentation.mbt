@@ -1,14 +1,12 @@
 ///|
 pub fn lanes() -> Array[@client.ClientBoardStage] {
-  [Created, Refining, Ready, Running, Review, Done, Suspended, Cancelled]
+  [Created, Refining, Ready, Running, Verification, Review, Done, Suspended, Cancelled]
 }
 
 ///|
-/// The five stages that form the flow. Done, Suspended and Cancelled are
-/// archive states, rendered by the archive drawer instead of consuming flow
-/// columns.
+/// The flow stages; Done, Suspended and Cancelled are archive states.
 pub fn flow_lanes() -> Array[@client.ClientBoardStage] {
-  [Created, Refining, Ready, Running, Review]
+  [Created, Refining, Ready, Running, Verification, Review]
 }
 
 ///|
@@ -26,6 +24,7 @@ pub fn ui_stage_label(stage : @client.ClientBoardStage) -> String {
     Refining => "Shaping"
     Ready => "Ready"
     Running => "In progress"
+    Verification => "Verification"
     Review => "In review"
     Done => "Done"
     Suspended => "Paused"
@@ -42,6 +41,7 @@ pub fn stage_hint(stage : @client.ClientBoardStage) -> String {
     Refining => "An agent or a person clarifies scope and acceptance."
     Ready => "Scoped and waiting for a worker."
     Running => "Work in progress."
+    Verification => "Independent verification against the story."
     Review => "Check the result, record a decision, then close it."
     Done => "Closed."
     Suspended => "Parked without losing its history."
@@ -57,7 +57,8 @@ pub fn stage_step(stage : @client.ClientBoardStage) -> Int32? {
     Refining => Some(2)
     Ready => Some(3)
     Running => Some(4)
-    Review => Some(5)
+    Verification => Some(5)
+    Review => Some(6)
     Done | Suspended | Cancelled => None
   }
 }
@@ -98,7 +99,8 @@ pub fn primary_move(
     Created => Refining
     Refining => Ready
     Ready => Running
-    Running => Review
+    Running => Verification
+    Verification => Review
     Review => Done
     Done => Refining
     Suspended => Ready
@@ -114,7 +116,8 @@ pub fn primary_action_label(stage : @client.ClientBoardStage) -> String {
     Created => "Start shaping"
     Refining => "Mark ready"
     Ready => "Start work"
-    Running => "Request review"
+    Running => "Send to verification"
+    Verification => "Request review"
     Review => "Mark done"
     Done => "Reopen"
     Suspended => "Resume"
@@ -182,6 +185,7 @@ pub fn stage_label(stage : @client.ClientBoardStage) -> String {
     Refining => "Refining"
     Ready => "Ready"
     Running => "Running"
+    Verification => "Verification"
     Review => "Review"
     Done => "Done"
     Suspended => "Suspended"
@@ -294,11 +298,27 @@ pub fn queue_attempt_id_valid(
 }
 
 ///|
-/// Move suggestions are a UX convenience mirroring the Board v1 stage FSM;
-/// the durable server stays authoritative and may still reject a move. The
-/// table covers every stage so the view can render a control row for any
-/// card. Every non-terminal stage may cancel, Done is never cancelled, and
-/// Cancelled is terminal, so it suggests nothing.
+/// A work item may enter Ready only after a Refiner has written the full
+/// story contract. Backlog and Shaping are intentionally not gated.
+pub fn ready_blocked_hint(
+  task : @client.ClientBoardTask,
+) -> String? {
+  if task.user_story.trim().is_empty() {
+    Some("A Refiner must add the user story before this can be Ready.")
+  } else if task.description.trim().is_empty() {
+    Some("The story needs a detailed description before it can be Ready.")
+  } else if task.implementation_suggestions.trim().is_empty() {
+    Some("The story needs implementation suggestions before it can be Ready.")
+  } else if task.definition_of_done.is_empty() {
+    Some("The story needs at least one definition-of-done item.")
+  } else {
+    None
+  }
+}
+
+///|
+/// Move suggestions are a UX convenience mirroring the Board stage FSM;
+/// the durable server stays authoritative and may still reject a move.
 pub fn move_suggestions(
   stage : @client.ClientBoardStage,
 ) -> Array[@client.ClientBoardStage] {
@@ -306,7 +326,8 @@ pub fn move_suggestions(
     Created => [Refining, Suspended, Cancelled]
     Refining => [Ready, Suspended, Cancelled]
     Ready => [Running, Refining, Suspended, Cancelled]
-    Running => [Review, Suspended, Cancelled]
+    Running => [Verification, Suspended, Cancelled]
+    Verification => [Review, Ready, Refining, Suspended, Cancelled]
     Review => [Done, Ready, Refining, Suspended, Cancelled]
     Done => [Refining]
     Suspended => [Created, Refining, Ready, Cancelled]

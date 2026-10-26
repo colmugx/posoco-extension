@@ -103,6 +103,7 @@ fn stage_json(value : @domain.BoardStage) -> Json {
       Refining => "Refining"
       Ready => "Ready"
       Running => "Running"
+      Verification => "Verification"
       Review => "Review"
       Done => "Done"
       Suspended => "Suspended"
@@ -118,6 +119,7 @@ fn stage(value : Json) -> @domain.BoardStage raise CodecError {
     "Refining" => Refining
     "Ready" => Ready
     "Running" => Running
+    "Verification" => Verification
     "Review" => Review
     "Done" => Done
     "Suspended" => Suspended
@@ -507,6 +509,8 @@ fn task_json(task : @domain.BoardTask) -> Json {
     "created_at_ms": number(task.created_at_ms),
     "updated_at_ms": number(task.updated_at_ms),
     "ready_since_ms": optional_number(task.ready_since_ms),
+    "user_story": Json::string(task.user_story),
+    "implementation_suggestions": Json::string(task.implementation_suggestions),
     "model": model_json(task.model),
     "review": review_json(task.review),
     "review_feedback": match task.review_feedback {
@@ -517,8 +521,8 @@ fn task_json(task : @domain.BoardTask) -> Json {
 }
 
 ///|
-/// `model`, `review` and `review_feedback` are optional keys so every
-/// pre-existing store keeps decoding with them absent.
+/// `model`, `review`, `review_feedback` and the story fields are optional
+/// keys so every pre-existing store keeps decoding with them absent.
 fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
   let f = optional_fields(
     value,
@@ -526,7 +530,9 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
       "id", "title", "description", "stage", "priority", "definition_of_done", "dependencies",
       "created_at_ms", "updated_at_ms", "ready_since_ms",
     ],
-    ["model", "review", "review_feedback"],
+    [
+      "model", "review", "review_feedback", "user_story", "implementation_suggestions",
+    ],
   )
   @domain.BoardTask::from_record(
     id=task_id(f["id"]),
@@ -539,6 +545,14 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     created_at_ms=integer(f["created_at_ms"]),
     updated_at_ms=integer(f["updated_at_ms"]),
     ready_since_ms=optional_integer(f["ready_since_ms"]),
+    user_story=match f.get("user_story") {
+      Some(value) => text(value)
+      None => ""
+    },
+    implementation_suggestions=match f.get("implementation_suggestions") {
+      Some(value) => text(value)
+      None => ""
+    },
     model=match f.get("model") {
       Some(value) => model(value)
       None => None

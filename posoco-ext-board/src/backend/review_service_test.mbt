@@ -405,6 +405,8 @@ async test "request changes commits the decision and returns the ticket to ready
         "created_at_ms": 100,
         "updated_at_ms": 1234,
         "ready_since_ms": 1234,
+        "user_story": "",
+        "implementation_suggestions": "",
         "model": Json::null(),
         "review": Json::null(),
         "review_feedback": "Add the missing regression test.",

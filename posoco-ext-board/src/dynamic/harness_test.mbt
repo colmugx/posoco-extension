@@ -168,6 +168,8 @@ async fn dynamic_harness(
         priority=@domain.Normal,
         definition_of_done=[],
         dependencies=[],
+        user_story="",
+        implementation_suggestions="",
         at_ms=100L,
         expected_revision=0L,
       ),

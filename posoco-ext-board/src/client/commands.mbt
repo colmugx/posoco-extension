@@ -31,6 +31,7 @@ pub fn ClientBoardStage::to_wire(self : ClientBoardStage) -> String {
     Refining => "refining"
     Ready => "ready"
     Running => "running"
+    Verification => "verification"
     Review => "review"
     Done => "done"
     Suspended => "suspended"
@@ -68,19 +69,28 @@ pub fn create_task_command(
   priority~ : ClientBoardPriority,
   definition_of_done~ : Array[String],
   dependencies~ : Array[String],
+  user_story? : String,
+  implementation_suggestions? : String,
 ) -> @protocol.BoardClientCommand {
+  let fields : Map[String, Json] = {
+    "id": Json(id),
+    "title": Json(title),
+    "description": Json(description),
+    "priority": Json(priority.to_wire()),
+    "definition_of_done": Json(definition_of_done.copy()),
+    "dependencies": Json(dependencies.copy()),
+  }
+  if user_story is Some(value) {
+    fields["user_story"] = Json(value)
+  }
+  if implementation_suggestions is Some(value) {
+    fields["implementation_suggestions"] = Json(value)
+  }
   {
     command_id,
     expected_revision,
     name: "board.task.create",
-    args: {
-      "id": Json(id),
-      "title": Json(title),
-      "description": Json(description),
-      "priority": Json(priority.to_wire()),
-      "definition_of_done": Json(definition_of_done.copy()),
-      "dependencies": Json(dependencies.copy()),
-    },
+    args: Json::object(fields),
   }
 }
 
@@ -102,6 +112,8 @@ pub fn update_task_command(
   description? : String,
   priority? : ClientBoardPriority,
   definition_of_done? : Array[String],
+  user_story? : String,
+  implementation_suggestions? : String,
 ) -> @protocol.BoardClientCommand {
   let fields : Map[String, Json] = { "id": Json(id) }
   if title is Some(value) {
@@ -115,6 +127,12 @@ pub fn update_task_command(
   }
   if definition_of_done is Some(value) {
     fields["definition_of_done"] = Json(value.copy())
+  }
+  if user_story is Some(value) {
+    fields["user_story"] = Json(value)
+  }
+  if implementation_suggestions is Some(value) {
+    fields["implementation_suggestions"] = Json(value)
   }
   {
     command_id,

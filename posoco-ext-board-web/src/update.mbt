@@ -358,6 +358,19 @@ fn update(
         update_editor(model, editor => { ..editor, description: value, }),
         @rabbita.none,
       )
+    UserStoryChanged(value) =>
+      (
+        update_editor(model, editor => { ..editor, user_story: value, }),
+        @rabbita.none,
+      )
+    ImplementationSuggestionsChanged(value) =>
+      (
+        update_editor(model, editor => {
+          ..editor,
+          implementation_suggestions: value,
+        }),
+        @rabbita.none,
+      )
     PriorityChanged(value) =>
       (
         update_editor(model, editor => {
@@ -455,6 +468,21 @@ fn update(
         (
           { ..model, ticket_sending: true, },
           ticket_answer(question_id, answer, emit),
+        )
+      }
+    TicketAnsweredAsRefiner(question_id, answer) =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available ||
+        answer.trim().is_empty() {
+        (model, @rabbita.none)
+      } else {
+        (
+          { ..model, ticket_sending: true, },
+          ticket_answer(
+            question_id,
+            TicketText(answer),
+            emit,
+            answered_by="refiner",
+          ),
         )
       }
     TicketShape(task_id) =>

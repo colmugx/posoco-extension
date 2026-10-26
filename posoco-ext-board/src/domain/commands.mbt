@@ -11,6 +11,8 @@ pub(all) enum BoardCommand {
     priority~ : BoardPriority,
     definition_of_done~ : Array[String],
     dependencies~ : Array[BoardTaskId],
+    user_story~ : String,
+    implementation_suggestions~ : String,
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
@@ -20,6 +22,8 @@ pub(all) enum BoardCommand {
     description~ : String?,
     priority~ : BoardPriority?,
     definition_of_done~ : Array[String]?,
+    user_story~ : String?,
+    implementation_suggestions~ : String?,
     at_ms~ : Int64,
     expected_revision~ : Int64
   )
@@ -134,6 +138,8 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       priority~,
       definition_of_done~,
       dependencies~,
+      user_story~,
+      implementation_suggestions~,
       at_ms~,
       expected_revision~
     ) =>
@@ -144,6 +150,8 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
         priority~,
         definition_of_done=definition_of_done.copy(),
         dependencies=dependencies.copy(),
+        user_story~,
+        implementation_suggestions~,
         at_ms~,
         expected_revision~,
       )
@@ -153,6 +161,8 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
       description~,
       priority~,
       definition_of_done~,
+      user_story~,
+      implementation_suggestions~,
       at_ms~,
       expected_revision~
     ) =>
@@ -164,6 +174,8 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
             description~,
             priority~,
             definition_of_done=Some(items.copy()),
+            user_story~,
+            implementation_suggestions~,
             at_ms~,
             expected_revision~,
           )
@@ -174,6 +186,8 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
             description~,
             priority~,
             definition_of_done=None,
+            user_story~,
+            implementation_suggestions~,
             at_ms~,
             expected_revision~,
           )

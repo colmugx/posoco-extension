@@ -7,6 +7,7 @@ pub(all) enum BoardStage {
   Refining
   Ready
   Running
+  Verification
   Review
   Done
   Suspended
@@ -244,6 +245,11 @@ pub struct BoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  /// Canonical `As a ..., I want ..., so that ...` story written by a
+  /// Refiner. Empty while the task is still a raw backlog entry.
+  user_story : String
+  /// Starting points for the development group, not a mandate.
+  implementation_suggestions : String
   /// `None` inherits the current Cetas model at execution time; `Some`
   /// pins the slot/effort for this work item.
   model : ModelSelection?

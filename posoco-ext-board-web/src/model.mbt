@@ -38,6 +38,9 @@ priv struct TicketQuestion {
   kind : String
   options : Array[String]
   asked_at : Int64
+  asked_by : String
+  audience : String
+  status : String
 } derive(Eq)
 
 ///|
@@ -187,6 +190,8 @@ priv struct Editor {
   mode : EditorMode
   title : String
   description : String
+  user_story : String
+  implementation_suggestions : String
   priority : @client.ClientBoardPriority
   definition_of_done : String
 } derive(Eq)
@@ -361,6 +366,8 @@ priv enum Msg {
   EditorCancelled
   TitleChanged(String)
   DescriptionChanged(String)
+  UserStoryChanged(String)
+  ImplementationSuggestionsChanged(String)
   PriorityChanged(String)
   DefinitionOfDoneChanged(String)
   SubmitRequested
@@ -398,6 +405,7 @@ priv enum Msg {
   TicketUpdatesDismissed
   TicketDraftChanged(String, String)
   TicketAnswered(String, TicketAnswer)
+  TicketAnsweredAsRefiner(String, String)
   TicketShape(String)
   TicketRun(String)
   TicketRetry(String)

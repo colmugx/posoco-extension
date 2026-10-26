@@ -73,7 +73,8 @@ fn detail_next_action(
           } else {
             "Moves it to In progress."
           }
-        Running => "Asks for a review before closing."
+        Running => "Asks for an independent verification before review."
+        Verification => "Requests the final review after verification."
         Review => "Closes the task. Done is final and moves it to the archive."
         Done => "Sends a closed task back to Shaping."
         Suspended => "Returns a paused task to Ready."

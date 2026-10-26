@@ -40,6 +40,8 @@ fn Editor::create() -> Editor {
     mode: CreateMode,
     title: "",
     description: "",
+    user_story: "",
+    implementation_suggestions: "",
     priority: Normal,
     definition_of_done: "",
   }
@@ -56,6 +58,8 @@ fn Editor::from_task(
     mode,
     title: task.title,
     description: task.description,
+    user_story: task.user_story,
+    implementation_suggestions: task.implementation_suggestions,
     priority: task.priority,
     definition_of_done: definition_of_done_text(task.definition_of_done),
   }
@@ -79,6 +83,8 @@ fn create_command(
     priority=editor.priority,
     definition_of_done=definition_of_done_lines(editor.definition_of_done),
     dependencies=[],
+    user_story=editor.user_story,
+    implementation_suggestions=editor.implementation_suggestions,
   )
 }
 
@@ -97,6 +103,8 @@ fn update_command(
     id=task_id,
     title=editor.title.trim().to_owned(),
     description=editor.description,
+    user_story=editor.user_story,
+    implementation_suggestions=editor.implementation_suggestions,
     priority=editor.priority,
     definition_of_done=definition_of_done_lines(editor.definition_of_done),
   )

@@ -127,6 +127,8 @@ async test "parent edits during an actual planning turn invalidate the emitted r
           description=None,
           priority=None,
           definition_of_done=None,
+          user_story=None,
+          implementation_suggestions=None,
           at_ms=h.clock.val,
           expected_revision=now,
         ),

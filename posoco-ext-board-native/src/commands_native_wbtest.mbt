@@ -148,6 +148,8 @@ async test "native create stamps deterministic server time and answers event the
           "created_at_ms": Json::number(1234),
           "updated_at_ms": Json::number(1234),
           "ready_since_ms": Json::null(),
+          "user_story": "",
+          "implementation_suggestions": "",
           "model": Json::null(),
           "review": Json::null(),
           "review_feedback": Json::null(),

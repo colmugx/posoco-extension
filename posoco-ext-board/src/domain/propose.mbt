@@ -19,12 +19,10 @@ pub(all) struct BoardProposal {
 }
 
 ///|
-/// Central stage FSM. One table, shared by every stage move; the S3A
-/// baseline is Created->Refining/Suspended; Refining->Ready/Suspended;
-/// Ready->Running/Refining/Suspended; Running->Review/Suspended;
-/// Review->Done/Ready/Refining/Suspended; Done->Refining;
-/// Suspended->Created/Refining/Ready. Every non-terminal stage may cancel;
-/// Cancelled is terminal and Done cannot be cancelled.
+/// Central stage FSM. One table, shared by every stage move; the V2 flow is
+/// Created->Refining; Refining->Ready; Ready->Running; Running->Verification;
+/// Verification->Review; Review->Done. Every non-terminal stage may suspend
+/// or cancel; Cancelled is terminal and Done cannot be cancelled.
 fn stage_allowed(from : BoardStage, to : BoardStage) -> Bool {
   match (from, to) {
     (Created, Refining) | (Created, Suspended) | (Created, Cancelled) => true
@@ -33,7 +31,15 @@ fn stage_allowed(from : BoardStage, to : BoardStage) -> Bool {
     | (Ready, Refining)
     | (Ready, Suspended)
     | (Ready, Cancelled) => true
-    (Running, Review) | (Running, Suspended) | (Running, Cancelled) => true
+    (Running, Verification)
+    | (Running, Review)
+    | (Running, Suspended)
+    | (Running, Cancelled) => true
+    (Verification, Review)
+    | (Verification, Ready)
+    | (Verification, Refining)
+    | (Verification, Suspended)
+    | (Verification, Cancelled) => true
     (Review, Done)
     | (Review, Ready)
     | (Review, Refining)
@@ -101,12 +107,14 @@ pub fn BoardDomain::propose(
       priority~,
       definition_of_done~,
       dependencies~,
+      user_story~,
+      implementation_suggestions~,
       at_ms~,
       ..
     ) =>
       propose_create(
         state, id, title, description, priority, definition_of_done, dependencies,
-        at_ms,
+        user_story, implementation_suggestions, at_ms,
       )
     UpdateTask(
       id~,
@@ -114,11 +122,14 @@ pub fn BoardDomain::propose(
       description~,
       priority~,
       definition_of_done~,
+      user_story~,
+      implementation_suggestions~,
       at_ms~,
       ..
     ) =>
       propose_update(
-        state, id, title, description, priority, definition_of_done, at_ms,
+        state, id, title, description, priority, definition_of_done, user_story,
+        implementation_suggestions, at_ms,
       )
     SetDependencies(id~, dependencies~, at_ms~, ..) =>
       propose_set_dependencies(state, id, dependencies, at_ms)
@@ -158,6 +169,8 @@ fn propose_create(
   priority : BoardPriority,
   definition_of_done : Array[String],
   dependencies : Array[BoardTaskId],
+  user_story : String,
+  implementation_suggestions : String,
   at_ms : Int64,
 ) -> Result[BoardProposal, BoardError] {
   if id.value == "" {
@@ -195,6 +208,8 @@ fn propose_create(
     created_at_ms: at_ms,
     updated_at_ms: at_ms,
     ready_since_ms: None,
+    user_story,
+    implementation_suggestions,
     model: None,
     review: None,
     review_feedback: None,
@@ -212,6 +227,8 @@ fn propose_update(
   description : String?,
   priority : BoardPriority?,
   definition_of_done : Array[String]?,
+  user_story : String?,
+  implementation_suggestions : String?,
   at_ms : Int64,
 ) -> Result[BoardProposal, BoardError] {
   if id.value == "" {
@@ -238,7 +255,9 @@ fn propose_update(
   if title is None &&
     description is None &&
     priority is None &&
-    definition_of_done is None {
+    definition_of_done is None &&
+    user_story is None &&
+    implementation_suggestions is None {
     return Err(InvalidInput(reason="update carries no changes"))
   }
   let task = match state.task(id) {
@@ -255,6 +274,10 @@ fn propose_update(
       Some(items) => items.copy()
       None => task.definition_of_done
     },
+    user_story: user_story.unwrap_or(task.user_story),
+    implementation_suggestions: implementation_suggestions.unwrap_or(
+      task.implementation_suggestions,
+    ),
     updated_at_ms: at_ms,
   }
   next.put_task(updated)
@@ -896,6 +919,8 @@ fn propose_expand_graph(
       created_at_ms: at_ms,
       updated_at_ms: at_ms,
       ready_since_ms: None,
+      user_story: "",
+      implementation_suggestions: "",
       model: None,
       review: None,
       review_feedback: None,

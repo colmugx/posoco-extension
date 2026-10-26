@@ -231,6 +231,7 @@ fn decode_create_task(
 ) -> @domain.BoardCommand raise SchemaError {
   args_allowlist(fields, [
     "id", "title", "description", "priority", "definition_of_done", "dependencies",
+    "user_story", "implementation_suggestions",
   ])
   let id = args_task_id(fields, "id")
   let title = args_string(fields, "title")
@@ -238,6 +239,10 @@ fn decode_create_task(
   let priority = args_priority(fields, "priority")
   let definition_of_done = args_string_array(fields, "definition_of_done")
   let dependencies = args_task_ids(fields, "dependencies")
+  let user_story = args_optional_string(fields, "user_story").unwrap_or("")
+  let implementation_suggestions = args_optional_string(
+    fields, "implementation_suggestions",
+  ).unwrap_or("")
   @domain.CreateTask(
     id~,
     title~,
@@ -245,6 +250,8 @@ fn decode_create_task(
     priority~,
     definition_of_done~,
     dependencies~,
+    user_story~,
+    implementation_suggestions~,
     at_ms~,
     expected_revision~,
   )
@@ -259,7 +266,8 @@ fn decode_update_task(
   expected_revision : Int64,
 ) -> @domain.BoardCommand raise SchemaError {
   args_allowlist(fields, [
-    "id", "title", "description", "priority", "definition_of_done",
+    "id", "title", "description", "priority", "definition_of_done", "user_story",
+    "implementation_suggestions",
   ])
   let id = args_task_id(fields, "id")
   let title = args_optional_string(fields, "title")
@@ -268,12 +276,18 @@ fn decode_update_task(
   let definition_of_done = args_optional_string_array(
     fields, "definition_of_done",
   )
+  let user_story = args_optional_string(fields, "user_story")
+  let implementation_suggestions = args_optional_string(
+    fields, "implementation_suggestions",
+  )
   @domain.UpdateTask(
     id~,
     title~,
     description~,
     priority~,
     definition_of_done~,
+    user_story~,
+    implementation_suggestions~,
     at_ms~,
     expected_revision~,
   )

@@ -63,6 +63,8 @@ async test "JS all six file failure stages publish no partial graph and preserve
         priority=@domain.Normal,
         definition_of_done=[],
         dependencies=[],
+        user_story="",
+        implementation_suggestions="",
         at_ms=400L,
         expected_revision=17L,
       ),

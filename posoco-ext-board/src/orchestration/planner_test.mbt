@@ -135,6 +135,8 @@ fn propose_created(
       priority=@domain.Normal,
       definition_of_done=[],
       dependencies~,
+      user_story="",
+      implementation_suggestions="",
       at_ms=0L,
       expected_revision=state.revision(),
     ),

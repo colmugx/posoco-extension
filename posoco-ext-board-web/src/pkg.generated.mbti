@@ -63,6 +63,8 @@ pub fn priority_tone(@client.ClientBoardPriority) -> String
 
 pub fn queue_attempt_id_valid(@client.BoardReplica, String) -> Bool
 
+pub fn ready_blocked_hint(@client.ClientBoardTask) -> String?
+
 pub fn relative_at(Int64, Int64) -> String
 
 pub fn retry_delay(Int32) -> Int32

@@ -72,8 +72,8 @@ pub fn AttemptStatus::not_equal(Self, Self) -> Bool
 pub fn AttemptStatus::to_repr(Self) -> @debug.Repr
 
 pub(all) enum BoardCommand {
-  CreateTask(id~ : BoardTaskId, title~ : String, description~ : String, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], at_ms~ : Int64, expected_revision~ : Int64)
-  UpdateTask(id~ : BoardTaskId, title~ : String?, description~ : String?, priority~ : BoardPriority?, definition_of_done~ : Array[String]?, at_ms~ : Int64, expected_revision~ : Int64)
+  CreateTask(id~ : BoardTaskId, title~ : String, description~ : String, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], user_story~ : String, implementation_suggestions~ : String, at_ms~ : Int64, expected_revision~ : Int64)
+  UpdateTask(id~ : BoardTaskId, title~ : String?, description~ : String?, priority~ : BoardPriority?, definition_of_done~ : Array[String]?, user_story~ : String?, implementation_suggestions~ : String?, at_ms~ : Int64, expected_revision~ : Int64)
   SetDependencies(id~ : BoardTaskId, dependencies~ : Array[BoardTaskId], at_ms~ : Int64, expected_revision~ : Int64)
   SetTaskModel(id~ : BoardTaskId, model~ : ModelSelection?, at_ms~ : Int64, expected_revision~ : Int64)
   SetReviewReport(id~ : BoardTaskId, review~ : ReviewReport?, at_ms~ : Int64, expected_revision~ : Int64)
@@ -158,6 +158,7 @@ pub(all) enum BoardStage {
   Refining
   Ready
   Running
+  Verification
   Review
   Done
   Suspended
@@ -203,13 +204,15 @@ pub struct BoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  user_story : String
+  implementation_suggestions : String
   model : ModelSelection?
   review : ReviewReport?
   review_feedback : String?
 } derive(Eq, @debug.Debug)
 pub fn BoardTask::copy_detached(Self) -> Self
 pub fn BoardTask::equal(Self, Self) -> Bool
-pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?, model? : ModelSelection?, review? : ReviewReport?, review_feedback? : String?) -> Self
+pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?, user_story? : String, implementation_suggestions? : String, model? : ModelSelection?, review? : ReviewReport?, review_feedback? : String?) -> Self
 pub fn BoardTask::not_equal(Self, Self) -> Bool
 pub fn BoardTask::to_repr(Self) -> @debug.Repr
 

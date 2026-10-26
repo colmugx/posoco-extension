@@ -357,6 +357,87 @@ fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     Some(editor) => {
       let locked = !mutations_allowed(model)
       let id = "board-editor"
+      let creating = editor.mode is CreateMode
+      let story_fields = if creating {
+        @html.p(
+          class="dialog-hint",
+          "A Refiner turns this into a user story, sets the P0-P3 priority, and writes the definition of done.",
+        )
+      } else {
+        @html.fragment([
+          labeled_field(
+            "\{id}-user-story",
+            "User story",
+            @html.textarea(
+              id="\{id}-user-story",
+              name="user_story",
+              rows=3,
+              value=editor.user_story,
+              placeholder="As a ..., I want ..., so that ...",
+              disabled=locked,
+              on_input=value => emit(UserStoryChanged(value)),
+              @html.fragment([]),
+            ),
+          ),
+          labeled_field(
+            "\{id}-suggestions",
+            "Implementation suggestions",
+            @html.textarea(
+              id="\{id}-suggestions",
+              name="implementation_suggestions",
+              rows=3,
+              value=editor.implementation_suggestions,
+              placeholder="Starting points, not a mandate",
+              disabled=locked,
+              on_input=value => emit(ImplementationSuggestionsChanged(value)),
+              @html.fragment([]),
+            ),
+          ),
+        ])
+      }
+      let priority_and_dod = if creating {
+        @html.nothing
+      } else {
+        @html.fragment([
+          @html.div(class="dialog-pair", [
+            labeled_field(
+              "\{id}-priority",
+              "Priority",
+              @html.select(
+                id="\{id}-priority",
+                name="priority",
+                disabled=locked,
+                on_change=value => emit(PriorityChanged(value)),
+                priorities().map(priority => {
+                  @html.option(
+                    value=priority.to_wire(),
+                    selected=priority == editor.priority,
+                    "\{priority_short(priority)} \{priority_label(priority)}",
+                  )
+                }),
+              ),
+            ),
+            @html.div(class="dialog-stage", [
+              @html.span(class="dialog-stage-label", "Stage"),
+              @html.span(class="dialog-stage-value", "Ready needs all fields"),
+            ]),
+          ]),
+          labeled_field(
+            "\{id}-dod",
+            "Definition of done",
+            @html.textarea(
+              id="\{id}-dod",
+              name="definition_of_done",
+              rows=4,
+              value=editor.definition_of_done,
+              placeholder="One entry per line",
+              disabled=locked,
+              on_input=value => emit(DefinitionOfDoneChanged(value)),
+              @html.fragment([]),
+            ),
+          ),
+        ])
+      }
       @html.div(class="dialog-form", [
         @html.div(class="dialog-grid", [
           labeled_field(
@@ -381,51 +462,20 @@ fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
             @html.textarea(
               id="\{id}-description",
               name="description",
-              rows=3,
+              rows=if creating { 4 } else { 3 },
               value=editor.description,
-              placeholder="Optional context",
+              placeholder=if creating {
+                "What should change? Rough notes are enough."
+              } else {
+                "Detailed scope and constraints"
+              },
               disabled=locked,
               on_input=value => emit(DescriptionChanged(value)),
               @html.fragment([]),
             ),
           ),
-          @html.div(class="dialog-pair", [
-            labeled_field(
-              "\{id}-priority",
-              "Priority",
-              @html.select(
-                id="\{id}-priority",
-                name="priority",
-                disabled=locked,
-                on_change=value => emit(PriorityChanged(value)),
-                priorities().map(priority => {
-                  @html.option(
-                    value=priority.to_wire(),
-                    selected=priority == editor.priority,
-                    "\{priority_short(priority)} \{priority_label(priority)}",
-                  )
-                }),
-              ),
-            ),
-            @html.div(class="dialog-stage", [
-              @html.span(class="dialog-stage-label", "Lands in"),
-              @html.span(class="dialog-stage-value", "Backlog"),
-            ]),
-          ]),
-          labeled_field(
-            "\{id}-dod",
-            "Definition of done",
-            @html.textarea(
-              id="\{id}-dod",
-              name="definition_of_done",
-              rows=4,
-              value=editor.definition_of_done,
-              placeholder="One entry per line",
-              disabled=locked,
-              on_input=value => emit(DefinitionOfDoneChanged(value)),
-              @html.fragment([]),
-            ),
-          ),
+          story_fields,
+          priority_and_dod,
         ]),
       ])
     }
@@ -439,10 +489,15 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let (heading, hint, submit_label) = match model.editor {
     Some(editor) =>
       match editor.mode {
-        CreateMode => ("New task", "", "Create task")
+        CreateMode =>
+          (
+            "New backlog item",
+            "A Refiner turns it into a user story and sets the initial priority.",
+            "Add to Backlog",
+          )
         EditMode(task_id~) => ("Edit \{task_id}", "", "Save changes")
       }
-    None => ("New task", "", "Create task")
+    None => ("New backlog item", "", "Add to Backlog")
   }
   let blocked = write_blocked_hint(model)
   let title_empty = match model.editor {
@@ -461,7 +516,7 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
             @html.h2(class="dialog-title", heading),
             @html.p(
               class="dialog-subtitle",
-              "One task per row of work. Shape it, scope it, then move it through the flow.",
+              "A backlog item becomes a story during Shaping.",
             ),
           ]),
           close_button("create-dialog"),
@@ -659,6 +714,9 @@ fn primary_intent(
   class~ : String,
 ) -> @html.Html {
   guard has_primary_intent(shown) else { return @html.nothing }
+  let ready_blocked = primary_move(shown) is Ready &&
+    ready_blocked_hint(task) is Some(_)
+  let disabled = disabled || ready_blocked
   // A failed/interrupted run stays in its lane. Its primary action is run
   // recovery, never the stage move that would turn the card into Paused.
   if ticket_task_failed(model, task.id) {

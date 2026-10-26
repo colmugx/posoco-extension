@@ -5,6 +5,7 @@ pub(all) enum ClientBoardStage {
   Refining
   Ready
   Running
+  Verification
   Review
   Done
   Suspended
@@ -231,6 +232,8 @@ pub struct ClientBoardTask {
   created_at_ms : Int64
   updated_at_ms : Int64
   ready_since_ms : Int64?
+  user_story : String
+  implementation_suggestions : String
   model : ClientModelSelection?
   review : ClientReviewReport?
   /// Durable reviewer feedback of the latest request-changes decision;

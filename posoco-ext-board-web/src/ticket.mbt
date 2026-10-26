@@ -151,7 +151,29 @@ fn decode_ticket_question(value : Json) -> TicketQuestion? {
     Some(Number(value, ..)) => value.to_int64()
     _ => 0L
   }
-  Some({ id, task_id, question, kind, options, asked_at, })
+  let asked_by = match fields.get("asked_by") {
+    Some(String(value)) => value
+    _ => "worker"
+  }
+  let audience = match fields.get("audience") {
+    Some(String(value)) => value
+    _ => "product_owner"
+  }
+  let status = match fields.get("status") {
+    Some(String(value)) => value
+    _ => "open"
+  }
+  Some({
+    id,
+    task_id,
+    question,
+    kind,
+    options,
+    asked_at,
+    asked_by,
+    audience,
+    status,
+  })
 }
 
 ///|
@@ -542,19 +564,26 @@ fn ticket_answer(
   question_id : String,
   answer : TicketAnswer,
   emit : @rabbita.Emit[Msg],
+  answered_by~ : String = "product_owner",
 ) -> @rabbita.Cmd {
   let args : Json = match answer {
     TicketText(value) =>
-      { "question_id": Json::string(question_id), "text": Json::string(value) }
+      {
+        "question_id": Json::string(question_id),
+        "text": Json::string(value),
+        "answered_by": Json::string(answered_by),
+      }
     TicketConfirm(value) =>
       {
         "question_id": Json::string(question_id),
         "confirm": Json::boolean(value),
+        "answered_by": Json::string(answered_by),
       }
     TicketSelect(value) =>
       {
         "question_id": Json::string(question_id),
         "index": Json::number(value.to_double()),
+        "answered_by": Json::string(answered_by),
       }
   }
   send_ticket_command("board.ticket.answer", args, emit)
@@ -1231,6 +1260,13 @@ fn ticket_question_card(
               on_click=emit(TicketAnswered(question.id, TicketText(draft))),
               "Send other",
             ),
+            @html.button(
+              type_="button",
+              class="btn btn-sm",
+              disabled=model.ticket_sending || draft.trim().is_empty(),
+              on_click=emit(TicketAnsweredAsRefiner(question.id, draft)),
+              "Answer as Refiner",
+            ),
           ]),
         ]),
       ])
@@ -1255,12 +1291,23 @@ fn ticket_question_card(
           on_click=emit(TicketAnswered(question.id, TicketText(draft))),
           "Send",
         ),
+        @html.button(
+          type_="button",
+          class="btn btn-sm",
+          disabled=model.ticket_sending || draft.trim().is_empty(),
+          on_click=emit(TicketAnsweredAsRefiner(question.id, draft)),
+          "Answer as Refiner",
+        ),
       ])
   }
   @html.div(class="ticket-question", [
     @html.div(class="ticket-question-meta", [
       @html.span(class="ticket-question-task", title),
       @html.span(class="ticket-question-kind", question.kind),
+      @html.span(
+        class="ticket-question-route",
+        "\{question.asked_by} → \{question.audience}",
+      ),
     ]),
     @html.div(class="ticket-question-text", question.question),
     answer_controls,

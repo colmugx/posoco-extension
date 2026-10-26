@@ -60,6 +60,8 @@ pub fn BoardTask::from_record(
   created_at_ms~ : Int64,
   updated_at_ms~ : Int64,
   ready_since_ms~ : Int64?,
+  user_story~ : String = "",
+  implementation_suggestions~ : String = "",
   model~ : ModelSelection? = None,
   review~ : ReviewReport? = None,
   review_feedback~ : String? = None,
@@ -75,6 +77,8 @@ pub fn BoardTask::from_record(
     created_at_ms,
     updated_at_ms,
     ready_since_ms,
+    user_story,
+    implementation_suggestions,
     model,
     review: match review {
       Some(report) => Some(report.copy_detached())

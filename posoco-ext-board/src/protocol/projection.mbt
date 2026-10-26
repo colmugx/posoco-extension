@@ -39,6 +39,7 @@ fn wire_stage(value : @domain.BoardStage) -> Json {
       Refining => "refining"
       Ready => "ready"
       Running => "running"
+      Verification => "verification"
       Review => "review"
       Done => "done"
       Suspended => "suspended"
@@ -236,6 +237,8 @@ pub fn task_to_json(task : @domain.BoardTask) -> Json {
     "created_at_ms": wire_number(task.created_at_ms),
     "updated_at_ms": wire_number(task.updated_at_ms),
     "ready_since_ms": wire_optional_number(task.ready_since_ms),
+    "user_story": Json::string(task.user_story),
+    "implementation_suggestions": Json::string(task.implementation_suggestions),
     "model": wire_optional_model(task.model),
     "review": wire_optional_review(task.review),
     "review_feedback": wire_optional_text(task.review_feedback),
