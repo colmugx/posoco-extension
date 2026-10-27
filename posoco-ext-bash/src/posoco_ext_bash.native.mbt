@@ -90,8 +90,13 @@ async fn ShellTools::bash_foreground(
         )
         let handle : ShellChildHandle = { proc, exited: false, }
         self.in_flight[key] = handle
+        // Keep data already read even when an inherited pipe writer stays open.
+        // The drain task must be cancelled explicitly after the grace period:
+        // cancelling its waiter does not cancel the task itself.
+        let output_sink = Ref::{ val: "", }
+        let decode_failed_sink = Ref::{ val: false, }
         let drain = group.spawn(async fn() {
-          bash_drain_native(reader, session~)
+          bash_drain_native(reader, output_sink, decode_failed_sink, session~)
         })
         let exit_code = proc.wait()
         match session {
@@ -108,8 +113,12 @@ async fn ShellTools::bash_foreground(
         let (content, decode_failed) = match drained {
           Some(data) => data
           None => {
+            // A grandchild may inherit stdout/stderr after its direct parent
+            // exits. Closing the reader alone cannot reliably wake the drain
+            // coroutine and the enclosing task group still joins that task.
+            drain.cancel()
             reader.close()
-            ("", false)
+            (output_sink.val, decode_failed_sink.val)
           }
         }
         (exit_code, content, decode_failed)
@@ -177,6 +186,8 @@ fn bash_utf8_complete_prefix(data : Array[Byte]) -> (String, Int32, Bool) {
 /// rather than the first 32 KiB, since test failures usually occur at the end.
 async fn bash_drain_native(
   reader : @process.ReadFromProcess,
+  output_sink : Ref[String],
+  decode_failed_sink : Ref[Bool],
   session~ : ShellSession? = None,
 ) -> (String, Bool) {
   let mut output = ""
@@ -197,6 +208,7 @@ async fn bash_drain_native(
         let (text, used, valid) = bash_utf8_complete_prefix(joined)
         if !valid {
           decode_failed = true
+          decode_failed_sink.val = true
           continue
         }
         // Keep output bounded as chunks arrive. Reuse the current shared
@@ -214,6 +226,7 @@ async fn bash_drain_native(
             marker +
             bash_tail_chars(combined, total_chars, tail_chars)
         }
+        output_sink.val = output
         match session {
           Some(active) => active.append(text)
           None => ()
@@ -228,6 +241,7 @@ async fn bash_drain_native(
   if !pending.is_empty() {
     decode_failed = true
   }
+  decode_failed_sink.val = decode_failed
   (output, decode_failed)
 }
 
