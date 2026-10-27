@@ -466,3 +466,33 @@ async test "bash large output retains the final diagnostic" {
     _ => fail("flooded command should finish successfully")
   }
 }
+
+///|
+/// A detached descendant can keep stdout open after sh has exited. The
+/// foreground tool must return promptly with the bytes already produced,
+/// instead of waiting for its own hard runtime deadline.
+async test "bash: inherited stdout writer does not delay completed command" {
+  let bash = ShellTools()
+  let start = @async.now()
+  let result : @posoco.ToolOutcome? = @async.with_timeout_opt(5_000, async fn() {
+    bash.execute(
+      bash_session_test_ctx(
+        "bash",
+        Json::object(
+          Map::from_array([
+            ("cmd", Json::string("echo completed; sleep 8 &")),
+            ("timeout_ms", Json::number(20_000.0)),
+          ]),
+        ),
+        1193,
+      ),
+    )
+  })
+  match result {
+    Some(@posoco.ToolOutcome::Success(content~, ..)) =>
+      assert_true(content.contains("completed"))
+    _ => fail("completed shell must return its buffered output promptly")
+  }
+  assert_true(@async.now() - start < 5_000L)
+  assert_false(bash.in_flight.contains(1193))
+}
