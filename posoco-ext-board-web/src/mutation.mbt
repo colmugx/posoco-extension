@@ -66,19 +66,45 @@ fn Editor::from_task(
 }
 
 ///|
+/// A backlog idea becomes a short card title from its first non-empty line;
+/// the full text stays as the description for the Refiner.
+fn idea_title(text : String) -> String {
+  let lines : Array[String] = []
+  for part in text.split("\n") {
+    if part.trim() != "" {
+      lines.push(part.trim().to_owned())
+    }
+  }
+  let line = match lines.get(0) {
+    Some(line) => line
+    None => ""
+  }
+  if line.length() <= 80 {
+    line
+  } else {
+    line[0:80].to_owned() + "…"
+  }
+}
+
+///|
 /// Build the create command from a draft and an injected identifier. IDs are
-/// `cmd-`/`task-` prefixed UUIDs; dependencies are not part of the v1 web
-/// editor and stay empty. Priority spelling uses the client's `to_wire`.
+/// `cmd-`/`task-` prefixed UUIDs; the web editor does not expose dependencies,
+/// so they stay empty. Priority spelling uses the client's `to_wire`.
 fn create_command(
   uuid : String,
   revision : Int64,
   editor : Editor,
 ) -> @protocol.BoardClientCommand {
+  let title = if editor.mode is CreateMode && editor.title.trim() == "" {
+    idea_title(editor.description)
+  } else {
+    editor.title.trim().to_owned()
+  }
   @client.create_task_command(
     "cmd-" + uuid,
     revision,
     id="task-" + uuid,
-    title=editor.title.trim().to_owned(),
+    title~,
     description=editor.description,
     priority=editor.priority,
     definition_of_done=definition_of_done_lines(editor.definition_of_done),

@@ -68,6 +68,7 @@ fn wbtest_running_run(task_id : String) -> TicketRun {
     task_id,
     session_id: "s1",
     phase: "work",
+    role: "rd",
     status: "running",
     error: None,
     result: None,

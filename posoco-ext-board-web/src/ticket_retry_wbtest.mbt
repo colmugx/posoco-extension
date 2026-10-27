@@ -7,6 +7,7 @@ fn retry_run(task_id : String, status : String) -> TicketRun {
     task_id,
     session_id: "s1",
     phase: "work",
+    role: "rd",
     status,
     error: if status == "failed" {
       Some("provider timed out")

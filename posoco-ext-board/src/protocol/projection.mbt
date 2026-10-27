@@ -219,6 +219,31 @@ fn wire_optional_review(value : @domain.ReviewReport?) -> Json {
 }
 
 ///|
+fn wire_role(value : @domain.TeamRole) -> Json {
+  Json::string(
+    match value {
+      PO => "po"
+      Refiner => "refiner"
+      RD => "rd"
+      SET => "set"
+      TE => "te"
+    },
+  )
+}
+
+///|
+fn wire_assignments(values : Array[@domain.TeamAssignment]) -> Json {
+  Json::array(
+    values.map(assignment => {
+      Json::object({
+        "role": wire_role(assignment.role),
+        "member_id": Json::string(assignment.member_id),
+      })
+    }),
+  )
+}
+
+///|
 /// Full committed task on the wire: all record fields, snake_case enum
 /// strings and JSON null for the absent `ready_since_ms`, `model`, `review`
 /// and `review_feedback`. The nested arrays are re-allocated, never aliased
@@ -239,6 +264,7 @@ pub fn task_to_json(task : @domain.BoardTask) -> Json {
     "ready_since_ms": wire_optional_number(task.ready_since_ms),
     "user_story": Json::string(task.user_story),
     "implementation_suggestions": Json::string(task.implementation_suggestions),
+    "assignments": wire_assignments(task.assignments),
     "model": wire_optional_model(task.model),
     "review": wire_optional_review(task.review),
     "review_feedback": wire_optional_text(task.review_feedback),

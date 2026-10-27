@@ -57,6 +57,15 @@ pub(all) enum BoardCommand {
   /// Remove a non-running task. Used when shaping replaces one oversized
   /// ticket with independently executable tickets.
   DeleteTask(id~ : BoardTaskId, at_ms~ : Int64, expected_revision~ : Int64)
+  /// Replace one accountability slot on a work item. Display names are a host
+  /// concern; this stores only the stable role and member id.
+  AssignRole(
+    id~ : BoardTaskId,
+    role~ : TeamRole,
+    member_id~ : String,
+    at_ms~ : Int64,
+    expected_revision~ : Int64
+  )
   QueueAttempt(
     id~ : AttemptId,
     task~ : BoardTaskId,
@@ -115,6 +124,7 @@ fn BoardCommand::expected_revision(self : BoardCommand) -> Int64 {
     | SetReviewReport(expected_revision~, ..)
     | MoveTask(expected_revision~, ..)
     | DeleteTask(expected_revision~, ..)
+    | AssignRole(expected_revision~, ..)
     | QueueAttempt(expected_revision~, ..)
     | StartAttempt(expected_revision~, ..)
     | FinishAttempt(expected_revision~, ..)
@@ -199,6 +209,8 @@ pub fn BoardCommand::copy_detached(self : BoardCommand) -> BoardCommand {
         at_ms~,
         expected_revision~,
       )
+    AssignRole(id~, role~, member_id~, at_ms~, expected_revision~) =>
+      AssignRole(id~, role~, member_id~, at_ms~, expected_revision~)
     ExpandGraph(
       expansion~,
       candidates~,

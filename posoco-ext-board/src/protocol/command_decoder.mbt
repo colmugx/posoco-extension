@@ -141,6 +141,34 @@ fn args_priority(
 }
 
 ///|
+fn args_role(
+  fields : Map[String, Json],
+  key : String,
+) -> @domain.TeamRole raise SchemaError {
+  match args_string(fields, key) {
+    "po" => PO
+    "refiner" => Refiner
+    "rd" => RD
+    "set" => SET
+    "te" => TE
+    _ => raise Schema("field '\{key}' must be one of: po, refiner, rd, set, te")
+  }
+}
+
+///|
+fn decode_assign_role(
+  fields : Map[String, Json],
+  at_ms : Int64,
+  expected_revision : Int64,
+) -> @domain.BoardCommand raise SchemaError {
+  args_allowlist(fields, ["id", "role", "member_id"])
+  let id = args_task_id(fields, "id")
+  let role = args_role(fields, "role")
+  let member_id = args_string(fields, "member_id")
+  @domain.AssignRole(id~, role~, member_id~, at_ms~, expected_revision~)
+}
+
+///|
 fn args_optional_priority(
   fields : Map[String, Json],
   key : String,
@@ -165,13 +193,14 @@ fn args_stage(
     "refining" => Refining
     "ready" => Ready
     "running" => Running
+    "verification" => Verification
     "review" => Review
     "done" => Done
     "suspended" => Suspended
     "cancelled" => Cancelled
     _ =>
       raise Schema(
-        "field '\{key}' must be one of: created, refining, ready, running, review, done, suspended, cancelled",
+        "field '\{key}' must be one of: created, refining, ready, running, verification, review, done, suspended, cancelled",
       )
   }
 }
@@ -577,6 +606,7 @@ fn command_parser(
     "board.task.request_changes" => Some(decode_request_changes)
     "board.task.move" => Some(decode_move_task)
     "board.task.delete" => Some(decode_delete_task)
+    "board.task.assign_role" => Some(decode_assign_role)
     "board.attempt.queue" => Some(decode_queue_attempt)
     "board.attempt.start" => Some(decode_start_attempt)
     "board.attempt.finish" => Some(decode_finish_attempt)

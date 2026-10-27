@@ -1,7 +1,5 @@
 ///|
-/// Host-side ticket frames. V1 keeps these outside the Board v1 wire contract
-/// so the authoritative task/attempt protocol stays unchanged; v2 will
-/// replace this shim with first-class ticket/session records.
+/// Host ticket frames. They stay outside the Board task/attempt wire contract.
 priv enum TicketFrame {
   TicketSnapshot(TicketState)
   TicketOutcome(Bool, String?, TicketState?)
@@ -476,6 +474,10 @@ fn decode_ticket_run(value : Json) -> TicketRun? {
     Some(String(value)) => value
     _ => "work"
   }
+  let role = match fields.get("role") {
+    Some(String(value)) => value
+    _ => ""
+  }
   let status = match fields.get("status") {
     Some(String(value)) => value
     _ => "running"
@@ -512,6 +514,7 @@ fn decode_ticket_run(value : Json) -> TicketRun? {
     task_id,
     session_id,
     phase,
+    role,
     status,
     error,
     result,
@@ -628,7 +631,13 @@ fn ticket_answer(
 
 ///|
 fn ticket_run_for(model : Model, task_id : String) -> TicketRun? {
-  model.tickets.runs.filter(run => run.task_id == task_id).get(0)
+  let runs = model.tickets.runs.filter(run => run.task_id == task_id)
+  for run in runs {
+    if run.status == "running" {
+      return Some(run)
+    }
+  }
+  runs.get(runs.length() - 1)
 }
 
 ///|
@@ -1057,7 +1066,17 @@ fn ticket_run_card(model : Model, run : TicketRun) -> @html.Html {
     Some(task) => task.title
     None => run.task_id
   }
-  let phase = if run.phase == "shape" { "Shaping" } else { "Working" }
+  let phase = if run.phase == "shape" {
+    "Shaping"
+  } else {
+    match run.role {
+      "" => "Working"
+      "rd" => "Working · RD"
+      "set" => "Working · SET"
+      "te" => "Verification · TE"
+      role => "Working · " + role
+    }
+  }
   let tool = match run.current_tool {
     Some(name) => " · " + name
     None => ""

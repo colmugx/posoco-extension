@@ -853,6 +853,7 @@ test "from domain snapshot converts every field and detaches arrays" {
       "ready_since_ms": Json::null(),
       "user_story": "",
       "implementation_suggestions": "",
+      "assignments": [],
       "model": Json::null(),
       "review": Json::null(),
       "review_feedback": Json::null(),

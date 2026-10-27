@@ -627,6 +627,33 @@ fn review_block(
 }
 
 ///|
+fn team_role_label(role : @client.ClientTeamRole) -> String {
+  match role {
+    PO => "PO"
+    Refiner => "Refiner"
+    RD => "RD"
+    SET => "SET"
+    TE => "TE"
+  }
+}
+
+///|
+fn task_assignments(task : @client.ClientBoardTask) -> @html.Html {
+  if task.assignments.is_empty() {
+    return @html.p(class="empty-line", "No team slots assigned yet.")
+  }
+  @html.div(
+    class="team-slots",
+    task.assignments.map(assignment => {
+      @html.span(
+        class="chip team-slot",
+        team_role_label(assignment.role) + " · " + assignment.member_id,
+      )
+    }),
+  )
+}
+
+///|
 fn task_details(
   model : Model,
   task : @client.ClientBoardTask,
@@ -671,6 +698,10 @@ fn task_details(
       // The report is what the decision below is about, so it leads.
       review_report_block(task),
       review_block(model, task, emit),
+      @html.section(class="detail-section", [
+        @html.h2(class="section-title", "Team"),
+        task_assignments(task),
+      ]),
       @html.section(class="detail-section", [
         @html.h2(class="section-title", "Definition of done"),
         task_dod(task),
@@ -723,8 +754,8 @@ fn task_fields(task : @client.ClientBoardTask) -> @html.Html {
 }
 
 ///|
-/// The definition of done is a promise list: the browser has no verification
-/// semantics in v1, so the entries render as text, never as checkboxes.
+/// The definition of done is a promise list: the browser does not execute
+/// verification, so entries render as text, never as checkboxes.
 fn task_dod(task : @client.ClientBoardTask) -> @html.Html {
   if task.definition_of_done.is_empty() {
     @html.p(class="empty-line", "No definition of done yet.")

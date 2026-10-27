@@ -27,6 +27,27 @@ pub(all) enum ClientBoardPriority {
 pub extend ClientBoardPriority with Eq::{equal, not_equal}
 
 ///|
+pub(all) enum ClientTeamRole {
+  PO
+  Refiner
+  RD
+  SET
+  TE
+} derive(Eq)
+
+///|
+pub extend ClientTeamRole with Eq::{equal, not_equal}
+
+///|
+pub struct ClientTeamAssignment {
+  role : ClientTeamRole
+  member_id : String
+} derive(Eq)
+
+///|
+pub extend ClientTeamAssignment with Eq::{equal, not_equal}
+
+///|
 pub(all) enum ClientAttemptKind {
   Discuss
   Execute
@@ -234,6 +255,7 @@ pub struct ClientBoardTask {
   ready_since_ms : Int64?
   user_story : String
   implementation_suggestions : String
+  assignments : Array[ClientTeamAssignment]
   model : ClientModelSelection?
   review : ClientReviewReport?
   /// Durable reviewer feedback of the latest request-changes decision;
@@ -316,6 +338,7 @@ fn ClientBoardTask::copy_detached(self : ClientBoardTask) -> ClientBoardTask {
     ..self,
     definition_of_done: self.definition_of_done.copy(),
     dependencies: self.dependencies.copy(),
+    assignments: self.assignments.copy(),
     review: match self.review {
       Some(report) => Some(report.copy_detached())
       None => None

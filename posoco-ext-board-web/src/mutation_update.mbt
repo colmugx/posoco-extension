@@ -89,7 +89,12 @@ fn submit_editor(
   emit : @rabbita.Emit[Msg],
   env : Env,
 ) -> (Model, @rabbita.Cmd) {
-  if !mutations_allowed(model) || editor.title.trim().is_empty() {
+  let idea = if editor.mode is CreateMode {
+    editor.title + editor.description
+  } else {
+    editor.title
+  }
+  if !mutations_allowed(model) || idea.trim().is_empty() {
     return (model, @rabbita.none)
   }
   if editor.mode is EditMode(task_id~) &&

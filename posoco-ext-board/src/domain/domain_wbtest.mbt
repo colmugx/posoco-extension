@@ -1009,6 +1009,7 @@ test "queries return deep copies that never alias committed state" {
         ready_since_ms: None,
         user_story: "",
         implementation_suggestions: "",
+        assignments: [],
         model: None,
         review: None,
         review_feedback: None,
@@ -1423,11 +1424,15 @@ test "review report is rejected outside running and review" {
     let state = task_at(stage)
     assert_eq(
       rejection_of(state, review_cmd("t", state.revision(), Some(report))),
-      InvalidInput(reason="a review report requires a Running or Review ticket"),
+      InvalidInput(
+        reason="a review report requires a Running, Verification, or Review ticket",
+      ),
     )
     assert_eq(
       rejection_of(state, review_cmd("t", state.revision(), None)),
-      InvalidInput(reason="a review report requires a Running or Review ticket"),
+      InvalidInput(
+        reason="a review report requires a Running, Verification, or Review ticket",
+      ),
     )
   }
 }
@@ -1892,4 +1897,48 @@ test "story contract fields survive the Verification path" {
       move_cmd("story", verifying.revision(), Review),
     ).next_state
   assert_eq(review.task(tid("story")).unwrap().stage, Review)
+}
+
+///|
+test "assign role stores unique stable slots and replaces one role" {
+  let created = accept(BoardState::BoardState(), create_cmd("t1", 0L)).next_state
+  let assigned = accept(
+    created,
+    AssignRole(
+      id=tid("t1"),
+      role=RD,
+      member_id=" member-rd ",
+      at_ms=2000L,
+      expected_revision=1L,
+    ),
+  )
+  assert_eq(assigned.next_state.task(tid("t1")).unwrap().assignments, [
+    { role: RD, member_id: "member-rd", },
+  ])
+  let replaced = accept(
+    assigned.next_state,
+    AssignRole(
+      id=tid("t1"),
+      role=RD,
+      member_id="member-rd-2",
+      at_ms=3000L,
+      expected_revision=2L,
+    ),
+  )
+  assert_eq(replaced.next_state.task(tid("t1")).unwrap().assignments, [
+    { role: RD, member_id: "member-rd-2", },
+  ])
+  assert_true(
+    rejection_of(
+      replaced.next_state,
+      AssignRole(
+        id=tid("t1"),
+        role=SET,
+        member_id=" ",
+        at_ms=4000L,
+        expected_revision=3L,
+      ),
+    )
+    is InvalidInput(_),
+  )
 }

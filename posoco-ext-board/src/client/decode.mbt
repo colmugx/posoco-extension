@@ -97,6 +97,31 @@ fn priority(value : Json) -> ClientBoardPriority raise DecodeFailure {
 }
 
 ///|
+fn team_role(value : Json) -> ClientTeamRole raise DecodeFailure {
+  match text(value) {
+    "po" => PO
+    "refiner" => Refiner
+    "rd" => RD
+    "set" => SET
+    "te" => TE
+    _ => raise DecodeFailure("unknown team role")
+  }
+}
+
+///|
+fn team_assignments(
+  value : Json,
+) -> Array[ClientTeamAssignment] raise DecodeFailure {
+  items(value).map(item => {
+    let obj = fields(item)
+    {
+      role: team_role(required(obj, "role")),
+      member_id: text(required(obj, "member_id")),
+    }
+  })
+}
+
+///|
 fn kind(value : Json) -> ClientAttemptKind raise DecodeFailure {
   match text(value) {
     "discuss" => Discuss
@@ -250,6 +275,10 @@ fn task(value : Json) -> ClientBoardTask raise DecodeFailure {
     implementation_suggestions: match obj.get("implementation_suggestions") {
       None => ""
       Some(value) => text(value)
+    },
+    assignments: match obj.get("assignments") {
+      None => []
+      Some(value) => team_assignments(value)
     },
     model: match obj.get("model") {
       Some(value) => model(value)

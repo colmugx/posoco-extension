@@ -497,6 +497,54 @@ fn review(value : Json) -> @domain.ReviewReport? raise CodecError {
 }
 
 ///|
+fn role_json(value : @domain.TeamRole) -> Json {
+  Json::string(
+    match value {
+      PO => "PO"
+      Refiner => "Refiner"
+      RD => "RD"
+      SET => "SET"
+      TE => "TE"
+    },
+  )
+}
+
+///|
+fn role(value : Json) -> @domain.TeamRole raise CodecError {
+  match text(value) {
+    "PO" => PO
+    "Refiner" => Refiner
+    "RD" => RD
+    "SET" => SET
+    "TE" => TE
+    _ => raise Bad("unknown team role")
+  }
+}
+
+///|
+fn assignments_json(values : Array[@domain.TeamAssignment]) -> Json {
+  Json::array(
+    values.map(assignment => {
+      Json::object({
+        "role": role_json(assignment.role),
+        "member_id": Json::string(assignment.member_id),
+      })
+    }),
+  )
+}
+
+///|
+fn assignments(value : Json) -> Array[@domain.TeamAssignment] raise CodecError {
+  array(value).map(item => {
+    let f = fields(item, ["role", "member_id"])
+    @domain.TeamAssignment::from_record(
+      role=role(f["role"]),
+      member_id=nonempty(f["member_id"]),
+    )
+  })
+}
+
+///|
 fn task_json(task : @domain.BoardTask) -> Json {
   Json::object({
     "id": Json::string(task.id.value),
@@ -511,6 +559,7 @@ fn task_json(task : @domain.BoardTask) -> Json {
     "ready_since_ms": optional_number(task.ready_since_ms),
     "user_story": Json::string(task.user_story),
     "implementation_suggestions": Json::string(task.implementation_suggestions),
+    "assignments": assignments_json(task.assignments),
     "model": model_json(task.model),
     "review": review_json(task.review),
     "review_feedback": match task.review_feedback {
@@ -532,6 +581,7 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     ],
     [
       "model", "review", "review_feedback", "user_story", "implementation_suggestions",
+      "assignments",
     ],
   )
   @domain.BoardTask::from_record(
@@ -552,6 +602,10 @@ fn task_decode(value : Json) -> @domain.BoardTask raise CodecError {
     implementation_suggestions=match f.get("implementation_suggestions") {
       Some(value) => text(value)
       None => ""
+    },
+    assignments=match f.get("assignments") {
+      Some(value) => assignments(value)
+      None => []
     },
     model=match f.get("model") {
       Some(value) => model(value)

@@ -375,6 +375,28 @@ fn editor_form(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
       let locked = !mutations_allowed(model)
       let id = "board-editor"
       let creating = editor.mode is CreateMode
+      if creating {
+        return @html.div(class="dialog-form", [
+          labeled_field(
+            "\{id}-idea",
+            "What do you want to build?",
+            @html.textarea(
+              id="\{id}-idea",
+              name="idea",
+              rows=6,
+              value=editor.description,
+              placeholder="Describe the idea in your own words. Rough notes are enough.",
+              disabled=locked,
+              on_input=value => emit(DescriptionChanged(value)),
+              @html.fragment([]),
+            ),
+          ),
+          @html.p(
+            class="dialog-hint",
+            "A Refiner turns this into a user story, sets the priority, and writes the definition of done.",
+          ),
+        ])
+      }
       let story_fields = if creating {
         @html.p(
           class="dialog-hint",
@@ -516,8 +538,13 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     None => ("New backlog item", "", "Add to Backlog")
   }
   let blocked = write_blocked_hint(model)
-  let title_empty = match model.editor {
-    Some(editor) => editor.title.trim().is_empty()
+  let idea_empty = match model.editor {
+    Some(editor) =>
+      if editor.mode is CreateMode {
+        editor.description.trim().is_empty()
+      } else {
+        editor.title.trim().is_empty()
+      }
     None => true
   }
   @html.dialog(
@@ -572,7 +599,7 @@ fn editor_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           @html.button(
             type_="button",
             class="btn btn-primary",
-            disabled=blocked is Some(_) || title_empty,
+            disabled=blocked is Some(_) || idea_empty,
             attrs=@html.Attrs::build().on_click(_ => {
               ui_close("create-dialog")
               emit(SubmitRequested)
@@ -657,8 +684,8 @@ fn confirm_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-/// Pipeline stepper: every step is a move target, offered only when the v1
-/// flow allows it. It makes the whole journey legible at a glance.
+/// Pipeline stepper: every step is a move target, offered only when the
+/// current flow allows it. It makes the whole journey legible at a glance.
 fn stage_stepper(
   model : Model,
   task : @client.ClientBoardTask,

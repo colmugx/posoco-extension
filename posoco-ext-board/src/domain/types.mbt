@@ -47,6 +47,43 @@ pub fn BoardPriority::rank(self : BoardPriority) -> Int32 {
 }
 
 ///|
+/// Stable accountability roles. Display names are configurable; these ids
+/// never change.
+pub(all) enum TeamRole {
+  PO
+  Refiner
+  RD
+  SET
+  TE
+} derive(Eq, Debug)
+
+///|
+pub extend TeamRole with Eq::{equal, not_equal}
+
+///|
+pub extend TeamRole with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub struct TeamAssignment {
+  role : TeamRole
+  member_id : String
+} derive(Eq, Debug)
+
+///|
+pub extend TeamAssignment with Eq::{equal, not_equal}
+
+///|
+pub extend TeamAssignment with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub fn TeamAssignment::from_record(
+  role~ : TeamRole,
+  member_id~ : String,
+) -> TeamAssignment {
+  { role, member_id, }
+}
+
+///|
 /// What kind of work one attempt performs.
 pub(all) enum AttemptKind {
   Discuss
@@ -250,6 +287,8 @@ pub struct BoardTask {
   user_story : String
   /// Starting points for the development group, not a mandate.
   implementation_suggestions : String
+  /// Durable accountability slots for this work item. Empty until assigned.
+  assignments : Array[TeamAssignment]
   /// `None` inherits the current Cetas model at execution time; `Some`
   /// pins the slot/effort for this work item.
   model : ModelSelection?

@@ -139,6 +139,8 @@ pub fn BoardDomain::propose(
       propose_set_review_report(state, id, review, at_ms)
     MoveTask(id~, to~, at_ms~, ..) => propose_move(state, id, to, at_ms)
     DeleteTask(id~, at_ms~, ..) => propose_delete(state, id, at_ms)
+    AssignRole(id~, role~, member_id~, at_ms~, ..) =>
+      propose_assign_role(state, id, role, member_id, at_ms)
     QueueAttempt(id~, task~, kind~, at_ms~, ..) =>
       propose_queue_attempt(state, id, task, kind, at_ms)
     StartAttempt(id~, at_ms~, ..) => propose_start_attempt(state, id, at_ms)
@@ -210,6 +212,7 @@ fn propose_create(
     ready_since_ms: None,
     user_story,
     implementation_suggestions,
+    assignments: [],
     model: None,
     review: None,
     review_feedback: None,
@@ -416,11 +419,11 @@ fn propose_set_review_report(
     return Err(InvalidInput(reason="updated_at_ms must not be negative"))
   }
   match task.stage {
-    Running | Review => ()
+    Running | Verification | Review => ()
     _ =>
       return Err(
         InvalidInput(
-          reason="a review report requires a Running or Review ticket",
+          reason="a review report requires a Running, Verification, or Review ticket",
         ),
       )
   }
@@ -540,6 +543,50 @@ fn propose_delete(
   next.remove_task(id)
   next.bump_revision()
   Ok({ next_state: next, events: [TaskDeleted(id~, at_ms~)], })
+}
+
+///|
+fn propose_assign_role(
+  state : BoardState,
+  id : BoardTaskId,
+  role : TeamRole,
+  member_id : String,
+  at_ms : Int64,
+) -> Result[BoardProposal, BoardError] {
+  if id.value == "" {
+    return Err(InvalidInput(reason="task id must not be empty"))
+  }
+  let member_id = member_id.trim().to_owned()
+  if member_id == "" {
+    return Err(InvalidInput(reason="member id must not be empty"))
+  }
+  if member_id.length() > 80 {
+    return Err(InvalidInput(reason="member id must be at most 80 characters"))
+  }
+  if invalid_time(at_ms) {
+    return Err(InvalidInput(reason="updated_at_ms must not be negative"))
+  }
+  let task = match state.task(id) {
+    Some(task) => task
+    None => return Err(TaskMissing(task=id))
+  }
+  let assignments : Array[TeamAssignment] = []
+  let mut replaced = false
+  for assignment in task.assignments {
+    if assignment.role == role {
+      assignments.push({ role, member_id, })
+      replaced = true
+    } else {
+      assignments.push(assignment)
+    }
+  }
+  if !replaced {
+    assignments.push({ role, member_id, })
+  }
+  let next = state.clone_detached()
+  next.put_task({ ..task, assignments, updated_at_ms: at_ms, })
+  next.bump_revision()
+  Ok({ next_state: next, events: [TaskUpdated(id~, at_ms~)], })
 }
 
 ///|
@@ -921,6 +968,7 @@ fn propose_expand_graph(
       ready_since_ms: None,
       user_story: "",
       implementation_suggestions: "",
+      assignments: [],
       model: None,
       review: None,
       review_feedback: None,

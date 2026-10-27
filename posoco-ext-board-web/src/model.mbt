@@ -55,6 +55,7 @@ priv struct TicketRun {
   task_id : String
   session_id : String
   phase : String
+  role : String
   status : String
   error : String?
   result : String?
@@ -148,7 +149,7 @@ priv struct TeamNames {
 
 ///|
 fn TeamNames::defaults() -> TeamNames {
-  { refiner: "Refiner", rd: "RD", set: "SET", te: "TE", }
+  { refiner: "Agile Coach", rd: "RD", set: "SET", te: "TE", }
 }
 
 ///|

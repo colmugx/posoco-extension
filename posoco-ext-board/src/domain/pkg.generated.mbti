@@ -79,6 +79,7 @@ pub(all) enum BoardCommand {
   SetReviewReport(id~ : BoardTaskId, review~ : ReviewReport?, at_ms~ : Int64, expected_revision~ : Int64)
   MoveTask(id~ : BoardTaskId, to~ : BoardStage, at_ms~ : Int64, expected_revision~ : Int64)
   DeleteTask(id~ : BoardTaskId, at_ms~ : Int64, expected_revision~ : Int64)
+  AssignRole(id~ : BoardTaskId, role~ : TeamRole, member_id~ : String, at_ms~ : Int64, expected_revision~ : Int64)
   QueueAttempt(id~ : AttemptId, task~ : BoardTaskId, kind~ : AttemptKind, at_ms~ : Int64, expected_revision~ : Int64)
   StartAttempt(id~ : AttemptId, at_ms~ : Int64, expected_revision~ : Int64)
   FinishAttempt(id~ : AttemptId, outcome~ : AttemptOutcome, at_ms~ : Int64, expected_revision~ : Int64)
@@ -206,13 +207,14 @@ pub struct BoardTask {
   ready_since_ms : Int64?
   user_story : String
   implementation_suggestions : String
+  assignments : Array[TeamAssignment]
   model : ModelSelection?
   review : ReviewReport?
   review_feedback : String?
 } derive(Eq, @debug.Debug)
 pub fn BoardTask::copy_detached(Self) -> Self
 pub fn BoardTask::equal(Self, Self) -> Bool
-pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?, user_story? : String, implementation_suggestions? : String, model? : ModelSelection?, review? : ReviewReport?, review_feedback? : String?) -> Self
+pub fn BoardTask::from_record(id~ : BoardTaskId, title~ : String, description~ : String, stage~ : BoardStage, priority~ : BoardPriority, definition_of_done~ : Array[String], dependencies~ : Array[BoardTaskId], created_at_ms~ : Int64, updated_at_ms~ : Int64, ready_since_ms~ : Int64?, user_story? : String, implementation_suggestions? : String, assignments? : Array[TeamAssignment], model? : ModelSelection?, review? : ReviewReport?, review_feedback? : String?) -> Self
 pub fn BoardTask::not_equal(Self, Self) -> Bool
 pub fn BoardTask::to_repr(Self) -> @debug.Repr
 
@@ -366,6 +368,26 @@ pub fn ReviewReport::equal(Self, Self) -> Bool
 pub fn ReviewReport::from_record(outcome~ : String, summary~ : String, changes~ : Array[String], verification~ : Array[ReviewEvidence], risks~ : Array[String], notes~ : Array[String], open_questions~ : Array[String], artifacts~ : Array[ReviewArtifact]) -> Self
 pub fn ReviewReport::not_equal(Self, Self) -> Bool
 pub fn ReviewReport::to_repr(Self) -> @debug.Repr
+
+pub struct TeamAssignment {
+  role : TeamRole
+  member_id : String
+} derive(Eq, @debug.Debug)
+pub fn TeamAssignment::equal(Self, Self) -> Bool
+pub fn TeamAssignment::from_record(role~ : TeamRole, member_id~ : String) -> Self
+pub fn TeamAssignment::not_equal(Self, Self) -> Bool
+pub fn TeamAssignment::to_repr(Self) -> @debug.Repr
+
+pub(all) enum TeamRole {
+  PO
+  Refiner
+  RD
+  SET
+  TE
+} derive(Eq, @debug.Debug)
+pub fn TeamRole::equal(Self, Self) -> Bool
+pub fn TeamRole::not_equal(Self, Self) -> Bool
+pub fn TeamRole::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

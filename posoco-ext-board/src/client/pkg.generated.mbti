@@ -145,6 +145,7 @@ pub struct ClientBoardTask {
   ready_since_ms : Int64?
   user_story : String
   implementation_suggestions : String
+  assignments : Array[ClientTeamAssignment]
   model : ClientModelSelection?
   review : ClientReviewReport?
   review_feedback : String?
@@ -246,6 +247,23 @@ pub struct ClientReviewReport {
 pub fn ClientReviewReport::ClientReviewReport(outcome~ : String, summary~ : String, changes~ : Array[String], verification~ : Array[ClientReviewEvidence], risks~ : Array[String], notes~ : Array[String], open_questions~ : Array[String], artifacts~ : Array[ClientReviewArtifact]) -> Self
 pub fn ClientReviewReport::equal(Self, Self) -> Bool
 pub fn ClientReviewReport::not_equal(Self, Self) -> Bool
+
+pub struct ClientTeamAssignment {
+  role : ClientTeamRole
+  member_id : String
+} derive(Eq)
+pub fn ClientTeamAssignment::equal(Self, Self) -> Bool
+pub fn ClientTeamAssignment::not_equal(Self, Self) -> Bool
+
+pub(all) enum ClientTeamRole {
+  PO
+  Refiner
+  RD
+  SET
+  TE
+} derive(Eq)
+pub fn ClientTeamRole::equal(Self, Self) -> Bool
+pub fn ClientTeamRole::not_equal(Self, Self) -> Bool
 
 pub struct DecodedBoardSnapshot {
   revision : Int64

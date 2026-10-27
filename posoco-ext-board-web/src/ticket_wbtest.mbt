@@ -70,6 +70,7 @@ test "failed runs belong to the ticket, not the question inbox" {
         task_id: "t1",
         session_id: "s1",
         phase: "work",
+        role: "rd",
         status: "failed",
         error: Some("provider timed out"),
         result: None,
