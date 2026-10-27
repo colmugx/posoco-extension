@@ -52,6 +52,8 @@ fn wbtest_ticket_model(
   runs : Array[TicketRun],
 ) -> Model {
   apply_ticket_state(Model::empty(true), {
+    project: "",
+    team: None,
     questions: [],
     runs,
     progress: [],
@@ -136,6 +138,8 @@ test "a ticket frame that omits the catalog keeps the last known one" {
   assert_eq(ticket_model_catalog(outcome).models.length(), 1)
   // An explicit non-selectable projection does replace the retained catalog.
   let disabled = apply_ticket_state(outcome, {
+    project: "",
+    team: None,
     questions: [],
     runs: [],
     progress: [],

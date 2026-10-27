@@ -156,9 +156,26 @@ fn archive_count(model : Model) -> Int32 {
 fn topbar(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let archived = archive_count(model)
   @html.header(class="topbar", [
-    @html.div(class="brand", [@html.span(class="brand-mark", "Posoco Board")]),
+    @html.div(class="brand", [
+      @html.span(class="brand-mark", "Cetas Board"),
+      if model.tickets.project == "" {
+        @html.nothing
+      } else {
+        @html.span(class="brand-flow", model.tickets.project)
+      },
+    ]),
     @html.div(class="topbar-actions", [
       live_chip(model, emit),
+      @html.button(
+        type_="button",
+        class="btn btn-sm btn-ghost",
+        title="Customize team names",
+        attrs=@html.Attrs::build().on_click(_ => {
+          ui_show("team-dialog")
+          emit(TeamOpened)
+        }),
+        [@html.span(class="btn-icon", "◎"), @html.span(class="btn-label", "Team")],
+      ),
       if archived == 0 {
         @html.nothing
       } else {
@@ -1368,6 +1385,87 @@ fn live_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
 }
 
 ///|
+fn team_name_field(
+  id : String,
+  label : String,
+  value : String,
+  role : String,
+  emit : @rabbita.Emit[Msg],
+) -> @html.Html {
+  labeled_field(
+    id,
+    label,
+    @html.input(
+      input_type=Text,
+      id~,
+      name=id,
+      class="dialog-title-input",
+      value~,
+      attrs=@html.Attrs::build().aria_label(label),
+      on_input=text => emit(TeamNameChanged(role, text)),
+    ),
+  )
+}
+
+///|
+fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
+  let draft = model.team_draft
+  @html.dialog(
+    id="team-dialog",
+    class="dialog team-dialog",
+    on_close=_ => emit(TeamClosed),
+    attrs=@html.Attrs::build().aria_label("Team names"),
+    [
+      @html.div(class="dialog-shell", [
+        @html.header(class="dialog-head", [
+          @html.div(class="dialog-titles", [
+            @html.h2(class="dialog-title", "Team names"),
+            @html.p(
+              class="dialog-subtitle",
+              "Names are used in the Board and in each member's system prompt.",
+            ),
+          ]),
+          close_button("team-dialog"),
+        ]),
+        @html.div(class="dialog-body", [
+          @html.div(class="dialog-grid", [
+            team_name_field(
+              "team-refiner", "Refiner", draft.refiner, "refiner", emit,
+            ),
+            team_name_field("team-rd", "RD", draft.rd, "rd", emit),
+            team_name_field("team-set", "SET", draft.set, "set", emit),
+            team_name_field("team-te", "TE", draft.te, "te", emit),
+          ]),
+        ]),
+        @html.footer(class="dialog-foot", [
+          @html.div(class="dialog-actions", [
+            @html.button(
+              type_="button",
+              class="btn",
+              attrs=@html.Attrs::build().on_click(_ => {
+                ui_close("team-dialog")
+                emit(TeamClosed)
+              }),
+              "Cancel",
+            ),
+            @html.button(
+              type_="button",
+              class="btn btn-primary",
+              disabled=model.ticket_sending || !model.ticket_available,
+              attrs=@html.Attrs::build().on_click(_ => {
+                ui_close("team-dialog")
+                emit(TeamSaved)
+              }),
+              "Save names",
+            ),
+          ]),
+        ]),
+      ]),
+    ],
+  )
+}
+
+///|
 fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   @html.main_(class="app", [
     topbar(model, emit),
@@ -1380,6 +1478,7 @@ fn view(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
     ticket_activity_dialog(model, emit),
     archive_dialog(model, emit),
     live_dialog(model, emit),
+    team_dialog(model, emit),
     confirm_dialog(model, emit),
     notice_toast(model.notice, emit),
   ])

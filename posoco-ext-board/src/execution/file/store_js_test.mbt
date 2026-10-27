@@ -49,7 +49,7 @@ async test "JS journal admits exactly one lock owner and reloads identity after 
   competitor.close()
   let lock = @node_fs.read(directory + "/execution.lock")
   assert_true(
-    lock is Ok(Some(token)) && token.has_prefix("board-execution-journal-v1:"),
+    lock is Ok(Some(token)) && token.has_prefix("board-execution-journal-v2:"),
   )
   assert_true(
     owner.persist([reserved(task="task-a", attempt="attempt-a")]) is Ok(_),
@@ -119,6 +119,25 @@ async test "JS stale execution lock fails closed and is never removed or reacqui
     @node_fs.read(directory + "/execution.lock"),
     Ok(Some("old owner unknown")),
   )
+}
+
+///|
+async test "JS lock owned by a dead process is reclaimed after a crash" {
+  let directory = @fixtures.temporary_directory()
+  defer @fixtures.cleanup(directory)
+  @fixtures.put(
+    directory + "/execution.lock",
+    "board-execution-journal-v2:999999999:1:stale\n",
+  )
+  let store = @file.FileBoardExecutionStore(directory~)
+  assert_eq(store.load(), Ok([]))
+  let lock = @node_fs.read(directory + "/execution.lock")
+  assert_true(
+    lock is Ok(Some(token)) &&
+    token.has_prefix("board-execution-journal-v2:") &&
+    !token.contains("999999999"),
+  )
+  store.close()
 }
 
 ///|

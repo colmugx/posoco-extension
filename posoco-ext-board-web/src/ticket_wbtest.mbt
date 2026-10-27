@@ -17,6 +17,8 @@ test "ticket state decodes the question drawer payload" {
 ///|
 test "ticket state records questions without forcing the drawer" {
   let state : TicketState = {
+    project: "",
+    team: None,
     questions: [
       {
         id: "q1",
@@ -60,6 +62,8 @@ test "running ticket activity belongs to the ticket, not the question inbox" {
 ///|
 test "failed runs belong to the ticket, not the question inbox" {
   let state : TicketState = {
+    project: "",
+    team: None,
     questions: [],
     runs: [
       {

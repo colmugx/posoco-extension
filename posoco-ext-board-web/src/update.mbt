@@ -456,6 +456,48 @@ fn update(
       }
     LiveOpened => ({ ..model, live_open: true, }, @rabbita.none)
     LiveClosed => ({ ..model, live_open: false, }, @rabbita.none)
+    TeamOpened => {
+      let draft = match model.tickets.team {
+        Some(team) => team
+        None => TeamNames::defaults()
+      }
+      ({ ..model, team_open: true, team_draft: draft, }, @rabbita.none)
+    }
+    TeamClosed => ({ ..model, team_open: false, }, @rabbita.none)
+    TeamNameChanged(role, value) =>
+      (
+        {
+          ..model,
+          team_draft: match role {
+            "refiner" => { ..model.team_draft, refiner: value }
+            "rd" => { ..model.team_draft, rd: value }
+            "set" => { ..model.team_draft, set: value }
+            "te" => { ..model.team_draft, te: value }
+            _ => model.team_draft
+          },
+        },
+        @rabbita.none,
+      )
+    TeamSaved =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else if model.team_draft.refiner.trim().is_empty() ||
+        model.team_draft.rd.trim().is_empty() ||
+        model.team_draft.set.trim().is_empty() ||
+        model.team_draft.te.trim().is_empty() {
+        (
+          {
+            ..model,
+            notice: Some(notice(Warning, "Every team name needs a value.")),
+          },
+          @rabbita.none,
+        )
+      } else {
+        (
+          { ..model, ticket_sending: true, },
+          ticket_set_team(model.team_draft, emit),
+        )
+      }
     TicketDraftChanged(question_id, value) => {
       let drafts = model.ticket_drafts.copy()
       drafts[question_id] = value

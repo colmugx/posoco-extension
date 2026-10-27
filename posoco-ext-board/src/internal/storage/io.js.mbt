@@ -94,11 +94,38 @@ extern "js" fn api_new(
   #|     lock(path) {
   #|       try {
   #|         prepare(path);
-  #|         const token = `board-execution-journal-v1:${random()}\n`;
-  #|         const fd = open(`${path}/${lockName}`, 'wx', 0o600);
-  #|         try { write(fd, token); sync(fd); } finally { close(fd); }
-  #|         syncDir(path);
-  #|         return { code: 0, text: token };
+  #|         const lockPath = `${path}/${lockName}`;
+  #|         const tokenFor = () => `board-execution-journal-v2:${process.pid}:${Date.now()}:${random()}\n`;
+  #|         const stale = () => {
+  #|           let current;
+  #|           try { current = read(lockPath).toString('utf8'); } catch { return false; }
+  #|           if (current.startsWith('board-execution-journal-v2:')) {
+  #|             const pid = Number(current.split(':')[1]);
+  #|             if (!Number.isInteger(pid) || pid <= 0) return false;
+  #|             try { process.kill(pid, 0); return false; }
+  #|             catch (e) { return e?.code === 'ESRCH'; }
+  #|           }
+  #|           // Legacy locks carried no owner id. Only an old, untouched lock is
+  #|           // assumed to be a crash leftover; a recent one stays protected.
+  #|           try { return Date.now() - stat(lockPath).mtimeMs > 86_400_000; }
+  #|           catch { return false; }
+  #|         };
+  #|         for (let attempt = 0; attempt < 2; attempt++) {
+  #|           try {
+  #|             const token = tokenFor();
+  #|             const fd = open(lockPath, 'wx', 0o600);
+  #|             try { write(fd, token); sync(fd); } finally { close(fd); }
+  #|             syncDir(path);
+  #|             return { code: 0, text: token };
+  #|           } catch {
+  #|             if (attempt === 0 && stale()) {
+  #|               try { unlink(lockPath); syncDir(path); } catch { return { code: 2, text: '' }; }
+  #|             } else {
+  #|               return { code: 2, text: '' };
+  #|             }
+  #|           }
+  #|         }
+  #|         return { code: 2, text: '' };
   #|       } catch { return { code: 2, text: '' }; }
   #|     },
   #|     unlock(path, token) {

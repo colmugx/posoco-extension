@@ -29,6 +29,8 @@ fn retry_run(task_id : String, status : String) -> TicketRun {
 ///|
 fn retry_ticket_model(runs : Array[TicketRun]) -> Model {
   apply_ticket_state(Model::empty(true), {
+    project: "",
+    team: None,
     questions: [],
     runs,
     progress: [],
@@ -209,6 +211,8 @@ test "a suspended ticket without a run still offers retry work" {
   let with_run = {
     ..suspended,
     tickets: {
+      project: "",
+      team: None,
       questions: [],
       runs: [retry_run("t1", "failed")],
       progress: [],

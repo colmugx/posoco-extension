@@ -13,6 +13,32 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Object(fields) => fields
     _ => return TicketState::empty()
   }
+  let project = match fields.get("project") {
+    Some(String(value)) => value
+    _ => ""
+  }
+  let team = match fields.get("team") {
+    Some(Object(team)) => {
+      let name = key => {
+        match team.get(key) {
+          Some(String(value)) if value.trim() != "" => value
+          _ => ""
+        }
+      }
+      let defaults = TeamNames::defaults()
+      Some({
+        refiner: if name("refiner") == "" {
+          defaults.refiner
+        } else {
+          name("refiner")
+        },
+        rd: if name("rd") == "" { defaults.rd } else { name("rd") },
+        set: if name("set") == "" { defaults.set } else { name("set") },
+        te: if name("te") == "" { defaults.te } else { name("te") },
+      })
+    }
+    _ => None
+  }
   let questions = match fields.get("questions") {
     Some(Array(items)) => items.filter_map(decode_ticket_question)
     _ => []
@@ -37,7 +63,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Some(value) => decode_ticket_live(value)
     None => None
   }
-  { questions, runs, progress, live, model_selection, }
+  { project, team, questions, runs, progress, live, model_selection, }
 }
 
 ///|
@@ -552,6 +578,17 @@ fn send_ticket_command(
       TicketResult(false, Some("The ticket command could not be sent."), None),
     )
   })
+}
+
+///|
+fn ticket_set_team(names : TeamNames, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
+  let args : Json = {
+    "refiner": Json::string(names.refiner.trim().to_owned()),
+    "rd": Json::string(names.rd.trim().to_owned()),
+    "set": Json::string(names.set.trim().to_owned()),
+    "te": Json::string(names.te.trim().to_owned()),
+  }
+  send_ticket_command("board.ticket.set_team", args, emit)
 }
 
 ///|
@@ -1126,9 +1163,18 @@ fn apply_ticket_state(model : Model, state : TicketState) -> Model {
     Some(_) => state.live
     None => model.tickets.live
   }
+  let project = if state.project == "" {
+    model.tickets.project
+  } else {
+    state.project
+  }
+  let team = match state.team {
+    Some(_) => state.team
+    None => model.tickets.team
+  }
   {
     ..model,
-    tickets: { ..state, live, model_selection, },
+    tickets: { ..state, project, team, live, model_selection, },
     // Only the updates still on the wire stay "seen": a worker that tore down
     // takes its updates with it, so its identities must not linger.
     ticket_seen_updates: ticket_progress_retain_seen(

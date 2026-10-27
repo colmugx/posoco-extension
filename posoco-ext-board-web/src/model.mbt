@@ -137,7 +137,24 @@ priv struct TicketLiveInfo {
 } derive(Eq)
 
 ///|
+/// Lightweight names shown in prompts and on the Board. Defaults are used
+/// when the host frame has no team field.
+priv struct TeamNames {
+  refiner : String
+  rd : String
+  set : String
+  te : String
+} derive(Eq)
+
+///|
+fn TeamNames::defaults() -> TeamNames {
+  { refiner: "Refiner", rd: "RD", set: "SET", te: "TE", }
+}
+
+///|
 priv struct TicketState {
+  project : String
+  team : TeamNames?
   questions : Array[TicketQuestion]
   runs : Array[TicketRun]
   /// Non-blocking worker updates. They are shown in the inbox and never own a
@@ -151,7 +168,15 @@ priv struct TicketState {
 
 ///|
 fn TicketState::empty() -> TicketState {
-  { questions: [], runs: [], progress: [], live: None, model_selection: None, }
+  {
+    project: "",
+    team: None,
+    questions: [],
+    runs: [],
+    progress: [],
+    live: None,
+    model_selection: None,
+  }
 }
 
 ///|
@@ -351,6 +376,8 @@ priv struct Model {
   confirm : ConfirmIntent?
   archive_open : Bool
   live_open : Bool
+  team_open : Bool
+  team_draft : TeamNames
 } derive(Eq)
 
 ///|
@@ -418,6 +445,10 @@ priv enum Msg {
   ArchiveClosed
   LiveOpened
   LiveClosed
+  TeamOpened
+  TeamClosed
+  TeamNameChanged(String, String)
+  TeamSaved
   DoneRequested(String)
   NoticeActionInvoked
   KeyboardMove(Int32)
@@ -473,6 +504,8 @@ fn Model::empty(available : Bool) -> Model {
     confirm: None,
     archive_open: false,
     live_open: false,
+    team_open: false,
+    team_draft: TeamNames::defaults(),
   }
 }
 
