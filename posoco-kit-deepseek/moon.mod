@@ -15,7 +15,7 @@ description = "Posoco DeepSeek kit — the client-side half of DeepSeek's servin
 source = "src"
 
 import {
-  "colmugx/posoco@0.23.0",
+  "colmugx/posoco@0.23.1",
   "posoco/devkit@0.4.1",
   "moonbitlang/async@0.22.5",
 }

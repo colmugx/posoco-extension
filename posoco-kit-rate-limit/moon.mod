@@ -15,5 +15,5 @@ description = "Posoco rate-limit kit - protocol-neutral quota-verdict classifica
 source = "src"
 
 import {
-  "colmugx/posoco@0.23.0",
+  "colmugx/posoco@0.23.1",
 }

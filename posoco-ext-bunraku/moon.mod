@@ -1,9 +1,9 @@
 name = "colmugx/posoco-ext-bunraku"
 
-version = "0.1.0"
+version = "0.2.0"
 
 import {
-  "colmugx/posoco@0.23.0",
+  "colmugx/posoco@0.23.1",
   "colmugx/posoco-ext-mbtx@0.1.0",
   "posoco/devkit@0.4.1",
   "moonbitlang/async@0.22.5",
