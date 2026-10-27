@@ -1437,6 +1437,7 @@ fn team_name_field(
 ///|
 fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
   let draft = model.team_draft
+  let draft_profile = model.team_profile_draft
   @html.dialog(
     id="team-dialog",
     class="dialog team-dialog",
@@ -1455,6 +1456,22 @@ fn team_dialog(model : Model, emit : @rabbita.Emit[Msg]) -> @html.Html {
           close_button("team-dialog"),
         ]),
         @html.div(class="dialog-body", [
+          labeled_field(
+            "team-profile",
+            "Work profile",
+            @html.select(
+              id="team-profile",
+              name="work_profile",
+              on_change=value => emit(TeamProfileChanged(value)),
+              work_profiles().map(profile => {
+                @html.option(
+                  value=profile.id,
+                  selected=profile.id == draft_profile.id,
+                  profile.label,
+                )
+              }),
+            ),
+          ),
           @html.div(class="dialog-grid", [
             team_name_field(
               "team-refiner", "Refiner", draft.refiner, "refiner", emit,

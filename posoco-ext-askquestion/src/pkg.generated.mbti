@@ -125,4 +125,5 @@ pub fn QuestionEvent::to_repr(Self) -> @debug.Repr
 // Traits
 pub(open) trait QuestionEndpoint {
   async fn request(Self, origin_call~ : String, req~ : @port.UiRequest) -> @port.UiResponse raise QuestionError
+  async fn request_with_audience(Self, origin_call~ : String, audience~ : String, req~ : @port.UiRequest) -> @port.UiResponse raise QuestionError
 }

@@ -16,6 +16,7 @@ fn progress_state(progress : Array[TicketProgress]) -> TicketState {
   {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [],
     runs: [],
     progress,
@@ -152,6 +153,7 @@ test "the inbox badge still counts open questions" {
   let model = apply_ticket_state(Model::empty(true), {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [question],
     runs: [],
     progress: [progress_update("t1", "normal", "Index built", 1700000000000L)],
@@ -171,6 +173,7 @@ test "opening the inbox sends nothing and keeps the questions" {
   let model = apply_ticket_state(Model::empty(true), {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [
       {
         id: "q1",

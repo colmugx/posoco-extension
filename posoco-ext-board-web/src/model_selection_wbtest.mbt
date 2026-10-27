@@ -54,6 +54,7 @@ fn wbtest_ticket_model(
   apply_ticket_state(Model::empty(true), {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [],
     runs,
     progress: [],
@@ -141,6 +142,7 @@ test "a ticket frame that omits the catalog keeps the last known one" {
   let disabled = apply_ticket_state(outcome, {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [],
     runs: [],
     progress: [],

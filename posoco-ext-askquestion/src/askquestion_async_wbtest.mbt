@@ -176,6 +176,17 @@ impl QuestionEndpoint for ScriptedEndpoint with fn request(
 }
 
 ///|
+impl QuestionEndpoint for ScriptedEndpoint with fn request_with_audience(
+  self : ScriptedEndpoint,
+  origin_call~ : String,
+  audience~ : String,
+  req~ : @posoco.UiRequest,
+) -> @posoco.UiResponse raise QuestionError {
+  let _ = audience
+  QuestionEndpoint::request(self, origin_call~, req~)
+}
+
+///|
 fn ask_child_call(arguments : Json) -> @posoco.ToolCall {
   {
     call_id: @posoco.CallId::unchecked("ask-child-test"),

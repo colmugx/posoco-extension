@@ -153,9 +153,30 @@ fn TeamNames::defaults() -> TeamNames {
 }
 
 ///|
+priv struct WorkProfile {
+  id : String
+  label : String
+} derive(Eq)
+
+///|
+fn WorkProfile::software() -> WorkProfile {
+  { id: "software", label: "Software" }
+}
+
+///|
+fn work_profiles() -> Array[WorkProfile] {
+  [
+    WorkProfile::software(),
+    { id: "document", label: "Document" },
+    { id: "analysis", label: "Analysis" },
+  ]
+}
+
+///|
 priv struct TicketState {
   project : String
   team : TeamNames?
+  profile : WorkProfile
   questions : Array[TicketQuestion]
   runs : Array[TicketRun]
   /// Non-blocking worker updates. They are shown in the inbox and never own a
@@ -172,6 +193,7 @@ fn TicketState::empty() -> TicketState {
   {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [],
     runs: [],
     progress: [],
@@ -379,6 +401,7 @@ priv struct Model {
   live_open : Bool
   team_open : Bool
   team_draft : TeamNames
+  team_profile_draft : WorkProfile
 } derive(Eq)
 
 ///|
@@ -434,6 +457,7 @@ priv enum Msg {
   TicketDraftChanged(String, String)
   TicketAnswered(String, TicketAnswer)
   TicketAnsweredAsRefiner(String, String)
+  TicketRefinerRequested(String)
   TicketShape(String)
   TicketRun(String)
   TicketRetry(String)
@@ -449,6 +473,7 @@ priv enum Msg {
   TeamOpened
   TeamClosed
   TeamNameChanged(String, String)
+  TeamProfileChanged(String)
   TeamSaved
   DoneRequested(String)
   NoticeActionInvoked
@@ -507,6 +532,7 @@ fn Model::empty(available : Bool) -> Model {
     live_open: false,
     team_open: false,
     team_draft: TeamNames::defaults(),
+    team_profile_draft: WorkProfile::software(),
   }
 }
 

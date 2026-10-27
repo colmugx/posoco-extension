@@ -461,7 +461,7 @@ fn update(
         Some(team) => team
         None => TeamNames::defaults()
       }
-      ({ ..model, team_open: true, team_draft: draft, }, @rabbita.none)
+      ({ ..model, team_open: true, team_draft: draft, team_profile_draft: model.tickets.profile, }, @rabbita.none)
     }
     TeamClosed => ({ ..model, team_open: false, }, @rabbita.none)
     TeamNameChanged(role, value) =>
@@ -474,6 +474,18 @@ fn update(
             "set" => { ..model.team_draft, set: value }
             "te" => { ..model.team_draft, te: value }
             _ => model.team_draft
+          },
+        },
+        @rabbita.none,
+      )
+    TeamProfileChanged(id) =>
+      (
+        {
+          ..model,
+          team_profile_draft: match id {
+            "document" => { id: "document", label: "Document" }
+            "analysis" => { id: "analysis", label: "Analysis" }
+            _ => WorkProfile::software()
           },
         },
         @rabbita.none,
@@ -495,7 +507,7 @@ fn update(
       } else {
         (
           { ..model, ticket_sending: true, },
-          ticket_set_team(model.team_draft, emit),
+          ticket_set_team(model.team_draft, model.team_profile_draft, emit),
         )
       }
     TicketDraftChanged(question_id, value) => {
@@ -527,6 +539,15 @@ fn update(
             emit,
             answered_by="refiner",
           ),
+        )
+      }
+    TicketRefinerRequested(question_id) =>
+      if model.ticket_sending || !model.can_connect || !model.ticket_available {
+        (model, @rabbita.none)
+      } else {
+        (
+          { ..model, ticket_sending: true, },
+          ticket_answer_as_refiner(question_id, emit),
         )
       }
     TicketShape(task_id) =>

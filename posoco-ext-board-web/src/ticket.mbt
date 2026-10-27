@@ -37,6 +37,15 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     }
     _ => None
   }
+  let profile = match fields.get("work_profile") {
+    Some(Object(profile)) =>
+      match profile.get("id") {
+        Some(String("document")) => { id: "document", label: "Document" }
+        Some(String("analysis")) => { id: "analysis", label: "Analysis" }
+        _ => WorkProfile::software()
+      }
+    _ => WorkProfile::software()
+  }
   let questions = match fields.get("questions") {
     Some(Array(items)) => items.filter_map(decode_ticket_question)
     _ => []
@@ -61,7 +70,7 @@ fn ticket_state_from_json(value : Json) -> TicketState {
     Some(value) => decode_ticket_live(value)
     None => None
   }
-  { project, team, questions, runs, progress, live, model_selection, }
+  { project, team, profile, questions, runs, progress, live, model_selection, }
 }
 
 ///|
@@ -584,14 +593,31 @@ fn send_ticket_command(
 }
 
 ///|
-fn ticket_set_team(names : TeamNames, emit : @rabbita.Emit[Msg]) -> @rabbita.Cmd {
+fn ticket_set_team(
+  names : TeamNames,
+  profile : WorkProfile,
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
   let args : Json = {
     "refiner": Json::string(names.refiner.trim().to_owned()),
     "rd": Json::string(names.rd.trim().to_owned()),
     "set": Json::string(names.set.trim().to_owned()),
     "te": Json::string(names.te.trim().to_owned()),
+    "work_profile": Json::string(profile.id),
   }
   send_ticket_command("board.ticket.set_team", args, emit)
+}
+
+///|
+fn ticket_answer_as_refiner(
+  question_id : String,
+  emit : @rabbita.Emit[Msg],
+) -> @rabbita.Cmd {
+  send_ticket_command(
+    "board.ticket.answer_as_refiner",
+    { "question_id": Json::string(question_id) },
+    emit,
+  )
 }
 
 ///|
@@ -1376,6 +1402,15 @@ fn ticket_question_card(
     ]),
     @html.div(class="ticket-question-text", question.question),
     answer_controls,
+    @html.div(class="ticket-answers", [
+      @html.button(
+        type_="button",
+        class="btn btn-sm",
+        disabled=model.ticket_sending,
+        on_click=emit(TicketRefinerRequested(question.id)),
+        "Ask Refiner",
+      ),
+    ]),
   ])
 }
 

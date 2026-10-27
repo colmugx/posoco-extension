@@ -19,6 +19,7 @@ test "ticket state records questions without forcing the drawer" {
   let state : TicketState = {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [
       {
         id: "q1",
@@ -64,6 +65,7 @@ test "failed runs belong to the ticket, not the question inbox" {
   let state : TicketState = {
     project: "",
     team: None,
+    profile: WorkProfile::software(),
     questions: [],
     runs: [
       {

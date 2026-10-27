@@ -23,4 +23,10 @@ pub extend QuestionError with Debug::{to_repr}
 /// never by the model.
 pub(open) trait QuestionEndpoint {
   async fn request(Self, origin_call~ : String, req~ : @posoco.UiRequest) -> @posoco.UiResponse raise QuestionError
+  async fn request_with_audience(
+    Self,
+    origin_call~ : String,
+    audience~ : String,
+    req~ : @posoco.UiRequest,
+  ) -> @posoco.UiResponse raise QuestionError
 }

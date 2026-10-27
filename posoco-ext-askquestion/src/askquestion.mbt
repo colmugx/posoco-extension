@@ -108,9 +108,99 @@ fn ask_question_schema(answerer~ : String = "the user") -> Json {
         "type": Json::string("integer"),
         "description": Json::string("Zero-based default choice"),
       }),
+      "audience": Json::object({
+        "type": Json::string("string"),
+        "enum": Json::array([
+          Json::string("refiner"),
+          Json::string("product_owner"),
+        ]),
+        "description": Json::string(
+          "Who should answer: refiner for requirements/design, product_owner for business trade-offs",
+        ),
+      }),
     }),
     "required": Json::array([Json::string("question")]),
   })
+}
+
+///|
+priv enum EndpointReply {
+  Answer(@posoco.UiResponse)
+  Unsupported(String)
+  Cancelled
+  TimedOut
+  Io(String)
+}
+
+///|
+async fn request_endpoint(
+  endpoint : &QuestionEndpoint,
+  origin_call : String,
+  audience : String,
+  req : @posoco.UiRequest,
+) -> EndpointReply noraise {
+  let response = try {
+    if audience == "" {
+      endpoint.request(origin_call~, req~)
+    } else {
+      endpoint.request_with_audience(origin_call~, audience~, req~)
+    }
+  } catch {
+    QuestionError::Unsupported(detail) =>
+      return EndpointReply::Unsupported(detail)
+    QuestionError::Cancelled => return EndpointReply::Cancelled
+    QuestionError::TimedOut => return EndpointReply::TimedOut
+    QuestionError::Io(detail) => return EndpointReply::Io(detail)
+  }
+  EndpointReply::Answer(response)
+}
+
+///|
+fn endpoint_outcome(
+  spec : AskSpec,
+  reply : EndpointReply,
+  tool_name : String,
+) -> @posoco.ToolOutcome raise @posoco.RuntimeError {
+  match reply {
+    Answer(response) => response_outcome(spec, response)
+    Unsupported(detail) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="endpoint unavailable: " + detail,
+        structured=None,
+      )
+    Cancelled =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="cancelled",
+        structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
+      )
+    TimedOut =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="answer timed out",
+        structured=Some(Json::object({ "timed_out": Json::boolean(true) })),
+      )
+    Io(detail) =>
+      @posoco.ToolOutcome::ToolReportedError(
+        content="\{tool_name}: endpoint: " + detail,
+        structured=None,
+      )
+  }
+}
+
+///|
+fn parse_audience(arguments : Json) -> String raise @posoco.RuntimeError {
+  let fields = match arguments {
+    Json::Object(fields) => fields
+    _ => return ""
+  }
+  match fields.get("audience") {
+    None | Some(Json::Null) => ""
+    Some(Json::String("refiner")) => "refiner"
+    Some(Json::String("product_owner")) => "product_owner"
+    Some(_) =>
+      raise @posoco.RuntimeError::UnknownTool(
+        "ask_question_child: 'audience' must be refiner or product_owner",
+      )
+  }
 }
 
 ///|
@@ -531,27 +621,14 @@ pub impl @posoco.ToolProvider for AskQuestionTools with fn execute(
             structured=None,
           )
       }
-      endpoint.request(origin_call=ctx.call_id.to_string(), req=spec.request()) catch {
-        QuestionError::Unsupported(detail) =>
-          return @posoco.ToolOutcome::ToolReportedError(
-            content="endpoint unavailable: " + detail,
-            structured=None,
-          )
-        QuestionError::Cancelled =>
-          return @posoco.ToolOutcome::ToolReportedError(
-            content="cancelled",
-            structured=Some(Json::object({ "cancelled": Json::boolean(true) })),
-          )
-        QuestionError::TimedOut =>
-          return @posoco.ToolOutcome::ToolReportedError(
-            content="answer timed out",
-            structured=Some(Json::object({ "timed_out": Json::boolean(true) })),
-          )
-        QuestionError::Io(detail) =>
-          raise @posoco.RuntimeError::InvocationFailed(
-            "\{tool_name}: endpoint: " + detail,
-          )
-      }
+      let audience = parse_audience(ctx.arguments)
+      let endpoint_result = request_endpoint(
+        endpoint,
+        ctx.call_id.to_string(),
+        audience,
+        spec.request(),
+      )
+      return endpoint_outcome(spec, endpoint_result, tool_name)
     }
   }
   response_outcome(spec, response)
@@ -565,7 +642,7 @@ pub impl @posoco.SystemPromptContributor for AskQuestionTools with fn system_pro
     Human =>
       "Use ask_question only when a user decision or missing fact blocks progress. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover. When you can keep working without the answer, use notify_user instead: it returns immediately and the reply arrives later as ordinary user input — never block on it, and never ask the same thing twice."
     ParentAgent =>
-      "Use ask_question_child only when a decision or missing fact blocks progress. The parent agent that spawned this session answers — never a human user. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
+      "Use ask_question_child only when a decision or missing fact blocks progress. Set audience=refiner for requirement/design questions and audience=product_owner for business trade-offs; the host routes it to that role. Ask one focused question at a time. Prefer select with concise known choices; otherwise use input. Do not ask for information available tools can discover."
   }
 }
 
